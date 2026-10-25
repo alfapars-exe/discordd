@@ -76,12 +76,12 @@ func (s *notificationService) MarkRead(ctx context.Context, userID, id string) e
 	// The badge count after this ack. A count failure here is logged and
 	// skips the push only — the REST call already succeeded and the client
 	// re-syncs from GET .../notifications/count.
-	unread, err := s.repo.CountUnread(ctx, userID)
+	counts, err := NotificationUnreadSummary(ctx, s.repo, userID)
 	if err != nil {
 		notificationLogger.Error("failed to count unread after mark-read", "user_id", userID, "err", pkg.ErrText(err))
 		return nil
 	}
-	s.broadcastRead(userID, []string{id}, false, unread)
+	broadcastNotificationRead(s.hub, userID, []string{id}, false, counts.UnreadCount, counts.BadgeUnreadCount)
 	return nil
 }
 
@@ -107,14 +107,20 @@ func (s *notificationService) broadcastRead(userID string, ids []string, all boo
 // broadcastNotificationRead pushes the notification_read event to the
 // reader's own sessions so other open tabs/devices drop the badge too.
 // Shared with the request-settling writers below.
-func broadcastNotificationRead(hub ws.Broadcaster, userID string, ids []string, all bool, unread int) {
+func broadcastNotificationRead(hub ws.Broadcaster, userID string, ids []string, all bool, unread int, badgeUnread ...int) {
+	data := map[string]any{"ids": ids, "all": all, "unread_count": unread}
+	if len(ids) > 512 {
+		data["ids"] = ids[:512]
+		data["refresh_required"] = true
+	}
+	if len(badgeUnread) == 1 {
+		data["badge_unread_count"] = badgeUnread[0]
+	} else if all {
+		data["badge_unread_count"] = 0
+	}
 	hub.BroadcastToUser(userID, ws.Event{
-		Op: ws.OpNotificationRead,
-		Data: map[string]any{
-			"ids":          ids,
-			"all":          all,
-			"unread_count": unread,
-		},
+		Op:   ws.OpNotificationRead,
+		Data: data,
 	})
 }
 
@@ -132,12 +138,12 @@ func settleRequestNotifications(ctx context.Context, repo repository.Notificatio
 	if len(ids) == 0 {
 		return
 	}
-	unread, err := repo.CountUnread(ctx, userID)
+	counts, err := NotificationUnreadSummary(ctx, repo, userID)
 	if err != nil {
 		notificationLogger.Error("failed to count unread after settling request notifications", "user_id", userID, "err", pkg.ErrText(err))
 		return
 	}
-	broadcastNotificationRead(hub, userID, ids, false, unread)
+	broadcastNotificationRead(hub, userID, ids, false, counts.UnreadCount, counts.BadgeUnreadCount)
 }
 
 // broadcastNotificationCreate pushes a freshly committed notification to

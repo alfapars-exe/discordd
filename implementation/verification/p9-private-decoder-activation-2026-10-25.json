@@ -1,0 +1,53 @@
+{
+  "scope": "P9 private-call zero-volume decoder activation",
+  "date": "2026-10-25",
+  "status": "controlled_runtime_verified_physical_acceptance_pending",
+  "owned_paths": [
+    "client/src/audio/p2pPlayback.ts",
+    "client/src/audio/p2pPlayback.test.ts"
+  ],
+  "source_hashes": {
+    "client/src/audio/p2pPlayback.ts": "779f9ab091eab959954676d121f8ecf4a3ec18edd04c1d3f661cf9a87bb1ff87",
+    "client/src/audio/p2pPlayback.test.ts": "b5d28de7a8dabb1c136fb65f1eb0c00fef5dd86bf90dafe9df4ad46645d39224"
+  },
+  "verification": {
+    "focused": {
+      "command": "npx vitest run src/audio/p2pPlayback.test.ts src/audio/privateRoomPlayback.test.ts src/components/p2p/P2PAudioSink.test.tsx src/components/dm/GroupDMCallAudio.test.tsx",
+      "files": 4,
+      "tests": 38,
+      "result": "passed",
+      "duration_seconds": 3.11
+    },
+    "typescript": {
+      "command": "npx tsc -b",
+      "result": "passed"
+    },
+    "eslint": {
+      "paths": [
+        "client/src/audio/p2pPlayback.ts",
+        "client/src/audio/p2pPlayback.test.ts"
+      ],
+      "result": "passed"
+    },
+    "diff_check": "passed"
+  },
+  "runtime_evidence": {
+    "qa11": "Actual SDK workers encrypted/decrypted frames but original routed playback produced zero remote PCM.",
+    "qa12": "Direct raw remote-audio playback plus a silent demand observer produced nonzero receiver PCM; this changed two variables.",
+    "qa13": "Original routed playback plus silent zero-gain context pull still produced zero PCM; branch rejected.",
+    "qa14": "Original routed playback plus an unmuted raw decoder fixed at volume zero produced receiver PCM about 0.0706 and decoded duration about 19.03 seconds, no worker errors. This disposable generated-input fixture preceded final dynamic-stream/routing implementation; it is not final app acceptance."
+  },
+  "invariants": [
+    "Only the processed routed element is audible; decoder remains volume zero.",
+    "Both elements use the same effective output, including missing-device fallback.",
+    "Owner retirement, stop and stale asynchronous completions cannot revive playback.",
+    "Only live borrowed audio tracks populate the decoder; initial empty and later replacement audio are supported without stopping borrowed tracks.",
+    "No context.destination audio branch or E2EE/plaintext fallback added."
+  ],
+  "remaining": [
+    "QA15 two-HiChat-client generated-audio runtime passed in rounds163-165 using exact main playback source plus numeric PCM observation; physical acceptance remains separate.",
+    "Physical microphone/speaker/headset and Windows native output/device-change acceptance.",
+    "Simultaneous multiple audio-track decoder behavior requires actual browser verification.",
+    "Background/sleep recovery and physical deafen/output leakage checks remain open."
+  ]
+}

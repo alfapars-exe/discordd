@@ -2,9 +2,24 @@ import { beforeEach,describe,expect,it,vi } from "vitest";
 const state=vi.hoisted(()=>({generation:1,apiClient:vi.fn(async()=>({success:true,data:{id:"m1"}}))}));
 vi.mock("./client",()=>({apiClient:state.apiClient,getAuthGeneration:()=>state.generation}));
 import { apiClient } from "./client";
-import { addGroupDMMember,leaveGroupDM,getGroupDMMessagesAround,removeGroupDMMember,sendGroupDMMessage,listPinnedGroupDMMessages,pinGroupDMMessage,unpinGroupDMMessage } from "./groupDM";
+import { getGroupDMCallToken,addGroupDMMember,leaveGroupDM,getGroupDMMessagesAround,removeGroupDMMember,sendGroupDMMessage,listPinnedGroupDMMessages,pinGroupDMMessage,unpinGroupDMMessage,markGroupDMRead,markGroupDMUnread,setGroupDMMuted } from "./groupDM";
 
 describe("group DM API",()=>{
+  it("bounds call-token requests and carries caller lifetime/abort without persisting credentials",()=>{
+    const controller=new AbortController();let current=true;
+    getGroupDMCallToken("group/id",{signal:controller.signal,isCurrent:()=>current});
+    const [url,options]=vi.mocked(apiClient).mock.lastCall!;
+    expect(url).toBe("/group-dms/group%2Fid/call-token");expect(options).toMatchObject({method:"POST",timeoutMs:15000,signal:controller.signal});expect(options?.body).toBeUndefined();
+    expect(options?.isCurrent?.()).toBe(true);current=false;expect(options?.isCurrent?.()).toBe(false);
+  });
+
+  it("sends optional membership epoch for read/unread/mute while retaining legacy bodies",()=>{
+    markGroupDMRead("g","m",{expectedKeyEpoch:3});expect(vi.mocked(apiClient).mock.lastCall?.[1]?.body).toEqual({message_id:"m",key_epoch:3});
+    markGroupDMUnread("g","m",{expectedKeyEpoch:3});expect(vi.mocked(apiClient).mock.lastCall?.[1]?.body).toEqual({message_id:"m",key_epoch:3});
+    setGroupDMMuted("g",true,{expectedUserId:"owner",expectedKeyEpoch:3});expect(vi.mocked(apiClient).mock.lastCall?.[1]?.body).toEqual({is_muted:true,key_epoch:3});
+    markGroupDMRead("g","m");expect(vi.mocked(apiClient).mock.lastCall?.[1]?.body).toEqual({message_id:"m"});
+    markGroupDMUnread("g","m");expect(vi.mocked(apiClient).mock.lastCall?.[1]?.body).toEqual({message_id:"m"});
+  });
   it("scopes pin reads and mutations to the account, credential generation and abort signal", () => {
     let current = true;
     const controller = new AbortController();

@@ -25,6 +25,7 @@ import { useFriendStore } from "./friendStore";
 import * as friendsApi from "../api/friends";
 import type { FriendshipWithUser } from "../types";
 import {useBlockStore} from "./blockStore";
+import {getAuthGeneration,clearTokens} from "../api/client";
 import {useAuthStore} from "./authStore";
 
 function makeRow(overrides: Partial<FriendshipWithUser> = {}): FriendshipWithUser {
@@ -177,3 +178,34 @@ describe("friendStore.sendRequest", () => {
     expect(res).toEqual({ success: false, error: "nope" });
   });
 });
+
+it("marks only a successful complete current empty snapshot ready",async()=>{
+ useFriendStore.setState({friendsStatus:"idle"});vi.mocked(friendsApi.listFriends).mockResolvedValueOnce({success:false,error:"offline"});await useFriendStore.getState().fetchFriends();expect(useFriendStore.getState().friendsStatus).toBe("error");expect(useFriendStore.getState().friends).toEqual([]);
+ vi.mocked(friendsApi.listFriends).mockResolvedValueOnce({success:true,data:[]});await useFriendStore.getState().fetchFriends();expect(useFriendStore.getState()).toMatchObject({ownerId:"owner",authGeneration:getAuthGeneration(),friendsStatus:"ready",isLoading:false,friends:[]});const options=vi.mocked(friendsApi.listFriends).mock.calls.at(-1)![0]!;expect(options.expectedUserId).toBe("owner");expect(options.isCurrent?.()).toBe(true);
+});
+it("keeps last confirmed UI list only for same-account failed refresh and drops it on owner switch",async()=>{
+ const row=makeRow();useFriendStore.setState({friends:[row],incoming:[row],outgoing:[row],ownerId:"owner",authGeneration:getAuthGeneration(),friendsStatus:"ready"});vi.mocked(friendsApi.listFriends).mockResolvedValueOnce({success:false,error:"offline"});await useFriendStore.getState().fetchFriends();expect(useFriendStore.getState().friends).toEqual([row]);expect(useFriendStore.getState().friendsStatus).toBe("error");useAuthStore.setState({user:{id:"other-owner"} as never});expect(useFriendStore.getState()).toMatchObject({ownerId:"other-owner",friendsStatus:"idle",friends:[],incoming:[],outgoing:[],isLoading:false});
+});
+it("resets readiness and all request arrays on same-account reauthentication generation",()=>{
+ const row=makeRow();useFriendStore.setState({friends:[row],incoming:[row],outgoing:[row],friendsStatus:"ready"});const previous=getAuthGeneration();clearTokens();expect(getAuthGeneration()).toBeGreaterThan(previous);expect(useFriendStore.getState()).toMatchObject({ownerId:"owner",authGeneration:getAuthGeneration(),friendsStatus:"idle",friends:[],incoming:[],outgoing:[]});
+});
+it("rejects previous-account list/request completion and its transport guard immediately",async()=>{
+ let finish!:(value:Awaited<ReturnType<typeof friendsApi.listFriends>>)=>void;vi.mocked(friendsApi.listFriends).mockReturnValueOnce(new Promise(resolve=>{finish=resolve;}));const pending=useFriendStore.getState().fetchFriends();const options=vi.mocked(friendsApi.listFriends).mock.calls.at(-1)![0]!;expect(options.isCurrent?.()).toBe(true);useAuthStore.setState({user:{id:"new-owner"} as never});expect(options.isCurrent?.()).toBe(false);finish({success:true,data:[makeRow()]});await pending;expect(useFriendStore.getState()).toMatchObject({ownerId:"new-owner",friendsStatus:"idle",friends:[]});
+});
+it("partial HTTP or WS relationship deltas cannot establish a complete friend snapshot",async()=>{
+ useFriendStore.setState({friendsStatus:"idle"});vi.mocked(friendsApi.acceptRequest).mockResolvedValueOnce({success:true,data:makeRow()});expect(await useFriendStore.getState().acceptRequest("request")).toBe(true);expect(useFriendStore.getState().friends).toHaveLength(1);expect(useFriendStore.getState().friendsStatus).toBe("idle");useFriendStore.getState().handleFriendRequestCreate(makeRow({status:"pending"}));expect(useFriendStore.getState().friendsStatus).toBe("idle");
+});
+it("ignores WS writes whose cached provenance is not the current authenticated account",()=>{
+ const row=makeRow();useFriendStore.setState({ownerId:"foreign",authGeneration:getAuthGeneration(),friendsStatus:"ready",friends:[],incoming:[],outgoing:[]});useFriendStore.getState().handleFriendRequestCreate(row);useFriendStore.getState().handleFriendRequestAccept(row);useFriendStore.getState().handleFriendRemove({user_id:row.user_id});expect(useFriendStore.getState().incoming).toEqual([]);expect(friendsApi.listFriends).not.toHaveBeenCalled();expect(useFriendStore.getState().friendsStatus).toBe("ready");
+});
+it("a newer relationship delta invalidates a pending full snapshot and cannot mark it ready",async()=>{
+ let finish!:(value:Awaited<ReturnType<typeof friendsApi.listFriends>>)=>void;vi.mocked(friendsApi.listFriends).mockReturnValueOnce(new Promise(resolve=>{finish=resolve;}));const pending=useFriendStore.getState().fetchFriends();const current=vi.mocked(friendsApi.listFriends).mock.calls.at(-1)![0]!.isCurrent!;useFriendStore.getState().handleFriendRemove({user_id:"u-1"});expect(current()).toBe(false);finish({success:true,data:[makeRow()]});await pending;expect(useFriendStore.getState()).toMatchObject({friendsStatus:"error",friends:[],isLoading:false});
+});
+it("a same-account re-login retires an old list before a new complete snapshot",async()=>{
+ let finish!:(value:Awaited<ReturnType<typeof friendsApi.listFriends>>)=>void;vi.mocked(friendsApi.listFriends).mockReturnValueOnce(new Promise(resolve=>{finish=resolve;}));const old=useFriendStore.getState().fetchFriends();const current=vi.mocked(friendsApi.listFriends).mock.calls.at(-1)![0]!.isCurrent!;clearTokens();expect(current()).toBe(false);vi.mocked(friendsApi.listFriends).mockResolvedValueOnce({success:true,data:[]});await useFriendStore.getState().fetchFriends();finish({success:true,data:[makeRow()]});await old;expect(useFriendStore.getState()).toMatchObject({ownerId:"owner",authGeneration:getAuthGeneration(),friendsStatus:"ready",friends:[],isLoading:false});
+});
+it("drops old-account pending request snapshots instead of leaking incoming/outgoing rows",async()=>{
+ let finish!:(value:Awaited<ReturnType<typeof friendsApi.listRequests>>)=>void;vi.mocked(friendsApi.listRequests).mockReturnValueOnce(new Promise(resolve=>{finish=resolve;}));const old=useFriendStore.getState().fetchRequests();const current=vi.mocked(friendsApi.listRequests).mock.calls.at(-1)![0]!.isCurrent!;useAuthStore.setState({user:{id:"new-owner"} as never});expect(current()).toBe(false);finish({success:true,data:{incoming:[makeRow()],outgoing:[makeRow()]}});await old;expect(useFriendStore.getState()).toMatchObject({ownerId:"new-owner",incoming:[],outgoing:[]});
+});
+
+it("does not establish ready/nonfriend from malformed friend rows",async()=>{vi.mocked(friendsApi.listFriends).mockResolvedValueOnce({success:true,data:[null] as unknown as FriendshipWithUser[]});await useFriendStore.getState().fetchFriends();expect(useFriendStore.getState()).toMatchObject({friendsStatus:"error",isLoading:false,friends:[]});});

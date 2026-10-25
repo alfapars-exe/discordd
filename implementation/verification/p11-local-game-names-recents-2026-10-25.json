@@ -1,0 +1,66 @@
+{
+  "date": "2026-10-25",
+  "scope": "P11 local user game names and truthful recent/unseen registry views",
+  "status": "implemented_unverified",
+  "owned_paths": [
+    "electron/registered-games.ts",
+    "electron/registered-games.test.ts",
+    "electron/registered-game-name-ipc.ts",
+    "electron/registered-game-name-ipc.test.ts",
+    "electron/ipc-handlers.ts",
+    "electron/preload.ts",
+    "client/src/types/electron.d.ts",
+    "client/src/components/settings/RegisteredGamesSettings.tsx",
+    "client/src/components/settings/RegisteredGamesSettings.test.tsx",
+    "client/src/i18n/locales/en/settings.json",
+    "client/src/i18n/locales/tr/settings.json"
+  ],
+  "source_hashes": {
+    "electron/registered-games.ts": "1f181e102d3dda48405ffb4e38b5e4b69a734d670ed21ed3ab6302728fb4c0c5",
+    "electron/registered-games.test.ts": "1d4b9f061dac189a7ec568234e65468048a412a1f87857bab9eb0a350f4d2498",
+    "electron/registered-game-name-ipc.ts": "900acd7d9d69a75dd79e39a4e2889eae818e0e6202405a2b540fd9fb6c1d02a5",
+    "electron/registered-game-name-ipc.test.ts": "615b408692b60974fd632b3289a66d442b1bf576a9a403acd6fe8adbe6e6afb7",
+    "electron/ipc-handlers.ts": "ac27ad641369b4b8fc2c2de499ce492cf93821d16cae778d3b471f532c86db59",
+    "electron/preload.ts": "8b74a8516466d505a7d73f0de24f3471928396ad9ec344ac5cbe82483c0e891f",
+    "client/src/types/electron.d.ts": "cac48a60b642f09c38952ae3d5c6a3a90f5f67d043c0b6c18ee820e9a027d8dc",
+    "client/src/components/settings/RegisteredGamesSettings.tsx": "d004dbdbb344bcc06c0dcbfbf7db48a2981a2a1920f419b29e4d596f30a41d7b",
+    "client/src/components/settings/RegisteredGamesSettings.test.tsx": "6eb8867413fc90023a8319c29ea1e66a96471e96d8a63923157bf6aa2421a8fa",
+    "client/src/i18n/locales/en/settings.json": "a62baa39dc987524e8836a2e0572a84094ff3931ce4faeebd9273eedec544881",
+    "client/src/i18n/locales/tr/settings.json": "e8ec1a8c2cfc93935f88ab896ae1cf3cb237e93a65f7921b3b961ae5c3a2a853"
+  },
+  "shared_locale_scope": {
+    "added_keys": [
+      "registeredGamesNameInvalid",
+      "registeredGamesName",
+      "registeredGamesNameSave",
+      "registeredGamesNameCancel",
+      "registeredGamesRename",
+      "registeredGamesAddedUnseen"
+    ],
+    "changed_key": "registeredGamesRecent",
+    "en_before": "Recent and registered",
+    "en_after": "Recently detected",
+    "tr_before": "Son algılanan ve kayıtlı",
+    "tr_after": "Son algılanan",
+    "foreign_hunks": "platformLogs* tail belongs to other task; fullfile hashes include those current bytes, stage only game key hunk."
+  },
+  "behavior": [
+    "Trusted main-window IPC validates UUID game ID and name before registry access. Name 1..80 raw UTF16 code units, trim accepted, controls/path separators rejected without truncation.",
+    "Name persists locally, literal .exe suffix roundtrips; disk failure rolls back; successful rename invalidates old activity cache until fresh consent-filtered scan. No process/path/network contract expansion.",
+    "Recent nonrunning games sort real valid lastSeenAt descending; never-detected records separately labeled.",
+    "Rename draft has explicit save/cancel, aria-invalid+visible validation, disabled invalid submission; save error retains draft and prior confirmed title."
+  ],
+  "checks": {
+    "electron": "npx tsc -p electron/tsconfig.json exit0; node --test dist-electron/registered-games.test.js dist-electron/registered-game-name-ipc.test.js:17PASS606ms",
+    "react": "npx vitest run src/components/settings/RegisteredGamesSettings.test.tsx:15PASS2.45s",
+    "typescript": "npx tsc -b exit0",
+    "lint": "scoped client ESLint exit0",
+    "build": "npx vite build exit0;1707modules1.29s (current worktree includes foreign logging WIP)",
+    "diff_check": "exact11paths exit0"
+  },
+  "remaining": [
+    "Windows installed app real executable start/stop, restart persistence, native picker and UI acceptance unverified.",
+    "No automatic supported-game catalog/discovery, cover art, verified ownership, or game join is implemented by this slice.",
+    "No browser/production/deploy/staging/commit operations; coverage not edited."
+  ]
+}

@@ -4,15 +4,45 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strings"
 
+	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/models"
 )
 
 // ToggleReaction adds or removes a DM reaction.
 // INSERT OR IGNORE -> if rowsAffected == 0 (UNIQUE hit) -> DELETE. Atomic toggle.
 func (r *sqliteDMRepo) ToggleReaction(ctx context.Context, messageID, userID, emoji string) (bool, error) {
+	if raw := database.RawDB(r.db); raw != nil {
+		var added bool
+		err := database.WithTx(ctx, raw, func(tx *sql.Tx) error {
+			var err error
+			added, err = (&sqliteDMRepo{db: tx}).toggleReactionAuthorized(ctx, messageID, userID, emoji)
+			return err
+		})
+		return added, err
+	}
+	return r.toggleReactionAuthorized(ctx, messageID, userID, emoji)
+}
+
+func (r *sqliteDMRepo) toggleReactionAuthorized(ctx context.Context, messageID, userID, emoji string) (bool, error) {
+	// Taking back an existing reaction is cleanup, permitted after revocation.
+	removed, err := r.RemoveReaction(ctx, messageID, userID, emoji)
+	if err != nil || removed {
+		return false, err
+	}
+	var added bool
+	err = r.withGameActorMessageMutation(ctx, messageID, userID, func(txRepo *sqliteDMRepo) error {
+		var err error
+		added, err = txRepo.toggleReaction(ctx, messageID, userID, emoji)
+		return err
+	})
+	return added, err
+}
+
+func (r *sqliteDMRepo) toggleReaction(ctx context.Context, messageID, userID, emoji string) (bool, error) {
 	insertQuery := `
 		INSERT OR IGNORE INTO dm_reactions (id, dm_message_id, user_id, emoji)
 		VALUES (lower(hex(randomblob(8))), ?, ?, ?)`

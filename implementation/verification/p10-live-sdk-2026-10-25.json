@@ -1,0 +1,73 @@
+{
+  "phase": "P10",
+  "date": "2026-10-25",
+  "status": "implemented_unverified",
+  "source": {
+    "head": "58fb31fa9490295608d0c19351dfcca8ebf6c325",
+    "music_source_sha256": {
+      "services/music_audience.go": "76c8aa3394dc3a5f998437aad741a7399d69edd89a5d9096aeed1dc660538aa1",
+      "services/music_bot_errors_test.go": "03e3a8781be363616b2db7f3b5c4cd1a9b11bcc38bdc2ea12156e03259780dca",
+      "services/music_bot_pipeline_test.go": "d59ccc1484dc92cdd2871db8d47f6dca807a96ef44dade3e87f169f10ef83420",
+      "services/music_bot_clock.go": "5e512cbf8c8f7d81f30c9d7a3646b837f9590d0aef128a87a3f3e04a760836c9",
+      "services/music_bot_e2ee.go": "6e0527a83e8d0a890ae31954c21234996fec2dc34cada64b11d6244117512a91",
+      "services/music_control.go": "ceb1c4db3b2627dc18e34b8e7192ac5c2be10574ace745013df938e6535e07ce",
+      "services/music_bot_concurrency_test.go": "a43d8d2cbe627fe19b4eefe97dcf687ff4b379e23504e8bb8c08047762993907",
+      "services/music_access_scope.go": "fbc5e9e532c21e3df911172cb20c8fa22ed2c553b2ac7258d6c74a8da3777ec1",
+      "services/music_url_guard_callsite_test.go": "dfb988af606c6f6d3e76bd20384e3bf47b719fd9b65a767e716e9f2cdbc3814e",
+      "services/music_bot_persistence_test.go": "14111f5d5cf13946101e51fcb4c50b8a0e2a1e455a2980710e1fd5fd106eade3",
+      "services/music_bot_pipeline.go": "82360c42c94de8ed371210ca07de5c168468cd0ce3fdceabba3e947c9b31973b",
+      "services/music_bot_metadata_test.go": "add805566f2a28289820fecb25e586d3f56f8d959e18f99f7012584d74d653bd",
+      "services/music_bot_live_integration_test.go": "acb331300103cfcb7d0538036434109f103b172033d830ba4218b4f04cfdd4a4",
+      "services/music_bot_service_test.go": "45581e804a6fdd741fcb576b72f7fcb0e27ce462207746df8b0427b60158ca71",
+      "services/music_search_test.go": "7d291da4d6650dfa57d3c3468767bfcf7b73d02d6795030e2e0c53736eab7d72",
+      "services/music_url_guard.go": "9a36fa16226e28bc1e9897ba9da8968134784e8970aaf4adc6a04b44e803ef9b",
+      "services/music_audience_test.go": "358f197633da10cbe4822274d0f0474c6114a204228b59c6d60a1e390865ab57",
+      "services/music_requester_privacy.go": "f151d5affc59bf05224e92d08adbd2508759617aef9cd20d18db2ea396f1c358",
+      "services/music_bot_clock_test.go": "21764c18954d6c961e040ada7fb46115c8584673c4a5cbe69032aef2fb4a1ffa",
+      "services/music_bot_e2ee_test.go": "2296cb68c746d65993250542e0babe0f30e4791ce40856c974d8defbafdad1eb",
+      "services/music_bot_metadata.go": "63ecc0d83ab3a5289b45495deef3e1068c47f4709647d8ecb285c51ccc14a6c5",
+      "services/music_bot_search_live_test.go": "1eb22bc8b21d009ca73d239bd07022c79e5bc8a41a52c405e5a2bf5aa63f36af",
+      "services/music_url_guard_test.go": "d1e2992b5abe54cd4b0087b125798d18dce4da5a0f07557ff57f7b35e090d158",
+      "services/music_bot_service.go": "45e47401d005c5ad9921e31c71c7eb41db3f316de3b634b1dc066c4551a722f8",
+      "services/music_requester_privacy_test.go": "84f4325928a638eb38f490e16b3b5efb8a3fa7fa7bf5389c442cf32fec9f54e9",
+      "services/music_bot_errors.go": "73800f101d1c08c16a60ac90752d37d2835607ab35137f22f073760f08d05b50",
+      "services/music_control_test.go": "8d12da7db30a58252cd52bc130b65ffbaf4cff06095d5936b66a7f4742ffc673",
+      "services/music_access_scope_test.go": "c1156a23aa79a0796ad54844385e9e280f20e8ee240380de3a562a688392c8aa"
+    },
+    "scope": "Current source with concurrent DM/repository edits; immutable compiled services test binary will select only named live music test.",
+    "verified_unchanged_after_test": true,
+    "compiled_binary_sha256": "50e8ea70ab3edd2f60babe92616b837564bbec9faf7e715a0836cab9a4c021da"
+  },
+  "environment": {
+    "go": "golang:1.26.10-bookworm, CGO_ENABLED=0",
+    "livekit": "Owned disposable livekit/livekit-server:v1.8.4 --dev --bind127.0.0.1 --node-ip127.0.0.1; no host ports; runtime shared only owned container namespace",
+    "tools": "Network-disabled prerequisite check: yt-dlp2026.10.21, Deno2.9.8, FFmpeg5.1.9 inside cached hichat-server-music-acceptance:local",
+    "video": "https://www.youtube.com/watch?v=0KbRhUtFwkc, canonical user-authorized single video; no radio playlist/cookies/private credentials/config/bypass"
+  },
+  "verification": {
+    "build": "docker golang:1.26.10-bookworm --network none, current server read-only mount + owned output directory + existing module/build caches; go test -c -o /out/music-services.test ./services",
+    "command": "docker run --rm --network container:<unique-owned-loopback-livekit> --mount type=bind,source=<owned-QA-dir>,target=/qa,readonly -e MUSIC_YOUTUBE_SMOKE_URL=https://www.youtube.com/watch?v=0KbRhUtFwkc -e MUSIC_LIVEKIT_SMOKE_URL=ws://127.0.0.1:7880 -e HICHAT_TEST_POSTGRES_DSN= --entrypoint /qa/music-services.test hichat-server-music-acceptance:local '-test.run=^TestMusicYouTubeLiveKitSmoke$' '-test.v' '-test.count=1' '-test.timeout=2m'",
+    "result": "PASS29.76s",
+    "decrypted_packets": 413,
+    "initial_decoded_peak": 0.2753,
+    "rotated_key_frames": 312,
+    "rotated_decoded_peak": 0.4156,
+    "behaviors": [
+      "Real YouTube extraction and FFmpeg Opus media",
+      "LiveKit GCM-encrypted publication and independent SDK RTP decryption/non-silent Opus decode",
+      "New key-index lookups and independently decoded non-silent media after room-key rotation",
+      "Pause freezes playback clock; resume advances packets",
+      "Intentional duplicate enqueue, skip to queued track, stop removes active bot"
+    ]
+  },
+  "corrections": [
+    "First owned container was ready and removed, but an unquoted dotted PowerShell test flag became -test; binary rejected argv before running a test or extracting media. Corrected fully quoted argv passed."
+  ],
+  "limits": [
+    "Only relevant music source hashes were verified unchanged; DM/repository work occurred concurrently, so the binary is not claimed to be a clean immutable whole-HEAD build.",
+    "Direct Go service/SDK fixture uses trusted internal legacy Enqueue and mutable test room keys; it does not exercise normal HTTP authorization, durable protocol2, browser WS audience, or actual voice-session permissions.",
+    "Actual two HiChat clients, installed Windows audible output, personal volume/deafen, device/reconnect/restart and final committed-source runtime/CI acceptance remain separate gates.",
+    "No production deployment, new image publication, installer, commit or push."
+  ],
+  "cleanup": "Exact owned loopback LiveKit container removed after both attempts; no existing services or host ports changed. Temporary benchmark repository source removed through apply_patch. Automatic approval review rejected exact validated temporary-directory deletion (tool reason: blocked by policy); nonsecret compiled binary/log/harness artifacts remain at C:/Users/PARS/AppData/Local/Temp/hichat-music-live-cee66fe103. No workaround deletion attempted."
+}

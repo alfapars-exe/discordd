@@ -1,0 +1,93 @@
+{
+  "phase": "P10",
+  "date": "2026-10-25",
+  "status": "implemented_unverified",
+  "baseline_head": "61b347c3da95de3e4a6beba44216dae578a67e80",
+  "source_sha256": {
+    "server/services/music_audience.go": "b55c5a04dd993f937ee0fabd94a87338f6a9322fbceeeb82140e19b1ef6ec7dc",
+    "server/services/music_audience_test.go": "6769a4fde229a1a3cb7b6d5c955b268490391b0ab8ded2ef9faa47508dec9081"
+  },
+  "scope": [
+    "Remove the redundant preliminary membership/fresh-View pass; each trusted candidate is deduplicated and checked once immediately before its targeted enqueue.",
+    "Retain direct current membership, uncached fresh View with invalidation handling, exact current server/channel/JoinedAt/ChannelGeneration, nonzero markers, whole-publication deadline and fail-closed dependencies.",
+    "Singleton BroadcastToUsers remains unchanged; no hub targeting refactor, schema/client/API/grant changes or prior SDK receipt updates."
+  ],
+  "scheduling_contract": "An early recipient can receive an event while authorized before a later lookup triggers revocation. That already enqueued event cannot be recalled. Any subsequent event must perform new membership/fresh-View/voice checks and deny the revoked recipient. Candidate identity captured for a pending publication is invalid after leave/rejoin/admin-out-back.",
+  "repository_call_counts": {
+    "method": "Real NewChannelPermissionService fresh resolver with existing counting repository doubles; non-admin View/Read role, no network or actual SQL latency. Exact assertions count membership, inner channel/roles/overrides and outer channel lookup.",
+    "before_formula": "8N+1",
+    "after_formula": "4N+1",
+    "rows": [
+      {
+        "participants": 0,
+        "before": 1,
+        "after": 1,
+        "membership": 0,
+        "fresh_view_operations": 0,
+        "fresh_view_inner_repo_calls": 0,
+        "outer_channel": 1,
+        "targeted_sends": 0
+      },
+      {
+        "participants": 2,
+        "before": 17,
+        "after": 9,
+        "membership": 2,
+        "fresh_view_operations": 2,
+        "fresh_view_inner_repo_calls": 6,
+        "outer_channel": 1,
+        "targeted_sends": 2
+      },
+      {
+        "participants": 10,
+        "before": 81,
+        "after": 41,
+        "membership": 10,
+        "fresh_view_operations": 10,
+        "fresh_view_inner_repo_calls": 30,
+        "outer_channel": 1,
+        "targeted_sends": 10
+      },
+      {
+        "participants": 30,
+        "before": 241,
+        "after": 121,
+        "membership": 30,
+        "fresh_view_operations": 30,
+        "fresh_view_inner_repo_calls": 90,
+        "outer_channel": 1,
+        "targeted_sends": 30
+      }
+    ]
+  },
+  "verification": [
+    {
+      "command": "go test ./services ./handlers -run '^TestMusicAudience|^TestMusicAccess|^TestMusicRequesterPrivacy|^TestStopBot' -count=1 -timeout=2m",
+      "result": "PASS final source services12.958s/handlers2.067s"
+    },
+    {
+      "command": "docker run --rm --mount type=bind,source=C:\\Users\\PARS\\Desktop\\PROJELER\\HiChat\\discordd\\server,target=/work,readonly --mount type=volume,source=hichat-go-qa-modules,target=/go/pkg/mod --mount type=volume,source=hichat-go-qa-build,target=/root/.cache/go-build --workdir /work -e CGO_ENABLED=1 golang:1.26.10-bookworm go test ./services ./handlers -run 'TestMusicAudience|TestMusicAccess|TestMusicRequesterPrivacy|TestStopBot' -race -count=1 -timeout=3m",
+      "result": "PASS final source services124.208s/handlers3.385s; no race report."
+    },
+    {
+      "command": "GOTOOLCHAIN=go1.26.10 golangci-lint 2.12.2 run --config ../.golangci.yml --timeout 3m ./services/... ./handlers/...",
+      "result": "PASS final source0issues; pinned Windows executable under LOCALAPPDATA/Temp/hichat-golangci-lint-2.12.2/golangci-lint-2.12.2-windows-amd64/golangci-lint.exe"
+    },
+    {
+      "command": "git diff --check -- services/music_audience.go services/music_audience_test.go",
+      "result": "PASS"
+    }
+  ],
+  "tests": [
+    "Existing state/error recipient-denial matrix, current voice identity/marker checks, positive-cache bypass/invalidation, owned cleanup and publication-ordering cases retained.",
+    "Updated later-lookup revocation case explicitly asserts authorized first state delivery then exclusion from a NEW error event.",
+    "Earlier recipient enqueue changes pending recipient membership/View or leave/rejoin/admin-out-back: pending recipient receives no stale publication.",
+    "Exact4N+1 repository-call assertions cover0/2/10/30 participants without weakening the fresh resolver.",
+    "A dependency returning stale success after the bounded context expires cannot authorize a delayed recipient."
+  ],
+  "remaining": [
+    "No actual database/hub latency measurement for this new single-pass source; earlier two-pass mocked CPU measurements remain historical and are not reused as new latency evidence.",
+    "Real two-client/installed Windows audible media, current compiled HTTP/WS runtime and final-source CI remain separate gates. Prior SDK58fb31fa evidence is unchanged and is not claimed to validate this newer metadata optimization.",
+    "No commit, push, deployment or new external media/service calls in this slice."
+  ]
+}

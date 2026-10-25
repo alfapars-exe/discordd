@@ -3,6 +3,9 @@
  * Shows mic/deafen/screen/disconnect when in voice, status picker on avatar click.
  */
 
+import {ownsP2PCapture}from "../../audio/p2pCaptureOwner";
+import {useMicrophoneCaptureViewStore}from "../../stores/microphoneCaptureViewStore";
+import { useGroupCallAudioControlStore, toggleGroupCallMicrophone } from "../../stores/groupCallAudioControlStore";
 import { useState, useRef, useEffect, lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../../stores/authStore";
@@ -47,9 +50,20 @@ function UserBar({
   const currentVoiceChannelId = useVoiceStore((s) => s.currentVoiceChannelId);
   const currentVoiceServerId = useVoiceStore((s) => s.currentVoiceServerId);
   const activeCall = useP2PCallStore((s) => s.activeCall);
+  const p2pCapture = ownsP2PCapture(activeCall);
   const openTab = useUIStore((s) => s.openTab);
   const isMuted = useVoiceStore((s) => s.isMuted);
   const isDeafened = useVoiceStore((s) => s.isDeafened);
+  const muteBeforeDeafen = useVoiceStore((s) => s.muteBeforeDeafen);
+  const groupControl = useGroupCallAudioControlStore(state => state.control);
+  const groupOnly = !!groupControl && !currentVoiceChannelId && !p2pCapture;
+  const captureJoinGeneration = useVoiceStore(state => state._joinGeneration ?? 0);
+  const captureView = useMicrophoneCaptureViewStore(state => state.view);
+  const guildCaptureFailed = captureView?.channelId === currentVoiceChannelId && captureView.joinGeneration === captureJoinGeneration && captureView.failed;
+  const displayedMuted = groupOnly ? groupControl.effectiveMuted : isMuted || guildCaptureFailed;
+  const manualMuted = groupOnly ? groupControl.manualMuted : (muteBeforeDeafen ?? true);
+  const muteActionLabel = isDeafened ? t(manualMuted ? "unmuteAfterUndeafen" : "muteAfterUndeafen") : t((groupOnly ? groupControl.manualMuted : isMuted) ? "unmute" : "mute");
+  const toggleDisplayedMute = groupOnly ? () => toggleGroupCallMicrophone(groupControl.nonce) : onToggleMute;
   const isStreaming = useVoiceStore((s) => s.isStreaming);
   const isCameraEnabled = useVoiceStore((s) => s.isCameraEnabled);
   const setCameraEnabled = useVoiceStore((s) => s.setCameraEnabled);
@@ -150,7 +164,7 @@ function UserBar({
   const peerName = activeCall ? (activeCall.caller_id === user.id
     ? activeCall.receiver_display_name || activeCall.receiver_username
     : activeCall.caller_display_name || activeCall.caller_username) : "";
-  const p2pOnly = UI_SHELL_V2 && !!activeCall && !isInVoice;
+  const p2pOnly = UI_SHELL_V2 && p2pCapture && !isInVoice;
 
   function returnToVoice() {
     if (!currentVoiceChannelId || !currentVoiceServerId || !voiceServer) return false;
@@ -322,14 +336,14 @@ function UserBar({
         {/* Mic toggle + device chevron */}
         {!p2pOnly && <div className="ub-ctrl-group">
           <button
-            className={`ub-ctrl${isMuted ? " active" : ""}`}
-            onClick={onToggleMute}
-            title={isMuted ? t("unmute") : t("mute")}
-            aria-label={isMuted ? t("unmute") : t("mute")}
-            aria-pressed={isMuted}
+            className={`ub-ctrl${displayedMuted ? " active" : ""}`}
+            onClick={toggleDisplayedMute}
+            title={muteActionLabel}
+            aria-label={muteActionLabel}
+            aria-pressed={displayedMuted}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-              {isMuted ? (
+              {displayedMuted ? (
                 <path d="M12 1a4 4 0 0 0-4 4v6a4 4 0 0 0 8 0V5a4 4 0 0 0-4-4zM2.7 2.7a1 1 0 0 1 1.4 0l17 17a1 1 0 0 1-1.4 1.4L2.7 4.1a1 1 0 0 1 0-1.4zM6 10a1 1 0 0 0-2 0 8 8 0 0 0 7 7.9V21H8a1 1 0 1 0 0 2h8a1 1 0 1 0 0-2h-3v-3.1A8 8 0 0 0 20 10a1 1 0 1 0-2 0 6 6 0 0 1-9.7 4.7" />
               ) : (
                 <path d="M12 1a4 4 0 0 0-4 4v6a4 4 0 0 0 8 0V5a4 4 0 0 0-4-4zM6 10a1 1 0 0 0-2 0 8 8 0 0 0 7 7.9V21H8a1 1 0 1 0 0 2h8a1 1 0 1 0 0-2h-3v-3.1A8 8 0 0 0 20 10a1 1 0 1 0-2 0 6 6 0 0 1-12 0z" />

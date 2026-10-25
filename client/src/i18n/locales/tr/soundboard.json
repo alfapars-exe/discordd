@@ -33,5 +33,11 @@
   "cancel": "İptal",
   "save": "Kaydet",
   "readError": "Ses dosyası okunamadı",
-  "uploadFailed": "Yükleme başarısız"
+  "uploadFailed": "Yükleme başarısız",
+  "loadFailed": "Ses paneli yüklenemedi. Yeniden açarak tekrar dene.",
+  "playFailed": "Ses isteği doğrulanamadı. Yeniden deneyebilirsin.",
+  "playbackFailed": "Ses çalınamadı. Çıkış cihazını ve ses iznini kontrol et.",
+  "outputFallback": "Seçili cihaz bulunamadı; sistemin varsayılan çıkışı kullanılıyor.",
+  "deleteFailed": "Ses silinemedi. Yeniden deneyebilirsin.",
+  "previewUnavailable": "Önizleme için ses panelinin sesini ve sağırlaştırmayı kontrol et."
 }

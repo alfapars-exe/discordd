@@ -1,0 +1,30 @@
+{
+  "date": "2026-10-25",
+  "status": "scoped_browser_pass",
+  "server_commit": "e90b7daf9262266d3a7181733480e6ee3faeb18a",
+  "client_source": "active working tree; not an immutable release",
+  "environment": "isolated loopback QA API and existing Ego Lite Space 0",
+  "checks": [
+    "Human recipient granted the synthetic game application permission through normal Security UI and explicit consent.",
+    "Game dev peer registered its own device and used production Signal modules in its own browser realm and account namespace.",
+    "Encrypted bot send returned encryption_version=1, immutable application origin, matching ciphertext and empty plaintext content.",
+    "Normal HiChat recipient displayed the decrypted synthetic bot message and accepted the message request.",
+    "Conversation encryption was initially disabled. Initial human reply was plaintext and the peer correctly rejected it as encrypted_peer_message_required. This attempt is not counted as an encrypted roundtrip.",
+    "Human enabled conversation encryption through normal confirmation UI, removed only the prior synthetic plaintext test message, and sent a new reply.",
+    "Game peer decrypted the exact new human reply using its own Signal device keys: one new encrypted reply.",
+    "Human paused game messaging permission through the Security switch. The next peer send failed with http_403:FORBIDDEN."
+  ],
+  "visual": {
+    "screenshot": "C:/Users/PARS/AppData/Local/Temp/hichat-browser-20261025-1140/game-signal-roundtrip.png",
+    "inspected": true,
+    "viewport_pixels": [2548, 1269],
+    "scope": "desktop conversation only; no responsive acceptance claim"
+  },
+  "secrets": "No credential or private key included. Synthetic token remained in peer memory; existing key stores were preserved.",
+  "remaining": [
+    "Peer is a developer game client, not a second complete HiChat UI.",
+    "No physical audio, LiveKit browser RTP, music audibility or Windows acceptance was exercised.",
+    "New uncommitted DM/group sequence and media admission changes are not covered by the running server binary.",
+    "Conversation E2EE is an explicit setting; this test does not establish encryption enabled by default."
+  ]
+}

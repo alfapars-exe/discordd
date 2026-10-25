@@ -1,0 +1,16 @@
+{
+  "source": "ddfc8fad0191af15de07bdb9e4a873a92459c741",
+  "checks_passed": 5,
+  "checks": [
+    "known-ID nonfriend and actor override fail without group or inbox writes",
+    "pending request does not grant group admission",
+    "accepted friendship admits the same recipient",
+    "unfriend does not revoke an existing admitted membership or send permission",
+    "nonfriend re-add cannot mutate membership/epoch or obtain a media token"
+  ],
+  "limits": [
+    "owned isolated loopback users only; generated temporary group and relationship removed",
+    "friend request/acceptance activity metadata may remain in synthetic inboxes",
+    "placeholder ciphertext, no Signal decryption or physical media acceptance"
+  ]
+}

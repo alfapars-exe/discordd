@@ -16,6 +16,7 @@ import type { EncryptionVersion } from "./e2ee";
  * server never ships ciphertext here.
  */
 export type DMLastMessage = {
+  source_sequence?: string;
   id: string;
   user_id: string;
   content: string | null;
@@ -41,6 +42,10 @@ export type DMChannelWithUser = {
 };
 
 export type DMMessage = {
+  /** Immutable decimal server append sequence; absent on legacy servers. */
+  source_sequence?: string;
+  /** Immutable server-derived game application origin; absent for legacy/human messages. */
+  application_id?: string | null;
   id: string;
   dm_channel_id: string;
   user_id: string;

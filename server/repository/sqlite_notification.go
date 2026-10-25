@@ -89,6 +89,86 @@ func (r *sqliteNotificationRepo) CreateReactionIfAbsent(ctx context.Context, n *
 	return true, nil
 }
 
+// CreateDMMessageIfAbsent uses a source-specific stable identity. No message
+// content, ciphertext or arbitrary caller payload is copied into the inbox.
+func (r *sqliteNotificationRepo) CreateDMMessageIfAbsent(ctx context.Context, n *models.Notification) (bool, error) {
+	if n == nil || n.UserID == "" || n.ActorID == nil || n.MessageID == nil || n.DMChannelID == nil || n.UserID == *n.ActorID {
+		return false, fmt.Errorf("DM notification requires recipient, actor and source")
+	}
+	identity, _ := json.Marshal([]string{"dm", n.UserID, *n.DMChannelID, *n.MessageID})
+	n.ID = fmt.Sprintf("dm-message-%x", sha256.Sum256(identity))
+	n.Kind = models.NotificationKindSystem
+	n.ServerID, n.ChannelID, n.GroupDMChannelID = nil, nil, nil
+	n.Payload = json.RawMessage(`{"action":"incoming_message","source":"dm"}`)
+	result, err := r.db.ExecContext(ctx, `INSERT INTO notifications(id,user_id,kind,actor_id,message_id,dm_channel_id,payload)
+		SELECT ?,?,?,?,?,?,? FROM dm_messages m JOIN dm_channels c ON c.id=m.dm_channel_id
+		WHERE m.id=? AND m.dm_channel_id=? AND m.user_id=? AND c.status='accepted'
+		AND ((c.user1_id=? AND c.user2_id=?) OR (c.user2_id=? AND c.user1_id=?))
+		ON CONFLICT(id) DO NOTHING`, n.ID, n.UserID, n.Kind, n.ActorID, n.MessageID, n.DMChannelID, string(n.Payload),
+		*n.MessageID, *n.DMChannelID, *n.ActorID, n.UserID, *n.ActorID, n.UserID, *n.ActorID)
+	if err != nil {
+		return false, fmt.Errorf("create DM notification: %w", err)
+	}
+	count, err := result.RowsAffected()
+	if err != nil || count == 0 {
+		return false, err
+	}
+	var createdAt string
+	if err := r.db.QueryRowContext(ctx, `SELECT created_at FROM notifications WHERE id=?`, n.ID).Scan(&createdAt); err != nil {
+		return false, err
+	}
+	n.CreatedAt = dbTextToRFC3339(createdAt)
+	return true, nil
+}
+
+func (r *sqliteNotificationRepo) MarkDMMessagesRead(ctx context.Context, userID, channelID string, messageID *string) ([]string, error) {
+	// The shared channel lock in DMTxRepos makes this captured cursor stable
+	// against concurrent sends. Never use notification wall-clock timestamps.
+	var cutoff int64
+	if messageID != nil {
+		if err := r.db.QueryRowContext(ctx, `SELECT last_read_source_sequence FROM dm_reads WHERE user_id=? AND dm_channel_id=?`, userID, channelID).Scan(&cutoff); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := r.db.QueryRowContext(ctx, `SELECT COALESCE(MAX(source_sequence),0) FROM dm_messages WHERE dm_channel_id=?`, channelID).Scan(&cutoff); err != nil {
+			return nil, err
+		}
+	}
+	const query = `SELECT n.id FROM notifications n
+		JOIN dm_messages m ON m.id=n.message_id AND m.dm_channel_id=n.dm_channel_id
+		WHERE n.user_id=? AND n.dm_channel_id=? AND n.kind='system' AND n.payload=? AND n.read_at IS NULL
+		AND m.source_sequence<=?`
+	args := []any{userID, channelID, `{"action":"incoming_message","source":"dm"}`, cutoff}
+	// Return one overflow sentinel beyond the WS budget, but acknowledge the
+	// entire cutoff with fixed-parameter SQL rather than an unbounded ID list.
+	const selectQuery = query + ` ORDER BY n.id LIMIT 513`
+	rows, err := r.db.QueryContext(ctx, selectQuery, args...)
+	if err != nil {
+		return nil, err
+	}
+	ids := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(ids) == 0 {
+		return ids, nil
+	}
+	const updateQuery = `UPDATE notifications SET read_at=datetime('now') WHERE read_at IS NULL AND id IN (` + query + `)`
+	if _, err := r.db.ExecContext(ctx, updateQuery, args...); err != nil {
+		return nil, err
+	}
+	return ids, nil
+}
+
 // dbTextToRFC3339 converts the table's 'YYYY-MM-DD HH:MM:SS' UTC text into
 // RFC3339 ('2006-01-02T15:04:05Z') for the API/WS boundary: the raw form
 // parses as LOCAL time on V8 and as NaN on WebKit. Text that does not match
@@ -111,11 +191,11 @@ func dbTextToRFC3339(s string) string {
 func (r *sqliteNotificationRepo) List(ctx context.Context, userID, beforeID string, unreadOnly bool, limit int) ([]models.Notification, error) {
 	query := `
 		SELECT n.id, n.user_id, n.kind, n.actor_id, n.server_id, n.channel_id, n.message_id, n.dm_channel_id,
-		       n.payload, n.read_at, n.created_at,
+		       n.payload, n.read_at, n.created_at, n.group_dm_channel_id,
 		       u.id, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, u.created_at
 		FROM notifications n
 		LEFT JOIN users u ON u.id = n.actor_id
-		WHERE n.user_id = ?`
+		WHERE n.user_id = ? AND (n.group_dm_channel_id IS NULL OR EXISTS(SELECT 1 FROM group_dm_members gm JOIN group_dm_channels gc ON gc.id=gm.group_id JOIN group_dm_messages src ON src.group_id=gm.group_id AND src.id=n.message_id WHERE gm.group_id=n.group_dm_channel_id AND gm.user_id=n.user_id))`
 	args := []any{userID}
 
 	if unreadOnly {
@@ -159,14 +239,14 @@ func (r *sqliteNotificationRepo) List(ctx context.Context, userID, beforeID stri
 // created_at / read_at leave here as RFC3339 (see dbTextToRFC3339).
 func scanNotificationRow(rows *sql.Rows) (*models.Notification, error) {
 	var n models.Notification
-	var actorID, serverID, channelID, messageID, dmChannelID, readAt sql.NullString
+	var actorID, serverID, channelID, messageID, dmChannelID, groupDMChannelID, readAt sql.NullString
 	var payload, createdAt string
 	var uID, uUsername, uDisplayName, uAvatarURL, uStatus, uCustomStatus sql.NullString
 	var uCreatedAt sql.NullTime
 
 	if err := rows.Scan(
 		&n.ID, &n.UserID, &n.Kind, &actorID, &serverID, &channelID, &messageID, &dmChannelID,
-		&payload, &readAt, &createdAt,
+		&payload, &readAt, &createdAt, &groupDMChannelID,
 		&uID, &uUsername, &uDisplayName, &uAvatarURL, &uStatus, &uCustomStatus, &uCreatedAt,
 	); err != nil {
 		return nil, fmt.Errorf("failed to scan notification: %w", err)
@@ -178,6 +258,7 @@ func scanNotificationRow(rows *sql.Rows) (*models.Notification, error) {
 	n.ChannelID = nullStringPtr(channelID)
 	n.MessageID = nullStringPtr(messageID)
 	n.DMChannelID = nullStringPtr(dmChannelID)
+	n.GroupDMChannelID = nullStringPtr(groupDMChannelID)
 	if readAt.Valid {
 		ra := dbTextToRFC3339(readAt.String)
 		n.ReadAt = &ra
@@ -219,7 +300,7 @@ func nullStringPtr(s sql.NullString) *string {
 // reports true (200) rather than a spurious 404.
 func (r *sqliteNotificationRepo) MarkRead(ctx context.Context, userID, id string) (bool, error) {
 	result, err := r.db.ExecContext(ctx,
-		`UPDATE notifications SET read_at = COALESCE(read_at, datetime('now')) WHERE id = ? AND user_id = ?`,
+		`UPDATE notifications SET read_at = COALESCE(read_at, datetime('now')) WHERE id = ? AND user_id = ? AND (group_dm_channel_id IS NULL OR EXISTS(SELECT 1 FROM group_dm_members gm JOIN group_dm_channels gc ON gc.id=gm.group_id JOIN group_dm_messages src ON src.group_id=gm.group_id AND src.id=notifications.message_id WHERE gm.group_id=notifications.group_dm_channel_id AND gm.user_id=notifications.user_id))`,
 		id, userID,
 	)
 	if err != nil {
@@ -234,7 +315,7 @@ func (r *sqliteNotificationRepo) MarkRead(ctx context.Context, userID, id string
 
 func (r *sqliteNotificationRepo) MarkAllRead(ctx context.Context, userID string) (int64, error) {
 	result, err := r.db.ExecContext(ctx,
-		`UPDATE notifications SET read_at = datetime('now') WHERE user_id = ? AND read_at IS NULL`,
+		`UPDATE notifications SET read_at = datetime('now') WHERE user_id = ? AND read_at IS NULL AND (group_dm_channel_id IS NULL OR EXISTS(SELECT 1 FROM group_dm_members gm JOIN group_dm_channels gc ON gc.id=gm.group_id JOIN group_dm_messages src ON src.group_id=gm.group_id AND src.id=notifications.message_id WHERE gm.group_id=notifications.group_dm_channel_id AND gm.user_id=notifications.user_id))`,
 		userID,
 	)
 	if err != nil {
@@ -250,7 +331,7 @@ func (r *sqliteNotificationRepo) MarkAllRead(ctx context.Context, userID string)
 func (r *sqliteNotificationRepo) CountUnread(ctx context.Context, userID string) (int, error) {
 	var n int
 	if err := r.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM notifications WHERE user_id = ? AND read_at IS NULL`, userID,
+		`SELECT COUNT(*) FROM notifications n WHERE user_id = ? AND read_at IS NULL AND (group_dm_channel_id IS NULL OR EXISTS(SELECT 1 FROM group_dm_members gm JOIN group_dm_channels gc ON gc.id=gm.group_id JOIN group_dm_messages src ON src.group_id=gm.group_id AND src.id=n.message_id WHERE gm.group_id=n.group_dm_channel_id AND gm.user_id=n.user_id))`, userID,
 	).Scan(&n); err != nil {
 		return 0, fmt.Errorf("failed to count unread notifications: %w", err)
 	}

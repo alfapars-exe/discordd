@@ -38,6 +38,8 @@ export type MusicBotChannelState = {
   /** Server playback position excludes paused time; absent on older servers. */
   elapsed_seconds?: number;
   revision?: number;
+  session_id?: string;
+  minimum_protocol?: number;
   repeat_mode?: "off" | "one" | "all";
 };
 

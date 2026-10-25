@@ -69,3 +69,17 @@ export function overlayNotificationActionAt(
   const y = point.y - windowBounds.y;
   return x >= 0 && x < INBOX_ACTION_WIDTH && y >= 0 && y < INBOX_ACTION_HEIGHT ? "open-inbox" : null;
 }
+
+/** Fixed reply buttons occupy only their own 88x20 DIP row regions. */
+export function overlayNotificationReplyRowAt(point: OverlayActionPoint, bounds: OverlayActionWindowBounds, rows: number): number | null {
+  if (!isFinitePoint(point) || !Number.isInteger(rows) || rows < 1 || rows > 3
+    || ![bounds.x, bounds.y, bounds.width, bounds.height].every(Number.isFinite)
+    || bounds.width < INBOX_ACTION_WIDTH) return null;
+  const x = point.x - bounds.x, y = point.y - bounds.y;
+  if (x < 0 || x >= INBOX_ACTION_WIDTH) return null;
+  for (let row = 0; row < rows; row++) {
+    const top = 20 + row * 32 + 6;
+    if (bounds.height >= top + 20 && y >= top && y < top + 20) return row;
+  }
+  return null;
+}

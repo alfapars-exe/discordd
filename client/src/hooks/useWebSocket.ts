@@ -429,7 +429,11 @@ export function useWebSocket() {
       try {
         const ticketRes = await apiClient<{ ticket: string }>(
           "/auth/ws-ticket",
-          { method: "POST" },
+          {
+            method: "POST",
+            timeoutMs: 10_000,
+            isCurrent: () => isCurrentConnection(connectionId, ownerId, generation),
+          },
         );
         if (ticketRes.success && ticketRes.data?.ticket) {
           connectURL = `${WS_URL}?ticket=${ticketRes.data.ticket}`;

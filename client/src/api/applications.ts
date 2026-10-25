@@ -8,6 +8,7 @@ export type ApplicationIdentity = {
   display_name: string | null;
   created_at: string;
   is_bot: true;
+  is_game_application?: boolean;
 };
 
 export type ApplicationTransferRequest = {

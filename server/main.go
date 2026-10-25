@@ -16,6 +16,7 @@ import (
 	"github.com/argeinfina/hichat/config"
 	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/middleware"
+	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/pkg/crypto"
 	"github.com/argeinfina/hichat/pkg/i18n"
@@ -189,6 +190,12 @@ func main() {
 	// 9. Service layer (order matters: channelPerm -> voice -> p2pCall -> rest)
 	svcs, limiters, metricsCollector := initServices(db.Conn, repos, hub, cfg, encryptionKey, readiness)
 
+	if sink, ok := svcs.AppLog.(interface {
+		ConsumeRecord(context.Context, slog.Record)
+	}); ok {
+		logx.SetAppSink(sink.ConsumeRecord)
+	}
+
 	// 9b. Wire structured app logger into Hub and services
 	hub.SetAppLogger(svcs.AppLog)
 	svcs.Voice.SetAppLogger(svcs.AppLog)
@@ -252,13 +259,20 @@ func main() {
 	// 10f. Runtime stats logger — periodic process metrics into the structured
 	// log stream (no external scraper on a single-instance HF Space) AND into
 	// the durable runtime_telemetry rollup (P3.11, repos.RuntimeTelemetry).
-	stopRuntimeStats := startRuntimeStatsLogger(hub, db, time.Minute, repos.RuntimeTelemetry, httpStats, cfg.TelemetryRetentionDays)
+	stopRuntimeStats := startRuntimeStatsLogger(hub, db, time.Minute, repos.RuntimeTelemetry, httpStats, cfg.TelemetryRetentionDays, func() models.AppLogHealth {
+		if h, ok := svcs.AppLog.(interface{ Health() models.AppLogHealth }); ok {
+			return h.Health()
+		}
+		return models.AppLogHealth{}
+	})
 
 	// 10g. Maintenance sweeper — hourly purge of expired sessions and stale
 	// link-preview cache rows (audit P1-BD-04: DeleteExpired had no caller,
 	// so both tables grew without bound). The same pass runs a read-only
 	// orphan census; it logs a warning per affected table and deletes nothing.
 	stopMaintenance := startMaintenanceSweeper(repos.Session, repos.LinkPreview, db.Conn, time.Hour)
+	stopAuthMaintenance := services.StartAuthMaintenance(context.Background(), svcs.Auth)
+	defer stopAuthMaintenance()
 	stopAccountAssetCleanup := svcs.AccountAssetCleanup.Start(context.Background())
 	stopMessageReminders := svcs.ReminderWorker.Start(context.Background())
 	stopServerEvents := svcs.ServerEventWorker.Start(context.Background())
@@ -456,6 +470,12 @@ func main() {
 	}()
 
 	<-done
+	if stopper, ok := svcs.LinkPreview.(interface{ Stop() }); ok {
+		stopper.Stop()
+	}
+	if stopper, ok := svcs.OnlineFriendNotifier.(interface{ Stop() }); ok {
+		stopper.Stop()
+	}
 	bootLogger.Info("shutting down")
 
 	// Music bots first, and specifically BEFORE the (up to 3 minute) backup
@@ -470,18 +490,9 @@ func main() {
 	}
 	musicBridge.Close()
 
-	svcs.AppLog.Stop()
-	svcs.AuditLog.Stop()
-	// Final backup BEFORE exit: the AppLog/AuditLog Stop() calls above
-	// already drained pending rows into the local DB, so this snapshot
-	// captures the latest Denetim/audit events and uploads them to the HF
-	// bucket — closing the data-loss window on graceful (SIGTERM) restarts.
-	// Bounded by its own timeout, independent of the 5s HTTP-shutdown budget.
-	backupShutdownCtx, backupShutdownCancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	svcs.Backup.Shutdown(backupShutdownCtx)
-	backupShutdownCancel()
 	stopRuntimeStats()
 	stopMaintenance()
+	stopAuthMaintenance()
 	stopAccountAssetCleanup()
 	stopMessageReminders()
 	stopServerEvents()
@@ -499,15 +510,28 @@ func main() {
 	}
 	hub.Shutdown()
 
-	// Deliver any buffered Sentry events before the process exits.
-	logx.Flush(2 * time.Second)
-
+	// Drain HTTP before stopping the log writer so in-flight failures retain
+	// their correlation IDs and the shutdown backup includes the final batch.
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	shutdownErr := srv.Shutdown(ctx)
-	cancel() // explicit — a defer would never run past the Fatalf below
+	cancel()
 	if shutdownErr != nil {
-		logx.Fatal("shutdown", "forced shutdown", shutdownErr)
+		bootLogger.Warn("HTTP shutdown deadline exceeded", "err", pkg.ErrText(shutdownErr))
+		_ = srv.Close()
 	}
+
+	logx.SetAppSink(nil)
+	svcs.AppLog.Stop()
+	svcs.AuditLog.Stop()
+	// Final backup BEFORE exit: the AppLog/AuditLog Stop() calls above
+	// already drained pending rows into the local DB, so this snapshot
+	// captures the latest Denetim/audit events and uploads them to the HF
+	// bucket — closing the data-loss window on graceful (SIGTERM) restarts.
+	// Bounded by its own timeout, independent of the 5s HTTP-shutdown budget.
+	backupShutdownCtx, backupShutdownCancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	svcs.Backup.Shutdown(backupShutdownCtx)
+	backupShutdownCancel()
+	logx.Flush(2 * time.Second)
 
 	if err := db.Close(); err != nil {
 		bootLogger.Error("db close failed", "err", pkg.ErrText(err))

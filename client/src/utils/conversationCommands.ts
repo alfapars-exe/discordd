@@ -1,3 +1,4 @@
+import { toggleInboxShortcut } from "./inboxShortcutToggle";
 import { useUIStore } from "../stores/uiStore";
 import { useToastStore } from "../stores/toastStore";
 import { useAuthStore } from "../stores/authStore";
@@ -102,8 +103,8 @@ async function executeReadShortcut(command: "chat-mark-channel-read" | "chat-mar
     const result = await readStateApi.markAllRead(serverId, { timeoutMs: 15_000, isCurrent });
     if (!isCurrent()) return "stale";
     if (!result.success) return "failed";
-    await useReadStateStore.getState().fetchUnreadCounts(serverId, { timeoutMs: 15_000, isCurrent }).catch(() => undefined);
-    return isCurrent() ? "success" : "stale";
+    const refreshed = await useReadStateStore.getState().fetchUnreadCounts(serverId, { timeoutMs: 15_000, isCurrent });
+    return !isCurrent() ? "stale" : refreshed ? "success" : "failed";
   }
 
   if (destination.type !== "text" && destination.type !== "audit" && destination.type !== "voice") return "unavailable";
@@ -115,8 +116,8 @@ async function executeReadShortcut(command: "chat-mark-channel-read" | "chat-mar
   const result = await readStateApi.markRead(serverId, destination.channelId, latestMessage.id, { timeoutMs: 15_000, isCurrent });
   if (!isCurrent()) return "stale";
   if (!result.success) return "failed";
-  await useReadStateStore.getState().fetchUnreadCounts(serverId, { timeoutMs: 15_000, isCurrent }).catch(() => undefined);
-  return isCurrent() ? "success" : "stale";
+  const refreshed = await useReadStateStore.getState().fetchUnreadCounts(serverId, { timeoutMs: 15_000, isCurrent });
+  return !isCurrent() ? "stale" : refreshed ? "success" : "failed";
 }
 
 async function copyCurrentChannelLink(): Promise<ShortcutActionResult> {
@@ -150,7 +151,7 @@ export function executeConversationShortcut(command: ConversationShortcutId, eve
   if (command === "chat-oldest-unread") { void jumpToOldestUnread(); return; }
   if (command === "chat-open-inbox") {
     if (document.querySelector("dialog[open], .settings-overlay, .modal-backdrop, .report-overlay, .new-conversation-overlay")) return;
-    useUIStore.getState().navigate({ type: "inbox", channelId: "inbox", label: i18n.t("common:shellInbox") });
+    toggleInboxShortcut();
     return;
   }
   if (command === "chat-create-group") {

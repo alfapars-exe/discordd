@@ -51,13 +51,16 @@ var allowedClientLevels = map[string]models.LogLevel{
 type ClientLogHandler struct {
 	appLogger services.AppLogService
 
-	mu      sync.Mutex
-	buckets map[string]*clientLogBucket // keyed by user ID
+	mu        sync.Mutex
+	buckets   map[string]*clientLogBucket // keyed by user ID
+	lastPurge time.Time
 }
 
 type clientLogBucket struct {
-	tokens float64
-	last   time.Time
+	tokens      float64
+	errorTokens float64
+	seen        time.Time
+	last        time.Time
 }
 
 func NewClientLogHandler(appLogger services.AppLogService) *ClientLogHandler {
@@ -91,11 +94,6 @@ func (h *ClientLogHandler) Log(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !h.allow(user.ID) {
-		pkg.ErrorWithMessage(w, http.StatusTooManyRequests, "rate limited")
-		return
-	}
-
 	r.Body = http.MaxBytesReader(w, r.Body, maxClientLogBody)
 
 	var req clientLogRequest
@@ -110,6 +108,11 @@ func (h *ClientLogHandler) Log(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !h.allowLevel(user.ID, level == models.LogLevelError) {
+		w.Header().Set("Retry-After", "2")
+		pkg.ErrorWithMessage(w, http.StatusTooManyRequests, "rate limited")
+		return
+	}
 	message := strings.TrimSpace(req.Message)
 	if message == "" {
 		pkg.ErrorWithMessage(w, http.StatusBadRequest, "message is required")
@@ -128,7 +131,11 @@ func (h *ClientLogHandler) Log(w http.ResponseWriter, r *http.Request) {
 	// stack traces (or leaked credentials) into a single row.
 	metadata := make(map[string]string, len(req.Metadata)+1)
 	for k, v := range req.Metadata {
-		v = pkg.RedactSecrets(v)
+		if pkg.IsSecretLogKey(k) {
+			v = "***"
+		} else {
+			v = pkg.RedactSecrets(v)
+		}
 		if len(v) > maxMetadataValueLen {
 			v = v[:maxMetadataValueLen]
 		}
@@ -170,33 +177,40 @@ func categoryForMessage(message string) models.LogCategory {
 	}
 }
 
-// allow runs a per-user token bucket. Returns false when the bucket is empty.
-// Bucket map grows unboundedly; this is fine because keys are user IDs and
-// the userCache TTL on the auth middleware already implies an upper bound on
-// how many distinct users hit the endpoint per unit time. If this ever becomes
-// a memory concern, a janitor goroutine that prunes idle buckets is the fix.
-func (h *ClientLogHandler) allow(userID string) bool {
+// ERROR may consume its own reserve; INFO can never exhaust that reserve.
+func (h *ClientLogHandler) allowLevel(userID string, isError bool) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-
 	now := time.Now()
+	if now.Sub(h.lastPurge) >= time.Minute {
+		for id, b := range h.buckets {
+			if now.Sub(b.seen) > 10*time.Minute {
+				delete(h.buckets, id)
+			}
+		}
+		h.lastPurge = now
+	}
 	b, ok := h.buckets[userID]
 	if !ok {
-		b = &clientLogBucket{tokens: float64(clientLogPerUserBurst), last: now}
+		if len(h.buckets) >= 10000 {
+			return false
+		}
+		b = &clientLogBucket{tokens: float64(clientLogPerUserBurst), errorTokens: 5, last: now, seen: now}
 		h.buckets[userID] = b
 	}
-
-	elapsed := now.Sub(b.last)
+	elapsed := now.Sub(b.last).Seconds()
+	b.seen = now
 	if elapsed > 0 {
-		b.tokens += float64(elapsed) / float64(clientLogPerUserRefill)
-		if b.tokens > float64(clientLogPerUserBurst) {
-			b.tokens = float64(clientLogPerUserBurst)
-		}
+		b.tokens = min(float64(clientLogPerUserBurst), b.tokens+elapsed/clientLogPerUserRefill.Seconds())
+		b.errorTokens = min(5, b.errorTokens+elapsed/5)
 		b.last = now
 	}
-
 	if b.tokens >= 1 {
 		b.tokens--
+		return true
+	}
+	if isError && b.errorTokens >= 1 {
+		b.errorTokens--
 		return true
 	}
 	return false

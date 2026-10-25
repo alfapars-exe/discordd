@@ -1,0 +1,16 @@
+{
+  "source": "9529659abc99c26b6bea889d1452ea3aae8b734b",
+  "checks_passed": 6,
+  "checks": [
+    "real message responses preserve monotonic decimal source order",
+    "canonical group inbox sources contain no opaque ciphertext and do not double count badges",
+    "muting does not delete persistent inbox history",
+    "exact first-source read preserves two later rows and repeated read is idempotent",
+    "stale key epoch cannot advance source reads",
+    "membership removal purges owned group inbox rows and revokes source access"
+  ],
+  "limits": [
+    "synthetic isolated loopback accounts; opaque placeholder ciphertext only, no actual encryption/decryption or browser/audio acceptance",
+    "own temporary group removed; no production data touched"
+  ]
+}

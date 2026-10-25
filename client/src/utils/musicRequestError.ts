@@ -8,6 +8,8 @@ import { classifyApiError, showApiError } from "./apiError";
 export function showMusicRequestError(res: APIResponse<unknown>, action: "play" | "control"): void {
   if (res.success) return;
   const addToast = useToastStore.getState().addToast;
+  const protocolKey=res.code==="MUSIC_PROTOCOL_REQUIRED"?"protocolRequired":res.code==="MUSIC_RETRY_REQUIRED"?"retryOriginalHint":res.status===409?"conflictRefresh":null;
+  if(protocolKey){addToast("error",i18n.t(`music:${protocolKey}`));return;}
   if (res.isTimeout) {
     addToast("info", i18n.t(action === "play" ? "music:playTimeout" : "music:controlTimeout"));
     return;

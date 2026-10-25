@@ -26,6 +26,14 @@ function snapshot(position: VoiceOverlaySnapshot["position"], patch: Partial<Voi
 }
 
 describe("VoiceOverlayContent", () => {
+  it("shows all five names at middle left when only two members are speaking", () => {
+    const participants = Array.from({ length: 5 }, (_, i) => ({ ...participant(`member-${i}`, i < 2), muted: i === 4 }));
+    const view = render(<VoiceOverlayContent snapshot={snapshot("center-left", { participants })} />);
+    expect(view.container.querySelector(".voice-overlay-root")).toHaveAttribute("data-position", "center-left");
+    expect(view.container.querySelectorAll(".voice-overlay-row")).toHaveLength(5);
+    participants.forEach(p => expect(screen.getByText(p.name)).toBeVisible());
+    expect(view.container.querySelector(".voice-overlay-widget")).toHaveStyle({ transformOrigin: "center left" });
+  });
   it("renders real projected activity independently from voice and an honest empty state", () => {
     const source = snapshot("top-left", { participants: [], voiceOverlayMaxParticipants: 0, voiceOverlayActivity: true, activities: [{ userId: "friend", label: "Friend", gameName: "Example Game" }] });
     const view = render(<VoiceOverlayContent snapshot={source} />);
@@ -393,3 +401,42 @@ describe("VoiceOverlayContent", () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: originalWidth });
   });
 });
+
+
+it("renders only an actual native welcome notice and expires locally without another snapshot", () => {
+  vi.useFakeTimers();
+  try {
+    const source = snapshot("top-left", { voiceOverlayWelcome: true, welcomeHeight: 32 });
+    const view = render(<VoiceOverlayContent snapshot={source} />);
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    view.rerender(<VoiceOverlayContent snapshot={{ ...source, welcome: { id: 1, expiresAt: Date.now() + 5000 } }} />);
+    expect(screen.getByRole("status")).toHaveTextContent("overlayWelcomeNotice");
+    act(() => { vi.advanceTimersByTime(5000); });
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    view.rerender(<VoiceOverlayContent snapshot={{ ...source, enabled: false, welcome: { id: 2, expiresAt: Date.now() + 5000 } }} />);
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  } finally { vi.useRealTimers(); }
+});
+
+
+it("shows Go Live guidance without any capture action and removes it on readiness loss", () => {
+  const source = snapshot("top-left", { voiceOverlayGoLive: true, goLiveEligible: true, goLiveHeight: 64, goLive: { id: 1, expiresAt: Date.now() + 5000 } });
+  const view = render(<VoiceOverlayContent snapshot={source} />);
+  expect(screen.getByRole("status")).toHaveTextContent("overlayGoLiveGuidance");
+  expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  view.rerender(<VoiceOverlayContent snapshot={{ ...source, goLiveEligible: false }} />);
+  expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  view.rerender(<VoiceOverlayContent snapshot={{ ...source, goLive: null }} />);
+  expect(screen.queryByRole("status")).not.toBeInTheDocument();
+});
+
+
+it("prepares the exact opaque notification reply only through its existing native action surface", async () => {
+  const send = vi.fn().mockResolvedValue(true);
+  Object.defineProperty(window, "electronAPI", { configurable: true, value: { sendOverlayOpenInbox: vi.fn().mockResolvedValue(true), sendOverlayPrepareNotificationReply: send } });
+  render(<VoiceOverlayContent notificationActionsOnly snapshot={snapshot("top-left", { voiceOverlayNotifications: true, voiceOverlayNotificationActions: true, notificationActionSession: "inbox", notificationReplySession: "reply-session", notificationReplyButtons: [{ id: "opaque-notice", row: 1 }] })} />);
+  fireEvent.click(screen.getByRole("button", { name: "overlayPrepareReply" }));
+  await waitFor(() => expect(send).toHaveBeenCalledExactlyOnceWith({ session: "reply-session", notificationId: "opaque-notice" }));
+  expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+});
+it('keeps every renderer action passive even if a stale snapshot still includes old opt-ins and unlock',()=>{const send=vi.fn();vi.stubGlobal('electronAPI',{sendOverlayVoiceAction:send});const value=snapshot('top-left',{voiceOverlayCompatibility:true,unlocked:true,voiceOverlayQuickActions:true,voiceOverlayClickableActions:true,voiceActionSession:'old',voiceOverlayChat:true,voiceOverlayChatActions:true,voiceOverlayChatCompose:true,chatActionSession:'chat',chatComposeSession:'compose',chatStatus:'ready',chatMessages:[]});const view=render(<VoiceOverlayContent snapshot={value}/>);expect(screen.getByRole('status',{name:'overlayCompatibilityActive'})).toBeInTheDocument();for(const button of screen.queryAllByRole('button'))expect(button).toBeDisabled();expect(send).not.toHaveBeenCalled();view.rerender(<VoiceOverlayContent snapshot={value} chatActionsOnly/>);expect(screen.queryByRole('button')).toBeNull();view.rerender(<VoiceOverlayContent snapshot={value} chatComposerOnly/>);expect(screen.queryByRole('textbox')).toBeNull();});

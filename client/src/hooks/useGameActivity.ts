@@ -5,6 +5,7 @@ import { usePreferencesStore } from "../stores/preferencesStore";
 import { useGameActivityStore } from "../stores/gameActivityStore";
 import type { ConnectionStatus } from "./useWebSocket";
 import { isGameActivityId, isGameActivityName } from "../utils/gameActivity";
+import { isGameActivitySourceBlocked, subscribeGameActivityMutations } from "../utils/gameActivityMutation";
 
 /** Publishes only the native, consent-filtered cache; never triggers process scans. */
 export function useGameActivity({ sendWS, connectionStatus }: { sendWS: (op: string, data?: unknown) => void; connectionStatus: ConnectionStatus }) {
@@ -23,13 +24,14 @@ export function useGameActivity({ sendWS, connectionStatus }: { sendWS: (op: str
     let inFlight = false;
     let previous = "";
     let sentAt = 0;
+    let mutationVersion = 0;
     const current = () => !stopped && useAuthStore.getState().user?.id === userId && getAuthGeneration() === generation;
-    const send = (game: { id: string; name: string } | null) => {
+    const send = (game: { id: string; name: string; canonical_game_id?: "steam:730" } | null) => {
       if (!current()) return;
       const preferences = usePreferencesStore.getState();
       if (game && (preferences.accountId !== userId || !preferences.isLoaded
         || preferences.get<{ shareGameActivity?: boolean }>("privacy")?.shareGameActivity !== true
-        || useAuthStore.getState().manualStatus === "offline")) game = null;
+        || useAuthStore.getState().manualStatus === "offline" || isGameActivitySourceBlocked(game.id))) game = null;
       const key = JSON.stringify(game);
       if (key !== previous || Date.now() - sentAt >= 30_000) {
         sendWS("game_activity_update", { game });
@@ -43,20 +45,30 @@ export function useGameActivity({ sendWS, connectionStatus }: { sendWS: (op: str
         || preferences.get<{ shareGameActivity?: boolean }>("privacy")?.shareGameActivity !== true
         || useAuthStore.getState().manualStatus === "offline" || !window.electronAPI?.getRegisteredGameActivity) { send(null); return; }
       inFlight = true;
+      const mutation = mutationVersion;
       try {
         const snapshot = await window.electronAPI.getRegisteredGameActivity();
-        if (!current()) return;
+        if (!current() || mutation !== mutationVersion) return;
         const game = snapshot?.enabled === true ? snapshot.game : null;
         // Copy an explicit projection: unknown native fields never enter a network frame.
-        send(game && isGameActivityId(game.id) && isGameActivityName(game.name) ? { id: game.id, name: game.name } : null);
+        send(game && isGameActivityId(game.id) && isGameActivityName(game.name) ? {
+          id: game.id, name: game.name,
+          ...(game.canonicalGameId === "steam:730" ? { canonical_game_id: "steam:730" as const } : {}),
+        } : null);
       } catch { send(null); }
       finally { inFlight = false; }
     };
+    const unsubscribeMutations = subscribeGameActivityMutations((_sourceId, blocked) => {
+      mutationVersion++;
+      if (blocked) send(null);
+      else void poll();
+    });
     void poll();
     const timer = window.setInterval(() => void poll(), 5_000);
     return () => {
       if (current()) sendWS("game_activity_update", { game: null });
       stopped = true;
+      unsubscribeMutations();
       window.clearInterval(timer);
     };
   }, [sendWS, connectionStatus, userId, generation, allowed, invisible, supported]);

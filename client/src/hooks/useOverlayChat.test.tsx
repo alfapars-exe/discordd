@@ -12,6 +12,7 @@ import { useMessageStore } from "../stores/messageStore";
 import { usePreferencesStore } from "../stores/preferencesStore";
 import { useBlockStore } from "../stores/blockStore";
 import { useE2EEStore } from "../stores/e2eeStore";
+import { useFriendStore } from "../stores/friendStore";
 import { useSpamDecisionStore } from "../stores/spamDecisionStore";
 import { useThreadStore } from "../stores/threadStore";
 import { useDMStore } from "../stores/dmStore";
@@ -156,4 +157,22 @@ it("recomputes on private destination changes and E2EE readiness transitions", (
   expect(view.result.current.chatMessages.map((row) => row.text)).toEqual(["text dm-1"]);
   act(() => useUIStore.setState({ destination: { type: "dm", channelId: "dm-2", label: "DM 2" } }));
   expect(view.result.current.chatMessages.map((row) => row.text)).toEqual(["text dm-2"]);
+});
+
+
+it("redacts pending nonfriend spam previews and reacts to relationship provenance without changing the friend array", () => {
+  const friends = [{ user_id: "author", status: "accepted" }] as never;
+  useMessageStore.setState({ messagesByChannel: { channel: [{ id: "message", channel_id: "channel", user_id: "author", content: "https://claim@example.test/reward", author: { id: "author", username: "Author" } } as Message] } });
+  usePreferencesStore.setState({ data: { privacy: { spamFilter: "nonfriends" } } });
+  useFriendStore.setState({ ownerId: "viewer", authGeneration: getAuthGeneration(), friendsStatus: "loading", friends });
+  const view = renderHook(() => useOverlayChat(true, true));
+  expect(view.result.current.chatMessages).toEqual([]);
+  expect(useSpamDecisionStore.getState().decisions).toEqual({});
+  act(() => useFriendStore.setState({ friendsStatus: "ready" }));
+  expect(view.result.current.chatMessages).toHaveLength(1);
+  act(() => useFriendStore.setState({ authGeneration: getAuthGeneration() - 1 }));
+  expect(view.result.current.chatMessages).toEqual([]);
+  act(() => useFriendStore.setState({ authGeneration: getAuthGeneration(), friendsStatus: "error" }));
+  expect(view.result.current.chatMessages).toEqual([]);
+  expect(useSpamDecisionStore.getState().decisions).toEqual({});
 });

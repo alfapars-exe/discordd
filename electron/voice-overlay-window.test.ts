@@ -15,6 +15,7 @@ test("native overlay lock toggles only visible widgets and bounds unlocked game 
   let chatActionWin!: FakeWindow;
   let chatComposerWin!: FakeWindow;
   let failShape = false;
+  let suppressShow = false;
   let cursor = { x: 0, y: 0 };
   let now = 1000;
   const timers = new Set<() => void>();
@@ -23,12 +24,12 @@ test("native overlay lock toggles only visible widgets and bounds unlocked game 
   class FakeWindow extends EventEmitter {
     visible = false; destroyed = false; ignored = true;
     x = 0; y = 0; width = 300; height = 420;
-    sent: Array<{ unlocked?: boolean; layoutSaveFailed?: boolean; quickActionsUnavailable?: boolean; notificationActionsUnavailable?: boolean; activities?: Array<{ userId: string }>; notifications?: Array<{ id: string; category: string }>; voiceOverlayNotifications?: boolean; notificationActionSession?: string; voiceOverlayChat?: boolean; voiceOverlayChatActions?: boolean; voiceOverlayChatCompose?: boolean; chatStatus?: string; chatMessages?: Array<{ id: string; author: string; text: string }>; chatActionSession?: string; chatComposeSession?: string; chatComposeLabel?: string; participants?: unknown[] }> = [];
+    sent: Array<{ welcome?: { id: number; expiresAt: number } | null; goLive?: { id: number; expiresAt: number } | null; unlocked?: boolean; layoutSaveFailed?: boolean; quickActionsUnavailable?: boolean; notificationActionsUnavailable?: boolean; activities?: Array<{ userId: string }>; notifications?: Array<{ id: string; category: string }>; voiceOverlayNotifications?: boolean; notificationActionSession?: string; notificationReplySession?: string; notificationReplyButtons?: Array<{ id: string; row: number }>; voiceOverlayChat?: boolean; voiceOverlayChatActions?: boolean; voiceOverlayChatCompose?: boolean; chatStatus?: string; chatMessages?: Array<{ id: string; author: string; text: string }>; chatActionSession?: string; chatComposeSession?: string; chatComposeLabel?: string; participants?: unknown[] }> = [];
     shape: Array<{ x: number; y: number; width: number; height: number }> = [];
     webContents = Object.assign(new EventEmitter(), {
       mainFrame: {},
-      isLoading: () => false,
-      send: (channel: string, value: { unlocked?: boolean; layoutSaveFailed?: boolean; quickActionsUnavailable?: boolean; notificationActionsUnavailable?: boolean; activities?: Array<{ userId: string }>; notifications?: Array<{ id: string; category: string }>; voiceOverlayNotifications?: boolean; notificationActionSession?: string; voiceOverlayChat?: boolean; voiceOverlayChatActions?: boolean; voiceOverlayChatCompose?: boolean; chatStatus?: string; chatMessages?: Array<{ id: string; author: string; text: string }>; chatActionSession?: string; chatComposeSession?: string; chatComposeLabel?: string; participants?: unknown[] }) => { this.sent.push(value); if (channel === "overlay-chat-send" || channel === "overlay-chat-composer-closed") forwarded.push({ channel, value }); },
+      isLoading: (): boolean => false,
+      send: (channel: string, value: { welcome?: { id: number; expiresAt: number } | null; goLive?: { id: number; expiresAt: number } | null; unlocked?: boolean; layoutSaveFailed?: boolean; quickActionsUnavailable?: boolean; notificationActionsUnavailable?: boolean; activities?: Array<{ userId: string }>; notifications?: Array<{ id: string; category: string }>; voiceOverlayNotifications?: boolean; notificationActionSession?: string; notificationReplySession?: string; notificationReplyButtons?: Array<{ id: string; row: number }>; voiceOverlayChat?: boolean; voiceOverlayChatActions?: boolean; voiceOverlayChatCompose?: boolean; chatStatus?: string; chatMessages?: Array<{ id: string; author: string; text: string }>; chatActionSession?: string; chatComposeSession?: string; chatComposeLabel?: string; participants?: unknown[] }) => { this.sent.push(value); if (channel === "overlay-chat-send" || channel === "overlay-chat-composer-closed") forwarded.push({ channel, value }); },
     });
     focusCount = 0;
     constructor(public options: Record<string, unknown>) { super(); if (options.width === 360 && options.height === 180) chatComposerWin = this; else if (options.width === 88 && options.height === 40) actionWin = this; else if (options.width !== 88 || options.height !== 20) win = this; }
@@ -39,7 +40,7 @@ test("native overlay lock toggles only visible widgets and bounds unlocked game 
     setIgnoreMouseEvents(ignored: boolean) { this.ignored = ignored; }
     loadURL(url: string) { if (url.includes("surface=notification-actions")) notificationActionWin = this; if (url.includes("surface=chat-actions")) chatActionWin = this; if (url.includes("surface=chat-composer")) chatComposerWin = this; return Promise.resolve(); }
     hide() { this.visible = false; this.emit("hide"); }
-    showInactive() { this.visible = true; }
+    showInactive() { if (!suppressShow) this.visible = true; }
     show() { this.visible = true; }
     focus() { this.focusCount++; }
     setSize(width: number, height: number) { this.width = width; this.height = height; }
@@ -354,5 +355,150 @@ test("native overlay lock toggles only visible widgets and bounds unlocked game 
   assert.equal(win.sent[win.sent.length - 1].activities!.length, visibleCards, "unlock delivery preserves physical row limits");
   exports.lockVoiceOverlay();
   assert.equal(win.sent[win.sent.length - 1].activities!.length, visibleCards);
+  exports.closeVoiceOverlay();
+  const welcomeSnapshot = { ...snapshot, voiceOverlayWelcome: true };
+  suppressShow = true;
+  exports.updateVoiceOverlay(welcomeSnapshot, area, context);
+  assert.equal(win.sent[win.sent.length - 1]?.welcome, null, "attempted but invisible native show cannot invent a welcome");
+  suppressShow = false;
+  exports.updateVoiceOverlay(welcomeSnapshot, area, context);
+  const firstWelcome = win.sent[win.sent.length - 1]!.welcome!;
+  assert.ok(firstWelcome && firstWelcome.expiresAt === now + 5000);
+  exports.updateVoiceOverlay(welcomeSnapshot, area, context);
+  assert.equal(win.sent[win.sent.length - 1]!.welcome!.id, firstWelcome.id, "routine snapshots do not replay welcome");
+  now += 5001;
+  for (const timeout of Array.from(timeouts)) timeout();
+  assert.equal(win.sent[win.sent.length - 1]!.welcome, null, "expiry updates the same native window");
+  exports.updateVoiceOverlay(welcomeSnapshot, area, context);
+  assert.equal(win.sent[win.sent.length - 1]!.welcome, null, "expired welcome remains consumed for this activation");
+  exports.updateVoiceOverlay({ ...welcomeSnapshot, enabled: false }, area, context);
+  assert.equal(win.visible, false);
+  exports.updateVoiceOverlay(welcomeSnapshot, area, context);
+  assert.ok(win.sent[win.sent.length - 1]!.welcome!.id > firstWelcome.id, "real hidden-to-shown activation gets one fresh welcome");
+  const priorContextNotice = win.sent[win.sent.length - 1]!.welcome!.id;
+  exports.updateVoiceOverlay(welcomeSnapshot, area, "game:87654321-1234-1234-1234-123456789abc");
+  assert.ok(win.sent[win.sent.length - 1]!.welcome!.id > priorContextNotice, "new authorized game context gets a separate activation");
+  exports.updateVoiceOverlay({ ...welcomeSnapshot, voiceOverlayWelcome: false }, area);
+  assert.equal(win.sent[win.sent.length - 1]!.welcome, null);
+  exports.updateVoiceOverlay(welcomeSnapshot, area);
+  assert.equal(win.sent[win.sent.length - 1]!.welcome, null, "turning on a preference in an already visible overlay is not a show");
+  exports.closeVoiceOverlay();
+  const goLiveSnapshot = { ...snapshot, voiceOverlayGoLive: true, goLiveEligible: false };
+  exports.updateVoiceOverlay(goLiveSnapshot, area, context);
+  assert.equal(win.sent[win.sent.length - 1].goLive, null, "unready room cannot advertise sharing");
+  exports.updateVoiceOverlay({ ...goLiveSnapshot, goLiveEligible: true }, area, context);
+  assert.equal(win.sent[win.sent.length - 1].goLive, null, "late readiness is not another real overlay activation");
+  exports.updateVoiceOverlay({ ...goLiveSnapshot, enabled: false }, area, context);
+  const readyGoLive = { ...goLiveSnapshot, goLiveEligible: true, goLiveSession: "room-a" };
+  exports.updateVoiceOverlay(readyGoLive, area, context);
+  const firstGoLive = win.sent[win.sent.length - 1].goLive!;
+  assert.ok(firstGoLive && firstGoLive.expiresAt === now + 5000);
+  exports.updateVoiceOverlay(readyGoLive, area, context);
+  assert.equal(win.sent[win.sent.length - 1].goLive!.id, firstGoLive.id);
+  exports.updateVoiceOverlay({ ...readyGoLive, goLiveSession: "replacement-room" }, area, context);
+  assert.equal(win.sent[win.sent.length - 1].goLive, null, "a room replacement cannot inherit the previous activation guide");
+  exports.updateVoiceOverlay(goLiveSnapshot, area, context);
+  assert.equal(win.sent[win.sent.length - 1].goLive, null, "losing readiness dismisses the active guide immediately");
+  exports.updateVoiceOverlay(readyGoLive, area, context);
+  assert.equal(win.sent[win.sent.length - 1].goLive, null, "regaining readiness never replays the same activation");
+  exports.updateVoiceOverlay({ ...readyGoLive, enabled: false }, area, context);
+  exports.updateVoiceOverlay(readyGoLive, area, context);
+  assert.ok(win.sent[win.sent.length - 1].goLive!.id > firstGoLive.id);
+  now += 5001;
+  for (const timeout of Array.from(timeouts)) timeout();
+  assert.equal(win.sent[win.sent.length - 1].goLive, null, "guide expires without starting a stream");
+  exports.closeVoiceOverlay();
+  exports.updateVoiceOverlay({ ...readyGoLive, voiceOverlayMode: "desktop" }, area, "desktop");
+  assert.equal(win.sent[win.sent.length - 1].goLive, null, "desktop-only overlay does not claim a detected game");
+  exports.closeVoiceOverlay();
+  const replySnapshot = { ...notificationActions, notificationReplySession: "reply-session", notificationReplyIds: ["notification-0", "notification-1"] };
+  exports.updateVoiceOverlay(replySnapshot, area);
+  const replySender = { sender: notificationActionWin.webContents, senderFrame: notificationActionWin.webContents.mainFrame };
+  const replyRequest = { session: "reply-session", notificationId: "notification-0" };
+  const replyBounds = notificationActionWin.getBounds(); cursor = { x: replyBounds.x + 5, y: replyBounds.y + 31 };
+  assert.equal(notificationActionWin.shape.length, 3, "the existing action window shapes only header and two allowed row targets");
+  assert.equal(notificationActionWin.sent[notificationActionWin.sent.length - 1].notifications, undefined, "reply action receives no notification body/category payload");
+  assert.equal(notificationActionWin.sent[notificationActionWin.sent.length - 1].notificationReplyButtons?.[0].id, "notification-0");
+  assert.equal(exports.takeVoiceOverlayNotificationReplyIntent({ ...replySender, senderFrame: {} }, replyRequest), null);
+  assert.equal(exports.takeVoiceOverlayNotificationReplyIntent(replySender, { ...replyRequest, url: "https://example.invalid" }), null);
+  assert.equal(exports.takeVoiceOverlayNotificationReplyIntent(replySender, { ...replyRequest, notificationId: "notification-1" }), null, "a row cannot impersonate another visible row");
+  now += 251;
+  assert.ok(exports.takeVoiceOverlayNotificationReplyIntent(replySender, replyRequest));
+  assert.equal(exports.confirmVoiceOverlayNotificationReply({ sender: {}, senderFrame: {} }, replyRequest, mainWindow), false);
+  assert.equal(exports.confirmVoiceOverlayNotificationReply({ sender: mainWebContents, senderFrame: mainFrame }, replyRequest, mainWindow), true);
+  assert.equal(exports.confirmVoiceOverlayNotificationReply({ sender: mainWebContents, senderFrame: mainFrame }, replyRequest, mainWindow), false, "reply focus consumes a one-shot physical intent");
+  now += 251; assert.ok(exports.takeVoiceOverlayNotificationReplyIntent(replySender, replyRequest));
+  now += 5001;
+  assert.equal(exports.confirmVoiceOverlayNotificationReply({ sender: mainWebContents, senderFrame: mainFrame }, replyRequest, mainWindow), false, "expired physical reply intent cannot focus");
+  now += 251; assert.ok(exports.takeVoiceOverlayNotificationReplyIntent(replySender, replyRequest));
+  exports.updateVoiceOverlay({ ...replySnapshot, notificationReplySession: "replacement-session" }, area);
+  assert.equal(exports.confirmVoiceOverlayNotificationReply({ sender: mainWebContents, senderFrame: mainFrame }, replyRequest, mainWindow), false, "rotated account/source session invalidates pending reply");
+  exports.updateVoiceOverlay(replySnapshot, { ...area, height: 140 });
+  const shortBounds = notificationActionWin.getBounds(); cursor = { x: shortBounds.x + 5, y: shortBounds.y + 63 };
+  now += 251;
+  assert.equal(exports.takeVoiceOverlayNotificationReplyIntent(replySender, { ...replyRequest, notificationId: "notification-1" }), null, "physically clipped rows cannot be invoked");
+  exports.updateVoiceOverlay(replySnapshot, area);
+  const renewedBounds = notificationActionWin.getBounds(); cursor = { x: renewedBounds.x + 5, y: renewedBounds.y + 31 };
+  now += 251; assert.ok(exports.takeVoiceOverlayNotificationReplyIntent(replySender, replyRequest));
+  notificationActionWin.close();
+  exports.updateVoiceOverlay(replySnapshot, area);
+  assert.equal(exports.confirmVoiceOverlayNotificationReply({ sender: mainWebContents, senderFrame: mainFrame }, replyRequest, mainWindow), false, "destroying the action surface prevents an old click from focusing through a replacement");
+  // Actual compatibility entry retires native hit surfaces, drafts and focus intents.
+  const compatibilitySnapshot = { ...replySnapshot, voiceOverlayQuickActions: true, voiceOverlayClickableActions: true,
+    voiceActionSession: "compat-voice", voiceOverlayChat: true, voiceOverlayChatActions: true,
+    voiceOverlayChatCompose: true, chatStatus: "ready" as const, chatActionSession: "compat-chat", chatComposeSession: "compat-compose" };
+  exports.updateVoiceOverlay(compatibilitySnapshot, area);
+  const passiveHUD = win;
+  const compatibilityChatSender = { sender: chatActionWin.webContents, senderFrame: chatActionWin.webContents.mainFrame };
+  const compatibilityNotificationSender = { sender: notificationActionWin.webContents, senderFrame: notificationActionWin.webContents.mainFrame };
+  const notificationBoundsForCompatibility = notificationActionWin.getBounds();
+  cursor = { x: notificationBoundsForCompatibility.x+5, y: notificationBoundsForCompatibility.y+31 }; now+=251;
+  assert.ok(exports.takeVoiceOverlayNotificationReplyIntent(compatibilityNotificationSender,replyRequest));
+  const composerBoundsForCompatibility=chatActionWin.getBounds();cursor={x:composerBoundsForCompatibility.x+5,y:composerBoundsForCompatibility.y+5};now+=251;
+  assert.ok(exports.takeVoiceOverlayOpenChatComposerIntent(compatibilityChatSender,"compat-compose",mainWindow));
+  const compatibilityComposer=chatComposerWin;
+  const compatibilityComposerSender={sender:compatibilityComposer.webContents,senderFrame:compatibilityComposer.webContents.mainFrame};
+  const compatibilityPending=exports.sendOverlayChatMessage(compatibilityComposerSender,{session:"compat-compose",requestId:"compat-pending",text:"explicit draft"},mainWindow);
+  const staleLoadWindows=[passiveHUD,actionWin,notificationActionWin,chatActionWin];
+  for(const child of staleLoadWindows)child.webContents.isLoading=()=>true;
+  exports.updateVoiceOverlay(compatibilitySnapshot,area);
+  const focusBeforeCompatibility=focuses;
+  exports.updateVoiceOverlay({...compatibilitySnapshot,voiceOverlayCompatibility:true},area);
+  assert.equal(await compatibilityPending,"unavailable");
+  assert.equal(compatibilityComposer.destroyed,true,"compatibility closes the focused composer");
+  assert.equal(passiveHUD.ignored,true,"compatibility is actual native mouse passthrough");
+  assert.equal(actionWin.visible,false);assert.equal(notificationActionWin.visible,false);assert.equal(chatActionWin.visible,false);
+  for(const child of staleLoadWindows){child.webContents.isLoading=()=>false;child.webContents.emit("did-finish-load");}
+  assert.equal(actionWin.visible,false,"late native action load cannot revive compatibility input");
+  assert.equal(notificationActionWin.visible,false);assert.equal(chatActionWin.visible,false);
+  exports.toggleVoiceOverlayLock();assert.equal(passiveHUD.ignored,true,"shortcut cannot unlock read-only mode");
+  assert.equal(passiveHUD.focusCount,0,"compatibility never focuses the HUD");
+  assert.equal(exports.takeVoiceOverlayAction({sender:actionWin.webContents,senderFrame:actionWin.webContents.mainFrame},"toggle-mute","compat-voice"),null);
+  assert.equal(exports.takeVoiceOverlayOpenInboxIntent(compatibilityNotificationSender,"session-notifications"),null);
+  assert.equal(exports.takeVoiceOverlayNotificationReplyIntent(compatibilityNotificationSender,replyRequest),null);
+  assert.equal(exports.confirmVoiceOverlayNotificationReply({sender:mainWebContents,senderFrame:mainFrame},replyRequest,mainWindow),false);
+  assert.equal(exports.confirmVoiceOverlayOpenInbox({sender:mainWebContents,senderFrame:mainFrame},"session-notifications",mainWindow),false);
+  assert.equal(exports.takeVoiceOverlayOpenChatIntent(compatibilityChatSender,"compat-chat"),null);
+  assert.equal(exports.confirmVoiceOverlayOpenChat({sender:mainWebContents,senderFrame:mainFrame},"compat-chat",mainWindow),false);
+  assert.equal(exports.takeVoiceOverlayOpenChatComposerIntent(compatibilityChatSender,"compat-compose",mainWindow),null);
+  assert.equal(await exports.sendOverlayChatMessage(compatibilityComposerSender,{session:"compat-compose",requestId:"compat-stale",text:"never forwarded"},mainWindow),"unavailable");
+  assert.equal(exports.resolveOverlayChatSend(mainSender,{session:"compat-compose",requestId:"compat-pending",result:"sent"},mainWindow),false);
+  assert.equal(focuses,focusBeforeCompatibility,"stale confirmations never focus the main app");
+  exports.updateVoiceOverlay({...compatibilitySnapshot,voiceOverlayCompatibility:false},area);
+  assert.equal(passiveHUD.ignored,true,"normal mode does not implicitly unlock after compatibility");
+  assert.equal(passiveHUD.focusCount,0);assert.equal(focuses,focusBeforeCompatibility);
+  const mediaLifecycle:boolean[]=[];
+  const stopMediaLifecycle=exports.subscribeVoiceOverlayMediaLifecycle(revoke=>mediaLifecycle.push(revoke));
+  const actualHUD=exports.getVoiceOverlayMediaWindow();
+  passiveHUD.webContents.emit("did-finish-load");
+  assert.equal(exports.getVoiceOverlayMediaWindow(),passiveHUD,"only the actual passive HUD is exposed, never its action/composer windows");
+  passiveHUD.emit("hide");assert.equal(mediaLifecycle[mediaLifecycle.length-1],false,"hide refreshes visibility without discarding installed receiver listeners");
+  passiveHUD.webContents.emit("did-start-navigation",{},"app://hichat/overlay.html",false,true);
+  assert.equal(exports.getVoiceOverlayMediaWindow(),null,"in-flight navigation cannot reauthorize the old frame");
+  assert.equal(mediaLifecycle[mediaLifecycle.length-1],true);
+  passiveHUD.webContents.emit("did-finish-load");assert.equal(exports.getVoiceOverlayMediaWindow(),passiveHUD);
+  passiveHUD.webContents.emit("render-process-gone");assert.equal(exports.getVoiceOverlayMediaWindow(),null);
+  assert.equal(mediaLifecycle[mediaLifecycle.length-1],true);void actualHUD;
+  stopMediaLifecycle();
   exports.closeVoiceOverlay();
 });

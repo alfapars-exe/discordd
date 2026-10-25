@@ -1,10 +1,13 @@
+import {nativePTTAvailable}from "../../audio/nativePTT";
 /**
  * P2PCallControls — Mic, camera, screen share, and end call buttons.
  *
  * `minimal` prop shows only the end-call button (used during ringing state).
  */
 
+import PrivateScreenQualityControls from "../voice/PrivateScreenQualityControls";
 import { useTranslation } from "react-i18next";
+import { useVoiceStore } from "../../stores/voiceStore";
 import { useP2PCallStore } from "../../stores/p2pCallStore";
 
 type P2PCallControlsProps = {
@@ -13,8 +16,18 @@ type P2PCallControlsProps = {
 
 function P2PCallControls({ minimal = false }: P2PCallControlsProps) {
   const { t } = useTranslation("common");
+  const { t: tv } = useTranslation("voice");
+  const isDeafened = useVoiceStore(s => s.isDeafened);
   const activeCall = useP2PCallStore((s) => s.activeCall);
   const isMuted = useP2PCallStore((s) => s.isMuted);
+  const failure = useP2PCallStore(s=>s.microphoneFailure);
+  const retrying = useP2PCallStore(s=>s.microphoneRetrying);
+  const retryMicrophone = useP2PCallStore(s=>s.retryMicrophone);
+  const inputDevice = useVoiceStore(s=>s.inputDevice);
+  const inputMode = useVoiceStore(s=>s.inputMode);
+  const failed = !!activeCall && failure?.call===activeCall;
+  const effectiveMuted = isMuted || isDeafened || failed;
+  const muteActionLabel = isDeafened ? tv(isMuted ? "unmuteAfterUndeafen" : "muteAfterUndeafen") : t("toggleMic");
   const isVideoOn = useP2PCallStore((s) => s.isVideoOn);
   const isScreenSharing = useP2PCallStore((s) => s.isScreenSharing);
   const toggleMute = useP2PCallStore((s) => s.toggleMute);
@@ -35,15 +48,17 @@ function P2PCallControls({ minimal = false }: P2PCallControlsProps) {
   }
 
   return (
-    <div className="p2p-controls">
+    <div className="p2p-controls" style={{flexWrap:"wrap"}}>
       {!minimal && (
         <>
           <button
-            className={`p2p-ctrl-btn ${isMuted ? "active" : ""}`}
+            className={`p2p-ctrl-btn ${effectiveMuted ? "active" : ""}`}
             onClick={toggleMute}
-            title={t("toggleMic")}
+            title={muteActionLabel}
+            aria-label={muteActionLabel}
+            aria-pressed={effectiveMuted}
           >
-            {isMuted ? (
+            {effectiveMuted ? (
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V5c0-1.66-1.34-3-3-3S9 3.34 9 5v.18l5.98 5.99zM4.27 3L3 4.27l6.01 6.01V11c0 1.66 1.33 3 2.99 3 .22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52-2.76 0-5.3-2.1-5.3-5.1H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c.91-.13 1.77-.45 2.54-.9L19.73 21 21 19.73 4.27 3z" />
               </svg>
@@ -81,9 +96,16 @@ function P2PCallControls({ minimal = false }: P2PCallControlsProps) {
               <path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z" />
             </svg>
           </button>
+          <PrivateScreenQualityControls />
         </>
       )}
 
+      {!minimal && failed && activeCall && <div role="alert" style={{flexBasis:"100%",minWidth:0,order:1}}>
+        <p>{tv("p2pMicrophoneUnavailable")}</p>
+        <button type="button" className="btn-secondary" style={{width:"auto",height:"auto",minHeight:44,padding:"8px 12px"}} disabled={retrying} onClick={()=>void retryMicrophone(activeCall)}>{tv("microphoneCaptureRetry")}</button>
+        {inputDevice && <button type="button" className="btn-secondary" style={{width:"auto",height:"auto",minHeight:44,padding:"8px 12px"}} disabled={retrying} onClick={()=>void retryMicrophone(activeCall,true)}>{tv("microphoneUseDefault")}</button>}
+      </div>}
+      {!minimal && inputMode==="push_to_talk" && !nativePTTAvailable() && <p role="status" style={{flexBasis:"100%",order:2}}>{tv("p2pFocusedPTT")}</p>}
       <button
         className="p2p-ctrl-btn end-call"
         onClick={handleEnd}

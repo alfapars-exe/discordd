@@ -28,9 +28,16 @@ export type P2PCall = {
  * WebRTC signaling data (SDP offer/answer or ICE candidate).
  * Server relays this directly to the peer without inspecting contents.
  */
+export type P2PMediaSource = "microphone" | "camera" | "screen-video" | "screen-audio";
 export type P2PSignalPayload = {
   call_id: string;
   type: "offer" | "answer" | "ice-candidate";
   sdp?: string;
   candidate?: RTCIceCandidateInit;
+  media_protocol?: 1;
+  description_id?: string;
+  description_revision?: number;
+  reply_to_description_id?: string;
+  capabilities?: "screen-audio-v1"[];
+  sources?: { mid: string; source: P2PMediaSource }[];
 };

@@ -1,0 +1,127 @@
+{
+  "date": "2026-10-25",
+  "scope": "P11 CS2 server-source offers, friend/shared-voice eligibility, expiring one-use join tickets and explicit community classification",
+  "status": "implemented_unverified",
+  "owned_paths": [
+    "server/models/game_join_recipe.go",
+    "server/models/game_join_recipe_test.go",
+    "testdata/cs2-join-parity.json",
+    "server/services/game_join_service.go",
+    "server/services/game_join_service_test.go",
+    "server/services/game_join_policy.go",
+    "server/services/game_join_policy_test.go",
+    "server/handlers/game_join.go",
+    "server/ws/game_join.go",
+    "server/ws/game_join_test.go",
+    "server/repository/server_community_test.go",
+    "server/init_routes_game_join.go",
+    "server/database/migrations/143_game_join_community.sql",
+    "server/database/postgres_migrations/045_game_join_community.sql",
+    "server/models/preferences.go",
+    "server/models/server.go",
+    "server/repository/sqlite_server.go",
+    "server/services/server_service_crud.go",
+    "server/services/game_activity_service.go",
+    "server/ws/event.go",
+    "server/ws/client_presence.go",
+    "server/ws/hub.go",
+    "server/ws/rate_limit.go",
+    "server/init_services.go",
+    "server/init_handlers.go",
+    "server/init_routes.go"
+  ],
+  "source_hashes": {
+    "server/models/game_join_recipe.go": "6ef1d6d2b769509f2f828e3b68e0a11dd9f0ae1e2d8f1c9d477915aa4221fe8d",
+    "server/models/game_join_recipe_test.go": "957acf510b498f736a12a0975899f9ae4d8ba073af17f2a5665d050fe9bd8c28",
+    "testdata/cs2-join-parity.json": "1ef67773611886964b5a1a07d957fa04e6a2fc82fbbee963c2fcc20d746d519d",
+    "server/services/game_join_service.go": "743c7eb904245b01f027d6f3002b7159abd1e247af9015cbacbc6d6af05746ce",
+    "server/services/game_join_service_test.go": "88e10cfbc2ea1b3e75408f1717f3080f6dbbce1f7202533018ac002717292011",
+    "server/services/game_join_policy.go": "dfc4edfe2077aa764b0d90883983e0a4eeaeae1f4ea49fc20dfdc32c85593dff",
+    "server/services/game_join_policy_test.go": "6f51a476e44b99d5280d80c2e6f1a8e7eff2c3bbb72a7c09a1467780a8cca4bd",
+    "server/handlers/game_join.go": "099026421eea819f1cb39a4b452c0a4b983825aee1e751df1231d74d7e1af70e",
+    "server/ws/game_join.go": "458225f56998976bb7210ad4c77a0ebc8bba02df1a4bf23ff20b689f3277e477",
+    "server/ws/game_join_test.go": "8acdaebf2bcfb171df43b0544b9f93273c236dbfab37d28ade9c222b6cd0c44b",
+    "server/repository/server_community_test.go": "98664e56a29cc4b626f47c5bdfad3843d80d5635d2fd20875cf0d26e0916b2c7",
+    "server/init_routes_game_join.go": "8906ece44a0b3acb1f7269c8b90d427cbfbfe0779b3809feb7c34690fec2ada7",
+    "server/database/migrations/143_game_join_community.sql": "82ecdfd6f1a6ed9cf102dc93f95e003872d38b07ad3e17a4500bca0a6617629d",
+    "server/database/postgres_migrations/045_game_join_community.sql": "d1a85576077abb916ddc7f5bd3703a7d1ffade6765d35396b870f1abee90377b",
+    "server/models/preferences.go": "b13f38c1893daee04231c1614613dfaf74a74f9fd2f7c310a39003af4653f88e",
+    "server/models/server.go": "84b73dd6fdbaf5b3a5a8c011815c9d4b31ffb325b8c4a5694a3602a692e16280",
+    "server/repository/sqlite_server.go": "83091fda1882d926437b86b391d8f814eace40cf3b58a415fdbd22dd80859aee",
+    "server/services/server_service_crud.go": "20b56565b3cce1c025d12c02fd229bc81180dc7d630bf4e57b19d865bba936f1",
+    "server/services/game_activity_service.go": "a1bbbf0c1257c88312e65d5c8add2c85255c03ea1e5ce2dd93333ff37b4f05e4",
+    "server/ws/event.go": "b6a9e66480dab93959b7ff247825dba9fd203eee9388ca4c851fff7e01d6ab1a",
+    "server/ws/client_presence.go": "26ecf38a10182537efc9084e2581a01423befe557705e5e63537d71dc30ff479",
+    "server/ws/hub.go": "2c5071db50bd8106ccd4005f8738898a1bb23e9410d386a4066703f5156af765",
+    "server/ws/rate_limit.go": "12a0ccec5f413fe01d2c2ab8a725da7c1e094ef80402cfff215272225f7516dc",
+    "server/init_services.go": "352cc22350bb3ae87335eac92304e9eb22cb0a3d836e9a1b9c32c00baa350574",
+    "server/init_handlers.go": "632179033aff46a7dfd4ed3a48884894e4c6223b40f798043c04dd6114f0e842",
+    "server/init_routes.go": "1b72e586382c6bec67d356b543f74054e3e0397413ca0a4ffb3c9bd0001ec8b5"
+  },
+  "hash_normalization": "SHA-256 of UTF-8 file bytes with CRLF normalized to LF",
+  "shared_partial_paths": [
+    "server/ws/client_dispatch.go",
+    "server/testdata/routes.golden"
+  ],
+  "shared_worktree_hashes_not_staging_authority": {
+    "server/ws/client_dispatch.go": "f7c839508cb41f38040f00316c1b2e1b44d2071cc3efeb513ef6979300bb90bf",
+    "server/testdata/routes.golden": "66082a911d522c42795ce331204028c873bf989d7ebd0041f5e531386f688cce"
+  },
+  "shared_scope": {
+    "server/ws/client_dispatch.go": "Only add game_join_offer dispatch handler; preserve and do not stage unrelated logging edits.",
+    "server/testdata/routes.golden": "Only add three POST /api/game-join routes after user notes; preserve and exclude unrelated admin/logs/health route."
+  },
+  "checks": [
+    {
+      "command": "GOTOOLCHAIN=go1.26.10 go test ./services ./models ./ws ./handlers ./repository -run 'TestGameJoin|TestCS2|TestGameActivity|TestServerCommunity' -count=1",
+      "terminal_session": 67862,
+      "exit_code": 0,
+      "results": {
+        "services": "PASS 3.064s",
+        "models": "PASS 0.476s",
+        "ws": "PASS 2.053s",
+        "handlers": "PASS 2.228s",
+        "repository": "PASS 2.716s"
+      }
+    },
+    {
+      "command": "GOTOOLCHAIN=go1.26.10 go test . -run 'TestInitRoutesGolden|Test.*Routes' -count=1",
+      "terminal_session": 67862,
+      "exit_code": 0,
+      "result": "PASS 3.276s"
+    },
+    {
+      "command": "git diff --check on owned tracked paths",
+      "exit_code": 0
+    }
+  ],
+  "behavior": [
+    "Separate client per-connection offer sequence and server-assigned target revision; canonical steam:730 is explicit self-reported adapter metadata.",
+    "Exact six-field WS input and three-field fixed recipe; no arbitrary URI/executable or recipe broadcast.",
+    "Physical connection/current source/incarnation and fresh logical session validation; 90-second manual offer cannot be renewed by activity heartbeat.",
+    "A competing selected source permanently retires old manual offer and tickets; fallback requires explicit fresh offer.",
+    "Fresh target sharing/visibility, accepted-friend or actual same voice incarnation, both users membership/bans/roles/permissions, bidirectional blocks and privacy.ignoredUsers; both join preferences default false.",
+    "One-use opaque 32-byte random secret stored only as SHA-256 digest; public UUID separate; bound requesting user, logical session, target, offer, context and <=30-second expiry.",
+    "Commit lock order target gate, database checks without map/hub locks, voice read admission, physical hub read admission, ticket CAS mutex. No DB/socket work in final admission closures.",
+    "Shared per-user HTTP limit 60/min, target batch <=32, <=8 pending tickets/viewer and <=8192 total; offered targets <=4096; per-connection revision cleanup on disconnect.",
+    "SQLite143/PostgreSQL045 additive is_community default false, persisted through existing admin-guarded server update. Existing logging migrations142/044 preserved."
+  ],
+  "regressions": [
+    "20 concurrent consumes yield exactly one winner",
+    "Wrong user/session denied without disclosing recipe",
+    "Host disconnect during authorization and voice incarnation changes deny",
+    "Source replacement, withdrawal, competing-tab fallback, session/lease expiry and offer replay denied",
+    "Default-off, share-off, pending friendship, either ignored direction, block, community, wrong channel, missing member, ban, missing View OR Connect, disabled account, bot, preferences failure and invisibility deny",
+    "Policy test caught any-bit Permission.Has bug; now separately requires View and Connect",
+    "Host fresh-session validator executes outside hub lock; physical removal serialized with final commit",
+    "Offer callback follows activity update in same presence queue; ACK only physical sender",
+    "Community repository roundtrip runs shared SQL harness (SQLite executed here; PostgreSQL requires explicit DSN)"
+  ],
+  "remaining": [
+    "Full immutable combined Go/client/Electron validation after selective integration",
+    "Parent-owned HTTP integration and actual PostgreSQL result to be recorded in combined receipt",
+    "Real Steam-generated CS2 invite and explicit two-client Windows/web acceptance; no real Steam launch performed here",
+    "No Steam account/lobby ownership verification or guarantee that private/full/game-restricted Steam lobbies accept the invite"
+  ],
+  "production": "No commit/stage, production deployment, real invitation delivery or Steam launch performed by this backend task."
+}

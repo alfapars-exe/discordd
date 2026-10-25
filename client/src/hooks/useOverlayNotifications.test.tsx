@@ -9,6 +9,7 @@ import { useServerStore } from "../stores/serverStore";
 import { useChannelStore } from "../stores/channelStore";
 import { useDMStore } from "../stores/dmStore";
 import { useGroupDMStore } from "../stores/groupDMStore";
+import { useThreadStore } from "../stores/threadStore";
 import { useBlockStore } from "../stores/blockStore";
 import type { AppNotification } from "../types/notification";
 import { getLiveOverlayNotificationItems } from "../utils/overlayNotificationAccess";
@@ -40,7 +41,7 @@ beforeEach(() => {
     fetchError: false, unreadCount: 0, hasMore: false, isLoading: false,
   });
   useServerStore.setState({ servers: [], mutedServerIds: new Set() });
-  useChannelStore.setState({ categoriesByServer: {} });
+  useChannelStore.setState({ categoriesByServer: {}, mutedChannelIds: new Set() });
   useDMStore.setState({ channels: [] });
   useGroupDMStore.setState({ groups: [] });
   useBlockStore.setState({ blockedUserIds: [] });
@@ -107,7 +108,9 @@ describe("useOverlayNotifications", () => {
       notification({ id: "blocked", actor_id: "blocked-actor" }),
       notification({ id: "deleted-channel", server_id: "server-1", channel_id: "gone-channel" }),
       notification({ id: "inaccessible-group", payload: { group_id: "not-a-member" } }),
+      notification({ id: "private-muted-group", payload: { group_id: "muted-group" } }),
     ];
+    useGroupDMStore.setState({groups:[{id:"muted-group",is_muted:true,members:[{id:owner}]} as never]});
     makeReadyFeed(rows);
 
     const { result } = renderHook(() => useOverlayNotifications(true, true));
@@ -127,4 +130,32 @@ describe("useOverlayNotifications", () => {
     expect(result.current.notifications).toEqual([]);
     expect(result.current.notificationStatus).toBe("unavailable");
   });
+});
+
+
+it("uses current thread ownership, parent mute and ignored actors for both published and action-time rows", () => {
+  useServerStore.setState({ servers: [{ id: "server" }] as never });
+  useChannelStore.setState({ categoriesByServer: { server: [{ id: "category", channels: [{ id: "parent", type: "text", name: "Parent" }] }] } as never });
+  useThreadStore.setState({ ownerId: owner, authGeneration: getAuthGeneration(), byID: { thread: { id: "thread", type: "thread", parent_channel_id: "parent" } } as never,
+    serverIdByThread: { thread: "server" }, statusByParent: { '["server","parent"]': "ready" }, statusByThread: { thread: "ready" } });
+  makeReadyFeed([notification({ server_id: "server", channel_id: "thread", message_id: "message" })]);
+  const view = renderHook(() => useOverlayNotifications(true, true));
+  expect(view.result.current.notifications).toHaveLength(1); expect(getLiveOverlayNotificationItems()).toHaveLength(1);
+  act(() => useChannelStore.setState({ mutedChannelIds: new Set(["parent"]) }));
+  expect(view.result.current.notifications).toEqual([]); expect(getLiveOverlayNotificationItems()).toEqual([]);
+  act(() => useChannelStore.setState({ mutedChannelIds: new Set() }));
+  act(() => usePreferencesStore.setState({ data: { privacy: { ignoredUsers: { "actor-1": true } } } }));
+  expect(view.result.current.notifications).toEqual([]); expect(getLiveOverlayNotificationItems()).toEqual([]);
+  act(() => usePreferencesStore.setState({ data: {} }));
+  act(() => useThreadStore.setState({ authGeneration: getAuthGeneration() - 1 }));
+  expect(view.result.current.notifications).toEqual([]); expect(getLiveOverlayNotificationItems()).toEqual([]);
+});
+
+it("projects canonical group rows only for current account membership and clears them on mute/rekey",()=>{
+ useGroupDMStore.setState({ownerId:owner,authGeneration:getAuthGeneration(),groupsReady:true,loading:false,groups:[{id:"group",key_epoch:3,read_key_epoch:3,members:[{id:owner}],is_muted:false} as never],messages:{}});
+ useBlockStore.setState({ownerId:owner,authGeneration:getAuthGeneration(),snapshotReady:true,isLoading:false,blockedUserIds:[]});
+ makeReadyFeed([notification({kind:"system",group_dm_channel_id:"group",message_id:"source",payload:{action:"incoming_message",source:"group"}})]);
+ const view=renderHook(()=>useOverlayNotifications(true,true));expect(view.result.current.notifications).toEqual([{id:"notice-1",category:"message"}]);expect(getLiveOverlayNotificationItems()).toEqual(view.result.current.notifications);
+ act(()=>useGroupDMStore.setState({groups:[{id:"group",key_epoch:4,read_key_epoch:3,members:[{id:owner}]} as never]}));
+ expect(view.result.current.notifications).toEqual([]);expect(getLiveOverlayNotificationItems()).toEqual([]);
 });

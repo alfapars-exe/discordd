@@ -1,0 +1,54 @@
+{
+  "date": "2026-10-26",
+  "source_commit": "112d1e8b3f85953540d7fc15a1a0ddc36f74977f",
+  "status": "partial_actual_web_visual_and_preference_acceptance",
+  "environment": {
+    "browser": "Existing Ego Lite Space 0, current installed version; no upgrade",
+    "server": "Fresh isolated full Docker API/web image; loopback 18185",
+    "accounts": "Two fresh synthetic accounts; no copied personal reference data"
+  },
+  "observed": [
+    "Actual login using fresh synthetic owner account succeeded",
+    "Welcome and download suggestion dismissed through visible controls; no installer downloaded",
+    "Settings dialog and game activity privacy page loaded",
+    "390px mobile settings navigation becomes two native select controls; long Turkish labels wrap",
+    "768/1024/1440/2560px document scrollWidth equals innerWidth; screenshots visually inspected",
+    "Own friend game-join preference enabled through label, saved and still checked after full page reload",
+    "Test preference restored to false through visible control",
+    "Accessibility preview loaded; hardcoded personal sample identity found and queued for remediation"
+  ],
+  "screenshots": [
+    {
+      "file": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-browser-20261025-1140\\visual-112-game-privacy-390.png",
+      "sha256": "4a6b301f1e3951c186eee91c4f1ec996d8cb334cf25ab2235485a8b012bfd158"
+    },
+    {
+      "file": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-browser-20261025-1140\\visual-112-game-privacy-768.png",
+      "sha256": "628f2832a93e407c549ea4edc468b24584638baac8977168d4a27e0f11070ea5"
+    },
+    {
+      "file": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-browser-20261025-1140\\visual-112-game-privacy-1024.png",
+      "sha256": "26d37cd89a29484f9a8f0d9bf01d6605fc81dfd34e80b9ad68899cda5f5310fa"
+    },
+    {
+      "file": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-browser-20261025-1140\\visual-112-game-privacy-1440.png",
+      "sha256": "ead466a1e331dbb6eebaf355efcef83feff8136daefd60b64f49099e30e3c71f"
+    },
+    {
+      "file": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-browser-20261025-1140\\visual-112-game-privacy-2560.png",
+      "sha256": "1063f42150ad33c7493104e7ebfb833f316efab346f4139079bcaf6353a1e522"
+    }
+  ],
+  "interruption": "Next screenshot attempt failed because native window was minimized. No zoom keys had executed; browser handed off without restoring/altering user window.",
+  "remaining": [
+    "200% browser zoom not run",
+    "Remaining settings/profile/invite/chat/viewer reference matrix not complete",
+    "Windows installer and real device acceptance not established by this web fixture"
+  ],
+  "safety": {
+    "hardware_capture_started": false,
+    "other_four_untracked_tabs_untouched": true,
+    "production_mutated": false,
+    "fixture_kept_live_for_continuation": true
+  }
+}

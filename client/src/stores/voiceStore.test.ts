@@ -32,6 +32,7 @@ function resetStore() {
     currentVoiceChannelId: null,
     isMuted: false,
     isDeafened: false,
+    muteBeforeDeafen: null,
     isStreaming: false,
     livekitUrl: null,
     livekitToken: null,
@@ -73,12 +74,13 @@ describe("voiceStore", () => {
       expect(useVoiceStore.getState().isMuted).toBe(false);
     });
 
-    it("should disable deafen when toggling mute while deafened", () => {
+    it("queues an explicit unmute while remaining effectively muted and deafened", () => {
       useVoiceStore.setState({ isMuted: true, isDeafened: true });
       useVoiceStore.getState().toggleMute();
       const state = useVoiceStore.getState();
-      expect(state.isMuted).toBe(false);
-      expect(state.isDeafened).toBe(false);
+      expect(state.isMuted).toBe(true);
+      expect(state.isDeafened).toBe(true);
+      expect(state.muteBeforeDeafen).toBe(false);
     });
   });
 
@@ -90,12 +92,12 @@ describe("voiceStore", () => {
       expect(state.isMuted).toBe(true);
     });
 
-    it("should disable deafen and unmute together", () => {
+    it("keeps a legacy deafened microphone muted without trustworthy prior intent", () => {
       useVoiceStore.setState({ isDeafened: true, isMuted: true });
       useVoiceStore.getState().toggleDeafen();
       const state = useVoiceStore.getState();
       expect(state.isDeafened).toBe(false);
-      expect(state.isMuted).toBe(false);
+      expect(state.isMuted).toBe(true);
     });
   });
 
@@ -877,4 +879,23 @@ describe("voiceStore", () => {
       expect(useVoiceStore.getState().livekitToken).toBe("old-token");
     });
   });
+});
+
+it.each([true,false])("preserves manual mute=%s through deafen and undeafen without changing server mute",muted=>{
+ useVoiceStore.setState({isMuted:muted,isDeafened:false,muteBeforeDeafen:null,isServerMuted:true});
+ useVoiceStore.getState().toggleDeafen();expect(useVoiceStore.getState().isMuted).toBe(true);
+ useVoiceStore.getState().toggleDeafen();expect(useVoiceStore.getState().isMuted).toBe(muted);expect(useVoiceStore.getState().isServerMuted).toBe(true);
+});
+it("persists queued intent and conservatively cancels a queued unmute on auth-generation or account reset",async()=>{
+ const {publishAuthGenerationChange,publishAuthOwnerChange}=await import("../api/authSessionEvents");
+ useVoiceStore.setState({isMuted:false,isDeafened:false,muteBeforeDeafen:null});useVoiceStore.getState().toggleDeafen();
+ expect(JSON.parse(localStorage.getItem("mqvi_voice_mute_state")!).muteBeforeDeafen).toBe(false);
+ publishAuthGenerationChange(99);expect(useVoiceStore.getState()).toMatchObject({isMuted:true,isDeafened:true,muteBeforeDeafen:true});
+ useVoiceStore.getState().toggleMute();expect(useVoiceStore.getState().muteBeforeDeafen).toBe(false);
+ publishAuthOwnerChange("different-mute-owner");useVoiceStore.getState().toggleDeafen();expect(useVoiceStore.getState().isMuted).toBe(true);
+});
+it("retains manual intent on same-account call/channel and preference resets",()=>{
+ useVoiceStore.setState({isMuted:true,isDeafened:false,muteBeforeDeafen:null});useVoiceStore.getState().toggleDeafen();
+ useVoiceStore.getState().leaveVoiceChannel();useVoiceStore.getState().resetAccountPreferences();
+ expect(useVoiceStore.getState()).toMatchObject({isMuted:true,isDeafened:true,muteBeforeDeafen:true});useVoiceStore.getState().toggleDeafen();expect(useVoiceStore.getState().isMuted).toBe(true);
 });

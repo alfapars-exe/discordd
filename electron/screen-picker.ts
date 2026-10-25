@@ -96,8 +96,9 @@ async function querySources() {
     fetchWindowIcons: false,
   });
 
+  let queryTimer: ReturnType<typeof setTimeout> | undefined;
   const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(
+    queryTimer = setTimeout(
       () => reject(new Error(`desktopCapturer.getSources timed out after ${GET_SOURCES_TIMEOUT_MS}ms`)),
       GET_SOURCES_TIMEOUT_MS,
     ),
@@ -119,6 +120,7 @@ async function querySources() {
     });
     throw err;
   } finally {
+    clearTimeout(queryTimer);
     // Clears the breadcrumb + in-flight flag. A no-op on the safe path.
     if (!safe) endThumbnailCapture();
   }
@@ -140,74 +142,95 @@ function serialize(s: Awaited<ReturnType<typeof querySources>>[number]): Seriali
  * Install the displayMedia request handler on the default session.
  * Call once at app start (after session.defaultSession is available).
  */
-export function installScreenPicker(): void {
-  session.defaultSession.setDisplayMediaRequestHandler(async (_request, callback) => {
-    // Diagnostic — the renderer's screen_share_attempt log lands BEFORE this
-    // runs; pairing the two rows tells us whether getDisplayMedia even made
-    // it into the handler before the renderer died. Missing = crash in the
-    // IPC queue (the Windows-elevated-process hang path).
-    const handlerStart = Date.now();
-    emitPickerDiagnostic("request_handler_start");
+let activePicker: { cancel: () => void } | null = null;
+const PICKER_TIMEOUT_MS = 120_000;
 
+export function installScreenPicker(): void {
+  activePicker?.cancel();
+  session.defaultSession.setDisplayMediaRequestHandler(async (request, callback) => {
+    const win = getMainWindow();
+    if (activePicker || !win || win.isDestroyed() || win.webContents.isDestroyed()
+      || !request.frame || request.frame !== win.webContents.mainFrame) {
+      callback({});
+      return;
+    }
+    const ownerWindow = win;
+    const contents = ownerWindow.webContents;
+    const frame = request.frame;
+    const handlerStart = Date.now();
+    let finished = false;
+    let sources: Awaited<ReturnType<typeof querySources>> = [];
+    let refreshing = false;
+    const owner = { cancel: () => finish({}) };
+    activePicker = owner;
+    const current = () => !finished && activePicker === owner && !win.isDestroyed()
+      && !contents.isDestroyed() && contents.mainFrame === frame;
+    const trusted = (event: Electron.IpcMainEvent) => current()
+      && event.sender === contents && event.senderFrame === frame;
+    const timeout = setTimeout(() => finish({}), PICKER_TIMEOUT_MS);
+
+    function finish(streams: Parameters<typeof callback>[0]) {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timeout);
+      ipcMain.off("screen-picker-result", onResult);
+      ipcMain.off("screen-picker-refresh", onRefresh);
+      ownerWindow.off("closed", owner.cancel);
+      contents.off("destroyed", owner.cancel);
+      contents.off("render-process-gone", owner.cancel);
+      contents.off("did-navigate", owner.cancel);
+      if (activePicker === owner) activePicker = null;
+      callback(streams);
+    }
+    function onResult(event: Electron.IpcMainEvent, sourceId: unknown) {
+      if (!trusted(event)) return;
+      if (sourceId !== null && (typeof sourceId !== "string" || sourceId.length > 512)) return;
+      const selected = sources.find((source) => source.id === sourceId);
+      emitPickerDiagnostic(sourceId ? "result_received" : "result_cancelled", {
+        msSinceHandlerStart: Date.now() - handlerStart,
+        picked: !!selected,
+        sourceKind: selected?.id?.startsWith("screen:") ? "screen" : (selected ? "window" : "none"),
+      });
+      finish(selected ? { video: selected } : {});
+    }
+    async function onRefresh(event: Electron.IpcMainEvent) {
+      if (!trusted(event) || refreshing) return;
+      refreshing = true;
+      try {
+        const updated = await querySources();
+        if (!current()) return;
+        sources = updated;
+        contents.send("screen-picker-refresh-result", sources.map(serialize));
+      } catch (error) {
+        if (current()) console.error("[screen-picker] refresh error:", error);
+      } finally {
+        refreshing = false;
+      }
+    }
+    win.on("closed", owner.cancel);
+    contents.on("destroyed", owner.cancel);
+    contents.on("render-process-gone", owner.cancel);
+    contents.on("did-navigate", owner.cancel);
+    emitPickerDiagnostic("request_handler_start");
     try {
-      let sources = await querySources();
-      if (sources.length === 0) {
+      sources = await querySources();
+      if (!current()) { finish({}); return; }
+      if (!sources.length) {
         emitPickerDiagnostic("no_sources", { msSinceHandlerStart: Date.now() - handlerStart });
-        callback({});
+        finish({});
         return;
       }
-
-      const win = getMainWindow();
-      win?.webContents.send("show-screen-picker", sources.map(serialize));
-      emitPickerDiagnostic("picker_shown", {
-        msSinceHandlerStart: Date.now() - handlerStart,
-        sourceCount: sources.length,
-      });
-
-      // Refresh handler — re-queries while picker is open. Lifetime is one
-      // getDisplayMedia call; removed in finally below.
-      const refreshHandler = async () => {
-        try {
-          sources = await querySources();
-          getMainWindow()?.webContents.send(
-            "screen-picker-refresh-result",
-            sources.map(serialize),
-          );
-        } catch (err) {
-          console.error("[screen-picker] refresh error:", err);
-        }
-      };
-      ipcMain.on("screen-picker-refresh", refreshHandler);
-
-      try {
-        const sourceId = await new Promise<string | null>((resolve) => {
-          ipcMain.once("screen-picker-result", (_e, id: string | null) => resolve(id));
-        });
-
-        if (sourceId) {
-          const selected = sources.find((s) => s.id === sourceId);
-          emitPickerDiagnostic("result_received", {
-            msSinceHandlerStart: Date.now() - handlerStart,
-            picked: !!selected,
-            sourceKind: selected?.id?.startsWith("screen:") ? "screen" : (selected ? "window" : "none"),
-          });
-          callback(selected ? { video: selected } : {});
-        } else {
-          emitPickerDiagnostic("result_cancelled", {
-            msSinceHandlerStart: Date.now() - handlerStart,
-          });
-          callback({});
-        }
-      } finally {
-        ipcMain.off("screen-picker-refresh", refreshHandler);
-      }
-    } catch (err) {
-      console.error("[screen-picker] error:", err);
+      ipcMain.on("screen-picker-result", onResult);
+      ipcMain.on("screen-picker-refresh", onRefresh);
+      contents.send("show-screen-picker", sources.map(serialize));
+      emitPickerDiagnostic("picker_shown", { sourceCount: sources.length, msSinceHandlerStart: Date.now() - handlerStart });
+    } catch (error) {
+      if (current()) console.error("[screen-picker] error:", error);
       emitPickerDiagnostic("handler_error", {
         msSinceHandlerStart: Date.now() - handlerStart,
-        error: err instanceof Error ? err.message : String(err),
+        error: error instanceof Error ? error.message : String(error),
       });
-      callback({});
+      finish({});
     }
   });
 }

@@ -1,0 +1,48 @@
+{
+  "date": "2026-10-25",
+  "scope": "P9 isolated outgoing P2P screen-audio publisher helper; not integrated into picker/store/UI yet",
+  "owned_paths": [
+    "client/src/webrtc/p2pScreenAudioSession.ts",
+    "client/src/webrtc/p2pScreenAudioSession.test.ts"
+  ],
+  "source_sha256": {
+    "client/src/webrtc/p2pScreenAudioSession.ts": "1117f792eea794e549519d3bd03f78d9a71837c14696dd8910d0c62275006ab0",
+    "client/src/webrtc/p2pScreenAudioSession.test.ts": "b393279910d37fc45f08b1e93272512093f29bcf366c35900f5a5666eec0c203"
+  },
+  "contract": {
+    "constructor": "{pc,sourceNonce,current,subscribeScope?,controller,state?}; current must bind exact auth/call/PC/screen source; subscribeScope must notify retirements/capability loss in production integration",
+    "start": "start({native:boolean,browserTrack?:MediaStreamTrack|null}):Promise<boolean>; no picker/GUM inside helper. Native uses existing SystemAudioCaptureSession p2p lease; browser consumes already-owned track.",
+    "controller": "canSendScreenAudio/setLocalSource/waitUntilLocalSourceNegotiated exactsender+track+source+v1answer offerID/revision; helper never disposes shared controller",
+    "ownership": "WeakMap dedicated sender slot per exactPC; source owners synchronously retire previousraw, serialize replaceTrack+setParameters+null detach. Old stopped owner cannot detach/unregister replacement.",
+    "profile": "maxBitrate256000 if actual encodings exist; no forceStereo/DTX claims for raw RTCPeerConnection.",
+    "stop": "Synchronous rawdisable/stop and nativelease cleanup; async sender null only if still unclaimed and exact oldraw. Never microphone/video sender or raw."
+  },
+  "verified": [
+    {
+      "cwd": "client",
+      "command": "npx vitest run src/webrtc/p2pScreenAudioSession.test.ts --reporter=dot",
+      "result": "19testsPASS2.17s"
+    },
+    {
+      "cwd": "client",
+      "command": "npx eslint src/webrtc/p2pScreenAudioSession.ts src/webrtc/p2pScreenAudioSession.test.ts",
+      "result": "exit0,0issues"
+    },
+    {
+      "cwd": "client",
+      "command": "npx tsc -b",
+      "result": "Pending combined type gate: only core-owned p2pCallStore.audio.test.ts438 directRTCTrackEvent cast TS2352; owner notified, no foreign edits. No helper diagnostics."
+    },
+    {
+      "cwd": "client",
+      "command": "npx tsc -b (core agent final combined project-reference gate)",
+      "result": "PASS0 after core fixture unknown cast fix; includes exact frozen2helperfiles, reported by linked_games_audit. Prior foreign fixture error superseded."
+    }
+  ],
+  "remaining": [
+    "Picker/store/UI integration not implemented by helper slice. Explicit audio choice and canSendScreenAudio check required BEFORE browserpicker/nativecapture.",
+    "Actual negotiated source ACK implementation is core-agent owned; helper tests use narrow structural controller double.",
+    "Two-client audible native/browser system audio, stereo/Opus negotiation quality and physical Windows acceptance remain open.",
+    "No production operations, browsercapture, index/stage/commit/push."
+  ]
+}

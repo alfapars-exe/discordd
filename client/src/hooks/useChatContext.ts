@@ -23,6 +23,7 @@ export type ChatAttachment = {
 };
 
 export type ChatMessage = {
+  application_id?: string | null;
   id: string;
   user_id: string;
   content: string | null;

@@ -1,0 +1,76 @@
+{
+  "date": "2026-10-25",
+  "scope": "P11 bounded native local video-only overlay relay; no claim of full overlay/media acceptance",
+  "owned_paths": [
+    "electron/overlay-media-broker.ts",
+    "electron/overlay-media-broker.test.ts",
+    "electron/voice-overlay.ts",
+    "electron/voice-overlay-window.test.ts",
+    "electron/voice-overlay-contract.ts",
+    "electron/voice-overlay-contract.test.ts",
+    "electron/voice-overlay-geometry.ts",
+    "electron/voice-overlay-geometry.test.ts",
+    "electron/ipc-handlers.ts",
+    "electron/preload.ts",
+    "client/src/types/electron.d.ts",
+    "implementation/verification/p11-overlay-media-native-2026-10-25.json"
+  ],
+  "source_sha256_lf": {
+    "electron/overlay-media-broker.ts": "f068618c0eaadc9b3c15a85d79e751933a49f2f5c603f169a10416bc7c5dfe78",
+    "electron/overlay-media-broker.test.ts": "df8a941660835264577acfe4abd22351b0e797533b8bb52de17a040c7679375e",
+    "electron/voice-overlay.ts": "38c8d57fd1a17d21950b86b0a366461767f24337835c7ca894ea6d6de040a00c",
+    "electron/voice-overlay-window.test.ts": "aa3b34e0e4d6d1f7c55ed8029543cc423efd4c7811155543dd310a96b9879988",
+    "electron/voice-overlay-contract.ts": "0ac82caf934c4040fb1ad331c1119989035d2f1ff9882eaf638fe1ba0a7eb283",
+    "electron/voice-overlay-contract.test.ts": "ca62cdb45a33fe467eeaefc39459e38a09d9dc7a8a23871b07e32cf306f6eb5c",
+    "electron/voice-overlay-geometry.ts": "365954c4dce22b5cc08a7c7cdc4a2579d59dd971aa070bd60339d2b9455e8090",
+    "electron/voice-overlay-geometry.test.ts": "bd054de06b4cf2eb867e0fc575d6c23738dda9ace1412e2fa13b6f5fa3e4fa24",
+    "electron/ipc-handlers.ts": "326c29bf40ec9cc81b22e0c8bc6549ec3fc367b9c94091cc2aec468dce3d17aa",
+    "electron/preload.ts": "1d16cd1ef9cf65500ed708e4abc6b6273e6b1e367a6cc0423186c181b9e1f060",
+    "client/src/types/electron.d.ts": "1bdd20d720a6581f3250a63b8a0a375fa51584aaf5886d03c79ae6db5fa30f70"
+  },
+  "behavior": [
+    "Reuses the existing passive HUD BrowserWindow. Only its exact current mainFrame and the exact current application mainFrame participate; action/composer windows and subframes cannot open/send/acknowledge.",
+    "The main opens an immutable max4/max2-kind tile lease after actual HUD listener readiness, native visibility, enabled policy and camera/screen opt-ins. Separate bounded lease metadata precedes SDP offers. No SDP/ICE/keys are logged; no Room/network/service credentials or game injection are introduced.",
+    "Video-only pure contract validates local-host SDP/ICE, direction, source-to-MID mapping and description relations. MAIN sends offer; HUD sends answer. HUD early ICE is queued at most64, each direction accepts at most128 candidates per lease; opens capped10/10seconds and viewports120/second. Viewports are source/session/revision-bound, max1920x1080/60; invisible must use0/0/0.",
+    "Native session/revision/window generation and exact frame identities fence stale sources. Valid kind preference revocation is projected synchronously before native repaint and retires the full lease; end is emitted to both live endpoints. Delivery errors return false and retire.",
+    "Native hide ends the lease but retains same-frame installed listeners. Availability becomes non-ready/hidden, re-show allows a fresh lease. Navigation/crash/close and explicit receiver-ready false revoke readiness and generation; in-flight navigation has no available HUD target until did-finish-load. Stale old-window events cannot revoke a replacement.",
+    "Media-only HUD allocates a passive region at most320DIP, bounded by work area. Compatibility remains passive/read-only and does not grant input or disable the media privacy fences."
+  ],
+  "verification": [
+    {
+      "kind": "native TypeScript",
+      "result": "PASS:tsc -p electron/tsconfig.json into isolated Temp output"
+    },
+    {
+      "kind": "focused native node tests",
+      "result": "PASS:54 tests,0 skips across overlay-media-broker,voice-overlay-contract,voice-overlay-geometry,voice-overlay-window",
+      "details": "Includes15 broker tests, actual VM HUD lifecycle/getter navigation/crash checks, malformed/foreign/stale frames and sources, bounded queues/rates, delivery failure, hidden late offer/viewport denial, same-frame re-show, and realistic throwing Electron teardown getters."
+    },
+    {
+      "kind": "client TypeScript",
+      "result": "Final current-worktree check reported separately to parent; receiver/source UI is another agent scope."
+    },
+    {
+      "kind": "owned diff check",
+      "result": "PASS"
+    }
+  ],
+  "remaining": [
+    "Actual Electron same-machine offer/answer video decode and pixel/visibility quality adaptation integration remain pending. Pure/node/VM seams are not physical Windows/game acceptance.",
+    "Renderer receiver/prefs/source catalog/main publisher integration is separately owned and is required before the feature is usable.",
+    "Physical Windows windowed/borderless games, multi-monitor/DPI, Alt-Tab/background rendering and anti-cheat behavior remain unaccepted; exclusive fullscreen and injection remain unsupported.",
+    "Parent coordinates combined source review, immutable whole-client/native gates and delivery. No staging/commit/push/deployment was performed in this slice."
+  ],
+  "teardown_follow_up": {
+    "base_commit": "8010864c9a742f8d4d0ac7cd279e902edee65c46",
+    "owned_paths": [
+      "electron/overlay-media-broker.ts",
+      "electron/overlay-media-broker.test.ts",
+      "implementation/verification/p11-overlay-media-native-2026-10-25.json"
+    ],
+    "finding": "Actual Electron controlled harness closing a real BrowserWindow exposed Object has been destroyed when availability read webContents/mainFrame before checking endpoint lifetime. Initial synthetic video harness also had an independent fixture page-body setup issue; no successful video-runtime acceptance is claimed from those initial probes.",
+    "change": "All broker endpoint resolution now checks BrowserWindow and optional WebContents destruction inside a guarded getter before reading mainFrame; emit/trust/current/open/readiness/availability share it. Captured WebContents identities allow destroyed-content retirement without re-dereferencing destroyed windows. Main endpoint loss also suppresses readiness.",
+    "verification": "Native TypeScript and54 focused tests PASS0skip, including realistic throwing BrowserWindow.webContents and WebContents.mainFrame getters while BrowserWindow remains live; all public broker calls fail closed, retire lease and notify surviving endpoint.",
+    "remaining": "Final real Electron video acceptance must rerun from freshly committed fixed source; temporary harness safe getters do not substitute for this production correction."
+  }
+}

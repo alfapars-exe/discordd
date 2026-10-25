@@ -1,3 +1,9 @@
+import { usePreferencesStore } from "../../stores/preferencesStore";
+import { listGroupDMs } from "../../api/groupDM";
+import { openGroupMessageAt } from "../../utils/groupMessageNavigation";
+import { dmSourceSequence } from "../../utils/dmSourceOrder";
+import {getAuthGeneration} from "../../api/client";
+import i18n from "../../i18n";
 /**
  * DM-domain WS event handlers.
  * Handles: DM channel, DM message CRUD, DM typing, DM reactions, DM pins, DM settings.
@@ -14,9 +20,9 @@ import { showNotification } from "../../utils/notifications";
 import type { WSMessage } from "../../types";
 import { useGroupDMStore } from "../../stores/groupDMStore";
 import { useUIStore } from "../../stores/uiStore";
-import { shouldFlashTaskbar } from "../../utils/notificationPreferences";
+import { getNotificationPreferences, shouldFlashTaskbar } from "../../utils/notificationPreferences";
 import { speakIncomingMessage } from "../../utils/textToSpeech";
-import { isMessageFilteredAsSpam } from "../../utils/messageSpamPolicy";
+import { resolveMessageSpamDisposition,getMessageSpamDisposition } from "../../utils/messageSpamPolicy";
 import { registerSpamMessage } from "../../utils/registerSpamMessage";
 import {cacheDMMessage,readDMMessageCache} from "../../crypto/dmMessageCache";
 import {useComposerDraftStore} from "../../stores/composerDraftStore";
@@ -38,14 +44,70 @@ export async function handleDMEvent(msg: WSMessage, isCurrent: () => boolean = (
       if (group) useGroupDMStore.getState().handleCreateOrUpdate({ ...group, key_epoch: msg.d.key_epoch });
       return true;
     }
-    case "group_dm_message_create":
-      await useGroupDMStore.getState().handleMessage(msg.d);
-      if (useUIStore.getState().destination.type === "group-dm" && useUIStore.getState().destination.channelId === msg.d.group_id) void useGroupDMStore.getState().markRead(msg.d.group_id, msg.d.id);
-      else if (msg.d.user_id !== useAuthStore.getState().user?.id) {
-        const group=useGroupDMStore.getState().groups.find((item)=>item.id===msg.d.group_id);
-        if(group && group.read_revision===undefined) useGroupDMStore.getState().handleCreateOrUpdate({...group,unread_count:group.unread_count+1});
+    case "group_dm_message_create": {
+      const receipt=await useGroupDMStore.getState().handleMessage(msg.d);
+      if(receipt.status!=="accepted"||receipt.message.user_id===receipt.ownerId)return true;
+      const sourceCurrent=()=>isCurrent()&&receipt.isCurrent()&&useAuthStore.getState().user?.id===receipt.ownerId
+        &&getAuthGeneration()===receipt.authGeneration&&useE2EEStore.getState().localDeviceId===receipt.deviceId
+        &&useGroupDMStore.getState().ownerId===receipt.ownerId&&useGroupDMStore.getState().authGeneration===receipt.authGeneration
+        &&useGroupDMStore.getState().groups.some(g=>g.id===receipt.groupId&&g.key_epoch===receipt.keyEpoch&&g.members.some(m=>m.id===receipt.ownerId));
+      if(!sourceCurrent())return true;
+      const group=()=>useGroupDMStore.getState().groups.find(g=>g.id===receipt.groupId);
+      const privacyReady=()=>{
+        const blocks=useBlockStore.getState(),prefs=usePreferencesStore.getState();
+        return sourceCurrent()&&blocks.ownerId===receipt.ownerId&&blocks.authGeneration===receipt.authGeneration&&blocks.snapshotReady&&!blocks.isLoading
+          &&!blocks.blockedUserIds.includes(receipt.message.user_id)&&prefs.accountId===receipt.ownerId&&prefs.isLoaded
+          &&!prefs.get<{ignoredUsers?:Record<string,boolean>}>("privacy")?.ignoredUsers?.[receipt.message.user_id];
+      };
+      const viewing=()=>useUIStore.getState().destination.type==="group-dm"&&useUIStore.getState().destination.channelId===receipt.groupId;
+      const foreground=()=>typeof document!=="undefined"&&!document.hidden&&document.hasFocus();
+      const disposition=await resolveMessageSpamDisposition(receipt.message,"group",sourceCurrent);
+      if(disposition==="stale"||!sourceCurrent())return true;
+      const readable=()=>receipt.storage==="visible"&&receipt.previewReady&&disposition==="allow"
+        &&getMessageSpamDisposition(receipt.message,"group")==="allow"&&privacyReady()
+        &&useE2EEStore.getState().initStatus==="ready"&&!useE2EEStore.getState().decryptionErrors.some(e=>e.channelId===receipt.groupId&&e.messageId===receipt.messageId);
+      const viewed=()=>viewing()&&foreground();
+      if(viewed()&&readable())void useGroupDMStore.getState().markRead(receipt.groupId,receipt.messageId);
+      else {
+        const currentGroup=group();
+        if(currentGroup&&currentGroup.read_revision===undefined)useGroupDMStore.getState().handleCreateOrUpdate({...currentGroup,unread_count:currentGroup.unread_count+1});
       }
+      const unread=()=>{
+        const live=group(),sequence=dmSourceSequence(receipt.message.source_sequence);
+        const watermark=live?.last_read_source_sequence==="0"?0n:dmSourceSequence(live?.last_read_source_sequence);
+        return sequence!==null&&watermark!==null?sequence>watermark:(live?.unread_count??0)>0;
+      };
+      const attentionAllowed=()=>{
+        const status=useAuthStore.getState().manualStatus;
+        return privacyReady()&&!group()?.is_muted&&!["dnd","offline","invisible"].includes(status)
+          &&disposition!=="filter"&&getMessageSpamDisposition(receipt.message,"group")!=="filter";
+      };
+      if(!attentionAllowed()||(!viewed()&&!unread()))return true;
+      const author=receipt.message.user?.display_name||receipt.message.user?.username||"HiChat!";
+      if(readable())speakIncomingMessage(author,receipt.message.content);
+      if(viewed()){
+        if(getNotificationPreferences().currentChannelSound)playNotificationSound();
+        return true;
+      }
+      playNotificationSound();
+      if(!foreground()&&shouldFlashTaskbar())window.electronAPI?.flashFrame();
+
+      // Detached history never claims to have rendered/read this live source.
+      // All delayed deliveries use generic text so pending classification cannot leak a preview.
+      const eligible=()=>attentionAllowed()&&!viewed()&&unread();
+      showNotification({title:author,body:disposition==="pending"?i18n.t("chat:spamPendingNotification"):i18n.t("inbox:kind.groupMessage",{name:author}),
+        tag:`group:${receipt.groupId}`,isStillEligible:eligible,onClick:()=>{
+          void(async()=>{
+            // The OS wrapper focuses the window before this callback; focus is not a permission loss.
+            if(!attentionAllowed())return;
+            const result=await listGroupDMs({isCurrent:attentionAllowed});
+            const live=result.success&&result.data?.group_dms?.find(g=>g.id===receipt.groupId);
+            if(!attentionAllowed()||!live||live.key_epoch!==receipt.keyEpoch||live.is_muted||!live.members.some(m=>m.id===receipt.ownerId))return;
+            await openGroupMessageAt(receipt.groupId,receipt.messageId,{isCurrent:()=>attentionAllowed()});
+          })().catch(()=>{});
+        }});
       return true;
+    }
     case "group_dm_message_update": await useGroupDMStore.getState().handleMessageUpdate(msg.d); notifyGroupDMPinsChanged(msg.d.group_id, isCurrent); return true;
     case "group_dm_message_delete": useGroupDMStore.getState().handleMessageDelete(msg.d.group_id,msg.d.id); notifyGroupDMPinsChanged(msg.d.group_id, isCurrent); return true;
     case "group_dm_pins_update": notifyGroupDMPinsChanged(msg.d.group_id, isCurrent); return true;
@@ -72,8 +134,9 @@ export async function handleDMEvent(msg: WSMessage, isCurrent: () => boolean = (
       let dmMsg = msg.d;
       const dmCurrentUserId = useAuthStore.getState().user?.id;
       const generation=useComposerDraftStore.getState().generation,device=useE2EEStore.getState().localDeviceId;
+      const authGeneration=getAuthGeneration();
       const versionCurrent=observeDMMessage(dmMsg.dm_channel_id,dmMsg.id,false,dmMsg);
-      const current=()=>versionCurrent()&&Boolean(dmCurrentUserId)&&useAuthStore.getState().user?.id===dmCurrentUserId&&useComposerDraftStore.getState().generation===generation&&useE2EEStore.getState().localDeviceId===device;
+      const current=()=>isCurrent()&&getAuthGeneration()===authGeneration&&versionCurrent()&&Boolean(dmCurrentUserId)&&useAuthStore.getState().user?.id===dmCurrentUserId&&useComposerDraftStore.getState().generation===generation&&useE2EEStore.getState().localDeviceId===device;
       if(!current())return true;
 
       if (dmMsg.encryption_version === 1 && dmMsg.ciphertext && dmMsg.sender_device_id) {
@@ -134,21 +197,25 @@ export async function handleDMEvent(msg: WSMessage, isCurrent: () => boolean = (
       useDMStore.getState().handleDMMessageCreate(dmMsg);
 
       if (dmMsg.user_id === dmCurrentUserId) return true;
-      if (isMessageFilteredAsSpam(dmMsg, "dm")) { void registerSpamMessage(dmMsg, "dm", dmMsg.dm_channel_id); return true; }
+      const disposition=await resolveMessageSpamDisposition(dmMsg,"dm",current);
+      if(disposition==="stale"||!current())return true;
+      if(disposition==="filter"){void registerSpamMessage(dmMsg,"dm",dmMsg.dm_channel_id,current);return true;}
 
-      speakIncomingMessage(
+      if(disposition==="allow")speakIncomingMessage(
         dmMsg.author?.display_name || dmMsg.author?.username || "",
         dmMsg.content,
       );
 
       const dmState = useDMStore.getState();
-      if (dmMsg.dm_channel_id === dmState.selectedDMId) {
+      if (dmMsg.dm_channel_id === dmState.selectedDMId&&disposition==="allow") {
         // Viewing this DM — advance the server read cursor so other devices
         // (and the next fetchChannels seed) don't count it as unread. Same
         // contract as channelEventHandlers' markAsRead for the active channel.
         dmApi.markDMRead(dmMsg.dm_channel_id, dmMsg.id).catch(() => {});
         return true;
       }
+
+      if(dmMsg.dm_channel_id===dmState.selectedDMId){dmState.incrementDMUnread(dmMsg.dm_channel_id);return true;}
 
       // Unread always counts (the badge is still shown, dimmed, on a muted
       // DM); only the attention-grabbing cues honour the mute.
@@ -167,14 +234,14 @@ export async function handleDMEvent(msg: WSMessage, isCurrent: () => boolean = (
           "HiChat!";
         showNotification({
           title: authorName,
-          body: dmMsg.content ?? "",
+          body: disposition==="pending"?i18n.t("chat:spamPendingNotification"):dmMsg.content??"",
           icon: dmMsg.author?.avatar_url ?? null,
           tag: `dm:${dmMsg.dm_channel_id}`,
           isStillEligible: () => {
             const auth = useAuthStore.getState();
             const state = useDMStore.getState();
             const channel = state.channels.find((item) => item.id === dmMsg.dm_channel_id);
-            return auth.user?.id === dmCurrentUserId && state.selectedDMId !== dmMsg.dm_channel_id
+            return current()&&(disposition==="pending"||getMessageSpamDisposition(dmMsg,"dm")==="allow")&&auth.user?.id === dmCurrentUserId && state.selectedDMId !== dmMsg.dm_channel_id
               && (state.dmUnreadCounts[dmMsg.dm_channel_id] ?? 0) > 0
               && !!channel && channel.status === "accepted" && !channel.is_muted
               && !(channel.other_user?.id && useBlockStore.getState().isBlocked(channel.other_user.id));

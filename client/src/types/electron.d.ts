@@ -43,6 +43,7 @@ export interface ElectronRegisteredGame {
   displayName: string;
   executableName: string;
   shareAllowed: boolean;
+  joinAdapter?: "none" | "cs2-steam";
   /** Local opt-in for a voice overlay over this game's foreground window. */
   overlayAllowed: boolean;
   availability: "available" | "missing" | "unreadable";
@@ -62,7 +63,7 @@ export interface ElectronRegisteredGamesSnapshot {
 /** Path-free local activity projection; process detection is never triggered by its getter. */
 export interface ElectronRegisteredGameActivity {
   enabled: boolean;
-  game: { id: string; name: string } | null;
+  game: { id: string; name: string; canonicalGameId?: "steam:730" } | null;
 }
 
 /**
@@ -151,6 +152,9 @@ interface ElectronAPI {
   sendOverlayOpenInbox?: (session: string) => Promise<boolean>;
   confirmOverlayOpenInbox?: (session: string) => Promise<boolean>;
   onOverlayOpenInbox?: (callback: (value: { session: string }) => void) => (() => void);
+  sendOverlayPrepareNotificationReply?: (request: { session: string; notificationId: string }) => Promise<boolean>;
+  confirmOverlayPrepareNotificationReply?: (request: { session: string; notificationId: string }) => Promise<boolean>;
+  onOverlayPrepareNotificationReply?: (callback: (value: { session: string; notificationId: string }) => void) => (() => void);
   sendOverlayOpenChat?: (session: string) => Promise<boolean>;
   confirmOverlayOpenChat?: (session: string) => Promise<boolean>;
   sendOverlayOpenChatComposer?: (session: string) => Promise<boolean>;
@@ -162,12 +166,16 @@ interface ElectronAPI {
   onOverlayOpenChat?: (callback: (value: { session: string }) => void) => (() => void);
   /** Read local Windows registered-game state; no executable paths are exposed. */
   getRegisteredGames?: () => Promise<ElectronRegisteredGamesSnapshot>;
+  syncGameJoinContext?: (context: { origin: string; ownerId: string; generation: number; nonce: string } | null) => Promise<{ accepted: boolean; scopeNonce: string | null }>;
+  launchCS2GameJoin?: (request: { scopeNonce: string; ticketId: string; ticket: string; targetUserId: string; offerRevision: number; accessToken: string; requestId: string }) => Promise<"forwarded" | "denied" | "expired" | "busy" | "unavailable" | "error">;
+  setRegisteredGameJoinAdapter?: (id: string, adapter: "none" | "cs2-steam") => Promise<boolean>;
   getRegisteredGameActivity?: () => Promise<ElectronRegisteredGameActivity>;
   setRegisteredGamesBackgroundDetection?: (enabled: boolean) => Promise<boolean>;
   /** Ask the main process to select and register a local .exe; paths never cross IPC. */
   addRegisteredGame?: () => Promise<ElectronRegisteredGame | null>;
   removeRegisteredGame?: (id: string) => Promise<boolean>;
   /** Local consent groundwork only; game activity upload is not implemented. */
+  setRegisteredGameName?: (id: string, name: string) => Promise<boolean>;
   setRegisteredGameSharing?: (id: string, allowed: boolean) => Promise<boolean>;
   /** Local foreground-window voice-overlay opt-in; unrelated to activity sharing. */
   setRegisteredGameOverlay?: (id: string, allowed: boolean) => Promise<boolean>;
@@ -200,6 +208,10 @@ interface ElectronAPI {
   ) => void;
 
   /** Start process-exclusive system audio capture (excludes our own audio) */
+  reserveSystemCaptureLease:(request:{kind:"guild"|"p2p"|"group";source:string})=>Promise<string>;
+  startSystemCaptureLease:(id:string)=>Promise<void>;
+  releaseSystemCaptureLease:(id:string)=>Promise<boolean>;
+  onSystemCaptureLeaseEvent:(cb:(event:{leaseId:string;type:"header"|"data"|"error"|"stopped";value?:unknown})=>void)=>(()=>void);
   startSystemCapture: () => Promise<void>;
   stopSystemCapture: () => Promise<void>;
   /** Read bundled helper lifecycle without receiving capture data. */
@@ -220,6 +232,9 @@ interface ElectronAPI {
   onCaptureAudioError: (cb: (msg: string) => void) => void;
 
   /** Register a key for global PTT detection (works when app is unfocused) */
+  acquirePTTLease: (request:{kind:"guild"|"p2p"|"group";source:string;keyCode:string})=>Promise<string|null>;
+  releasePTTLease: (id:string)=>Promise<void>;
+  onPTTLeaseSignal: (cb:(signal:{leaseId:string;pressed:boolean})=>void)=>(()=>void);
   registerPTTShortcut: (keyCode: string) => Promise<boolean>;
   /** Unregister the global PTT shortcut */
   unregisterPTTShortcut: () => Promise<void>;
@@ -264,14 +279,24 @@ interface ElectronAPI {
   getAppSettings: () => Promise<{ openAtLogin: boolean; startMinimized: boolean; closeToTray: boolean; transparentBackground: boolean; hardwareAcceleration: boolean }>;
   setAppSetting: (key: string, value: boolean) => Promise<void>;
   onVoiceOverlayUpdate?: (cb: (snapshot: unknown) => void) => (() => void);
-  sendVoiceOverlaySnapshot?: (snapshot: unknown) => void;
+  sendVoiceOverlaySnapshot?: (snapshot: unknown) => Promise<boolean>;
+  clearOverlayGameNotices?: () => Promise<void>;
+  openOverlayMediaLease?: (lease: {session:string;revision:number;tiles:{tileId:string;kind:"camera"|"screen";label?:string}[]}) => Promise<boolean>;
+  sendOverlayMedia?: (envelope: unknown) => Promise<boolean>;
+  sendOverlayMediaViewport?: (viewport: {session:string;revision:number;tileId:string;visible:boolean;width:number;height:number;fps:number}) => Promise<boolean>;
+  setOverlayMediaReceiverReady?: (ready: boolean) => Promise<boolean>;
+  getOverlayMediaAvailability?: () => Promise<{ready:boolean;visible:boolean;allowedKinds:("camera"|"screen")[];windowGeneration:string}|null>;
+  onOverlayMedia?: (callback: (value: unknown) => void) => (() => void);
+  onOverlayMediaLease?: (callback: (value: unknown) => void) => (() => void);
+  onOverlayMediaViewport?: (callback: (value: unknown) => void) => (() => void);
+  onOverlayMediaAvailability?: (callback: (value: unknown) => void) => (() => void);
   setOverlayShortcut?: (binding: { code: string; ctrl: boolean; shift: boolean; alt: boolean; meta: boolean } | null) => Promise<boolean>;
 
   /** Custom titlebar window controls */
   minimizeWindow: () => Promise<void>;
   maximizeWindow: () => Promise<void>;
   closeWindow: () => Promise<void>;
-  onMaximizedChange: (cb: (isMaximized: boolean) => void) => void;
+  onMaximizedChange: (cb: (isMaximized: boolean) => void) => (() => void);
   removeMaximizedListener: () => void;
 
   /** Windows taskbar overlay badge. count=0 removes badge. */
@@ -282,10 +307,10 @@ interface ElectronAPI {
   /** Clipboard write via main process IPC — always works */
   writeClipboard: (text: string) => Promise<void>;
 
-  onUpdateAvailable: (cb: (info: ElectronUpdateInfo) => void) => void;
-  onUpdateProgress: (cb: (progress: ElectronDownloadProgress) => void) => void;
-  onUpdateDownloaded: (cb: (info: ElectronUpdateInfo) => void) => void;
-  onUpdateError: (cb: (message: string) => void) => void;
+  onUpdateAvailable: (cb: (info: ElectronUpdateInfo) => void) => (() => void);
+  onUpdateProgress: (cb: (progress: ElectronDownloadProgress) => void) => (() => void);
+  onUpdateDownloaded: (cb: (info: ElectronUpdateInfo) => void) => (() => void);
+  onUpdateError: (cb: (message: string) => void) => (() => void);
 }
 
 declare global {

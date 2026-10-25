@@ -1,3 +1,4 @@
+vi.mock("./inboxShortcutToggle",()=>({toggleInboxShortcut:()=>fixture.navigate({type:"inbox",channelId:"inbox",label:"common:shellInbox"})}));
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { executeConversationShortcut, dispatchConversationCommand, CONVERSATION_COMMAND_EVENT, type ConversationCommandDetail } from "./conversationCommands";
 
@@ -42,7 +43,7 @@ vi.mock("../i18n", () => ({ default: { t: (key: string) => key } }));
 
 beforeEach(() => {
   vi.resetAllMocks();
-  fixture.fetchUnreadCounts.mockResolvedValue(undefined);
+  fixture.fetchUnreadCounts.mockResolvedValue(true);
   fixture.getMessages.mockResolvedValue({ success: true, data: { messages: [{ id: "m-latest" }], has_more: true } });
   fixture.markRead.mockResolvedValue({ success: true, data: { message: "ok" } });
   fixture.markAllRead.mockResolvedValue({ success: true, data: { message: "ok" } });
@@ -74,6 +75,33 @@ it("marks the active channel through its current server and refreshes authoritat
   expect(fixture.markRead).toHaveBeenCalledWith("s1", "c1", "m-latest", expect.objectContaining({ timeoutMs: 15000, isCurrent: expect.any(Function) }));
   expect(fixture.clearUnread).not.toHaveBeenCalled();
   expect(fixture.addToast).toHaveBeenCalledWith("success", "common:shortcutMarkedRead");
+});
+
+it.each(["chat-mark-channel-read", "chat-mark-server-read"] as const)("reports a failed count refresh for %s without claiming success", async (command) => {
+  fixture.fetchUnreadCounts.mockResolvedValueOnce(false);
+  executeConversationShortcut(command);
+  await vi.waitFor(() => expect(fixture.addToast).toHaveBeenCalledWith("error", "common:shortcutReadFailed"));
+  expect(fixture.addToast).not.toHaveBeenCalledWith("success", expect.anything());
+  expect(fixture.clearUnread).not.toHaveBeenCalled();
+});
+
+it.each(["chat-mark-channel-read", "chat-mark-server-read"] as const)("reports a rejected count refresh for %s without claiming success", async (command) => {
+  fixture.fetchUnreadCounts.mockRejectedValueOnce(new Error("offline"));
+  executeConversationShortcut(command);
+  await vi.waitFor(() => expect(fixture.addToast).toHaveBeenCalledWith("error", "common:shortcutReadFailed"));
+  expect(fixture.addToast).not.toHaveBeenCalledWith("success", expect.anything());
+});
+
+it("does not show a count-refresh failure in a different account or destination", async () => {
+  let finish!: (result: boolean) => void;
+  fixture.fetchUnreadCounts.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+  executeConversationShortcut("chat-mark-channel-read");
+  await vi.waitFor(() => expect(fixture.fetchUnreadCounts).toHaveBeenCalledOnce());
+  fixture.navigationRevision++;
+  fixture.userId = "u2";
+  finish(false);
+  await Promise.resolve(); await Promise.resolve();
+  expect(fixture.addToast).not.toHaveBeenCalled();
 });
 
 it("marks a DM at its authoritative latest ID and refreshes metadata without clearing newer unread messages", async () => {

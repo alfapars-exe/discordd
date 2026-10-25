@@ -1,4 +1,10 @@
 {
+  "overlayNotificationMessage": "Yeni mesaj",
+  "overlayPrepareReply": "Yanıt hazırla",
+  "overlayReplyDraftConflict": "Mevcut taslak veya düzenleme korunuyor. Tamamladıktan sonra yeniden dene.",
+  "overlayReplyUnavailable": "Bu bildirimin mesajına şu anda yanıt hazırlanamadı.",
+  "overlayGoLiveGuidance": "Uygulamadaki Paylaş düğmesiyle ekran veya pencere seçebilirsin.",
+  "overlayWelcomeNotice": "HiChat oyun arayüzü açık",
   "shortcutLofi": "Yerel lo-fi oynatıcısını aç",
   "lofiTitle": "HiChat Lo-fi",
   "lofiPermissionError": "Ses izni reddedildi. Tarayıcı veya sistem ayarlarından HiChat için sese izin verip Oynat ile yeniden deneyin.",
@@ -467,5 +473,8 @@
     "retry": "Tekrar dene",
     "reloading": "Yeniden yükleniyor...",
     "sectionTitle": "Bu bölümde bir sorun oluştu ({{section}})"
-  }
+  },
+  "overlayCompatibilityActive": "Salt okunur uyumluluk modu",
+  "overlayGameActivityNotice": "{{name}}, {{game}} etkinliğini paylaşmaya başladı",
+  "overlayNowPlayingNotice": "{{name}}, aynı CS2 eşleştirmesi için etkinlik paylaşmaya başladı"
 }

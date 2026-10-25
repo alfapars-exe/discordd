@@ -7,7 +7,7 @@ import { useShortcutCaptureStore } from "../../stores/shortcutCaptureStore";
 
 const state = vi.hoisted(() => ({
   auth: { user: { id: "me", username: "me", display_name: "Me", avatar_url: null }, manualStatus: "online" },
-  voice: { currentVoiceChannelId: "voice-a" as string | null, currentVoiceServerId: "server-a", isMuted: false, isDeafened: false,
+  voice: { currentVoiceChannelId: "voice-a" as string | null, currentVoiceServerId: "server-a", isMuted: false, isDeafened: false, muteBeforeDeafen:null as boolean|null,
     isStreaming: false, isCameraEnabled: false, setCameraEnabled: vi.fn(), noiseReduction: true, setNoiseReduction: vi.fn(), rtt: 25 },
   server: { servers: [{ id: "server-a", name: "Server A", icon_url: null }, { id: "server-b", name: "Server B", icon_url: null }], activeServerId: "server-b" },
   channel: { categories: [{ channels: [{ id: "voice-b", name: "Voice B" }] }], categoriesByServer: { "server-a": [{ channels: [{ id: "voice-a", name: "Voice A" }] }] } },
@@ -108,4 +108,11 @@ describe("persistent voice dock", () => {
     dialog.remove();
     expect(state.soundboard.togglePanel).not.toHaveBeenCalled();
   });
+
+it("describes queued microphone intent while keeping the effective mute indicator",()=>{
+ state.voice.isMuted=true;state.voice.isDeafened=true;state.voice.muteBeforeDeafen=true;
+ const view=render(<UserBar {...actions}/>);const queuedUnmute=screen.getByRole("button",{name:"unmuteAfterUndeafen"});expect(queuedUnmute).toHaveAttribute("aria-pressed","true");fireEvent.click(queuedUnmute);expect(actions.onToggleMute).toHaveBeenCalled();
+ state.voice.muteBeforeDeafen=false;view.rerender(<UserBar {...actions}/>);expect(screen.getByRole("button",{name:"muteAfterUndeafen"})).toHaveAttribute("aria-pressed","true");
+});
+
 });

@@ -47,7 +47,7 @@ export type CameraQuality = "360p" | "720p" | "1080p";
  * useful on weak uplinks or laptop encoders.
  */
 export type CameraFps = 15 | 30;
-export type VoiceOverlayPosition = "top-left" | "bottom-left" | "top-right" | "bottom-right";
+export type VoiceOverlayPosition = "top-left" | "center-left" | "bottom-left" | "top-right" | "bottom-right";
 
 /**
  * Microphone profile — picks the whole capture + publish + processor chain.
@@ -234,8 +234,15 @@ export type VoiceSettings = {
   voiceOverlayQuickActions: boolean;
   /** Device-local opt-in for mute/deafen button input while widget is click-through locked. */
   voiceOverlayClickableActions: boolean;
+  voiceOverlayCompatibility: boolean;
   /** Device-local display of activity already shared by friends. */
   voiceOverlayActivity: boolean;
+  voiceOverlayVideo: boolean;
+  voiceOverlayStreams: boolean;
+  voiceOverlayWelcome: boolean;
+  voiceOverlayGoLive: boolean;
+  voiceOverlayGameActivityNotifications: boolean;
+  voiceOverlayNowPlayingNotifications: boolean;
   /** Device-local opt-in to show read-only genuine unread notification indicators. */
   voiceOverlayNotifications: boolean;
   /** Device-local opt-in to open the main app from the overlay notification panel. */
@@ -273,6 +280,8 @@ const STORAGE_KEY = "mqvi_voice_settings";
  * once. They can toggle it back off and that choice persists.
  */
 const SCREEN_SHARE_AUDIO_MIGRATION_KEY = "mqvi_voice_settings_v2_screenShareAudio";
+const OVERLAY_ROSTER_MIGRATION_KEY = "mqvi_voice_settings_v4_gameRosterCenter";
+const OVERLAY_GAME_MODE_MIGRATION_KEY = "mqvi_voice_settings_v3_overlayGameMode";
 
 /**
  * Engines removed from the picker over time. Persisted settings with one
@@ -318,15 +327,22 @@ export const DEFAULT_SETTINGS: VoiceSettings = {
   muteHotkey: "KeyL",
   muteHotkeyGlobal: false,
   voiceOverlayEnabled: true,
-  voiceOverlayMode: "desktop",
+  voiceOverlayMode: "game",
   voiceOverlaySpeakingOpacity: 100,
   voiceOverlayIdleOpacity: 35,
   voiceOverlayScale: 100,
-  voiceOverlayPosition: "bottom-left",
+  voiceOverlayPosition: "center-left",
   voiceOverlayPinned: false,
   voiceOverlayQuickActions: false,
   voiceOverlayClickableActions: false,
+  voiceOverlayCompatibility: false,
   voiceOverlayActivity: false,
+  voiceOverlayVideo: false,
+  voiceOverlayStreams: false,
+  voiceOverlayWelcome: false,
+  voiceOverlayGoLive: false,
+  voiceOverlayGameActivityNotifications: false,
+  voiceOverlayNowPlayingNotifications: false,
   voiceOverlayNotifications: false,
   voiceOverlayNotificationActions: false,
   voiceOverlayChat: false,
@@ -343,7 +359,7 @@ function boundedOverlayNumber(value: number, min: number, max: number, fallback:
 }
 
 function validOverlayPosition(value: unknown): value is VoiceOverlayPosition {
-  return value === "top-left" || value === "top-right" || value === "bottom-left" || value === "bottom-right";
+  return value === "center-left" || value === "top-left" || value === "top-right" || value === "bottom-left" || value === "bottom-right";
 }
 
 /** Loads voice settings from localStorage with partial merge (new keys get defaults). */
@@ -353,6 +369,8 @@ export function loadSettings(): VoiceSettings {
     if (!raw) {
       // No saved settings — treat as already migrated; mark to skip on first save.
       try { localStorage.setItem(SCREEN_SHARE_AUDIO_MIGRATION_KEY, "1"); } catch { /* ignore */ }
+      try { localStorage.setItem(OVERLAY_GAME_MODE_MIGRATION_KEY, "1"); } catch { /* ignore */ }
+      try { localStorage.setItem(OVERLAY_ROSTER_MIGRATION_KEY, "1"); } catch { /* ignore */ }
       return { ...DEFAULT_SETTINGS };
     }
     // JSON.parse can return any shape — array, primitive, null. Guard
@@ -371,10 +389,36 @@ export function loadSettings(): VoiceSettings {
     if (merged.voiceOverlayMode !== "desktop" && merged.voiceOverlayMode !== "game") {
       merged.voiceOverlayMode = DEFAULT_SETTINGS.voiceOverlayMode;
     }
+    // Persist the mode before the marker so a restart cannot restore the old
+    // desktop default. Later explicit desktop choices must remain untouched.
+    if (!localStorage.getItem(OVERLAY_GAME_MODE_MIGRATION_KEY)) {
+      merged.voiceOverlayMode = "game";
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...parsed, voiceOverlayMode: "game" }));
+        localStorage.setItem(OVERLAY_GAME_MODE_MIGRATION_KEY, "1");
+      } catch { /* Keep game mode in memory and retry migration on next load. */ }
+    }
+    // Upgrade existing layouts once; subsequent explicit choices remain local.
+    if (!localStorage.getItem(OVERLAY_ROSTER_MIGRATION_KEY)) {
+      Object.assign(merged, { voiceOverlayMode: "game", voiceOverlayPosition: "center-left",
+        voiceOverlaySpeakingOnly: false, voiceOverlayMaxParticipants: 25, voiceOverlayNameDisplay: "always" });
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...parsed, voiceOverlayMode: "game", voiceOverlayPosition: "center-left",
+          voiceOverlaySpeakingOnly: false, voiceOverlayMaxParticipants: 25, voiceOverlayNameDisplay: "always" }));
+        localStorage.setItem(OVERLAY_ROSTER_MIGRATION_KEY, "1");
+      } catch { /* Retry if persistence was unavailable. */ }
+    }
     if (typeof merged.voiceOverlaySpeakingOnly !== "boolean") merged.voiceOverlaySpeakingOnly = false;
     if (typeof merged.voiceOverlayPinned !== "boolean") merged.voiceOverlayPinned = DEFAULT_SETTINGS.voiceOverlayPinned;
     if (typeof merged.voiceOverlayQuickActions !== "boolean") merged.voiceOverlayQuickActions = DEFAULT_SETTINGS.voiceOverlayQuickActions;
     if (typeof merged.voiceOverlayClickableActions !== "boolean") merged.voiceOverlayClickableActions = DEFAULT_SETTINGS.voiceOverlayClickableActions;
+    if (typeof merged.voiceOverlayCompatibility !== "boolean") merged.voiceOverlayCompatibility = DEFAULT_SETTINGS.voiceOverlayCompatibility;
+    if (typeof merged.voiceOverlayGoLive !== "boolean") merged.voiceOverlayGoLive = DEFAULT_SETTINGS.voiceOverlayGoLive;
+    if (typeof merged.voiceOverlayGameActivityNotifications !== "boolean") merged.voiceOverlayGameActivityNotifications = false;
+    if (typeof merged.voiceOverlayNowPlayingNotifications !== "boolean") merged.voiceOverlayNowPlayingNotifications = false;
+    if (typeof merged.voiceOverlayWelcome !== "boolean") merged.voiceOverlayWelcome = DEFAULT_SETTINGS.voiceOverlayWelcome;
+    if (typeof merged.voiceOverlayVideo !== "boolean") merged.voiceOverlayVideo = DEFAULT_SETTINGS.voiceOverlayVideo;
+    if (typeof merged.voiceOverlayStreams !== "boolean") merged.voiceOverlayStreams = DEFAULT_SETTINGS.voiceOverlayStreams;
     if (typeof merged.voiceOverlayActivity !== "boolean") merged.voiceOverlayActivity = DEFAULT_SETTINGS.voiceOverlayActivity;
     if (typeof merged.voiceOverlayNotifications !== "boolean") merged.voiceOverlayNotifications = DEFAULT_SETTINGS.voiceOverlayNotifications;
     if (typeof merged.voiceOverlayNotificationActions !== "boolean") merged.voiceOverlayNotificationActions = DEFAULT_SETTINGS.voiceOverlayNotificationActions;
@@ -430,7 +474,9 @@ const DEVICE_LOCAL_KEYS = new Set<keyof VoiceSettings>([
   "voiceOverlayScale", "voiceOverlayPosition", "voiceOverlaySpeakingOnly",
   "voiceOverlayPinned",
   "voiceOverlayQuickActions", "voiceOverlayClickableActions",
-  "voiceOverlayActivity",
+  "voiceOverlayCompatibility",
+  "voiceOverlayActivity", "voiceOverlayVideo", "voiceOverlayStreams", "voiceOverlayWelcome", "voiceOverlayGoLive",
+  "voiceOverlayGameActivityNotifications", "voiceOverlayNowPlayingNotifications",
   "voiceOverlayNotifications",
   "voiceOverlayNotificationActions",
   "voiceOverlayChat",
@@ -552,7 +598,14 @@ function currentSettings(s: VoiceSettings): VoiceSettings {
     voiceOverlayPinned: s.voiceOverlayPinned,
     voiceOverlayQuickActions: s.voiceOverlayQuickActions,
     voiceOverlayClickableActions: s.voiceOverlayClickableActions,
+    voiceOverlayCompatibility: s.voiceOverlayCompatibility,
     voiceOverlayActivity: s.voiceOverlayActivity,
+    voiceOverlayVideo: s.voiceOverlayVideo,
+    voiceOverlayStreams: s.voiceOverlayStreams,
+    voiceOverlayWelcome: s.voiceOverlayWelcome,
+    voiceOverlayGoLive: s.voiceOverlayGoLive,
+    voiceOverlayGameActivityNotifications: s.voiceOverlayGameActivityNotifications,
+    voiceOverlayNowPlayingNotifications: s.voiceOverlayNowPlayingNotifications,
     voiceOverlayNotifications: s.voiceOverlayNotifications,
     voiceOverlayNotificationActions: s.voiceOverlayNotificationActions,
     voiceOverlayChat: s.voiceOverlayChat,
@@ -601,7 +654,14 @@ export type VoiceSettingsSlice = VoiceSettings & {
   setVoiceOverlayPinned: (pinned: boolean) => void;
   setVoiceOverlayQuickActions: (enabled: boolean) => void;
   setVoiceOverlayClickableActions: (enabled: boolean) => void;
+  setVoiceOverlayCompatibility: (enabled: boolean) => void;
   setVoiceOverlayActivity: (enabled: boolean) => void;
+  setVoiceOverlayVideo: (enabled: boolean) => void;
+  setVoiceOverlayStreams: (enabled: boolean) => void;
+  setVoiceOverlayWelcome: (enabled: boolean) => void;
+  setVoiceOverlayGoLive: (enabled: boolean) => void;
+  setVoiceOverlayGameActivityNotifications: (enabled: boolean) => void;
+  setVoiceOverlayNowPlayingNotifications: (enabled: boolean) => void;
   setVoiceOverlayNotifications: (enabled: boolean) => void;
   setVoiceOverlayNotificationActions: (enabled: boolean) => void;
   setVoiceOverlayChat: (enabled: boolean) => void;
@@ -667,7 +727,14 @@ export const createVoiceSettingsSlice: StateCreator<
     voiceOverlayPinned: initial.voiceOverlayPinned,
     voiceOverlayQuickActions: initial.voiceOverlayQuickActions,
     voiceOverlayClickableActions: initial.voiceOverlayClickableActions,
+    voiceOverlayCompatibility: initial.voiceOverlayCompatibility,
     voiceOverlayActivity: initial.voiceOverlayActivity,
+    voiceOverlayVideo: initial.voiceOverlayVideo,
+    voiceOverlayStreams: initial.voiceOverlayStreams,
+    voiceOverlayWelcome: initial.voiceOverlayWelcome,
+    voiceOverlayGoLive: initial.voiceOverlayGoLive,
+    voiceOverlayGameActivityNotifications: initial.voiceOverlayGameActivityNotifications,
+    voiceOverlayNowPlayingNotifications: initial.voiceOverlayNowPlayingNotifications,
     voiceOverlayNotifications: initial.voiceOverlayNotifications,
     voiceOverlayNotificationActions: initial.voiceOverlayNotificationActions,
     voiceOverlayChat: initial.voiceOverlayChat,
@@ -805,6 +872,13 @@ export const createVoiceSettingsSlice: StateCreator<
     setVoiceOverlayPinned: (pinned) => { set({ voiceOverlayPinned: pinned === true }); saveSettings(currentSettings(get())); },
     setVoiceOverlayQuickActions: (enabled) => { set({ voiceOverlayQuickActions: enabled === true }); saveSettings(currentSettings(get())); },
     setVoiceOverlayClickableActions: (enabled) => { set({ voiceOverlayClickableActions: enabled === true }); saveSettings(currentSettings(get())); },
+    setVoiceOverlayCompatibility: (enabled) => { set({ voiceOverlayCompatibility: enabled === true }); saveSettings(currentSettings(get())); },
+    setVoiceOverlayGoLive: (enabled) => { set({ voiceOverlayGoLive: enabled === true }); saveSettings(currentSettings(get())); },
+    setVoiceOverlayGameActivityNotifications: (enabled) => { set({ voiceOverlayGameActivityNotifications: enabled === true }); saveSettings(currentSettings(get())); },
+    setVoiceOverlayNowPlayingNotifications: (enabled) => { set({ voiceOverlayNowPlayingNotifications: enabled === true }); saveSettings(currentSettings(get())); },
+    setVoiceOverlayWelcome: (enabled) => { set({ voiceOverlayWelcome: enabled === true }); saveSettings(currentSettings(get())); },
+    setVoiceOverlayVideo: (enabled) => { set({ voiceOverlayVideo: enabled === true }); saveSettings(currentSettings(get())); },
+    setVoiceOverlayStreams: (enabled) => { set({ voiceOverlayStreams: enabled === true }); saveSettings(currentSettings(get())); },
     setVoiceOverlayActivity: (enabled) => { set({ voiceOverlayActivity: enabled === true }); saveSettings(currentSettings(get())); },
     setVoiceOverlayNotifications: (enabled) => { set({ voiceOverlayNotifications: enabled === true }); saveSettings(currentSettings(get())); },
     setVoiceOverlayNotificationActions: (enabled) => { set({ voiceOverlayNotificationActions: enabled === true }); saveSettings(currentSettings(get())); },
@@ -943,7 +1017,14 @@ export const createVoiceSettingsSlice: StateCreator<
         voiceOverlayPinned: merged.voiceOverlayPinned,
         voiceOverlayQuickActions: merged.voiceOverlayQuickActions,
         voiceOverlayClickableActions: merged.voiceOverlayClickableActions,
+        voiceOverlayCompatibility: merged.voiceOverlayCompatibility,
         voiceOverlayActivity: merged.voiceOverlayActivity,
+        voiceOverlayVideo: merged.voiceOverlayVideo,
+        voiceOverlayStreams: merged.voiceOverlayStreams,
+        voiceOverlayWelcome: merged.voiceOverlayWelcome,
+        voiceOverlayGoLive: merged.voiceOverlayGoLive,
+        voiceOverlayGameActivityNotifications: merged.voiceOverlayGameActivityNotifications,
+        voiceOverlayNowPlayingNotifications: merged.voiceOverlayNowPlayingNotifications,
         voiceOverlayNotifications: merged.voiceOverlayNotifications,
         voiceOverlayNotificationActions: merged.voiceOverlayNotificationActions,
         voiceOverlayChat: merged.voiceOverlayChat,
@@ -973,7 +1054,14 @@ export const createVoiceSettingsSlice: StateCreator<
         voiceOverlayPinned: current.voiceOverlayPinned,
         voiceOverlayQuickActions: current.voiceOverlayQuickActions,
         voiceOverlayClickableActions: current.voiceOverlayClickableActions,
+        voiceOverlayCompatibility: current.voiceOverlayCompatibility,
         voiceOverlayActivity: current.voiceOverlayActivity,
+        voiceOverlayVideo: current.voiceOverlayVideo,
+        voiceOverlayStreams: current.voiceOverlayStreams,
+        voiceOverlayWelcome: current.voiceOverlayWelcome,
+        voiceOverlayGoLive: current.voiceOverlayGoLive,
+        voiceOverlayGameActivityNotifications: current.voiceOverlayGameActivityNotifications,
+        voiceOverlayNowPlayingNotifications: current.voiceOverlayNowPlayingNotifications,
         voiceOverlayNotifications: current.voiceOverlayNotifications,
         voiceOverlayNotificationActions: current.voiceOverlayNotificationActions,
         voiceOverlayChat: current.voiceOverlayChat,

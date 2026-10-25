@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/models"
 )
 
@@ -243,7 +244,7 @@ func TestNotificationRepo_MarkReadAndCounts(t *testing.T) {
 		if err := db.Conn.QueryRow(`SELECT read_at FROM notifications WHERE id = ?`, created[0]).Scan(&again); err != nil {
 			t.Fatalf("read read_at: %v", err)
 		}
-		if again != "2000-01-01 00:00:00" {
+		if dbTextToRFC3339(again) != "2000-01-01T00:00:00Z" {
 			t.Errorf("repeat mark-read overwrote read_at: %q", again)
 		}
 	})
@@ -340,9 +341,19 @@ func TestNotificationRepo_ReadAtIsRFC3339(t *testing.T) {
 		t.Fatal("read_at nil after MarkRead")
 	}
 	assertRFC3339UTC(t, "List read_at", *list[0].ReadAt)
-	// Stored form stays the DB's space-separated text — only the boundary converts.
-	if n := countRows(t, db, `SELECT COUNT(*) FROM notifications WHERE id = ? AND created_at LIKE '____-__-__ __:__:__' AND read_at LIKE '____-__-__ __:__:__'`, n.ID); n != 1 {
-		t.Error("stored created_at/read_at are not 'YYYY-MM-DD HH:MM:SS' text")
+	if database.IsPostgres(wrapForRepo(db)) {
+		var createdType, readType string
+		if err := db.Conn.QueryRow(`SELECT pg_typeof(created_at)::text,pg_typeof(read_at)::text FROM notifications WHERE id=?`, n.ID).Scan(&createdType, &readType); err != nil {
+			t.Fatal(err)
+		}
+		if createdType != "timestamp with time zone" || readType != "timestamp with time zone" {
+			t.Fatalf("PostgreSQL timestamp storage types=%s/%s", createdType, readType)
+		}
+	} else {
+		// SQLite stores UTC space-separated text; the public boundary converts it.
+		if n := countRows(t, db, `SELECT COUNT(*) FROM notifications WHERE id = ? AND created_at LIKE '____-__-__ __:__:__' AND read_at LIKE '____-__-__ __:__:__'`, n.ID); n != 1 {
+			t.Error("stored created_at/read_at are not 'YYYY-MM-DD HH:MM:SS' text")
+		}
 	}
 }
 
@@ -410,9 +421,9 @@ func TestNotificationRepo_MarkRequestRead(t *testing.T) {
 
 	alice, carol, dm := dmAlice, dmCarol, "dm-1"
 	seed := []*models.Notification{
-		{UserID: dmBob, Kind: models.NotificationKindFriendRequest, ActorID: &alice},  // target
-		{UserID: dmBob, Kind: models.NotificationKindFriendRequest, ActorID: &carol},  // other sender, untouched
-		{UserID: dmBob, Kind: models.NotificationKindMention, ActorID: &alice},        // other kind, untouched
+		{UserID: dmBob, Kind: models.NotificationKindFriendRequest, ActorID: &alice},   // target
+		{UserID: dmBob, Kind: models.NotificationKindFriendRequest, ActorID: &carol},   // other sender, untouched
+		{UserID: dmBob, Kind: models.NotificationKindMention, ActorID: &alice},         // other kind, untouched
 		{UserID: dmAlice, Kind: models.NotificationKindFriendRequest, ActorID: &carol}, // other user, untouched
 		{UserID: dmBob, Kind: models.NotificationKindDMRequest, ActorID: &alice, DMChannelID: &dm},
 	}

@@ -1,0 +1,7 @@
+{
+  "status": "static_verified_integration_open",
+  "scope": "Preserve main-view quality when manual video visibility coordinator is integrated",
+  "change": "Main viewport requests retain bounded8192x8192/120FPS support; overlay tiles remain bounded1920x1080/60FPS. A small overlay cannot silently downgrade a visible4K120 main view; releasing main falls back to actual overlay demand.",
+  "checks": "26 coordinator tests PASS1.56s; scoped ESLint0",
+  "remaining": "Coordinator is not wired to live Rooms. No actual high-resolution decode or native overlay/media acceptance claimed."
+}

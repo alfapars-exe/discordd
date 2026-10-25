@@ -1,13 +1,31 @@
+import OverlayMediaPanel from "./media/OverlayMediaPanel";
+import GameActivityNotices from "./GameActivityNotices";
+import { visibleOverlayGameActivityNotices, type OverlayGameActivityNotice } from "../../../../electron/voice-overlay-contract";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 export type VoiceOverlaySnapshot = {
   unlocked?: boolean;
+  voiceOverlayCompatibility?: boolean;
   voiceOverlayPinned?: boolean;
   voiceOverlayQuickActions?: boolean;
   voiceOverlayClickableActions?: boolean;
   voiceOverlayNotificationActions?: boolean;
   voiceOverlayActivity?: boolean;
+  voiceOverlayGameActivityNotifications?: boolean;
+  voiceOverlayNowPlayingNotifications?: boolean;
+  gameActivityNotices?: OverlayGameActivityNotice[];
+  gameActivityNoticeHeight?: number;
+  voiceOverlayVideo?: boolean;
+  voiceOverlayStreams?: boolean;
+  mediaHeight?: number;
+  voiceOverlayWelcome?: boolean;
+  voiceOverlayGoLive?: boolean;
+  goLiveEligible?: boolean;
+  goLive?: { id: number; expiresAt: number } | null;
+  goLiveHeight?: number;
+  welcome?: { id: number; expiresAt: number } | null;
+  welcomeHeight?: number;
   activities?: Array<{ userId: string; label: string; gameName: string }>;
   voiceOverlayNotifications?: boolean;
   voiceOverlayChat?: boolean;
@@ -20,9 +38,12 @@ export type VoiceOverlaySnapshot = {
   chatComposeSession?: string;
   chatComposeLabel?: string;
   notificationActionSession?: string;
+  notificationReplySession?: string;
+  notificationReplyIds?: string[];
+  notificationReplyButtons?: Array<{ id: string; row: number }>;
   notificationActionsUnavailable?: boolean;
   notificationStatus?: "loading" | "ready" | "unavailable";
-  notifications?: Array<{ id: string; category: "mention" | "reply" | "friend_request" | "dm_request" | "system" }>;
+  notifications?: Array<{ id: string; category: "mention" | "reply" | "friend_request" | "dm_request" | "system" | "message" }>;
   voiceActionSession?: string;
   selfMuted?: boolean;
   selfDeafened?: boolean;
@@ -33,7 +54,7 @@ export type VoiceOverlaySnapshot = {
   speakingOpacity: number;
   idleOpacity: number;
   scale: number;
-  position: "top-left" | "bottom-left" | "top-right" | "bottom-right";
+  position: "top-left" | "center-left" | "bottom-left" | "top-right" | "bottom-right";
   speakingOnly: boolean;
   voiceOverlayAvatarSize: "small" | "large";
   voiceOverlayNameDisplay: "always" | "speaking" | "never";
@@ -81,7 +102,7 @@ function VoiceOverlayToolbar({ snapshot }: { snapshot: VoiceOverlaySnapshot }) {
     </div>;
 }
 
-function NotificationInboxButton({ session }: { session: string }) {
+function NotificationInboxButton({ session, replySession, replyButtons = [] }: { session: string; replySession?: string; replyButtons?: Array<{ id: string; row: number }> }) {
   const { t } = useTranslation("common");
   const [pending, setPending] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -103,7 +124,18 @@ function NotificationInboxButton({ session }: { session: string }) {
       if (mounted.current) setPending(false);
     }
   }
-  return <div className="voice-overlay-notification-action-surface">
+  async function prepareReply(notificationId: string) {
+    if (!replySession || !window.electronAPI?.sendOverlayPrepareNotificationReply || busy.current) return;
+    busy.current = true; setPending(true); setFailed(false);
+    try { if (await window.electronAPI.sendOverlayPrepareNotificationReply({ session: replySession, notificationId }) !== true && mounted.current) setFailed(true); }
+    catch { if (mounted.current) setFailed(true); }
+    finally { busy.current = false; if (mounted.current) setPending(false); }
+  }
+  const buttons = replyButtons.slice(0, 3).filter((item, index, all) => typeof item.id === "string" && item.id.length > 0 && item.id.length <= 128
+    && Number.isInteger(item.row) && item.row >= 0 && item.row < 3 && all.findIndex(other => other.id === item.id || other.row === item.row) === index);
+  return <div className="voice-overlay-notification-action-surface" style={{ height: 20 + (buttons.length ? Math.max(...buttons.map(item => item.row)) + 1 : 0) * 32 }}>
+    {replySession && buttons.map(item => <button key={item.id} type="button" tabIndex={-1} style={{ position: "absolute", top: 20 + item.row * 32 + 6, left: 0 }}
+      disabled={pending || !window.electronAPI?.sendOverlayPrepareNotificationReply} aria-label={t("overlayPrepareReply")} onClick={() => void prepareReply(item.id)}>{t("overlayPrepareReply")}</button>)}
     <button type="button" tabIndex={-1} disabled={!send || pending} aria-label={t("overlayOpenInbox")} title={t(failed ? "overlayOpenInboxFailed" : "overlayOpenInbox")}
       onClick={() => void openInbox()}>{t("overlayOpenInbox")}</button>
     {failed && <span className="voice-overlay-inbox-error" role="alert" aria-label={t("overlayOpenInboxFailed")} title={t("overlayOpenInboxFailed")}>!</span>}
@@ -205,7 +237,18 @@ function ChatComposer({ session, label }: { session: string; label?: string }) {
   </section>;
 }
 
-export default function VoiceOverlayContent({ snapshot, actionsOnly = false, notificationActionsOnly = false, chatActionsOnly = false, chatComposerOnly = false }: Props) {
+function OverlayWelcomeNotice({ notice, bottom, height = 32, textKey = "overlayWelcomeNotice" }: { notice: { id: number; expiresAt: number }; bottom: number; height?: 32 | 64; textKey?: "overlayWelcomeNotice" | "overlayGoLiveGuidance" }) {
+  const { t } = useTranslation("common");
+  const [visible, setVisible] = useState(() => notice.expiresAt > Date.now() && notice.expiresAt <= Date.now() + 20000);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setVisible(false), Math.max(0, notice.expiresAt - Date.now()));
+    return () => window.clearTimeout(timer);
+  }, [notice.expiresAt]);
+  return visible ? <div role="status" className="voice-overlay-welcome" style={{ position: "absolute", bottom, left: 8, right: 8, height, boxSizing: "border-box", overflow: "hidden", padding: "6px", borderRadius: 6, background: "rgba(12, 14, 20, .96)", color: "#f4f6fb", fontSize: 12, lineHeight: height === 64 ? "16px" : "20px", overflowWrap: "anywhere", pointerEvents: "none" }}>{t(textKey)}</div> : null;
+}
+
+export default function VoiceOverlayContent({ snapshot:rawSnapshot, actionsOnly = false, notificationActionsOnly = false, chatActionsOnly = false, chatComposerOnly = false }: Props) {
+  const snapshot=rawSnapshot.voiceOverlayCompatibility?{...rawSnapshot,unlocked:false,voiceOverlayClickableActions:false,voiceOverlayNotificationActions:false,voiceOverlayChatActions:false,voiceOverlayChatCompose:false}:rawSnapshot;
   const { t } = useTranslation("common");
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
   useEffect(() => {
@@ -217,6 +260,9 @@ export default function VoiceOverlayContent({ snapshot, actionsOnly = false, not
   const showActivity = snapshot.voiceOverlayActivity === true;
   const showNotifications = snapshot.voiceOverlayNotifications === true;
   const showChat = snapshot.voiceOverlayChat === true;
+  const gameActivityNoticeHeight = Number.isInteger(snapshot.gameActivityNoticeHeight) && (snapshot.gameActivityNoticeHeight ?? 0) >= 0 && (snapshot.gameActivityNoticeHeight ?? 0) <= 144
+    ? snapshot.gameActivityNoticeHeight ?? 0 : 0;
+  const showGameNotices = gameActivityNoticeHeight >= 48 && visibleOverlayGameActivityNotices(snapshot).length > 0;
   const canOpenInbox = showNotifications && snapshot.voiceOverlayNotificationActions === true
     && snapshot.notificationStatus === "ready" && (snapshot.notifications?.length ?? 0) > 0
     && typeof snapshot.notificationActionSession === "string" && snapshot.notificationActionsUnavailable !== true;
@@ -231,17 +277,17 @@ export default function VoiceOverlayContent({ snapshot, actionsOnly = false, not
     return composeSession ? <ChatComposer key={composeSession} session={composeSession} label={label} /> : null;
   }
   if (notificationActionsOnly) return notificationActionAuthorized
-    ? <NotificationInboxButton key={snapshot.notificationActionSession} session={snapshot.notificationActionSession!} />
+    ? <NotificationInboxButton key={`${snapshot.notificationActionSession}:${snapshot.notificationReplySession ?? ""}`} session={snapshot.notificationActionSession!} replySession={snapshot.notificationReplySession} replyButtons={snapshot.notificationReplyButtons} />
     : null;
   if (chatActionsOnly) {
     const openSession = chatActionAuthorized ? snapshot.chatActionSession : undefined;
     if (!openSession && !composeSession) return null;
     return <ChatActionSurface key={`${openSession ?? ""}:${composeSession ?? ""}`} openSession={openSession} composeSession={composeSession} />;
   }
-  if (!snapshot.enabled || (snapshot.voiceOverlayMaxParticipants === 0 && !showActions && !showActivity && !showNotifications && !showChat)) return null;
+  if (!snapshot.enabled || (snapshot.voiceOverlayMaxParticipants === 0 && !showActions && !showActivity && !showNotifications && !showChat && !showGameNotices)) return null;
   const participants = snapshot.participants.filter((participant) => !snapshot.speakingOnly || participant.speaking)
     .slice(0, Math.max(0, Math.min(25, Math.floor(snapshot.voiceOverlayMaxParticipants))));
-  const transformOrigin = `${snapshot.position.startsWith("top") ? "top" : "bottom"} ${snapshot.position.endsWith("left") ? "left" : "right"}`;
+  const transformOrigin = `${snapshot.position === "center-left" ? "center" : snapshot.position.startsWith("top") ? "top" : "bottom"} ${snapshot.position.endsWith("left") ? "left" : "right"}`;
   const scaleFactor = snapshot.scale / 100;
   const maxWidthVw = viewportWidth > 0 ? Math.min(100, Math.max(0, ((viewportWidth - 16) / scaleFactor / viewportWidth) * 100)) : 100;
   const toolbar = showActions && <VoiceOverlayToolbar key={snapshot.voiceActionSession} snapshot={snapshot} />;
@@ -252,11 +298,17 @@ export default function VoiceOverlayContent({ snapshot, actionsOnly = false, not
   const notificationRows = snapshot.notificationStatus === "ready" ? Math.max(1, notifications.length) : 1;
   const notificationHeight = showNotifications ? 20 + notificationRows * 32 : 0;
   const actionHeight = showActions ? 48 : 0;
+  const mediaHeight=(snapshot.voiceOverlayVideo===true||snapshot.voiceOverlayStreams===true)&&Number.isFinite(snapshot.mediaHeight)?Math.max(0,Math.min(320,snapshot.mediaHeight??0)):0;
+  const goLiveHeight = snapshot.voiceOverlayGoLive === true && snapshot.goLiveEligible === true && snapshot.goLiveHeight === 64 ? 64 : 0;
+  const goLive = goLiveHeight && snapshot.goLive && Number.isSafeInteger(snapshot.goLive.id) && snapshot.goLive.id > 0 && Number.isFinite(snapshot.goLive.expiresAt) ? snapshot.goLive : null;
+  const welcomeHeight = snapshot.voiceOverlayWelcome === true && snapshot.welcomeHeight === 32 ? 32 : 0;
+  const welcome = welcomeHeight && snapshot.welcome && Number.isSafeInteger(snapshot.welcome.id) && snapshot.welcome.id > 0 && Number.isFinite(snapshot.welcome.expiresAt) ? snapshot.welcome : null;
   const notificationLabels = {
     mention: "overlayNotificationMention",
     reply: "overlayNotificationReply",
     friend_request: "overlayNotificationFriendRequest",
     dm_request: "overlayNotificationDMRequest",
+    message: "overlayNotificationMessage",
     system: "overlayNotificationSystem",
   } as const;
   const notificationStatus = snapshot.notificationStatus ?? "unavailable";
@@ -265,8 +317,14 @@ export default function VoiceOverlayContent({ snapshot, actionsOnly = false, not
   const chatHasRows = snapshot.chatStatus === "ready" && chatMessages.length > 0;
   const chatHeight = showChat ? CHAT_HEADER_HEIGHT + (chatHasRows ? chatMessages.length : 1) * CHAT_ROW_MAX_HEIGHT : 0;
   return <div className="voice-overlay-root" data-position={snapshot.position} data-unlocked={snapshot.unlocked === true} data-actions={showActions}
-    style={{ paddingTop: 8 + chatHeight, paddingBottom: 8 + actionHeight + activityHeight + notificationHeight }}>
+    style={{ paddingTop: 8 + chatHeight, paddingBottom: 8 + actionHeight + activityHeight + notificationHeight + welcomeHeight + goLiveHeight + mediaHeight + (showGameNotices ? gameActivityNoticeHeight : 0) }}>
     {toolbar}
+    {showGameNotices && <GameActivityNotices gameActivityNotices={snapshot.gameActivityNotices} voiceOverlayGameActivityNotifications={snapshot.voiceOverlayGameActivityNotifications}
+      voiceOverlayNowPlayingNotifications={snapshot.voiceOverlayNowPlayingNotifications} height={gameActivityNoticeHeight}
+      bottom={8 + actionHeight + activityHeight + notificationHeight + welcomeHeight + goLiveHeight + mediaHeight} />}
+    {snapshot.enabled&&mediaHeight>0&&<OverlayMediaPanel video={snapshot.voiceOverlayVideo===true} streams={snapshot.voiceOverlayStreams===true} height={mediaHeight} bottom={8+actionHeight+activityHeight+notificationHeight+welcomeHeight+goLiveHeight}/>}
+    {goLive && <OverlayWelcomeNotice key={`go-live:${goLive.id}`} notice={goLive} bottom={8 + actionHeight + activityHeight + notificationHeight + welcomeHeight} height={64} textKey="overlayGoLiveGuidance" />}
+    {welcome && <OverlayWelcomeNotice key={welcome.id} notice={welcome} bottom={8 + actionHeight + activityHeight + notificationHeight} />}
     {showChat && <section className="voice-overlay-chat" aria-label={t("overlayChatTitle")}
       style={{ position: "absolute", top: 8, left: 8, right: 8, height: chatHeight, maxHeight: CHAT_MAX_HEIGHT, overflow: "hidden", boxSizing: "border-box", borderRadius: 6, background: "rgba(12, 14, 20, .94)", color: "#f4f6fb", zIndex: 2, pointerEvents: "none" }}>
       <header style={{ boxSizing: "border-box", height: CHAT_HEADER_HEIGHT, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4, padding: "2px 6px", overflow: "hidden" }}>
@@ -294,7 +352,7 @@ export default function VoiceOverlayContent({ snapshot, actionsOnly = false, not
       {notificationStatus === "loading" ? <p className="voice-overlay-notification-state">{t("overlayNotificationsLoading")}</p>
         : notificationStatus === "unavailable" ? <p className="voice-overlay-notification-state">{t("overlayNotificationsUnavailable")}</p>
           : notifications.length === 0 ? <p className="voice-overlay-notification-state">{t("overlayNotificationsEmpty")}</p>
-            : notifications.map((notification) => <div className="voice-overlay-notification-row" key={notification.id}>
+            : notifications.map((notification) => <div className="voice-overlay-notification-row" key={notification.id} style={{ paddingRight: snapshot.notificationReplyIds?.includes(notification.id) ? 100 : undefined }}>
               <span aria-hidden="true" className="voice-overlay-notification-dot" />
               <span>{t(notificationLabels[notification.category])}</span>
             </div>)}
@@ -305,6 +363,7 @@ export default function VoiceOverlayContent({ snapshot, actionsOnly = false, not
         <strong>{entry.label}</strong><span>{t("gameActivityPlaying", { name: entry.gameName })}</span>
       </div>) : <p className="voice-overlay-activity-empty">{t("overlayActivityEmpty")}</p>}
     </section>}
+    {snapshot.voiceOverlayCompatibility && <span className="voice-overlay-pin" role="status" title={t("overlayCompatibilityActive")} aria-label={t("overlayCompatibilityActive")}>◌</span>}
     {snapshot.layoutSaveFailed && <span className="voice-overlay-layout-error" role="alert" title={t("overlayLayoutSaveFailed")} aria-label={t("overlayLayoutSaveFailed")}>!</span>}
     {snapshot.voiceOverlayPinned && <span className="voice-overlay-pin" title={t("overlayWidgetPinned")} aria-label={t("overlayWidgetPinned")}>⌖</span>}
     <div className="voice-overlay-widget" data-avatar-size={snapshot.voiceOverlayAvatarSize} style={{ transform: `scale(${scaleFactor})`, transformOrigin, maxWidth: `${maxWidthVw}vw` }}>

@@ -6,13 +6,30 @@
  */
 
 import { contextBridge, ipcRenderer } from "electron";
+import type { GameJoinContext, GameJoinContextAck, CS2JoinRequest, CS2JoinStatus } from "./cs2-join-controller";
 import type {
   PublicRegisteredGame as ElectronRegisteredGame,
   RegisteredGameActivity as ElectronRegisteredGameActivity,
   RegisteredGamesSnapshot as ElectronRegisteredGamesSnapshot,
 } from "./registered-games";
 
+// Keep runtime helpers inside this file: sandboxed preloads cannot require
+// arbitrary local modules. Each disposer owns only its registered listener.
+function subscribeIPC<T>(channel: string, callback: (value: T) => void): () => void {
+  let active = true;
+  const listener = (_event: unknown, value: T) => { if (active) callback(value); };
+  ipcRenderer.on(channel, listener);
+  return () => {
+    if (!active) return;
+    active = false;
+    ipcRenderer.removeListener(channel, listener);
+  };
+}
+
 contextBridge.exposeInMainWorld("electronAPI", {
+  syncGameJoinContext: (context: GameJoinContext | null): Promise<GameJoinContextAck> => ipcRenderer.invoke("sync-game-join-context", context),
+  launchCS2GameJoin: (request: CS2JoinRequest): Promise<CS2JoinStatus> => ipcRenderer.invoke("launch-cs2-game-join", request),
+  setRegisteredGameJoinAdapter: (id: string, adapter: "none" | "cs2-steam"): Promise<boolean> => ipcRenderer.invoke("set-registered-game-join-adapter", id, adapter),
   // ─── Invoke-style IPC (renderer → main → response) ───
 
   /** App version from package.json */
@@ -115,6 +132,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("add-registered-game"),
   removeRegisteredGame: (id: string): Promise<boolean> =>
     ipcRenderer.invoke("remove-registered-game", id),
+  setRegisteredGameName: (id: string, name: string): Promise<boolean> =>
+    ipcRenderer.invoke("set-registered-game-name", id, name),
   setRegisteredGameSharing: (id: string, allowed: boolean): Promise<boolean> =>
     ipcRenderer.invoke("set-registered-game-sharing", id, allowed),
   setRegisteredGameOverlay: (id: string, allowed: boolean): Promise<boolean> =>
@@ -192,6 +211,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Uses native audio-capture.exe (WASAPI process loopback) to capture
   // system audio while excluding our own process tree — no voice echo.
 
+  reserveSystemCaptureLease:(request:{kind:"guild"|"p2p"|"group";source:string}):Promise<string>=>ipcRenderer.invoke("reserve-system-capture-lease",request),
+  startSystemCaptureLease:(id:string):Promise<void>=>ipcRenderer.invoke("start-system-capture-lease",id),
+  releaseSystemCaptureLease:(id:string):Promise<boolean>=>ipcRenderer.invoke("release-system-capture-lease",id),
+  onSystemCaptureLeaseEvent:(cb:(event:{leaseId:string;type:"header"|"data"|"error"|"stopped";value?:unknown})=>void):(()=>void)=>{
+    const listener=(_event:Electron.IpcRendererEvent,event:{leaseId:string;type:"header"|"data"|"error"|"stopped";value?:unknown})=>cb(event);
+    ipcRenderer.on("system-capture-lease-event",listener);return()=>ipcRenderer.removeListener("system-capture-lease-event",listener);
+  },
+
   /** Start system audio capture (excludes Electron's own audio) */
   startSystemCapture: (): Promise<void> => ipcRenderer.invoke("start-system-capture"),
 
@@ -244,6 +271,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
 
   // ─── Global PTT (Push-to-Talk) Shortcut ───
+
+  acquirePTTLease: (request: {kind:"guild"|"p2p"|"group";source:string;keyCode:string}):Promise<string|null> => ipcRenderer.invoke("acquire-ptt-lease",request),
+  releasePTTLease: (id:string):Promise<void> => ipcRenderer.invoke("release-ptt-lease",id),
+  onPTTLeaseSignal: (cb:(signal:{leaseId:string;pressed:boolean})=>void):(()=>void) => {
+    const listener=(_event:Electron.IpcRendererEvent,signal:{leaseId:string;pressed:boolean})=>cb(signal);
+    ipcRenderer.on("ptt-lease-signal",listener);
+    return ()=>ipcRenderer.removeListener("ptt-lease-signal",listener);
+  },
 
   /** Register a key for global PTT detection (works even when app is unfocused) */
   registerPTTShortcut: (keyCode: string): Promise<boolean> =>
@@ -332,8 +367,28 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("voice-overlay-update", listener);
     return () => { ipcRenderer.removeListener("voice-overlay-update", listener); };
   },
-  sendVoiceOverlaySnapshot: (snapshot: unknown): void => {
-    ipcRenderer.send("voice-overlay-snapshot", snapshot);
+  sendVoiceOverlaySnapshot: (snapshot: unknown): Promise<boolean> => ipcRenderer.invoke("voice-overlay-snapshot", snapshot),
+  clearOverlayGameNotices: (): Promise<void> => ipcRenderer.invoke("clear-overlay-game-notices"),
+  openOverlayMediaLease: (lease: unknown): Promise<boolean> => ipcRenderer.invoke("open-overlay-media-lease", lease),
+  sendOverlayMedia: (envelope: unknown): Promise<boolean> => ipcRenderer.invoke("send-overlay-media", envelope),
+  sendOverlayMediaViewport: (viewport: unknown): Promise<boolean> => ipcRenderer.invoke("send-overlay-media-viewport", viewport),
+  setOverlayMediaReceiverReady: (ready: boolean): Promise<boolean> => ipcRenderer.invoke("set-overlay-media-receiver-ready", ready),
+  getOverlayMediaAvailability: (): Promise<unknown> => ipcRenderer.invoke("get-overlay-media-availability"),
+  onOverlayMedia: (callback: (value: unknown) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, value: unknown) => callback(value);
+    ipcRenderer.on("overlay-media", listener); return () => ipcRenderer.removeListener("overlay-media", listener);
+  },
+  onOverlayMediaLease: (callback: (value: unknown) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, value: unknown) => callback(value);
+    ipcRenderer.on("overlay-media-lease", listener); return () => ipcRenderer.removeListener("overlay-media-lease", listener);
+  },
+  onOverlayMediaViewport: (callback: (value: unknown) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, value: unknown) => callback(value);
+    ipcRenderer.on("overlay-media-viewport", listener); return () => ipcRenderer.removeListener("overlay-media-viewport", listener);
+  },
+  onOverlayMediaAvailability: (callback: (value: unknown) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, value: unknown) => callback(value);
+    ipcRenderer.on("overlay-media-availability", listener); return () => ipcRenderer.removeListener("overlay-media-availability", listener);
   },
   setOverlayShortcut: (binding: unknown): Promise<boolean> => ipcRenderer.invoke("set-overlay-shortcut", binding),
   resetOverlayLayout: (): Promise<boolean> => ipcRenderer.invoke("reset-overlay-layout"),
@@ -344,6 +399,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
     const listener = (_event: Electron.IpcRendererEvent, value: { session: string }) => callback(value);
     ipcRenderer.on("overlay-open-inbox", listener);
     return () => ipcRenderer.removeListener("overlay-open-inbox", listener);
+  },
+  sendOverlayPrepareNotificationReply: (request: unknown): Promise<boolean> => ipcRenderer.invoke("overlay-prepare-notification-reply", request),
+  confirmOverlayPrepareNotificationReply: (request: unknown): Promise<boolean> => ipcRenderer.invoke("confirm-overlay-prepare-notification-reply", request),
+  onOverlayPrepareNotificationReply: (callback: (value: { session: string; notificationId: string }) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, value: { session: string; notificationId: string }) => callback(value);
+    ipcRenderer.on("overlay-prepare-notification-reply", listener);
+    return () => ipcRenderer.removeListener("overlay-prepare-notification-reply", listener);
   },
   sendOverlayOpenChat: (session: unknown): Promise<boolean> => ipcRenderer.invoke("overlay-open-chat", session),
   confirmOverlayOpenChat: (session: unknown): Promise<boolean> => ipcRenderer.invoke("confirm-overlay-open-chat", session),
@@ -384,9 +446,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   closeWindow: (): Promise<void> => ipcRenderer.invoke("close-window"),
 
   /** Listen for maximize/unmaximize changes (icon toggle) */
-  onMaximizedChange: (cb: (isMaximized: boolean) => void): void => {
-    ipcRenderer.on("window-maximized-change", (_e, val) => cb(val));
-  },
+  onMaximizedChange: (cb: (isMaximized: boolean) => void): (() => void) =>
+    subscribeIPC("window-maximized-change", cb),
 
   /** Remove maximize listener (on component unmount) */
   removeMaximizedListener: (): void => {
@@ -411,22 +472,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // ─── Event listeners (main → renderer) ───
 
   /** Update available */
-  onUpdateAvailable: (cb: (info: unknown) => void): void => {
-    ipcRenderer.on("update-available", (_e, info) => cb(info));
-  },
+  onUpdateAvailable: (cb: (info: unknown) => void): (() => void) =>
+    subscribeIPC("update-available", cb),
 
   /** Download progress */
-  onUpdateProgress: (cb: (progress: unknown) => void): void => {
-    ipcRenderer.on("update-progress", (_e, progress) => cb(progress));
-  },
+  onUpdateProgress: (cb: (progress: unknown) => void): (() => void) =>
+    subscribeIPC("update-progress", cb),
 
   /** Download completed — info carries `{ version, releaseNotes?, ... }` */
-  onUpdateDownloaded: (cb: (info: { version: string }) => void): void => {
-    ipcRenderer.on("update-downloaded", (_e, info) => cb(info));
-  },
+  onUpdateDownloaded: (cb: (info: { version: string }) => void): (() => void) =>
+    subscribeIPC("update-downloaded", cb),
 
   /** Update error */
-  onUpdateError: (cb: (message: string) => void): void => {
-    ipcRenderer.on("update-error", (_e, message) => cb(message));
-  },
+  onUpdateError: (cb: (message: string) => void): (() => void) =>
+    subscribeIPC("update-error", cb),
 });

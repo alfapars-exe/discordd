@@ -1,0 +1,68 @@
+{
+  "date": "2026-10-25",
+  "scope": "P11 canonical persisted group-message inbox/native metadata and exact-source main-chat reply preparation",
+  "status": "implemented_focused_client_verified_combined_acceptance_pending",
+  "owned_paths": [
+    "client/src/types/notification.ts",
+    "client/src/utils/dmMessageNotification.ts",
+    "client/src/utils/groupMessageNotification.ts",
+    "client/src/stores/notificationStore.ts",
+    "client/src/stores/notificationStore.test.ts",
+    "client/src/utils/overlayNotifications.ts",
+    "client/src/utils/overlayNotifications.test.ts",
+    "client/src/utils/overlayNotificationAccess.ts",
+    "client/src/utils/overlayNotificationReply.ts",
+    "client/src/utils/overlayNotificationReply.test.ts",
+    "client/src/hooks/useOpenAtMessage.ts",
+    "client/src/hooks/useOpenAtMessage.test.ts",
+    "client/src/hooks/useNotificationNavigation.ts",
+    "client/src/hooks/useNotificationNavigation.test.ts",
+    "client/src/hooks/useOverlayNotificationReply.ts",
+    "client/src/hooks/useOverlayNotificationReply.test.tsx",
+    "client/src/hooks/useOverlayNotifications.ts",
+    "client/src/hooks/useOverlayNotifications.test.tsx",
+    "client/src/components/inbox/NotificationItem.tsx",
+    "client/src/components/inbox/NotificationItem.anniversary.test.tsx",
+    "client/src/i18n/locales/en/inbox.json",
+    "client/src/i18n/locales/tr/inbox.json",
+    "client/src/i18n/locales/en/settings.json",
+    "client/src/i18n/locales/tr/settings.json",
+    "implementation/verification/p11-group-incoming-notifications-client-2026-10-25.json"
+  ],
+  "wire": {
+    "kind": "system",
+    "payload": {
+      "action": "incoming_message",
+      "source": "group"
+    },
+    "source": "group_dm_channel_id + actor_id + message_id; server/channel/dm refs absent"
+  },
+  "behavior": [
+    "Optional additive group source discriminator; canonical group incoming rows count toward inbox but not duplicated aggregate badge.",
+    "Incoming metadata never renders payload body/title previews or crosses native bridge as plaintext; bounded existing opaque ID/session bridge retained.",
+    "Both rendered overlay rows and live action access recheck own account/generation, current membership, private mute/read epoch, block/ignore, message spam/decryption state.",
+    "Exact group main-chat opening fetches around source before arming existing scroll target; caller lifetime/account/device/key epoch rechecked after await.",
+    "Reply preparation refreshes authoritative group metadata, captures current membership epoch, allows a legitimate older encrypted source, and sets actual groupReplyToId without auto-send or replacing text/files/reply/edit/send state.",
+    "Normal inbox group navigation refreshes authoritative membership and acknowledges only after source opened; malformed incoming sources cannot generic-mark-read."
+  ],
+  "verification": [
+    {
+      "kind": "focused client",
+      "result": "10 files,149 tests PASS; includes malformed authoritative-list fail-closed regression"
+    },
+    {
+      "kind": "scoped ESLint",
+      "result": "PASS 0 errors; projection dependency warning corrected and hook lint rerun clean"
+    },
+    {
+      "kind": "TypeScript",
+      "result": "PASS final app TypeScript check after private audio source freeze"
+    }
+  ],
+  "remaining": [
+    "Group incoming OS toast/sound dispatch remains pending: existing accepted-receipt group WS controller currently updates read/unread only; this slice adds no second notification_create sound/OS path.",
+    "Native Windows physical overlay click, actual two-client encrypted group acceptance, combined full client/build and repository self-scan remain parent-coordinated acceptance gates.",
+    "No new window/native IPC schema/body upload, no auto-send, no production deployment claimed."
+  ],
+  "shared_paths_note": "Parent audioDevice keys committed separately as 0d89bedd before staging; settings changes here are only notificationActions description wording."
+}

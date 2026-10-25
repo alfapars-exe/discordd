@@ -1,0 +1,60 @@
+{
+  "date": "2026-10-25",
+  "scope": "P3/P4 new group admission matches existing friends-only picker",
+  "status": "implemented_targeted_native_and_actual_postgres_verified",
+  "owned_paths": [
+    "server/repository/group_dm_repository.go",
+    "server/repository/sqlite_group_dm.go",
+    "server/repository/sqlite_group_admission.go",
+    "server/repository/sqlite_group_admission_test.go",
+    "server/services/group_dm_service.go",
+    "server/services/group_dm_admission.go",
+    "server/services/group_dm_admission_test.go",
+    "server/handlers/group_dm_admission_test.go",
+    "security/tools/self-scan-reviewed-falsepositives.json",
+    "implementation/verification/p3-group-friend-admission-2026-10-25.json"
+  ],
+  "behavior": [
+    "Create/AddMember require accepted inviter-target friendship and retain existing bidirectional block/public-user/owner/member-limit checks. Missing/pending/rejected/nil/read-error states fail closed.",
+    "Public service always supplies the authenticated inviter in a trusted repository-only scope; HTTP has no actor override field and rejects unknown actor fields. Supplied empty/multiple/wrong-owner scopes cannot downgrade into legacy mechanics.",
+    "Concrete repository rechecks admission inside the membership transaction and holds the accepted friendship row through commit using a bound no-op UPDATE. Targets sorted for consistent pair acquisition. Current unfriend/atomic-block transitions delete the accepted pair and serialize against that row lock.",
+    "An omitted actor remains explicitly trusted internal legacy/import use only, preserving existing repository fixtures; no public service fallback omits the actor.",
+    "Denied create/mixed rosters/additions commit no partial group/member/read/key-epoch/inbox state and confer no target call/key access. No schema, pending invitations, or group-wide send-policy changes.",
+    "Existing joined memberships and sends survive subsequent unfriend as before; this change only governs NEW Create/AddMember admission."
+  ],
+  "verification": [
+    {
+      "kind": "native admission",
+      "command": "go test ./repository ./services ./handlers -run ^TestGroupAdmission -count=1",
+      "result": "PASS repository2.548s/services6.218s/handlers2.240s; PostgreSQL-only barrier intentionally skipped in native SQLite run"
+    },
+    {
+      "kind": "broader native group/DM privacy regression",
+      "command": "go test ./repository ./services ./handlers -run ^TestGroup|^TestServerDMPolicy|^TestSendMessage_firstMessageToMessageRequestUserTransitionsToPending|^TestSendMessage_secondMessageToMessageRequestUserBlocked -count=1",
+      "result": "PASS repository8.656s/services7.214s/handlers3.299s"
+    },
+    {
+      "kind": "actual PostgreSQL18.6",
+      "command": "go test ./repository -run ^TestGroupAdmission -count=1 -v",
+      "result": "PASS all5 top-level tests3.485s, no skips; disposable loopback container removed and process credential variables restored",
+      "concurrency": "Member insertion paused by advisory barrier AFTER accepted-row lock; observed concurrent unfriend DELETE waiting with pg_stat_activity Lock; admission commits first, then unfriend completes."
+    },
+    {
+      "kind": "real service/API",
+      "result": "Known-ID nonfriend and actor-body override denied; accepted friend succeeds; target token404, no denied-admission inbox/member/rekey mutation. Service precheck→unfriend-before-repo-write regression fails closed."
+    },
+    {
+      "kind": "pinned golangci-lint2.12.2/Go1.26.10",
+      "result": "PASS0 issues for repository/services/handlers"
+    },
+    {
+      "kind": "reviewed self-scan manifest",
+      "result": "35records valid; only2 existing sqlite_group_dm.go file hashes refreshed after exact unchanged matched-line review; no new exceptions"
+    }
+  ],
+  "remaining": [
+    "Broader nonfriend group invitation/recipient-acceptance flow remains unimplemented and is not represented as dm_request.",
+    "Admission does not impose new pairwise recipient checks on existing group sends or change existing-group block/remove/leave behavior.",
+    "Parent coordinates combined repository/full app/self-scan/release validation; no production push/deployment claimed by this receipt."
+  ]
+}

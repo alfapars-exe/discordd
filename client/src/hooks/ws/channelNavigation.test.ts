@@ -21,7 +21,7 @@ vi.mock("../../api/authSessionEvents", () => ({
 }));
 vi.mock("../../stores/uiStore", () => ({ useUIStore: { getState: () => ({ destination: state.destination, panels: {}, activePanelId: "legacy", updateTabLabel: state.updateTabLabel }) } }));
 vi.mock("../../stores/authStore", () => ({ useAuthStore: { getState: () => ({ user: state.ownerId ? { id: state.ownerId } : null }) } }));
-vi.mock("../../stores/messageStore", () => ({ useMessageStore: { getState: () => ({ handleMessageCreate: state.handleMessageCreate, handleMessageUpdate: state.handleMessageUpdate }) } }));
+vi.mock("../../stores/messageStore", () => ({ useMessageStore: { getState: () => ({ messagesByChannel: {}, handleMessageCreate: state.handleMessageCreate, handleMessageUpdate: state.handleMessageUpdate }) } }));
 vi.mock("../../stores/readStateStore", () => ({ useReadStateStore: { getState: () => ({ registerChannel: vi.fn(), markAsRead: state.markAsRead, incrementUnread: state.incrementUnread }) } }));
 vi.mock("../../stores/serverStore", () => ({ useServerStore: { getState: () => ({ isServerMuted: () => false }) } }));
 vi.mock("../../stores/channelStore", () => ({ useChannelStore: { getState: () => ({ mutedChannelIds: new Set(), categories: [], fetchChannels: state.fetchChannels, handleChannelDelete: state.handleChannelDelete, handleChannelUpdate: state.handleChannelUpdate }) } }));

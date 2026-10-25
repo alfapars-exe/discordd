@@ -56,6 +56,12 @@ jobs:
       - name: Go shard runner unit tests
         run: python3 -m unittest scripts/test_go_test_shard.py
 
+      - name: Welcome bot tests and vet (independent Go module)
+        working-directory: bots/welcome-bot
+        run: |
+          go test ./... -count=1 -timeout=60s
+          go vet ./...
+
       - name: go test (race + cover, remaining packages)
         shell: bash
         run: |
@@ -66,8 +72,17 @@ jobs:
             exit 1
           fi
           printf 'Testing %s non-sharded packages\n' "${#packages[@]}"
-          go test -race -cover -timeout=15m "${packages[@]}"
+          mkdir -p "$RUNNER_TEMP/go-coverage"
+          go test -race -covermode=atomic -coverprofile="$RUNNER_TEMP/go-coverage/base.out" -timeout=15m "${packages[@]}"
+          python3 ../scripts/coverage-meta.py "$RUNNER_TEMP/go-coverage/base.out"
         working-directory: server
+
+      - name: Upload base coverage
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: go-coverage-base
+          path: ${{ runner.temp }}/go-coverage/
+          if-no-files-found: error
 
       - name: go build
         run: go build -trimpath -o /tmp/mqvi-server .
@@ -84,10 +99,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { package: ./repository, shard: 0, shards: 4 }
-          - { package: ./repository, shard: 1, shards: 4 }
-          - { package: ./repository, shard: 2, shards: 4 }
-          - { package: ./repository, shard: 3, shards: 4 }
+          - { package: ./repository, shard: 0, shards: 8 }
+          - { package: ./repository, shard: 1, shards: 8 }
+          - { package: ./repository, shard: 2, shards: 8 }
+          - { package: ./repository, shard: 3, shards: 8 }
+          - { package: ./repository, shard: 4, shards: 8 }
+          - { package: ./repository, shard: 5, shards: 8 }
+          - { package: ./repository, shard: 6, shards: 8 }
+          - { package: ./repository, shard: 7, shards: 8 }
           - { package: ./services, shard: 0, shards: 8 }
           - { package: ./services, shard: 1, shards: 8 }
           - { package: ./services, shard: 2, shards: 8 }
@@ -110,22 +129,98 @@ jobs:
           python-version: "3.11"
 
       - name: go test shard (race + cover)
-        run: python3 ../scripts/go-test-shard.py --package "${{ matrix.package }}" --shards "${{ matrix.shards }}" --shard "${{ matrix.shard }}"
+        run: python3 ../scripts/go-test-shard.py --package "${{ matrix.package }}" --shards "${{ matrix.shards }}" --shard "${{ matrix.shard }}" --coverprofile "${{ runner.temp }}/go-coverage/${{ matrix.package == './repository' && 'repository' || 'services' }}-${{ matrix.shard }}.out"
         working-directory: server
+
+      - name: Upload shard coverage
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: go-coverage-${{ matrix.package == './repository' && 'repository' || 'services' }}-${{ matrix.shard }}
+          path: ${{ runner.temp }}/go-coverage/
+          if-no-files-found: error
+
+  server-postgres:
+    name: PostgreSQL repository and migration contracts
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.6-bookworm@sha256:bbf83594798e144bff365a9c191c5d779f181fb3135902064ab8ff11918020fc
+        env:
+          # Disposable CI fixture, reachable only on the runner loopback.
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: hichat_test
+        ports:
+          - 127.0.0.1:5432:5432
+        options: --health-cmd "pg_isready -U postgres -d hichat_test" --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.10'
+          cache-dependency-path: server/go.sum
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: '3.12'
+      - name: Execute both packages; reject required test skips
+        env:
+          HICHAT_TEST_POSTGRES_DSN: postgres://postgres@127.0.0.1:5432/hichat_test?sslmode=disable
+        run: python3 scripts/run-postgres-tests.py
+
+  server-postgres-tls:
+    name: PostgreSQL client certificate reconnect
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.10'
+          cache-dependency-path: server/go.sum
+      - name: Provision isolated certificate-authenticated database
+        shell: pwsh
+        run: ./server/database/run-postgres-tls-integration.ps1 -GoBinary (Get-Command go).Source -Toolchains local
+
+  server-coverage:
+    name: Combined Go statement coverage
+    needs: [server-test, server-test-shards]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.10'
+          cache-dependency-path: server/go.sum
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          pattern: go-coverage-*
+          path: coverage/inputs
+          merge-multiple: true
+      - name: Merge only profiles from identical source manifests
+        run: python3 scripts/merge-go-coverage.py --expected-profiles 17 --output coverage/go.out 'coverage/inputs/**/*.out'
+      - name: Report statement coverage
+        working-directory: server
+        run: go tool cover -func=../coverage/go.out
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: go-coverage-combined
+          path: coverage/go.out
+          if-no-files-found: error
 
   server-tests-gate:
     name: Go test & build
     if: always()
-    needs: [server-test, server-test-shards]
+    needs: [server-test, server-test-shards, server-postgres, server-postgres-tls, server-coverage]
     runs-on: ubuntu-latest
     steps:
       - name: Require every Go test and build job to succeed
         env:
           BASE_RESULT: ${{ needs.server-test.result }}
           SHARDS_RESULT: ${{ needs.server-test-shards.result }}
+          POSTGRES_RESULT: ${{ needs.server-postgres.result }}
+          TLS_RESULT: ${{ needs.server-postgres-tls.result }}
+          COVERAGE_RESULT: ${{ needs.server-coverage.result }}
         run: |
-          if [ "$BASE_RESULT" != "success" ] || [ "$SHARDS_RESULT" != "success" ]; then
-            echo "::error::Go test gate blocked: base=$BASE_RESULT shards=$SHARDS_RESULT"
+          if [ "$BASE_RESULT" != "success" ] || [ "$SHARDS_RESULT" != "success" ] || [ "$POSTGRES_RESULT" != "success" ] || [ "$TLS_RESULT" != "success" ] || [ "$COVERAGE_RESULT" != "success" ]; then
+            echo "::error::Go test gate blocked: base=$BASE_RESULT shards=$SHARDS_RESULT postgres=$POSTGRES_RESULT tls=$TLS_RESULT coverage=$COVERAGE_RESULT"
             exit 1
           fi
           echo "All Go test shards, vet, tidy, and build succeeded."
@@ -242,13 +337,24 @@ jobs:
         working-directory: client
 
       - name: Vitest
-        run: npm test
+        run: npm run test:coverage
         working-directory: client
+
+      - name: Upload client statement and branch coverage
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: client-coverage
+          path: client/coverage/
+          if-no-files-found: error
 
       # `npm run build` runs `tsc -b && vite build` — covers type checking
       # and production bundle in one step.
       - name: Build
         run: npm run build
+        working-directory: client
+
+      - name: Microphone worklet CSP packaging
+        run: node --test scripts/audio-build-csp.test.mjs
         working-directory: client
 
       # npm audit — dependency advisories. Advisory (continue-on-error):
@@ -346,6 +452,18 @@ jobs:
 
       - name: electron:test (resolve-path + regression suite)
         run: npm run electron:test
+
+      - name: Quality runner and acceptance validator tests
+        run: node --test scripts/run-quality.test.mjs scripts/run-frozen-quality.test.mjs scripts/check-implementation-coverage.test.mjs
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: '3.12'
+      - run: python3 -m pip install huggingface_hub==1.26.0
+      - name: Source encoding and Python tool regressions
+        run: |
+          python3 scripts/check-text-encoding.py
+          python3 -m unittest discover -s scripts -p 'test_*.py'
 
   # ─── Prod image build (HF Space Dockerfile) ───
   # The root Dockerfile is what HF Space actually builds on `git push origin`.

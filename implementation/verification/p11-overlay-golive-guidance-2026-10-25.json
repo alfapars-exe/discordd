@@ -1,0 +1,18 @@
+{
+  "phase": "P11",
+  "status": "implemented_unverified",
+  "scope": "Default-off device preference shows bounded Go Live guidance only on an actual Windows game-overlay activation with a current JS LiveKit SDK-connected room, publishing capability, screen-capture API and current voice-channel permissions. It references the existing Share button; no capture, new CTA, IPC action or toggle is added.",
+  "fences": "Account/auth generation, channel/server, join generation, actual room and opaque lease identity. Reconnect, permission/capture loss, active sharing, malformed roles, leave or room replacement suppress/dismiss guidance without replay during the same activation.",
+  "verification": [
+    "Native focused36 tests passed; full native167 passed, zero failed, one existing physical symlink conditional unavailable on this Windows host.",
+    "Client focused46 tests passed before the final malformed-role regression; final readiness5 tests passed, including null/malformed ready role lists without SDK callback exceptions.",
+    "Integrated client regression with body/reaction gates:350 files,3391 tests passed before the later friendship-provenance follow-up.",
+    "Native/client TypeScript and scoped ESLint passed.",
+    "Source654b6c317f91a60f646f2788ee83169890196722 / CI40179663273: all21jobs passed, including production client build."
+  ],
+  "remaining": [
+    "Actual Windows/game/DPI/reconnect acceptance remains open; later changes need their own final-source CI.",
+    "Correct-conversation reply notifications, activity/now-playing notices, video/stream widgets and independent widget placement remain separate gaps."
+  ],
+  "release": "Source only; no production database change, installer execution or new Windows publication."
+}

@@ -1,6 +1,5 @@
 /**
- * EN/TR locale key-parity check — namespaces touched by the moderation
- * timeout/temp-ban UX change (B1), plus e2ee and music. Every user-facing
+ * EN/TR locale key and interpolation parity for every namespace on disk. Every user-facing
  * string must exist in
  * both languages; this test catches an EN key added without its TR
  * counterpart (or vice versa) going forward.
@@ -11,28 +10,8 @@
  */
 
 import { describe, it, expect } from "vitest";
-import enCommon from "./locales/en/common.json";
-import trCommon from "./locales/tr/common.json";
-import enChat from "./locales/en/chat.json";
-import trChat from "./locales/tr/chat.json";
-import enVoice from "./locales/en/voice.json";
-import trVoice from "./locales/tr/voice.json";
-import enSettings from "./locales/en/settings.json";
-import trSettings from "./locales/tr/settings.json";
-import enAudit from "./locales/en/audit.json";
-import trAudit from "./locales/tr/audit.json";
 import enE2EE from "./locales/en/e2ee.json";
 import trE2EE from "./locales/tr/e2ee.json";
-import enInbox from "./locales/en/inbox.json";
-import trInbox from "./locales/tr/inbox.json";
-import enSaved from "./locales/en/saved.json";
-import trSaved from "./locales/tr/saved.json";
-import enExpressions from "./locales/en/expressions.json";
-import trExpressions from "./locales/tr/expressions.json";
-import enEntrance from "./locales/en/entrance.json";
-import trEntrance from "./locales/tr/entrance.json";
-import enCosmetics from "./locales/en/cosmetics.json";
-import trCosmetics from "./locales/tr/cosmetics.json";
 import enMusic from "./locales/en/music.json";
 import trMusic from "./locales/tr/music.json";
 import { RECOVERY_PASSPHRASE_I18N_KEYS } from "../crypto/recoveryPassphrase";
@@ -70,19 +49,30 @@ function assertKeyParity(
   expect(missingInEn, `${nsName}: keys present in tr but missing in en`).toEqual([]);
 }
 
+const englishNamespaces = import.meta.glob<Record<string, unknown>>("./locales/en/*.json", { eager: true, import: "default" });
+const turkishNamespaces = import.meta.glob<Record<string, unknown>>("./locales/tr/*.json", { eager: true, import: "default" });
+
 describe("EN/TR locale key parity", () => {
-  it("common.json", () => assertKeyParity("common", enCommon, trCommon));
-  it("chat.json", () => assertKeyParity("chat", enChat, trChat));
-  it("voice.json", () => assertKeyParity("voice", enVoice, trVoice));
-  it("settings.json", () => assertKeyParity("settings", enSettings, trSettings));
-  it("audit.json", () => assertKeyParity("audit", enAudit, trAudit));
-  it("e2ee.json", () => assertKeyParity("e2ee", enE2EE, trE2EE));
-  it("inbox.json", () => assertKeyParity("inbox", enInbox, trInbox));
-  it("saved.json", () => assertKeyParity("saved", enSaved, trSaved));
-  it("expressions.json", () => assertKeyParity("expressions", enExpressions, trExpressions));
-  it("entrance.json", () => assertKeyParity("entrance", enEntrance, trEntrance));
-  it("cosmetics.json", () => assertKeyParity("cosmetics", enCosmetics, trCosmetics));
-  it("music.json", () => assertKeyParity("music", enMusic, trMusic));
+  it("checks every namespace available in both languages", () => {
+    const names = (resources: typeof englishNamespaces) => Object.keys(resources).map((path) => path.split("/").at(-1)).sort();
+    expect(names(englishNamespaces)).toEqual(names(turkishNamespaces));
+  });
+  for (const [path, en] of Object.entries(englishNamespaces)) {
+    const tr = turkishNamespaces[path.replace("/en/", "/tr/")];
+    const namespace = path.split("/").at(-1)!;
+    it(namespace, () => assertKeyParity(namespace, en, tr));
+    it(`${namespace} interpolation variables`, () => {
+      const valueAt = (tree: Record<string, unknown>, key: string): unknown => key.split(".").reduce<unknown>((value, part) =>
+        value && typeof value === "object" ? (value as Record<string, unknown>)[part] : undefined, tree);
+      const tokens = (value: unknown) => typeof value === "string"
+        ? [...new Set([...value.matchAll(/{{-?\s*([^}, ]+)/g)].map((match) => match[1]))].sort() : [];
+      for (const key of flattenKeys(en)) {
+        const english = valueAt(en, key);
+        const turkish = valueAt(tr, key) ?? valueAt(tr, key.replace(/_(one|other)$/, ""));
+        expect(tokens(english), `${namespace}:${key} interpolation mismatch`).toEqual(tokens(turkish));
+      }
+    });
+  }
 });
 
 /**

@@ -12,6 +12,8 @@
  * UiohookKey enum. Both registerPTT and registerMuteHotkey reuse it.
  */
 
+import { randomUUID } from "node:crypto";
+import { PTTLeases, type PTTRequest } from "./ptt-leases";
 import { uIOhook, UiohookKey } from "uiohook-napi";
 import { getMainWindow } from "./window";
 import { isActive, keyDown, keyUp, setMute, setPtt } from "./hotkey-router";
@@ -97,15 +99,16 @@ uIOhook.on("keydown", (e) => {
   // PRIVACY: keycode comparison happens inside hotkey-router; nothing else
   // on `e` is read here.
   for (const signal of keyDown(e.keycode)) {
-    if (signal === "ptt-down") getMainWindow()?.webContents.send("ptt-global-down");
+    if (signal === "ptt-down") { if(pttLeases.active)pttLeases.signal(true);else getMainWindow()?.webContents.send("ptt-global-down"); }
     else if (signal === "mute-toggle") getMainWindow()?.webContents.send("mute-hotkey-global");
   }
 });
 uIOhook.on("keyup", (e) => {
   // PRIVACY: see keydown rationale.
   for (const signal of keyUp(e.keycode)) {
-    if (signal === "ptt-up") getMainWindow()?.webContents.send("ptt-global-up");
+    if (signal === "ptt-up") { if(pttLeases.active)pttLeases.signal(false);else getMainWindow()?.webContents.send("ptt-global-up"); }
   }
+  if(!isActive())stopUiohook();
 });
 
 function startUiohook(): void {
@@ -126,6 +129,7 @@ function stopUiohook(): void {
 
 /** Register a PTT shortcut by KeyboardEvent.code. Returns false on unknown key. */
 export function registerPTT(keyCode: string): boolean {
+  if(pttLeases.active)return false;
   const uiCode = codeToUiohook[keyCode];
   if (uiCode === undefined) {
     console.warn("[hotkeys] unknown PTT key code");
@@ -139,6 +143,7 @@ export function registerPTT(keyCode: string): boolean {
 }
 
 export function unregisterPTT(): void {
+  if(pttLeases.active)return;
   setPtt(null);
   // Only stop the shared hook if the mute binding isn't keeping it alive.
   if (!isActive()) stopUiohook();
@@ -167,7 +172,18 @@ export function unregisterMuteHotkey(): void {
 
 /** Stop the hook entirely and clear both bindings (called during app shutdown). */
 export function shutdownGlobalHotkeys(): void {
+  pttLeases.clear();
   setPtt(null);
   setMute(null);
   stopUiohook();
 }
+
+// Scoped lease signals use a distinct channel, immune to legacy listener cleanup.
+const pttLeases=new PTTLeases(key=>{
+ const code=key===null?null:codeToUiohook[key];if(code===undefined)return false;
+ setPtt(code,true);
+ try{if(isActive())startUiohook();else stopUiohook();return true;}catch{setPtt(null,true);return false;}
+},(sender,signal)=>{const contents=getMainWindow()?.webContents;if(contents&&!contents.isDestroyed()&&contents.id===sender)contents.send("ptt-lease-signal",signal);},randomUUID);
+export function acquirePTTLease(sender:number,request:PTTRequest):string|null{return pttLeases.acquire(sender,request);}
+export function releasePTTLease(sender:number,id:string):void{pttLeases.release(sender,id);}
+export function retirePTTSender(sender:number):void{pttLeases.retireSender(sender);}

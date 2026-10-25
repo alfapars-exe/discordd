@@ -18,6 +18,8 @@ import { useE2EEStore } from "../../stores/e2eeStore";
 import { useSavedStore } from "../../stores/savedStore";
 import { useSpamVisibility } from "../../hooks/useSpamVisibility";
 import UnclassifiedMediaGate from "./UnclassifiedMediaGate";
+import MessageBodyMediaGate from "./MessageBodyMediaGate";
+import SpamPendingNotice from "./SpamPendingNotice";
 import SpamPreview from "./SpamPreview";
 import type { ChatMessage } from "../../hooks/useChatContext";
 import { copyToClipboard } from "../../utils/constants";
@@ -49,6 +51,7 @@ import MentionAutocomplete from "./MentionAutocomplete";
 import MessageAttachments from "./MessageAttachments";
 import MessageHoverActions from "./MessageHoverActions";
 import MessageReactions from "./MessageReactions";
+import GameMessageOrigin from "./GameMessageOrigin";
 import MobileMessageActions from "./MobileMessageActions";
 import ReportModal from "../shared/ReportModal";
 import {
@@ -366,7 +369,7 @@ function Message({
       delete: t("deleteMessage"),
       "copy-id": t("copyId"),
     },
-    hasContent: Boolean(message.content) && !spam.hidden && (!isIgnored || showIgnoredContent) && !hasDecryptionError,
+    hasContent: Boolean(message.content) && !spam.hidden && !spam.pending && (!isIgnored || showIgnoredContent) && !hasDecryptionError,
     isOwner,
     isSaved,
     isPinned,
@@ -382,7 +385,7 @@ function Message({
     onThread: () => setThreadOpen(true),
     onCopy: () => { if (message.content) void copyToClipboard(message.content).catch(() => useToastStore.getState().addToast("error",t("common:shortcutCopyFailed"))); },
     onSpeak: () => {
-      if (spam.hidden || (isIgnored && !showIgnoredContent) || hasDecryptionError) return;
+      if (spam.hidden || spam.pending || (isIgnored && !showIgnoredContent) || hasDecryptionError) return;
       if (!speakMessage(displayName, message.content)) useToastStore.getState().addToast("error", t("common:shortcutSpeechUnavailable"));
     },
     onCopyLink: () => { void handleCopyLink(); },
@@ -396,7 +399,7 @@ function Message({
     onCopyID: () => { void copyToClipboard(message.id).catch(() => useToastStore.getState().addToast("error",t("common:shortcutCopyFailed"))); },
   }), [applicationActions, canManageMessages, cosmeticScope, developerMode, handleCopyLink,
     handleDelete, handleMarkUnread, handlePinToggle, handleReply, handleToggleSave, invokeApplicationAction,
-    isOwner, isPinned, isSaved, message.content, message.id, mode, startEdit, t, tSaved, spam.hidden, isIgnored, showIgnoredContent, hasDecryptionError, displayName, threadActionsAllowed]);
+    isOwner, isPinned, isSaved, message.content, message.id, mode, startEdit, t, tSaved, spam.hidden,spam.pending, isIgnored, showIgnoredContent, hasDecryptionError, displayName, threadActionsAllowed]);
 
   const handleContextMenu = useCallback(
     (e: React.MouseEvent) => {
@@ -447,7 +450,7 @@ function Message({
       onKeyDown={(event) => {
         if (event.target !== event.currentTarget || useShortcutCaptureStore.getState().active) return;
         if (event.ctrlKey && event.code === "KeyC" && window.getSelection()?.toString()) return;
-        runMessageShortcut(event.nativeEvent, messageActions, spam.hidden || (isIgnored && !showIgnoredContent) || hasDecryptionError, useShortcutBindingsStore.getState().bindings, () => focusMessageComposer(event.currentTarget));
+        runMessageShortcut(event.nativeEvent, messageActions, spam.hidden || spam.pending || (isIgnored && !showIgnoredContent) || hasDecryptionError, useShortcutBindingsStore.getState().bindings, () => focusMessageComposer(event.currentTarget));
       }}
       {...(isMobile ? longPressHandlers : {})}
       onContextMenu={isMobile ? longPressHandlers.onContextMenu : handleContextMenu}
@@ -491,6 +494,7 @@ function Message({
                 )}
               </span>
             )}
+            {mode === "dm" && <GameMessageOrigin applicationID={message.application_id} authorID={message.user_id} />}
             <span className="msg-time" title={formatFullDate(message.created_at)}>
               {formatTime(message.created_at)}
             </span>
@@ -568,7 +572,7 @@ function Message({
                 </span>
               )}
             </div>
-          ) : spam.hidden ? (
+          ) : spam.pending ? <SpamPendingNotice failed={spam.pendingError} retry={spam.retryRelationship}/> : spam.hidden ? (
             <div className="msg-text msg-ignored" role="note">
               <span>{t("spamHidden")}</span>
               <span>{spam.reasons.map((reason) => t(`spamReason.${reason}`)).join(" · ")}</span>
@@ -582,7 +586,9 @@ function Message({
             </div>
           ) : (
             <div className="msg-text">
-              {renderedContent}
+              <MessageBodyMediaGate content={message.content} authorId={message.user_id} messageId={message.id} revision={message.edited_at??"original"} sourceKind={mode} sourceChannelId={channelId}>
+                {renderedContent}
+              </MessageBodyMediaGate>
               {previewUrls.length > 0 && (
                 <div className="msg-link-previews">
                   {previewUrls.map((url) => (
@@ -601,10 +607,12 @@ function Message({
             </div>
           )}
 
-          {!spam.hidden && (!isIgnored || showIgnoredContent) && <MessageAttachments message={message} />}
+          {!spam.hidden && !spam.pending && (!isIgnored || showIgnoredContent) && <MessageAttachments message={message} />}
 
-          {!spam.hidden && (!isIgnored || showIgnoredContent) && <MessageReactions
+          {!spam.hidden && !spam.pending && (!isIgnored || showIgnoredContent) && <MessageReactions
             message={message}
+            sourceKind={mode}
+            sourceChannelId={channelId}
             pickerSource={pickerSource}
             onPickerOpen={() => setPickerSource("bar")}
             onPickerClose={() => setPickerSource(null)}

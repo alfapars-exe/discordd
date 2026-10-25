@@ -220,6 +220,10 @@ export type TrustedIdentity = {
  * Enables client-side search since E2EE messages are stored encrypted on server.
  */
 export type CachedDecryptedMessage = {
+  /** Public source metadata retained for encrypted DM search results. */
+  senderUserId?: string;
+  applicationId?: string;
+  sourceSequence?: string;
   messageId: string;
   channelId: string;
   /** DM channel ID (null for server messages) */

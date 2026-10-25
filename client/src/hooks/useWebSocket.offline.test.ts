@@ -40,7 +40,7 @@ const revocation = vi.hoisted(() => ({
   generationListeners: new Set<(generation: number) => void>(),
   logout: vi.fn(async () => {}),
   ensureFreshToken: vi.fn(async () => "test-token"),
-  ticket: vi.fn(async () => ({ success: false })),
+  ticket: vi.fn<(endpoint: string, options?: Parameters<typeof import("../api/client").apiClient>[1]) => Promise<{ success: boolean }>>(async () => ({ success: false })),
 }));
 vi.mock("../stores/authStore", () => ({ useAuthStore: { getState: () => ({ user: revocation.owner ? { id: revocation.owner } : null, logout: revocation.logout }) } }));
 vi.mock("../api/authSessionEvents", () => ({
@@ -79,6 +79,8 @@ vi.mock("../stores/voiceStore", () => ({
 }));
 
 vi.mock("../utils/constants", () => ({
+  API_BASE_URL: "/api", SERVER_URL: "",
+  isElectron: () => false, isCapacitor: () => false, isAppProtocolPage: () => false,
   WS_URL: "ws://test.local/ws",
   WS_HEARTBEAT_INTERVAL: 30_000,
   WS_HEARTBEAT_MAX_MISS: 3,
@@ -375,6 +377,50 @@ describe("useWebSocket offline/online handling", () => {
     expect(FakeWebSocket.instances).toHaveLength(1);
     expect(lastSocket().url).not.toContain("stale-token");
     view.unmount();
+  });
+
+  it("bounds a stalled ticket using the real API lifetime then falls back once", async () => {
+    vi.useFakeTimers();
+    const actual = await vi.importActual<typeof import("../api/client")>("../api/client");
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise(() => {}));
+    revocation.ticket.mockImplementationOnce(actual.apiClient);
+    const view = renderHook(() => useWebSocket());
+    try {
+      await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+      expect(FakeWebSocket.instances).toHaveLength(0);
+      await act(async () => { await vi.advanceTimersByTimeAsync(9_999); });
+      expect(FakeWebSocket.instances).toHaveLength(0);
+      await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+      expect(FakeWebSocket.instances).toHaveLength(1);
+      expect(lastSocket().url).toBe("ws://test.local/ws?token=test-token");
+      await act(async () => { await vi.advanceTimersByTimeAsync(20_000); });
+      expect(FakeWebSocket.instances).toHaveLength(1);
+    } finally {
+      view.unmount(); fetchSpy.mockRestore(); vi.useRealTimers();
+    }
+  });
+
+  it("never creates an old-account socket after a stalled ticket times out or completes late", async () => {
+    vi.useFakeTimers();
+    const actual = await vi.importActual<typeof import("../api/client")>("../api/client");
+    let resolveFetch!: (response: Response) => void;
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementationOnce(() => new Promise((resolve) => { resolveFetch = resolve; }));
+    revocation.ticket.mockImplementationOnce(actual.apiClient);
+    const view = renderHook(() => useWebSocket());
+    try {
+      await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+      expect(FakeWebSocket.instances).toHaveLength(0);
+      await act(async () => { changeAuth("u2"); await Promise.resolve(); await Promise.resolve(); });
+      expect(FakeWebSocket.instances).toHaveLength(1);
+      await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+      expect(FakeWebSocket.instances).toHaveLength(1);
+      resolveFetch(new Response(JSON.stringify({ success: true, data: { ticket: "retired-ticket" } }), { headers: { "content-type": "application/json" } }));
+      await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+      expect(FakeWebSocket.instances).toHaveLength(1);
+      expect(lastSocket().url).not.toContain("retired-ticket");
+    } finally {
+      view.unmount(); fetchSpy.mockRestore(); vi.useRealTimers();
+    }
   });
 
   it("discards a ticket completion captured before reauthentication", async () => {

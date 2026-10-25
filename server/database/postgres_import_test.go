@@ -47,6 +47,9 @@ func TestPostgresImportPreservesDataAndRejectsReuse(t *testing.T) {
 	defer source.Close()
 	for _, q := range []string{
 		`INSERT INTO users(id,username,password_hash) VALUES('import-user','import-user','opaque-password-hash')`,
+		`INSERT INTO dm_channels(id,user1_id,user2_id) VALUES('import-dm','import-user','import-user')`,
+		`INSERT INTO dm_messages(id,dm_channel_id,user_id,content,source_sequence) VALUES('z-import-earlier','import-dm','import-user','opaque-DM',200),('a-import-later','import-dm','import-user','opaque-DM-later',500)`,
+		`INSERT INTO dm_reads(user_id,dm_channel_id,last_read_message_id,last_read_source_sequence,last_read_at,unread_count) VALUES('import-user','import-dm','z-import-earlier',200,'2026-01-01',1)`,
 		`INSERT INTO servers(id,name,owner_id) VALUES('import-server','Server','import-user')`,
 		`INSERT INTO channels(id,name,type,server_id) VALUES('import-channel','general','text','import-server')`,
 		`INSERT INTO messages(id,channel_id,user_id,content,encryption_version) VALUES('import-message','import-channel','import-user','opaque-ciphertext',1)`,
@@ -121,6 +124,22 @@ func TestPostgresImportPreservesDataAndRejectsReuse(t *testing.T) {
 	}
 	if hash != "opaque-password-hash" || ciphertext != "opaque-ciphertext" || url != "/api/uploads/preserved.bin" {
 		t.Fatal("opaque fields changed")
+	}
+	var importedSequence, importedCounter, readSequence int64
+	if err = target.QueryRow(`SELECT source_sequence FROM dm_messages WHERE id='a-import-later'`).Scan(&importedSequence); err != nil || importedSequence != 500 {
+		t.Fatalf("DM source sequence changed: %d %v", importedSequence, err)
+	}
+	if err = target.QueryRow(`SELECT last_source_sequence FROM dm_channels WHERE id='import-dm'`).Scan(&importedCounter); err != nil || importedCounter != 500 {
+		t.Fatalf("DM counter changed on out-of-order import: %d %v", importedCounter, err)
+	}
+	if err = target.QueryRow(`SELECT last_read_source_sequence FROM dm_reads WHERE dm_channel_id='import-dm'`).Scan(&readSequence); err != nil || readSequence != 200 {
+		t.Fatalf("read watermark changed on import: %d %v", readSequence, err)
+	}
+	if _, err = target.Exec(`INSERT INTO dm_messages(id,dm_channel_id,user_id,content) VALUES('import-next','import-dm','import-user','opaque-next')`); err != nil {
+		t.Fatal(err)
+	}
+	if err = target.QueryRow(`SELECT source_sequence FROM dm_messages WHERE id='import-next'`).Scan(&importedSequence); err != nil || importedSequence != 501 {
+		t.Fatalf("post-import allocation failed: %d %v", importedSequence, err)
 	}
 	var nextID int64
 	if err = target.QueryRow(`INSERT INTO livekit_metrics_history(instance_id) VALUES('test-instance') RETURNING id`).Scan(&nextID); err != nil || nextID <= 42 {

@@ -194,24 +194,20 @@ export async function updateReportStatus(reportId: string, status: string) {
 
 // ── App Logs ──
 
-export async function listAppLogs(params?: {
-  level?: string;
-  category?: string;
-  search?: string;
-  limit?: number;
-  offset?: number;
-}) {
-  const query = new URLSearchParams();
-  if (params?.level) query.set("level", params.level);
-  if (params?.category) query.set("category", params.category);
-  if (params?.search) query.set("search", params.search);
-  if (params?.limit) query.set("limit", String(params.limit));
-  if (params?.offset) query.set("offset", String(params.offset));
-
-  const qs = query.toString();
-  return apiClient<{ logs: AppLog[]; total: number }>(
-    `/admin/logs${qs ? `?${qs}` : ""}`
-  );
+export type AppLogQuery = {
+ level?: string; category?: string; search?: string; limit?: number; offset?: number;
+ request_id?: string; event_code?: string; component?: string; from?: string; to?: string;
+};
+export async function listAppLogs(params?: AppLogQuery) {
+ const query = new URLSearchParams();
+ for (const [key,value] of Object.entries(params ?? {})) {
+  if (value !== undefined && value !== "") query.set(key,String(value));
+ }
+ const qs=query.toString();
+ return apiClient<{logs:AppLog[];total:number}>(`/admin/logs${qs ? `?${qs}` : ""}`);
+}
+export async function getAppLogHealth() {
+ return apiClient<import("../types").AppLogHealth>("/admin/logs/health");
 }
 
 export async function clearAppLogs() {

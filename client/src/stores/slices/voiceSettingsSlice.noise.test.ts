@@ -17,6 +17,19 @@ afterEach(() => {
 });
 
 describe("noise engine preference migration", () => {
+  it("keeps the two independent game notice preferences local, default off, and immune to cloud hydration", () => {
+    expect(loadSettings()).toMatchObject({ voiceOverlayGameActivityNotifications: false, voiceOverlayNowPlayingNotifications: false });
+    localStorage.setItem("mqvi_voice_settings", JSON.stringify({ voiceOverlayGameActivityNotifications: "true", voiceOverlayNowPlayingNotifications: 1 }));
+    expect(loadSettings()).toMatchObject({ voiceOverlayGameActivityNotifications: false, voiceOverlayNowPlayingNotifications: false });
+    const store = createStore<VoiceSettingsSlice>()(createVoiceSettingsSlice as unknown as StateCreator<VoiceSettingsSlice>);
+    store.getState().setVoiceOverlayGameActivityNotifications(true);
+    expect(store.getState().voiceOverlayNowPlayingNotifications).toBe(false);
+    store.getState().setVoiceOverlayNowPlayingNotifications(true); flushPendingVoiceSettingsSave();
+    expect(loadSettings()).toMatchObject({ voiceOverlayGameActivityNotifications: true, voiceOverlayNowPlayingNotifications: true });
+    expect(sync).not.toHaveBeenCalled();
+    store.getState().applyFromServer({ voiceOverlayGameActivityNotifications: false, voiceOverlayNowPlayingNotifications: false });
+    expect(store.getState()).toMatchObject({ voiceOverlayGameActivityNotifications: true, voiceOverlayNowPlayingNotifications: true });
+  });
   it.each(["krisp", "dpdfnet"])("migrates local %s while preserving unrelated settings", (engine) => {
     localStorage.setItem("mqvi_voice_settings", JSON.stringify({ noiseReductionEngine: engine, inputVolume: 145, screenShareAudio: false, inputDevice: "usb-mic" }));
     expect(loadSettings()).toMatchObject({ noiseReductionEngine: "rnnoise", inputVolume: 145, screenShareAudio: false, inputDevice: "usb-mic" });
@@ -50,7 +63,7 @@ describe("device-local voice overlay presentation preferences", () => {
       voiceOverlayScale: null, voiceOverlayIdleOpacity: "35", voiceOverlaySpeakingOpacity: 900,
     }));
     expect(loadSettings()).toMatchObject({ voiceOverlayEnabled: false, voiceOverlaySpeakingOnly: false,
-      voiceOverlayPosition: "bottom-left", voiceOverlayScale: 100, voiceOverlayIdleOpacity: 35, voiceOverlaySpeakingOpacity: 100 });
+      voiceOverlayPosition: "center-left", voiceOverlayScale: 100, voiceOverlayIdleOpacity: 35, voiceOverlaySpeakingOpacity: 100 });
     const store = createStore<VoiceSettingsSlice>()(createVoiceSettingsSlice as unknown as StateCreator<VoiceSettingsSlice>);
     store.getState().setVoiceOverlayScale(Number.NaN);
     store.getState().setVoiceOverlayIdleOpacity(Number.POSITIVE_INFINITY);
@@ -59,7 +72,7 @@ describe("device-local voice overlay presentation preferences", () => {
   });
   it("defaults safely and repairs malformed persisted values", () => {
     expect(loadSettings()).toMatchObject({
-      voiceOverlayMode: "desktop", voiceOverlayPinned: false, voiceOverlayAvatarSize: "small", voiceOverlayNameDisplay: "always", voiceOverlayMaxParticipants: 25,
+      voiceOverlayMode: "game", voiceOverlayPinned: false, voiceOverlayAvatarSize: "small", voiceOverlayNameDisplay: "always", voiceOverlayMaxParticipants: 25,
       voiceOverlayQuickActions: false, voiceOverlayClickableActions: false, voiceOverlayActivity: false, voiceOverlayNotifications: false,
       voiceOverlayNotificationActions: false,
       voiceOverlayChat: false,
@@ -70,13 +83,41 @@ describe("device-local voice overlay presentation preferences", () => {
       voiceOverlayMode: "automatic", voiceOverlayPinned: "yes", voiceOverlayQuickActions: "yes", voiceOverlayClickableActions: 1, voiceOverlayActivity: "true", voiceOverlayNotifications: 1, voiceOverlayNotificationActions: "yes", voiceOverlayChat: "yes", voiceOverlayChatActions: "yes", voiceOverlayChatCompose: "yes", voiceOverlayAvatarSize: "huge", voiceOverlayNameDisplay: "sometimes", voiceOverlayMaxParticipants: 99.7,
     }));
     expect(loadSettings()).toMatchObject({
-      voiceOverlayMode: "desktop", voiceOverlayPinned: false, voiceOverlayAvatarSize: "small", voiceOverlayNameDisplay: "always", voiceOverlayMaxParticipants: 25,
+      voiceOverlayMode: "game", voiceOverlayPinned: false, voiceOverlayAvatarSize: "small", voiceOverlayNameDisplay: "always", voiceOverlayMaxParticipants: 25,
       voiceOverlayQuickActions: false, voiceOverlayClickableActions: false, voiceOverlayActivity: false, voiceOverlayNotifications: false,
       voiceOverlayNotificationActions: false,
       voiceOverlayChat: false,
       voiceOverlayChatActions: false,
       voiceOverlayChatCompose: false,
     });
+  });
+
+  it.each([true, false])("migrates desktop mode once, preserving enabled=%s and unrelated preferences", (enabled) => {
+    localStorage.setItem("mqvi_voice_settings", JSON.stringify({
+      voiceOverlayMode: "desktop", voiceOverlayEnabled: enabled, inputDevice: "usb-mic", masterVolume: 38, screenShareAudio: false,
+    }));
+    expect(loadSettings()).toMatchObject({ voiceOverlayMode: "game", voiceOverlayEnabled: enabled, inputDevice: "usb-mic", masterVolume: 38, screenShareAudio: false });
+    expect(JSON.parse(localStorage.getItem("mqvi_voice_settings")!).voiceOverlayMode).toBe("game");
+    expect(loadSettings().voiceOverlayMode).toBe("game");
+    const store = createStore<VoiceSettingsSlice>()(createVoiceSettingsSlice as unknown as StateCreator<VoiceSettingsSlice>);
+    store.getState().setVoiceOverlayMode("desktop");
+    flushPendingVoiceSettingsSave();
+    expect(loadSettings().voiceOverlayMode).toBe("desktop");
+    expect(sync).not.toHaveBeenCalled();
+  });
+
+  it("preserves an explicit desktop choice after a fresh install", () => {
+    expect(loadSettings().voiceOverlayMode).toBe("game");
+    const store = createStore<VoiceSettingsSlice>()(createVoiceSettingsSlice as unknown as StateCreator<VoiceSettingsSlice>);
+    store.getState().setVoiceOverlayMode("desktop");
+    flushPendingVoiceSettingsSave();
+    expect(loadSettings().voiceOverlayMode).toBe("desktop");
+  });
+
+  it.each([undefined, "invalid"])("defaults missing or invalid mode to game after migration (%s)", (mode) => {
+    loadSettings();
+    localStorage.setItem("mqvi_voice_settings", JSON.stringify({ voiceOverlayMode: mode }));
+    expect(loadSettings().voiceOverlayMode).toBe("game");
   });
 
   it("clamps, persists locally, and never sends these fields in account preference patches", () => {
@@ -95,6 +136,8 @@ describe("device-local voice overlay presentation preferences", () => {
     store.getState().setVoiceOverlayQuickActions(true);
     store.getState().setVoiceOverlayClickableActions(true);
     store.getState().setVoiceOverlayActivity(true);
+    store.getState().setVoiceOverlayWelcome(true);
+    store.getState().setVoiceOverlayGoLive(true);
     store.getState().setVoiceOverlayNotifications(true);
     store.getState().setVoiceOverlayNotificationActions(true);
     store.getState().setVoiceOverlayChat(true);
@@ -109,6 +152,8 @@ describe("device-local voice overlay presentation preferences", () => {
       voiceOverlayPinned: true,
       voiceOverlayQuickActions: true, voiceOverlayClickableActions: true,
       voiceOverlayActivity: true,
+      voiceOverlayWelcome: true,
+      voiceOverlayGoLive: true,
       voiceOverlayNotifications: true,
       voiceOverlayNotificationActions: true,
       voiceOverlayChat: true,
@@ -132,6 +177,8 @@ describe("device-local voice overlay presentation preferences", () => {
     store.getState().setVoiceOverlayQuickActions(true);
     store.getState().setVoiceOverlayClickableActions(true);
     store.getState().setVoiceOverlayActivity(true);
+    store.getState().setVoiceOverlayWelcome(true);
+    store.getState().setVoiceOverlayGoLive(true);
     store.getState().setVoiceOverlayNotifications(true);
     store.getState().setVoiceOverlayNotificationActions(true);
     store.getState().setVoiceOverlayChat(true);
@@ -148,6 +195,8 @@ describe("device-local voice overlay presentation preferences", () => {
       voiceOverlayPinned: true,
       voiceOverlayQuickActions: true, voiceOverlayClickableActions: true,
       voiceOverlayActivity: true,
+      voiceOverlayWelcome: true,
+      voiceOverlayGoLive: true,
       voiceOverlayNotifications: true,
       voiceOverlayNotificationActions: true,
       voiceOverlayChat: true,
@@ -156,3 +205,18 @@ describe("device-local voice overlay presentation preferences", () => {
     });
   });
 });
+
+ it("upgrades a truncated roster to all users at middle left once", () => {
+    localStorage.setItem("mqvi_voice_settings_v3_overlayGameMode", "1");
+    localStorage.setItem("mqvi_voice_settings", JSON.stringify({ voiceOverlayMode: "desktop",
+      voiceOverlayPosition: "bottom-left", voiceOverlaySpeakingOnly: true, voiceOverlayMaxParticipants: 2,
+      voiceOverlayNameDisplay: "speaking", voiceOverlayEnabled: false, masterVolume: 41 }));
+    expect(loadSettings()).toMatchObject({ voiceOverlayMode: "game", voiceOverlayPosition: "center-left",
+      voiceOverlaySpeakingOnly: false, voiceOverlayMaxParticipants: 25, voiceOverlayNameDisplay: "always",
+      voiceOverlayEnabled: false, masterVolume: 41 });
+    const store = createStore<VoiceSettingsSlice>()(createVoiceSettingsSlice as unknown as StateCreator<VoiceSettingsSlice>);
+    store.getState().setVoiceOverlayPosition("top-left");
+    store.getState().setVoiceOverlayMaxParticipants(7);
+    flushPendingVoiceSettingsSave();
+    expect(loadSettings()).toMatchObject({ voiceOverlayPosition: "top-left", voiceOverlayMaxParticipants: 7 });
+  });

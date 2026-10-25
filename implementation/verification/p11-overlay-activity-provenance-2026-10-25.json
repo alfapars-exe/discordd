@@ -1,0 +1,32 @@
+{
+  "date": "2026-10-25",
+  "scope": "P11 overlay friend activity relationship provenance",
+  "status": "implemented_static_verified",
+  "owned_paths": [
+    "client/src/hooks/useOverlayActivity.ts",
+    "client/src/hooks/useOverlayActivity.test.ts",
+    "client/src/utils/overlayActivity.ts",
+    "client/src/utils/overlayActivity.test.ts"
+  ],
+  "source_hashes": {
+    "client/src/hooks/useOverlayActivity.ts": "3c8b5936abd50ab91db90080879783302cca65facae9956e490f652cb8cd699c",
+    "client/src/hooks/useOverlayActivity.test.ts": "46388dd81b64c9fa2eca1fec6ddd9bf5a94153cb81d86c8b00750dc1083db74c",
+    "client/src/utils/overlayActivity.ts": "4fa62aff9a10ab09aefd0e89d92508c431def714904e6ca753e63b7661c81b77",
+    "client/src/utils/overlayActivity.test.ts": "2657b92d6b4ab8438abcce52a0552c16ad1311d3cd1d3e5d2450071e7b7456c6"
+  },
+  "changes": [
+    "Activity requires complete ready friendship list belonging to current account and auth generation.",
+    "Hook subscribes provenance changes even when cached friend array identity remains unchanged.",
+    "Revoked global activity tombstone remains effective when relationship loading/error resolves; stale revisions cannot restore visibility."
+  ],
+  "checks": {
+    "focused": "2files10tests PASS2.56s",
+    "typescript": "npx tsc -b exit0",
+    "lint": "exact4clientpaths ESLint exit0",
+    "diff_check": "exact4paths exit0"
+  },
+  "remaining": [
+    "Native overlay runtime acceptance open. No new game-start events, same-title identity inference, preferences, native bridge or matching adapter registry added."
+  ],
+  "no_external_operations": true
+}

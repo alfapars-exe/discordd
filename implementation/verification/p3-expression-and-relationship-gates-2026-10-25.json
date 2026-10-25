@@ -1,0 +1,24 @@
+{
+  "phase": "P3",
+  "status": "implemented_unverified",
+  "scope": [
+    "Ordinary channel/DM GIF, sticker and custom-emoji bodies use the same pre-mount media gate as group bodies and attachments. Code literals and parser/spoiler behavior remain.",
+    "Custom reaction images use actual reactor identities and current conversation participants, never the message author's exemption. Unknown/incomplete attribution applies both private-message scopes and the stricter category policy. Count, toggle, removal and picker remain usable; reveal/retry controls are siblings outside the reaction button.",
+    "Friend lists carry account, authentication generation and complete-snapshot readiness. Owner/generation transitions synchronously clear old lists and counters. Failed revalidation may retain a same-account UI list, but media policy treats the relationship as unknown.",
+    "Unknown friendship applies the stricter friend-DM/other-DM choice even when the user configures friend content more strictly. Source/actor/count/account/device/relationship changes fence old analysis, labels and reveals; detached lightboxes close on privacy-provenance changes.",
+    "Existing pinned local TFJS sexual-media and ONNX/WASM disturbing-media models, animation/video sampling and client-side encrypted-file analysis are reused. No plaintext server classifier, model download or new dependency is added."
+  ],
+  "verification": {
+    "body": "81 tests across eight files passed",
+    "reactions": "68 tests across nine files passed, including real private-annotation API cancellation and no nested interactive controls",
+    "friendship_follow_up": "142 tests across13 files passed, including actual friend API/WS guards, malformed snapshots, cold/error/confirmed-empty distinction, account/re-login/stale-response reset, both reversed policy orders, lightbox and reveal fencing",
+    "static": "TypeScript and scoped ESLint passed",
+    "earlier_integrated_client": "350 files,3391 tests passed before the friendship-provenance follow-up; final-source full CI remains required"
+  },
+  "remaining": [
+    "Representative classifier accuracy/thresholds, browser worker/codecs/CSP/performance and physical Windows/two-client acceptance remain open.",
+    "Own-authored source-message annotation API is unsupported: reaction filtering/local analysis/reveal still work, while unsupported annotation calls and controls are disabled. Ordinary non-own sources retain account-private exact-fingerprint annotations.",
+    "Spam is a real deterministic rule classifier, not ML. Cold/failed relationship handling in spam routing and honest friend-list error/retry UI require a separate follow-up; this receipt does not close that behavior.",
+    "No production or Windows publication was performed."
+  ]
+}

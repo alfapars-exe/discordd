@@ -90,9 +90,9 @@ func TestDMReadRepo_IncrementAndMarkRead(t *testing.T) {
 		}
 	})
 
-	t.Run("last_read_at is stored as space-separated UTC text", func(t *testing.T) {
-		if n := countRows(t, db, `SELECT COUNT(*) FROM dm_reads WHERE user_id = ? AND last_read_at NOT LIKE '____-__-__ __:__:__'`, dmBob); n != 0 {
-			t.Errorf("%d dm_reads rows have a last_read_at outside 'YYYY-MM-DD HH:MM:SS'", n)
+	t.Run("last_read_at retains its UTC date and time on SQLite and PostgreSQL", func(t *testing.T) {
+		if n := countRows(t, db, `SELECT COUNT(*) FROM dm_reads WHERE user_id = ? AND CAST(last_read_at AS TEXT) NOT LIKE '____-__-__ __:__:__%'`, dmBob); n != 0 {
+			t.Errorf("%d dm_reads rows have a last_read_at without a UTC date/time", n)
 		}
 	})
 }

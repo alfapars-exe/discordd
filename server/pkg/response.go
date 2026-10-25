@@ -50,6 +50,10 @@ func JSON(w http.ResponseWriter, status int, data any) {
 // (CWE-209: information exposure through an error message). Those are logged
 // server-side and replaced with a generic message in the response.
 func Error(w http.ResponseWriter, err error) {
+	if ctx := ResponseLogContext(w); ctx != nil {
+		ErrorCtxErr(ctx, w, err)
+		return
+	}
 	status := mapErrorToStatus(err)
 	code := errorCode(err)
 
@@ -88,20 +92,16 @@ func Error(w http.ResponseWriter, err error) {
 // has just an err and wants Error's original behavior with a correlation id
 // attached; kept for that future use, not currently exercised.
 func ErrorCtxErr(ctx context.Context, w http.ResponseWriter, err error) {
+	if errors.Is(err, context.Canceled) && ctx.Err() != nil {
+		return
+	}
 	status := mapErrorToStatus(err)
 	code := errorCode(err)
 	reqID := RequestIDFrom(ctx)
 
 	message := err.Error()
 	if status >= http.StatusInternalServerError {
-		method, path := RequestInfoFrom(ctx)
-		slog.LogAttrs(ctx, slog.LevelError, "server error",
-			slog.Int("status", status),
-			slog.String("request_id", reqID),
-			slog.String("method", method),
-			slog.String("path", path),
-			slog.String("err", ErrText(err)),
-		)
+		DiagnosticError(ctx, status, "HTTP_INTERNAL", "internal", err)
 		message = "internal server error"
 	}
 
@@ -124,6 +124,9 @@ func ErrorCtxErr(ctx context.Context, w http.ResponseWriter, err error) {
 // The err argument is optional. Passing nil is fine — used when the
 // caller detected a bad state without a wrapped error.
 func ErrorCtx(ctx context.Context, w http.ResponseWriter, status int, userMsg string, err error) {
+	if errors.Is(err, context.Canceled) && ctx.Err() != nil {
+		return
+	}
 	// Only derive a code when the caller actually passed an err: errorCode(nil)
 	// falls through to "INTERNAL", which on a 4xx would make the client render
 	// a server-fault message for a client-side condition.
@@ -138,14 +141,7 @@ func ErrorCtx(ctx context.Context, w http.ResponseWriter, status int, userMsg st
 		// client signal (e.g. "NOT_FOUND") that contradicts the generic 500
 		// body. Force "INTERNAL" so status and code never disagree.
 		code = "INTERNAL"
-		method, path := RequestInfoFrom(ctx)
-		slog.LogAttrs(ctx, slog.LevelError, "server error",
-			slog.Int("status", status),
-			slog.String("request_id", reqID),
-			slog.String("method", method),
-			slog.String("path", path),
-			slog.String("err", ErrText(err)),
-		)
+		DiagnosticError(ctx, status, "HTTP_INTERNAL", "internal", err)
 		if userMsg == "" {
 			userMsg = "internal server error"
 		}

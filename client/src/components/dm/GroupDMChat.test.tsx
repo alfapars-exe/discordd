@@ -3,6 +3,9 @@ import { beforeEach, expect, it, vi } from "vitest";
 import GroupDMChat from "./GroupDMChat";
 import { useGroupDMStore } from "../../stores/groupDMStore";
 import { useAuthStore } from "../../stores/authStore";
+import { useGroupCallStore } from "../../stores/groupCallStore";
+import { getAuthGeneration } from "../../api/client";
+import { publishAuthOwnerChange } from "../../api/authSessionEvents";
 import { useE2EEStore } from "../../stores/e2eeStore";
 import type { GroupDM, GroupDMMessage } from "../../types/groupDM";
 import { reportUser } from "../../api/report";
@@ -19,12 +22,12 @@ import { pinCurrentGroupDMMessage } from "../../utils/groupDMPins";
 vi.mock("../../utils/groupDMPins", () => ({ pinCurrentGroupDMMessage: vi.fn(async () => true) }));
 vi.mock("./GroupDMPinsPanel", () => ({ default: ({ onClose }: { onClose: () => void }) => <aside aria-label="group-pins"><button onClick={onClose}>close-pins</button></aside> }));
 const gate = vi.hoisted(() => ({ hidden: true, confirm: vi.fn(async () => true),forward:vi.fn(), touch:false }));
-const callApi = vi.hoisted(() => ({ getToken: vi.fn() }));
+const callApi = vi.hoisted(() => ({ getToken: vi.fn(), list:vi.fn() }));
 const expressionCallbacks = vi.hoisted(() => ({ emoji: undefined as ((value: string) => void) | undefined, gif: undefined as ((value: string) => void) | undefined, sticker: undefined as ((value: string) => void) | undefined }));
 vi.mock("../shared/EmojiPicker", () => ({ default: ({ onSelect }: { onSelect: (value: string) => void }) => { expressionCallbacks.emoji = onSelect; return <button type="button" onClick={() => onSelect("😀")}>select-emoji</button>; } }));
 vi.mock("../shared/GifPicker", () => ({ default: ({ onSelect }: { onSelect: (value: string) => void }) => { expressionCallbacks.gif = onSelect; return <button type="button" onClick={() => onSelect("https://static.klipy.com/example.gif")}>select-gif</button>; } }));
 vi.mock("../shared/StickerPicker", () => ({ default: ({ onSelect }: { onSelect: (value: string) => void }) => { expressionCallbacks.sticker = onSelect; return <button type="button" onClick={() => onSelect("<sticker:sample:1>")}>select-sticker</button>; } }));
-vi.mock("../../api/groupDM", () => ({ getGroupDMCallToken: callApi.getToken }));
+vi.mock("../../api/groupDM", () => ({ getGroupDMCallToken: callApi.getToken,listGroupDMs:callApi.list }));
 vi.mock("../chat/ForwardMessageModal",()=>({default:({message,onClose}:{message:{content:string|null;attachments:unknown[]};onClose:()=>void})=>{gate.forward(message);return <div role="dialog" aria-label="forward-source"><p>{message.content}</p><button onClick={onClose}>close-forward</button></div>}}));
 vi.mock("../../hooks/useConfirm", () => ({ useConfirm: () => gate.confirm }));
 vi.mock("../../hooks/useMediaQuery", () => ({ useIsTouch: () => gate.touch }));
@@ -44,7 +47,18 @@ const message = (id: string, author: string): GroupDMMessage => ({
   e2ee_metadata: null, key_epoch: 1, reply_to_id: null, edited_at: null,
   created_at: "2026-10-24T00:00:00Z", reactions: [], attachments: [],
 });
+
+it("saves a private group mute from the header and reflects authoritative saved state",async()=>{
+  const save=vi.fn(async(_id:string,muted:boolean)=>{
+    useGroupDMStore.getState().handleReadState({group_id:"group",last_read_message_id:null,unread_count:0,revision:0,is_muted:muted,settings_revision:1});return true;
+  });
+  useGroupDMStore.setState({setMuted:save});render(<GroupDMChat groupId="group"/>);
+  fireEvent.click(screen.getByRole("button",{name:"dm:muteDM"}));
+  await waitFor(()=>expect(save).toHaveBeenCalledExactlyOnceWith("group",true));
+  expect(screen.getByRole("button",{name:"dm:unmuteDM"})).toHaveAttribute("aria-pressed","true");
+});
 beforeEach(() => {
+  const active=useGroupCallStore.getState().session;if(active)useGroupCallStore.getState().leave(active.nonce);
   vi.clearAllMocks();
   expressionCallbacks.emoji = undefined; expressionCallbacks.gif = undefined; expressionCallbacks.sticker = undefined;
   useComposerDraftStore.getState().reset();
@@ -53,13 +67,15 @@ beforeEach(() => {
   vi.mocked(copyToClipboard).mockResolvedValue(undefined); vi.mocked(speakMessage).mockReturnValue(true);
   vi.mocked(reportUser).mockResolvedValue({ success: true });
   callApi.getToken.mockReset();
-  callApi.getToken.mockResolvedValue({ success: true, data: { url: "wss://voice.test", token: "token", e2ee_passphrase: "key" } });
+  callApi.getToken.mockResolvedValue({ success: true, data: { url: "wss://voice.test", token: "token", channel_id:"group", e2ee_passphrase: "key",e2ee_key_context:"context",e2ee_key_epoch:1,e2ee_key_index:1 } });
   useShortcutCaptureStore.setState({ active: false });
   useUIStore.setState({ destination: { type: "group-dm", channelId: "group", label: "Test group" } as never });
   useAuthStore.setState({ user: { id: "me" } as NonNullable<ReturnType<typeof useAuthStore.getState>["user"]> });
+  publishAuthOwnerChange("me");
   useE2EEStore.setState({ initStatus: "ready", localDeviceId: "test-device" });
-  const group: GroupDM = { id: "group", name: "Test group", owner_id: "me", members: [], icon_url: null, key_epoch: 1, call_room_key: "room", unread_count: 0, created_at: "2026-10-24T00:00:00Z", updated_at: "2026-10-24T00:00:00Z" };
-  useGroupDMStore.setState({ groups: [group], messages: { group: [message("own", "me"), message("other-message", "other")] },hasMoreAfterByGroup:{},scrollTarget:null, error: null,uploadRecoveries:{},pendingSends:{},groupsReady:true,restoreStatus:"ready",restoreBlocked:[],restoredQueue:{}, fetchMessages: vi.fn(async () => true),jumpToPresent:vi.fn(), markRead: vi.fn(async () => {}),markUnread:vi.fn(async()=>true) });
+  const group: GroupDM = { id: "group", name: "Test group", owner_id: "me", members: [{id:"me",username:"me",display_name:null,avatar_url:null,custom_status:null,status:"online",created_at:"2026-01-01"}], icon_url: null, key_epoch: 1, call_room_key: "room", unread_count: 0, created_at: "2026-10-24T00:00:00Z", updated_at: "2026-10-24T00:00:00Z" };
+  useGroupDMStore.setState({ ownerId:"me",authGeneration:getAuthGeneration(),groups: [group], messages: { group: [message("own", "me"), message("other-message", "other")] },hasMoreAfterByGroup:{},scrollTarget:null, error: null,uploadRecoveries:{},pendingSends:{},groupsReady:true,setMuted:vi.fn(async()=>false),restoreStatus:"ready",restoreBlocked:[],restoredQueue:{}, fetchMessages: vi.fn(async () => true),jumpToPresent:vi.fn(), markRead: vi.fn(async () => {}),markUnread:vi.fn(async()=>true) });
+  callApi.list.mockResolvedValue({success:true,data:{group_dms:[group]}});
 });
 it("loads group history when account crypto becomes ready after the route mounts", async () => {
   const fetchMessages = vi.fn(async () => true);
@@ -242,7 +258,7 @@ it("blocks new sends while an operation is unresolved and exposes an explicit re
 it("starts a group call with Ctrl+Quote only for the active group destination",async()=>{
   render(<GroupDMChat groupId="group"/>);
   expect(executeVoiceShortcut("group-call-start",new KeyboardEvent("keydown",{key:"'",code:"Quote",ctrlKey:true,bubbles:true,cancelable:true}))).toBe(true);
-  await waitFor(()=>expect(callApi.getToken).toHaveBeenCalledExactlyOnceWith("group"));
+  await waitFor(()=>expect(callApi.getToken).toHaveBeenCalledExactlyOnceWith("group",expect.objectContaining({timeoutMs:15000,isCurrent:expect.any(Function),signal:expect.any(AbortSignal)})));
   await waitFor(()=>expect(screen.getByRole("button",{name:"leaveCall"})).toBeInTheDocument());
 });
 it("does not start a call for a background group or while a modal/input/capture owns the key",()=>{
@@ -262,14 +278,15 @@ it("does not start a call for a background group or while a modal/input/capture 
   dialog.remove();view.unmount();
   expect(callApi.getToken).not.toHaveBeenCalled();
 });
-it("ignores a token response after the destination changes",async()=>{
-  let resolve!:(value:{success:boolean;data:{url:string;token:string;e2ee_passphrase:string}})=>void;
+it("keeps an explicitly requested pending call when the destination changes",async()=>{
+  let resolve!:(value:unknown)=>void;
   callApi.getToken.mockReturnValueOnce(new Promise(done=>{resolve=done}));
   render(<GroupDMChat groupId="group"/>);
   expect(executeVoiceShortcut("group-call-start",new KeyboardEvent("keydown",{key:"'",code:"Quote",ctrlKey:true,bubbles:true,cancelable:true}))).toBe(true);
+  await waitFor(()=>expect(callApi.getToken).toHaveBeenCalledTimes(1));
   useUIStore.setState({destination:{type:"friends",channelId:"friends",label:"Friends"} as never});
-  await act(async()=>resolve({success:true,data:{url:"wss://voice.test",token:"late",e2ee_passphrase:"key"}}));
-  expect(screen.getByRole("button",{name:"startCall"})).toBeInTheDocument();
+  await act(async()=>resolve({success:true,data:{url:"wss://voice.test",token:"late",channel_id:"group",e2ee_passphrase:"key",e2ee_key_context:"context",e2ee_key_epoch:1,e2ee_key_index:1}}));
+  expect(screen.getByRole("button",{name:"leaveCall"})).toBeInTheDocument();
 });
 it("does not cancel a replacement operation after a delayed confirmation",async()=>{
   const cancel=vi.fn(async()=>true);let confirm!:(value:boolean)=>void;gate.confirm.mockReturnValueOnce(new Promise(resolve=>{confirm=resolve}));

@@ -4,6 +4,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 const mocks = vi.hoisted(() => ({
   dismissWelcome: vi.fn(),
   dismissDownloadPrompt: vi.fn(),
+  shouldShowDownloadPrompt: vi.fn(() => true),
 }));
 
 vi.mock("../../api/auth", () => ({
@@ -20,13 +21,14 @@ vi.mock("react-i18next", async (importOriginal) => ({
 }));
 vi.mock("../../utils/detectOS", () => ({
   detectOS: () => ({ url: "https://example.test/download", i18nKey: "downloadPromptTitle" }),
-  shouldShowDownloadPrompt: () => true,
+  shouldShowDownloadPrompt: mocks.shouldShowDownloadPrompt,
 }));
 
 import type { User } from "../../types";
 import { useAuthStore } from "../../stores/authStore";
 import DownloadPromptModal from "./DownloadPromptModal";
 import WelcomeModal from "./WelcomeModal";
+import RecoveryPasswordPrompt from "./RecoveryPasswordPrompt";
 
 function user(id: string, hasSeenWelcome: boolean, hasSeenDownloadPrompt = false) {
   return {
@@ -40,6 +42,7 @@ function user(id: string, hasSeenWelcome: boolean, hasSeenDownloadPrompt = false
 describe("first-run onboarding prompts", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.shouldShowDownloadPrompt.mockReturnValue(true);
     useAuthStore.setState({ user: user("account-one", false) });
   });
 
@@ -48,18 +51,25 @@ describe("first-run onboarding prompts", () => {
       <>
         <WelcomeModal />
         <DownloadPromptModal />
+        <RecoveryPasswordPrompt />
       </>,
     );
 
     expect(screen.getByRole("heading", { name: "welcomeTitle" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "downloadPromptTitle" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "recoveryPromptTitle" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "welcomeGotIt" }));
     expect(screen.queryByRole("heading", { name: "welcomeTitle" })).toBeNull();
     expect(screen.getByRole("heading", { name: "downloadPromptTitle" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "recoveryPromptTitle" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "downloadPromptDismiss" }));
+    expect(screen.getByRole("heading", { name: "recoveryPromptTitle" })).toBeInTheDocument();
 
     act(() => useAuthStore.setState({ user: user("account-two", false) }));
     expect(screen.getByRole("heading", { name: "welcomeTitle" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "recoveryPromptTitle" })).toBeNull();
     expect(screen.queryByRole("heading", { name: "downloadPromptTitle" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "welcomeGotIt" }));
@@ -68,5 +78,13 @@ describe("first-run onboarding prompts", () => {
     act(() => useAuthStore.setState({ user: user("account-three", true) }));
     expect(screen.queryByRole("heading", { name: "welcomeTitle" })).toBeNull();
     expect(screen.getByRole("heading", { name: "downloadPromptTitle" })).toBeInTheDocument();
+  });
+
+  it("does not defer recovery for an unavailable desktop download prompt", () => {
+    mocks.shouldShowDownloadPrompt.mockReturnValue(false);
+    useAuthStore.setState({ user: user("native-account", true, false) });
+    render(<><DownloadPromptModal /><RecoveryPasswordPrompt /></>);
+    expect(screen.queryByRole("heading", { name: "downloadPromptTitle" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "recoveryPromptTitle" })).toBeInTheDocument();
   });
 });

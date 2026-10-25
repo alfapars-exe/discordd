@@ -46,6 +46,45 @@ beforeEach(() => {
 });
 afterEach(() => { vi.unstubAllGlobals(); });
 
+it("keeps microphone test running when a saved output device disappeared", async () => {
+  useVoiceStore.setState({ outputDevice: "removed-usb" });
+  vi.stubGlobal("Audio", class extends FakeAudio {
+    constructor() {
+      super();
+      this.setSinkId.mockRejectedValueOnce(new DOMException("removed", "NotFoundError"));
+    }
+  });
+  const view = renderHook(useMicTest);
+  act(() => view.result.current.toggleTesting());
+  await waitFor(() => expect(audio[0]?.play).toHaveBeenCalledOnce());
+  expect(audio[0].setSinkId.mock.calls).toEqual([["removed-usb"], [""]]);
+  expect(view.result.current.isTesting).toBe(true);
+  expect(view.result.current.error).toBeUndefined();
+  expect(useVoiceStore.getState().outputDevice).toBe("removed-usb");
+  view.unmount();
+});
+
+it("a superseded output failure cannot restore default over the newest choice", async () => {
+  useVoiceStore.setState({ outputDevice: "old-output" });
+  let fail!: (error: Error) => void;
+  vi.stubGlobal("Audio", class extends FakeAudio {
+    constructor() {
+      super();
+      this.setSinkId.mockImplementationOnce(() => new Promise<void>((_resolve, reject) => { fail = reject; }));
+    }
+  });
+  const view = renderHook(useMicTest);
+  act(() => view.result.current.toggleTesting());
+  await waitFor(() => expect(audio[0]?.setSinkId).toHaveBeenCalledWith("old-output"));
+  act(() => useVoiceStore.setState({ outputDevice: "new-output" }));
+  await act(async () => fail(new DOMException("removed", "NotFoundError")));
+  await waitFor(() => expect(audio[0].play).toHaveBeenCalledOnce());
+  expect(audio[0].setSinkId.mock.calls).toEqual([["old-output"], ["new-output"]]);
+  expect(view.result.current.error).toBeUndefined();
+  expect(view.result.current.isTesting).toBe(true);
+  view.unmount();
+});
+
 it("uses selected engine and common constraints, then changes engine without recapturing", async () => {
   useVoiceStore.setState({ noiseReductionEngine: "gtcrn" });
   const { result, unmount } = renderHook(useMicTest);

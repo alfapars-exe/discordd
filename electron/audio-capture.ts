@@ -41,7 +41,9 @@ export type SystemCaptureStatus = {
   reason?: "unsupported_platform" | "helper_missing" | "permission_denied" | "spawn_failed" | "startup_timeout" | "invalid_audio_format" | "exited_before_ready" | "runtime_error";
   owner?: "screen_share" | "diagnostic";
 };
-type CaptureOwner = { kind: "screen-share" } | { kind: "diagnostic"; token: string };
+export type CaptureLeaseRequest={kind:"guild"|"p2p"|"group";source:string};
+type CaptureLease={id:string;sender:number;request:CaptureLeaseRequest;start?:Promise<void>};
+type CaptureOwner = { kind: "screen-share";lease?:CaptureLease } | { kind: "diagnostic"; token: string };
 
 /** Factory seam for deterministic lifecycle tests; production uses Electron defaults. */
 export function createAudioCaptureWorker(deps: WorkerDependencies) {
@@ -79,7 +81,9 @@ export function createAudioCaptureWorker(deps: WorkerDependencies) {
 
   function sendCaptureEvent(channel: string, value?: unknown): void {
     if (captureOwner?.kind !== "screen-share") return;
-    deps.getWindow()?.webContents.send(channel, value);
+    const contents=deps.getWindow()?.webContents;
+    if(captureOwner.lease){if(contents&&!contents.isDestroyed()&&contents.id===captureOwner.lease.sender)contents.send("system-capture-lease-event",{leaseId:captureOwner.lease.id,type:channel.replace("capture-audio-",""),value});}
+    else contents?.send(channel,value);
   }
 
   const nativeLog = (level: "info" | "warn" | "error", msg: string, meta?: Record<string, unknown>) =>
@@ -92,7 +96,7 @@ export function createAudioCaptureWorker(deps: WorkerDependencies) {
     if (!win || win.isDestroyed()) { pcmBuffer = []; pcmBufferBytes = 0; return; }
     const merged = pcmBuffer.length === 1 ? pcmBuffer[0] : Buffer.concat(pcmBuffer, pcmBufferBytes);
     pcmBuffer = []; pcmBufferBytes = 0;
-    win.webContents.send("capture-audio-data", merged);
+    sendCaptureEvent("capture-audio-data", merged);
   }
 
   function startFlushTimer(): void {
@@ -268,6 +272,7 @@ export function createAudioCaptureWorker(deps: WorkerDependencies) {
   }
 
   function start(): Promise<void> {
+    if(captureOwner?.kind==="screen-share"&&captureOwner.lease)return Promise.reject(new Error("System audio capture is already in use."));
     if (captureOwner?.kind === "diagnostic") {
       // A live screen share has priority over an opt-in diagnostic run.
       stopNative();
@@ -280,6 +285,25 @@ export function createAudioCaptureWorker(deps: WorkerDependencies) {
       throw error;
     });
   }
+
+  function reserveLease(sender:number,request:CaptureLeaseRequest):string {
+    if(status().state==="unavailable")throw new Error("System audio capture is unavailable.");
+    // Preserve existing explicit guild-share priority over diagnostic capture.
+    if(request.kind==="guild"&&captureOwner?.kind==="diagnostic"){stopNative();captureOwner=null;}
+    if(captureOwner||captureProcess||pendingStart)throw new Error("System audio capture is already in use.");
+    const id=randomUUID();captureOwner={kind:"screen-share",lease:{id,sender,request}};return id;
+  }
+  function startLease(sender:number,id:string):Promise<void>{
+    const owner=captureOwner;
+    if(owner?.kind!=="screen-share"||owner.lease?.id!==id||owner.lease.sender!==sender)return Promise.reject(new Error("System audio capture lease is no longer current."));
+    if(owner.lease.start)return owner.lease.start;
+    owner.lease.start=startNative().catch(error=>{if(captureOwner===owner&&!captureProcess&&!pendingStart)captureOwner=null;throw error;});return owner.lease.start;
+  }
+  function releaseLease(sender:number,id:string):boolean{
+    if(captureOwner?.kind!=="screen-share"||captureOwner.lease?.id!==id||captureOwner.lease.sender!==sender)return false;
+    sendCaptureEvent("capture-audio-stopped");stopNative();captureOwner=null;lastError=undefined;return true;
+  }
+  function retireSender(sender:number){if(captureOwner?.kind==="screen-share"&&captureOwner.lease?.sender===sender)releaseLease(sender,captureOwner.lease.id);}
 
   function startDiagnostic(): Promise<string> {
     if (status().state === "unavailable") return Promise.reject(new Error("System audio capture is unavailable."));
@@ -301,7 +325,7 @@ export function createAudioCaptureWorker(deps: WorkerDependencies) {
   }
 
   function stop(): void {
-    if (captureOwner?.kind !== "screen-share") return;
+    if (captureOwner?.kind !== "screen-share"||captureOwner.lease) return;
     stopNative(); captureOwner = null; lastError = undefined;
   }
 
@@ -331,7 +355,7 @@ export function createAudioCaptureWorker(deps: WorkerDependencies) {
     });
   }
 
-  return { start, stop, shutdown, status, startDiagnostic, stopDiagnostic };
+  return { start, stop, shutdown, status, startDiagnostic, stopDiagnostic, reserveLease,startLease,releaseLease,retireSender };
 }
 
 function helperPath(): string {
@@ -360,3 +384,8 @@ export const shutdownCapture = worker.shutdown;
 export const getCaptureStatus = worker.status;
 export const startDiagnosticCapture = worker.startDiagnostic;
 export const stopDiagnosticCapture = worker.stopDiagnostic;
+
+export const reserveCaptureLease=worker.reserveLease;
+export const startCaptureLease=worker.startLease;
+export const releaseCaptureLease=worker.releaseLease;
+export const retireCaptureSender=worker.retireSender;

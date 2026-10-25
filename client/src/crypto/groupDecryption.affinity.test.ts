@@ -10,6 +10,14 @@ vi.mock("../stores/e2eeStore",()=>({useE2EEStore:{getState:()=>({localDeviceId:"
 vi.mock("../api/clientLog",()=>({logToServer:vi.fn()}));
 const message={id:"m",group_id:"g",user_id:"other",content:null,sender_device_id:"remote",ciphertext:JSON.stringify([{recipient_device_id:"local",ciphertext:"{}"}]),attachments:[],created_at:"2026-10-24T00:00:00Z"} as unknown as GroupDMMessage;
 beforeEach(()=>{vi.clearAllMocks();vi.mocked(keyStorage.getCachedDecryptedMessage).mockResolvedValue(null);vi.mocked(keyStorage.cacheDecryptedMessage).mockResolvedValue(undefined);vi.mocked(signalProtocol.decryptMessage).mockResolvedValue(JSON.stringify({content:"private"}));});
+it("restores cached canonical source order only after exact group/ciphertext affinity, without replacing server order",async()=>{
+  const cached={messageId:"m",content:"cached",channelId:"",dmChannelId:"group:g",timestamp:0,sourceSequence:"9007199254740993",encryptedSourceTag:await groupMessageCacheTag(message)};
+  vi.mocked(keyStorage.getCachedDecryptedMessage).mockResolvedValue(cached);
+  expect((await decryptGroupDMMessages([message]))[0].source_sequence).toBe(cached.sourceSequence);
+  expect((await decryptGroupDMMessages([{...message,source_sequence:"9007199254740994"}]))[0].source_sequence).toBe("9007199254740994");
+  vi.mocked(keyStorage.getCachedDecryptedMessage).mockResolvedValue({...cached,dmChannelId:"group:other"});
+  expect((await decryptGroupDMMessages([message]))[0].source_sequence).toBeUndefined();
+});
 it("does not even read the cache for an invalidated operation",async()=>{
   expect(await decryptGroupDMMessages([message],()=>false)).toEqual([]);
   expect(keyStorage.getCachedDecryptedMessage).not.toHaveBeenCalled();

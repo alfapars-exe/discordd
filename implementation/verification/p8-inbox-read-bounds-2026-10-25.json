@@ -1,0 +1,14 @@
+{
+  "phase": "P8",
+  "status": "implemented_unverified",
+  "scope": "Ctrl+Shift+E marks the captured top unread Inbox source with a 15-second deadline and an account/generation/navigation/source/lifetime guard.",
+  "verification": [
+    "119 focused tests across the shortcut, API timeout, conversation commands and global shortcuts passed.",
+    "TypeScript and scoped ESLint passed.",
+    "Timeout preserves unread state and releases the pending lock for deliberate retry. Navigation away/back, source replacement, account changes and unmount cannot apply a late result or toast."
+  ],
+  "remaining": [
+    "Ctrl+I return toggle is a separate implementation still in progress.",
+    "Real Windows/web keyboard acceptance remains open; unit checks do not close the full chat-shortcuts ledger item."
+  ]
+}

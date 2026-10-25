@@ -1,3 +1,4 @@
+import { sortDMBySource, newerDMSource } from "../../utils/dmSourceOrder";
 import type { StateCreator } from "zustand";
 import type { DMChannelWithUser, DMMessage, ReactionGroup } from "../../types";
 import { useUIStore } from "../uiStore";
@@ -109,7 +110,7 @@ export const createDMWsSlice: StateCreator<
     bufferDMHistoryEvent(message);
     set((state) => {
       const updatedChannels = state.channels.map((ch) =>
-        ch.id === message.dm_channel_id
+        ch.id === message.dm_channel_id && newerDMSource(message,ch.last_message)
           ? {
               ...ch,
               last_message_at: message.created_at,
@@ -117,6 +118,7 @@ export const createDMWsSlice: StateCreator<
               // E2EE messages (the REST list carries null for those).
               last_message: {
                 id: message.id,
+                source_sequence: message.source_sequence,
                 user_id: message.user_id,
                 content: message.content,
                 encryption_version: message.encryption_version,
@@ -156,7 +158,7 @@ export const createDMWsSlice: StateCreator<
         channels: sortedChannels,
         messagesByChannel: {
           ...state.messagesByChannel,
-          [message.dm_channel_id]: [...channelMessages, message],
+          [message.dm_channel_id]: sortDMBySource([...channelMessages, message]),
         },
         typingUsers,
       };

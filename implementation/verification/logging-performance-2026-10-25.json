@@ -1,0 +1,149 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-10-25T21:00:31.430219+03:00",
+  "status": "implemented_and_locally_verified",
+  "git_head_at_verification": "1cf168ae593b2f7f8359539fe8678f91f39f0621",
+  "scope": {
+    "app_log_retention_days": 7,
+    "historical_log_import": false,
+    "deployment_performed": false,
+    "unrelated_worktree_changes_preserved": true
+  },
+  "implemented": [
+    "Late-bound cached component loggers preserving structured severity and attributes",
+    "Sanitized WARN/ERROR fan-out to stdout, optional Sentry and asynchronous admin storage",
+    "Request correlation and one boundary diagnostic with fallback for unreported HTTP 5xx",
+    "512 ERROR and 256 WARN/INFO slots, 64-event or 1-second batches, 2-second writes and 5-second shutdown",
+    "Bounded identical-event grouping preserving different request IDs and diagnostic contents",
+    "Deleted-account guards preserved with atomic batch owner filtering",
+    "Admin search, request/code/component/date filters, occurrence times and memory-only sink health endpoint",
+    "SQLite and PostgreSQL additive migrations for app log diagnostics and persisted runtime diagnostics",
+    "Preview timestamp compatibility, shared requests, 4-fetch limit, 24-hour positive and 1-minute negative cache",
+    "Bulk presence candidate reads with transactional privacy rechecks and shutdown-canceled fresh 5-second budget",
+    "Music timeout classification as 504 retaining media codes and no generic 500 on caller cancellation",
+    "ERROR-only client logging reserve with idle bucket cleanup",
+    "Configurable PostgreSQL 4/2 baseline pool and bounded route histogram/wait-duration metrics"
+  ],
+  "validation": {
+    "go_test_all_packages": {
+      "command": "go test ./...",
+      "status": "passed"
+    },
+    "go_vet": {
+      "command": "go vet ./pkg/... ./middleware ./handlers ./services ./repository .",
+      "status": "passed"
+    },
+    "postgres": {
+      "version": "18.6 (Debian 18.6-1.pgdg12+2)",
+      "target": "disposable loopback-only local Docker database",
+      "status": "passed",
+      "tests": "TestAppLog*, TestOnlineFriendCandidates*, TestOnlineFriendNotification*, TestRuntimeTelemetry*; full native migrations per fresh schema"
+    },
+    "race": {
+      "runtime": "Linux Docker, Go 1.26.8, source snapshot, outbound network disabled",
+      "status": "passed",
+      "packages": [
+        "pkg/logx",
+        "middleware",
+        "services"
+      ],
+      "tests": "ComponentResolves, Pipeline, AppLog, HTTPFailures, CanceledCaller, Preview, OnlineFriend"
+    },
+    "sentry_pipeline": {
+      "status": "passed",
+      "transport": "in-memory fake; no external events sent",
+      "checks": [
+        "sanitization",
+        "grouped attributes",
+        "stable fingerprint",
+        "access record exclusion"
+      ]
+    },
+    "client_tests": {
+      "status": "passed",
+      "files": 4,
+      "tests": 23,
+      "targets": [
+        "AdminLogsPanel.test.tsx",
+        "logTimestamp.test.ts",
+        "clientLog.test.ts",
+        "musicProtocol.test.ts"
+      ]
+    },
+    "client_targeted_eslint": {
+      "status": "passed",
+      "warnings": 0
+    },
+    "client_build": {
+      "command": "npm run build",
+      "status": "passed",
+      "observed_warnings": [
+        "Vite native config __dirname migration warning",
+        "bundle size and mixed static/dynamic import warnings"
+      ]
+    },
+    "route_golden": {
+      "status": "passed",
+      "change": "GET /api/admin/logs/health only"
+    },
+    "diff_whitespace_check": {
+      "status": "passed"
+    }
+  },
+  "measurements": {
+    "sql_batching": {
+      "environment": "Windows amd64, AMD Ryzen 9 7950X3D, disposable SQLite databases",
+      "comparison": "same current schema and guarded SQL; single-row batches versus 64-row batches, not full production before/after latency",
+      "run_1": {
+        "single_ns_per_event": 264674,
+        "batch_64_ns_per_event": 32964,
+        "speedup": 8.029
+      },
+      "run_2": {
+        "single_ns_per_event": 250543,
+        "batch_64_ns_per_event": 33994,
+        "speedup": 7.37
+      },
+      "run_2_memory": {
+        "single_bytes_per_event": 3157,
+        "batch_64_bytes_per_event": 1592.75
+      },
+      "statement_count_for_64_ungrouped_events": {
+        "single": 64,
+        "batched": 1
+      }
+    },
+    "enqueue": {
+      "environment": "Windows amd64",
+      "ns_per_call_range": [
+        850.8,
+        1036
+      ],
+      "bytes_per_call": 464,
+      "allocations_per_call": 7
+    },
+    "isolated_handler_p95": {
+      "environment": "Linux Docker Go 1.26.8, 2000 in-process synthetic requests per scenario; no production network/DB workload",
+      "disabled_ns": 90,
+      "healthy_fake_store_ns": 2610,
+      "unavailable_fake_store_ns": 2431,
+      "healthy_dropped_error_events": 0,
+      "unavailable_store_dropped_error_events_before_shutdown": 1424,
+      "interpretation": "a blocked store does not block the handler; overload loss is intentional, bounded and counted"
+    },
+    "supplied_log_policy_replay": {
+      "http_records": 2908,
+      "routine_records_moved_to_debug": 2163,
+      "http_log_reduction_percent": 74.38,
+      "all_http_5xx_remain_visible": 16,
+      "method": "offline classification of original access records including the 2-second visibility override"
+    }
+  },
+  "remaining_runtime_acceptance": [
+    "Deploy the reviewed revision and verify readiness and startup logs",
+    "Check real admin log visibility, cache hits, music outcomes, pool wait duration and route latency under actual traffic",
+    "No claim that upstream YouTube/network failures have disappeared",
+    "Queue persistence remains bounded best-effort; process crashes, unavailable storage or saturation can lose events"
+  ],
+  "documentation": "ERROR_MANAGEMENT.md"
+}

@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/ws"
 )
 
@@ -84,7 +85,7 @@ func (s *dmService) PinMessage(ctx context.Context, userID, messageID string) er
 		return err
 	}
 
-	if err := s.dmRepo.PinMessage(ctx, messageID); err != nil {
+	if err := s.dmRepo.PinMessageAs(ctx, userID, messageID); err != nil {
 		return fmt.Errorf("failed to pin DM message: %w", err)
 	}
 
@@ -179,6 +180,13 @@ func (s *dmService) SearchMessages(ctx context.Context, userID, channelID, query
 // ─── E2EE Toggle ───
 
 func (s *dmService) ToggleE2EE(ctx context.Context, userID, channelID string, enabled bool) (*models.DMChannel, error) {
+	actor, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if actor == nil || actor.IsBot {
+		return nil, fmt.Errorf("%w: only human users may change conversation encryption", pkg.ErrForbidden)
+	}
 	channel, err := s.verifyChannelMembership(ctx, userID, channelID)
 	if err != nil {
 		return nil, err

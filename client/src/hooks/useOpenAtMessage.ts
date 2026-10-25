@@ -16,6 +16,7 @@ import { useUIStore, type TabServerInfo } from "../stores/uiStore";
 import { useServerStore } from "../stores/serverStore";
 import { useChannelStore } from "../stores/channelStore";
 import { useMessageStore } from "../stores/messageStore";
+import { openGroupMessageAt } from "../utils/groupMessageNavigation";
 import { useDMStore } from "../stores/dmStore";
 import { useAuthStore } from "../stores/authStore";
 import { useMobileStore } from "../stores/mobileStore";
@@ -26,14 +27,18 @@ export type OpenAtMessage = (
   serverId: string,
   channelId: string,
   messageId: string,
-  channelName?: string
+  channelName?: string,
+  context?: { isCurrent: () => boolean }
 ) => Promise<boolean>;
 
-export type OpenAtDMMessage = (dmChannelId: string, messageId: string) => Promise<boolean>;
+export type OpenAtDMMessage = (dmChannelId: string, messageId: string, context?: { isCurrent: () => boolean }) => Promise<boolean>;
+
+export type OpenAtGroupMessage = OpenAtDMMessage;
 
 export function useOpenAtMessage(): {
   openAtMessage: OpenAtMessage;
   openAtDMMessage: OpenAtDMMessage;
+  openAtGroupMessage: OpenAtGroupMessage;
 } {
   const { t } = useTranslation("saved");
   const { t: tCommon } = useTranslation("common");
@@ -52,7 +57,8 @@ export function useOpenAtMessage(): {
   const addToast = useToastStore((s) => s.addToast);
 
   const openAtMessage = useCallback<OpenAtMessage>(
-    async (serverId, channelId, messageId, channelName) => {
+    async (serverId, channelId, messageId, channelName, context) => {
+      if (context && !context.isCurrent()) return false;
       const targetServerId = serverId || activeServerId;
       if (!targetServerId) return false;
 
@@ -76,6 +82,7 @@ export function useOpenAtMessage(): {
       const navigationRevision = useUIStore.getState().navigationRevision;
 
       const found = await fetchAroundMessage(targetServerId, channelId, messageId);
+      if (context && !context.isCurrent()) return false;
       const current = useUIStore.getState();
       if (UI_SHELL_V2 && (current.navigationRevision !== navigationRevision || current.destination.type !== "text" || current.destination.channelId !== channelId)) return found;
       if (!found) {
@@ -95,7 +102,8 @@ export function useOpenAtMessage(): {
   );
 
   const openAtDMMessage = useCallback<OpenAtDMMessage>(
-    async (dmChannelId, messageId) => {
+    async (dmChannelId, messageId, context) => {
+      if (context && !context.isCurrent()) return false;
       const channel = useDMStore.getState().channels.find((c) => c.id === dmChannelId);
       const isSelf = !!channel && channel.other_user.id === currentUserId;
       const label = !channel
@@ -108,7 +116,8 @@ export function useOpenAtMessage(): {
       openTab(dmChannelId, "dm", label);
       const navigationRevision = useUIStore.getState().navigationRevision;
 
-      const found = await fetchMessagesAround(dmChannelId, messageId);
+      const found = await fetchMessagesAround(dmChannelId, messageId, context);
+      if (context && !context.isCurrent()) return false;
       const current = useUIStore.getState();
       if (UI_SHELL_V2 && (current.navigationRevision !== navigationRevision || current.destination.type !== "dm" || current.destination.channelId !== dmChannelId)) return found;
       if (!found) {
@@ -126,5 +135,9 @@ export function useOpenAtMessage(): {
     ]
   );
 
-  return { openAtMessage, openAtDMMessage };
+  const openAtGroupMessage = useCallback<OpenAtGroupMessage>((groupId, messageId, context) =>
+    openGroupMessageAt(groupId, messageId, { isCurrent: context?.isCurrent ?? (() => true),
+      fallbackLabel: tCommon("directMessages"), goneLabel: t("messageGone") }), [tCommon, t]);
+
+  return { openAtMessage, openAtDMMessage, openAtGroupMessage };
 }

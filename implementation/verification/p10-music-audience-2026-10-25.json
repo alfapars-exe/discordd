@@ -1,0 +1,68 @@
+{
+  "phase": "P10",
+  "status": "implemented_unverified",
+  "date": "2026-10-25",
+  "scope": [
+    "State snapshots (including requester-retirement snapshots) and title-bearing playback errors use a shared server-side restricted audience helper; no music BroadcastToServer fallback remains.",
+    "Constructor-injected current voice and direct membership dependencies plus fresh View permission checks restrict delivery to existing current channel/server participants with nonzero JoinedAt and ChannelGeneration.",
+    "Each recipient is checked again immediately before singleton targeted dispatch, including membership, fresh View and exact current voice incarnation. Later recipients cannot retain an earlier authorization snapshot.",
+    "Read-only HTTP state authorization remains View-only; this change does not impose a voice-join requirement on HTTP reads.",
+    "Attempt-owned quiet cleanup reconciles inactive/paused state only when a legitimate active snapshot was actually delivered, preserving accepted queue/session/revision and other actors edits. Unpublished failed attempts remain silent.",
+    "Per-bot publication serialization follows the global requester privacy fence, drains in-flight active deliveries before final inactive delivery, suppresses stopped-bot future snapshots, and leaves replacement publishers intact.",
+    "Trusted unit-test fixtures supply explicit permitted listeners and record targeted delivery, without adding a production allow fallback."
+  ],
+  "verification": [
+    {
+      "command": "go test ./services -run '^TestMusicAudience' -count=1 -timeout=1m",
+      "result": "PASS 2.832s before final recipient-recheck addition"
+    },
+    {
+      "command": "go test ./services -run '^TestMusicAudience|^TestStopBot|^TestMusicAccess|^TestMusicRequesterPrivacy' -count=1 -timeout=2m",
+      "result": "PASS final source services8.002s"
+    },
+    {
+      "command": "go test ./services ./handlers -count=1 -timeout=5m",
+      "result": "PASS final source services36.119s/handlers6.476s. Initial run identified one final-stop fixture missing explicit audience; corrected its fixture without weakening the final-event assertion. Earlier pre-final recipient-recheck run passed38.251s/5.849s."
+    },
+    {
+      "command": "docker run --rm --mount type=bind,source=C:\\Users\\PARS\\Desktop\\PROJELER\\HiChat\\discordd\\server,target=/work,readonly --mount type=volume,source=hichat-go-qa-modules,target=/go/pkg/mod --mount type=volume,source=hichat-go-qa-build,target=/root/.cache/go-build --workdir /work -e CGO_ENABLED=1 golang:1.26.10-bookworm go test ./services ./handlers -run 'TestMusic|TestPlayLoop|TestGetOrCreateBot|TestStopBot|TestEnqueue' -race -count=1 -timeout=4m",
+      "result": "NOT PASS: services exceeded4m (242.217s) during concurrent race/native workloads; handlers passed3.201s. Isolated extraction/Stop race passed7.369s and final-source broad rerun with8m budget passed174.326s/3.212s below."
+    },
+    {
+      "command": "docker run --rm --mount type=bind,source=C:\\Users\\PARS\\Desktop\\PROJELER\\HiChat\\discordd\\server,target=/work,readonly --mount type=volume,source=hichat-go-qa-modules,target=/go/pkg/mod --mount type=volume,source=hichat-go-qa-build,target=/root/.cache/go-build --workdir /work -e CGO_ENABLED=1 golang:1.26.10-bookworm go test ./services -run '^TestMusicControlStopDuringExtractionDoesNotReconnectStaleSession$' -race -count=1 -timeout=30s",
+      "result": "PASS final source services7.369s"
+    },
+    {
+      "command": "docker run --rm --mount type=bind,source=C:\\Users\\PARS\\Desktop\\PROJELER\\HiChat\\discordd\\server,target=/work,readonly --mount type=volume,source=hichat-go-qa-modules,target=/go/pkg/mod --mount type=volume,source=hichat-go-qa-build,target=/root/.cache/go-build --workdir /work -e CGO_ENABLED=1 golang:1.26.10-bookworm go test ./services ./handlers -run 'TestMusicAudience|TestMusicAccess|TestMusicRequesterPrivacy|TestStopBot|TestPlayLoop' -race -count=1 -timeout=4m",
+      "result": "PASS final source services115.783s/handlers3.169s"
+    },
+    {
+      "command": "GOTOOLCHAIN=go1.26.10 golangci-lint 2.12.2 run --config ../.golangci.yml --timeout 3m ./handlers/... ./services/... ./repository/...",
+      "result": "PASS final source:0 issues; executable LOCALAPPDATA/Temp/hichat-golangci-lint-2.12.2/golangci-lint-2.12.2-windows-amd64/golangci-lint.exe"
+    },
+    {
+      "command": "go test . -run '^$' -count=1 -timeout=1m",
+      "result": "PASS final source2.856s, init dependency wiring compiled; no tests selected"
+    },
+    {
+      "command": "git diff --check -- server/init_services.go server/services",
+      "result": "PASS no whitespace errors"
+    },
+    {
+      "command": "docker run --rm --mount type=bind,source=C:\\Users\\PARS\\Desktop\\PROJELER\\HiChat\\discordd\\server,target=/work,readonly --mount type=volume,source=hichat-go-qa-modules,target=/go/pkg/mod --mount type=volume,source=hichat-go-qa-build,target=/root/.cache/go-build --workdir /work -e CGO_ENABLED=1 golang:1.26.10-bookworm go test ./services ./handlers -run 'TestMusic|TestPlayLoop|TestGetOrCreateBot|TestStopBot|TestEnqueue' -race -count=1 -timeout=8m",
+      "result": "PASS final source full all-music race: services174.326s/handlers3.212s; no race report or skipped failing assertion."
+    }
+  ],
+  "tests": [
+    "State and error denied-recipient matrix: missing/failed deps/fresh resolver, zero voice markers, leave/rejoin/admin out-back, leave during permission lookup, wrong channel/server/type, lost membership/View. Permitted listener gets exact scoped state/error event and server_id.",
+    "Earlier candidate loses membership or View while resolving later candidate: final per-recipient recheck suppresses earlier candidate for state and error.",
+    "Actual local SQLite paused-queue test assigns an unconnected local LiveKit room object (no join/network), accepts another actor repeat edit and active snapshot, rejects creator and delivers same-revision inactive paused reconciliation preserving queue/order/mode.",
+    "Blocked in-flight active targeted delivery plus concurrent quiet cleanup proves active then inactive ordering and no later stopped-bot state; existing replacement and unclaimed-failure controls remain."
+  ],
+  "remaining": [
+    "QA binaryc735 contains the previous access slice only, not this audience/reconciliation source. No compiled HTTP/WS runtime acceptance or production rollout is claimed here.",
+    "Real two-client encrypted audible YouTube playback, installed Windows update and final committed-source CI remain separate gates. No media/network/production operation or schema migration in this slice.",
+    "Revocation after a WebSocket event is enqueued cannot recall that event. Authorization is revalidated per recipient immediately before enqueue, within one bounded whole-publication timeout.",
+    "Performance measurement remains pending: current two-pass audience checks perform two direct membership and two fresh permission resolutions per candidate. A measured single-final-check optimization may be possible; no speculative optimization was mixed into this slice."
+  ]
+}

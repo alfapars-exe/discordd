@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ElectronRegisteredGame, ElectronRegisteredGamesSnapshot } from "../../types/electron";
 import RegisteredGamesSettings from "./RegisteredGamesSettings";
@@ -58,6 +58,18 @@ describe("RegisteredGamesSettings", () => {
     fireEvent.click(checkbox);
     await waitFor(() => expect(setSharing).toHaveBeenCalledWith(game.id, true));
     expect(checkbox).toBeChecked();
+  });
+
+  it("associates the join adapter explicitly, without guessing from the executable or display name", async () => {
+    const setAdapter = vi.fn().mockResolvedValue(true);
+    setApi({ getRegisteredGames: vi.fn().mockResolvedValue({ detection: "available", backgroundDetectionEnabled: true, games: [game] }), setRegisteredGameJoinAdapter: setAdapter });
+    render(<RegisteredGamesSettings />);
+    const select = await screen.findByRole("combobox", { name: "cs2JoinAdapter" });
+    expect(select).toHaveValue("none");
+    fireEvent.change(select, { target: { value: "cs2-steam" } });
+    await waitFor(() => expect(setAdapter).toHaveBeenCalledWith(game.id, "cs2-steam"));
+    expect(select).toHaveValue("cs2-steam");
+    expect(screen.getByRole("button", { name: "cs2OfferShare" })).toBeDisabled(); // game is not shared
   });
 
   it("changes the local foreground-overlay opt-in independently from game-activity sharing", async () => {
@@ -204,4 +216,18 @@ describe("RegisteredGamesSettings", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("registeredGamesSaveError");
     expect(backgroundToggle).toBeChecked();
   });
+});
+
+it("orders actual recent timestamps newest first and separates never-seen added records",async()=>{
+ setApi({getRegisteredGames:vi.fn().mockResolvedValue({detection:"available",backgroundDetectionEnabled:false,games:[{...game,id:"old",displayName:"Older",running:false,lastSeenAt:"2026-10-20T10:00:00Z"},{...game,id:"never",displayName:"Unseen",running:false,lastSeenAt:null},{...game,id:"new",displayName:"Newest",running:false,lastSeenAt:"2026-10-25T10:00:00Z"}]})});render(<RegisteredGamesSettings/>);await screen.findByText("Newest");
+ const recent=screen.getByText("registeredGamesRecent").parentElement!;expect(within(recent).getAllByRole("region").map(node=>node.getAttribute("aria-label"))).toEqual(["Newest","Older"]);expect(within(recent).queryByText("Unseen")).toBeNull();expect(within(screen.getByText("registeredGamesAddedUnseen").parentElement!).getByText("Unseen")).toBeInTheDocument();
+});
+it("keeps a failed name draft for retry and publishes only the saved display name",async()=>{
+ const rename=vi.fn().mockRejectedValueOnce(new Error("disk")).mockResolvedValueOnce(true);setApi({getRegisteredGames:vi.fn().mockResolvedValue({detection:"available",games:[game]}),setRegisteredGameName:rename});render(<RegisteredGamesSettings/>);fireEvent.click(await screen.findByRole("button",{name:"registeredGamesRename"}));const input=screen.getByRole("textbox",{name:"registeredGamesName"});fireEvent.change(input,{target:{value:"New title"}});fireEvent.click(screen.getByRole("button",{name:"registeredGamesNameSave"}));expect(await screen.findByRole("alert")).toHaveTextContent("registeredGamesSaveError");expect(input).toHaveValue("New title");expect(screen.getByText("Sample Game")).toBeInTheDocument();fireEvent.click(screen.getByRole("button",{name:"registeredGamesNameSave"}));await screen.findByText("New title");expect(rename).toHaveBeenLastCalledWith(game.id,"New title");expect(screen.queryByRole("textbox")).toBeNull();expect(screen.queryByText("Sample Game")).toBeNull();
+});
+
+it("explains invalid names and never silently submits path/control/empty/overlong drafts",async()=>{
+ const rename=vi.fn();setApi({getRegisteredGames:vi.fn().mockResolvedValue({detection:"available",games:[game]}),setRegisteredGameName:rename});render(<RegisteredGamesSettings/>);fireEvent.click(await screen.findByRole("button",{name:"registeredGamesRename"}));const input=screen.getByRole("textbox",{name:"registeredGamesName"});
+ for(const value of ["   ","C:/Games/game.exe","bad\tname"," "+"x".repeat(80)+" "]){fireEvent.change(input,{target:{value}});expect(input).toHaveAttribute("aria-invalid","true");expect(screen.getByText("registeredGamesNameInvalid")).toBeInTheDocument();expect(screen.getByRole("button",{name:"registeredGamesNameSave"})).toBeDisabled()}
+ expect(rename).not.toHaveBeenCalled();fireEvent.change(input,{target:{value:"Good name"}});expect(input).toHaveAttribute("aria-invalid","false");expect(screen.queryByText("registeredGamesNameInvalid")).toBeNull();expect(screen.getByRole("button",{name:"registeredGamesNameSave"})).toBeEnabled();fireEvent.click(screen.getByRole("button",{name:"registeredGamesNameCancel"}));expect(screen.queryByRole("textbox")).toBeNull();expect(rename).not.toHaveBeenCalled();
 });

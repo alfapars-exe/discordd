@@ -1,0 +1,46 @@
+{
+  "phase": "P10",
+  "status": "implemented_unverified",
+  "scope": [
+    "Explicit sticky protocol 2 adoption adds durable session identity, revisions and actor-bound request receipts on existing music endpoints.",
+    "Queue/head changes and the exact response receipt share a transaction. Exact indeterminate retries preserve the original UUID and payload; deliberate repeated additions use distinct IDs.",
+    "Historical stop/skip receipts acknowledge the previous result without changing a replacement session. Track controls bind the expected queue item as well as revision.",
+    "Legacy callers remain compatible only until explicit channel adoption; every legacy mutation rechecks adoption under the session lock.",
+    "Current channel view/server/type/voice membership gates protect controls. Existing remote moderator Stop remains available; read-only state never adopts.",
+    "Client current-scope HTTP refresh can accept an authoritative rotated session; stale HTTP and old-session WS cannot replace newer state. Stop followed by Play explicitly re-adopts the current session.",
+    "Server deletion explicitly removes music receipts, sessions and heads even with foreign keys disabled. Schema coverage checks retain their full assertion on SQLite and PostgreSQL.",
+    "Account anonymization removes that actor's retry receipts containing cached requester display metadata; unrelated receipts and shared history remain."
+  ],
+  "verification": {
+    "client_full": "344 files, 3323 tests passed after rotation fix",
+    "client_final_focused": "68 tests passed after the explicit read-only GET case",
+    "client_static": "Production build and scoped ESLint passed",
+    "backend_native": "Full services 29.184s, handlers 6.180s, repository 69.398s passed; current-source TestMusicControl rerun 4.842s passed",
+    "backend_postgres": "Actual disposable PostgreSQL 18.6 parity passed 9.740s, including all music/cascade families, every-server-table schema guard and FK-on/FK-off account anonymization; no skipped coverage guard",
+    "backend_race": "Linux Go1.26.10 CGO race: services 57.319s, handlers 3.205s, repository 82.066s passed",
+    "backend_lint": "Pinned Go1.26.10 golangci-lint: zero issues",
+    "route_contract_follow_up": "CI40177037782 exposed missing control-session route golden/declared-handler gate registration. Added the exact route and documented the existing ViewChannel/Speak/current-voice checks, without weakening guards. Route golden/permission/no-duplicate tests then passed locally in 2.919s; new-source CI still required.",
+    "route_fixed_source_ci": {
+      "source": "56bf33b3ddd5eab73ce3b1235a779eea390bde82",
+      "run": 40177894501,
+      "jobs_passed": 21,
+      "scope": "Committed protocol plus Inbox/welcome checkpoint only; subsequent requester privacy, expression filters and Go Live follow-ups require separate final-source CI."
+    },
+    "actual_local_http": {
+      "source": "2c35c8ef55b687cc9e664dc51e457b81f841aeaf",
+      "checks_passed": 14,
+      "scope": "Compiled server and owned loopback SQLite: readonly GET does not adopt, unauthenticated/bot/wrong-server/text-channel denial, voice-required adoption and enqueue, moderator Stop rotation, exact retry, changed payload/stale request conflicts, legacy/partial metadata rejection and explicit server cascade cleanup",
+      "limits": "A control head was explicitly seeded as a fixture. No voice join, extractor, playback, encryption or WS round-trip acceptance. No production or external media calls.",
+      "upgrade": "Online SQLite QA backup and upgraded DB integrity checks passed; both new control tables present. This is not a production backup or rollback acceptance."
+    },
+    "final_review_follow_up": "HTTP inactive-state database failure returns safe 500, not empty success; native TestMusicControl services4.597s/handlers1.795s and focused Linux race services11.004s/handlers3.126s passed; final pinned lint zero issues",
+    "source_self_scan": "0 blocking matches, 344 review rows; reviewed added non-security shuffle randomness and synthetic local cookie/file fixtures. Existing path containment remains SafeJoin-protected. This is not an exhaustive security acceptance."
+  },
+  "remaining": [
+    "Subsequent requester privacy, expression-filter and Go Live changes require their own final-source CI.",
+    "Actual two-client HTTP/WS behavior and audible encrypted YouTube playback remain acceptance gates; mocked media tests do not satisfy them.",
+    "Queue requester privacy follow-up is recorded in p2-music-requester-privacy-2026-10-25.json; historical at-rest backfill and real device acceptance remain open.",
+    "Installed Windows update, migrations on a restored production backup and rollback verification remain separate gates. Music must be quiesced and a coherent backup restored for binary rollback: older binaries do not maintain the new durable control heads. No automatic queue-dropping reconciliation is provided.",
+    "No new production or Windows publication; release 2.11.111 is unchanged."
+  ]
+}

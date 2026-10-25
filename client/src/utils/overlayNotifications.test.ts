@@ -15,6 +15,13 @@ const project = (items: AppNotification[], extra = {}) => projectOverlayNotifica
 });
 
 describe("overlay notification metadata", () => {
+  it("projects accepted-DM source metadata as a generic message, without treating requests or unknown sources as messages", () => {
+    const dm=notification({kind:"system",dm_channel_id:"dm",message_id:"message",payload:{action:"incoming_message",source:"dm"}});
+    expect(project([dm])).toEqual([{id:"n1",category:"message"}]);
+    expect(project([{...dm,payload:{action:"incoming_message",source:"unknown"}}])).toEqual([]);
+    expect(project([{...dm,server_id:"foreign"}])).toEqual([]);
+    expect(project([{...dm,kind:"dm_request"}])).toEqual([{id:"n1",category:"dm_request"}]);
+  });
   it("projects only bounded metadata and deduplicates real unread rows", () => {
     expect(project([notification(), notification(), ...[2, 3, 4].map((i) => notification({ id: `n${i}` }))]))
       .toEqual([1, 2, 3].map((i) => ({ id: `n${i}`, category: "mention" })));
@@ -53,4 +60,11 @@ describe("overlay notification metadata", () => {
       expect(project([n], { preferences: { ...DEFAULT_NOTIFICATION_PREFERENCES, upcomingEventNotifications: false } })).toEqual([]);
     }
   });
+});
+
+it("projects canonical group metadata only and refuses ambiguous sources or body-bearing group payloads",()=>{
+ const n=notification({kind:"system",group_dm_channel_id:"group",message_id:"source",payload:{action:"incoming_message",source:"group"}});
+ expect(project([n])).toEqual([{id:"n1",category:"message"}]);
+ expect(project([{...n,dm_channel_id:"dm"}])).toEqual([]);
+ expect(project([{...n,payload:{...n.payload,body:"secret"}}])).toEqual([]);
 });

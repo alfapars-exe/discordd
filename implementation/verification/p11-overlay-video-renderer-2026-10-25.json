@@ -1,0 +1,76 @@
+{
+  "date": "2026-10-25",
+  "scope": "P11 renderer/prefs and exact main-to-HUD real video/stream integration",
+  "status": "implemented_unverified",
+  "owned_paths": [
+    "client/src/hooks/useOverlayMediaSender.ts",
+    "client/src/hooks/useOverlayMediaSender.test.ts",
+    "client/src/utils/overlayMediaUIContract.ts",
+    "client/src/utils/overlayMediaUIContract.test.ts",
+    "client/src/components/voice/media/OverlayMediaPanel.tsx",
+    "client/src/components/voice/media/OverlayMediaPanel.test.tsx",
+    "client/src/components/voice/VoiceOverlayContent.tsx",
+    "client/src/components/layout/AppLayout.tsx",
+    "client/src/stores/slices/voiceSettingsSlice.ts",
+    "client/src/stores/slices/voiceSettingsSlice.overlay-media.test.ts",
+    "client/src/components/settings/VoiceSettings.tsx",
+    "client/src/components/settings/VoiceSettings.audio.test.tsx",
+    "client/src/i18n/locales/en/settings.json",
+    "client/src/i18n/locales/tr/settings.json"
+  ],
+  "source_hashes": {
+    "client/src/hooks/useOverlayMediaSender.ts": "5763726c827c8fdfc966131317e6efdbd4ceb5e8b0fc54a73ff456f1c56d77fc",
+    "client/src/hooks/useOverlayMediaSender.test.ts": "d40fda6c69dd0a9582af6e6ece9cd76fec612b8762d9e380717d8afc453581b3",
+    "client/src/utils/overlayMediaUIContract.ts": "75dd8a39c8943739e8700bcf5bcdd206fb5520ae375b82582fd59340792fda82",
+    "client/src/utils/overlayMediaUIContract.test.ts": "bc6d3dd5eac0c70e0c60c0b393e3dbd593fe442021be1b239f0da50c2f1012f8",
+    "client/src/components/voice/media/OverlayMediaPanel.tsx": "4cbd7f7bbb3c9fa4053f2dd2784da8cd943ae0e81621c30df4ea32597d134014",
+    "client/src/components/voice/media/OverlayMediaPanel.test.tsx": "d58cd40db0f6a53ce61069b8160509744110b4fc3f3bad62170dfed76282a0cb",
+    "client/src/components/voice/VoiceOverlayContent.tsx": "18aeb5acc4b27c4c22275bc4444fd2dcb74ebed8916b13c281976f6d7eb343b6",
+    "client/src/components/layout/AppLayout.tsx": "e10515f12215b8b531ddfe643348ed074bd97ac217cf89c10382eb48390b3e31",
+    "client/src/stores/slices/voiceSettingsSlice.ts": "43a2225824fa9bac5c7d7b8bef2244707d44295f474deed93def5ed1a5881dab",
+    "client/src/stores/slices/voiceSettingsSlice.overlay-media.test.ts": "ed648718270c8494987d63a4d347babe50c6348068642f68882af8f204ae417b",
+    "client/src/components/settings/VoiceSettings.tsx": "ab943f5912cdc1a19262c4df044a308306c0850cca22ec24310eaec4e2c0a70f",
+    "client/src/components/settings/VoiceSettings.audio.test.tsx": "54da887f78082e7c0beb1c3cce03e7e04d67c0fbcee2ae2c255a55419fc915b9",
+    "client/src/i18n/locales/en/settings.json": "8019ba5607d46c3905558b3f2d9e4b94c29bfc85746e51090419af8366dab5a3",
+    "client/src/i18n/locales/tr/settings.json": "975a7cd7241281200075ba24165b6982f6069b85aff894dcbf1c8b2cc2cd3462"
+  },
+  "behavior": [
+    "Independent device-only voiceOverlayVideo/voiceOverlayStreams defaults false; persist locally, survive account preference reset, ignore cloud injection and never enter cloud preference writes.",
+    "Single AppLayout sender consumes only selected authorizedVideoSources context, max2camera+2screen; native ready/visible/allowedKinds/generation and exact account/auth/context/source guards precede lease open and media bridge construction.",
+    "Stable source identity/availability signature avoids reopen on speaking, array-only or label-only refresh. Auth/windowhide/prefs/source/key revocation retires bridge and viewport leases synchronously; pending lease cancel sends scoped end before any clone bridge exists.",
+    "HUD attaches media/lease listeners before ready acknowledgement, reacknowledges after native load snapshot, handles doc hidden/readyfalse and exact session:revision stale end/metadata/video callbacks. No app user IDs/auth/media keys sent to HUD.",
+    "Real received video-only MediaStream attached to muted playsInline video; original borrowed raw is never stopped by React binding. Existing bridge owns its own received/cloned resources.",
+    "Resize/intersection/document visibility report actual bounded per-tile demand up to1920x1080/60 (current target30fps); hidden/playback-failed demand becomes false/0. Metadata-only empty/connecting/unavailable states are explicit, no fake source preview.",
+    "UI respects native mediaHeight max320DIP and four-tile grid; kind permission changes remove forbidden DOM video before asynchronous teardown."
+  ],
+  "checks": {
+    "focused": "7files76tests PASS3.34s:sender,receiver,UIcontract,existingHUDcontent,VoiceSettings,devicepref/pastcompat suites",
+    "typescript": "npx tsc -b exit0 final candidate (also compiles other agents current source/native contracts)",
+    "lint": "12 owned client TS/TSX paths ESLint exit0",
+    "diff_check": "exact14ownedpaths exit0",
+    "build": "Deferred to root coordinated full integration build after all three agents freeze; no full-client or immutable acceptance claim."
+  },
+  "shared_locale_scope": {
+    "keys": [
+      "voiceOverlayVideo",
+      "voiceOverlayVideoDesc",
+      "voiceOverlayStreams",
+      "voiceOverlayStreamsDesc",
+      "voiceOverlayMediaTitle",
+      "voiceOverlayMediaEmpty",
+      "voiceOverlayMediaUnavailable",
+      "voiceOverlayMediaConnecting"
+    ],
+    "qualification": "Only own eight settings keys per language; current wholefile hashes include foreign logging entries. Do not stage locale wholefiles blindly."
+  },
+  "dependencies": [
+    "Native broker/preload/types/mediaHeight/window policy owned by soundboard_review_fix.",
+    "Authorized source adapters/public SDK visibility coordinator/bridge tagged P2P union owned by dm_pg_fixtures.",
+    "Underlying actual-bridge clone ownership tests belong to that peer; this receipt proves integration calls and fences, not independent physical clone/runtime acceptance."
+  ],
+  "remaining": [
+    "Full integrated client/build/native tests and real Windows video overlay with authorized guild/group/P2P sources remain open.",
+    "DPI/multi-monitor/occlusion/driver/game window/anti-cheat/exclusive-fullscreen limitations remain runtime gates.",
+    "No capture/new LiveKit room/audio/server publication/browser/external operation/staging/commit performed."
+  ]
+}

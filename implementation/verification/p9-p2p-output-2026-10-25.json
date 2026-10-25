@@ -1,0 +1,72 @@
+{
+  "phase": "P9",
+  "date": "2026-10-25",
+  "status": "implemented_unverified",
+  "owned_paths": [
+    "client/src/audio/p2pPlayback.ts",
+    "client/src/audio/p2pPlayback.test.ts",
+    "client/src/components/p2p/P2PAudioSink.tsx",
+    "client/src/components/p2p/P2PAudioSink.test.tsx",
+    "client/src/components/p2p/P2PCallScreen.tsx",
+    "client/src/i18n/locales/en/voice.json",
+    "client/src/i18n/locales/tr/voice.json",
+    "implementation/verification/p9-p2p-output-2026-10-25.json",
+    "client/src/styles/globals.css"
+  ],
+  "scope": [
+    "P2PAudioSink is the sole ordinary one-to-one P2P remote audio owner and remains mounted across main-chat navigation. Remote video presentation is muted so its shared stream cannot produce duplicate or uncontrolled audio.",
+    "Remote audio tracks feed a WebAudio gain and MediaStreamDestination, then one routed audio element. The graph never also connects to AudioContext.destination. Master times peer-personal volume preserves zero and supports up to 200 percent; local mute, local deafen and server deafen silence remote playback without changing microphone publication or mute state.",
+    "Selected output is applied before playback. Only a missing selected device (NotFoundError) permits system-default fallback, which is disclosed in UI. Unsupported custom routing, permission denial, context/playback failure and ten-second hung operations fail explicitly with a retry action. No success is inferred merely from assigning a stream.",
+    "Output/call/stream/connection transitions and direct account/auth-generation subscriptions stop obsolete playback. Abort, pause, mute, srcObject detach and graph cleanup prevent late sink/play promises from reviving obsolete audio. Owned destination tracks are stopped; borrowed remote microphone/video tracks are not.",
+    "A WeakMap binds a stream to its first adopted account, auth generation, call, peer and connection. A retained previously adopted stream cannot be reassigned to another login or replacement call. This supplements current-store checks; it is not independent proof of signaling/authentication provenance before first adoption.",
+    "New remote audio tracks are mixed through the same controlled gain; removed/ended tracks detach. Device identifiers remain device-local through existing preference behavior. No server publication, microphone pipeline, group call capture or undeafen semantics changed."
+  ],
+  "verification": {
+    "focused": {
+      "result": "passed",
+      "files": 7,
+      "tests": 62,
+      "command": "npx.cmd vitest run src/audio/p2pPlayback.test.ts src/components/p2p/P2PAudioSink.test.tsx src/stores/p2pCallStore.audio.test.ts src/audio/liveMicrophone.test.ts src/hooks/useMicTest.test.tsx src/hooks/useOutputDeviceSync.test.ts src/audio/microphonePipeline.test.ts",
+      "scenarios": [
+        "Selected sink before play, zero and amplified gain, no direct destination double path",
+        "Missing-only default fallback; unsupported/denied/context/play errors and bounded hung routing",
+        "Late old sink success/failure cannot replace a newer selected output; late play remains paused after cancellation",
+        "Dynamic remote tracks and cleanup without stopping borrowed microphone/video tracks",
+        "Master and personal zero, local mute, local/server deafen without transmission mutation",
+        "Output/stream/connection/call/end/owner/auth-generation/unmount fences",
+        "Retained adopted stream rejected after relogin, switching to other participant or component remount",
+        "Explicit failure/retry and stale readiness cannot clear replacement failure",
+        "Actual remote video DOM is muted while the dedicated audio owner reports fallback",
+        "Existing shared microphone/LiveKit/P2P capture and routing regression tests"
+      ]
+    },
+    "static": {
+      "typescript": "npx.cmd tsc -b --pretty false passed",
+      "lint": "Scoped ESLint passed for changed TS/TSX files",
+      "diff": "git diff --check passed for owned paths"
+    },
+    "combined_full_client": {
+      "result": "pending",
+      "owner": "root",
+      "note": "Root is running integrated tests on the final candidate. This receipt does not claim their result."
+    }
+  },
+  "remaining": [
+    "No physical speaker/microphone, two-client, actual browser autoplay, device unplug/replug or multi-monitor acceptance was performed for this slice.",
+    "GroupDMCall still uses its separate SDK capture/playback path without the main room shared microphone/output/volume hooks. That integration remains separate and is not fixed here.",
+    "VoiceSettings useAudioDevices still requests microphone permission while opening settings and lacks devicechange refresh plus an honest enumeration error state. Device-detachment recovery and application-level ended-capture handling remain separate.",
+    "Existing voiceStore undeafen behavior automatically unmutes the microphone; changing that behavior remains a separate deliberate semantics/privacy follow-up.",
+    "The stream binding begins at first adoption and relies on current store/account/auth-generation/call/connection state. No broader signaling identity or cryptographic provenance guarantee is claimed.",
+    "No production, Windows package, full P9 acceptance, commit or push was performed by this subagent."
+  ],
+  "final_client_candidate": {
+    "result": "passed",
+    "files": 359,
+    "tests": 3513,
+    "log": "C:/Users/PARS/AppData/Local/Temp/hichat-p2p-dm-final-full-20261025.log",
+    "build": "TypeScript+production Vite build passed; final cosmetic fixed-status CSS placement added afterwards, no application JS changed.",
+    "build_log": "C:/Users/PARS/AppData/Local/Temp/hichat-p2p-dm-final-build-20261025.log",
+    "limits": "Automated checks only; physical/two-HiChat-client/Windows acceptance remains open."
+  },
+  "root_layout_follow_up": "Audio failure/retry status is fixed-position and responsive below modals; AppLayout mounts the sink outside the main full-height layout, so an unpositioned div could be offscreen. Visual browser acceptance remains pending."
+}

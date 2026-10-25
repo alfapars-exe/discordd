@@ -1,0 +1,15 @@
+{
+  "date": "2026-10-25",
+  "commit": "0d89bedd",
+  "status": "scoped_tests_passed",
+  "behavior": "Settings enumerate without getUserMedia; devicechange and explicit refresh use latest-response ordering; unsupported and failed enumeration are visible and retryable.",
+  "checks": {
+    "focused": "useAudioDevices.test.tsx and VoiceSettings.audio.test.tsx: 29 tests passed",
+    "typecheck": "tsc --noEmit passed",
+    "lint": "Scoped ESLint passed with zero warnings"
+  },
+  "limits": [
+    "No physical unplug/replug or permission prompt was exercised.",
+    "This does not establish capture recovery, speaker routing or browser/device acceptance."
+  ]
+}

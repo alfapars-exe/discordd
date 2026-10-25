@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="tr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>HiChat yerel oyun istemcisi</title></head>
+<body>
+  <main style="max-width:760px;margin:32px auto;font:16px system-ui;padding:16px">
+    <h1>HiChat yerel oyun istemcisi</h1>
+    <p>Yalnız yerel geliştirme testi. Bot kendi kimliği ve cihaz anahtarlarıyla çalışır. Token yalnız bu sayfanın belleğinde tutulur. Özel anahtarlar bot hesabına ait IndexedDB alanında kalır. İnsan hesabının oturumunu kullanmaz.</p>
+    <form id="connect-form"><label>Uygulama token’ı <input id="game-token" type="password" autocomplete="off" required></label> <button>Bağlan</button></form>
+    <p id="identity" role="status">Bağlı değil</p>
+    <form id="send-form"><p><label>Alıcı kullanıcı kimliği <input id="recipient" required></label></p><p><label>Mesaj <textarea id="message" required maxlength="2000"></textarea></label></p><button id="send" disabled>Şifreli gönder</button></form>
+    <p><button id="poll" disabled>Şifreli yanıtları oku</button> <button id="disconnect" disabled>Bağlantıyı kes</button></p>
+    <p id="result" role="status"></p><p id="error" role="alert"></p><ol id="received" aria-label="Çözülen yanıtlar"></ol>
+  </main>
+  <script type="module" src="/src/qa/gameClient.ts"></script>
+</body></html>

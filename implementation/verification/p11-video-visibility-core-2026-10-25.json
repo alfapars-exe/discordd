@@ -1,0 +1,43 @@
+{
+  "date": "2026-10-25",
+  "scope": "P11 isolated public-SDK manual video visibility coordinator core only; not wired to any existingRoom/overlay",
+  "owned_paths": [
+    "client/src/video/videoVisibilityCoordinator.ts",
+    "client/src/video/videoVisibilityCoordinator.test.ts"
+  ],
+  "source_sha256": {
+    "client/src/video/videoVisibilityCoordinator.ts": "8830805b65a1752d94c12ad07ac9e568f5c592e7418d7870618ff32f100c2f12",
+    "client/src/video/videoVisibilityCoordinator.test.ts": "8fc3456aa29d2896cdb6cf0d71c3425abbb9023fbba2921159e55efea8877f42"
+  },
+  "behavior": [
+    "CapturedRoomidentity/sessionnonce/keycontext/epoch/authowner+generation, requiredscope notification; scopechange retiresexactleases.",
+    "Remoteactualparticipant/publication/SDKtrack/rawtrack identities checked; globalper-publicationowner fencesstaleoldcoordinator releases fromnewowner.",
+    "Only remoteVIDEO publications in explicitmanualRoomadaptiveStreamfalse ANDactualtrackisAdaptiveStreamfalse accepted. ExistingadaptiveRooms rejectedwithoutstickysetEnabled/dimensions writes.",
+    "CallerexistingauthorizedSubscribedpredicate plusSDKisSubscribed/permission/admission/connected/live-track required. No setSubscribed calls, no audio/localcamera/capture changes.",
+    "Realmain/overlay viewportleaseunion, max32views/publication, max1920x1080 and60fps. Dimensions/FPS applied beforeenabledtrue, no actualvisiblelease setsenabledfalse; geometryinvalid retiresonlyownview.",
+    "Publicmethods setEnabled/setVideoDimensions/setVideoFPS only; SDKinternals notusedbyproductioncore. TestfixtureusesactualSDKsetTrack toconstructrealpublication.",
+    "Throwingadmission/authorization/SDKsetters failclosed,best-effortdisable; lifecyclecallbacks cleanupwithoutthrowing orstaleownerwrites."
+  ],
+  "verified": [
+    {
+      "cwd": "client",
+      "command": "npx vitest run src/video/videoVisibilityCoordinator.test.ts --reporter=dot",
+      "result": "25testsPASS1.69s,includingactualinstalledRemoteTrackPublication/RemoteVideoTrack publicsettingsemantics"
+    },
+    {
+      "cwd": "client",
+      "command": "npx eslint src/video/videoVisibilityCoordinator.ts src/video/videoVisibilityCoordinator.test.ts",
+      "result": "exit0,0issues"
+    },
+    {
+      "cwd": "client",
+      "command": "npx tsc -b",
+      "result": "Finalfrozencoreproject-referencecheck exit0 session67495"
+    }
+  ],
+  "remaining": [
+    "No RoomadaptiveStream settingchanged. No hook/nativeIPC/settings/AppLayout/transport/prefs integration.",
+    "Video/Streams livewidgets remainNOTimplemented bythiscore; eventualintegrationneedsactualviewportobservers,existingauthorization+watchpolicy,encryptedmedia bridge andphysicalWindows minimizedmain acceptance.",
+    "No backend/logging edits,index/stage/commit/push,production/browser/hardware operations."
+  ]
+}

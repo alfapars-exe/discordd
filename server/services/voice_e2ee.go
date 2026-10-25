@@ -5,6 +5,7 @@ package services
 
 import (
 	cryptorand "crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
 	"strings"
@@ -12,16 +13,9 @@ import (
 	"github.com/argeinfina/hichat/pkg"
 )
 
-// getOrCreateRoomPassphrase returns or creates a per-room E2EE passphrase.
-// 32 bytes crypto/rand -> base64. All participants in the room share the same passphrase.
-func (s *voiceService) getOrCreateRoomPassphrase(roomName string) (string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.getOrCreateRoomPassphraseLocked(roomName)
-}
-
 func (s *voiceService) getOrCreateRoomPassphraseLocked(roomName string) (string, error) {
 	if passphrase, ok := s.roomPassphrases[roomName]; ok {
+		s.ensureRoomKeyContextLocked(roomName, passphrase)
 		return passphrase, nil
 	}
 
@@ -32,6 +26,7 @@ func (s *voiceService) getOrCreateRoomPassphraseLocked(roomName string) (string,
 	passphrase := base64.RawURLEncoding.EncodeToString(raw)
 
 	s.roomPassphrases[roomName] = passphrase
+	s.ensureRoomKeyContextLocked(roomName, passphrase)
 	if s.roomKeyVersions == nil {
 		s.roomKeyVersions = make(map[string]uint32)
 	}
@@ -53,6 +48,25 @@ func (s *voiceService) MusicRoomKey(roomName string) (string, uint32, error) {
 	return passphrase, s.roomKeyVersions[roomName], nil
 }
 
+func (s *voiceService) ensureRoomKeyContextLocked(roomName, initialPassphrase string) {
+	if s.roomKeyContexts == nil {
+		s.roomKeyContexts = make(map[string]string)
+	}
+	if s.roomKeyContexts[roomName] == "" {
+		sum := sha256.Sum256([]byte("hichat-room-context-v1:" + initialPassphrase))
+		s.roomKeyContexts[roomName] = base64.RawURLEncoding.EncodeToString(sum[:])
+	}
+}
+func (s *voiceService) roomMediaKey(roomName string) (string, uint32, string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	passphrase, err := s.getOrCreateRoomPassphraseLocked(roomName)
+	if err != nil {
+		return "", 0, "", err
+	}
+	return passphrase, s.roomKeyVersions[roomName], s.roomKeyContexts[roomName], nil
+}
+
 // cleanupRoomPassphraseIfEmpty deletes the passphrase when a room becomes empty (forward secrecy).
 // MUST be called under mu.Lock (caller holds lock).
 func (s *voiceService) cleanupRoomPassphraseIfEmpty(channelID string) {
@@ -68,6 +82,7 @@ func (s *voiceService) cleanupRoomPassphraseIfEmpty(channelID string) {
 		if strings.HasSuffix(roomName, suffix) {
 			delete(s.roomPassphrases, roomName)
 			delete(s.roomKeyVersions, roomName)
+			delete(s.roomKeyContexts, roomName)
 			voiceLogger.Info("cleaned up E2EE passphrase for room", "room_name", roomName)
 		}
 	}
@@ -102,6 +117,7 @@ func (s *voiceService) rotateRoomPassphraseForChannel(channelID string) map[stri
 			continue
 		}
 		newPassphrase := base64.RawURLEncoding.EncodeToString(raw)
+		s.ensureRoomKeyContextLocked(roomName, s.roomPassphrases[roomName])
 		s.roomPassphrases[roomName] = newPassphrase
 		s.roomKeyVersions[roomName]++
 		rotated[roomName] = newPassphrase

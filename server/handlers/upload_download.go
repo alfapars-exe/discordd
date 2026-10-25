@@ -62,28 +62,46 @@ type AccessTokenValidator interface {
 	ValidateAccessToken(tokenString string) (*models.TokenClaims, error)
 }
 
+// BotMediaTokenValidator resolves a live bot credential to the bot's own user
+// identity. BotService checks token revocation and deleted/banned/disabled bot
+// state on every request; the owner's identity or permissions are never used.
+type BotMediaTokenValidator interface {
+	ValidateBotToken(context.Context, string) (string, error)
+}
+
 type UploadDownloadHandler struct {
 	uploadDir      string
 	mediaAuth      services.MediaAccessService
 	tokenValidator AccessTokenValidator
+	botValidator   BotMediaTokenValidator
 }
 
 func NewUploadDownloadHandler(
 	uploadDir string,
 	mediaAuth services.MediaAccessService,
 	tokenValidator AccessTokenValidator,
+	botValidator ...BotMediaTokenValidator,
 ) *UploadDownloadHandler {
-	return &UploadDownloadHandler{
+	h := &UploadDownloadHandler{
 		uploadDir:      uploadDir,
 		mediaAuth:      mediaAuth,
 		tokenValidator: tokenValidator,
 	}
+	if len(botValidator) > 0 {
+		h.botValidator = botValidator[0]
+	}
+	return h
 }
 
 // authUserID extracts an authenticated user ID from either the Authorization
 // Bearer header (API clients) or the hichat_media cookie (browser <img>/<video>
 // tags, which can't set headers). Returns ("", false) when neither yields a
 // usable token.
+//
+// Explicit Bearer hb_ credentials use BotMediaTokenValidator and resolve only
+// the bot's own identity. They do not confer read permission: MediaAccessService
+// still checks the existing conversation/channel ACL. Cookies never accept bot
+// credentials, and a failing bot header does not fall back to a human cookie.
 //
 // Accepted scopes — this endpoint is the ONLY one that takes a scoped token:
 //
@@ -102,16 +120,33 @@ func NewUploadDownloadHandler(
 // recognise fails closed rather than being waved through.
 func (h *UploadDownloadHandler) authUserID(r *http.Request) (string, bool) {
 	var token string
+	fromBearer := false
 	if ah := r.Header.Get("Authorization"); strings.HasPrefix(ah, "Bearer ") {
 		token = strings.TrimPrefix(ah, "Bearer ")
+		fromBearer = true
 	} else if c, err := r.Cookie(mediaCookieName); err == nil {
 		token = c.Value
 	}
-	if token == "" || h.tokenValidator == nil {
+	if token == "" {
+		return "", false
+	}
+	if strings.HasPrefix(token, models.BotTokenPrefix) {
+		// Bot credentials are explicit API Bearer credentials, never browser
+		// media cookies. An invalid bot header cannot borrow a human cookie.
+		if !fromBearer || h.botValidator == nil {
+			return "", false
+		}
+		userID, err := h.botValidator.ValidateBotToken(r.Context(), token)
+		if err != nil || userID == "" {
+			return "", false
+		}
+		return userID, true
+	}
+	if h.tokenValidator == nil {
 		return "", false
 	}
 	claims, err := h.tokenValidator.ValidateAccessToken(token)
-	if err != nil {
+	if err != nil || claims == nil {
 		return "", false
 	}
 	if claims.Scope != "" && claims.Scope != models.TokenScopeMedia {

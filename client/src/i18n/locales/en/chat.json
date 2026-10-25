@@ -164,14 +164,12 @@
   "threadSource": "Go to source message",
   "threadActive": "Active",
   "messageTooLong": "Message must be at most {{max}} characters",
-
   "gif": "GIF",
   "gifSearch": "Search GIFs",
   "gifTrending": "Trending",
   "gifNoResults": "No GIFs found",
   "gifLoading": "Loading GIFs...",
   "gifUnavailable": "GIF search is not available",
-
   "imagePreview": "Image preview",
   "lightboxOpenOriginal": "Open original",
   "lightboxDownload": "Download",
@@ -183,7 +181,6 @@
   "lightboxResetZoom": "Reset zoom",
   "lightboxPrevious": "Previous image",
   "lightboxNext": "Next image",
-
   "jumpToMention": "Jump to mention",
   "ignoredMessage": "Message hidden from an ignored user.",
   "showIgnoredMessage": "Show message",
@@ -194,5 +191,11 @@
   "forwardGroupPending": "The destination group has an unresolved send. Open that group to check the result before trying to forward again.",
   "groupPinsLoadFailed": "Pinned group messages could not be loaded.",
   "groupPinUpdateFailed": "The pin could not be updated. The message was kept.",
-  "groupPinsRetry": "Retry"
+  "groupPinsRetry": "Retry",
+  "gameMessageOrigin": "Game application",
+  "gameMessageOriginHint": "Game application identity recorded when sent: {{id}}. This does not verify the publisher.",
+  "spamFilterPending": "Checking message filters.",
+  "spamFilterPendingError": "Friendship could not be checked. Message content stays hidden; it has not been marked as spam.",
+  "spamFilterRetry": "Check again",
+  "spamPendingNotification": "New message. Content is hidden while message filters are checked."
 }

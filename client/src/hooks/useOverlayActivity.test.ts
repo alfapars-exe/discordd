@@ -1,11 +1,12 @@
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it } from "vitest";
-import { clearTokens } from "../api/client";
+import { clearTokens, getAuthGeneration } from "../api/client";
 import { useAuthStore } from "../stores/authStore";
 import { useBlockStore } from "../stores/blockStore";
 import { useFriendStore } from "../stores/friendStore";
 import { useGameActivityStore } from "../stores/gameActivityStore";
 import { usePresenceStore } from "../stores/presenceStore";
+import { usePreferencesStore } from "../stores/preferencesStore";
 import { useOverlayActivity } from "./useOverlayActivity";
 
 const game = { id: "example-game", name: "Example Game", started_at: "2026-10-25T09:00:00Z" };
@@ -13,11 +14,20 @@ beforeEach(() => {
   clearTokens();
   useAuthStore.setState({ user: { id: "viewer" } as never });
   useGameActivityStore.getState().start("epoch-a");
-  useBlockStore.setState({ blockedUserIds: [] });
+  useBlockStore.setState({ ownerId: "viewer", authGeneration: getAuthGeneration(), snapshotReady: true, blockedUserIds: [] });
+  usePreferencesStore.setState({ accountId: "viewer", isLoaded: true, data: { privacy: { ignoredUsers: {} } } });
   usePresenceStore.setState({ statusByUserId: {} });
-  useFriendStore.setState({ friends: [{ id: "relationship", status: "accepted", user_id: "friend", username: "friend", display_name: "Friend", avatar_url: null, user_status: "online", user_custom_status: null, created_at: "2026-10-25T08:00:00Z" }] });
+  useFriendStore.setState({ ownerId: "viewer", authGeneration: getAuthGeneration(), friendsStatus: "ready", friends: [{ id: "relationship", status: "accepted", user_id: "friend", username: "friend", display_name: "Friend", avatar_url: null, user_status: "online", user_custom_status: null, created_at: "2026-10-25T08:00:00Z" }] });
 });
 afterEach(cleanup);
+it("hides ignored users and fails closed for loading privacy or stale block ownership", () => {
+  useGameActivityStore.getState().apply({ epoch: "epoch-a", user_id: "friend", game, revision: 1 });
+  const view = renderHook(useOverlayActivity); expect(view.result.current).toHaveLength(1);
+  act(() => usePreferencesStore.setState({ data: { privacy: { ignoredUsers: { friend: true } } } })); expect(view.result.current).toEqual([]);
+  act(() => usePreferencesStore.setState({ data: { privacy: { ignoredUsers: {} } }, isLoaded: false })); expect(view.result.current).toEqual([]);
+  act(() => usePreferencesStore.setState({ isLoaded: true })); expect(view.result.current).toHaveLength(1);
+  act(() => useBlockStore.setState({ authGeneration: getAuthGeneration() + 1 })); expect(view.result.current).toEqual([]);
+});
 it("subscribes to grant, block, presence and revocation changes without reusing server grants", () => {
   const view = renderHook(useOverlayActivity);
   act(() => useGameActivityStore.getState().apply({ epoch: "epoch-a", user_id: "friend", server_id: "private-server", game, revision: 1 }));
@@ -56,4 +66,12 @@ it("suppresses cached rows immediately while disconnected and waits for a new re
   act(() => useGameActivityStore.getState().start("epoch-b"));
   act(() => useGameActivityStore.getState().apply({ epoch: "epoch-a", user_id: "friend", game, revision: 2 }));
   expect(view.result.current).toEqual([]);
+});
+
+it("immediately hides cached activity when relationship provenance alone changes, then honors revocation while unavailable",()=>{
+ useGameActivityStore.getState().apply({epoch:"epoch-a",user_id:"friend",game,revision:1});const friends=useFriendStore.getState().friends;const view=renderHook(useOverlayActivity);expect(view.result.current).toHaveLength(1);
+ for(const patch of [{friendsStatus:"loading" as const},{friendsStatus:"error" as const},{friendsStatus:"ready" as const,ownerId:"other"},{ownerId:"viewer",authGeneration:getAuthGeneration()+1}]){act(()=>useFriendStore.setState(patch));expect(useFriendStore.getState().friends).toBe(friends);expect(view.result.current).toEqual([])}
+ act(()=>useGameActivityStore.getState().apply({epoch:"epoch-a",user_id:"friend",game:null,revision:2}));act(()=>useFriendStore.setState({ownerId:"viewer",authGeneration:getAuthGeneration(),friendsStatus:"ready"}));expect(view.result.current).toEqual([]);
+ act(()=>useGameActivityStore.getState().apply({epoch:"epoch-a",user_id:"friend",game,revision:1}));expect(view.result.current).toEqual([]);
+ act(()=>useGameActivityStore.getState().apply({epoch:"epoch-a",user_id:"friend",game,revision:3}));expect(view.result.current).toHaveLength(1);act(()=>useFriendStore.setState({friends:[]}));expect(view.result.current).toEqual([]);
 });

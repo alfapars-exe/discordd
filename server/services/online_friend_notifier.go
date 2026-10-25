@@ -18,6 +18,19 @@ const (
 	maxOnlineFriendTrackedUsers = 10_000
 )
 
+// OnlineFriendNotificationError carries one bounded summary, never one
+// repeated context error per remaining friend.
+type OnlineFriendNotificationError struct {
+	Processed, Delivered, Skipped, Failed int
+	Duration                              time.Duration
+	Err                                   error
+}
+
+func (e *OnlineFriendNotificationError) Error() string {
+	return fmt.Sprintf("online friend notifications failed (processed=%d delivered=%d skipped=%d failed=%d): %v", e.Processed, e.Delivered, e.Skipped, e.Failed, e.Err)
+}
+func (e *OnlineFriendNotificationError) Unwrap() error { return e.Err }
+
 type onlineFriendUserReader interface {
 	GetByID(context.Context, string) (*models.User, error)
 }
@@ -64,8 +77,10 @@ type onlineFriendNotifier struct {
 	presence      onlineFriendPresenceReader
 	hub           ws.Broadcaster
 
-	mu     sync.Mutex
-	epochs map[string]*onlineFriendEpoch
+	mu        sync.Mutex
+	epochs    map[string]*onlineFriendEpoch
+	lifecycle context.Context
+	stop      context.CancelFunc
 }
 
 func NewOnlineFriendNotifier(
@@ -77,14 +92,35 @@ func NewOnlineFriendNotifier(
 	hub ws.Broadcaster,
 ) OnlineFriendNotifier {
 	guardedWriter, _ := notifications.(repository.OnlineFriendNotificationRepository)
+	lifecycle, stop := context.WithCancel(context.Background())
 	return &onlineFriendNotifier{
 		users: users, prefs: prefs, friends: friends,
 		notifications: notifications, guardedWriter: guardedWriter, presence: presence, hub: hub,
-		epochs: make(map[string]*onlineFriendEpoch),
+		epochs: make(map[string]*onlineFriendEpoch), lifecycle: lifecycle, stop: stop,
 	}
 }
 
-func (n *onlineFriendNotifier) NotifyOnline(ctx context.Context, actorID string) error {
+func (n *onlineFriendNotifier) Stop() { n.stop() }
+
+// Called only after the presence status was committed and broadcast. Keep this
+// synchronous in the existing per-user dispatcher to preserve transition order.
+func (n *onlineFriendNotifier) NotifyOnlinePresence(actorID string) error {
+	ctx, cancel := context.WithTimeout(n.lifecycle, 5*time.Second)
+	defer cancel()
+	return n.NotifyOnline(ctx, actorID)
+}
+
+func (n *onlineFriendNotifier) NotifyOnline(ctx context.Context, actorID string) (resultErr error) {
+	start := time.Now()
+	processed, delivered, skipped, failed := 0, 0, 0, 0
+	defer func() {
+		if resultErr != nil {
+			resultErr = &OnlineFriendNotificationError{Processed: processed, Delivered: delivered, Skipped: skipped, Failed: failed, Duration: time.Since(start), Err: resultErr}
+		}
+	}()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if actorID == "" {
 		return errors.New("online friend notifier: actor ID is required")
 	}
@@ -120,13 +156,33 @@ func (n *onlineFriendNotifier) NotifyOnline(ctx context.Context, actorID string)
 		return nil
 	}
 
-	friends, err := n.friends.ListFriends(ctx, actorID)
-	if err != nil {
-		return fmt.Errorf("online friend notifier: list friends: %w", err)
+	var friends []models.FriendshipWithUser
+	bulk := make(map[string]repository.OnlineFriendCandidate)
+	bulkReader, hasBulk := n.notifications.(interface {
+		ListOnlineFriendCandidates(context.Context, string) ([]repository.OnlineFriendCandidate, error)
+	})
+	if hasBulk {
+		candidates, loadErr := bulkReader.ListOnlineFriendCandidates(ctx, actorID)
+		if loadErr != nil {
+			return loadErr
+		}
+		for _, c := range candidates {
+			bulk[c.UserID] = c
+			friends = append(friends, models.FriendshipWithUser{UserID: c.UserID})
+		}
+	} else {
+		friends, err = n.friends.ListFriends(ctx, actorID)
+		if err != nil {
+			return fmt.Errorf("online friend notifier: list friends: %w", err)
+		}
 	}
 
 	var firstErr error
 	for _, friend := range friends {
+		if err := ctx.Err(); err != nil {
+			return errors.Join(firstErr, err)
+		}
+		processed++
 		recipientID := friend.UserID
 		if recipientID == "" || recipientID == actorID {
 			continue
@@ -135,38 +191,76 @@ func (n *onlineFriendNotifier) NotifyOnline(ctx context.Context, actorID string)
 			continue
 		}
 
-		blocked, blockErr := n.friends.IsBlocked(ctx, actorID, recipientID)
-		if blockErr != nil {
-			firstErr = errors.Join(firstErr, fmt.Errorf("online friend notifier: check block for %s: %w", recipientID, blockErr))
-			continue
+		var blocked bool
+		var recipientPrefs *models.UserPreferences
+		var prefErr error
+		if hasBulk {
+			candidate := bulk[recipientID]
+			blocked = candidate.Blocked
+			recipientPrefs = candidate.Preferences
+		} else {
+			var blockErr error
+			blocked, blockErr = n.friends.IsBlocked(ctx, actorID, recipientID)
+			if blockErr != nil {
+				failed++
+				if firstErr == nil {
+					firstErr = fmt.Errorf("online friend notifier: check block: %w", blockErr)
+				}
+				continue
+			}
+			if err := ctx.Err(); err != nil {
+				return errors.Join(firstErr, err)
+			}
+			recipientPrefs, prefErr = n.prefs.Get(ctx, recipientID)
 		}
 		if blocked {
+			skipped++
+			continue
+		}
+		if prefErr != nil {
+			failed++
+			if firstErr == nil {
+				firstErr = fmt.Errorf("online friend notifier: load recipient preferences: %w", prefErr)
+			}
 			continue
 		}
 
-		recipientPrefs, prefErr := n.prefs.Get(ctx, recipientID)
-		if prefErr != nil {
-			firstErr = errors.Join(firstErr, fmt.Errorf("online friend notifier: load preferences for %s: %w", recipientID, prefErr))
-			continue
-		}
 		enabled, prefErr := onlineFriendNotificationsEnabled(recipientPrefs)
 		if prefErr != nil {
-			firstErr = errors.Join(firstErr, fmt.Errorf("online friend notifier: read preferences for %s: %w", recipientID, prefErr))
+			failed++
+			if firstErr == nil {
+				firstErr = fmt.Errorf("online friend notifier: recipient preferences: %w", prefErr)
+			}
 			continue
 		}
 		if !enabled {
+			skipped++
 			// This is still a completed decision for this epoch. A later
 			// duplicate callback must not deliver after a preference change.
 			epoch.sentTo[recipientID] = struct{}{}
 			continue
 		}
-		stillVisible, shareOnline, visibilityErr := n.actorStillVisible(ctx, actorID)
-		if visibilityErr != nil {
-			firstErr = errors.Join(firstErr, visibilityErr)
-			continue
+		if hasBulk {
+			// The guarded write below owns persisted privacy checks; the Hub remains
+			// authoritative for in-memory visibility. Avoid redundant per-recipient reads.
+			if !containsOnlineID(n.presence.GetVisibleOnlineUserIDs(), actorID) {
+				return firstErr
+			}
+		} else {
+			stillVisible, shareOnline, visibilityErr := n.actorStillVisible(ctx, actorID)
+			if visibilityErr != nil {
+				failed++
+				if firstErr == nil {
+					firstErr = visibilityErr
+				}
+				continue
+			}
+			if !stillVisible || !shareOnline {
+				return firstErr
+			}
 		}
-		if !stillVisible || !shareOnline {
-			return firstErr
+		if err := ctx.Err(); err != nil {
+			return errors.Join(firstErr, err)
 		}
 
 		actorCopy := actorID
@@ -187,7 +281,10 @@ func (n *onlineFriendNotifier) NotifyOnline(ctx context.Context, actorID string)
 		}
 		committed, err := n.guardedWriter.CreateIfOnlineFriendEligible(ctx, actorID, recipientID, notification)
 		if err != nil {
-			firstErr = errors.Join(firstErr, fmt.Errorf("online friend notifier: create notification for %s: %w", recipientID, err))
+			failed++
+			if firstErr == nil {
+				firstErr = fmt.Errorf("online friend notifier: create notification: %w", err)
+			}
 			continue
 		}
 		if committed == nil {
@@ -196,6 +293,7 @@ func (n *onlineFriendNotifier) NotifyOnline(ctx context.Context, actorID string)
 			continue
 		}
 		epoch.sentTo[recipientID] = struct{}{}
+		delivered++
 		broadcastNotificationCreate(n.hub, committed)
 	}
 	return firstErr

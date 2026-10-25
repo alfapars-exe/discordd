@@ -15,6 +15,7 @@ import AccountLifecycleSettings from "./AccountLifecycleSettings";
 import AccountDeletionSettings from "./AccountDeletionSettings";
 import EmailVerificationSettings from "./EmailVerificationSettings";
 import PrivacyConsentSettings from "./PrivacyConsentSettings";
+import LinkedGameSettings from "./LinkedGameSettings";
 import DataExportSettings from "./DataExportSettings";
 
 function SecuritySettings() {
@@ -290,6 +291,8 @@ function SecurityForm({ user }: { user: User }) {
       <AccountStatusSettings key={`status:${user.id}`} userID={user.id} />
       <AccountLifecycleSettings key={`lifecycle:${user.id}`} userID={user.id} />
       <PrivacyConsentSettings />
+      <div className="settings-divider" />
+      <LinkedGameSettings />
       <DataExportSettings key={`export:${user.id}`} userID={user.id} />
       <AccountDeletionSettings key={`delete:${user.id}`} userID={user.id} />
     </div>

@@ -1,0 +1,49 @@
+{
+  "status": "source_fixed_candidate_built_live_retest_pending",
+  "baseline": "v2.11.111 / a2a86fd096e551a6789be5a5d3917932f12127cf",
+  "reported_failures": [
+    "Crackle/noise on Alias Pro raw input; Sonar input is clean according to the user.",
+    "Microphone test meter remains flat while the requested RNNoise chain is in raw fallback.",
+    "Leaving voice and switching inputs raises unexpected-error toast; captured error includes processedTrack access after processor teardown and microphone operation cancelled.",
+    "iOS 27.0.1 Safari microphone permission is granted, remote audio is audible but quiet, local speech never arrives. Receiver and Speaker are enumerated; selecting Speaker did not resolve it.",
+    "User reports the earlier audio path worked approximately one week before the changes."
+  ],
+  "confirmed_causes": [
+    "Vite inlined the small gate worklet as data:text/javascript, rejected by both shipped web and Electron script-src policies. Electron45 real AudioWorklet reproduction fails for data URL and succeeds for a same-origin module at48kHz without weakening CSP.",
+    "LiveKit changed from2.22.3 in v2.11.110 to2.23.0 in v2.11.111. In2.22.3 setAudioContext only assigned a field;2.23.0 restarts its processor. Our processor.restart called setAudioContext again, queueing recursive restarts and racing stop. The installed bundle stack maps directly to the new SDK setAudioContext continuation."
+  ],
+  "changes": [
+    "client/src/audio/microphonePipeline.ts: import the gate using ?url&no-inline.",
+    "client/src/audio/MicrophoneTrackProcessor.ts: do not enqueue SDK setAudioContext from inside SDK-owned processor.restart. Preserve dedicated graph context ownership and capture constraint persistence."
+  ],
+  "verification": [
+    "New restart regression fails against the original adapter (two SDK context assignments rather than one) and passes after the fix.",
+    "Actual LocalAudioTrack.prototype.setAudioContext integration passes with the adapter and confirms no recursive SDK context assignment.",
+    "Production Vite build regression confirms a referenced standalone vadGateWorklet JS asset.",
+    "Isolated v2.11.111 plus only the two runtime fixes: complete audio suite198passed/0failed.",
+    "Isolated frontend TypeScript/Vite build and Electron TypeScript compilation pass.",
+    "Windows NSIS2.11.112-rc.1 built with clean root npm dependencies. Required updater transitive dependencies and Windows x64 uiohook native prebuild are present in ASAR/unpacked payload.",
+    "Fresh Windows checkout modified newline-sensitive public runtime JS through autocrlf. Restoring original v2.11.111 git blob bytes for22public scripts resolves the DTLN pinned hash fixture;198audio tests then pass. Candidate was rebuilt after this correction."
+  ],
+  "windows_candidate": {
+    "version": "2.11.112-rc.1",
+    "installer": "C:/Users/PARS/.codex/tmp/hichat-audio-hotfix-20261025-output/hichat-setup.exe",
+    "sha256": "0a70a60f6fd8218d47db29c975557a0f7137f61bffc1c8b80834eb095d70a593",
+    "published_to_update_feeds": false,
+    "installed_or_launched_on_user_profile": false,
+    "signature": "unsigned"
+  },
+  "live_web_hotfix": {
+    "parent": "6dd07e20ee4731dd0da8be0685173d5c32e31781",
+    "delivery": "Authenticated HF multi-file upload; checked both pinned live originals against v2.11.111, uploaded only the two runtime files and rechecked expected parent before commit.",
+    "commit": "d28cd45557cb105f2d08395b79ffb29dd15b48fb",
+    "runtime_verification": "Exact revision RUNNING; /api/ready200 and database true. Served AppLayout-BjY2t4Cy.js references separate vadGateWorklet-hxCY43Yf.js, fetched200 with text/javascript and processor registration intact."
+  },
+  "remaining": [
+    "Verify new HF runtime revision and served worklet before asking Safari to reload.",
+    "Real microphone meter, clean audio, input switch, mute/unmute, leave/rejoin on Windows candidate.",
+    "Real iPhone outgoing voice and received volume after HF hotfix. The two confirmed code bugs are not proof that every mobile routing issue has been solved.",
+    "Only publish a stable Windows update after the physical regression checks pass."
+  ],
+  "secrets_and_data": "No key import/reset, recording, database/storage/secret change, or global security-policy relaxation."
+}

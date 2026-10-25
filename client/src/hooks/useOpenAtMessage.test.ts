@@ -68,6 +68,12 @@ vi.mock("../stores/dmStore", async () => {
     })),
   };
 });
+vi.mock("../api/authSessionEvents",()=>({getAuthSessionSnapshot:()=>({ownerId:"me",generation:1})}));
+vi.mock("../stores/e2eeStore",()=>({useE2EEStore:{getState:()=>({localDeviceId:"device"})}}));
+vi.mock("../stores/groupDMStore", async()=>{
+ const {create}=await vi.importActual<typeof import("zustand")>("zustand");
+ return {useGroupDMStore:create(()=>({ownerId:"me",authGeneration:1,groupsReady:true,loading:false,groups:[{id:"group",name:"Group",key_epoch:3,members:[{id:"me"}]}],fetchMessagesAround:vi.fn(),setScrollTarget:vi.fn(()=>1)}))};
+});
 vi.mock("../stores/authStore", async () => {
   const { create } = await vi.importActual<typeof import("zustand")>("zustand");
   return { useAuthStore: create(() => ({ user: { id: "me" } })) };
@@ -85,6 +91,7 @@ import { useOpenAtMessage } from "./useOpenAtMessage";
 import { useUIStore } from "../stores/uiStore";
 import { useChannelStore } from "../stores/channelStore";
 import { useMessageStore } from "../stores/messageStore";
+import { useGroupDMStore } from "../stores/groupDMStore";
 import { useDMStore } from "../stores/dmStore";
 import { useToastStore } from "../stores/toastStore";
 
@@ -99,6 +106,22 @@ beforeEach(() => {
 });
 
 describe("useOpenAtMessage — channel", () => {
+  it("honors caller lifetime before navigation and after a failed asynchronous fetch", async () => {
+    let current = false;
+    const view = renderHook(() => useOpenAtMessage());
+    await expect(view.result.current.openAtMessage("srv-1", "ch-1", "m-7", "", { isCurrent: () => current })).resolves.toBe(false);
+    expect(openTab()).not.toHaveBeenCalled();
+    let finish!: (found: boolean) => void;
+    fetchAround().mockImplementation(() => new Promise<boolean>(resolve => { finish = resolve; }));
+    current = true;
+    let pending!: Promise<boolean>;
+    act(() => { pending = view.result.current.openAtMessage("srv-1", "ch-1", "m-7", "", { isCurrent: () => current }); });
+    current = false;
+    await act(async () => { finish(false); await pending; });
+    expect(await pending).toBe(false);
+    expect(setScroll()).not.toHaveBeenCalled();
+    expect(addToast()).not.toHaveBeenCalled();
+  });
   it("does not scroll another V2 destination when a slow message lookup finishes", async () => {
     shell.enabled = true;
     let finish!: (found: boolean) => void;
@@ -161,6 +184,17 @@ describe("useOpenAtMessage — channel", () => {
 });
 
 describe("useOpenAtMessage — DM", () => {
+  it("does not navigate with stale caller context, or scroll/toast after context expires during a fetch", async () => {
+    let current=false; const dm=useDMStore.getState();const {result}=renderHook(()=>useOpenAtMessage());
+    expect(await result.current.openAtDMMessage("dm-1","message",{isCurrent:()=>current})).toBe(false);
+    expect(dm.selectDM).not.toHaveBeenCalled();
+    current=true;let finish!:(value:boolean)=>void;
+    vi.mocked(dm.fetchMessagesAround).mockReturnValueOnce(new Promise(resolve=>{finish=resolve;}));
+    let opening!:Promise<boolean>;
+    act(()=>{opening=result.current.openAtDMMessage("dm-1","message",{isCurrent:()=>current});});
+    current=false;finish(false);
+    expect(await opening).toBe(false);expect(dm.setScrollToMessageId).not.toHaveBeenCalled();expect(addToast()).not.toHaveBeenCalled();
+  });
   it("opens the DM tab and scrolls after the around-fetch", async () => {
     const dm = useDMStore.getState();
     vi.mocked(dm.fetchMessagesAround).mockResolvedValue(true);
@@ -184,4 +218,11 @@ describe("useOpenAtMessage — DM", () => {
     });
     expect(openTab()).toHaveBeenCalledWith("dm-self", "dm", "dm:myNotes");
   });
+});
+
+it("group exact-source opens main chat then fetches before arming scroll; late membership loss cannot arm it",async()=>{
+ const group=useGroupDMStore.getState();vi.mocked(group.fetchMessagesAround).mockResolvedValueOnce(true);const {result}=renderHook(()=>useOpenAtMessage());
+ expect(await result.current.openAtGroupMessage("group","source")).toBe(true);expect(group.setScrollTarget).toHaveBeenCalledWith("group","source");
+ vi.mocked(group.setScrollTarget).mockClear();let finish!:(value:boolean)=>void;vi.mocked(group.fetchMessagesAround).mockReturnValueOnce(new Promise(resolve=>{finish=resolve;}));
+ const pending=result.current.openAtGroupMessage("group","source");useGroupDMStore.setState({groups:[]});finish(true);expect(await pending).toBe(false);expect(group.setScrollTarget).not.toHaveBeenCalled();
 });

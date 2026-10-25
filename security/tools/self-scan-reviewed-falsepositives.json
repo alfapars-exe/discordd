@@ -12,7 +12,7 @@
     {
       "rule": "go.sql-concat",
       "path": "server/database/postgres_import_test.go",
-      "file_sha256": "9b9f05612e3e8791d1d9691eaa40750aa3ef15481a156801b0c7728fe9d1ddec",
+      "file_sha256": "d74f8a0e27ec7714788f566749601207d7d9c2f3cb154266a3a3f16d9cff5c1b",
       "line_sha256": "fb9879437de4b36ace22b67076b4aba070f0d691abc561263c44310bda9993da",
       "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
       "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
@@ -20,7 +20,7 @@
     {
       "rule": "go.sql-concat",
       "path": "server/repository/postgres_testdb_test.go",
-      "file_sha256": "afb73fd09ba3c548ff87dfc045fcfd26cafed7a951ab82853ec60eac0bf89184",
+      "file_sha256": "fe992dba453093bd95bd5758bf22c8281f28e0f71b9362c378f79647b6156e2e",
       "line_sha256": "11c1a8f059dc896554f0c17cc47ee457ef8833dcc548581189e37d7c552d5471",
       "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
       "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
@@ -28,7 +28,7 @@
     {
       "rule": "go.sql-concat",
       "path": "server/repository/sqlite_account_anonymization.go",
-      "file_sha256": "f1174396458923ebcf2b4e747d157640aad7d86d3eef89b28f85d5d5e332d349",
+      "file_sha256": "e2d3a5e47db9dbc1ad72b7804b6ab2678ff95a72b0bfc66269a7cf8a32f83a31",
       "line_sha256": "d2e9044224e8e7f5a8f01f8a9f4b1290be8d6ba35155739655b714e2fd42231a",
       "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
       "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
@@ -116,23 +116,7 @@
     {
       "rule": "go.sql-concat",
       "path": "server/repository/sqlite_group_dm.go",
-      "file_sha256": "fa6d24879ff2ea103714320db0e7172003de471d7a2a38115cabca15a7101d74",
-      "line_sha256": "25ad92c8bc78e4f80288f59d28effd54533c8b2fa29e73ae741124d8854a813b",
-      "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
-      "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
-    },
-    {
-      "rule": "go.sql-concat",
-      "path": "server/repository/sqlite_group_dm.go",
-      "file_sha256": "fa6d24879ff2ea103714320db0e7172003de471d7a2a38115cabca15a7101d74",
-      "line_sha256": "57a20885ea64b1f4ce49371bf4cb95fd97cc2c532aa81d3a84b924d76e1df5d9",
-      "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
-      "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
-    },
-    {
-      "rule": "go.sql-concat",
-      "path": "server/repository/sqlite_group_dm.go",
-      "file_sha256": "fa6d24879ff2ea103714320db0e7172003de471d7a2a38115cabca15a7101d74",
+      "file_sha256": "66ff4bed9a1699f1f904e025d21763a4829140aab4a1984f7c8bc0985a54ee87",
       "line_sha256": "7c8f35c7ab1143e7ce941b75912d6549057a6489e5b5ff88fc5186b31a600746",
       "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
       "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
@@ -140,7 +124,7 @@
     {
       "rule": "go.sql-concat",
       "path": "server/repository/sqlite_group_dm.go",
-      "file_sha256": "fa6d24879ff2ea103714320db0e7172003de471d7a2a38115cabca15a7101d74",
+      "file_sha256": "66ff4bed9a1699f1f904e025d21763a4829140aab4a1984f7c8bc0985a54ee87",
       "line_sha256": "947be30c7ec80d463d9bb7a1f6be1fa6fc2a38536edecc2adfb58ec5006e5fe0",
       "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
       "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
@@ -252,7 +236,7 @@
     {
       "rule": "go.sql-sprintf",
       "path": "server/repository/sqlite_group_dm_unread_anchor_test.go",
-      "file_sha256": "87db692329fa047f8bde200fcb1eb5e1d25da89af24a9cef3337b521ca3f4111",
+      "file_sha256": "256b7f7ef4829321a5f8c44c51667269632b26d4116162a6f0ff9101f1259d06",
       "line_sha256": "724b956aa2243197beda5c91d82a6e44cccf347d47e4078d2d767a55e0b020af",
       "reason": "The matched formatting does not interpolate attacker-controlled SQL: repository snapshot identifiers are schema-derived, allowlisted/quoted, and row values stay bound; test timestamp formatting is passed only to a placeholder.",
       "proof_ref": "server/database/postgres_import.go:23-30,37-78,239-249;server/database/postgres_import_test.go;server/repository/sqlite_group_dm_unread_anchor_test.go:80-87"
@@ -272,6 +256,30 @@
       "line_sha256": "ef4b375aa03bc2946ff120d1dfaeaf1ad16a23916ef4990be4e95214a72213d7",
       "reason": "This exact call persists only a validated UserStatus enum as a UI preference under a per-user key; no session, token, credential, or user object is stored.",
       "proof_ref": "client/src/stores/authStore.test.ts:132-138;client/src/stores/authStore.ts:31-50"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/repository/application_game_grants.go",
+      "file_sha256": "4e47337cfc73106b3467504bc260688fb6a2b1297100710b817a08db7d7d6b82",
+      "line_sha256": "ba47c188649c686f39ec2ae115d61190fe56ec2bfd6122467283dbeb45f594f7",
+      "reason": "Reviewed fixed SQL: compile-time SELECT suffixes and numeric revision=revision+1 arithmetic. Recipient/application IDs, enable state, time and expected revision remain bound parameters; there is no request-derived SQL fragment.",
+      "proof_ref": "server/repository/application_game_grants.go:54-68,95-153;server/repository/application_game_grants_test.go:TestGameGrantOwnershipRevisionAndIsolation,TestGameGrantConcurrentCASOnlyOneWins"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/repository/application_game_grants.go",
+      "file_sha256": "4e47337cfc73106b3467504bc260688fb6a2b1297100710b817a08db7d7d6b82",
+      "line_sha256": "68149bf51d94e29556ddda5f4152c184028e1cb7f004a98d35956ccb3f4b6c24",
+      "reason": "Reviewed fixed SQL: compile-time SELECT suffixes and numeric revision=revision+1 arithmetic. Recipient/application IDs, enable state, time and expected revision remain bound parameters; there is no request-derived SQL fragment.",
+      "proof_ref": "server/repository/application_game_grants.go:54-68,95-153;server/repository/application_game_grants_test.go:TestGameGrantOwnershipRevisionAndIsolation,TestGameGrantConcurrentCASOnlyOneWins"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/repository/application_game_grants.go",
+      "file_sha256": "4e47337cfc73106b3467504bc260688fb6a2b1297100710b817a08db7d7d6b82",
+      "line_sha256": "19a2a16e0381fb7de119ef3f5fce83cde13bd624959f056339c19baef0e13ce8",
+      "reason": "Reviewed fixed SQL: compile-time SELECT suffixes and numeric revision=revision+1 arithmetic. Recipient/application IDs, enable state, time and expected revision remain bound parameters; there is no request-derived SQL fragment.",
+      "proof_ref": "server/repository/application_game_grants.go:54-68,95-153;server/repository/application_game_grants_test.go:TestGameGrantOwnershipRevisionAndIsolation,TestGameGrantConcurrentCASOnlyOneWins"
     }
   ]
 }

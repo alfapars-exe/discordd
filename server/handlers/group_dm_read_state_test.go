@@ -17,9 +17,11 @@ type groupReadServiceStub struct {
 	services.GroupDMService
 	calls   int
 	failure error
+	epoch   []int64
 }
 
-func (s *groupReadServiceStub) MarkRead(_ context.Context, group, user string, message *string) (*models.GroupDMReadState, error) {
+func (s *groupReadServiceStub) MarkRead(_ context.Context, group, user string, message *string, epoch ...int64) (*models.GroupDMReadState, error) {
+	s.epoch = epoch
 	s.calls++
 	if group != "group" || user != "reader" || message == nil || *message != "message" {
 		return nil, pkg.ErrBadRequest
@@ -41,7 +43,38 @@ func TestGroupDMReadDecodesChunkedBody(t *testing.T) {
 	}
 }
 
-func (s *groupReadServiceStub) MarkUnreadFrom(_ context.Context, group, user, message string) (*models.GroupDMReadState, error) {
+func TestGroupDMReadUnreadExpectedEpochIsOptionalAndValidated(t *testing.T) {
+	for _, method := range []string{"read", "unread"} {
+		for _, value := range []struct {
+			field string
+			want  int
+		}{{"", 200}, {`,"key_epoch":3`, 200}, {`,"key_epoch":0`, 400}, {`,"key_epoch":-1`, 400}} {
+			stub := &groupReadServiceStub{}
+			handler := &GroupDMHandler{service: stub}
+			request := httptest.NewRequest(http.MethodPost, "/api/group-dms/group/"+method, strings.NewReader(`{"message_id":"message"`+value.field+`}`))
+			request.SetPathValue("groupId", "group")
+			request = request.WithContext(context.WithValue(request.Context(), UserContextKey, &models.User{ID: "reader"}))
+			response := httptest.NewRecorder()
+			if method == "read" {
+				handler.MarkRead(response, request)
+			} else {
+				handler.MarkUnread(response, request)
+			}
+			if response.Code != value.want {
+				t.Fatalf("method=%s field=%s status=%d", method, value.field, response.Code)
+			}
+			if value.want == 400 && stub.calls != 0 {
+				t.Fatal("invalid epoch reached service")
+			}
+			if value.want == 200 && value.field != "" && (len(stub.epoch) != 1 || stub.epoch[0] != 3) {
+				t.Fatalf("scope not forwarded=%v", stub.epoch)
+			}
+		}
+	}
+}
+
+func (s *groupReadServiceStub) MarkUnreadFrom(_ context.Context, group, user, message string, epoch ...int64) (*models.GroupDMReadState, error) {
+	s.epoch = epoch
 	s.calls++
 	if s.failure != nil {
 		return nil, s.failure

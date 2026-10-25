@@ -1,0 +1,104 @@
+{
+  "date": "2026-10-25",
+  "scope": "P11 bounded group prerequisite: authoritative live-message acceptance, private membership mute, group unread badges and transaction lock ordering",
+  "status": "implemented_unverified",
+  "owned_paths": [
+    "client/src/api/groupDM.ts",
+    "client/src/components/dm/GroupDMChat.tsx",
+    "client/src/components/dm/GroupDMChat.test.tsx",
+    "client/src/hooks/useNotificationBadge.ts",
+    "client/src/hooks/useNotificationBadge.aggregate.test.tsx",
+    "client/src/hooks/useOverlayNotifications.test.tsx",
+    "client/src/hooks/ws/dmEventHandlers.ts",
+    "client/src/hooks/ws/systemEventHandlers.ts",
+    "client/src/hooks/ws/systemEventHandlers.test.ts",
+    "client/src/stores/groupDMStore.ts",
+    "client/src/stores/groupDMStore.test.ts",
+    "client/src/types/groupDM.ts",
+    "client/src/utils/overlayNotificationAccess.ts",
+    "server/database/migrations/138_group_dm_member_mute.sql",
+    "server/database/postgres_migrations/040_group_dm_member_mute.sql",
+    "server/handlers/group_dm_settings.go",
+    "server/handlers/group_dm_settings_test.go",
+    "server/init_routes_global.go",
+    "server/models/group_dm.go",
+    "server/repository/group_dm_repository.go",
+    "server/repository/sqlite_group_dm.go",
+    "server/repository/sqlite_group_dm_unread_anchor_test.go",
+    "server/repository/sqlite_group_dm_settings.go",
+    "server/repository/sqlite_group_dm_settings_test.go",
+    "server/services/group_dm_service.go",
+    "server/services/group_dm_settings.go",
+    "server/services/group_dm_settings_test.go",
+    "server/testdata/routes.golden",
+    "server/route_permissions_test.go",
+    "implementation/verification/p11-group-receipt-private-mute-badge-2026-10-25.json"
+  ],
+  "schema": {
+    "sqlite": "138_group_dm_member_mute.sql",
+    "postgresql": "040_group_dm_member_mute.sql",
+    "changes": [
+      "group_dm_members.is_muted integer default0 constrained0/1",
+      "group_dm_members.settings_revision default0"
+    ],
+    "compatibility": "Additive existing request/response shapes retained; new fields are optional for older clients. Rolling back application code can retain new columns; no group notification schema or second infrastructure added."
+  },
+  "implemented": [
+    "handleMessage returns a discriminated accepted/rejected result with account/auth generation, group lifetime/current key epoch/device/source version fences and isCurrent callback. Decrypted body stays in existing main-renderer/cache path.",
+    "Visible and detached source duplicates, evicted-window replays and deleted-source replays cannot produce another accepted receipt. Failed decryption can accept metadata but never claims preview-ready.",
+    "Existing WS group read/legacy unread effects require a still-current accepted receipt; detached or undecrypted sources do not auto-read. No new group OS sound/toast dispatcher added.",
+    "Per-member private is_muted/settings_revision persisted behind authenticated PATCH group-dms/:id/settings; strict boolean validation and expected-user guard. Existing own-recipient group_dm_read stream carries settings revision independently of read revision.",
+    "Own Get/List/personalized group broadcasts project only that recipient mute. Shared profile never receives another member setting. Same-value retry is idempotent; membership retirement removes settings and rejoin starts fresh.",
+    "Group header mute action reflects authoritative saved state and preserves account/group-navigation scope; failed writes never show saved state.",
+    "Application/taskbar/favicon aggregate includes only current owner/auth-ready active-member groups with positive authoritative unread, excluding privately muted groups. Existing group-reaction delayed OS eligibility and overlay indicators also obey mute.",
+    "Group send, member change, read cursor, source deletion and private-setting writes use group-row-first locks. Legacy sends now revalidate current epoch and membership inside the message transaction, not only in preflight service checks.",
+    "New PATCH settings route is explicitly pinned in ordered route golden and documented as authenticated/current-active-own-member scoped; settings update uses a compile-time constant SQL query with bound arguments, without scanner exceptions."
+  ],
+  "verification": {
+    "client_focused": {
+      "files": 7,
+      "tests": 157,
+      "result": "pass",
+      "command": "npm exec vitest -- run src/hooks/ws/systemEventHandlers.test.ts src/stores/groupDMStore.test.ts src/stores/groupDMStore.persistence.test.ts src/hooks/useNotificationBadge.aggregate.test.tsx src/hooks/useNotificationBadge.test.ts src/components/dm/GroupDMChat.test.tsx src/hooks/useOverlayNotifications.test.tsx"
+    },
+    "client_typescript": "pass: npm exec tsc -- --noEmit -p tsconfig.app.json",
+    "client_lint": "pass:13 owned source/test files",
+    "go_all_group_focus": {
+      "result": "pass",
+      "command": "go test ./repository ./services ./handlers -run TestGroup -count=1",
+      "repository_seconds": 6.224,
+      "services_seconds": 3.163,
+      "handlers_seconds": 3.112,
+      "log": "C:/Users/PARS/AppData/Local/Temp/hichat-group-prereq-all-group.log"
+    },
+    "go_new_settings_service_http": "pass: TestGroupDMSettings (private Get/List/broadcast; authenticated strict HTTP/account guards)",
+    "actual_postgresql": {
+      "result": "pass",
+      "engine": "postgres:18.6-bookworm disposable loopback-only container + unique schema migrations",
+      "command": "go test ./repository -run TestGroupDMSettings|TestGroupDMLegacy|TestGroupDMConcurrent|TestGroupDMRead -count=1",
+      "seconds": 4.933,
+      "coverage": "private/idempotent settings, outsider and retired-member denial, clean rejoin, legacy epoch and member denial, concurrent sends/read/member rekey/settings, existing read cursor concurrency",
+      "cleanup": "container removed; process-local credentials/DSN restored; no credentials persisted"
+    },
+    "full_regression": "pending parent coordination after peer SDK and DM sequence changes freeze",
+    "route_contract": {
+      "result": "pass",
+      "elapsed_seconds": 2.766,
+      "command": "go test . -run ^(TestInitRoutesGolden|TestInitRoutesNoDuplicates|TestRoutePermissions_EveryRouteHasADeclaredGate)$ -count=1"
+    },
+    "pinned_go_lint": {
+      "result": "blocked by unrelated unused helper; group paths had no findings",
+      "version": "golangci-lint2.12.2 builtGo1.26.10",
+      "toolchain": "process-local GOTOOLCHAIN=go1.26.10, restored afterward; host defaultGo1.27 cannot be analyzed by this binary",
+      "command": "golangci-lint run --timeout=5m ./repository ./services ./handlers",
+      "finding": "server/services/voice_e2ee.go:18:24 getOrCreateRoomPassphrase unused (outside owned group source scope)",
+      "log": "C:/Users/PARS/AppData/Local/Temp/hichat-group-prereq-pinned-lint.log"
+    }
+  },
+  "remaining": [
+    "No persisted group incoming inbox notifications, notifications.group_id schema, new group OS sound/toast or exact group notification reply preparation in this prerequisite.",
+    "Existing group source ordering remains created_at/random-id tuples; group read revisions fence event delivery but do not fix same-second source arrival ordering. Source sequence remediation is a separate gate.",
+    "Windows native physical overlay and real multi-client group E2EE/device/read/mute acceptance remain open.",
+    "No browser, production deployment, commit or push performed by this agent."
+  ]
+}

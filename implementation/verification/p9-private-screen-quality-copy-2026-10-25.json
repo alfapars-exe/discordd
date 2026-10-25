@@ -1,0 +1,22 @@
+{
+  "date": "2026-10-25",
+  "scope": "P9 truthful optional private screen quality controls",
+  "status": "implemented_static_verified",
+  "owned_paths": [
+    "client/src/components/voice/PrivateScreenQualityControls.tsx",
+    "client/src/components/voice/PrivateScreenQualityControls.test.tsx"
+  ],
+  "source_hashes": {
+    "client/src/components/voice/PrivateScreenQualityControls.tsx": "cd47e5b6eb7807ee2d0d07b501833f579e5539c4fad8a3bc9d8c029d95a213bb",
+    "client/src/components/voice/PrivateScreenQualityControls.test.tsx": "cbc0b7f90b7e8674baaf6e1d331c50dc4979e12b7a596fc91b971bcdf39cb0e6"
+  },
+  "checks": {
+    "focused": "npx vitest run src/components/voice/PrivateScreenQualityControls.test.tsx: 1 file / 4 tests PASS",
+    "typescript": "npx tsc -b: exit 0",
+    "lint": "npx eslint src/components/voice/PrivateScreenQualityControls.tsx src/components/voice/PrivateScreenQualityControls.test.tsx: exit 0"
+  },
+  "behavior": "Absent inline audio prop means quality-only UI, not unsupported capability. Existing P2P capability/consent and group inline consent remain unchanged. No callsite/API/locale changes.",
+  "remaining": [
+    "Updated copy has not been browser-verified; frozen a12 runtime artifact retains old copy. No physical capture or source-protocol runtime acceptance inferred."
+  ]
+}

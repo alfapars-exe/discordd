@@ -85,9 +85,7 @@ func TestSQLiteAccountLifecycleRollbackAndBan(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().Unix()
 	a, _ := createLogicalSession(t, sessions, "session-user", "rollback-disable", "rollback-disable-refresh")
-	if _, err := db.Conn.Exec(`CREATE TRIGGER fail_disable BEFORE DELETE ON sessions BEGIN SELECT RAISE(ABORT,'fixture failure'); END`); err != nil {
-		t.Fatal(err)
-	}
+	installWriteFailure(t, db, "fail_disable", "sessions", "DELETE", "")
 	if err := r.Disable(ctx, a.UserID, a.ID, "hash", now); err == nil {
 		t.Fatal("failed disable reported success")
 	}
@@ -98,17 +96,13 @@ func TestSQLiteAccountLifecycleRollbackAndBan(t *testing.T) {
 	if _, err := sessions.GetActive(ctx, a.UserID, a.ID, now); err != nil {
 		t.Fatal("failed disable ended session", err)
 	}
-	if _, err := db.Conn.Exec(`DROP TRIGGER fail_disable`); err != nil {
-		t.Fatal(err)
-	}
+	dropFailureTrigger(t, db, "fail_disable", "sessions")
 	if err := r.Disable(ctx, a.UserID, a.ID, "hash", now); err != nil {
 		t.Fatal(err)
 	}
 	state, _ = r.Get(ctx, a.UserID)
 	logical, next := lifecycleTokens("restore-rollback")
-	if _, err := db.Conn.Exec(`CREATE TRIGGER fail_restore BEFORE INSERT ON sessions BEGIN SELECT RAISE(ABORT,'fixture failure'); END`); err != nil {
-		t.Fatal(err)
-	}
+	installWriteFailure(t, db, "fail_restore", "sessions", "INSERT", "")
 	if err := r.RestoreWithSession(ctx, a.UserID, state.Version, "hash", logical, next); err == nil {
 		t.Fatal("failed restore reported success")
 	}
@@ -120,7 +114,8 @@ func TestSQLiteAccountLifecycleRollbackAndBan(t *testing.T) {
 	if err := db.Conn.QueryRow(`SELECT token_version FROM users WHERE id=?`, a.UserID).Scan(&tv); err != nil || tv != 1 {
 		t.Fatalf("partial token version %d %v", tv, err)
 	}
-	if _, err := db.Conn.Exec(`DROP TRIGGER fail_restore; UPDATE users SET is_platform_banned=1 WHERE id='session-user'`); err != nil {
+	dropFailureTrigger(t, db, "fail_restore", "sessions")
+	if _, err := db.Conn.Exec(`UPDATE users SET is_platform_banned=1 WHERE id='session-user'`); err != nil {
 		t.Fatal(err)
 	}
 	if err := r.RestoreWithSession(ctx, a.UserID, state.Version, "hash", logical, next); err == nil {

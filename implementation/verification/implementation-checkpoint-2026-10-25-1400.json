@@ -1,0 +1,33 @@
+{
+  "status": "implemented_unverified",
+  "source": "f0bbd887",
+  "verification": {
+    "client_full": {
+      "files": 359,
+      "tests": 3513,
+      "result": "passed",
+      "log": "C:/Users/PARS/AppData/Local/Temp/hichat-p2p-dm-final-full-20261025.log"
+    },
+    "client_build": "TypeScript+Vite passed on final JS source; subsequent fixed-position status CSS is an unverified visual-only followup.",
+    "go_all": "All packages passed before final DM cursor/bounded-ack, audience single-pass and SQL-constant followups; affected native/PG/race tests passed after those changes, each separately recorded.",
+    "go_lint": "PinnedGo1.26.10 golangci-lint2.12.2 final handlers/services/repository0issues (correct server module directory).",
+    "security_self_scan": {
+      "result": "passed",
+      "block_matches": 0,
+      "review_rows": 347,
+      "log": "C:/Users/PARS/AppData/Local/Temp/hichat-final-linux-selfscan-20261025.log",
+      "environment": "Cached node22bookworm network-disabled read-only container, only /tmp writable; unchanged scanner/37 exact reviewed source records.",
+      "new_review_hits": "Maintenance CLI os.Open reads an explicitly operator-chosen plan file; test os.WriteFile targets t.TempDir files. No remotely supplied paths or scanner exemptions.",
+      "fixed_prior_failures": "Nonempty test HTML replaced by DOM nodes; SQL fixture arithmetic bound separately; constant DM queries assembled at compile time. No broad ignore or skipped gate."
+    },
+    "sdk_music": "Real public authorized YouTube\u2192yt-dlp/FFmpeg\u2192local LiveKit\u2192independent GCM decode/non-silence/key rotation passed; see SDK receipt; not two actual HiChat clients.",
+    "coverage": "261behaviors/33references; existing39,missing24,implemented_unverified185,accepted2,excluded11; all248nonexcluded/unaccepted rows still pending acceptance."
+  },
+  "remaining": [
+    "Final exact-commit CI remains required; prior db745 CI had20success and1securityscan failure on a fixture SQL arithmetic shape, corrected without exemption.",
+    "Actual Windows physical device/two-HiChat-client/visual/installer acceptance remains open.",
+    "Group notification/mute/badge and group shared voice capture/output are incomplete; microphone permission/devicechange/unplug and undeafen privacy semantics need further work.",
+    "No new production/HF/Windows version was published. Existing release2.11.111 is preserved.",
+    "Owned temporary music test binary/log folder retained after automatic approval review rejected cleanup; exact LiveKit container/repository harness were removed."
+  ]
+}

@@ -1,0 +1,80 @@
+{
+  "phase": "P9",
+  "feature": "group call lifetime across main-chat navigation",
+  "date": "2026-10-25",
+  "status": "implemented_not_runtime_accepted",
+  "owned_paths": [
+    "client/src/stores/groupCallStore.ts",
+    "client/src/stores/groupCallAudioControlStore.ts",
+    "client/src/components/dm/GroupCallProvider.tsx",
+    "client/src/components/dm/GroupCallProvider.css",
+    "client/src/components/dm/GroupCallProvider.test.tsx",
+    "client/src/components/dm/GroupDMCall.tsx",
+    "client/src/components/dm/GroupDMCall.ownership.test.tsx",
+    "client/src/components/dm/GroupDMChat.tsx",
+    "client/src/components/dm/GroupDMChat.test.tsx",
+    "client/src/components/layout/AppLayout.tsx",
+    "client/src/api/groupDM.ts",
+    "client/src/api/groupDM.test.ts"
+  ],
+  "shared_scope": {
+    "client/src/components/dm/GroupDMCall.tsx": "Only optional call-session association/initial private microphone intent/current-session props, fresh mount control association, actual Room+mount disconnect lease and retained toggle guard belong to the persistent-call slice. Final capture-agent additions include captureReady/private captureFailure latch and callbacks, standalone latch retirement, isCurrentSource admission bridge and isCurrentSession audio guard; the combined union commit includes both reviewed slices.",
+    "client/src/stores/groupCallAudioControlStore.ts": "Only additive optional callSessionNonce association metadata; persistent session nonce never replaces the fresh control nonce or grants toggle authority.",
+    "client/src/api/groupDM.ts": "Only call-token endpoint URI encoding and bounded caller signal/isCurrent options."
+  },
+  "behavior": [
+    "Single explicit in-memory group call intent owns credentials across destination changes; no persistence, restart autojoin or silent replacement of another group call.",
+    "AppLayout mounts one GroupCallProvider outside the conditional guild VoiceProvider and at the same outer sibling position in mobile/desktop branches. GroupDMChat no longer mounts the media room.",
+    "Fresh membership metadata and call-token requests use 15-second limits, AbortSignal and account/auth-generation/device/session/request fences. Missing authoritative membership retires its cached group source. Only matching group and authoritative key epoch/index credentials are adopted.",
+    "Rekey refresh retains one component/manual intent while existing GroupDMCall epoch admission pauses old capture/playback until the new key is admitted. Older in-flight tokens cannot overwrite later epochs.",
+    "Compact return/leave controls use the normal single-main-chat navigation and preserve composer drafts/files/reply. SDK final disconnection ends the current call; a new explicit join fetches fresh credentials. No new automatic network rejoin policy.",
+    "SDK render errors are isolated inside SectionErrorBoundary; Leave remains outside the boundary. Private manual mute intent survives boundary retry using exact owned session association, while each runtime mount retains a fresh control nonce.",
+    "Disconnect callbacks are fenced by the mounted component, exact actual Room reference, current fresh control nonce and session authority. Old Room/boundary callbacks cannot stop a replacement runtime.",
+    "Exact logical-call retirement clears its private capture-failure latch; rekey and render-boundary retry preserve the latch. This uses the capture agent's bounded owner/generation/nonce failure record; unrelated or stale leave cannot clear another source."
+  ],
+  "verification": {
+    "focused": {
+      "command": "npx vitest run src/components/dm/GroupCallProvider.test.tsx src/components/dm/GroupDMCall.ownership.test.tsx src/components/dm/GroupDMChat.test.tsx src/api/groupDM.test.ts src/components/dm/GroupDMCall.encryption.test.tsx src/components/dm/GroupDMCall.conflict.test.tsx",
+      "result": "6 files75 tests PASS; final run16:11:43 local,4.81s"
+    },
+    "typescript": {
+      "command": "npx tsc -b --pretty false",
+      "result": "PASS on combined current client source"
+    },
+    "lint": {
+      "command": "npx eslint on the11 owned TypeScript source/test paths",
+      "result": "0 errors and warnings"
+    },
+    "diff_check": {
+      "command": "git diff --check on owned paths",
+      "result": "PASS"
+    }
+  },
+  "test_boundaries": [
+    "Actual Zustand group call store and provider navigation lifecycle, changing first sibling wrapper, StrictMode and exact mount cleanup; LiveKit Room itself is mocked in this unit fixture.",
+    "Actual GroupDMCall control binding with mocked SDK/admission verifies mount-initializer mute intent, fresh control nonce, old actual-Room identity callback denial and retired mount/session denial.",
+    "Pending cancel/account/device/membership invalidation, stale token completion, explicit retry after network/API failure, malformed epoch credentials, concurrent rekey supersession and authoritative membership denial.",
+    "Existing encrypted admission/group conflict tests remain passing; no microphone pipeline changes in this slice.",
+    "Logical capture-failure retention across rekey and exact retirement cleanup, using the actual bounded failure store."
+  ],
+  "remaining": [
+    "Combined final full client380 files/3702 tests72.91s and TypeScript/build1690 modules2.53s passed; see paired p9-owned-microphone-capture-2026-10-25.json. Scoped75-test evidence above remains historical.",
+    "Real two-client LiveKit encrypted group audio across navigation/rekey/reconnect, camera/screen share, browser focus, physical device and Windows acceptance remain required.",
+    "No production deployment, credentials persisted or native bridge permission changes. This unit evidence does not certify transport-level media delivery."
+  ],
+  "source_sha256": {
+    "client/src/stores/groupCallStore.ts": "ff024bf12ad9aaa1412061887d77d24035c80a265efd3f5e7dc04d5409640f8e",
+    "client/src/stores/groupCallAudioControlStore.ts": "b0bfff600829badfa1ce212095ddce18eaf3a95b72114e93e2df5c25ba8e3322",
+    "client/src/components/dm/GroupCallProvider.tsx": "f07830e4b0f4804a479933acee23051502d4cc93ce91b7b5b8efdc600d1f6de0",
+    "client/src/components/dm/GroupCallProvider.css": "d1443716ad83d0109bb6dd563ea11c60a841435a795f95bf55bd37f38ef123dd",
+    "client/src/components/dm/GroupCallProvider.test.tsx": "416674eb4b1364947469e968c4544b722cfaf012985414a213b85d87d57fee82",
+    "client/src/components/dm/GroupDMCall.tsx": "bffff7358e8f1bbd2fadf742b49adb0b5a6e9b22acf082c644010e0f76041eb3",
+    "client/src/components/dm/GroupDMCall.ownership.test.tsx": "82e389e28cfddb26df4af1f37bc5f9ab450f94d8c59b6c922f43b052c671fede",
+    "client/src/components/dm/GroupDMChat.tsx": "5b9218db6e9682a14904e139a7d446ed5bf05c3a4e60596932c5e913a5c9817b",
+    "client/src/components/dm/GroupDMChat.test.tsx": "6d9fa9bea933313228373e677969b1bd56c172b391d28025ce0d21f9a82bd27d",
+    "client/src/components/layout/AppLayout.tsx": "c7226ee2f7aef3c68360b79fbbcb93a5413ddf61c6ec0120eaf0c4a74c3455eb",
+    "client/src/api/groupDM.ts": "c97025e167053169b482f0de210f76a8a610063e1af7b109e69dede95352ae4c",
+    "client/src/api/groupDM.test.ts": "1c4b0cfd96b06f6260fcdb21fb257fa403a548e6fdacb6a1a9a4148286b23118"
+  },
+  "hash_scope": "Canonical LF complete file bytes at final combined capture+provider source freeze. GroupDMCall shared hash was refreshed after reading the complete final source and confirming provider props, fresh control nonce, manual-intent initializer and Room/mount lease were preserved; its hash includes separately reviewed capture fields, failure latch and source-current admission/audio guards. Other source hashes are unchanged."
+}

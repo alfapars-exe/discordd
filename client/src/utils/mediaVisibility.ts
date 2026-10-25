@@ -25,3 +25,7 @@ export function annotatedMediaMode(privacy:{sensitiveMedia?:MediaPolicy;disturbi
   // preserve the stricter unknown-media protection.
   return unknownMediaMode(privacy,scope);
 }
+
+export function strictestMediaMode(modes:readonly MediaMode[]):MediaMode {
+  return modes.includes("block")?"block":modes.includes("blur")?"blur":"show";
+}

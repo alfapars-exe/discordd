@@ -1,0 +1,90 @@
+{
+  "phase": [
+    "P4",
+    "P6",
+    "P11"
+  ],
+  "feature": "persistent encrypted group message notifications",
+  "date": "2026-10-25",
+  "status": "implemented_not_runtime_accepted",
+  "owned_paths": [
+    "server/database/migrations/141_group_message_notifications.sql",
+    "server/database/postgres_migrations/043_group_message_notifications.sql",
+    "server/models/notification.go",
+    "server/repository/notification_counts.go",
+    "server/repository/sqlite_notification.go",
+    "server/repository/sqlite_notification_test.go",
+    "server/repository/sqlite_group_dm.go",
+    "server/repository/sqlite_group_dm_source_read.go",
+    "server/repository/sqlite_group_notifications.go",
+    "server/repository/sqlite_group_notifications_test.go",
+    "server/repository/sqlite_data_export.go",
+    "server/services/group_dm_service.go",
+    "server/services/group_message_notifications.go",
+    "server/services/group_message_notifications_test.go"
+  ],
+  "wire": {
+    "group_dm_channel_id": "Optional nullable group source reference; distinct from dm_channel_id.",
+    "kind": "system",
+    "payload": {
+      "action": "incoming_message",
+      "source": "group"
+    },
+    "references": "actor_id/message_id/group_dm_channel_id only; server_id/channel_id/dm_channel_id NULL; no message body, ciphertext, keys or device ID.",
+    "source_epoch": "Not copied to notification. Exact reply must refresh membership/current group epoch and fence all asynchronous work; historical message epoch may legitimately differ.",
+    "read_event": {
+      "ids": [],
+      "all": false,
+      "refresh_required": true,
+      "unread_count": "authoritative inbox aggregate",
+      "badge_unread_count": "authoritative non-message notification aggregate"
+    }
+  },
+  "invariants": [
+    "Per-recipient deterministic source identity inserted in the same serialized group transaction as message admission, key-epoch verification and read counts. A notification failure rolls back the source.",
+    "No self notification. Muting retains inbox/history; existing unmuted group unread aggregate owns the taskbar contribution. Canonical group rows are excluded from notification badge aggregate to avoid double counting.",
+    "Explicit group read acknowledges canonical inbox sources through effective durable source sequence atomically. Sending preserves the existing own-read behavior and acknowledges matching prior inbox sources. Mark-unread does not resurrect dismissed inbox rows.",
+    "Member, message and group deletion triggers purge metadata even when SQLite foreign keys are disabled; listing/counting/acknowledging also verify existing membership/group/source.",
+    "Postcommit notification callback holds the same group lock during WS push, preventing a metadata push after membership removal acknowledges. Callback performs no database operations. Offline recovery uses the durable inbox.",
+    "Group source reference is included in the existing personal data export allowlist; ciphertext contracts remain unchanged."
+  ],
+  "verification": {
+    "native": {
+      "command": "go test ./repository ./services ./handlers -run 'TestGroupIncoming|TestGroupDMRead|TestGroupSource|TestNotificationUnreadSummary|TestDataExport|TestNotificationRepo' -count=1",
+      "result": "PASS repository8.587s services2.236s handlers2.474s"
+    },
+    "postgres": {
+      "engine": "Disposable PostgreSQL18.6 loopback container; isolated schemas; removed and process environment restored",
+      "command": "Same focused native command with HICHAT_TEST_POSTGRES_DSN configured only in process memory",
+      "result": "PASS repository17.052s services2.997s handlers3.100s",
+      "log": "C:/Users/PARS/AppData/Local/Temp/hichat-group-inbox-pg-20261025.log"
+    },
+    "linux_race": {
+      "engine": "golang:1.26.10-bookworm cached image, readonly source, CGO_ENABLED=1",
+      "command": "go test ./repository ./services -run 'TestGroupIncoming|TestGroupDMRead|TestNotificationUnreadSummary|TestNotificationRepo' -race -count=1 -timeout=4m",
+      "result": "PASS repository105.484s services3.531s"
+    },
+    "native_repository": {
+      "command": "go test ./repository -count=1",
+      "result": "PASS98.695s",
+      "log": "C:/Users/PARS/AppData/Local/Temp/hichat-group-inbox-repository-final.log"
+    },
+    "static": {
+      "command": "Pinned Go1.26.10 golangci-lint run --config ../.golangci.yml --timeout 3m ./repository/... ./services/... ./models/...",
+      "result": "0issues; git diff --check clean"
+    }
+  },
+  "tests_cover": [
+    "Body-free metadata serialization and correct actor/source, author exclusion, mute retaining inbox and canonical badge subtraction.",
+    "Same-second source cutoffs, stale key-epoch rejection, source deletion, removal/rejoin and group deletion cleanup.",
+    "Notification-storage failure rolls back message; removed membership cannot receive callback; concurrent removal cannot acknowledge while source-delivery lock held (actual PostgreSQL pooled connections included).",
+    "More than50 sources aggregate independently of inbox pagination; invalid/orphan sources cannot list/count/ack; own-send read watermark settles prior inbox rows without settling unrelated event.",
+    "Service postcommit push does not report failed sends for event lookup failure; refresh semantics never mark all unrelated rows read.",
+    "Two existing notification fixtures now assert timestamp instant preservation across engines and native PG timestamp column types, retaining SQLite raw storage assertion."
+  ],
+  "remaining": [
+    "Client integration and exact group reply preparation owned by separate agent; not part of this server-only evidence.",
+    "Real browser multi-client encrypted group message, rekey/revocation and overlay/inbox acceptance still required.",
+    "No production mutation, publication or physical-device acceptance. Normal migration backup/rollback review remains deployment gate."
+  ]
+}

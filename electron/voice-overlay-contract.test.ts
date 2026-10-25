@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   parseVoiceOverlaySnapshot,
+  visibleOverlayGameActivityNotices,
+  applyAcknowledgedVoiceOverlaySnapshot,
   isTrustedVoiceOverlaySender,
   VoiceOverlayLifecycle,
   type VoiceOverlayLifecycleTarget,
@@ -291,4 +293,67 @@ test("voice overlay IPC trusts only the live main window main frame", () => {
   assert.equal(isTrustedVoiceOverlaySender({ sender: webContents, senderFrame: null }, mainWindow), false);
   assert.equal(isTrustedVoiceOverlaySender({ sender: webContents, senderFrame: webContents.mainFrame }, { ...mainWindow, isDestroyed: () => true }), false);
   assert.equal(isTrustedVoiceOverlaySender({ sender: webContents, senderFrame: webContents.mainFrame }, null), false);
+});
+
+
+test("welcome accepts a boolean preference and bounded accessibility duration, never a renderer-authored activation", () => {
+  assert.equal(parseVoiceOverlaySnapshot({ ...validSnapshot(), voiceOverlayWelcome: true, overlayNotificationDurationMs: 20000 })?.voiceOverlayWelcome, true);
+  for (const patch of [{ voiceOverlayWelcome: 1 }, { overlayNotificationDurationMs: 0 }, { overlayNotificationDurationMs: 20001 }, { overlayNotificationDurationMs: 3000.5 }, { welcome: { id: 1, expiresAt: 999999 } }, { welcomeHeight: 32 }]) assert.equal(parseVoiceOverlaySnapshot({ ...validSnapshot(), ...patch }), null);
+  assert.equal(parseVoiceOverlaySnapshot(validSnapshot())?.voiceOverlayWelcome, undefined);
+});
+
+
+test("Go Live is optional bounded booleans only; renderer cannot author a native activation", () => {
+  assert.equal(parseVoiceOverlaySnapshot({ ...validSnapshot(), voiceOverlayGoLive: true, goLiveEligible: true, goLiveSession: "room-a" })?.goLiveEligible, true);
+  for (const patch of [{ voiceOverlayGoLive: 1 }, { goLiveEligible: "true" }, { voiceOverlayGoLive: true, goLiveEligible: true }, { goLiveSession: "bad\nroom" }, { goLive: { id: 1, expiresAt: 99999 } }, { goLiveHeight: 64 }]) assert.equal(parseVoiceOverlaySnapshot({ ...validSnapshot(), ...patch }), null);
+});
+
+
+test("notification reply metadata contains only a unique visible mention/reply subset and an explicit bounded session", () => {
+  const source = { ...validSnapshot(), voiceOverlayNotifications: true, voiceOverlayNotificationActions: true, notificationStatus: "ready", notifications: [{ id: "mention", category: "mention" }, { id: "friend", category: "friend_request" }], notificationReplyIds: ["mention"], notificationReplySession: "reply-session" };
+  assert.deepEqual(parseVoiceOverlaySnapshot(source)?.notificationReplyIds, ["mention"]);
+  assert.deepEqual(parseVoiceOverlaySnapshot({ ...source,notifications:[{id:"dm-message",category:"message"}],notificationReplyIds:["dm-message"] })?.notificationReplyIds,["dm-message"]);
+  for (const patch of [{ notificationReplyIds: ["missing"] }, { notificationReplyIds: ["friend"] }, { notificationReplyIds: ["mention", "mention"] }, { notificationReplyIds: ["mention"], notificationReplySession: undefined }, { notificationReplySession: "bad\nsession" }, { notificationReplyButtons: [{ id: "mention", row: 0 }] }, { voiceOverlayNotificationActions: false }]) assert.equal(parseVoiceOverlaySnapshot({ ...source, ...patch }), null);
+});
+
+test("compatibility is optional legacy-safe and strictly boolean",()=>{assert.equal(parseVoiceOverlaySnapshot(validSnapshot())?.voiceOverlayCompatibility,undefined);assert.equal(parseVoiceOverlaySnapshot({...validSnapshot(),voiceOverlayCompatibility:true})?.voiceOverlayCompatibility,true);for(const value of [1,"true",null,{},[]])assert.equal(parseVoiceOverlaySnapshot({...validSnapshot(),voiceOverlayCompatibility:value}),null);});
+
+test("acknowledged and legacy snapshot application share strict trust, parse and policy boundary", () => {
+ const applied:string[]=[];
+ const target={setSuspended(value:boolean){applied.push(`policy:${value}`);return true;},setSnapshot(){applied.push("snapshot");}};
+ assert.equal(applyAcknowledgedVoiceOverlaySnapshot({...validSnapshot(),voiceOverlayCompatibility:false},false,target),false);
+ assert.equal(applyAcknowledgedVoiceOverlaySnapshot({...validSnapshot(),voiceOverlayCompatibility:"no"},true,target),false);
+ assert.deepEqual(applied,[]);
+ assert.equal(applyAcknowledgedVoiceOverlaySnapshot({...validSnapshot(),voiceOverlayCompatibility:false},true,target),true);
+ assert.deepEqual(applied,["policy:false","snapshot"]);
+ assert.equal(applyAcknowledgedVoiceOverlaySnapshot({...validSnapshot(),voiceOverlayCompatibility:true},true,{...target,setSuspended(){return false;}}),false);
+ assert.equal(applied[applied.length - 1],"snapshot");
+});
+
+test("media preferences are opt-in typed booleans and count as passive HUD content",()=>{
+ assert.equal(parseVoiceOverlaySnapshot({...validSnapshot(),voiceOverlayVideo:true})?.voiceOverlayVideo,true);
+ assert.equal(parseVoiceOverlaySnapshot({...validSnapshot(),voiceOverlayStreams:false})?.voiceOverlayStreams,false);
+ for(const key of ["voiceOverlayVideo","voiceOverlayStreams"])for(const value of [1,"true",null])assert.equal(parseVoiceOverlaySnapshot({...validSnapshot(),[key]:value}),null);
+});
+
+const transientNotice = (kind: "game_activity" | "now_playing" = "game_activity", suffix = "1") => ({ noticeId: `12345678-1234-4234-8234-${suffix.padStart(12, "0")}`, label: "Friend", gameName: "CS2", kind, expiresAt: Date.now() + 10_000 });
+test("game notices are independently opt-in, expiring and display-only even in passive compatibility", () => {
+  const notices = [transientNotice(), transientNotice("now_playing", "2")];
+  const source = { ...validSnapshot(), voiceOverlayCompatibility: true, voiceOverlayGameActivityNotifications: true, voiceOverlayNowPlayingNotifications: false, gameActivityNotices: notices };
+  assert.deepEqual(parseVoiceOverlaySnapshot(source)?.gameActivityNotices, [notices[0]]);
+  assert.deepEqual(parseVoiceOverlaySnapshot({ ...source, voiceOverlayGameActivityNotifications: false })?.gameActivityNotices, []);
+  assert.equal(visibleOverlayGameActivityNotices({ ...source, voiceOverlayNowPlayingNotifications: true }).length, 2);
+  assert.deepEqual(parseVoiceOverlaySnapshot({ ...source, gameActivityNotices: [{ ...notices[0], expiresAt: Date.now() - 1 }] })?.gameActivityNotices, []);
+  for (const field of ["voiceOverlayGameActivityNotifications", "voiceOverlayNowPlayingNotifications"]) for (const value of [1, "true", null]) assert.equal(parseVoiceOverlaySnapshot({ ...source, [field]: value }), null);
+});
+test("game notice transport rejects identifiers, capabilities, invalid expiry and unbounded rows/text", () => {
+  const notice = transientNotice();
+  const source = { ...validSnapshot(), voiceOverlayGameActivityNotifications: true };
+  for (const entry of [{ ...notice, userId: "private" }, { ...notice, ticket: "private" }, { ...notice, url: "steam://run/730" },
+    { ...notice, noticeId: "user-id" }, { ...notice, label: "x".repeat(81) }, { ...notice, gameName: "x".repeat(81) },
+    { ...notice, label: "bad\nlabel" }, { ...notice, kind: "join" }, { ...notice, expiresAt: Infinity }, { ...notice, expiresAt: Date.now() + 21_000 }]) {
+    assert.equal(parseVoiceOverlaySnapshot({ ...source, gameActivityNotices: [entry] }), null);
+  }
+  assert.equal(parseVoiceOverlaySnapshot({ ...source, gameActivityNotices: [notice, notice] }), null);
+  assert.equal(parseVoiceOverlaySnapshot({ ...source, gameActivityNotices: Array(4).fill(notice) }), null);
 });

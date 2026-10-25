@@ -1,3 +1,5 @@
+import { isGroupMessageNotification } from "./dmMessageNotification";
+import { groupNotificationSource } from "./groupMessageNotification";
 import { getAuthGeneration } from "../api/client";
 import { useAuthStore } from "../stores/authStore";
 import { useNotificationStore } from "../stores/notificationStore";
@@ -9,6 +11,8 @@ import { useGroupDMStore } from "../stores/groupDMStore";
 import { useBlockStore } from "../stores/blockStore";
 import type { AppNotification } from "../types/notification";
 import { getNotificationPreferences } from "./notificationPreferences";
+import { resolveChatChannel } from "./resolveChatChannel";
+import { useThreadStore } from "../stores/threadStore";
 import { projectOverlayNotifications } from "./overlayNotifications";
 
 type Visibility = {
@@ -19,19 +23,32 @@ type Visibility = {
   dms: ReturnType<typeof useDMStore.getState>["channels"];
   groups: ReturnType<typeof useGroupDMStore.getState>["groups"];
   blocked: readonly string[];
+  threads?: ReturnType<typeof useThreadStore.getState>;
+  authGeneration?: number;
+  mutedChannelIds?: ReadonlySet<string>;
+  ignoredUsers?: Readonly<Record<string, boolean>>;
 };
 
 export function isOverlayNotificationVisible(n: AppNotification, context: Visibility): boolean {
   const { userId, servers, mutedServers, channels, dms, groups, blocked } = context;
-  if (n.actor_id && blocked.includes(n.actor_id)) return false;
+  if (isGroupMessageNotification(n) && !groups.some(g => g.id === n.group_dm_channel_id && !g.is_muted && g.read_key_epoch === g.key_epoch && g.members.some(m => m.id === userId))) return false;
+  if (n.actor_id && (blocked.includes(n.actor_id) || context.ignoredUsers?.[n.actor_id])) return false;
+  if (n.channel_id && context.mutedChannelIds?.has(n.channel_id)) return false;
   if (n.server_id && (!servers.some((s) => s.id === n.server_id) || mutedServers.has(n.server_id)
-    || (n.channel_id && !channels[n.server_id]?.some((c) => c.channels.some((ch) => ch.id === n.channel_id))))) return false;
+    || (n.channel_id && !channels[n.server_id]?.some((c) => c.channels.some((ch) => ch.id === n.channel_id))
+      && !(context.threads && resolveChatChannel(n.channel_id, n.server_id, { categoriesByServer: channels, threads: context.threads,
+        currentOwnerId: userId, currentAuthGeneration: context.authGeneration ?? -1 }))))) return false;
+  if (n.server_id && n.channel_id && context.threads) {
+    const resolved = resolveChatChannel(n.channel_id, n.server_id, { categoriesByServer: channels, threads: context.threads,
+      currentOwnerId: userId, currentAuthGeneration: context.authGeneration ?? -1 });
+    if (resolved && context.mutedChannelIds?.has(resolved.permissionChannelId)) return false;
+  }
   if (n.dm_channel_id) {
     const dm = dms.find((d) => d.id === n.dm_channel_id);
     if (!dm || dm.is_muted || blocked.includes(dm.other_user.id)
       || (dm.status !== "accepted" && !(n.kind === "dm_request" && dm.status === "pending"))) return false;
   }
-  if (typeof n.payload.group_id === "string" && !groups.some((g) => g.id === n.payload.group_id && g.members.some((m) => m.id === userId))) return false;
+  if (typeof n.payload.group_id === "string" && !groups.some((g) => g.id === n.payload.group_id && !g.is_muted && g.members.some((m) => m.id === userId))) return false;
   return true;
 }
 
@@ -46,10 +63,12 @@ export function getLiveOverlayNotificationItems() {
     ownerId: feed.ownerId, currentOwnerId: userId,
     authGeneration: feed.authGeneration, currentAuthGeneration: getAuthGeneration(),
     status: auth.manualStatus, items: feed.items, preferences: getNotificationPreferences(),
-    isVisible: (n) => isOverlayNotificationVisible(n, {
+    isVisible: (n) => (!isGroupMessageNotification(n) || !!groupNotificationSource(n)) && isOverlayNotificationVisible(n, {
       userId, servers: useServerStore.getState().servers, mutedServers: useServerStore.getState().mutedServerIds,
       channels: useChannelStore.getState().categoriesByServer, dms: useDMStore.getState().channels,
       groups: useGroupDMStore.getState().groups, blocked: useBlockStore.getState().blockedUserIds,
+      threads: useThreadStore.getState(), authGeneration: getAuthGeneration(), mutedChannelIds: useChannelStore.getState().mutedChannelIds,
+      ignoredUsers: preferences.get<{ ignoredUsers?: Record<string, boolean> }>("privacy")?.ignoredUsers,
     }),
   });
 }

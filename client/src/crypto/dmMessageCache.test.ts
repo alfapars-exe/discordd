@@ -9,6 +9,14 @@ import {captureDMReceipt,observeDMMessage} from "./dmMessageVersions";
 import {useComposerDraftStore} from "../stores/composerDraftStore";
 const message={id:"m",dm_channel_id:"dm",user_id:"u",sender_device_id:"device",ciphertext:"abcd",e2ee_metadata:"{}",encryption_version:1,content:null,edited_at:null,created_at:"2026-10-24T00:00:00Z",attachments:[]} as unknown as DMMessage;
 beforeEach(()=>{records.clear();vi.clearAllMocks();useComposerDraftStore.getState().reset()});
+it("retains server-derived game origin for local encrypted search and never infers it from sender alone", async () => {
+  await cacheDMMessage({...message,application_id:"u"},{content:"encrypted game message"},()=>true);
+  expect(records.get("m")).toMatchObject({senderUserId:"u",applicationId:"u"});
+  await cacheDMMessage({...message,application_id:"someone-else"},{content:"ordinary"},()=>true);
+  expect(records.get("m")?.applicationId).toBeUndefined();
+  await cacheDMMessage(message,{content:"legacy"},()=>true);
+  expect(records.get("m")?.applicationId).toBeUndefined();
+});
 it("does not let an older receipt finish hashing and overwrite the newer live source",async()=>{
   const claim=captureDMReceipt("dm"),oldGuard=claim(message);
   expect(oldGuard).not.toBeNull();
@@ -44,4 +52,10 @@ it("preserves legacy unedited text but does not apply it to an edited or attachm
 it("rejects cross-scope records and stale lookup/write contexts without deleting data",async()=>{
  await cacheDMMessage(message,{content:"current"},()=>true);const retained=records.get("m")!;records.set("m",{...retained,dmChannelId:"group:dm"});expect(await readDMMessageCache(message,()=>true)).toBeNull();records.set("m",retained);
  let active=true,finish!:(record:CachedDecryptedMessage)=>void;vi.mocked(storage.getCachedDecryptedMessage).mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve}));const lookup=readDMMessageCache(message,()=>active);active=false;finish(retained);expect(await lookup).toBeNull();await cacheDMMessage(message,{content:"stale"},()=>false);expect(records.get("m")?.content).toBe("current");
+});
+
+it("retains validated server append sequence without placing it in encrypted plaintext",async()=>{
+ await cacheDMMessage({...message,source_sequence:"9007199254740993"},{content:"opaque decrypted text"},()=>true);
+ expect(records.get("m")?.sourceSequence).toBe("9007199254740993");expect(records.get("m")?.content).toBe("opaque decrypted text");
+ await cacheDMMessage({...message,source_sequence:"not-server-sequence"},{content:"same"},()=>true);expect(records.get("m")?.sourceSequence).toBeUndefined();
 });

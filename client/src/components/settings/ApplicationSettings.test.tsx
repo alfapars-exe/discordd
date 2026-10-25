@@ -2,11 +2,12 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ApplicationSettings from "./ApplicationSettings";
 
-const mocks = vi.hoisted(() => ({ list: vi.fn(), manifests: vi.fn(), saveManifest: vi.fn(), testAction: vi.fn(), incoming: vi.fn(), create: vi.fn(), revoke: vi.fn(), remove: vi.fn(), requestTransfer: vi.fn(), resolveTransfer: vi.fn(), confirm: vi.fn(), generation: 1, owner: "owner" }));
+const mocks = vi.hoisted(() => ({ registerGame: vi.fn(), list: vi.fn(), manifests: vi.fn(), saveManifest: vi.fn(), testAction: vi.fn(), incoming: vi.fn(), create: vi.fn(), revoke: vi.fn(), remove: vi.fn(), requestTransfer: vi.fn(), resolveTransfer: vi.fn(), confirm: vi.fn(), generation: 1, owner: "owner" }));
 const t = (key: string) => key;
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t }), initReactI18next: { type: "3rdParty", init: () => {} } }));
 vi.mock("../../api/applications", () => ({ listApplications: mocks.list, listApplicationManifests: mocks.manifests, saveApplicationManifest: mocks.saveManifest, invokeApplicationTest: mocks.testAction, listIncomingApplicationTransfers: mocks.incoming, createApplication: mocks.create, revokeApplicationCredentials: mocks.revoke, removeApplication: mocks.remove, requestApplicationTransfer: mocks.requestTransfer, resolveApplicationTransfer: mocks.resolveTransfer }));
 vi.mock("../../api/client", () => ({ getAuthGeneration: () => mocks.generation }));
+vi.mock("../../api/gameApplications", () => ({ registerGameApplication: mocks.registerGame }));
 vi.mock("../../stores/authStore", () => {
   const state = () => ({ user: { id: mocks.owner } });
   const hook = (selector: (value: ReturnType<typeof state>) => unknown) => selector(state());
@@ -27,6 +28,15 @@ describe("ApplicationSettings", () => {
     mocks.confirm.mockResolvedValue(true);
     mocks.revoke.mockResolvedValue({ success: true });
     mocks.remove.mockResolvedValue({ success: true, data: { removed: true, shared_history: "retained", personal_asset_cleanup: "queued" } });
+  });
+
+  it("requires explicit confirmation before permanent game identity registration", async () => {
+    mocks.registerGame.mockResolvedValueOnce({ success: true, data: { application_id: "app-1", is_game_application: true } });
+    render(<ApplicationSettings />); await screen.findByText("Helper");
+    fireEvent.click(screen.getByRole("button", { name: "linkedGames.register" }));
+    expect(await screen.findByText("linkedGames.registered")).toBeVisible();
+    expect(mocks.confirm).toHaveBeenCalledWith(expect.objectContaining({ message: "linkedGames.registerConfirm" }));
+    expect(mocks.registerGame).toHaveBeenCalledWith("app-1", expect.any(Function));
   });
 
   it("shows a newly minted token once without persisting it in the list response", async () => {

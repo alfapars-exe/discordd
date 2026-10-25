@@ -10,15 +10,30 @@ import (
 // method is nil-safe (no Fn set = no-op success) so services whose
 // notification writes are best-effort side effects need no setup.
 type MockNotificationRepo struct {
-	CreateFn                func(ctx context.Context, n *models.Notification) error
-	ListFn                  func(ctx context.Context, userID, beforeID string, unreadOnly bool, limit int) ([]models.Notification, error)
-	MarkReadFn              func(ctx context.Context, userID, id string) (bool, error)
-	MarkAllReadFn           func(ctx context.Context, userID string) (int64, error)
-	CountUnreadFn           func(ctx context.Context, userID string) (int, error)
-	DeleteByMessageIDFn     func(ctx context.Context, messageID string) error
-	DeleteByChannelIDFn     func(ctx context.Context, channelID string) error
-	MarkFriendRequestReadFn func(ctx context.Context, userID, actorID string) ([]string, error)
-	MarkDMRequestReadFn     func(ctx context.Context, userID, dmChannelID string) ([]string, error)
+	CreateDMMessageIfAbsentFn func(context.Context, *models.Notification) (bool, error)
+	MarkDMMessagesReadFn      func(context.Context, string, string, *string) ([]string, error)
+	CreateFn                  func(ctx context.Context, n *models.Notification) error
+	ListFn                    func(ctx context.Context, userID, beforeID string, unreadOnly bool, limit int) ([]models.Notification, error)
+	MarkReadFn                func(ctx context.Context, userID, id string) (bool, error)
+	MarkAllReadFn             func(ctx context.Context, userID string) (int64, error)
+	CountUnreadFn             func(ctx context.Context, userID string) (int, error)
+	DeleteByMessageIDFn       func(ctx context.Context, messageID string) error
+	DeleteByChannelIDFn       func(ctx context.Context, channelID string) error
+	MarkFriendRequestReadFn   func(ctx context.Context, userID, actorID string) ([]string, error)
+	MarkDMRequestReadFn       func(ctx context.Context, userID, dmChannelID string) ([]string, error)
+}
+
+func (m *MockNotificationRepo) CreateDMMessageIfAbsent(ctx context.Context, n *models.Notification) (bool, error) {
+	if m.CreateDMMessageIfAbsentFn != nil {
+		return m.CreateDMMessageIfAbsentFn(ctx, n)
+	}
+	return true, nil
+}
+func (m *MockNotificationRepo) MarkDMMessagesRead(ctx context.Context, userID, channelID string, messageID *string) ([]string, error) {
+	if m.MarkDMMessagesReadFn != nil {
+		return m.MarkDMMessagesReadFn(ctx, userID, channelID, messageID)
+	}
+	return []string{}, nil
 }
 
 func (m *MockNotificationRepo) DeleteByChannelID(ctx context.Context, channelID string) error {

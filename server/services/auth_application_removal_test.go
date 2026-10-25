@@ -83,6 +83,8 @@ func TestApplicationRemovalFailureDoesNotDisconnect(t *testing.T) {
 			s.SetUserCacheInvalidator(users)
 			s.SetVoiceDisconnecter(voice)
 			disconnects := 0
+			observers := 0
+			s.SetMusicRequesterRetirementObserver(musicRequesterObserverFunc(func(string) { observers++ }))
 			hub.DisconnectUserFn = func(string) { disconnects++ }
 			repo := repository.NewSQLiteApplicationRemovalRepo(h.db.Conn)
 			s.applicationRemoval = applicationRemovalTransition(func(ctx context.Context, actor, sid, hash, mfa, app string, now int64) error {
@@ -97,7 +99,7 @@ func TestApplicationRemovalFailureDoesNotDisconnect(t *testing.T) {
 			if err := s.RemoveApplication(ctx, h.user.ID, login.SessionID, "app", "current-password", ""); err == nil {
 				t.Fatal("failed or stale-proof removal succeeded")
 			}
-			if disconnects != 0 || len(inv.userCalls) != 0 || len(users.invalidated) != 0 || len(voice.DisconnectedIDs) != 0 {
+			if observers != 0 || disconnects != 0 || len(inv.userCalls) != 0 || len(users.invalidated) != 0 || len(voice.DisconnectedIDs) != 0 {
 				t.Fatal("failed removal changed runtime")
 			}
 			var active int

@@ -1,0 +1,116 @@
+{
+  "date": "2026-10-25",
+  "scope": "P9 bounded private P2P/group screen video selected resolution/FPS and live source quality",
+  "status": "implemented_focused_verified_runtime_acceptance_pending",
+  "owned_paths": [
+    "client/src/utils/privateScreenQuality.ts",
+    "client/src/utils/privateScreenQuality.test.ts",
+    "client/src/webrtc/p2pScreenShare.ts",
+    "client/src/webrtc/p2pScreenShare.test.ts",
+    "client/src/stores/p2pCallStore.screen.test.ts",
+    "client/src/components/dm/GroupScreenShareSession.ts",
+    "client/src/components/dm/GroupScreenShareSession.test.ts",
+    "client/src/components/dm/GroupScreenShareControl.tsx",
+    "client/src/components/dm/GroupScreenShareControl.test.tsx",
+    "client/src/components/voice/PrivateScreenQualityControls.tsx",
+    "client/src/components/p2p/P2PCallControls.tsx",
+    "client/src/i18n/locales/en/voice.json",
+    "client/src/i18n/locales/tr/voice.json",
+    "client/src/stores/p2pCallStore.ts",
+    "client/src/components/dm/GroupDMCall.tsx",
+    "client/src/components/dm/GroupDMCall.encryption.test.tsx",
+    "client/src/components/dm/GroupDMCall.localization.test.tsx",
+    "client/src/components/dm/GroupDMCall.ownership.test.tsx",
+    "client/src/components/dm/GroupDMCall.conflict.test.tsx",
+    "client/src/webrtc/videoSenderMutation.ts",
+    "client/src/webrtc/videoSenderMutation.test.ts",
+    "client/src/components/layout/UserBar.groupAudio.test.tsx",
+    "client/src/components/layout/UserBar.p2pRinging.test.tsx",
+    "implementation/verification/p9-private-screen-quality-2026-10-25.json"
+  ],
+  "shared_camera_union_paths": [
+    "client/src/stores/p2pCallStore.ts",
+    "client/src/components/dm/GroupDMCall.tsx",
+    "client/src/components/dm/GroupDMCall.encryption.test.tsx",
+    "client/src/components/dm/GroupDMCall.localization.test.tsx",
+    "client/src/components/dm/GroupDMCall.ownership.test.tsx",
+    "client/src/components/dm/GroupDMCall.conflict.test.tsx"
+  ],
+  "behavior": [
+    "P2P screen capture uses selected device preferences, resolves native Windows physical metrics after the user picker, and applies resolution/FPS plus encoding bitrate ceilings. Pending sources remain disabled until exact active-call/auth/PC/localStream and sender ownership checks pass.",
+    "Group screen capture uses the existing actual admitted SDK Room; SDKConnected, canPublish, current capture admission, account generation and current group key epoch are required. Captured SDK screen tracks are muted through publication and unmuted only after current lease checks.",
+    "Quality/FPS changes apply constraints and sender encoding ceilings to the existing owned source; no picker reopen or new Room. Group primary and backup codec senders retain source identity. Codec changes are not attempted as a live quality update.",
+    "Late permission/picker/SDK publication results cannot publish into a replacement call or Room. Reconnect/admission closure, auth generation, group epoch or component retirement stops the owned source. A reconnect requires explicitly sharing again; selected device preferences remain saved.",
+    "P2P pending camera changes prevent screen acquisition with explicit retry guidance; the companion camera slice treats a pending/active screen ticket as local-preview-only, preventing competing same-sender replacements. Stopping screen sharing restores the latest local camera track.",
+    "P2P renegotiation wait is bounded to 10 seconds, closed/retired peers release capture, and a negotiated video transceiver with a cleared sender is reused. Initial capture/quality failure restores the still-current camera sender and stops the screen source.",
+    "Private calls are explicitly video-only in this bounded slice. Native system audio remains owned by the existing guild capture helper; no private WASAPI ownership or capture lease was added. Existing guild selected-quality runtime is preserved.",
+    "Review correction: every P2P camera/screen replaceTrack and screen setParameters mutation shares one actual-sender queue. Stop retains a restore ticket through awaited replacement, restores the latest local camera after deferred preview updates, removes screen-only FPS/bitrate caps and prevents stale queued mutations from overwriting a newer owner. A new picker waits for restoration; auth/call cleanup invalidates old restore continuations."
+  ],
+  "verification": [
+    {
+      "kind": "focused Vitest",
+      "result": "13 files, 52 tests PASS on current shared worktree; includes deferred restore/new camera/new share/account retirement, encoder ordering, publication rejection and both actual UserBar group integration fixtures",
+      "paths": [
+        "src/components/dm/GroupScreenShareControl.test.tsx",
+        "src/components/dm/GroupScreenShareSession.test.ts",
+        "src/stores/p2pCallStore.screen.test.ts",
+        "src/webrtc/p2pScreenShare.test.ts",
+        "src/utils/privateScreenQuality.test.ts",
+        "src/components/p2p/P2PCallControls.test.tsx",
+        "src/components/dm/GroupDMCall.encryption.test.tsx",
+        "src/components/dm/GroupDMCall.localization.test.tsx",
+        "src/components/dm/GroupDMCall.ownership.test.tsx",
+        "src/components/dm/GroupDMCall.conflict.test.tsx",
+        "src/webrtc/videoSenderMutation.test.ts",
+        "src/components/layout/UserBar.groupAudio.test.tsx",
+        "src/components/layout/UserBar.p2pRinging.test.tsx"
+      ]
+    },
+    {
+      "kind": "app TypeScript",
+      "command": "tsc --noEmit -p tsconfig.app.json",
+      "result": "PASS current combined camera/share worktree"
+    },
+    {
+      "kind": "scoped ESLint",
+      "result": "PASS clean on changed-path ESLint; final union scope contains21 owned/shared TS/TSX source and test paths"
+    },
+    {
+      "kind": "diff check",
+      "result": "PASS current worktree; unrelated CRLF warnings do not affect diff check"
+    }
+  ],
+  "remaining": [
+    "Real Windows/web display/window capture, DPI/multiple monitors, actual encoder output, receiver-visible resolution/FPS, permission denial and reconnect acceptance remain open. These tests verify source/SDK contracts, not physical output quality.",
+    "Private system-audio sharing remains missing and required in broader P9; a globally owned native source lease is needed before using the guild WASAPI helper from another call. No P9 whole-phase or full share acceptance is claimed.",
+    "Existing guild quality-change restart behavior was preserved; this slice does not claim eliminating its picker/restart behavior.",
+    "Parent coordinates combined full client/build/security scan and one coherent camera/share commit. No deployment, push or production update is claimed by this receipt."
+  ],
+  "exclusive_source_sha256_lf": {
+    "client/src/utils/privateScreenQuality.ts": "b1afe3ca5fc2b4273e7732f05b78701ae793e2382be6d0bcb6641a54935a836c",
+    "client/src/utils/privateScreenQuality.test.ts": "35315c33bc150a8b8492eb087b30aec2b4243857657f228e9a0b8af7dea3d7ca",
+    "client/src/webrtc/p2pScreenShare.ts": "396d440b4a0928e67ffe794c64987546c1a35a830ef323ef8533845fe3c9b057",
+    "client/src/webrtc/p2pScreenShare.test.ts": "b18865955b5564eb89ee8308db446ceb9259b2d8bec847fbfd066984cd046864",
+    "client/src/stores/p2pCallStore.screen.test.ts": "57228208a9edf8ea35fa84ddd09e52687c4f7216bdee844334f98ddf9c569c2e",
+    "client/src/components/dm/GroupScreenShareSession.ts": "3302b0f9c417b60047a3d03164614271c3fe556025729441b7aa743b8e1344cb",
+    "client/src/components/dm/GroupScreenShareSession.test.ts": "e0081f058eac0187b82b05690e69cf263e99d17d550e7b29b0b2b6178289d3a8",
+    "client/src/components/dm/GroupScreenShareControl.tsx": "68bf4978a4a6cf89dbbef40cf2804322b762a83426b70560a53480350d022ed7",
+    "client/src/components/dm/GroupScreenShareControl.test.tsx": "3097733de9e622095b11fd9ff2b07b3f847e8c66092e28200d00a338630ed078",
+    "client/src/components/voice/PrivateScreenQualityControls.tsx": "acee909941f93b49179a2ecde637dc0050ae1a81e381695b9068ccb1a79ece84",
+    "client/src/components/p2p/P2PCallControls.tsx": "cf03d3e0591c9e7f2733f81a7a34784c768f1e2f92caf1003c96f8e89b50244e",
+    "client/src/i18n/locales/en/voice.json": "3a365aeaa2a9e712477c2a7a01516c8f672beb788bb72d4954131d64632e2d8e",
+    "client/src/i18n/locales/tr/voice.json": "b03bb72ec63b27e8be27afa228e8e88e27488ee4da15c9c64f495837de643003",
+    "client/src/webrtc/videoSenderMutation.ts": "cb98da956000eb45781d16436096a15ed5e7ab4e70c1b8aa41954d1150802949",
+    "client/src/webrtc/videoSenderMutation.test.ts": "c02395f9c9c7f23590c7f842f3f6b3adb554f42f4a8a98940e622b475966cae9",
+    "client/src/components/layout/UserBar.groupAudio.test.tsx": "0a980964d9b5cce294eae3a455d5c0dfe1ad41cd7fb481830b2a1d6d96a2da14",
+    "client/src/components/layout/UserBar.p2pRinging.test.tsx": "2cdba49d4a458f656ebc231b0b4028b8c5f8c3e96800a51fc989489c5cd140f9"
+  },
+  "shared_camera_union_sha256_lf": {
+    "client/src/stores/p2pCallStore.ts": "0adf5b113c55dd9b0a6af694eef5ceaa75102af8a815d1dff4c3eda8d3fe9c92",
+    "client/src/components/dm/GroupDMCall.tsx": "f153df7c4b0589b5ba52523c397f6620f19993ba0e40ef7ac69f96bada59b52e",
+    "client/src/components/dm/GroupDMCall.encryption.test.tsx": "04de6839ad57a19bff3108a3c59f4a2c8c33d157a3f902f787aed5f18833202b",
+    "client/src/components/dm/GroupDMCall.localization.test.tsx": "d1037e848e7addd464aa37c5e5e4216f40f48b0caae30968782a72d84cece1a3",
+    "client/src/components/dm/GroupDMCall.ownership.test.tsx": "54b6df224ec8800cfe86275f215cacbc891b164d43aeb462e0fa7b058677a963",
+    "client/src/components/dm/GroupDMCall.conflict.test.tsx": "857e441f611af047788eef158ce62af5bc52ab9ede7f05bcb0bc2385dfbade4e"
+  }
+}

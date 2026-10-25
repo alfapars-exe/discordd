@@ -18,6 +18,7 @@ export interface RegisteredGameRecord {
   executablePath: string;
   displayName: string;
   shareAllowed: boolean;
+  joinAdapter: "none" | "cs2-steam";
   overlayAllowed: boolean;
   lastSeenAt: string | null;
 }
@@ -27,6 +28,7 @@ export interface PublicRegisteredGame {
   displayName: string;
   executableName: string;
   shareAllowed: boolean;
+  joinAdapter: "none" | "cs2-steam";
   overlayAllowed: boolean;
   availability: "available" | "missing" | "unreadable";
   running: boolean | null;
@@ -42,7 +44,7 @@ export interface RegisteredGamesSnapshot {
 
 export interface RegisteredGameActivity {
   enabled: boolean;
-  game: { id: string; name: string } | null;
+  game: { id: string; name: string; canonicalGameId?: "steam:730" } | null;
 }
 
 export interface RegisteredGamesOptions {
@@ -82,21 +84,47 @@ export function parseProcessSnapshot(json: string): DetectedExecutable[] {
 }
 
 /**
+ * A provider-side WQL literal may contain a legal apostrophe, but never a
+ * double quote, path separator, wildcard or control character. Values still
+ * cross the process boundary only as base64 JSON stdin, never command text.
+ */
+export function validateProcessImageNames(value: unknown): string[] {
+  if (!Array.isArray(value) || value.length > MAX_GAMES) throw new TypeError("Invalid registered process names.");
+  const seen = new Set<string>();
+  const names: string[] = [];
+  for (const name of value) {
+    if (typeof name !== "string" || !name || name.length > 255 || !/\.exe$/i.test(name)
+      || /[<>:"/\\|?*\p{Cc}]/u.test(name) || path.win32.basename(name) !== name) {
+      throw new TypeError("Invalid registered process name.");
+    }
+    const key = name.toLowerCase();
+    if (!seen.has(key)) { seen.add(key); names.push(name); }
+  }
+  return names;
+}
+
+/**
  * Run one fixed PowerShell/CIM query. Registered image names enter over stdin,
  * never in command text or arguments. The local process list is filtered before
  * output; no process data is logged or sent to the renderer/server.
  */
 export function scanWindowsExecutables(knownImageNames: string[]): Promise<DetectedExecutable[]> {
+  let names: string[];
+  try { names = validateProcessImageNames(knownImageNames); } catch (error) { return Promise.reject(error); }
+  // An empty provider filter would enumerate every process. Do not start one.
+  if (!names.length) return Promise.resolve([]);
   const systemRoot = process.env.SystemRoot || "C:\\Windows";
   const powershell = path.win32.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
   const script = [
     "$ErrorActionPreference = 'Stop'",
     "$namesJson = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String([Console]::In.ReadToEnd()))",
     "$names = @($namesJson | ConvertFrom-Json)",
+    "if ($names.Count -eq 0) { throw 'Empty process filter.' }",
     "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)",
     "$lookup = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)",
     "foreach ($name in $names) { [void]$lookup.Add([string]$name) }",
-    "$rows = @(Get-CimInstance -ClassName Win32_Process -Property Name, ExecutablePath -ErrorAction Stop | Where-Object { $_.Name -and $lookup.Contains([string]$_.Name) } | Select-Object @{Name='name';Expression={$_.Name}}, @{Name='executablePath';Expression={$_.ExecutablePath}})",
+    "$filter = ($names | ForEach-Object { 'Name = \"' + [string]$_ + '\"' }) -join ' OR '",
+    "$rows = @(Get-CimInstance -ClassName Win32_Process -Filter $filter -Property Name, ExecutablePath -ErrorAction Stop | Where-Object { $_.Name -and $lookup.Contains([string]$_.Name) } | Select-Object @{Name='name';Expression={$_.Name}}, @{Name='executablePath';Expression={$_.ExecutablePath}})",
     "ConvertTo-Json -InputObject $rows -Compress -Depth 2",
   ].join("; ");
 
@@ -132,7 +160,7 @@ export function scanWindowsExecutables(knownImageNames: string[]): Promise<Detec
       if (code !== 0) return finish(new Error("Process scan failed."));
       try {
         const rows = parseProcessSnapshot(output);
-        const known = new Set(knownImageNames.map((name) => name.toLowerCase()));
+        const known = new Set(names.map((name) => name.toLowerCase()));
         if (rows.some((row) => !known.has(row.name))) throw new Error("Unexpected process name.");
         finish(undefined, rows);
       } catch {
@@ -143,7 +171,7 @@ export function scanWindowsExecutables(knownImageNames: string[]): Promise<Detec
       child.kill();
       finish(new Error("Process scan input failed."));
     });
-    child.stdin.end(Buffer.from(JSON.stringify(knownImageNames), "utf8").toString("base64"));
+    child.stdin.end(Buffer.from(JSON.stringify(names), "utf8").toString("base64"));
   });
 }
 
@@ -151,6 +179,14 @@ function safeDisplayName(filename: string): string {
   const withoutExtension = path.win32.basename(filename).replace(/\.exe$/i, "");
   const cleaned = withoutExtension.replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, 80);
   return cleaned || "Game";
+}
+
+/** User-provided title only; never accepts a path or silently truncates input. */
+export function validateGameDisplayName(value: unknown): string {
+  if (typeof value !== "string" || value.length > 80 || /[\u0000-\u001f\u007f/\\]/.test(value) || !value.trim()) {
+    throw new TypeError("A game name of 1 to 80 characters without control characters or path separators is required.");
+  }
+  return value.trim();
 }
 
 function normalizeRecord(value: unknown): RegisteredGameRecord | null {
@@ -166,8 +202,9 @@ function normalizeRecord(value: unknown): RegisteredGameRecord | null {
   return {
     id: row.id,
     executablePath,
-    displayName: typeof row.displayName === "string" ? safeDisplayName(row.displayName).slice(0, 80) : safeDisplayName(filename),
+    displayName: (() => { try { return validateGameDisplayName(row.displayName); } catch { return safeDisplayName(filename); } })(),
     shareAllowed: row.shareAllowed === true,
+    joinAdapter: row.joinAdapter === "cs2-steam" ? "cs2-steam" : "none",
     overlayAllowed: row.overlayAllowed === true,
     lastSeenAt,
   };
@@ -414,7 +451,7 @@ export function createRegisteredGamesService(options: RegisteredGamesOptions) {
       const previous = cloneRecords(games);
       const record: RegisteredGameRecord = {
         id: makeId(), executablePath: resolved, displayName: safeDisplayName(filename),
-        shareAllowed: false, overlayAllowed: false, lastSeenAt: null,
+        shareAllowed: false, joinAdapter: "none", overlayAllowed: false, lastSeenAt: null,
       };
       games.push(record);
       try {
@@ -434,6 +471,7 @@ export function createRegisteredGamesService(options: RegisteredGamesOptions) {
       displayName: record.displayName,
       executableName: path.win32.basename(record.executablePath),
       shareAllowed: record.shareAllowed,
+      joinAdapter: record.joinAdapter,
       overlayAllowed: record.overlayAllowed,
       availability,
       running,
@@ -470,7 +508,8 @@ export function createRegisteredGamesService(options: RegisteredGamesOptions) {
       const selected = cached.games
         .filter((game) => game.running === true && game.availability === "available" && currentRecords.get(game.id)?.shareAllowed === true)
         .sort((left, right) => left.id.localeCompare(right.id))[0];
-      return { enabled: true, game: selected ? { id: selected.id, name: selected.name } : null };
+      return { enabled: true, game: selected ? { id: selected.id, name: selected.name,
+        ...(currentRecords.get(selected.id)?.joinAdapter === "cs2-steam" ? { canonicalGameId: "steam:730" as const } : {}) } : null };
     },
     async setBackgroundDetectionEnabled(enabled: boolean): Promise<boolean> {
       if (typeof enabled !== "boolean") throw new TypeError("background detection setting must be boolean");
@@ -507,6 +546,36 @@ export function createRegisteredGamesService(options: RegisteredGamesOptions) {
       clearBackgroundActivity();
     },
     addExecutable,
+    async setJoinAdapter(id: string, adapter: unknown): Promise<boolean> {
+      if (adapter !== "none" && adapter !== "cs2-steam") throw new TypeError("Unsupported game join adapter.");
+      if (disposed || platform !== "win32") return false;
+      return serialize(async () => {
+        const games = await load();
+        const game = games.find(row => row.id === id);
+        if (!game) return false;
+        if (game.joinAdapter === adapter) return true;
+        const previous = cloneRecords(games);
+        game.joinAdapter = adapter;
+        try { await persist(); } catch (error) { records = previous; throw error; }
+        clearBackgroundActivity();
+        return true;
+      });
+    },
+    async setDisplayName(id: string, value: unknown): Promise<boolean> {
+      const displayName = validateGameDisplayName(value);
+      if (disposed || platform !== "win32") return false;
+      return serialize(async () => {
+        const games = await load();
+        const game = games.find((row) => row.id === id);
+        if (!game) return false;
+        if (game.displayName === displayName) return true;
+        const previous = cloneRecords(games);
+        game.displayName = displayName;
+        try { await persist(); } catch (error) { records = previous; throw error; }
+        clearBackgroundActivity();
+        return true;
+      });
+    },
     async remove(id: string): Promise<boolean> {
       return serialize(async () => {
         const games = await load();

@@ -49,17 +49,17 @@ export function useUpdateChecker(): UpdateChecker {
 
     const api = window.electronAPI!;
 
-    api.onUpdateAvailable((info) => {
+    const stopAvailable = api.onUpdateAvailable((info) => {
       setUpdate({ version: info.version });
       setStatus("downloading");
       setProgress(0);
     });
 
-    api.onUpdateProgress((progressInfo) => {
+    const stopProgress = api.onUpdateProgress((progressInfo) => {
       setProgress(Math.round(progressInfo.percent));
     });
 
-    api.onUpdateDownloaded((info) => {
+    const stopDownloaded = api.onUpdateDownloaded((info) => {
       const downloaded: UpdateInfo = { version: info?.version ?? "" };
       downloadedUpdateRef.current = downloaded;
       setUpdate(downloaded);
@@ -67,7 +67,7 @@ export function useUpdateChecker(): UpdateChecker {
       setStatus("ready");
     });
 
-    api.onUpdateError((message) => {
+    const stopError = api.onUpdateError((message) => {
       // Network errors (tunnel failures, no internet) are expected —
       // don't show a banner, just log for debugging.
       console.warn("[updater] Update check failed:", message);
@@ -84,7 +84,14 @@ export function useUpdateChecker(): UpdateChecker {
       }
     });
 
-    // Listeners persist for app lifetime — no cleanup needed
+    return () => {
+      stopAvailable?.();
+      stopProgress?.();
+      stopDownloaded?.();
+      stopError?.();
+      if (snoozeTimerRef.current) clearTimeout(snoozeTimerRef.current);
+      snoozeTimerRef.current = null;
+    };
   }, []);
 
   const restartAndInstall = useCallback(() => {

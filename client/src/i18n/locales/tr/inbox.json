@@ -25,6 +25,7 @@
   "messageRequests": "Mesaj istekleri",
   "youPrefix": "Sen:",
   "kind": {
+    "directMessage": "{{name}} sana bir özel mesaj gönderdi",
     "mention": "{{name}} seni #{{channel}} kanalında etiketledi",
     "reply": "{{name}} #{{channel}} kanalında sana yanıt verdi",
     "friendRequest": "{{name}} sana arkadaşlık isteği gönderdi",
@@ -35,7 +36,8 @@
     "streamStart": "{{name}} yayın yapmaya başladı",
     "friendAnniversary": "{{name}} ile arkadaşlığınızın {{count}}. yıl dönümü!",
     "friendAnniversary_one": "{{name}} ile arkadaşlığınızın {{count}}. yıl dönümü!",
-    "friendAnniversary_other": "{{name}} ile arkadaşlığınızın {{count}}. yıl dönümü!"
+    "friendAnniversary_other": "{{name}} ile arkadaşlığınızın {{count}}. yıl dönümü!",
+    "groupMessage": "{{name}} bir grup mesajı gönderdi"
   },
   "friendRequestToast": "{{name}} sana arkadaşlık isteği gönderdi"
 }

@@ -91,8 +91,8 @@ func (c *Client) handleP2PSignal(event Event) {
 		return
 	}
 
-	if data.CallID == "" || data.Type == "" {
-		dispatchLogger.Warn("p2p_signal missing fields", "user_id", c.userID)
+	if err := data.Validate(); err != nil {
+		dispatchLogger.Warn("p2p_signal invalid payload", "user_id", c.userID)
 		return
 	}
 

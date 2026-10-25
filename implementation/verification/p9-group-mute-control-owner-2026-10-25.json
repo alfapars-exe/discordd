@@ -1,0 +1,63 @@
+{
+  "phase": "P9",
+  "date": "2026-10-25",
+  "status": "implemented_unverified",
+  "baseline_head": "0c4ae680d5ad4c0b97ae5c5a36495b8190b75c3a",
+  "owned_paths": [
+    "client/src/stores/groupCallAudioControlStore.ts",
+    "client/src/components/layout/UserBar.tsx",
+    "client/src/components/layout/UserBar.groupAudio.test.tsx",
+    "client/src/components/dm/GroupDMCall.tsx",
+    "client/src/hooks/useVoice.ts",
+    "client/src/hooks/useVoice.groupAudio.test.ts"
+  ],
+  "source_sha256": {
+    "client/src/stores/groupCallAudioControlStore.ts": "069c5f832bd55d6271c634125ecb4d67b7f7b849d641140200020a781bc3d7e6",
+    "client/src/components/layout/UserBar.tsx": "e9b303721db3781ea294dc15adeda18ab6f3a5c2cf3f6f5e98c675539e61e443",
+    "client/src/components/layout/UserBar.groupAudio.test.tsx": "45116a3d4f0e7d0da58687a216dd4261e1ca47226c594d4c6fec385ad7efce28",
+    "client/src/components/dm/GroupDMCall.tsx": "4c8eca10d9b1082ca2085ae5cf1a369daee7453c4e2cd6a238f55ff40fcef24d",
+    "client/src/hooks/useVoice.ts": "37da2b72a2839e36077763ce955aba671c029ff19ae78b5d7626f1df95b25039",
+    "client/src/hooks/useVoice.groupAudio.test.ts": "7ef1def4bbbec8b717f4b9b37fee039a436ce9b096a415dce0b42b2e7c76931d"
+  },
+  "problem": "UserBar and shared mute shortcuts previously changed guild manual mute while private group capture had separate manual intent. The icon/action could diverge from the actually transmitting group microphone.",
+  "contract": [
+    "An ephemeral audio-control binding exposes exact component call nonce, immutable account/generation, group ID, manual/effective mute, capture conflict and a guarded toggle. This is control routing only, not persistent call ownership or navigation state.",
+    "Group local button, UserBar and shared useVoice mute command now reach the same actual group manual intent when no guild/P2P call takes precedence. Unrelated guild moderation does not become authority over private capture.",
+    "Dock icon reflects group effective mute; queued-deafen action label uses group manual intent. Undeafen cannot reopen a manually muted group simply because the global guild queued-unmute was false.",
+    "Bindings only publish for the initial component account/generation. Account replacement clears control and stale component changes cannot adopt the new owner. Release/toggle require exact nonce; a retained group command never falls through to a replacement group/guild microphone.",
+    "Existing capture conflict latch still forces explicit new group unmute when another call ends. Receiving/camera behavior, E2EE admission and exact controller/media ownership stay unchanged."
+  ],
+  "verification": [
+    {
+      "cwd": "client",
+      "command": "npx vitest run",
+      "result": "PASS376 files/3660 tests72.65s after final UserBar source freeze; root device/cue source included. Later persistent group-lifetime work is independent and requires its own integrated gate."
+    },
+    {
+      "cwd": "client",
+      "command": "npm run build",
+      "result": "PASS TypeScript and1683 modules9.58s; known native-loader/chunk/dynamic-import/worker-timing warnings retained."
+    },
+    {
+      "cwd": "client",
+      "command": "npx eslint src/stores/groupCallAudioControlStore.ts src/components/layout/UserBar.tsx src/components/layout/UserBar.groupAudio.test.tsx src/components/dm/GroupDMCall.tsx src/hooks/useVoice.ts src/hooks/useVoice.groupAudio.test.ts",
+      "result": "PASS0 errors0 warnings."
+    },
+    {
+      "cwd": "client",
+      "command": "npx vitest run src/components/layout/UserBar.groupAudio.test.tsx src/hooks/useVoice.groupAudio.test.ts",
+      "result": "PASS2 files/8 tests2.65s."
+    }
+  ],
+  "actual_controller_test_boundary": "UserBar.groupAudio.test renders real UserBar, GroupDMCall and actual LiveMicrophone controller. SDK capture and processor implementation are mocked; this establishes real command/controller mute ownership, not physical audio transmission. Tests cover dock mute, local-button icon synchronization, queued-deafen privacy, conflict ending and stale account rebinding.",
+  "nonce_and_precedence_tests": "useVoice.groupAudio.test checks exact current owner routing without guild WS updates, retained command suppression after group/guild replacement, exact nonce release and auth retirement, plus existing guild/P2P precedence.",
+  "remaining_acceptance": [
+    "Real browser/Windows two-client microphone audibility and encrypted media acceptance remain open.",
+    "No claim that persistent group navigation is implemented by this control binding; another scoped agent owns that work.",
+    "Foreground-only group PTT remains as documented in prior private-audio slice.",
+    "Existing non-group P2P global mute-hotkey behavior is not changed by this group-only routing; P2P dock retains its separate dedicated controls.",
+    "No installer, production deployment or physical device acceptance is claimed."
+  ],
+  "server_or_schema_changes": false,
+  "production_operations": false
+}

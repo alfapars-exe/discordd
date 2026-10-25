@@ -348,6 +348,7 @@ describe("account-scoped preference synchronization", () => {
       voiceOverlayPinned: true,
       voiceOverlayQuickActions: true, voiceOverlayClickableActions: true,
       voiceOverlayActivity: true,
+      voiceOverlayGameActivityNotifications: true, voiceOverlayNowPlayingNotifications: true,
       voiceOverlayNotifications: true,
       voiceOverlayNotificationActions: true,
       voiceOverlayChat: true,
@@ -361,6 +362,7 @@ describe("account-scoped preference synchronization", () => {
       voiceOverlayPinned: false,
       voiceOverlayQuickActions: false, voiceOverlayClickableActions: false,
       voiceOverlayActivity: false,
+      voiceOverlayGameActivityNotifications: false, voiceOverlayNowPlayingNotifications: false,
       voiceOverlayNotifications: false,
       voiceOverlayNotificationActions: false,
       voiceOverlayChat: true,
@@ -699,4 +701,8 @@ describe("account-scoped preference synchronization", () => {
     state().reset();
     expect(JSON.parse(localStorage.getItem(legacyBackupKey)!)).toEqual({ appearance: { uiScale: 140 } });
   });
+});
+
+it("preserves account-scoped voice event booleans without leaking them to another account",()=>{
+ state().reset();localStorage.clear();state().bindAccount("alice");const keys=["voiceJoinSound","voiceLeaveSound","voiceWatchStartSound","voiceWatchStopSound","voiceMuteSound","voiceUnmuteSound","voiceDeafenSound","voiceUndeafenSound"];for(const key of keys){state().set({notifications:{[key]:false}});expect(state().data.notifications).toMatchObject({[key]:false});}state().bindAccount("bob");for(const key of keys)expect((state().data.notifications as Record<string,unknown>|undefined)?.[key]).toBeUndefined();
 });

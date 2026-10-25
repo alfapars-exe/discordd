@@ -1,6 +1,13 @@
 import type { GroupDMMessage } from "../types/groupDM";
 import type { E2EEPayload } from "./e2eePayload";
 import * as keyStorage from "./keyStorage";
+import {dmSourceSequence} from "../utils/dmSourceOrder";
+
+/** Call only after ciphertext/group cache affinity passed; never replace server metadata. */
+export function restoreGroupSourceSequence(message:GroupDMMessage,cachedSequence:unknown):GroupDMMessage{
+  const sequence=dmSourceSequence(cachedSequence);
+  return message.source_sequence===undefined&&sequence!==null?{...message,source_sequence:sequence.toString()}:message;
+}
 
 /** Cache identity, not a sender-authentication claim. Ciphertext changes even
  * when two edits share the same server timestamp or encoded length. */
@@ -14,5 +21,5 @@ export async function cacheGroupMessage(message:GroupDMMessage,payload:E2EEPaylo
   if(!isCurrent())return;
   const sourceTag=tag??await groupMessageCacheTag(message);
   if(!isCurrent())return;
-  await keyStorage.cacheDecryptedMessage({messageId:message.id,channelId:"",dmChannelId:`group:${message.group_id}`,content:payload.content,timestamp:new Date(message.created_at).getTime(),encryptedSourceTag:sourceTag,fileKeys:payload.file_keys},isCurrent);
+  await keyStorage.cacheDecryptedMessage({messageId:message.id,channelId:"",dmChannelId:`group:${message.group_id}`,sourceSequence:dmSourceSequence(message.source_sequence)?.toString(),content:payload.content,timestamp:new Date(message.created_at).getTime(),encryptedSourceTag:sourceTag,fileKeys:payload.file_keys},isCurrent);
 }

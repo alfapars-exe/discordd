@@ -1,0 +1,27 @@
+{
+  "date": "2026-10-25",
+  "scope": "Preserve original microphone gate initialization cause when browser fallback suppression is unverified",
+  "status": "static_verified",
+  "owned_paths": [
+    "client/src/audio/microphonePipeline.ts",
+    "client/src/audio/microphonePipeline.test.ts"
+  ],
+  "source_hashes": {
+    "client/src/audio/microphonePipeline.ts": "19d3e59d4d73a5d8d563bff14fa3c41f0fa736032537ec21c38fe20731c595f0",
+    "client/src/audio/microphonePipeline.test.ts": "bd60455bbe7bbf5396f7a48232158a7bb0b842465a440d07dba233c97fe35497"
+  },
+  "checks": {
+    "focused": "npx vitest run src/audio/microphonePipeline.test.ts:1file13tests PASS1.85s",
+    "typescript": "npx tsc -b exit0",
+    "lint": "npx eslint src/audio/microphonePipeline.ts src/audio/microphonePipeline.test.ts exit0",
+    "diff_check": "exact owned paths exit0"
+  },
+  "invariants": [
+    "Only diagnostic message composition changes; fallback behavior/status type/capture/DSP options and lifetime unchanged.",
+    "Original gate timeout remains across preference updates; unverified suppression reason appears only when requested candidate cannot be confirmed.",
+    "No claim that observed QA AudioWorklet hang is an application, production model, or browser root-cause defect."
+  ],
+  "remaining": [
+    "Browser/fresh AudioContext worklet hang root cause remains unresolved; this patch only preserves diagnostic evidence. No browser, production or deploy operations."
+  ]
+}

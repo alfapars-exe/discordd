@@ -1,0 +1,125 @@
+{
+  "phase": "P9/P10",
+  "date": "2026-10-25",
+  "status": "implemented_unverified",
+  "baseline_head": "e8d5a2a67faf5982f1ca9709ffa887116339965b",
+  "scope": [
+    "Explicit SDK GCM enable admits transport only; automatic audio/video/screen capture is always disabled. Actual connected JWT/auth owner must receive nonce-correlated worker enable ACK before publishers or SDK capture controls mount.",
+    "Pause exact current tracks in layout phase on key/auth/reconnect change; awaited capture and publication wrappers on this exact Room stop obsolete tracks and unpublish exact late publications. Disposed Rooms retain deny-closed instance wrappers; no prototype mutation.",
+    "Authoritative full epoch, byte slot and opaque room incarnation in voice/group token and rotation contracts. Explicit 256-slot indexed key provider; stale/malformed/conflicting versions fail closed; a fresh incarnation may reset epoch zero.",
+    "Group media pauses immediately on authoritative group epoch mismatch while refreshed token is pending. Group shared processing/output integration is outside this slice.",
+    "Go music encryptor observes full epoch and passphrase, including missed 256+ rotations and same-epoch room recreation; same PBKDF2 AES128 material as installed browser SDK."
+  ],
+  "source_sha256": {
+    "client/src/audio/voiceEncryptionKeys.ts": "cc9dde448b7455dfe7b32747d451d6a9a01bb613b1e23f0f8e4e9c4ebd8e3f44",
+    "client/src/audio/voiceEncryptionKeys.test.ts": "38b03353b721813b5d0298a25912b45105039ddd90872a4a4f4de18baee4b1bb",
+    "client/src/hooks/useE2EEKeyProvider.ts": "35e48cd2ba1bfc9288b7f1de047f2b49df2006164dece9e38e9109981b057184",
+    "client/src/hooks/useE2EEKeyProvider.test.tsx": "8e40b9e982f4155362b2b3d585dae507b2b2f0b720026ef52a66ec92b88ec50a",
+    "client/src/hooks/useEncryptedRoomAdmission.ts": "f04e931fe3d21d267a901fb82ddfdd1536843a7c8e741352cb66fff72e3484bb",
+    "client/src/hooks/useEncryptedRoomAdmission.test.tsx": "7c9775939e72236af69bfa771ad6955cafbe50557ce58afe5a1dca0f94d6866e",
+    "client/src/components/voice/VoiceProvider.tsx": "b306674f8827f4b4e437be602c846ac70d57eb5c82f212cc45082d7bfdca0824",
+    "client/src/components/voice/VoiceProvider.encryption.test.tsx": "da979aa52f12aa74f699f30884224725cfede2db62e7825e96a64cd97ef77f7b",
+    "client/src/components/dm/GroupDMCall.tsx": "59b8e4ddaf9bff8890a3e9bbe74ddc935a582a727abfc38d5c1221fdf39481de",
+    "client/src/components/dm/GroupDMCall.encryption.test.tsx": "fb1dccb3d7af4c8621bc84d238807167c7bf957df56b879069800a0dd7710ff0",
+    "client/src/hooks/ws/voiceEventHandlers.ts": "e9119f148c2e6f61f33ad500954171398078a212b0df0b4bdcd2e95c5ed316f1",
+    "client/src/hooks/ws/voiceEventHandlers.encryption.test.ts": "aecc8b55878cd6d3234e561632c47e95ff5f4f87496fa213ba6357d85e54e831",
+    "client/src/stores/voiceStore.ts": "094e8b83c131d6ae66c3601e9c61212b8f982e3ad46596137a3709d2478d8ec6",
+    "client/src/stores/voiceStore.encryption.test.ts": "b3022441bffb63b3dec81ac24dcaefb1cec19eccc6e3ac5fff0b17766c883d66",
+    "client/src/stores/slices/voiceWsSlice.ts": "d5de1a0625c2d62462057c568ab983593115fa1de0360905dfa175c8ddbbf48d",
+    "client/src/types/voice.ts": "776b03ac184c31e6758a2ac754ce98abc528855d4c303f0067712eecb1a9c67d",
+    "client/src/types/ws.ts": "51890a3ecc313798eda19f2fb0a053d283d4458f38f28fa0eff25406eb72f148",
+    "server/models/voice.go": "fd642f9df8cefa20e2c4112ae3446e8e6c54e231b58507ebecfabd074a8988ba",
+    "server/ws/event.go": "a655f5a8b21b5b270b80533e2424ea3ca2dba6891efa4e7e6cdcd74ad60be3a0",
+    "server/services/voice_service.go": "47be8bf588163380b3671f6f7cf5323d97ccdcea513072c64b14e5867638bbfd",
+    "server/services/voice_e2ee.go": "818c25c19c3bdf3389f6b7e7d236dd6741fced68cfa8c6b9c92743dcb3037cb7",
+    "server/services/voice_token.go": "93ef89d3a7a8dd4241b5adc1a7b650e4d9ea67e368c046ed9b78288ab7905870",
+    "server/services/voice_admin.go": "176d2765c548d4eef6dc56b60b2af6b4c514bd2f6ccd4148953fb4f8163e2dc5",
+    "server/services/group_dm_service.go": "14822b076e2b2647df7742320b82b5e429ad5a456804f2975d1e59c4b094e1b8",
+    "server/services/group_dm_media_contract_test.go": "310768bc9e5e5e9209fea211079ff2c32e354af0d6a3c4f044a1575591b3ea03",
+    "server/services/music_bot_e2ee.go": "235336087e3727ffffd4e54c97560578394277d94878a6087ab6bd5677740c69",
+    "server/services/music_bot_e2ee_test.go": "ec8f40c24d74d3b609f1f2b800386279310864bb5963734a184e2c560233275a",
+    "server/services/voice_key_contract_test.go": "6b1bb859792a4f30d670902e676279fc6443e33bc5ac4bf4341726bae277454b"
+  },
+  "concurrent_worktree_note": "Root and sibling agents own unrelated DM sequence, mute/deaf and group read changes. Shared voiceStore and group_dm_service hashes include those independent hunks; this is source verification, not an immutable release artifact.",
+  "installed_sdk_source_proof": {
+    "version": "livekit-client installed local package; components-react useLiveKitRoom direct path",
+    "gcm_enable": "Room.setE2EEEnabled(true) changes LocalParticipant encryptionType GCM; setupE2EE alone does not enable and components useLiveKitRoom does not call enable.",
+    "plaintext_boundary": "worker/FrameCryptor.encodeFunction enqueues plaintext when identity encryption is disabled/unknown. Therefore empty-identity preconnect ACK is insufficient; all auto capture remains false until actual owner ACK. Enabled GCM with missing key returns without enqueue.",
+    "worker_barrier": "e2ee.worker serializes setKey/enable in AsyncQueue; enable echoes original message after prior queued key derivation. Scoped message listener requires exact identity, enabled=true, and nonce. This is an enabled-owner ordering barrier, not a custom setKey ACK or a real browser media acceptance claim.",
+    "capture_boundary": "LocalParticipant.setTrackEnabled awaits public createTracks/createScreenTracks then public publishTrack. Pinned instance wrappers fence these public SDK boundaries before/after awaits. Private SDK reconnect republish retains GCM while current MediaStreamTracks are paused.",
+    "cross_sdk_vector": {
+      "passphrase": "hichat-cross-sdk-v1",
+      "salt": "LKFrameEncryptionKey",
+      "pbkdf2_iterations": 100000,
+      "hash": "SHA-256",
+      "bits": 128,
+      "hex": "e12cedbef126327d289b0359b8839926"
+    }
+  },
+  "checks": [
+    {
+      "cwd": "client",
+      "command": "npx vitest run",
+      "result": "PASS369 files /3570 tests;71.50s on final production source before one additional admission regression test was added; additional admission suite9 PASS3.38s."
+    },
+    {
+      "cwd": "client",
+      "command": "npx vitest run src/audio/voiceEncryptionKeys.test.ts src/hooks/useE2EEKeyProvider.test.tsx src/hooks/useEncryptedRoomAdmission.test.tsx src/components/voice/VoiceProvider.encryption.test.tsx src/components/dm/GroupDMCall.encryption.test.tsx src/hooks/ws/voiceEventHandlers.encryption.test.ts src/stores/voiceStore.encryption.test.ts",
+      "result": "PASS7 files/26 tests4.18s on final scoped source/tests."
+    },
+    {
+      "cwd": "client",
+      "command": "npx tsc -b",
+      "result": "PASS0, using installed client toolchain."
+    },
+    {
+      "cwd": "client",
+      "command": "npm run build",
+      "result": "PASS1676 modules; Vite native-loader/chunk-size/ineffective-dynamic-import warnings retained, no build failure."
+    },
+    {
+      "cwd": "client",
+      "command": "npx eslint src/audio/voiceEncryptionKeys.ts src/audio/voiceEncryptionKeys.test.ts src/hooks/useE2EEKeyProvider.ts src/hooks/useE2EEKeyProvider.test.tsx src/hooks/useEncryptedRoomAdmission.ts src/hooks/useEncryptedRoomAdmission.test.tsx src/components/voice/VoiceProvider.tsx src/components/voice/VoiceProvider.encryption.test.tsx src/components/dm/GroupDMCall.tsx src/components/dm/GroupDMCall.encryption.test.tsx src/hooks/ws/voiceEventHandlers.ts src/hooks/ws/voiceEventHandlers.encryption.test.ts src/stores/voiceStore.ts src/stores/voiceStore.encryption.test.ts src/stores/slices/voiceWsSlice.ts src/types/voice.ts src/types/ws.ts",
+      "result": "PASS0 errors0 warnings."
+    },
+    {
+      "cwd": "server",
+      "command": "go test ./... -count=1 -timeout=5m",
+      "result": "PASS all packages; repository122.588s/services60.258s; concurrent group read transition happened later, so not an immutable final whole-repo release gate."
+    },
+    {
+      "cwd": "server",
+      "command": "go test ./services -run '^TestGroupDMCallMediaKeyContract$|^TestVoiceMediaKeyContractWrapAndRecreation$|^TestMusicRoomKeyProvider' -count=1 -timeout=2m",
+      "result": "PASS3.097s after group interface transition compiled."
+    },
+    {
+      "cwd": "server",
+      "command": "golangci-lint2.12.2 run --config ../.golangci.yml --timeout3m ./services/... ./handlers/...; GOTOOLCHAIN=go1.26.10",
+      "result": "PASS0 issues."
+    },
+    {
+      "cwd": "owned Docker golang1.26.10-bookworm,CGO_ENABLED=1,server readonly bind,existing isolated QA module/build caches",
+      "command": "go test -race ./services ./handlers -run '^TestVoice|^TestMoveUser|^TestGenerateToken|^TestMusic.*Key|^TestGroupDM.*Call' -count=1 -timeout=4m",
+      "result": "PASS services9.631s/handlers3.246s; owned --rm container exited."
+    }
+  ],
+  "focused_client_test_count": 26,
+  "remaining_acceptance": [
+    "Actual two HiChat browser/Windows clients: encrypted audible microphone/camera/share/bot media across initial connect, reconnect, kick/rekey, missed rotations, auth replacement and room restart.",
+    "Installed browser worker/frame pipeline has source proof and mocked ordering regression tests here; no claim this slice performed real browser worker RTP decode or physical device acceptance.",
+    "Group shared microphone processing/output device/personal volume and cross-call ownership are a separate pending slice.",
+    "Native iOS media implementation was not refactored or physically accepted here.",
+    "Current local QA API binary was e90 during root browser testing and does not establish this new source contract; rebuild both backend/client together before runtime acceptance.",
+    "Missing authoritative fields from an old server fail closed; no legacy plaintext/index-inference fallback.",
+    "Server-managed room media keys remain known to server; no zero-knowledge claim."
+  ],
+  "production_operations": false,
+  "prior_sdk_receipts_modified": false,
+  "integration_review": {
+    "reviewed_companion_slice": "implementation/verification/p9-deafen-mute-intent-2026-10-25.json",
+    "combined_focused_command": "npx vitest run src/utils/voiceMuteIntent.test.ts src/stores/voiceStore.test.ts src/stores/p2pCallStore.audio.test.ts src/audio/liveMicrophone.test.ts src/stores/accountPreferenceConsumers.test.ts src/components/layout/UserBar.test.tsx src/components/p2p/P2PCallControls.test.tsx src/hooks/ws/voiceEventHandlers.test.ts src/hooks/usePushToTalk.test.ts src/components/p2p/P2PAudioSink.test.tsx src/audio/voiceEncryptionKeys.test.ts src/hooks/useE2EEKeyProvider.test.tsx src/hooks/useEncryptedRoomAdmission.test.tsx src/components/voice/VoiceProvider.encryption.test.tsx src/components/dm/GroupDMCall.encryption.test.tsx src/hooks/ws/voiceEventHandlers.encryption.test.ts src/stores/voiceStore.encryption.test.ts",
+    "combined_focused_result": "PASS17 files/205 tests7.57s",
+    "scoped_diff_check": "PASS43 intended source/test/receipt paths; no unrelated microphone processor/pipeline/CSP files included.",
+    "shared_group_crypto_hunk": "GenerateCallToken contract is already in HEAD e8d5a2a6; no group_dm_service.go dirty hunks are staged by this slice. New VoiceTokenResponse fields complete that contract."
+  }
+}

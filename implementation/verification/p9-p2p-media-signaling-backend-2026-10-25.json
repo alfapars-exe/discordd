@@ -1,0 +1,87 @@
+{
+  "date": "2026-10-25",
+  "scope": "P9 P2P screen-audio phase2 backend-only optional signaling contract; does not enable client system audio",
+  "owned_paths": [
+    "server/ws/event.go",
+    "server/ws/client_p2p.go",
+    "server/ws/p2p_signal_validation.go",
+    "server/ws/p2p_signal_validation_test.go",
+    "server/services/p2p_call_service.go",
+    "server/services/p2p_signal_test.go"
+  ],
+  "source_sha256": {
+    "server/ws/event.go": "50f03c47e8318a35a41c9e4747a3a41bdd3afd5de036e195ac570bf2dd9c3383",
+    "server/ws/client_p2p.go": "56da96f5ca446508fd8d316a28e67aab0ce405865fc585eee3c5aaa1e319c669",
+    "server/ws/p2p_signal_validation.go": "1a89d27467fbbce04cbe48deb781f35a7d52ec1320b096b13a0554c277d28c60",
+    "server/ws/p2p_signal_validation_test.go": "20e4316ac24ce13e78aae896dc6acdaf89a2cda4a4f8eec076906b33cc058ef9",
+    "server/services/p2p_call_service.go": "7d8c7214a9848ee0f812768c9f6834d2c6c87e532978d2ef24e40b215a38194b",
+    "server/services/p2p_signal_test.go": "656c58fd0dd2f4d57b29cf134d0f8c8e83ca836f2575010d1486060fed641df6"
+  },
+  "wire_contract": {
+    "legacy": "offer/answer require bounded nonempty SDP; standard ICE candidate JSON remains accepted. Calls must be active and both users still mapped to exact call.",
+    "v1_description": {
+      "media_protocol": 1,
+      "description_id": "nonzero canonical UUID",
+      "description_revision": "sender-local monotonic integer1..9007199254740991",
+      "reply_to_description_id": "answer only; exact outstanding peer offer UUID",
+      "capabilities": [
+        "screen-audio-v1"
+      ],
+      "sources": [
+        {
+          "mid": "ASCII alphanumeric/_/- 1..32",
+          "source": "microphone|camera|screen-video|screen-audio"
+        }
+      ]
+    },
+    "limits": "SDP <=30000 bytes, max4 sources with unique MID and source; screen-audio requires capability; candidate JSON<=8192 bytes, candidate string<=4096, MID/username<=256, line index integer0..65535 or null",
+    "revision": "Only v1 descriptions advance per-call/per-sender high-water mark. Answer consumes exact outstanding offer; legacy answer consumes pending peer v1 relation, legacy offer supersedes sender pending v1 relation. End/decline/disconnect/expiry clear ephemeral state. A v1 answer also clears its sender own superseded offer, preventing glare/rollback stale offer answers.",
+    "client_obligation": "Validate source/MID/kind/direction against actual accepted SDP and exact call/auth/PC/description before exposing any new audio; no track-label or aggregate-stream fallback. Server validates bounded metadata only, not SDP media semantics.",
+    "future_typescript_shape": "Existing P2PSignalPayload additive optional media_protocol?:1,description_id?:string,description_revision?:number,reply_to_description_id?:string,capabilities?:Array<screen-audio-v1>,sources?:Array<{mid:string,source:microphone|camera|screen-video|screen-audio}>. No client source modified in backend slice."
+  },
+  "verified": [
+    {
+      "cwd": "server",
+      "command": "go test ./services ./ws -run 'TestP2P' -count=1",
+      "result": "servicesPASS2.590s,wsPASS1.581s; validated actual WS handler,active membership/legacy,revision/relation,concurrentduplicate,malformedbounds"
+    },
+    {
+      "cwd": "server",
+      "command": "go vet ./ws ./services",
+      "result": "exit0"
+    },
+    {
+      "command": "scoped git diff --check",
+      "result": "exit0; existing CRLF normalization warnings only"
+    },
+    {
+      "command": "docker run --rm --network none <readonly immutable source.tar and module-cache> -e CGO_ENABLED=1 golang:1.26.10-bookworm: go test -race ./services ./ws -run TestP2P -count=1",
+      "result": "servicesPASS3.171s,wsPASS3.187s; no races; only subsequent source change two gocritic equivalent empty-string comparisons len(s)==0 -> s==empty"
+    },
+    {
+      "cwd": "server",
+      "command": "GOTOOLCHAIN=go1.26.10 pinned golangci-lint v2.12.2 run --timeout=5m ./ws/... ./services/...",
+      "result": "exit0,0issues. Initial defaultGo1.27 caused tool panic; pinned1.26.10 succeeded after two style corrections."
+    },
+    {
+      "cwd": "server",
+      "command": "go test ./services ./ws -run 'TestP2P' -count=1",
+      "result": "Final glare regression source servicesPASS2.655s,wsPASS1.616s. Aoffer1/Boffer1/AanswerB1 supersedes Aoffer1; later BanswerAoffer1 conflicts."
+    },
+    {
+      "command": "Final immutable readonly source archive, network-none golang:1.26.10-bookworm CGO1: go test -race ./services ./ws -run TestP2P -count=1",
+      "result": "servicesPASS3.170s,wsPASS3.148s; final glare-fix source exact hashes,exit0,no races"
+    },
+    {
+      "cwd": "server",
+      "command": "GOTOOLCHAIN=go1.26.10 pinned golangci-lint v2.12.2 run --timeout=5m ./ws/... ./services/...",
+      "result": "Final glare-fix source exit0,0issues"
+    }
+  ],
+  "root_combined_gate": "GOTOOLCHAIN=go1.26.10 go test ./... passed across all server packages; repository90.683s,services48.017s,root11.348s,ws5.538s; session11711 exit0. This is separate from focused CGO race evidence.",
+  "remaining": [
+    "Client source mapping/independent microphone+screen audio receive gain/controls not implemented; phase2 remains open.",
+    "No physical Windows/system capture/two-client audible acceptance.",
+    "No migration/production/network/service changes; no staging/commit/push."
+  ]
+}

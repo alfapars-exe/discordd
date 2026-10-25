@@ -690,3 +690,12 @@ describe("dmStore — encrypted self-DM send failure", () => {
     expect(discardLastSentPlaintext).not.toHaveBeenCalled();
   });
 });
+
+it("keeps authoritative DM append order in history merges and out-of-order WS previews",async()=>{
+ const first={...makeDM("z-first"),source_sequence:"1"},second={...makeDM("a-second"),source_sequence:"2"},third={...makeDM("b-third"),source_sequence:"3"};
+ useDMStore.setState({channels:[listedDM(CH)],messagesByChannel:{[CH]:[]}});
+ useDMStore.getState().handleDMMessageCreate(third);useDMStore.getState().handleDMMessageCreate(first);useDMStore.getState().handleDMMessageCreate(second);
+ expect(ids()).toEqual([first.id,second.id,third.id]);expect(useDMStore.getState().channels[0].last_message?.id).toBe(third.id);
+ vi.mocked(dmApi.getDMMessages).mockResolvedValueOnce(page([second,first,third],false));await useDMStore.getState().fetchMessages(CH);
+ expect(ids()).toEqual([first.id,second.id,third.id]);
+});

@@ -30,7 +30,7 @@ export const SETTINGS_SECTIONS: Partial<Record<SettingsTab, { id: string; labelK
     { id: "activity-new-server", labelKey: "activityPrivacyNewServer" },
     { id: "activity-servers", labelKey: "activityPrivacyServers" },
   ],
-  security: [{ id: "email", labelKey: "emailSection" }, { id: "password", labelKey: "changePassword" }, { id: "email-verification", labelKey: "verification.title" }, { id: "mfa", labelKey: "mfa.title" }, { id: "sessions", labelKey: "sessions.title" }, { id: "account-status", labelKey: "accountStatus.title" }, { id: "lifecycle", labelKey: "lifecycle.title" }, { id: "data-processing", labelKey: "privacyControls.title" }, { id: "deletion", labelKey: "deletion.title" }],
+  security: [{ id: "email", labelKey: "emailSection" }, { id: "password", labelKey: "changePassword" }, { id: "email-verification", labelKey: "verification.title" }, { id: "mfa", labelKey: "mfa.title" }, { id: "sessions", labelKey: "sessions.title" }, { id: "account-status", labelKey: "accountStatus.title" }, { id: "lifecycle", labelKey: "lifecycle.title" }, { id: "data-processing", labelKey: "privacyControls.title" }, { id: "linked-games", labelKey: "linkedGames.title" }, { id: "deletion", labelKey: "deletion.title" }],
   applications: [{ id: "create", labelKey: "applications.create" }, { id: "owned", labelKey: "applications.owned" }],
   voice: [
     { id: "input", labelKey: "voiceInputMode" }, { id: "noise", labelKey: "noiseReduction" },

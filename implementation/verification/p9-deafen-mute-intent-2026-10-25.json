@@ -1,0 +1,68 @@
+{
+  "phase": "P9",
+  "date": "2026-10-25",
+  "status": "implemented_unverified",
+  "owned_paths": [
+    "client/src/utils/voiceMuteIntent.ts",
+    "client/src/utils/voiceMuteIntent.test.ts",
+    "client/src/stores/voiceStore.ts",
+    "client/src/stores/voiceStore.test.ts",
+    "client/src/stores/p2pCallStore.ts",
+    "client/src/stores/p2pCallStore.audio.test.ts",
+    "client/src/webrtc/p2pMicrophone.ts",
+    "client/src/audio/liveMicrophone.ts",
+    "client/src/audio/liveMicrophone.test.ts",
+    "client/src/components/layout/UserBar.tsx",
+    "client/src/components/layout/UserBar.test.tsx",
+    "client/src/components/p2p/P2PCallControls.tsx",
+    "client/src/components/p2p/P2PCallControls.test.tsx",
+    "client/src/i18n/locales/en/voice.json",
+    "client/src/i18n/locales/tr/voice.json",
+    "implementation/verification/p9-deafen-mute-intent-2026-10-25.json"
+  ],
+  "shared_file_ownership": "voiceStore.ts is shared with the separate E2EE readiness/key-index owner. This slice owns only mute-state load/type/initial/toggles/auth-boundary observer/imports/comments; E2EE declarations/assignments/reset changes require their own review and evidence. No broad formatter or E2EE edits were performed here.",
+  "contract": [
+    "Voice isMuted remains effective microphone mute. Entering local deafen captures manual mute intent and forces effective mute. Explicit undeafen restores that intent, so a previously manually muted microphone stays muted.",
+    "Mute toggles while locally deafened change queued manual intent only; they neither undeafen nor enable capture. UserBar tooltip/accessible action labels describe the queued action while its effective muted icon remains. Private P2P controls describe their separate queued manual intent similarly.",
+    "Mute/deafen intent is device-local, never synchronized to the server. Legacy deafened state without trustworthy prior intent remains muted on undeafen. A queued unmute is discarded on account/auth-generation changes; same-account call/channel teardown and account-preference resets retain the privacy state.",
+    "Main LiveKit publication defensively checks local deafen alongside existing local/server mute gates, including explicit stale enable requests. Existing capture cancellation and publication guards remain.",
+    "P2P manual mute remains separate. Only global LOCAL deafen gates private capture; another guild moderator server-mute does not gain control over a private P2P microphone. Current and staged processed outputs are silenced immediately, and preparation/replacement continuations recheck effective mute before attachment. Undeafen restores the private call manual choice rather than overwriting it.",
+    "No microphone processing engine, group-call audio path, overlay controls, server permission policy, output graph or E2EE protocol was changed by this slice."
+  ],
+  "verification": {
+    "focused": {
+      "result": "passed",
+      "files": 10,
+      "tests": 179,
+      "command": "npx.cmd vitest run src/utils/voiceMuteIntent.test.ts src/stores/voiceStore.test.ts src/stores/p2pCallStore.audio.test.ts src/audio/liveMicrophone.test.ts src/stores/accountPreferenceConsumers.test.ts src/components/layout/UserBar.test.tsx src/components/p2p/P2PCallControls.test.tsx src/hooks/ws/voiceEventHandlers.test.ts src/hooks/usePushToTalk.test.ts src/components/p2p/P2PAudioSink.test.tsx",
+      "scenarios": [
+        "Previously muted and previously unmuted restoration",
+        "Queued manual changes remain effectively muted until explicit undeafen",
+        "Legacy missing intent and persistence roundtrip",
+        "Account/generation queued-unmute fence and same-account reset preservation",
+        "Main server-muted/deafened explicit enable request blocked",
+        "Private local-deafen capture/preparation/replacement gating with separate manual intent",
+        "Other-guild server mute does not gate private P2P capture",
+        "Queued action labels and effective mute indicators",
+        "Existing capture cancellation, PTT, force-move, preference-boundary and P2P output regressions"
+      ]
+    },
+    "static": {
+      "typescript": "npx.cmd tsc -b --pretty false passed at this slice source freeze; later shared E2EE changes require final integrated validation",
+      "lint": "Scoped ESLint passed for owned TS/TSX files",
+      "diff": "git diff --check passed for owned paths"
+    },
+    "combined_full_client": {
+      "result": "pending",
+      "owner": "root",
+      "note": "No full client suite was run by this subagent. Shared voiceStore E2EE/key-index work is coordinated separately."
+    }
+  },
+  "remaining": [
+    "Actual browser/Windows/two-client microphone transmission and physical mute/deafen acceptance remain open; mocked runtime tests are not device acceptance.",
+    "Group-call capture/playback remains a separate integration path. This slice does not claim its mute/deafen or shared processing acceptance.",
+    "Device enumeration permission/devicechange and unplug/ended-capture recovery remain separate P9 work.",
+    "Broader signaling/authentication ownership beyond current existing call guards is not added here. Existing P2P playback stream-binding limits still apply.",
+    "No production, installer publication, commit or push was performed by this subagent."
+  ]
+}

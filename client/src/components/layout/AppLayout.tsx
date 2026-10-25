@@ -1,3 +1,4 @@
+import {useOverlayMediaSender} from "../../hooks/useOverlayMediaSender";
 /**
  * AppLayout — Main layout with sidebar, split panes, and member list.
  *
@@ -19,12 +20,14 @@ import { useVoiceOverlayCleanup } from "../../hooks/useVoiceOverlayCleanup";
 import { useOverlayShortcut } from "../../hooks/useOverlayShortcut";
 import { getOverlayVoiceSession, useOverlayVoiceActions } from "../../hooks/useOverlayVoiceActions";
 import { useOverlayActivity } from "../../hooks/useOverlayActivity";
+import { getLiveOverlayGameNotices, useOverlayGameNotices } from "../../hooks/useOverlayGameNotices";
 import { useOverlayChat } from "../../hooks/useOverlayChat";
 import { useOverlayChatActions } from "../../hooks/useOverlayChatActions";
 import { useOverlayChatCompose } from "../../hooks/useOverlayChatCompose";
 import { useThreadReconnectRefresh } from "../../hooks/useThreadReconnectRefresh";
 import { getAuthSessionSnapshot } from "../../api/authSessionEvents";
 import { formatOverlayChatComposeLabel, getLiveOverlayChatTarget } from "../../utils/overlayChatAccess";
+import { useOverlayNotificationReply } from "../../hooks/useOverlayNotificationReply";
 import { useOverlayNotifications } from "../../hooks/useOverlayNotifications";
 import { useOverlayNotificationActions } from "../../hooks/useOverlayNotificationActions";
 import { useIsMobile } from "../../hooks/useMediaQuery";
@@ -47,8 +50,10 @@ import SettingsModal from "../settings/SettingsModal";
 // channel; the brief Suspense fallback during that fetch is hidden behind the
 // existing "Connecting..." UX from useVoice's join flow.
 const VoiceProvider = lazy(() => import("../voice/VoiceProvider"));
+import GroupCallProvider from "../dm/GroupCallProvider";
 import { useWebSocket } from "../../hooks/useWebSocket";
 import { useGameActivity } from "../../hooks/useGameActivity";
+import { useGameJoinStore } from "../../stores/gameJoinStore";
 import { useVoice } from "../../hooks/useVoice";
 import { useIdleDetection } from "../../hooks/useIdleDetection";
 import { useVoiceActivityReporter } from "../../hooks/useVoiceActivityReporter";
@@ -83,6 +88,8 @@ import { useMemberStore } from "../../stores/memberStore";
 import { useRoleStore } from "../../stores/roleStore";
 import { useUIStore, type TabServerInfo } from "../../stores/uiStore";
 import { useVoiceStore } from "../../stores/voiceStore";
+import { useOverlayGoLiveStore } from "../../stores/overlayGoLiveStore";
+import { useAccessibilityStore } from "../../stores/accessibilityStore";
 import { useMessageStore } from "../../stores/messageStore";
 import { useReadStateStore } from "../../stores/readStateStore";
 import { useInviteStore } from "../../stores/inviteStore";
@@ -99,26 +106,36 @@ import "../../styles/voice-overlay.css";
 function AppLayout() {
   const { ownerId: overlayRenderOwner, generation: overlayRenderGeneration } = getAuthSessionSnapshot();
   useVoiceOverlayCleanup();
-  useOverlayShortcut();
   const { sendTyping, sendDMTyping, sendPresenceUpdate, sendVoiceJoin, sendVoiceLeave, sendVoiceStateUpdate, sendWS, connectionStatus, reconnectAttempt } =
     useWebSocket();
   useThreadReconnectRefresh(connectionStatus === "connected");
+  const overlayNotificationDurationMs = useAccessibilityStore(s => s.notificationDuration * 1000);
+  const overlayGoLive = useVoiceStore(s => s.voiceOverlayGoLive);
+  const goLiveSession = useOverlayGoLiveStore(s => s.session);
+  const goLiveEligible = useOverlayGoLiveStore(s => s.eligible) && connectionStatus === "connected";
+  const overlayWelcome = useVoiceStore((s) => s.voiceOverlayWelcome);
   const overlayEnabled = useVoiceStore((s) => s.voiceOverlayEnabled);
+  const overlayCompatibility = useVoiceStore(s=>s.voiceOverlayCompatibility);
   const overlayChatEnabled = useVoiceStore((s) => s.voiceOverlayChat);
   const overlayChat = useOverlayChat(overlayEnabled && overlayChatEnabled, connectionStatus === "connected");
   const overlayChatActions = useVoiceStore((s) => s.voiceOverlayChatActions);
-  const chatActionSession = useOverlayChatActions(connectionStatus === "connected", overlayChat.chatStatus === "ready");
+  const chatActionSession = useOverlayChatActions(connectionStatus === "connected" && !overlayCompatibility, overlayChat.chatStatus === "ready");
   const overlayChatCompose = useVoiceStore((s) => s.voiceOverlayChatCompose);
-  const chatComposeSession = useOverlayChatCompose(connectionStatus === "connected", overlayChat.chatStatus === "ready");
+  const chatComposeSession = useOverlayChatCompose(connectionStatus === "connected" && !overlayCompatibility, overlayChat.chatStatus === "ready");
   const chatComposeLabel = formatOverlayChatComposeLabel(getLiveOverlayChatTarget(true)?.label);
   const overlayMode = useVoiceStore((s) => s.voiceOverlayMode);
   const overlayPinned = useVoiceStore((s) => s.voiceOverlayPinned);
   const overlayActivityEnabled = useVoiceStore((s) => s.voiceOverlayActivity);
+  const overlayVideo=useVoiceStore(s=>s.voiceOverlayVideo),overlayStreams=useVoiceStore(s=>s.voiceOverlayStreams);
   const overlayActivities = useOverlayActivity(overlayActivityEnabled, connectionStatus === "connected");
+  const overlayGameActivityNotifications = useVoiceStore(s => s.voiceOverlayGameActivityNotifications);
+  const overlayNowPlayingNotifications = useVoiceStore(s => s.voiceOverlayNowPlayingNotifications);
+  const overlayGameNotices = useOverlayGameNotices(connectionStatus === "connected");
   const overlayNotificationsEnabled = useVoiceStore((s) => s.voiceOverlayNotifications);
   const overlayNotificationActions = useVoiceStore((s) => s.voiceOverlayNotificationActions);
   const { notifications: overlayNotifications, notificationStatus } = useOverlayNotifications(overlayEnabled && overlayNotificationsEnabled, connectionStatus === "connected");
-  const notificationActionSession = useOverlayNotificationActions(connectionStatus === "connected", notificationStatus === "ready" && overlayNotifications.length > 0);
+  const { notificationReplySession, notificationReplyIds } = useOverlayNotificationReply(connectionStatus === "connected" && !overlayCompatibility, overlayNotifications);
+  const notificationActionSession = useOverlayNotificationActions(connectionStatus === "connected" && !overlayCompatibility, notificationStatus === "ready" && overlayNotifications.length > 0);
   const overlayQuickActions = useVoiceStore((s) => s.voiceOverlayQuickActions);
   const overlayClickableActions = useVoiceStore((s) => s.voiceOverlayClickableActions);
   const overlaySelfMuted = useVoiceStore((s) => s.isMuted);
@@ -135,7 +152,10 @@ function AppLayout() {
   const voiceStates = useVoiceStore((s) => s.voiceStates);
   const overlayChannelId = useVoiceStore((s) => s.currentVoiceChannelId);
   const activeSpeakers = useVoiceStore((s) => s.activeSpeakers);
+  const overlayPolicyAck = useRef<Promise<boolean>>(Promise.resolve(false));
+  const awaitOverlayPolicy = useCallback(() => overlayPolicyAck.current, []);
   useEffect(() => {
+    overlayPolicyAck.current = Promise.resolve(false);
     if (!window.electronAPI?.sendVoiceOverlaySnapshot) return;
     const currentScope = getAuthSessionSnapshot();
     if (!overlayRenderOwner || currentScope.ownerId !== overlayRenderOwner || currentScope.generation !== overlayRenderGeneration) return;
@@ -144,10 +164,15 @@ function AppLayout() {
       id: p.user_id, name: p.display_name || p.username, avatarUrl: p.avatar_url || "",
       speaking: activeSpeakers[p.user_id] ?? false, muted: p.is_muted, deafened: p.is_deafened,
     }));
-    const notificationActions = { voiceOverlayNotificationActions: overlayNotificationActions, ...(notificationActionSession ? { notificationActionSession } : {}) };
+    const notificationActions = { voiceOverlayNotificationActions: overlayNotificationActions, notificationReplyIds, ...(notificationReplySession ? { notificationReplySession } : {}), ...(notificationActionSession ? { notificationActionSession } : {}) };
     const chatSnapshot = { voiceOverlayChat: overlayChatEnabled, ...(overlayChatEnabled ? { ...overlayChat, voiceOverlayChatActions: overlayChatActions, ...(chatActionSession ? { chatActionSession } : {}), voiceOverlayChatCompose: overlayChatCompose, ...(chatComposeSession ? { chatComposeSession, chatComposeLabel } : {}) } : {}) };
-    window.electronAPI.sendVoiceOverlaySnapshot({ enabled: overlayEnabled, ...chatSnapshot, voiceOverlayMode: overlayMode, voiceOverlayPinned: overlayPinned, voiceOverlayActivity: overlayActivityEnabled, activities: overlayActivityEnabled ? overlayActivities : [], voiceOverlayNotifications: overlayNotificationsEnabled, ...(overlayNotificationsEnabled ? { notifications: overlayNotifications, notificationStatus, ...notificationActions } : {}), voiceOverlayQuickActions: overlayQuickActions, voiceOverlayClickableActions: overlayClickableActions, ...(getOverlayVoiceSession() ? { voiceActionSession: getOverlayVoiceSession() } : {}), selfMuted: overlaySelfMuted, selfDeafened: overlaySelfDeafened, participants, speakingOpacity: overlaySpeakingOpacity, idleOpacity: overlayIdleOpacity, scale: overlayScale, position: overlayPosition, speakingOnly: overlaySpeakingOnly, voiceOverlayAvatarSize: overlayAvatarSize, voiceOverlayNameDisplay: overlayNameDisplay, voiceOverlayMaxParticipants: overlayMaxParticipants });
-  }, [overlayRenderOwner, overlayRenderGeneration, overlayEnabled, overlayChatEnabled, overlayChat, overlayChatActions, chatActionSession, overlayChatCompose, chatComposeSession, chatComposeLabel, overlayMode, overlayPinned, overlayActivityEnabled, overlayActivities, overlayNotificationsEnabled, overlayNotificationActions, overlayNotifications, notificationStatus, notificationActionSession, overlayQuickActions, overlayClickableActions, overlaySelfMuted, overlaySelfDeafened, overlayJoinGeneration, overlaySpeakingOpacity, overlayIdleOpacity, overlayScale, overlayPosition, overlaySpeakingOnly, overlayAvatarSize, overlayNameDisplay, overlayMaxParticipants, voiceStates, overlayChannelId, activeSpeakers]);
+    const acknowledgement = window.electronAPI.sendVoiceOverlaySnapshot({ voiceOverlayGameActivityNotifications: overlayGameActivityNotifications, voiceOverlayNowPlayingNotifications: overlayNowPlayingNotifications, gameActivityNotices: getLiveOverlayGameNotices(), enabled: overlayEnabled, voiceOverlayWelcome: overlayWelcome, voiceOverlayGoLive: overlayGoLive, goLiveEligible, ...(goLiveEligible && goLiveSession ? { goLiveSession } : {}), overlayNotificationDurationMs, ...chatSnapshot, voiceOverlayMode: overlayMode, voiceOverlayPinned: overlayPinned, voiceOverlayActivity: overlayActivityEnabled, voiceOverlayVideo:overlayVideo,voiceOverlayStreams:overlayStreams,mediaHeight:overlayVideo||overlayStreams?320:0, activities: overlayActivityEnabled ? overlayActivities : [], voiceOverlayNotifications: overlayNotificationsEnabled, ...(overlayNotificationsEnabled ? { notifications: overlayNotifications, notificationStatus, ...notificationActions } : {}), voiceOverlayQuickActions: overlayQuickActions, voiceOverlayClickableActions: overlayClickableActions, voiceOverlayCompatibility: overlayCompatibility, ...(getOverlayVoiceSession() ? { voiceActionSession: getOverlayVoiceSession() } : {}), selfMuted: overlaySelfMuted, selfDeafened: overlaySelfDeafened, participants, speakingOpacity: overlaySpeakingOpacity, idleOpacity: overlayIdleOpacity, scale: overlayScale, position: overlayPosition, speakingOnly: overlaySpeakingOnly, voiceOverlayAvatarSize: overlayAvatarSize, voiceOverlayNameDisplay: overlayNameDisplay, voiceOverlayMaxParticipants: overlayMaxParticipants });
+    overlayPolicyAck.current = Promise.resolve(acknowledgement).then(value => value === true, () => false);
+  }, [overlayGameNotices, overlayGameActivityNotifications, overlayNowPlayingNotifications, overlayRenderOwner, overlayRenderGeneration, overlayWelcome, overlayGoLive, goLiveEligible, goLiveSession, overlayNotificationDurationMs, overlayEnabled, overlayChatEnabled, overlayChat, overlayChatActions, chatActionSession, overlayChatCompose, chatComposeSession, chatComposeLabel, overlayMode, overlayPinned, overlayActivityEnabled, overlayVideo,overlayStreams,overlayActivities, overlayNotificationsEnabled, overlayNotificationActions, overlayNotifications, notificationStatus, notificationActionSession, notificationReplySession, notificationReplyIds, overlayQuickActions, overlayClickableActions, overlayCompatibility, overlaySelfMuted, overlaySelfDeafened, overlayJoinGeneration, overlaySpeakingOpacity, overlayIdleOpacity, overlayScale, overlayPosition, overlaySpeakingOnly, overlayAvatarSize, overlayNameDisplay, overlayMaxParticipants, voiceStates, overlayChannelId, activeSpeakers]);
+  // Project native compatibility before configuring the chord. This prevents
+  // normal-mode re-registration racing the native suspension policy.
+  useOverlayShortcut(`${overlayRenderOwner ?? ""}:${overlayRenderGeneration}`, awaitOverlayPolicy);
+  useOverlayMediaSender(connectionStatus === "connected");
   useNavigationHistory();
 
   // Idle detection — auto-set "idle" after 5min inactivity
@@ -335,6 +360,11 @@ function AppLayout() {
     };
   }, [sendWS]);
 
+  useEffect(() => {
+    useGameJoinStore.getState().register(connectionStatus === "connected" ? sendWS : null);
+    return () => useGameJoinStore.getState().register(null);
+  }, [sendWS, connectionStatus, overlayRenderOwner, overlayRenderGeneration]);
+
   // Voice channel change -> close stale voice tabs + refetch channel list
   // (hidden channels may become visible via voice-connected override, or vice versa)
   const currentVoiceChannelId = useVoiceStore((s) => s.currentVoiceChannelId);
@@ -439,7 +469,7 @@ function AppLayout() {
   // Do not put VoiceProvider inside ShellV2 or key it by the selected conversation.
   if (UI_SHELL_V2) {
     const body = <><ShellV2 sidebarProps={sidebarProps} sendTyping={sendTyping} sendDMTyping={sendDMTyping} />{overlays}</>;
-    return isVoiceSessionActive ? <Suspense fallback={body}><SectionErrorBoundary section="voice"><VoiceProvider>{body}</VoiceProvider></SectionErrorBoundary></Suspense> : body;
+    return <>{isVoiceSessionActive ? <Suspense fallback={body}><SectionErrorBoundary section="voice"><VoiceProvider>{body}</VoiceProvider></SectionErrorBoundary></Suspense> : body}<GroupCallProvider/></>;
   }
 
   // Mobile layout
@@ -467,7 +497,7 @@ function AppLayout() {
       mobileBody
     );
 
-    return mobileContent;
+    return <>{mobileContent}<GroupCallProvider/></>;
   }
 
   // Desktop layout
@@ -512,7 +542,7 @@ function AppLayout() {
     </div>
   );
 
-  return desktopContent;
+  return <>{desktopContent}<GroupCallProvider/></>;
 }
 
 export default AppLayout;

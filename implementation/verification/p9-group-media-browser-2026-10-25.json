@@ -1,0 +1,67 @@
+{
+  "date": "2026-10-25",
+  "status": "runtime_churn_observed_hmr_confounded_acceptance_pending",
+  "scope": "Two full HiChat web clients against isolated local API and LiveKit",
+  "environment": {
+    "api": "http://127.0.0.1:18181",
+    "clients": ["http://127.0.0.1:15173", "http://localhost:15173"],
+    "media": "Local LiveKit 1.8.4, loopback-only ports, synthetic accounts",
+    "server_source": "ddfc8fad0191af15de07bdb9e4a873a92459c741",
+    "client_source": "6d136901 plus concurrent uncommitted audio pipeline changes; not an immutable release test"
+  },
+  "observed": [
+    "Both separate-origin full clients signed in with different synthetic human accounts and explicitly joined the same group call through UI.",
+    "User handled each origin's browser-owned microphone permission prompt. No browser permission bypass was used.",
+    "Both identities reached participant-active state and each published audio/opus with trackInfo.encryption GCM in local SFU logs.",
+    "Connected controls appeared in both clients. Friends navigation retained the app-level group call panel.",
+    "Call admission repeatedly returned to connecting and SFU logs showed multiple distinct participant sessions for each identity without explicit leave/join. Connection continuity is defective and is being investigated.",
+    "Both clients explicitly left through the persistent panel after reproduction. First client's panel absence was checked. Test microphone capture is no longer intentionally running."
+  ],
+  "visual": {
+    "screenshot": "C:/Users/PARS/AppData/Local/Temp/hichat-browser-20261025-1140/group-media-two-client.png",
+    "inspected": true,
+    "findings": "Persistent panel renders, but raw camera/disconnect localization labels and compact default-looking controls remain visual gaps. Screenshot is not full visual acceptance."
+  },
+  "not_proven": [
+    "Peer-audible output or successful receiver GCM decryption",
+    "Stable long call, navigation continuity, rekey continuity",
+    "Physical device removal/recovery, Windows packaged runtime",
+    "YouTube music playback or production readiness"
+  ],
+  "automated_checks": {
+    "client_suite": "381 files, 3725 tests PASS, 73.72 seconds; current combined worktree at 6d136901, not immutable release evidence",
+    "client_build": "npm run build PASS: tsc -b and Vite, 1691 modules; existing chunk-size/config warnings remain"
+  },
+  "follow_up_diagnosis": {
+    "method": "Temporary DEV-only bounded numeric lifecycle diagnostics, removed before final source commit; no credentials or media content logged.",
+    "evidence": [
+      "SFU participant-closing reason was CLIENT_REQUEST_LEAVE, followed by immediate new sessions. ICE failure was not established.",
+      "Before frontend write freeze, admission cleanup was followed by new provider and worker identities with unchanged scope and token owner. Concurrent Vite HMR is a confounding variable.",
+      "During frontend write freeze and Friends navigation, the same numeric Room54/provider55/worker56 remained connected through repeated observations. No new admission_create or cleanup occurred in that interval.",
+      "Same-Room admission key-check/ready events continued with unchanged key scope; their trigger still needs investigation. This is not proof of a production reconnect defect.",
+      "The diagnostic call was explicitly left through UI and panel absence was verified."
+    ],
+    "conclusion": "Initial production-defect classification was premature. Reproduce from a frozen or immutable client build before prescribing a runtime fix; peer-audible media acceptance remains open."
+  },
+  "frozen_build_follow_up": {
+    "revision": "9f01982ec3578b0f4ed67668a0e3562b98cfaa1a",
+    "build": "tsc -b and Vite PASS, 1691 modules; 10 WASM files checked without Git LFS pointers",
+    "harness_correction": "Vite preview omitted server/main.go's web index rewrite. Nested-route reload requested /channels/group/assets/*.js and returned 404. Frozen dist index was rewritten with the exact production quote-dot-slash to quote-slash replacement; original preserved outside repository.",
+    "websocket_observed": "After corrected reload: synthetic owner socket constructed/opened, ready and voice_states_sync received, ws-ticket HTTP200. No ticket/token values recorded.",
+    "media_observed": "Both full clients subsequently reached localized connected group controls on frozen code. Peer-audible output and decoded receiver samples remain unproven.",
+    "cleanup": "First client explicitly left and panel absence verified. Second page became unresponsive; navigation to root then completed, discarding the old execution and call page. No browser-owned permission bypass.",
+    "remaining": "Browser unresponsiveness still needs diagnosis; no general call stability or production runtime acceptance claim."
+  },
+  "instrumented_frozen_follow_up": {
+    "scope": "Separate qa-dist based on frozen9f with bounded lifecycle metadata only; production source untouched by diagnostics",
+    "observed": [
+      "Both clients reached connected controls. First client's initial key installation and exact worker acknowledgement completed.",
+      "First client retained the same Room4/provider2/worker3. SDK reconnecting/reconnected occurred at approximately35/38 and52/55 seconds after page start; each acknowledgement succeeded and no admission cleanup/fatal/key-timeout occurred in this observation.",
+      "Before this instrumentation, first client receiver reported3 audio RTP packets but0 total received audio samples/energy; publisher reported0 packets sent. No usable peer audio proven.",
+      "Second page lifecycle read timed out again. Previous execution must be discarded by reload/navigation before further actions.",
+      "Local compose pins LiveKit1.8.4 whereas deployment installer pins1.9.12; transport/version compatibility remains a test question, not a proven root cause."
+    ],
+    "conclusion": "Own admission-loop hypothesis is unsupported by this run. Investigate SDK/media transport and local SFU compatibility without weakening encryption gates."
+  },
+  "next": "Diagnose SDK transport reconnects and browser unresponsiveness; complete peer-audible two-client acceptance from a frozen build."
+}

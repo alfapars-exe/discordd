@@ -1,0 +1,45 @@
+{
+  "scope": "P11 isolated local video-only overlay media bridge core; native broker, authorized Room adapter and visible UI are not integrated",
+  "owned_paths": [
+    "electron/overlay-media-contract.ts",
+    "electron/overlay-media-contract.test.ts",
+    "client/src/video/overlayMediaBridge.ts",
+    "client/src/video/overlayMediaBridge.test.ts"
+  ],
+  "source_sha256": {
+    "electron/overlay-media-contract.ts": "c6e0e1f5fdf91c3ba640b0bac469fcce04fdc380835c18c2bc77e7d889cfe38b",
+    "electron/overlay-media-contract.test.ts": "58b4e52bec67c727747e7b1438ff359fba3c907c4818bee56d836f1332aca51c",
+    "client/src/video/overlayMediaBridge.ts": "cad54b02202b5ffce48541cbe3e34e815bc94b8510443a7f68756a27c5db82cb",
+    "client/src/video/overlayMediaBridge.test.ts": "581ab9f311c79f097a0416d52f892efe23f236457726c963e4c5a42c9c627d44"
+  },
+  "tests": [
+    {
+      "command": "cd client; npx vitest run src/video/overlayMediaBridge.test.ts --reporter=dot",
+      "result": "15 PASS, 1 file, 2.15s; actual installed LiveKit RemoteVideoTrack wrappers, deterministic fake RTC transport; no hardware/network"
+    },
+    {
+      "command": "npx tsc -p electron/tsconfig.json; node --test dist-electron/overlay-media-contract.test.js",
+      "result": "PASS compile; 6 PASS, 0 skipped, 87.7296ms"
+    },
+    {
+      "command": "cd client; npx tsc -b; npx eslint src/video/overlayMediaBridge.ts src/video/overlayMediaBridge.test.ts",
+      "result": "PASS actual app project references and scoped ESLint, exit0 (session5270)"
+    }
+  ],
+  "invariants": [
+    "immutable session/revision source lease; max4 tiles with2 camera and2 screen",
+    "no GUM, microphone, audio transport, additional LiveKit connection, app media keys or source label inference",
+    "sender clones only caller-authorized live actual SDK remote video; clone remains disabled until accepted SDP and connected DTLS",
+    "receiver quarantines own early ontrack until successful SDP MID/kind/direction mapping; no foreign-peer track cleanup",
+    "fixed empty ICE servers; strict bounded host-only private/link-local/loopback/mDNS candidates; reject public/relay/srflx/prflx and audio/data SDP",
+    "exact scope/auth/source subscription closes pending handshake and clones synchronously; originals untouched",
+    "handshake/await bounded10s; errors only categorical, no SDP/candidate/credential logging"
+  ],
+  "remaining": [
+    "Native trusted broker/preload wiring and renderer transport not implemented in this slice",
+    "Existing Room adaptiveStream behavior remains unchanged; actual main/overlay visibility coordinator integration pending",
+    "Actual Electron local WebRTC handshake/frame delivery and hidden-main visible-overlay acceptance remain pending",
+    "ready indicates connected transport with admitted descriptions, not decoded video frame proof",
+    "No full widget or production runtime acceptance claimed"
+  ]
+}

@@ -12,9 +12,7 @@ import { useUIStore } from "../../stores/uiStore";
 import Avatar from "../shared/Avatar";
 import ReportModal from "../shared/ReportModal";
 import type { GroupDMMessage } from "../../types/groupDM";
-import GroupDMCall from "./GroupDMCall";
-import { getGroupDMCallToken } from "../../api/groupDM";
-import type { VoiceTokenResponse } from "../../types/voice";
+import { useGroupCallStore } from "../../stores/groupCallStore";
 import EncryptedAttachment from "../chat/EncryptedAttachment";
 import UnclassifiedMediaGate from "../chat/UnclassifiedMediaGate";
 import GroupSpamGate from "../chat/GroupSpamGate";
@@ -103,6 +101,7 @@ export default function GroupDMChat({ groupId }: { groupId: string }) {
   const expressionNavigationRevision = useUIStore((state) => state.navigationRevision);
   const expressionScope = JSON.stringify([currentUserId, getAuthGeneration(), groupId, group?.key_epoch, expressionNavigationRevision]);
   const [pinsScope, setPinsScope] = useState<string | null>(null);
+  const [mutePendingScope,setMutePendingScope]=useState<string|null>(null);
   const showPins = pinsScope === expressionScope;
   const togglePins = () => {
     if (!showPins) setShowMembers(false);
@@ -128,6 +127,13 @@ export default function GroupDMChat({ groupId }: { groupId: string }) {
     return expressionCurrent() && !currentDraft.groupEditingId && !currentDraft.sending
       && state.restoreStatus === "ready" && !state.restoreBlocked.includes(groupId) && !state.pendingSends[groupId]
       && !(state.uploadRecoveries[groupId] ?? []).some((item) => item.retrying);
+  };
+  const toggleMute=async()=>{
+    if(!expressionCurrent()||mutePendingScope===expressionScope)return;
+    setMutePendingScope(expressionScope);
+    const ok=await useGroupDMStore.getState().setMuted(groupId,!group?.is_muted);
+    if(!ok&&expressionCurrent())useToastStore.getState().addToast("error",t("somethingWentWrong"));
+    setMutePendingScope(current=>current===expressionScope?null:current);
   };
   const openExpressionPicker = (kind: "emoji" | "gif" | "sticker") => {
     if (!canAttach || !expressionAvailable()) return false;
@@ -204,14 +210,8 @@ export default function GroupDMChat({ groupId }: { groupId: string }) {
     if (command === "emoji" || command === "gif" || command === "sticker") return openExpressionPicker(command);
     return false;
   });
-  const [call, setCall] = useState<VoiceTokenResponse | null>(null);
-  const callActive = call !== null;
-  const callContextKey = JSON.stringify([currentUserId, groupId]);
-  const [callPendingContext, setCallPendingContext] = useState<string | null>(null);
-  const callPending = callPendingContext === callContextKey;
-  const callRequestRef = useRef(0);
-  const callPendingRef = useRef(false);
-  const callMountedRef = useRef(true);
+  const call = useGroupCallStore(state=>state.session);
+  const ownCall = call?.groupId===groupId && call.ownerId===currentUserId ? call : null;
   const authGeneration = getAuthGeneration();
   const [reporting, setReporting] = useState<GroupDMMessage | null>(null);
   const [forwarding,setForwarding]=useState<GroupDMMessage|null>(null);
@@ -223,11 +223,6 @@ export default function GroupDMChat({ groupId }: { groupId: string }) {
   },[currentForward,group?.members]);
   const availableFriends = useMemo(() => friends.filter((friend) => !group?.members.some((member) => member.id === friend.user_id)), [friends, group]);
   const visibleMessages = useMemo(() => { const q=search.trim().toLocaleLowerCase(); return q ? messages.filter((m)=>(m.content??"").toLocaleLowerCase().includes(q)) : messages; }, [messages,search]);
-  useEffect(() => {
-    callMountedRef.current = true;
-    callPendingRef.current = false;
-    return () => { callMountedRef.current = false; callPendingRef.current = false; callRequestRef.current += 1; };
-  }, [groupId, currentUserId]);
   useEffect(()=>{if(editingId)composerInput.current?.focus()},[editingId,draftKey]);
 
   useEffect(() => {
@@ -263,23 +258,11 @@ export default function GroupDMChat({ groupId }: { groupId: string }) {
     window.setTimeout(()=>target.classList.remove("msg-highlight"),2000);
     clear();
   },[scrollTarget,visibleMessages,messages,search,groupId]);
-  useEffect(() => {
-    if (!callActive) return;
-    let active = true;
-    void getGroupDMCallToken(groupId).then((response) => {
-      if (active && response.success && response.data) setCall(response.data);
-    });
-    return () => { active = false; };
-    // A membership mutation increments key_epoch. Refreshing rotates the
-    // LiveKit SFrame key for remaining participants without exposing it to
-    // the removed member.
-  }, [callActive, group?.key_epoch, groupId]);
-
   useVoiceShortcutAction("group-call-start", () => {
     const destination = useUIStore.getState().destination;
     const activeUserId = useAuthStore.getState().user?.id;
     if (!currentUserId || activeUserId !== currentUserId || getAuthGeneration() !== authGeneration ||
-        destination.type !== "group-dm" || destination.channelId !== groupId || !group || call || callPendingRef.current) return false;
+        destination.type !== "group-dm" || destination.channelId !== groupId || !group || call) return false;
     return joinCall();
   });
   if (!group) return <div className="shell-empty" role="status"><h2>{t("groupUnavailable")}</h2></div>;
@@ -346,43 +329,22 @@ export default function GroupDMChat({ groupId }: { groupId: string }) {
   }
 
   function joinCall(): boolean {
-    const ownerId = currentUserId;
-    const requestGroupId = groupId;
-    const requestGeneration = getAuthGeneration();
-    const destination = useUIStore.getState().destination;
-    if (!ownerId || useAuthStore.getState().user?.id !== ownerId || destination.type !== "group-dm" || destination.channelId !== requestGroupId ||
-        !useGroupDMStore.getState().groups.some((item) => item.id === requestGroupId) || callPendingRef.current) return false;
-    callPendingRef.current = true;
-    const requestId = ++callRequestRef.current;
-    setCallPendingContext(JSON.stringify([ownerId, requestGroupId]));
-    const isCurrentRequest = () => callMountedRef.current && requestId === callRequestRef.current &&
-      getAuthGeneration() === requestGeneration && useAuthStore.getState().user?.id === ownerId &&
-      useUIStore.getState().destination.type === "group-dm" && useUIStore.getState().destination.channelId === requestGroupId &&
-      useGroupDMStore.getState().groups.some((item) => item.id === requestGroupId);
-    void getGroupDMCallToken(requestGroupId).then((response) => {
-      if (!isCurrentRequest()) return;
-      if (response.success && response.data) setCall(response.data);
-      else useToastStore.getState().addToast("error", t("somethingWentWrong"));
-    }).catch(() => {
-      if (isCurrentRequest()) useToastStore.getState().addToast("error", t("somethingWentWrong"));
-    }).finally(() => {
-      if (!callMountedRef.current || requestId !== callRequestRef.current) return;
-      callPendingRef.current = false;
-      setCallPendingContext(null);
-    });
-    return true;
+    const destination=useUIStore.getState().destination;
+    if(!currentUserId||useAuthStore.getState().user?.id!==currentUserId||getAuthGeneration()!==authGeneration
+      ||destination.type!=="group-dm"||destination.channelId!==groupId)return false;
+    return useGroupCallStore.getState().join(groupId);
   }
 
   return <div className="group-dm-chat">
     <header className="channel-bar">
       <span aria-hidden="true">◉</span><strong>{group.name}</strong>
       <span className="group-dm-member-count">{t("memberCount", { count: group.members.length })}</span>
-      <button disabled={callPending} onClick={() => call ? setCall(null) : void joinCall()}>{t(call ? "leaveCall" : "startCall")}</button>
+      <button disabled={!!call&&!ownCall} onClick={() => ownCall ? useGroupCallStore.getState().leave(ownCall.nonce) : void joinCall()}>{t(ownCall ? "leaveCall" : "startCall")}</button>
       <button onClick={toggleMembers} aria-expanded={showMembers}>{t("members")}</button>
       <button type="button" aria-expanded={showPins} onClick={togglePins}>{t("chat:pinnedMessages")}</button>
+      <button type="button" aria-pressed={!!group.is_muted} disabled={mutePendingScope===expressionScope} onClick={()=>void toggleMute()}>{t(group.is_muted?"dm:unmuteDM":"dm:muteDM")}</button>
       <input ref={searchInput} type="search" value={search} onChange={(e)=>setSearch(e.target.value)} onKeyDown={(e)=>{if(e.key==="Enter"){e.preventDefault();void useGroupDMStore.getState().searchMessages(groupId,search)}}} placeholder={t("search")} aria-label={t("search")} />
     </header>
-    {call && <GroupDMCall credentials={call} onLeave={() => setCall(null)} />}
     <div className="group-dm-body">
       <main ref={messagesScrollRef} className="group-dm-messages" aria-live="polite">
         {visibleMessages.map((message) => {

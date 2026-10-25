@@ -410,7 +410,13 @@ var deleteServerCascadeTargetTable = regexp.MustCompile(`(?i)DELETE FROM (\w+)`)
 // SQLite's own internal sqlite_% tables).
 func listTableNames(t *testing.T, db *database.DB) []string {
 	t.Helper()
-	rows, err := db.Conn.Query(`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`)
+	query := `SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`
+	if database.IsPostgres(db.Conn) {
+		// PostgreSQL parity fixtures isolate production migrations in the
+		// current schema; enumerate every real table in that schema as well.
+		query = `SELECT table_name FROM information_schema.tables WHERE table_schema=current_schema() AND table_type='BASE TABLE'`
+	}
+	rows, err := db.Conn.Query(query)
 	if err != nil {
 		t.Fatalf("list tables: %v", err)
 	}
@@ -437,7 +443,11 @@ func listTableNames(t *testing.T, db *database.DB) []string {
 // into SQL text.
 func tableHasColumn(t *testing.T, db *database.DB, table, column string) bool {
 	t.Helper()
-	rows, err := db.Conn.Query(`SELECT name FROM pragma_table_info(?)`, table)
+	query := `SELECT name FROM pragma_table_info(?)`
+	if database.IsPostgres(db.Conn) {
+		query = `SELECT column_name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name=?`
+	}
+	rows, err := db.Conn.Query(query, table)
 	if err != nil {
 		t.Fatalf("table_info(%s): %v", table, err)
 	}

@@ -64,5 +64,9 @@
   "reason_stalled": "Playback stalled",
   "reason_tool_missing": "Server audio tools are unavailable",
   "reason_unknown": "Unknown error",
-  "playTimeout": "This is taking longer than usual — the track may still appear in the queue. Check the queue before trying again."
+  "playTimeout": "This is taking longer than usual — the track may still appear in the queue. Check the queue before trying again.",
+  "protocolRequired": "Update the HiChat server to use safe music controls.",
+  "retryOriginal": "Retry original request",
+  "retryOriginalHint": "The result is unknown. Retry the original request safely before sending another command.",
+  "conflictRefresh": "The queue changed. Refreshed its state; choose your action again."
 }

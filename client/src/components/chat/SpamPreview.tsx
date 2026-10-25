@@ -11,5 +11,5 @@ export default function SpamPreview({ message, kind, children }: {
   const { t } = useTranslation("chat");
   const spam = useSpamVisibility(message, { kind, channelId: "" });
   const { ignored } = useIgnoredMessage(message.user_id);
-  return <>{spam.hidden ? t("spamHidden") : ignored ? t("ignoredMessage") : children ?? message.content}</>;
+  return <>{spam.pending?t("spamFilterPending"):spam.hidden ? t("spamHidden") : ignored ? t("ignoredMessage") : children ?? message.content}</>;
 }

@@ -33,5 +33,11 @@
   "cancel": "Cancel",
   "save": "Save",
   "readError": "Could not read audio file",
-  "uploadFailed": "Upload failed"
+  "uploadFailed": "Upload failed",
+  "loadFailed": "The soundboard could not load. Reopen it to retry.",
+  "playFailed": "The sound request could not be confirmed. Try again.",
+  "playbackFailed": "Audio could not play. Check the output device and audio permission.",
+  "outputFallback": "The selected device is missing; the system default output is being used.",
+  "deleteFailed": "The sound could not be deleted. Try again.",
+  "previewUnavailable": "Check soundboard volume and deafen before previewing."
 }

@@ -2,8 +2,10 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -39,14 +41,25 @@ func TestSQLiteAccountAnonymizationPreservesSharedHistory(t *testing.T) {
 			a, old := createLogicalSession(t, sessions, "session-user", "deleting", "old-refresh")
 			b, _ := createLogicalSession(t, sessions, "session-other", "surviving", "other-refresh")
 			execSeed(t, db, []seedStmt{
+				{q: `INSERT INTO data_exports(id,user_id,status,payload,expires_at) VALUES('retiring-export','session-user','ready','{"email":"private@example.invalid"}',?),('survivor-export','session-other','ready','{"preserve":true}',?)`, args: []any{time.Now().UTC().Add(time.Hour), time.Now().UTC().Add(time.Hour)}},
 				{q: `INSERT INTO servers(id,name,owner_id) VALUES('preserved-server','Shared server','session-other')`},
 				{q: `INSERT INTO channels(id,name,type,server_id) VALUES('shared-delete-channel','shared','text','preserved-server')`},
+				{q: `INSERT INTO channels(id,name,type,server_id) VALUES('shared-music-channel','music','voice','preserved-server')`},
+				{q: `INSERT INTO music_control_heads(channel_id,server_id,session_id,revision,minimum_protocol) VALUES('shared-music-channel','preserved-server','preserved-session',1,2)`},
+				{q: `INSERT INTO music_sessions(channel_id,server_id,queue_json,repeat_mode,revision) VALUES('shared-music-channel','preserved-server',
+				 '[{"queue_item_id":"retired-first","requested_by_user_id":"session-user","requested_by_name":"Original Name","title":"Original Name","video_id":"video-a","future":{"keep":true}},{"queue_item_id":"unrelated","requested_by_user_id":"session-other","requested_by_name":"Original Name","url":"https://youtu.be/0KbRhUtFwkc"},{"queue_item_id":"retired-second","requested_by_user_id":"session-user","requested_by_name":"Original Name","duration_seconds":123}]','all',1)`},
+				{q: `INSERT INTO music_operation_receipts(channel_id,actor_id,request_id,session_id,request_hash,expected_revision,result_json) VALUES
+					('shared-music-channel','session-user','retry','preserved-session',?,0,'{"added_tracks":[{"requested_by_name":"Original Name"}]}'),
+					('shared-music-channel','session-other','retry','preserved-session',?,0,'{"added_tracks":[{"requested_by_name":"Surviving Name"}]}')`, args: []any{strings.Repeat("a", 64), strings.Repeat("b", 64)}},
 				{q: `UPDATE users SET email='delete@example.invalid',display_name='Original Name',avatar_url='/api/uploads/avatars/personal.png',bio='personal bio' WHERE id='session-user'`},
 				{q: `INSERT INTO dm_channels(id,user1_id,user2_id) VALUES('shared-dm','session-other','session-user')`},
 				{q: `INSERT INTO dm_messages(id,dm_channel_id,user_id,content) VALUES('shared-message','shared-dm','session-user','opaque-ciphertext'),('other-message','shared-dm','session-other','other-ciphertext')`},
 				{q: `INSERT INTO dm_attachments(id,dm_message_id,filename,file_url) VALUES('shared-file','shared-message','file.bin','/api/uploads/dm/shared.bin')`},
 				{q: `INSERT INTO messages(id,channel_id,user_id,content) VALUES('shared-channel-message','shared-delete-channel','session-user','opaque-channel-ciphertext')`},
 				{q: `INSERT INTO user_preferences(user_id,data) VALUES('session-user','{}'),('session-other','{}')`},
+				{q: `INSERT INTO users(id,username,password_hash,is_bot,owner_user_id) VALUES('cleanup-game','cleanupgame','game-hash',1,'session-other')`},
+				{q: `INSERT INTO application_game_identities(bot_user_id) VALUES('cleanup-game')`},
+				{q: `INSERT INTO application_game_grants(user_id,bot_user_id,messaging_enabled,revision,authorized_at,updated_at) VALUES('session-user','cleanup-game',1,1,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),('session-other','cleanup-game',1,1,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`},
 				{q: `INSERT INTO server_events(id,server_id,creator_id,name,starts_at) VALUES
 					('deleted-user-event','preserved-server','session-user','Retained authored event','2026-10-25T12:00:00.000000000Z'),
 					('other-user-event','preserved-server','session-other','Other shared event','2026-10-26T12:00:00.000000000Z')`},
@@ -75,8 +88,43 @@ func TestSQLiteAccountAnonymizationPreservesSharedHistory(t *testing.T) {
 			ctx := context.Background()
 			execSeed(t, db, []seedStmt{{q: `INSERT INTO private_media_labels(user_id,source_kind,channel_id,message_id,revision,fingerprint,label) VALUES('session-user','dm','shared-dm','own-label','original',?,'sexual'),('session-other','dm','shared-dm','other-label','original',?,'ordinary')`, args: []any{strings.Repeat("a", 64), strings.Repeat("b", 64)}}})
 			now := time.Now().Unix()
+			var beforeQueue, beforeUpdated string
+			if err := db.Conn.QueryRow(`SELECT queue_json,updated_at FROM music_sessions WHERE channel_id='shared-music-channel'`).Scan(&beforeQueue, &beforeUpdated); err != nil {
+				t.Fatal(err)
+			}
 			if err := r.Anonymize(ctx, a.UserID, a.ID, "hash", "", now); err != nil {
 				t.Fatal(err)
+			}
+			var afterQueue, afterUpdated, repeat string
+			var queueRevision, headRevision int
+			var headSession string
+			if err := db.Conn.QueryRow(`SELECT queue_json,updated_at,repeat_mode,revision FROM music_sessions WHERE channel_id='shared-music-channel'`).Scan(&afterQueue, &afterUpdated, &repeat, &queueRevision); err != nil {
+				t.Fatal(err)
+			}
+			if err := db.Conn.QueryRow(`SELECT session_id,revision FROM music_control_heads WHERE channel_id='shared-music-channel'`).Scan(&headSession, &headRevision); err != nil {
+				t.Fatal(err)
+			}
+			var expected, actual []map[string]any
+			if err := json.Unmarshal([]byte(beforeQueue), &expected); err != nil {
+				t.Fatal(err)
+			}
+			expected[0]["requested_by_name"] = "Deleted User"
+			expected[2]["requested_by_name"] = "Deleted User"
+			if err := json.Unmarshal([]byte(afterQueue), &actual); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(expected, actual) || beforeUpdated != afterUpdated || queueRevision != 1 || headRevision != 1 || headSession != "preserved-session" || repeat != "all" {
+				t.Fatalf("queue anonymization changed unrelated content/control state: %s", afterQueue)
+			}
+			var ownGrants, survivorGrants int
+			if err := db.Conn.QueryRow(`SELECT COUNT(*) FROM application_game_grants WHERE user_id='session-user'`).Scan(&ownGrants); err != nil {
+				t.Fatal(err)
+			}
+			if err := db.Conn.QueryRow(`SELECT COUNT(*) FROM application_game_grants WHERE user_id='session-other'`).Scan(&survivorGrants); err != nil {
+				t.Fatal(err)
+			}
+			if ownGrants != 0 || survivorGrants != 1 {
+				t.Fatalf("game grant cleanup = own:%d survivor:%d", ownGrants, survivorGrants)
 			}
 			if postgresFKOff {
 				// FK-off mode is needed only for the cleanup transaction. Restore
@@ -95,6 +143,11 @@ func TestSQLiteAccountAnonymizationPreservesSharedHistory(t *testing.T) {
 				t.Fatalf("identity not stripped: %s %s %s %d %d", name, display, status, deleted, personal)
 			}
 			for query, want := range map[string]int{
+				`SELECT COUNT(*) FROM data_exports WHERE user_id='session-user'`:                                                  0,
+				`SELECT COUNT(*) FROM data_exports WHERE user_id='session-other'`:                                                 1,
+				`SELECT COUNT(*) FROM music_operation_receipts WHERE actor_id='session-user'`:                                     0,
+				`SELECT COUNT(*) FROM music_operation_receipts WHERE actor_id='session-other'`:                                    1,
+				`SELECT COUNT(*) FROM music_control_heads WHERE channel_id='shared-music-channel'`:                                1,
 				`SELECT COUNT(*) FROM private_media_labels WHERE user_id='session-user'`:                                          0,
 				`SELECT COUNT(*) FROM private_media_labels WHERE user_id='session-other'`:                                         1,
 				`SELECT COUNT(*) FROM spam_inbox WHERE user_id='session-user'`:                                                    0,

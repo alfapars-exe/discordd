@@ -1,0 +1,10 @@
+{
+  "status": "clean_full_suite_verified",
+  "source_gate": "Immutable17a0f67f:406files3955tests,3952passed3failed80.51s; two stale fallback text expectations and one GroupCallProvider strict=false initial findBy1s timeout",
+  "change": "GroupCallProvider admission test imports actual lazy GroupDMCall module in beforeAll, separating cold Vite/SDK module transformation from admission measurement. No production code, SDK mock, admission timeout or assertion weakened.",
+  "validation": "Focused strict=false/true2tests PASS3.11s; scoped ESLint0",
+  "full_suite": "Fresh immutable git archive41fa964e, dependency lock unchanged, excludes foreign logging/ongoing compatibility work:406files3957tests allPASS81.07seconds; session67011 exit0. No retries/timeouts/production logic changed to obtain pass.",
+  "clean_build": "Same immutable41fa964e npm run build: actual tsc-b and production Vite1706modules PASS1.44s; session24773 exit0. Existing config/chunk/dynamic import warnings remain.",
+  "clean_electron": "Same immutable41fa964e npm run electron:test: actual Electron TypeScript compile and186tests,185PASS1existingSKIP0fail,969ms,exit0. Host-dependent skipped test is not accepted runtime coverage.",
+  "remaining": "This is client automated verification, not physical media/native overlay or production acceptance"
+}

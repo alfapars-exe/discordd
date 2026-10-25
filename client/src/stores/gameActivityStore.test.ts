@@ -19,6 +19,20 @@ it("keeps independent global and server grants at the same revision", () => {
   expect(useGameActivityStore.getState().entries[gameActivityKey("target", "other")]).toBeUndefined();
 });
 
+it("retains server-origin transition metadata only on active global grants and fences duplicates", () => {
+  const store = useGameActivityStore.getState();
+  store.apply({ epoch: "epoch-a", user_id: "target", game, revision: 1, transition: true });
+  expect(useGameActivityStore.getState().entries[gameActivityKey("target")]?.transition).toBe(true);
+  store.apply({ epoch: "epoch-a", user_id: "target", game: null, revision: 2, transition: true });
+  expect(useGameActivityStore.getState().entries[gameActivityKey("target")]).toEqual({ revision: 2, game: null });
+  store.apply({ epoch: "epoch-a", user_id: "target", game, revision: 1, transition: true });
+  expect(useGameActivityStore.getState().entries[gameActivityKey("target")]?.game).toBeNull();
+  store.apply({ epoch: "epoch-a", user_id: "target", server_id: "server", game, revision: 3, transition: true });
+  expect(useGameActivityStore.getState().entries[gameActivityKey("target", "server")]?.transition).toBeUndefined();
+  store.apply({ epoch: "epoch-a", user_id: "invalid", game, revision: 1, transition: "true" } as unknown as GameActivityUpdate);
+  expect(useGameActivityStore.getState().entries[gameActivityKey("invalid")]).toBeUndefined();
+});
+
 it("retains a scoped revoke tombstone against delayed or duplicate grants", () => {
   const store = useGameActivityStore.getState();
   store.apply({ epoch: "epoch-a", user_id: "target", server_id: "server", game: null, revision: 3 });

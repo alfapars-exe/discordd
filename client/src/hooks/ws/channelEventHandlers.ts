@@ -1,3 +1,4 @@
+import i18n from "../../i18n";
 /**
  * Channel-domain WS event handlers.
  * Handles: channel CRUD, category CRUD, message CRUD, typing, reactions, pins, permissions.
@@ -25,7 +26,7 @@ import type { Channel, WSMessage } from "../../types";
 import { UI_SHELL_V2 } from "../../utils/uiShell";
 import { getNotificationPreferences, shouldFlashTaskbar } from "../../utils/notificationPreferences";
 import { speakIncomingMessage } from "../../utils/textToSpeech";
-import { isMessageFilteredAsSpam } from "../../utils/messageSpamPolicy";
+import { resolveMessageSpamDisposition,getMessageSpamDisposition } from "../../utils/messageSpamPolicy";
 import { registerSpamMessage } from "../../utils/registerSpamMessage";
 
 async function refreshChannelAccess(channelId: string, explicitServerId?: string) {
@@ -146,8 +147,12 @@ export async function handleChannelEvent(msg: WSMessage, isCurrent: () => boolea
         return true;
       }
 
-      if (isMessageFilteredAsSpam(message, "channel")) { void registerSpamMessage(message, "channel", message.channel_id, eventSessionCurrent); return true; }
-      speakIncomingMessage(
+      const cachedAtArrival=useMessageStore.getState().messagesByChannel[message.channel_id]?.some(item=>item.id===message.id);
+      const sourceCurrent=()=>{if(!eventSessionCurrent()||!isCurrent())return false;const live=useMessageStore.getState().messagesByChannel[message.channel_id]?.find(item=>item.id===message.id);return !live?!cachedAtArrival:live.edited_at===message.edited_at&&live.content===message.content;};
+      const disposition=await resolveMessageSpamDisposition(message,"channel",sourceCurrent);
+      if(disposition==="stale"||!sourceCurrent())return true;
+      if(disposition==="filter"){void registerSpamMessage(message,"channel",message.channel_id,sourceCurrent);return true;}
+      if(disposition==="allow")speakIncomingMessage(
         message.author?.display_name || message.author?.username || "",
         message.content,
       );
@@ -158,9 +163,12 @@ export async function handleChannelEvent(msg: WSMessage, isCurrent: () => boolea
       const isViewingThisChannel =
         activeTab?.type === "text" && activeTab?.channelId === message.channel_id;
 
-      if (isViewingThisChannel) {
+      if (isViewingThisChannel&&disposition==="allow") {
         useReadStateStore.getState().markAsRead(message.channel_id, message.id);
         if (getNotificationPreferences().currentChannelSound) playNotificationSound();
+      } else if(isViewingThisChannel){
+        useReadStateStore.getState().incrementUnread(message.channel_id);
+        if(getNotificationPreferences().currentChannelSound)playNotificationSound();
       } else {
         const isServerMuted = msgServerId ? useServerStore.getState().isServerMuted(msgServerId) : false;
         const isChannelMuted = useChannelStore.getState().mutedChannelIds.has(message.channel_id);
@@ -178,7 +186,7 @@ export async function handleChannelEvent(msg: WSMessage, isCurrent: () => boolea
             "";
           showNotification({
             title: authorName || "HiChat!",
-            body: message.content ?? "",
+            body: disposition==="pending"?i18n.t("chat:spamPendingNotification"):message.content??"",
             icon: message.author?.avatar_url ?? null,
             tag: `channel:${message.channel_id}`,
             isStillEligible: () => {
@@ -194,7 +202,7 @@ export async function handleChannelEvent(msg: WSMessage, isCurrent: () => boolea
               const activePanel = activeUI.panels[activeUI.activePanelId];
               const destination = UI_SHELL_V2 ? activeUI.destination : activePanel?.tabs.find((tab) => tab.id === activePanel.activeTabId);
               const nowViewing = destination?.type === "text" && destination.channelId === message.channel_id;
-              return auth.user?.id === currentUserId && getAuthGeneration() === eventAuthGeneration && !nowViewing && channelKnown
+              return sourceCurrent()&&(disposition==="pending"||getMessageSpamDisposition(message,"channel")==="allow")&&auth.user?.id === currentUserId && getAuthGeneration() === eventAuthGeneration && !nowViewing && channelKnown
                 && (read.unreadCounts[message.channel_id] ?? 0) > 0
                 && !channels.mutedChannelIds.has(message.channel_id)
                 && !!server && !useServerStore.getState().mutedServerIds.has(serverId)

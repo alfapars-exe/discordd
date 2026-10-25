@@ -1,6 +1,7 @@
 /** ServerGeneralSettings — Server name, icon, invite settings, and LiveKit config (self-hosted, owner-only). */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, useLayoutEffect } from "react";
+import { getAuthGeneration } from "../../api/client";
 import { useTranslation, Trans } from "react-i18next";
 import { useToastStore } from "../../stores/toastStore";
 import { showApiError } from "../../utils/apiError";
@@ -26,10 +27,14 @@ function ServerGeneralSettings() {
   const activeServerId = useServerStore((s) => s.activeServerId);
   const deleteServerAction = useServerStore((s) => s.deleteServer);
   const currentUser = useAuthStore((s) => s.user);
+  const scope = `${activeServerId}:${currentUser?.id}:${getAuthGeneration()}`;
+  const scopeRef = useRef(scope);
+  useLayoutEffect(() => { scopeRef.current = scope; }, [scope]);
 
   const [server, setServer] = useState<Server | null>(null);
   const [editName, setEditName] = useState("");
   const [editInviteRequired, setEditInviteRequired] = useState(false);
+  const [editCommunity, setEditCommunity] = useState(false);
   const [editAFKTimeout, setEditAFKTimeout] = useState(60);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -56,10 +61,13 @@ function ServerGeneralSettings() {
     : false;
 
   useEffect(() => {
+    let cancelled = false;
+    const current = () => !cancelled && scopeRef.current === scope;
     // Clear stale state on server switch — deferred via microtask so
     // the lint react-hooks/set-state-in-effect treats the writes as
     // post-commit work, not a cascading render.
     queueMicrotask(() => {
+      if (!current()) return;
       setServer(null);
       setIsLoaded(false);
       setLkSettings(null);
@@ -72,15 +80,18 @@ function ServerGeneralSettings() {
     async function fetchServer() {
       if (!activeServerId) return;
       const res = await serverApi.getServer(activeServerId);
+      if (!current()) return;
       if (res.success && res.data) {
         setServer(res.data);
         setEditName(res.data.name);
         setEditInviteRequired(res.data.invite_required);
+        setEditCommunity(res.data.is_community === true);
         setEditAFKTimeout(res.data.afk_timeout_minutes ?? 60);
 
         // Fetch LiveKit settings if instance exists
         if (res.data.livekit_instance_id) {
           const lkRes = await serverApi.getLiveKitSettings(activeServerId);
+          if (!current()) return;
           if (lkRes.success && lkRes.data) {
             setLkSettings(lkRes.data);
             setEditLkUrl(lkRes.data.url);
@@ -94,12 +105,14 @@ function ServerGeneralSettings() {
       setIsLoaded(true);
     }
     fetchServer();
-  }, [activeServerId]);
+    return () => { cancelled = true; };
+  }, [activeServerId, scope]);
 
   const hasChanges =
-    server !== null &&
+    server !== null && server.id === activeServerId &&
     (editName !== server.name ||
       editInviteRequired !== server.invite_required ||
+      editCommunity !== (server.is_community === true) ||
       editAFKTimeout !== (server.afk_timeout_minutes ?? 60));
 
   async function handleSave() {
@@ -111,8 +124,10 @@ function ServerGeneralSettings() {
       const res = await serverApi.updateServer(activeServerId, {
         name: editName,
         invite_required: editInviteRequired,
+        is_community: editCommunity,
         afk_timeout_minutes: editAFKTimeout,
       });
+      if (scopeRef.current !== scope) return;
       if (res.success && res.data) {
         setServer(res.data);
         setEditInviteRequired(res.data.invite_required);
@@ -274,6 +289,10 @@ function ServerGeneralSettings() {
       </div>
 
       {/* AFK Voice Timeout */}
+      <div className="settings-field">
+        <label><input type="checkbox" checked={editCommunity} onChange={event => setEditCommunity(event.currentTarget.checked)} />{t("serverCommunityClassification")}</label>
+        <p className="settings-hint">{t("serverCommunityClassificationHint")}</p>
+      </div>
       <div className="settings-field">
         <label htmlFor="afkTimeout" className="settings-label">
           {t("afkTimeout")}

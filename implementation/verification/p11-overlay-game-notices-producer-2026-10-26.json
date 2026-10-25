@@ -1,0 +1,124 @@
+{
+  "date": "2026-10-26",
+  "scope": "P11 transient authorized friend activity notices and explicit CS2 same-game association notices; server live-transition provenance, client producer and independent device preferences",
+  "status": "implemented_unverified",
+  "base_commit_at_receipt_creation": "11e809efa81906c3b249a7a18c9e19c4b5b5dba1",
+  "owned_paths": [
+    "server/services/game_activity_transition.go",
+    "server/services/game_activity_transition_test.go",
+    "server/ws/game_activity_transition_test.go",
+    "server/services/game_activity_service.go",
+    "server/ws/event.go",
+    "client/src/hooks/useOverlayGameNotices.ts",
+    "client/src/hooks/useOverlayGameNotices.test.ts",
+    "client/src/utils/overlayGameNotices.ts",
+    "client/src/utils/overlayGameNotices.test.ts",
+    "client/src/utils/overlayActivity.ts",
+    "client/src/hooks/useOverlayActivity.ts",
+    "client/src/hooks/useOverlayActivity.test.ts",
+    "client/src/stores/gameActivityStore.ts",
+    "client/src/stores/gameActivityStore.test.ts",
+    "client/src/stores/slices/voiceSettingsSlice.ts",
+    "client/src/stores/slices/voiceSettingsSlice.noise.test.ts",
+    "client/src/stores/preferencesStore.ts",
+    "client/src/stores/preferencesStore.test.ts",
+    "client/src/components/settings/VoiceSettings.tsx",
+    "client/src/components/settings/VoiceSettings.audio.test.tsx",
+    "client/src/components/layout/AppLayout.tsx",
+    "client/src/i18n/locales/en/settings.json",
+    "client/src/i18n/locales/tr/settings.json",
+    "client/src/i18n/locales/en/common.json",
+    "client/src/i18n/locales/tr/common.json"
+  ],
+  "source_sha256_lf": {
+    "server/services/game_activity_transition.go": "98f638586dba97a372f3191368f192a5517ade1d62156f9f97a1bcc6b670bd6a",
+    "server/services/game_activity_transition_test.go": "07d275aaecb2214f484b7dc60bf0a5af7d81d65b61b492a942062d142cc648d7",
+    "server/ws/game_activity_transition_test.go": "280867c0d84115bf19784b649f3e648551f9075ab1a0ed71de172fef5af16ec4",
+    "server/services/game_activity_service.go": "429feb65936499fcc52700f303afcc1cc77bc5e6560ac53024788aada612295a",
+    "server/ws/event.go": "4433ee9b91b3f41c2ee36716ff4f3bdd3e3ec57cbfaee32b05d8d50defc0e28e",
+    "client/src/hooks/useOverlayGameNotices.ts": "4a45ecc4a5b482bca4068e0c7a4db96114b46ccf0ef76f234a9646ee0720fcb2",
+    "client/src/hooks/useOverlayGameNotices.test.ts": "6574404511d2fb78565d0dd73e8e7e669cd466dd35b5cbc3c4ab3318f6c5c5ca",
+    "client/src/utils/overlayGameNotices.ts": "3c24fe8efc84e411756c974cdc2661213e32a2f7ff40e055c5904e6283789459",
+    "client/src/utils/overlayGameNotices.test.ts": "8bbb8b565917c45dda5c1ec9642672060a9006768b80e8ed2ba7449d15102455",
+    "client/src/utils/overlayActivity.ts": "578d3ab77ce46d283f6c58db2ffbc8b6a8bac1fba6aa26126ed100774e782905",
+    "client/src/hooks/useOverlayActivity.ts": "a0b6008d0d1e5ade0d7156bd75eaa9f136eaae5b64aa49df67d1b4ce18dcd38b",
+    "client/src/hooks/useOverlayActivity.test.ts": "1b3358309d152b486fa6f1f6986fa30027ed6aa38cef56d27ceb5e77fef4f324",
+    "client/src/stores/gameActivityStore.ts": "07ffdb0d2fcc8a681a749e1cabe43877c708e7843bd3cb96495f9467a1ae561c",
+    "client/src/stores/gameActivityStore.test.ts": "f9b6fc3ea57e3fdd0450610a5745f62a06c4d267a64f6f6844b5b5e9e4683b7b",
+    "client/src/stores/slices/voiceSettingsSlice.ts": "f0e2bd39954b1357ff07aa17020a6818ede86f1b4026d34901613fed09b5a3b5",
+    "client/src/stores/slices/voiceSettingsSlice.noise.test.ts": "aa1d504225386a5e03a4d957fff317c869c2788d034d3c0de502d15f35c7d017",
+    "client/src/stores/preferencesStore.ts": "d4e3c8d3e4ad7fd0ec3a0fbeae5cb0a0126146887ee5262b1ec296af6ed72696",
+    "client/src/stores/preferencesStore.test.ts": "b262e8353a5cc2a6644151cf776d04ec85bcc9fd0ef39fc922324c8f3d23b147",
+    "client/src/components/settings/VoiceSettings.tsx": "930449659e9a1f55601af20c949aae94c0e0c98cfc82ca4f2a7fd62d731ed280",
+    "client/src/components/settings/VoiceSettings.audio.test.tsx": "6d4f41d8e6a0a7e2abab9b0ed4ace2d65358eea7786b5423efcc7f51beb3be37",
+    "client/src/components/layout/AppLayout.tsx": "aef7820d38331dbce3204ad79b36a8bd140b407ee71bd78b31e9e7f679d34d28",
+    "client/src/i18n/locales/en/settings.json": "446b353b754c5d572369080a6b2d9aa2ca8fb612b2bf15fdd6a43e2b5d802e13",
+    "client/src/i18n/locales/tr/settings.json": "08723873abc5ea7aab5a8215b3ccafaf27884b0f13144479f3d03892a5680fb3",
+    "client/src/i18n/locales/en/common.json": "88a21b441a6a38bd6a4bdef24d68e05dfcb3f19667ed368aed2577c45681908f",
+    "client/src/i18n/locales/tr/common.json": "e4514223a3641f8214d8bf3cb733518467ed19435ea66e06043584b52603c646"
+  },
+  "qualification": "Hashes describe final working-tree producer source, including unrelated dirty hunks in the explicitly shared paths below. This is not an immutable full-source gate or actual game/device acceptance. No staging, commit, release, real Steam launch or invitation was performed for this notice slice. Native/HUD consumer is a separate agent-owned slice.",
+  "shared_path_ownership": {
+    "client/src/stores/slices/voiceSettingsSlice.ts": "Only voiceOverlayGameActivityNotifications/voiceOverlayNowPlayingNotifications fields, default false, validation, local-only keys, persistence, setters and hydration/reset preservation. Excludes all foreign center-left/game-mode migration/default/position work.",
+    "client/src/stores/slices/voiceSettingsSlice.noise.test.ts": "Only new independent game notice preference regression. Excludes foreign center-left/game-mode migration tests.",
+    "client/src/components/settings/VoiceSettings.tsx": "Only four notice selectors and two notice preference rows. Excludes center-left reset/position choices and any unrelated changes.",
+    "client/src/components/settings/VoiceSettings.audio.test.tsx": "Only the two new default/mocked-setter fields and independent notice preference UI regression. Excludes other foreign test edits.",
+    "client/src/i18n/locales/en/settings.json": "Only voiceOverlayGameActivityNotifications, voiceOverlayGameActivityNotificationsDesc, voiceOverlayNowPlayingNotifications, voiceOverlayNowPlayingNotificationsDesc.",
+    "client/src/i18n/locales/tr/settings.json": "Same four notice keys only; exclude foreign platformLogs/center-left/game-mode or unrelated translations.",
+    "client/src/i18n/locales/en/common.json": "Only overlayGameActivityNotice and overlayNowPlayingNotice.",
+    "client/src/i18n/locales/tr/common.json": "Only overlayGameActivityNotice and overlayNowPlayingNotice.",
+    "client/src/components/layout/AppLayout.tsx": "Only notice hook/live-getter import, flags/hook selection, additive gameActivityNotices snapshot fields and effect dependencies. Existing CS2/media/overlay plumbing retained.",
+    "server/services/game_activity_service.go": "Only notifyTransition detection, internal transition candidate through Update/reconcile, post-policy selected-source transition recheck and deliver wrapper. Existing CS2 source/offer logic retained.",
+    "server/ws/event.go": "Only server-only GameActivityData.transition optional boolean."
+  },
+  "validation": [
+    {
+      "command": "npx vitest run src/utils/overlayGameNotices.test.ts src/hooks/useOverlayGameNotices.test.ts src/hooks/useOverlayActivity.test.ts src/utils/overlayActivity.test.ts src/stores/gameActivityStore.test.ts src/stores/slices/voiceSettingsSlice.noise.test.ts src/components/settings/VoiceSettings.audio.test.tsx src/stores/preferencesStore.test.ts",
+      "result": "pass",
+      "exit_code": 0,
+      "suites": 8,
+      "tests": 127,
+      "failed": 0,
+      "duration_seconds": 4.12
+    },
+    {
+      "command": "npx tsc -b --pretty false",
+      "result": "pass",
+      "exit_code": 0
+    },
+    {
+      "command": "npx eslint (13 owned producer/source and regression paths)",
+      "result": "pass",
+      "exit_code": 0
+    },
+    {
+      "command": "GOTOOLCHAIN=go1.26.10 go test ./services ./ws -run TestGame(Activity|Join) -count=1",
+      "result": "pass",
+      "exit_code": 0,
+      "packages": [
+        "services",
+        "ws"
+      ],
+      "note": "Includes four new live-transition provenance regressions plus existing game activity/join regressions."
+    }
+  ],
+  "verified_behavior": [
+    "Server alone creates transition marker from actual new selected source/game/canonical association/lease reincarnation; strict client payload cannot inject it.",
+    "Initial viewer snapshots, policy/permission reconciliation, heartbeats, name-only edits, source fallback, server-scoped and owner deliveries never trigger notice provenance.",
+    "Selected physical source incarnation and lease are rechecked after fresh policy work, with no map mutex held across repository calls.",
+    "Hook hydration/remount seeds baseline; only live higher-revision store updates can cause notices. No persisted AppNotification or history rows are manufactured.",
+    "Accepted globally authorized friends only, with current auth/epoch/relationship/loaded preference/block provenance; ignored, blocked, offline, DND, disconnected and source-revoked rows fail closed.",
+    "Own comparison uses local cached consent-filtered registered-game getter without requiring account game-sharing opt-in or sending local source IDs to the server.",
+    "Same-game comparison only accepts both explicit steam:730 canonical associations, never matching raw titles or per-device registration UUIDs. Unknown titles still receive truthful shared-activity notices.",
+    "Two independent device-local preferences default false, persist locally, reject invalid cached shapes and cannot be enabled by cloud hydration.",
+    "At most three metadata-only notices, 80-character labels/titles and existing 3-20 second accessibility duration. No user/source/Steam/ticket identifiers enter HUD DTO.",
+    "Appending notices preserves existing transport IDs. Privacy revocation clears native rows immediately before React, then remints surviving transport IDs without extending original expiry or creating another logical transition. Natural expiry does not clear unrelated native notices.",
+    "Existing persistent friend activity widget also applies ignored-user and current loaded preference/block ownership fences."
+  ],
+  "remaining_acceptance": [
+    "Root frozen combined-source tests/build and consumer/native contract validation against this producer.",
+    "Actual Windows game overlay rendering, geometry, focus/click-through, independent toggles, native autonomous expiry and clear/tombstone integration.",
+    "Two real clients demonstrating eligible friend transitions, private-own CS2 comparison and immediate policy/source revocation without replay.",
+    "Production deployment and Windows installer/update distribution."
+  ]
+}

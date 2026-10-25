@@ -1,0 +1,99 @@
+{
+  "date": "2026-10-25",
+  "scope": "Windows CS2 typed Steam lobby adapter, bounded main-process ticket consumption, auth/document lifetime fences and explicit local registered-game association",
+  "status": "implemented_unverified",
+  "base_commit_at_receipt_creation": "706fc7e30024f2c42c3a7dfd7fac7a1d5050dde7",
+  "verification_source": "Working-tree native source with the normalized-LF SHA256 values below. These are not an immutable whole-repository acceptance result.",
+  "owned_paths": [
+    "electron/cs2-join-controller.ts",
+    "electron/cs2-join-controller.test.ts",
+    "electron/cs2-join-ipc.ts",
+    "electron/cs2-join-ipc.test.ts",
+    "electron/cs2-join-parity.test.ts",
+    "electron/registered-game-join.test.ts",
+    "electron/registered-games.ts",
+    "electron/preload.ts",
+    "client/src/types/electron.d.ts"
+  ],
+  "shared_file_selective_ownership": {
+    "path": "electron/ipc-handlers.ts",
+    "include_only": [
+      "Import registerCS2JoinIPC from ./cs2-join-ipc",
+      "Register the gameJoin controller with trusted MAIN-frame guard, fixed net.fetch and shell.openExternal dependencies, dev-loopback policy, Windows support and before-quit disposal",
+      "Register set-registered-game-join-adapter with trusted sender and bounded game-ID validation"
+    ],
+    "explicitly_excluded": "Foreign middle-left overlay layout migration comment and overlay-layout.json -> overlay-layout-v2.json change; all other unrelated overlay and logging changes remain outside this native CS2 slice.",
+    "worktree_full_file_sha256_lf": "253aba78fa8954c5205eb1e335f3a7fd63a8c648c603b0b7197dafe89acc8510",
+    "owned_projection_sha256_lf": "cbb30d2fe84b2dca92d45c19fedbc74b9b7821cc360a6ea6b2390d66b9eac58b",
+    "projection_definition": "Current normalized-LF IPC file with the foreign two-line layout migration comment removed and overlay-layout-v2.json restored to overlay-layout.json. The resulting hash covers the intended native CS2 staging projection, not the full dirty file."
+  },
+  "source_sha256_lf": {
+    "electron/cs2-join-controller.ts": "08898ca56a19dac96c5b2cce1ae701d4cbe8e99d237c7ee4b10d26573f140c00",
+    "electron/cs2-join-controller.test.ts": "01c2925aa4108b77200def4c48516feb54e86ca743509a2c3199a034826c11b7",
+    "electron/cs2-join-ipc.ts": "aefea4e0df16a3cce8cc38bcbf59589806aa520ce6d59179e20a6c5d1797fde4",
+    "electron/cs2-join-ipc.test.ts": "2cca16bdd00f5eb3fc40617953e885d2297b23f44d92c03df1fd512707a95600",
+    "electron/cs2-join-parity.test.ts": "b4cdee407a4fbe9d858efbdbf2e66c99f988889fd4e08c6329415b25dfb6c40f",
+    "electron/registered-game-join.test.ts": "af011c8c756e525c6cbd6016498a6db1308895ecad439f8035a1b4f4bc16ce2c",
+    "electron/registered-games.ts": "87a056a0fc85e1244beb07cc228d8641939ca9c0a276c58c2aa0bba7b28ce23d",
+    "electron/preload.ts": "a82e00025bdddcb8e08d67e7409c1b7ca1a657a5513dfb79774e99afc45b6742",
+    "client/src/types/electron.d.ts": "990798e653061e6cdf918d2b771293a5a8d76beb855b59063173f75ac079a4c5"
+  },
+  "read_only_dependencies_sha256_lf": {
+    "electron/cs2-join-contract.ts": "b8d0507b88e2e90cf7ec019bdae38d3e2e4401d999ae44b24bc9c1d252cf4118",
+    "electron/cs2-join-contract.test.ts": "0e733a37f0209af9a1b312cb52debb5d4f4580942b753e1edc9677d60cbfd7ba",
+    "testdata/cs2-join-parity.json": "1ef67773611886964b5a1a07d957fa04e6a2fc82fbbee963c2fcc20d746d519d"
+  },
+  "validation": [
+    {
+      "command": "npx tsc -p electron/tsconfig.json --noEmit",
+      "result": "pass",
+      "exit_code": 0
+    },
+    {
+      "command": "npx tsc -p electron/tsconfig.json && node --test dist-electron/cs2-join-controller.test.js dist-electron/cs2-join-ipc.test.js dist-electron/cs2-join-parity.test.js dist-electron/registered-game-join.test.js",
+      "result": "pass",
+      "exit_code": 0,
+      "tests": 19,
+      "passed": 19,
+      "failed": 0,
+      "skipped": 0,
+      "duration_ms": 196.9852
+    },
+    {
+      "command": "npm run electron:test",
+      "result": "pass",
+      "exit_code": 0,
+      "tests": 240,
+      "passed": 239,
+      "failed": 0,
+      "skipped": 1,
+      "duration_ms": 1051.0071,
+      "note": "One pre-existing skip retained. This worktree run also contained unrelated overlay-layout changes; selective publication requires root's frozen-source verification."
+    }
+  ],
+  "covered_regressions": [
+    "Trusted current MAIN document only; foreign/subframes denied, navigation/crash/destruction retire the scope, main-document load readiness gates fresh ACK",
+    "Fresh native scope nonce, exact pinned validated origin, opaque user IDs, public ticket UUID distinct from secret, expected target and offer revision",
+    "Fixed POST /api/game-join/tickets/consume, redirect:error, credentials:omit, no-store, 8-second whole-operation deadline and 64-KiB streamed response cap",
+    "Strict success/data envelope, account/target/ticket/revision/UTC expiry matching and typed Steam730 recipe reconstruction; no renderer-supplied executable, arbitrary URL or arguments",
+    "One-use local reservation, request replay denial, bounded burst rate, pending-operation exclusion and late async auth-scope fences",
+    "Early HTTP/content rejection and late-auth responses cancel unread bodies; throwing/rejected/hung cancellation cannot hang IPC",
+    "Retired auth during external-handler promise does not produce a stale forwarded result; an already dispatched OS request cannot be undone",
+    "Explicit local joinAdapter default none, persistence/rollback, scan-free path-free canonicalGameId projection only for fresh running and shared explicitly associated game",
+    "Shared synthetic CS2 URI parity corpus matches the strict native parser and builder"
+  ],
+  "safety": {
+    "actual_steam_or_cs2_launched": false,
+    "external_handler": "Stubbed in tests; no real shell dispatch performed by this agent.",
+    "live_invitation_sent": false,
+    "tokens_or_tickets_logged_or_persisted": false,
+    "git_stage_or_commit_performed": false
+  },
+  "remaining_acceptance": [
+    "Frozen combined-source frontend/native/backend tests and actual production-shaped HTTP ticket-consume integration",
+    "Real Windows installed Steam and CS2 lobby handoff, supported lobby access, unavailable handler and declined launch behavior",
+    "Real web external-protocol dispatch and browser permission/user-activation behavior",
+    "Two-user fresh consent, source opt-out, membership/ACL/session revocation, expiry and concurrent join flows",
+    "Windows packaged IPC/preload integration and installer/update distribution"
+  ]
+}

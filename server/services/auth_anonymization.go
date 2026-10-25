@@ -15,6 +15,10 @@ func WithAccountAnonymization(repo repository.AccountAnonymizationRepository) Au
 	return func(s *authService) { s.accountAnonymization = repo }
 }
 
+func (s *authService) SetMusicRequesterRetirementObserver(observer MusicRequesterRetirementObserver) {
+	s.musicRequesterRetirement = observer
+}
+
 // DeleteAccount is only the credential/runtime part of deletion. The handler
 // must additionally require owner affinity and irreversible typed consent.
 // Never use administrative HardDeleteUser: shared history must survive.
@@ -39,9 +43,14 @@ func (s *authService) DeleteAccount(ctx context.Context, userID, current, passwo
 	if err := s.accountAnonymization.Anonymize(ctx, userID, current, user.PasswordHash, security.Secret, time.Now().Unix()); err != nil {
 		return err
 	}
-	s.hub.BroadcastToAll(ws.Event{Op: ws.OpGroupDMRefresh, Data: map[string]string{"reason": "membership_changed"}})
 	// Durable revocation commits first. This existing path invalidates the
 	// HTTP user cache, closes all same-process sockets and disconnects voice.
 	s.afterBoundSessionRevocation(userID)
+	s.hub.BroadcastToAll(ws.Event{Op: ws.OpGroupDMRefresh, Data: map[string]string{"reason": "membership_changed"}})
+	// Privacy publication may wait for an older HTTP write to drain. Security
+	// cache/socket/voice revocation must already be complete before that wait.
+	if s.musicRequesterRetirement != nil {
+		s.musicRequesterRetirement.AnonymizeMusicRequester(userID)
+	}
 	return nil
 }

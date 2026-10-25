@@ -4,11 +4,11 @@ import GroupSpamGate from "./GroupSpamGate";
 import type { GroupDMMessage } from "../../types/groupDM";
 import { useAuthStore } from "../../stores/authStore";
 import { usePreferencesStore } from "../../stores/preferencesStore";
-const state = vi.hoisted(() => ({ hidden: false }));
-vi.mock("../../hooks/useSpamVisibility", () => ({ useSpamVisibility: () => ({ hidden: state.hidden, reasons: [], restore: vi.fn(), retry: vi.fn(), syncError: false }) }));
+const state = vi.hoisted(() => ({ hidden: false, pending: false }));
+vi.mock("../../hooks/useSpamVisibility", () => ({ useSpamVisibility: () => ({ hidden: state.hidden, pending:state.pending, pendingError:false, retryRelationship:vi.fn(), reasons: [], restore: vi.fn(), retry: vi.fn(), syncError: false }) }));
 vi.mock("react-i18next", async (original) => ({...await original<typeof import("react-i18next")>(), useTranslation: () => ({ t: (key: string) => key }) }));
 const message = { id:"m",group_id:"g",user_id:"other",content:"hello" } as GroupDMMessage;
-beforeEach(() => { state.hidden=false; useAuthStore.setState({user:{id:"me"} as NonNullable<ReturnType<typeof useAuthStore.getState>["user"]>}); usePreferencesStore.setState({data:{privacy:{ignoredUsers:{}}}}); });
+beforeEach(() => { state.hidden=false;state.pending=false; useAuthStore.setState({user:{id:"me"} as NonNullable<ReturnType<typeof useAuthStore.getState>["user"]>}); usePreferencesStore.setState({data:{privacy:{ignoredUsers:{}}}}); });
 it("dispatches only focused group actions and leaves child controls alone", () => {
   state.hidden = false; const run = vi.fn();
   render(<GroupSpamGate message={message} keyboardActions={[{id:"reply",label:"reply",run}]}><button>child</button></GroupSpamGate>);
@@ -64,3 +64,5 @@ it("blocks content actions on hidden messages but allows returning to the group 
   fireEvent.keyDown(screen.getByRole("group"), {code:"Escape",key:"Escape"});
   expect(screen.getByRole("textbox")).toHaveFocus();
 });
+
+it("blocks group content, children and shortcuts while relationship is pending",()=>{state.pending=true;const run=vi.fn();render(<GroupSpamGate message={message} keyboardActions={[{id:"reply",label:"reply",run}]}><p>pending secret</p></GroupSpamGate>);expect(screen.queryByText("pending secret")).toBeNull();expect(screen.getByText("spamFilterPending")).toBeInTheDocument();fireEvent.keyDown(screen.getByRole("group"),{code:"KeyR",key:"r"});expect(run).not.toHaveBeenCalled();});

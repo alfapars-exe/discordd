@@ -34,7 +34,7 @@ func (f *groupReadFixture) GetReadState(_ context.Context, group, user string) (
 	}
 	return &models.GroupDMReadState{GroupID: group, Revision: 7}, nil
 }
-func (f *groupReadFixture) MarkUnreadFrom(_ context.Context, group, user, message string) (*models.GroupDMReadState, error) {
+func (f *groupReadFixture) MarkUnreadFrom(_ context.Context, group, user, message string, _ ...int64) (*models.GroupDMReadState, error) {
 	f.writes++
 	if f.failure != nil {
 		return nil, f.failure

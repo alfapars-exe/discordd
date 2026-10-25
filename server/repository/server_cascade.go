@@ -42,6 +42,20 @@ var deleteServerCascadeStmts = []struct {
 	args  func(serverID string) []any
 }{
 	{
+		// Music protocol heads deliberately outlive queue deletion, but not
+		// their server. Remove receipts before heads even with FKs disabled.
+		query: `DELETE FROM music_operation_receipts WHERE channel_id IN (SELECT channel_id FROM music_control_heads WHERE server_id = ?)`,
+		args:  func(id string) []any { return []any{id} },
+	},
+	{
+		query: `DELETE FROM music_sessions WHERE server_id = ?`,
+		args:  func(id string) []any { return []any{id} },
+	},
+	{
+		query: `DELETE FROM music_control_heads WHERE server_id = ?`,
+		args:  func(id string) []any { return []any{id} },
+	},
+	{
 		query: `DELETE FROM attachments WHERE message_id IN (
 			SELECT id FROM messages WHERE channel_id IN (
 				SELECT id FROM channels WHERE server_id = ?))`,

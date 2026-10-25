@@ -88,6 +88,7 @@ var noRouteLevelGate = map[string]string{
 // permission bit doesn't fit a check that's actually per-channel, or an
 // ownership comparison that isn't a role permission at all).
 var handlerInternalGates = map[string]string{
+	"PATCH /api/group-dms/{groupId}/settings":                     "auth requires an authenticated caller; groupDMService.SetMuted requires current active group membership, expected_user_id rejects account switches, and sqliteGroupDMRepo.SetMuted updates only the caller's own member row under the group lock",
 	"GET /api/servers/{serverId}/channels/{channelId}/threads":    "threadService.List validates parent server/type and requires per-channel view plus read permission",
 	"POST /api/servers/{serverId}/channels/{channelId}/threads":   "threadService.Create validates parent server/type and starter-message scope; requires per-channel view, read and send permissions",
 	"GET /api/servers/{serverId}/threads/{threadId}":              "threadService.Get validates same-server thread and text-parent scope, then requires current parent-channel view/read permission; archived threads remain readable",
@@ -155,7 +156,8 @@ var handlerInternalGates = map[string]string{
 	"GET /api/servers/{serverId}/voice/states":        "read-only — membership is the intended view gate",
 
 	// ── Music bot — PermSpeak/PermManageChannels enforced in the handler ──
-	"POST /api/servers/{serverId}/channels/{channelId}/music/play":                  "PermSpeak enforced inside the handler — handlers/music.go:89 (requirePerm at :181)",
+	"POST /api/servers/{serverId}/channels/{channelId}/music/control-session":       "Handler requires human identity, channel/server/type binding, ViewChannel, Speak and current voice membership before explicit protocol adoption",
+	"POST /api/servers/{serverId}/channels/{channelId}/music/play":                  "Handler requires ViewChannel and Speak with current voice membership; guarded command service binds durable session/revision/request identity",
 	"GET /api/servers/{serverId}/channels/{channelId}/music/search":                 "PermSpeak enforced inside the handler before external lookup",
 	"POST /api/servers/{serverId}/channels/{channelId}/music/skip":                  "PermSpeak enforced inside the handler — handlers/music.go:119",
 	"POST /api/servers/{serverId}/channels/{channelId}/music/pause":                 "PermSpeak enforced inside the handler — handlers/music.go:124",
@@ -167,7 +169,7 @@ var handlerInternalGates = map[string]string{
 	"PUT /api/servers/{serverId}/channels/{channelId}/music/repeat":                 "PermSpeak enforced inside the handler",
 	"POST /api/servers/{serverId}/channels/{channelId}/music/seek":                  "PermSpeak enforced inside the handler",
 	"POST /api/servers/{serverId}/channels/{channelId}/music/restore":               "PermSpeak enforced inside the handler",
-	"GET /api/servers/{serverId}/channels/{channelId}/music/state":                  "read-only — membership is the intended view gate",
+	"GET /api/servers/{serverId}/channels/{channelId}/music/state":                  "Read-only handler requires human identity, matching server/voice-channel and ViewChannel; never adopts the control protocol",
 
 	// ── Soundboard (read) ──
 	"GET /api/servers/{serverId}/soundboard/sounds": "read-only — membership is the intended view gate",

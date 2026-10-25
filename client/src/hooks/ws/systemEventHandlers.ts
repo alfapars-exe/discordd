@@ -4,6 +4,7 @@
  */
 
 import { useChannelStore } from "../../stores/channelStore";
+import { useGameJoinStore } from "../../stores/gameJoinStore";
 import { useMessageStore } from "../../stores/messageStore";
 import { useMemberStore } from "../../stores/memberStore";
 import { useRoleStore } from "../../stores/roleStore";
@@ -74,7 +75,7 @@ function notificationTargetStillAvailable(n: { server_id: string | null; channel
     const group = useGroupDMStore.getState().groups.find((item) => item.id === groupId);
     // Group membership is an eligibility boundary, not just navigation state:
     // fail closed while the list is absent/stale after account or membership changes.
-    if (!userId || !group?.members.some((member) => member.id === userId)) return false;
+    if (!userId || group?.is_muted || !group?.members.some((member) => member.id === userId)) return false;
   }
   return true;
 }
@@ -190,6 +191,10 @@ export async function handleSystemEvent(
       return true;
     }
 
+    case "game_join_offer_state": {
+      useGameJoinStore.getState().acknowledge(msg.d);
+      return true;
+    }
     case "game_activity_update": {
       useGameActivityStore.getState().apply(msg.d);
       return true;

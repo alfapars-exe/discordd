@@ -1123,7 +1123,9 @@
         "Compare shell, settings, profile, invite, chat and viewer at 390/768/1024/1440/2560px and 200% zoom; no inaccessible controls or accidental horizontal overflow."
       ],
       "code": [],
-      "evidence": []
+      "evidence": [
+        "implementation/verification/p0-partial-visual-112d1e8b-2026-10-26.json"
+      ]
     },
     {
       "id": "p0.release-checks",
@@ -2272,7 +2274,8 @@
         "client/src/components/settings/DataExportSettings.tsx"
       ],
       "evidence": [
-        "implementation/verification/p2-data-export-2026-10-23.json"
+        "implementation/verification/p2-data-export-2026-10-23.json",
+        "implementation/verification/p2-personal-music-export-retirement-fence-2026-10-25.json"
       ]
     },
     {
@@ -2441,7 +2444,7 @@
       "id": "p3.sensitive-sexual",
       "title": "Sensitive sexual media policy",
       "phase": "P3",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R04"
       ],
@@ -2454,14 +2457,14 @@
       "acceptance": [
         "Friend DMs, other DMs and server channels each honor selected show/blur/block policy against actual classification results."
       ],
-      "code": [],
-      "evidence": []
+      "code": ["client/src/components/settings/PrivacyConsentSettings.tsx", "server/models/preferences.go", "client/src/utils/mediaVisibility.ts", "client/src/hooks/useLocalMediaAnalysis.ts", "client/src/components/chat/MessageBodyMediaGate.tsx", "client/src/components/chat/ReactionMediaGate.tsx", "client/src/stores/friendStore.ts"],
+      "evidence": ["implementation/verification/p3-local-media-model-runtime-2026-10-24.json", "implementation/verification/p3-local-media-chat-integration-2026-10-24.json", "implementation/verification/p3-expression-and-relationship-gates-2026-10-25.json"]
     },
     {
       "id": "p3.sensitive-disturbing",
       "title": "Disturbing media policy",
       "phase": "P3",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R04"
       ],
@@ -2474,14 +2477,14 @@
       "acceptance": [
         "Switch category and enforce independent show/blur/block rules for the same three message sources."
       ],
-      "code": [],
-      "evidence": []
+      "code": ["client/src/components/settings/PrivacyConsentSettings.tsx", "client/src/media/disturbingModelRuntime.ts", "client/src/media/disturbingPreprocessing.ts", "client/src/media/mediaClassifier.worker.ts", "client/src/components/chat/MessageBodyMediaGate.tsx", "client/src/components/chat/ReactionMediaGate.tsx"],
+      "evidence": ["implementation/verification/p3-vendored-disturbing-runtime-2026-10-24.json", "implementation/verification/p3-disturbing-preprocessing-2026-10-24.json", "implementation/verification/p3-animated-sampling-2026-10-24.json", "implementation/verification/p3-video-sampling-2026-10-24.json", "implementation/verification/p3-expression-and-relationship-gates-2026-10-25.json"]
     },
     {
       "id": "p3.spam",
       "title": "Spam filters",
       "phase": "P3",
-      "status": "missing",
+      "status": "existing",
       "sources": [
         "R04"
       ],
@@ -2495,13 +2498,13 @@
         "All mode routes detected non-self spam from friends and nonfriends into the inbox before hiding; nonfriends mode does so only for nonfriends. Off disables automatic routing and hiding, leaving messages normally visible. Existing inbox decisions remain accessible; restore/dismiss must not delete the underlying message."
       ],
       "code": ["client/src/utils/spamClassification.ts", "client/src/utils/spamClassification.corpus.ts", "client/scripts/spam-classifier-eval.mjs", "client/src/hooks/useSpamVisibility.ts", "server/services/spam_inbox_service.go"],
-      "evidence": ["implementation/verification/p3-spam-rule-regressions-2026-10-24.json"]
+      "evidence": ["implementation/verification/p3-spam-rule-regressions-2026-10-24.json", "implementation/verification/p3-spam-relationship-readiness-2026-10-25.json"]
     },
     {
       "id": "p3.classifier",
       "title": "Real media and spam classification",
       "phase": "P3",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "user-plan"
       ],
@@ -2534,7 +2537,10 @@
         "client/public/media-classifier/v1/provenance.json",
         "client/public/media-classifier/v2/provenance.json",
         "client/src/media/disturbingModelRuntime.ts",
-        "client/src/media/disturbingModelContract.ts"
+        "client/src/media/disturbingModelContract.ts",
+        "client/src/utils/expressionMedia.ts",
+        "client/src/components/chat/MessageBodyMediaGate.tsx",
+        "client/src/components/chat/ReactionMediaGate.tsx"
       ],
       "evidence": [
         "implementation/verification/p3-private-media-labels-2026-10-24.json",
@@ -2547,14 +2553,15 @@
         "implementation/verification/p3-current-runtime-audit-2026-10-24.json",
         "implementation/verification/p3-provenance-repair-2026-10-24.json",
         "implementation/verification/p3-animated-sampling-2026-10-24.json",
-        "implementation/verification/p3-video-sampling-2026-10-24.json"
+        "implementation/verification/p3-video-sampling-2026-10-24.json",
+        "implementation/verification/p3-expression-and-relationship-gates-2026-10-25.json"
       ]
     },
     {
       "id": "p3.classification-failure",
       "title": "Classification failure states",
       "phase": "P3",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "user-plan"
       ],
@@ -2567,8 +2574,8 @@
       "acceptance": [
         "Pending/error/retry states cannot silently display a blocked item as safe; user-selected visibility behavior stays explicit."
       ],
-      "code": [],
-      "evidence": []
+      "code": ["client/src/components/chat/UnclassifiedMediaGate.tsx", "client/src/components/chat/PrivateMediaAnnotation.tsx", "client/src/hooks/useLocalMediaAnalysis.ts", "client/src/media/mediaClassifierClient.ts", "client/src/utils/relationshipMediaPolicy.ts"],
+      "evidence": ["implementation/verification/p3-local-media-chat-integration-2026-10-24.json", "implementation/verification/p3-expression-and-relationship-gates-2026-10-25.json"]
     },
     {
       "id": "p3.server-dm-selector",
@@ -3433,7 +3440,12 @@
         "implementation/verification/p4-reviewed-file-source-receipts-2026-10-24.json",
         "implementation/verification/p4-transitive-file-receipts-2026-10-24.json",
         "implementation/verification/p4-confirmed-send-recovery-state-2026-10-24.json",
-        "implementation/verification/p4-durable-send-confirmation-2026-10-24.json"
+        "implementation/verification/p4-durable-send-confirmation-2026-10-24.json",
+        "implementation/verification/p11-group-source-sequence-2026-10-25.json",
+        "implementation/verification/p11-group-incoming-notifications-server-2026-10-25.json",
+        "implementation/verification/p11-group-incoming-notifications-client-2026-10-25.json",
+        "implementation/verification/p11-group-message-cues-2026-10-25.json",
+        "implementation/verification/p11-group-inbox-http-2026-10-25.json"
       ]
     },
     {
@@ -3487,7 +3499,12 @@
         "client/src/components/dm/GroupDMChat.tsx"
       ],
       "evidence": [
-        "implementation/verification/p4-group-dm-foundation-2026-10-23.json"
+        "implementation/verification/p4-group-dm-foundation-2026-10-23.json",
+        "implementation/verification/p9-web-e2ee-admission-2026-10-25.json",
+        "implementation/verification/p9-private-group-audio-2026-10-25.json",
+        "implementation/verification/p9-group-mute-control-owner-2026-10-25.json",
+        "implementation/verification/p9-private-decoder-activation-2026-10-25.json",
+        "implementation/verification/p9-audio-combined-gates-2026-10-25.json"
       ]
     },
     {
@@ -5916,7 +5933,7 @@
       "id": "p8.chat-shortcuts",
       "title": "Default chat shortcuts",
       "phase": "P8",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R17"
       ],
@@ -5930,7 +5947,11 @@
         "All displayed chat shortcuts invoke working features and preserve active draft on panels/picker navigation."
       ],
       "code": ["client/src/utils/shortcutRegistry.ts", "client/src/utils/conversationCommands.ts", "client/src/utils/oldestUnreadShortcut.ts", "client/src/hooks/useConversationPageShortcut.ts", "client/src/hooks/useFocusComposerOnTyping.ts", "client/src/hooks/useInboxReadTopShortcut.ts", "client/src/components/layout/DestinationView.tsx"],
-      "evidence": ["implementation/verification/p8-actions-2026-10-24.json", "implementation/verification/p8-dm-group-unread-2026-10-24.json", "implementation/verification/p8-voice-text-2026-10-24.json", "implementation/verification/p8-private-read-upload-2026-10-25.json", "implementation/verification/p4-p8-group-expressions-pins-2026-10-25.json"],
+      "evidence": ["implementation/verification/p8-actions-2026-10-24.json", "implementation/verification/p8-dm-group-unread-2026-10-24.json", "implementation/verification/p8-voice-text-2026-10-24.json", "implementation/verification/p8-private-read-upload-2026-10-25.json", "implementation/verification/p4-p8-group-expressions-pins-2026-10-25.json",
+        "implementation/verification/p8-read-shortcut-refresh-2026-10-25.json",
+        "implementation/verification/p8-inbox-read-bounds-2026-10-25.json",
+        "implementation/verification/p8-inbox-toggle-2026-10-25.json"
+      ],
       "actions": [
         "Mark server read Shift+Escape",
         "Mark channel read Escape",
@@ -6263,7 +6284,7 @@
       "id": "p8.linked-games",
       "title": "Linked-game messaging connections",
       "phase": "P8",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R05",
         "R06"
@@ -6277,14 +6298,22 @@
       "acceptance": [
         "List actual first-party app/game grants with revoke and messaging toggle; empty state appears when none exist."
       ],
-      "code": [],
-      "evidence": []
+      "code": [
+        "server/models/application_game.go",
+        "server/repository/application_game_grants.go",
+        "server/services/application_game_grants.go",
+        "server/handlers/application_game_grants.go",
+        "client/src/api/gameApplications.ts",
+        "client/src/components/settings/LinkedGameSettings.tsx",
+        "client/src/components/chat/GameMessageOrigin.tsx"
+      ],
+      "evidence": ["implementation/verification/p8-linked-game-grants-2026-10-25.json", "implementation/verification/p8-game-control-e2ee-boundaries-2026-10-25.json", "implementation/verification/p8-game-signal-browser-2026-10-25.json"]
     },
     {
       "id": "p8.game-message-delivery",
       "title": "Authorized game-origin messaging",
       "phase": "P8",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R05",
         "R06"
@@ -6298,14 +6327,22 @@
       "acceptance": [
         "Included first-party test client sends messages through scoped grant and normal DM/block/request checks; app origin is visible."
       ],
-      "code": [],
-      "evidence": []
+      "code": [
+        "server/models/application_game.go",
+        "server/repository/application_game_grants.go",
+        "server/services/application_game_grants.go",
+        "server/handlers/application_game_grants.go",
+        "client/src/api/gameApplications.ts",
+        "client/src/components/settings/LinkedGameSettings.tsx",
+        "client/src/components/chat/GameMessageOrigin.tsx"
+      ],
+      "evidence": ["implementation/verification/p8-linked-game-grants-2026-10-25.json", "implementation/verification/p8-game-control-e2ee-boundaries-2026-10-25.json", "implementation/verification/p8-bot-private-download-2026-10-25.json", "implementation/verification/p8-game-signal-browser-2026-10-25.json"]
     },
     {
       "id": "p9.input-device",
       "title": "Microphone device selection",
       "phase": "P9",
-      "status": "missing",
+      "status": "existing",
       "sources": [
         "R28",
         "user-plan"
@@ -6319,14 +6356,19 @@
       "acceptance": [
         "Selected microphone is used by actual call capture; unplug/replug and denied permission recover safely."
       ],
-      "code": [],
-      "evidence": []
+      "code": ["client/src/components/settings/VoiceSettings.tsx", "client/src/hooks/useAudioDevices.ts", "client/src/audio/liveMicrophone.ts", "client/src/webrtc/p2pMicrophone.ts"],
+      "evidence": [
+        "implementation/verification/p9-runtime-path-audit-2026-10-25.json",
+        "implementation/verification/p9-device-enumeration-2026-10-25.json",
+        "implementation/verification/p9-private-group-audio-2026-10-25.json",
+        "implementation/verification/p9-p2p-microphone-recovery-focused-ptt-2026-10-25.json"
+      ]
     },
     {
       "id": "p9.output-device",
       "title": "Speaker/output device selection",
       "phase": "P9",
-      "status": "missing",
+      "status": "existing",
       "sources": [
         "R28",
         "user-plan"
@@ -6340,14 +6382,19 @@
       "acceptance": [
         "Selected output and reset-to-default route real remote audio and preserve per-user volume."
       ],
-      "code": ["client/src/hooks/useOutputDeviceSync.ts", "client/src/hooks/useOutputDeviceSync.test.ts"],
-      "evidence": ["implementation/verification/p9-output-event-safety-2026-10-25.json"]
+      "code": ["client/src/hooks/useOutputDeviceSync.ts", "client/src/hooks/useOutputDeviceSync.test.ts", "client/src/audio/p2pPlayback.ts", "client/src/components/p2p/P2PAudioSink.tsx"],
+      "evidence": [
+        "implementation/verification/p9-runtime-path-audit-2026-10-25.json",
+        "implementation/verification/p9-p2p-output-2026-10-25.json",
+        "implementation/verification/p9-output-event-safety-2026-10-25.json",
+        "implementation/verification/p9-private-group-audio-2026-10-25.json"
+      ]
     },
     {
       "id": "p9.microphone-level",
       "title": "Microphone gain and input meter",
       "phase": "P9",
-      "status": "missing",
+      "status": "existing",
       "sources": [
         "R28",
         "user-plan"
@@ -6361,14 +6408,14 @@
       "acceptance": [
         "Gain/meter reflect real capture; test mode stops tracks on close."
       ],
-      "code": [],
-      "evidence": []
+      "code": ["client/src/audio/liveMicrophone.ts", "client/src/webrtc/p2pMicrophone.ts", "client/src/hooks/useMicTest.ts", "client/src/hooks/useMicTest.test.tsx"],
+      "evidence": ["implementation/verification/p9-runtime-path-audit-2026-10-25.json"]
     },
     {
       "id": "p9.output-level",
       "title": "Output volume and deafen",
       "phase": "P9",
-      "status": "missing",
+      "status": "existing",
       "sources": [
         "R28",
         "user-plan"
@@ -6382,14 +6429,20 @@
       "acceptance": [
         "Personal output control and deafen affect actual playback without muting transmission unexpectedly."
       ],
-      "code": [],
-      "evidence": []
+      "code": ["client/src/hooks/useVolumeSync.ts", "client/src/audio/p2pPlayback.ts", "client/src/components/p2p/P2PAudioSink.tsx"],
+      "evidence": [
+        "implementation/verification/p9-runtime-path-audit-2026-10-25.json",
+        "implementation/verification/p9-p2p-output-2026-10-25.json",
+        "implementation/verification/p9-deafen-mute-intent-2026-10-25.json",
+        "implementation/verification/p9-private-group-audio-2026-10-25.json",
+        "implementation/verification/p9-group-mute-control-owner-2026-10-25.json"
+      ]
     },
     {
       "id": "p9.noise-processing",
       "title": "Voice processing",
       "phase": "P9",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R28",
         "user-plan"
@@ -6403,14 +6456,22 @@
       "acceptance": [
         "Noise suppression, echo cancellation and automatic gain preferences affect actual processing and display device support honestly."
       ],
-      "code": [],
-      "evidence": []
+      "code": [
+        "client/src/audio/microphonePipeline.ts",
+        "client/src/audio/MicrophoneTrackProcessor.ts",
+        "client/src/audio/engines/workletEngine.ts",
+        "client/src/components/settings/VoiceSettings.tsx"
+      ],
+      "evidence": [
+        "implementation/verification/p9-electron-rnnoise-synthetic-2026-10-26.json",
+        "implementation/verification/p9-p11-combined-112d1e8b-2026-10-26.json"
+      ]
     },
     {
       "id": "p9.ptt",
       "title": "Voice activity and push-to-talk",
       "phase": "P9",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R28",
         "user-plan"
@@ -6424,14 +6485,25 @@
       "acceptance": [
         "Selected mode gates actual publication; key release, focus loss and disconnect never leave microphone unintentionally live."
       ],
-      "code": [],
-      "evidence": []
+      "code": [
+        "electron/ptt-leases.ts",
+        "electron/ptt-ipc.ts",
+        "electron/hotkey-router.ts",
+        "client/src/audio/nativePTT.ts",
+        "client/src/hooks/usePushToTalk.ts",
+        "client/src/components/dm/GroupDMCallAudio.tsx",
+        "client/src/webrtc/p2pMicrophone.ts"
+      ],
+      "evidence": [
+        "implementation/verification/p9-native-ptt-leases-2026-10-25.json",
+        "implementation/verification/p9-p2p-microphone-recovery-focused-ptt-2026-10-25.json"
+      ]
     },
     {
       "id": "p9.camera-preview",
       "title": "Camera selection and preview",
       "phase": "P9",
-      "status": "existing",
+      "status": "implemented_unverified",
       "sources": [
         "R28",
         "user-plan"
@@ -6447,15 +6519,21 @@
       ],
       "code": [
         "client/src/hooks/useCameraPreview.ts",
-        "client/src/components/settings/voice/CameraSection.tsx"
+        "client/src/components/settings/voice/CameraSection.tsx",
+        "client/src/audio/ownedCamera.ts",
+        "client/src/webrtc/p2pCamera.ts",
+        "client/src/hooks/useRoomCamera.ts"
       ],
-      "evidence": []
+      "evidence": [
+        "implementation/verification/p9-camera-share-union-2026-10-25.json",
+        "implementation/verification/p9-owned-camera-2026-10-25.json"
+      ]
     },
     {
       "id": "p9.camera-live-switch",
       "title": "Switch camera during call",
       "phase": "P9",
-      "status": "existing",
+      "status": "implemented_unverified",
       "sources": [
         "R28",
         "user-plan"
@@ -6470,15 +6548,22 @@
         "LiveKit and one-to-one calls switch to selected camera settings; unavailable device falls back with clear feedback."
       ],
       "code": [
-        "client/src/utils/cameraCapture.ts"
+        "client/src/utils/cameraCapture.ts",
+        "client/src/audio/ownedCamera.ts",
+        "client/src/webrtc/p2pCamera.ts",
+        "client/src/hooks/useRoomCamera.ts",
+        "client/src/hooks/useCameraPreview.ts"
       ],
-      "evidence": []
+      "evidence": [
+        "implementation/verification/p9-camera-share-union-2026-10-25.json",
+        "implementation/verification/p9-owned-camera-2026-10-25.json"
+      ]
     },
     {
       "id": "p9.camera-cancel",
       "title": "Camera permission cancellation",
       "phase": "P9",
-      "status": "existing",
+      "status": "implemented_unverified",
       "sources": [
         "R28",
         "user-plan"
@@ -6493,15 +6578,21 @@
         "Late permission resolution after cancel never opens camera or publishes stale track."
       ],
       "code": [
-        "client/src/hooks/useCameraPreview.ts"
+        "client/src/hooks/useCameraPreview.ts",
+        "client/src/audio/ownedCamera.ts",
+        "client/src/webrtc/p2pCamera.ts",
+        "client/src/hooks/useRoomCamera.ts"
       ],
-      "evidence": []
+      "evidence": [
+        "implementation/verification/p9-camera-share-union-2026-10-25.json",
+        "implementation/verification/p9-owned-camera-2026-10-25.json"
+      ]
     },
     {
       "id": "p9.screenshare",
       "title": "Screen/window sharing",
       "phase": "P9",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R28",
         "user-plan"
@@ -6515,14 +6606,21 @@
       "acceptance": [
         "Web native picker and Windows picker share selected source with correct stop/reselect and permission handling."
       ],
-      "code": [],
-      "evidence": []
+      "code": [
+        "client/src/webrtc/p2pScreenShare.ts",
+        "client/src/components/dm/GroupScreenShareSession.ts",
+        "client/src/hooks/useScreenShareToggle.ts"
+      ],
+      "evidence": [
+        "implementation/verification/p9-camera-share-union-2026-10-25.json",
+        "implementation/verification/p9-private-screen-quality-2026-10-25.json"
+      ]
     },
     {
       "id": "p9.share-audio",
       "title": "Screen-share audio",
       "phase": "P9",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R28",
         "user-plan"
@@ -6536,14 +6634,14 @@
       "acceptance": [
         "Supported system/app audio is captured and mixed correctly; unavailable audio sources are not promised."
       ],
-      "code": ["electron/audio-capture.ts", "client/src/hooks/useSystemAudioCapture.ts", "electron/audio-capture.test.ts", "client/src/hooks/useSystemAudioCapture.test.tsx"],
-      "evidence": ["implementation/verification/p9-system-capture-lifecycle-2026-10-24.json"]
+      "code": ["electron/audio-capture.ts", "client/src/hooks/useSystemAudioCapture.ts", "electron/audio-capture.test.ts", "client/src/hooks/useSystemAudioCapture.test.tsx", "electron/system-audio-ipc.ts", "client/src/audio/systemAudioCaptureSession.ts", "client/src/components/dm/GroupScreenShareSession.ts", "client/src/webrtc/p2pScreenAudioSession.ts", "client/src/webrtc/p2pMediaController.ts", "client/src/components/p2p/P2PAudioSink.tsx"],
+      "evidence": ["implementation/verification/p9-system-capture-lifecycle-2026-10-24.json", "implementation/verification/p9-private-system-audio-phase1-2026-10-25.json", "implementation/verification/p9-audio-combined-gates-2026-10-25.json", "implementation/verification/p9-p2p-combined-gates-2026-10-25.json"]
     },
     {
       "id": "p9.share-quality",
       "title": "Screen-share quality",
       "phase": "P9",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R28",
         "user-plan"
@@ -6557,14 +6655,21 @@
       "acceptance": [
         "Selected resolution/FPS updates publication and remains stable under reconnect without a payment gate."
       ],
-      "code": [],
-      "evidence": []
+      "code": [
+        "client/src/webrtc/p2pScreenShare.ts",
+        "client/src/components/dm/GroupScreenShareSession.ts",
+        "client/src/hooks/useScreenShareToggle.ts"
+      ],
+      "evidence": [
+        "implementation/verification/p9-camera-share-union-2026-10-25.json",
+        "implementation/verification/p9-private-screen-quality-2026-10-25.json"
+      ]
     },
     {
       "id": "p9.voice-effects",
       "title": "Voice event sounds",
       "phase": "P9",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R28",
         "user-plan"
@@ -6573,19 +6678,29 @@
         "windows",
         "web"
       ],
-      "persistence": "device media preferences and live call state",
+      "persistence": "Account-synced event preferences and live controller commits; device-local output selection",
       "authorization": "Device consent and current channel/call membership",
       "acceptance": [
         "Mute/unmute/deafen/join/leave sounds and previews respect individual and global mute settings."
       ],
-      "code": ["client/src/utils/sounds.ts", "client/src/utils/sounds.test.ts"],
-      "evidence": ["implementation/verification/p9-output-event-safety-2026-10-25.json"]
+      "code": [
+        "client/src/utils/sounds.ts",
+        "client/src/utils/sounds.test.ts",
+        "client/src/utils/voiceEventSounds.ts",
+        "client/src/components/settings/NotificationSettings.tsx",
+        "server/models/preferences.go"
+      ],
+      "evidence": [
+        "implementation/verification/p9-output-event-safety-2026-10-25.json",
+        "implementation/verification/p9-voice-event-catalog-2026-10-25.json",
+        "implementation/verification/p9-voice-event-api-2026-10-25.json"
+      ]
     },
     {
       "id": "p9.soundboard",
       "title": "Soundboard",
       "phase": "P9",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R28",
         "user-plan"
@@ -6599,8 +6714,8 @@
       "acceptance": [
         "Actual authorized uploaded/built-in sounds play into current voice channel and honor quota/volume/block rules."
       ],
-      "code": [],
-      "evidence": []
+      "code": ["client/src/stores/soundboardStore.ts", "client/src/audio/soundboardPlayback.ts", "client/src/components/soundboard/SoundUploadForm.tsx", "server/services/soundboard_service.go"],
+      "evidence": ["implementation/verification/p9-soundboard-call-scope-2026-10-25.json"]
     },
     {
       "id": "p9.call-reconnect",
@@ -6620,8 +6735,16 @@
       "acceptance": [
         "Two clients reconnect after interruption while preserving active destination, device settings and current-call binding."
       ],
-      "code": [],
-      "evidence": []
+      "code": [
+        "client/src/stores/groupCallStore.ts",
+        "client/src/components/dm/GroupCallProvider.tsx",
+        "client/src/hooks/useEncryptedRoomAdmission.ts",
+        "client/src/components/dm/GroupCallProvider.admission.test.tsx"
+      ],
+      "evidence": [
+        "implementation/verification/p9-persistent-group-call-2026-10-25.json",
+        "implementation/verification/p9-group-media-browser-2026-10-25.json"
+      ]
     },
     {
       "id": "p9.device-acceptance",
@@ -6667,7 +6790,10 @@
         "server/services/music_bot_live_integration_test.go",
         "client/src/components/voice/MusicBotPanel.tsx"
       ],
-      "evidence": ["implementation/verification/p10-live-youtube-2026-10-24.json"]
+      "evidence": [
+        "implementation/verification/p10-live-youtube-2026-10-24.json",
+        "implementation/verification/p10-two-electron-listeners-112d1e8b-2026-10-26.json"
+      ]
     },
     {
       "id": "p10.controls",
@@ -6692,7 +6818,7 @@
         "server/services/music_bot_live_integration_test.go",
         "client/src/components/voice/MusicBotPanel.tsx"
       ],
-      "evidence": []
+      "evidence": ["implementation/verification/p10-music-control-protocol-2026-10-25.json"]
     },
     {
       "id": "p10.playlist",
@@ -6934,7 +7060,8 @@
         "client/src/stores/slices/voiceSettingsSlice.ts"
       ],
       "evidence": [
-        "implementation/verification/p10-personal-volume-2026-10-23.json"
+        "implementation/verification/p10-personal-volume-2026-10-23.json",
+        "implementation/verification/p10-two-electron-listeners-112d1e8b-2026-10-26.json"
       ]
     },
     {
@@ -6965,7 +7092,8 @@
       ],
       "evidence": [
         "implementation/verification/p10-queue-persistence-2026-10-23.json",
-        "implementation/verification/p10-persistence-failure-2026-10-24.json"
+        "implementation/verification/p10-persistence-failure-2026-10-24.json",
+        "implementation/verification/p10-music-control-protocol-2026-10-25.json"
       ]
     },
     {
@@ -6993,7 +7121,8 @@
       ],
       "evidence": [
         "implementation/verification/p10-queue-persistence-2026-10-23.json",
-        "implementation/verification/p10-persistence-failure-2026-10-24.json"
+        "implementation/verification/p10-persistence-failure-2026-10-24.json",
+        "implementation/verification/p10-music-control-protocol-2026-10-25.json"
       ]
     },
     {
@@ -7047,7 +7176,8 @@
         "server/services/music_bot_live_integration_test.go"
       ],
       "evidence": [
-        "implementation/verification/p10-encrypted-room-2026-10-23.json"
+        "implementation/verification/p10-encrypted-room-2026-10-23.json",
+        "implementation/verification/p10-two-electron-listeners-112d1e8b-2026-10-26.json"
       ]
     },
     {
@@ -7149,7 +7279,7 @@
       "id": "p11.recent-games",
       "title": "Registered and recently played games",
       "phase": "P11",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R20"
       ],
@@ -7162,13 +7292,14 @@
         "Current and added list uses real play timestamps; removal and game-level sharing toggle persist."
       ],
       "code": ["electron/registered-games.ts", "client/src/components/settings/RegisteredGamesSettings.tsx"],
-      "evidence": ["implementation/verification/p11-local-registered-games-2026-10-24.json"]
+      "evidence": ["implementation/verification/p11-local-registered-games-2026-10-24.json",
+        "implementation/verification/p11-local-game-names-recents-2026-10-25.json"]
     },
     {
       "id": "p11.game-metadata",
       "title": "Game metadata attribution",
       "phase": "P11",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R20"
       ],
@@ -7180,8 +7311,8 @@
       "acceptance": [
         "Only supported or user-provided title/art is shown; no fake verified game badge or external inventory."
       ],
-      "code": [],
-      "evidence": []
+      "code": ["electron/registered-games.ts", "client/src/components/settings/RegisteredGamesSettings.tsx"],
+      "evidence": ["implementation/verification/p11-local-game-names-recents-2026-10-25.json"]
     },
     {
       "id": "p11.activity-global",
@@ -7313,7 +7444,7 @@
       "id": "p11.friend-join",
       "title": "Allow friends to join game",
       "phase": "P11",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R21",
         "R22"
@@ -7327,14 +7458,26 @@
       "acceptance": [
         "Eligible friend receives scoped expiring join action; denied preference or revoked session prevents joining."
       ],
-      "code": [],
-      "evidence": []
+      "code": [
+        "server/services/game_join_service.go",
+        "server/services/game_join_policy.go",
+        "server/handlers/game_join.go",
+        "client/src/components/shared/GameJoinButton.tsx",
+        "electron/cs2-join-controller.ts"
+      ],
+      "evidence": [
+        "implementation/verification/p11-cs2-native-2026-10-25.json",
+        "implementation/verification/p11-cs2-client-2026-10-25.json",
+        "implementation/verification/p11-cs2-game-join-backend-2026-10-25.json",
+        "implementation/verification/p11-cs2-combined-4b0e196d-2026-10-25.json",
+        "implementation/verification/p11-cs2-http-ws-runtime-2026-10-25.json"
+      ]
     },
     {
       "id": "p11.voice-join",
       "title": "Allow voice participants to join game",
       "phase": "P11",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R21",
         "R22"
@@ -7348,14 +7491,26 @@
       "acceptance": [
         "Shared voice membership and allowed server type gate join permission at invocation time."
       ],
-      "code": [],
-      "evidence": []
+      "code": [
+        "server/services/game_join_service.go",
+        "server/services/game_join_policy.go",
+        "server/handlers/game_join.go",
+        "client/src/components/shared/GameJoinButton.tsx",
+        "electron/cs2-join-controller.ts"
+      ],
+      "evidence": [
+        "implementation/verification/p11-cs2-native-2026-10-25.json",
+        "implementation/verification/p11-cs2-client-2026-10-25.json",
+        "implementation/verification/p11-cs2-game-join-backend-2026-10-25.json",
+        "implementation/verification/p11-cs2-combined-4b0e196d-2026-10-25.json",
+        "implementation/verification/p11-cs2-http-ws-runtime-2026-10-25.json"
+      ]
     },
     {
       "id": "p11.join-protocol",
       "title": "Authorized game join adapter",
       "phase": "P11",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R21",
         "R22"
@@ -7369,8 +7524,20 @@
       "acceptance": [
         "Only declared supported game protocols/first-party adapters launch; arbitrary executable or URL payload is rejected."
       ],
-      "code": [],
-      "evidence": []
+      "code": [
+        "server/services/game_join_service.go",
+        "server/services/game_join_policy.go",
+        "server/handlers/game_join.go",
+        "client/src/components/shared/GameJoinButton.tsx",
+        "electron/cs2-join-controller.ts"
+      ],
+      "evidence": [
+        "implementation/verification/p11-cs2-native-2026-10-25.json",
+        "implementation/verification/p11-cs2-client-2026-10-25.json",
+        "implementation/verification/p11-cs2-game-join-backend-2026-10-25.json",
+        "implementation/verification/p11-cs2-combined-4b0e196d-2026-10-25.json",
+        "implementation/verification/p11-cs2-http-ws-runtime-2026-10-25.json"
+      ]
     },
     {
       "id": "p11.overlay-current-game",
@@ -7414,7 +7581,7 @@
       "id": "p11.overlay-compatibility",
       "title": "Compatibility overlay mode",
       "phase": "P11",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R23"
       ],
@@ -7426,8 +7593,14 @@
       "acceptance": [
         "Compatibility implementation is selectable and its focus/click limitations are described truthfully."
       ],
-      "code": [],
-      "evidence": []
+      "code": [
+        "electron/voice-overlay.ts",
+        "electron/voice-overlay-contract.ts",
+        "client/src/components/settings/VoiceSettings.tsx"
+      ],
+      "evidence": [
+        "implementation/verification/p11-overlay-compatibility-2026-10-25.json"
+      ]
     },
     {
       "id": "p11.overlay-report",
@@ -7471,7 +7644,7 @@
       "id": "p11.overlay-focus",
       "title": "Compatibility focus behavior",
       "phase": "P11",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R23"
       ],
@@ -7483,8 +7656,14 @@
       "acceptance": [
         "Compatibility mode avoids stealing game focus and reports unsupported integration."
       ],
-      "code": [],
-      "evidence": []
+      "code": [
+        "electron/voice-overlay.ts",
+        "electron/overlay-shortcut.ts",
+        "client/src/hooks/useOverlayShortcut.ts"
+      ],
+      "evidence": [
+        "implementation/verification/p11-overlay-compatibility-2026-10-25.json"
+      ]
     },
     {
       "id": "p11.overlay-click-through",
@@ -7509,7 +7688,7 @@
       "id": "p11.overlay-widgets",
       "title": "Overlay widget enablement",
       "phase": "P11",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R23",
         "R24"
@@ -7522,8 +7701,37 @@
       "acceptance": [
         "All seven toggles add/remove actual live widgets and persist independently."
       ],
-      "code": ["client/src/components/settings/VoiceSettings.tsx", "client/src/components/voice/VoiceOverlayContent.tsx", "client/src/hooks/useOverlayVoiceActions.ts", "client/src/hooks/useOverlayActivity.ts", "client/src/utils/overlayActivity.ts", "client/src/hooks/useOverlayNotifications.ts", "client/src/hooks/useOverlayNotificationActions.ts", "client/src/utils/overlayNotificationAccess.ts", "electron/voice-overlay.ts"],
-      "evidence": ["implementation/verification/p11-overlay-quick-actions-2026-10-25.json", "implementation/verification/p11-overlay-activity-2026-10-25.json", "implementation/verification/p11-overlay-notifications-2026-10-25.json", "implementation/verification/p11-overlay-inbox-action-2026-10-25.json", "implementation/verification/p11-chat-source-isolation-2026-10-25.json", "implementation/verification/p11-overlay-chat-preview-2026-10-25.json", "implementation/verification/p11-overlay-chat-open-action-2026-10-25.json", "implementation/verification/p11-overlay-chat-compose-2026-10-25.json", "implementation/verification/p4-p11-thread-parity-2026-10-25.json", "implementation/verification/p11-overlay-private-chat-2026-10-25.json"],
+      "code": [
+        "client/src/components/settings/VoiceSettings.tsx",
+        "client/src/components/voice/VoiceOverlayContent.tsx",
+        "client/src/hooks/useOverlayVoiceActions.ts",
+        "client/src/hooks/useOverlayActivity.ts",
+        "client/src/utils/overlayActivity.ts",
+        "client/src/hooks/useOverlayNotifications.ts",
+        "client/src/hooks/useOverlayNotificationActions.ts",
+        "client/src/utils/overlayNotificationAccess.ts",
+        "electron/voice-overlay.ts",
+        "client/src/hooks/useOverlayMediaSender.ts",
+        "client/src/components/voice/media/OverlayMediaPanel.tsx",
+        "client/src/video/authorizedVideoSources.ts",
+        "electron/overlay-media-broker.ts"
+      ],
+      "evidence": [
+        "implementation/verification/p11-overlay-quick-actions-2026-10-25.json",
+        "implementation/verification/p11-overlay-activity-2026-10-25.json",
+        "implementation/verification/p11-overlay-notifications-2026-10-25.json",
+        "implementation/verification/p11-overlay-inbox-action-2026-10-25.json",
+        "implementation/verification/p11-chat-source-isolation-2026-10-25.json",
+        "implementation/verification/p11-overlay-chat-preview-2026-10-25.json",
+        "implementation/verification/p11-overlay-chat-open-action-2026-10-25.json",
+        "implementation/verification/p11-overlay-chat-compose-2026-10-25.json",
+        "implementation/verification/p4-p11-thread-parity-2026-10-25.json",
+        "implementation/verification/p11-overlay-private-chat-2026-10-25.json",
+        "implementation/verification/p11-authorized-video-sources-2026-10-25.json",
+        "implementation/verification/p11-overlay-video-renderer-2026-10-25.json",
+        "implementation/verification/p11-overlay-media-electron-2026-10-25.json",
+        "implementation/verification/p9-p11-combined-f821cce1-2026-10-25.json"
+      ],
       "actions": [
         "Voice",
         "Quick actions",
@@ -7678,7 +7886,7 @@
       "id": "p11.overlay-message",
       "title": "Overlay message notifications",
       "phase": "P11",
-      "status": "missing",
+      "status": "existing",
       "sources": [
         "R25"
       ],
@@ -7686,18 +7894,18 @@
         "windows"
       ],
       "persistence": "Device overlay notification preferences",
-      "authorization": "Explicit activity consent, server audience and authorized join checks",
+      "authorization": "Partial persisted server mention/reply and accepted one-to-one DM support: current owner/auth/source, server/thread ACL or accepted DM membership, block/ignore/mute/spam and crypto-device checks; opaque native action with one-shot confirmation. Group and ordinary channel message dispatch remain pending.",
       "acceptance": [
         "Enabled widget displays actual permitted incoming messages and reply action targets correct conversation."
       ],
-      "code": [],
-      "evidence": []
+      "code": ["client/src/hooks/useOverlayNotificationReply.ts", "client/src/utils/overlayNotificationReply.ts", "client/src/hooks/useOverlayNotifications.ts", "electron/overlay-action-regions.ts", "electron/voice-overlay.ts"],
+      "evidence": ["implementation/verification/p11-overlay-notification-reply-2026-10-25.json", "implementation/verification/p11-accepted-dm-notification-reply-2026-10-25.json", "implementation/verification/p11-dm-badge-read-order-2026-10-25.json"]
     },
     {
       "id": "p11.overlay-welcome",
       "title": "Overlay welcome notification",
       "phase": "P11",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R25"
       ],
@@ -7709,14 +7917,14 @@
       "acceptance": [
         "Shows once per real overlay activation only when enabled."
       ],
-      "code": [],
-      "evidence": []
+      "code": ["electron/overlay-welcome.ts", "electron/voice-overlay.ts", "electron/voice-overlay-contract.ts", "client/src/components/voice/VoiceOverlayContent.tsx", "client/src/stores/slices/voiceSettingsSlice.ts"],
+      "evidence": ["implementation/verification/p11-overlay-welcome-2026-10-25.json"]
     },
     {
       "id": "p11.overlay-live",
       "title": "Overlay Go Live notification",
       "phase": "P11",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R25"
       ],
@@ -7728,14 +7936,14 @@
       "acceptance": [
         "Shows actual stream availability/start guidance and opens working share flow."
       ],
-      "code": [],
-      "evidence": []
+      "code": ["client/src/hooks/useOverlayGoLiveReadiness.ts", "client/src/stores/overlayGoLiveStore.ts", "client/src/components/voice/VoiceStateManager.tsx", "electron/voice-overlay.ts", "electron/voice-overlay-contract.ts"],
+      "evidence": ["implementation/verification/p11-overlay-golive-guidance-2026-10-25.json"]
     },
     {
       "id": "p11.overlay-game-activity",
       "title": "Overlay game activity notification",
       "phase": "P11",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R25"
       ],
@@ -7747,14 +7955,25 @@
       "acceptance": [
         "Uses allowed real friend activity and respects activity/privacy preferences."
       ],
-      "code": [],
-      "evidence": []
+      "code": [
+        "server/services/game_activity_transition.go",
+        "client/src/hooks/useOverlayGameNotices.ts",
+        "client/src/utils/overlayGameNotices.ts",
+        "client/src/components/voice/GameActivityNotices.tsx",
+        "electron/overlay-game-notices.ts"
+      ],
+      "evidence": [
+        "implementation/verification/p11-overlay-game-notices-producer-2026-10-26.json",
+        "implementation/verification/p11-game-notice-transport-2026-10-26.json",
+        "implementation/verification/p9-p11-combined-112d1e8b-2026-10-26.json",
+        "implementation/verification/p11-game-notice-electron-112d1e8b-2026-10-26.json"
+      ]
     },
     {
       "id": "p11.overlay-now-playing",
       "title": "Overlay now-playing notification",
       "phase": "P11",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R25"
       ],
@@ -7766,8 +7985,19 @@
       "acceptance": [
         "Notifies on eligible friend starting the same game once per transition."
       ],
-      "code": [],
-      "evidence": []
+      "code": [
+        "server/services/game_activity_transition.go",
+        "client/src/hooks/useOverlayGameNotices.ts",
+        "client/src/utils/overlayGameNotices.ts",
+        "client/src/components/voice/GameActivityNotices.tsx",
+        "electron/overlay-game-notices.ts"
+      ],
+      "evidence": [
+        "implementation/verification/p11-overlay-game-notices-producer-2026-10-26.json",
+        "implementation/verification/p11-game-notice-transport-2026-10-26.json",
+        "implementation/verification/p9-p11-combined-112d1e8b-2026-10-26.json",
+        "implementation/verification/p11-game-notice-electron-112d1e8b-2026-10-26.json"
+      ]
     },
     {
       "id": "p0.excluded-phone",
@@ -8040,7 +8270,9 @@
         ".github/workflows/build-desktop.yml",
         "package.json"
       ],
-      "evidence": []
+      "evidence": [
+        "implementation/verification/p11-windows-rc-packaging-4b0e196d-2026-10-26.json"
+      ]
     }
   ]
 }

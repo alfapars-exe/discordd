@@ -1,4 +1,10 @@
 {
+  "overlayNotificationMessage": "New message",
+  "overlayPrepareReply": "Prepare reply",
+  "overlayReplyDraftConflict": "Your existing draft or edit is preserved. Finish it before trying again.",
+  "overlayReplyUnavailable": "A reply to this notification’s message could not be prepared.",
+  "overlayGoLiveGuidance": "Use Share in the app to choose a screen or window.",
+  "overlayWelcomeNotice": "HiChat overlay is active",
   "shortcutLofi": "Open the local lo-fi player",
   "lofiTitle": "HiChat Lo-fi",
   "lofiPermissionError": "Audio permission was denied. Allow audio for HiChat in your browser or system settings, then retry Play.",
@@ -469,5 +475,8 @@
     "retry": "Try again",
     "reloading": "Reloading...",
     "sectionTitle": "Something went wrong in this section ({{section}})"
-  }
+  },
+  "overlayCompatibilityActive": "Read-only compatibility mode",
+  "overlayGameActivityNotice": "{{name}} started sharing {{game}} activity",
+  "overlayNowPlayingNotice": "{{name}} started sharing activity for the same CS2 association"
 }

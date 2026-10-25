@@ -12,6 +12,9 @@ import (
 // Same shape as MessageTxRepos; every constructor already takes a
 // database.TxQuerier, so binding them to a *sql.Tx needs no repo changes.
 type DMTxRepos struct {
+	// LockChannel serializes message creation and read-cutoff capture without dialect-specific locks.
+	LockChannel  func(context.Context, string) error
+	ReadState    func(context.Context, string, string) (*string, int, error)
 	DM           DMRepository
 	DMRead       DMReadRepository
 	Notification NotificationRepository
@@ -34,6 +37,16 @@ func NewDMMessageTxRunner(db *sql.DB) DMMessageTxRunner {
 func (r *dmMessageTxRunner) InTx(ctx context.Context, fn func(*DMTxRepos) error) error {
 	return database.WithTx(ctx, r.db, func(tx *sql.Tx) error {
 		return fn(&DMTxRepos{
+			ReadState: func(ctx context.Context, userID, channelID string) (*string, int, error) {
+				var cursor *string
+				var count int
+				err := tx.QueryRowContext(ctx, `SELECT last_read_message_id,unread_count FROM dm_reads WHERE user_id=? AND dm_channel_id=?`, userID, channelID).Scan(&cursor, &count)
+				return cursor, count, err
+			},
+			LockChannel: func(ctx context.Context, id string) error {
+				_, err := tx.ExecContext(ctx, `UPDATE dm_channels SET status=status WHERE id=?`, id)
+				return err
+			},
 			DM:           NewSQLiteDMRepo(tx),
 			DMRead:       NewSQLiteDMReadRepo(tx),
 			Notification: NewSQLiteNotificationRepo(tx),

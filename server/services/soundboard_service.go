@@ -348,6 +348,9 @@ func (s *soundboardService) Play(ctx context.Context, serverID, soundID, userID,
 	if voiceState == nil {
 		return fmt.Errorf("%w: you must be in a voice channel to play sounds", pkg.ErrBadRequest)
 	}
+	if voiceState.ServerID != serverID || voiceState.ChannelID == "" {
+		return fmt.Errorf("%w: soundboard must target the connected voice server", pkg.ErrForbidden)
+	}
 
 	sound, err := s.repo.GetByID(ctx, soundID)
 	if err != nil {
@@ -356,6 +359,13 @@ func (s *soundboardService) Play(ctx context.Context, serverID, soundID, userID,
 
 	if sound.ServerID != serverID {
 		return fmt.Errorf("%w: sound does not belong to this server", pkg.ErrBadRequest)
+	}
+
+	// Repository I/O may outlive a leave/rejoin or channel switch. Never send
+	// a sound selected for the previous call into a later call's audience.
+	latest := s.voice.GetUserVoiceState(userID)
+	if latest == nil || latest.ServerID != serverID || latest.ChannelID != voiceState.ChannelID || !latest.JoinedAt.Equal(voiceState.JoinedAt) {
+		return fmt.Errorf("%w: voice session changed before soundboard playback", pkg.ErrForbidden)
 	}
 
 	// Broadcast only to users in the same voice channel

@@ -3,6 +3,10 @@ import type { ReactionGroup } from "./common";
 import type { EncryptedFileMeta } from "../crypto/fileEncryption";
 
 export type GroupDM = {
+  last_read_source_sequence?:string;
+  read_key_epoch?:number;
+  is_muted?: boolean;
+  settings_revision?: number;
   id: string;
   owner_id: string;
   name: string;
@@ -17,7 +21,7 @@ export type GroupDM = {
   read_revision?: number;
 };
 
-export type GroupDMReadState = { group_id: string; last_read_message_id: string | null; unread_count: number; revision?: number };
+export type GroupDMReadState = { group_id: string; last_read_message_id: string | null; unread_count: number; revision?: number; is_muted?: boolean; settings_revision?: number;key_epoch?:number;last_read_source_sequence?:string;oldest_unread_message_id?:string };
 
 export type GroupDMMessagesAroundPage = {
   messages: GroupDMMessage[];
@@ -26,6 +30,7 @@ export type GroupDMMessagesAroundPage = {
 };
 
 export type GroupDMMessage = {
+  source_sequence?:string;
   id: string;
   group_id: string;
   user_id: string;

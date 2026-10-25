@@ -173,6 +173,7 @@ func (d *routeDeps) registerDMRoutes() {
 }
 
 func (d *routeDeps) registerGroupDMRoutes() {
+	d.mux.Handle("PATCH /api/group-dms/{groupId}/settings", d.auth(d.h.GroupDM.SetMuted))
 	d.mux.Handle("GET /api/group-dms", d.auth(d.h.GroupDM.List))
 	d.mux.Handle("POST /api/group-dms", d.auth(d.h.GroupDM.Create))
 	d.mux.Handle("GET /api/group-dms/{groupId}", d.auth(d.h.GroupDM.Get))
@@ -291,6 +292,10 @@ func (d *routeDeps) registerFriendRoutes() {
 func (d *routeDeps) registerBotRoutes() {
 	d.mux.Handle("POST /api/bots", d.auth(d.botHandler.Create))
 	d.mux.Handle("GET /api/bots", d.auth(d.botHandler.List))
+	d.mux.Handle("POST /api/bots/{botID}/game-identity", d.auth(d.botHandler.RegisterGameIdentity))
+	d.mux.Handle("GET /api/application-game-grants", d.auth(d.botHandler.ListGameGrants))
+	d.mux.Handle("PUT /api/application-game-grants/{botID}", d.auth(d.botHandler.PutGameGrant))
+	d.mux.Handle("DELETE /api/application-game-grants/{botID}", d.auth(d.botHandler.RevokeGameGrant))
 	d.mux.Handle("POST /api/bots/{botID}/revoke", d.auth(d.botHandler.Revoke))
 	d.mux.Handle("POST /api/bots/{botID}/remove", d.auth(d.h.Auth.RemoveApplication))
 	d.mux.Handle("POST /api/bots/{botID}/transfer-requests", d.auth(d.botHandler.RequestTransfer))
@@ -343,6 +348,7 @@ func (d *routeDeps) registerAdminRoutes() {
 
 	// Platform Admin — App Logs
 	d.mux.Handle("GET /api/admin/logs", d.authAdmin(d.h.Admin.ListAppLogs))
+	d.mux.Handle("GET /api/admin/logs/health", d.authAdmin(d.h.Admin.AppLogHealth))
 	d.mux.Handle("DELETE /api/admin/logs", d.authAdmin(d.h.Admin.ClearAppLogs))
 }
 

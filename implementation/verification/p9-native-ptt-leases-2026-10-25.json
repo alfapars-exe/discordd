@@ -1,0 +1,125 @@
+{
+  "date": "2026-10-25",
+  "baseline_head": "9f01982ec3578b0f4ed67668a0e3562b98cfaa1a",
+  "scope": "Scoped native background push-to-talk ownership for guild, accepted P2P and admitted group calls",
+  "status": "Implemented and automated checks verified; physical Windows acceptance remains open",
+  "owned_paths": [
+    "electron/hotkey-router.ts",
+    "electron/hotkey-router.test.ts",
+    "electron/push-to-talk.ts",
+    "electron/ipc-handlers.ts",
+    "electron/preload.ts",
+    "electron/ptt-leases.ts",
+    "electron/ptt-leases.test.ts",
+    "electron/ptt-ipc.ts",
+    "electron/ptt-ipc.test.ts",
+    "electron/ptt-preload.test.ts",
+    "electron/ptt-runtime.test.ts",
+    "client/src/audio/nativePTT.ts",
+    "client/src/audio/nativePTT.test.ts",
+    "client/src/types/electron.d.ts",
+    "client/src/hooks/usePushToTalk.ts",
+    "client/src/hooks/usePushToTalk.test.ts",
+    "client/src/hooks/useMicSync.ts",
+    "client/src/components/dm/GroupDMCallAudio.tsx",
+    "client/src/components/dm/GroupDMCallAudio.test.tsx",
+    "client/src/webrtc/p2pMicrophone.ts",
+    "client/src/stores/p2pCallStore.audio.test.ts",
+    "client/src/components/p2p/P2PCallControls.tsx",
+    "client/src/components/voice/VoiceStateManager.tsx",
+    "client/src/components/voice/NativePTTStatus.tsx",
+    "client/src/components/voice/NativePTTStatus.test.tsx",
+    "client/src/i18n/locales/en/voice.json",
+    "client/src/i18n/locales/tr/voice.json"
+  ],
+  "source_sha256": {
+    "electron/hotkey-router.ts": "833eb71da48ce978a3c5e8c642ba732eb1073cc67b6328b9ee892ba2b9887e6f",
+    "electron/hotkey-router.test.ts": "db704d67a4f18db89829fcfc138a3d3afbdda836813978bb187869885eaaddb8",
+    "electron/push-to-talk.ts": "d7a30dc83ac15adf60cc3453ae0a66d03abb414dcc2a3aa694127faf3fd2cc0a",
+    "electron/ipc-handlers.ts": "87aa901dacf3c5eae54408154f43a6e6659616db8f144f587e400911b2c89574",
+    "electron/preload.ts": "1fd7fecf0e64b8dd34bd7a0bdf7cccbe3dab6fbe4ffb01fe3eb99843a363f195",
+    "electron/ptt-leases.ts": "dd9d7ef694ef2fdf018bc33ad8d1e079762b9bbe9775ce341062d69cc93d4a7f",
+    "electron/ptt-leases.test.ts": "687163d8731852547d09800b6d47f69ce37f7ab67c8532a5475d61ff7f025088",
+    "electron/ptt-ipc.ts": "f831154244ddb3865e09f2de6183c9261a441cd07e2e6c5220371e54a84e270b",
+    "electron/ptt-ipc.test.ts": "9fc38bbfd69d623c6eeeefca641da1fc7294be4fbf4f7b47a1e39e1f36d02323",
+    "electron/ptt-preload.test.ts": "2d6950b0f2b71b325538f367b2ecc137a036ccb04bbb4fdcb4f67e1ca3413882",
+    "electron/ptt-runtime.test.ts": "948915003519091eacbb1eddce914f078d485e2c34d42da6ea4ae0dd15aa1d3a",
+    "client/src/audio/nativePTT.ts": "d32611c192c1d7d9897ced2a6964097a368d1c2a06186aea713cbd53ed9a866f",
+    "client/src/audio/nativePTT.test.ts": "b75c77293957293e21ff2e1b96e49a983635c4408e9065b097d9967b542ac11f",
+    "client/src/types/electron.d.ts": "892c6f3fce36b8525f09fa8c2fb5d2d29f6b55d949050711c4a51588510ea93c",
+    "client/src/hooks/usePushToTalk.ts": "d835388eeb8be58c43c849b42e83c843f7216b0b5bb0d35e954674a880c0cda5",
+    "client/src/hooks/usePushToTalk.test.ts": "015849bdda8702b50eeeceab5d54e379d93f301db9fdda260bff8e073ac81118",
+    "client/src/hooks/useMicSync.ts": "e780296fd4bbba0cf56d766c10f69729102cf6f534bb1be19aedc1f8d2bf8ff4",
+    "client/src/components/dm/GroupDMCallAudio.tsx": "752dacd9528471432351f8680cf72e86b5ea9e0f5c1d116290da4997c0c35f04",
+    "client/src/components/dm/GroupDMCallAudio.test.tsx": "b155b63c882b384fce8d3808ea36524aa3a670aa8925f2cebe35074e82479fe5",
+    "client/src/webrtc/p2pMicrophone.ts": "a16f7c7953e75da803b4a9b598ebf4c35e4112eacc7b3a0c98a4e60cd2c63a5e",
+    "client/src/stores/p2pCallStore.audio.test.ts": "9d86bfb3d323deb68a4a7dc4f5ae2189b0be51cc105fabc3905a62e2792bae47",
+    "client/src/components/p2p/P2PCallControls.tsx": "48c3f5e8e8c263e318fd0a02813946adfa76d7cf480a14d0e2786c1d2ba3c5c8",
+    "client/src/components/voice/VoiceStateManager.tsx": "acc24e965bdfc2f31ea88dc3b201d4705248b98851a3279325359c8f8da00bbb",
+    "client/src/components/voice/NativePTTStatus.tsx": "ba730f90946730b9e70617770cc86af5e0b8cf3c498394e2edc7eafcf1bce021",
+    "client/src/components/voice/NativePTTStatus.test.tsx": "d069bd929b1503257d92ace8686f078f6fce7d5f54a8b2f474ed5581b3c19b6b",
+    "client/src/i18n/locales/en/voice.json": "9dab4790f7c78f506db89087e5ec8a6b3a6d5019efc7907f3c3ded0d84eff655",
+    "client/src/i18n/locales/tr/voice.json": "829109924964ccc8bcefc449b5cc2516c35ae35e9161af6c3458f66d508e186a"
+  },
+  "behavior": [
+    "Main process issues sender-owned UUID leases with bounded source/kind/key and guild > accepted P2P > group priority. Only trusted top-level renderer IPC may acquire/release; navigation, process loss and destruction retire its exact ownership.",
+    "Per-lease signals use a separate IPC channel and exact unsubscribe. Legacy listener cleanup and stale lease release cannot erase another owner.",
+    "Native PTT is latched per physical press; ownership transfer emits synthetic up. A known held old binding remains a release barrier across unbind and replacement; a new bound key pressed during that barrier also must release before speaking. Only bound key state is retained, never arbitrary event/key history or keycode logs.",
+    "Renderer bridge fences auth/source/current call, returns late acquired leases after retirement, silences focused text/composition, and keeps native background hold through blur/hidden visibility. Browser foreground guards remain.",
+    "Guild encrypted admission closure, group key/session closure, private call failure/auth/disposal and shortcut capture retire native leases. Registration failure is observable with explicit recovery; stale guild Retry cannot affect a later source/account/channel.",
+    "Initial/recovered private PTT output remains disabled until an admitted current lease press; manual mute/deafen and original capture/publisher guards remain authoritative."
+  ],
+  "verification": [
+    {
+      "command": "npx vitest run src/components/voice/NativePTTStatus.test.tsx src/audio/nativePTT.test.ts src/hooks/usePushToTalk.test.ts src/components/dm/GroupDMCallAudio.test.tsx src/stores/p2pCallStore.audio.test.ts src/components/p2p/P2PCallControls.test.tsx --reporter=dot",
+      "cwd": "client",
+      "result": "PASS 6 files / 56 tests / 3.88s (subsequent test-only act cleanup included in final full suite)"
+    },
+    {
+      "command": "npm test -- --run --reporter=dot",
+      "cwd": "client",
+      "result": "PASS 385 files / 3749 tests / 75.70s"
+    },
+    {
+      "command": "npm run build",
+      "cwd": "client",
+      "result": "PASS TypeScript build and Vite1693 modules / 2.75s; existing chunk-size/dynamic-import/config-loader warnings remain"
+    },
+    {
+      "command": "npx tsc -b",
+      "cwd": "client",
+      "result": "PASS exit0"
+    },
+    {
+      "command": "npm run electron:test",
+      "cwd": ".",
+      "result": "178 discovered:177 PASS /0 FAIL /1 existing host-dependent SKIP; 1.249s tests. Skip: overlay-layout-store symlink creation unavailable on this Windows host. Not full native acceptance."
+    },
+    {
+      "command": "node --test dist-electron/hotkey-router.test.js dist-electron/ptt-leases.test.js dist-electron/ptt-ipc.test.js dist-electron/ptt-preload.test.js; node --test dist-electron/ptt-runtime.test.js",
+      "cwd": ".",
+      "result": "18+1 focused tests PASS, no skips; strict Electron TypeScript compilation PASS"
+    },
+    {
+      "command": "npx eslint src/audio/nativePTT.ts src/audio/nativePTT.test.ts src/hooks/usePushToTalk.ts src/hooks/usePushToTalk.test.ts src/hooks/useMicSync.ts src/components/dm/GroupDMCallAudio.tsx src/components/dm/GroupDMCallAudio.test.tsx src/webrtc/p2pMicrophone.ts src/stores/p2pCallStore.audio.test.ts src/components/p2p/P2PCallControls.tsx src/components/voice/VoiceStateManager.tsx src/components/voice/NativePTTStatus.tsx src/components/voice/NativePTTStatus.test.tsx",
+      "cwd": "client",
+      "result": "PASS exit0"
+    },
+    {
+      "command": "git diff --check -- electron client/src/audio/nativePTT.ts client/src/hooks/usePushToTalk.ts client/src/components/voice/NativePTTStatus.tsx client/src/components/dm/GroupDMCallAudio.tsx client/src/webrtc/p2pMicrophone.ts",
+      "cwd": ".",
+      "result": "PASS"
+    }
+  ],
+  "limits": [
+    "Tests validate actual compiled native routing/preload/IPC handlers with mocked uIOhook and renderer Window; actual Electron/uIOhook OS capture and real microphone/background game acceptance are not claimed.",
+    "Fresh initial hook startup cannot infer a key held before the hook existed through the keycode-only uIOhook API. Known-owner held handoff is tested; fresh-start held-key behavior remains an explicit physical/native capability acceptance gate. Unconditional first-keyup blocking was not silently added because it would discard the first normal guild press.",
+    "Full client/build observe the shared worktree including other agents unrelated files; hashes identify this exact owned slice, not an immutable release or deployment.",
+    "One accidental client test invocation from repository root lacked jsdom configuration and failed window/document setup. It was corrected by running from client; no source change or weakening was used to pass."
+  ],
+  "remaining": [
+    "Physical Windows background PTT in minimized/unfocused app and pencereli/kenarliksiz games; first startup while key already held; native failure and held owner handoff with real uIOhook.",
+    "Existing overlay-layout-store symlink host skip requires a capable clean Windows acceptance host.",
+    "No production deployment or Windows installer acceptance is implied."
+  ]
+}

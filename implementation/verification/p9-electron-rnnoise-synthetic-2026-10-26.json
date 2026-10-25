@@ -1,0 +1,515 @@
+{
+  "date": "2026-10-26",
+  "scope": "P9 Windows Electron AudioWorklet/RNNoise synthetic evidence; not physical device/call acceptance",
+  "source_revision": "112d1e8b3f85953540d7fc15a1a0ddc36f74977f",
+  "source_archive": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-clean-112d1e8b-7p_qyxca\\source",
+  "source_hashes": {
+    "client/src/audio/microphonePipeline.ts": {
+      "actual_sha256": "544be1cb7cb36f773be5a386c552fd880705aba294dbca633ffc103a3a130df0",
+      "git_blob_lf_sha256": "19d3e59d4d73a5d8d563bff14fa3c41f0fa736032537ec21c38fe20731c595f0",
+      "crlf_export": true
+    },
+    "client/src/audio/MicrophoneTrackProcessor.ts": {
+      "actual_sha256": "37762570d449098a78881d72e8027588c8f0ee32e7df91cd510ff7ba21785bc3",
+      "git_blob_lf_sha256": "802e6cc9e18b10174df5400800d7068032f4724d30da5cef8a6742b76adf809b",
+      "crlf_export": true
+    },
+    "client/src/audio/microphoneSettings.ts": {
+      "actual_sha256": "49f14f1d3e3beeab8656c3225fbdaa38dfc87fbc2805b57f37e311ff3155de55",
+      "git_blob_lf_sha256": "b4c26c354f8181a9d3c01fc8dbcad2404df2d4c563b2784f5aff7634a9b12cd1",
+      "crlf_export": true
+    },
+    "client/src/audio/audioOperation.ts": {
+      "actual_sha256": "e553ea9c8c978aeea20d0173fbba6561a1f26f93b323f67e0d2d21b11fc4d897",
+      "git_blob_lf_sha256": "57e1ee43cdad47661afd07d345014224e758e0485ad367b2067621f7ee2c1ae0",
+      "crlf_export": true
+    },
+    "client/src/audio/gateConfig.ts": {
+      "actual_sha256": "68058b7be165090b190ecc16c15469ea9cc0eff8a6bf636aaa0505722bdbd4bd",
+      "git_blob_lf_sha256": "3aabaac13576c131206667fd25f1658448864af31efe86f604ad70a22a8e8952",
+      "crlf_export": true
+    },
+    "client/src/audio/vadGateWorklet.js": {
+      "actual_sha256": "b3d04244550f5028b70afd7ae05e60e5562fd0bfada3320f84c593b249b243be",
+      "git_blob_lf_sha256": "7cbe4d81b79258c51d339edc58b1d251dcedef0cff77239c93d15762a6258510",
+      "crlf_export": true
+    },
+    "client/src/audio/engines/workletEngine.ts": {
+      "actual_sha256": "eb0b8f436714c5494ee3cd1996a0d835f3479222025a80a46e23e19903e8df3e",
+      "git_blob_lf_sha256": "bd91214950bc82be31e0dcf7c0a450b2c438e411568a4d42caa337d0a5bc408c",
+      "crlf_export": true
+    },
+    "client/src/audio/publicAssetBase.ts": {
+      "actual_sha256": "e327ff746a92cda54cfa578df26ae8f3b7ffd7e91105285bae9bc52c82be0611",
+      "git_blob_lf_sha256": "1b1dd84558120a8a3099e76d3a74264111d2de10f3929b4c6c35d209f38079dc",
+      "crlf_export": true
+    },
+    "client/src/audio/pipelineStatus.ts": {
+      "actual_sha256": "9b36d49ed7225dbfe5d1eec0107750e012ee8537469cbe42cd1301c53c009c31",
+      "git_blob_lf_sha256": "0fdad30b8784d57df671606874d4a42106ebd128e7ef06e438fa2badf3518d9e",
+      "crlf_export": true
+    },
+    "client/src/utils/constants.ts": {
+      "actual_sha256": "3603b9a5762fbaac0fedfb79028fc57afcd13bd16db8bd16584157bd0a18c785",
+      "git_blob_lf_sha256": "739f0252458098cf8dfd95a83c8756a7a070f66e9d7b9853674631f53b0158d0",
+      "crlf_export": true
+    },
+    "electron/main.ts": {
+      "actual_sha256": "7ee524e41c46ea9a0784a561ac6990ffc7879d79548a1a5b9e46678573216f13",
+      "git_blob_lf_sha256": "7807c180a4f98c3f760b698063a7bce7652b552303df6d96fdaadc36a6ac4509",
+      "crlf_export": true
+    },
+    "electron/resolve-path.ts": {
+      "actual_sha256": "c8f8172841317b65114cc328d1bfb328b1d18b6cc530d99c752a2cbbbc8374d2",
+      "git_blob_lf_sha256": "498bddd90c42b54cf4ceeeb6b3954ce1c2f9a0a1b1c8272e50b2020958d58b09",
+      "crlf_export": true
+    },
+    "client/public/audio-engines/v1/manifest.json": {
+      "actual_sha256": "1d4b3e1ba5e7d67aead9cfc8ebb97e0710b04cd36f8761bb16fd682c9897ff37",
+      "git_blob_lf_sha256": "1d4b3e1ba5e7d67aead9cfc8ebb97e0710b04cd36f8761bb16fd682c9897ff37",
+      "crlf_export": false
+    },
+    "client/public/audio-engines/v1/engine-worklet.js": {
+      "actual_sha256": "998c0a05c48af0153a3edbb9ce51455b8d902da97a2a4bb578b806457dc4eced",
+      "git_blob_lf_sha256": "998c0a05c48af0153a3edbb9ce51455b8d902da97a2a4bb578b806457dc4eced",
+      "crlf_export": false
+    },
+    "client/public/audio-engines/v1/dsp.js": {
+      "actual_sha256": "5033749713f35f73d2e9d0d83d0d70195ee0fbd12b190f9be2f574d35fbaff8e",
+      "git_blob_lf_sha256": "5033749713f35f73d2e9d0d83d0d70195ee0fbd12b190f9be2f574d35fbaff8e",
+      "crlf_export": false
+    },
+    "client/public/audio-engines/v1/utf8.js": {
+      "actual_sha256": "1db99aa560e7127e407ed307631a4a7bb30d5baf2b0021edfcadede90238fbb8",
+      "git_blob_lf_sha256": "1db99aa560e7127e407ed307631a4a7bb30d5baf2b0021edfcadede90238fbb8",
+      "crlf_export": false
+    },
+    "client/public/audio-engines/v1/vendor/rnnoise.js": {
+      "actual_sha256": "d2c419c257bb3af2b0eb5128eb475d8ae46ce649dbf8d1d12fae8bb926cc00ac",
+      "git_blob_lf_sha256": "d2c419c257bb3af2b0eb5128eb475d8ae46ce649dbf8d1d12fae8bb926cc00ac",
+      "crlf_export": false
+    },
+    "client/public/audio-engines/v1/rnnoise_simd.wasm": {
+      "actual_sha256": "378fd17c294db15ee4e818ba5ef072242a21c8ad7445b483f7f46d7dc4f2c253",
+      "git_lfs_oid_sha256": "378fd17c294db15ee4e818ba5ef072242a21c8ad7445b483f7f46d7dc4f2c253",
+      "bytes": 157234
+    }
+  },
+  "source_comparison": "Seventeen text source files match the 112d1e8b Git blobs after CRLF export normalization; both actual byte and normalized hashes are recorded. Expanded RNNoise SIMD WASM matches the commit Git LFS OID, size, and shipped manifest byte for byte.",
+  "fixture": {
+    "directory": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-electron-audio-112d1e8b-58l5mw5r",
+    "sha256": {
+      "entry.ts": "2b9cc2c36509a47cf66ced6f49335974d794d1b76b9e87cedf69354a06212a51",
+      "main.cjs": "75ef361a863049c8814158f8629c881036e8547f162a175278c412edb04672c1",
+      "preload.cjs": "627154f1d9b837453cc21bae1682d7449ba56ea8189000d265f28bac486a193b",
+      "build.mjs": "8ff3c38f37738f2ca8459e4092036560be1db864c80415d75ea890ed412fb95b",
+      "csp.json": "63fcc354f139a96e7e896b2a5abf857eac2fe083711611c69fb757a2fba0b508",
+      "result.json": "ea27bc5330c915afb798c594f1a6e14c4f7ed58a0ab62fea4d6e2cae8e310c28",
+      "attempt1-result.json": "9b14090c7b36ac5879ae1cdcf30562b63535bccf933861bfdf5dee0f3e8ec087"
+    },
+    "build": "Installed Vite8.3.5 production build chrome120/base./. Actual source pipeline/processor imports, worklet URL/no-inline handling. Unchanged publicassets served from archive through freshlycompiled production resolveAppPath. No actualHiChatmain imported.",
+    "elapsed_seconds": 5.05
+  },
+  "initial_native_constraints_attempt": {
+    "passed": false,
+    "failures": [
+      {
+        "stage": "gate-gain",
+        "name": "OverconstrainedError",
+        "message": "Cannot satisfy constraints"
+      }
+    ],
+    "modules": [
+      {
+        "path": "/assets/vadGateWorklet-BctI8FGF.js",
+        "ms": 5.2999999998137355,
+        "ok": true
+      }
+    ],
+    "hardwareCaptureCalls": 0,
+    "sourcesEnded": true,
+    "processedEnded": true,
+    "contextStates": [
+      "closed"
+    ],
+    "interpretation": "Synthetic WebAudio destination tracks reject capture-device constraints with OverconstrainedError. This does not establish a production microphone defect. The actual same-origin gate module loaded in 5.3 ms before that failure."
+  },
+  "final_result": {
+    "source": "112d1e8b",
+    "hardwareCaptureCalls": 0,
+    "captureConstraintsSimulated": true,
+    "syntheticCapturePolicies": [
+      {
+        "stage": "gate-gain",
+        "constraints": {
+          "echoCancellation": true,
+          "autoGainControl": true,
+          "noiseSuppression": false,
+          "channelCount": 1
+        }
+      },
+      {
+        "stage": "gate-gain",
+        "constraints": {
+          "echoCancellation": true,
+          "autoGainControl": true,
+          "noiseSuppression": false,
+          "channelCount": 1
+        }
+      },
+      {
+        "stage": "gate-gain",
+        "constraints": {
+          "echoCancellation": true,
+          "autoGainControl": true,
+          "noiseSuppression": false,
+          "channelCount": 1
+        }
+      },
+      {
+        "stage": "gate-gain",
+        "constraints": {
+          "echoCancellation": true,
+          "autoGainControl": true,
+          "noiseSuppression": false,
+          "channelCount": 1
+        }
+      },
+      {
+        "stage": "gate-gain",
+        "constraints": {
+          "echoCancellation": true,
+          "autoGainControl": true,
+          "noiseSuppression": false,
+          "channelCount": 1
+        }
+      },
+      {
+        "stage": "rnnoise-pipeline",
+        "constraints": {
+          "echoCancellation": true,
+          "autoGainControl": true,
+          "noiseSuppression": false,
+          "channelCount": 1
+        }
+      },
+      {
+        "stage": "rnnoise-pipeline",
+        "constraints": {
+          "echoCancellation": true,
+          "autoGainControl": true,
+          "noiseSuppression": false,
+          "channelCount": 1
+        }
+      },
+      {
+        "stage": "sdk-processor",
+        "constraints": {
+          "echoCancellation": true,
+          "autoGainControl": true,
+          "noiseSuppression": false,
+          "channelCount": 1
+        }
+      },
+      {
+        "stage": "sdk-processor",
+        "constraints": {}
+      }
+    ],
+    "hardwarePermissionsAllowed": false,
+    "monitorGain": 0,
+    "modules": [
+      {
+        "path": "/assets/vadGateWorklet-BctI8FGF.js",
+        "ms": 5.099999999627471,
+        "ok": true
+      },
+      {
+        "path": "/assets/vadGateWorklet-BctI8FGF.js",
+        "ms": 4.800000000745058,
+        "ok": true
+      },
+      {
+        "path": "/audio-engines/v1/engine-worklet.js",
+        "ms": 11.300000000745058,
+        "ok": true
+      },
+      {
+        "path": "/assets/vadGateWorklet-BctI8FGF.js",
+        "ms": 5.199999999254942,
+        "ok": true
+      },
+      {
+        "path": "/audio-engines/v1/engine-worklet.js",
+        "ms": 12.299999999813735,
+        "ok": true
+      }
+    ],
+    "steps": [
+      {
+        "stage": "gate-gain",
+        "initializationMs": 19.100000000558794,
+        "status": {
+          "requestedEngine": "none",
+          "activeEngine": "none",
+          "phase": "ready",
+          "sampleRate": 48000,
+          "gateAvailable": true,
+          "gateEnabled": true,
+          "gainAvailable": true,
+          "inputDb": -120,
+          "outputDb": -120,
+          "gateOpen": false
+        }
+      },
+      {
+        "stage": "rnnoise-pipeline",
+        "initializationMs": 32.799999999813735,
+        "status": {
+          "requestedEngine": "rnnoise",
+          "activeEngine": "rnnoise",
+          "phase": "ready",
+          "sampleRate": 48000,
+          "gateAvailable": true,
+          "gateEnabled": false,
+          "gainAvailable": true,
+          "inputDb": -120,
+          "outputDb": -120,
+          "gateOpen": false
+        }
+      }
+    ],
+    "contextStates": [
+      "closed",
+      "closed",
+      "closed",
+      "closed",
+      "closed",
+      "closed",
+      "closed",
+      "closed",
+      "closed"
+    ],
+    "failures": [],
+    "secureContext": true,
+    "origin": "app://hichat",
+    "baseURI": "app://hichat/index.html",
+    "cspHeader": "default-src 'self' app: file:; script-src 'self' 'wasm-unsafe-eval' app: file: blob:; style-src 'self' 'unsafe-inline' app: file:; img-src 'self' data: blob: app: file: https:; font-src 'self' data: app: file:; media-src 'self' blob: app: file:; connect-src 'self' app: file: ws: wss: https:; worker-src 'self' blob:; frame-ancestors 'none'; frame-src 'none'; object-src 'none'; base-uri 'self'",
+    "gateGain": {
+      "quietClosedPower": 0,
+      "unityPower": 4.999999403171165e-09,
+      "doubledPower": 1.999999761268466e-08,
+      "gainPowerRatio": 4,
+      "inputMeterDbDifference": 0,
+      "zeroGainPower": 0,
+      "loudOpenPower": 0.0012499999475435511,
+      "reclosedPower": 0,
+      "status": {
+        "requestedEngine": "none",
+        "activeEngine": "none",
+        "phase": "ready",
+        "sampleRate": 48000,
+        "gateAvailable": true,
+        "gateEnabled": true,
+        "gainAvailable": true,
+        "inputDb": -83.01030047503879,
+        "outputDb": -120,
+        "gateOpen": false
+      }
+    },
+    "gateDispose": {
+      "sourceStillLive": true,
+      "processedEnded": true
+    },
+    "rnnoise": {
+      "power": 0.005321462388929337,
+      "continuityReadings": 12,
+      "continuityAudioSeconds": 1.28,
+      "zeroGainPower": 0,
+      "audioTimeAdvanced": 0.24,
+      "status": {
+        "requestedEngine": "rnnoise",
+        "activeEngine": "rnnoise",
+        "phase": "ready",
+        "sampleRate": 48000,
+        "gateAvailable": true,
+        "gateEnabled": false,
+        "gainAvailable": true,
+        "inputDb": -26.61558194786616,
+        "outputDb": -120,
+        "gateOpen": true
+      }
+    },
+    "rnnoiseDispose": {
+      "sourceStillLive": true,
+      "processedEnded": true
+    },
+    "sdkProcessor": {
+      "processedPower": 0.005422195610447532,
+      "status": {
+        "requestedEngine": "rnnoise",
+        "activeEngine": "rnnoise",
+        "phase": "ready",
+        "sampleRate": 48000,
+        "gateAvailable": true,
+        "gateEnabled": false,
+        "gainAvailable": true,
+        "inputDb": -120,
+        "outputDb": -120,
+        "gateOpen": false
+      },
+      "sourceStillLive": true,
+      "processedEnded": true
+    },
+    "passed": true,
+    "ownedSourcesEnded": true,
+    "ownedProcessedEnded": true,
+    "runtime": {
+      "electron": "45.0.0",
+      "chrome": "156.0.8078.48",
+      "node": "24.22.0",
+      "platform": "win32",
+      "autoplayPolicy": "no-user-gesture-required",
+      "hiddenWindow": true,
+      "backgroundThrottling": false,
+      "sandbox": true,
+      "contextIsolation": true,
+      "nodeIntegration": false,
+      "permissionRequests": 0,
+      "assetRequests": [
+        {
+          "path": "/index.html",
+          "status": 200,
+          "mime": "text/html"
+        },
+        {
+          "path": "/assets/index-9pWc2C9s.js",
+          "status": 200,
+          "mime": "text/javascript"
+        },
+        {
+          "path": "/index.html",
+          "status": 200,
+          "mime": "text/html"
+        },
+        {
+          "path": "/assets/vadGateWorklet-BctI8FGF.js",
+          "status": 200,
+          "mime": "text/javascript"
+        },
+        {
+          "path": "/assets/vadGateWorklet-BctI8FGF.js",
+          "status": 200,
+          "mime": "text/javascript"
+        },
+        {
+          "path": "/assets/workletEngine-DZPA3ukm.js",
+          "status": 200,
+          "mime": "text/javascript"
+        },
+        {
+          "path": "/assets/constants-CrgHhAsO.js",
+          "status": 200,
+          "mime": "text/javascript"
+        },
+        {
+          "path": "/audio-engines/v1/rnnoise_simd.wasm",
+          "status": 200,
+          "mime": "application/wasm"
+        },
+        {
+          "path": "/audio-engines/v1/engine-worklet.js",
+          "status": 200,
+          "mime": "text/javascript"
+        },
+        {
+          "path": "/audio-engines/v1/dsp.js",
+          "status": 200,
+          "mime": "text/javascript"
+        },
+        {
+          "path": "/audio-engines/v1/utf8.js",
+          "status": 200,
+          "mime": "text/javascript"
+        },
+        {
+          "path": "/audio-engines/v1/vendor/rnnoise.js",
+          "status": 200,
+          "mime": "text/javascript"
+        },
+        {
+          "path": "/audio-engines/v1/vendor/gtcrn.js",
+          "status": 200,
+          "mime": "text/javascript"
+        },
+        {
+          "path": "/audio-engines/v1/vendor/speex.js",
+          "status": 200,
+          "mime": "text/javascript"
+        },
+        {
+          "path": "/audio-engines/v1/vendor/deepfilter.js",
+          "status": 200,
+          "mime": "text/javascript"
+        },
+        {
+          "path": "/assets/vadGateWorklet-BctI8FGF.js",
+          "status": 200,
+          "mime": "text/javascript"
+        },
+        {
+          "path": "/audio-engines/v1/engine-worklet.js",
+          "status": 200,
+          "mime": "text/javascript"
+        },
+        {
+          "path": "/audio-engines/v1/dsp.js",
+          "status": 200,
+          "mime": "text/javascript"
+        },
+        {
+          "path": "/audio-engines/v1/utf8.js",
+          "status": 200,
+          "mime": "text/javascript"
+        },
+        {
+          "path": "/audio-engines/v1/vendor/rnnoise.js",
+          "status": 200,
+          "mime": "text/javascript"
+        },
+        {
+          "path": "/audio-engines/v1/vendor/gtcrn.js",
+          "status": 200,
+          "mime": "text/javascript"
+        },
+        {
+          "path": "/audio-engines/v1/vendor/speex.js",
+          "status": 200,
+          "mime": "text/javascript"
+        },
+        {
+          "path": "/audio-engines/v1/vendor/deepfilter.js",
+          "status": 200,
+          "mime": "text/javascript"
+        }
+      ],
+      "policyErrors": [],
+      "remainingOwnWindows": 0
+    }
+  },
+  "wasm_matches_shipped_manifest": true,
+  "measurements": "A 2048-sample analyser measured finite scalar power. Bounded polling every 50 ms required three consecutive successful readings. RNNoise remained ready over 12 readings and 1.28 seconds of audio time. Gain 100 to 200 produced a power ratio of 4; the pre-gain input meter changed by 0 dB; zero gain produced zero power. Quiet gate closure, loud opening, and closure after the hold were asserted. RNNoise required activeEngine=rnnoise, phase=ready, and nonzero processed output; a fallback failed the test. The installed LocalAudioTrack.setProcessor and production MicrophoneTrackProcessor ran. Disposal preserved the caller-owned source until fixture cleanup, ended processed tracks, and closed nine observed fixture/processor contexts.",
+  "qualifications": [
+    "Only synthetic capture policy is simulated through documented pipeline.applyCapture and synthetic sourceTrack.applyConstraints. Exact requested constraints are recorded. Hardware echo cancellation, AGC, and capture noise suppression are not verified. Native WebAudio contexts, worklet loading, WASM hash validation and inference, SDK processor, and stream graph remain unmodified.",
+    "The fixture uses autoplay-policy=no-user-gesture-required and a hidden window with backgroundThrottling=false. Sandbox and contextIsolation are enabled; nodeIntegration is disabled. It uses the exact production CSP and privileged app://hichat scheme. Worklet and CSP security checks were not bypassed.",
+    "The actual HiChat main process, providers, hooks, Room, and API server were not loaded. No microphone, camera, desktop capture, Steam, user profile, authentication, or external network was used. Permission handlers deny all requests; request count was zero. Every attempt used a fresh temporary userData directory. All owned windows closed.",
+    "Every output monitor gain was zero before signal connection. No audio/video was recorded and no sample arrays were persisted. Oscillators, a sawtooth signal, and deterministic seeded noise were generated in memory. This does not measure perceptual speech denoising quality.",
+    "The fixture legacy console-message listener signature emitted a deprecation warning. No CSP or audio engine error occurred in the successful run.",
+    "Prior Ego gate and minimal-worklet timeout observations remain separate evidence. This successful Electron run does not establish their cause or resolution."
+  ],
+  "remaining": [
+    "Physical microphone/headset with active RNNoise and gate in packaged HiChat.",
+    "Two-client encrypted call with active RNNoise, device changes, hotplug, and reconnection.",
+    "Long-call CPU/latency stability and actual installer/update acceptance."
+  ]
+}

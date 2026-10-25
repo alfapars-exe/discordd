@@ -5,7 +5,7 @@ const state = vi.hoisted(() => ({
   owner: "viewer" as string | null,
   generation: 4,
   connected: true,
-  enabled: true,
+  enabled: true, compatibility:false,
   canSend: true,
   target: { type: "text", channelId: "channel", label: "Channel", serverInfo: { serverId: "server", serverName: "Server", serverIconUrl: null } } as { type: "text" | "dm" | "group-dm"; channelId: string; label: string; serverInfo?: { serverId: string; serverName: string; serverIconUrl: null } } | null,
   receive: undefined as ((value: { session: string; requestId: string; text: string }) => void) | undefined,
@@ -20,7 +20,7 @@ const state = vi.hoisted(() => ({
 vi.mock("../api/authSessionEvents", () => ({ getAuthSessionSnapshot: () => ({ ownerId: state.owner, generation: state.generation }) }));
 vi.mock("../stores/authStore", () => ({ useAuthStore: Object.assign((pick: (s: unknown) => unknown) => pick({ user: state.owner ? { id: state.owner } : null }), { getState: () => ({ user: state.owner ? { id: state.owner } : null }) }) }));
 vi.mock("../stores/voiceStore", () => {
-  const snapshot = () => ({ voiceOverlayEnabled: state.enabled, voiceOverlayChat: state.enabled,
+  const snapshot = () => ({ voiceOverlayCompatibility:state.compatibility, voiceOverlayEnabled: state.enabled, voiceOverlayChat: state.enabled,
     voiceOverlayChatActions: state.enabled, voiceOverlayChatCompose: state.enabled });
   return { useVoiceStore: Object.assign((pick: (s: unknown) => unknown) => pick(snapshot()), { getState: snapshot }) };
 });
@@ -33,7 +33,7 @@ vi.mock("../utils/overlayChatAccess", () => ({ getLiveOverlayChatTarget: (requir
 import { useOverlayChatCompose } from "./useOverlayChatCompose";
 
 beforeEach(() => {
-  state.owner = "viewer"; state.generation = 4; state.connected = true; state.enabled = true; state.canSend = true;
+  state.owner = "viewer"; state.generation = 4; state.connected = true; state.enabled = true; state.compatibility=false; state.canSend = true;
   state.target = { type: "text", channelId: "channel", label: "Channel", serverInfo: { serverId: "server", serverName: "Server", serverIconUrl: null } };
   state.receive = undefined; state.close = undefined;
   state.sendMessage.mockReset().mockResolvedValue(true);
@@ -111,7 +111,7 @@ it("requires connected, ready, opted-in desktop chat, a bridge and live send aut
   state.enabled = false;
   view.rerender({ connected: true, ready: true });
   expect(view.result.current).toBeNull();
-  state.enabled = true; state.canSend = false;
+  state.enabled = true; state.compatibility=false; state.canSend = false;
   view.rerender({ connected: true, ready: true });
   expect(view.result.current).toBeNull();
   state.canSend = true; state.target = null;
@@ -207,3 +207,4 @@ it("rotates the session on a matching composer-close event and ignores old-sessi
   act(() => currentClose({ session: oldSession }));
   expect(view.result.current).toBe(newSession);
 });
+it("rejects retained composer requests immediately and rotates grants after compatibility",async()=>{const view=renderHook(()=>useOverlayChatCompose(true,true));const old=view.result.current!,receive=state.receive!;state.compatibility=true;await act(async()=>receive({session:old,requestId:"compat-denied",text:"never send"}));expect(state.sendMessage).not.toHaveBeenCalled();view.rerender();expect(view.result.current).toBeNull();state.compatibility=false;view.rerender();expect(view.result.current).not.toBe(old);await act(async()=>receive({session:old,requestId:"compat-stale",text:"still never"}));expect(state.sendMessage).not.toHaveBeenCalled();});

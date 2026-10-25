@@ -16,11 +16,19 @@ const h = vi.hoisted(() => ({
   sinkError: null as Error | null,
   sinkPromise: null as Promise<void> | null,
   removeSinkApi: false,
+  prefs: { muteAllSounds:false,messageSound:true,incomingCallSound:true,soundPack:"classic" },
+  preferenceListeners: [] as Array<()=>void>,
+  accessibilityListeners: [] as Array<()=>void>,
+  resumePromise: null as Promise<void>|null,
+  initialContextState: "running",
+  contexts: [] as FakeCtx[],
 }));
 
 vi.mock("../stores/voiceStore", () => ({ useVoiceStore: { getState: () => h.voice, subscribe: (fn: (state: VoiceMock, previous: VoiceMock) => void) => { h.voiceListeners.push(fn); return () => {}; } } }));
 vi.mock("../stores/authStore", () => ({ useAuthStore: { getState: () => h.auth, subscribe: (fn: (state: AuthMock) => void) => { h.authListeners.push(fn); return () => {}; } } }));
-vi.mock("../stores/accessibilityStore", () => ({ useAccessibilityStore: { getState: () => h.a11y } }));
+vi.mock("../stores/preferencesStore",()=>({usePreferencesStore:{subscribe:(fn:()=>void)=>{h.preferenceListeners.push(fn);return()=>{}}}}));
+vi.mock("./notificationPreferences",()=>({getNotificationPreferences:()=>h.prefs}));
+vi.mock("../stores/accessibilityStore", () => ({ useAccessibilityStore: { getState: () => h.a11y, subscribe:(fn:()=>void)=>{h.accessibilityListeners.push(fn);return()=>{}} } }));
 
 class FakeParam {
   setValueAtTime = vi.fn((v: number) => {
@@ -31,10 +39,10 @@ class FakeParam {
 }
 
 class FakeCtx {
-  state = "running";
+  state = h.initialContextState;
   currentTime = 0;
   destination = {};
-  resume = vi.fn(() => Promise.resolve());
+  resume = vi.fn(() => h.resumePromise ?? Promise.resolve());
   close = vi.fn(() => Promise.resolve());
   setSinkId = vi.fn(async (id: string) => {
     h.sinkCalls.push(id);
@@ -43,6 +51,7 @@ class FakeCtx {
     if (h.sinkPromise) await h.sinkPromise;
   });
   constructor() {
+    h.contexts.push(this);
     if (h.removeSinkApi) delete (this as Partial<FakeCtx>).setSinkId;
   }
   createOscillator() {
@@ -66,7 +75,7 @@ class FakeCtx {
   }
 }
 
-import { playNotificationSound, playJoinSound, playToneAt, closeAudioContext } from "./sounds";
+import { playNotificationSound, playJoinSound, previewIncomingCallSound, playWatchStartSound, playVoiceEventSound, VOICE_SOUND_EVENTS, playToneAt, closeAudioContext } from "./sounds";
 const subscriptionsAtModuleImport = h.voiceListeners.length;
 
 beforeEach(() => {
@@ -84,6 +93,8 @@ beforeEach(() => {
   h.sinkError = null;
   h.sinkPromise = null;
   h.removeSinkApi = false;
+  h.prefs={muteAllSounds:false,messageSound:true,incomingCallSound:true,soundPack:"classic"};
+  h.resumePromise=null;h.initialContextState="running";h.contexts=[];
 });
 
 afterEach(() => {
@@ -246,4 +257,56 @@ describe("join sound / playToneAt", () => {
     for (const listener of h.voiceListeners) listener(h.voice, beforeDeafen);
     expect(h.gainNodes[0].gain.setValueAtTime).toHaveBeenLastCalledWith(0, 0);
   });
+});
+
+describe("bounded event sound authorization",()=>{
+ it.each(["dnd","message-off","mute-all"])("rechecks %s after deferred sink and cancels active notification requests",async mode=>{
+  let finish!:()=>void;h.sinkPromise=new Promise<void>(done=>{finish=done});playNotificationSound();await vi.waitFor(()=>expect(h.sinkCalls).toHaveLength(1));
+  if(mode==="dnd"){h.auth.manualStatus="dnd";h.authListeners.forEach(fn=>fn(h.auth))}else{if(mode==="message-off")h.prefs.messageSound=false;else h.prefs.muteAllSounds=true;h.preferenceListeners.forEach(fn=>fn())}
+  h.sinkPromise=null;finish();await vi.advanceTimersByTimeAsync(150);expect(h.oscillators).toBe(0);
+ });
+ it("cancels a sounding notification and its second note immediately on DND but keeps voice effects eligible",async()=>{
+  playNotificationSound();await vi.waitFor(()=>expect(h.oscillators).toBe(1));h.auth.manualStatus="dnd";h.authListeners.forEach(fn=>fn(h.auth));expect(h.oscillatorNodes[0].stop).toHaveBeenCalledTimes(2);await vi.advanceTimersByTimeAsync(100);expect(h.oscillators).toBe(1);
+  playJoinSound();await vi.waitFor(()=>expect(h.oscillators).toBe(2));
+ });
+ it("global mute cancels active voice effects and forbids scheduled watch notes, while explicit previews ignore DND",async()=>{
+  playWatchStartSound();await vi.waitFor(()=>expect(h.oscillators).toBe(1));h.prefs.muteAllSounds=true;h.preferenceListeners.forEach(fn=>fn());expect(h.oscillatorNodes[0].stop).toHaveBeenCalledTimes(2);await vi.advanceTimersByTimeAsync(100);expect(h.oscillators).toBe(1);playJoinSound();expect(h.oscillators).toBe(1);
+  h.prefs.muteAllSounds=false;h.auth.manualStatus="dnd";previewIncomingCallSound();await vi.waitFor(()=>expect(h.oscillators).toBe(3));
+ });
+ it("retires a timed-out sink engine, allows a fresh request, and ignores late old routing completion",async()=>{
+  let finish!:()=>void;h.sinkPromise=new Promise<void>(done=>{finish=done});h.voice.outputDevice="speaker-a";playJoinSound();await vi.waitFor(()=>expect(h.sinkCalls).toHaveLength(1));const old=h.contexts[0];await vi.advanceTimersByTimeAsync(10001);expect(old.close).toHaveBeenCalledOnce();expect(h.oscillators).toBe(0);
+  h.sinkPromise=null;h.voice.outputDevice="speaker-b";playJoinSound();await vi.waitFor(()=>expect(h.oscillators).toBe(1));expect(h.contexts).toHaveLength(2);finish();await vi.advanceTimersByTimeAsync(1);expect(h.oscillators).toBe(1);expect(h.contexts[1].setSinkId).toHaveBeenLastCalledWith("speaker-b");expect(h.contexts[1].close).not.toHaveBeenCalled();
+ });
+ it("bounds suspended resume and rejects a resolved resume that did not make context running",async()=>{
+  h.initialContextState="suspended";h.resumePromise=new Promise(()=>{});playJoinSound();await vi.advanceTimersByTimeAsync(10001);expect(h.contexts[0].close).toHaveBeenCalledOnce();expect(h.oscillators).toBe(0);
+  h.resumePromise=null;playJoinSound();await vi.advanceTimersByTimeAsync(1);expect(h.oscillators).toBe(0);
+ });
+ it("never starts a deferred resume after notification permission is revoked",async()=>{
+  let finish!:()=>void;h.initialContextState="suspended";h.resumePromise=new Promise<void>(done=>{finish=done});playNotificationSound();await vi.advanceTimersByTimeAsync(1);h.prefs.messageSound=false;h.preferenceListeners.forEach(fn=>fn());h.contexts[0].state="running";finish();await vi.advanceTimersByTimeAsync(100);expect(h.oscillators).toBe(0);
+ });
+});
+
+it("does not resurrect a second note when notification permission is revoked and restored before its timer",async()=>{
+ playNotificationSound();await vi.waitFor(()=>expect(h.oscillators).toBe(1));h.prefs.messageSound=false;h.preferenceListeners.forEach(fn=>fn());h.prefs.messageSound=true;h.preferenceListeners.forEach(fn=>fn());await vi.advanceTimersByTimeAsync(100);expect(h.oscillators).toBe(1);
+ playWatchStartSound();await vi.waitFor(()=>expect(h.oscillators).toBe(2));h.prefs.muteAllSounds=true;h.preferenceListeners.forEach(fn=>fn());h.prefs.muteAllSounds=false;h.preferenceListeners.forEach(fn=>fn());await vi.advanceTimersByTimeAsync(100);expect(h.oscillators).toBe(2);
+});
+
+it("retires even a superseded timed-out route so its late completion cannot redirect the newer device",async()=>{
+ let finish!:()=>void;h.voice.outputDevice="a";h.sinkPromise=new Promise<void>(done=>{finish=done});playJoinSound();await vi.waitFor(()=>expect(h.sinkCalls).toEqual(["a"]));const previous=h.voice;h.voice={...h.voice,outputDevice:"b"};h.voiceListeners.forEach(fn=>fn(h.voice,previous));await vi.advanceTimersByTimeAsync(10001);expect(h.contexts[0].close).toHaveBeenCalledOnce();expect(h.contexts[0].setSinkId).toHaveBeenCalledTimes(1);
+ h.sinkPromise=null;playJoinSound();await vi.waitFor(()=>expect(h.oscillators).toBe(1));expect(h.contexts[1].setSinkId).toHaveBeenCalledWith("b");finish();await vi.advanceTimersByTimeAsync(1);expect(h.contexts[1].close).not.toHaveBeenCalled();expect(h.oscillators).toBe(1);
+});
+
+it.each(["notification","preview"])("volume zero retires deferred %s even if restored before routing completes",async kind=>{
+ let finish!:()=>void;h.sinkPromise=new Promise<void>(done=>{finish=done});if(kind==="notification")playNotificationSound();else previewIncomingCallSound();await vi.waitFor(()=>expect(h.sinkCalls).toHaveLength(1));h.a11y.notificationSoundVolume=0;h.accessibilityListeners.forEach(fn=>fn());h.a11y.notificationSoundVolume=80;h.accessibilityListeners.forEach(fn=>fn());h.sinkPromise=null;finish();await vi.advanceTimersByTimeAsync(150);expect(h.oscillators).toBe(0);
+});
+it("volume zero immediately cancels sounding notification/preview but leaves master-following voice effects",async()=>{
+ playNotificationSound();previewIncomingCallSound();playJoinSound();await vi.waitFor(()=>expect(h.oscillators).toBe(4));const voice=h.oscillatorNodes[3];h.a11y.notificationSoundVolume=0;h.accessibilityListeners.forEach(fn=>fn());for(const node of h.oscillatorNodes.slice(0,3))expect(node.stop).toHaveBeenCalledTimes(2);expect(voice.stop).toHaveBeenCalledTimes(1);await vi.advanceTimersByTimeAsync(100);expect(h.oscillators).toBe(4);
+});
+
+it.each(VOICE_SOUND_EVENTS)("uses actual %s catalog tone for preview and respects its individual switch",async event=>{
+ playVoiceEventSound(event);await vi.waitFor(()=>expect(h.oscillators).toBeGreaterThan(0));closeAudioContext();h.oscillators=0;const key={join:"voiceJoinSound",leave:"voiceLeaveSound",watchStart:"voiceWatchStartSound",watchStop:"voiceWatchStopSound",mute:"voiceMuteSound",unmute:"voiceUnmuteSound",deafen:"voiceDeafenSound",undeafen:"voiceUndeafenSound"}[event];Object.assign(h.prefs,{[key]:false});playVoiceEventSound(event);await vi.advanceTimersByTimeAsync(100);expect(h.oscillators).toBe(0);
+});
+
+it("individual watch preference revoke/restore cannot resurrect its delayed second note",async()=>{
+ playVoiceEventSound("watchStart");await vi.waitFor(()=>expect(h.oscillators).toBe(1));Object.assign(h.prefs,{voiceWatchStartSound:false});h.preferenceListeners.forEach(fn=>fn());Object.assign(h.prefs,{voiceWatchStartSound:true});h.preferenceListeners.forEach(fn=>fn());await vi.advanceTimersByTimeAsync(100);expect(h.oscillators).toBe(1);
 });

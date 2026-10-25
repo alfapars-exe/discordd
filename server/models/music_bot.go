@@ -31,6 +31,7 @@ type MusicTrack struct {
 // pause flag changes; also returned from the GET /music/state endpoint
 // for initial load and reconnect.
 type MusicBotChannelState struct {
+	SessionID      string       `json:"session_id,omitempty"`
 	ChannelID      string       `json:"channel_id"`
 	ServerID       string       `json:"server_id"`
 	IsActive       bool         `json:"is_active"`               // true while bot is in the room

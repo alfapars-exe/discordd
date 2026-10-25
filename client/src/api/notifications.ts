@@ -25,7 +25,7 @@ export function listNotifications(params: ListNotificationsParams = {}) {
 }
 
 export function getNotificationCount() {
-  return apiClient<{ unread_count: number }>("/users/me/notifications/count");
+  return apiClient<{ unread_count: number; badge_unread_count?: number }>("/users/me/notifications/count");
 }
 
 export function markNotificationRead(id: string) {

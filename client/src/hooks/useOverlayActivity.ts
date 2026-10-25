@@ -5,6 +5,7 @@ import { useBlockStore } from "../stores/blockStore";
 import { useFriendStore } from "../stores/friendStore";
 import { useGameActivityStore } from "../stores/gameActivityStore";
 import { usePresenceStore } from "../stores/presenceStore";
+import { usePreferencesStore } from "../stores/preferencesStore";
 import { projectOverlayActivity } from "../utils/overlayActivity";
 const EMPTY: ReturnType<typeof projectOverlayActivity> = [];
 
@@ -12,8 +13,13 @@ export function useOverlayActivity(enabled = true, connected = true) {
   const currentOwnerId = useAuthStore((state) => state.user?.id ?? null);
   const currentAuthGeneration = useAuthStore(() => getAuthGeneration());
   const activity = useGameActivityStore();
-  const friends = useFriendStore((state) => state.friends);
-  const blockedUserIds = useBlockStore((state) => state.blockedUserIds);
+  const relationship = useFriendStore();
+  const blocks = useBlockStore();
+  const preferences = usePreferencesStore();
   const statusByUserId = usePresenceStore((state) => state.statusByUserId);
-  return useMemo(() => enabled && connected ? projectOverlayActivity({ ...activity, currentOwnerId, currentAuthGeneration, friends, blockedUserIds, statusByUserId }) : EMPTY, [enabled, connected, activity, currentOwnerId, currentAuthGeneration, friends, blockedUserIds, statusByUserId]);
+  return useMemo(() => enabled && connected && preferences.accountId === currentOwnerId && preferences.isLoaded
+    && blocks.ownerId === currentOwnerId && blocks.authGeneration === currentAuthGeneration && blocks.snapshotReady
+    ? projectOverlayActivity({ ...activity, currentOwnerId, currentAuthGeneration, friends: relationship.friends, friendOwnerId: relationship.ownerId, friendAuthGeneration: relationship.authGeneration, friendsStatus: relationship.friendsStatus,
+      blockedUserIds: blocks.blockedUserIds, statusByUserId, ignoredUsers: (preferences.data.privacy as { ignoredUsers?: Record<string, boolean> } | undefined)?.ignoredUsers })
+    : EMPTY, [enabled, connected, activity, currentOwnerId, currentAuthGeneration, relationship, blocks, preferences, statusByUserId]);
 }

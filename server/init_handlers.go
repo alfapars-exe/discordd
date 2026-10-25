@@ -9,6 +9,7 @@ import (
 
 // Handlers holds all HTTP handler instances.
 type Handlers struct {
+	GameJoin              *handlers.GameJoinHandler
 	AccountStatus         *handlers.AccountStatusHandler
 	AccountDeletionStatus *handlers.AccountDeletionStatusHandler
 	EmailVerification     *handlers.EmailVerificationHandler
@@ -84,7 +85,13 @@ func initHandlers(svcs *Services, repos *Repositories, limiters *RateLimiters, h
 		panic("stream start notification dependencies are not wired")
 	}
 	liveKitWebhook.SetStreamStartNotifier(services.NewStreamStartNotifier(repos.StreamStartNotification, verifier, hub))
+	musicAccess := handlers.MusicAccessDependencies{Channels: repos.Channel, Voice: svcs.Voice, Members: repos.Server}
+	musicAccess.Sessions, _ = svcs.Auth.(handlers.MusicSessionValidator)
+	if musicAccess.Sessions == nil {
+		panic("music session validation dependency is not wired")
+	}
 	return &Handlers{
+		GameJoin:              handlers.NewGameJoinHandler(svcs.GameJoin, svcs.Auth, repos.User, repos.AccountLifecycle),
 		AccountStatus:         handlers.NewAccountStatusHandler(repos.AccountStatus),
 		AccountDeletionStatus: handlers.NewAccountDeletionStatusHandler(repos.AccountDeletionStatus),
 		EmailVerification:     handlers.NewEmailVerificationHandler(svcs.EmailVerification, limiters.VerifyEmail),
@@ -132,13 +139,13 @@ func initHandlers(svcs *Services, repos *Repositories, limiters *RateLimiters, h
 		Entrance:              handlers.NewEntranceHandler(svcs.Entrance, limiters.Upload),
 		Cosmetic:              handlers.NewCosmeticHandler(svcs.Cosmetic, limiters.CosmeticEquip),
 		ExpressionClone:       handlers.NewExpressionCloneHandler(svcs.ExpressionClone, limiters.Upload),
-		Music:                 handlers.NewMusicHandler(svcs.MusicBot, svcs.ChannelPermission, limiters.MusicPlay),
+		Music:                 handlers.NewMusicHandler(svcs.MusicBot, svcs.ChannelPermission, limiters.MusicPlay, musicAccess),
 		LiveKitWebhook:        liveKitWebhook,
 		ClientLog:             handlers.NewClientLogHandler(svcs.AppLog),
 		UploadDownload: handlers.NewUploadDownloadHandler(cfg.Upload.Dir, services.NewMediaAccessService(
 			repos.Attachment, repos.Message, repos.DM, svcs.ChannelPermission,
 			repos.Report, repos.Feedback, repos.User, repos.MediaAsset, repos.GroupDM,
-		), svcs.Auth),
+		), svcs.Auth, botService),
 		Notification:    handlers.NewNotificationHandler(svcs.Notification),
 		Reminder:        handlers.NewReminderHandler(svcs.Reminder),
 		Saved:           handlers.NewSavedHandler(svcs.Saved),

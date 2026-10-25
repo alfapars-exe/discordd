@@ -24,7 +24,7 @@ type ReadStateState = {
   seenMentions: Record<string, Set<string>>;
 
   /** Fetch unread counts for a specific server and merge into global state */
-  fetchUnreadCounts: (serverId: string, options?: { timeoutMs?: number; isCurrent?: () => boolean }) => Promise<void>;
+  fetchUnreadCounts: (serverId: string, options?: { timeoutMs?: number; isCurrent?: () => boolean }) => Promise<boolean>;
   /** Fetch unread counts for ALL servers the user belongs to */
   fetchAllUnreadCounts: () => Promise<void>;
   markAsRead: (channelId: string, lastMessageId: string) => void;
@@ -86,7 +86,9 @@ export const useReadStateStore = create<ReadStateState>((set, get) => ({
 
         return { unreadCounts: nextCounts, channelServerMap: nextMap };
       });
+      return true;
     }
+    return false;
   },
 
   fetchAllUnreadCounts: async () => {

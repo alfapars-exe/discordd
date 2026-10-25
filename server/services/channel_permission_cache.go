@@ -137,6 +137,31 @@ func (c *cachingPermResolver) ResolveChannelPermissions(ctx context.Context, use
 	return 0, pkg.ErrForbidden
 }
 
+// ResolveChannelPermissionsFresh revalidates long-running authorized work.
+// It remains on the cache decorator and honors invalidations during DB reads;
+// no caller receives an uncached-core handle or a stale positive cache entry.
+func (c *cachingPermResolver) ResolveChannelPermissionsFresh(ctx context.Context, userID, channelID string) (models.Permission, error) {
+	for attempt := 0; attempt < 3; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return 0, err
+		}
+		c.cacheMu.Lock()
+		revision := c.cacheRevision
+		c.cacheMu.Unlock()
+		perm, err := c.inner.ResolveChannelPermissions(ctx, userID, channelID)
+		if err != nil {
+			return 0, err
+		}
+		c.cacheMu.Lock()
+		changed := revision != c.cacheRevision
+		c.cacheMu.Unlock()
+		if !changed {
+			return perm, nil
+		}
+	}
+	return 0, pkg.ErrForbidden
+}
+
 // ResolveChannelPermissionsBulk probes the cache for every requested user
 // and only asks the uncached core to resolve the misses, in one batched
 // call — preserves the "at most 3 queries regardless of N" property the

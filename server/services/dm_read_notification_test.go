@@ -11,6 +11,7 @@ import (
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
 )
 
@@ -29,6 +30,7 @@ func acceptedFriendsFixture(f *dmTestFixture) {
 func TestSendMessage_BumpsRecipientUnreadInsideTx(t *testing.T) {
 	f := newDMFixture()
 	acceptedFriendsFixture(f)
+	f.repo.CreateMessageFn = func(_ context.Context, m *models.DMMessage) error { m.ID = "committed-source"; return nil }
 
 	var bumped []string
 	f.dmRead.IncrementUnreadFn = func(_ context.Context, userID, channelID string) error {
@@ -37,6 +39,8 @@ func TestSendMessage_BumpsRecipientUnreadInsideTx(t *testing.T) {
 	}
 	notifCreated := false
 	f.notif.CreateFn = func(_ context.Context, _ *models.Notification) error { notifCreated = true; return nil }
+	var incoming *models.Notification
+	f.notif.CreateDMMessageIfAbsentFn = func(_ context.Context, n *models.Notification) (bool, error) { incoming = n; return true, nil }
 
 	if _, err := f.svc.SendMessage(context.Background(), "alice", "ch-1", &models.CreateDMMessageRequest{Content: "hi"}); err != nil {
 		t.Fatalf("SendMessage: %v", err)
@@ -45,7 +49,38 @@ func TestSendMessage_BumpsRecipientUnreadInsideTx(t *testing.T) {
 		t.Errorf("IncrementUnread calls = %v, want exactly [bob@ch-1] (recipient only)", bumped)
 	}
 	if notifCreated {
-		t.Error("a plain friend DM wrote a notification row — only the pending transition does")
+		t.Error("accepted DM must not create a dm_request notification")
+	}
+	if incoming == nil || incoming.UserID != "bob" || incoming.ActorID == nil || *incoming.ActorID != "alice" || incoming.DMChannelID == nil || *incoming.DMChannelID != "ch-1" || incoming.MessageID == nil || *incoming.MessageID == "" || len(incoming.Payload) != 0 {
+		t.Fatalf("missing/body-bearing incoming metadata: %+v", incoming)
+	}
+}
+
+func TestSendMessage_IncomingNotificationFailureCannotBroadcastSuccess(t *testing.T) {
+	f := newDMFixture()
+	acceptedFriendsFixture(f)
+	f.notif.CreateDMMessageIfAbsentFn = func(context.Context, *models.Notification) (bool, error) { return false, errors.New("write failed") }
+	events := 0
+	f.hub.BroadcastToUserFn = func(string, ws.Event) { events++ }
+	if _, err := f.svc.SendMessage(context.Background(), "alice", "ch-1", &models.CreateDMMessageRequest{Content: "private"}); err == nil {
+		t.Fatal("notification write failure swallowed")
+	}
+	if events != 0 {
+		t.Fatalf("broadcast after failed transaction: %d", events)
+	}
+}
+
+func TestDMMarkRead_NotificationFailureCannotBroadcastSuccess(t *testing.T) {
+	f := newDMFixture()
+	acceptedFriendsFixture(f)
+	f.notif.MarkDMMessagesReadFn = func(context.Context, string, string, *string) ([]string, error) { return nil, errors.New("ack failed") }
+	events := 0
+	f.hub.BroadcastToUserFn = func(string, ws.Event) { events++ }
+	if err := f.svc.MarkRead(context.Background(), "bob", "ch-1", nil); err == nil {
+		t.Fatal("notification read failure swallowed")
+	}
+	if events != 0 {
+		t.Fatalf("broadcast after failed read transaction: %d", events)
 	}
 }
 
@@ -160,6 +195,34 @@ func TestDMMarkRead_RequiresMembershipAndEchoesDMRead(t *testing.T) {
 	data := events[0].Data.(map[string]any)
 	if data["dm_channel_id"] != "ch-1" || data["user_id"] != "alice" || data["last_read_message_id"] != &mid {
 		t.Errorf("dm_read data = %v", data)
+	}
+}
+
+func TestDMMarkRead_EchoesActualStoredCursorAndRemainingUnread(t *testing.T) {
+	for i, request := range []*string{nil, strPtr("old-request")} {
+		t.Run([]string{"bodyless", "older-source"}[i], func(t *testing.T) {
+			f := newDMFixture()
+			acceptedFriendsFixture(f)
+			marked := false
+			f.dmRead.MarkReadFn = func(context.Context, string, string, *string) error { marked = true; return nil }
+			f.svc.(*dmService).txRunner = passthroughDMTxRunner{repos: repository.DMTxRepos{DM: f.repo, DMRead: f.dmRead, Notification: f.notif,
+				ReadState: func(context.Context, string, string) (*string, int, error) {
+					if !marked {
+						t.Fatal("read state sampled before write")
+					}
+					return strPtr("stored-latest"), 2, nil
+				}}}
+			var event ws.Event
+			f.hub.BroadcastToUserFn = func(_ string, e ws.Event) { event = e }
+			if err := f.svc.MarkRead(context.Background(), "bob", "ch-1", request); err != nil {
+				t.Fatal(err)
+			}
+			data := event.Data.(map[string]any)
+			cursor, ok := data["last_read_message_id"].(*string)
+			if event.Op != ws.OpDMRead || !ok || cursor == nil || *cursor != "stored-latest" || data["unread_count"] != 2 {
+				t.Fatalf("echo did not use stored state: %+v", event)
+			}
+		})
 	}
 }
 

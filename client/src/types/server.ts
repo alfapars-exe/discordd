@@ -8,6 +8,7 @@ export type Server = {
   icon_url: string | null;
   owner_id: string;
   invite_required: boolean;
+  is_community?: boolean;
   e2ee_enabled: boolean;
   livekit_instance_id: string | null;
   afk_timeout_minutes: number;

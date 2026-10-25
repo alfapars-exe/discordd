@@ -13,8 +13,10 @@ const mocks = vi.hoisted(() => ({
     voiceOverlayEnabled: true, voiceOverlayMode: "desktop", voiceOverlaySpeakingOpacity: 100, voiceOverlayIdleOpacity: 35,
     voiceOverlayScale: 100, voiceOverlayPosition: "bottom-left", voiceOverlaySpeakingOnly: false,
     voiceOverlayPinned: false,
-    voiceOverlayQuickActions: false, voiceOverlayClickableActions: false,
-    voiceOverlayActivity: false,
+    voiceOverlayQuickActions: false, voiceOverlayClickableActions: false, voiceOverlayCompatibility: false,
+    voiceOverlayActivity: false, voiceOverlayVideo:false,voiceOverlayStreams:false,
+    voiceOverlayWelcome: false, voiceOverlayGoLive: false,
+    voiceOverlayGameActivityNotifications: false, voiceOverlayNowPlayingNotifications: false,
     voiceOverlayNotifications: false,
     voiceOverlayNotificationActions: false,
     voiceOverlayChat: false, voiceOverlayChatActions: false, voiceOverlayChatCompose: false,
@@ -26,8 +28,10 @@ const mocks = vi.hoisted(() => ({
     setNoiseReductionEngine: vi.fn(), setNoiseSuppressionLevel: vi.fn(), setDeepfilterSuppression: vi.fn(),
     setVoiceOverlayMode: vi.fn(), setVoiceOverlayAvatarSize: vi.fn(), setVoiceOverlayNameDisplay: vi.fn(), setVoiceOverlayMaxParticipants: vi.fn(),
     setVoiceOverlayPinned: vi.fn(), setVoiceOverlayPosition: vi.fn(), setVoiceOverlayScale: vi.fn(),
-    setVoiceOverlayQuickActions: vi.fn(), setVoiceOverlayClickableActions: vi.fn(),
-    setVoiceOverlayActivity: vi.fn(),
+    setVoiceOverlayQuickActions: vi.fn(), setVoiceOverlayClickableActions: vi.fn(), setVoiceOverlayCompatibility: vi.fn(),
+    setVoiceOverlayActivity: vi.fn(),setVoiceOverlayVideo:vi.fn(),setVoiceOverlayStreams:vi.fn(),
+    setVoiceOverlayWelcome: vi.fn(), setVoiceOverlayGoLive: vi.fn(),
+    setVoiceOverlayGameActivityNotifications: vi.fn(), setVoiceOverlayNowPlayingNotifications: vi.fn(),
     setVoiceOverlayNotifications: vi.fn(),
     setVoiceOverlayNotificationActions: vi.fn(),
     setVoiceOverlayChatCompose: vi.fn(),
@@ -58,7 +62,7 @@ vi.mock("./voice/CameraSection", () => ({ default: () => null }));
 beforeEach(() => {
   delete window.electronAPI;
   vi.clearAllMocks();
-  Object.assign(mocks.state, { noiseReduction: true, noiseReductionEngine: "rnnoise", inputMode: "voice_activity", micProfile: "konusma", micSensitivity: 50 });
+  Object.assign(mocks.state, { voiceOverlayCompatibility:false, noiseReduction: true, noiseReductionEngine: "rnnoise", inputMode: "voice_activity", micProfile: "konusma", micSensitivity: 50 });
   mocks.status = null;
   mocks.testError = undefined;
 });
@@ -227,6 +231,17 @@ describe("voice processing settings", () => {
     expect(screen.getByText(en.voiceOverlayActivityDesc)).toHaveTextContent(/does not show live activity/i);
   });
 
+  it("offers independent transient activity and explicitly supported same-game notice preferences", () => {
+    render(<VoiceSettings />);
+    fireEvent.click(screen.getByRole("checkbox", { name: en.voiceOverlayGameActivityNotifications }));
+    expect(mocks.state.setVoiceOverlayGameActivityNotifications).toHaveBeenCalledWith(true);
+    expect(mocks.state.setVoiceOverlayNowPlayingNotifications).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("checkbox", { name: en.voiceOverlayNowPlayingNotifications }));
+    expect(mocks.state.setVoiceOverlayNowPlayingNotifications).toHaveBeenCalledWith(true);
+    expect(screen.getByText(en.voiceOverlayNowPlayingNotificationsDesc)).toHaveTextContent(/explicit CS2\/Steam associations only/i);
+    expect(screen.getByText(en.voiceOverlayNowPlayingNotificationsDesc)).toHaveTextContent(/own activity can remain private/i);
+  });
+
   it("offers read-only unread indicators without decrypted previews", () => {
     render(<VoiceSettings />);
     fireEvent.click(screen.getByRole("checkbox", { name: en.voiceOverlayNotifications }));
@@ -235,13 +250,17 @@ describe("voice processing settings", () => {
     expect(screen.getByText(en.voiceOverlayNotificationsDesc)).toHaveTextContent(/not shown in the web preview/i);
   });
 
-  it("keeps opening the inbox behind a separate opt-in from mute/deafen clicks", () => {
+  it("keeps inbox and exact-source reply preparation behind a separate device-only opt-in", () => {
     render(<VoiceSettings />);
     fireEvent.click(screen.getByRole("checkbox", { name: en.voiceOverlayNotificationActions }));
     expect(mocks.state.setVoiceOverlayNotificationActions).toHaveBeenCalledWith(true);
-    expect(screen.getByText(en.voiceOverlayNotificationActionsDesc)).toHaveTextContent(/does not mark messages read/i);
+    expect(screen.getByText(en.voiceOverlayNotificationActionsDesc)).toHaveTextContent(/reply to the exact message in the main chat/i);
+    expect(screen.getByText(en.voiceOverlayNotificationActionsDesc)).toHaveTextContent(/nothing is sent automatically/i);
+    expect(screen.getByText(en.voiceOverlayNotificationActionsDesc)).toHaveTextContent(/existing drafts are preserved/i);
     expect(screen.getByText(en.voiceOverlayNotificationActionsDesc)).toHaveTextContent(/separate device-only opt-in/i);
     expect(mocks.state.setVoiceOverlayClickableActions).not.toHaveBeenCalled();
+    expect(mocks.state.setVoiceOverlayWelcome).not.toHaveBeenCalled();
+    expect(mocks.state.setVoiceOverlayGoLive).not.toHaveBeenCalled();
   });
 
   it("resets only position and scale after native success", async () => {
@@ -250,7 +269,7 @@ describe("voice processing settings", () => {
     Object.assign(mocks.state, { voiceOverlayPosition: "top-right", voiceOverlayScale: 140, masterVolume: 62, inputVolume: 80 });
     render(<VoiceSettings />);
     fireEvent.click(screen.getByRole("button", { name: en.voiceOverlayResetLayout }));
-    await waitFor(() => expect(mocks.state.setVoiceOverlayPosition).toHaveBeenCalledWith("bottom-left"));
+    await waitFor(() => expect(mocks.state.setVoiceOverlayPosition).toHaveBeenCalledWith("center-left"));
     expect(resetOverlayLayout).toHaveBeenCalledOnce();
     expect(mocks.state.setVoiceOverlayScale).toHaveBeenCalledWith(100);
     expect(mocks.state.setMasterVolume).not.toHaveBeenCalled();
@@ -296,8 +315,12 @@ describe("voice processing settings", () => {
     view.unmount();
     resolveReset(true);
     await Promise.resolve();
-    await waitFor(() => expect(mocks.state.setVoiceOverlayPosition).toHaveBeenCalledWith("bottom-left"));
+    await waitFor(() => expect(mocks.state.setVoiceOverlayPosition).toHaveBeenCalledWith("center-left"));
     expect(mocks.state.setVoiceOverlayScale).toHaveBeenCalledWith(100);
     delete window.electronAPI;
   });
 });
+
+it("offers actual read-only compatibility without losing stored interaction choices",()=>{const view=render(<VoiceSettings/>);fireEvent.click(screen.getByRole("checkbox",{name:en.voiceOverlayCompatibility}));expect(mocks.state.setVoiceOverlayCompatibility).toHaveBeenCalledWith(true);mocks.state.voiceOverlayCompatibility=true;view.rerender(<VoiceSettings/>);for(const label of [en.voiceOverlayPinned,en.voiceOverlayClickableActions,en.voiceOverlayNotificationActions,en.voiceOverlayChatActions,en.voiceOverlayChatCompose])expect(screen.getByRole("checkbox",{name:label})).toBeDisabled();expect(screen.getByRole("status")).toHaveTextContent(en.voiceOverlayCompatibilityActive);expect(en.voiceOverlayCompatibilityDesc).toContain("exclusive-fullscreen");expect(tr.voiceOverlayCompatibilityDesc).toContain("Özel tam ekran");expect(mocks.state.setVoiceOverlayClickableActions).not.toHaveBeenCalled();});
+
+it("offers independent real video/source widgets with truthful current-call descriptions",()=>{render(<VoiceSettings/>);fireEvent.click(screen.getByRole("checkbox",{name:en.voiceOverlayVideo}));expect(mocks.state.setVoiceOverlayVideo).toHaveBeenCalledWith(true);fireEvent.click(screen.getByRole("checkbox",{name:en.voiceOverlayStreams}));expect(mocks.state.setVoiceOverlayStreams).toHaveBeenCalledWith(true);expect(screen.getByText(en.voiceOverlayVideoDesc)).toBeInTheDocument();expect(screen.getByText(en.voiceOverlayStreamsDesc)).toBeInTheDocument();expect(en.voiceOverlayStreamsDesc).toContain("already watching");expect(tr.voiceOverlayStreamsDesc).toContain("zaten izlediğin");});

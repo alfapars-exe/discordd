@@ -38,7 +38,7 @@ type eventLog struct {
 }
 
 func (l *eventLog) hub() *testutil.MockBroadcaster {
-	return &testutil.MockBroadcaster{BroadcastToServerFn: func(_ string, e ws.Event) {
+	return &testutil.MockBroadcaster{BroadcastToUsersFn: func(_ []string, e ws.Event) {
 		l.mu.Lock()
 		l.events = append(l.events, e)
 		l.mu.Unlock()
@@ -72,6 +72,7 @@ func newConcurrencyTestService(t *testing.T, log *eventLog, play func(*botInstan
 			return nil
 		},
 	}
+	configureMusicAudienceFixture(svc, concTestChannel, concTestServer)
 	t.Cleanup(func() {
 		svc.mu.RLock()
 		bots := make([]*botInstance, 0, len(svc.bots))
@@ -456,6 +457,7 @@ func TestGetOrCreateBot_ExplicitStopDuringConnectIsNotUndone(t *testing.T) {
 func TestStopBot_DoesNotRemoveReplacement(t *testing.T) {
 	log := &eventLog{}
 	svc := &musicBotService{bots: map[string]*botInstance{}, hub: log.hub()}
+	configureMusicAudienceFixture(svc, concTestChannel, concTestServer)
 	a := &botInstance{channelID: concTestChannel, serverID: concTestServer}
 	a.stopping.Store(true)
 	b := &botInstance{channelID: concTestChannel, serverID: concTestServer}
@@ -481,6 +483,7 @@ func TestStopBot_DoesNotRemoveReplacement(t *testing.T) {
 func TestStopBot_SendsFinalStateWhenNotReplaced(t *testing.T) {
 	log := &eventLog{}
 	svc := &musicBotService{bots: map[string]*botInstance{}, hub: log.hub()}
+	configureMusicAudienceFixture(svc, concTestChannel, concTestServer)
 	a := &botInstance{channelID: concTestChannel, serverID: concTestServer}
 	svc.bots[concTestChannel] = a
 
@@ -531,10 +534,10 @@ func TestPlayLoop_FailureCapEnqueueGetsFreshBot(t *testing.T) {
 		plays.Add(1)
 		return nil
 	})
-	record := log.hub().BroadcastToServerFn
+	record := log.hub().BroadcastToUsersFn
 	enqueued := make(chan error, 1)
-	svc.hub = &testutil.MockBroadcaster{BroadcastToServerFn: func(serverID string, e ws.Event) {
-		record(serverID, e)
+	svc.hub = &testutil.MockBroadcaster{BroadcastToUsersFn: func(userIDs []string, e ws.Event) {
+		record(userIDs, e)
 		p, ok := e.Data.(models.MusicBotErrorPayload)
 		if !ok || !p.Fatal {
 			return

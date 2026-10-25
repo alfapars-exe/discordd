@@ -225,7 +225,18 @@ func (s *BotService) ValidateBotToken(ctx context.Context, token string) (string
 
 // ListBots returns every bot owned by the given human.
 func (s *BotService) ListBots(ctx context.Context, ownerID string) ([]models.User, error) {
-	return s.repo.ListByOwner(ctx, ownerID)
+	items, err := s.repo.ListByOwner(ctx, ownerID)
+	if err != nil {
+		return nil, err
+	}
+	identities, err := s.repo.OwnedGameIdentityIDs(ctx, ownerID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range items {
+		items[i].IsGameApplication = identities[items[i].ID]
+	}
+	return items, nil
 }
 
 // RevokeAllTokens revokes every token of one owned bot (used to disable a bot).

@@ -1,0 +1,144 @@
+{
+  "phase": "P11",
+  "status": "implemented_unverified",
+  "date": "2026-10-25",
+  "behavior_ids": [
+    "p11.overlay-message"
+  ],
+  "reference_ids": [
+    "R25"
+  ],
+  "scope": [
+    "Bounded partial slice: existing persisted server mention/reply notification rows may prepare a reply to their exact source message in the single main chat. This is not automatic sending, a complete incoming-message dispatcher, or full DM/group notification support.",
+    "The existing shaped notification-action child window is reused. At most three native fixed row regions carry only bounded opaque notification IDs, row indexes and session tokens. No actor, conversation ID, message body or arbitrary route/URL is sent to that child. Strict two-field requests require an exact physical row hit and a one-shot expiring confirmation from the trusted main frame.",
+    "The main renderer resolves immutable account/session/server/channel/message/actor bindings from its existing authenticated feed. It checks current block/ignore/mute state, fresh member and channel overrides, thread parent ACL, send/read/view rights and source membership before navigation and again after asynchronous source loading.",
+    "The existing message-window loading/decryption path is reused with an optional backwards-compatible caller-lifetime guard. Source reply selection is discarded on auth, navigation, source, ACL, block/ignore/mute/spam, crypto-device or message lifetime changes. Unknown or undecryptable encrypted bodies are never quoted into a draft.",
+    "Existing composer text and files remain in their account/conversation draft. A different reply, in-flight send, group edit, active inline message edit or concurrent draft revision returns a conflict instead of being overwritten. The source notification is marked read only after the exact message opened and reply preparation succeeded.",
+    "Canonical P3 shouldSuppressMessagePreview is reused for filter OR pending decisions in overlay chat previews and reply eligibility. Relationship provenance-only changes invalidate the overlay projection even when the friend-array reference is unchanged. Pending disposition neither exposes message text nor creates a spam/quarantine record through these read-only overlay paths.",
+    "Settings descriptions now distinguish inbox opening from exact-source reply preparation, automatic sending remains absent, and notification actions keep their existing separate device-only opt-in from mute/deafen, welcome and Go Live controls."
+  ],
+  "verification": [
+    {
+      "kind": "targeted_client",
+      "status": "passed",
+      "files": 7,
+      "tests": 88,
+      "includes": [
+        "Exact source preparation and text/file preservation",
+        "Unknown IDs, rejected confirmation, coalesced in-flight clicks and stale account/generation/disconnect/retarget events",
+        "Draft conflict, inline edit and delayed draft revision preservation",
+        "Permission, source, spam/pending, ignore, mute, crypto-device and deleted-message races",
+        "Failed E2EE source decryption and known-thread parent ACL",
+        "Canonical relationship-pending preview redaction and same-array provenance resolution",
+        "Caller-lifetime protection around the existing source-open await"
+      ],
+      "limit": "Focused tests passed before the root final combined regression; these counts are not a claim that the complete client suite is green."
+    },
+    {
+      "kind": "settings_copy_fixture",
+      "status": "passed",
+      "file": "client/src/components/settings/VoiceSettings.audio.test.tsx",
+      "tests": 24,
+      "detail": "After the combined run exposed an obsolete inbox-only copy assertion, the fixture was updated to the truthful reply-preparation/no-auto-send/preserved-draft contract and independent consent checks. This affected suite and scoped ESLint passed."
+    },
+    {
+      "kind": "native_targeted",
+      "status": "passed",
+      "tests": 28,
+      "detail": "Strict subset/session IPC validation; fixed row/gap/edge hit regions; wrong-row/free-field/untrusted-frame rejection; expiry, rotated source session, clipped row and destroyed-child replacement checks."
+    },
+    {
+      "kind": "native_full_windows_host",
+      "status": "passed_with_known_conditional_skip",
+      "total": 170,
+      "passed": 169,
+      "failed": 0,
+      "skipped": 1,
+      "log": "C:/Users/PARS/AppData/Local/Temp/hichat-overlay-notification-reply-native-20261025.txt",
+      "limit": "The existing physical filesystem symlink case is conditional on Windows host privileges. This run does not establish physical Windows symlink or live game-overlay acceptance."
+    },
+    {
+      "kind": "separate_linux_layout_store_symlink",
+      "status": "root_reported_passed",
+      "reported_by": "root",
+      "tests": 9,
+      "failed": 0,
+      "skipped": 0,
+      "detail": "Root separately ran the real layout-store filesystem/symlink tests with cached Node 22 in a read-only, network-disabled Linux environment.",
+      "limit": "This separately reported Linux evidence is not a Windows physical-device result and does not erase the Windows-conditional skip."
+    },
+    {
+      "kind": "static_checks",
+      "status": "passed",
+      "checks": [
+        "Electron TypeScript compilation",
+        "Client TypeScript build",
+        "Scoped ESLint for the owned source/test paths",
+        "git diff --check for the owned paths"
+      ],
+      "detail": "Canonical P3 policy imports were available and the targeted real-policy tests passed; no parallel edits were made to the P3 policy or friend store."
+    }
+  ],
+  "root_final_regression": {
+    "status": "passed",
+    "files": 356,
+    "tests": 3465,
+    "log": "C:/Users/PARS/AppData/Local/Temp/hichat-spam-notification-final-20261025.log",
+    "limit": "Automated client run only; physical Windows/game/two-client acceptance remains open."
+  },
+  "open": [
+    "Real Windows notification-row hit regions, DPI/monitor placement, focus transfer and game-overlay interaction",
+    "Two real clients observing source deletion, read synchronization, membership/ACL revocation, blocking/ignoring and E2EE recovery while preparing a reply",
+    "Complete ordinary incoming DM/group notification dispatch and remaining P11 message-notification acceptance",
+    "The remaining P0-P11 integrated acceptance and subsequent release/package validation"
+  ],
+  "owned_paths": [
+    "client/src/components/layout/AppLayout.tsx",
+    "client/src/components/settings/VoiceSettings.audio.test.tsx",
+    "client/src/components/voice/VoiceOverlayContent.tsx",
+    "client/src/components/voice/VoiceOverlayContent.test.tsx",
+    "client/src/hooks/useOpenAtMessage.ts",
+    "client/src/hooks/useOpenAtMessage.test.ts",
+    "client/src/hooks/useOverlayChat.ts",
+    "client/src/hooks/useOverlayChat.test.tsx",
+    "client/src/hooks/useOverlayNotificationReply.ts",
+    "client/src/hooks/useOverlayNotificationReply.test.tsx",
+    "client/src/hooks/useOverlayNotifications.ts",
+    "client/src/hooks/useOverlayNotifications.test.tsx",
+    "client/src/utils/overlayNotificationAccess.ts",
+    "client/src/utils/overlayNotificationReply.ts",
+    "client/src/utils/overlayNotificationReply.test.ts",
+    "client/src/types/electron.d.ts",
+    "client/src/i18n/locales/en/common.json",
+    "client/src/i18n/locales/tr/common.json",
+    "client/src/i18n/locales/en/settings.json",
+    "client/src/i18n/locales/tr/settings.json",
+    "electron/ipc-handlers.ts",
+    "electron/overlay-action-regions.ts",
+    "electron/overlay-action-regions.test.ts",
+    "electron/preload.ts",
+    "electron/voice-overlay-contract.ts",
+    "electron/voice-overlay-contract.test.ts",
+    "electron/voice-overlay-window.test.ts",
+    "electron/voice-overlay.ts",
+    "implementation/verification/p11-overlay-notification-reply-2026-10-25.json"
+  ],
+  "release": "No commit, push, merge, production deployment or Windows update publication was performed by this slice. Overall goal remains incomplete.",
+  "ci_follow_up": [
+    {
+      "source": "6077140b",
+      "run": 40182993017,
+      "result": "Security scan rejected nonempty test innerHTML assignment; replaced fixture with createElement/value/append and cleanup replaceChildren, no scanner exception.16 affected tests and ESLint passed; fix339e1309."
+    },
+    {
+      "source": "339e1309",
+      "run": 40183334813,
+      "result": "Security scan passed; client full test failed unrelated GeneralSettings late diagnostic test: findByRole found a still-disabled start button before initial status timer. Test now waits until enabled and asserts start called before unmount; deferred late return is resolved in act.9 affected tests and ESLint passed; fixdb745af8. Final exact-source CI remains required."
+    }
+  ],
+  "production_build": {
+    "result": "passed",
+    "log": "C:/Users/PARS/AppData/Local/Temp/hichat-spam-notification-build-20261025.log",
+    "limit": "Built before subsequent test-only fixture corrections; no application source changed in those corrections."
+  }
+}

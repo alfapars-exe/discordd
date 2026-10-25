@@ -36,10 +36,10 @@ services:
       # is a breaking change deferred indefinitely (it requires every
       # operator to mv the file inside the volume before restarting).
       - DATABASE_PATH=/data/mqvi.db
-      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required (run: openssl rand -hex 32)}
+      - "JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required (run: openssl rand -hex 32)}"
       - JWT_ACCESS_EXPIRY_MINUTES=1440
       - JWT_REFRESH_EXPIRY_DAYS=7
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY is required (run: openssl rand -hex 32)}
+      - "ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY is required (run: openssl rand -hex 32)}"
       - LIVEKIT_URL=ws://livekit:7880
       - LIVEKIT_API_KEY=${LIVEKIT_API_KEY:?LIVEKIT_API_KEY is required}
       - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET:?LIVEKIT_API_SECRET is required}
@@ -58,7 +58,7 @@ services:
     # ICE config defaults) and an unattended `docker-compose pull`
     # could silently swap in an incompatible build. Bump this tag
     # deliberately after testing the corresponding client SDK.
-    image: livekit/livekit-server:v1.8.4
+    image: livekit/livekit-server:v1.9.12
     ports:
       - "7880:7880"     # WebSocket signaling
       - "7881:7881"     # WebRTC over TCP

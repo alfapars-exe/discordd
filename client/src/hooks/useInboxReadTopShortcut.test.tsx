@@ -19,6 +19,8 @@ import { executeInboxShortcut } from "./useInboxShortcutAction";
 import { useInboxReadTopShortcut } from "./useInboxReadTopShortcut";
 import { useAuthStore } from "../stores/authStore";
 import { useDMStore } from "../stores/dmStore";
+import {getAuthGeneration,clearTokens} from "../api/client";
+import {useToastStore} from "../stores/toastStore";
 import { useUIStore } from "../stores/uiStore";
 import { useShortcutCaptureStore } from "../stores/shortcutCaptureStore";
 
@@ -94,7 +96,7 @@ describe("Inbox top unread shortcut", () => {
     markDMReadMock.mockImplementation(() => new Promise((resolve) => { resolveMark = resolve; }));
 
     expect(executeInboxShortcut("inbox-read-top", keyEvent())).toBe(true);
-    expect(markDMReadMock).toHaveBeenCalledExactlyOnceWith("request", "request-last");
+    expect(markDMReadMock).toHaveBeenCalledExactlyOnceWith("request", "request-last",expect.objectContaining({timeoutMs:15000,isCurrent:expect.any(Function)}));
     expect(fetchChannels).not.toHaveBeenCalled();
     expect(useDMStore.getState().acceptDMRequest).not.toHaveBeenCalled();
     expect(useUIStore.getState().destination.type).toBe("inbox");
@@ -164,7 +166,7 @@ describe("Inbox top unread shortcut", () => {
     let resolveMark!: (result: { success: boolean; data?: { message: string } }) => void;
     markDMReadMock.mockImplementation(() => new Promise((resolve) => { resolveMark = resolve; }));
     expect(executeInboxShortcut("inbox-read-top", keyEvent())).toBe(true);
-    useAuthStore.setState({ user: { id: "new-account" } as NonNullable<ReturnType<typeof useAuthStore.getState>["user"]> });
+    act(()=>useAuthStore.setState({ user: { id: "new-account" } as NonNullable<ReturnType<typeof useAuthStore.getState>["user"]> }));
     await act(async () => {
       resolveMark({ success: true, data: { message: "read" } });
       await Promise.resolve();
@@ -213,4 +215,29 @@ describe("Inbox top unread shortcut", () => {
     expect(markDMReadMock).not.toHaveBeenCalled();
     editor.remove();
   });
+});
+
+it("releases a timed-out top-read lock, reports failure and permits deliberate retry",async()=>{
+ const unread=row("retry-dm",1,"retry-message");setupRows([],[unread]);
+ const toast=vi.spyOn(useToastStore.getState(),"addToast");
+ let finish!:(value:unknown)=>void;markDMReadMock.mockReturnValueOnce(new Promise(resolve=>{finish=resolve;}));
+ renderHook(()=>useInboxReadTopShortcut(true,"panel-a",[],[unread]));
+ expect(executeInboxShortcut("inbox-read-top",keyEvent())).toBe(true);
+ expect(executeInboxShortcut("inbox-read-top",keyEvent())).toBe(false);
+ const options=markDMReadMock.mock.calls[0][2];expect(options.timeoutMs).toBe(15000);expect(options.isCurrent()).toBe(true);
+ await act(async()=>{finish({success:false,isTimeout:true});await Promise.resolve();});
+ expect(useDMStore.getState().fetchChannels).not.toHaveBeenCalled();expect(useDMStore.getState().dmUnreadCounts["retry-dm"]).toBe(1);
+ expect(toast).toHaveBeenCalledWith("error","somethingWentWrong");
+ markDMReadMock.mockResolvedValueOnce({success:true});expect(executeInboxShortcut("inbox-read-top",keyEvent())).toBe(true);
+ await act(async()=>{await Promise.resolve();await Promise.resolve();});expect(markDMReadMock).toHaveBeenCalledTimes(2);expect(useDMStore.getState().fetchChannels).toHaveBeenCalledOnce();toast.mockRestore();
+});
+it.each(["navigation-return","account","generation","top-source","unmount"])("invalidates pending read transport on %s and drops late acknowledgement",async kind=>{
+ const unread=row("source",1,"anchor");setupRows([],[unread]);
+ const toast=vi.spyOn(useToastStore.getState(),"addToast");
+ let finish!:(value:unknown)=>void;markDMReadMock.mockReturnValueOnce(new Promise(resolve=>{finish=resolve;}));
+ const view=renderHook(()=>useInboxReadTopShortcut(true,"panel-a",[],[unread]));
+ expect(executeInboxShortcut("inbox-read-top",keyEvent())).toBe(true);const current=markDMReadMock.mock.calls[0][2].isCurrent;expect(current()).toBe(true);
+ act(()=>{if(kind==="navigation-return")useUIStore.setState(state=>({navigationRevision:state.navigationRevision+2}));if(kind==="account")useAuthStore.setState({user:{id:"other"} as NonNullable<ReturnType<typeof useAuthStore.getState>["user"]>});if(kind==="generation"){const generation=getAuthGeneration();clearTokens();expect(getAuthGeneration()).toBeGreaterThan(generation);}if(kind==="top-source")useDMStore.setState({channels:[row("source",2,"new-anchor").dm]});});
+ if(kind==="unmount")view.unmount();expect(current()).toBe(false);
+ await act(async()=>{finish({success:true});await Promise.resolve();await Promise.resolve();});expect(useDMStore.getState().fetchChannels).not.toHaveBeenCalled();expect(toast).not.toHaveBeenCalled();toast.mockRestore();
 });

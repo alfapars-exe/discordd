@@ -1,0 +1,16 @@
+{
+  "phase": "P9",
+  "status": "existing",
+  "scope": "Source audit of four existing partial runtime paths; not acceptance or full implementation.",
+  "rows": {
+    "input-device": "Main LiveKit and P2P use selected microphone capture/replacement with shared processing. Enumeration currently requests permission on settings open, lacks devicechange refresh/error state and application-level unplug recovery. Group SDK path remains separate.",
+    "output-device": "Main LiveKit/mic-test route selected output; new P2P sole remote owner routes before play, preserves volume/deafen and explains unavailable routing. Group direct RoomAudioRenderer still bypasses shared output path.",
+    "microphone-level": "Shared pipeline gain0-200 and real processed meter/mic-test cleanup exist in main/P2P. Group SDK TrackToggle capture bypasses shared processing.",
+    "output-level": "Main LiveKit and new P2P master/personal/mute/deafen playback paths exist. Group audio path and privacy-preserving undeafen behavior remain open; existing toggleDeafen always unmutes, including previously muted microphones."
+  },
+  "verification": "Read-only source/test audit; P2P62focused + final combined359files3513tests/TS/lint/build are in linked receipt. No new physical tests were run for this audit.",
+  "remaining": [
+    "Actual devices, permissions, unplug/replug, two participants, browser autoplay and Windows routing remain unaccepted.",
+    "All four rows intentionally remain existing/partial; no phase or behavior promoted to accepted."
+  ]
+}

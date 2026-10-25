@@ -15,6 +15,7 @@ type Server struct {
 	IconURL           *string   `json:"icon_url"`
 	OwnerID           string    `json:"owner_id"`
 	InviteRequired    bool      `json:"invite_required"`
+	IsCommunity       bool      `json:"is_community"`
 	E2EEEnabled       bool      `json:"e2ee_enabled"`
 	LiveKitInstanceID *string   `json:"livekit_instance_id,omitempty"` // nil = no voice
 	AFKTimeoutMinutes int       `json:"afk_timeout_minutes"`           // 15/30/45/60, default 60
@@ -74,6 +75,7 @@ func (r *CreateServerRequest) Validate() error {
 
 // UpdateServerRequest — nil fields are not updated (partial update).
 type UpdateServerRequest struct {
+	IsCommunity       *bool   `json:"is_community,omitempty"`
 	Name              *string `json:"name"`
 	InviteRequired    *bool   `json:"invite_required"`
 	E2EEEnabled       *bool   `json:"e2ee_enabled"`

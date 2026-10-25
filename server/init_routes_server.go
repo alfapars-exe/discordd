@@ -168,6 +168,7 @@ func (d *routeDeps) registerVoiceMusicRoutes() {
 	// inside the handler (PermSpeak for play/skip/pause/resume,
 	// PermManageChannels for stop) since this lives "below" the channel.
 	d.mux.Handle("POST /api/servers/{serverId}/channels/{channelId}/music/play", d.authServer(d.h.Music.Play))
+	d.mux.Handle("POST /api/servers/{serverId}/channels/{channelId}/music/control-session", d.authServer(d.h.Music.AdoptControl))
 	d.mux.Handle("GET /api/servers/{serverId}/channels/{channelId}/music/search", d.authServer(d.h.Music.Search))
 	d.mux.Handle("POST /api/servers/{serverId}/channels/{channelId}/music/skip", d.authServer(d.h.Music.Skip))
 	d.mux.Handle("POST /api/servers/{serverId}/channels/{channelId}/music/pause", d.authServer(d.h.Music.Pause))

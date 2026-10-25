@@ -28,13 +28,13 @@ it("does not let a pending authoritative snapshot erase a newer websocket unread
 
 it("applies a fresh empty server snapshot when no newer local event occurred", async () => {
   api.getUnreadCounts.mockResolvedValue({ success: true, data: [] });
-  await useReadStateStore.getState().fetchUnreadCounts("s1", { isCurrent: () => true });
+  expect(await useReadStateStore.getState().fetchUnreadCounts("s1", { isCurrent: () => true })).toBe(true);
   expect(useReadStateStore.getState().unreadCounts.c1).toBeUndefined();
 });
 
 it("ignores an account or destination-scoped snapshot after its guard expires", async () => {
   api.getUnreadCounts.mockResolvedValue({ success: true, data: [] });
-  await useReadStateStore.getState().fetchUnreadCounts("s1", { isCurrent: () => false });
+  expect(await useReadStateStore.getState().fetchUnreadCounts("s1", { isCurrent: () => false })).toBe(false);
   expect(useReadStateStore.getState().unreadCounts.c1).toBe(2);
 });
 
@@ -46,6 +46,12 @@ it("does not let an older concurrent HTTP snapshot overwrite the latest snapshot
   pending[1]({ success: true, data: [{ channel_id: "c1", unread_count: 5 }] });
   await newer;
   pending[0]({ success: true, data: [{ channel_id: "c1", unread_count: 1 }] });
-  await older;
+  expect(await older).toBe(false);
   expect(useReadStateStore.getState().unreadCounts.c1).toBe(5);
+});
+
+it("reports unsuccessful refreshes without erasing the last known unread counts", async () => {
+  api.getUnreadCounts.mockResolvedValue({ success: false });
+  expect(await useReadStateStore.getState().fetchUnreadCounts("s1")).toBe(false);
+  expect(useReadStateStore.getState().unreadCounts.c1).toBe(2);
 });

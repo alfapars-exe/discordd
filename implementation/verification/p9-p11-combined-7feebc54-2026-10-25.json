@@ -1,0 +1,15 @@
+{
+  "status": "automated_gates_verified_runtime_acceptance_open",
+  "source": "Immutable git archive7feebc54; excludes foreign logging and in-progress live widget integration",
+  "client": "410files4049tests allPASS83.41s; session63869 exit0",
+  "build": "Actual tsc-b and production Vite build PASS1.42s; session48158 exit0; existing chunk/dynamic-import warnings remain",
+  "electron": "Actual TypeScript compile and195tests:194PASS1existingSKIP0fail1006.9ms exit0",
+  "lint": "Exact clean client npm run lint exit0:0errors5existingwarnings; session63262",
+  "api": "Separate immutable3a353c35 local API executable ready200, consistent SQLite backup and unchanged credentials/keys.8 event booleans persist/read; invalid type400 and account mismatch409 rejected. See p9-voice-event-api-2026-10-25.json",
+  "server": "Exact7feebc54 full go test ./... with Go1.26.10 PASS; repository104.007s,services51.676s,ws5.373s,root12.060s; session13313 exit0",
+  "remaining": [
+    "Native broker8010864c and new source/receiver integration require subsequent combined exact-source gates.",
+    "Physical/native focus, video, selected output and game acceptance remain open; generated fixtures and unit tests do not replace these gates.",
+    "No new installer, updater publication or production deployment performed."
+  ]
+}

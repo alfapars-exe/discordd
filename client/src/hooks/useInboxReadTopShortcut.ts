@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { getAuthGeneration } from "../api/client";
 import { markDMRead } from "../api/dm";
@@ -32,6 +32,8 @@ export function useInboxReadTopShortcut(
   const ownerId = useAuthStore((state) => state.user?.id);
   const authGeneration = getAuthGeneration();
   const pendingKeys = useRef(new Set<string>());
+  const mounted=useRef(true);
+  useEffect(()=>{mounted.current=true;return ()=>{mounted.current=false;};},[]);
   // A panel can briefly survive an auth-store update while its rows still
   // belong to the previous account. Do not rebind this mounted listener to a
   // new owner; logout resets navigation and the next Inbox mount gets a fresh
@@ -53,16 +55,25 @@ export function useInboxReadTopShortcut(
     const liveChannel = liveState.channels.find((channel) => channel.id === channelId);
     if (!liveChannel || (liveState.dmUnreadCounts[channelId] ?? 0) <= 0 || liveChannel.last_message?.id !== messageId) return false;
 
+    const navigationRevision=useUIStore.getState().navigationRevision;
+    const activePanelId=useUIStore.getState().activePanelId;
+    const activeTabId=useUIStore.getState().panels[activePanelId]?.activeTabId;
     const requestKey = JSON.stringify([ownerId, authGeneration, panelId ?? "", channelId, messageId]);
     if (pendingKeys.current.has(requestKey)) return false;
     pendingKeys.current.add(requestKey);
-    const isCurrent = () => useAuthStore.getState().user?.id === ownerId &&
-      getAuthGeneration() === authGeneration && isActiveInbox(panelId);
+    const isCurrent = () => {
+      const navigation=useUIStore.getState();
+      const source=useDMStore.getState().channels.find(channel=>channel.id===channelId);
+      return mounted.current && useAuthStore.getState().user?.id===ownerId &&
+        getAuthGeneration()===authGeneration && navigation.navigationRevision===navigationRevision &&
+        navigation.activePanelId===activePanelId && navigation.panels[activePanelId]?.activeTabId===activeTabId &&
+        isActiveInbox(panelId) && source?.last_message?.id===messageId;
+    };
 
     void (async () => {
       try {
         if (!isCurrent()) return;
-        const response = await markDMRead(channelId, messageId);
+        const response = await markDMRead(channelId, messageId,{timeoutMs:15_000,isCurrent});
         if (!isCurrent()) return;
         if (!response.success) {
           useToastStore.getState().addToast("error", t("somethingWentWrong"));

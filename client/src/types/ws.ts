@@ -65,6 +65,7 @@ export interface WSPayloadMap {
     game_activity_epoch?: string;
   };
   game_activity_update: import("../stores/gameActivityStore").GameActivityUpdate;
+  game_join_offer_state: import("../stores/gameJoinStore").GameJoinOfferState;
   preferences_changed: { user_id: string };
   presence_update: { user_id: string; status: UserStatus; is_auto?: boolean };
   member_join: MemberWithRoles;
@@ -226,7 +227,7 @@ export interface WSPayloadMap {
   voice_force_disconnect: unknown;
   voice_afk_kick: { channel_name: string; server_name: string };
   voice_replaced: unknown;
-  voice_passphrase_rotated: { channel_id: string; passphrase: string };
+  voice_passphrase_rotated: { channel_id: string; passphrase: string; key_index?: number; key_epoch?: number; key_context?: string };
   music_bot_state: { channel_id?: string; state?: MusicBotChannelState };
   // `reason` stays `string` on the wire: it is untrusted and a newer server
   // may send a code this client doesn't know. Narrow with

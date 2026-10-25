@@ -1,3 +1,4 @@
+import { dmSourceSequence } from "../utils/dmSourceOrder";
 import type {DMMessage} from "../types/dm";
 import type {E2EEPayload} from "./e2eePayload";
 import * as storage from "./keyStorage";
@@ -12,7 +13,7 @@ export async function dmMessageCacheTag(message:DMMessage):Promise<string>{
 
 export async function cacheDMMessage(message:DMMessage,payload:E2EEPayload,isCurrent:()=>boolean):Promise<void>{
   if(!isCurrent())return;const tag=await dmMessageCacheTag(message);if(!isCurrent())return;
-  await storage.cacheDecryptedMessage({messageId:message.id,channelId:"",dmChannelId:message.dm_channel_id,content:payload.content,fileKeys:payload.file_keys,encryptedSourceTag:tag,timestamp:new Date(message.created_at).getTime()},isCurrent);
+  await storage.cacheDecryptedMessage({messageId:message.id,channelId:"",dmChannelId:message.dm_channel_id,senderUserId:message.user_id,sourceSequence:dmSourceSequence(message.source_sequence)?.toString(),applicationId:message.application_id === message.user_id ? message.application_id : undefined,content:payload.content,fileKeys:payload.file_keys,encryptedSourceTag:tag,timestamp:new Date(message.created_at).getTime()},isCurrent);
 }
 
 export async function readDMMessageCache(message:DMMessage,isCurrent:()=>boolean):Promise<E2EEPayload|null>{

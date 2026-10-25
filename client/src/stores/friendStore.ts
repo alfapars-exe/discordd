@@ -10,14 +10,24 @@ import type { FriendshipWithUser, UserStatus } from "../types";
 import {useBlockStore} from "./blockStore";
 import {useAuthStore} from "./authStore";
 import {getAuthGeneration} from "../api/client";
+import {getAuthSessionSnapshot,subscribeAuthOwnerChanges,subscribeAuthGenerationChanges} from "../api/authSessionEvents";
 
 const EMPTY_FRIENDS: FriendshipWithUser[] = [];
 const EMPTY_INCOMING: FriendshipWithUser[] = [];
 const EMPTY_OUTGOING: FriendshipWithUser[] = [];
 let relationshipRevision=0,friendRead=0,requestRead=0;
-function friendSessionGuard(){
+function resetFriendScope(ownerId:string|null,authGeneration:number):void{
+  ++relationshipRevision;++friendRead;++requestRead;
+  useFriendStore.setState({ownerId,authGeneration,friendsStatus:"idle",friends:EMPTY_FRIENDS,incoming:EMPTY_INCOMING,outgoing:EMPTY_OUTGOING,isLoading:false});
+}
+function friendSessionGuard():()=>boolean{
   const owner=useAuthStore.getState().user?.id,generation=getAuthGeneration();
-  return ()=>Boolean(owner)&&owner===useAuthStore.getState().user?.id&&generation===getAuthGeneration();
+  if(useFriendStore.getState().ownerId!==(owner??null)||useFriendStore.getState().authGeneration!==generation)resetFriendScope(owner??null,generation);
+  return ()=>Boolean(owner)&&owner===useAuthStore.getState().user?.id&&generation===getAuthGeneration()&&useFriendStore.getState().ownerId===owner&&useFriendStore.getState().authGeneration===generation;
+}
+function friendEventCurrent():boolean{
+  const state=useFriendStore.getState();
+  return !!state.ownerId&&state.ownerId===useAuthStore.getState().user?.id&&state.authGeneration===getAuthGeneration();
 }
 
 export type SendFriendRequestResult = {
@@ -27,7 +37,11 @@ export type SendFriendRequestResult = {
   friendship?: FriendshipWithUser;
 };
 
+export type FriendsStatus="idle"|"loading"|"ready"|"error";
 type FriendState = {
+  ownerId:string|null;
+  authGeneration:number;
+  friendsStatus:FriendsStatus;
   friends: FriendshipWithUser[];
   incoming: FriendshipWithUser[];
   outgoing: FriendshipWithUser[];
@@ -51,6 +65,9 @@ type FriendState = {
 };
 
 export const useFriendStore = create<FriendState>((set, get) => ({
+  ownerId:getAuthSessionSnapshot().ownerId,
+  authGeneration:getAuthSessionSnapshot().generation,
+  friendsStatus:"idle",
   friends: EMPTY_FRIENDS,
   incoming: EMPTY_INCOMING,
   outgoing: EMPTY_OUTGOING,
@@ -61,24 +78,27 @@ export const useFriendStore = create<FriendState>((set, get) => ({
   fetchFriends: async () => {
     const current=friendSessionGuard(),revision=relationshipRevision,request=++friendRead;
     if(!current())return;
-    set({ isLoading: true });
+    set({ isLoading: true,friendsStatus:"loading" });
+    let applied=false;
+    const sourceCurrent=()=>current()&&revision===relationshipRevision&&request===friendRead;
     try {
-      const res = await friendsApi.listFriends({expectedUserId:useAuthStore.getState().user?.id,isCurrent:current});
-      if (current()&&revision===relationshipRevision&&request===friendRead&&res.success && res.data) {
-        set({ friends: res.data.filter(row=>!useBlockStore.getState().isBlocked(row.user_id)) });
+      const res = await friendsApi.listFriends({expectedUserId:useAuthStore.getState().user?.id,isCurrent:sourceCurrent});
+      if (current()&&revision===relationshipRevision&&request===friendRead&&res.success && Array.isArray(res.data)&&res.data.every(row=>row&&typeof row.user_id==="string"&&row.user_id.length>0&&row.status==="accepted")) {
+        set({ friendsStatus:"ready",friends: res.data.filter(row=>!useBlockStore.getState().isBlocked(row.user_id)) });applied=true;
       }
     } catch {
       // Keep the last confirmed list when a refresh fails.
     } finally {
-      if(current()&&request===friendRead)set({ isLoading: false });
+      if(current()&&request===friendRead)set({ isLoading: false,...(!applied?{friendsStatus:"error" as const}:{}) });
     }
   },
 
   fetchRequests: async () => {
     const current=friendSessionGuard(),revision=relationshipRevision,request=++requestRead;
     if(!current())return;
+    const sourceCurrent=()=>current()&&revision===relationshipRevision&&request===requestRead;
     try {
-      const res = await friendsApi.listRequests({expectedUserId:useAuthStore.getState().user?.id,isCurrent:current});
+      const res = await friendsApi.listRequests({expectedUserId:useAuthStore.getState().user?.id,isCurrent:sourceCurrent});
       if (current()&&revision===relationshipRevision&&request===requestRead&&res.success && res.data) {
         set({
           incoming: res.data.incoming.filter(row=>!useBlockStore.getState().isBlocked(row.user_id)),
@@ -169,6 +189,7 @@ export const useFriendStore = create<FriendState>((set, get) => ({
   // ─── WS Event Handlers ───
 
   handleFriendRequestCreate: (data: FriendshipWithUser) => {
+    if(!friendEventCurrent())return;
     if(useBlockStore.getState().isBlocked(data.user_id))return;
     ++relationshipRevision;
     set((s) => ({
@@ -177,6 +198,7 @@ export const useFriendStore = create<FriendState>((set, get) => ({
   },
 
   handleFriendRequestAccept: (data: FriendshipWithUser) => {
+    if(!friendEventCurrent())return;
     if(useBlockStore.getState().isBlocked(data.user_id))return;
     ++relationshipRevision;
     // A late event may describe a friendship already removed by a reverse
@@ -186,6 +208,7 @@ export const useFriendStore = create<FriendState>((set, get) => ({
   },
 
   handleFriendRequestDecline: (data: { id: string; user_id: string }) => {
+    if(!friendEventCurrent())return;
     ++relationshipRevision;
     set((s) => ({
       incoming: s.incoming.filter((r) => r.id !== data.id),
@@ -194,6 +217,7 @@ export const useFriendStore = create<FriendState>((set, get) => ({
   },
 
   handleFriendRemove: (data: { user_id: string }) => {
+    if(!friendEventCurrent())return;
     ++relationshipRevision;
     set((s) => ({
       friends: s.friends.filter((f) => f.user_id !== data.user_id),
@@ -203,6 +227,7 @@ export const useFriendStore = create<FriendState>((set, get) => ({
   },
 
   handlePresenceUpdate: (userId, status) => {
+    if(!friendEventCurrent())return;
     set((s) => {
       const patch = (list: FriendshipWithUser[]) =>
         list.some((f) => f.user_id === userId && f.user_status !== status)
@@ -218,3 +243,8 @@ export const useFriendStore = create<FriendState>((set, get) => ({
     });
   },
 }));
+
+// Credential-free observers reset before a newly authenticated account can use
+// retained relationship data, including same-account reauthentication.
+subscribeAuthOwnerChanges(owner=>resetFriendScope(owner,getAuthSessionSnapshot().generation));
+subscribeAuthGenerationChanges(generation=>resetFriendScope(getAuthSessionSnapshot().ownerId,generation));

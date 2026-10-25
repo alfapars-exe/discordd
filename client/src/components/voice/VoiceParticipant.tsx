@@ -1,3 +1,4 @@
+import AuthorizedVideoTrack from "../../video/AuthorizedVideoTrack";
 /**
  * VoiceParticipant — Single participant tile in the voice room.
  *
@@ -13,7 +14,7 @@
  */
 
 import { useState, useCallback } from "react";
-import { useParticipantTracks, VideoTrack } from "@livekit/components-react";
+import { useParticipantTracks } from "@livekit/components-react";
 import { Track } from "livekit-client";
 import type { Participant } from "livekit-client";
 import { useVoiceStore } from "../../stores/voiceStore";
@@ -131,7 +132,7 @@ function VoiceParticipant({
     // viewer's screen. See CameraView.tsx for the trade-off rationale (held
     // text reads reversed on remote screens; product owner accepted).
     avatarContent = (
-      <VideoTrack
+      <AuthorizedVideoTrack
         trackRef={cameraTrackRef}
         style={{
           width: "100%",

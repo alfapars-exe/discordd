@@ -23,6 +23,8 @@
  * (utils/entrancePreset.ts), which schedules several notes on one context.
  */
 
+import { awaitAudioStep } from "../audio/audioOperation";
+import { usePreferencesStore } from "../stores/preferencesStore";
 import { useVoiceStore } from "../stores/voiceStore";
 import { useAuthStore } from "../stores/authStore";
 import { useAccessibilityStore } from "../stores/accessibilityStore";
@@ -34,6 +36,19 @@ let audioCtx: AudioContext | null = null;
 type SinkAudioContext = AudioContext & { setSinkId?: (sinkId: string) => Promise<void> };
 type ActiveTone = { osc: OscillatorNode; gain: GainNode; volume: number; followsMaster: boolean; start: number; end: number; cancel: () => void };
 const activeTones = new Set<ActiveTone>();
+const requests = new Set<{ authorized: () => boolean; cancel: () => void }>();
+const effectsAllowed = () => useVoiceStore.getState().soundsEnabled && !getNotificationPreferences().muteAllSounds;
+let notificationRevision = 0;
+const voiceEventRevisions = new Map<string, number>();
+const notificationsAllowed = () => effectsAllowed() && getNotificationPreferences().messageSound
+  && !["dnd", "offline"].includes(useAuthStore.getState().manualStatus)
+  && useAccessibilityStore.getState().notificationSoundVolume > 0;
+function cancelUnauthorized(): void {
+  if (!effectsAllowed()) { cancelTones(); return; }
+  if (!notificationsAllowed()) notificationRevision++;
+  for(const event of VOICE_SOUND_EVENTS)if(getNotificationPreferences()[VOICE_SOUND_PREFERENCES[event]]===false)voiceEventRevisions.set(event,(voiceEventRevisions.get(event)??0)+1);
+  for (const request of [...requests]) if (!request.authorized()) request.cancel();
+}
 let routedDevice = "";
 let requestedDevice = "";
 let routeQueue: Promise<void> = Promise.resolve();
@@ -45,7 +60,7 @@ let listenersInstalled = false;
 
 function cancelTones(): void {
   eventGeneration++;
-  for (const tone of [...activeTones]) tone.cancel();
+  for (const request of [...requests]) request.cancel();
 }
 
 function effectiveVolume(tone: ActiveTone): number {
@@ -88,22 +103,28 @@ function routeToDevice(ctx: AudioContext, deviceId: string): Promise<boolean> {
       return;
     }
     try {
-      await sinkContext.setSinkId(deviceId);
+      await awaitAudioStep(sinkContext.setSinkId(deviceId), "Event sound output");
       if (revision === routeRevision) {
         routedDevice = deviceId;
         succeeded = true;
       }
     } catch (error) {
+      // A timed-out native route can still complete later. Never reuse that
+      // context for a newer device choice, even if this route was superseded.
+      if (error instanceof Error && error.message === "Event sound output timed out") {
+        if (ctx === audioCtx) closeAudioContext();
+        return;
+      }
       if (revision !== routeRevision || ctx !== audioCtx) return;
       if (deviceId && (error as { name?: string })?.name === "NotFoundError") {
         try {
-          await sinkContext.setSinkId("");
+          await awaitAudioStep(sinkContext.setSinkId(""), "Event sound default output");
           if (revision === routeRevision) {
             routedDevice = "";
             succeeded = true;
           }
-        } catch { /* unavailable fallback: suppress this sound */ }
-      }
+        } catch { if (ctx === audioCtx) closeAudioContext(); }
+      } else if (ctx === audioCtx) closeAudioContext();
     }
   }).catch(() => {});
   return routeQueue.then(() => succeeded);
@@ -122,6 +143,7 @@ function ensureStoreListeners(): void {
     const session = `${state.currentVoiceChannelId ?? ""}:${state._joinGeneration}`;
     if ((lastVoiceSession && session !== lastVoiceSession) || (previous.currentVoiceChannelId && !state.currentVoiceChannelId)) cancelTones();
     lastVoiceSession = session;
+    cancelUnauthorized();
     refreshToneVolumes();
     const nextDevice = state.outputDevice === "default" ? "" : state.outputDevice || "";
     if ((nextDevice !== routedDevice || nextDevice !== requestedDevice) && audioCtx) {
@@ -141,7 +163,10 @@ function ensureStoreListeners(): void {
     const userId = state.user?.id ?? null;
     if (lastUserId !== undefined && lastUserId !== userId) cancelTones();
     lastUserId = userId;
+    cancelUnauthorized();
   });
+  usePreferencesStore.subscribe(cancelUnauthorized);
+  useAccessibilityStore.subscribe(cancelUnauthorized);
   subscribeAuthGenerationChanges(cancelTones);
   subscribeAuthOwnerChanges(cancelTones);
 }
@@ -167,10 +192,11 @@ export function closeAudioContext(): void {
   cancelTones();
   routeRevision++;
   if (audioCtx) {
-    audioCtx.close().catch(() => {});
+    void awaitAudioStep(audioCtx.close(), "Event sound context shutdown", undefined, 2000).catch(() => {});
     audioCtx = null;
     routedDevice = "";
     requestedDevice = "";
+    routeQueue = Promise.resolve();
   }
 }
 
@@ -192,28 +218,36 @@ export function playToneAt(
   volume: number,
   waveType: OscillatorType = "sine",
   startOffsetSec = 0,
-  followsMaster = false
+  followsMaster = false,
+  authorized: () => boolean = effectsAllowed
 ): () => void {
   let cancelled = false;
   let startedTone: ActiveTone | null = null;
   const cancel = () => {
     if (cancelled) return;
     cancelled = true;
+    requests.delete(request);
     if (startedTone) {
       activeTones.delete(startedTone);
       try { startedTone.osc.stop(); } catch { /* already stopped */ }
     }
   };
+  const request = { authorized, cancel };
+  if (!authorized()) return cancel;
+  requests.add(request);
   try {
     const ctx = getAudioContext();
 
-    const resumed = ctx.state !== "running" ? ctx.resume() : Promise.resolve();
+    const resumed = ctx.state !== "running" ? awaitAudioStep(ctx.resume(), "Event sound context resume").catch(error => {
+      if (ctx === audioCtx) closeAudioContext();
+      throw error;
+    }) : Promise.resolve();
 
     const selectedDevice = useVoiceStore.getState().outputDevice || "";
     const outputDevice = selectedDevice === "default" ? "" : selectedDevice;
     const playbackGeneration = eventGeneration;
     void Promise.all([resumed, routeToDevice(ctx, outputDevice)]).then(([, routed]) => {
-      if (!routed || cancelled || ctx !== audioCtx || playbackGeneration !== eventGeneration) return;
+      if (!routed || cancelled || ctx !== audioCtx || playbackGeneration !== eventGeneration || !authorized() || ctx.state !== "running") { cancel(); return; }
       const now = ctx.currentTime + Math.max(0, startOffsetSec);
       const osc = ctx.createOscillator();
       osc.type = waveType;
@@ -230,6 +264,7 @@ export function playToneAt(
       osc.start(now);
       osc.stop(now + duration);
       osc.onended = () => {
+        requests.delete(request);
         activeTones.delete(tone);
         osc.disconnect();
         gain.disconnect();
@@ -238,49 +273,46 @@ export function playToneAt(
     return cancel;
   } catch {
     // AudioContext not supported or error — silently continue
+    cancel();
     return cancel;
   }
 }
 
-export function playJoinSound(): void {
-  const { soundsEnabled } = useVoiceStore.getState();
-  if (!soundsEnabled) return;
-
-  playToneAt(350, 600, 0.15, 1, "sine", 0, true);
+export type VoiceSoundEvent = "join" | "leave" | "watchStart" | "watchStop" | "mute" | "unmute" | "deafen" | "undeafen";
+export const VOICE_SOUND_EVENTS: readonly VoiceSoundEvent[] = ["join", "leave", "watchStart", "watchStop", "mute", "unmute", "deafen", "undeafen"];
+export const VOICE_SOUND_PREFERENCES = {join:"voiceJoinSound",leave:"voiceLeaveSound",watchStart:"voiceWatchStartSound",watchStop:"voiceWatchStopSound",mute:"voiceMuteSound",unmute:"voiceUnmuteSound",deafen:"voiceDeafenSound",undeafen:"voiceUndeafenSound"} as const;
+/** Current call effects and explicit previews share exactly the same tone and policy. */
+export function playVoiceEventSound(event: VoiceSoundEvent): void {
+  const revision=voiceEventRevisions.get(event)??0;
+  const authorized = () => revision===(voiceEventRevisions.get(event)??0) && effectsAllowed() && getNotificationPreferences()[VOICE_SOUND_PREFERENCES[event]] !== false;
+  if (!authorized()) return;
+  const notes: Record<VoiceSoundEvent, [number, number, number, OscillatorType]> = {
+    join:[350,600,0.15,"sine"],leave:[400,200,0.12,"sine"],watchStart:[380,500,0.08,"triangle"],watchStop:[480,320,0.1,"triangle"],
+    mute:[520,320,0.09,"sine"],unmute:[320,520,0.09,"sine"],deafen:[300,180,0.12,"triangle"],undeafen:[180,380,0.12,"triangle"],
+  };
+  const [from,to,duration,wave]=notes[event];
+  playToneAt(from,to,duration,1,wave,0,true,authorized);
+  if(event==="watchStart"){
+    const generation=eventGeneration;
+    setTimeout(()=>{if(generation===eventGeneration&&authorized())playToneAt(500,620,0.08,1,"triangle",0,true,authorized)},90);
+  }
 }
-
-export function playLeaveSound(): void {
-  const { soundsEnabled } = useVoiceStore.getState();
-  if (!soundsEnabled) return;
-
-  playToneAt(400, 200, 0.12, 1, "sine", 0, true);
-}
-
-export function playWatchStartSound(): void {
-  const { soundsEnabled } = useVoiceStore.getState();
-  if (!soundsEnabled) return;
-
-  const generation = eventGeneration;
-  playToneAt(380, 500, 0.08, 1, "triangle", 0, true);
-  setTimeout(() => { if (generation === eventGeneration) playToneAt(500, 620, 0.08, 1, "triangle", 0, true); }, 90);
-}
-
-export function playWatchStopSound(): void {
-  const { soundsEnabled } = useVoiceStore.getState();
-  if (!soundsEnabled) return;
-
-  playToneAt(480, 320, 0.1, 1, "triangle", 0, true);
-}
+export function playJoinSound(): void { playVoiceEventSound("join"); }
+export function playLeaveSound(): void { playVoiceEventSound("leave"); }
+export function playWatchStartSound(): void { playVoiceEventSound("watchStart"); }
+export function playWatchStopSound(): void { playVoiceEventSound("watchStop"); }
 
 /** Notification sound — skipped in DND and invisible mode. */
 export function playNotificationSound(): void {
+  const revision = notificationRevision;
+  const authorized = () => revision === notificationRevision && notificationsAllowed();
   const notificationPrefs = getNotificationPreferences();
-  if (notificationPrefs.muteAllSounds || !notificationPrefs.messageSound) return;
+  if (!authorized()) return;
   const manualStatus = useAuthStore.getState().manualStatus;
   if (manualStatus === "dnd" || manualStatus === "offline") return;
 
   const { soundsEnabled } = useVoiceStore.getState();
-  if (!soundsEnabled) return;
+  if (!soundsEnabled || !effectsAllowed()) return;
 
   const pct = useAccessibilityStore.getState().notificationSoundVolume;
   const volume = (Math.max(0, Math.min(100, pct)) / 100) * 0.6;
@@ -290,17 +322,20 @@ export function playNotificationSound(): void {
   const second = pack === "soft" ? 720 : pack === "minimal" ? 760 : 1000;
   const duration = pack === "minimal" ? 0.05 : 0.06;
   const generation = eventGeneration;
-  playToneAt(first, pack === "minimal" ? first : first + 100, duration, volume, pack === "soft" ? "triangle" : "sine", 0, false);
-  if (pack !== "minimal") setTimeout(() => { if (generation === eventGeneration) playToneAt(first + 100, second, duration, volume, pack === "soft" ? "triangle" : "sine", 0, false); }, 70);
+  playToneAt(first, pack === "minimal" ? first : first + 100, duration, volume, pack === "soft" ? "triangle" : "sine", 0, false, authorized);
+  if (pack !== "minimal") setTimeout(() => { if (generation === eventGeneration && authorized()) playToneAt(first + 100, second, duration, volume, pack === "soft" ? "triangle" : "sine", 0, false, authorized); }, 70);
 }
 
 /** Short, non-looping incoming-call preview used by notification settings. */
 export function previewIncomingCallSound(): void {
+  // Explicit preview ignores DND; global silence and this event preference still apply.
+  const authorized = () => !getNotificationPreferences().muteAllSounds && getNotificationPreferences().incomingCallSound
+    && useAccessibilityStore.getState().notificationSoundVolume > 0;
   const notificationPrefs = getNotificationPreferences();
   if (notificationPrefs.muteAllSounds || !notificationPrefs.incomingCallSound) return;
   const pct = useAccessibilityStore.getState().notificationSoundVolume;
   const volume = Math.max(0, Math.min(100, pct)) / 100;
   if (volume <= 0) return;
-  playToneAt(440, 440, 0.45, volume, "sine", 0, false);
-  playToneAt(554, 554, 0.45, volume, "sine", 0, false);
+  playToneAt(440, 440, 0.45, volume, "sine", 0, false, authorized);
+  playToneAt(554, 554, 0.45, volume, "sine", 0, false, authorized);
 }

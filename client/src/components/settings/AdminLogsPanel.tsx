@@ -4,14 +4,15 @@
  * Filter by category, level, search text. Paginated. Clear all button.
  */
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useToastStore } from "../../stores/toastStore";
 import { showApiError } from "../../utils/apiError";
 import { useConfirm } from "../../hooks/useConfirm";
-import { listAppLogs, clearAppLogs } from "../../api/admin";
-import type { AppLog, AppLogLevel } from "../../types";
+import { listAppLogs, clearAppLogs, getAppLogHealth } from "../../api/admin";
+import type { AppLog, AppLogLevel, AppLogHealth } from "../../types";
 import { formatDateTime } from "../../utils/dateFormat";
+import { normalizeLogTimestamp } from "../../utils/logTimestamp";
 
 const PAGE_SIZE = 50;
 
@@ -32,6 +33,7 @@ const CATEGORY_OPTIONS: { value: string; labelKey: string }[] = [
   { value: "auth", labelKey: "platformLogsCategoryAuth" },
   { value: "general", labelKey: "platformLogsCategoryGeneral" },
   { value: "feedback", labelKey: "platformLogsCategoryFeedback" },
+  { value: "client", labelKey: "platformLogsCategoryClient" },
 ];
 
 function levelBadgeClass(level: AppLogLevel): string {
@@ -48,9 +50,7 @@ function levelBadgeClass(level: AppLogLevel): string {
 }
 
 /** Parse backend SQLite timestamps as UTC. */
-function formatTimestamp(iso: string): string {
-  return formatDateTime(iso.endsWith("Z") ? iso : iso + "Z");
-}
+function formatTimestamp(iso: string): string { return formatDateTime(normalizeLogTimestamp(iso)); }
 
 function parseMetadata(raw: string): Record<string, string> | null {
   try {
@@ -78,89 +78,37 @@ function AdminLogsPanel() {
   const [level, setLevel] = useState("");
   const [category, setCategory] = useState("");
   const [search, setSearch] = useState("");
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const [advanced,setAdvanced]=useState({request_id:"",event_code:"",component:"",from:"",to:""});
+  const [health,setHealth]=useState<AppLogHealth | null>(null);
+  const [refresh,setRefresh]=useState(0);
+  const [expandedIds,setExpandedIds]=useState<Set<string>>(new Set());
 
-  // Expanded rows for metadata
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-
-  const fetchLogs = useCallback(
-    async (p = 0, lvl = level, cat = category, s = search) => {
-      try {
+  useEffect(()=>{
+    let cancelled=false;
+    const timer=setTimeout(()=>{
+      void (async()=>{
         setIsLoading(true);
-        const res = await listAppLogs({
-          level: lvl || undefined,
-          category: cat || undefined,
-          search: s || undefined,
-          limit: PAGE_SIZE,
-          offset: p * PAGE_SIZE,
-        });
-        if (res.success && res.data) {
-          setLogs(res.data.logs ?? []);
-          setTotal(res.data.total);
-        } else {
-          showApiError(res, { fallbackKey: "settings:platformLogsLoadError" });
-        }
-      } catch {
-        addToast("error", t("platformLogsLoadError"));
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [level, category, search, addToast, t]
-  );
-
-  // Mount-time initial load. Inlined async IIFE (instead of calling
-  // `fetchLogs(0)` directly) so the setState calls land behind an
-  // `await` boundary — react-hooks/set-state-in-effect treats those
-  // as Promise-callback state, not cascading-render state, and
-  // doesn't fire. The reusable `fetchLogs` callback above is still
-  // wired to the filter/page change handlers, which run in event
-  // handlers (where the rule doesn't apply).
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        setIsLoading(true);
-        const res = await listAppLogs({ limit: PAGE_SIZE, offset: 0 });
+        const dates={from:advanced.from ? new Date(advanced.from).toISOString():undefined,to:advanced.to ? new Date(advanced.to).toISOString():undefined};
+        const [logsResult,healthResult]=await Promise.allSettled([
+          listAppLogs({level,category,search,...advanced,...dates,limit:PAGE_SIZE,offset:page*PAGE_SIZE}),getAppLogHealth(),
+        ]);
         if (cancelled) return;
-        if (res.success && res.data) {
-          setLogs(res.data.logs ?? []);
-          setTotal(res.data.total);
-        } else {
-          showApiError(res, { fallbackKey: "settings:platformLogsLoadError" });
-        }
-      } catch {
-        if (!cancelled) addToast("error", t("platformLogsLoadError"));
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [addToast, t]);
+        if (healthResult.status==="fulfilled" && healthResult.value.success && healthResult.value.data) setHealth(healthResult.value.data);
+        if(logsResult.status==="fulfilled"){
+          const res=logsResult.value;
+          if(res.success && res.data){setLogs(res.data.logs ?? []);setTotal(res.data.total)}
+          else showApiError(res,{fallbackKey:"settings:platformLogsLoadError"});
+        } else addToast("error",t("platformLogsLoadError"));
+        setIsLoading(false);
+      })();
+    },300);
+    return ()=>{clearTimeout(timer);cancelled=true};
+  },[level,category,search,advanced,page,refresh,addToast,t]);
 
-  function handleFilterChange(newLevel: string, newCategory: string) {
-    setLevel(newLevel);
-    setCategory(newCategory);
-    setPage(0);
-    setExpandedIds(new Set());
-    fetchLogs(0, newLevel, newCategory, search);
-  }
-
-  function handleSearchChange(value: string) {
-    setSearch(value);
-    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-    searchTimerRef.current = setTimeout(() => {
-      setPage(0);
-      setExpandedIds(new Set());
-      fetchLogs(0, level, category, value);
-    }, 400);
-  }
-
-  function handlePageChange(newPage: number) {
-    setPage(newPage);
-    setExpandedIds(new Set());
-    fetchLogs(newPage);
-  }
+  function handleFilterChange(newLevel:string,newCategory:string){setLevel(newLevel);setCategory(newCategory);setPage(0);setExpandedIds(new Set())}
+  function handleSearchChange(value:string){setSearch(value);setPage(0);setExpandedIds(new Set())}
+  function handlePageChange(value:number){setPage(value);setExpandedIds(new Set())}
+  function updateAdvanced(key:keyof typeof advanced,value:string){setAdvanced(prev=>({...prev,[key]:value}));setPage(0);setExpandedIds(new Set())}
 
   async function handleClear() {
     const ok = await confirm({
@@ -173,6 +121,7 @@ function AdminLogsPanel() {
       const res = await clearAppLogs();
       if (res.success) {
         setLogs([]);
+        setRefresh(v=>v+1);
         setTotal(0);
         setPage(0);
         addToast("success", t("platformLogsCleared"));
@@ -200,6 +149,8 @@ function AdminLogsPanel() {
       {/* Header */}
       <div className="admin-logs-header">
         <h2 className="settings-section-title">{t("platformLogsTitle")}</h2>
+        <div className="admin-logs-actions">
+        <button className="settings-btn" onClick={()=>setRefresh(v=>v+1)}>{t("platformLogsRefresh")}</button>
         <button
           className="settings-btn settings-btn-danger"
           onClick={handleClear}
@@ -207,8 +158,14 @@ function AdminLogsPanel() {
         >
           {t("platformLogsClearAll")}
         </button>
+        </div>
       </div>
 
+      {health && <div className="admin-logs-health" role="status">
+        <p>{t("platformLogsHealth",{errors:health.error_queue,errorCapacity:health.error_capacity,normal:health.normal_queue,normalCapacity:health.normal_capacity,days:health.retention_days})}</p>
+        <p>{t("platformLogsLastWrite",{time:health.last_success_at ? formatTimestamp(health.last_success_at):t("platformLogsNoWrite")})}</p>
+        {(health.dropped_error+health.dropped_warn+health.dropped_info+health.failed_events)>0 && <p className="log-badge-error">{t("platformLogsLoss",{errors:health.dropped_error,warnings:health.dropped_warn,info:health.dropped_info,failed:health.failed_events,writes:health.write_failures})}</p>}
+      </div>}
       {/* Filters */}
       <div className="admin-logs-filters">
         <select
@@ -244,6 +201,10 @@ function AdminLogsPanel() {
         />
       </div>
 
+      <div className="admin-logs-filters">
+        {(["request_id","event_code","component"] as const).map(key=><input key={key} type="text" className="admin-logs-search" aria-label={t(`platformLogsFilter_${key}`)} placeholder={t(`platformLogsFilter_${key}`)} value={advanced[key]} onChange={e=>updateAdvanced(key,e.target.value)} />)}
+        {(["from","to"] as const).map(key=><label key={key} className="admin-logs-date">{t(`platformLogsFilter_${key}`)}<input className="admin-logs-select" type="datetime-local" aria-label={t(`platformLogsFilter_${key}`)} value={advanced[key]} onChange={e=>updateAdvanced(key,e.target.value)} /></label>)}
+      </div>
       {/* Log list */}
       <div className="admin-logs-list">
         {isLoading && <p className="no-channel">{t("loading")}</p>}
@@ -275,9 +236,19 @@ function AdminLogsPanel() {
                     </span>
                   )}
                   <span className="admin-log-message">{log.message}</span>
+
                   <span className="admin-log-time">
                     {formatTimestamp(log.created_at)}
+
                   </span>
+                </div>
+
+                <div className="admin-log-diagnostics">
+                  {log.event_code && <span>{log.event_code}</span>}
+                  {log.component && <span>{log.component}</span>}
+                  {(log.occurrence_count ?? 1)>1 && <span>{t("platformLogsOccurrences",{count:log.occurrence_count})}</span>}
+                  {log.request_id && <code>{log.request_id}</code>}
+                  {log.last_seen_at && log.last_seen_at!==log.created_at && <span>{t("platformLogsLastSeen",{time:formatTimestamp(log.last_seen_at)})}</span>}
                 </div>
 
                 {isExpanded && meta && (

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 
@@ -15,14 +16,17 @@ type MusicSessionRepository interface {
 	Delete(context.Context, string) error
 }
 
-type sqliteMusicSessionRepo struct{ db database.TxQuerier }
+type sqliteMusicSessionRepo struct {
+	db       database.TxQuerier
+	postgres bool
+}
 
 func NewSQLiteMusicSessionRepo(db database.TxQuerier) MusicSessionRepository {
-	return &sqliteMusicSessionRepo{db: db}
+	return &sqliteMusicSessionRepo{db: db, postgres: database.IsPostgres(db)}
 }
 
 func (r *sqliteMusicSessionRepo) List(ctx context.Context) ([]models.MusicSession, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT channel_id,server_id,queue_json,repeat_mode,revision FROM music_sessions ORDER BY updated_at,channel_id`)
+	rows, err := r.db.QueryContext(ctx, `SELECT s.channel_id,s.server_id,s.queue_json,s.repeat_mode,s.revision,COALESCE(h.session_id,'') FROM music_sessions s LEFT JOIN music_control_heads h ON h.channel_id=s.channel_id ORDER BY s.updated_at,s.channel_id`)
 	if err != nil {
 		return nil, fmt.Errorf("list music sessions: %w", err)
 	}
@@ -31,7 +35,7 @@ func (r *sqliteMusicSessionRepo) List(ctx context.Context) ([]models.MusicSessio
 	for rows.Next() {
 		var session models.MusicSession
 		var raw string
-		if err := rows.Scan(&session.ChannelID, &session.ServerID, &raw, &session.RepeatMode, &session.Revision); err != nil {
+		if err := rows.Scan(&session.ChannelID, &session.ServerID, &raw, &session.RepeatMode, &session.Revision, &session.SessionID); err != nil {
 			return nil, fmt.Errorf("scan music session: %w", err)
 		}
 		if err := json.Unmarshal([]byte(raw), &session.Queue); err != nil {
@@ -46,6 +50,19 @@ func (r *sqliteMusicSessionRepo) List(ctx context.Context) ([]models.MusicSessio
 }
 
 func (r *sqliteMusicSessionRepo) Save(ctx context.Context, session models.MusicSession) error {
+	if db := database.RawDB(r.db); db != nil {
+		return database.WithTx(ctx, db, func(tx *sql.Tx) error {
+			if err := lockMusicIdentityTx(ctx, tx, r.postgres); err != nil {
+				return err
+			}
+			return (&sqliteMusicSessionRepo{db: tx, postgres: r.postgres}).Save(ctx, session)
+		})
+	}
+	tracks, err := sanitizeMusicTracks(ctx, r.db, r.postgres, session.Queue)
+	if err != nil {
+		return err
+	}
+	session.Queue = tracks
 	raw, err := json.Marshal(session.Queue)
 	if err != nil {
 		return fmt.Errorf("encode music session: %w", err)

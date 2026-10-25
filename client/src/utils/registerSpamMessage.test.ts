@@ -1,15 +1,15 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { registerSpamBatch, registerSpamMessage } from "./registerSpamMessage";
 import { recordSpam } from "../api/spam";
-const state = vi.hoisted(() => ({ user: { id: "account" }, generation: 0, toast: vi.fn() }));
+const state = vi.hoisted(() => ({ user: { id: "account" }, generation: 0, disposition: "filter" as "filter"|"pending"|"allow", readiness: vi.fn(async()=>"pending"), toast: vi.fn() }));
 vi.mock("../api/client", () => ({ getAuthGeneration: () => state.generation }));
 vi.mock("../api/spam", () => ({ recordSpam: vi.fn() }));
 vi.mock("../stores/authStore", () => ({ useAuthStore: { getState: () => ({ user: state.user }) } }));
 vi.mock("../stores/toastStore", () => ({ useToastStore: { getState: () => ({ addToast: state.toast }) } }));
-vi.mock("./messageSpamPolicy", () => ({ isMessageFilteredAsSpam: () => true }));
+vi.mock("./messageSpamPolicy", () => ({ getMessageSpamDisposition: () => state.disposition, ensureSpamRelationshipReady: state.readiness }));
 vi.mock("../i18n", () => ({ default: { t: (key: string) => key } }));
 const message = { id: "message", user_id: "sender", content: "https://trusted.test@evil.test" };
-beforeEach(() => { vi.clearAllMocks(); state.user = { id: "account" }; state.generation = 0; vi.mocked(recordSpam).mockResolvedValue({ success: true }); });
+beforeEach(() => { vi.clearAllMocks(); state.user = { id: "account" }; state.generation = 0; state.disposition="filter"; state.readiness.mockResolvedValue("pending"); vi.mocked(recordSpam).mockResolvedValue({ success: true }); });
 it("sends source metadata without decrypted text and binds the request to its account", async () => {
   await registerSpamMessage(message, "dm", "private");
   const [body, , isCurrent] = vi.mocked(recordSpam).mock.calls[0];
@@ -43,4 +43,15 @@ it("suppresses stale-generation completion and failure toast for the same accoun
   resolve({ success: false, error: "stale failure" });
   expect(await pending).toBe(false);
   expect(state.toast).not.toHaveBeenCalled();
+});
+
+it("never records an unresolved relationship or a friend resolved during the bounded read",async()=>{
+ state.disposition="pending";expect(await registerSpamMessage(message,"dm","private")).toBe(false);expect(recordSpam).not.toHaveBeenCalled();
+ state.readiness.mockImplementationOnce(async()=>{state.disposition="allow";return "ready";});
+ expect(await registerSpamMessage(message,"dm","private")).toBe(true);expect(recordSpam).not.toHaveBeenCalled();
+});
+it("discards registration errors after filter mode changes during the request",async()=>{
+ let finish!:(value:{success:boolean})=>void;vi.mocked(recordSpam).mockReturnValueOnce(new Promise(resolve=>{finish=resolve;}));
+ const pending=registerSpamMessage(message,"dm","private");state.disposition="allow";finish({success:false});
+ expect(await pending).toBe(false);expect(state.toast).not.toHaveBeenCalled();
 });

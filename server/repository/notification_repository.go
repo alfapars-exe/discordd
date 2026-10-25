@@ -12,6 +12,11 @@ type NotificationRepository interface {
 	// Create inserts n, assigning n.ID (generateID) and filling n.CreatedAt
 	// from the DB default. An empty Payload is stored as '{}'.
 	Create(ctx context.Context, n *models.Notification) error
+	// CreateDMMessageIfAbsent stores body-free accepted-DM metadata once per source message.
+	CreateDMMessageIfAbsent(ctx context.Context, n *models.Notification) (bool, error)
+	// MarkDMMessagesRead acknowledges only this recipient/conversation through an exact source cursor.
+	// A nil cursor captures the latest committed source in the caller's serialized DM transaction.
+	MarkDMMessagesRead(ctx context.Context, userID, channelID string, messageID *string) ([]string, error)
 	// List returns userID's notifications newest-first (created_at DESC,
 	// id DESC), at most limit rows, LEFT JOINing the actor's public view.
 	// beforeID is a keyset cursor: only rows strictly older than that

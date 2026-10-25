@@ -35,7 +35,7 @@ func TestGroupDMReadStateOldestUnreadAnchorAndDeletedCursorRepair(t *testing.T) 
 	create("group-incoming-first", dmBob, "2026-01-01 10:00:03")
 	create("group-own-after", dmAlice, "2026-01-01 10:00:04")
 	create("group-incoming-second", dmBob, "2026-01-01 10:00:05")
-	if _, err := db.Conn.ExecContext(ctx, `UPDATE group_dm_reads SET last_read_message_id=?,unread_count=2 WHERE group_id=? AND user_id=?`, "group-cursor", groupID, dmAlice); err != nil {
+	if _, err := db.Conn.ExecContext(ctx, `UPDATE group_dm_reads SET last_read_message_id=?,last_read_source_sequence=(SELECT source_sequence FROM group_dm_messages WHERE id=?),unread_count=2 WHERE group_id=? AND user_id=?`, "group-cursor", "group-cursor", groupID, dmAlice); err != nil {
 		t.Fatal(err)
 	}
 	state, err := repo.GetReadState(ctx, groupID, dmAlice)
@@ -73,7 +73,7 @@ func TestGroupDMGetMessagesAroundIsBoundedScopedAndOrdered(t *testing.T) {
 	ctx := context.Background()
 	repo := NewSQLiteGroupDMRepo(wrapForRepo(db))
 	for _, groupID := range []string{"around-group", "other-around-group"} {
-		if err := repo.Create(ctx, &models.GroupDM{ID: groupID, OwnerID: dmAlice, Name: groupID, KeyEpoch: 1, CallRoomKey: groupID + "-room"}, []string{dmAlice, dmBob}); err != nil {
+		if err := repo.Create(ctx, &models.GroupDM{ID: groupID, OwnerID: dmAlice, Name: groupID, KeyEpoch: 7, CallRoomKey: groupID + "-room"}, []string{dmAlice, dmBob}); err != nil {
 			t.Fatal(err)
 		}
 	}

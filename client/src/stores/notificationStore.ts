@@ -10,6 +10,7 @@ import { create } from "zustand";
 import { getAuthGeneration } from "../api/client";
 import * as notificationsApi from "../api/notifications";
 import type { AppNotification } from "../types";
+import { isPrivateMessageNotification } from "../utils/dmMessageNotification";
 import { useAuthStore } from "./authStore";
 import { getAuthSessionOwner, subscribeAuthOwnerChanges, subscribeAuthGenerationChanges } from "../api/authSessionEvents";
 
@@ -21,6 +22,7 @@ type Session = { ownerId: string; authGeneration: number };
 type NotificationState = {
   items: AppNotification[];
   unreadCount: number;
+  badgeUnreadCount: number;
   hasMore: boolean;
   isLoading: boolean;
   /** Latest account-scoped initial list request completed successfully. */
@@ -43,7 +45,7 @@ type NotificationState = {
 
   // ─── WS Event Handlers ───
   handleCreate: (n: AppNotification) => void;
-  handleReadSync: (data: { ids: string[]; all: boolean; unread_count: number }) => void;
+  handleReadSync: (data: { ids: string[]; all: boolean; unread_count: number; badge_unread_count?: number; refresh_required?: boolean }) => void;
 };
 
 let listIntent = 0;
@@ -51,6 +53,40 @@ let countIntent = 0;
 let unreadRevision = 0;
 let readRevision = 0;
 const pendingReadRevisions = new Map<string, number>();
+const readIds = new Set<string>();
+const MAX_READ_IDS = 2048;
+let readHistoryIncomplete = false;
+let refreshQueued: { session: Session; again: boolean; started: boolean } | null = null;
+
+// Exact read IDs fence delayed creates even when the acknowledged row was on
+// an unloaded page. Overflow switches to authoritative refresh, never guesses
+// from the loaded page or permits an unbounded account-owned tombstone set.
+function rememberReadIds(ids: string[]): void {
+  for (const id of ids) {
+    if (readIds.size >= MAX_READ_IDS && !readIds.has(id)) { readHistoryIncomplete = true; continue; }
+    readIds.add(id);
+  }
+}
+function queueAuthoritativeRefresh(): void {
+  const session = currentSession();
+  if (!session) return;
+  if (refreshQueued?.session.ownerId === session.ownerId && refreshQueued.session.authGeneration === session.authGeneration) {
+    if (refreshQueued.started) refreshQueued.again = true;
+    return;
+  }
+  const entry = { session, again: false, started: false };
+  refreshQueued = entry;
+  queueMicrotask(() => {
+    if (!isSessionCurrent(session)) { if (refreshQueued === entry) refreshQueued = null; return; }
+    entry.started = true;
+    void Promise.allSettled([useNotificationStore.getState().fetchInitial(), useNotificationStore.getState().fetchCount()])
+      .finally(() => {
+        if (refreshQueued !== entry) return;
+        refreshQueued = null;
+        if (entry.again && isSessionCurrent(session)) queueAuthoritativeRefresh();
+      });
+  });
+}
 
 function currentSession(): Session | null {
   const ownerId = useAuthStore.getState().user?.id;
@@ -71,9 +107,11 @@ function clearForOwner(ownerId: string | null, authGeneration: number): void {
   unreadRevision += 1;
   readRevision += 1;
   pendingReadRevisions.clear();
+  readIds.clear(); readHistoryIncomplete = false;
   useNotificationStore.setState((state) => ({
     items: EMPTY_ITEMS,
     unreadCount: 0,
+    badgeUnreadCount: 0,
     hasMore: false,
     isLoading: false,
     hasLoaded: false,
@@ -95,9 +133,11 @@ export const useNotificationStore = create<NotificationState>((set, get) => {
       unreadRevision += 1;
       readRevision += 1;
       pendingReadRevisions.clear();
+      readIds.clear(); readHistoryIncomplete = false;
       set({
         items: EMPTY_ITEMS,
         unreadCount: 0,
+        badgeUnreadCount: 0,
         hasMore: false,
         isLoading: false,
         hasLoaded: false,
@@ -119,6 +159,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => {
   return {
     items: EMPTY_ITEMS,
     unreadCount: 0,
+    badgeUnreadCount: 0,
     hasMore: false,
     isLoading: false,
     hasLoaded: false,
@@ -209,7 +250,9 @@ export const useNotificationStore = create<NotificationState>((set, get) => {
       try {
         const res = await notificationsApi.getNotificationCount();
         if (isSessionCurrent(session) && request === countIntent && revision === unreadRevision && res.success && res.data) {
-          set({ unreadCount: Math.max(0, res.data.unread_count) });
+          const total = Math.max(0, res.data.unread_count);
+          set({ unreadCount: total, badgeUnreadCount: Number.isFinite(res.data.badge_unread_count)
+            ? Math.max(0, Math.min(total, res.data.badge_unread_count!)) : total });
         }
       } catch {
         // Keep the last confirmed count on network failure.
@@ -229,6 +272,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => {
       set((state) => ({
         items: state.items.map((item) => (item.id === id ? { ...item, read_at: readAt } : item)),
         unreadCount: Math.max(0, state.unreadCount - 1),
+        badgeUnreadCount: target && !isPrivateMessageNotification(target) ? Math.max(0, state.badgeUnreadCount - 1) : state.badgeUnreadCount,
       }));
 
       let succeeded: boolean;
@@ -249,6 +293,9 @@ export const useNotificationStore = create<NotificationState>((set, get) => {
             item.id === id && item.read_at === readAt ? { ...item, read_at: target?.read_at ?? null } : item) }));
         }
         void get().fetchCount();
+      } else {
+        rememberReadIds([id]);
+        if (!target) void get().fetchCount();
       }
     },
 
@@ -261,6 +308,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => {
       set((state) => ({
         items: state.items.map((item) => (item.read_at ? item : { ...item, read_at: readAt })),
         unreadCount: 0,
+        badgeUnreadCount: 0,
       }));
       try {
         const res = await notificationsApi.markAllNotificationsRead();
@@ -281,6 +329,10 @@ export const useNotificationStore = create<NotificationState>((set, get) => {
     handleCreate: (notification) => {
       const session = currentOwnedSession();
       if (!session || notification.user_id !== session.ownerId) return;
+      if (readHistoryIncomplete && !get().items.some(item => item.id === notification.id)) {
+        queueAuthoritativeRefresh(); return;
+      }
+      if (readIds.has(notification.id)) notification = { ...notification, read_at: notification.read_at ?? new Date().toISOString() };
       set((state) => {
         if (state.ownerId !== session.ownerId || state.authGeneration !== session.authGeneration
           || state.items.some((existing) => existing.id === notification.id)) return state;
@@ -289,6 +341,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => {
         return {
           items: listed ? [notification, ...state.items] : state.items,
           unreadCount: notification.read_at ? state.unreadCount : state.unreadCount + 1,
+          badgeUnreadCount: notification.read_at || isPrivateMessageNotification(notification) ? state.badgeUnreadCount : state.badgeUnreadCount + 1,
         };
       });
     },
@@ -298,6 +351,8 @@ export const useNotificationStore = create<NotificationState>((set, get) => {
       if (!session || !data || !Array.isArray(data.ids) || typeof data.all !== "boolean"
         || !Number.isFinite(data.unread_count)) return;
       const ids = new Set(data.ids);
+      rememberReadIds(data.ids);
+      if (data.refresh_required === true) readHistoryIncomplete = true;
       for (const id of pendingReadRevisions.keys()) {
         if (data.all || ids.has(id)) pendingReadRevisions.delete(id);
       }
@@ -312,8 +367,11 @@ export const useNotificationStore = create<NotificationState>((set, get) => {
             return item;
           }),
           unreadCount: Math.max(0, data.unread_count),
+          badgeUnreadCount: data.all ? 0 : Number.isFinite(data.badge_unread_count)
+            ? Math.max(0, Math.min(data.unread_count, data.badge_unread_count!)) : Math.max(0, data.unread_count),
         };
       });
+      if (data.refresh_required === true) queueAuthoritativeRefresh();
     },
   };
 });

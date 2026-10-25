@@ -163,7 +163,7 @@ func (s *voiceService) GenerateToken(ctx context.Context, userID, username, disp
 	}
 
 	// E2EE: per-room SFrame passphrase (created on first join, reused for session)
-	passphrase, err := s.getOrCreateRoomPassphrase(roomName)
+	passphrase, epoch, keyContext, err := s.roomMediaKey(roomName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create E2EE passphrase: %w", err)
 	}
@@ -173,6 +173,9 @@ func (s *voiceService) GenerateToken(ctx context.Context, userID, username, disp
 		URL:            lkInstance.URL,
 		ChannelID:      channelID,
 		E2EEPassphrase: passphrase,
+		E2EEKeyIndex:   epoch % 256,
+		E2EEKeyEpoch:   uint64(epoch),
+		E2EEKeyContext: keyContext,
 	}, nil
 }
 
@@ -314,7 +317,7 @@ func (s *voiceService) GenerateScreenShareToken(ctx context.Context, userID, use
 		return nil, fmt.Errorf("failed to generate screen share token: %w", err)
 	}
 
-	passphrase, err := s.getOrCreateRoomPassphrase(roomName)
+	passphrase, epoch, keyContext, err := s.roomMediaKey(roomName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create E2EE passphrase: %w", err)
 	}
@@ -324,5 +327,8 @@ func (s *voiceService) GenerateScreenShareToken(ctx context.Context, userID, use
 		URL:            lkInstance.URL,
 		ChannelID:      channelID,
 		E2EEPassphrase: passphrase,
+		E2EEKeyIndex:   epoch % 256,
+		E2EEKeyEpoch:   uint64(epoch),
+		E2EEKeyContext: keyContext,
 	}, nil
 }

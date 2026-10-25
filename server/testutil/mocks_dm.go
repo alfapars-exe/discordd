@@ -144,7 +144,10 @@ func (m *MockDMRepo) GetReactionsByMessageIDs(_ context.Context, _ []string) (ma
 	return nil, nil
 }
 
-func (m *MockDMRepo) PinMessage(_ context.Context, _ string) error   { return nil }
+func (m *MockDMRepo) PinMessage(_ context.Context, _ string) error { return nil }
+func (m *MockDMRepo) PinMessageAs(ctx context.Context, _ string, id string) error {
+	return m.PinMessage(ctx, id)
+}
 func (m *MockDMRepo) UnpinMessage(_ context.Context, _ string) error { return nil }
 func (m *MockDMRepo) GetPinnedMessages(_ context.Context, _ string) ([]models.DMMessage, error) {
 	return nil, nil

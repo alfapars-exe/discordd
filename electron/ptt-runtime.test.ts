@@ -1,0 +1,21 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {EventEmitter}from "node:events";
+import {readFileSync}from "node:fs";
+import {createRequire}from "node:module";
+import path from "node:path";
+import vm from "node:vm";
+test("native runtime preserves exact owner through legacy cleanup, repeat and held handoff without key payloads",()=>{
+ let started=0,stopped=0;const native=Object.assign(new EventEmitter(),{start:()=>{started++;},stop:()=>{stopped++;}}),sent:Array<[string,unknown]>=[],logs:unknown[][]=[];
+ const codes=new Proxy({}as Record<string,number>,{get:(target,key:string)=>target[key]??(target[key]=Object.keys(target).length+1)});
+ const actual=createRequire(__filename);const api={}as typeof import("./push-to-talk");
+ vm.runInNewContext(readFileSync(path.join(__dirname,"push-to-talk.js"),"utf8"),{exports:api,console:{log:(...args:unknown[])=>logs.push(args),warn:(...args:unknown[])=>logs.push(args)},require:(name:string)=>name==="uiohook-napi"?{uIOhook:native,UiohookKey:codes}:name==="./window"?{getMainWindow:()=>({webContents:{id:9,isDestroyed:()=>false,send:(channel:string,value:unknown)=>sent.push([channel,value])}})}:actual(name)});
+ const old=api.acquirePTTLease(9,{kind:"group",source:"old",keyCode:"Space"})!;assert.equal(started,1);
+ const event={keycode:codes.Space,get time(){throw new Error("event privacy");},get rawcode(){throw new Error("event privacy");}};
+ native.emit("keydown",event);native.emit("keydown",event);assert.equal(sent.length,1);assert.equal(sent[0][0],"ptt-lease-signal");
+ assert.equal(api.registerPTT("KeyV"),false);api.unregisterPTT();const next=api.acquirePTTLease(9,{kind:"p2p",source:"next",keyCode:"Space"})!;
+ assert.equal((sent[sent.length-1][1]as {leaseId:string}).leaseId,old);const before=sent.length;native.emit("keydown",event);assert.equal(sent.length,before);
+ api.releasePTTLease(9,old);native.emit("keyup",event);native.emit("keydown",event);assert.equal((sent[sent.length-1][1]as {leaseId:string}).leaseId,next);
+ api.releasePTTLease(9,next);assert.equal(stopped,0);native.emit("keyup",event);assert.equal(stopped,1);
+ assert.equal(logs.flat().some(v=>String(v).includes("Space")||String(v).includes("KeyV")),false);api.shutdownGlobalHotkeys();
+});

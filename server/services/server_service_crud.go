@@ -264,6 +264,9 @@ func (s *serverService) UpdateServer(ctx context.Context, serverID string, req *
 	if req.InviteRequired != nil {
 		server.InviteRequired = *req.InviteRequired
 	}
+	if req.IsCommunity != nil {
+		server.IsCommunity = *req.IsCommunity
+	}
 	if req.E2EEEnabled != nil {
 		server.E2EEEnabled = *req.E2EEEnabled
 	}

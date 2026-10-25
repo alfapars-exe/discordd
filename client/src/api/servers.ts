@@ -46,6 +46,7 @@ export async function updateServer(
   data: {
     name?: string;
     invite_required?: boolean;
+    is_community?: boolean;
     e2ee_enabled?: boolean;
     afk_timeout_minutes?: number;
     livekit_url?: string;

@@ -1,0 +1,98 @@
+{
+  "phase": "P9",
+  "date": "2026-10-25",
+  "status": "implemented_unverified",
+  "baseline_head": "3be70edcbe2481342ad191c4805319cc12df418b",
+  "owned_paths": [
+    "client/src/audio/captureOwnedMicrophone.ts",
+    "client/src/audio/captureOwnedMicrophone.test.ts",
+    "client/src/audio/liveMicrophone.ts",
+    "client/src/audio/liveMicrophone.test.ts",
+    "client/src/audio/microphoneAdmission.ts",
+    "client/src/audio/privateRoomPlayback.ts",
+    "client/src/components/voice/MicrophoneCaptureStatus.tsx",
+    "client/src/components/voice/MicrophoneCaptureStatus.test.tsx",
+    "client/src/components/voice/VoiceStateManager.tsx",
+    "client/src/components/dm/GroupDMCallAudio.tsx",
+    "client/src/components/dm/GroupDMCallAudio.test.tsx",
+    "client/src/components/dm/GroupDMCall.tsx",
+    "client/src/components/layout/UserBar.tsx",
+    "client/src/components/layout/UserBar.groupAudio.test.tsx",
+    "client/src/hooks/useEncryptedRoomAdmission.ts",
+    "client/src/hooks/useEncryptedRoomAdmission.test.tsx",
+    "client/src/hooks/useAudioProcessor.ts",
+    "client/src/stores/microphoneCaptureViewStore.ts",
+    "client/src/i18n/locales/en/voice.json",
+    "client/src/i18n/locales/tr/voice.json"
+  ],
+  "source_sha256": {
+    "client/src/audio/captureOwnedMicrophone.ts": "0e33ea3de15636e4dc8327a3ca1f197a6ed59f1d047be47c558f4663ccb3fff2",
+    "client/src/audio/captureOwnedMicrophone.test.ts": "3b9a266fde7893b0dd54182365e181f98109a7f63bdaf84ffee809b9da657766",
+    "client/src/audio/liveMicrophone.ts": "e521d5ac01feb6ddbe512c51a916649ce99baff4ef0024ecc7388433fa7b2ac1",
+    "client/src/audio/liveMicrophone.test.ts": "50b5ed77312b8a9ef3bb5112f2aeec0555a20697f6e10cf61e13594e743c761d",
+    "client/src/audio/microphoneAdmission.ts": "83a2d3d2b378d157173834210e5453cc6d7dd9b6dc6cf358504579e6f4d2faad",
+    "client/src/audio/privateRoomPlayback.ts": "5c7cb856ef3476bd1e5993c43b8590509c67b2db2de5fd4d16c56f97168e9219",
+    "client/src/components/voice/MicrophoneCaptureStatus.tsx": "ddd8956749a6814536bafe8b803689b41d12ddd9d72bb2e5dadc75a394218e21",
+    "client/src/components/voice/MicrophoneCaptureStatus.test.tsx": "80ad49f8d53381d4658bfd52e7d94c777f577a53accb972a0d6db1706c01ddd0",
+    "client/src/components/voice/VoiceStateManager.tsx": "88956d89fce1e1bd13a5466e1e46e1f6fd13a23466d09533a4d0530eaac66369",
+    "client/src/components/dm/GroupDMCallAudio.tsx": "1dc18f5807ae20d2c9559635beb46015902104060713d138a78b243499f336f3",
+    "client/src/components/dm/GroupDMCallAudio.test.tsx": "8a64b9a56d8425da0f7bffa195f2beab01e71ad1be0880c3e4af5ee4d31d22cd",
+    "client/src/components/dm/GroupDMCall.tsx": "bffff7358e8f1bbd2fadf742b49adb0b5a6e9b22acf082c644010e0f76041eb3",
+    "client/src/components/layout/UserBar.tsx": "fd5bcd87b774c5360c0a3cd89f6941c8b4b2c65028e3cb831bc02d486529732b",
+    "client/src/components/layout/UserBar.groupAudio.test.tsx": "805c7c120d8df84df88d8d6b67dd10584d0aedcfb93efa4309f040475b63f2f0",
+    "client/src/hooks/useEncryptedRoomAdmission.ts": "4f74f636998f5df077071551f946cc2ee86442d8deddabccc5fccc4ec66b1304",
+    "client/src/hooks/useEncryptedRoomAdmission.test.tsx": "8392fbf90230e65dea9fe97b06370fea53c9e7c8e189599c307c1a0c6155c423",
+    "client/src/hooks/useAudioProcessor.ts": "a5b455040baf25270d95574284c7e8ecc1b9335210143853311e3bc9c4558889",
+    "client/src/stores/microphoneCaptureViewStore.ts": "c9fc82b2763839c796e06ffe78e22af2a0f29421f6ee40da5d5db96152367ac8",
+    "client/src/i18n/locales/en/voice.json": "27cfd4d8281180edf4436851237d6ed7d61cb6973536f64142fe98b9dc9f851e",
+    "client/src/i18n/locales/tr/voice.json": "308e5387e45c8020825286aec2492b625157290c1ae74936a88e00b2d38d4fcd"
+  },
+  "hash_scope": "Canonical LF complete current source at combined capture/persistent-provider freeze. Shared GroupDMCall includes both reviewed hunk sets.",
+  "installed_sdk_audit": [
+    "LocalParticipant.handleTrackEnded automatically reacquires library-created nonmuted microphones, including default-device fallback; LocalTrack.restart rebuilds the processor then replaces sender media without calling public participant.createTracks/publishTrack. Adding another ended\u2192refresh owner would race it.",
+    "Public LocalAudioTrack(rawSource,constraints,true) establishes user-provided ownership before publication; actual installed SDK handleTrackEnded then mutes without restart or another GUM call. replaceTrack ownership cannot safely substitute before publish because its public method requires an existing sender.",
+    "Owned capture preserves SDK voiceIsolation:true/default-device semantics and existing AEC/AGC/NS/channel-count profile settings. Missing selected input does not silently fall back; explicit Use default action changes only the device-local preference."
+  ],
+  "contract": [
+    "One exact raw source is owned by the shared microphone controller; stale GUM and processor results are stopped before publication. Auth owner/generation and guild channel/join-generation loss retire known pending raw immediately, without waiting for model preparation.",
+    "Exact-LocalParticipant admission lease is fail-closed when absent. Initial worker owner ACK opens it; key/layout/reconnect/auth/cleanup close synchronously and notify the controller to stop known raw preparation. Re-registering first retires the previous guard. Old lease close/retire or expected-controller cleanup cannot stop a replacement.",
+    "Persistent group session authority is checked in admission, raw capture and recovery actions; metadata retirement synchronously closes exact participant capture and owned playback before React unmount. The metadata store never holds a Room.",
+    "Raw ended is observed before processing and checked after awaited preparation; even an ended candidate without a usable publication cannot become active. Failures immediately silence/mute and latch; refresh/reconnect/render retry cannot silently reacquire. Rejected mute promises are handled.",
+    "Guild failure survives controller/rekey/render replacement keyed auth/channel/join generation; group failure survives rekey and render-boundary retry keyed stable logical callSessionNonce. Fresh runtime control nonces remain separate. Only explicit microphone recovery/new logical call clears failure; exact logical retirement/auth clears its own records.",
+    "Retry and Use default are explicit, fenced by current auth/channel/join/mount/admission/session before device-preference changes. Muted/deafened/PTT retry does not open capture; a subsequent authorized enable/PTT action is required.",
+    "Main and group effective mic indicators reflect capture failure while manual intent remains separate. Capture view activation/update/release use an exact mount nonce, preventing old status from replacing or clearing a newer call."
+  ],
+  "verification": [
+    {
+      "cwd": "client",
+      "command": "npx vitest run",
+      "result": "PASS380 files/3702 tests72.91s after final combined capture/provider source freeze; no source edits during this final run."
+    },
+    {
+      "cwd": "client",
+      "command": "npm run build",
+      "result": "PASS TypeScript and1690 modules2.53s; existing Vite native-loader/chunk/dynamic-import warnings retained."
+    },
+    {
+      "cwd": "client",
+      "command": "npx eslint src/audio/captureOwnedMicrophone.ts src/audio/captureOwnedMicrophone.test.ts src/audio/liveMicrophone.ts src/audio/liveMicrophone.test.ts src/audio/microphoneAdmission.ts src/audio/privateRoomPlayback.ts src/components/voice/MicrophoneCaptureStatus.tsx src/components/voice/MicrophoneCaptureStatus.test.tsx src/components/voice/VoiceStateManager.tsx src/components/dm/GroupDMCallAudio.tsx src/components/dm/GroupDMCallAudio.test.tsx src/stores/microphoneCaptureViewStore.ts src/components/layout/UserBar.tsx src/components/layout/UserBar.groupAudio.test.tsx src/hooks/useEncryptedRoomAdmission.ts src/hooks/useEncryptedRoomAdmission.test.tsx src/hooks/useAudioProcessor.ts",
+      "result": "PASS0 errors0 warnings."
+    },
+    {
+      "cwd": "client",
+      "command": "npx vitest run src/audio/liveMicrophone.test.ts src/hooks/useEncryptedRoomAdmission.test.tsx",
+      "result": "PASS28 tests3.54s after exact-participant replacement retirement refinement; included final full suite."
+    }
+  ],
+  "actual_sdk_test_boundary": "captureOwnedMicrophone.test uses the actual installed LocalAudioTrack and LocalParticipant ended handler; browser raw media/GUM are mocked. It proves SDK ownership and no automatic reacquisition, not physical capture or real worker RTP delivery.",
+  "remaining_acceptance": [
+    "Real browser/Windows microphone unplug/replug, permission denial, default selection, engine initialization, devicechange and two-client encrypted audio across key/auth/reconnect remain open.",
+    "P2PMicrophoneSession already owns raw media but still lacks ended/device-disappearance recovery; its current onError is settings-update toast only. This slice does not change or claim that separate P2P gap.",
+    "Native mobile SDK capture and browser-specific device enumeration behavior (including SDK internal iOS DeviceManager pending-media workaround) remain separate acceptance. No internal SDK deep import or prototype mutation was introduced.",
+    "No physical microphone/recording-consent acceptance, production deployment, updater or installer claim is made here.",
+    "Foreign dirty MicrophoneTrackProcessor/microphonePipeline/audio-CSP/.gitattributes/music/release files were not edited/staged by this slice. Worktree tests include concurrent sources; final immutable release acceptance belongs to root."
+  ],
+  "production_operations": false,
+  "server_or_schema_changes": false,
+  "integration_scope": "One root-approved coherent union commit with p9-persistent-group-call-2026-10-25.json. Both source sets and receipts reviewed; no server/schema changes. Foreign processing/CSP/music/e2ee-copy/release/gitattributes paths excluded."
+}

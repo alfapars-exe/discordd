@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 )
@@ -17,6 +18,9 @@ func TestSQLiteDataExportOwnershipExpiryAndSecretExclusion(t *testing.T) {
 	execSeed(t, db, []seedStmt{
 		{q: `INSERT INTO users(id,username,password_hash,email) VALUES(?,?,?,?)`, args: []any{"export-alice", "alice", "super-secret-hash", "alice@example.test"}},
 		{q: `INSERT INTO users(id,username,password_hash) VALUES(?,?,?)`, args: []any{"export-bob", "bob", "bob-secret"}},
+		{q: `INSERT INTO users(id,username,password_hash,is_bot,owner_user_id) VALUES('export-game','exportgame','game-secret',1,'export-bob'),('other-game','othergame','other-game-secret',1,'export-bob')`},
+		{q: `INSERT INTO application_game_identities(bot_user_id) VALUES('export-game'),('other-game')`},
+		{q: `INSERT INTO application_game_grants(user_id,bot_user_id,messaging_enabled,revision,authorized_at,updated_at) VALUES('export-alice','export-game',1,2,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),('export-bob','other-game',0,1,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`},
 		{q: `INSERT INTO servers(id,name,owner_id) VALUES('export-server','Export server','export-bob')`},
 		{q: `INSERT INTO server_events(id,server_id,creator_id,name,description,starts_at) VALUES
 			('alice-event','export-server','export-alice','Alice event','Alice event description','2026-11-01T12:00:00.000000000Z'),
@@ -44,6 +48,9 @@ func TestSQLiteDataExportOwnershipExpiryAndSecretExclusion(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(payload)
+	if !strings.Contains(text, `"game_application_grants"`) || !strings.Contains(text, `"application_id": "export-game"`) || strings.Contains(text, `"application_id": "other-game"`) || strings.Contains(text, "game-secret") {
+		t.Fatal("game grant export omitted own grant or leaked another user's grant/credential")
+	}
 	if !strings.Contains(text, "alice-media-label") || strings.Contains(text, "bob-media-label") {
 		t.Fatal("media-label export ownership failed")
 	}
@@ -128,5 +135,155 @@ func TestDataExportIncludesOnlyOwnNotificationDecisions(t *testing.T) {
 	}
 	if _, exposed := streams[0]["notification_id"]; exposed {
 		t.Fatal("internal notification linkage exposed")
+	}
+}
+
+func TestDataExportOwnMusicProjectionAndOpaqueCiphertext(t *testing.T) {
+	db := newTestDB(t)
+	execSeed(t, db, []seedStmt{
+		{q: `INSERT INTO users(id,username,password_hash) VALUES('export-owner','exportowner','hash'),('export-peer','exportpeer','hash')`},
+		{q: `INSERT INTO servers(id,name,owner_id) VALUES('export-music-server','Music','export-peer')`},
+		{q: `INSERT INTO channels(id,name,type,server_id) VALUES('export-music-channel','Music','voice','export-music-server')`},
+		{q: `INSERT INTO music_control_heads(channel_id,server_id,session_id,revision) VALUES('export-music-channel','export-music-server','export-session',9)`},
+		{q: `INSERT INTO music_sessions(channel_id,server_id,queue_json,repeat_mode,revision) VALUES('export-music-channel','export-music-server',?,'all',9)`, args: []any{`[{"queue_item_id":"owned-first","video_id":"same-song","requested_by_user_id":"export-owner","requested_by_name":"Owner","future_private":"excluded-future"},{"queue_item_id":"foreign-item","requested_by_user_id":"export-peer","requested_by_name":"Foreign Requester"},{"queue_item_id":"owned-second","video_id":"same-song","requested_by_user_id":"export-owner","requested_by_name":"Owner"}]`}},
+		{q: `INSERT INTO music_operation_receipts(channel_id,actor_id,request_id,session_id,request_hash,expected_revision,result_json) VALUES('export-music-channel','export-owner','own-request','export-session','secret-request-hash',8,'{"foreign":"receipt-private-payload"}'),('export-music-channel','export-peer','foreign-request','export-session','foreign-hash',7,'{}')`},
+		{q: `INSERT INTO dm_channels(id,user1_id,user2_id) VALUES('export-opaque-dm','export-owner','export-peer')`},
+		{q: `INSERT INTO dm_messages(id,dm_channel_id,user_id,content,encryption_version,ciphertext,sender_device_id,e2ee_metadata) VALUES('opaque-own','export-opaque-dm','export-owner',NULL,1,'opaque+/cipher==','device','{"opaque":"metadata"}')`},
+	})
+	repo := NewSQLiteDataExportRepo(wrapForRepo(db))
+	job, err := repo.Create(context.Background(), &models.User{ID: "export-owner"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := repo.Download(context.Background(), "export-owner", job.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]json.RawMessage
+	if err = json.Unmarshal(payload, &doc); err != nil {
+		t.Fatal(err)
+	}
+	var queue, ops, dm []map[string]any
+	for name, target := range map[string]*[]map[string]any{"own_music_queue_items": &queue, "own_music_operations": &ops, "direct_messages": &dm} {
+		if err = json.Unmarshal(doc[name], target); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(queue) != 2 || queue[0]["queue_index"] != float64(0) || queue[1]["queue_index"] != float64(2) || queue[0]["session_id"] != "export-session" || queue[0]["revision"] != float64(9) {
+		t.Fatalf("own queue projection: %s", doc["own_music_queue_items"])
+	}
+	if len(ops) != 1 || ops[0]["request_id"] != "own-request" {
+		t.Fatalf("own receipt projection: %s", doc["own_music_operations"])
+	}
+	for _, forbidden := range []string{"Foreign Requester", "foreign-item", "foreign-request", "secret-request-hash", "receipt-private-payload", "excluded-future"} {
+		if strings.Contains(string(doc["own_music_queue_items"])+string(doc["own_music_operations"]), forbidden) {
+			t.Fatalf("music export leaked %s", forbidden)
+		}
+	}
+	if len(dm) != 1 || dm[0]["content"] != nil || dm[0]["ciphertext"] != "opaque+/cipher==" || dm[0]["e2ee_metadata"] != `{"opaque":"metadata"}` {
+		t.Fatalf("ciphertext changed: %s", doc["direct_messages"])
+	}
+}
+
+func TestDataExportDisabledDeletedAndRevokedIdentityGuards(t *testing.T) {
+	db := newTestDB(t)
+	execSeed(t, db, []seedStmt{{q: `INSERT INTO users(id,username,password_hash) VALUES('export-live','exportlive','hash')`}})
+	repo := NewSQLiteDataExportRepo(wrapForRepo(db))
+	user := &models.User{ID: "export-live"}
+	job, err := repo.Create(context.Background(), user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Conn.Exec(`INSERT INTO account_lifecycle(user_id,disabled_at,version) VALUES('export-live',?,1)`, time.Now().Unix()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = repo.Create(context.Background(), user); !errors.Is(err, pkg.ErrUnauthorized) {
+		t.Fatalf("disabled create: %v", err)
+	}
+	if _, err = repo.Get(context.Background(), user.ID, job.ID); !errors.Is(err, pkg.ErrNotFound) {
+		t.Fatalf("disabled get: %v", err)
+	}
+	if _, err = repo.Download(context.Background(), user.ID, job.ID); !errors.Is(err, pkg.ErrNotFound) {
+		t.Fatalf("disabled download: %v", err)
+	}
+	if _, err = db.Conn.Exec(`UPDATE account_lifecycle SET disabled_at=NULL WHERE user_id='export-live'`); err != nil {
+		t.Fatal(err)
+	}
+	nextVersion := user.TokenVersion + 1
+	if _, err = db.Conn.Exec(`UPDATE users SET token_version=? WHERE id='export-live'`, nextVersion); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = repo.Create(context.Background(), user); !errors.Is(err, pkg.ErrUnauthorized) {
+		t.Fatalf("revoked identity create: %v", err)
+	}
+	if _, err = db.Conn.Exec(`UPDATE users SET deleted_at=? WHERE id='export-live'`, time.Now().Unix()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = repo.Get(context.Background(), user.ID, job.ID); !errors.Is(err, pkg.ErrNotFound) {
+		t.Fatalf("deleted get: %v", err)
+	}
+	if _, err = repo.Download(context.Background(), user.ID, job.ID); !errors.Is(err, pkg.ErrNotFound) {
+		t.Fatalf("deleted download: %v", err)
+	}
+}
+
+// This wrapper pauses only RawDB unwrapping: all snapshot rows have been read
+// and closed, but the final publication transaction has not acquired its lock.
+type gatedExportPublication struct {
+	database.TxQuerier
+	reached chan struct{}
+	release chan struct{}
+}
+
+func (q *gatedExportPublication) Unwrap() database.TxQuerier {
+	close(q.reached)
+	<-q.release
+	return q.TxQuerier
+}
+
+var _ database.TxQuerier = (*gatedExportPublication)(nil)
+
+func TestDataExportFinalPublicationCannotResurrectDeletedSnapshot(t *testing.T) {
+	db := newTestDB(t)
+	execSeed(t, db, []seedStmt{{q: `INSERT INTO users(id,username,password_hash,email) VALUES('export-retire','exportretire','hash','private@example.invalid')`}})
+	session, _ := createLogicalSession(t, NewSQLiteAuthSessionRepo(wrapForRepo(db)), "export-retire", "export-retiring-session", "export-retiring-refresh")
+	user := &models.User{ID: "export-retire", Email: ptrString("private@example.invalid"), TokenVersion: session.TokenVersion}
+	repo := NewSQLiteDataExportRepo(wrapForRepo(db))
+	prior, err := repo.Create(context.Background(), user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gate := &gatedExportPublication{TxQuerier: wrapForRepo(db), reached: make(chan struct{}), release: make(chan struct{})}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { _, err := NewSQLiteDataExportRepo(gate).Create(ctx, user); done <- err }()
+	select {
+	case <-gate.reached:
+	case <-ctx.Done():
+		t.Fatal("export never reached final publication")
+	}
+	if err := NewSQLiteAccountAnonymizationRepo(wrapForRepo(db)).Anonymize(ctx, user.ID, session.ID, "hash", "", time.Now().Unix()); err != nil {
+		close(gate.release)
+		t.Fatal(err)
+	}
+	close(gate.release)
+	select {
+	case err := <-done:
+		if !errors.Is(err, pkg.ErrUnauthorized) {
+			t.Fatalf("stale publication: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("export publication did not settle")
+	}
+	var count int
+	if err := db.Conn.QueryRow(`SELECT COUNT(*) FROM data_exports WHERE user_id=?`, user.ID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatal("export snapshot survived or was recreated after deletion")
+	}
+	if _, err := repo.Download(ctx, user.ID, prior.ID); !errors.Is(err, pkg.ErrNotFound) {
+		t.Fatalf("retired snapshot readable: %v", err)
 	}
 }

@@ -61,6 +61,9 @@ PATCH /api/users/me/saved/{id}
 DELETE /api/users/me/saved/{id}
 GET /api/users/{userId}/note
 PUT /api/users/{userId}/note
+POST /api/game-join/targets
+POST /api/game-join/tickets
+POST /api/game-join/tickets/consume
 GET /api/servers
 POST /api/servers
 POST /api/servers/join
@@ -91,6 +94,7 @@ GET /api/dms/{channelId}/search
 PATCH /api/dms/channels/{channelId}/e2ee
 POST /api/dms/{channelId}/read
 POST /api/dms/{channelId}/unread
+PATCH /api/group-dms/{groupId}/settings
 GET /api/group-dms
 POST /api/group-dms
 GET /api/group-dms/{groupId}
@@ -156,6 +160,10 @@ GET /api/friends
 DELETE /api/friends/{userId}
 POST /api/bots
 GET /api/bots
+POST /api/bots/{botID}/game-identity
+GET /api/application-game-grants
+PUT /api/application-game-grants/{botID}
+DELETE /api/application-game-grants/{botID}
 POST /api/bots/{botID}/revoke
 POST /api/bots/{botID}/remove
 POST /api/bots/{botID}/transfer-requests
@@ -194,6 +202,7 @@ DELETE /api/admin/users/{id}/ban
 DELETE /api/admin/users/{id}
 PATCH /api/admin/users/{id}/platform-admin
 GET /api/admin/logs
+GET /api/admin/logs/health
 DELETE /api/admin/logs
 POST /api/livekit/webhook
 GET /api/stats
@@ -279,6 +288,7 @@ GET /api/servers/{serverId}/voice/clips/consent
 POST /api/servers/{serverId}/voice/clips/start
 POST /api/servers/{serverId}/voice/clips/{recordingId}/stop
 POST /api/servers/{serverId}/channels/{channelId}/music/play
+POST /api/servers/{serverId}/channels/{channelId}/music/control-session
 GET /api/servers/{serverId}/channels/{channelId}/music/search
 POST /api/servers/{serverId}/channels/{channelId}/music/skip
 POST /api/servers/{serverId}/channels/{channelId}/music/pause

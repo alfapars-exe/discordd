@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   owner: "owner-1" as string | null,
   generation: 4,
-  overlayEnabled: true,
+  overlayEnabled: true, compatibility:false,
   notificationConsent: true,
   notificationActionsConsent: true,
   clickableConsent: true,
@@ -23,13 +23,13 @@ vi.mock("../stores/authStore", () => ({
 }));
 vi.mock("../stores/voiceStore", () => ({
   useVoiceStore: Object.assign((pick: (state: unknown) => unknown) => pick({
-    voiceOverlayEnabled: mocks.overlayEnabled,
+    voiceOverlayCompatibility:mocks.compatibility, voiceOverlayEnabled: mocks.overlayEnabled,
     voiceOverlayNotifications: mocks.notificationConsent,
     voiceOverlayNotificationActions: mocks.notificationActionsConsent,
     voiceOverlayClickableActions: mocks.clickableConsent,
   }), {
     getState: () => ({
-      voiceOverlayEnabled: mocks.overlayEnabled,
+      voiceOverlayCompatibility:mocks.compatibility, voiceOverlayEnabled: mocks.overlayEnabled,
       voiceOverlayNotifications: mocks.notificationConsent,
       voiceOverlayNotificationActions: mocks.notificationActionsConsent,
       voiceOverlayClickableActions: mocks.clickableConsent,
@@ -61,7 +61,7 @@ function emit(session: string) {
 beforeEach(() => {
   mocks.owner = "owner-1";
   mocks.generation = 4;
-  mocks.overlayEnabled = true;
+  mocks.overlayEnabled = true; mocks.compatibility=false;
   mocks.notificationConsent = true;
   mocks.notificationActionsConsent = true;
   mocks.clickableConsent = true;
@@ -200,3 +200,4 @@ describe("useOverlayNotificationActions", () => {
     expect(mocks.navigate).toHaveBeenCalledTimes(1);
   });
 });
+it("does not open the inbox after compatibility changes across native confirmation",async()=>{let finish!:(value:boolean)=>void;mocks.confirm.mockReturnValueOnce(new Promise(resolve=>{finish=resolve;}));const view=renderHook(()=>useOverlayNotificationActions(true,true));const old=view.result.current!;act(()=>mocks.receive?.({session:old}));mocks.compatibility=true;await act(async()=>finish(true));expect(mocks.navigate).not.toHaveBeenCalled();view.rerender();expect(view.result.current).toBeNull();mocks.compatibility=false;view.rerender();expect(view.result.current).not.toBe(old);});

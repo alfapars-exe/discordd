@@ -44,10 +44,36 @@ type MusicHandler struct {
 	// commands. See RateLimiters.MusicPlay for the sizing rationale.
 	playLimiter *ratelimit.MessageRateLimiter
 	search      func(context.Context, string) ([]models.MusicTrack, error)
+	access      MusicAccessDependencies
 }
 
-func NewMusicHandler(music services.MusicBotService, perms services.ChannelPermResolver, playLimiter *ratelimit.MessageRateLimiter) *MusicHandler {
-	return &MusicHandler{music: music, perms: perms, playLimiter: playLimiter, search: services.SearchMusicTracks}
+func NewMusicHandler(music services.MusicBotService, perms services.ChannelPermResolver, playLimiter *ratelimit.MessageRateLimiter, access ...MusicAccessDependencies) *MusicHandler {
+	h := &MusicHandler{music: music, perms: perms, playLimiter: playLimiter, search: services.SearchMusicTracks}
+	if len(access) > 0 {
+		h.access = access[0]
+	}
+	return h
+}
+
+// musicFailure preserves existing media reason codes while distinguishing
+// canceled callers, upstream deadlines and application faults.
+func musicFailure(w http.ResponseWriter, r *http.Request, err error, operation string) bool {
+	code := services.MusicErrorCode(err)
+	if errors.Is(err, context.Canceled) && r.Context().Err() != nil {
+		return true
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		if code == "" {
+			code = "MUSIC_NETWORK"
+		}
+		pkg.ErrorCtxCode(r.Context(), w, http.StatusGatewayTimeout, "YouTube request timed out", code, "timeout", err, slog.String("component", "music"), slog.String("operation", operation))
+		return true
+	}
+	if code != "" {
+		pkg.ErrorCtxCode(r.Context(), w, http.StatusBadGateway, "failed to resolve YouTube track", code, "upstream", err, slog.String("component", "music"), slog.String("operation", operation))
+		return true
+	}
+	return false
 }
 
 // Search — GET .../music/search?q=. Returns up to five selectable YouTube
@@ -83,8 +109,7 @@ func (h *MusicHandler) Search(w http.ResponseWriter, r *http.Request) {
 			pkg.Error(w, err)
 			return
 		}
-		if code := services.MusicErrorCode(err); code != "" {
-			pkg.ErrorWithCode(w, http.StatusBadGateway, "failed to search YouTube", code)
+		if musicFailure(w, r, err, "search") {
 			return
 		}
 		pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "failed to search YouTube", err)
@@ -105,6 +130,9 @@ type playResponse struct {
 // Body: {"url": "<youtube url>"}. Lazy-starts the bot if absent. Requires
 // PermSpeak in the target voice channel (same gate as actually talking).
 func (h *MusicHandler) Play(w http.ResponseWriter, r *http.Request) {
+	if h.guardedCommand(w, r, "play", models.PermSpeak) {
+		return
+	}
 	user, ok := r.Context().Value(UserContextKey).(*models.User)
 	if !ok {
 		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
@@ -161,11 +189,22 @@ func (h *MusicHandler) Play(w http.ResponseWriter, r *http.Request) {
 		musicHandlerLogger.Warn("play: extend write deadline failed", slog.String("err", pkg.ErrText(err)))
 	}
 
-	tracks, err := h.music.Enqueue(r.Context(), user.ID, channelID, req.URL)
+	ctx, err := h.musicAccessContext(r, user.ID, channelID, models.PermSpeak)
 	if err != nil {
-		if code := services.MusicErrorCode(err); code != "" {
-			musicHandlerLogger.Warn("play: YouTube resolution failed", "code", code, "err", pkg.ErrText(err))
-			pkg.ErrorWithCode(w, http.StatusBadGateway, "failed to resolve YouTube track", code)
+		pkg.Error(w, err)
+		return
+	}
+	tracks, err := h.music.Enqueue(ctx, user.ID, channelID, req.URL)
+	if err != nil {
+		if errors.Is(err, services.ErrMusicProtocolRequired) {
+			musicControlError(w, err)
+			return
+		}
+		if errors.Is(err, pkg.ErrForbidden) || errors.Is(err, pkg.ErrUnauthorized) || errors.Is(err, pkg.ErrConflict) || errors.Is(err, pkg.ErrNotFound) {
+			pkg.Error(w, err)
+			return
+		}
+		if musicFailure(w, r, err, "play") {
 			return
 		}
 		if errors.Is(err, pkg.ErrBadRequest) {
@@ -191,22 +230,34 @@ func (h *MusicHandler) Play(w http.ResponseWriter, r *http.Request) {
 // Skip — POST /api/servers/{serverId}/channels/{channelId}/music/skip
 // Drops the currently-playing track; queue advances. PermSpeak gate.
 func (h *MusicHandler) Skip(w http.ResponseWriter, r *http.Request) {
+	if h.guardedCommand(w, r, "skip", models.PermSpeak) {
+		return
+	}
 	h.simpleCommand(w, r, models.PermSpeak, h.music.Skip)
 }
 
 // Pause — POST /api/servers/.../music/pause
 func (h *MusicHandler) Pause(w http.ResponseWriter, r *http.Request) {
+	if h.guardedCommand(w, r, "pause", models.PermSpeak) {
+		return
+	}
 	h.simpleCommand(w, r, models.PermSpeak, h.music.Pause)
 }
 
 // Resume — POST /api/servers/.../music/resume
 func (h *MusicHandler) Resume(w http.ResponseWriter, r *http.Request) {
+	if h.guardedCommand(w, r, "resume", models.PermSpeak) {
+		return
+	}
 	h.simpleCommand(w, r, models.PermSpeak, h.music.Resume)
 }
 
 // Stop — POST /api/servers/.../music/stop. Higher gate (ManageChannels) since
 // it kicks the bot for everyone listening.
 func (h *MusicHandler) Stop(w http.ResponseWriter, r *http.Request) {
+	if h.guardedCommand(w, r, "stop", models.PermManageChannels) {
+		return
+	}
 	h.simpleCommand(w, r, models.PermManageChannels, h.music.Stop)
 }
 
@@ -228,6 +279,9 @@ type seekMusicRequest struct {
 }
 
 func (h *MusicHandler) RemoveQueueItem(w http.ResponseWriter, r *http.Request) {
+	if h.guardedCommand(w, r, "remove", models.PermSpeak) {
+		return
+	}
 	user, ok := r.Context().Value(UserContextKey).(*models.User)
 	if !ok {
 		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
@@ -255,6 +309,9 @@ func (h *MusicHandler) RemoveQueueItem(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *MusicHandler) ReorderQueue(w http.ResponseWriter, r *http.Request) {
+	if h.guardedCommand(w, r, "reorder", models.PermSpeak) {
+		return
+	}
 	user, ok := r.Context().Value(UserContextKey).(*models.User)
 	if !ok {
 		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
@@ -278,6 +335,9 @@ func (h *MusicHandler) ReorderQueue(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *MusicHandler) ShuffleQueue(w http.ResponseWriter, r *http.Request) {
+	if h.guardedCommand(w, r, "shuffle", models.PermSpeak) {
+		return
+	}
 	user, ok := r.Context().Value(UserContextKey).(*models.User)
 	if !ok {
 		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
@@ -301,6 +361,9 @@ func (h *MusicHandler) ShuffleQueue(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *MusicHandler) SetRepeatMode(w http.ResponseWriter, r *http.Request) {
+	if h.guardedCommand(w, r, "repeat", models.PermSpeak) {
+		return
+	}
 	user, ok := r.Context().Value(UserContextKey).(*models.User)
 	if !ok {
 		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
@@ -324,6 +387,9 @@ func (h *MusicHandler) SetRepeatMode(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *MusicHandler) Seek(w http.ResponseWriter, r *http.Request) {
+	if h.guardedCommand(w, r, "seek", models.PermSpeak) {
+		return
+	}
 	user, ok := r.Context().Value(UserContextKey).(*models.User)
 	if !ok {
 		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
@@ -347,6 +413,9 @@ func (h *MusicHandler) Seek(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *MusicHandler) Restore(w http.ResponseWriter, r *http.Request) {
+	if h.guardedCommand(w, r, "restore", models.PermSpeak) {
+		return
+	}
 	user, ok := r.Context().Value(UserContextKey).(*models.User)
 	if !ok {
 		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
@@ -357,7 +426,12 @@ func (h *MusicHandler) Restore(w http.ResponseWriter, r *http.Request) {
 		pkg.Error(w, err)
 		return
 	}
-	if err := h.music.Restore(r.Context(), channelID); err != nil {
+	ctx, err := h.musicAccessContext(r, user.ID, channelID, models.PermSpeak)
+	if err != nil {
+		pkg.Error(w, err)
+		return
+	}
+	if err := h.music.Restore(ctx, channelID); err != nil {
 		pkg.Error(w, err)
 		return
 	}
@@ -373,6 +447,31 @@ func (h *MusicHandler) Restore(w http.ResponseWriter, r *http.Request) {
 // on the happy path with nothing meaningful for the caller to do about it.
 func (h *MusicHandler) State(w http.ResponseWriter, r *http.Request) {
 	channelID := r.PathValue("channelId")
+	user, ok := r.Context().Value(UserContextKey).(*models.User)
+	if !ok || user == nil {
+		pkg.Error(w, pkg.ErrUnauthorized)
+		return
+	}
+	if err := h.requirePerm(r, user.ID, channelID, models.PermViewChannel); err != nil {
+		pkg.Error(w, err)
+		return
+	}
+	if reader, ok := h.music.(services.PublicMusicStateReader); ok {
+		err := reader.WithPublicMusicState(r.Context(), channelID, func(state *models.MusicBotChannelState) { pkg.JSON(w, http.StatusOK, state) })
+		if err != nil {
+			pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "failed to read music state", err)
+		}
+		return
+	}
+	if reader, ok := h.music.(services.ErrorAwareMusicState); ok {
+		state, err := reader.GetStateWithError(r.Context(), channelID)
+		if err != nil {
+			pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "failed to read music state", err)
+			return
+		}
+		pkg.JSON(w, http.StatusOK, state)
+		return
+	}
 	state := h.music.GetState(channelID)
 	pkg.JSON(w, http.StatusOK, state)
 }
@@ -408,12 +507,30 @@ func (h *MusicHandler) simpleCommand(
 }
 
 func (h *MusicHandler) requirePerm(r *http.Request, userID, channelID string, required models.Permission) error {
+	if user, ok := r.Context().Value(UserContextKey).(*models.User); ok && user.IsBot {
+		return pkg.ErrForbidden
+	}
+	if h.access.Channels != nil {
+		channel, err := h.access.Channels.GetByID(r.Context(), channelID)
+		if err != nil {
+			return err
+		}
+		if channel.Type != models.ChannelTypeVoice || channel.ServerID != r.PathValue("serverId") {
+			return pkg.ErrForbidden
+		}
+	}
 	effective, err := h.perms.ResolveChannelPermissions(r.Context(), userID, channelID)
 	if err != nil {
 		return err
 	}
-	if !effective.Has(required) {
+	if !effective.Has(required) || !effective.Has(models.PermViewChannel) {
 		return pkg.ErrForbidden
+	}
+	if required != models.PermViewChannel && h.access.Voice != nil && h.access.Voice.GetUserVoiceChannelID(userID) != channelID {
+		// Existing remote moderator control is intentionally limited to Stop.
+		if required != models.PermManageChannels || !effective.Has(models.PermManageChannels) {
+			return pkg.ErrForbidden
+		}
 	}
 	return nil
 }

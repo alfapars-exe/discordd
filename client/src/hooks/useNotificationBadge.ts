@@ -11,6 +11,9 @@
 import { useEffect, useRef } from "react";
 import { useReadStateStore } from "../stores/readStateStore";
 import { useDMStore } from "../stores/dmStore";
+import { useGroupDMStore } from "../stores/groupDMStore";
+import { getAuthGeneration } from "../api/client";
+import { useAuthStore } from "../stores/authStore";
 import { useServerStore } from "../stores/serverStore";
 import { useNotificationStore } from "../stores/notificationStore";
 import { usePreferencesStore } from "../stores/preferencesStore";
@@ -138,7 +141,9 @@ export function useNotificationBadge(): void {
   const channelUnreads = useReadStateStore((s) => s.unreadCounts);
   const dmUnreads = useDMStore((s) => s.dmUnreadCounts);
   const dmChannels = useDMStore((s) => s.channels);
-  const notificationUnread = useNotificationStore((s) => s.unreadCount);
+  const groups=useGroupDMStore(s=>s.groups),groupOwner=useGroupDMStore(s=>s.ownerId),groupGeneration=useGroupDMStore(s=>s.authGeneration),groupsReady=useGroupDMStore(s=>s.groupsReady);
+  const owner=useAuthStore(s=>s.user?.id),generation=useAuthStore(()=>getAuthGeneration());
+  const notificationUnread = useNotificationStore((s) => s.badgeUnreadCount);
   const badgeEnabled = usePreferencesStore((s) => {
     const value = s.data.notifications;
     return !value || typeof value !== "object" || Array.isArray(value) || (value as Record<string, unknown>).unreadBadge !== false;
@@ -179,7 +184,8 @@ export function useNotificationBadge(): void {
       const ch = dmChannels.find((d) => d.id === chId);
       return ch?.is_muted ? sum : sum + c;
     }, 0);
-    const total = badgeEnabled ? channelTotal + dmTotal + notificationUnread : 0;
+    const groupTotal=groupsReady&&owner===groupOwner&&generation===groupGeneration?groups.reduce((sum,g)=>sum+(!g.is_muted&&(g.read_key_epoch===undefined||g.read_key_epoch===g.key_epoch)&&g.members.some(m=>m.id===owner)&&Number.isSafeInteger(g.unread_count)&&g.unread_count>0?g.unread_count:0),0):0;
+    const total = badgeEnabled ? channelTotal + dmTotal + groupTotal + notificationUnread : 0;
 
     document.title = total > 0
       ? `(${formatNotificationBadge(total)}) ${BASE_TITLE}`
@@ -209,5 +215,5 @@ export function useNotificationBadge(): void {
         }
       }
     }
-  }, [channelUnreads, dmUnreads, dmChannels, notificationUnread, activeServerId, mutedServerIds, badgeEnabled]);
+  }, [channelUnreads, dmUnreads, dmChannels, groups,groupOwner,groupGeneration,groupsReady,owner,generation,notificationUnread, activeServerId, mutedServerIds, badgeEnabled]);
 }

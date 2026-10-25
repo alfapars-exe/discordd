@@ -1,7 +1,7 @@
 {
   "version": "2.11.111",
   "authorization": "User explicitly requested a current-work checkpoint commit/push, production HF update and Windows update on 2026-10-25; remaining P0-P11 implementation continues afterwards.",
-  "status": "production_rollback_verified_new_postgres_candidate_pending",
+  "status": "production_checkpoint_published_verified",
   "verified": [
     "Current local Go test ./..., go vet ./... and go build ./... passed using Go1.27.0 before CI baseline remediation.",
     "Client final local regression: 337 files, 3249 passed, zero failed/pending. Report C:/Users/PARS/AppData/Local/Temp/hichat-release-2.11.111-final.json.",
@@ -19,7 +19,8 @@
     "Complete CI40158957121 at05eaf82a passed21jobs, including all303repository/709service tests in exact-name balanced shards, base race+coverage tests, client3249tests, Electron162tests, E2E5tests and production Docker/Trivy.",
     "The first full-source HF deployment failed its real PostgreSQL startup connection check. Source-only recovery restored the exact previous tree in333669de; HTTP/api/ready returned200/ready again. No Windows2.11.111 release was published during this failure.",
     "Actual disposable PostgreSQL18 inline-PEM verify-full mTLS integration passed under bothGo1.26.10 andGo1.27.3, including a newly opened second pooled TLS connection after temporary PEM removal. FullGo1.26.10 golangci-lint2.12.2 reports0issues on latest candidate.",
-    "New candidate adds fixed safe PostgreSQL failure categories, at most3 transient network startup attempts with cancellation, and a read-only BuildKit-secret PostgreSQL/TLS probe. Authentication and certificate failures do not retry or weaken verification. Focused retry/classifier/build-secret tests passed."
+    "New candidate adds fixed safe PostgreSQL failure categories, at most3 transient network startup attempts with cancellation, and a read-only BuildKit-secret PostgreSQL/TLS probe. Authentication and certificate failures do not retry or weaken verification. Focused retry/classifier/build-secret tests passed.",
+    "Current release source a2a86fd0 passed complete21-job CI40165242229 and real Windows clean install2.11.110 then in-place upgrade2.11.111 in smoke40165242209. HF6dd07e20 is RUNNING at the exact deployed revision with ready/healthy endpoints; public root/login/channels entries load2.11.111 and four served model/WASM assets match approved source SHA256."
   ],
   "release_gates": [
     "Existing main CI40152688980 failures were remediated locally: fresh Sentry types, Docker shared-contract context, module/lint issues, headless desktop import, required-email E2E fixture and reviewed static-policy false positives. New remote CI must pass before tagging/publication; local success is not represented as clean CI success.",
@@ -49,5 +50,71 @@
     "rollback_readiness": "ready",
     "persistent_data_and_secrets_changed": false,
     "windows_tag_or_publication_created": false
-  }
+  },
+  "release_source_commit": "a2a86fd096e551a6789be5a5d3917932f12127cf",
+  "final_candidate_checks": {
+    "ci_run": 40165242229,
+    "ci_jobs_succeeded": 21,
+    "desktop_smoke_run": 40165242209,
+    "windows_clean_install": "2.11.110",
+    "windows_in_place_upgrade": "2.11.111",
+    "installed_native_helpers_and_generic_updater": "verified",
+    "hf_deployment_run": 40165965374,
+    "hf_running_commit": "6dd07e20ee4731dd0da8be0685173d5c32e31781",
+    "hf_running_commit_and_readiness": "verified",
+    "web_version": "2.11.111",
+    "web_entry_routes_verified": [
+      "/",
+      "/login",
+      "/channels/@me"
+    ],
+    "public_model_and_wasm_hashes_match_source": true,
+    "hf_build_probe_log_confirmation": "PostgreSQL 18 SQL connection verified; TLS=TLSv1.3; client certificate accepted at 2026-10-25T05:35:48.562Z; inspector40166440495",
+    "windows_tag_created": true,
+    "desktop_release_run": 40166540038,
+    "tag": "v2.11.111",
+    "public_update_feeds": {
+      "status": "verified",
+      "tag": "v2.11.111",
+      "release_url": "https://github.com/alfapars-exe/discordd/releases/tag/v2.11.111",
+      "feeds": [
+        {
+          "feed": "huggingface",
+          "version": "2.11.111",
+          "installer_bytes": 165874293,
+          "installer_sha256": "0cabd75a2fe606febe990c100ea1dc37741a55585f4a4578efbe41c67558c448",
+          "blockmap_sha256": "576c9909de045d6b36fe8e1d17d5318a8d265c6ca37405c2e24fe520b97fa55c"
+        },
+        {
+          "feed": "github",
+          "version": "2.11.111",
+          "installer_bytes": 165874293,
+          "installer_sha256": "0cabd75a2fe606febe990c100ea1dc37741a55585f4a4578efbe41c67558c448",
+          "blockmap_sha256": "576c9909de045d6b36fe8e1d17d5318a8d265c6ca37405c2e24fe520b97fa55c"
+        }
+      ]
+    },
+    "tagged_windows_clean_install_and_upgrade": "passed in job121088644222 before publication",
+    "ghcr": {
+      "status": "verified",
+      "image": "ghcr.io/alfapars-exe/hichat-server",
+      "tags": [
+        "v2.11.111",
+        "latest"
+      ],
+      "index_digest": "sha256:866a85be5ed185cd19716f03a7574c7f97ca10d35af6ee8adbffc6136e17e061",
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ],
+      "release_workflow_conclusion": "success"
+    }
+  },
+  "remaining_acceptance": [
+    "Installer is unsigned; Windows reputation/trust is not certified.",
+    "Physical audio, camera, screen/system audio and two-client music acceptance remain open.",
+    "Real existing user profile migration and desktop rollback acceptance remain open; CI verified clean110 install and in-place111 upgrade without launching the app.",
+    "Remaining P0-P11 coverage is not complete."
+  ],
+  "historical_evidence_note": "The verified array and release_gates preserve chronological attempts and earlier blockers. final_candidate_checks and remaining_acceptance describe the current release; earlier pending statements do not override later measured results."
 }

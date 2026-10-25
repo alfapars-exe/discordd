@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { createRegisteredGamesService, parseProcessSnapshot, type DetectedExecutable } from "./registered-games";
+import { createRegisteredGamesService, parseProcessSnapshot, validateGameDisplayName, type DetectedExecutable } from "./registered-games";
 
 const executableExists = async () => "available" as const;
 
@@ -528,4 +528,20 @@ test("a successful fresh activity projection remains available while its next sc
     service.dispose();
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("user names validate without path input, persist literally, and invalidate cached activity", async () => {
+ const directory=await mkdtemp(path.join(os.tmpdir(),"hichat-game-name-"));const filePath=path.join(directory,"games.json");const ticks:Array<()=>void>=[];
+ const options={filePath,platform:"win32" as const,probeExecutable:executableExists,scanExecutables:async()=>[{name:"game.exe",executablePath:"C:\\Games\\game.exe"}],scheduleEvery:(fn:()=>void)=>{ticks.push(fn);return 1 as unknown as ReturnType<typeof setInterval>},cancelSchedule:()=>{}};
+ const service=createRegisteredGamesService(options);
+ try{const game=await service.addExecutable("C:\\Games\\game.exe");await service.setShareAllowed(game.id,true);await service.setBackgroundDetectionEnabled(true);await waitForActivity(service,a=>a.game!==null);
+ for(const invalid of [null,42,"","   ","x".repeat(81)," "+"x".repeat(80)+" ","bad\nname","C:\\Games\\game.exe","foo/bar"])await assert.rejects(()=>service.setDisplayName(game.id,invalid),TypeError);
+ assert.equal(validateGameDisplayName("  My Game.exe  "),"My Game.exe");assert.equal(await service.setDisplayName(game.id,"  My Game.exe  "),true);assert.equal((await service.getActivity()).game,null,"old cached title cannot publish after rename");ticks[0]();assert.equal((await waitForActivity(service,a=>a.game!==null)).game?.name,"My Game.exe");
+ const reloaded=createRegisteredGamesService({...options,scheduleEvery:()=>1 as unknown as ReturnType<typeof setInterval>});assert.equal((await reloaded.snapshot()).games[0].displayName,"My Game.exe");reloaded.dispose();assert.equal(await service.setDisplayName("absent","Name"),false);
+ const publicGame=(await service.snapshot()).games[0];assert.equal("executablePath" in publicGame,false);assert.equal(publicGame.shareAllowed,true);assert.equal(publicGame.overlayAllowed,false);
+ }finally{service.dispose();await rm(directory,{recursive:true,force:true})}
+});
+test("failed game-name persistence rolls back the title without erasing the record",async()=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),"hichat-game-name-failure-"));const filePath=path.join(directory,"games.json");const service=createRegisteredGamesService({filePath,platform:"win32",probeExecutable:executableExists,scanExecutables:async()=>[]});
+ try{const game=await service.addExecutable("C:\\Games\\game.exe");await rm(filePath);await mkdir(filePath);await assert.rejects(()=>service.setDisplayName(game.id,"Replacement"));assert.equal((await service.snapshot()).games[0].displayName,"game");assert.equal((await service.snapshot()).games[0].id,game.id)}finally{service.dispose();await rm(directory,{recursive:true,force:true})}
 });

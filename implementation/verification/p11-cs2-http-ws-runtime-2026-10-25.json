@@ -1,0 +1,116 @@
+{
+  "date": "2026-10-25",
+  "source": "4b0e196d",
+  "status": "local_http_ws_native_controller_integration_verified_real_steam_acceptance_open",
+  "scope": "Exact immutable source API, real authenticated HTTP/WebSocket routes, isolated consistent COPY of existing synthetic QA accounts/database, and exact compiled native consume controller with external dispatch stubbed.",
+  "isolation": {
+    "api_origin": "http://127.0.0.1:18183",
+    "consistent_sqlite_backup_integrity": "ok",
+    "original_qa_data_and_process_not_modified": true,
+    "external_service_credentials": "absent",
+    "uploads_directory": "isolated empty local directory",
+    "real_account_or_invite_data_used": false
+  },
+  "source_hash_normalization": "SHA-256 of UTF-8 source bytes with CRLF normalized to LF",
+  "source_hashes": {
+    "server/services/game_join_service.go": "743c7eb904245b01f027d6f3002b7159abd1e247af9015cbacbc6d6af05746ce",
+    "server/services/game_join_policy.go": "dfc4edfe2077aa764b0d90883983e0a4eeaeae1f4ea49fc20dfdc32c85593dff",
+    "server/handlers/game_join.go": "099026421eea819f1cb39a4b452c0a4b983825aee1e751df1231d74d7e1af70e",
+    "server/ws/game_join.go": "458225f56998976bb7210ad4c77a0ebc8bba02df1a4bf23ff20b689f3277e477",
+    "server/init_services.go": "352cc22350bb3ae87335eac92304e9eb22cb0a3d836e9a1b9c32c00baa350574",
+    "server/init_routes_game_join.go": "8906ece44a0b3acb1f7269c8b90d427cbfbfe0779b3809feb7c34690fec2ada7",
+    "electron/cs2-join-controller.ts": "08898ca56a19dac96c5b2cce1ae701d4cbe8e99d237c7ee4b10d26573f140c00",
+    "electron/cs2-join-contract.ts": "b8d0507b88e2e90cf7ec019bdae38d3e2e4401d999ae44b24bc9c1d252cf4118",
+    "electron/api-proxy.ts": "206037e0fdfa6cc0462c2b4622fde7eef1e84267515d10fb3123a4faf6c433de"
+  },
+  "compiled_js_binary_hashes": {
+    "dist-electron/cs2-join-controller.js": "a37d91d88188d19ee1a4194aaa2ef5368a82448bde9a71ea73c354d186af3512",
+    "dist-electron/cs2-join-contract.js": "ee546feaa110482d2fe803a754ee2152dfb1ad26be4409e3caac8a9fbcf71532",
+    "dist-electron/api-proxy.js": "f94a54ccf1c08a43191210c088cd48438a3d1ce4bf1999cde83118e06df4eab8"
+  },
+  "api_executable_sha256": "0e7e2cb8a87d9c0e27d30d8af31e63052095192a5c2ec51106db9b1dd920f38e",
+  "checks": {
+    "friend_http_ws_and_native_controller": {
+      "login_two_existing_copied_accounts": 200,
+      "real_ws_explicit_canonical_activity": true,
+      "physical_host_offer_ack": true,
+      "authorized_friend_target_joinable": true,
+      "mint_201_without_recipe": true,
+      "expected_account_mismatch": 409,
+      "cross_account_consume": 403,
+      "one_use_consume": 200,
+      "replayed_consume": 404,
+      "preference_off_consume": 403,
+      "preference_off_target_hidden": true,
+      "compiled_native_real_http_consume": "forwarded",
+      "native_fixed_headers_body_and_origin_verified": true,
+      "stub_external_dispatch_count": 1,
+      "native_replay_denied_before_fetch": true,
+      "real_server_ticket_after_native_consume": 404,
+      "host_disconnect_consume": 404,
+      "disconnected_target_hidden": true,
+      "no_recipe_or_ack_broadcast_to_viewer": true,
+      "no_media_capture_or_steam_launch": true
+    },
+    "shared_voice_and_community": {
+      "real_ws_server_voice_states": 2,
+      "normal_shared_voice_target_joinable": true,
+      "admin_classification_update": 200,
+      "community_consume_denied": 403,
+      "community_target_hidden": true,
+      "normal_classification_restored": true,
+      "voice_leave_consume_denied": 403,
+      "departed_target_hidden": true,
+      "media_capture_sfu_connection_audio_and_steam_launch": false
+    },
+    "cleanup": {
+      "own_voice_states_after_cleanup": 0,
+      "original_18181_ready": "unavailable_observed_only_not_modified",
+      "no_media_started": true,
+      "own_api_pid": 55304,
+      "own_api_executable_identity_checked_before_stop": true,
+      "own_api_process_stop_verified": true,
+      "own_port_listening_after_stop": false
+    }
+  },
+  "commands": [
+    {
+      "command": "GOTOOLCHAIN=go1.26.10 GOMAXPROCS=2 go build -p 2 -o <own-temp-exe> .",
+      "source": "frozen 4b0e196d/server",
+      "exit_code": 0
+    },
+    {
+      "command": "node <own-temp>/hichat-cs2-http-ws-4b0-probe.mjs",
+      "exit_code": 0,
+      "scope": "Friend actual HTTP/WS, single-use, fresh preferences, cross-account and disconnect denial"
+    },
+    {
+      "command": "node <own-temp>/hichat-cs2-http-ws-4b0-voice-probe.mjs",
+      "exit_code": 0,
+      "scope": "Actual logical server voice membership via WebSocket and community classification via authorized HTTP"
+    },
+    {
+      "command": "node <own-temp>/hichat-cs2-http-ws-4b0-native-probe.mjs",
+      "exit_code": 0,
+      "scope": "Controlled rerun adds exact compiled native controller using real HTTP consume and stub protocol dispatch"
+    },
+    {
+      "command": "python <own-temp>/hichat-cs2-http-ws-4b0-cleanup-check.py; exact executable PID check and stop only own API",
+      "exit_code": 0
+    }
+  ],
+  "qualifications": [
+    "Voice fixture server/channel/membership/roles were inserted only into the owned QA COPY. Server voice-state admission was exercised without a LiveKit instance, SDK connection, microphone, media track or audible sound.",
+    "Native controller ran its actual compiled factory and real fetch path; only isCurrent endpoint identity and openExternal dispatch were test dependencies. Stub validated the fixed synthetic Steam recipe and counted exactly one dispatch. This is not a real Electron IPC-window, OS protocol handler or CS2 launch acceptance.",
+    "The host's synthetic lobby and inviter IDs came exclusively from repository parity fixtures. No Steam ownership or private-lobby access claim is made.",
+    "The initial cleanup's optional old18181 health check found that independent older fixture unavailable. It was neither stopped nor restarted by this task; the corrected final cleanup records that observation rather than claiming readiness.",
+    "The owned API was stopped after both probe rounds; no test sockets or logical voice states remain in that process."
+  ],
+  "remaining": [
+    "Real Steam-generated CS2 invite and two-user Windows/web game joining",
+    "Actual Electron endpoint/IPC and browser gesture flow acceptance",
+    "Installed Steam/CS2 availability, lobby rules and failure UX on real devices",
+    "Complete application-wide acceptance and distribution gates"
+  ],
+  "production": "No production deployment, external message, real invite, media capture or Steam/protocol launch."
+}

@@ -1,7 +1,9 @@
 /** Friends management page with Online/All/Pending/Blocked/Add tabs and search. */
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo,useRef } from "react";
 import { useTranslation } from "react-i18next";
+import {useAuthStore} from "../../stores/authStore";
+import {getAuthGeneration} from "../../api/client";
 import { useFriendStore } from "../../stores/friendStore";
 import { useBlockStore } from "../../stores/blockStore";
 import { useDMStore } from "../../stores/dmStore";
@@ -15,6 +17,8 @@ import BlockedList from "./BlockedList";
 import PersonalizedSuggestions from "./PersonalizedSuggestions";
 import type { FriendshipWithUser } from "../../types";
 
+const EMPTY_FRIENDS: FriendshipWithUser[] = [];
+
 type FriendsTab = "online" | "all" | "pending" | "blocked" | "add";
 
 function FriendsView() {
@@ -22,10 +26,13 @@ function FriendsView() {
   const [activeTab, setActiveTab] = useState<FriendsTab>("online");
   const [searchQuery, setSearchQuery] = useState("");
 
-  const friends = useFriendStore((s) => s.friends);
-  const incoming = useFriendStore((s) => s.incoming);
-  const outgoing = useFriendStore((s) => s.outgoing);
-  const isLoading = useFriendStore((s) => s.isLoading);
+  const owner=useAuthStore(s=>s.user?.id),generation=useAuthStore(()=>getAuthGeneration());
+  const cachedFriends=useFriendStore(s=>s.friends),cachedIncoming=useFriendStore(s=>s.incoming),cachedOutgoing=useFriendStore(s=>s.outgoing);
+  const friendOwner=useFriendStore(s=>s.ownerId),friendGeneration=useFriendStore(s=>s.authGeneration),friendsStatus=useFriendStore(s=>s.friendsStatus);
+  const ownSnapshot=!!owner&&friendOwner===owner&&friendGeneration===generation;
+  const friends=ownSnapshot?cachedFriends:EMPTY_FRIENDS,incoming=ownSnapshot?cachedIncoming:EMPTY_FRIENDS,outgoing=ownSnapshot?cachedOutgoing:EMPTY_FRIENDS;
+  const retryPending=useRef(false);
+
   const fetchFriends = useFriendStore((s) => s.fetchFriends);
   const fetchRequests = useFriendStore((s) => s.fetchRequests);
   const acceptRequest = useFriendStore((s) => s.acceptRequest);
@@ -162,6 +169,13 @@ function FriendsView() {
     );
   }
 
+  function renderFriends(list:FriendshipWithUser[]){
+    const status=ownSnapshot?friendsStatus:"idle";
+    const retry=async()=>{if(retryPending.current)return;retryPending.current=true;try{await fetchFriends();}finally{retryPending.current=false;}};
+    return <>{status==="error"?<div role="alert"><p>{t("somethingWentWrong")}</p><button type="button" onClick={()=>void retry()}>{t("retry")}</button></div>:status!=="ready"?<p role="status">{t("loading")}</p>:null}
+      {list.length>0||status==="ready"?renderList(list,"friend"):null}</>;
+  }
+
   /** Search bar shown only on Online and All tabs */
   const showSearch = activeTab === "online" || activeTab === "all";
 
@@ -233,12 +247,10 @@ function FriendsView() {
           </div>
         )}
 
-        {isLoading ? (
-          <div className="fv-empty">{t("loading")}</div>
-        ) : activeTab === "online" ? (
-          renderList(filteredOnline, "friend")
+        {activeTab === "online" ? (
+          renderFriends(filteredOnline)
         ) : activeTab === "all" ? (
-          renderList(filteredAll, "friend")
+          renderFriends(filteredAll)
         ) : activeTab === "pending" ? (
           <div>
             {incoming.length > 0 && (

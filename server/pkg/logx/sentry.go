@@ -59,22 +59,39 @@ func (h *sentryHandler) Enabled(ctx context.Context, level slog.Level) bool {
 }
 
 func (h *sentryHandler) Handle(ctx context.Context, r slog.Record) error {
-	if sentryEnabled && r.Level >= slog.LevelError {
+	skip := false
+	r.Attrs(func(a slog.Attr) bool {
+		if a.Key == "event_kind" && a.Value.String() == "http_access" {
+			skip = true
+		}
+		return true
+	})
+	if sentryEnabled && r.Level >= slog.LevelError && !skip {
 		// v0.46 dropped Event.Extra; structured data now goes through Contexts
 		// (Context is map[string]interface{}). Group all slog attrs under one
 		// "attributes" context card.
 		attrs := sentry.Context{}
 		for _, a := range h.attrs {
-			attrs[a.Key] = a.Value.Any()
+			attrs[a.Key] = logValue(a.Value)
 		}
 		r.Attrs(func(a slog.Attr) bool {
-			attrs[a.Key] = a.Value.Any()
+			attrs[a.Key] = logValue(a.Value)
 			return true
 		})
 
 		event := sentry.NewEvent()
 		event.Level = sentry.LevelError
 		event.Message = r.Message
+		event.Timestamp = r.Time
+		event.Tags = map[string]string{}
+		for _, key := range []string{"component", "event_code", "error_kind", "category"} {
+			if v, ok := attrs[key].(string); ok && v != "" {
+				event.Tags[key] = v
+			}
+		}
+		if code := event.Tags["event_code"]; code != "" {
+			event.Fingerprint = []string{event.Tags["component"], code, event.Tags["error_kind"]}
+		}
 		if len(attrs) > 0 {
 			event.Contexts = map[string]sentry.Context{"attributes": attrs}
 		}

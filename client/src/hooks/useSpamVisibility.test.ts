@@ -4,7 +4,7 @@ import { useSpamVisibility } from "./useSpamVisibility";
 import { usePreferencesStore } from "../stores/preferencesStore";
 import { useFriendStore } from "../stores/friendStore";
 import { useAuthStore } from "../stores/authStore";
-import { clearTokens } from "../api/client";
+import { clearTokens, getAuthGeneration } from "../api/client";
 import { recordSpam, decideSpam } from "../api/spam";
 vi.mock("../api/spam", () => ({ recordSpam: vi.fn(), decideSpam: vi.fn() }));
 vi.mock("../api/preferences", () => ({ getPreferences: vi.fn(), updatePreferences: vi.fn(async () => ({ success: true })) }));
@@ -17,7 +17,7 @@ beforeEach(() => {
   usePreferencesStore.getState().reset();
   usePreferencesStore.getState().bindAccount("spam-test-user", "https://spam-test.invalid");
   usePreferencesStore.setState({ data: {} });
-  useFriendStore.setState({ friends: [] });
+  useFriendStore.setState({ friends: [], ownerId: "spam-test-user", authGeneration: getAuthGeneration(), friendsStatus: "ready" });
 });
 
 it("ignores a restore response after the same account signs in again", async () => {
@@ -28,7 +28,7 @@ it("ignores a restore response after the same account signs in again", async () 
   await act(async () => { pending = result.current.restore(); await Promise.resolve(); });
   act(() => { clearTokens(); useAuthStore.setState({ user: { id: "spam-test-user" } as never }); });
   await act(async () => { finish({ success: true }); await pending; });
-  expect(result.current.hidden).toBe(true);
+  expect(result.current.pending).toBe(true);
   expect(usePreferencesStore.getState().get<{ spamRestoredMessages?: Record<string, string> }>("privacy")?.spamRestoredMessages).toBeUndefined();
 });
 
@@ -91,4 +91,23 @@ it("retains a synchronized restore after remount but rechecks edited messages", 
   next.rerender({ value: { ...message, edited_at: "2026-10-24T12:00:00Z" } });
   expect(next.result.current.hidden).toBe(true);
   expect(JSON.stringify(usePreferencesStore.getState().data)).not.toContain("https://");
+});
+
+it("keeps unknown friendship pending without recording spam and releases a confirmed friend", async () => {
+  const fetchFriends=vi.fn(async()=>{});
+  useFriendStore.setState({friendsStatus:"loading",fetchFriends});
+  const {result}=renderHook(()=>useSpamVisibility({id:"pending-friend",user_id:"peer",content:"https://trusted.test@evil.test"},{kind:"dm",channelId:"dm"}));
+  expect(result.current.pending).toBe(true);expect(result.current.hidden).toBe(false);expect(recordSpam).not.toHaveBeenCalled();
+  await act(async()=>{useFriendStore.setState({friendsStatus:"ready",friends:[{user_id:"peer"} as never]});});
+  expect(result.current.pending).toBe(false);expect(result.current.hidden).toBe(false);expect(recordSpam).not.toHaveBeenCalled();
+});
+it("offers explicit retry after failed friendship read without a quarantine write", async () => {
+  const fetchFriends=vi.fn(async()=>{useFriendStore.setState({friendsStatus:"error"});});
+  useFriendStore.setState({friendsStatus:"idle",fetchFriends});
+  const {result}=renderHook(()=>useSpamVisibility({id:"failed-friend",user_id:"peer",content:"https://trusted.test@evil.test"},{kind:"dm",channelId:"dm"}));
+  await act(async()=>{await Promise.resolve();});
+  expect(result.current.pendingError).toBe(true);expect(recordSpam).not.toHaveBeenCalled();expect(fetchFriends).toHaveBeenCalledTimes(1);
+  fetchFriends.mockImplementation(async()=>{useFriendStore.setState({friendsStatus:"ready",friends:[]});});
+  await act(async()=>{result.current.retryRelationship();});
+  expect(result.current.pending).toBe(false);expect(result.current.hidden).toBe(true);expect(fetchFriends).toHaveBeenCalledTimes(2);expect(recordSpam).toHaveBeenCalledTimes(1);
 });

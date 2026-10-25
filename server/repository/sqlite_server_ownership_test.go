@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"github.com/argeinfina/hichat/database"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -14,9 +15,7 @@ func TestServerOwnershipTransferAtomicRolesAndOneWinner(t *testing.T) {
 		t.Run(fmt.Sprintf("foreign_keys_%v", foreignKeys), func(t *testing.T) {
 			db, sessions, _ := authSessionRepoFixture(t)
 			if !foreignKeys {
-				if _, err := db.Conn.Exec(`PRAGMA foreign_keys=OFF`); err != nil {
-					t.Fatal(err)
-				}
+				disableFixtureForeignKeys(t, db)
 			}
 			actor, _ := createLogicalSession(t, sessions, "session-user", "transfer-actor", "transfer-refresh")
 			execSeed(t, db, []seedStmt{
@@ -34,9 +33,7 @@ func TestServerOwnershipTransferAtomicRolesAndOneWinner(t *testing.T) {
 			if _, err := r.Transfer(ctx, actor.UserID, actor.ID, "hash", "stale-factor", "handoff", "session-other", now); err == nil {
 				t.Fatal("stale factor accepted")
 			}
-			if _, err := db.Conn.Exec(`CREATE TRIGGER deny_owner_grant BEFORE INSERT ON user_roles WHEN NEW.role_id='handoff-owner' BEGIN SELECT RAISE(ABORT,'fixture failure'); END`); err != nil {
-				t.Fatal(err)
-			}
+			installWriteFailure(t, db, "deny_owner_grant", "user_roles", "INSERT", "NEW.role_id='handoff-owner'")
 			if _, err := r.Transfer(ctx, actor.UserID, actor.ID, "hash", "", "handoff", "session-other", now); err == nil {
 				t.Fatal("partial role change succeeded")
 			}
@@ -44,21 +41,15 @@ func TestServerOwnershipTransferAtomicRolesAndOneWinner(t *testing.T) {
 			if err := db.Conn.QueryRow(`SELECT owner_id FROM servers WHERE id='handoff'`).Scan(&owner); err != nil || owner != actor.UserID {
 				t.Fatal("failed transfer changed owner", owner, err)
 			}
-			if _, err := db.Conn.Exec(`DROP TRIGGER deny_owner_grant`); err != nil {
-				t.Fatal(err)
-			}
-			if _, err := db.Conn.Exec(`CREATE TRIGGER deny_transfer_audit BEFORE INSERT ON audit_logs BEGIN SELECT RAISE(ABORT,'fixture audit failure'); END`); err != nil {
-				t.Fatal(err)
-			}
+			dropFailureTrigger(t, db, "deny_owner_grant", "user_roles")
+			installWriteFailure(t, db, "deny_transfer_audit", "audit_logs", "INSERT", "")
 			if _, err := r.Transfer(ctx, actor.UserID, actor.ID, "hash", "", "handoff", "session-other", now); err == nil {
 				t.Fatal("unaudited ownership committed")
 			}
 			if err := db.Conn.QueryRow(`SELECT owner_id FROM servers WHERE id='handoff'`).Scan(&owner); err != nil || owner != actor.UserID {
 				t.Fatal("failed audit changed owner", owner, err)
 			}
-			if _, err := db.Conn.Exec(`DROP TRIGGER deny_transfer_audit`); err != nil {
-				t.Fatal(err)
-			}
+			dropFailureTrigger(t, db, "deny_transfer_audit", "audit_logs")
 			var winners atomic.Int32
 			var wg sync.WaitGroup
 			for i := 0; i < 12; i++ {
@@ -74,13 +65,17 @@ func TestServerOwnershipTransferAtomicRolesAndOneWinner(t *testing.T) {
 			if winners.Load() != 1 {
 				t.Fatalf("winners=%d", winners.Load())
 			}
+			auditQuery := `SELECT COUNT(*) FROM audit_logs WHERE server_id='handoff' AND json_extract(actor_snapshot,'$.id')='session-user' AND json_extract(target_snapshot,'$.id')='session-other'`
+			if database.IsPostgres(db.Conn) {
+				auditQuery = `SELECT COUNT(*) FROM audit_logs WHERE server_id='handoff' AND actor_snapshot::jsonb->>'id'='session-user' AND target_snapshot::jsonb->>'id'='session-other'`
+			}
 			for query, want := range map[string]int{
-				`SELECT COUNT(*) FROM audit_logs WHERE server_id='handoff' AND json_extract(actor_snapshot,'$.id')='session-user' AND json_extract(target_snapshot,'$.id')='session-other'`: 1,
-				`SELECT COUNT(*) FROM user_roles WHERE role_id='handoff-owner' AND user_id='session-other'`:                                                                             1,
-				`SELECT COUNT(*) FROM user_roles WHERE role_id='handoff-owner' AND user_id='session-user'`:                                                                              0,
-				`SELECT COUNT(*) FROM user_roles WHERE role_id='handoff-regular'`:                                                                                                       2,
-				`SELECT COUNT(*) FROM server_members WHERE server_id='handoff'`:                                                                                                         2,
-				`SELECT COUNT(*) FROM audit_logs WHERE server_id='handoff' AND event_type='server_ownership_transfer'`:                                                                  1,
+				auditQuery: 1,
+				`SELECT COUNT(*) FROM user_roles WHERE role_id='handoff-owner' AND user_id='session-other'`:            1,
+				`SELECT COUNT(*) FROM user_roles WHERE role_id='handoff-owner' AND user_id='session-user'`:             0,
+				`SELECT COUNT(*) FROM user_roles WHERE role_id='handoff-regular'`:                                      2,
+				`SELECT COUNT(*) FROM server_members WHERE server_id='handoff'`:                                        2,
+				`SELECT COUNT(*) FROM audit_logs WHERE server_id='handoff' AND event_type='server_ownership_transfer'`: 1,
 			} {
 				var got int
 				if err := db.Conn.QueryRow(query).Scan(&got); err != nil || got != want {

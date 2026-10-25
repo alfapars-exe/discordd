@@ -18,7 +18,7 @@ import * as signalProtocol from "./signalProtocol";
 import * as e2eeApi from "../api/e2ee";
 import { logToServer } from "../api/clientLog";
 import * as keyStorage from "./keyStorage";
-import { cacheGroupMessage,groupMessageCacheTag } from "./groupMessageCache";
+import { cacheGroupMessage,groupMessageCacheTag,restoreGroupSourceSequence } from "./groupMessageCache";
 import { groupAttachmentKey } from "../utils/groupAttachmentKeys";
 import * as deviceManager from "./deviceManager";
 import { decodePayload, type E2EEPayload } from "./e2eePayload";
@@ -852,15 +852,16 @@ export async function decryptGroupDMMessages(messages: GroupDMMessage[],isCurren
       const hasFileKeys=!msg.attachments?.length || msg.attachments.every((attachment,index)=>Boolean(groupAttachmentKey(cached?.fileKeys,attachment,index)));
       const legacyOriginal=sameScope && !cached.encryptedSourceTag && !msg.edited_at && !msg.attachments?.length;
       if(cached && sameScope && hasFileKeys && (cached.encryptedSourceTag===tag || legacyOriginal)){
+        const restored=restoreGroupSourceSequence(msg,cached.sourceSequence);
         if(legacyOriginal) {
           // Preserve pre-versioning original plaintext without replaying a
           // consumed Signal message. Edited legacy entries stay untouched
           // unless the current encrypted version can actually be opened.
-          try{await cacheGroupMessage(msg,{content:cached.content},active,tag)}catch{ /* An upgrade failure must not hide the available original. */ }
+          try{await cacheGroupMessage(restored,{content:cached.content},active,tag)}catch{ /* An upgrade failure must not hide the available original. */ }
           if(!isCurrent())return [];
           if(!isMessageCurrent(msg))continue;
         }
-        result.push({...msg,content:cached.content,e2ee_file_keys:cached.fileKeys,decryption_error:undefined});
+        result.push({...restored,content:cached.content,e2ee_file_keys:cached.fileKeys,decryption_error:undefined});
         continue;
       }
       const payload = await decryptDMMessage(msg.user_id, msg.ciphertext, msg.sender_device_id);

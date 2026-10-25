@@ -4,6 +4,7 @@ package repository
 
 import (
 	"context"
+	"github.com/argeinfina/hichat/database"
 	"testing"
 )
 
@@ -60,7 +61,11 @@ func TestUserNoteRepo_GetUpsertDelete(t *testing.T) {
 		t.Errorf("note after replace = %q", note)
 	}
 	// Stored form stays the DB's space-separated text — only the boundary converts.
-	if n := countRows(t, db, `SELECT COUNT(*) FROM user_notes WHERE owner_user_id = ? AND updated_at LIKE '____-__-__ __:__:__'`, dmAlice); n != 1 {
+	storageQuery := `SELECT COUNT(*) FROM user_notes WHERE owner_user_id = ? AND updated_at LIKE '____-__-__ __:__:__'`
+	if database.IsPostgres(db.Conn) {
+		storageQuery = `SELECT COUNT(*) FROM user_notes WHERE owner_user_id = ? AND updated_at IS NOT NULL AND pg_typeof(updated_at) = 'timestamptz'::regtype`
+	}
+	if n := countRows(t, db, storageQuery, dmAlice); n != 1 {
 		t.Error("stored updated_at is not 'YYYY-MM-DD HH:MM:SS' text")
 	}
 

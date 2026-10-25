@@ -12,16 +12,32 @@ vi.mock("../utils/constants", () => ({
 
 import i18n from "../i18n";
 import { clearTokens } from "./client";
+import { publishAuthGenerationChange, publishAuthOwnerChange } from "./authSessionEvents";
+import { useVoiceStore } from "../stores/voiceStore";
 import { playMusic, searchMusic } from "./music";
 import { showMusicRequestError } from "../utils/musicRequestError";
 
 const radioURL = "https://www.youtube.com/watch?v=0KbRhUtFwkc&list=RD0KbRhUtFwkc&start_radio=1";
 const fetchMock = vi.fn();
+let generation = 100;
+const snapshot = { server_id: "s", channel_id: "c", session_id: "feedback-session", revision: 0,
+  is_active: false, is_paused: true, queue: [], repeat_mode: "off" as const };
 
 beforeEach(() => {
   vi.clearAllMocks();
   clearTokens();
-  vi.stubGlobal("fetch", fetchMock);
+  publishAuthOwnerChange("music-feedback-user");
+  publishAuthGenerationChange(++generation);
+  useVoiceStore.setState({ currentVoiceServerId: "s", currentVoiceChannelId: "c", musicBotStates: {}, musicBotRevisions: {} });
+  // Keep the actual versioned music protocol and current-room checks. Only
+  // successful adoption/state reads are supplied before the provider failure.
+  vi.stubGlobal("fetch", (url: string, init?: RequestInit) => {
+    if (url.endsWith("/control-session")) return Promise.resolve(new Response(JSON.stringify({ success: true,
+      data: { ...snapshot, minimum_protocol: 2 } }), { headers: { "Content-Type": "application/json" } }));
+    if (url.endsWith("/state")) return Promise.resolve(new Response(JSON.stringify({ success: true, data: snapshot }),
+      { headers: { "Content-Type": "application/json" } }));
+    return fetchMock(url, init);
+  });
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 

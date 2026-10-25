@@ -161,3 +161,25 @@ test("an older allowed policy result cannot undo a newer per-game revocation", a
   assert.equal(starts, 0);
   assert.equal(last(displayed)?.enabled, false);
 });
+
+test("five-person game roster hides outside game and returns when it regains focus", async () => {
+  const f = fixture();
+  f.controller.setSnapshot(source({ position: "center-left", participants: Array.from({ length: 5 }, (_, i) => ({
+    id: String(i), name: `User ${i}`, avatarUrl: "", speaking: i < 2, muted: false, deafened: false,
+  })) }));
+  await tick();
+  assert.equal(last(f.displays)?.snapshot.participants.length, 5);
+  for (const active of [
+    { ...foreground(), executablePath: "C:/Windows/explorer.exe" },
+    { ...foreground(), executablePath: "C:/Apps/Browser.exe" },
+    { available: false, executablePath: null, rect: null }, null,
+  ]) {
+    f.setActive(active);
+    f.controller.foregroundChanged();
+    assert.equal(last(f.displays)?.snapshot.enabled, false);
+    f.setActive(foreground());
+    f.controller.foregroundChanged();
+    assert.equal(last(f.displays)?.snapshot.enabled, true);
+    assert.equal(last(f.displays)?.snapshot.participants.length, 5);
+  }
+});

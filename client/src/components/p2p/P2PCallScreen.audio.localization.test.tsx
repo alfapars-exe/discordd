@@ -1,0 +1,15 @@
+import {cleanup,render,screen} from "@testing-library/react";
+import {afterEach,beforeEach,expect,it,vi} from "vitest";
+import {createInstance} from "i18next";
+import {I18nextProvider} from "react-i18next";
+import P2PCallScreen from "./P2PCallScreen";
+import {useP2PCallStore} from "../../stores/p2pCallStore";
+import {useAuthStore} from "../../stores/authStore";
+import {publishAuthOwnerChange} from "../../api/authSessionEvents";
+import en from "../../i18n/locales/en/voice.json";
+import tr from "../../i18n/locales/tr/voice.json";
+vi.mock("./P2PCallControls",()=>({default:()=>null}));vi.mock("../shared/Avatar",()=>({default:()=>null}));
+beforeEach(()=>{window.electronAPI=undefined;publishAuthOwnerChange("owner");useAuthStore.setState({user:{id:"owner"} as never});useP2PCallStore.setState({activeCall:{id:"call",caller_id:"owner",receiver_id:"peer",status:"active"} as never,localStream:null,remoteStream:null,peerScreenAudioSupported:true,screenAudioRequested:false,screenAudioStatus:"shared",isScreenSharing:true,isScreenSharePending:false,peerConnection:null,stopScreenAudio:vi.fn(),setScreenAudioRequested:vi.fn()});});
+afterEach(()=>{cleanup();window.electronAPI=undefined;});
+it.each(["en","tr"] as const)("renders real %s voice resources for separate volumes and capture states",async language=>{const i18n=createInstance(),copy=language==="en"?en:tr;await i18n.init({lng:language,resources:{[language]:{voice:copy,common:{}}},interpolation:{escapeValue:false}});render(<I18nextProvider i18n={i18n}><P2PCallScreen/></I18nextProvider>);expect(screen.getByRole("slider",{name:copy.p2pMicrophoneVolume})).toBeInTheDocument();expect(screen.getByRole("slider",{name:copy.p2pScreenAudioVolume})).toBeInTheDocument();expect(screen.getByRole("checkbox",{name:copy.privateScreenAudioBrowserConsent})).toBeDisabled();expect(screen.getByRole("status")).toHaveTextContent(copy.privateScreenAudioShared);expect(screen.getByRole("button",{name:copy.privateScreenAudioStop})).toBeInTheDocument();});
+it("uses explicit Windows all-other-apps consent rather than claiming selected-window-only system audio",async()=>{window.electronAPI={} as Window["electronAPI"];const i18n=createInstance();await i18n.init({lng:"en",resources:{en:{voice:en,common:{}}}});render(<I18nextProvider i18n={i18n}><P2PCallScreen/></I18nextProvider>);expect(screen.getByRole("checkbox",{name:en.privateScreenAudioWindowsConsent})).toBeInTheDocument();expect(screen.queryByText(en.privateScreenAudioBrowserConsent)).toBeNull();});

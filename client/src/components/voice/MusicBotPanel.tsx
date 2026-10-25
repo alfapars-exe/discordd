@@ -23,7 +23,9 @@ import { useToastStore } from "../../stores/toastStore";
 import { showMusicRequestError } from "../../utils/musicRequestError";
 import { advanceMusicTimeline, musicElapsedAt, musicTrackKey, type MusicTimeline } from "../../utils/musicPlaybackTime";
 import { skipMusic, pauseMusic, resumeMusic, stopMusic, getMusicState, playMusic, searchMusic, removeMusicQueueItem, reorderMusicQueue, shuffleMusicQueue, setMusicRepeatMode, restoreMusicSession, seekMusic } from "../../api/music";
-import type { MusicTrack } from "../../types";
+import { captureMusicScope } from "../../api/musicProtocol";
+import { retryMusicMutation, hasPendingMusicMutation, subscribeMusicRetries } from "../../api/music";
+import type { APIResponse, MusicTrack } from "../../types";
 
 type MusicBotPanelProps = {
   channelId: string;
@@ -41,6 +43,8 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
   const state = useVoiceStore((s) => s.musicBotStates[channelId]);
   const updatedAt = useVoiceStore((s) => s.musicBotUpdatedAt[channelId]);
   const serverId = useVoiceStore((s) => s.currentVoiceChannelId === channelId ? s.currentVoiceServerId : null);
+  const callGeneration=useVoiceStore(s=>s._joinGeneration);
+  const cacheGeneration=useVoiceStore(s=>s.musicBotResetRevision);
   const room = useRoomContext();
   const musicBotIdentity = `__music_bot__:${channelId}`;
   const musicVolume = useVoiceStore((s) => s.userVolumes[musicBotIdentity] ?? 100);
@@ -50,6 +54,7 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
   const [now, setNow] = useState(Date.now);
   const [loadStatus, setLoadStatus] = useState<"loading" | "ready" | "error">("loading");
   const [pending, setPending] = useState(false);
+  const [retryAvailable, setRetryAvailable] = useState(false);
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<MusicTrack[]>([]);
@@ -64,17 +69,32 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
     actionPending.current = false;
   }, []);
 
+  useEffect(()=>{
+    invalidateActions();
+    let cancelled=false;
+    queueMicrotask(()=>{if(!cancelled){setResults([]);setSearching(false);setRetryAvailable(false);setPending(false);}});
+    return ()=>{cancelled=true;};
+  },[cacheGeneration,callGeneration,invalidateActions]);
+
+  useEffect(()=>{
+    if(!serverId)return;
+    const scope=captureMusicScope(serverId,channelId);
+    return subscribeMusicRetries(()=>{if(scope.current())setRetryAvailable(hasPendingMusicMutation(serverId,channelId));});
+  },[serverId,channelId,callGeneration,cacheGeneration]);
+
   // REST repairs missed WS updates on reconnect/focus and periodically. A REST
   // response may not overwrite a more recent WS snapshot (including a stop).
   useEffect(() => {
     if (!serverId || !channelId) return;
     let cancelled = false;
+    const scope=captureMusicScope(serverId,channelId);
     let request = 0;
     const ownsSession = () => {
       const voice = useVoiceStore.getState();
-      return !cancelled && voice.currentVoiceChannelId === channelId && voice.currentVoiceServerId === serverId;
+      return !cancelled && scope.current() && voice.currentVoiceChannelId === channelId && voice.currentVoiceServerId === serverId;
     };
     async function refresh() {
+      if(!ownsSession())return;
       const sequence = ++request;
       const before = useVoiceStore.getState();
       const revision = before.musicBotRevisions[channelId] ?? 0;
@@ -91,7 +111,7 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
           setLoadStatus("error");
           return;
         }
-        if (res.data) voice.setMusicBotState(channelId, res.data);
+        if (res.data) voice.setMusicBotState(channelId, res.data,true);
         else voice.clearMusicBotState(channelId);
         setLoadStatus("ready");
       } catch {
@@ -100,7 +120,7 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
     }
     refreshRef.current = refresh;
     queueMicrotask(() => {
-      if (ownsSession()) { setPending(false); setLoadStatus("loading"); }
+      if (ownsSession()) { setPending(false); setResults([]); setSearching(false); setRetryAvailable(hasPendingMusicMutation(serverId,channelId)); setLoadStatus("loading"); }
     });
     void refresh();
     room.on(RoomEvent.Reconnected, refresh);
@@ -116,7 +136,7 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
       window.removeEventListener("online", refresh);
       window.removeEventListener("focus", refresh);
     };
-  }, [serverId, channelId, room, invalidateActions]);
+  }, [serverId, channelId, room, invalidateActions,callGeneration]);
 
   // elapsed_seconds is the authoritative server playback clock, excluding
   // pause time. Retain compatibility with older started_at-only servers.
@@ -140,48 +160,48 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
     event.preventDefault();
     const value = query.trim();
     if (!serverId || !value || value.length > 100 || searching) return;
+    const scope=captureMusicScope(serverId,channelId);
     setSearching(true);
     try {
       const response = await searchMusic(serverId, channelId, value);
+      if (!scope.current()) return;
       if (!response.success || !response.data) {
         showMusicRequestError(response, "play");
         return;
       }
       setResults(response.data.results ?? []);
     } catch {
-      useToastStore.getState().addToast("error", t("searchError"));
+      if(scope.current())useToastStore.getState().addToast("error", t("searchError"));
     } finally {
-      setSearching(false);
+      if(scope.current())setSearching(false);
     }
   }
 
   async function addResult(track: MusicTrack) {
-    if (!serverId || pending) return;
-    setPending(true);
-    try {
-      const response = await playMusic(serverId, channelId, track.url);
-      if (!response.success) showMusicRequestError(response, "play");
-      else {
-        useToastStore.getState().addToast("success", t("addedToQueue", { count: response.data?.added_tracks.length ?? 1 }));
-        setResults((items) => items.filter((item) => item.video_id !== track.video_id));
-      }
-    } catch {
-      useToastStore.getState().addToast("error", t("playError"));
-    } finally {
-      setPending(false);
-    }
+    if(!serverId)return;
+    await mutateQueue(()=>playMusic(serverId,channelId,track.url),response=>{
+      const data=response.data as {added_tracks?:MusicTrack[]}|undefined;
+      useToastStore.getState().addToast("success",t("addedToQueue",{count:data?.added_tracks?.length??1}));
+      setResults(items=>items.filter(item=>item.video_id!==track.video_id));
+    });
   }
 
-  async function mutateQueue(action: () => Promise<{ success: boolean; isTimeout?: boolean }>) {
-    if (pending) return;
+  async function mutateQueue(action: () => Promise<APIResponse<unknown>>,onSuccess?: (response:APIResponse<unknown>)=>void,errorKey="queueMutationError") {
+    if(!serverId||actionPending.current)return;
+    const scope=captureMusicScope(serverId,channelId);
+    if(!scope.current())return;
+    actionPending.current=true;
+    const generation=++actionGeneration.current;
+    const current=()=>scope.current()&&generation===actionGeneration.current;
     setPending(true);
     try {
-      const response = await action();
-      if (!response.success) showMusicRequestError(response, "control");
-      else refreshRef.current?.();
-    } catch {
-      useToastStore.getState().addToast("error", t("queueMutationError"));
-    } finally { setPending(false); }
+      const response=await action();
+      if(!current())return;
+      setRetryAvailable(hasPendingMusicMutation(serverId,channelId));
+      if(!response.success)showMusicRequestError(response,"control");
+      else {onSuccess?.(response);refreshRef.current?.();}
+    } catch {if(current())useToastStore.getState().addToast("error",t(errorKey));}
+    finally {if(generation===actionGeneration.current){actionPending.current=false;setPending(false);}}
   }
 
   function dropQueueItem(targetID: string) {
@@ -207,6 +227,7 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
   }
 
   const searchBox = <div className="music-bot-search">
+    {retryAvailable&&serverId&&<div role="status"><span>{t("retryOriginalHint")}</span><button disabled={pending} onClick={()=>void mutateQueue(()=>retryMusicMutation(serverId,channelId))}>{t("retryOriginal")}</button></div>}
     <form onSubmit={(event) => void runSearch(event)}>
       <input value={query} maxLength={100} onChange={(event) => setQuery(event.target.value)} placeholder={t("searchPlaceholder")} aria-label={t("searchPlaceholder")} />
       <button className="music-bot-btn" disabled={searching || !query.trim()}>{searching ? t("searching") : t("search")}</button>
@@ -244,30 +265,7 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
   const nextRepeatMode = repeatMode === "off" ? "one" : repeatMode === "one" ? "all" : "off";
 
   async function control(fn: typeof pauseMusic) {
-    const voice = useVoiceStore.getState();
-    if (actionPending.current || !serverId || voice.currentVoiceChannelId !== channelId || voice.currentVoiceServerId !== serverId) return;
-    actionPending.current = true;
-    const generation = ++actionGeneration.current;
-    const resetRevision = voice.musicBotResetRevision;
-    const ownsAction = () => {
-      const current = useVoiceStore.getState();
-      return generation === actionGeneration.current && resetRevision === current.musicBotResetRevision
-        && current.currentVoiceChannelId === channelId && current.currentVoiceServerId === serverId;
-    };
-    setPending(true);
-    try {
-      const res = await fn(serverId, channelId);
-      if (!ownsAction()) return;
-      if (!res.success) showMusicRequestError(res, "control");
-      else refreshRef.current?.();
-    } catch {
-      if (ownsAction()) useToastStore.getState().addToast("error", t("controlError"));
-    } finally {
-      if (generation === actionGeneration.current) {
-        actionPending.current = false;
-        setPending(false);
-      }
-    }
+    if(serverId)await mutateQueue(()=>fn(serverId,channelId),undefined,"controlError");
   }
 
   return (

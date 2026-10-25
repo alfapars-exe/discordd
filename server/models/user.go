@@ -65,9 +65,10 @@ type User struct {
 	TokenVersion int `json:"-"`
 	// Bot identity (migration 072). IsBot marks an automated account whose
 	// password is disabled; OwnerUserID is the human who created it.
-	IsBot       bool      `json:"is_bot"`
-	OwnerUserID *string   `json:"owner_user_id,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
+	IsBot             bool      `json:"is_bot"`
+	IsGameApplication bool      `json:"is_game_application,omitempty"`
+	OwnerUserID       *string   `json:"owner_user_id,omitempty"`
+	CreatedAt         time.Time `json:"created_at"`
 }
 
 // PublicUser is the API-facing view of another user as embedded in message,

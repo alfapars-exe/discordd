@@ -90,12 +90,12 @@ func (r *sqliteDMRepo) searchPostgres(ctx context.Context, channelID, query stri
 	}
 	limit, offset = searchPage(limit, offset)
 	rows, err := r.db.QueryContext(ctx, `SELECT m.id,m.dm_channel_id,m.user_id,m.content,m.edited_at,m.created_at,
-	 m.reply_to_id,m.is_pinned,m.encryption_version,m.ciphertext,m.sender_device_id,m.e2ee_metadata,
+	 m.reply_to_id,m.is_pinned,m.encryption_version,m.ciphertext,m.sender_device_id,m.e2ee_metadata,m.application_id,m.source_sequence,
 	 u.id,u.username,u.display_name,u.avatar_url,u.status,u.custom_status,u.created_at,
 	 rm.id,rm.content,ru.id,ru.username,ru.display_name,ru.avatar_url,ru.status,ru.custom_status,ru.created_at
 	 FROM dm_messages m LEFT JOIN users u ON m.user_id=u.id
 	 LEFT JOIN dm_messages rm ON m.reply_to_id=rm.id LEFT JOIN users ru ON rm.user_id=ru.id`+
-		where+` ORDER BY m.created_at DESC,m.id DESC LIMIT ? OFFSET ?`, append(args, limit, offset)...)
+		where+` ORDER BY m.source_sequence DESC LIMIT ? OFFSET ?`, append(args, limit, offset)...)
 	if err != nil {
 		return nil, 0, err
 	}

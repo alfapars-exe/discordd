@@ -200,6 +200,7 @@ func initRoutes(
 	// ╚══════════════════════════════════════════╝
 	d.registerAuthRoutes()
 	d.registerUserRoutes()
+	d.registerGameJoinRoutes()
 	d.registerServerListRoutes()
 	d.registerUploadRoutes()
 	d.registerDMRoutes()

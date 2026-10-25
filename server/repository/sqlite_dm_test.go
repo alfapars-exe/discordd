@@ -558,7 +558,7 @@ func TestDMRepo_GetMessagesPagination(t *testing.T) {
 		m := newDMMessage(t, ctx, repo, ch.ID, dmAlice, string(rune('a'+i)))
 		ids[i] = m.ID
 		if _, err := db.Conn.Exec(
-			`UPDATE dm_messages SET created_at = datetime('2026-01-01 00:00:0'||?) WHERE id = ?`, i, m.ID,
+			`UPDATE dm_messages SET created_at = ? WHERE id = ?`, fmt.Sprintf("2026-01-01 00:00:%02d", i), m.ID,
 		); err != nil {
 			t.Fatalf("stamp created_at: %v", err)
 		}
@@ -1050,13 +1050,26 @@ func TestDMRepo_DeleteChannel_NoOrphanAttachmentsWithFKsOff(t *testing.T) {
 		t.Fatalf("setup: expected 2 attachments before delete, got %d", n)
 	}
 
-	// Open a second connection with foreign_keys OFF — the exact condition
-	// prod's libSQL/Turso branch runs under (see execWithoutFKs above) — and
-	// run DeleteChannel THROUGH IT, so this test cannot pass merely because
-	// SQLite's own FK cascade covered for a missing explicit delete.
-	fkOffConn, err := sql.Open("sqlite", path+"?_pragma=foreign_keys(0)&_pragma=busy_timeout(5000)")
-	if err != nil {
-		t.Fatalf("open fk-off conn: %v", err)
+	// Run through a second connection with FK enforcement disabled. PostgreSQL's
+	// isolated-schema fixture disables FK triggers; SQLite disables the PRAGMA.
+	// Neither backend may pass because its cascade covered a missing delete.
+	var fkOffConn *sql.DB
+	if database.IsPostgresDSN(path) {
+		fkOffConn = postgresFixtureFKOffConn(t, path)
+		var mode string
+		if err := fkOffConn.QueryRowContext(ctx, `SHOW session_replication_role`).Scan(&mode); err != nil || mode != "replica" {
+			t.Fatalf("fixture FK triggers are not disabled: mode=%q err=%v", mode, err)
+		}
+	} else {
+		var err error
+		fkOffConn, err = sql.Open("sqlite", path+"?_pragma=foreign_keys(0)&_pragma=busy_timeout(5000)")
+		if err != nil {
+			t.Fatalf("open fk-off conn: %v", err)
+		}
+		var enabled int
+		if err := fkOffConn.QueryRowContext(ctx, `PRAGMA foreign_keys`).Scan(&enabled); err != nil || enabled != 0 {
+			t.Fatalf("fixture FKs are not disabled: enabled=%d err=%v", enabled, err)
+		}
 	}
 	defer func() { _ = fkOffConn.Close() }()
 	fkOffRepo := NewSQLiteDMRepo(fkOffConn)

@@ -27,14 +27,17 @@ func (r *sqliteRuntimeTelemetryRepo) Insert(ctx context.Context, row *models.Run
 			bucket_at, goroutines, heap_alloc_bytes, online_users,
 			db_open_conns, db_in_use, db_idle, db_wait_count,
 			ws_dispatch_total, ws_rate_limit_drops_total,
-			http_requests, http_5xx, http_max_latency_ms, http_avg_latency_ms
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+			http_requests, http_5xx, http_max_latency_ms, http_avg_latency_ms,diagnostics
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
+	if row.Diagnostics == "" {
+		row.Diagnostics = "{}"
+	}
 	_, err := r.db.ExecContext(ctx, query,
 		row.BucketAt, row.Goroutines, row.HeapAllocBytes, row.OnlineUsers,
 		row.DBOpenConns, row.DBInUse, row.DBIdle, row.DBWaitCount,
 		row.WSDispatchTotal, row.WSRateLimitDropsTotal,
-		row.HTTPRequests, row.HTTP5xx, row.HTTPMaxLatencyMs, row.HTTPAvgLatencyMs,
+		row.HTTPRequests, row.HTTP5xx, row.HTTPMaxLatencyMs, row.HTTPAvgLatencyMs, row.Diagnostics,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to insert runtime telemetry: %w", err)

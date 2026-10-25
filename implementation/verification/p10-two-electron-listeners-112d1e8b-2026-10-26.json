@@ -1,0 +1,169 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-10-25T21:39:29.311445+00:00",
+  "sourceCommit": "112d1e8b3f85953540d7fc15a1a0ddc36f74977f",
+  "imageId": "sha256:f7d435662855a00d4b8ac425bd80d23624efee10ed8f69351c56922c330e1af0",
+  "livekitImage": "livekit/livekit-server:v1.9.12",
+  "qualification": "Scoped Electron component fixture, not full two HiChat UI or physical device acceptance",
+  "actualPath": [
+    "fresh synthetic accounts/server/channel via real HTTP API",
+    "fresh ws ticket + voice_join + scoped voice token",
+    "actual IndexedVoiceKeyProvider and production E2EE worker, encryption enabled on both listeners",
+    "actual production api/music.ts -> musicProtocol.ts protocol2 play with authorized public YouTube video/radio URL",
+    "actual production RoomAudioRenderer/useVolumeSync, two isolated Electron partitions",
+    "AudioContext pre-gain and post-gain numeric power only",
+    "actual protocol2 stop"
+  ],
+  "result": {
+    "source": "112d1e8b3f85953540d7fc15a1a0ddc36f74977f",
+    "passed": true,
+    "reason": "component-fixture-complete",
+    "results": [
+      {
+        "who": "a",
+        "type": "diagnostic",
+        "baseline": {
+          "prePower": 0.004981834251520421,
+          "postPower": 0.004992849171185133,
+          "gainValues": [
+            1
+          ],
+          "audioTime": 6.16
+        },
+        "contextState": "running",
+        "preNodes": 1,
+        "gainNodes": 1,
+        "e2ee": true,
+        "remoteCount": 2,
+        "captureCalls": 0
+      },
+      {
+        "who": "a",
+        "type": "measured",
+        "baseline": {
+          "prePower": 0.004981834251520421,
+          "postPower": 0.004992849171185133,
+          "gainValues": [
+            1
+          ],
+          "audioTime": 6.16
+        },
+        "e2eeEnabled": true,
+        "rotationCount": 0,
+        "captureCalls": 0,
+        "sinkNone": true
+      },
+      {
+        "who": "b",
+        "type": "diagnostic",
+        "baseline": {
+          "prePower": 0.005093609753075687,
+          "postPower": 0,
+          "gainValues": [
+            0
+          ],
+          "audioTime": 6.141333333333334
+        },
+        "contextState": "running",
+        "preNodes": 1,
+        "gainNodes": 1,
+        "e2ee": true,
+        "remoteCount": 2,
+        "captureCalls": 0
+      },
+      {
+        "who": "b",
+        "type": "measured",
+        "baseline": {
+          "prePower": 0.005093609753075687,
+          "postPower": 0,
+          "gainValues": [
+            0
+          ],
+          "audioTime": 6.141333333333334
+        },
+        "half": {
+          "prePower": 0.021174108460532422,
+          "postPower": 0.0052935271151331054,
+          "gainValues": [
+            0.5
+          ],
+          "audioTime": 9.661333333333333
+        },
+        "muted": {
+          "prePower": 0.03531696264735615,
+          "postPower": 0,
+          "gainValues": [
+            0
+          ],
+          "audioTime": 13.181333333333333
+        },
+        "restored": {
+          "prePower": 0.03481880983434589,
+          "postPower": 0.008691895406985485,
+          "gainValues": [
+            0.5
+          ],
+          "audioTime": 16.701333333333334
+        },
+        "e2eeEnabled": true,
+        "rotationCount": 0,
+        "captureCalls": 0,
+        "sinkNone": true
+      },
+      {
+        "who": "a",
+        "type": "stopped"
+      }
+    ],
+    "permissions": 0,
+    "blocked": 0,
+    "hardwareAudioMuted": true,
+    "remainingOwnWindows": 0
+  },
+  "firstAttempt": {
+    "passed": false,
+    "reason": "PCM check happened before bot startup yielded samples; provider accepted. Reconnect measured same ongoing bot, no second play/extraction command.",
+    "noCapture": true
+  },
+  "derived": {
+    "listenerA_powerRatio": 1.0022110168882776,
+    "listenerB_halfPowerRatio": 0.25
+  },
+  "safety": {
+    "bothNativeAudioMutedBeforeLoad": true,
+    "allConstructedAudioContextsForcedAndVerifiedSinkNone": true,
+    "captureCalls": 0,
+    "permissionRequests": 0,
+    "audibleOutput": false,
+    "audioFilesWritten": false,
+    "hardwareDeviceSelectionTested": false,
+    "cookiesOrRestrictionBypass": false,
+    "productionTouched": false,
+    "freshProfilesOnly": true
+  },
+  "remainingAcceptance": [
+    "Physical selected output device and full two HiChat UI flows remain untested",
+    "A continuity during B gain/deafen transitions not sampled concurrently; stores isolated by separate browser sessions",
+    "No new rotation in this fixture: existing 413-packet/decrypt/new-key proof remains separate evidence",
+    "Fixture manually performs SDK admission using production indexed provider; full useEncryptedRoomAdmission UI integration is not covered",
+    "No renderer RTP counters retained; nonzero decoded WebAudio PCM is stronger direct numerical transport evidence"
+  ],
+  "cleanup": [
+    {
+      "container_id": "7dcaa8d3fe8db012cfe42f2f720c6e211b87491ea58285076517c1a75e975600",
+      "removed": true
+    },
+    {
+      "container_id": "a21fbba5f165a575d7b790b99376b8cbc75d4e72949bb4f8bfcd051a273f8037",
+      "removed": true
+    }
+  ],
+  "scriptHashes": {
+    "main.cjs": "3a2117ce6af1d96aeef61d21a10f6730e5f26a6280eb40159857fc7f6c5de716",
+    "preload.cjs": "408f18239e7ea83b6ca9314303b6408cd22945aab40d2e0944c5753bf7a8a2c6",
+    "entry.tsx": "05f303eab2702a66f97aced3e7ec28197cb7191619d6597b1f0086334a12680b",
+    "build.mjs": "af0df50996612ddf98e73d536008594ddcd0a1e0361204ecfe59ff6c878c21f9",
+    "launch.py": "8ca548dbe0fac2987314adf3c1a99ee202baca80aaf1f2490f177687395a4923"
+  }
+}

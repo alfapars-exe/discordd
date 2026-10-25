@@ -72,6 +72,9 @@ func (r *sqliteAccountAnonymizationRepo) Anonymize(ctx context.Context, owner, s
 // must acquire a write boundary and verify credentials/ownership before entry.
 // This helper never deletes a shared conversation or authored message.
 func anonymizeIdentityTx(ctx context.Context, tx *sql.Tx, owner, expectedHash string, now int64) error {
+	if err := anonymizeMusicRequesterTx(ctx, tx, owner); err != nil {
+		return fmt.Errorf("anonymize music requester metadata: %w", err)
+	}
 	// Capture only personal assets; shared attachment rows/URLs are untouched.
 	_, err := tx.ExecContext(ctx, `INSERT INTO account_asset_cleanup(file_url,requested_at)
 		 SELECT file_url,? FROM (
@@ -179,6 +182,9 @@ func anonymizeIdentityTx(ctx context.Context, tx *sql.Tx, owner, expectedHash st
 }
 
 var anonymizationPrivateDeletes = []string{
+	`DELETE FROM data_exports WHERE user_id=?`,
+	// Retry receipts cache requester display metadata, not shared history.
+	`DELETE FROM music_operation_receipts WHERE actor_id=?`,
 	`DELETE FROM bot_tokens WHERE bot_user_id=?`,
 	`DELETE FROM sessions WHERE user_id=?`,
 	`DELETE FROM password_reset_tokens WHERE user_id=?`,
@@ -199,6 +205,8 @@ var anonymizationPrivateDeletes = []string{
 	`DELETE FROM saved_messages WHERE user_id=?`,
 	`DELETE FROM spam_inbox WHERE user_id=?`,
 	`DELETE FROM private_media_labels WHERE user_id=?`,
+	`DELETE FROM application_game_grants WHERE user_id=?`,
+	`DELETE FROM application_game_grants WHERE bot_user_id=?`,
 	`DELETE FROM user_notes WHERE owner_user_id=?`,
 	`DELETE FROM app_logs WHERE user_id=?`,
 	`DELETE FROM user_roles WHERE user_id=?`,

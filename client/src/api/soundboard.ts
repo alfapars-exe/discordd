@@ -5,8 +5,8 @@
 import { apiClient } from "./client";
 import type { SoundboardSound } from "../types";
 
-export async function getSounds(serverId: string) {
-  return apiClient<SoundboardSound[]>(`/servers/${serverId}/soundboard/sounds`);
+export async function getSounds(serverId: string, isCurrent?: () => boolean) {
+  return apiClient<SoundboardSound[]>(`/servers/${serverId}/soundboard/sounds`, { isCurrent, timeoutMs: 15000 });
 }
 
 export async function createSound(
@@ -14,7 +14,8 @@ export async function createSound(
   file: File,
   name: string,
   durationMs: number,
-  emoji?: string
+  emoji?: string,
+  isCurrent?: () => boolean,
 ) {
   const formData = new FormData();
   formData.append("file", file);
@@ -25,6 +26,7 @@ export async function createSound(
   return apiClient<SoundboardSound>(`/servers/${serverId}/soundboard/sounds`, {
     method: "POST",
     body: formData,
+    isCurrent, timeoutMs: 30000,
   });
 }
 
@@ -39,16 +41,16 @@ export async function updateSound(
   );
 }
 
-export async function deleteSound(serverId: string, soundId: string) {
+export async function deleteSound(serverId: string, soundId: string, isCurrent?: () => boolean) {
   return apiClient<void>(
     `/servers/${serverId}/soundboard/sounds/${soundId}`,
-    { method: "DELETE" }
+    { method: "DELETE", isCurrent, timeoutMs: 15000 }
   );
 }
 
-export async function playSound(serverId: string, soundId: string) {
+export async function playSound(serverId: string, soundId: string, isCurrent?: () => boolean) {
   return apiClient<void>(
     `/servers/${serverId}/soundboard/sounds/${soundId}/play`,
-    { method: "POST" }
+    { method: "POST", isCurrent, timeoutMs: 15000 }
   );
 }

@@ -95,7 +95,7 @@
   "fileDecryptFailed": "Dosya çözülemedi",
   "clientSearchNote": "Yerel arama (E2EE)",
 
-  "voiceE2eeEnabled": "Sesli aramalar uçtan uca şifreli",
+  "voiceE2eeEnabled": "Oda sesi sunucunun yönettiği anahtarla şifrelenir; sunucuya karşı gizlilik sağlamaz.",
   "voiceE2eeError": "Ses şifreleme hatası",
   "encryptionActive": "Şifreleme aktif",
   "encryptionNotSetup": "Şifreleme kurulmadı",
