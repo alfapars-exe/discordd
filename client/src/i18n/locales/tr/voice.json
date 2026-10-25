@@ -113,5 +113,8 @@
   "microphoneCaptureRetry": "Mikrofonu yeniden dene",
   "microphoneUseDefault": "Varsayılan mikrofonu kullan",
   "p2pMicrophoneUnavailable": "Mikrofon kaydı kullanılamıyor ve kendiliğinden yeniden başlamaz. Cihazı ve izni kontrol edip yeniden dene.",
-  "p2pFocusedPTT": "Bas-konuş, bu HiChat penceresinde klavye odağı varken çalışır."
+  "p2pFocusedPTT": "Bas-konuş, bu HiChat penceresinde klavye odağı varken çalışır.",
+  "camera": "Kamera",
+  "disconnect": "Bağlantıyı kes",
+  "connecting": "Bağlanıyor..."
 }

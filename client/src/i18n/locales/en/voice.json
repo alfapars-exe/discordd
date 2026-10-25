@@ -113,5 +113,8 @@
   "microphoneCaptureRetry": "Retry microphone",
   "microphoneUseDefault": "Use default microphone",
   "p2pMicrophoneUnavailable": "Microphone capture is unavailable and will not restart automatically. Check the device and permission, then retry.",
-  "p2pFocusedPTT": "Push-to-talk works while this HiChat window has keyboard focus."
+  "p2pFocusedPTT": "Push-to-talk works while this HiChat window has keyboard focus.",
+  "camera": "Camera",
+  "disconnect": "Disconnect",
+  "connecting": "Connecting..."
 }
