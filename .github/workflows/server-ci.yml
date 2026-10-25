@@ -84,10 +84,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { package: ./repository, shard: 0, shards: 4 }
-          - { package: ./repository, shard: 1, shards: 4 }
-          - { package: ./repository, shard: 2, shards: 4 }
-          - { package: ./repository, shard: 3, shards: 4 }
+          - { package: ./repository, shard: 0, shards: 8 }
+          - { package: ./repository, shard: 1, shards: 8 }
+          - { package: ./repository, shard: 2, shards: 8 }
+          - { package: ./repository, shard: 3, shards: 8 }
+          - { package: ./repository, shard: 4, shards: 8 }
+          - { package: ./repository, shard: 5, shards: 8 }
+          - { package: ./repository, shard: 6, shards: 8 }
+          - { package: ./repository, shard: 7, shards: 8 }
           - { package: ./services, shard: 0, shards: 8 }
           - { package: ./services, shard: 1, shards: 8 }
           - { package: ./services, shard: 2, shards: 8 }
