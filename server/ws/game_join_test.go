@@ -18,7 +18,11 @@ func TestGameJoinPhysicalSessionFreshCheckOutsideHubLock(t *testing.T) {
 	c.validateSession = func(ctx context.Context, user, sid string) error {
 		calls++
 		h.mu.Lock()
+		connected := h.clients[user][c]
 		h.mu.Unlock()
+		if !connected {
+			t.Fatal("session validation must observe the registered physical connection")
+		}
 		if user != "host" || sid != "host-session" {
 			t.Fatal("wrong session projection")
 		}

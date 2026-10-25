@@ -23,7 +23,7 @@ type CS2SteamJoinRecipe struct {
 }
 
 func validCS2SteamID(raw string, lobby bool) bool {
-	if len(raw) == 0 || len(raw) > 20 || raw[0] == '0' {
+	if raw == "" || len(raw) > 20 || raw[0] == '0' {
 		return false
 	}
 	for _, c := range raw {
