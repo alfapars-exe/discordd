@@ -37,32 +37,17 @@ func (s *musicBotService) broadcastMusicAudience(serverID, channelID string, eve
 		return false
 	}
 	candidates := voice.GetChannelParticipants(channelID)
-	allowed := make([]models.VoiceState, 0, len(candidates))
 	seen := make(map[string]bool, len(candidates))
-	for _, state := range candidates {
-		if ctx.Err() != nil {
-			return false
-		}
-		if state.UserID == "" || state.JoinedAt.IsZero() || state.ChannelGeneration == 0 || state.ServerID != serverID || state.ChannelID != channelID || seen[state.UserID] {
-			continue
-		}
-		seen[state.UserID] = true
-		member, err := members.IsMember(ctx, serverID, state.UserID)
-		if err != nil || !member {
-			continue
-		}
-		permission, err := fresh.ResolveChannelPermissionsFresh(ctx, state.UserID, channelID)
-		if err != nil || !permission.Has(models.PermViewChannel) {
-			continue
-		}
-		allowed = append(allowed, state)
-	}
 	sent := false
 	event.ServerID = serverID
-	for _, expected := range allowed {
+	for _, expected := range candidates {
 		if ctx.Err() != nil {
 			return sent
 		}
+		if expected.UserID == "" || expected.JoinedAt.IsZero() || expected.ChannelGeneration == 0 || expected.ServerID != serverID || expected.ChannelID != channelID || seen[expected.UserID] {
+			continue
+		}
+		seen[expected.UserID] = true
 		member, err := members.IsMember(ctx, serverID, expected.UserID)
 		if err != nil || !member {
 			continue
@@ -75,9 +60,9 @@ func (s *musicBotService) broadcastMusicAudience(serverID, channelID string, eve
 		if current == nil || current.ServerID != serverID || current.ChannelID != channelID || !current.JoinedAt.Equal(expected.JoinedAt) || current.ChannelGeneration != expected.ChannelGeneration || ctx.Err() != nil {
 			continue
 		}
-		// Send immediately after this recipient's final checks. A later
-		// recipient's lookup cannot retain a previously authorized recipient;
-		// revocation after queue delivery cannot recall the enqueued event.
+		// Authorize once immediately before this recipient's enqueue; no
+		// preliminary database read is reused. A later recipient's lookup
+		// cannot retroactively recall an already authorized enqueued event.
 		s.hub.BroadcastToUsers([]string{expected.UserID}, event)
 		sent = true
 	}

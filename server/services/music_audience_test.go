@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"sync"
 	"testing"
@@ -325,7 +326,7 @@ func TestMusicAudienceStateAndErrorsOnlyReachCurrentPermittedParticipants(t *tes
 	}
 }
 
-func TestMusicAudienceRechecksEarlyCandidateAfterLaterLookupRevokesAccess(t *testing.T) {
+func TestMusicAudienceLaterRevocationDoesNotAuthorizeNewDelivery(t *testing.T) {
 	for _, revoke := range []string{"membership", "view"} {
 		t.Run(revoke, func(t *testing.T) {
 			s := newTestMusicBotService("ch", "srv")
@@ -348,13 +349,133 @@ func TestMusicAudienceRechecksEarlyCandidateAfterLaterLookupRevokesAccess(t *tes
 					}
 				}
 			}
-			var recipients []string
-			s.hub = &testutil.MockBroadcaster{BroadcastToServerFn: func(string, ws.Event) { t.Error("broad fallback") }, BroadcastToUsersFn: func(ids []string, _ ws.Event) { recipients = append(recipients, ids...) }}
+			var stateRecipients, errorRecipients []string
+			s.hub = &testutil.MockBroadcaster{BroadcastToServerFn: func(string, ws.Event) { t.Error("broad fallback") }, BroadcastToUsersFn: func(ids []string, event ws.Event) {
+				if event.Op == "music_bot_state" {
+					stateRecipients = append(stateRecipients, ids...)
+				} else {
+					errorRecipients = append(errorRecipients, ids...)
+				}
+			}}
 			s.broadcastState(s.bots["ch"])
 			s.broadcastPlaybackError(s.bots["ch"], &models.MusicTrack{Title: "private"}, musicBotErrorReason("test"), 1, false)
-			if !reflect.DeepEqual(recipients, []string{"later", "later"}) {
-				t.Fatalf("retained revoked early candidate: %v", recipients)
+			// The first recipient was authorized and enqueued before the later
+			// lookup revoked it. That prior event cannot be recalled; a NEW
+			// error event must freshly exclude the now-revoked recipient.
+			if !reflect.DeepEqual(stateRecipients, []string{"listener", "later"}) || !reflect.DeepEqual(errorRecipients, []string{"later"}) {
+				t.Fatalf("wrong enqueue/revocation boundary: state=%v error=%v", stateRecipients, errorRecipients)
 			}
 		})
+	}
+}
+
+func TestMusicAudienceChecksPendingRecipientAfterEarlierEnqueueChangesAccess(t *testing.T) {
+	for _, change := range []string{"membership", "view", "leave", "leave-rejoin", "admin-out-back"} {
+		t.Run(change, func(t *testing.T) {
+			s := newTestMusicBotService("ch", "srv")
+			voice := s.audience.Voice.(*musicAudienceFixtureVoice)
+			first := *voice.GetUserVoiceState("listener")
+			later := first
+			later.UserID = "later"
+			voice.states[later.UserID] = later
+			voice.candidates = []models.VoiceState{first, later}
+			members := s.audience.Members.(*musicAudienceFixtureMembers)
+			members.denied = map[string]bool{}
+			perms := s.perms.(*musicAudienceFixturePerms)
+			perms.denied = map[string]bool{}
+			var recipients []string
+			s.hub = &testutil.MockBroadcaster{BroadcastToServerFn: func(string, ws.Event) { t.Error("broad fallback") }, BroadcastToUsersFn: func(ids []string, _ ws.Event) {
+				recipients = append(recipients, ids...)
+				if ids[0] != "listener" {
+					return
+				}
+				switch change {
+				case "membership":
+					members.denied["later"] = true
+				case "view":
+					perms.denied["later"] = true
+				case "leave":
+					voice.mu.Lock()
+					delete(voice.states, "later")
+					voice.mu.Unlock()
+				case "leave-rejoin":
+					voice.mu.Lock()
+					updated := voice.states["later"]
+					updated.JoinedAt = updated.JoinedAt.Add(time.Second)
+					voice.states["later"] = updated
+					voice.mu.Unlock()
+				case "admin-out-back":
+					voice.mu.Lock()
+					updated := voice.states["later"]
+					updated.ChannelGeneration += 2
+					voice.states["later"] = updated
+					voice.mu.Unlock()
+				}
+			}}
+			s.broadcastState(s.bots["ch"])
+			if !reflect.DeepEqual(recipients, []string{"listener"}) {
+				t.Fatalf("pending recipient retained obsolete access/incarnation: %v", recipients)
+			}
+		})
+	}
+}
+
+func TestMusicAudienceNonAdminRepositoryCallsAreFourNPlusOne(t *testing.T) {
+	for _, n := range []int{0, 2, 10, 30} {
+		t.Run(fmt.Sprintf("participants_%d", n), func(t *testing.T) {
+			s := newTestMusicBotService("ch", "srv")
+			voice := s.audience.Voice.(*musicAudienceFixtureVoice)
+			voice.states = map[string]models.VoiceState{}
+			voice.candidates = []models.VoiceState{}
+			roles := map[string][]models.Role{}
+			for i := 0; i < n; i++ {
+				state := models.VoiceState{UserID: fmt.Sprintf("listener-%d", i), ChannelID: "ch", ServerID: "srv", JoinedAt: time.Unix(1, 0), ChannelGeneration: 1}
+				voice.states[state.UserID] = state
+				voice.candidates = append(voice.candidates, state)
+				roles[state.UserID] = []models.Role{{ID: "default", Permissions: models.PermViewChannel | models.PermReadMessages}}
+			}
+			var membershipCalls, outerChannelCalls, sends int
+			s.audience.Members = &testutil.MockServerRepo{IsMemberFn: func(context.Context, string, string) (bool, error) { membershipCalls++; return true, nil }}
+			counter := &bulkRepoCounter{}
+			s.perms = (permFixture{serverID: "srv", channelID: "ch", roles: roles}).newService(counter)
+			s.channels = &testutil.MockChannelRepo{GetByIDFn: func(context.Context, string) (*models.Channel, error) {
+				outerChannelCalls++
+				return &models.Channel{ID: "ch", ServerID: "srv", Type: models.ChannelTypeVoice}, nil
+			}}
+			s.hub = &testutil.MockBroadcaster{BroadcastToServerFn: func(string, ws.Event) { t.Error("broad fallback") }, BroadcastToUsersFn: func(ids []string, _ ws.Event) {
+				if len(ids) != 1 {
+					t.Fatal("non-singleton targeted delivery")
+				}
+				sends++
+			}}
+			if sent := s.broadcastMusicAudience("srv", "ch", ws.Event{Op: "music_bot_state"}); sent != (n > 0) {
+				t.Fatal("wrong audience result")
+			}
+			if membershipCalls != n || outerChannelCalls != 1 || counter.channelByID != n || counter.rolesByUser != n || counter.overridesByRoles != n || counter.total() != 3*n || sends != n {
+				t.Fatalf("redundant or missing checks: member=%d outerChannel=%d resolver=%+v sends=%d", membershipCalls, outerChannelCalls, *counter, sends)
+			}
+			if total := membershipCalls + outerChannelCalls + counter.total(); total != 4*n+1 {
+				t.Fatalf("repository round trips=%d, want%d", total, 4*n+1)
+			}
+		})
+	}
+}
+
+func TestMusicAudienceDeadlineCannotAuthorizeDelayedRecipient(t *testing.T) {
+	s := newTestMusicBotService("ch", "srv")
+	var membershipCalls, sends int
+	s.audience.Members = &testutil.MockServerRepo{IsMemberFn: func(ctx context.Context, _ string, _ string) (bool, error) {
+		membershipCalls++
+		if _, ok := ctx.Deadline(); !ok {
+			t.Error("audience lookup missing bounded deadline")
+			return false, nil
+		}
+		<-ctx.Done()
+		// Even a dependency returning a stale success after timeout cannot deliver.
+		return true, nil
+	}}
+	s.hub = &testutil.MockBroadcaster{BroadcastToServerFn: func(string, ws.Event) { t.Error("broad timeout fallback") }, BroadcastToUsersFn: func([]string, ws.Event) { sends++ }}
+	if s.broadcastMusicAudience("srv", "ch", ws.Event{Op: "music_bot_state"}) || sends != 0 || membershipCalls != 1 {
+		t.Fatalf("timeout leaked event: membership=%d sends=%d", membershipCalls, sends)
 	}
 }
