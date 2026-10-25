@@ -1,0 +1,31 @@
+{
+  "date": "2026-10-25",
+  "scope": "P9 bounded event-effect authorization and output operations",
+  "status": "implemented_static_verified",
+  "owned_paths": [
+    "client/src/utils/sounds.ts",
+    "client/src/utils/sounds.test.ts"
+  ],
+  "source_hashes": {
+    "client/src/utils/sounds.ts": "eb8d57723530fa48d2c29d2e40c09ddd3fc324064a40f4daad7f368ef02016a2",
+    "client/src/utils/sounds.test.ts": "8002782de7f9621508b594120e05e145408e609760f4424f1cc670624ef1c8fd"
+  },
+  "changes": [
+    "Per-request authorization rechecked after routing/resume; active/pending cues cancel on current preference/status revocation. Notification-policy revision prevents delayed second-note resurrection across revoke/restore.",
+    "Global mute and voice soundsEnabled apply to voice/watch effects; DND suppresses notification cues only. Explicit incoming-call preview remains available in DND when its own preference/global silence permits.",
+    "Existing awaitAudioStep bounds selected/default sink and context resume10s, shutdown2s. Nonrunning resumed contexts cannot start tones.",
+    "Timed-out sink context retires even if device selection superseded its revision; future requests use fresh engine/queue and late old native routing cannot target replacement context.",
+    "Accessibility volume subscription cancels active/pending notification and explicit-preview requests at zero; zero-to-restored volume cannot revive them, while master-following voice effects remain eligible."
+  ],
+  "checks": {
+    "focused": "npx vitest run src/utils/sounds.test.ts src/utils/entrancePreset.test.ts src/hooks/ws/entranceEventHandlers.test.ts:3files79tests PASS3.41s",
+    "typescript": "npx tsc -b exit0",
+    "lint": "exact2sounds paths ESLint exit0",
+    "diff_check": "exact2paths exit0"
+  },
+  "remaining": [
+    "No per-event mute/unmute/deafen sound catalog/preferences added.",
+    "Physical selected sink/device removal and native/browser audible acceptance remain open. No actual call-media or soundboard DND policy changes.",
+    "No browser/external/publication/staging operations. Shared preferences/VoiceSettings/native compatibility files untouched."
+  ]
+}
