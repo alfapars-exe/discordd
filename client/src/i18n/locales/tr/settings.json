@@ -1529,5 +1529,9 @@
   "gameJoinForwarded": "İstek Steam’e iletildi. Katılımı Steam içinde kontrol et.",
   "gameJoinUnavailable": "Davet kullanılamıyor veya Steam açılamadı. Yeniden kontrol edebilirsin.",
   "serverCommunityClassification": "Topluluk sunucusu olarak sınıflandır",
-  "serverCommunityClassificationHint": "Bu sınıflandırma ses kanalı üzerinden oyuna katılmayı kapatır. Ek topluluk araçları sağlamaz."
+  "serverCommunityClassificationHint": "Bu sınıflandırma ses kanalı üzerinden oyuna katılmayı kapatır. Ek topluluk araçları sağlamaz.",
+  "voiceOverlayGameActivityNotifications": "Arkadaş oyun etkinliği bildirimleri",
+  "voiceOverlayGameActivityNotificationsDesc": "Kabul edilmiş bir arkadaşın seninle yeni oyun etkinliği paylaşmaya başladığında kısa bir bildirim göster. Gizlilik, engelleme, yoksayma ve Rahatsız Etmeyin seçimlerine uyar. Giriş yaptıktan veya bu seçeneği açtıktan sonra eski bildirimleri tekrar göstermez.",
+  "voiceOverlayNowPlayingNotifications": "Aynı oyun bildirimleri",
+  "voiceOverlayNowPlayingNotificationsDesc": "Bir arkadaşın yerel CS2 eşleştirmenle aynı CS2 etkinliğini paylaşmaya başladığında bir kez bildir. Şimdilik yalnızca açık CS2/Steam eşleştirmelerini destekler; aynı ad veya yerel kimlik aynı oyun sayılmaz. Kendi etkinliğin gizli kalabilir."
 }

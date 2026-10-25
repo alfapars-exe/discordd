@@ -31,6 +31,7 @@ const DEVICE_FIELDS = new Set([
   "voiceOverlayPinned",
   "voiceOverlayQuickActions", "voiceOverlayClickableActions",
   "voiceOverlayActivity",
+  "voiceOverlayGameActivityNotifications", "voiceOverlayNowPlayingNotifications",
   "voiceOverlayNotifications",
   "voiceOverlayNotificationActions",
   "voiceOverlayChat",

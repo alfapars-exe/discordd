@@ -49,6 +49,10 @@ function VoiceSettings() {
   const setOverlayVideo=useVoiceStore(s=>s.setVoiceOverlayVideo),setOverlayStreams=useVoiceStore(s=>s.setVoiceOverlayStreams);
   const overlayGoLive = useVoiceStore(s => s.voiceOverlayGoLive);
   const setOverlayGoLive = useVoiceStore(s => s.setVoiceOverlayGoLive);
+  const overlayGameActivityNotices = useVoiceStore(s => s.voiceOverlayGameActivityNotifications);
+  const overlayNowPlayingNotices = useVoiceStore(s => s.voiceOverlayNowPlayingNotifications);
+  const setOverlayGameActivityNotices = useVoiceStore(s => s.setVoiceOverlayGameActivityNotifications);
+  const setOverlayNowPlayingNotices = useVoiceStore(s => s.setVoiceOverlayNowPlayingNotifications);
   const overlayWelcome = useVoiceStore((s) => s.voiceOverlayWelcome);
   const setOverlayWelcome = useVoiceStore((s) => s.setVoiceOverlayWelcome);
   const overlayActivity = useVoiceStore((s) => s.voiceOverlayActivity);
@@ -426,6 +430,8 @@ function VoiceSettings() {
         <div className="vs-row"><div><div className="vs-label">{t("voiceOverlayVideo")}</div><div className="vs-desc">{t("voiceOverlayVideoDesc")}</div></div><label className="vs-switch"><input type="checkbox" aria-label={t("voiceOverlayVideo")} checked={overlayVideo} onChange={e=>setOverlayVideo(e.target.checked)}/><span className="vs-switch-slider"/></label></div>
         <div className="vs-row"><div><div className="vs-label">{t("voiceOverlayStreams")}</div><div className="vs-desc">{t("voiceOverlayStreamsDesc")}</div></div><label className="vs-switch"><input type="checkbox" aria-label={t("voiceOverlayStreams")} checked={overlayStreams} onChange={e=>setOverlayStreams(e.target.checked)}/><span className="vs-switch-slider"/></label></div>
         <div className="vs-row"><div><div className="vs-label">{t("voiceOverlayGoLive")}</div><div className="vs-desc">{t("voiceOverlayGoLiveDesc")}</div></div><label className="vs-switch"><input type="checkbox" aria-label={t("voiceOverlayGoLive")} checked={overlayGoLive} onChange={(e) => setOverlayGoLive(e.target.checked)} /><span className="vs-switch-slider" /></label></div>
+        <div className="vs-row"><div><div className="vs-label">{t("voiceOverlayGameActivityNotifications")}</div><div className="vs-desc">{t("voiceOverlayGameActivityNotificationsDesc")}</div></div><label className="vs-switch"><input type="checkbox" aria-label={t("voiceOverlayGameActivityNotifications")} checked={overlayGameActivityNotices} onChange={event => setOverlayGameActivityNotices(event.target.checked)} /><span className="vs-switch-slider" /></label></div>
+        <div className="vs-row"><div><div className="vs-label">{t("voiceOverlayNowPlayingNotifications")}</div><div className="vs-desc">{t("voiceOverlayNowPlayingNotificationsDesc")}</div></div><label className="vs-switch"><input type="checkbox" aria-label={t("voiceOverlayNowPlayingNotifications")} checked={overlayNowPlayingNotices} onChange={event => setOverlayNowPlayingNotices(event.target.checked)} /><span className="vs-switch-slider" /></label></div>
         {overlayEnabled && (
           <>
             <div className="vs-label">{t("voiceOverlaySpeakingOpacity", { defaultValue: "Konuşan opaklığı" })} ({overlaySpeakingOpacity}%)</div>

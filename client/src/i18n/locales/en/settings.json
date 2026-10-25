@@ -1529,5 +1529,9 @@
   "gameJoinForwarded": "The request was forwarded to Steam. Check the result in Steam.",
   "gameJoinUnavailable": "The invitation is unavailable or Steam could not be opened. You can check again.",
   "serverCommunityClassification": "Classify as a community server",
-  "serverCommunityClassificationHint": "This classification disables game joining through voice channels. It does not enable additional community tools."
+  "serverCommunityClassificationHint": "This classification disables game joining through voice channels. It does not enable additional community tools.",
+  "voiceOverlayGameActivityNotifications": "Friend game activity notices",
+  "voiceOverlayGameActivityNotificationsDesc": "Briefly show a notice when an accepted friend starts sharing new game activity with you. Respects privacy, blocks, ignored users and Do Not Disturb. No notices are replayed after signing in or enabling this option.",
+  "voiceOverlayNowPlayingNotifications": "Same-game notices",
+  "voiceOverlayNowPlayingNotificationsDesc": "Notify once when a friend starts sharing CS2 activity that matches your local CS2 association. Currently supports explicit CS2/Steam associations only; matching names or local IDs are never treated as the same game. Your own activity can remain private."
 }

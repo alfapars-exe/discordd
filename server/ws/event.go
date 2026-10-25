@@ -250,6 +250,8 @@ type GameActivityData struct {
 	Game     *GameActivityGame `json:"game"`
 	Revision uint64            `json:"revision"`
 	Epoch    string            `json:"epoch"`
+	// Server-only live source transition; snapshots and authorization refreshes omit it.
+	Transition bool `json:"transition,omitempty"`
 }
 
 type GameActivityGame struct {

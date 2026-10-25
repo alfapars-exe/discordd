@@ -144,6 +144,7 @@ func (s *GameActivityService) Update(ctx context.Context, userID string, connect
 	old, exists := byConnection[connectionID]
 	now := time.Now().UTC()
 	changed := !exists || old.game.ID != game.ID || old.game.Name != game.Name || old.game.CanonicalGameID != game.CanonicalGameID || !now.Before(old.leaseUntil)
+	notifyTransition := !exists || old.game.ID != game.ID || old.game.CanonicalGameID != game.CanonicalGameID || !now.Before(old.leaseUntil)
 	started := old.changedAt
 	incarnation := old.incarnation
 	if changed {
@@ -152,7 +153,11 @@ func (s *GameActivityService) Update(ctx context.Context, userID string, connect
 	}
 	byConnection[connectionID] = gameActivitySource{incarnation: incarnation, game: *game, changedAt: started, leaseUntil: now.Add(gameActivityLease), sequence: sequence}
 	s.mu.Unlock()
-	s.reconcileTargetLocked(ctx, userID)
+	if notifyTransition {
+		s.reconcileTargetLocked(ctx, userID, gameActivityTransition{connection: connectionID, incarnation: incarnation})
+	} else {
+		s.reconcileTargetLocked(ctx, userID)
+	}
 }
 
 func (s *GameActivityService) Disconnect(ctx context.Context, userID string, connectionID uint64) {
@@ -439,7 +444,7 @@ func (s *GameActivityService) Start() {
 }
 func (s *GameActivityService) Stop() { s.once.Do(func() { close(s.stop) }) }
 
-func (s *GameActivityService) reconcileTargetLocked(ctx context.Context, targetID string) {
+func (s *GameActivityService) reconcileTargetLocked(ctx context.Context, targetID string, transition ...gameActivityTransition) {
 	if s.gameJoin != nil {
 		s.gameJoin.retireObsoleteOfferLocked(targetID)
 	}
@@ -534,7 +539,8 @@ func (s *GameActivityService) reconcileTargetLocked(ctx context.Context, targetI
 		if allowed {
 			next[grant] = true
 			if stateChanged || !oldGrants[grant] {
-				s.deliver(grant.viewerID, targetID, grant.serverID, game)
+				liveTransition := len(transition) == 1 && grant.serverID == "" && grant.viewerID != targetID && s.isSelectedActivityTransition(targetID, transition[0])
+				s.deliverActivityTransition(grant.viewerID, targetID, grant.serverID, game, liveTransition)
 			}
 		} else if oldGrants[grant] {
 			s.deliver(grant.viewerID, targetID, grant.serverID, nil)
@@ -565,13 +571,7 @@ func (s *GameActivityService) revokeTargetLocked(targetID string) {
 }
 
 func (s *GameActivityService) deliver(viewerID, targetID, serverID string, game *ws.GameActivityGame) {
-	s.mu.Lock()
-	revision := s.revisions[targetID] + 1
-	s.revisions[targetID] = revision
-	s.mu.Unlock()
-	if s.hub != nil {
-		s.hub.BroadcastToUsers([]string{viewerID}, ws.Event{Op: ws.OpGameActivityUpdate, Data: ws.GameActivityData{UserID: targetID, ServerID: serverID, Game: game, Revision: revision, Epoch: s.epoch}})
-	}
+	s.deliverActivityTransition(viewerID, targetID, serverID, game, false)
 }
 
 func (s *GameActivityService) contextsForViewer(ctx context.Context, targetID, viewerID string) []string {

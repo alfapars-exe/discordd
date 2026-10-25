@@ -17,6 +17,20 @@ afterEach(() => {
 });
 
 describe("noise engine preference migration", () => {
+  it("keeps the two independent game notice preferences local, default off, and immune to cloud hydration", () => {
+    expect(loadSettings()).toMatchObject({ voiceOverlayGameActivityNotifications: false, voiceOverlayNowPlayingNotifications: false });
+    localStorage.setItem("mqvi_voice_settings", JSON.stringify({ voiceOverlayGameActivityNotifications: "true", voiceOverlayNowPlayingNotifications: 1 }));
+    expect(loadSettings()).toMatchObject({ voiceOverlayGameActivityNotifications: false, voiceOverlayNowPlayingNotifications: false });
+    const store = createStore<VoiceSettingsSlice>()(createVoiceSettingsSlice as unknown as StateCreator<VoiceSettingsSlice>);
+    store.getState().setVoiceOverlayGameActivityNotifications(true);
+    expect(store.getState().voiceOverlayNowPlayingNotifications).toBe(false);
+    store.getState().setVoiceOverlayNowPlayingNotifications(true); flushPendingVoiceSettingsSave();
+    expect(loadSettings()).toMatchObject({ voiceOverlayGameActivityNotifications: true, voiceOverlayNowPlayingNotifications: true });
+    expect(sync).not.toHaveBeenCalled();
+    store.getState().applyFromServer({ voiceOverlayGameActivityNotifications: false, voiceOverlayNowPlayingNotifications: false });
+    expect(store.getState()).toMatchObject({ voiceOverlayGameActivityNotifications: true, voiceOverlayNowPlayingNotifications: true });
+  });
+
   it.each(["krisp", "dpdfnet"])("migrates local %s while preserving unrelated settings", (engine) => {
     localStorage.setItem("mqvi_voice_settings", JSON.stringify({ noiseReductionEngine: engine, inputVolume: 145, screenShareAudio: false, inputDevice: "usb-mic" }));
     expect(loadSettings()).toMatchObject({ noiseReductionEngine: "rnnoise", inputVolume: 145, screenShareAudio: false, inputDevice: "usb-mic" });

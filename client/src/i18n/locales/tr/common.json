@@ -474,5 +474,7 @@
     "reloading": "Yeniden yükleniyor...",
     "sectionTitle": "Bu bölümde bir sorun oluştu ({{section}})"
   },
-  "overlayCompatibilityActive": "Salt okunur uyumluluk modu"
+  "overlayCompatibilityActive": "Salt okunur uyumluluk modu",
+  "overlayGameActivityNotice": "{{name}}, {{game}} etkinliğini paylaşmaya başladı",
+  "overlayNowPlayingNotice": "{{name}}, aynı CS2 eşleştirmesi için etkinlik paylaşmaya başladı"
 }

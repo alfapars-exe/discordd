@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
     voiceOverlayQuickActions: false, voiceOverlayClickableActions: false, voiceOverlayCompatibility: false,
     voiceOverlayActivity: false, voiceOverlayVideo:false,voiceOverlayStreams:false,
     voiceOverlayWelcome: false, voiceOverlayGoLive: false,
+    voiceOverlayGameActivityNotifications: false, voiceOverlayNowPlayingNotifications: false,
     voiceOverlayNotifications: false,
     voiceOverlayNotificationActions: false,
     voiceOverlayChat: false, voiceOverlayChatActions: false, voiceOverlayChatCompose: false,
@@ -30,6 +31,7 @@ const mocks = vi.hoisted(() => ({
     setVoiceOverlayQuickActions: vi.fn(), setVoiceOverlayClickableActions: vi.fn(), setVoiceOverlayCompatibility: vi.fn(),
     setVoiceOverlayActivity: vi.fn(),setVoiceOverlayVideo:vi.fn(),setVoiceOverlayStreams:vi.fn(),
     setVoiceOverlayWelcome: vi.fn(), setVoiceOverlayGoLive: vi.fn(),
+    setVoiceOverlayGameActivityNotifications: vi.fn(), setVoiceOverlayNowPlayingNotifications: vi.fn(),
     setVoiceOverlayNotifications: vi.fn(),
     setVoiceOverlayNotificationActions: vi.fn(),
     setVoiceOverlayChatCompose: vi.fn(),
@@ -227,6 +229,17 @@ describe("voice processing settings", () => {
     expect(mocks.state.setVoiceOverlayActivity).toHaveBeenCalledWith(true);
     expect(screen.getByText(en.voiceOverlayActivityDesc)).toHaveTextContent(/never reads this device's process list/i);
     expect(screen.getByText(en.voiceOverlayActivityDesc)).toHaveTextContent(/does not show live activity/i);
+  });
+
+  it("offers independent transient activity and explicitly supported same-game notice preferences", () => {
+    render(<VoiceSettings />);
+    fireEvent.click(screen.getByRole("checkbox", { name: en.voiceOverlayGameActivityNotifications }));
+    expect(mocks.state.setVoiceOverlayGameActivityNotifications).toHaveBeenCalledWith(true);
+    expect(mocks.state.setVoiceOverlayNowPlayingNotifications).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("checkbox", { name: en.voiceOverlayNowPlayingNotifications }));
+    expect(mocks.state.setVoiceOverlayNowPlayingNotifications).toHaveBeenCalledWith(true);
+    expect(screen.getByText(en.voiceOverlayNowPlayingNotificationsDesc)).toHaveTextContent(/explicit CS2\/Steam associations only/i);
+    expect(screen.getByText(en.voiceOverlayNowPlayingNotificationsDesc)).toHaveTextContent(/own activity can remain private/i);
   });
 
   it("offers read-only unread indicators without decrypted previews", () => {
