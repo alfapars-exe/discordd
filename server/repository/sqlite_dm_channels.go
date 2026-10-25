@@ -78,11 +78,9 @@ func (r *sqliteDMRepo) ListChannels(ctx context.Context, userID string) ([]model
 			COALESCE(dr.unread_count, 0),
 			(SELECT unread.id FROM dm_messages unread
 			 WHERE unread.dm_channel_id=dc.id AND unread.user_id != ? AND COALESCE(dr.unread_count,0)>0
-			   AND (dr.last_read_message_id IS NULL OR EXISTS (
-			     SELECT 1 FROM dm_messages cursor WHERE cursor.id=dr.last_read_message_id AND cursor.dm_channel_id=dc.id
-			       AND (unread.created_at>cursor.created_at OR (unread.created_at=cursor.created_at AND unread.id>cursor.id))))
-			 ORDER BY unread.created_at ASC,unread.id ASC LIMIT 1),
-			lm.id, lm.user_id, lm.content, lm.encryption_version, lm.created_at
+           AND unread.source_sequence>COALESCE(dr.last_read_source_sequence,0)
+             ORDER BY unread.source_sequence ASC LIMIT 1),
+			lm.id, lm.user_id, lm.content, lm.encryption_version, lm.created_at, lm.source_sequence
 		FROM dm_channels dc
 		JOIN users u ON u.id = CASE
 			WHEN dc.user1_id = ? THEN dc.user2_id
@@ -92,7 +90,7 @@ func (r *sqliteDMRepo) ListChannels(ctx context.Context, userID string) ([]model
 		LEFT JOIN dm_reads dr ON dr.user_id = ? AND dr.dm_channel_id = dc.id
 		LEFT JOIN dm_messages lm ON lm.id = (
 			SELECT id FROM dm_messages WHERE dm_channel_id = dc.id
-			ORDER BY created_at DESC, id DESC LIMIT 1)
+			ORDER BY source_sequence DESC LIMIT 1)
 		WHERE (dc.user1_id = ? OR dc.user2_id = ?)
 		  AND COALESCE(ds.is_hidden, 0) = 0
 		ORDER BY COALESCE(ds.is_pinned, 0) DESC,
@@ -115,6 +113,7 @@ func (r *sqliteDMRepo) ListChannels(ctx context.Context, userID string) ([]model
 		var oldestUnread sql.NullString
 		var lmEncryptionVersion sql.NullInt64
 		var lmCreatedAt sql.NullTime
+		var lastSequence sql.NullInt64
 
 		if err := rows.Scan(
 			&ch.ID, &ch.E2EEEnabled, &ch.Status, &initiatedBy, &ch.CreatedAt, &lastMsgAt,
@@ -122,13 +121,14 @@ func (r *sqliteDMRepo) ListChannels(ctx context.Context, userID string) ([]model
 			&isPinned, &isMuted,
 			&ch.UnreadCount,
 			&oldestUnread,
-			&lmID, &lmUserID, &lmContent, &lmEncryptionVersion, &lmCreatedAt,
+			&lmID, &lmUserID, &lmContent, &lmEncryptionVersion, &lmCreatedAt, &lastSequence,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan DM channel: %w", err)
 		}
 
 		if lmID.Valid {
 			last := &models.DMLastMessage{
+				SourceSequence:    lastSequence.Int64,
 				ID:                lmID.String,
 				UserID:            lmUserID.String,
 				EncryptionVersion: int(lmEncryptionVersion.Int64),

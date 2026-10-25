@@ -24,7 +24,7 @@ func (r *sqliteDMRepo) GetMessages(ctx context.Context, channelID string, before
 		query = `
 			SELECT m.id, m.dm_channel_id, m.user_id, m.content, m.edited_at, m.created_at,
 			       m.reply_to_id, m.is_pinned,
-			       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata, m.application_id,
+			       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata, m.application_id, m.source_sequence,
 			       u.id, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, u.created_at,
 			       rm.id, rm.content,
 			       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.status, ru.custom_status, ru.created_at
@@ -33,25 +33,15 @@ func (r *sqliteDMRepo) GetMessages(ctx context.Context, channelID string, before
 			LEFT JOIN dm_messages rm ON m.reply_to_id = rm.id
 			LEFT JOIN users ru ON rm.user_id = ru.id
 			WHERE m.dm_channel_id = ?
-			ORDER BY m.created_at DESC, m.id DESC
+			ORDER BY m.source_sequence DESC
 			LIMIT ?`
 		args = []any{channelID, limit}
 	} else {
-		// Cursor pagination: fetch messages older than beforeID, using a
-		// compound (created_at, id) tiebreak. created_at has only second
-		// resolution while id is random hex, so a plain `created_at < X`
-		// cursor silently drops rows: whenever more than `limit` messages
-		// land in the same second, the ones on the far side of the page
-		// boundary never satisfy the strict `<` again and the client sees
-		// hasMore:false with messages permanently missing. Expressed as
-		// boolean expansion rather than a row-value comparison so it works
-		// identically on both the local modernc.org/sqlite driver and the
-		// CGO libsql/Turso driver (row-value comparison isn't guaranteed
-		// portable across both engines).
+		// Opaque cursor IDs resolve to the immutable per-conversation append sequence.
 		query = `
 			SELECT m.id, m.dm_channel_id, m.user_id, m.content, m.edited_at, m.created_at,
 			       m.reply_to_id, m.is_pinned,
-			       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata, m.application_id,
+			       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata, m.application_id, m.source_sequence,
 			       u.id, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, u.created_at,
 			       rm.id, rm.content,
 			       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.status, ru.custom_status, ru.created_at
@@ -60,13 +50,11 @@ func (r *sqliteDMRepo) GetMessages(ctx context.Context, channelID string, before
 			LEFT JOIN dm_messages rm ON m.reply_to_id = rm.id
 			LEFT JOIN users ru ON rm.user_id = ru.id
 			WHERE m.dm_channel_id = ?
-			  AND ( m.created_at < (SELECT created_at FROM dm_messages WHERE id = ? AND dm_channel_id = ?)
-			     OR ( m.created_at = (SELECT created_at FROM dm_messages WHERE id = ? AND dm_channel_id = ?)
-			          AND m.id < ? ) )
-			ORDER BY m.created_at DESC, m.id DESC
+			  AND m.source_sequence < (SELECT source_sequence FROM dm_messages WHERE id = ? AND dm_channel_id = ?)
+			ORDER BY m.source_sequence DESC
 			LIMIT ?`
 		// Channel-scoped cursor subqueries — see sqliteMessageRepo.GetByChannelID.
-		args = []any{channelID, beforeID, channelID, beforeID, channelID, beforeID, limit}
+		args = []any{channelID, beforeID, channelID, limit}
 	}
 
 	rows, err := r.db.QueryContext(ctx, query, args...)
@@ -100,7 +88,7 @@ func (r *sqliteDMRepo) GetMessages(ctx context.Context, channelID string, before
 const dmMessageHistorySelect = `
 	SELECT m.id, m.dm_channel_id, m.user_id, m.content, m.edited_at, m.created_at,
 	       m.reply_to_id, m.is_pinned,
-	       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata, m.application_id,
+	       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata, m.application_id, m.source_sequence,
 	       u.id, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, u.created_at,
 	       rm.id, rm.content,
 	       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.status, ru.custom_status, ru.created_at
@@ -149,7 +137,7 @@ func (r *sqliteDMRepo) queryDMHistory(ctx context.Context, tail string, args ...
 
 // GetMessagesAround — DM twin of sqliteMessageRepo.GetByChannelIDAround:
 // older half DESC (limit half+1), anchor + newer half ASC (limit half+2),
-// both boolean-expanded (created_at, id) keysets with a channel-scoped
+// both source-sequence keysets with a channel-scoped
 // anchor subquery; the window is returned ASC.
 func (r *sqliteDMRepo) GetMessagesAround(ctx context.Context, channelID, anchorID string, limit int) ([]models.DMMessage, bool, bool, error) {
 	if err := r.dmAnchorExists(ctx, channelID, anchorID); err != nil {
@@ -159,12 +147,10 @@ func (r *sqliteDMRepo) GetMessagesAround(ctx context.Context, channelID, anchorI
 
 	older, err := r.queryDMHistory(ctx, `
 		WHERE m.dm_channel_id = ?
-		  AND ( m.created_at < (SELECT created_at FROM dm_messages WHERE id = ? AND dm_channel_id = ?)
-		     OR ( m.created_at = (SELECT created_at FROM dm_messages WHERE id = ? AND dm_channel_id = ?)
-		          AND m.id < ? ) )
-		ORDER BY m.created_at DESC, m.id DESC
+		  AND m.source_sequence < (SELECT source_sequence FROM dm_messages WHERE id = ? AND dm_channel_id = ?)
+		ORDER BY m.source_sequence DESC
 		LIMIT ?`,
-		channelID, anchorID, channelID, anchorID, channelID, anchorID, half+1)
+		channelID, anchorID, channelID, half+1)
 	if err != nil {
 		return nil, false, false, err
 	}
@@ -175,12 +161,10 @@ func (r *sqliteDMRepo) GetMessagesAround(ctx context.Context, channelID, anchorI
 
 	newer, err := r.queryDMHistory(ctx, `
 		WHERE m.dm_channel_id = ?
-		  AND ( m.created_at > (SELECT created_at FROM dm_messages WHERE id = ? AND dm_channel_id = ?)
-		     OR ( m.created_at = (SELECT created_at FROM dm_messages WHERE id = ? AND dm_channel_id = ?)
-		          AND m.id >= ? ) )
-		ORDER BY m.created_at ASC, m.id ASC
+		  AND m.source_sequence >= (SELECT source_sequence FROM dm_messages WHERE id = ? AND dm_channel_id = ?)
+		ORDER BY m.source_sequence ASC
 		LIMIT ?`,
-		channelID, anchorID, channelID, anchorID, channelID, anchorID, half+2)
+		channelID, anchorID, channelID, half+2)
 	if err != nil {
 		return nil, false, false, err
 	}
@@ -205,19 +189,17 @@ func (r *sqliteDMRepo) GetMessagesAfter(ctx context.Context, channelID, afterID 
 	}
 	return r.queryDMHistory(ctx, `
 		WHERE m.dm_channel_id = ?
-		  AND ( m.created_at > (SELECT created_at FROM dm_messages WHERE id = ? AND dm_channel_id = ?)
-		     OR ( m.created_at = (SELECT created_at FROM dm_messages WHERE id = ? AND dm_channel_id = ?)
-		          AND m.id > ? ) )
-		ORDER BY m.created_at ASC, m.id ASC
+		  AND m.source_sequence > (SELECT source_sequence FROM dm_messages WHERE id = ? AND dm_channel_id = ?)
+		ORDER BY m.source_sequence ASC
 		LIMIT ?`,
-		channelID, afterID, channelID, afterID, channelID, afterID, limit)
+		channelID, afterID, channelID, limit)
 }
 
 func (r *sqliteDMRepo) GetMessageByID(ctx context.Context, id string) (*models.DMMessage, error) {
 	query := `
 		SELECT m.id, m.dm_channel_id, m.user_id, m.content, m.edited_at, m.created_at,
 		       m.reply_to_id, m.is_pinned,
-		       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata, m.application_id,
+		       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata, m.application_id, m.source_sequence,
 		       u.id, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, u.created_at,
 		       rm.id, rm.content,
 		       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.status, ru.custom_status, ru.created_at
@@ -245,7 +227,7 @@ func (r *sqliteDMRepo) GetMessageByID(ctx context.Context, id string) (*models.D
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
 		&msg.ID, &msg.DMChannelID, &msg.UserID, &content, &editedAt, &msg.CreatedAt,
 		&msg.ReplyToID, &isPinned,
-		&msg.EncryptionVersion, &msg.Ciphertext, &msg.SenderDeviceID, &msg.E2EEMetadata, &msg.ApplicationID,
+		&msg.EncryptionVersion, &msg.Ciphertext, &msg.SenderDeviceID, &msg.E2EEMetadata, &msg.ApplicationID, &msg.SourceSequence,
 		&authorID, &authorUsername, &displayName, &avatarURL, &authorStatus, &customStatus, &authorCreatedAt,
 		&refMsgID, &refMsgContent,
 		&refAuthorID, &refAuthorUsername, &refAuthorDisplayName, &refAuthorAvatarURL, &refAuthorStatus, &refAuthorCustomStatus, &refAuthorCreatedAt,
@@ -325,7 +307,9 @@ func (r *sqliteDMRepo) CreateMessage(ctx context.Context, msg *models.DMMessage)
 
 	// Best-effort read-back of the DB-side default created_at (RETURNING avoided
 	// for Turso/Hrana safety — see sqlite_user.go Create).
-	_ = r.db.QueryRowContext(ctx, "SELECT created_at FROM dm_messages WHERE id = ?", msg.ID).Scan(&msg.CreatedAt)
+	if err := r.db.QueryRowContext(ctx, "SELECT created_at,source_sequence FROM dm_messages WHERE id = ?", msg.ID).Scan(&msg.CreatedAt, &msg.SourceSequence); err != nil {
+		return fmt.Errorf("read DM append sequence: %w", err)
+	}
 	msg.CreatedAt = msg.CreatedAt.UTC()
 	return nil
 }
@@ -394,21 +378,16 @@ func (r *sqliteDMRepo) DeleteMessage(ctx context.Context, id string) error {
 	}
 	// Keep denormalized unread counts and read watermarks in sync with message
 	// deletion, including on deployments where SQLite foreign keys are off.
-	if _, err := tx.ExecContext(ctx, `UPDATE dm_reads SET
-	 unread_count=CASE WHEN user_id<>? AND (
-	   last_read_message_id IS NULL OR NOT EXISTS(SELECT 1 FROM dm_messages cursor WHERE cursor.id=dm_reads.last_read_message_id AND cursor.dm_channel_id=dm_reads.dm_channel_id) OR
-	   EXISTS(SELECT 1 FROM dm_messages candidate JOIN dm_messages seen ON seen.id=dm_reads.last_read_message_id
-	     WHERE candidate.id=? AND candidate.dm_channel_id=dm_reads.dm_channel_id AND
-	       (candidate.created_at>seen.created_at OR (candidate.created_at=seen.created_at AND candidate.id>seen.id)))
-	 ) THEN CASE WHEN unread_count>0 THEN unread_count-1 ELSE 0 END ELSE unread_count END,
-	 last_read_message_id=CASE WHEN last_read_message_id=? THEN (
-	   SELECT previous.id FROM dm_messages previous JOIN dm_messages target ON target.id=? AND target.dm_channel_id=previous.dm_channel_id
-	   WHERE previous.dm_channel_id=? AND (previous.created_at<target.created_at OR (previous.created_at=target.created_at AND previous.id<target.id))
-	   ORDER BY previous.created_at DESC,previous.id DESC LIMIT 1
-	 ) ELSE last_read_message_id END
-	 WHERE dm_channel_id=?`, authorID, id, id, id, channelID, channelID); err != nil {
+	if _, err := tx.ExecContext(ctx, `UPDATE dm_channels SET status=status WHERE id=?`, channelID); err != nil {
 		return err
 	}
+	if _, err := tx.ExecContext(ctx, `UPDATE dm_reads SET
+ unread_count=CASE WHEN user_id<>? AND (SELECT source_sequence FROM dm_messages WHERE id=?)>last_read_source_sequence THEN CASE WHEN unread_count>0 THEN unread_count-1 ELSE 0 END ELSE unread_count END,
+ last_read_message_id=CASE WHEN last_read_message_id=? THEN (SELECT previous.id FROM dm_messages previous JOIN dm_messages target ON target.id=? AND target.dm_channel_id=previous.dm_channel_id WHERE previous.dm_channel_id=? AND previous.source_sequence<target.source_sequence ORDER BY previous.source_sequence DESC LIMIT 1) ELSE last_read_message_id END
+ WHERE dm_channel_id=?`, authorID, id, id, id, channelID, channelID); err != nil {
+		return err
+	}
+
 	// Explicit child delete before the parent: prod's remote libSQL/Turso
 	// branch never enables the foreign_keys PRAGMA, so ON DELETE CASCADE
 	// does not fire there (same rule as DeleteChannel in
@@ -474,7 +453,7 @@ func (r *sqliteDMRepo) SearchMessages(ctx context.Context, channelID string, sea
 	dataQuery := `
 		SELECT m.id, m.dm_channel_id, m.user_id, m.content, m.edited_at, m.created_at,
 		       m.reply_to_id, m.is_pinned,
-		       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata, m.application_id,
+		       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata, m.application_id, m.source_sequence,
 		       u.id, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, u.created_at,
 		       rm.id, rm.content,
 		       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.status, ru.custom_status, ru.created_at
@@ -484,7 +463,7 @@ func (r *sqliteDMRepo) SearchMessages(ctx context.Context, channelID string, sea
 		LEFT JOIN dm_messages rm ON m.reply_to_id = rm.id
 		LEFT JOIN users ru ON rm.user_id = ru.id
 		WHERE m.dm_channel_id = ? AND fts.content MATCH ?
-		ORDER BY fts.rank
+		ORDER BY fts.rank,m.source_sequence DESC
 		LIMIT ? OFFSET ?`
 
 	rows, err := r.db.QueryContext(ctx, dataQuery, channelID, safeQuery, limit, offset)

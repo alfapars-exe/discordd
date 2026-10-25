@@ -1,3 +1,4 @@
+import { sortDMBySource } from "../../utils/dmSourceOrder";
 /** DMSearchPanel — DM message search panel. Same pattern as channel SearchPanel. */
 
 import { useState, useCallback, useRef, useEffect } from "react";
@@ -82,9 +83,8 @@ function DMSearchPanel({ channelId, onClose }: DMSearchPanelProps) {
           // (and spinner state) own the panel now.
           if (seq !== searchSeqRef.current) return;
           const total = cached.length;
-          const paged = cached
-            .sort((a, b) => b.timestamp - a.timestamp)
-            .slice(searchOffset, searchOffset + LIMIT);
+          const paged = sortDMBySource(cached.map(record => ({ id: record.messageId, created_at: new Date(record.timestamp).toISOString(), source_sequence: record.sourceSequence, record }))).reverse()
+            .slice(searchOffset, searchOffset + LIMIT).map(item => item.record);
 
           // CachedDecryptedMessage -> DMMessage minimal format
           const messages: DMMessage[] = paged.map((c) => ({
@@ -92,6 +92,7 @@ function DMSearchPanel({ channelId, onClose }: DMSearchPanelProps) {
             dm_channel_id: channelId,
             user_id: c.senderUserId ?? "",
             application_id: c.applicationId,
+            source_sequence: c.sourceSequence,
             content: c.content,
             created_at: new Date(c.timestamp).toISOString(),
             edited_at: null,

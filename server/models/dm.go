@@ -37,6 +37,7 @@ const (
 // (GET /api/dms "last_message"). Content is nil whenever the message is
 // E2EE (encryption_version=1) or file-only — ciphertext is never included.
 type DMLastMessage struct {
+	SourceSequence    int64     `json:"source_sequence,omitempty,string"`
 	ID                string    `json:"id"`
 	UserID            string    `json:"user_id"`
 	Content           *string   `json:"content"`
@@ -72,14 +73,16 @@ type MarkDMReadRequest struct {
 }
 
 type DMMessage struct {
-	ID          string     `json:"id"`
-	DMChannelID string     `json:"dm_channel_id"`
-	UserID      string     `json:"user_id"`
-	Content     *string    `json:"content"`
-	EditedAt    *time.Time `json:"edited_at"`
-	CreatedAt   time.Time  `json:"created_at"`
-	ReplyToID   *string    `json:"reply_to_id"`
-	IsPinned    bool       `json:"is_pinned"`
+	// Server-assigned append order; decimal string avoids client integer precision loss.
+	SourceSequence int64      `json:"source_sequence,omitempty,string"`
+	ID             string     `json:"id"`
+	DMChannelID    string     `json:"dm_channel_id"`
+	UserID         string     `json:"user_id"`
+	Content        *string    `json:"content"`
+	EditedAt       *time.Time `json:"edited_at"`
+	CreatedAt      time.Time  `json:"created_at"`
+	ReplyToID      *string    `json:"reply_to_id"`
+	IsPinned       bool       `json:"is_pinned"`
 	// ApplicationID is a send-time, server-derived game application origin.
 	// It is never accepted in a CreateDMMessageRequest.
 	ApplicationID *string `json:"application_id,omitempty"`

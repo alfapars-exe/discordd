@@ -1,3 +1,4 @@
+import { sortDMBySource } from "../utils/dmSourceOrder";
 import { create } from "zustand";
 import i18n from "../i18n";
 import { getAuthSessionSnapshot, subscribeAuthGenerationChanges, subscribeAuthOwnerChanges } from "../api/authSessionEvents";
@@ -337,11 +338,11 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
       set((state) => ({
         messagesByChannel: {
           ...state.messagesByChannel,
-          [channelId]: [...new Map([
+          [channelId]: sortDMBySource([...new Map([
             ...messages,
             ...(state.messagesByChannel[channelId]??[]).filter(message=>!historyVersion.current(message)&&!historyVersion.deleted(message)),
             ...historyBuffer.read().filter(message=>!historyVersion.current(message)&&!historyVersion.deleted(message)),
-          ].map(message=>[message.id,message])).values()].map(historyBuffer.apply).sort((a,b)=>a.created_at.localeCompare(b.created_at)||(positions.get(a.id)??Number.MAX_SAFE_INTEGER)-(positions.get(b.id)??Number.MAX_SAFE_INTEGER)),
+          ].map(message=>[message.id,message])).values()].map(historyBuffer.apply),positions),
         },
         hasMoreByChannel: {
           ...state.hasMoreByChannel,
@@ -384,7 +385,7 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
       set((state) => ({
         messagesByChannel: {
           ...state.messagesByChannel,
-          [channelId]: [...decrypted, ...state.messagesByChannel[channelId]].map(historyBuffer.apply),
+          [channelId]: sortDMBySource([...decrypted, ...state.messagesByChannel[channelId]].map(historyBuffer.apply)),
         },
         hasMoreByChannel: {
           ...state.hasMoreByChannel,
@@ -450,8 +451,7 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
     const rawIds = new Set(raw.map(message=>message.id));
     const positions = new Map(raw.map((message,index)=>[message.id,index]));
     const retained = [...(get().messagesByChannel[channelId]??[]),...historyBuffer.read()].filter(message=>rawIds.has(message.id)&&!historyVersion.current(message)&&!historyVersion.deleted(message));
-    const windowMessages = [...new Map([...decrypted,...retained].map(message=>[message.id,message])).values()].map(historyBuffer.apply)
-      .sort((a,b)=>a.created_at.localeCompare(b.created_at)||(positions.get(a.id)??Number.MAX_SAFE_INTEGER)-(positions.get(b.id)??Number.MAX_SAFE_INTEGER));
+    const windowMessages = sortDMBySource([...new Map([...decrypted,...retained].map(message=>[message.id,message])).values()].map(historyBuffer.apply),positions);
     if (!windowMessages.some(message=>message.id===messageId)) return false;
     clearDetachedDMMessages(channelId);
 
@@ -515,7 +515,7 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
         return {
           messagesByChannel: {
             ...state.messagesByChannel,
-            [channelId]: [...current, ...appended].map(historyBuffer.apply),
+            [channelId]: sortDMBySource([...current, ...appended].map(historyBuffer.apply)),
           },
           hasMoreAfterByChannel: { ...state.hasMoreAfterByChannel, [channelId]: hasMoreAfter },
         };

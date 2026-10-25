@@ -124,27 +124,21 @@ func (r *sqliteNotificationRepo) CreateDMMessageIfAbsent(ctx context.Context, n 
 func (r *sqliteNotificationRepo) MarkDMMessagesRead(ctx context.Context, userID, channelID string, messageID *string) ([]string, error) {
 	// The shared channel lock in DMTxRepos makes this captured cursor stable
 	// against concurrent sends. Never use notification wall-clock timestamps.
-	var cutoffID string
+	var cutoff int64
 	if messageID != nil {
-		// Use the effective watermark retained by the transaction's MarkRead.
-		if err := r.db.QueryRowContext(ctx, `SELECT last_read_message_id FROM dm_reads WHERE user_id=? AND dm_channel_id=?`, userID, channelID).Scan(&cutoffID); err != nil {
+		if err := r.db.QueryRowContext(ctx, `SELECT last_read_source_sequence FROM dm_reads WHERE user_id=? AND dm_channel_id=?`, userID, channelID).Scan(&cutoff); err != nil {
 			return nil, err
 		}
 	} else {
-		err := r.db.QueryRowContext(ctx, `SELECT id FROM dm_messages WHERE dm_channel_id=? ORDER BY created_at DESC,id DESC LIMIT 1`, channelID).Scan(&cutoffID)
-		if err == sql.ErrNoRows {
-			return []string{}, nil
-		}
-		if err != nil {
+		if err := r.db.QueryRowContext(ctx, `SELECT COALESCE(MAX(source_sequence),0) FROM dm_messages WHERE dm_channel_id=?`, channelID).Scan(&cutoff); err != nil {
 			return nil, err
 		}
 	}
 	const query = `SELECT n.id FROM notifications n
 		JOIN dm_messages m ON m.id=n.message_id AND m.dm_channel_id=n.dm_channel_id
-		JOIN dm_messages cutoff ON cutoff.id=? AND cutoff.dm_channel_id=m.dm_channel_id
 		WHERE n.user_id=? AND n.dm_channel_id=? AND n.kind='system' AND n.payload=? AND n.read_at IS NULL
-		AND (m.created_at<cutoff.created_at OR (m.created_at=cutoff.created_at AND m.id<=cutoff.id))`
-	args := []any{cutoffID, userID, channelID, `{"action":"incoming_message","source":"dm"}`}
+		AND m.source_sequence<=?`
+	args := []any{userID, channelID, `{"action":"incoming_message","source":"dm"}`, cutoff}
 	// Return one overflow sentinel beyond the WS budget, but acknowledge the
 	// entire cutoff with fixed-parameter SQL rather than an unbounded ID list.
 	const selectQuery = query + ` ORDER BY n.id LIMIT 513`

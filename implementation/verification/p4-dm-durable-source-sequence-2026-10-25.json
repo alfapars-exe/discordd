@@ -1,0 +1,86 @@
+{
+  "phase": "P4",
+  "feature": "durable DM source order",
+  "status": "implemented_not_runtime_accepted",
+  "date": "2026-10-25",
+  "owned_paths": [
+    "server/database/migrations/139_dm_source_sequence.sql",
+    "server/database/postgres_migrations/041_dm_source_sequence.sql",
+    "server/database/migration_139_test.go",
+    "server/database/postgres_import_test.go",
+    "server/models/dm.go",
+    "server/repository/sqlite_dm_source_sequence_test.go",
+    "server/repository/sqlite_dm_messages.go",
+    "server/repository/sqlite_dm_channels.go",
+    "server/repository/sqlite_dm_read.go",
+    "server/repository/sqlite_dm_scan.go",
+    "server/repository/sqlite_dm_pins.go",
+    "server/repository/sqlite_dm_notification_test.go",
+    "server/repository/sqlite_notification.go",
+    "server/repository/postgres_search.go",
+    "server/repository/sqlite_data_export.go",
+    "client/src/utils/dmSourceOrder.ts",
+    "client/src/utils/dmSourceOrder.test.ts",
+    "client/src/types/dm.ts",
+    "client/src/stores/dmStore.ts",
+    "client/src/stores/dmStore.test.ts",
+    "client/src/stores/slices/dmWsSlice.ts",
+    "client/src/crypto/types.ts",
+    "client/src/crypto/dmMessageCache.ts",
+    "client/src/crypto/dmMessageCache.test.ts",
+    "client/src/components/dm/DMSearchPanel.tsx"
+  ],
+  "shared_path_scope": {
+    "client/src/crypto/types.ts": "Additive optional sourceSequence cache metadata reused by group agent.",
+    "server/repository/sqlite_data_export.go": "Only direct_messages source_sequence CAST(TEXT); adjacent group export query belongs to group agent."
+  },
+  "contract": [
+    "Database-assigned immutable per-conversation append sequence, durable channel counter and read watermark. Opaque IDs remain HTTP history/read cursors.",
+    "Positive trusted DB/import sequences preserved and counter advances to max; API Create ignores caller sequence. Deleted tails never recycle positions.",
+    "Legacy backfill preserves prior created_at/id observable ordering, not unknowable historical arrival.",
+    "HTTP/WS model sequence serializes canonical decimal string; cache/search/history/sidebar use authoritative ordering with legacy/optimistic fallback. Ciphertexts remain opaque.",
+    "Notification acknowledgement retains bounded changed-ID sentinel and fixed-parameter bulk update, compares durable source sequence."
+  ],
+  "verification": {
+    "client": {
+      "command": "npx vitest run src/utils/dmSourceOrder.test.ts src/stores/dmStore.test.ts src/crypto/dmMessageCache.test.ts",
+      "result": "3files105testsPASS; scoped ESLint and whole tsc -b clean"
+    },
+    "native_repository": {
+      "log": "C:/Users/PARS/AppData/Local/Temp/hichat-dm-source-seq-repository-final.log",
+      "command": "go test ./repository -count=1",
+      "result": "PASS98.347s",
+      "limitation": "Before final PG-only search ordering correction and direct exportCAST"
+    },
+    "golangci": {
+      "result": "0issues before final PG-only order correction/exportCAST",
+      "tool": "Pinned Go1.26.10 golangci-lint",
+      "scope": "./repository/... ./database/..."
+    },
+    "native_focused": {
+      "command": "go test ./repository ./database -run 'TestDMSameSecond|TestDMSourceSequence|TestDMMessageNotification|TestMigration139|TestDMRepo_GetMessagesPagination|TestDMReadRepo' -count=1",
+      "result": "PASS repository4.184s database2.404s"
+    },
+    "linux_race": {
+      "engine": "Cached golang:1.26.10-bookworm, readonly source mount, CGO_ENABLED=1",
+      "result": "PASS repository61.429s database8.037s",
+      "scope": "Same focused native expression with -race -count=1 -timeout=4m; before final PG-search ordering correction and exportCAST, which do not modify concurrent allocation."
+    },
+    "export_after_cast": {
+      "command": "go test ./repository -run 'TestDataExport' -count=1",
+      "result": "PASS2.370s"
+    },
+    "actual_postgres": {
+      "log": "C:/Users/PARS/AppData/Local/Temp/hichat-dm-source-seq-pg-final.log",
+      "engine": "Disposable loopback PostgreSQL18.6, isolated test schemas, container removed/env restored",
+      "command": "go test ./repository ./database -run 'TestDMSameSecond|TestDMSourceSequence|TestDMMessageNotification|TestMigration139|TestDMRepo_GetMessagesPagination|TestDMReadRepo|TestPostgresImportPreservesDataAndRejectsReuse' -count=1",
+      "result": "PASS repository8.110s database4.207s"
+    }
+  },
+  "remaining": [
+    "Root must rerun compiled HTTP same-second regression and combined final suite after all parallel slices freeze.",
+    "No browser/Signal E2EE, physical-device or production acceptance from these repository/model tests.",
+    "DM read websocket events still have no dedicated monotonic read-state revision; reordered events remain separate known residual.",
+    "Additive migrations require normal backup/rollback review; no production mutation executed."
+  ]
+}

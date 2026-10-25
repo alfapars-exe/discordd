@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
 	"sync"
 	"testing"
 
@@ -240,7 +239,7 @@ func TestDMMessageNotification_ConcurrentDeliveryAndSourceRollback(t *testing.T)
 	}
 }
 
-func TestDMMessageNotification_SameTimestampCutoffUsesSourceID(t *testing.T) {
+func TestDMMessageNotification_SameTimestampCutoffUsesSourceSequence(t *testing.T) {
 	db := newTestDB(t)
 	seedDMUsers(t, db)
 	ctx := context.Background()
@@ -248,7 +247,6 @@ func TestDMMessageNotification_SameTimestampCutoffUsesSourceID(t *testing.T) {
 	ch := newDMChannel(t, ctx, dm, dmAlice, dmBob, models.DMStatusAccepted)
 	repo := NewSQLiteNotificationRepo(wrapForRepo(db))
 	messages := []*models.DMMessage{newDMMessage(t, ctx, dm, ch.ID, dmAlice, "first"), newDMMessage(t, ctx, dm, ch.ID, dmAlice, "second")}
-	sort.Slice(messages, func(i, j int) bool { return messages[i].ID < messages[j].ID })
 	for _, m := range messages {
 		if _, err := db.Conn.Exec(`UPDATE dm_messages SET created_at='2026-01-01 00:00:01' WHERE id=?`, m.ID); err != nil {
 			t.Fatal(err)
