@@ -1,7 +1,7 @@
 {
   "version": "2.11.111",
   "authorization": "User explicitly requested a current-work checkpoint commit/push, production HF update and Windows update on 2026-10-25; remaining P0-P11 implementation continues afterwards.",
-  "status": "production_web_verified_desktop_publication_pending",
+  "status": "production_web_and_desktop_verified_ghcr_pending",
   "verified": [
     "Current local Go test ./..., go vet ./... and go build ./... passed using Go1.27.0 before CI baseline remediation.",
     "Client final local regression: 337 files, 3249 passed, zero failed/pending. Report C:/Users/PARS/AppData/Local/Temp/hichat-release-2.11.111-final.json.",
@@ -69,7 +69,39 @@
       "/channels/@me"
     ],
     "public_model_and_wasm_hashes_match_source": true,
-    "hf_build_probe_log_confirmation": "pending",
-    "windows_tag_created": false
-  }
+    "hf_build_probe_log_confirmation": "PostgreSQL 18 SQL connection verified; TLS=TLSv1.3; client certificate accepted at 2026-10-25T05:35:48.562Z; inspector40166440495",
+    "windows_tag_created": true,
+    "desktop_release_run": 40166540038,
+    "tag": "v2.11.111",
+    "public_update_feeds": {
+      "status": "verified",
+      "tag": "v2.11.111",
+      "release_url": "https://github.com/alfapars-exe/discordd/releases/tag/v2.11.111",
+      "feeds": [
+        {
+          "feed": "huggingface",
+          "version": "2.11.111",
+          "installer_bytes": 165874293,
+          "installer_sha256": "0cabd75a2fe606febe990c100ea1dc37741a55585f4a4578efbe41c67558c448",
+          "blockmap_sha256": "576c9909de045d6b36fe8e1d17d5318a8d265c6ca37405c2e24fe520b97fa55c"
+        },
+        {
+          "feed": "github",
+          "version": "2.11.111",
+          "installer_bytes": 165874293,
+          "installer_sha256": "0cabd75a2fe606febe990c100ea1dc37741a55585f4a4578efbe41c67558c448",
+          "blockmap_sha256": "576c9909de045d6b36fe8e1d17d5318a8d265c6ca37405c2e24fe520b97fa55c"
+        }
+      ]
+    },
+    "tagged_windows_clean_install_and_upgrade": "passed in job121088644222 before publication",
+    "ghcr": "publication in progress; not accepted yet"
+  },
+  "remaining_acceptance": [
+    "Installer is unsigned; Windows reputation/trust is not certified.",
+    "Physical audio, camera, screen/system audio and two-client music acceptance remain open.",
+    "Real existing user profile migration and desktop rollback acceptance remain open; CI verified clean110 install and in-place111 upgrade without launching the app.",
+    "Remaining P0-P11 coverage is not complete."
+  ],
+  "historical_evidence_note": "The verified array and release_gates preserve chronological attempts and earlier blockers. final_candidate_checks and remaining_acceptance describe the current release; earlier pending statements do not override later measured results."
 }
