@@ -1123,7 +1123,9 @@
         "Compare shell, settings, profile, invite, chat and viewer at 390/768/1024/1440/2560px and 200% zoom; no inaccessible controls or accidental horizontal overflow."
       ],
       "code": [],
-      "evidence": []
+      "evidence": [
+        "implementation/verification/p0-partial-visual-112d1e8b-2026-10-26.json"
+      ]
     },
     {
       "id": "p0.release-checks",
@@ -6788,7 +6790,10 @@
         "server/services/music_bot_live_integration_test.go",
         "client/src/components/voice/MusicBotPanel.tsx"
       ],
-      "evidence": ["implementation/verification/p10-live-youtube-2026-10-24.json"]
+      "evidence": [
+        "implementation/verification/p10-live-youtube-2026-10-24.json",
+        "implementation/verification/p10-two-electron-listeners-112d1e8b-2026-10-26.json"
+      ]
     },
     {
       "id": "p10.controls",
@@ -7055,7 +7060,8 @@
         "client/src/stores/slices/voiceSettingsSlice.ts"
       ],
       "evidence": [
-        "implementation/verification/p10-personal-volume-2026-10-23.json"
+        "implementation/verification/p10-personal-volume-2026-10-23.json",
+        "implementation/verification/p10-two-electron-listeners-112d1e8b-2026-10-26.json"
       ]
     },
     {
@@ -7170,7 +7176,8 @@
         "server/services/music_bot_live_integration_test.go"
       ],
       "evidence": [
-        "implementation/verification/p10-encrypted-room-2026-10-23.json"
+        "implementation/verification/p10-encrypted-room-2026-10-23.json",
+        "implementation/verification/p10-two-electron-listeners-112d1e8b-2026-10-26.json"
       ]
     },
     {
