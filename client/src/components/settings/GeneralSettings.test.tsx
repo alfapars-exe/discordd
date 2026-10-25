@@ -90,7 +90,9 @@ describe("GeneralSettings", () => {
   it("starts an opt-in diagnostic capture and stops only its returned owner token on unmount", async () => {
     getSystemCaptureStatus.mockResolvedValueOnce({ state: "stopped" }).mockResolvedValueOnce({ state: "running", owner: "diagnostic" });
     const view = render(<GeneralSettings />);
-    fireEvent.click(await screen.findByRole("button", { name: "systemCaptureStart" }));
+    const start = await screen.findByRole("button", { name: "systemCaptureStart" });
+    await waitFor(() => expect(start).toBeEnabled());
+    fireEvent.click(start);
     await waitFor(() => expect(screen.getByRole("button", { name: "systemCaptureStop" })).toBeInTheDocument());
     expect(startSystemCaptureDiagnostic).toHaveBeenCalledOnce();
     view.unmount();
@@ -109,9 +111,12 @@ describe("GeneralSettings", () => {
     let finishStart: ((token: string) => void) | undefined;
     startSystemCaptureDiagnostic.mockImplementationOnce(() => new Promise((resolve) => { finishStart = resolve; }));
     const view = render(<GeneralSettings />);
-    fireEvent.click(await screen.findByRole("button", { name: "systemCaptureStart" }));
+    const start = await screen.findByRole("button", { name: "systemCaptureStart" });
+    await waitFor(() => expect(start).toBeEnabled());
+    fireEvent.click(start);
+    expect(startSystemCaptureDiagnostic).toHaveBeenCalledOnce();
     view.unmount();
-    finishStart?.("late-diagnostic-token");
+    await act(async () => { finishStart!("late-diagnostic-token"); });
     await waitFor(() => expect(stopSystemCaptureDiagnostic).toHaveBeenCalledWith("late-diagnostic-token"));
   });
 
