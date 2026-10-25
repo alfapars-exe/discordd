@@ -31,9 +31,9 @@ func (r *groupPrivateSettingsRepo) ListForUser(context.Context, string) ([]model
 	return []models.GroupDM{{ID: "group", KeyEpoch: 1}}, nil
 }
 func (r *groupPrivateSettingsRepo) GetReadState(_ context.Context, group, user string) (*models.GroupDMReadState, error) {
-	return &models.GroupDMReadState{GroupID: group, IsMuted: r.muted && user == "bob", SettingsRevision: 1, Revision: 4, UnreadCount: 2}, nil
+	return &models.GroupDMReadState{GroupID: group, KeyEpoch: 1, LastReadSourceSequence: 17, IsMuted: r.muted && user == "bob", SettingsRevision: 1, Revision: 4, UnreadCount: 2}, nil
 }
-func (r *groupPrivateSettingsRepo) SetMuted(ctx context.Context, group, user string, value bool) (*models.GroupDMReadState, error) {
+func (r *groupPrivateSettingsRepo) SetMuted(ctx context.Context, group, user string, value bool, _ ...int64) (*models.GroupDMReadState, error) {
 	r.writes++
 	r.muted = value
 	return r.GetReadState(ctx, group, user)
@@ -66,8 +66,12 @@ func TestGroupDMSettingsProjectionAndBroadcastRemainRecipientPrivate(t *testing.
 			t.Fatalf("list user=%s groups=%+v err=%v", id, groups, err)
 		}
 	}
-	if _, err := service.broadcastGroup(ctx, "group", ws.OpGroupDMUpdate); err != nil {
+	personal, err := service.broadcastGroup(ctx, "group", ws.OpGroupDMUpdate, "bob")
+	if err != nil {
 		t.Fatal(err)
+	}
+	if personal == nil || !personal.IsMuted || personal.ReadKeyEpoch != 1 || personal.LastReadSourceSequence != 17 {
+		t.Fatalf("requester lost private read projection: %+v", personal)
 	}
 	for _, id := range []string{"alice", "bob"} {
 		g := events[id].Data.(*models.GroupDM)

@@ -2,7 +2,7 @@ import { apiClient,getAuthGeneration } from "./client";
 import type { GroupDM, GroupDMMessage, GroupDMReadState,GroupDMMessagesAroundPage,GroupSendResponse,GroupSendOutcome } from "../types/groupDM";
 import type { VoiceTokenResponse } from "../types/voice";
 export type GroupDMRequestScope = {isCurrent?:()=>boolean;signal?:AbortSignal;timeoutMs?:number};
-export type GroupDMMembershipRequestScope = {expectedUserId?:string;isCurrent?:()=>boolean};
+export type GroupDMMembershipRequestScope = {expectedUserId?:string;isCurrent?:()=>boolean;expectedKeyEpoch?:number};
 
 function membershipScope(context:GroupDMMembershipRequestScope={}){
   const generation=getAuthGeneration();
@@ -13,7 +13,7 @@ function membershipScope(context:GroupDMMembershipRequestScope={}){
 }
 export const setGroupDMMuted = (groupId:string,muted:boolean,context:GroupDMMembershipRequestScope={})=>{
   const request=membershipScope(context);
-  return apiClient<GroupDMReadState>(`/group-dms/${encodeURIComponent(groupId)}/settings${request.query}`,{...request.options,method:"PATCH",body:{is_muted:muted}});
+  return apiClient<GroupDMReadState>(`/group-dms/${encodeURIComponent(groupId)}/settings${request.query}`,{...request.options,method:"PATCH",body:{is_muted:muted,...(context.expectedKeyEpoch===undefined?{}:{key_epoch:context.expectedKeyEpoch})}});
 };
 
 export const listGroupDMs = (scope?:GroupDMRequestScope) => apiClient<{ group_dms: GroupDM[] }>("/group-dms",scope);
@@ -43,8 +43,15 @@ export const sendGroupDMMessage = (groupId: string, payload: GroupSendPayload,fi
 export const editGroupDMMessage = (groupId: string, messageId: string, payload: { ciphertext: string; sender_device_id: string; e2ee_metadata: string; key_epoch: number },scope?:GroupDMRequestScope) => apiClient<GroupDMMessage>(`/group-dms/${groupId}/messages/${messageId}`, { method: "PATCH", body: payload,...scope });
 export const deleteGroupDMMessage = (groupId: string, messageId: string) => apiClient<void>(`/group-dms/${groupId}/messages/${messageId}`, { method: "DELETE" });
 export const toggleGroupDMReaction = (groupId: string, messageId: string, emoji: string) => apiClient<{ status: string }>(`/group-dms/${groupId}/messages/${messageId}/reactions`, { method: "POST", body: { emoji } });
-export const markGroupDMRead = (groupId: string, messageId?: string, options?: {isCurrent?:()=>boolean}) => apiClient<GroupDMReadState>(`/group-dms/${groupId}/read`, { method: "POST", body: { message_id: messageId ?? null },timeoutMs:15_000,...options });
-export const markGroupDMUnread = (groupId: string, messageId: string, options?: {isCurrent?:()=>boolean}) => apiClient<GroupDMReadState>(`/group-dms/${groupId}/unread`, { method: "POST", body: { message_id: messageId },timeoutMs:15_000,...options });
+type GroupDMReadScope={isCurrent?:()=>boolean;expectedKeyEpoch?:number};
+export const markGroupDMRead = (groupId:string,messageId?:string,options:GroupDMReadScope={})=>{
+ const {expectedKeyEpoch,...scope}=options;
+ return apiClient<GroupDMReadState>(`/group-dms/${groupId}/read`,{method:"POST",body:{message_id:messageId,...(expectedKeyEpoch===undefined?{}:{key_epoch:expectedKeyEpoch})},...scope});
+};
+export const markGroupDMUnread = (groupId:string,messageId:string,options:GroupDMReadScope={})=>{
+ const {expectedKeyEpoch,...scope}=options;
+ return apiClient<GroupDMReadState>(`/group-dms/${groupId}/unread`,{method:"POST",body:{message_id:messageId,...(expectedKeyEpoch===undefined?{}:{key_epoch:expectedKeyEpoch})},timeoutMs:15_000,...scope});
+};
 export const getGroupDMCallToken = (groupId: string) => apiClient<VoiceTokenResponse>(`/group-dms/${groupId}/call-token`, { method: "POST" });
 
 export type GroupDMPinRequestScope = GroupDMMembershipRequestScope & { signal?: AbortSignal };

@@ -6,7 +6,7 @@ import (
 )
 
 type GroupDMRepository interface {
-	SetMuted(context.Context, string, string, bool) (*models.GroupDMReadState, error)
+	SetMuted(context.Context, string, string, bool, ...int64) (*models.GroupDMReadState, error)
 	SetMessagePinned(ctx context.Context, groupID, messageID, userID string, pinned bool) error
 	ListPinnedMessages(ctx context.Context, groupID, userID string) ([]models.GroupDMMessage, error)
 	PrepareSend(ctx context.Context, groupID, userID, requestID, requestHash string, fileCount int) (*models.GroupSendOperation, bool, error)
@@ -32,8 +32,8 @@ type GroupDMRepository interface {
 	DeleteMessage(ctx context.Context, groupID, messageID, userID string) error
 	ToggleReaction(ctx context.Context, messageID, userID, emoji string) (bool, error)
 	GetReactions(ctx context.Context, messageIDs []string) (map[string][]models.ReactionGroup, error)
-	MarkRead(ctx context.Context, groupID, userID string, messageID *string) error
-	MarkUnreadFrom(ctx context.Context, groupID, userID, messageID string) (*models.GroupDMReadState, error)
+	MarkRead(ctx context.Context, groupID, userID string, messageID *string, expectedEpoch ...int64) error
+	MarkUnreadFrom(ctx context.Context, groupID, userID, messageID string, expectedEpoch ...int64) (*models.GroupDMReadState, error)
 	GetReadState(ctx context.Context, groupID, userID string) (*models.GroupDMReadState, error)
 	UnreadCount(ctx context.Context, groupID, userID string) (int, error)
 	CreateAttachment(ctx context.Context, attachment *models.GroupDMAttachment) error

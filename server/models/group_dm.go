@@ -10,30 +10,34 @@ import (
 )
 
 type GroupDM struct {
-	IsMuted               bool         `json:"is_muted"`
-	SettingsRevision      int64        `json:"settings_revision"`
-	ID                    string       `json:"id"`
-	OwnerID               string       `json:"owner_id"`
-	Name                  string       `json:"name"`
-	IconURL               *string      `json:"icon_url"`
-	KeyEpoch              int64        `json:"key_epoch"`
-	CallRoomKey           string       `json:"call_room_key"`
-	CreatedAt             time.Time    `json:"created_at"`
-	UpdatedAt             time.Time    `json:"updated_at"`
-	Members               []PublicUser `json:"members"`
-	UnreadCount           int          `json:"unread_count"`
-	ReadRevision          int64        `json:"read_revision"`
-	OldestUnreadMessageID *string      `json:"oldest_unread_message_id,omitempty"`
+	ReadKeyEpoch           int64        `json:"read_key_epoch"`
+	LastReadSourceSequence int64        `json:"last_read_source_sequence,string"`
+	IsMuted                bool         `json:"is_muted"`
+	SettingsRevision       int64        `json:"settings_revision"`
+	ID                     string       `json:"id"`
+	OwnerID                string       `json:"owner_id"`
+	Name                   string       `json:"name"`
+	IconURL                *string      `json:"icon_url"`
+	KeyEpoch               int64        `json:"key_epoch"`
+	CallRoomKey            string       `json:"call_room_key"`
+	CreatedAt              time.Time    `json:"created_at"`
+	UpdatedAt              time.Time    `json:"updated_at"`
+	Members                []PublicUser `json:"members"`
+	UnreadCount            int          `json:"unread_count"`
+	ReadRevision           int64        `json:"read_revision"`
+	OldestUnreadMessageID  *string      `json:"oldest_unread_message_id,omitempty"`
 }
 
 type GroupDMReadState struct {
-	IsMuted               bool    `json:"is_muted"`
-	SettingsRevision      int64   `json:"settings_revision"`
-	GroupID               string  `json:"group_id"`
-	LastReadMessageID     *string `json:"last_read_message_id"`
-	UnreadCount           int     `json:"unread_count"`
-	Revision              int64   `json:"revision"`
-	OldestUnreadMessageID *string `json:"oldest_unread_message_id,omitempty"`
+	KeyEpoch               int64   `json:"key_epoch"`
+	LastReadSourceSequence int64   `json:"last_read_source_sequence,string"`
+	IsMuted                bool    `json:"is_muted"`
+	SettingsRevision       int64   `json:"settings_revision"`
+	GroupID                string  `json:"group_id"`
+	LastReadMessageID      *string `json:"last_read_message_id"`
+	UnreadCount            int     `json:"unread_count"`
+	Revision               int64   `json:"revision"`
+	OldestUnreadMessageID  *string `json:"oldest_unread_message_id,omitempty"`
 }
 
 type CreateGroupDMRequest struct {
@@ -69,6 +73,7 @@ func (r *UpdateGroupDMRequest) Validate() error {
 }
 
 type GroupDMMessage struct {
+	SourceSequence int64 `json:"source_sequence,omitempty,string"`
 	// Internal binding to a durable send operation; never accepted from message JSON.
 	SendRequestID     string              `json:"-"`
 	ID                string              `json:"id"`

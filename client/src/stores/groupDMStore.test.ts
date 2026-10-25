@@ -65,6 +65,58 @@ function outcome(id:string,phase:GroupSendOutcome["operation"]["phase"],message?
 const publicMember=(id:string)=>({id,username:id,display_name:id,avatar_url:null,status:"online" as const,custom_status:null,created_at:"2026-10-24T00:00:00Z"});
 const groupMessage=(id:string,createdAt:string,userId="other"):GroupDMMessage=>({id,group_id:"g1",user_id:userId,content:`body-${id}`,encryption_version:1,ciphertext:`cipher-${id}`,sender_device_id:"device",e2ee_metadata:null,key_epoch:1,reply_to_id:null,edited_at:null,created_at:createdAt,reactions:[],attachments:[]});
 
+it("orders same-second group sources with exact BIGINT metadata and retains legacy fallback",async()=>{
+  useGroupDMStore.setState({groups:[group("g1")]});
+  const z={...groupMessage("zz-first","2026-01-01T00:00:00Z"),source_sequence:"9007199254740992"};
+  const a={...groupMessage("aa-second","2026-01-01T00:00:00Z"),source_sequence:"9007199254740993"};
+  vi.mocked(api.listGroupDMMessages).mockResolvedValueOnce({success:true,data:{messages:[a,z]}});
+  expect(await useGroupDMStore.getState().fetchMessages("g1")).toBe(true);
+  expect(useGroupDMStore.getState().messages.g1.map(m=>m.id)).toEqual([z.id,a.id]);
+  useGroupDMStore.setState({messages:{g1:[]}});
+  vi.mocked(api.listGroupDMMessages).mockResolvedValueOnce({success:true,data:{messages:[groupMessage("legacy-z","2026-01-01T00:00:00Z"),groupMessage("legacy-a","2026-01-01T00:00:00Z")]}});
+  expect(await useGroupDMStore.getState().fetchMessages("g1")).toBe(true);expect(useGroupDMStore.getState().messages.g1.map(m=>m.id)).toEqual(["legacy-a","legacy-z"]);
+});
+it("merges detached live sources into a later present window by immutable source order",async()=>{
+  useGroupDMStore.setState({groups:[group("g1")],hasMoreAfterByGroup:{g1:true}});
+  const warmup={...groupMessage("zz-warmup","2026-01-01T00:00:00Z"),source_sequence:"1"};
+  const middle={...groupMessage("bb-middle","2026-01-01T00:00:00Z"),source_sequence:"2"};
+  const live={...groupMessage("aa-live","2026-01-01T00:00:00Z"),source_sequence:"3"};
+  expect(await useGroupDMStore.getState().handleMessage(live)).toMatchObject({status:"accepted",storage:"detached"});
+  vi.mocked(api.getGroupDMMessagesAround).mockResolvedValueOnce({success:true,data:{messages:[middle,warmup],has_more:false,has_more_after:false}});
+  expect(await useGroupDMStore.getState().fetchMessagesAround("g1",middle.id)).toBe(true);
+  expect(useGroupDMStore.getState().messages.g1.map(m=>m.id)).toEqual([warmup.id,middle.id,live.id]);
+});
+it("fences old-membership read/settings revisions and accepts a new epoch's lower revision",()=>{
+  useGroupDMStore.setState({groups:[{...group("g1",2),read_key_epoch:2,read_revision:90,settings_revision:90,is_muted:true,unread_count:7}]});
+  useGroupDMStore.getState().handleDelete("g1");
+  useGroupDMStore.getState().handleCreateOrUpdate({...group("g1",4),read_key_epoch:4,read_revision:0,settings_revision:0,is_muted:false});
+  useGroupDMStore.getState().handleReadState({group_id:"g1",key_epoch:2,last_read_message_id:null,last_read_source_sequence:"99",revision:999,unread_count:99,is_muted:true,settings_revision:999});
+  expect(useGroupDMStore.getState().groups[0]).toMatchObject({key_epoch:4,read_key_epoch:4,read_revision:0,unread_count:0,is_muted:false});
+  useGroupDMStore.getState().handleReadState({group_id:"g1",key_epoch:4,last_read_message_id:null,last_read_source_sequence:"100",revision:1,unread_count:2,is_muted:true,settings_revision:1});
+  expect(useGroupDMStore.getState().groups[0]).toMatchObject({read_revision:1,unread_count:2,is_muted:true,last_read_source_sequence:"100"});
+  useGroupDMStore.getState().handleCreateOrUpdate({...useGroupDMStore.getState().groups[0],key_epoch:5});
+  useGroupDMStore.getState().handleReadState({group_id:"g1",key_epoch:5,last_read_message_id:null,last_read_source_sequence:"100",revision:0,unread_count:0,is_muted:false,settings_revision:0});
+  expect(useGroupDMStore.getState().groups[0]).toMatchObject({key_epoch:5,read_key_epoch:5,read_revision:0,unread_count:0,is_muted:false});
+});
+it.each(["leave","rejoin"])("does not apply a list snapshot across concurrent membership %s",async action=>{
+  useGroupDMStore.setState({groups:[{...group("g1",1),read_key_epoch:1}]});let finish!:(value:Awaited<ReturnType<typeof api.listGroupDMs>>)=>void;
+  vi.mocked(api.listGroupDMs).mockReturnValueOnce(new Promise(resolve=>{finish=resolve;}));const pending=useGroupDMStore.getState().fetchGroups();
+  useGroupDMStore.getState().handleDelete("g1");if(action==="rejoin")useGroupDMStore.getState().handleCreateOrUpdate({...group("g1",3),read_key_epoch:3,read_revision:0});
+  finish({success:true,data:{group_dms:[{...group("g1",1),read_key_epoch:1,read_revision:99}]}});await pending;
+  if(action==="leave")expect(useGroupDMStore.getState().groups).toEqual([]);else expect(useGroupDMStore.getState().groups[0]).toMatchObject({key_epoch:3,read_key_epoch:3,read_revision:0});
+});
+it("binds new-protocol read/unread/mute requests to the captured epoch and ignores a reply after rejoin",async()=>{
+  useGroupDMStore.setState({groups:[{...group("g1"),read_key_epoch:1}]});
+  vi.mocked(api.markGroupDMRead).mockResolvedValueOnce({success:true,data:{group_id:"g1",key_epoch:1,last_read_message_id:null,last_read_source_sequence:"0",revision:1,unread_count:0,is_muted:false,settings_revision:0}});
+  await useGroupDMStore.getState().markRead("g1");expect(api.markGroupDMRead).toHaveBeenLastCalledWith("g1",undefined,expect.objectContaining({expectedKeyEpoch:1,isCurrent:expect.any(Function)}));
+  let finish!:(value:Awaited<ReturnType<typeof api.markGroupDMUnread>>)=>void;vi.mocked(api.markGroupDMUnread).mockReturnValueOnce(new Promise(resolve=>{finish=resolve;}));
+  const pending=useGroupDMStore.getState().markUnread("g1","old-source");expect(api.markGroupDMUnread).toHaveBeenLastCalledWith("g1","old-source",expect.objectContaining({expectedKeyEpoch:1}));
+  useGroupDMStore.getState().handleDelete("g1");useGroupDMStore.getState().handleCreateOrUpdate({...group("g1",3),read_key_epoch:3,read_revision:0});
+  finish({success:true,data:{group_id:"g1",key_epoch:1,last_read_message_id:null,revision:99,unread_count:99}});expect(await pending).toBe(false);
+  vi.mocked(api.setGroupDMMuted).mockResolvedValueOnce({success:true,data:{group_id:"g1",key_epoch:3,last_read_message_id:null,last_read_source_sequence:"0",revision:0,unread_count:0,is_muted:true,settings_revision:1}});
+  expect(await useGroupDMStore.getState().setMuted("g1",true)).toBe(true);expect(api.setGroupDMMuted).toHaveBeenLastCalledWith("g1",true,expect.objectContaining({expectedKeyEpoch:3,expectedUserId:"me"}));
+});
+
 it("returns one fenced acceptance for a detached source and rejects later duplicates without invalidating that receipt",async()=>{
   useGroupDMStore.setState({groups:[group("g1")],hasMoreAfterByGroup:{g1:true}});
   const message=groupMessage("detached-source","2026-01-01T00:00:00Z");

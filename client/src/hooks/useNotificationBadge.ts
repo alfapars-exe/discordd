@@ -184,7 +184,7 @@ export function useNotificationBadge(): void {
       const ch = dmChannels.find((d) => d.id === chId);
       return ch?.is_muted ? sum : sum + c;
     }, 0);
-    const groupTotal=groupsReady&&owner===groupOwner&&generation===groupGeneration?groups.reduce((sum,g)=>sum+(!g.is_muted&&g.members.some(m=>m.id===owner)&&Number.isSafeInteger(g.unread_count)&&g.unread_count>0?g.unread_count:0),0):0;
+    const groupTotal=groupsReady&&owner===groupOwner&&generation===groupGeneration?groups.reduce((sum,g)=>sum+(!g.is_muted&&(g.read_key_epoch===undefined||g.read_key_epoch===g.key_epoch)&&g.members.some(m=>m.id===owner)&&Number.isSafeInteger(g.unread_count)&&g.unread_count>0?g.unread_count:0),0):0;
     const total = badgeEnabled ? channelTotal + dmTotal + groupTotal + notificationUnread : 0;
 
     document.title = total > 0

@@ -40,8 +40,8 @@ func TestGroupDMReadCursorRewindAndRevision(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if read.UnreadCount != 2 || read.LastReadMessageID == nil || *read.LastReadMessageID != "m1" {
-		t.Fatalf("read old anchor erased later messages: %+v", read)
+	if read.UnreadCount != 1 || read.LastReadMessageID == nil || *read.LastReadMessageID != "m3" {
+		t.Fatalf("old acknowledgement regressed the already-read own source: %+v", read)
 	}
 	unread, err := repo.MarkUnreadFrom(ctx, "read-group", "reader", "m2")
 	if err != nil {

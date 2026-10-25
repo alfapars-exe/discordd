@@ -105,7 +105,7 @@ func (r *sqliteGroupDMRepo) ListPinnedMessages(ctx context.Context, groupID, use
 	if !member {
 		return nil, pkg.ErrForbidden
 	}
-	rows, err := r.db.QueryContext(ctx, `SELECT m.id,m.group_id,m.user_id,m.content,m.encryption_version,m.ciphertext,m.sender_device_id,m.e2ee_metadata,m.key_epoch,m.reply_to_id,m.edited_at,m.created_at
+	rows, err := r.db.QueryContext(ctx, `SELECT m.id,m.group_id,m.user_id,m.content,m.encryption_version,m.ciphertext,m.sender_device_id,m.e2ee_metadata,m.key_epoch,m.reply_to_id,m.edited_at,m.created_at,m.source_sequence
  FROM group_dm_messages m JOIN group_dm_pins p ON p.message_id=m.id AND p.group_id=m.group_id
  WHERE m.group_id=? AND EXISTS(SELECT 1 FROM group_dm_members WHERE group_id=m.group_id AND user_id=?)
 	 ORDER BY p.created_at DESC,p.message_id DESC`, groupID, userID)
@@ -116,7 +116,7 @@ func (r *sqliteGroupDMRepo) ListPinnedMessages(ctx context.Context, groupID, use
 	items := []models.GroupDMMessage{}
 	for rows.Next() {
 		var m models.GroupDMMessage
-		if err := rows.Scan(&m.ID, &m.GroupID, &m.UserID, &m.Content, &m.EncryptionVersion, &m.Ciphertext, &m.SenderDeviceID, &m.E2EEMetadata, &m.KeyEpoch, &m.ReplyToID, &m.EditedAt, &m.CreatedAt); err != nil {
+		if err := rows.Scan(&m.ID, &m.GroupID, &m.UserID, &m.Content, &m.EncryptionVersion, &m.Ciphertext, &m.SenderDeviceID, &m.E2EEMetadata, &m.KeyEpoch, &m.ReplyToID, &m.EditedAt, &m.CreatedAt, &m.SourceSequence); err != nil {
 			return nil, err
 		}
 		items = append(items, m)

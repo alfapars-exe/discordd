@@ -393,11 +393,16 @@ func (h *GroupDMHandler) MarkRead(w http.ResponseWriter, r *http.Request) {
 	}
 	var req struct {
 		MessageID *string `json:"message_id"`
+		KeyEpoch  *int64  `json:"key_epoch"`
 	}
 	if r.ContentLength != 0 && !decodeGroupJSON(w, r, &req) {
 		return
 	}
-	state, err := h.service.MarkRead(r.Context(), r.PathValue("groupId"), u.ID, req.MessageID)
+	epoch, valid := groupExpectedEpoch(w, req.KeyEpoch)
+	if !valid {
+		return
+	}
+	state, err := h.service.MarkRead(r.Context(), r.PathValue("groupId"), u.ID, req.MessageID, epoch...)
 	if err != nil {
 		pkg.ErrorCtxErr(r.Context(), w, err)
 		return
@@ -416,11 +421,16 @@ func (h *GroupDMHandler) MarkUnread(w http.ResponseWriter, r *http.Request) {
 	}
 	var req struct {
 		MessageID string `json:"message_id"`
+		KeyEpoch  *int64 `json:"key_epoch"`
 	}
 	if !decodeGroupJSON(w, r, &req) {
 		return
 	}
-	state, err := h.service.MarkUnreadFrom(r.Context(), r.PathValue("groupId"), u.ID, req.MessageID)
+	epoch, valid := groupExpectedEpoch(w, req.KeyEpoch)
+	if !valid {
+		return
+	}
+	state, err := h.service.MarkUnreadFrom(r.Context(), r.PathValue("groupId"), u.ID, req.MessageID, epoch...)
 	if err != nil {
 		pkg.ErrorCtxErr(r.Context(), w, err)
 		return

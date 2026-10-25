@@ -25,7 +25,7 @@ import (
 var groupDMLogger = logx.Component("service.group_dm")
 
 type GroupDMService interface {
-	SetMuted(context.Context, string, string, bool) (*models.GroupDMReadState, error)
+	SetMuted(context.Context, string, string, bool, ...int64) (*models.GroupDMReadState, error)
 	SetMessagePinned(context.Context, string, string, string, bool) error
 	ListPinnedMessages(context.Context, string, string) ([]models.GroupDMMessage, error)
 	PrepareSend(context.Context, string, string, *models.CreateGroupDMMessageRequest, string, int) (*models.GroupSendOperation, error)
@@ -46,8 +46,8 @@ type GroupDMService interface {
 	EditMessage(context.Context, string, string, string, *models.UpdateGroupDMMessageRequest) (*models.GroupDMMessage, error)
 	DeleteMessage(context.Context, string, string, string) error
 	ToggleReaction(context.Context, string, string, string, string) error
-	MarkRead(context.Context, string, string, *string) (*models.GroupDMReadState, error)
-	MarkUnreadFrom(context.Context, string, string, string) (*models.GroupDMReadState, error)
+	MarkRead(context.Context, string, string, *string, ...int64) (*models.GroupDMReadState, error)
+	MarkUnreadFrom(context.Context, string, string, string, ...int64) (*models.GroupDMReadState, error)
 	BroadcastMessage(context.Context, *models.GroupDMMessage) error
 	GenerateCallToken(context.Context, string, string) (*models.VoiceTokenResponse, error)
 }
@@ -208,6 +208,7 @@ func (s *groupDMService) Create(ctx context.Context, creatorID string, req *mode
 	if err := s.hydrate(ctx, g); err != nil {
 		return nil, err
 	}
+	g.ReadKeyEpoch = g.KeyEpoch
 	s.hub.BroadcastToUsers(members, ws.Event{Op: ws.OpGroupDMCreate, Data: g})
 	return g, nil
 }
@@ -228,6 +229,7 @@ func (s *groupDMService) List(ctx context.Context, userID string) ([]models.Grou
 		}
 		groups[i].UnreadCount, groups[i].ReadRevision = readState.UnreadCount, readState.Revision
 		groups[i].OldestUnreadMessageID = readState.OldestUnreadMessageID
+		groups[i].LastReadSourceSequence, groups[i].ReadKeyEpoch = readState.LastReadSourceSequence, readState.KeyEpoch
 		groups[i].IsMuted, groups[i].SettingsRevision = readState.IsMuted, readState.SettingsRevision
 	}
 	return groups, nil
@@ -245,6 +247,7 @@ func (s *groupDMService) Get(ctx context.Context, groupID, userID string) (*mode
 	if err == nil {
 		g.UnreadCount, g.ReadRevision = readState.UnreadCount, readState.Revision
 		g.OldestUnreadMessageID = readState.OldestUnreadMessageID
+		g.LastReadSourceSequence, g.ReadKeyEpoch = readState.LastReadSourceSequence, readState.KeyEpoch
 		g.IsMuted, g.SettingsRevision = readState.IsMuted, readState.SettingsRevision
 	}
 	return g, err
@@ -264,7 +267,7 @@ func (s *groupDMService) Update(ctx context.Context, groupID, actorID string, re
 	if err := s.groups.UpdateProfile(ctx, groupID, req.Name, req.IconURL); err != nil {
 		return nil, err
 	}
-	return s.broadcastGroup(ctx, groupID, ws.OpGroupDMUpdate)
+	return s.broadcastGroup(ctx, groupID, ws.OpGroupDMUpdate, actorID)
 }
 
 func (s *groupDMService) AddMember(ctx context.Context, groupID, actorID, userID string) (*models.GroupDM, error) {
@@ -296,7 +299,7 @@ func (s *groupDMService) AddMember(ctx context.Context, groupID, actorID, userID
 	if err != nil {
 		return nil, err
 	}
-	g, err = s.broadcastGroup(ctx, groupID, ws.OpGroupDMUpdate)
+	g, err = s.broadcastGroup(ctx, groupID, ws.OpGroupDMUpdate, actorID)
 	if err == nil {
 		s.hub.BroadcastToUsers(append(ids, userID), ws.Event{Op: ws.OpGroupDMRekey, Data: map[string]any{"group_id": groupID, "key_epoch": epoch}})
 	}
@@ -326,7 +329,7 @@ func (s *groupDMService) RemoveMember(ctx context.Context, groupID, actorID, use
 		}
 	}
 	s.hub.BroadcastToUser(userID, ws.Event{Op: ws.OpGroupDMDelete, Data: map[string]string{"group_id": groupID}})
-	g, err = s.broadcastGroup(ctx, groupID, ws.OpGroupDMUpdate)
+	g, err = s.broadcastGroup(ctx, groupID, ws.OpGroupDMUpdate, actorID)
 	if err == nil {
 		s.hub.BroadcastToUsers(remaining, ws.Event{Op: ws.OpGroupDMRekey, Data: map[string]any{"group_id": groupID, "key_epoch": epoch}})
 	}
@@ -374,7 +377,7 @@ func (s *groupDMService) Leave(ctx context.Context, groupID, userID string) erro
 	return nil
 }
 
-func (s *groupDMService) broadcastGroup(ctx context.Context, groupID, op string) (*models.GroupDM, error) {
+func (s *groupDMService) broadcastGroup(ctx context.Context, groupID, op string, viewerID ...string) (*models.GroupDM, error) {
 	g, err := s.groups.GetByID(ctx, groupID)
 	if err != nil {
 		return nil, err
@@ -382,6 +385,7 @@ func (s *groupDMService) broadcastGroup(ctx context.Context, groupID, op string)
 	if err := s.hydrate(ctx, g); err != nil {
 		return nil, err
 	}
+	var viewer *models.GroupDM
 	for _, member := range g.Members {
 		copy := *g
 		readState, readErr := s.groups.GetReadState(ctx, groupID, member.ID)
@@ -391,7 +395,17 @@ func (s *groupDMService) broadcastGroup(ctx context.Context, groupID, op string)
 		}
 		copy.UnreadCount, copy.ReadRevision = readState.UnreadCount, readState.Revision
 		copy.IsMuted, copy.SettingsRevision = readState.IsMuted, readState.SettingsRevision
+		copy.LastReadSourceSequence, copy.ReadKeyEpoch = readState.LastReadSourceSequence, readState.KeyEpoch
+		if len(viewerID) > 0 && member.ID == viewerID[0] {
+			viewer = &copy
+		}
 		s.hub.BroadcastToUser(member.ID, ws.Event{Op: op, Data: &copy})
+	}
+	if len(viewerID) > 0 {
+		if viewer == nil {
+			return nil, pkg.ErrNotFound
+		}
+		return viewer, nil
 	}
 	return g, nil
 }
@@ -649,7 +663,7 @@ func (s *groupDMService) ToggleReaction(ctx context.Context, groupID, messageID,
 	}
 	return nil
 }
-func (s *groupDMService) MarkRead(ctx context.Context, groupID, userID string, messageID *string) (*models.GroupDMReadState, error) {
+func (s *groupDMService) MarkRead(ctx context.Context, groupID, userID string, messageID *string, expectedEpoch ...int64) (*models.GroupDMReadState, error) {
 	if _, err := s.requireMember(ctx, groupID, userID); err != nil {
 		return nil, err
 	}
@@ -658,7 +672,7 @@ func (s *groupDMService) MarkRead(ctx context.Context, groupID, userID string, m
 			return nil, err
 		}
 	}
-	if err := s.groups.MarkRead(ctx, groupID, userID, messageID); err != nil {
+	if err := s.groups.MarkRead(ctx, groupID, userID, messageID, expectedEpoch...); err != nil {
 		return nil, err
 	}
 	state, err := s.groups.GetReadState(ctx, groupID, userID)
@@ -669,14 +683,14 @@ func (s *groupDMService) MarkRead(ctx context.Context, groupID, userID string, m
 	return state, nil
 }
 
-func (s *groupDMService) MarkUnreadFrom(ctx context.Context, groupID, userID, messageID string) (*models.GroupDMReadState, error) {
+func (s *groupDMService) MarkUnreadFrom(ctx context.Context, groupID, userID, messageID string, expectedEpoch ...int64) (*models.GroupDMReadState, error) {
 	if strings.TrimSpace(messageID) == "" {
 		return nil, badGroupRequest(errors.New("message_id is required"))
 	}
 	if _, err := s.requireMember(ctx, groupID, userID); err != nil {
 		return nil, err
 	}
-	state, err := s.groups.MarkUnreadFrom(ctx, groupID, userID, messageID)
+	state, err := s.groups.MarkUnreadFrom(ctx, groupID, userID, messageID, expectedEpoch...)
 	if err != nil {
 		return nil, err
 	}

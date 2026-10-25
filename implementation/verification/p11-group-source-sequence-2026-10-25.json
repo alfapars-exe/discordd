@@ -1,0 +1,93 @@
+{
+  "date": "2026-10-25",
+  "scope": "P11 group durable message source order and membership-scoped private read/settings projections",
+  "status": "implemented_targeted_verification_passed_not_full_P11_acceptance",
+  "owned_paths": [
+    "client/src/api/groupDM.test.ts",
+    "client/src/api/groupDM.ts",
+    "client/src/crypto/dmEncryption.ts",
+    "client/src/crypto/groupDecryption.affinity.test.ts",
+    "client/src/crypto/groupMessageCache.test.ts",
+    "client/src/crypto/groupMessageCache.ts",
+    "client/src/hooks/useNotificationBadge.ts",
+    "client/src/stores/groupDMStore.test.ts",
+    "client/src/stores/groupDMStore.ts",
+    "client/src/types/groupDM.ts",
+    "security/tools/self-scan-reviewed-falsepositives.json",
+    "server/handlers/group_dm.go",
+    "server/handlers/group_dm_read_state_test.go",
+    "server/handlers/group_dm_settings.go",
+    "server/handlers/group_dm_settings_test.go",
+    "server/models/group_dm.go",
+    "server/repository/group_dm_repository.go",
+    "server/repository/sqlite_data_export.go",
+    "server/repository/sqlite_group_dm.go",
+    "server/repository/sqlite_group_dm_pins.go",
+    "server/repository/sqlite_group_dm_settings.go",
+    "server/repository/sqlite_group_dm_unread_anchor_test.go",
+    "server/repository/sqlite_group_read_state_test.go",
+    "server/services/group_dm_read_state_test.go",
+    "server/services/group_dm_service.go",
+    "server/services/group_dm_settings.go",
+    "server/services/group_dm_settings_test.go",
+    "server/database/migration_140_test.go",
+    "server/database/migrations/140_group_dm_source_sequence.sql",
+    "server/database/postgres_migrations/042_group_dm_source_sequence.sql",
+    "server/repository/sqlite_group_dm_source_order_test.go",
+    "server/repository/sqlite_group_dm_source_read.go",
+    "server/repository/sqlite_group_source_export_test.go",
+    "implementation/verification/p11-group-source-sequence-2026-10-25.json"
+  ],
+  "migrations": {
+    "sqlite": "140_group_dm_source_sequence.sql",
+    "postgres": "042_group_dm_source_sequence.sql"
+  },
+  "behavior": [
+    "Monotonic per-group source sequence survives same-second timestamp ties, cursor/tail deletion and trusted positive imports; exact decimal JSON/cache/export metadata.",
+    "Read watermark never regresses on older acknowledgments; explicit unread rewinds by source sequence. New/rejoined members baseline current group counter.",
+    "Optional expected key epoch checked under group-row lock for read, unread and mute; new clients fence stale account/lifetime/membership responses and private projections.",
+    "Self-authored opaque group-message export only; source metadata never replaces explicit server sequence or changes ciphertext affinity."
+  ],
+  "verification": [
+    {
+      "kind": "native Go",
+      "command": "go test ./database ./repository ./services ./handlers -run TestMigration140|TestGroup|TestSQLiteDataExport -count=1",
+      "result": "PASS database 1.540s; repository 8.396s; services 3.373s; handlers 4.226s"
+    },
+    {
+      "kind": "actual PostgreSQL 18.6",
+      "command": "go test ./repository -run TestGroupSource|TestGroupDMRead|TestGroupDMConcurrent|TestGroupDMSettings|TestGroupDMLegacy -count=1",
+      "result": "PASS 7.262s; isolated disposable loopback container removed; process credentials restored"
+    },
+    {
+      "kind": "client",
+      "result": "7 focused files, 163 tests PASS; TypeScript app compile and scoped ESLint PASS"
+    },
+    {
+      "kind": "pinned golangci-lint 2.12.2 / Go1.26.10",
+      "command": "golangci-lint run --timeout=5m ./repository ./services ./handlers",
+      "result": "PASS 0 issues"
+    },
+    {
+      "kind": "requester-private projection regression",
+      "result": "PASS service recipient privacy plus caller epoch/watermark return assertion"
+    },
+    {
+      "kind": "route contracts",
+      "command": "go test . -run TestInitRoutesGolden|TestRoutePermissions_EveryRouteHasADeclaredGate -count=1",
+      "result": "PASS 2.908s"
+    },
+    {
+      "kind": "repository self-scan",
+      "result": "PASS exit0, 0 blocking patterns, 348 visible review lines; existing reviewed-source hashes validated (35 records); no new exceptions",
+      "log": "C:/Users/PARS/AppData/Local/Temp/hichat-group140-self-scan-final.log"
+    }
+  ],
+  "limitations": [
+    "Legacy requests without expected key epoch still require current membership but cannot distinguish intent from an earlier membership lifetime.",
+    "Legacy backfill preserves prior observable timestamp/id ordering; it cannot recover historical arrival order that was never stored.",
+    "Persisted group notifications, group incoming sound/OS dispatch and exact group notification reply remain pending.",
+    "No browser/physical Windows/multidevice acceptance or deployment claimed by this receipt.",
+    "Full combined regression suite is parent-coordinated."
+  ]
+}

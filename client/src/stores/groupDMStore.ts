@@ -1,3 +1,4 @@
+import {dmSourceSequence,sortDMBySource} from "../utils/dmSourceOrder";
 import { create } from "zustand";
 import * as api from "../api/groupDM";
 import { getAuthGeneration } from "../api/client";
@@ -85,6 +86,8 @@ export type GroupDMSendContext = { ownerId: string; authGeneration: number; isCu
 const readRequests = new Map<string,number>();
 let accountEpoch=0;
 let listRequest=0;
+let groupProjectionClock=0;
+const groupProjectionVersions=new Map<string,number>();
 let messageClock=0;
 let recoveryCounter=0;
 let scrollTargetRequest=0;
@@ -139,16 +142,32 @@ function mergeHistory(groupId:string,fresh:GroupDMMessage[],current:GroupDMMessa
   const safe=fresh.filter(m=>m.group_id===groupId && (messageVersions.get(groupId)?.get(m.id)??0)<=started);
   return sortGroupMessages([...new Map([...current,...safe].map(m=>[m.id,m])).values()]);
 }
-function sortGroupMessages(messages:GroupDMMessage[]):GroupDMMessage[]{return messages.sort((a,b)=>new Date(a.created_at).getTime()-new Date(b.created_at).getTime()||a.id.localeCompare(b.id))}
-function mergeUniqueGroupMessages(...lists:GroupDMMessage[][]):GroupDMMessage[]{return sortGroupMessages([...new Map(lists.flat().map(message=>[message.id,message])).values()])}
+function sortGroupMessages(messages:GroupDMMessage[]):GroupDMMessage[]{
+  const legacy=[...messages].sort((a,b)=>new Date(a.created_at).getTime()-new Date(b.created_at).getTime()||a.id.localeCompare(b.id));
+  return sortDMBySource(legacy,new Map(legacy.map((m,index)=>[m.id,index])));
+}
+function mergeUniqueGroupMessages(...lists:GroupDMMessage[][]):GroupDMMessage[]{
+  const merged=new Map<string,GroupDMMessage>();
+  for(const message of lists.flat()){const previous=merged.get(message.id);merged.set(message.id,message.source_sequence===undefined&&dmSourceSequence(previous?.source_sequence)!==null?{...message,source_sequence:previous?.source_sequence}:message)}
+  return sortGroupMessages([...merged.values()]);
+}
 function validReadState(read:GroupDMReadState):boolean {
-  return Boolean(read.group_id) && Number.isSafeInteger(read.unread_count) && read.unread_count>=0 && (read.revision===undefined || (Number.isSafeInteger(read.revision)&&read.revision>=0))
-    && (read.settings_revision===undefined||(Number.isSafeInteger(read.settings_revision)&&read.settings_revision>=0&&typeof read.is_muted==="boolean"));
+  return Boolean(read.group_id)&&Number.isSafeInteger(read.unread_count)&&read.unread_count>=0
+    &&(read.revision===undefined||(Number.isSafeInteger(read.revision)&&read.revision>=0))
+    &&(read.settings_revision===undefined||(Number.isSafeInteger(read.settings_revision)&&read.settings_revision>=0&&typeof read.is_muted==="boolean"))
+    &&(read.key_epoch===undefined||(Number.isSafeInteger(read.key_epoch)&&read.key_epoch>0))
+    &&(read.last_read_source_sequence===undefined||read.last_read_source_sequence==="0"||dmSourceSequence(read.last_read_source_sequence)!==null);
 }
 function preserveNewerReadState(group:GroupDM,current:GroupDM|undefined):GroupDM {
+  if(!current)return group;
+  if(group.key_epoch<current.key_epoch)return current;
+  if(group.key_epoch!==current.key_epoch)return group;
+  if(current.read_key_epoch!==undefined&&group.read_key_epoch!==undefined&&group.read_key_epoch<current.read_key_epoch)return current;
+  if(group.read_key_epoch!==undefined&&group.read_key_epoch!==current.read_key_epoch)return group;
   let merged=group;
-  if(current?.read_revision !== undefined && (group.read_revision === undefined || group.read_revision < current.read_revision))merged={...merged,unread_count:current.unread_count,read_revision:current.read_revision};
-  if(current?.settings_revision!==undefined&&(group.settings_revision===undefined||group.settings_revision<current.settings_revision))merged={...merged,is_muted:current.is_muted,settings_revision:current.settings_revision};
+  const unknownEpoch=current.read_key_epoch!==undefined&&group.read_key_epoch===undefined;
+  if(unknownEpoch||(current.read_revision!==undefined&&(group.read_revision===undefined||group.read_revision<current.read_revision)))merged={...merged,unread_count:current.unread_count,read_revision:current.read_revision,last_read_source_sequence:current.last_read_source_sequence,oldest_unread_message_id:current.oldest_unread_message_id,read_key_epoch:current.read_key_epoch};
+  if(unknownEpoch||(current.settings_revision!==undefined&&(group.settings_revision===undefined||group.settings_revision<current.settings_revision)))merged={...merged,is_muted:current.is_muted,settings_revision:current.settings_revision};
   return merged;
 }
 
@@ -195,13 +214,21 @@ export const useGroupDMStore = create<GroupDMState>((set, get) => ({
     const next=prefillRestoredDraft(groupId,pending);if(next.draftRevision!==pending.draftRevision)set(state=>({pendingSends:{...state.pendingSends,[groupId]:next}}));
   },
   fetchGroups: async () => {
-    const {ownerId, generation}=getAuthSessionSnapshot(),account=captureAccount(),request=++listRequest;
+    const {ownerId, generation}=getAuthSessionSnapshot(),account=captureAccount(),request=++listRequest,started=groupProjectionClock;
     const isCurrent=()=>account()&&request===listRequest;
     if(!isCurrent())return;
     set({ loading: true, error: null });
     const res = await api.listGroupDMs({isCurrent,timeoutMs:15_000});
     if(!isCurrent())return;
-    set(state=>res.success && res.data ? { ownerId,authGeneration:generation,groups: (res.data.group_dms ?? []).map(group=>preserveNewerReadState(group,state.groups.find(current=>current.id===group.id))),groupsReady:true, loading: false } : { loading: false, error: res.error ?? "group_dm_load_failed" });
+    set(state=>{
+      if(!res.success||!res.data)return {loading:false,error:res.error??"group_dm_load_failed"};
+      const groups:GroupDM[]=[],seen=new Set<string>();
+      for(const incoming of res.data.group_dms??[]){seen.add(incoming.id);const current=state.groups.find(group=>group.id===incoming.id);
+        if((groupProjectionVersions.get(incoming.id)??0)>started){if(current)groups.push(current)}else groups.push(preserveNewerReadState(incoming,current));
+      }
+      for(const current of state.groups)if(!seen.has(current.id)&&(groupProjectionVersions.get(current.id)??0)>started)groups.push(current);
+      return {ownerId,authGeneration:generation,groups,groupsReady:true,loading:false};
+    });
   },
   create: async (name, userIds) => {
     const isCurrent=captureAccount();if(!isCurrent())return null;
@@ -323,7 +350,7 @@ export const useGroupDMStore = create<GroupDMState>((set, get) => ({
       before = decrypted[0]?.id;
       if (!before) break;
     }
-    const unique = [...new Map(all.map((message) => [message.id, message])).values()].filter(m=>(messageVersions.get(groupId)?.get(m.id)??0)<=started);
+    const unique = mergeUniqueGroupMessages(all).filter(m=>(messageVersions.get(groupId)?.get(m.id)??0)<=started);
     void registerSpamBatch(unique.map((message) => ({ ...message, content: message.content ?? null })), "group", groupId);
     if(!isCurrent())return [];
     set((state) => ({messages:{...state.messages,[groupId]:mergeHistory(groupId,unique,state.messages[groupId]??[],started)}}));
@@ -568,39 +595,45 @@ export const useGroupDMStore = create<GroupDMState>((set, get) => ({
   removeMessage: async(groupId,messageId)=>{const res=await api.deleteGroupDMMessage(groupId,messageId);if(!res.success){set({error:res.error??"group_dm_delete_failed"});return false};get().handleMessageDelete(groupId,messageId);return true},
   toggleReaction: async(groupId,messageId,emoji)=>{const res=await api.toggleGroupDMReaction(groupId,messageId,emoji);if(!res.success){set({error:res.error??"group_dm_reaction_failed"});return false};return true},
   markRead: async(groupId,messageId)=>{
-    const owner=useAuthStore.getState().user;if(!owner)return;
+    const groupCurrent=captureGroup(groupId),group=get().groups.find(g=>g.id===groupId);
+    const epoch=group?.read_key_epoch===undefined?undefined:group.key_epoch;
+    const owner=useAuthStore.getState().user;if(!owner||!groupCurrent())return;
     const request=(readRequests.get(groupId)??0)+1;readRequests.set(groupId,request);
-    const isCurrent=()=>useAuthStore.getState().user===owner && readRequests.get(groupId)===request && get().groups.some(g=>g.id===groupId);
-    const res=await api.markGroupDMRead(groupId,messageId,{isCurrent});
+    const isCurrent=()=>groupCurrent()&&useAuthStore.getState().user===owner&&readRequests.get(groupId)===request;
+    const res=await api.markGroupDMRead(groupId,messageId,{isCurrent,...(epoch===undefined?{}:{expectedKeyEpoch:epoch})});
     if(!isCurrent())return;
-    if(res.success && res.data?.group_id===groupId && validReadState(res.data)){get().handleReadState(res.data);return}
+    if(res.success && res.data?.group_id===groupId && validReadState(res.data)&&(res.data.key_epoch===undefined?epoch===undefined:res.data.key_epoch===group?.key_epoch)){get().handleReadState(res.data);return}
     // Older servers returned 204. Only legacy (unrevisioned) groups may use it.
     if(res.success && !res.data && get().groups.find(g=>g.id===groupId)?.read_revision===undefined){get().handleReadState({group_id:groupId,last_read_message_id:messageId??null,unread_count:0});return}
     set({error:res.error??"group_dm_read_failed"});
   },
   markUnread: async(groupId,messageId)=>{
-    const owner=useAuthStore.getState().user;if(!owner || !messageId)return false;
+    const groupCurrent=captureGroup(groupId),group=get().groups.find(g=>g.id===groupId);
+    const epoch=group?.read_key_epoch===undefined?undefined:group.key_epoch;
+    const owner=useAuthStore.getState().user;if(!owner||!messageId||!groupCurrent())return false;
     const request=(readRequests.get(groupId)??0)+1;readRequests.set(groupId,request);
-    const isCurrent=()=>useAuthStore.getState().user===owner && readRequests.get(groupId)===request && get().groups.some(g=>g.id===groupId);
-    const res=await api.markGroupDMUnread(groupId,messageId,{isCurrent});
+    const isCurrent=()=>groupCurrent()&&useAuthStore.getState().user===owner&&readRequests.get(groupId)===request;
+    const res=await api.markGroupDMUnread(groupId,messageId,{isCurrent,...(epoch===undefined?{}:{expectedKeyEpoch:epoch})});
     if(!isCurrent())return false;
-    if(!res.success || !res.data || res.data.group_id!==groupId || res.data.revision===undefined || !validReadState(res.data)){set({error:res.error??"group_dm_unread_failed"});return false}
+    if(!res.success || !res.data || res.data.group_id!==groupId || res.data.revision===undefined || !validReadState(res.data)||(res.data.key_epoch===undefined?epoch!==undefined:res.data.key_epoch!==group?.key_epoch)){set({error:res.error??"group_dm_unread_failed"});return false}
     get().handleReadState(res.data);return true;
   },
   handleReadState: read=>{
     if(!validReadState(read))return;
     set(state=>({groups:state.groups.map(group=>{
-      if(group.id!==read.group_id)return group;
-      const next=group.read_revision!==undefined&&(read.revision===undefined||read.revision<=group.read_revision)?group:{...group,unread_count:read.unread_count,read_revision:read.revision};
-      return read.settings_revision!==undefined&&(group.settings_revision===undefined||read.settings_revision>group.settings_revision)
-        ?{...next,is_muted:read.is_muted,settings_revision:read.settings_revision}:next;
+      if(group.id!==read.group_id||(read.key_epoch!==undefined&&read.key_epoch!==group.key_epoch)||(group.read_key_epoch!==undefined&&read.key_epoch===undefined))return group;
+      const changed=read.key_epoch!==undefined&&read.key_epoch!==group.read_key_epoch;
+      let next=!changed&&group.read_revision!==undefined&&(read.revision===undefined||read.revision<=group.read_revision)?group:{...group,unread_count:read.unread_count,read_revision:read.revision,last_read_source_sequence:read.last_read_source_sequence,oldest_unread_message_id:read.oldest_unread_message_id,read_key_epoch:read.key_epoch};
+      if(read.settings_revision!==undefined&&(changed||group.settings_revision===undefined||read.settings_revision>group.settings_revision))next={...next,is_muted:read.is_muted,settings_revision:read.settings_revision};
+      return next;
     })}));
   },
   setMuted:async(groupId,muted)=>{
-    const current=captureGroup(groupId),ownerId=getAuthSessionSnapshot().ownerId;
+    const current=captureGroup(groupId),ownerId=getAuthSessionSnapshot().ownerId,group=get().groups.find(g=>g.id===groupId);
+    const epoch=group?.read_key_epoch===undefined?undefined:group.key_epoch;
     if(!ownerId||!current())return false;
-    try{const res=await api.setGroupDMMuted(groupId,muted,{expectedUserId:ownerId,isCurrent:current});
-      if(!current()||!res.success||!res.data||res.data.group_id!==groupId||!validReadState(res.data)||res.data.settings_revision===undefined||res.data.is_muted!==muted)return false;
+    try{const res=await api.setGroupDMMuted(groupId,muted,{expectedUserId:ownerId,isCurrent:current,...(epoch===undefined?{}:{expectedKeyEpoch:epoch})});
+      if(!current()||!res.success||!res.data||res.data.group_id!==groupId||!validReadState(res.data)||res.data.settings_revision===undefined||res.data.is_muted!==muted||(res.data.key_epoch===undefined?epoch!==undefined:res.data.key_epoch!==group?.key_epoch))return false;
       get().handleReadState(res.data);return true;
     }catch{return false}
   },
@@ -646,8 +679,13 @@ export const useGroupDMStore = create<GroupDMState>((set, get) => ({
     }catch{return false}
     finally{membershipMutations.delete(lock)}
   },
-  handleCreateOrUpdate: (group) => set((state) => ({ groups: [preserveNewerReadState(group,state.groups.find(item=>item.id===group.id)), ...state.groups.filter((item) => item.id !== group.id)] })),
+  handleCreateOrUpdate: group=>{
+    const previous=get().groups.find(item=>item.id===group.id);if(previous&&group.key_epoch<previous.key_epoch)return;
+    groupProjectionVersions.set(group.id,++groupProjectionClock);
+    set(state=>({groups:[preserveNewerReadState(group,state.groups.find(item=>item.id===group.id)),...state.groups.filter(item=>item.id!==group.id)]}));
+  },
   handleDelete: (groupId) => {
+    groupProjectionVersions.set(groupId,++groupProjectionClock);
     groupLifetimes.set(groupId,(groupLifetimes.get(groupId)??0)+1);messageVersions.delete(groupId);messageCreateVersions.delete(groupId);historyRequests.delete(groupId);aroundPending.get(groupId)?.abort();aroundPending.delete(groupId);aroundLoaded.delete(groupId);detachedWsMessages.delete(groupId);pendingAroundUpdates.delete(groupId);
     set((state) => { const messages = { ...state.messages },hasMoreAfterByGroup={...state.hasMoreAfterByGroup},uploadRecoveries={...state.uploadRecoveries},pendingSends={...state.pendingSends},restoredQueue={...state.restoredQueue}; delete messages[groupId];delete hasMoreAfterByGroup[groupId];delete uploadRecoveries[groupId];delete pendingSends[groupId];delete restoredQueue[groupId]; return { groups: state.groups.filter((item) => item.id !== groupId), messages,hasMoreAfterByGroup,scrollTarget:state.scrollTarget?.groupId===groupId?null:state.scrollTarget,uploadRecoveries,pendingSends,restoredQueue }; });
   },
@@ -714,7 +752,7 @@ function resetGroupAuthScope(){
   const {ownerId, generation}=getAuthSessionSnapshot();
   const current=useGroupDMStore.getState();
   if(current.ownerId===ownerId&&current.authGeneration===generation)return;
-  accountEpoch++;listRequest++;restoreRequest++;retiredSends.clear();readRequests.clear();historyRequests.clear();messageVersions.clear();messageCreateVersions.clear();groupLifetimes.clear();pendingCreates.clear();preparingSends.clear();recoverySendOrigins.clear();aroundPending.forEach(controller=>controller.abort());aroundPending.clear();aroundLoaded.clear();detachedWsMessages.clear();pendingAroundUpdates.clear();
+  accountEpoch++;listRequest++;groupProjectionClock=0;groupProjectionVersions.clear();restoreRequest++;retiredSends.clear();readRequests.clear();historyRequests.clear();messageVersions.clear();messageCreateVersions.clear();groupLifetimes.clear();pendingCreates.clear();preparingSends.clear();recoverySendOrigins.clear();aroundPending.forEach(controller=>controller.abort());aroundPending.clear();aroundLoaded.clear();detachedWsMessages.clear();pendingAroundUpdates.clear();
   useComposerDraftStore.getState().reset();
   useGroupDMStore.setState({ownerId,authGeneration:generation,groups:[],messages:{},hasMoreAfterByGroup:{},scrollTarget:null,loading:false,error:null,uploadRecoveries:{},pendingSends:{},groupsReady:false,restoreStatus:"idle",restoreScope:null,restoreDeviceId:null,restoreBlocked:[],restoredQueue:{}});
 }

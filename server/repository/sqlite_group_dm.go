@@ -127,7 +127,7 @@ func (r *sqliteGroupDMRepo) changeMember(ctx context.Context, groupID, userID st
 		return 0, pkg.ErrConflict
 	}
 	if add {
-		_, err = tx.ExecContext(ctx, `INSERT INTO group_dm_reads(group_id,user_id) VALUES(?,?) ON CONFLICT(group_id,user_id) DO NOTHING`, groupID, userID)
+		_, err = tx.ExecContext(ctx, `INSERT INTO group_dm_reads(group_id,user_id,last_read_source_sequence) SELECT ?,?,last_source_sequence FROM group_dm_channels WHERE id=? ON CONFLICT(group_id,user_id) DO NOTHING`, groupID, userID, groupID)
 	} else {
 		_, err = tx.ExecContext(ctx, `DELETE FROM group_dm_reads WHERE group_id=? AND user_id=?`, groupID, userID)
 	}
@@ -249,15 +249,19 @@ func (r *sqliteGroupDMRepo) CreateMessage(ctx context.Context, m *models.GroupDM
 		m.ID = op.MessageID
 
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO group_dm_messages(id,group_id,user_id,content,encryption_version,ciphertext,sender_device_id,e2ee_metadata,key_epoch,reply_to_id) VALUES(?,?,?,?,?,?,?,?,?,?)`, m.ID, m.GroupID, m.UserID, m.Content, m.EncryptionVersion, m.Ciphertext, m.SenderDeviceID, m.E2EEMetadata, m.KeyEpoch, m.ReplyToID); err != nil {
+	if _, err = tx.ExecContext(ctx, `INSERT INTO group_dm_messages(id,group_id,user_id,content,encryption_version,ciphertext,sender_device_id,e2ee_metadata,key_epoch,reply_to_id,source_sequence) VALUES(?,?,?,?,?,?,?,?,?,?,?)`, m.ID, m.GroupID, m.UserID, m.Content, m.EncryptionVersion, m.Ciphertext, m.SenderDeviceID, m.E2EEMetadata, m.KeyEpoch, m.ReplyToID, m.SourceSequence); err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE group_dm_reads SET unread_count=CASE WHEN user_id=? THEN 0 ELSE unread_count+1 END,last_read_message_id=CASE WHEN user_id=? THEN ? ELSE last_read_message_id END,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE group_id=?`, m.UserID, m.UserID, m.ID, m.GroupID); err != nil {
+	if err = tx.QueryRowContext(ctx, `SELECT created_at,source_sequence FROM group_dm_messages WHERE id=?`, m.ID).Scan(&m.CreatedAt, &m.SourceSequence); err != nil {
 		return err
 	}
-	if err = tx.QueryRowContext(ctx, `SELECT created_at FROM group_dm_messages WHERE id=?`, m.ID).Scan(&m.CreatedAt); err != nil {
+	if _, err = tx.ExecContext(ctx, `UPDATE group_dm_reads SET last_read_source_sequence=CASE WHEN last_read_source_sequence<? THEN ? ELSE last_read_source_sequence END WHERE group_id=? AND user_id=?`, m.SourceSequence, m.SourceSequence, m.GroupID, m.UserID); err != nil {
 		return err
 	}
+	if err := refreshGroupReadCounts(ctx, tx, m.GroupID); err != nil {
+		return err
+	}
+
 	if m.SendRequestID != "" {
 		if _, err = tx.ExecContext(ctx, `UPDATE group_dm_send_operations SET phase='committed',updated_at=CURRENT_TIMESTAMP WHERE group_id=? AND user_id=? AND request_id=?`, m.GroupID, m.UserID, m.SendRequestID); err != nil {
 			return err
@@ -267,7 +271,7 @@ func (r *sqliteGroupDMRepo) CreateMessage(ctx context.Context, m *models.GroupDM
 }
 func (r *sqliteGroupDMRepo) GetMessage(ctx context.Context, groupID, messageID string) (*models.GroupDMMessage, error) {
 	m := &models.GroupDMMessage{}
-	err := r.db.QueryRowContext(ctx, `SELECT id,group_id,user_id,content,encryption_version,ciphertext,sender_device_id,e2ee_metadata,key_epoch,reply_to_id,edited_at,created_at FROM group_dm_messages WHERE id=? AND group_id=?`, messageID, groupID).Scan(&m.ID, &m.GroupID, &m.UserID, &m.Content, &m.EncryptionVersion, &m.Ciphertext, &m.SenderDeviceID, &m.E2EEMetadata, &m.KeyEpoch, &m.ReplyToID, &m.EditedAt, &m.CreatedAt)
+	err := r.db.QueryRowContext(ctx, `SELECT id,group_id,user_id,content,encryption_version,ciphertext,sender_device_id,e2ee_metadata,key_epoch,reply_to_id,edited_at,created_at,source_sequence FROM group_dm_messages WHERE id=? AND group_id=?`, messageID, groupID).Scan(&m.ID, &m.GroupID, &m.UserID, &m.Content, &m.EncryptionVersion, &m.Ciphertext, &m.SenderDeviceID, &m.E2EEMetadata, &m.KeyEpoch, &m.ReplyToID, &m.EditedAt, &m.CreatedAt, &m.SourceSequence)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, pkg.ErrNotFound
 	}
@@ -278,7 +282,7 @@ func (r *sqliteGroupDMRepo) GetMessage(ctx context.Context, groupID, messageID s
 }
 func (r *sqliteGroupDMRepo) GetMessageByID(ctx context.Context, messageID string) (*models.GroupDMMessage, error) {
 	m := &models.GroupDMMessage{}
-	err := r.db.QueryRowContext(ctx, `SELECT id,group_id,user_id,content,encryption_version,ciphertext,sender_device_id,e2ee_metadata,key_epoch,reply_to_id,edited_at,created_at FROM group_dm_messages WHERE id=?`, messageID).Scan(&m.ID, &m.GroupID, &m.UserID, &m.Content, &m.EncryptionVersion, &m.Ciphertext, &m.SenderDeviceID, &m.E2EEMetadata, &m.KeyEpoch, &m.ReplyToID, &m.EditedAt, &m.CreatedAt)
+	err := r.db.QueryRowContext(ctx, `SELECT id,group_id,user_id,content,encryption_version,ciphertext,sender_device_id,e2ee_metadata,key_epoch,reply_to_id,edited_at,created_at,source_sequence FROM group_dm_messages WHERE id=?`, messageID).Scan(&m.ID, &m.GroupID, &m.UserID, &m.Content, &m.EncryptionVersion, &m.Ciphertext, &m.SenderDeviceID, &m.E2EEMetadata, &m.KeyEpoch, &m.ReplyToID, &m.EditedAt, &m.CreatedAt, &m.SourceSequence)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, pkg.ErrNotFound
 	}
@@ -288,14 +292,14 @@ func (r *sqliteGroupDMRepo) GetMessageByID(ctx context.Context, messageID string
 	return m, nil
 }
 func (r *sqliteGroupDMRepo) ListMessages(ctx context.Context, groupID, beforeID string, limit int) ([]models.GroupDMMessage, error) {
-	q := `SELECT id,group_id,user_id,content,encryption_version,ciphertext,sender_device_id,e2ee_metadata,key_epoch,reply_to_id,edited_at,created_at FROM group_dm_messages WHERE group_id=?`
+	q := `SELECT id,group_id,user_id,content,encryption_version,ciphertext,sender_device_id,e2ee_metadata,key_epoch,reply_to_id,edited_at,created_at,source_sequence FROM group_dm_messages WHERE group_id=?`
 	args := []any{groupID}
 	if beforeID != "" {
 		q += ` AND EXISTS (SELECT 1 FROM group_dm_messages anchor WHERE anchor.id=? AND anchor.group_id=?
- AND (group_dm_messages.created_at<anchor.created_at OR (group_dm_messages.created_at=anchor.created_at AND group_dm_messages.id<anchor.id)))`
+ AND group_dm_messages.source_sequence<anchor.source_sequence)`
 		args = append(args, beforeID, groupID)
 	}
-	q += ` ORDER BY created_at DESC,id DESC LIMIT ?`
+	q += ` ORDER BY source_sequence DESC LIMIT ?`
 	args = append(args, limit)
 	rows, err := r.db.QueryContext(ctx, q, args...)
 	if err != nil {
@@ -305,7 +309,7 @@ func (r *sqliteGroupDMRepo) ListMessages(ctx context.Context, groupID, beforeID 
 	out := []models.GroupDMMessage{}
 	for rows.Next() {
 		var m models.GroupDMMessage
-		if err := rows.Scan(&m.ID, &m.GroupID, &m.UserID, &m.Content, &m.EncryptionVersion, &m.Ciphertext, &m.SenderDeviceID, &m.E2EEMetadata, &m.KeyEpoch, &m.ReplyToID, &m.EditedAt, &m.CreatedAt); err != nil {
+		if err := rows.Scan(&m.ID, &m.GroupID, &m.UserID, &m.Content, &m.EncryptionVersion, &m.Ciphertext, &m.SenderDeviceID, &m.E2EEMetadata, &m.KeyEpoch, &m.ReplyToID, &m.EditedAt, &m.CreatedAt, &m.SourceSequence); err != nil {
 			return nil, err
 		}
 		out = append(out, m)
@@ -314,8 +318,7 @@ func (r *sqliteGroupDMRepo) ListMessages(ctx context.Context, groupID, beforeID 
 }
 
 // GetMessagesAround returns an ASC, bounded window centered on a message that
-// belongs to this group. Tuple ordering is (created_at,id), matching all group
-// history cursors and remaining deterministic for same-timestamp messages.
+// belongs to this group. Durable source order survives timestamp ties and deletions.
 func (r *sqliteGroupDMRepo) GetMessagesAround(ctx context.Context, groupID, anchorID string, limit int) ([]models.GroupDMMessage, bool, bool, error) {
 	var exists int
 	if err := r.db.QueryRowContext(ctx, `SELECT 1 FROM group_dm_messages WHERE id=? AND group_id=?`, anchorID, groupID).Scan(&exists); err != nil {
@@ -327,7 +330,7 @@ func (r *sqliteGroupDMRepo) GetMessagesAround(ctx context.Context, groupID, anch
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
-	selectColumns := `SELECT id,group_id,user_id,content,encryption_version,ciphertext,sender_device_id,e2ee_metadata,key_epoch,reply_to_id,edited_at,created_at FROM group_dm_messages WHERE group_id=? AND `
+	selectColumns := `SELECT id,group_id,user_id,content,encryption_version,ciphertext,sender_device_id,e2ee_metadata,key_epoch,reply_to_id,edited_at,created_at,source_sequence FROM group_dm_messages WHERE group_id=? AND `
 	read := func(where, order string, args ...any) ([]models.GroupDMMessage, error) {
 		rows, err := r.db.QueryContext(ctx, selectColumns+where+order, args...)
 		if err != nil {
@@ -337,7 +340,7 @@ func (r *sqliteGroupDMRepo) GetMessagesAround(ctx context.Context, groupID, anch
 		items := make([]models.GroupDMMessage, 0, len(args))
 		for rows.Next() {
 			var item models.GroupDMMessage
-			if err := rows.Scan(&item.ID, &item.GroupID, &item.UserID, &item.Content, &item.EncryptionVersion, &item.Ciphertext, &item.SenderDeviceID, &item.E2EEMetadata, &item.KeyEpoch, &item.ReplyToID, &item.EditedAt, &item.CreatedAt); err != nil {
+			if err := rows.Scan(&item.ID, &item.GroupID, &item.UserID, &item.Content, &item.EncryptionVersion, &item.Ciphertext, &item.SenderDeviceID, &item.E2EEMetadata, &item.KeyEpoch, &item.ReplyToID, &item.EditedAt, &item.CreatedAt, &item.SourceSequence); err != nil {
 				return nil, err
 			}
 			items = append(items, item)
@@ -346,7 +349,7 @@ func (r *sqliteGroupDMRepo) GetMessagesAround(ctx context.Context, groupID, anch
 	}
 	half := limit / 2
 	afterCount := limit - half
-	older, err := read(`(created_at<(SELECT created_at FROM group_dm_messages WHERE id=? AND group_id=?) OR (created_at=(SELECT created_at FROM group_dm_messages WHERE id=? AND group_id=?) AND id<?))`, ` ORDER BY created_at DESC,id DESC LIMIT ?`, groupID, anchorID, groupID, anchorID, groupID, anchorID, half+1)
+	older, err := read(`source_sequence<(SELECT source_sequence FROM group_dm_messages WHERE id=? AND group_id=?)`, ` ORDER BY source_sequence DESC LIMIT ?`, groupID, anchorID, groupID, half+1)
 	if err != nil {
 		return nil, false, false, err
 	}
@@ -354,7 +357,7 @@ func (r *sqliteGroupDMRepo) GetMessagesAround(ctx context.Context, groupID, anch
 	if hasMoreBefore {
 		older = older[:half]
 	}
-	newer, err := read(`(created_at>(SELECT created_at FROM group_dm_messages WHERE id=? AND group_id=?) OR (created_at=(SELECT created_at FROM group_dm_messages WHERE id=? AND group_id=?) AND id>=?))`, ` ORDER BY created_at ASC,id ASC LIMIT ?`, groupID, anchorID, groupID, anchorID, groupID, anchorID, afterCount+1)
+	newer, err := read(`source_sequence>=(SELECT source_sequence FROM group_dm_messages WHERE id=? AND group_id=?)`, ` ORDER BY source_sequence ASC LIMIT ?`, groupID, anchorID, groupID, afterCount+1)
 	if err != nil {
 		return nil, false, false, err
 	}
@@ -403,24 +406,14 @@ func (r *sqliteGroupDMRepo) DeleteMessage(ctx context.Context, groupID, messageI
 	} else if err != nil {
 		return err
 	}
-	// Compare persisted timestamps directly, without an empty-string timestamp
-	// sentinel (invalid in PostgreSQL) or driver-specific time serialization.
-	if _, err = tx.ExecContext(ctx, `UPDATE group_dm_reads SET unread_count=CASE WHEN user_id<>? AND (
- last_read_message_id IS NULL OR NOT EXISTS(SELECT 1 FROM group_dm_messages WHERE id=last_read_message_id) OR
- EXISTS(SELECT 1 FROM group_dm_messages candidate JOIN group_dm_messages seen ON seen.id=last_read_message_id
- WHERE candidate.id=? AND (candidate.created_at>seen.created_at OR (candidate.created_at=seen.created_at AND candidate.id>seen.id))))
- THEN CASE WHEN unread_count>0 THEN unread_count-1 ELSE 0 END ELSE unread_count END,
- last_read_message_id=CASE WHEN last_read_message_id=? THEN (
- SELECT previous.id FROM group_dm_messages previous JOIN group_dm_messages target ON target.id=?
- WHERE previous.group_id=target.group_id AND (previous.created_at<target.created_at OR (previous.created_at=target.created_at AND previous.id<target.id))
- ORDER BY previous.created_at DESC,previous.id DESC LIMIT 1) ELSE last_read_message_id END,
- revision=revision+1 WHERE group_id=?`, userID, messageID, messageID, messageID, groupID); err != nil {
-		return err
-	}
+
 	if _, err = tx.ExecContext(ctx, `UPDATE group_dm_send_operations SET phase='deleted',failed_indices='[]',updated_at=CURRENT_TIMESTAMP WHERE message_id=?`, messageID); err != nil {
 		return err
 	}
 	if _, err = tx.ExecContext(ctx, `DELETE FROM group_dm_messages WHERE id=?`, messageID); err != nil {
+		return err
+	}
+	if err := refreshGroupReadCounts(ctx, tx, groupID); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -487,108 +480,19 @@ func (r *sqliteGroupDMRepo) GetReactions(ctx context.Context, messageIDs []strin
 	}
 	return out, rows.Err()
 }
-func (r *sqliteGroupDMRepo) MarkRead(ctx context.Context, groupID, userID string, messageID *string) error {
-	_, err := r.setReadCursor(ctx, groupID, userID, messageID, false)
+func (r *sqliteGroupDMRepo) MarkRead(ctx context.Context, groupID, userID string, messageID *string, expectedEpoch ...int64) error {
+	_, err := r.setReadCursor(ctx, groupID, userID, messageID, false, expectedEpoch...)
 	return err
 }
 
-func (r *sqliteGroupDMRepo) MarkUnreadFrom(ctx context.Context, groupID, userID, messageID string) (*models.GroupDMReadState, error) {
-	return r.setReadCursor(ctx, groupID, userID, &messageID, true)
+func (r *sqliteGroupDMRepo) MarkUnreadFrom(ctx context.Context, groupID, userID, messageID string, expectedEpoch ...int64) (*models.GroupDMReadState, error) {
+	return r.setReadCursor(ctx, groupID, userID, &messageID, true, expectedEpoch...)
 }
 
 func (r *sqliteGroupDMRepo) GetReadState(ctx context.Context, groupID, userID string) (*models.GroupDMReadState, error) {
 	return groupReadState(ctx, r.db, groupID, userID)
 }
 
-func groupReadState(ctx context.Context, db database.TxQuerier, groupID, userID string) (*models.GroupDMReadState, error) {
-	state := &models.GroupDMReadState{GroupID: groupID}
-	var oldestUnread sql.NullString
-	err := db.QueryRowContext(ctx, `SELECT r.last_read_message_id,r.unread_count,r.revision,m.is_muted,m.settings_revision,
-	 (SELECT unread.id FROM group_dm_messages unread
-	  WHERE unread.group_id=r.group_id AND unread.user_id<>? AND r.unread_count>0
-	    AND (r.last_read_message_id IS NULL OR EXISTS (
-	      SELECT 1 FROM group_dm_messages cursor WHERE cursor.id=r.last_read_message_id AND cursor.group_id=r.group_id
-	        AND (unread.created_at>cursor.created_at OR (unread.created_at=cursor.created_at AND unread.id>cursor.id))))
-	  ORDER BY unread.created_at ASC,unread.id ASC LIMIT 1)
-	 FROM group_dm_reads r JOIN group_dm_members m ON m.group_id=r.group_id AND m.user_id=r.user_id WHERE r.group_id=? AND r.user_id=?`, userID, groupID, userID).Scan(&state.LastReadMessageID, &state.UnreadCount, &state.Revision, &state.IsMuted, &state.SettingsRevision, &oldestUnread)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, pkg.ErrNotFound
-	}
-	if oldestUnread.Valid {
-		state.OldestUnreadMessageID = &oldestUnread.String
-	}
-	return state, err
-}
-
-func (r *sqliteGroupDMRepo) setReadCursor(ctx context.Context, groupID, userID string, messageID *string, unread bool) (*models.GroupDMReadState, error) {
-	db := database.RawDB(r.db)
-	if db == nil {
-		return nil, fmt.Errorf("group read cursor requires transaction-capable database")
-	}
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = tx.Rollback() }()
-	if err := lockGroupDM(ctx, tx, groupID); err != nil {
-		return nil, err
-	}
-	// Acquire the per-reader write lock before taking the message snapshot.
-	// A concurrent sender then increments after this commit, or is visible to
-	// the following COUNT; it cannot be silently lost by an older snapshot.
-	locked, err := tx.ExecContext(ctx, `UPDATE group_dm_reads SET revision=revision WHERE group_id=? AND user_id=?`, groupID, userID)
-	if err != nil {
-		return nil, err
-	}
-	lockedRows, err := locked.RowsAffected()
-	if err != nil {
-		return nil, err
-	}
-	if lockedRows == 0 {
-		return nil, pkg.ErrNotFound
-	}
-	if messageID == nil {
-		var latest string
-		err = tx.QueryRowContext(ctx, `SELECT id FROM group_dm_messages WHERE group_id=? ORDER BY created_at DESC,id DESC LIMIT 1`, groupID).Scan(&latest)
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return nil, err
-		}
-		if err == nil {
-			messageID = &latest
-		}
-	}
-	var result sql.Result
-	if messageID == nil {
-		result, err = tx.ExecContext(ctx, `UPDATE group_dm_reads SET last_read_message_id=NULL,unread_count=0,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE group_id=? AND user_id=?`, groupID, userID)
-	} else {
-		cursorSQL := `SELECT id FROM group_dm_messages WHERE id=? AND group_id=?`
-		comparison := `candidate.id>target.id`
-		if unread {
-			cursorSQL = `SELECT previous.id FROM group_dm_messages previous JOIN group_dm_messages target ON target.id=? AND target.group_id=? WHERE previous.group_id=target.group_id AND (previous.created_at<target.created_at OR (previous.created_at=target.created_at AND previous.id<target.id)) ORDER BY previous.created_at DESC,previous.id DESC LIMIT 1`
-			comparison = `candidate.id>=target.id`
-		}
-		query := `UPDATE group_dm_reads SET last_read_message_id=(` + cursorSQL + `),unread_count=(SELECT COUNT(*) FROM group_dm_messages candidate JOIN group_dm_messages target ON target.id=? AND target.group_id=candidate.group_id WHERE candidate.group_id=? AND candidate.user_id<>? AND (candidate.created_at>target.created_at OR (candidate.created_at=target.created_at AND ` + comparison + `))),revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE group_id=? AND user_id=? AND EXISTS(SELECT 1 FROM group_dm_messages WHERE id=? AND group_id=?)`
-		result, err = tx.ExecContext(ctx, query, *messageID, groupID, *messageID, groupID, userID, groupID, userID, *messageID, groupID)
-	}
-	if err != nil {
-		return nil, err
-	}
-	n, err := result.RowsAffected()
-	if err != nil {
-		return nil, err
-	}
-	if n == 0 {
-		return nil, pkg.ErrNotFound
-	}
-	state, err := groupReadState(ctx, tx, groupID, userID)
-	if err != nil {
-		return nil, err
-	}
-	if err = tx.Commit(); err != nil {
-		return nil, err
-	}
-	return state, nil
-}
 func (r *sqliteGroupDMRepo) UnreadCount(ctx context.Context, groupID, userID string) (int, error) {
 	var n int
 	err := r.db.QueryRowContext(ctx, `SELECT unread_count FROM group_dm_reads WHERE group_id=? AND user_id=?`, groupID, userID).Scan(&n)
