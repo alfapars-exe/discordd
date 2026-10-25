@@ -1,0 +1,27 @@
+{
+  "status": "implemented_unverified",
+  "production_space_head_reviewed": "f11b20eaed4d4b881add3d22ac996ccee306b9b2",
+  "production_source_reviewed": "e8bfcb284917aede6af44fd250be177a61cc13f6",
+  "ported_commit": "e95f5f0b166ee64b6d5aebee3a9aeadbbc215d4b",
+  "scope": "Preserve deployed music search socket-write deadline and truthful TR/EN connectivity feedback without reverting current permission/session/revision/idempotency controls. Existing fe44 radioURL selection and metadata timeout fixes already byteequal in current source.",
+  "checks": [
+    "4 client suites78testsPASS2.64s actualversionedprotocol and request-room guards retained; no mutation POST replay.",
+    "Go1.26.10 actualHTTPsocketwrite-deadline regression+allTestSearch PASS3.009s session8638.",
+    "Owned new client test ESLint exit0."
+  ],
+  "initial_failure": "Production feedback fixture initially failed16cases because it lacked currentroom/auth/versionedprotocol admission. Updatedfixture supplies realadoption/statereads and actualauth/voicestore scopes instead of weakening production guards.",
+  "source_sha256_lf": {
+    "client/src/api/musicErrorFeedback.test.ts": "c7a2ad05812a46e697a3df98e122d84afd1474946d26a0e84a46695b60142a4a",
+    "server/handlers/music_test.go": "d32e0c9e3aa1bd8b1106d780179f47c364f03033a288fcbd4bfbe2a00d16df18",
+    "client/src/i18n/locales/en/auth.json": "aed38a1172c14322960246992b52b4c62021eb4296bd63fc49c6f58be6b9b53a",
+    "client/src/i18n/locales/en/music.json": "c9e6c1c5478e20e7735375bb8cc66603a4b969dc8a72f8b499244955ed7ea6e4",
+    "client/src/i18n/locales/tr/auth.json": "5bf8d20921550913dee0c9425cdc92c2d4f8329c4f03e4dd8750095593d41ee8",
+    "client/src/i18n/locales/tr/music.json": "a6ab1814e473fe6a4c2f3e54081fb0820f8c687d811974b41e0ae3810ea50080"
+  },
+  "shared_handler_projection_sha256_lf": "83de08611ef15103e4f1b792f2c9781d1e15a5b2ed1efff300c456a591ba806e",
+  "foreign_changes": "server/handlers/music.go logging diagnostics remain uncommitted and excluded. Existing music locale protocol keys retained. Historical version113/workflowprevious112 not copied over newer main safeguards.",
+  "remaining": [
+    "No production publication or YouTube availability/audio acceptance performed by this port.",
+    "Subsequent immutable combined gates required with pendingoverlaynotices."
+  ]
+}
