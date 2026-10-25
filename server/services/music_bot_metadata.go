@@ -15,15 +15,21 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 )
 
 const maxMusicMetadataBytes = 4 << 20
+const maxMusicMetadataDiagnosticRunes = 1280
 
 var youtubeVideoID = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
 var errMusicMetadataTooLarge = errors.New("music metadata exceeds size limit")
+var musicDiagnosticANSI = regexp.MustCompile(`\x1b\[[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]`)
+var musicDiagnosticURL = regexp.MustCompile(`(?i)\b[a-z][a-z0-9+.-]*://[^\s"'<>]+`)
+var musicDiagnosticSecret = regexp.MustCompile(`(?i)\b(?:authorization|proxy-authorization|cookie|set-cookie|password|passphrase|secret|(?:api[-_]?|auth[-_]?)?token|api[-_]?key|ticket)\b\s*["']?\s*[:=].*$`)
+var musicDiagnosticVideo = regexp.MustCompile(`(\[youtube[^\]]*\]\s+)[A-Za-z0-9_-]{11}:`)
 
 // A queue cap alone does not bound extraction: a playlist can emit thousands
 // of full JSON blobs before Enqueue truncates it. Bound both the subprocess's
@@ -74,7 +80,6 @@ var ytDlpPath = sync.OnceValues(func() (string, error) {
 //	--no-playlist       select the video when a link also includes a playlist;
 //	                    explicit playlist URLs still expand normally
 //	--print            only the metadata fields needed for each track
-//	--no-warnings       suppress noisy warnings on private/age-restricted videos
 //	--ignore-errors     tolerate single-video failures inside a playlist
 //	--use-extractors "Youtube.*"  restrict resolution to yt-dlp's dedicated
 //	                    YouTube extractors. Without it, a URL that no
@@ -93,9 +98,11 @@ func extractTracks(parent context.Context, urlStr, requesterID, requesterName st
 	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
 	defer cancel()
 
+	validationStart := time.Now()
 	if err := validateMusicURLNetwork(ctx, urlStr); err != nil {
 		return nil, err
 	}
+	validationDuration := time.Since(validationStart)
 
 	// `--` terminates yt-dlp's option parsing. Without it, a caller-supplied
 	// `url` like `--exec "wget ..."` would be interpreted as a yt-dlp flag
@@ -111,7 +118,7 @@ func extractTracks(parent context.Context, urlStr, requesterID, requesterName st
 	stderr := newTailBuffer(ytDlpStderrTailBytes)
 	cmd.Stdout, cmd.Stderr = stdout, stderr
 	cmd.WaitDelay = subprocessWaitDelay
-	runErr := cmd.Run()
+	runDuration, runErr := runMusicMetadataCommand(ctx, cmd, "extraction", validationDuration, stderr)
 	// A cancelled request must not enqueue partially extracted tracks after
 	// the caller has left. Keep deadlines classifiable as network failures.
 	if ctx.Err() != nil {
@@ -126,6 +133,9 @@ func extractTracks(parent context.Context, urlStr, requesterID, requesterName st
 	}
 	// A playlist may contain unavailable entries. Keep valid entries on a
 	// partial exit, but preserve classified errors if nothing can play.
+	if len(out) == 0 {
+		logMusicMetadataFailure("extraction", validationDuration, runDuration, runErr, stderr.String())
+	}
 	if len(out) == 0 && runErr != nil {
 		return nil, &trackPlaybackError{
 			Reason: classifyPlaybackFailure(runErr, stderr.String()),
@@ -147,6 +157,52 @@ func musicMetadataInterruptedError(operation string, cause error) error {
 		return &trackPlaybackError{Reason: reasonNetwork, err: err}
 	}
 	return err
+}
+
+func runMusicMetadataCommand(ctx context.Context, cmd *exec.Cmd, operation string, validationDuration time.Duration, stderr *tailBuffer) (time.Duration, error) {
+	started := time.Now()
+	err := cmd.Run()
+	duration := time.Since(started)
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		logMusicMetadataFailure(operation, validationDuration, duration, ctx.Err(), stderr.String())
+	}
+	return duration, err
+}
+
+// Only provider warnings/errors belong in diagnostics. Never log command
+// arguments, request details, environment dumps, or unredacted signed URLs.
+func musicMetadataDiagnostic(tail string) string {
+	var lines []string
+	for _, line := range strings.Split(musicDiagnosticANSI.ReplaceAllString(tail, ""), "\n") {
+		line = strings.TrimSpace(strings.Map(func(r rune) rune {
+			if unicode.IsControl(r) {
+				return -1
+			}
+			return r
+		}, line))
+		if !strings.HasPrefix(line, "WARNING:") && !strings.HasPrefix(line, "ERROR:") {
+			continue
+		}
+		line = musicDiagnosticURL.ReplaceAllString(line, "[url]")
+		line = musicDiagnosticSecret.ReplaceAllString(line, "[redacted]")
+		line = musicDiagnosticVideo.ReplaceAllString(line, "${1}[video]:")
+		lines = append(lines, pkg.RedactSecrets(line))
+	}
+	diagnostic := []rune(strings.Join(lines, " | "))
+	if len(diagnostic) > maxMusicMetadataDiagnosticRunes {
+		diagnostic = diagnostic[len(diagnostic)-maxMusicMetadataDiagnosticRunes:]
+	}
+	return string(diagnostic)
+}
+
+func logMusicMetadataFailure(operation string, validationDuration, runDuration time.Duration, cause error, stderr string) {
+	musicBotLogger.Warn("yt-dlp metadata diagnostic",
+		"operation", operation,
+		"validation_ms", validationDuration.Milliseconds(),
+		"subprocess_ms", runDuration.Milliseconds(),
+		"deadline", errors.Is(cause, context.DeadlineExceeded),
+		"reason", classifyPlaybackFailure(cause, stderr),
+		"stderr_tail", musicMetadataDiagnostic(stderr))
 }
 
 func parseMusicMetadata(r io.Reader, requesterID, requesterName string) ([]models.MusicTrack, error) {
@@ -189,7 +245,6 @@ func extractTracksArgs(urlStr string) []string {
 		"--playlist-end", strconv.Itoa(maxQueueLen + 1),
 		"--skip-download",
 		"--print", "%(.{id,title,uploader,channel,duration,thumbnail})j",
-		"--no-warnings",
 		"--ignore-errors",
 		"--socket-timeout", "10",
 		"--extractor-retries", "1",
@@ -203,10 +258,12 @@ func extractTracksArgs(urlStr string) []string {
 // a caller-controlled URL. The query remains one argv value after `--`; no
 // shell is involved and yt-dlp is restricted to YouTube extractors.
 func SearchMusicTracks(parent context.Context, query string) ([]models.MusicTrack, error) {
+	validationStart := time.Now()
 	query = strings.TrimSpace(query)
 	if query == "" || len([]rune(query)) > 100 || strings.ContainsAny(query, "\x00\r\n") {
 		return nil, fmt.Errorf("%w: search query must be 1-100 characters", pkg.ErrBadRequest)
 	}
+	validationDuration := time.Since(validationStart)
 	ctx, cancel := context.WithTimeout(parent, 20*time.Second)
 	defer cancel()
 	bin, err := ytDlpPath()
@@ -218,7 +275,7 @@ func SearchMusicTracks(parent context.Context, query string) ([]models.MusicTrac
 	stderr := newTailBuffer(ytDlpStderrTailBytes)
 	cmd.Stdout, cmd.Stderr = stdout, stderr
 	cmd.WaitDelay = subprocessWaitDelay
-	runErr := cmd.Run()
+	runDuration, runErr := runMusicMetadataCommand(ctx, cmd, "search", validationDuration, stderr)
 	if ctx.Err() != nil {
 		return nil, musicMetadataInterruptedError("search", ctx.Err())
 	}
@@ -233,6 +290,7 @@ func SearchMusicTracks(parent context.Context, query string) ([]models.MusicTrac
 		tracks = tracks[:5]
 	}
 	if len(tracks) == 0 {
+		logMusicMetadataFailure("search", validationDuration, runDuration, runErr, stderr.String())
 		return nil, &trackPlaybackError{Reason: classifyPlaybackFailure(runErr, stderr.String()), err: errors.New("no YouTube search results")}
 	}
 	return tracks, nil
@@ -243,7 +301,7 @@ func searchMusicArgs(query string) []string {
 		"--ignore-config", "--no-plugin-dirs", "--no-remote-components",
 		"--flat-playlist", "--playlist-end", "5", "--skip-download",
 		"--print", "%(.{id,title,uploader,channel,duration,thumbnail})j",
-		"--no-warnings", "--socket-timeout", "10", "--extractor-retries", "1",
+		"--socket-timeout", "10", "--extractor-retries", "1",
 		"--use-extractors", "Youtube.*", "--", "ytsearch5:" + query,
 	}
 }
