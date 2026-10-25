@@ -28,7 +28,7 @@ const notice = { id: "notice", user_id: "owner", kind: "mention", actor_id: "act
 const message = { id: "message", channel_id: "channel", user_id: "actor", author: { id: "actor" }, content: "hello", attachments: [], reactions: [], encryption_version: 0 } as unknown as Message;
 const allowed = Permissions.ViewChannel | Permissions.ReadMessages | Permissions.SendMessages;
 beforeEach(() => {
-  vi.clearAllMocks(); h.scope = { ownerId: "owner", generation: 1 }; h.ignored = {}; h.spam = false; h.pending = false; h.visible = true; document.body.innerHTML = "";
+  vi.clearAllMocks(); h.scope = { ownerId: "owner", generation: 1 }; h.ignored = {}; h.spam = false; h.pending = false; h.visible = true; document.body.replaceChildren();
   h.auth.set({ user: { id: "owner" } });
   h.feed.set({ items: [notice], markRead: h.markRead });
   h.prefs.set({ accountId: "owner", isLoaded: true, get: () => ({ ignoredUsers: h.ignored }) });
@@ -79,9 +79,12 @@ it("never silently replaces another reply, inline edit or sending draft", async 
   const source = resolveOverlayNotificationReplySource("notice")!, open = openSource();
   useComposerDraftStore.getState().patch(key, { replyingTo: { ...message, id: "other", is_pinned: false } });
   expect(await prepareOverlayNotificationReply(source, open, () => true)).toBe("conflict"); expect(open).not.toHaveBeenCalled();
-  useComposerDraftStore.getState().reset(); document.body.innerHTML = '<div class="msg-edit-area"><textarea>editing text</textarea></div>';
+  useComposerDraftStore.getState().reset();
+  const editor = document.createElement("div"), input = document.createElement("textarea");
+  editor.className = "msg-edit-area"; input.value = "editing text";
+  editor.append(input); document.body.append(editor);
   expect(await prepareOverlayNotificationReply(source, open, () => true)).toBe("conflict"); expect(document.querySelector("textarea")?.value).toBe("editing text");
-  document.body.innerHTML = ""; useComposerDraftStore.getState().beginSend(key);
+  editor.remove(); useComposerDraftStore.getState().beginSend(key);
   expect(await prepareOverlayNotificationReply(source, open, () => true)).toBe("conflict"); expect(h.markRead).not.toHaveBeenCalled();
 });
 it("keeps a draft changed during source fetch instead of clearing or retargeting it", async () => {
