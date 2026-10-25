@@ -86,7 +86,7 @@ export async function createMicrophonePipeline(
         const active = candidate === "webrtc" && !browserSuppressionEnabled() ? "none" : candidate;
         report({ requestedEngine: requested, activeEngine: active, phase: "fallback",
           sampleRate: output.getSettings().sampleRate ?? 0, gateAvailable: false, gateEnabled: false, gainAvailable: false,
-          error: active !== candidate ? browserSuppressionFailure : message(error) });
+          error: active !== candidate ? `${message(error)}; ${browserSuppressionFailure}` : message(error) });
       });
       return serial;
     };

@@ -210,3 +210,14 @@ describe("shared microphone pipeline", () => {
     expect(gates[0].disconnect).not.toHaveBeenCalled();
   });
 });
+
+it("preserves the gate initialization timeout alongside unverified browser fallback and through later updates",async()=>{
+ vi.useFakeTimers();const context=new Context();context.audioWorklet.addModule.mockReturnValue(new Promise(()=>{}));
+ const clone={enabled:true,stop:vi.fn(),applyConstraints:vi.fn().mockResolvedValue(undefined),getSettings:()=>({sampleRate:48000})};
+ const raw={clone:()=>clone,getSettings:()=>({noiseSuppression:false}),applyConstraints:vi.fn().mockResolvedValue(undefined)} as unknown as MediaStreamTrack;
+ const pending=createMicrophonePipeline(raw,defaults,{audioContext:context as unknown as AudioContext});await vi.advanceTimersByTimeAsync(10001);const p=await pending;pipelines.push(p);
+ expect(p.getStatus()).toMatchObject({phase:"fallback",activeEngine:"none",gateAvailable:false,gateEnabled:false,gainAvailable:false,error:"Microphone gate module timed out; Browser noise suppression could not be verified as enabled"});
+ expect(context.close).toHaveBeenCalledOnce();expect(mocks.build).not.toHaveBeenCalled();
+ await p.update({...defaults,noiseReduction:false});expect(p.getStatus().error).toBe("Microphone gate module timed out");expect(p.getStatus().activeEngine).toBe("none");
+ await p.update(defaults);expect(p.getStatus().error).toBe("Microphone gate module timed out; Browser noise suppression could not be verified as enabled");
+});
