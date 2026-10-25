@@ -1,4 +1,5 @@
 {
+  "backgroundPTTUnavailable": "Arka planda bas-konuş kaydedilemedi. Konuşmadan önce yeniden dene.",
   "voiceTextView": "Metin sohbetini aç",
   "voiceRoomView": "Ses görünümüne dön",
   "clipRecordingStart": "Klip kaydet",

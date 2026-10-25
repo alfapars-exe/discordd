@@ -1,3 +1,4 @@
+import NativePTTStatus from "./NativePTTStatus";
 /**
  * VoiceStateManager — orchestrates the bidirectional sync between voiceStore
  * and the LiveKit Room. Renders inside LiveKitRoom. No visual output.
@@ -95,7 +96,7 @@ function VoiceStateManager() {
 
   // Mic enabled sync — isMuted, isServerMuted, inputMode, and PTT all flow
   // through here to drive localParticipant.setMicrophoneEnabled().
-  useMicSync(localParticipant, initialSyncDone);
+  const ptt=useMicSync(localParticipant, initialSyncDone);
 
   // Output device sync — apply the chosen sinkId to all LiveKit audio
   // elements, including ones created after future (re)connects.
@@ -186,7 +187,7 @@ function VoiceStateManager() {
     };
   }, [room]);
 
-  return <MicrophoneCaptureStatus participant={localParticipant} />;
+  return <><MicrophoneCaptureStatus participant={localParticipant} /><NativePTTStatus unavailable={ptt.nativeUnavailable} retry={ptt.retryNative}/></>;
 }
 
 export default VoiceStateManager;

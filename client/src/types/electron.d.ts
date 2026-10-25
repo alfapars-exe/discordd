@@ -223,6 +223,9 @@ interface ElectronAPI {
   onCaptureAudioError: (cb: (msg: string) => void) => void;
 
   /** Register a key for global PTT detection (works when app is unfocused) */
+  acquirePTTLease: (request:{kind:"guild"|"p2p"|"group";source:string;keyCode:string})=>Promise<string|null>;
+  releasePTTLease: (id:string)=>Promise<void>;
+  onPTTLeaseSignal: (cb:(signal:{leaseId:string;pressed:boolean})=>void)=>(()=>void);
   registerPTTShortcut: (keyCode: string) => Promise<boolean>;
   /** Unregister the global PTT shortcut */
   unregisterPTTShortcut: () => Promise<void>;

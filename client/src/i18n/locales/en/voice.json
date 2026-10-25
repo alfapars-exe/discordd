@@ -1,4 +1,5 @@
 {
+  "backgroundPTTUnavailable": "Global push-to-talk could not be registered. Retry before speaking.",
   "voiceTextView": "Open text chat",
   "voiceRoomView": "Return to voice",
   "clipRecordingStart": "Record clip",

@@ -7,10 +7,9 @@
  * uiohook-napi/electron cannot be loaded that way.
  *
  * Two independent slots, each bound to at most one uiohook native keycode:
- *   - PTT ("ptt-down"/"ptt-up") is momentary and unlatched: every matching
- *     keydown (including OS auto-repeat) emits "ptt-down", every matching
- *     keyup emits "ptt-up" — identical to the pre-router push-to-talk.ts
- *     behavior.
+ *   - PTT ("ptt-down"/"ptt-up") is latched per physical press. A changed
+ *     owner while held requires release of the old bound key before rearming.
+ *     Only that bound held key is retained, never a keyboard history.
  *   - Mute ("mute-toggle") is latched: OS auto-repeat on a held key must not
  *     toggle the mic on every repeat, so only the FIRST keydown of a
  *     physical press emits a signal. The latch clears on a matching keyup,
@@ -28,11 +27,16 @@ export type Signal = "ptt-down" | "ptt-up" | "mute-toggle";
 
 let pttKeycode: number | null = null;
 let muteKeycode: number | null = null;
+let pttHeld = false;
+let pttBlockedHeld = false;
+let releaseKey: number | null = null;
 /** True while the currently-bound mute key is physically held down. */
 let muteLatched = false;
 
 /** Bind (or clear, with null) the push-to-talk slot. */
-export function setPtt(code: number | null): void {
+export function setPtt(code: number | null, newOwner = false): void {
+  if ((pttHeld || pttBlockedHeld) && (newOwner || code !== pttKeycode)) releaseKey = pttKeycode;
+  if (newOwner || code !== pttKeycode) {pttHeld = false;pttBlockedHeld=false;}
   pttKeycode = code;
 }
 
@@ -49,13 +53,15 @@ export function setMute(code: number | null): void {
 
 /** True while either slot has a bound keycode — the hook only needs to run then. */
 export function isActive(): boolean {
-  return pttKeycode !== null || muteKeycode !== null;
+  return pttKeycode !== null || muteKeycode !== null || releaseKey !== null;
 }
 
 /** Routes a native keydown. Returns every signal this event produces (0-2). */
 export function keyDown(keycode: number): Signal[] {
   const signals: Signal[] = [];
-  if (pttKeycode !== null && keycode === pttKeycode) {
+  if (pttKeycode !== null && keycode === pttKeycode && releaseKey !== null) pttBlockedHeld=true;
+  if (pttKeycode !== null && keycode === pttKeycode && !pttHeld && !pttBlockedHeld && releaseKey === null) {
+    pttHeld = true;
     signals.push("ptt-down");
   }
   if (muteKeycode !== null && keycode === muteKeycode && !muteLatched) {
@@ -68,7 +74,10 @@ export function keyDown(keycode: number): Signal[] {
 /** Routes a native keyup. Returns every signal this event produces (0-1). */
 export function keyUp(keycode: number): Signal[] {
   const signals: Signal[] = [];
-  if (pttKeycode !== null && keycode === pttKeycode) {
+  if (releaseKey === keycode) releaseKey = null;
+  if(pttKeycode===keycode)pttBlockedHeld=false;
+  if (pttKeycode !== null && keycode === pttKeycode && pttHeld) {
+    pttHeld = false;
     signals.push("ptt-up");
   }
   if (muteKeycode !== null && keycode === muteKeycode) {

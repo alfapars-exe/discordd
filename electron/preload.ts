@@ -245,6 +245,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // ─── Global PTT (Push-to-Talk) Shortcut ───
 
+  acquirePTTLease: (request: {kind:"guild"|"p2p"|"group";source:string;keyCode:string}):Promise<string|null> => ipcRenderer.invoke("acquire-ptt-lease",request),
+  releasePTTLease: (id:string):Promise<void> => ipcRenderer.invoke("release-ptt-lease",id),
+  onPTTLeaseSignal: (cb:(signal:{leaseId:string;pressed:boolean})=>void):(()=>void) => {
+    const listener=(_event:Electron.IpcRendererEvent,signal:{leaseId:string;pressed:boolean})=>cb(signal);
+    ipcRenderer.on("ptt-lease-signal",listener);
+    return ()=>ipcRenderer.removeListener("ptt-lease-signal",listener);
+  },
+
   /** Register a key for global PTT detection (works even when app is unfocused) */
   registerPTTShortcut: (keyCode: string): Promise<boolean> =>
     ipcRenderer.invoke("register-ptt-shortcut", keyCode),

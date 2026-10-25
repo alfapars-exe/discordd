@@ -408,3 +408,17 @@ it("never commits a candidate to localStream when raw ends between sender replac
  const next=track("commit-candidate"),nextOut=track("commit-candidate-output");mocks.capture.mockResolvedValueOnce(new Stream([next]));mocks.createPipeline.mockResolvedValueOnce(pipeline(nextOut));const sender=pc.getSenders()[0];sender.replaceTrack.mockImplementationOnce((output:MediaStreamTrack)=>Promise.resolve().then(()=>{sender.track=output;queueMicrotask(()=>queueMicrotask(()=>next.end()));}));
  changeSettings({inputDevice:"commit-race-device"});await vi.waitFor(()=>expect(useP2PCallStore.getState().microphoneFailure).not.toBeNull());expect(nextOut.enabled).toBe(false);expect(useP2PCallStore.getState().localStream?.getAudioTracks()).toEqual([oldOut]);
 });
+
+it.each(["ended","auth","call"])("accepted private PTT owns native background signals and retires exact leases across settings/%s",async(reason)=>{
+ const listeners=new Set<(signal:{leaseId:string;pressed:boolean})=>void>();let id=0;
+ const acquire=vi.fn(async()=>`lease${++id}`),release=vi.fn(async()=>{});
+ window.electronAPI={acquirePTTLease:acquire,releasePTTLease:release,onPTTLeaseSignal:(cb:(signal:{leaseId:string;pressed:boolean})=>void)=>{listeners.add(cb);return()=>{listeners.delete(cb);};}}as unknown as Window["electronAPI"];
+ try{
+  const source=track("raw"),output=track("output");mocks.capture.mockResolvedValue(new Stream([source]));mocks.createPipeline.mockResolvedValue(pipeline(output));peer();changeSettings({inputMode:"push_to_talk",pttKey:"Space"});
+  Object.defineProperty(document,"hidden",{configurable:true,value:true});vi.spyOn(document,"hasFocus").mockReturnValue(false);
+  await useP2PCallStore.getState().startWebRTC(true);await Promise.resolve();expect(output.enabled).toBe(false);expect(acquire).toHaveBeenCalledWith(expect.objectContaining({kind:"p2p",keyCode:"Space"}));
+  const old=[...listeners][0];old({leaseId:"lease1",pressed:true});expect(output.enabled).toBe(true);window.dispatchEvent(new Event("blur"));document.dispatchEvent(new Event("visibilitychange"));expect(output.enabled).toBe(true);
+  changeSettings({pttKey:"KeyV"});await Promise.resolve();expect(output.enabled).toBe(false);expect(release).toHaveBeenCalledWith("lease1");old({leaseId:"lease1",pressed:true});expect(output.enabled).toBe(false);
+  for(const listener of listeners)listener({leaseId:"lease2",pressed:true});expect(output.enabled).toBe(true);if(reason==="ended")source.end();else if(reason==="auth")clearTokens();else useP2PCallStore.getState().cleanup();expect(output.enabled).toBe(false);expect(listeners.size).toBe(0);expect(release).toHaveBeenCalledWith("lease2");
+ }finally{window.electronAPI=undefined;}
+});

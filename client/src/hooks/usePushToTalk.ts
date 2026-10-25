@@ -5,8 +5,8 @@
  *
  * Electron: Registers a global shortcut via uIOhook (native keyboard hook)
  * so PTT works even when the app window is not focused (e.g. in a game).
- * Falls back to document listeners when the window IS focused to avoid
- * double-firing and to respect the text input guard.
+ * Uses an exact source lease; the bridge respects focused text inputs
+ * without releasing a valid hold merely because the app loses focus.
  *
  * Browser: Document-level keydown/keyup listeners (only works when focused).
  *
@@ -18,65 +18,51 @@
  * - Blur guard: releases mic on window blur (alt-tab)
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {getAuthSessionSnapshot}from "../api/authSessionEvents";
+import type {LocalParticipant}from "livekit-client";
+import {bindNativePTT}from "../audio/nativePTT";
+import {captureAdmissionCurrent,subscribeCaptureAdmission}from "../audio/microphoneAdmission";
 import { useVoiceStore } from "../stores/voiceStore";
 import { isElectron } from "../utils/constants";
 import { useShortcutCaptureStore } from "../stores/shortcutCaptureStore";
 
 type UsePushToTalkParams = {
   setMicEnabled: (enabled: boolean) => void;
+  participant?:LocalParticipant;
 };
 
-export function usePushToTalk({ setMicEnabled }: UsePushToTalkParams): void {
+export function usePushToTalk({ setMicEnabled,participant }: UsePushToTalkParams) {
   const inputMode = useVoiceStore((s) => s.inputMode);
   const pttKey = useVoiceStore((s) => s.pttKey);
   const currentVoiceChannelId = useVoiceStore((s) => s.currentVoiceChannelId);
   const capturing = useShortcutCaptureStore((state) => state.active);
 
+  const [nativeFailure,setNativeFailure]=useState<{source:string;channel:string;auth:string}|null>(null);
+  const [nativeRetry,setNativeRetry]=useState(0);
+  const binding=useRef<{source:string;channel:string;auth:string}|null>(null);
+  const retryNative=()=>{
+    const current=binding.current;
+    if(!nativeFailure||current?.source!==nativeFailure.source||current.channel!==useVoiceStore.getState().currentVoiceChannelId||current.auth!==JSON.stringify(getAuthSessionSnapshot())||useShortcutCaptureStore.getState().active||participant&&!captureAdmissionCurrent(participant))return;
+    setNativeFailure(null);setNativeRetry(value=>value+1);
+  };
+
   // Ref — no re-render needed, side-effect only
   const isPressedRef = useRef(false);
 
-  // ─── Electron: global PTT via uIOhook IPC ───
-  useEffect(() => {
-    if (!isElectron()) return;
-    if (inputMode !== "push_to_talk" || !currentVoiceChannelId || capturing) return;
-
-    const api = window.electronAPI!;
-    let disposed = false;
-
-    // Remove stale listeners from previous sessions
-    api.removePTTListeners();
-
-    api.onPTTGlobalDown(() => {
-      if (disposed || useShortcutCaptureStore.getState().active) return;
-      if (isPressedRef.current) return;
-      const { isMuted, isServerMuted } = useVoiceStore.getState();
-      if (isMuted || isServerMuted) return;
-      isPressedRef.current = true;
-      setMicEnabled(true);
-    });
-
-    api.onPTTGlobalUp(() => {
-      if (disposed) return;
-      if (!isPressedRef.current) return;
-      isPressedRef.current = false;
-      setMicEnabled(false);
-    });
-
-    // Register the key with the main process
-    api.registerPTTShortcut(pttKey);
-
-    return () => {
-      disposed = true;
-      api.unregisterPTTShortcut();
-      api.removePTTListeners();
-
-      if (isPressedRef.current) {
-        isPressedRef.current = false;
-        setMicEnabled(false);
-      }
-    };
-  }, [inputMode, pttKey, currentVoiceChannelId, setMicEnabled, capturing]);
+  // Exact native source lease; cleanup cannot erase another call's listeners.
+  useLayoutEffect(() => {
+    if(!isElectron()||inputMode!=="push_to_talk"||!currentVoiceChannelId||capturing)return;
+    const source=crypto.randomUUID(),channel=currentVoiceChannelId,auth=JSON.stringify(getAuthSessionSnapshot());
+    const scope={source,channel,auth};binding.current=scope;
+    const current=()=>binding.current===scope&&JSON.stringify(getAuthSessionSnapshot())===auth&&useVoiceStore.getState().currentVoiceChannelId===channel&&(!participant||captureAdmissionCurrent(participant));
+    const stop=bindNativePTT({kind:"guild",source,keyCode:pttKey,current,onUnavailable:()=>{if(current())setNativeFailure(scope);},onReady:()=>{if(current())setNativeFailure(null);},onPressed:pressed=>{
+      const state=useVoiceStore.getState();const enabled=pressed&&current()&&!state.isMuted&&!state.isServerMuted&&!state.isDeafened;
+      isPressedRef.current=enabled;setMicEnabled(enabled);
+    }});
+    const admission=participant?subscribeCaptureAdmission(participant,stop):()=>{};
+    return()=>{if(binding.current===scope)binding.current=null;stop();admission();if(isPressedRef.current){isPressedRef.current=false;setMicEnabled(false);}};
+  },[inputMode,pttKey,currentVoiceChannelId,setMicEnabled,capturing,participant,nativeRetry]);
 
   // ─── Browser: document-level keydown/keyup (focus required) ───
   useEffect(() => {
@@ -136,4 +122,5 @@ export function usePushToTalk({ setMicEnabled }: UsePushToTalkParams): void {
       }
     };
   }, [inputMode, pttKey, currentVoiceChannelId, setMicEnabled, capturing]);
+  return {nativeUnavailable:!!nativeFailure&&nativeFailure.channel===currentVoiceChannelId&&nativeFailure.auth===JSON.stringify(getAuthSessionSnapshot())&&inputMode==="push_to_talk",retryNative};
 }

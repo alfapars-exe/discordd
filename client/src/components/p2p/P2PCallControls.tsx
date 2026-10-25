@@ -1,3 +1,4 @@
+import {nativePTTAvailable}from "../../audio/nativePTT";
 /**
  * P2PCallControls — Mic, camera, screen share, and end call buttons.
  *
@@ -102,7 +103,7 @@ function P2PCallControls({ minimal = false }: P2PCallControlsProps) {
         <button type="button" className="btn-secondary" style={{width:"auto",height:"auto",minHeight:44,padding:"8px 12px"}} disabled={retrying} onClick={()=>void retryMicrophone(activeCall)}>{tv("microphoneCaptureRetry")}</button>
         {inputDevice && <button type="button" className="btn-secondary" style={{width:"auto",height:"auto",minHeight:44,padding:"8px 12px"}} disabled={retrying} onClick={()=>void retryMicrophone(activeCall,true)}>{tv("microphoneUseDefault")}</button>}
       </div>}
-      {!minimal && inputMode==="push_to_talk" && <p role="status" style={{flexBasis:"100%",order:2}}>{tv("p2pFocusedPTT")}</p>}
+      {!minimal && inputMode==="push_to_talk" && !nativePTTAvailable() && <p role="status" style={{flexBasis:"100%",order:2}}>{tv("p2pFocusedPTT")}</p>}
       <button
         className="p2p-ctrl-btn end-call"
         onClick={handleEnd}

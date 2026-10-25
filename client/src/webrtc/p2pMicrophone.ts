@@ -1,3 +1,4 @@
+import {bindNativePTT,nativePTTAvailable}from "../audio/nativePTT";
 import { createMicrophonePipeline, type MicrophonePipeline } from "../audio/microphonePipeline";
 import { captureConstraints, microphoneSettings, settingsEqual, type MicrophoneSettings } from "../audio/microphoneSettings";
 import { registerMicrophonePipeline } from "../audio/pipelineStatus";
@@ -40,6 +41,7 @@ export class P2PMicrophoneSession {
   private commits: Promise<void> = Promise.resolve();
   private pressed = false;
   private pressedCode: string | null = null;
+  private refreshNativePTT:(()=>void)|null=null;
   private controlsCleanup: (() => void) | null = null;
   private authCleanup: () => void;
   private scopeCleanup?: () => void;
@@ -70,7 +72,7 @@ export class P2PMicrophoneSession {
   }
   private fail(error: unknown) {
     if (!this.current()) return;
-    this.failed = true; this.retrying = false; this.pressed = false; this.pressedCode = null;
+    this.failed = true;this.refreshNativePTT?.(); this.retrying = false; this.pressed = false; this.pressedCode = null;
     ++this.generation; this.controller.abort(); this.controller = new AbortController(); this.pendingKey = null;
     // Stop hardware and disable every possible sender output before notifying UI.
     if (this.resource) this.release(this.resource);
@@ -129,6 +131,7 @@ export class P2PMicrophoneSession {
     this.unsubscribe = useVoiceStore.subscribe(() => {
       const nextPTT = JSON.stringify([useVoiceStore.getState().inputMode, useVoiceStore.getState().pttKey]);
       if (nextPTT !== ptt) { this.pressed = false; this.pressedCode = null; ptt = nextPTT; }
+      this.refreshNativePTT?.();
       this.syncMute();
       const next = settingsNow();
       if (!settingsEqual(this.latest, next)) this.reconcile(next);
@@ -136,10 +139,18 @@ export class P2PMicrophoneSession {
     this.reconcile(settingsNow());
   }
   private installControls() {
-    const release = () => { this.pressed = false; this.pressedCode = null; this.syncMute(); };
+    let nativeStop=()=>{},nativeConfig="",nativeWorks=false;
+    const source=crypto.randomUUID();
+    this.refreshNativePTT=()=>{
+      const voice=useVoiceStore.getState(),desired=this.current()&&!this.failed&&nativePTTAvailable()&&voice.inputMode==="push_to_talk"&&!useShortcutCaptureStore.getState().active;
+      const config=desired?voice.pttKey:"";if(config===nativeConfig)return;
+      nativeStop();nativeConfig=config;nativeWorks=!!config;this.pressed=false;this.pressedCode=null;this.syncMute();
+      if(config)nativeStop=bindNativePTT({kind:"p2p",source,keyCode:config,current:()=>this.current()&&!this.failed,onPressed:pressed=>{this.pressed=pressed;this.pressedCode=pressed?config:null;this.syncMute();},onUnavailable:()=>{if(this.current())this.fail(new DOMException("Global push-to-talk unavailable","NotSupportedError"));}});
+    };
+    const release = () => { if(nativeWorks)return;this.pressed = false; this.pressedCode = null; this.syncMute(); };
     const down = (event: KeyboardEvent) => {
       const voice = useVoiceStore.getState();
-      if (!this.current() || this.failed || voice.inputMode !== "push_to_talk" || event.code !== voice.pttKey || event.repeat
+      if (nativeWorks || !this.current() || this.failed || voice.inputMode !== "push_to_talk" || event.code !== voice.pttKey || event.repeat
         || event.isComposing || document.hidden || !document.hasFocus() || editable(event.target) || editable(document.activeElement) || useShortcutCaptureStore.getState().active) return;
       this.pressed = true; this.pressedCode = event.code; this.syncMute();
     };
@@ -149,8 +160,9 @@ export class P2PMicrophoneSession {
     const composition = () => release();
     document.addEventListener("keydown", down); document.addEventListener("keyup", up); window.addEventListener("blur", release);
     document.addEventListener("visibilitychange", visibility); document.addEventListener("focusin", focus); document.addEventListener("compositionstart", composition);
-    const capture = useShortcutCaptureStore.subscribe(state => { if (state.active) release(); });
-    this.controlsCleanup = () => { capture(); document.removeEventListener("keydown", down); document.removeEventListener("keyup", up); window.removeEventListener("blur", release);
+    const capture = useShortcutCaptureStore.subscribe(state=>{if(state.active)release();this.refreshNativePTT?.();});
+    this.refreshNativePTT();
+    this.controlsCleanup = () => {nativeStop();this.refreshNativePTT=null; capture(); document.removeEventListener("keydown", down); document.removeEventListener("keyup", up); window.removeEventListener("blur", release);
       document.removeEventListener("visibilitychange", visibility); document.removeEventListener("focusin", focus); document.removeEventListener("compositionstart", composition); };
   }
   private reconcile(next: MicrophoneSettings) {
@@ -194,7 +206,7 @@ export class P2PMicrophoneSession {
         this.unregister?.(); this.unregister = registerMicrophonePipeline(resource.pipeline, "call"); committed = true;
       };
       this.commits = this.commits.catch(() => {}).then(commit); await this.commits;
-      if (committed) this.reconcile(settingsNow());
+      if (committed) {this.refreshNativePTT?.();this.reconcile(settingsNow());}
       return committed;
     } catch (error) {
       if (this.current() && id === this.generation && !signal.aborted) this.fail(error);

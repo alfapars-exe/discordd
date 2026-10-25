@@ -1,3 +1,4 @@
+import {registerPTTLeaseHandlers}from "./ptt-ipc";
 /**
  * electron/ipc-handlers.ts — Centralized IPC channel registration.
  *
@@ -73,7 +74,7 @@ import {
   toPublicCredentials,
 } from "./credentials";
 import { loginWithSavedCredentials } from "./credential-login";
-import { registerMuteHotkey, registerPTT, unregisterMuteHotkey, unregisterPTT } from "./push-to-talk";
+import { acquirePTTLease, releasePTTLease, retirePTTSender, registerMuteHotkey, registerPTT, unregisterMuteHotkey, unregisterPTT } from "./push-to-talk";
 import { getSerializedSources } from "./screen-picker";
 import { DEFAULT_APP_SETTINGS, getSettings, setSetting } from "./settings";
 import { setTrayTooltip } from "./tray";
@@ -504,15 +505,17 @@ export function registerIpcHandlers(): void {
   );
   ipcMain.handle("clear-credentials", () => clearCredentials());
 
+  registerPTTLeaseHandlers(ipcMain,assertTrustedMainWindowSender,{acquire:acquirePTTLease,release:releasePTTLease,retire:retirePTTSender});
   // ─── Push-to-Talk shortcuts (uIOhook global keyboard) ────────────
   ipcMain.handle("register-ptt-shortcut", (_e, keyCode: unknown) => {
+    assertTrustedMainWindowSender(_e);
     // Audit 2026-05-27: keyCode is mapped against an allowlist inside
     // registerPTT(), but bound the string here defensively to avoid
     // pathological inputs reaching the keymap lookup.
     assertString(keyCode, "PTT keyCode", MAX_PTT_KEYCODE_LEN);
     return registerPTT(keyCode);
   });
-  ipcMain.handle("unregister-ptt-shortcut", () => unregisterPTT());
+  ipcMain.handle("unregister-ptt-shortcut", (event) => {assertTrustedMainWindowSender(event);unregisterPTT();});
 
   // ─── Global mute-toggle hotkey (uIOhook, shares the PTT hook) ────
   ipcMain.handle("register-mute-hotkey-shortcut", (_e, keyCode: unknown) => {

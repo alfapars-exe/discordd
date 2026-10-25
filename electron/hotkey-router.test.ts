@@ -16,6 +16,7 @@ import assert from "node:assert/strict";
 import { isActive, keyDown, keyUp, setMute, setPtt } from "./hotkey-router.js";
 
 function reset() {
+  for(const code of [10,20,30,99])keyUp(code);
   setPtt(null);
   setMute(null);
 }
@@ -37,12 +38,12 @@ test("isActive is a refcount across both slots — true until BOTH are cleared",
   assert.equal(isActive(), false);
 });
 
-test("PTT emits ptt-down on every keydown, including OS auto-repeat — no latch", () => {
+test("PTT emits only one down per physical press", () => {
   reset();
   setPtt(10);
   assert.deepEqual(keyDown(10), ["ptt-down"]);
-  assert.deepEqual(keyDown(10), ["ptt-down"]);
-  assert.deepEqual(keyDown(10), ["ptt-down"]);
+  assert.deepEqual(keyDown(10), []);
+  assert.deepEqual(keyDown(10), []);
   assert.deepEqual(keyUp(10), ["ptt-up"]);
 });
 
@@ -109,4 +110,17 @@ test("unrelated keycodes produce no signals when both slots are bound", () => {
   setMute(20);
   assert.deepEqual(keyDown(999), []);
   assert.deepEqual(keyUp(999), []);
+});
+
+test("owner handoff while held requires release before replacement can speak",()=>{
+ reset();setPtt(10);assert.deepEqual(keyDown(10),["ptt-down"]);
+ setPtt(null,true);assert.equal(isActive(),true);setPtt(10,true);
+ assert.deepEqual(keyDown(10),[]);assert.deepEqual(keyUp(10),[]);
+ assert.deepEqual(keyDown(10),["ptt-down"]);assert.deepEqual(keyUp(10),["ptt-up"]);
+});
+test("different-key handoff cannot open while prior bound key remains held",()=>{
+ reset();setPtt(10);keyDown(10);setPtt(20,true);
+ assert.deepEqual(keyDown(20),[]);assert.deepEqual(keyUp(10),[]);
+ assert.deepEqual(keyDown(20),[]);assert.deepEqual(keyUp(20),[]);
+ assert.deepEqual(keyDown(20),["ptt-down"]);keyUp(20);
 });
