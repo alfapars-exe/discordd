@@ -61,7 +61,8 @@ var ytDlpPath = sync.OnceValues(func() (string, error) {
 
 // extractTracks — call yt-dlp to resolve a URL into one or more tracks.
 //
-// Single video URL → one track. Playlist URL → N tracks (one per video).
+// Video URL (including a watch link with radio/playlist parameters) → one
+// track. Explicit playlist URL → N tracks (one per video).
 // Each track gets the same RequestedBy fields. Metadata fetched here is
 // cheap (no audio extraction, no download); the actual stream URL is
 // re-extracted at play time via the same binary because YouTube's signed
@@ -70,6 +71,8 @@ var ytDlpPath = sync.OnceValues(func() (string, error) {
 // yt-dlp invocation:
 //
 //	--flat-playlist     emit one entry per video without descending into formats
+//	--no-playlist       select the video when a link also includes a playlist;
+//	                    explicit playlist URLs still expand normally
 //	--print            only the metadata fields needed for each track
 //	--no-warnings       suppress noisy warnings on private/age-restricted videos
 //	--ignore-errors     tolerate single-video failures inside a playlist
@@ -112,7 +115,7 @@ func extractTracks(parent context.Context, urlStr, requesterID, requesterName st
 	// A cancelled request must not enqueue partially extracted tracks after
 	// the caller has left. Keep deadlines classifiable as network failures.
 	if ctx.Err() != nil {
-		return nil, fmt.Errorf("music extraction interrupted: %w", ctx.Err())
+		return nil, musicMetadataInterruptedError("extraction", ctx.Err())
 	}
 	if stdout.overflow {
 		return nil, errMusicMetadataTooLarge
@@ -133,6 +136,17 @@ func extractTracks(parent context.Context, urlStr, requesterID, requesterName st
 		return nil, &trackPlaybackError{Reason: reasonUnavailable, err: errors.New("no playable YouTube videos found")}
 	}
 	return out, nil
+}
+
+// Metadata deadlines are provider/network failures, not unclassified HTTP
+// 500s. Keep cancellation distinct so a caller leaving does not become a
+// misleading provider failure, and retain the cause for errors.Is checks.
+func musicMetadataInterruptedError(operation string, cause error) error {
+	err := fmt.Errorf("music %s interrupted: %w", operation, cause)
+	if errors.Is(cause, context.DeadlineExceeded) {
+		return &trackPlaybackError{Reason: reasonNetwork, err: err}
+	}
+	return err
 }
 
 func parseMusicMetadata(r io.Reader, requesterID, requesterName string) ([]models.MusicTrack, error) {
@@ -165,6 +179,11 @@ func extractTracksArgs(urlStr string) []string {
 		"--ignore-config",
 		"--no-plugin-dirs",
 		"--no-remote-components",
+		// YouTube's Share/current-address links often include list=RD... and
+		// start_radio=1. Resolve the requested video, not its generated radio
+		// queue, before connecting the bot. yt-dlp still expands /playlist
+		// URLs because they do not identify a particular video.
+		"--no-playlist",
 		"--flat-playlist",
 		"--lazy-playlist",
 		"--playlist-end", strconv.Itoa(maxQueueLen + 1),
@@ -201,7 +220,7 @@ func SearchMusicTracks(parent context.Context, query string) ([]models.MusicTrac
 	cmd.WaitDelay = subprocessWaitDelay
 	runErr := cmd.Run()
 	if ctx.Err() != nil {
-		return nil, fmt.Errorf("music search interrupted: %w", ctx.Err())
+		return nil, musicMetadataInterruptedError("search", ctx.Err())
 	}
 	if stdout.overflow {
 		return nil, errMusicMetadataTooLarge
