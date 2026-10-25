@@ -70,7 +70,12 @@ describe("owner-bound group manual mute commands",()=>{
  });
  it("preserves fresh guild/P2P precedence instead of routing those commands into a blocked group",()=>{
   const group=binding("group");bindGroupCallAudioControl(group);useVoiceStore.setState({currentVoiceChannelId:"guild"});const guild=renderVoice();act(()=>guild.result.current.toggleMute());expect(group.toggle).not.toHaveBeenCalled();expect(guild.sendVoiceStateUpdate).toHaveBeenCalledWith({is_muted:true,is_deafened:false});guild.unmount();
-  useVoiceStore.setState({currentVoiceChannelId:null,isMuted:false});useP2PCallStore.setState({activeCall:{id:"private"}as NonNullable<ReturnType<typeof useP2PCallStore.getState>["activeCall"]>});const privateCall=renderVoice();act(()=>privateCall.result.current.toggleMute());expect(group.toggle).not.toHaveBeenCalled();privateCall.unmount();
+  useVoiceStore.setState({currentVoiceChannelId:null,isMuted:false});useP2PCallStore.setState({activeCall:{id:"private",status:"active"}as NonNullable<ReturnType<typeof useP2PCallStore.getState>["activeCall"]>});const privateCall=renderVoice();act(()=>privateCall.result.current.toggleMute());expect(group.toggle).not.toHaveBeenCalled();privateCall.unmount();
+ });
+
+ it("keeps the group shortcut owner while ringing and rejects its retained command once acceptance owns capture",()=>{
+  const group=binding("group");bindGroupCallAudioControl(group);useP2PCallStore.setState({activeCall:{id:"ring",status:"ringing"}as NonNullable<ReturnType<typeof useP2PCallStore.getState>["activeCall"]>});const view=renderVoice();const beforeAccept=view.result.current.toggleMute;act(()=>beforeAccept());expect(group.toggle).toHaveBeenCalledOnce();expect(view.sendVoiceStateUpdate).not.toHaveBeenCalled();
+  act(()=>useP2PCallStore.setState({activeCall:{id:"ring",status:"active"}as NonNullable<ReturnType<typeof useP2PCallStore.getState>["activeCall"]>}));act(()=>beforeAccept());expect(group.toggle).toHaveBeenCalledOnce();expect(view.sendVoiceStateUpdate).not.toHaveBeenCalled();view.unmount();
  });
 
 });

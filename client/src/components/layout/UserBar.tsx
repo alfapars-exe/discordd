@@ -3,6 +3,7 @@
  * Shows mic/deafen/screen/disconnect when in voice, status picker on avatar click.
  */
 
+import {ownsP2PCapture}from "../../audio/p2pCaptureOwner";
 import {useMicrophoneCaptureViewStore}from "../../stores/microphoneCaptureViewStore";
 import { useGroupCallAudioControlStore, toggleGroupCallMicrophone } from "../../stores/groupCallAudioControlStore";
 import { useState, useRef, useEffect, lazy, Suspense } from "react";
@@ -49,12 +50,13 @@ function UserBar({
   const currentVoiceChannelId = useVoiceStore((s) => s.currentVoiceChannelId);
   const currentVoiceServerId = useVoiceStore((s) => s.currentVoiceServerId);
   const activeCall = useP2PCallStore((s) => s.activeCall);
+  const p2pCapture = ownsP2PCapture(activeCall);
   const openTab = useUIStore((s) => s.openTab);
   const isMuted = useVoiceStore((s) => s.isMuted);
   const isDeafened = useVoiceStore((s) => s.isDeafened);
   const muteBeforeDeafen = useVoiceStore((s) => s.muteBeforeDeafen);
   const groupControl = useGroupCallAudioControlStore(state => state.control);
-  const groupOnly = !!groupControl && !currentVoiceChannelId && !activeCall;
+  const groupOnly = !!groupControl && !currentVoiceChannelId && !p2pCapture;
   const captureJoinGeneration = useVoiceStore(state => state._joinGeneration ?? 0);
   const captureView = useMicrophoneCaptureViewStore(state => state.view);
   const guildCaptureFailed = captureView?.channelId === currentVoiceChannelId && captureView.joinGeneration === captureJoinGeneration && captureView.failed;
@@ -162,7 +164,7 @@ function UserBar({
   const peerName = activeCall ? (activeCall.caller_id === user.id
     ? activeCall.receiver_display_name || activeCall.receiver_username
     : activeCall.caller_display_name || activeCall.caller_username) : "";
-  const p2pOnly = UI_SHELL_V2 && !!activeCall && !isInVoice;
+  const p2pOnly = UI_SHELL_V2 && p2pCapture && !isInVoice;
 
   function returnToVoice() {
     if (!currentVoiceChannelId || !currentVoiceServerId || !voiceServer) return false;

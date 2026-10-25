@@ -1,0 +1,51 @@
+{
+  "date": "2026-10-25",
+  "scope": "Accepted P2P capture ownership; unaccepted ringing remains signaling only",
+  "owned_paths": [
+    "client/src/audio/p2pCaptureOwner.ts",
+    "client/src/audio/privateCallState.ts",
+    "client/src/components/dm/GroupDMCall.tsx",
+    "client/src/components/layout/UserBar.tsx",
+    "client/src/hooks/useVoice.ts",
+    "client/src/hooks/useVoice.groupAudio.test.ts",
+    "client/src/components/layout/UserBar.p2pRinging.test.tsx"
+  ],
+  "source_sha256": {
+    "client/src/audio/p2pCaptureOwner.ts": "e548dddcda65c3f27056601fa2f63b218caed5804a4b988e0ff0cd526bbfe38b",
+    "client/src/audio/privateCallState.ts": "83395bfadcf18e1f08fd384c4f3dbf7a988927ef9e136f8d9534cdab129165a6",
+    "client/src/components/dm/GroupDMCall.tsx": "f8f96a89ca50f3f3807a14cc889a35f4c3de1edd1b056cc20f8ef0206508d2f4",
+    "client/src/components/layout/UserBar.tsx": "7bc5b1e7f949316f4ffd5ea63d95f13b78ff71d78c833a01ee87af7657723654",
+    "client/src/hooks/useVoice.ts": "b26360584958a8ff582dfc649d7e703cfbe10c7b13ee18e138670a8b8cc08d08",
+    "client/src/hooks/useVoice.groupAudio.test.ts": "f68c0e21a13b666f18989b7fc602d0f34a99ad225b445c7aba2acb950408eca9",
+    "client/src/components/layout/UserBar.p2pRinging.test.tsx": "e849517b64a55835d16153403b10af7938ffeba7280baa006cdd76d9a96c100d"
+  },
+  "behavior": [
+    "One actual-status predicate is shared by group capture conflict, group component selector, UserBar control precedence and useVoice render/event routing.",
+    "Incoming and outgoing ringing keep existing answer/decline UI and group microphone ownership. Accepted active calls keep existing precedence and latch group microphone off until explicit user unmute after completion.",
+    "Retained group shortcut callbacks cannot toggle an accepted P2P call or fall through to another capture owner."
+  ],
+  "verification": [
+    {
+      "command": "npx vitest run src/components/layout/UserBar.p2pRinging.test.tsx src/components/layout/UserBar.groupAudio.test.tsx src/hooks/useVoice.groupAudio.test.ts src/components/dm/GroupDMCall.test.tsx --reporter=dot",
+      "cwd": "client",
+      "result": "PASS: 3 discovered files, 14 tests, 2.68s. GroupDMCall.test.tsx did not exist and was not a discovered test file."
+    },
+    {
+      "command": "npx tsc -b",
+      "cwd": "client",
+      "result": "PASS exit 0"
+    },
+    {
+      "command": "npx eslint src/audio/p2pCaptureOwner.ts src/audio/privateCallState.ts src/components/dm/GroupDMCall.tsx src/components/layout/UserBar.tsx src/hooks/useVoice.ts src/hooks/useVoice.groupAudio.test.ts src/components/layout/UserBar.p2pRinging.test.tsx",
+      "cwd": "client",
+      "result": "PASS exit 0"
+    }
+  ],
+  "test_limits": [
+    "Tests use actual P2P signaling state and orchestration with startWebRTC mocked; no real peer transport, physical capture, Windows background PTT or two-client acceptance is claimed.",
+    "Other agent P2P implementation was concurrently dirty; these checks validate the observed combined worktree, not an immutable release build."
+  ],
+  "remaining": [
+    "Windows background PTT scoped lease implementation and runtime acceptance are separate pending work."
+  ]
+}

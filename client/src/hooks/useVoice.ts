@@ -5,6 +5,7 @@
  * Orchestration layer — neither store handles both concerns alone.
  */
 
+import {ownsP2PCapture}from "../audio/p2pCaptureOwner";
 import { useCallback } from "react";
 import { useVoiceStore } from "../stores/voiceStore";
 import { useP2PCallStore } from "../stores/p2pCallStore";
@@ -35,7 +36,7 @@ export function useVoice({
 }: UseVoiceParams): VoiceActions {
   const groupNonce = useGroupCallAudioControlStore(state => state.control?.nonce ?? null);
   const guildChannel = useVoiceStore(state => state.currentVoiceChannelId);
-  const p2pCall = useP2PCallStore(state => state.activeCall?.id ?? null);
+  const p2pCall = useP2PCallStore(state => ownsP2PCapture(state.activeCall) ? state.activeCall?.id ?? null : null);
   const groupOnlyNonce = !guildChannel && !p2pCall ? groupNonce : null;
   const joinVoiceChannel = useVoiceStore((s) => s.joinVoiceChannel);
   const leaveVoiceChannel = useVoiceStore((s) => s.leaveVoiceChannel);
@@ -111,7 +112,7 @@ export function useVoice({
 
   const toggleMute = useCallback(() => {
     const activeGroup = useGroupCallAudioControlStore.getState().control;
-    const guild = useVoiceStore.getState().currentVoiceChannelId, privateCall = useP2PCallStore.getState().activeCall;
+    const guild = useVoiceStore.getState().currentVoiceChannelId, privateCall = ownsP2PCapture(useP2PCallStore.getState().activeCall);
     if (groupOnlyNonce) {
       if (!guild && !privateCall && activeGroup?.nonce === groupOnlyNonce) toggleGroupCallMicrophone(groupOnlyNonce);
       return; // A retained group command must never fall through to another call.

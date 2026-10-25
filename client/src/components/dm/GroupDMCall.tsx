@@ -1,3 +1,4 @@
+import {ownsP2PCapture}from "../../audio/p2pCaptureOwner";
 import {useMicrophoneCaptureViewStore,latchPrivateCaptureFailure,clearPrivateCaptureFailure,retirePrivateCaptureFailure}from "../../stores/microphoneCaptureViewStore";
 import { useCallback, useMemo, useState, useLayoutEffect, useRef } from "react";
 import { DisconnectButton, LiveKitRoom, TrackToggle } from "@livekit/components-react";
@@ -26,7 +27,7 @@ export default function GroupDMCall({ credentials, onLeave, callSessionNonce, in
   const deafened = useVoiceStore(state => state.isDeafened);
   const [microphoneEnabled, setMicrophoneEnabled] = useState(() => initialMicrophoneEnabled ?? !useVoiceStore.getState().isMuted);
   const guildCapture = useVoiceStore(state => !!state.currentVoiceChannelId);
-  const privateCapture = useP2PCallStore(state => !!state.activeCall);
+  const privateCapture = useP2PCallStore(state => ownsP2PCapture(state.activeCall));
   const conflict = guildCapture || privateCapture;
   useLayoutEffect(() => {
     const fence = () => { if (privateCaptureConflict()) setMicrophoneEnabled(false); };
