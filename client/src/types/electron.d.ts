@@ -275,7 +275,7 @@ interface ElectronAPI {
   getAppSettings: () => Promise<{ openAtLogin: boolean; startMinimized: boolean; closeToTray: boolean; transparentBackground: boolean; hardwareAcceleration: boolean }>;
   setAppSetting: (key: string, value: boolean) => Promise<void>;
   onVoiceOverlayUpdate?: (cb: (snapshot: unknown) => void) => (() => void);
-  sendVoiceOverlaySnapshot?: (snapshot: unknown) => void;
+  sendVoiceOverlaySnapshot?: (snapshot: unknown) => Promise<boolean>;
   setOverlayShortcut?: (binding: { code: string; ctrl: boolean; shift: boolean; alt: boolean; meta: boolean } | null) => Promise<boolean>;
 
   /** Custom titlebar window controls */

@@ -310,3 +310,16 @@ export class VoiceOverlayLifecycle {
     target.deliver(snapshot);
   }
 }
+
+/** Shared by legacy send and acknowledged invoke; acknowledgement follows application. */
+export function applyAcknowledgedVoiceOverlaySnapshot(raw: unknown, trusted: boolean, target: {
+  setSuspended(value: boolean): boolean;
+  setSnapshot(snapshot: VoiceOverlaySnapshot): void;
+}): boolean {
+  if (!trusted) return false;
+  const snapshot = parseVoiceOverlaySnapshot(raw);
+  if (!snapshot) return false;
+  const accepted = snapshot.voiceOverlayCompatibility === undefined || target.setSuspended(snapshot.voiceOverlayCompatibility);
+  target.setSnapshot(snapshot);
+  return accepted;
+}

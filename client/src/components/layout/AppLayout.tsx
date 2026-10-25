@@ -103,7 +103,6 @@ import "../../styles/voice-overlay.css";
 function AppLayout() {
   const { ownerId: overlayRenderOwner, generation: overlayRenderGeneration } = getAuthSessionSnapshot();
   useVoiceOverlayCleanup();
-  useOverlayShortcut();
   const { sendTyping, sendDMTyping, sendPresenceUpdate, sendVoiceJoin, sendVoiceLeave, sendVoiceStateUpdate, sendWS, connectionStatus, reconnectAttempt } =
     useWebSocket();
   useThreadReconnectRefresh(connectionStatus === "connected");
@@ -146,7 +145,10 @@ function AppLayout() {
   const voiceStates = useVoiceStore((s) => s.voiceStates);
   const overlayChannelId = useVoiceStore((s) => s.currentVoiceChannelId);
   const activeSpeakers = useVoiceStore((s) => s.activeSpeakers);
+  const overlayPolicyAck = useRef<Promise<boolean>>(Promise.resolve(false));
+  const awaitOverlayPolicy = useCallback(() => overlayPolicyAck.current, []);
   useEffect(() => {
+    overlayPolicyAck.current = Promise.resolve(false);
     if (!window.electronAPI?.sendVoiceOverlaySnapshot) return;
     const currentScope = getAuthSessionSnapshot();
     if (!overlayRenderOwner || currentScope.ownerId !== overlayRenderOwner || currentScope.generation !== overlayRenderGeneration) return;
@@ -157,8 +159,12 @@ function AppLayout() {
     }));
     const notificationActions = { voiceOverlayNotificationActions: overlayNotificationActions, notificationReplyIds, ...(notificationReplySession ? { notificationReplySession } : {}), ...(notificationActionSession ? { notificationActionSession } : {}) };
     const chatSnapshot = { voiceOverlayChat: overlayChatEnabled, ...(overlayChatEnabled ? { ...overlayChat, voiceOverlayChatActions: overlayChatActions, ...(chatActionSession ? { chatActionSession } : {}), voiceOverlayChatCompose: overlayChatCompose, ...(chatComposeSession ? { chatComposeSession, chatComposeLabel } : {}) } : {}) };
-    window.electronAPI.sendVoiceOverlaySnapshot({ enabled: overlayEnabled, voiceOverlayWelcome: overlayWelcome, voiceOverlayGoLive: overlayGoLive, goLiveEligible, ...(goLiveEligible && goLiveSession ? { goLiveSession } : {}), overlayNotificationDurationMs, ...chatSnapshot, voiceOverlayMode: overlayMode, voiceOverlayPinned: overlayPinned, voiceOverlayActivity: overlayActivityEnabled, activities: overlayActivityEnabled ? overlayActivities : [], voiceOverlayNotifications: overlayNotificationsEnabled, ...(overlayNotificationsEnabled ? { notifications: overlayNotifications, notificationStatus, ...notificationActions } : {}), voiceOverlayQuickActions: overlayQuickActions, voiceOverlayClickableActions: overlayClickableActions, voiceOverlayCompatibility: overlayCompatibility, ...(getOverlayVoiceSession() ? { voiceActionSession: getOverlayVoiceSession() } : {}), selfMuted: overlaySelfMuted, selfDeafened: overlaySelfDeafened, participants, speakingOpacity: overlaySpeakingOpacity, idleOpacity: overlayIdleOpacity, scale: overlayScale, position: overlayPosition, speakingOnly: overlaySpeakingOnly, voiceOverlayAvatarSize: overlayAvatarSize, voiceOverlayNameDisplay: overlayNameDisplay, voiceOverlayMaxParticipants: overlayMaxParticipants });
+    const acknowledgement = window.electronAPI.sendVoiceOverlaySnapshot({ enabled: overlayEnabled, voiceOverlayWelcome: overlayWelcome, voiceOverlayGoLive: overlayGoLive, goLiveEligible, ...(goLiveEligible && goLiveSession ? { goLiveSession } : {}), overlayNotificationDurationMs, ...chatSnapshot, voiceOverlayMode: overlayMode, voiceOverlayPinned: overlayPinned, voiceOverlayActivity: overlayActivityEnabled, activities: overlayActivityEnabled ? overlayActivities : [], voiceOverlayNotifications: overlayNotificationsEnabled, ...(overlayNotificationsEnabled ? { notifications: overlayNotifications, notificationStatus, ...notificationActions } : {}), voiceOverlayQuickActions: overlayQuickActions, voiceOverlayClickableActions: overlayClickableActions, voiceOverlayCompatibility: overlayCompatibility, ...(getOverlayVoiceSession() ? { voiceActionSession: getOverlayVoiceSession() } : {}), selfMuted: overlaySelfMuted, selfDeafened: overlaySelfDeafened, participants, speakingOpacity: overlaySpeakingOpacity, idleOpacity: overlayIdleOpacity, scale: overlayScale, position: overlayPosition, speakingOnly: overlaySpeakingOnly, voiceOverlayAvatarSize: overlayAvatarSize, voiceOverlayNameDisplay: overlayNameDisplay, voiceOverlayMaxParticipants: overlayMaxParticipants });
+    overlayPolicyAck.current = Promise.resolve(acknowledgement).then(value => value === true, () => false);
   }, [overlayRenderOwner, overlayRenderGeneration, overlayWelcome, overlayGoLive, goLiveEligible, goLiveSession, overlayNotificationDurationMs, overlayEnabled, overlayChatEnabled, overlayChat, overlayChatActions, chatActionSession, overlayChatCompose, chatComposeSession, chatComposeLabel, overlayMode, overlayPinned, overlayActivityEnabled, overlayActivities, overlayNotificationsEnabled, overlayNotificationActions, overlayNotifications, notificationStatus, notificationActionSession, notificationReplySession, notificationReplyIds, overlayQuickActions, overlayClickableActions, overlayCompatibility, overlaySelfMuted, overlaySelfDeafened, overlayJoinGeneration, overlaySpeakingOpacity, overlayIdleOpacity, overlayScale, overlayPosition, overlaySpeakingOnly, overlayAvatarSize, overlayNameDisplay, overlayMaxParticipants, voiceStates, overlayChannelId, activeSpeakers]);
+  // Project native compatibility before configuring the chord. This prevents
+  // normal-mode re-registration racing the native suspension policy.
+  useOverlayShortcut(`${overlayRenderOwner ?? ""}:${overlayRenderGeneration}`, awaitOverlayPolicy);
   useNavigationHistory();
 
   // Idle detection — auto-set "idle" after 5min inactivity

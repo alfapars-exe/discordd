@@ -61,22 +61,22 @@
   "source_sha256_lf": {
     "electron/voice-overlay.ts": "285a1ffe636a83ef3c516f2b2c5dc9e12fe73756a4be25d78167d47d06263ac8",
     "electron/voice-overlay-window.test.ts": "60ceb2ea8ddb63cd6d18a1fb9f08293abae597cc13f915358aaaffdb892dda6c",
-    "electron/voice-overlay-contract.ts": "653413fb5e88c5788db99689b83a88e2416e8c6386bda32d600f62c6a453ebb6",
-    "electron/voice-overlay-contract.test.ts": "3011b99af86efb143f6860b57b4360a5f222e458940dcdfee62f6f335e4ed1e6",
+    "electron/voice-overlay-contract.ts": "92f449fc6c84473f983ab3e27ff7317761a2ebc625e244d90b4894e383c5286d",
+    "electron/voice-overlay-contract.test.ts": "57bbdcd36be93a454b5431b82cd6ef5d230be0a3c6e9f7b6bf3ff52c808189ef",
     "electron/overlay-shortcut.ts": "2fd173f4cb425c599de444fe0cb99ef509c3e208d11d9a2e3656f120b3f397a3",
     "electron/overlay-shortcut.test.ts": "b90a98cba9e8364cebd4abd2c92bd30466a4a3d01d5ccf16571d1a6b92d46ca7",
-    "electron/ipc-handlers.ts": "2da18a0ce230e3b1d74d1032e47f0bc891fa8e6d7d9b82e08954b1dc1af565fc",
+    "electron/ipc-handlers.ts": "086c6af1f5fcb5439cb106da2275b1a6691fda9d4a1841862ca019f7e034d9f8",
     "client/src/stores/slices/voiceSettingsSlice.ts": "4c5bbfd59a40f5ecf000e2f6ca0a74876e59e834c704e16db8797e1ca623ce71",
     "client/src/stores/slices/voiceSettingsSlice.compatibility.test.ts": "a70ed6502c1d2823ed4ced8e75d23679476ffa3b71fd2ad0626166a9f274a6b7",
     "client/src/components/settings/VoiceSettings.tsx": "3a9d75ae0809b82d42f20c6014fb7d27ecb5a90b715bd4c519b87c93fa54c3d9",
     "client/src/components/settings/VoiceSettings.audio.test.tsx": "ec0eced995970b2ea409f6dad6c27edcdf380d0d20041a89e05c172833e7160a",
     "client/src/components/voice/VoiceOverlayContent.tsx": "f0d213fe5f90d5e60253b651ef095da4a70949f290187c7f6de1c54fb2905f4b",
     "client/src/components/voice/VoiceOverlayContent.test.tsx": "d95229c89b87fc3404d0c4cf52f0b650399babb9aef0988f563906f77e1f0cc9",
-    "client/src/components/layout/AppLayout.tsx": "4893b37a35f80c93804d246b5f6076122f373491caf728565bddfd7ab14ef177",
+    "client/src/components/layout/AppLayout.tsx": "1d460d6e893405c37de1d051299a484fed1aeaa5ef368811e26c11d82a6c6e21",
     "client/src/hooks/useOverlayVoiceActions.ts": "dff1bf9a23101f2a31be40c8a6f838a5597ecdae9c28f3c153f09794260f12f5",
     "client/src/hooks/useOverlayVoiceActions.test.ts": "daacf191e496775f693ee8ad34fd04b3907aab6ffd9a919e78938d63d3dca70b",
-    "client/src/hooks/useOverlayShortcut.ts": "714a51a90c4e0b10ca61df7adb6e50e68e3cf4f774253375f127efd10ec80ec0",
-    "client/src/hooks/useOverlayShortcut.test.ts": "6d2f761e1845e01df339bba7dfcdbc67eaa1175086fa319ede0c5e28df7616b3",
+    "client/src/hooks/useOverlayShortcut.ts": "c532b68b28fceeb3a40859847167be2ee805a565276b3936006e285ac5d3dbd0",
+    "client/src/hooks/useOverlayShortcut.test.ts": "eebfc424b9a4bbe373aa09518117de360bcb21bdd33b9be3b44f0148ad258803",
     "client/src/hooks/useOverlayChatActions.ts": "36b41e491961215a352abc2e0f77485ae44380d2161598d8d107545ea3da21e7",
     "client/src/hooks/useOverlayChatActions.test.tsx": "9b18753ebd8941b3cd28bae5c89698a55185a9404991d0ef34eacd8dcf45a90f",
     "client/src/hooks/useOverlayChatCompose.ts": "4f6457fc68ae27f4c93b6db347e1b6477ba550ed9dd0f703d3d967cd01b5d0c8",
@@ -86,7 +86,11 @@
     "client/src/hooks/useOverlayNotificationReply.ts": "8e0909a51cea5ab373b80530b4d07d456ce61e352182861fa91f2923f74dc895",
     "client/src/hooks/useOverlayNotificationReply.test.tsx": "763c0c49fa3d221eeab7e3e781ed4b6910a41b01a821e1bac118ac0088e28404",
     "client/src/i18n/locales/en/common.json": "6374b8b55168fd3aabb7b0f0a5933ecce215284dc29294769b7e4967b9f2e78a",
-    "client/src/i18n/locales/tr/common.json": "c9db8f598517d7c70492b51153b8f02088348d075dac91ef389244afd7fe4f43"
+    "client/src/i18n/locales/tr/common.json": "c9db8f598517d7c70492b51153b8f02088348d075dac91ef389244afd7fe4f43",
+    "client/src/types/electron.d.ts": "c281d30129dca53c31b1aa5fa687678825d125bb227eb28066aca68f3c81aa2d",
+    "electron/preload.ts": "fd4de6f5bf881c6af15461aa927be693fe5aa8bf70a51815c16f5f008dbfe0ed",
+    "client/src/hooks/useVoiceOverlayCleanup.ts": "5930dd9c264502d155879d746c72382b0ea576e27d56a38051e52a48dc02cb31",
+    "client/src/hooks/useVoiceOverlayCleanup.test.ts": "5c3b6b2c785a2fe86bcd9e0d5dec76b3c2c2907c25492796c039d7888a58679d"
   },
   "owned_locale_values": {
     "client/src/i18n/locales/en/settings.json": {
@@ -112,12 +116,13 @@
     "Compatibility entry clears pending inbox/chat/reply focus intents and cancels outstanding composer acknowledgements. All action, notification, chat and composer availability checks and trusted-main confirmation routes deny interaction while active. Late native did-finish-load callbacks cannot revive hit regions or focus the main app. An already-dispatched main-renderer/network send cannot be retroactively unsent by changing this display policy.",
     "Main-renderer action hooks check live compatibility before and across awaits; eligibility and opaque grants are revoked on entry. Voice action sessions include a synchronous policy epoch so old grants stay stale after normal mode resumes. Normal-mode restoration never implicitly unlocks or focuses the HUD.",
     "Compatibility also releases the global overlay shortcut, rather than leaving an OS-reserved chord with a no-op callback. Native shortcut suspension rejects late registration while active; registration epochs reject old callbacks even after the same chord is registered again. Failed unregister is exposed through the existing shortcut status instead of reporting success. Other independent call hotkeys such as PTT are unchanged.",
-    "The settings toggle and disabled interaction controls explain the read-only limitation and preserve choices. The renderer independently suppresses stale interaction flags and shows a read-only indicator; chat/activity/notification display privacy rules and existing layout storage remain in place."
+    "The settings toggle and disabled interaction controls explain the read-only limitation and preserve choices. The renderer independently suppresses stale interaction flags and shows a read-only indicator; chat/activity/notification display privacy rules and existing layout storage remain in place.",
+    "Follow-up: shortcut enable waits for the actual acknowledged native snapshot application, independent of send/invoke FIFO assumptions. Compatibility entry releases immediately; stale auth/scope replies cannot rebind. Native rejection remains visibly failed and never implicitly resumes a stale desired binding."
   ],
   "verification": [
     {
       "kind": "focused client Vitest",
-      "result": "PASS:9 files,124 tests on final scoped source",
+      "result": "PASS:10 files,135 tests after acknowledged policy, timeout and cleanup follow-up",
       "suites": [
         "voiceSettingsSlice.compatibility",
         "VoiceOverlayContent",
@@ -127,22 +132,23 @@
         "useOverlayChatActions",
         "useOverlayChatCompose",
         "useOverlayNotificationActions",
-        "useOverlayNotificationReply"
+        "useOverlayNotificationReply",
+        "useVoiceOverlayCleanup"
       ]
     },
     {
       "kind": "native TypeScript and focused node tests",
       "command": "tsc -p electron/tsconfig.json --outDir %TEMP%/hichat-overlay-compat-native-20261025; node --test voice-overlay-contract.test.js voice-overlay-window.test.js overlay-shortcut.test.js",
-      "result": "PASS:native compile and31 tests,0 skips; includes actual native owner/action code executed against deterministic BrowserWindow/IPC seams"
+      "result": "PASS:native compile and32 tests,0 skips; shared trusted acknowledgement helper, actual native window/action code and shortcut owner tests"
     },
     {
       "kind": "application TypeScript",
       "command": "tsc --noEmit -p tsconfig.app.json",
-      "result": "PASS before final report; exact final result sent separately to parent if concurrent unrelated WIP changes it"
+      "result": "PASS:final application TypeScript exit0"
     },
     {
       "kind": "scoped ESLint",
-      "result": "PASS clean on19 owned client TS/TSX paths"
+      "result": "PASS:initial19 owned client paths; final follow-up5 client source/test paths exit0"
     },
     {
       "kind": "diff check",
@@ -153,5 +159,25 @@
     "Physical Windows windowed/borderless games, real keyboard interception/focus, Alt-Tab, multiple monitors, DPI and composing-to-compatibility transitions remain unaccepted. Deterministic native window tests are not those device tests.",
     "Exclusive fullscreen and blocking anti-cheat environments remain unsupported; this mode makes no claim to bypass or repair them.",
     "Parent coordinates exact staged snapshot review, security manifest checks, full client/native build/regression gates and any commit/push/deployment. No staging, production change or whole-P11 acceptance is claimed."
-  ]
+  ],
+  "follow_up": {
+    "base_commit": "4e745d62",
+    "owned_paths": [
+      "client/src/components/layout/AppLayout.tsx",
+      "client/src/hooks/useOverlayShortcut.ts",
+      "client/src/hooks/useOverlayShortcut.test.ts",
+      "client/src/types/electron.d.ts",
+      "electron/preload.ts",
+      "electron/ipc-handlers.ts",
+      "electron/voice-overlay-contract.ts",
+      "electron/voice-overlay-contract.test.ts",
+      "client/src/hooks/useVoiceOverlayCleanup.ts",
+      "client/src/hooks/useVoiceOverlayCleanup.test.ts",
+      "implementation/verification/p11-overlay-compatibility-2026-10-25.json"
+    ],
+    "problem": "Separate legacy send and shortcut invoke paths could race compatibility-off application and reject restoration. Renderer effect ordering alone did not establish a native acknowledgement.",
+    "change": "The preload now invokes the existing snapshot channel and returns Promise<boolean>. Native legacy on and new handle both use one trusted/strict parser/application helper. AppLayout captures the current policy acknowledgement; non-null shortcut registration awaits accepted=true and rechecks effect lifetime, live compatibility and auth owner/generation. Null release is immediate. Void legacy responses cannot authorize a chord. Cleanup explicitly handles rejected invokes through Promise.resolve(...).catch without treating legacy void as success. Shortcut acknowledgement waits use the existing awaitAudioStep helper with a10-second deadline; timeout remains failed and late resolution cannot configure a key.",
+    "tests": "Delayed acknowledgement, compatibility entry before resolution, out-of-order scopes, rejected/void acknowledgements and auth-generation changes cannot reserve a key; native helper verifies trust/parse/application order and failed suspension acknowledgement. Rejected cleanup at mount/auth boundary/unmount stays empty and has no unhandled rejection; fake-timer timeout remains failed after late acceptance.",
+    "limitation": "Real Windows keyboard/focus/game acceptance remains pending. Tests execute native application and renderer hook seams; no physical Electron keyboard round trip is claimed."
+  }
 }

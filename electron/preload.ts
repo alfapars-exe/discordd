@@ -350,9 +350,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("voice-overlay-update", listener);
     return () => { ipcRenderer.removeListener("voice-overlay-update", listener); };
   },
-  sendVoiceOverlaySnapshot: (snapshot: unknown): void => {
-    ipcRenderer.send("voice-overlay-snapshot", snapshot);
-  },
+  sendVoiceOverlaySnapshot: (snapshot: unknown): Promise<boolean> => ipcRenderer.invoke("voice-overlay-snapshot", snapshot),
   setOverlayShortcut: (binding: unknown): Promise<boolean> => ipcRenderer.invoke("set-overlay-shortcut", binding),
   resetOverlayLayout: (): Promise<boolean> => ipcRenderer.invoke("reset-overlay-layout"),
   sendOverlayVoiceAction: (action: unknown, session: unknown): Promise<boolean> => ipcRenderer.invoke("overlay-voice-action", action, session),

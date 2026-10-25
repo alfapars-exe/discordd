@@ -85,7 +85,7 @@ import { getMainWindow } from "./window";
 import { updateVoiceOverlay, toggleVoiceOverlayLock, lockVoiceOverlay, configureVoiceOverlayLayout, resetVoiceOverlayLayout, takeVoiceOverlayAction, takeVoiceOverlayOpenInboxIntent, confirmVoiceOverlayOpenInbox, takeVoiceOverlayNotificationReplyIntent, confirmVoiceOverlayNotificationReply, takeVoiceOverlayOpenChatIntent, confirmVoiceOverlayOpenChat, takeVoiceOverlayOpenChatComposerIntent, sendOverlayChatMessage, closeOverlayChatComposer, resolveOverlayChatSend } from "./voice-overlay";
 import { createOverlayLayoutStore } from "./overlay-layout-store";
 import { createOverlayShortcutController, type OverlayShortcutBinding } from "./overlay-shortcut";
-import { isTrustedVoiceOverlaySender, parseVoiceOverlaySnapshot } from "./voice-overlay-contract";
+import { isTrustedVoiceOverlaySender, applyAcknowledgedVoiceOverlaySnapshot } from "./voice-overlay-contract";
 import { copyFile, writeFile } from "fs/promises";
 import { buildUploadBytes, bundleBaseName, newestCrashDumpFullPath } from "./diagnostic-bundle";
 import { getLogsDir, setVerbose } from "./diagnostic-log";
@@ -238,14 +238,13 @@ export function registerIpcHandlers(): void {
     return registeredGames.setShareAllowed(id, allowed);
   });
 
-  ipcMain.on("voice-overlay-snapshot", (event, raw: unknown) => {
-    if (!isTrustedMainWindowSender(event)) return;
-    const snapshot = parseVoiceOverlaySnapshot(raw);
-    if (snapshot) {
-      if (snapshot.voiceOverlayCompatibility !== undefined) overlayShortcut.setSuspended(snapshot.voiceOverlayCompatibility);
-      gameOverlay?.setSnapshot(snapshot);
-    }
-  });
+  const applyOverlaySnapshot = (event: Parameters<typeof isTrustedMainWindowSender>[0], raw: unknown): boolean =>
+    applyAcknowledgedVoiceOverlaySnapshot(raw, isTrustedMainWindowSender(event), {
+      setSuspended: value => overlayShortcut.setSuspended(value),
+      setSnapshot: snapshot => gameOverlay?.setSnapshot(snapshot),
+    });
+  ipcMain.on("voice-overlay-snapshot", applyOverlaySnapshot);
+  ipcMain.handle("voice-overlay-snapshot", applyOverlaySnapshot);
   ipcMain.handle("set-registered-game-overlay", async (event, id: unknown, allowed: unknown) => {
     assertTrustedMainWindowSender(event);
     assertString(id, "game id", 64);

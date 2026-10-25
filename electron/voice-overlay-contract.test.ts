@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   parseVoiceOverlaySnapshot,
+  applyAcknowledgedVoiceOverlaySnapshot,
   isTrustedVoiceOverlaySender,
   VoiceOverlayLifecycle,
   type VoiceOverlayLifecycleTarget,
@@ -315,3 +316,15 @@ test("notification reply metadata contains only a unique visible mention/reply s
 });
 
 test("compatibility is optional legacy-safe and strictly boolean",()=>{assert.equal(parseVoiceOverlaySnapshot(validSnapshot())?.voiceOverlayCompatibility,undefined);assert.equal(parseVoiceOverlaySnapshot({...validSnapshot(),voiceOverlayCompatibility:true})?.voiceOverlayCompatibility,true);for(const value of [1,"true",null,{},[]])assert.equal(parseVoiceOverlaySnapshot({...validSnapshot(),voiceOverlayCompatibility:value}),null);});
+
+test("acknowledged and legacy snapshot application share strict trust, parse and policy boundary", () => {
+ const applied:string[]=[];
+ const target={setSuspended(value:boolean){applied.push(`policy:${value}`);return true;},setSnapshot(){applied.push("snapshot");}};
+ assert.equal(applyAcknowledgedVoiceOverlaySnapshot({...validSnapshot(),voiceOverlayCompatibility:false},false,target),false);
+ assert.equal(applyAcknowledgedVoiceOverlaySnapshot({...validSnapshot(),voiceOverlayCompatibility:"no"},true,target),false);
+ assert.deepEqual(applied,[]);
+ assert.equal(applyAcknowledgedVoiceOverlaySnapshot({...validSnapshot(),voiceOverlayCompatibility:false},true,target),true);
+ assert.deepEqual(applied,["policy:false","snapshot"]);
+ assert.equal(applyAcknowledgedVoiceOverlaySnapshot({...validSnapshot(),voiceOverlayCompatibility:true},true,{...target,setSuspended(){return false;}}),false);
+ assert.equal(applied[applied.length - 1],"snapshot");
+});
