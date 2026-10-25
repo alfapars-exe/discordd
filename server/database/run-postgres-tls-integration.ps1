@@ -37,7 +37,7 @@ try {
 
     $certScript = @'
 set -eu
-cd /out
+cd /tls
 openssl req -x509 -newkey rsa:2048 -nodes -keyout ca.key -out ca.crt -days 2 -subj /CN=HiChat-Test-CA >/dev/null 2>&1
 openssl req -newkey rsa:2048 -nodes -keyout server.key -out server.csr -subj /CN=127.0.0.1 >/dev/null 2>&1
 # Use one explicit RSA PEM format and validate it inside the database image.
@@ -51,8 +51,7 @@ printf 'extendedKeyUsage=clientAuth\n' > client.ext
 openssl x509 -req -in client.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out client.crt -days 2 -sha256 -extfile client.ext >/dev/null 2>&1
 '@ -replace "`r`n", "`n"
 
-    docker run --rm --mount "type=bind,source=$tempDir,target=/out" postgres:18.6-bookworm@sha256:bbf83594798e144bff365a9c191c5d779f181fb3135902064ab8ff11918020fc bash -lc $certScript | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "Test certificate generation failed." }
+    Write-Utf8NoBom (Join-Path $tempDir "generate-certs.sh") $certScript
 
     $hba = @'
 local all all trust
@@ -62,12 +61,9 @@ hostssl all all ::/0 cert
     Write-Utf8NoBom (Join-Path $tempDir "pg_hba.conf") $hba
     $dockerfile = @'
 FROM postgres:18.6-bookworm@sha256:bbf83594798e144bff365a9c191c5d779f181fb3135902064ab8ff11918020fc
-RUN mkdir /tls && chown postgres:postgres /tls
-COPY --chown=postgres:postgres --chmod=0644 server.crt /tls/server.crt
-COPY --chown=postgres:postgres --chmod=0644 ca.crt /tls/ca.crt
-COPY --chown=postgres:postgres --chmod=0600 server.key /tls/server.key
+COPY --chmod=0700 generate-certs.sh /generate-certs.sh
+RUN mkdir /tls && bash /generate-certs.sh && chown -R postgres:postgres /tls && chmod 0600 /tls/*.key && openssl rsa -in /tls/server.key -check -noout
 COPY --chown=postgres:postgres --chmod=0644 pg_hba.conf /tls/pg_hba.conf
-RUN openssl rsa -in /tls/server.key -check -noout
 '@ -replace "`r`n", "`n"
     Write-Utf8NoBom (Join-Path $tempDir "Dockerfile") $dockerfile
     docker build --tag $imageName $tempDir | Out-Null
@@ -103,6 +99,13 @@ RUN openssl rsa -in /tls/server.key -check -noout
         Start-Sleep -Milliseconds 500
     } while ([DateTime]::UtcNow -lt $deadline)
     if ($LASTEXITCODE -ne 0) { throw "Disposable PostgreSQL did not become ready within 90 seconds." }
+
+    # Export only the client credentials needed by Go. The server private key
+    # stays inside the disposable image; no bind-mount/host conversion is used.
+    foreach ($certificate in @("ca.crt", "client.crt", "client.key")) {
+        docker cp "${containerName}:/tls/$certificate" (Join-Path $tempDir $certificate)
+        if ($LASTEXITCODE -ne 0) { throw "Could not export disposable TLS client credential." }
+    }
 
     $env:HICHAT_TEST_POSTGRES_TLS_DSN = "postgres://hichat_tls_test:${testPassword}@127.0.0.1:${port}/postgres?sslmode=verify-full"
     $env:HICHAT_PG_CA_PEM = Get-Content -Raw -LiteralPath (Join-Path $tempDir "ca.crt")
