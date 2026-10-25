@@ -95,7 +95,7 @@
   "fileDecryptFailed": "Failed to decrypt file",
   "clientSearchNote": "Searching locally (E2EE)",
 
-  "voiceE2eeEnabled": "Voice calls are end-to-end encrypted",
+  "voiceE2eeEnabled": "Room audio is encrypted with a server-managed key; this does not hide calls from the server.",
   "voiceE2eeError": "Voice encryption error",
   "encryptionActive": "Encryption is active",
   "encryptionNotSetup": "Encryption not set up",
