@@ -39,6 +39,12 @@ class PublishSafetyTests(unittest.TestCase):
         self.stack.enter_context(patch.object(release.subprocess, "check_output", side_effect=lambda args, **kwargs: "source-commit\n" if args[1] == "rev-parse" else b"server/main.go\0"))
         self.stack.enter_context(patch.dict(os.environ, {"HF_TOKEN": "disposable-test-value"}))
 
+    def test_verification_receives_exact_publish_result_commit(self):
+        output = Path("github-output")
+        with patch.dict(os.environ, {"GITHUB_OUTPUT": str(output)}):
+            release.record_deployed_commit("a" * 40)
+        self.assertEqual(output.read_text(encoding="utf-8"), "deployed_commit=" + "a" * 40 + "\n")
+
     def run_command(self, *args):
         output = io.StringIO()
         with patch("sys.argv", ["publish-hf-space.py", "--expected-head", "reviewed-parent", *args]), contextlib.redirect_stdout(output):

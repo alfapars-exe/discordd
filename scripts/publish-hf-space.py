@@ -15,6 +15,15 @@ def managed(path):
     return path in ROOT_FILES or path.startswith(("client/", "server/"))
 
 
+def record_deployed_commit(commit):
+    # The verifier must target create_commit's exact result, not a possibly
+    # stale HEAD response immediately after publication.
+    output = os.environ.get("GITHUB_OUTPUT")
+    if output:
+        with open(output, "a", encoding="utf-8") as destination:
+            destination.write(f"deployed_commit={commit}\n")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--expected-head", required=True)
@@ -56,9 +65,11 @@ def main():
     operations = additions + [CommitOperationDelete(path_in_repo=path) for path in removals]
     if not operations:
         print(json.dumps({"status": "already_current", "commit": current}))
+        record_deployed_commit(current)
         return
     result = api.create_commit(repo, repo_type="space", parent_commit=current, operations=operations, commit_message=f"Deploy HiChat {source[:12]}")
     print(json.dumps({"status": "published", "commit": result.oid, "url": result.commit_url}))
+    record_deployed_commit(result.oid)
 
 
 if __name__ == "__main__":

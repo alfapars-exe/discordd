@@ -37,6 +37,7 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install --disable-pip-version-check --no-input huggingface_hub==1.26.0
       - name: Review or publish application source
+        id: source
         env:
           HF_TOKEN: ${{ secrets.HF_RELEASE_TOKEN }}
           EXPECTED_HEAD: ${{ inputs.expected_space_head }}
@@ -51,16 +52,20 @@ jobs:
         if: inputs.publish
         env:
           HF_TOKEN: ${{ secrets.HF_RELEASE_TOKEN }}
+          EXPECTED_COMMIT: ${{ steps.source.outputs.deployed_commit }}
         shell: bash
         run: |
           python - <<'PY'
           import json
+          import os
           import time
           from urllib.request import urlopen
           from huggingface_hub import HfApi
           api = HfApi()
           repo = 'infinayazilim/discord'
-          expected = api.space_info(repo).sha
+          expected = os.environ['EXPECTED_COMMIT']
+          if len(expected) != 40 or any(c not in '0123456789abcdef' for c in expected):
+              raise SystemExit('Publisher did not return a valid deployment commit')
           previous = None
           for attempt in range(60):
               info = api.space_info(repo)
