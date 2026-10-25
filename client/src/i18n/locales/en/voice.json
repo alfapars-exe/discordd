@@ -133,5 +133,12 @@
   "privateScreenVideoOnly": "Video only; system audio is not shared in private calls.",
   "screenShareCameraPending": "Wait for the camera change to finish, then share your screen.",
   "privateScreenNativeRate": "Display refresh rate (60 FPS if unknown)",
-  "screenShareRestoring": "Wait for the camera to be restored before sharing again."
+  "screenShareRestoring": "Wait for the camera to be restored before sharing again.",
+  "p2pMicrophoneAudioSource": "Microphone audio",
+  "p2pScreenAudioSource": "Shared system audio",
+  "p2pMicrophoneVolume": "Personal microphone volume",
+  "p2pScreenAudioVolume": "Personal shared-audio volume",
+  "p2pScreenAudioPeerUnsupported": "The other client has not advertised separate shared-audio support.",
+  "p2pScreenAudioOff": "System audio is not being shared.",
+  "p2pScreenAudioEnded": "System audio ended. Screen video continues without audio."
 }

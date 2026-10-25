@@ -1,12 +1,13 @@
+import { isElectron } from "../utils/constants";
 import { mutateOwnedVideoSender, replaceOwnedVideoTrack } from "./videoSenderMutation";
 import { privateScreenConstraints, updatePrivateScreenQuality, type PrivateScreenQuality, type ScreenMetrics } from "../utils/privateScreenQuality";
 
 const hasEnded = (track: MediaStreamTrack) => track.readyState === "ended";
 
-export interface StartScreenShareResult { sender: RTCRtpSender; track: MediaStreamTrack; update: (settings: PrivateScreenQuality) => Promise<boolean>; dispose: () => void }
-export type ScreenShareOptions = { isCurrent: () => boolean; settings: PrivateScreenQuality; display?: ScreenMetrics | null; getDisplayMetrics?: () => Promise<ScreenMetrics>; getCameraTrack?: () => MediaStreamTrack | null };
+export interface StartScreenShareResult { sender: RTCRtpSender; track: MediaStreamTrack; audioTrack: MediaStreamTrack | null; update: (settings: PrivateScreenQuality) => Promise<boolean>; dispose: () => void }
+export type ScreenShareOptions = { audioRequested?: boolean; audioCurrent?: () => boolean; restoreCurrent?: () => boolean; subscribeScope?: (retire: () => void) => () => void; subscribeAudioScope?: (retire: () => void) => () => void; isCurrent: () => boolean; settings: PrivateScreenQuality; display?: ScreenMetrics | null; getDisplayMetrics?: () => Promise<ScreenMetrics>; getCameraTrack?: () => MediaStreamTrack | null };
 
-/** Own the picker result until the exact caller commits it. P2P shares video only. */
+/** Own the picker result until the exact caller commits it. Audio remains disabled until the separate source-ACK publisher admits it. */
 export async function startScreenShare(pc: RTCPeerConnection, options: ScreenShareOptions): Promise<StartScreenShareResult | null> {
   let stream: MediaStream | undefined;
   let disposed = false;
@@ -14,14 +15,46 @@ export async function startScreenShare(pc: RTCPeerConnection, options: ScreenSha
   let previousTrack: MediaStreamTrack | null = null;
   let capturedTrack: MediaStreamTrack | undefined;
   let display = options.display;
+  let audioTrack: MediaStreamTrack | null = null, audioRetired = false;
+  let scopeOff: (() => void) | null = null, audioOff: (() => void) | null = null;
+  const stoppedTracks = new WeakSet<MediaStreamTrack>();
+  const stopTrack = (track: MediaStreamTrack) => { track.enabled = false; if (!stoppedTracks.has(track)) { stoppedTracks.add(track); track.stop(); } };
   const current = () => !disposed && options.isCurrent() && pc.signalingState !== "closed";
-  const dispose = () => { disposed = true; stream?.getTracks().forEach(track => { track.enabled = false; track.stop(); }); };
+  const audioCurrent = () => !audioRetired && current() && (!options.audioCurrent || options.audioCurrent());
+  // Repeated disposal still observes a late picker result. Tracks themselves
+  // stop once; an already-disposed flag must never orphan later GDM output.
+  const dispose = () => { disposed = true; stream?.getTracks().forEach(stopTrack); audioTrack = null; const off = scopeOff; scopeOff = null; const offAudio = audioOff; audioOff = null; off?.(); offAudio?.(); };
+  const retireAudio = () => { if (audioCurrent()) return; audioRetired = true; if (audioTrack) stopTrack(audioTrack); audioTrack = null; const off = audioOff; audioOff = null; off?.(); };
+  const restoreCancelled = async () => {
+    const sender = replacedSender, ownedRaw = capturedTrack;
+    if (!sender || !ownedRaw || sender.track !== ownedRaw) return;
+    const restoreScope = () => pc.signalingState !== "closed" && (options.isCurrent() || options.restoreCurrent?.() === true);
+    let expected: MediaStreamTrack | null = ownedRaw;
+    while (restoreScope() && sender.track === expected) {
+      const selected = options.getCameraTrack ? options.getCameraTrack() : previousTrack;
+      const camera = selected && !hasEnded(selected) ? selected : null;
+      const restored = await stopScreenShare(sender, camera, () => restoreScope() && (sender.track === expected || sender.track === camera));
+      if (!restored || !restoreScope() || sender.track !== camera) return;
+      const latest = options.getCameraTrack ? options.getCameraTrack() : previousTrack;
+      if ((latest && !hasEnded(latest) ? latest : null) === camera) return;
+      expected = camera;
+    }
+  };
   try {
     if (!current()) return null;
-    stream = await navigator.mediaDevices.getDisplayMedia({ audio: false, video: privateScreenConstraints(options.settings, options.display) });
+    if (options.subscribeScope) { const off = options.subscribeScope(() => { if (!current()) dispose(); }); if (disposed) off(); else scopeOff = off; }
+    if (options.subscribeAudioScope) { const off = options.subscribeAudioScope(retireAudio); if (disposed || audioRetired) off(); else audioOff = off; }
+    if (!current()) { dispose(); return null; }
+    const captureAudio = options.audioRequested === true && !isElectron() && audioCurrent();
+    stream = await navigator.mediaDevices.getDisplayMedia({ audio: captureAudio ? { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2 } : false, video: privateScreenConstraints(options.settings, options.display) });
+    audioTrack = captureAudio ? stream.getTracks().find(candidate => candidate.kind === "audio") ?? null : null;
+    // The picker may return an enabled system source. Silence it before any
+    // further await, even while video replacement/quality configuration waits.
+    if (audioTrack) audioTrack.enabled = false;
+    retireAudio();
     const track = stream.getVideoTracks()[0]; capturedTrack = track;
     if (!current() || !track || hasEnded(track)) { dispose(); return null; }
-    stream.getTracks().filter(candidate => candidate !== track).forEach(candidate => candidate.stop());
+    stream.getTracks().filter(candidate => candidate !== track && candidate !== audioTrack).forEach(stopTrack);
     // Keep pending capture silent until replaceTrack and the current-session check finish.
     track.enabled = false;
     if (options.getDisplayMetrics) { try { display = await options.getDisplayMetrics(); } catch { /* Saved native choice uses the browser display fallback. */ } }
@@ -35,16 +68,15 @@ export async function startScreenShare(pc: RTCPeerConnection, options: ScreenSha
     if (!current()) { dispose(); return null; }
     previousTrack = sender.track; replacedSender = sender;
     await replaceOwnedVideoTrack(sender, track, current);
-    if (!current() || hasEnded(track)) { dispose(); return null; }
+    if (!current() || hasEnded(track)) { dispose(); await restoreCancelled().catch(() => {}); return null; }
     const ownedSender = sender;
     const sourceCurrent = () => current() && ownedSender.track === track;
     await updatePrivateScreenQuality(track, sender, options.settings, sourceCurrent, display);
-    if (!sourceCurrent()) { dispose(); return null; }
+    if (!sourceCurrent()) { dispose(); await restoreCancelled().catch(() => {}); return null; }
     track.enabled = true;
-    return { sender, track, dispose, update: settings => updatePrivateScreenQuality(track, ownedSender, settings, sourceCurrent, display) };
+    return { sender, track, get audioTrack() { return audioCurrent() && audioTrack && !hasEnded(audioTrack) ? audioTrack : null; }, dispose, update: settings => updatePrivateScreenQuality(track, ownedSender, settings, sourceCurrent, display) };
   } catch (error) {
-    if (current() && replacedSender && replacedSender.track === capturedTrack) await stopScreenShare(replacedSender, options.getCameraTrack ? options.getCameraTrack() : previousTrack, current).catch(() => {});
-    dispose(); if (options.isCurrent()) throw error; return null;
+    dispose(); await restoreCancelled().catch(() => {}); if (options.isCurrent()) throw error; return null;
   }
 }
 

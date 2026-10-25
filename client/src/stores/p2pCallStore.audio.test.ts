@@ -1,3 +1,4 @@
+import {P2PMediaController,getP2PMediaController} from "../webrtc/p2pMediaController";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { P2PCall } from "../types";
 import type { MicrophonePipeline } from "../audio/microphonePipeline";
@@ -52,16 +53,18 @@ function changeSettings(patch: Record<string, unknown>) {
 function peer() {
   const senders: { track: MediaStreamTrack; replaceTrack: ReturnType<typeof vi.fn> }[] = [];
   const pc = {
+    signalingState:"stable",localDescription:null as RTCSessionDescriptionInit|null,remoteDescription:null as RTCSessionDescriptionInit|null,
+    getTransceivers:vi.fn<()=>RTCRtpTransceiver[]>(()=>[]),createOffer:vi.fn(async()=>({type:"offer" as const,sdp:"offer"})),
     addTrack: vi.fn((output: MediaStreamTrack) => {
       const sender = { track: output, replaceTrack: vi.fn(async (next: MediaStreamTrack) => { sender.track = next; }) };
       senders.push(sender);
       return sender;
     }),
     getSenders: () => senders, getReceivers: () => [], close: vi.fn(),
-    setRemoteDescription: vi.fn().mockResolvedValue(undefined), createAnswer: vi.fn().mockResolvedValue({ sdp: "answer" }),
-    setLocalDescription: vi.fn().mockResolvedValue(undefined), addIceCandidate: vi.fn().mockResolvedValue(undefined),
+    setRemoteDescription: vi.fn(async(data:RTCSessionDescriptionInit)=>{pc.remoteDescription=data;pc.signalingState=data.type==="offer"?"have-remote-offer":"stable";}), createAnswer: vi.fn().mockResolvedValue({ type:"answer",sdp: "answer" }),
+    setLocalDescription: vi.fn(async(data:RTCSessionDescriptionInit)=>{pc.localDescription=data;pc.signalingState=data.type==="offer"?"have-local-offer":"stable";}), addIceCandidate: vi.fn().mockResolvedValue(undefined),
   };
-  mocks.createPeer.mockReturnValue(pc);
+  mocks.createPeer.mockImplementation((callId,send,callbacks)=>{new P2PMediaController(pc as unknown as RTCPeerConnection,{callId,polite:!callbacks.isCaller,isCaller:callbacks.isCaller,isCurrent:()=>callbacks.isCurrent(pc),send,onMedia:callbacks.onRemoteMedia,onError:callbacks.onTerminated});return pc;});
   return pc;
 }
 function setCall(video = false) {
@@ -369,6 +372,7 @@ it("detects already-ended capture before processor creation",async()=>{
  const raw=track("already-ended");raw.end();mocks.capture.mockResolvedValueOnce(new Stream([raw]));const pc=peer();await useP2PCallStore.getState().startWebRTC(true);expect(mocks.createPipeline).not.toHaveBeenCalled();expect(pc.addTrack).not.toHaveBeenCalled();expect(useP2PCallStore.getState().microphoneFailure).not.toBeNull();
 });
 it("keeps receiver initial failure truthful and retries only its retained exact-call offer",async()=>{
+ useP2PCallStore.setState({activeCall:{...useP2PCallStore.getState().activeCall!,caller_id:"peer",receiver_id:"owner"}});
  mocks.capture.mockRejectedValueOnce(new DOMException("denied","NotAllowedError"));const pc=peer();await useP2PCallStore.getState().handleSignal({call_id:"call",type:"offer",sdp:"original"});expect(pc.setRemoteDescription).not.toHaveBeenCalled();const call=useP2PCallStore.getState().activeCall!;expect(call).not.toBeNull();expect(useP2PCallStore.getState().microphoneFailure).not.toBeNull();
  const output=track("receiver-retry");mocks.capture.mockResolvedValueOnce(new Stream([track("receiver-raw")]));mocks.createPipeline.mockResolvedValueOnce(pipeline(output));expect(await useP2PCallStore.getState().retryMicrophone(call)).toBe(true);expect(pc.setRemoteDescription).toHaveBeenCalledWith(expect.objectContaining({sdp:"original"}));
  expect(mocks.ws).toHaveBeenCalledWith("p2p_signal",expect.objectContaining({call_id:"call",type:"answer"}));
@@ -421,4 +425,19 @@ it.each(["ended","auth","call"])("accepted private PTT owns native background si
   changeSettings({pttKey:"KeyV"});await Promise.resolve();expect(output.enabled).toBe(false);expect(release).toHaveBeenCalledWith("lease1");old({leaseId:"lease1",pressed:true});expect(output.enabled).toBe(false);
   for(const listener of listeners)listener({leaseId:"lease2",pressed:true});expect(output.enabled).toBe(true);if(reason==="ended")source.end();else if(reason==="auth")clearTokens();else useP2PCallStore.getState().cleanup();expect(output.enabled).toBe(false);expect(listeners.size).toBe(0);expect(release).toHaveBeenCalledWith("lease2");
  }finally{window.electronAPI=undefined;}
+});
+
+it("commits separate SDP-bound microphone/screen streams into the store and clears them with their exact PC",async()=>{
+ useP2PCallStore.setState({activeCall:{...useP2PCallStore.getState().activeCall!,caller_id:"peer",receiver_id:"owner"}});
+ const pc=peer(),remoteMic=track("misleading-screen-label"),remoteScreen=track("misleading-microphone-label");
+ const transceivers=[remoteMic,remoteScreen].map((raw,index)=>({mid:String(index),sender:{track:null},receiver:{track:raw},currentDirection:"sendrecv"} as unknown as RTCRtpTransceiver));pc.getTransceivers.mockReturnValue(transceivers);
+ pc.setRemoteDescription.mockImplementationOnce(async data=>{pc.remoteDescription=data;pc.signalingState="have-remote-offer";for(const transceiver of [...transceivers].reverse())getP2PMediaController(pc as unknown as RTCPeerConnection)!.onTrack({track:transceiver.receiver.track,transceiver} as unknown as RTCTrackEvent)});
+ mocks.capture.mockResolvedValueOnce(new Stream([track("source") ]));mocks.createPipeline.mockResolvedValueOnce(pipeline(track("processed")));
+ await useP2PCallStore.getState().handleSignal({call_id:"call",type:"offer",sdp:"v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=mid:0\r\na=sendrecv\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=mid:1\r\na=sendrecv\r\n",media_protocol:1,description_id:"00000000-0000-4000-8000-000000000001",description_revision:1,capabilities:["screen-audio-v1"],sources:[{mid:"0",source:"microphone"},{mid:"1",source:"screen-audio"}]});
+ expect(useP2PCallStore.getState().remoteMicrophoneStream!.getTracks()).toEqual([remoteMic]);expect(useP2PCallStore.getState().remoteScreenAudioStream!.getTracks()).toEqual([remoteScreen]);expect(useP2PCallStore.getState().remoteStream).toBeNull();expect(useP2PCallStore.getState().peerScreenAudioSupported).toBe(true);
+ const controller=getP2PMediaController(pc as unknown as RTCPeerConnection)!;useP2PCallStore.getState().cleanup();controller.onTrack({track:remoteMic,transceiver:transceivers[0]} as unknown as RTCTrackEvent);
+ expect(useP2PCallStore.getState().remoteMicrophoneStream).toBeNull();expect(useP2PCallStore.getState().remoteScreenAudioStream).toBeNull();expect(useP2PCallStore.getState().peerScreenAudioSupported).toBe(false);
+});
+it("rejects invalid SDP source claims before requesting local capture",async()=>{
+ await useP2PCallStore.getState().handleSignal({call_id:"call",type:"offer",sdp:"v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=mid:0\r\n",media_protocol:1,description_id:"00000000-0000-4000-8000-000000000001",description_revision:1,sources:[{mid:"0",source:"camera"}]});expect(mocks.capture).not.toHaveBeenCalled();expect(mocks.createPeer).not.toHaveBeenCalled();
 });

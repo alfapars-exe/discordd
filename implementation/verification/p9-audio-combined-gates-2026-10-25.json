@@ -30,6 +30,7 @@
     "observed": "Both connected with encrypted live local publications. Recipient receiver RMS0.002668 and decoded duration1.91s before requested speech. Both processing snapshots showed fallback/activeEngine none, so physical RNNoise operation is NOT accepted by this result.",
     "user_response": "User answered Evet, sesimi duyuyorum to the request to speak5-10seconds and confirm own voice returning through the peer to the headset.",
     "scope": "One-host physical microphone/headset audible private group loopback confirmed. Separate-device, device-switch, noise-engine, long-call and every other media acceptance gate remain open.",
-    "cleanup": "Browser control changed to user before round167, which hard-stopped before any action. Do not claim calls closed. User instructed to leave both calls when finished; agent cannot retake without explicit continuation. No raw audio retained."
+    "cleanup": "Round167 hard-stopped before any action when control changed to user. User subsequently explicitly authorized retaking control and closing calls. Round168 left both calls and independently observed callVisible false for each. No raw audio retained.",
+    "end_of_test": "Before leaving first client in round168, connected/E2EE remained true with received2335510bytes and decoded579.34seconds; receiver PCM0.00338. This is bounded observed transport duration, not every long-call/device/reconnect acceptance gate."
   }
 }

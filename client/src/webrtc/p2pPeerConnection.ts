@@ -1,3 +1,4 @@
+import { P2PMediaController, type P2PRemoteMedia } from "./p2pMediaController";
 /**
  * webrtc/p2pPeerConnection.ts — RTCPeerConnection factory + WebRTC primitives.
  *
@@ -6,9 +7,8 @@
  * onnegotiationneeded glare prevention). Returns a wired-up PC that the
  * caller adds tracks to.
  *
- * Glare prevention: a single `makingOffer` + `signalingState` guard ensures
- * we don't emit two simultaneous offers. This is the only place offers are
- * created — both initial and mid-call renegotiation routes through here.
+ * One per-peer media controller serializes descriptions, stages receiver
+ * tracks, and handles polite rollback or impolite glare rejection.
  */
 
 import { logToServer } from "../api/clientLog";
@@ -22,10 +22,9 @@ const ICE_SERVERS: RTCIceServer[] = [
 export type SendWS = (op: string, data?: unknown) => void;
 
 export interface PeerConnectionCallbacks {
-  /** Called whenever the remote stream changes — caller stores it. */
-  onRemoteStream: (stream: MediaStream) => void;
-  /** Read current remote stream (for mid-call addTransceiver track aggregation). */
-  getRemoteStream: () => MediaStream | null;
+  onRemoteMedia: (media: P2PRemoteMedia) => void;
+  isCurrent: (pc: RTCPeerConnection) => boolean;
+  isCaller: boolean;
   /** Called when the connection has irrecoverably failed/closed. */
   onTerminated: () => void;
 }
@@ -57,10 +56,16 @@ export function createPeerConnection(
   callbacks: PeerConnectionCallbacks,
 ): RTCPeerConnection {
   const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+  let disconnectedTimer: ReturnType<typeof setTimeout> | null = null;
+  const controller = new P2PMediaController(pc, { callId, polite: !callbacks.isCaller, isCaller: callbacks.isCaller,
+    isCurrent: () => callbacks.isCurrent(pc), send: sendWS, onMedia: callbacks.onRemoteMedia,
+    onError: () => { if (callbacks.isCurrent(pc)) callbacks.onTerminated(); },
+    onDispose: () => { if (disconnectedTimer) clearTimeout(disconnectedTimer); disconnectedTimer = null; pc.ontrack = null; pc.onicecandidate = null; pc.onnegotiationneeded = null; pc.onconnectionstatechange = null; },
+  });
 
   // Relay new ICE candidates to the remote peer
   pc.onicecandidate = (event) => {
-    if (event.candidate) {
+    if (event.candidate && callbacks.isCurrent(pc)) {
       sendWS("p2p_signal", {
         call_id: callId,
         type: "ice-candidate",
@@ -69,26 +74,13 @@ export function createPeerConnection(
     }
   };
 
-  // Mid-call renegotiation (e.g. screen share addTransceiver) emits ontrack
-  // without populating event.streams[0]. In that case we need to splice the
-  // new track into the existing remote stream so the audio side keeps playing.
-  pc.ontrack = (event) => {
-    if (event.streams[0]) {
-      callbacks.onRemoteStream(event.streams[0]);
-      return;
-    }
-    const existing = callbacks.getRemoteStream();
-    const stream = new MediaStream(existing ? existing.getTracks() : []);
-    stream.addTrack(event.track);
-    callbacks.onRemoteStream(stream);
-  };
+  pc.ontrack = (event) => controller.onTrack(event);
 
   // Connection-state monitoring with debounce on transient "disconnected".
   // During renegotiation (signalingState !== "stable") ICE may briefly drop —
   // we wait longer in that case before declaring the call dead.
-  let disconnectedTimer: ReturnType<typeof setTimeout> | null = null;
-
   pc.onconnectionstatechange = () => {
+    if (!callbacks.isCurrent(pc)) return;
     if (pc.connectionState === "connected" || pc.connectionState === "connecting") {
       if (disconnectedTimer) {
         clearTimeout(disconnectedTimer);
@@ -131,6 +123,7 @@ export function createPeerConnection(
         });
         disconnectedTimer = setTimeout(() => {
           disconnectedTimer = null;
+          if (!callbacks.isCurrent(pc)) return;
           if (pc.connectionState === "disconnected" || pc.connectionState === "failed") {
             console.warn("[p2p] PeerConnection did not recover, ending call");
             logToServer("warn", "p2p_recovery_timeout", {
@@ -147,35 +140,7 @@ export function createPeerConnection(
     }
   };
 
-  // onnegotiationneeded — auto-offer creation after addTrack/addTransceiver.
-  // Single offer-creation point; the makingOffer + signalingState guard
-  // prevents glare with a concurrent incoming offer.
-  let makingOffer = false;
-  pc.onnegotiationneeded = async () => {
-    if (makingOffer || pc.signalingState !== "stable") return;
-    try {
-      makingOffer = true;
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      sendWS("p2p_signal", {
-        call_id: callId,
-        type: "offer",
-        sdp: offer.sdp,
-      });
-    } catch (err) {
-      console.error("[p2p] Renegotiation error:", err);
-      logToServer("error", "p2p_renegotiation_failed", {
-        errorMessage:
-          err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200),
-        errorName: err instanceof Error ? err.name : typeof err,
-        errorStack: err instanceof Error && err.stack ? err.stack.slice(0, 1024) : "",
-        signalingState: pc.signalingState,
-        callId,
-      });
-    } finally {
-      makingOffer = false;
-    }
-  };
+  pc.onnegotiationneeded = () => controller.requestNegotiation();
 
   return pc;
 }

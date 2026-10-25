@@ -1,0 +1,70 @@
+{
+  "date": "2026-10-25",
+  "scope": "P9 P2P single-picker optional browser audio capture plumbing only",
+  "owned_paths": [
+    "client/src/webrtc/p2pScreenShare.ts",
+    "client/src/webrtc/p2pScreenShare.test.ts"
+  ],
+  "source_sha256": {
+    "client/src/webrtc/p2pScreenShare.ts": "785b1b393d4a6e3ead96bf88971d2ee48e56498ae68de4b66047f45bcc7c18d9",
+    "client/src/webrtc/p2pScreenShare.test.ts": "3187a9acbb0d75215bd69dfe4cb4494707ccdbb725eb2460f2083ea30438a884"
+  },
+  "behavior": [
+    "ScreenShareOptions.audioRequested optional defaultsfalse. NativeElectron always display audiofalse.",
+    "Explicitweb requests echoCancellation/noiseSuppression/autoGainControlfalse,channelCount2 on the SAMEdisplaypicker.",
+    "Firstreturnedbrowseraudio disabled immediately before any furtherawait; all extras/nonrequested audio stopped.",
+    "Returned audioTrack nullable; capture result.dispose stops exactownedbrowseraudio+video. Only isolated P2PScreenAudioSession may enable audio after exactsourceACK.",
+    "Latecancel/source loss stops all pickertracks and cannot replace sender. Existingcamera/video mutation ownership retained.",
+    "subscribeScope registered beforeGDM stops all exactpickerraw synchronously on auth/call/PC/ticket loss, including heldmetrics/replace. Repeateddispose stillstops lateGDM output; eachtrackstops once.",
+    "audioCurrent+subscribeAudioScope separately retire onlybrowseraudio on request/caploss whilevideocontinues. audioTrack livegetter becomesnull afterretirement.",
+    "restoreCurrent separately authorizes same-call/PC/no-newshare late cancellation restoration. Only exactoldcapturedraw sender mayrestore; serialized mutation restoreslatestlivecamera/null and reconcilescamera changes duringawait. Cap-onlyloss nevercancelsvideo."
+  ],
+  "verified": [
+    {
+      "cwd": "client",
+      "command": "npx vitest run src/webrtc/p2pScreenShare.test.ts src/webrtc/p2pScreenAudioSession.test.ts --reporter=dot",
+      "result": "2files31testsPASS2.28s:12screen+19publisher"
+    },
+    {
+      "cwd": "client",
+      "command": "npx tsc -b",
+      "result": "exit0 session88368; actualprojectreference gate"
+    },
+    {
+      "cwd": "client",
+      "command": "npx eslint src/webrtc/p2pScreenShare.ts src/webrtc/p2pScreenShare.test.ts",
+      "result": "exit0,0issues"
+    },
+    {
+      "cwd": "client",
+      "command": "npx vitest run src/webrtc/p2pScreenShare.test.ts src/webrtc/p2pScreenAudioSession.test.ts --reporter=dot",
+      "result": "Final pendingownership source2files38testsPASS2.35s;19capture+19publisher"
+    },
+    {
+      "cwd": "client",
+      "command": "npx tsc -b",
+      "result": "Final pendingownership sourceactualprojectreferencePASS0 session35591"
+    },
+    {
+      "cwd": "client",
+      "command": "npx eslint src/webrtc/p2pScreenShare.ts src/webrtc/p2pScreenShare.test.ts",
+      "result": "Final pendingownership sourceexit0,0issues"
+    },
+    {
+      "cwd": "client",
+      "command": "npx vitest run src/webrtc/p2pScreenShare.test.ts src/webrtc/p2pScreenAudioSession.test.ts --reporter=dot; scoped eslint capture2paths",
+      "result": "Final restoration source44testsPASS2.43s (25capture+19publisher),lint0. Tests cancelheldreplace/latestcameraoff/newshare/newcall/duringrestorecameraoff."
+    },
+    {
+      "cwd": "client",
+      "command": "npx tsc -b (core agent final combined project-reference run11096); combined11file focused integration",
+      "result": "Reported by linked_games_audit: actualtscbPASS0 includes frozenrestorefields+UIpendingguards;11files143testsPASS4.51s (99core+44helper)."
+    }
+  ],
+  "remaining": [
+    "Store/UI still must require explicitchoice+confirmedcap BEFOREopeningpicker and passreturneddisabledtrack to publisher.",
+    "No native helper start,store/controller/UI source edits in this plumbing slice.",
+    "Actualtwo-client audible Windows/browser systemaudio,Opus/stereo quality andphysicaldevice gates remainopen.",
+    "No productionoperations,actualcapture,stage/commit/push."
+  ]
+}

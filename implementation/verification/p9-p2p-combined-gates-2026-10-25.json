@@ -1,0 +1,27 @@
+{
+  "status": "implemented_unverified",
+  "scope": "P2P SDP-bound microphone/screen audio, capture publisher, same-picker ownership and source-specific controls",
+  "source_receipts": ["p9-p2p-media-source-core-2026-10-25.json", "p9-p2p-screen-audio-helper-2026-10-25.json", "p9-p2p-screen-capture-plumbing-2026-10-25.json", "p9-p2p-source-audio-ui-2026-10-25.json"],
+  "frozen_union": "23 source/test paths and23 canonical SHA256 records independently verified before staging",
+  "working_tree_gates": {
+    "client": "407 files,3949 tests passed,85.95seconds; root23049 exit0",
+    "build": "actual tsc-b and Vite1707modules passed,2.72seconds; root17254 exit0",
+    "lint": "0errors,6warnings; root95988 exit0",
+    "qualification": "Separate user-owned logging task modified additional frontend/backend files during this working-tree run. Those files are excluded from this commit. Exact immutable-source test/build/scan gates must run after this scoped commit; this run alone is not evidence for the released artifact."
+  },
+  "implemented": [
+    "Current accepted SDP, source MID/kind/direction and exact offer/answer revisions authorize receiving streams; legacy peers retain microphone and cannot enable screen audio.",
+    "Separate microphone and screen-audio playback, personal volumes, routed output and local mute/deafen; guild server-deafen does not affect private calls.",
+    "Explicit pre-picker audio choice; same browser picker or existing packaged native capture; no second audio infrastructure.",
+    "Dedicated bounded audio sender stays disabled until exact peer source ACK. Video and microphone survive audio failure/stop.",
+    "Call/auth/PC/source/capability retirement stops pending raw capture immediately, including unresolved post-picker operations; stale UI controls cannot stop a replacement source.",
+    "Cancelled late video replacement restores only the latest eligible camera under an exact separate restoration lease; replacement shares and calls are protected."
+  ],
+  "acceptance_open": [
+    "Actual new-client/new-client and new-client/legacy P2P signaling and independent received audio",
+    "Real browser picker-returned audio and packaged Windows WASAPI capture",
+    "Physical output switching, source gain/deafen, background/reconnect and permission/device failures",
+    "P9 physical microphone initialization fallback diagnosis; generated RNNoise readiness and audible raw fallback do not prove physical RNNoise"
+  ],
+  "production": "Not deployed; current separately published stable release113 is not this feature bundle"
+}

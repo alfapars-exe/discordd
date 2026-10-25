@@ -133,5 +133,12 @@
   "privateScreenVideoOnly": "Yalnızca video; özel aramalarda sistem sesi paylaşılmaz.",
   "screenShareCameraPending": "Kamera değişikliği tamamlandıktan sonra ekranınızı paylaşın.",
   "privateScreenNativeRate": "Ekran yenileme hızı (bilinmiyorsa 60 FPS)",
-  "screenShareRestoring": "Yeniden paylaşmadan önce kameranın geri yüklenmesini bekleyin."
+  "screenShareRestoring": "Yeniden paylaşmadan önce kameranın geri yüklenmesini bekleyin.",
+  "p2pMicrophoneAudioSource": "Mikrofon sesi",
+  "p2pScreenAudioSource": "Paylaşılan sistem sesi",
+  "p2pMicrophoneVolume": "Kişisel mikrofon ses düzeyi",
+  "p2pScreenAudioVolume": "Kişisel paylaşım sesi düzeyi",
+  "p2pScreenAudioPeerUnsupported": "Diğer istemci ayrı paylaşım sesi desteği bildirmedi.",
+  "p2pScreenAudioOff": "Sistem sesi paylaşılmıyor.",
+  "p2pScreenAudioEnded": "Sistem sesi sona erdi. Ekran videosu sessiz devam ediyor."
 }

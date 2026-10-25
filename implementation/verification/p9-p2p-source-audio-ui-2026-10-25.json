@@ -1,0 +1,71 @@
+{
+  "date": "2026-10-25",
+  "scope": "P9 P2P independent microphone/screen-audio sinks and guarded capture controls",
+  "status": "implemented_focused_verified_runtime_acceptance_pending",
+  "owned_paths": [
+    "client/src/components/p2p/P2PAudioSink.tsx",
+    "client/src/components/p2p/P2PAudioSink.test.tsx",
+    "client/src/components/p2p/P2PCallScreen.tsx",
+    "client/src/components/p2p/P2PCallScreen.audio.test.tsx",
+    "client/src/components/p2p/P2PCallScreen.audio.localization.test.tsx",
+    "client/src/components/p2p/P2PCallScreen.staleControls.test.tsx",
+    "client/src/i18n/locales/en/voice.json",
+    "client/src/i18n/locales/tr/voice.json"
+  ],
+  "receipt_path": "implementation/verification/p9-p2p-source-audio-ui-2026-10-25.json",
+  "source_sha256_lf": {
+    "client/src/components/p2p/P2PAudioSink.tsx": "df5c40a6da26909531569aeb29ce89fadf4a37fa328023886e3940ca071350dc",
+    "client/src/components/p2p/P2PAudioSink.test.tsx": "75a635930262c0b7598367dd2885c1146b3e5e394a0728aec0641b964f106aaf",
+    "client/src/components/p2p/P2PCallScreen.tsx": "0edbe761b38546e4a958fdb14d5f19fb678dc4ae89caa5b2a52b42841ef3c1a6",
+    "client/src/components/p2p/P2PCallScreen.audio.test.tsx": "5e90de3514292e082114be10c3580647bd1d71b345facc935155c9a8a8d07a8d",
+    "client/src/components/p2p/P2PCallScreen.audio.localization.test.tsx": "379bc9e1e2afea06f3766e739997a8c29433665ab1cf49526d1668ac1a0996c9",
+    "client/src/components/p2p/P2PCallScreen.staleControls.test.tsx": "d826ca72c183250dd11e20ee99e261d9dca6157d0e25d8613753cebd78bd6c23",
+    "client/src/i18n/locales/en/voice.json": "757d00fece6b79973999d2ab6dc4c6fcefba992ed41e0de9960d0de8e6c1c6f9",
+    "client/src/i18n/locales/tr/voice.json": "f304ae6bcf9c6e43bbc1180b8d4ccef5b28be14004b4339a3240f1855a3dc86b"
+  },
+  "behavior": [
+    "Two independent playPrivateAudio leases consume remoteMicrophoneStream and remoteScreenAudioStream; remoteStream remains video-only and is never an audio fallback.",
+    "Each playback lease checks the exact source stream, live raw audio track set, call object and participant IDs, peer connection, account owner/generation and selected output device. Weak ownership bindings prevent retained streams or raw tracks from being relabelled across sources, calls, connections or logins.",
+    "Microphone volume uses masterVolume times userVolumes; shared audio uses masterVolume times screenShareVolumes. Local deafen and per-peer local mute gate both. Guild server-deafen is intentionally excluded from private-call playback. Source failure/retry, revocation and output changes retire only the correct owners.",
+    "Explicit system-audio choice reads screenAudioRequested and calls setScreenAudioRequested only for the current active account/call/connection with advertised peer support, before screen sharing and outside isScreenSharePending. No UI invocation starts a second picker or implies later audio auto-enablement.",
+    "The UI displays actual off/starting/shared/not_returned/unavailable/ended states. Starting/shared expose the render-captured stopScreenAudio action; controls also validate captured call object, peer connection, account owner/generation and current action reference before invoking it. The source-bound store action remains responsible for the exact media ticket.",
+    "Personal volume and checkbox handlers reject stale render callbacks after account, generation, connection or call replacement. Pending picker/restore is visibly disabled and stale checkbox handlers also recheck live pending state.",
+    "Windows consent explicitly describes system audio from all other applications excluding HiChat; browser consent describes audio only when returned by the selected-source picker. Existing group consent/status translations are reused. Real en/tr i18next rendering verifies the voice namespace, separate personal volumes and source-state labels."
+  ],
+  "verification": [
+    {
+      "kind": "focused Vitest",
+      "result": "PASS:4 files,37 tests on current combined worktree",
+      "paths": [
+        "src/components/p2p/P2PAudioSink.test.tsx",
+        "src/components/p2p/P2PCallScreen.audio.test.tsx",
+        "src/components/p2p/P2PCallScreen.audio.localization.test.tsx",
+        "src/components/p2p/P2PCallScreen.staleControls.test.tsx"
+      ]
+    },
+    {
+      "kind": "application TypeScript",
+      "command": "tsc --noEmit -p tsconfig.app.json",
+      "result": "PASS after the approved core store fields/actions were written; earlier transitional missing-field errors were not hidden with casts"
+    },
+    {
+      "kind": "scoped ESLint",
+      "result": "PASS:all6 owned TS/TSX source/test files,0 errors and0 warnings"
+    },
+    {
+      "kind": "diff check",
+      "result": "PASS on exact owned paths; existing CRLF conversion warning does not change the canonical-LF source hashes"
+    },
+    {
+      "kind": "combined project TypeScript",
+      "command": "npx tsc -b",
+      "result": "PASS:reported by the client-core agent at final source freeze, including the UI integration",
+      "evidence_origin": "collaboration final-freeze report from linked_games_audit; direct UI-agent TypeScript command is recorded separately above"
+    }
+  ],
+  "remaining": [
+    "New-client P2P source-audio runtime is NOT accepted by this UI receipt. Headful protocol/capture/output integration and actual peer PCM remain root/core acceptance work.",
+    "Focused component tests exercise actual rendering and actual retained JSX-render callback functions, with store/media seams mocked where appropriate; they do not prove physical audio output, Windows WASAPI capture, browser source-audio availability or hardware output-device behavior.",
+    "Parent owns combined full client/build/Electron/security gates and any staging, commit, push or deployment. No production mutation is claimed here."
+  ]
+}
