@@ -117,5 +117,13 @@
   "p2pFocusedPTT": "Bas-konuş, bu HiChat penceresinde klavye odağı varken çalışır.",
   "camera": "Kamera",
   "disconnect": "Bağlantıyı kes",
-  "connecting": "Bağlanıyor..."
+  "connecting": "Bağlanıyor...",
+  "screenShareQualityFailed": "Ekran paylaşımı başarısız oldu. Paylaşım iznini kontrol edin veya başka bir kalite deneyin.",
+  "privateScreenQuality": "Ekran kalitesi",
+  "privateScreenFps": "Ekran kare hızı",
+  "privateScreenNative": "Ekran boyutu",
+  "privateScreenVideoOnly": "Yalnızca video; özel aramalarda sistem sesi paylaşılmaz.",
+  "screenShareCameraPending": "Kamera değişikliği tamamlandıktan sonra ekranınızı paylaşın.",
+  "privateScreenNativeRate": "Ekran yenileme hızı (bilinmiyorsa 60 FPS)",
+  "screenShareRestoring": "Yeniden paylaşmadan önce kameranın geri yüklenmesini bekleyin."
 }

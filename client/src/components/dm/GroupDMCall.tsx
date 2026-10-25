@@ -1,13 +1,15 @@
+import GroupDMCallCamera from "./GroupDMCallCamera";
 import {ownsP2PCapture}from "../../audio/p2pCaptureOwner";
 import {useMicrophoneCaptureViewStore,latchPrivateCaptureFailure,clearPrivateCaptureFailure,retirePrivateCaptureFailure}from "../../stores/microphoneCaptureViewStore";
 import { useCallback, useMemo, useState, useLayoutEffect, useRef } from "react";
-import { DisconnectButton, LiveKitRoom, TrackToggle } from "@livekit/components-react";
+import { DisconnectButton, LiveKitRoom } from "@livekit/components-react";
 import { Track, type RoomOptions } from "livekit-client";
 import type { VoiceTokenResponse } from "../../types/voice";
 import { useE2EEKeyProvider } from "../../hooks/useE2EEKeyProvider";
 import { useToastStore } from "../../stores/toastStore";
 import { useEncryptedRoomAdmission } from "../../hooks/useEncryptedRoomAdmission";
 import GroupDMCallAudio from "./GroupDMCallAudio";
+import GroupScreenShareControl from "./GroupScreenShareControl";
 import { privateCaptureConflict } from "../../audio/privateCallState";
 import { useVoiceStore } from "../../stores/voiceStore";
 import { useP2PCallStore } from "../../stores/p2pCallStore";
@@ -78,9 +80,9 @@ export default function GroupDMCall({ credentials, onLeave, callSessionNonce, in
       <div className="group-dm-call-controls">
         {admission.publishReady && <>
           <GroupDMCallAudio room={admission.room} microphoneEnabled={microphoneEnabled} onMicrophoneChange={setMicrophoneEnabled} onCaptureState={setCaptureReady} captureFailure={captureFailure} onCaptureFailure={setCaptureFailure} isCurrentSession={isCurrentSession} conflict={conflict} />
-          <TrackToggle source={Track.Source.Camera}>{t("camera")}</TrackToggle>
-          <TrackToggle source={Track.Source.ScreenShare}>{t("screenShare")}</TrackToggle>
+          <GroupScreenShareControl room={admission.room} groupId={credentials.channel_id} keyEpoch={credentials.e2ee_key_epoch} isCurrentSession={isCurrentSession} />
         </>}
+        <GroupDMCallCamera room={admission.room} admitted={admission.publishReady} current={isCurrentSession}/>
         <DisconnectButton onClick={leaveCurrentRoom}>{t("disconnect")}</DisconnectButton>
       </div>
     </LiveKitRoom>

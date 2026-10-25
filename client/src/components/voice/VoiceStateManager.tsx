@@ -1,3 +1,5 @@
+import {useRoomCamera}from "../../hooks/useRoomCamera";
+import CameraCaptureStatus from "./CameraCaptureStatus";
 import NativePTTStatus from "./NativePTTStatus";
 /**
  * VoiceStateManager — orchestrates the bidirectional sync between voiceStore
@@ -22,11 +24,10 @@ import NativePTTStatus from "./NativePTTStatus";
  */
 
 import MicrophoneCaptureStatus from "./MicrophoneCaptureStatus";
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { useLocalParticipant, useRoomContext } from "@livekit/components-react";
 import { useVoiceStore } from "../../stores/voiceStore";
 import { useAudioProcessor } from "../../hooks/useAudioProcessor";
-import { useCameraPublishDefaults } from "../../hooks/useCameraPublishDefaults";
 import { useSpeakingDetection } from "../../hooks/useSpeakingDetection";
 import { useRttPolling } from "../../hooks/useRttPolling";
 import { useConnectionQualitySync } from "../../hooks/useConnectionQualitySync";
@@ -38,7 +39,6 @@ import { useScreenShareStats } from "../../hooks/useScreenShareStats";
 import { useScreenShareReceiverStats } from "../../hooks/useScreenShareReceiverStats";
 import { useMicSync } from "../../hooks/useMicSync";
 import { useOutputDeviceSync } from "../../hooks/useOutputDeviceSync";
-import { useCameraDeviceSync } from "../../hooks/useCameraDeviceSync";
 import { useTrackSubscriptions } from "../../hooks/useTrackSubscriptions";
 import { useInitialRoomSync } from "../../hooks/useInitialRoomSync";
 import { useLiveKitDebugTracer } from "../../hooks/useLiveKitDebugTracer";
@@ -51,7 +51,6 @@ function VoiceStateManager() {
   const room = useRoomContext();
   const { localParticipant } = useLocalParticipant();
   useOverlayGoLiveReadiness(room, localParticipant);
-  useCameraDeviceSync(room);
 
   // Skip effects until initial connection sync is done
   const initialSyncDone = useRef(false);
@@ -115,52 +114,10 @@ function VoiceStateManager() {
   // investigating sporadic disconnects. Default off to keep prod console clean.
   useLiveKitDebugTracer(room, { enabled: false });
 
-  // Camera publish/unpublish — drives LiveKit from voiceStore.isCameraEnabled.
-  // Mirrors the screen-share pattern but stays inline because there's no
-  // multi-path complexity (no native handler, no separate audio capture).
-  // Errors are toast-free: LiveKit logs its own permission/device failures
-  // and the UI button stays in its previous state if publish fails.
-  const isCameraEnabled = useVoiceStore((s) => s.isCameraEnabled);
-
-  // Resolution / fps / simulcast ladder for the camera, passed per-publish as
-  // the 2nd and 3rd args of setCameraEnabled. They are NOT in
-  // RoomOptions.publishDefaults for the same reason the screen-share options
-  // aren't (see VoiceProvider.tsx:177-185): room-level publishDefaults are
-  // captured at connect() and never re-applied.
-  //
-  // Held in a latest-ref rather than an effect dependency on purpose: a
-  // mid-session quality change must NOT re-fire the toggle effect and cycle a
-  // live camera. New settings take effect on the NEXT camera toggle — the same
-  // semantics the screen share has.
-  const cameraOpts = useCameraPublishDefaults();
-  const cameraOptsRef = useRef(cameraOpts);
-  useLayoutEffect(() => {
-    cameraOptsRef.current = cameraOpts;
-  });
-
-  useEffect(() => {
-    if (!initialSyncDone.current) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const { cameraCapture, cameraPublish } = cameraOptsRef.current;
-        await localParticipant.setCameraEnabled(
-          isCameraEnabled,
-          cameraCapture,
-          cameraPublish,
-        );
-      } catch (err) {
-        if (!cancelled) {
-          console.error("[VoiceStateManager] camera toggle failed:", err);
-          // Roll the store state back so the UI mirrors reality.
-          useVoiceStore.getState().setCameraEnabled(!isCameraEnabled);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [isCameraEnabled, localParticipant]);
+  // One admitted raw-camera owner applies live device/quality/FPS changes.
+  const isCameraEnabled=useVoiceStore(state=>state.isCameraEnabled);
+  const cameraChannel=useVoiceStore(state=>state.currentVoiceChannelId),cameraJoin=useVoiceStore(state=>state._joinGeneration);
+  const camera=useRoomCamera(room,isCameraEnabled,true,()=>{const state=useVoiceStore.getState();return state.currentVoiceChannelId===cameraChannel&&state._joinGeneration===cameraJoin;},()=>useVoiceStore.getState().setCameraEnabled(false));
 
   // Raise EventEmitter limit — we attach many room listeners here + SDK internals
   useEffect(() => {
@@ -187,7 +144,7 @@ function VoiceStateManager() {
     };
   }, [room]);
 
-  return <><MicrophoneCaptureStatus participant={localParticipant} /><NativePTTStatus unavailable={ptt.nativeUnavailable} retry={ptt.retryNative}/></>;
+  return <><MicrophoneCaptureStatus participant={localParticipant} /><NativePTTStatus unavailable={ptt.nativeUnavailable} retry={ptt.retryNative}/><CameraCaptureStatus status={camera} retry={()=>camera.retry(()=>useVoiceStore.getState().setCameraEnabled(true))}/></>;
 }
 
 export default VoiceStateManager;

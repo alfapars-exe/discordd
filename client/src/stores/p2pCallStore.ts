@@ -1,3 +1,4 @@
+import {P2PCameraSession}from "../webrtc/p2pCamera";
 /**
  * p2pCallStore — P2P call state management (signaling + media orchestration).
  *
@@ -23,7 +24,7 @@ import {
   createPeerConnection,
   type SendWS,
 } from "../webrtc/p2pPeerConnection";
-import { startScreenShare, stopScreenShare } from "../webrtc/p2pScreenShare";
+import { startScreenShare, stopScreenShare, type StartScreenShareResult } from "../webrtc/p2pScreenShare";
 import { useToastStore } from "./toastStore";
 import { useAuthStore } from "./authStore";
 import { useVoiceStore } from "./voiceStore";
@@ -36,15 +37,6 @@ function selectedCameraConstraints() {
 }
 
 // ─── Helpers ───
-
-/** Acquire a single high-quality camera track (used by toggleVideo). */
-async function getCameraTrack(): Promise<MediaStreamTrack> {
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio: false,
-    video: selectedCameraConstraints(),
-  });
-  return stream.getVideoTracks()[0];
-}
 
 /** Stop every track on a stream — defensive cleanup. */
 function stopAllTracks(stream: MediaStream | null): void {
@@ -112,7 +104,23 @@ type P2PCallStore = {
 // ─── Store ───
 
 export const useP2PCallStore = create<P2PCallStore>((set, get) => {
+  let screenTicket: symbol | null = null;
+  let screenRestoring = false;
+  let screenSession: StartScreenShareResult | null = null;
+  let unsubscribeScreenQuality: (() => void) | null = null;
+  const retireScreen = () => { screenTicket = null; screenRestoring = false; unsubscribeScreenQuality?.(); unsubscribeScreenQuality = null; screenSession?.dispose(); screenSession = null; };
   let cameraPending = false;
+  let cameraRecord:{call:P2PCall;pc:RTCPeerConnection;stream:MediaStream;owner:P2PCameraSession}|null=null;
+  const cameraFor=(call:P2PCall,pc:RTCPeerConnection,stream:MediaStream)=>{
+    const auth=getAuthSessionSnapshot(),user=useAuthStore.getState().user?.id;
+    if(call.status!=="active"||!auth.ownerId||user!==auth.ownerId||![call.caller_id,call.receiver_id].includes(user))return null;
+    if(cameraRecord?.call===call&&cameraRecord.pc===pc&&cameraRecord.stream===stream)return cameraRecord.owner;
+    const prior=cameraRecord;cameraRecord=null;prior?.owner.dispose();cameraPending=false;
+    const scope=JSON.stringify(auth);
+    const current=()=>cameraRecord?.owner===owner&&get().activeCall===call&&get().peerConnection===pc&&get().localStream===stream&&JSON.stringify(getAuthSessionSnapshot())===scope;
+    const owner=new P2PCameraSession({current,sharing:()=>screenTicket!==null||get().isScreenSharing||!!get()._screenSender,stream,pc,enabled:get().isVideoOn,state:enabled=>{if(current())set({isVideoOn:enabled});},busy:pending=>{if(current())cameraPending=pending;},error:error=>{if(current())useToastStore.getState().addToast("error",i18n.t(`settings:${cameraErrorKey(error)}`));}});
+    cameraRecord={call,pc,stream,owner};owner.activate();return owner;
+  };
   let microphone: P2PMicrophoneSession | null = null;
   const microphoneNow=():P2PMicrophoneSession|null=>microphone;
   let audioSender: {pc:RTCPeerConnection;sender:RTCRtpSender}|null=null;
@@ -239,71 +247,56 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
     },
 
     toggleVideo: () => {
-      const { localStream, isVideoOn, peerConnection, activeCall } = get();
-      if (!localStream || !peerConnection || !activeCall || cameraPending) return;
-
-      if (isVideoOn) {
-        for (const track of localStream.getVideoTracks()) track.enabled = false;
-        set({ isVideoOn: false });
-        return;
-      }
-
-      cameraPending = true;
-      getCameraTrack()
-        .then(async (videoTrack) => {
-          const current = get();
-          if (current.activeCall !== activeCall || current.peerConnection !== peerConnection || current.localStream !== localStream) {
-            videoTrack.stop();
-            return;
-          }
-          const previous = localStream.getVideoTracks()[0];
-          const sender = previous ? peerConnection.getSenders().find((candidate) => candidate.track === previous) : undefined;
-          try {
-            if (sender) await sender.replaceTrack(videoTrack);
-            else peerConnection.addTrack(videoTrack, localStream);
-          } catch (error) { videoTrack.stop(); throw error; }
-          if (get().peerConnection !== peerConnection || get().activeCall !== activeCall) {
-            videoTrack.stop();
-            return;
-          }
-          if (previous) { localStream.removeTrack(previous); previous.stop(); }
-          localStream.addTrack(videoTrack);
-          set({ isVideoOn: true });
-        })
-        .catch((err) => {
-          console.error("[p2p] Failed to get video:", err);
-          if (get().activeCall === activeCall) useToastStore.getState().addToast("error", i18n.t(`settings:${cameraErrorKey(err)}`));
-        }).finally(() => { cameraPending = false; });
+      const{localStream,peerConnection,activeCall}=get();
+      if(localStream&&peerConnection&&activeCall)cameraFor(activeCall,peerConnection,localStream)?.toggle();
     },
 
     toggleScreenShare: () => {
-      const { isScreenSharing, peerConnection, localStream, _screenSender } = get();
-      if (!peerConnection || !localStream) return;
-
-      if (isScreenSharing) {
-        stopScreenShare(_screenSender, localStream.getVideoTracks()[0] ?? null);
+      const { activeCall, peerConnection, localStream, isScreenSharing } = get();
+      if (screenRestoring) { useToastStore.getState().addToast("error", i18n.t("voice:screenShareRestoring")); return; }
+      if (isScreenSharing || screenTicket) {
+        const previous = screenSession;
+        retireScreen();
         set({ _screenSender: null, isScreenSharing: false });
+        if (previous && previous.sender.track === previous.track && activeCall && peerConnection && localStream) {
+          const ticket = Symbol("screen-camera-restore"), auth = JSON.stringify(getAuthSessionSnapshot());
+          screenTicket = ticket; screenRestoring = true;
+          const current = () => screenTicket === ticket && get().activeCall === activeCall && activeCall.status === "active" && get().peerConnection === peerConnection && get().localStream === localStream && JSON.stringify(getAuthSessionSnapshot()) === auth;
+          void (async () => {
+            while (current()) {
+              const camera = get().isVideoOn ? localStream.getVideoTracks()[0] ?? null : null;
+              const restored = await stopScreenShare(previous.sender, camera, current);
+              if (!restored || !current() || camera === (get().isVideoOn ? localStream.getVideoTracks()[0] ?? null : null)) break;
+            }
+          })().catch(() => { if (current()) useToastStore.getState().addToast("error", i18n.t("voice:screenShareQualityFailed")); }).finally(() => { if (screenTicket === ticket) { screenTicket = null; screenRestoring = false; } });
+        }
         return;
       }
-
-      startScreenShare(peerConnection)
-        .then((result) => {
-          if (!result) return;
-          // Wire the browser's native "Stop sharing" button to our state.
-          result.track.onended = () => {
-            const current = get();
-            if (!current.isScreenSharing) return;
-            stopScreenShare(
-              current._screenSender,
-              current.localStream?.getVideoTracks()[0] ?? null,
-            );
-            set({ _screenSender: null, isScreenSharing: false });
-          };
-          set({ _screenSender: result.sender, isScreenSharing: true });
-        })
-        .catch((err) => {
-          console.error("[p2p] Screen share error:", err);
+      if (!activeCall || activeCall.status !== "active" || !peerConnection || !localStream) return;
+      if (cameraPending) { useToastStore.getState().addToast("error", i18n.t("voice:screenShareCameraPending")); return; }
+      const auth = getAuthSessionSnapshot();
+      if (!auth.ownerId || useAuthStore.getState().user?.id !== auth.ownerId || (activeCall.caller_id !== auth.ownerId && activeCall.receiver_id !== auth.ownerId)) return;
+      const ticket = Symbol("screen-share"); screenTicket = ticket;
+      const current = () => screenTicket === ticket && activeCall.status === "active" && get().activeCall === activeCall && get().peerConnection === peerConnection && get().localStream === localStream
+        && useAuthStore.getState().user?.id === auth.ownerId && getAuthSessionSnapshot().ownerId === auth.ownerId && getAuthSessionSnapshot().generation === auth.generation;
+      const settings = useVoiceStore.getState();
+      const display = { width: window.screen.width, height: window.screen.height, refreshRate: 0 };
+      void startScreenShare(peerConnection, { isCurrent: current, settings, display, getCameraTrack: () => get().isVideoOn ? localStream.getVideoTracks()[0] ?? null : null, getDisplayMetrics: window.electronAPI?.getDisplayInfo ? () => window.electronAPI!.getDisplayInfo() : undefined }).then(result => {
+        if (!result) { if (current()) screenTicket = null; return; }
+        if (!current()) { result.dispose(); return; }
+        screenSession = result;
+        result.track.onended = () => { if (current() && screenSession === result) get().toggleScreenShare(); };
+        let chain = Promise.resolve().then(async () => { if (current() && screenSession === result) await result.update(useVoiceStore.getState()); }).catch(() => { if (current()) useToastStore.getState().addToast("error", i18n.t("voice:screenShareQualityFailed")); });
+        unsubscribeScreenQuality = useVoiceStore.subscribe((next, previous) => {
+          if (next.screenShareQuality === previous.screenShareQuality && next.screenShareFps === previous.screenShareFps) return;
+          chain = chain.then(async () => { if (current() && screenSession === result) await result.update(useVoiceStore.getState()); }).catch(() => {
+            if (current()) useToastStore.getState().addToast("error", i18n.t("voice:screenShareQualityFailed"));
+          });
         });
+        set({ _screenSender: result.sender, isScreenSharing: true });
+      }).catch(error => {
+        if (current()) { screenTicket = null; console.error("[p2p] Screen share error:", error); useToastStore.getState().addToast("error", i18n.t("voice:screenShareQualityFailed")); }
+      });
     },
 
     startWebRTC: async (isCaller) => {
@@ -333,7 +326,7 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
         // addTrack triggers onnegotiationneeded; PC's handler creates the offer.
         for (const track of stream.getTracks()) {const sender=pc.addTrack(track, stream);if(track.kind==="audio")audioSender={pc,sender};}
         applyDegradationPreference(pc);
-        microphone?.connect();
+        microphone?.connect();cameraFor(activeCall,pc,stream);
       } catch (err) {
         console.error("[p2p] WebRTC start error:", err);
         if (currentStart() && get().microphoneFailure?.call!==activeCall) get().cleanup();
@@ -343,6 +336,8 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
     },
 
     cleanup: () => {
+      const priorCamera=cameraRecord;cameraRecord=null;priorCamera?.owner.dispose();cameraPending=false;
+      retireScreen();
       const { localStream, remoteStream, peerConnection, _durationInterval } = get();
       microphone?.dispose();
       microphone = null;
@@ -488,7 +483,7 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
                   for (const track of stream.getTracks()) {const sender=pc.addTrack(track, stream);if(track.kind==="audio")audioSender={pc,sender};}
                 }
                 applyDegradationPreference(pc);
-                microphone?.connect();
+                microphone?.connect();if(stream)cameraFor(activeCall,pc,stream);
               } catch (error) {
                 console.error("[p2p] Failed to attach local media:", error);
                 if (get().peerConnection === pc) get().cleanup();

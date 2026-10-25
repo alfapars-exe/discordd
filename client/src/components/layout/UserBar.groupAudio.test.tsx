@@ -55,7 +55,7 @@ const actions={onToggleMute:vi.fn(),onToggleDeafen:()=>useVoiceStore.getState().
 beforeEach(()=>{
  vi.clearAllMocks();publishAuthOwnerChange("me");publishAuthGenerationChange(10);useGroupCallAudioControlStore.setState({control:null});useMicrophoneCaptureViewStore.setState({view:null,privateFailure:null,failedCall:null});
  useVoiceStore.setState({currentVoiceChannelId:null,currentVoiceServerId:null,isMuted:false,isDeafened:false,muteBeforeDeafen:null,isServerMuted:true,isServerDeafened:true,inputMode:"voice_activity"});audio.tracks=[];audio.sources=[];
- const publications=new Map();audio.room={localParticipant:{trackPublications:publications,getTrackPublication:()=>[...publications.values()][0],publishTrack:vi.fn(async(track:unknown)=>{publications.set("mic",{track});}),unpublishTrack:vi.fn(async(track:unknown)=>{if(publications.get("mic")?.track===track)publications.delete("mic");})}};
+ const publications=new Map();audio.room={state:"connected",on:vi.fn(),off:vi.fn(),localParticipant:{permissions:{canPublish:true},trackPublications:publications,getTrackPublication:()=>[...publications.values()][0],publishTrack:vi.fn(async(track:unknown)=>{publications.set("mic",{track});}),unpublishTrack:vi.fn(async(track:unknown)=>{if(publications.get("mic")?.track===track)publications.delete("mic");})}};
  registerCaptureAdmission((audio.room as {localParticipant:LocalParticipant}).localParticipant,()=>true).open();
  audio.createTrack.mockImplementation(async()=>{const track={isMuted:false,setProcessor:vi.fn(async()=>{}),mute:vi.fn(async()=>{track.isMuted=true;}),unmute:vi.fn(async()=>{track.isMuted=false;}),stop:vi.fn()};audio.tracks.push(track);return track;});
 });

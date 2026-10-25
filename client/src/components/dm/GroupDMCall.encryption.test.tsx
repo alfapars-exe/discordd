@@ -1,3 +1,5 @@
+vi.mock("./GroupDMCallCamera",()=>({default:()=>null}));
+vi.mock("./GroupScreenShareControl",()=>({default:()=> <button>screenShare</button>}));
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const fixture = vi.hoisted(() => ({ admission: { room: {} as object | null, connect: true, publishReady: false, error: null as unknown }, room: vi.fn(), toggle: vi.fn(), admissionInput:vi.fn(), epoch:0 }));
@@ -23,7 +25,7 @@ describe("group encrypted publication wiring", () => {
   expect(fixture.room.mock.lastCall?.[0]).toMatchObject({ connect:true, audio:false, video:false, screen:false });
   expect(fixture.toggle).not.toHaveBeenCalled(); expect(screen.queryByTestId("audio")).toBeNull();
   fixture.admission.publishReady = true; view.rerender(<GroupDMCall credentials={credentials} onLeave={vi.fn()} />);
-  expect(fixture.toggle).toHaveBeenCalledTimes(2); expect(screen.getByTestId("audio")).toBeTruthy();
+  expect(fixture.toggle).not.toHaveBeenCalled(); expect(screen.getByTestId("audio")).toBeTruthy();
   fixture.admission.publishReady = false; view.rerender(<GroupDMCall credentials={credentials} onLeave={vi.fn()} />);
   expect(screen.queryByText("microphone")).toBeNull(); expect(screen.queryByTestId("audio")).toBeNull();
   expect(fixture.room.mock.lastCall?.[0]).toMatchObject({ audio:false, video:false, screen:false });

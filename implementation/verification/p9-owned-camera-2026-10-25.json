@@ -1,0 +1,120 @@
+{
+  "date": "2026-10-25",
+  "baseline_head": "c0d6243d63f9b768565bfa74568586ca1f29d613",
+  "scope": "P9 current-owned guild/group/P2P camera capture, live settings and preview retirement",
+  "status": "implemented_focused_verified_combined_gates_and_physical_acceptance_pending",
+  "owned_paths": [
+    "client/src/audio/ownedCamera.ts",
+    "client/src/audio/ownedCamera.test.ts",
+    "client/src/hooks/useRoomCamera.ts",
+    "client/src/hooks/useCameraPreview.ts",
+    "client/src/hooks/useCameraPreview.test.ts",
+    "client/src/hooks/useCameraDeviceSync.ts",
+    "client/src/hooks/useCameraDeviceSync.test.ts",
+    "client/src/components/voice/VoiceStateManager.tsx",
+    "client/src/components/voice/CameraCaptureStatus.tsx",
+    "client/src/components/dm/GroupDMCall.tsx",
+    "client/src/components/dm/GroupDMCallCamera.tsx",
+    "client/src/components/dm/GroupDMCallCamera.test.tsx",
+    "client/src/components/dm/GroupDMCall.encryption.test.tsx",
+    "client/src/components/dm/GroupDMCall.ownership.test.tsx",
+    "client/src/components/dm/GroupDMCall.conflict.test.tsx",
+    "client/src/components/dm/GroupDMCall.localization.test.tsx",
+    "client/src/webrtc/p2pCamera.ts",
+    "client/src/webrtc/p2pCamera.test.ts",
+    "client/src/stores/p2pCallStore.ts",
+    "client/src/stores/p2pCallStore.camera.test.ts",
+    "client/src/stores/p2pCallStore.audio.test.ts",
+    "client/src/components/settings/voice/CameraSection.tsx",
+    "client/src/i18n/locales/en/settings.json",
+    "client/src/i18n/locales/tr/settings.json",
+    "implementation/verification/p9-owned-camera-2026-10-25.json"
+  ],
+  "deleted_paths": [
+    "client/src/hooks/useCameraDeviceSync.ts",
+    "client/src/hooks/useCameraDeviceSync.test.ts"
+  ],
+  "source_sha256": {
+    "client/src/audio/ownedCamera.ts": "d27e4eb744c273a8991967fe298ab907ccba2f4349c194f519890249e79b0cea",
+    "client/src/audio/ownedCamera.test.ts": "13abdc3dc2fe1332f567588b2e7fcef1c200ca7c4399670fcbd14e11f6f5cc5b",
+    "client/src/hooks/useRoomCamera.ts": "389aaac0fdd935d9cbf5f21865f2cd7468bf3a14430e17925d9e55abd100dafe",
+    "client/src/hooks/useCameraPreview.ts": "9acc8b837866f5c028b75f1baa7d1accc7d5c59cab5a538b265043ceeec4f1b3",
+    "client/src/hooks/useCameraPreview.test.ts": "9dfdce022f0827f5a6a0afe825f5917051cf671f376c0e2e5971c39683fb53be",
+    "client/src/components/voice/VoiceStateManager.tsx": "b32d77581ab42120c371180b9c9d9c5ab36c870945443729527dd395815ca3b8",
+    "client/src/components/voice/CameraCaptureStatus.tsx": "557658064a46008fc30c99290811137652713113141861521c97ecb6b431a826",
+    "client/src/components/dm/GroupDMCall.tsx": "f153df7c4b0589b5ba52523c397f6620f19993ba0e40ef7ac69f96bada59b52e",
+    "client/src/components/dm/GroupDMCallCamera.tsx": "2848176307b7f90a8e36e179229ea66cc0f6b818f877eda1705c748937092f95",
+    "client/src/components/dm/GroupDMCallCamera.test.tsx": "5aedde5d3ffa3cc0e61f2c8cdbc1f822e95e092a2bf02e077230404ad35ec67e",
+    "client/src/components/dm/GroupDMCall.encryption.test.tsx": "04de6839ad57a19bff3108a3c59f4a2c8c33d157a3f902f787aed5f18833202b",
+    "client/src/components/dm/GroupDMCall.ownership.test.tsx": "54b6df224ec8800cfe86275f215cacbc891b164d43aeb462e0fa7b058677a963",
+    "client/src/components/dm/GroupDMCall.conflict.test.tsx": "857e441f611af047788eef158ce62af5bc52ab9ede7f05bcb0bc2385dfbade4e",
+    "client/src/components/dm/GroupDMCall.localization.test.tsx": "d1037e848e7addd464aa37c5e5e4216f40f48b0caae30968782a72d84cece1a3",
+    "client/src/webrtc/p2pCamera.ts": "8dfc38d8e4de35dcdbcebe7f528f5d40a934a10befeb3df182dec5026fdd29b5",
+    "client/src/webrtc/p2pCamera.test.ts": "5b2be03c05d337f0b50194a2dc58e44204e29bed5f905ea072551252a9ac6e0e",
+    "client/src/stores/p2pCallStore.ts": "0adf5b113c55dd9b0a6af694eef5ceaa75102af8a815d1dff4c3eda8d3fe9c92",
+    "client/src/stores/p2pCallStore.camera.test.ts": "6ce49b9f57275750cc710f4ab43d78615d97a2b167125870b8acf887c3e669a4",
+    "client/src/stores/p2pCallStore.audio.test.ts": "02b0ec6ef6bf6a627d5691f26d88a24bfcf784ba823b531f45021fc363e76d8a",
+    "client/src/components/settings/voice/CameraSection.tsx": "9e1bece570a98001cfd936618dae41f1b95b8ce73c296a8e5e3e91e5ee512762",
+    "client/src/i18n/locales/en/settings.json": "88eae05f034e24a07f1e8f0cd1f4da01fd49a345f46347e71e543e5439e21f4c",
+    "client/src/i18n/locales/tr/settings.json": "9d9aa4d6f445a9db85f1bc314d0ffc7f769cf08a049e7ef37f0e89e67315864f"
+  },
+  "shared_screen_union_paths": [
+    "client/src/stores/p2pCallStore.ts",
+    "client/src/components/dm/GroupDMCall.tsx",
+    "client/src/components/dm/GroupDMCall.encryption.test.tsx",
+    "client/src/components/dm/GroupDMCall.localization.test.tsx",
+    "client/src/components/dm/GroupDMCall.ownership.test.tsx",
+    "client/src/components/dm/GroupDMCall.conflict.test.tsx"
+  ],
+  "behavior": [
+    "A shared exact LocalParticipant camera owner replaces raw SDK camera toggling/device restart in guild and group calls. Video-only raw capture stays muted until a guarded publication commit, with immutable auth/source/admission/generation fences and immediate known-pending source retirement.",
+    "Actual installed LocalVideoTrack is userProvided, so SDK automatic device-change and ended-camera handling do not reacquire the camera. SDK constructor asynchronously enables raw according to isMuted: the owner registers the raw resource immediately, awaits public mute before publication, then performs guarded unmute with a post-await check.",
+    "Selected camera, quality and FPS changes replace the active owned camera while running. Off stops hardware. Permission/ended/current silent-ended failures show errors and explicit retry; silent endings during deferred mute/publish/unmute cannot leave starting or active success. Retired generations do not report failure into later owners.",
+    "Group camera uses the same preferences, actual ready indicator and translated error/retry path; no capture or camera controls before encrypted admission. Logical call retirement closes current capture. Guild retained Retry is gated by exact error-status identity and current camera owner.",
+    "P2P initial accepted video acquisition is retained. A per-call/PC/localStream/auth camera owner adopts that source, switches device/quality/FPS live, stops hardware when off, and uses operation generations so stale permission/finally work cannot clear later pending state. Ringing/ended calls cannot acquire camera.",
+    "P2P camera updates during a screen picker/share only update the local camera source, preserving the screen sender; screen start is refused while camera replacement is pending. This depends on the paired screen-quality slice and is committed as a reviewed union.",
+    "Preview remains explicit video-only, stops/invalidates on account retirement, drops late permission results, and never marks an already-ended return active.",
+    "Camera, screen replacement/restoration and screen encoder parameter mutations share one exact-RTCRtpSender queue. Camera rechecks valid ownership and non-sharing inside that queue; deferred restore/new-camera/new-share regressions prove no older restore or camera can overwrite the later screen owner. Current camera sender is rediscovered after camera was created while sharing."
+  ],
+  "verification": [
+    {
+      "command": "npx vitest run src/audio/ownedCamera.test.ts src/webrtc/p2pCamera.test.ts src/stores/p2pCallStore.camera.test.ts src/stores/p2pCallStore.audio.test.ts src/hooks/useCameraPreview.test.ts src/components/dm/GroupDMCallCamera.test.tsx --reporter=dot",
+      "cwd": "client",
+      "result": "PASS final post-sender-coordinator source:6files/69tests/4.24s"
+    },
+    {
+      "command": "npx tsc -b",
+      "cwd": "client",
+      "result": "PASS exit0 on combined camera/screen worktree"
+    },
+    {
+      "command": "npx eslint src/audio/ownedCamera.ts src/audio/ownedCamera.test.ts src/webrtc/p2pCamera.ts src/webrtc/p2pCamera.test.ts src/stores/p2pCallStore.ts src/stores/p2pCallStore.camera.test.ts src/stores/p2pCallStore.audio.test.ts src/hooks/useRoomCamera.ts src/hooks/useCameraPreview.ts src/hooks/useCameraPreview.test.ts src/components/dm/GroupDMCall.tsx src/components/dm/GroupDMCallCamera.tsx src/components/dm/GroupDMCallCamera.test.tsx src/components/voice/CameraCaptureStatus.tsx src/components/voice/VoiceStateManager.tsx src/components/settings/voice/CameraSection.tsx",
+      "cwd": "client",
+      "result": "PASS exit0"
+    },
+    {
+      "command": "npx vitest run src/webrtc/p2pCamera.test.ts src/stores/p2pCallStore.camera.test.ts src/stores/p2pCallStore.screen.test.ts src/webrtc/videoSenderMutation.test.ts src/webrtc/p2pScreenShare.test.ts --reporter=dot",
+      "cwd": "client",
+      "result": "PASS5files/29tests/3.76s after shared-sender integration; later encoder serialization also covered by finalcamera69 and paired screen receipt."
+    }
+  ],
+  "sdk_evidence": [
+    "livekit-client LocalVideoTrack constructor uses userProvidedTrack=true; actual SDK test confirms handleTrackEnded mutes without restart/reacquire.",
+    "LocalTrack.setMediaStreamTrack synchronizes raw.enabled asynchronously from isMuted; tests defer mute/publication/unmute with real LocalVideoTrack rather than assuming raw.enabled=false alone is enough.",
+    "Room.onDeviceChange skips publications whose track.isUserProvided; the old explicit Room.switchActiveDevice hook bypassed this protection and is removed."
+  ],
+  "limits": [
+    "Tests use actual SDK track objects but mocked browser getUserMedia and publisher/RTCPeerConnection boundaries, not physical devices or two-client video acceptance.",
+    "Existing camera/audio fixture methods were completed to represent real stream/PC/auth contracts; cleanup assertions retained, microphone+camera settings ownership expects two listeners and zero after retirement.",
+    "No UI or runtime claim that requested resolution/FPS exceeds the actual camera/browser capabilities; constraints are ideal and encoding ceilings reflect selected FPS.",
+    "Combined full client/build gates run after both camera and screen source freezes; no isolated incomplete commit is authorized.",
+    "Initial accepted video calls retain existing coupled audio+video getUserMedia. Its permission failure cannot identify which device failed; existing microphone-centric initial-failure wording is not claimed as complete camera-denial acceptance."
+  ],
+  "remaining": [
+    "Combined immutable review/full client/TypeScript/build gates.",
+    "Physical Windows/web camera permission, hot unplug, camera switch while active, real observed quality/FPS and two-client encrypted video/rekey acceptance."
+  ],
+  "test_harness_notes": [
+    "Two child combined full-client/build sessions were dispatched just before root announced its own equivalent gates. Child exact sessions1661/42343 were canceled with Ctrl-C, reported exit1, and are not counted as completed checks. Root owns authoritative combined gates."
+  ]
+}

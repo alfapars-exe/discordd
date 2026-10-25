@@ -2,10 +2,8 @@
  * CameraSection — camera resolution + frame rate pickers for the
  * Voice & Audio settings tab.
  *
- * Both settings are consumed by useCameraPublishDefaults and passed
- * per-publish to setCameraEnabled. LiveKit can't re-encode a live
- * publication, so a change here applies on the NEXT camera toggle — the hint
- * text says so rather than leaving the user to wonder.
+ * Guild, private and group calls apply these choices through their current
+ * owned camera. Local preview remains video-only and explicitly started.
  */
 
 import { useEffect, useRef } from "react";

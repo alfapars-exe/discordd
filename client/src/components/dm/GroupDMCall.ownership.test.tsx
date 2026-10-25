@@ -1,3 +1,5 @@
+vi.mock("./GroupDMCallCamera",()=>({default:()=>null}));
+vi.mock("./GroupScreenShareControl",()=>({default:()=> <button>screenShare</button>}));
 import { act,render } from "@testing-library/react";
 import { beforeEach,expect,it,vi } from "vitest";
 const h=vi.hoisted(()=>({room:{} as object,callbacks:[] as (()=>void)[],audio:vi.fn()}));

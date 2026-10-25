@@ -5,6 +5,7 @@ import {nativePTTAvailable}from "../../audio/nativePTT";
  * `minimal` prop shows only the end-call button (used during ringing state).
  */
 
+import PrivateScreenQualityControls from "../voice/PrivateScreenQualityControls";
 import { useTranslation } from "react-i18next";
 import { useVoiceStore } from "../../stores/voiceStore";
 import { useP2PCallStore } from "../../stores/p2pCallStore";
@@ -95,6 +96,7 @@ function P2PCallControls({ minimal = false }: P2PCallControlsProps) {
               <path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z" />
             </svg>
           </button>
+          <PrivateScreenQualityControls />
         </>
       )}
 

@@ -1,4 +1,5 @@
 {
+  "cameraRetry": "Kamerayı yeniden dene",
   "audioDevicePermissionHint": "Ayarları açmak mikrofonunu etkinleştirmez. Erişim izni vermek ve cihaz adlarını görmek için mikrofon testini veya bir aramayı başlat.",
   "audioDevicesUnsupported": "Bu tarayıcıda veya bağlantıda ses cihazları listelenemiyor.",
   "audioDevicesFailed": "Ses cihazları listelenemedi. Cihazı yeniden bağlayıp tekrar dene.",
@@ -730,7 +731,7 @@
   "cameraFpsDesc": "30 fps akıcı hareket verir. 15 fps aynı bant genişliğini daha az kareye harcar: hareket azalır, görüntü netleşir.",
   "cameraFps15": "15 fps (net görüntü)",
   "cameraFps30": "30 fps (akıcı)",
-  "cameraApplyHint": "Ses kanalında cihaz değişikliği hemen uygulanır. Kalite ve FPS, kamerayı yeniden açtığında geçerli olur. Birebir aramada tüm değişiklikler kamerayı yeniden açtığında uygulanır.",
+  "cameraApplyHint": "Kamera açıkken cihaz, kalite ve FPS değişiklikleri uygulanır. Kullanılabilen çözünürlük ve kare hızı kameraya bağlıdır.",
 
   "selectChannelToEdit": "İzinlerini düzenlemek için bir kanal seçin",
   "selectRoleToEdit": "Override düzenlemek için bir rol seçin",

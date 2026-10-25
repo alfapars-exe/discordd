@@ -1,4 +1,5 @@
 {
+  "cameraRetry": "Retry camera",
   "audioDevicePermissionHint": "Opening settings does not activate your microphone. Start the microphone test or a call to grant access and reveal device names.",
   "audioDevicesUnsupported": "Audio device listing is unavailable in this browser or connection.",
   "audioDevicesFailed": "Audio devices could not be listed. Reconnect the device and try again.",
@@ -730,7 +731,7 @@
   "cameraFpsDesc": "30 fps gives smooth motion. 15 fps spends the same bandwidth on fewer frames — less motion, sharper image.",
   "cameraFps15": "15 fps (sharper)",
   "cameraFps30": "30 fps (smoother)",
-  "cameraApplyHint": "Device changes apply immediately in voice channels. Quality and FPS apply when you reopen the camera. In direct calls, all changes apply when you reopen the camera.",
+  "cameraApplyHint": "Camera device, quality and FPS changes apply while the camera is on. Available resolution and frame rate depend on the camera.",
 
   "selectChannelToEdit": "Select a channel to edit its permissions",
   "selectRoleToEdit": "Select a role to edit overrides",

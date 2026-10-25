@@ -117,5 +117,13 @@
   "p2pFocusedPTT": "Push-to-talk works while this HiChat window has keyboard focus.",
   "camera": "Camera",
   "disconnect": "Disconnect",
-  "connecting": "Connecting..."
+  "connecting": "Connecting...",
+  "screenShareQualityFailed": "Screen sharing failed. Check screen-sharing permission or try another quality.",
+  "privateScreenQuality": "Screen quality",
+  "privateScreenFps": "Screen frame rate",
+  "privateScreenNative": "Display size",
+  "privateScreenVideoOnly": "Video only; system audio is not shared in private calls.",
+  "screenShareCameraPending": "Wait for the camera change to finish, then share your screen.",
+  "privateScreenNativeRate": "Display refresh rate (60 FPS if unknown)",
+  "screenShareRestoring": "Wait for the camera to be restored before sharing again."
 }

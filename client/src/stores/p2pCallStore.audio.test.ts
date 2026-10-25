@@ -287,7 +287,7 @@ describe("processed P2P microphones", () => {
     mocks.createPipeline.mockResolvedValue(filter);
     const pc = peer();
     await useP2PCallStore.getState().startWebRTC(true);
-    expect(mocks.listeners.size).toBe(1);
+    expect(mocks.listeners.size).toBe(2); // microphone + accepted-call camera settings owners
     useP2PCallStore.getState().cleanup();
     expect(raw.stop).toHaveBeenCalled();
     expect(filter.dispose).toHaveBeenCalledOnce();
