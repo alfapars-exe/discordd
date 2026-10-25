@@ -29,6 +29,7 @@ function input(overrides: Partial<OverlayActivityProjectionInput> = {}): Overlay
     currentAuthGeneration: 7,
     epoch: "ready-epoch-1",
     entries: { [gameActivityKey(target.user_id)]: { revision: 1, game } },
+    friendOwnerId: "viewer", friendAuthGeneration: 7, friendsStatus: "ready",
     friends: [target],
     blockedUserIds: [],
     statusByUserId: {},
@@ -107,4 +108,9 @@ describe("projectOverlayActivity", () => {
     expect(result.map((row) => row.userId)).toEqual(["f-0", "f-1", "f-2", "f-3", "f-4"]);
     expect(result[0]?.label).toBe("f-0-handle");
   });
+});
+
+it("requires complete current-account relationships even when the cached friend array is unchanged",()=>{
+ for(const override of [{friendOwnerId:"other"},{friendAuthGeneration:8},{friendsStatus:"idle" as const},{friendsStatus:"loading" as const},{friendsStatus:"error" as const}])expect(projectOverlayActivity(input(override))).toEqual([]);
+ expect(projectOverlayActivity(input())).toHaveLength(1);expect(projectOverlayActivity(input({friends:[]}))).toEqual([]);
 });

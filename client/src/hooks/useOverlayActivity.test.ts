@@ -1,6 +1,6 @@
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it } from "vitest";
-import { clearTokens } from "../api/client";
+import { clearTokens, getAuthGeneration } from "../api/client";
 import { useAuthStore } from "../stores/authStore";
 import { useBlockStore } from "../stores/blockStore";
 import { useFriendStore } from "../stores/friendStore";
@@ -15,7 +15,7 @@ beforeEach(() => {
   useGameActivityStore.getState().start("epoch-a");
   useBlockStore.setState({ blockedUserIds: [] });
   usePresenceStore.setState({ statusByUserId: {} });
-  useFriendStore.setState({ friends: [{ id: "relationship", status: "accepted", user_id: "friend", username: "friend", display_name: "Friend", avatar_url: null, user_status: "online", user_custom_status: null, created_at: "2026-10-25T08:00:00Z" }] });
+  useFriendStore.setState({ ownerId: "viewer", authGeneration: getAuthGeneration(), friendsStatus: "ready", friends: [{ id: "relationship", status: "accepted", user_id: "friend", username: "friend", display_name: "Friend", avatar_url: null, user_status: "online", user_custom_status: null, created_at: "2026-10-25T08:00:00Z" }] });
 });
 afterEach(cleanup);
 it("subscribes to grant, block, presence and revocation changes without reusing server grants", () => {
@@ -56,4 +56,12 @@ it("suppresses cached rows immediately while disconnected and waits for a new re
   act(() => useGameActivityStore.getState().start("epoch-b"));
   act(() => useGameActivityStore.getState().apply({ epoch: "epoch-a", user_id: "friend", game, revision: 2 }));
   expect(view.result.current).toEqual([]);
+});
+
+it("immediately hides cached activity when relationship provenance alone changes, then honors revocation while unavailable",()=>{
+ useGameActivityStore.getState().apply({epoch:"epoch-a",user_id:"friend",game,revision:1});const friends=useFriendStore.getState().friends;const view=renderHook(useOverlayActivity);expect(view.result.current).toHaveLength(1);
+ for(const patch of [{friendsStatus:"loading" as const},{friendsStatus:"error" as const},{friendsStatus:"ready" as const,ownerId:"other"},{ownerId:"viewer",authGeneration:getAuthGeneration()+1}]){act(()=>useFriendStore.setState(patch));expect(useFriendStore.getState().friends).toBe(friends);expect(view.result.current).toEqual([])}
+ act(()=>useGameActivityStore.getState().apply({epoch:"epoch-a",user_id:"friend",game:null,revision:2}));act(()=>useFriendStore.setState({ownerId:"viewer",authGeneration:getAuthGeneration(),friendsStatus:"ready"}));expect(view.result.current).toEqual([]);
+ act(()=>useGameActivityStore.getState().apply({epoch:"epoch-a",user_id:"friend",game,revision:1}));expect(view.result.current).toEqual([]);
+ act(()=>useGameActivityStore.getState().apply({epoch:"epoch-a",user_id:"friend",game,revision:3}));expect(view.result.current).toHaveLength(1);act(()=>useFriendStore.setState({friends:[]}));expect(view.result.current).toEqual([]);
 });

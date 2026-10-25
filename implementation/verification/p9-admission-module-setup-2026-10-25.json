@@ -1,0 +1,7 @@
+{
+  "status": "focused_verified_full_suite_pending",
+  "source_gate": "Immutable17a0f67f:406files3955tests,3952passed3failed80.51s; two stale fallback text expectations and one GroupCallProvider strict=false initial findBy1s timeout",
+  "change": "GroupCallProvider admission test imports actual lazy GroupDMCall module in beforeAll, separating cold Vite/SDK module transformation from admission measurement. No production code, SDK mock, admission timeout or assertion weakened.",
+  "validation": "Focused strict=false/true2tests PASS3.11s; scoped ESLint0",
+  "remaining": "Fresh exact-source full suite must pass; focused pass alone does not close full gate"
+}

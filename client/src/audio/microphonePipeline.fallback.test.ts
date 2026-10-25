@@ -51,8 +51,10 @@ describe("microphone capability fallback cleanup", () => {
     const h = harness();
     h.source.getSettings.mockReturnValue({ noiseSuppression });
     const pipeline = await createMicrophonePipeline(h.track, settings, h.options);
-    expect(pipeline.getStatus()).toMatchObject({ requestedEngine: "rnnoise", activeEngine: "none", gateAvailable: false, phase: "fallback", error: "Browser noise suppression could not be verified as enabled" });
+    expect(pipeline.getStatus()).toMatchObject({ requestedEngine: "rnnoise", activeEngine: "none", gateAvailable: false, gateEnabled: false, gainAvailable: false, phase: "fallback", error: "48 kHz AudioWorklet unavailable; Browser noise suppression could not be verified as enabled" });
     expect(h.source.applyConstraints).toHaveBeenCalledWith(expect.objectContaining({ noiseSuppression: true }));
+    expect(h.context.close).toHaveBeenCalledOnce();
+    expect(h.source.stop).not.toHaveBeenCalled();
     expect(h.output.stop).not.toHaveBeenCalled();
     await pipeline.dispose();
   });

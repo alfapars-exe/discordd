@@ -1,0 +1,18 @@
+{
+  "date": "2026-10-25",
+  "scope": "Follow-up fallback expectation aligns with preserved initialization cause",
+  "owned_paths": [
+    "client/src/audio/microphonePipeline.fallback.test.ts"
+  ],
+  "source_hashes": {
+    "client/src/audio/microphonePipeline.fallback.test.ts": "590c4a4c26fe6ffd02c169982e9925b3a53fa34040a59512735fdaa26a2dcfff"
+  },
+  "change": "Exact assertion now requires BOTH unavailable48kHz/AudioWorklet initialization reason and unverified browser suppression; additionally asserts unavailable gate/gain and failed-context cleanup without stopping borrowed source. No production source changes.",
+  "checks": {
+    "audio": "npx vitest run src/audio:23files182tests PASS6.53s",
+    "typescript": "npx tsc -b exit0",
+    "lint": "exact fallback test ESLint exit0",
+    "diff_check": "exact fallback path exit0"
+  },
+  "remaining": "No worklet root cause or physical runtime acceptance claim."
+}

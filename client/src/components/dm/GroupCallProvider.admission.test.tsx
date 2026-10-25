@@ -1,6 +1,6 @@
 import {act,render,screen,waitFor}from "@testing-library/react";
 import {StrictMode}from "react";
-import {beforeEach,expect,it,vi}from "vitest";
+import {beforeAll,beforeEach,expect,it,vi}from "vitest";
 const h=vi.hoisted(()=>({rooms:[] as {connect:ReturnType<typeof vi.fn>;disconnect:ReturnType<typeof vi.fn>}[],list:vi.fn(),token:vi.fn()}));
 vi.mock("../../api/groupDM",()=>({listGroupDMs:h.list,getGroupDMCallToken:h.token}));
 vi.mock("../../audio/voiceEncryptionKeys",()=>({IndexedVoiceKeyProvider:class{setIndexedKey=vi.fn(async()=>true)},isMediaKeyVersion:(i:number,e:number)=>Number.isSafeInteger(e)&&i===e%256,mediaTokenSubject:(token:string)=>{try{return JSON.parse(atob(token.split('.')[1])).sub}catch{return null}}}));
@@ -30,6 +30,9 @@ import {useE2EEStore}from "../../stores/e2eeStore";
 import {getAuthGeneration,setTokens}from "../../api/client";
 import {publishAuthOwnerChange}from "../../api/authSessionEvents";
 const group={id:"group",owner_id:"me",name:"Group",members:[{id:"me",username:"me",display_name:null,avatar_url:null,custom_status:null,status:"online" as const,created_at:"2026-01-01"}],icon_url:null,key_epoch:1,call_room_key:"room",unread_count:0,created_at:"2026-01-01",updated_at:"2026-01-01"};
+// Exercise admission and navigation with the real SDK module already loaded.
+// Cold module transformation under full-suite load is not admission latency.
+beforeAll(async()=>{await import("./GroupDMCall");});
 beforeEach(()=>{
  const old=useGroupCallStore.getState().session;if(old)useGroupCallStore.getState().leave(old.nonce);h.rooms=[];h.list.mockReset().mockResolvedValue({success:true,data:{group_dms:[group]}});h.token.mockReset().mockResolvedValue({success:true,data:{token:`header.${btoa(JSON.stringify({sub:'me'}))}.signature`,channel_id:"group",url:"wss://voice.test",e2ee_passphrase:"pass",e2ee_key_context:"context",e2ee_key_epoch:1,e2ee_key_index:1}});
  setTokens("access","refresh");useAuthStore.setState({user:{id:"me"} as never});publishAuthOwnerChange("me");useE2EEStore.setState({initStatus:"ready",localDeviceId:"device"});useGroupDMStore.setState({ownerId:"me",authGeneration:getAuthGeneration(),groupsReady:true,groups:[group]});

@@ -33,6 +33,9 @@ export interface OverlayActivityProjectionInput {
   /** Nonempty ready epoch; the store itself fences updates to this epoch. */
   epoch: string | null;
   entries: Readonly<Record<string, OverlayActivityEntry | undefined>>;
+  friendOwnerId: string | null;
+  friendAuthGeneration: number;
+  friendsStatus: "idle" | "loading" | "ready" | "error";
   friends: readonly FriendshipWithUser[];
   blockedUserIds: readonly string[];
   statusByUserId: Readonly<Record<string, UserStatus | undefined>>;
@@ -66,6 +69,8 @@ function validGame(value: unknown): value is OverlayActivityGame {
 export function projectOverlayActivity(input: OverlayActivityProjectionInput): OverlayActivityItem[] {
   if (!input.ownerId || input.ownerId !== input.currentOwnerId
     || !Number.isSafeInteger(input.authGeneration) || input.authGeneration !== input.currentAuthGeneration
+    || input.friendOwnerId !== input.currentOwnerId || input.friendAuthGeneration !== input.currentAuthGeneration
+    || input.friendsStatus !== "ready"
     || typeof input.epoch !== "string" || input.epoch.length === 0 || input.epoch.length > MAX_EPOCH_LENGTH) return [];
 
   const blocked = new Set(input.blockedUserIds);
