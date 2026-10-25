@@ -23,6 +23,10 @@ var musicHandlerLogger = logx.Component("handler.music")
 // playWriteDeadline is Play's per-response write deadline. The client gives
 // up at 50 s, so the server must be able to answer before that.
 const playWriteDeadline = 45 * time.Second
+
+// Search extraction can take 20 s; leave bounded time to return its JSON
+// result or classified failure beyond the server's global 15 s write limit.
+const searchWriteDeadline = 25 * time.Second
 const maxMusicQueueMutationItems = 200
 
 // MusicHandler — HTTP entry points for the per-channel music bot.
@@ -69,6 +73,9 @@ func (h *MusicHandler) Search(w http.ResponseWriter, r *http.Request) {
 	if query == "" || len([]rune(query)) > 100 {
 		pkg.ErrorWithMessage(w, http.StatusBadRequest, "search query must be 1-100 characters")
 		return
+	}
+	if err := http.NewResponseController(w).SetWriteDeadline(time.Now().Add(searchWriteDeadline)); err != nil {
+		musicHandlerLogger.Warn("search: extend write deadline failed", slog.String("err", pkg.ErrText(err)))
 	}
 	tracks, err := h.search(r.Context(), query)
 	if err != nil {

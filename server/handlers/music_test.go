@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -117,6 +118,72 @@ func TestSearch_RejectsOversizedQueryBeforeProvider(t *testing.T) {
 	h.Search(rec, req)
 	if rec.Code != http.StatusBadRequest || called {
 		t.Fatalf("status=%d provider_called=%v", rec.Code, called)
+	}
+}
+
+type musicDeadlineRecorder struct {
+	http.ResponseWriter
+	deadlines chan<- time.Duration
+}
+
+func (w musicDeadlineRecorder) SetWriteDeadline(deadline time.Time) error {
+	w.deadlines <- time.Until(deadline)
+	return http.NewResponseController(w.ResponseWriter).SetWriteDeadline(deadline)
+}
+
+func TestSearch_PreservesResponseAfterServerWriteTimeout(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		providerErr error
+		status      int
+		body        string
+	}{
+		{name: "results", status: http.StatusOK, body: `"video_id":"abcdefghijk"`},
+		{name: "provider failure", providerErr: errors.New("private provider detail"), status: http.StatusInternalServerError, body: `"error":"failed to search YouTube"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			const shortWriteTimeout = 50 * time.Millisecond
+			h := NewMusicHandler(&stubMusicService{}, stubPermResolver{}, nil)
+			h.search = func(context.Context, string) ([]models.MusicTrack, error) {
+				// Cross the real HTTP server's original socket write deadline.
+				time.Sleep(2 * shortWriteTimeout)
+				return []models.MusicTrack{{VideoID: "abcdefghijk"}}, tc.providerErr
+			}
+			deadlines := make(chan time.Duration, 1)
+			server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				r.SetPathValue("channelId", "ch")
+				r = r.WithContext(context.WithValue(r.Context(), UserContextKey, &models.User{ID: "user-1"}))
+				h.Search(musicDeadlineRecorder{ResponseWriter: w, deadlines: deadlines}, r)
+			}))
+			server.Config.WriteTimeout = shortWriteTimeout
+			server.Start()
+			defer server.Close()
+			client := server.Client()
+			client.Timeout = 3 * time.Second
+			response, err := client.Get(server.URL + "/music/search?q=song")
+			if err != nil {
+				t.Fatalf("search lost its response after the original write deadline: %v", err)
+			}
+			defer response.Body.Close()
+			body, err := io.ReadAll(response.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if response.StatusCode != tc.status || response.Header.Get("Content-Type") != "application/json" || !strings.Contains(string(body), tc.body) {
+				t.Fatalf("response = %d %q %s", response.StatusCode, response.Header.Get("Content-Type"), body)
+			}
+			if strings.Contains(string(body), "private provider detail") {
+				t.Fatalf("response leaked provider details: %s", body)
+			}
+			select {
+			case duration := <-deadlines:
+				if duration < 24*time.Second || duration > 25*time.Second {
+					t.Fatalf("search write deadline is not bounded at 25 seconds: %v", duration)
+				}
+			default:
+				t.Fatal("search did not extend its response deadline")
+			}
+		})
 	}
 }
 
