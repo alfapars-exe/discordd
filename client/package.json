@@ -37,7 +37,7 @@
     "@noble/hashes": "^2.0.1",
     "@sapphi-red/dtln-web": "^0.1.4",
     "@sapphi-red/web-noise-suppressor": "^0.4.1",
-    "@sentry/react": "^10.69.0",
+    "@sentry/react": "^11.8.0",
     "@tanstack/react-virtual": "^3.14.13",
     "@tensorflow/tfjs": "^4.22.0",
     "@tensorflow/tfjs-tflite": "^0.0.1-alpha.10",
@@ -81,6 +81,6 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.71.1",
     "vite": "^8.3.3",
-    "vitest": "^4.1.12"
+    "vitest": "^5.0.5"
   }
 }
