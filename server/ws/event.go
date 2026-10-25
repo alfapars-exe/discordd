@@ -405,9 +405,20 @@ type P2PCallDeclineData struct {
 }
 
 // P2PSignalData carries WebRTC SDP/ICE data. Server relays without inspecting.
+type P2PMediaSource struct {
+	MID    string `json:"mid"`
+	Source string `json:"source"`
+}
+
 type P2PSignalData struct {
-	CallID    string `json:"call_id"`
-	Type      string `json:"type"` // "offer", "answer", "ice-candidate"
-	SDP       string `json:"sdp,omitempty"`
-	Candidate any    `json:"candidate,omitempty"`
+	CallID               string           `json:"call_id"`
+	Type                 string           `json:"type"` // "offer", "answer", "ice-candidate"
+	SDP                  string           `json:"sdp,omitempty"`
+	Candidate            any              `json:"candidate,omitempty"`
+	MediaProtocol        int              `json:"media_protocol,omitempty"`
+	DescriptionID        string           `json:"description_id,omitempty"`
+	DescriptionRevision  uint64           `json:"description_revision,omitempty"`
+	ReplyToDescriptionID string           `json:"reply_to_description_id,omitempty"`
+	Capabilities         []string         `json:"capabilities,omitempty"`
+	Sources              []P2PMediaSource `json:"sources,omitempty"`
 }

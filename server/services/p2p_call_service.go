@@ -62,6 +62,7 @@ type p2pCallService struct {
 	// In-memory state, cleared on server restart.
 	activeCalls   map[string]*models.P2PCall // callID -> call
 	userCalls     map[string]string          // userID -> callID (max 1 call per user)
+	signals       map[string]map[string]p2pSignalRevision
 	timers        map[string]p2pCallTimer
 	ringTimeout   time.Duration
 	afterFunc     p2pAfterFunc
@@ -102,6 +103,7 @@ func NewP2PCallService(
 		activeCalls:   make(map[string]*models.P2PCall),
 		userCalls:     make(map[string]string),
 		timers:        make(map[string]p2pCallTimer),
+		signals:       make(map[string]map[string]p2pSignalRevision),
 		ringTimeout:   p2pRingTimeout,
 		afterFunc:     func(d time.Duration, fn func()) p2pCallTimer { return time.AfterFunc(d, fn) },
 	}
@@ -260,6 +262,7 @@ func (s *p2pCallService) DeclineCall(userID, callID string) error {
 	}
 
 	delete(s.activeCalls, callID)
+	delete(s.signals, callID)
 	s.stopCallTimerLocked(callID)
 	delete(s.userCalls, call.CallerID)
 	delete(s.userCalls, call.ReceiverID)
@@ -297,6 +300,7 @@ func (s *p2pCallService) EndCall(userID string) error {
 	}
 
 	delete(s.activeCalls, callID)
+	delete(s.signals, callID)
 	s.stopCallTimerLocked(callID)
 	delete(s.userCalls, call.CallerID)
 	delete(s.userCalls, call.ReceiverID)
@@ -317,31 +321,74 @@ func (s *p2pCallService) EndCall(userID string) error {
 	return nil
 }
 
-// RelaySignal forwards WebRTC signaling data (SDP/ICE) to the other party.
-// Server does not inspect the payload.
-func (s *p2pCallService) RelaySignal(senderID, callID string, signal ws.P2PSignalData) error {
-	s.mu.RLock()
-	call, exists := s.activeCalls[callID]
-	s.mu.RUnlock()
+type p2pSignalRevision struct {
+	revision      uint64
+	descriptionID string
+	pendingOffer  string
+}
 
+// RelaySignal validates authenticated call membership and optional v1 revision
+// relationships under the call lock; network delivery never runs under it.
+func (s *p2pCallService) RelaySignal(senderID, callID string, signal ws.P2PSignalData) error {
+	if signal.CallID != callID {
+		return fmt.Errorf("%w: call mismatch", pkg.ErrBadRequest)
+	}
+	if err := signal.Validate(); err != nil {
+		return fmt.Errorf("%w: invalid signal", pkg.ErrBadRequest)
+	}
+	s.mu.Lock()
+	call, exists := s.activeCalls[callID]
 	if !exists {
+		s.mu.Unlock()
 		return fmt.Errorf("%w: call not found", pkg.ErrNotFound)
 	}
-
-	if call.CallerID != senderID && call.ReceiverID != senderID {
-		return fmt.Errorf("%w: not part of this call", pkg.ErrForbidden)
+	if call.Status != models.P2PCallStatusActive || (call.CallerID != senderID && call.ReceiverID != senderID) || s.userCalls[senderID] != callID || s.userCalls[call.CallerID] != callID || s.userCalls[call.ReceiverID] != callID {
+		s.mu.Unlock()
+		return fmt.Errorf("%w: not an active call participant", pkg.ErrForbidden)
 	}
-
 	otherUserID := call.CallerID
-	if call.CallerID == senderID {
+	if otherUserID == senderID {
 		otherUserID = call.ReceiverID
 	}
-
-	s.hub.BroadcastToUser(otherUserID, ws.Event{
-		Op:   ws.OpP2PSignal,
-		Data: signal,
-	})
-
+	if signal.MediaProtocol == 1 {
+		peers := s.signals[callID]
+		if peers == nil {
+			peers = make(map[string]p2pSignalRevision)
+		}
+		prior, other := peers[senderID], peers[otherUserID]
+		if signal.DescriptionRevision <= prior.revision || signal.DescriptionID == prior.descriptionID || signal.DescriptionID == other.descriptionID {
+			s.mu.Unlock()
+			return fmt.Errorf("%w: stale description", pkg.ErrConflict)
+		}
+		if signal.Type == "answer" {
+			if other.pendingOffer == "" || other.pendingOffer != signal.ReplyToDescriptionID {
+				s.mu.Unlock()
+				return fmt.Errorf("%w: unrelated answer", pkg.ErrConflict)
+			}
+			other.pendingOffer = ""
+			peers[otherUserID] = other
+		}
+		prior.revision = signal.DescriptionRevision
+		prior.descriptionID = signal.DescriptionID
+		prior.pendingOffer = ""
+		if signal.Type == "offer" {
+			prior.pendingOffer = signal.DescriptionID
+		}
+		peers[senderID] = prior
+		s.signals[callID] = peers
+	} else if peers := s.signals[callID]; peers != nil && signal.Type != "ice-candidate" {
+		// A legacy description replaces/consumes any previous v1 offer relation.
+		// Keep revision high-water marks: compatibility must not revive old IDs.
+		actor := senderID
+		if signal.Type == "answer" {
+			actor = otherUserID
+		}
+		prior := peers[actor]
+		prior.pendingOffer = ""
+		peers[actor] = prior
+	}
+	s.mu.Unlock()
+	s.hub.BroadcastToUser(otherUserID, ws.Event{Op: ws.OpP2PSignal, Data: signal})
 	return nil
 }
 
@@ -363,6 +410,7 @@ func (s *p2pCallService) HandleDisconnect(userID string) {
 	}
 
 	delete(s.activeCalls, callID)
+	delete(s.signals, callID)
 	s.stopCallTimerLocked(callID)
 	delete(s.userCalls, call.CallerID)
 	delete(s.userCalls, call.ReceiverID)
@@ -413,6 +461,7 @@ func (s *p2pCallService) cleanupCall(callID string) {
 	}
 
 	delete(s.activeCalls, callID)
+	delete(s.signals, callID)
 	s.stopCallTimerLocked(callID)
 	delete(s.userCalls, call.CallerID)
 	delete(s.userCalls, call.ReceiverID)
@@ -436,6 +485,7 @@ func (s *p2pCallService) expireRingingCall(callID string, expected *models.P2PCa
 		return
 	}
 	delete(s.activeCalls, callID)
+	delete(s.signals, callID)
 	delete(s.userCalls, call.CallerID)
 	delete(s.userCalls, call.ReceiverID)
 	delete(s.timers, callID)
