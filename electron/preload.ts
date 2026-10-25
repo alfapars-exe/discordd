@@ -192,6 +192,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Uses native audio-capture.exe (WASAPI process loopback) to capture
   // system audio while excluding our own process tree — no voice echo.
 
+  reserveSystemCaptureLease:(request:{kind:"guild"|"p2p"|"group";source:string}):Promise<string>=>ipcRenderer.invoke("reserve-system-capture-lease",request),
+  startSystemCaptureLease:(id:string):Promise<void>=>ipcRenderer.invoke("start-system-capture-lease",id),
+  releaseSystemCaptureLease:(id:string):Promise<boolean>=>ipcRenderer.invoke("release-system-capture-lease",id),
+  onSystemCaptureLeaseEvent:(cb:(event:{leaseId:string;type:"header"|"data"|"error"|"stopped";value?:unknown})=>void):(()=>void)=>{
+    const listener=(_event:Electron.IpcRendererEvent,event:{leaseId:string;type:"header"|"data"|"error"|"stopped";value?:unknown})=>cb(event);
+    ipcRenderer.on("system-capture-lease-event",listener);return()=>ipcRenderer.removeListener("system-capture-lease-event",listener);
+  },
+
   /** Start system audio capture (excludes Electron's own audio) */
   startSystemCapture: (): Promise<void> => ipcRenderer.invoke("start-system-capture"),
 

@@ -1,4 +1,12 @@
 {
+  "privateScreenAudioWindowsConsent": "HiChat hariç diğer tüm uygulamaların sistem sesini paylaş",
+  "privateScreenAudioBrowserConsent": "Tarayıcı sunuyorsa seçilen kaynağın sesini iste",
+  "privateScreenAudioShared": "Ekran sesi paylaşılıyor",
+  "privateScreenAudioStop": "Ses paylaşımını durdur",
+  "privateScreenAudioStarting": "Ekran sesi başlatılıyor…",
+  "privateScreenAudioNotReturned": "Tarayıcı bu kaynak için ses sağlamadı. Görüntü sessiz paylaşılıyor.",
+  "privateScreenAudioUnavailable": "Ekran sesi kullanılamıyor veya durdu. Görüntü sessiz devam ediyor; yeniden denemek için paylaşımı durdurup başlat.",
+
   "backgroundPTTUnavailable": "Arka planda bas-konuş kaydedilemedi. Konuşmadan önce yeniden dene.",
   "voiceTextView": "Metin sohbetini aç",
   "voiceRoomView": "Ses görünümüne dön",

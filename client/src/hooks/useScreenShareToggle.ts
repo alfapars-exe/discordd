@@ -319,7 +319,7 @@ export function useScreenShareToggle(
   // Native Electron audio capture — excludes our own process tree to prevent
   // screen-share echo. Held in a latest-ref so the toggle effect doesn't
   // re-register on every mount of the underlying capture hook.
-  const systemAudioCapture = useSystemAudioCapture();
+  const systemAudioCapture = useSystemAudioCapture(localParticipant);
   const systemAudioCaptureRef = useRef(systemAudioCapture);
   useLayoutEffect(() => {
     systemAudioCaptureRef.current = systemAudioCapture;
@@ -455,7 +455,7 @@ export function useScreenShareToggle(
       notifyServerStarted();
       logPublishedTrackDetails(localParticipant, branch);
 
-      const audioTrack = await systemAudioCaptureRef.current.start();
+      const audioTrack = await systemAudioCaptureRef.current.start(()=>!shouldCancel());
       if (shouldCancel() || !audioTrack) {
         // Video already published; audio track failed (Mac/Linux no
         // native helper, WASAPI denied, etc.). Log the partial state so
@@ -468,7 +468,10 @@ export function useScreenShareToggle(
         return;
       }
 
-      const lkTrack = new LKLocalAudioTrack(audioTrack, undefined, false);
+      const lkTrack = new LKLocalAudioTrack(audioTrack, undefined, true);
+      lkTrack.source=Track.Source.ScreenShareAudio;
+      await lkTrack.mute();
+      if(shouldCancel()||audioTrack.readyState!=="live"){lkTrack.stop();return;}
       const pub = await localParticipant.publishTrack(lkTrack, {
         source: Track.Source.ScreenShareAudio,
         // Media profile: forced stereo + DTX-off + dedicated bitrate (see
@@ -480,6 +483,9 @@ export function useScreenShareToggle(
         // Same stream name as the video above → one MediaStream for A/V sync.
         stream: "screenshare",
       });
+      if(shouldCancel()||audioTrack.readyState!=="live"){lkTrack.stop();await localParticipant.unpublishTrack(lkTrack).catch(()=>{});return;}
+      await lkTrack.unmute();
+      if(shouldCancel()||audioTrack.readyState!=="live"){lkTrack.stop();await localParticipant.unpublishTrack(lkTrack).catch(()=>{});return;}
       customAudioPubRef.current = pub;
       logPublishedAudioTrackDetails(localParticipant, branch);
       logToServer("info", "screen_share_success", {
@@ -543,13 +549,10 @@ export function useScreenShareToggle(
     if (branch === "capacitor") {
       await stopNativeScreenShare();
     } else {
-      if (customAudioPubRef.current) {
-        await localParticipant.unpublishTrack(
-          customAudioPubRef.current.track!,
-        );
-        customAudioPubRef.current = null;
-      }
+      const audio=customAudioPubRef.current;
+      customAudioPubRef.current=null;
       systemAudioCaptureRef.current.stop();
+      if(audio?.track)await localParticipant.unpublishTrack(audio.track);
       await localParticipant.setScreenShareEnabled(false);
     }
   }
@@ -649,8 +652,19 @@ export function useScreenShareToggle(
   // Suppressed during programmatic restarts: when `runRestart` calls
   // setScreenShareEnabled(false) the SDK fires LocalTrackUnpublished, which
   // would otherwise race the start phase and flip `isStreaming` to false.
+  useEffect(()=>{
+    if(systemAudioCapture.isCapturing)return;
+    const publication=customAudioPubRef.current;
+    if(!publication)return;
+    customAudioPubRef.current=null;
+    if(publication.track)void localParticipant.unpublishTrack(publication.track).catch(()=>{});
+  },[systemAudioCapture.isCapturing,localParticipant]);
   useEffect(() => {
     function handleLocalTrackUnpublished(pub: LocalTrackPublication) {
+      if(pub.source===Track.Source.ScreenShareAudio){
+        if(customAudioPubRef.current===pub){customAudioPubRef.current=null;systemAudioCaptureRef.current.stop();}
+        return;
+      }
       if (pub.source !== Track.Source.ScreenShare) return;
       if (isRestartingRef.current) return;
       const { isStreaming: streaming } = useVoiceStore.getState();

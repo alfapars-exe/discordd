@@ -121,7 +121,7 @@ const SCREEN_SHARE_AUDIO_PRESET: AudioPreset = { maxBitrate: 256_000 };
  *     audible pumping/warble.
  *   - red: true          → Redundant Audio Data for packet-loss resilience.
  */
-const SCREEN_SHARE_AUDIO_PUBLISH: ScreenSharePublishDefaults["screenShareAudioPublish"] = {
+export const SCREEN_SHARE_AUDIO_PUBLISH: ScreenSharePublishDefaults["screenShareAudioPublish"] = {
   audioPreset: SCREEN_SHARE_AUDIO_PRESET,
   dtx: false,
   red: true,

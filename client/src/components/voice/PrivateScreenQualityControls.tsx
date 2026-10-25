@@ -1,8 +1,9 @@
+import {isElectron}from "../../utils/constants";
 import { useTranslation } from "react-i18next";
 import { useVoiceStore } from "../../stores/voiceStore";
-export default function PrivateScreenQualityControls() {
+export default function PrivateScreenQualityControls({audio}:{audio?:{enabled:boolean;disabled?:boolean;onChange:(value:boolean)=>void}}={}) {
  const {t}=useTranslation("voice");
  const quality=useVoiceStore(state=>state.screenShareQuality),fps=useVoiceStore(state=>state.screenShareFps);
  const setQuality=useVoiceStore(state=>state.setScreenShareQuality),setFps=useVoiceStore(state=>state.setScreenShareFps);
- return <span className="private-screen-quality"><label>{t("privateScreenQuality")}<select value={quality} onChange={event=>setQuality(event.target.value as typeof quality)}><option value="720p">720p</option><option value="1080p">1080p</option><option value="1440p">1440p</option><option value="native">{t("privateScreenNative")}</option></select></label><label>FPS<select aria-label={t("privateScreenFps")} value={fps} onChange={event=>setFps(Number(event.target.value) as typeof fps)}><option value={30}>30</option><option value={60}>60</option><option value={120}>120</option>{fps===-1&&<option value={-1}>{t("privateScreenNativeRate")}</option>}</select></label><small>{t("privateScreenVideoOnly")}</small></span>;
+ return <span className="private-screen-quality"><label>{t("privateScreenQuality")}<select value={quality} onChange={event=>setQuality(event.target.value as typeof quality)}><option value="720p">720p</option><option value="1080p">1080p</option><option value="1440p">1440p</option><option value="native">{t("privateScreenNative")}</option></select></label><label>FPS<select aria-label={t("privateScreenFps")} value={fps} onChange={event=>setFps(Number(event.target.value) as typeof fps)}><option value={30}>30</option><option value={60}>60</option><option value={120}>120</option>{fps===-1&&<option value={-1}>{t("privateScreenNativeRate")}</option>}</select></label>{audio?<label><input type="checkbox" checked={audio.enabled} disabled={audio.disabled} onChange={event=>audio.onChange(event.target.checked)}/>{t(isElectron()?"privateScreenAudioWindowsConsent":"privateScreenAudioBrowserConsent")}</label>:<small>{t("privateScreenVideoOnly")}</small>}</span>;
 }

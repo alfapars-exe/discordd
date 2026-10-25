@@ -12,6 +12,6 @@ test("trusted bounded PTT handlers reject subframes/foreign senders and retire o
  assert.throws(()=>acquire({...event}as IpcMainInvokeEvent,request),/Untrusted/);assert.throws(()=>acquire(event,{...request,source:"x".repeat(161)}),/Invalid/);assert.equal(calls.length,0);
  assert.equal(acquire(event,request),"lease");acquire(event,request);assert.equal(sender.listenerCount("destroyed"),1);
  assert.throws(()=>release({...event}as IpcMainInvokeEvent,"lease"),/Untrusted/);assert.throws(()=>release(event,"x".repeat(81)),/Invalid/);release(event,"lease");
- sender.emit("did-start-navigation",{},"",false,false);assert.equal(calls.length,3);sender.emit("did-start-navigation",{},"",false,true);sender.emit("render-process-gone");sender.emit("destroyed");
+ sender.emit("did-start-navigation",{},"",false,false);sender.emit("did-start-navigation",{},"app://hichat/#settings",true,true);assert.equal(calls.length,3);sender.emit("did-start-navigation",{},"",false,true);sender.emit("render-process-gone");sender.emit("destroyed");
  assert.deepEqual(calls.slice(-3),[["retire",9],["retire",9],["retire",9]]);
 });

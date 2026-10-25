@@ -3500,7 +3500,9 @@
         "implementation/verification/p4-group-dm-foundation-2026-10-23.json",
         "implementation/verification/p9-web-e2ee-admission-2026-10-25.json",
         "implementation/verification/p9-private-group-audio-2026-10-25.json",
-        "implementation/verification/p9-group-mute-control-owner-2026-10-25.json"
+        "implementation/verification/p9-group-mute-control-owner-2026-10-25.json",
+        "implementation/verification/p9-private-decoder-activation-2026-10-25.json",
+        "implementation/verification/p9-audio-combined-gates-2026-10-25.json"
       ]
     },
     {
@@ -6622,8 +6624,8 @@
       "acceptance": [
         "Supported system/app audio is captured and mixed correctly; unavailable audio sources are not promised."
       ],
-      "code": ["electron/audio-capture.ts", "client/src/hooks/useSystemAudioCapture.ts", "electron/audio-capture.test.ts", "client/src/hooks/useSystemAudioCapture.test.tsx"],
-      "evidence": ["implementation/verification/p9-system-capture-lifecycle-2026-10-24.json"]
+      "code": ["electron/audio-capture.ts", "client/src/hooks/useSystemAudioCapture.ts", "electron/audio-capture.test.ts", "client/src/hooks/useSystemAudioCapture.test.tsx", "electron/system-audio-ipc.ts", "client/src/audio/systemAudioCaptureSession.ts", "client/src/components/dm/GroupScreenShareSession.ts"],
+      "evidence": ["implementation/verification/p9-system-capture-lifecycle-2026-10-24.json", "implementation/verification/p9-private-system-audio-phase1-2026-10-25.json", "implementation/verification/p9-audio-combined-gates-2026-10-25.json"]
     },
     {
       "id": "p9.share-quality",

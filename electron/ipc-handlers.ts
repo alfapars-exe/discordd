@@ -1,3 +1,4 @@
+import {registerSystemAudioLeaseIPC}from "./system-audio-ipc";
 import {registerPTTLeaseHandlers}from "./ptt-ipc";
 /**
  * electron/ipc-handlers.ts — Centralized IPC channel registration.
@@ -64,7 +65,7 @@ function assertFiniteNumber(
 
 import { app, clipboard, dialog, globalShortcut, ipcMain, nativeImage, net, screen, shell } from "electron";
 import { autoUpdater } from "electron-updater";
-import { getCaptureStatus, startCapture, startDiagnosticCapture, stopCapture, stopDiagnosticCapture } from "./audio-capture";
+import { getCaptureStatus, startCapture, startDiagnosticCapture, stopCapture, stopDiagnosticCapture,reserveCaptureLease,startCaptureLease,releaseCaptureLease,retireCaptureSender } from "./audio-capture";
 import { consumeLastCrash } from "./crash-reporter";
 import { appendDiagnostic } from "./diagnostic-log";
 import {
@@ -389,9 +390,10 @@ export function registerIpcHandlers(): void {
     };
   });
 
+  registerSystemAudioLeaseIPC(ipcMain,assertTrustedMainWindowSender,{reserve:reserveCaptureLease,start:startCaptureLease,release:releaseCaptureLease,retire:retireCaptureSender});
   // ─── Process-exclusive system audio ──────────────────────────────
-  ipcMain.handle("start-system-capture", () => startCapture());
-  ipcMain.handle("stop-system-capture", () => stopCapture());
+  ipcMain.handle("start-system-capture", event => {assertTrustedMainWindowSender(event);return startCapture();});
+  ipcMain.handle("stop-system-capture", event => {assertTrustedMainWindowSender(event);return stopCapture();});
   ipcMain.handle("get-system-capture-status", () => getCaptureStatus());
   ipcMain.handle("start-system-capture-diagnostic", () => startDiagnosticCapture());
   ipcMain.handle("stop-system-capture-diagnostic", (_event, token: unknown) => {

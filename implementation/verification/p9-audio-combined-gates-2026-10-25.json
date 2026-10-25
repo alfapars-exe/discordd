@@ -1,0 +1,28 @@
+{
+  "status": "implemented_unverified",
+  "scope": "Leased system audio phase1 and private-call decoder activation",
+  "sources": ["p9-private-system-audio-phase1-2026-10-25.json", "p9-private-decoder-activation-2026-10-25.json"],
+  "gates": {
+    "client": "396 files,3836 tests passed,79.09 seconds; root session20791 exit0",
+    "build": "tsc -b and Vite1703 modules passed,2.54 seconds; root session36070 exit0",
+    "lint": "0 errors,5 existing warnings; root session18707 exit0",
+    "electron": "182 passed,1 existing host-dependent skip,0 failures; full electron:test exit0",
+    "initial_failure": "First build found test mock callback signatures missed by bare tsc --noEmit. Typed fixtures corrected; actual project-reference build rerun successfully."
+  },
+  "runtime": {
+    "build": "Frozen QA15; exact main p2pPlayback.ts canonical SHA256 779f9ab091eab959954676d121f8ecf4a3ec18edd04c1d3f661cf9a87bb1ff87 with separate numeric-only PCM observer; frozen base9f plus microphone startup fixes, excludes new system-audio source",
+    "rounds": [163,164,165],
+    "result": "Two actual HiChat clients joined their existing group using actual API credentials, SDK workers, encrypted LiveKit1.9.12 room and nonzero generated input. Both connected, E2EE enabled, local publications encrypted, RNNoise ready and gate open. No encryption bypass.",
+    "recipient": {"receive_rms":0.07629656973304992,"decoded_seconds":27.82000000000155,"received_bytes":210275,"sent_packets":1438},
+    "owner": {"receive_rms":0.07836317657969538,"decoded_seconds":28.750000000001695,"received_bytes":217182,"sent_packets":1437},
+    "energy_note": "Receiver totalAudioEnergy is zero on the deliberately zero-volume raw decoder. Nonzero post-decode PCM and advancing decoded duration establish received audio; energy alone is not the acceptance oracle.",
+    "cleanup": "Both calls explicitly left and generated sources stopped in round165. No raw audio recordings or credentials logged."
+  },
+  "open": [
+    "Physical microphone/headset/output switching and audible user confirmation",
+    "Real packaged Windows system-audio capture and browser picker-returned audio",
+    "P2P separate microphone/screen-audio sources and independent volume controls",
+    "Multi-track decoding, background/sleep recovery, key rotation and reconnect acceptance",
+    "Exact immutable source scan, CI and production/Windows publication of this change"
+  ]
+}

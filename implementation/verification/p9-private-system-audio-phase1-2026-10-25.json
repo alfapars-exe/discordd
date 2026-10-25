@@ -1,0 +1,121 @@
+{
+  "date": "2026-10-25",
+  "scope": "P9 phase1 leased packaged system capture, guild migration, explicit group screen audio; P2P dual-source integration remains open",
+  "owned_paths": [
+    "electron/audio-capture.ts",
+    "electron/audio-capture.test.ts",
+    "electron/system-audio-ipc.ts",
+    "electron/system-audio-ipc.test.ts",
+    "electron/system-audio-preload.test.ts",
+    "electron/ipc-handlers.ts",
+    "electron/preload.ts",
+    "electron/ptt-ipc.ts",
+    "electron/ptt-ipc.test.ts",
+    "client/src/types/electron.d.ts",
+    "client/src/audio/systemAudioCaptureSession.ts",
+    "client/src/audio/systemAudioCaptureSession.test.ts",
+    "client/src/hooks/useSystemAudioCapture.ts",
+    "client/src/hooks/useSystemAudioCapture.test.tsx",
+    "client/src/hooks/useScreenShareToggle.ts",
+    "client/src/hooks/useScreenSharePublishDefaults.ts",
+    "client/src/components/dm/GroupScreenShareSession.ts",
+    "client/src/components/dm/GroupScreenShareSession.audio.test.ts",
+    "client/src/components/dm/GroupScreenShareControl.tsx",
+    "client/src/components/dm/GroupScreenShareControl.test.tsx",
+    "client/src/components/voice/PrivateScreenQualityControls.tsx",
+    "client/src/i18n/locales/en/voice.json",
+    "client/src/i18n/locales/tr/voice.json"
+  ],
+  "source_sha256": {
+    "electron/audio-capture.ts": "dd16557e03fec7bc878638d9e102ab64b5f5e06b3ee31e51f86f6cafa68c61f0",
+    "electron/audio-capture.test.ts": "b6ce851fa59a19eb3b8cb7b42fba43935f8ceadc194e2424f2512ae56a0b8e98",
+    "electron/system-audio-ipc.ts": "527b1be601f54c0297184f9a95dc87811bbddea4dc95c43bf9b0a862fe1d1040",
+    "electron/system-audio-ipc.test.ts": "90e82b73a25109a4120ab746b4b21ef673bd99f9b76562956b42d77df8193432",
+    "electron/system-audio-preload.test.ts": "2b396cdf42271d7f86ba490df016a2313845b192665c2a09ea6494d2f191a004",
+    "electron/ipc-handlers.ts": "85a2025466415651e27a0a338895ebe15a8e33612f60192eee79dc10c8b539fa",
+    "electron/preload.ts": "2fa15230daba8988f409511b6b358f0c176163d2727c240226bf4ab5ae96e9d2",
+    "electron/ptt-ipc.ts": "c15076d68d3aed6ba26a0fc3a17949710a728706b75f44a30539d104635485ac",
+    "electron/ptt-ipc.test.ts": "632a3be27b474ad82ae6a0482a5734c1e969d7d93a3d51bc366e5a9bb9076d1e",
+    "client/src/types/electron.d.ts": "fabed3993167995519ad096f3f26923e072c3ab9ac2c5e0df77e310833e31287",
+    "client/src/audio/systemAudioCaptureSession.ts": "bc1b18f7792fe312cebcbba24966e7fc957296fb7798fc012392993f18514d60",
+    "client/src/audio/systemAudioCaptureSession.test.ts": "686dad51f1af146e5bc447525f12e9d36686f7977f0f7445fffb4a5b05e96e1e",
+    "client/src/hooks/useSystemAudioCapture.ts": "5e78ed27c06a0ea7767605eaf21a322a18d68c999a91a17275769e17c3a4d37a",
+    "client/src/hooks/useSystemAudioCapture.test.tsx": "3135fd069ecaa2428a900ed4825e619f0e86655de0aba4bcfa444eb214b1123e",
+    "client/src/hooks/useScreenShareToggle.ts": "b14c824b05727056a074065806c56d0bc7554ba16b8a7ac3e2258ac0e6b12078",
+    "client/src/hooks/useScreenSharePublishDefaults.ts": "86a9f7025b2a61dae9ce05e3a11ca3efb1b29c3507e89966ee1bdf8fa178f05f",
+    "client/src/components/dm/GroupScreenShareSession.ts": "ee641c94720e71689fd4b9b45de71287642cdfe217e564776c6dbb6b5505cab2",
+    "client/src/components/dm/GroupScreenShareSession.audio.test.ts": "352674447ef2771b8895eb6e7a45c4f1b3e8d15ee5bfbe15f043bcc57c54fc0b",
+    "client/src/components/dm/GroupScreenShareControl.tsx": "7bb607e249e12d7450c2fcfaa4720a762e4b9813ee4f5ca900480899f47183fc",
+    "client/src/components/dm/GroupScreenShareControl.test.tsx": "4567633004498b9ae62f880bd2c34d56f6c84b8d3c7fe1a7083a4762daacd7e1",
+    "client/src/components/voice/PrivateScreenQualityControls.tsx": "b5998eadfd8f0016a9216e20883ae5911f812831524512e7defd67ad8668d6e7",
+    "client/src/i18n/locales/en/voice.json": "a7bd14515ac9167b3de63f03db56721a57456e75a7f0572550bc76c14fa21414",
+    "client/src/i18n/locales/tr/voice.json": "4cf56a89ea588aba47bd6b146d1fc42956844a1d97d05c3a30cedfbecf472bb1"
+  },
+  "verified": [
+    {
+      "cwd": "client",
+      "command": "npx vitest run src/audio/systemAudioCaptureSession.test.ts src/hooks/useSystemAudioCapture.test.tsx src/components/dm/GroupScreenShareSession.test.ts src/components/dm/GroupScreenShareSession.audio.test.ts src/components/dm/GroupScreenShareControl.test.tsx --reporter=dot",
+      "result": "5 files,34 tests passed; existing act warnings in GroupScreenShareControl tests"
+    },
+    {
+      "cwd": "client",
+      "command": "npx tsc --noEmit",
+      "result": "exit0"
+    },
+    {
+      "cwd": "client",
+      "command": "npx eslint <owned client audio/hooks/group control paths>",
+      "result": "exit0; no warnings"
+    },
+    {
+      "cwd": ".",
+      "command": "npx tsc -p electron/tsconfig.json && node --test dist-electron/audio-capture.test.js dist-electron/system-audio-ipc.test.js dist-electron/system-audio-preload.test.js dist-electron/ptt-ipc.test.js",
+      "result": "20 passed,0 skipped; before final client-only cleanup"
+    },
+    {
+      "command": "Get-FileHash client/public/pcm-feeder-processor.js,client/dist/pcm-feeder-processor.js -Algorithm SHA256; inspect package.json files",
+      "result": "both 7a6ee1d805f565f3f6d60406dfbfb706c8b6b4b7ae7f01b2140bc6f44543abfe; client/dist included"
+    },
+    {
+      "cwd": "client",
+      "command": "npx tsc -b",
+      "result": "exit0 after exact LocalTrack fixture parameter typing; real app project-reference validation"
+    },
+    {
+      "cwd": "client",
+      "command": "npx vitest run src/components/dm/GroupScreenShareSession.audio.test.ts --reporter=dot",
+      "result": "9 passed after test-only typing correction"
+    },
+    {
+      "cwd": ".",
+      "command": "electron:test (root-run full native gate)",
+      "result": "182 passed,1 pre-existing skip,exit0; reported by root"
+    },
+    {
+      "cwd": "client",
+      "command": "npx vitest run src/hooks/useSystemAudioCapture.test.tsx --reporter=dot; npx tsc -b; scoped eslint adapter+test",
+      "result": "3 hook tests passed, actual tsc-b exit0,eslint0. Added synchronous constructor admission-retirement regression: no native IPC, null result, no TDZ/unhandled."
+    }
+  ],
+  "behavior": [
+    "One existing native worker; trusted top-level sender bounded lease request, scoped reserve/subscribe/start/release; no global removeAll listener theft.",
+    "Guild can preserve existing diagnostic preemption policy; private capture never preempts another owner.",
+    "HashRouter same-document navigation retains native audio/PTT leases; real main document navigation retires.",
+    "Stopped-before-start and synchronous retirement settle AbortError without leaked subscription.",
+    "Group audio starts only explicit checkbox choice; Windows consent states all other apps except HiChat, browser source may return video only.",
+    "Audio failures/ended/unpublication preserve group video and never claim shared audio; pending audio stop cannot re-enable.",
+    "Native PCM remains exact auth/source/admission owned; generation/streaming closure stops capture, selected output/deafen screen gain existing receiver path unchanged."
+  ],
+  "remaining": [
+    "Root whole-client/build/security gates pending on final frozen source.",
+    "Real Windows packaged helper capture and audible two-client group screen audio acceptance not performed by this agent.",
+    "Browser actual picker-returned system audio across supported sources/platforms remains physical/runtime gate.",
+    "P2P remains video-only until approved phase2 revision/MID-bound dual-source mapping and independent receive gain implemented.",
+    "Root/other agent independently investigating private receiver playback graph; this receipt does not claim audible acceptance.",
+    "Runtime AudioContext suspension after initial ready is not automatically resumed; no physical device acceptance claimed.",
+    "Earlier npx tsc --noEmit did not validate app project references; superseded by passing actual npx tsc -b."
+  ],
+  "not_done": [
+    "No production operations, no user screen capture, no cookies/bypass, no commit/stage/push."
+  ]
+}

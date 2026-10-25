@@ -10,9 +10,19 @@ export function playP2PAudio(stream: MediaStream, options: {
   onFailure: (error: unknown) => void;
 }): P2PPlayback {
   const audio = new Audio();
+  // Chromium needs a playing raw-track element to pull decoded WebRTC audio
+  // into WebAudio. This element is never audible; routing stays on audio.
+  const decoder = new Audio();
+  const decoderStream = new MediaStream();
+  decoder.autoplay = false; decoder.volume = 0; decoder.muted = false;
+  decoder.srcObject = decoderStream;
+  decoder.onvolumechange = () => { if (decoder.volume !== 0) decoder.volume = 0; };
   audio.autoplay = false; audio.volume = 0; audio.muted = true;
   const abort = new AbortController();
   let stopped = false, volume = gainValue(options.volume);
+  let routed = false, decoderPlaying = false, decoderVersion = 0;
+  let decoderPending: Promise<void> | null = null;
+  let decoderAbort: AbortController | null = null;
   let context: AudioContext | undefined, gain: GainNode | undefined, destination: MediaStreamAudioDestinationNode | undefined;
   const sources = new Map<MediaStreamTrack, { node: MediaStreamAudioSourceNode; ended: () => void }>();
   const current = () => !stopped && options.isCurrent();
@@ -24,12 +34,14 @@ export function playP2PAudio(stream: MediaStream, options: {
   };
   const remove = (track: MediaStreamTrack) => {
     const source = sources.get(track); if (!source) return;
-    track.removeEventListener("ended", source.ended); source.node.disconnect(); sources.delete(track);
+    track.removeEventListener("ended", source.ended); source.node.disconnect(); decoderStream.removeTrack(track); sources.delete(track);
   };
   const stop = () => {
     if (stopped) return;
-    stopped = true; abort.abort();
+    stopped = true; decoderVersion++; decoderAbort?.abort(); abort.abort();
     audio.muted = true; audio.volume = 0; audio.pause(); audio.srcObject = null;
+    decoder.onvolumechange = null; decoder.volume = 0; decoder.muted = true;
+    decoder.pause(); decoder.srcObject = null;
     stream.removeEventListener("addtrack", refresh); stream.removeEventListener("removetrack", refresh);
     for (const track of sources.keys()) remove(track);
     gain?.disconnect();
@@ -37,18 +49,38 @@ export function playP2PAudio(stream: MediaStream, options: {
     void closeAudioContext(context);
   };
   const failed = (error: unknown) => { if (current()) options.onFailure(error); stop(); };
+  function ensureDecoder(): Promise<void> {
+    if (!current() || !routed || !decoderStream.getAudioTracks().length || decoderPlaying) return Promise.resolve();
+    if (decoderPending) return decoderPending;
+    const version = decoderVersion;
+    const activation = new AbortController(); decoderAbort = activation;
+    const playing = decoder.play();
+    void playing.then(() => { if (!current()) { decoder.volume = 0; decoder.muted = true; decoder.pause(); decoder.srcObject = null; } }, () => {});
+    const pending = awaitAudioStep(playing, "Private decoder activation", activation.signal).then(() => {
+      if (!current()) throw new DOMException("Obsolete private decoder", "AbortError");
+      if (version === decoderVersion) decoderPlaying = true;
+    }).catch((error: unknown) => { if (!current() || version === decoderVersion) throw error; });
+    decoderPending = pending;
+    void pending.finally(() => { if (decoderPending === pending) decoderPending = null; }).catch(() => {});
+    return pending;
+  }
   function refresh() {
     if (!current() || !context || !gain) return;
     try {
       const tracks = stream.getAudioTracks().filter(track => track.readyState !== "ended");
       for (const track of sources.keys()) if (!tracks.includes(track)) remove(track);
+      for (const track of decoderStream.getTracks()) if (!tracks.includes(track)) decoderStream.removeTrack(track);
       for (const track of tracks) {
         if (sources.has(track)) continue;
+        if (!decoderStream.getTracks().includes(track)) decoderStream.addTrack(track);
         const node = context.createMediaStreamSource(new MediaStream([track]));
         node.connect(gain);
-        const ended = () => remove(track);
+        const ended = () => { remove(track); refresh(); };
         sources.set(track, { node, ended }); track.addEventListener("ended", ended);
       }
+      if (!tracks.length && (decoderPlaying || decoderPending)) {
+        decoderVersion++; decoderAbort?.abort(); decoderAbort = null; decoderPlaying = false; decoderPending = null; decoder.pause();
+      } else if (tracks.length && routed) void ensureDecoder().catch((error: unknown) => { if (current()) failed(error); });
     } catch (error) { failed(error); }
   }
   const ready = (async () => {
@@ -61,17 +93,25 @@ export function playP2PAudio(stream: MediaStream, options: {
     if (!current()) throw new DOMException("Obsolete P2P playback", "AbortError");
     const device = options.outputDevice === "default" ? "" : options.outputDevice;
     let fallback = false;
-    if (device && typeof audio.setSinkId !== "function") throw new DOMException("Custom output unavailable", "NotSupportedError");
-    if (typeof audio.setSinkId === "function") {
-      try { await awaitAudioStep(audio.setSinkId(device), "P2P audio output", abort.signal); }
-      catch (error) {
-        if (!current()) throw new DOMException("Obsolete P2P playback", "AbortError");
-        if (!device || (error as { name?: string })?.name !== "NotFoundError") throw error;
-        await awaitAudioStep(audio.setSinkId(""), "P2P default output", abort.signal); fallback = true;
+    const route = async (target: string) => {
+      for (const element of [audio, decoder]) {
+        if (target && typeof element.setSinkId !== "function") throw new DOMException("Custom output unavailable", "NotSupportedError");
+        if (typeof element.setSinkId === "function") await awaitAudioStep(element.setSinkId(target), "Private audio output", abort.signal);
+        if (!current()) throw new DOMException("Obsolete private output", "AbortError");
       }
+    };
+    try { await route(device); }
+    catch (error) {
+      if (!current()) throw new DOMException("Obsolete P2P playback", "AbortError");
+      if (!device || (error as { name?: string })?.name !== "NotFoundError") throw error;
+      await route(""); fallback = true;
     }
     if (!current()) throw new DOMException("Obsolete P2P playback", "AbortError");
+    routed = true;
+    await ensureDecoder();
+    if (!current()) throw new DOMException("Obsolete private decoder", "AbortError");
     await awaitAudioStep(context.resume(), "P2P audio context", abort.signal);
+    if (context.state !== "running") throw new DOMException("Private audio context is not running", "NotAllowedError");
     if (!current()) throw new DOMException("Obsolete P2P playback", "AbortError");
     audio.volume = 1; setVolume(volume);
     const playing = audio.play();

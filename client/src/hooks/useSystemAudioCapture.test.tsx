@@ -1,84 +1,24 @@
-import { act, renderHook } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { useSystemAudioCapture } from "./useSystemAudioCapture";
+import {act,renderHook}from "@testing-library/react";
+import {afterEach,beforeEach,expect,it,vi}from "vitest";
+import {useSystemAudioCapture}from "./useSystemAudioCapture";
+vi.mock("../utils/constants",()=>({isElectron:()=>true,isNativeApp:()=>true}));
+const h=vi.hoisted(()=>({toast:vi.fn(),syncRetire:false}));vi.mock("../stores/toastStore",()=>({useToastStore:{getState:()=>({addToast:h.toast})}}));
+vi.mock("../audio/microphoneAdmission",()=>({captureAdmissionCurrent:()=>false,subscribeCaptureAdmission:(_participant:unknown,retire:()=>void)=>{if(h.syncRetire)retire();return()=>{};}}));
+type Event={leaseId:string;type:"header"|"data"|"stopped"|"error";value?:unknown};
+let listeners:Set<(value:Event)=>void>,api:{reserveSystemCaptureLease:ReturnType<typeof vi.fn>;startSystemCaptureLease:ReturnType<typeof vi.fn>;releaseSystemCaptureLease:ReturnType<typeof vi.fn>;onSystemCaptureLeaseEvent:(cb:(value:Event)=>void)=>()=>void;removeCaptureListeners:ReturnType<typeof vi.fn>};
+const emit=(type:Event["type"],value?:unknown)=>{for(const listener of [...listeners])listener({leaseId:"lease",type,value});};
+beforeEach(()=>{h.toast.mockClear();h.syncRetire=false;listeners=new Set();api={reserveSystemCaptureLease:vi.fn(async()=>"lease"),startSystemCaptureLease:vi.fn(async()=>{}),releaseSystemCaptureLease:vi.fn(async()=>true),onSystemCaptureLeaseEvent:cb=>{listeners.add(cb);return()=>{listeners.delete(cb);};},removeCaptureListeners:vi.fn()};window.electronAPI=api as unknown as Window["electronAPI"];});
+afterEach(()=>{vi.useRealTimers();vi.unstubAllGlobals();window.electronAPI=undefined;});
+it("timeouts release only the exact lease and never erase another owner's listeners",async()=>{
+ vi.useFakeTimers();const{result}=renderHook(()=>useSystemAudioCapture());let pending!:Promise<MediaStreamTrack|null>;act(()=>{pending=result.current.start();});await act(async()=>{});expect(api.startSystemCaptureLease).toHaveBeenCalledWith("lease");await act(async()=>{await vi.advanceTimersByTimeAsync(5000);});expect(await pending).toBeNull();expect(api.releaseSystemCaptureLease).toHaveBeenCalledWith("lease");expect(api.removeCaptureListeners).not.toHaveBeenCalled();expect(listeners.size).toBe(0);expect(result.current.isCapturing).toBe(false);expect(h.toast).toHaveBeenCalledOnce();
+});
+it("uses the same unaligned PCM conversion and closes ready capture on exact helper stop",async()=>{
+ const track={enabled:true,readyState:"live",addEventListener:vi.fn(),removeEventListener:vi.fn(),stop:vi.fn()},context={state:"running",audioWorklet:{addModule:vi.fn(async()=>{})},resume:vi.fn(async()=>{}),createMediaStreamDestination:()=>({stream:{getAudioTracks:()=>[track]},disconnect:vi.fn()}),close:vi.fn(async()=>{})},worklet={port:{postMessage:vi.fn(),onmessage:null},connect:vi.fn(),disconnect:vi.fn()};
+ vi.stubGlobal("AudioContext",class{state=context.state;audioWorklet=context.audioWorklet;resume=context.resume;createMediaStreamDestination=context.createMediaStreamDestination;close=context.close;});vi.stubGlobal("AudioWorkletNode",class{port=worklet.port;connect=worklet.connect;disconnect=worklet.disconnect;});
+ const{result}=renderHook(()=>useSystemAudioCapture());let pending!:Promise<MediaStreamTrack|null>;act(()=>{pending=result.current.start();});await act(async()=>{});await act(async()=>{emit("header",{sampleRate:48000,channels:2,bitsPerSample:32,formatTag:3});await pending;});expect(await pending).toBe(track);expect(result.current.isCapturing).toBe(true);expect(track.enabled).toBe(false);
+ const bytes=new Uint8Array(9),view=new DataView(bytes.buffer);view.setFloat32(1,0.25,true);view.setFloat32(5,-0.5,true);act(()=>emit("data",bytes.subarray(1)));expect(Array.from(worklet.port.postMessage.mock.calls[0][0]as Float32Array)).toEqual([0.25,-0.5]);act(()=>emit("stopped"));expect(result.current.isCapturing).toBe(false);expect(track.stop).toHaveBeenCalledOnce();expect(context.close).toHaveBeenCalledOnce();expect(api.releaseSystemCaptureLease).toHaveBeenCalledWith("lease");expect(api.removeCaptureListeners).not.toHaveBeenCalled();
+});
 
-vi.mock("../utils/constants", () => ({ isElectron: () => true }));
-vi.mock("../api/clientLog", () => ({ logToServer: vi.fn() }));
-
-describe("useSystemAudioCapture startup cleanup", () => {
-  afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); delete (window as Window & { electronAPI?: unknown }).electronAPI; });
-
-  it("stops the worker and removes listeners when the ready header times out", async () => {
-    vi.useFakeTimers();
-    const api = {
-      removeCaptureListeners: vi.fn(),
-      onCaptureAudioError: vi.fn(),
-      onCaptureAudioHeader: vi.fn(),
-      onCaptureAudioData: vi.fn(),
-      onCaptureAudioStopped: vi.fn(),
-      startSystemCapture: vi.fn().mockResolvedValue(undefined),
-      stopSystemCapture: vi.fn().mockResolvedValue(undefined),
-    };
-    Object.defineProperty(window, "electronAPI", { configurable: true, value: api });
-    const { result } = renderHook(() => useSystemAudioCapture());
-    let pending!: Promise<MediaStreamTrack | null>;
-    act(() => { pending = result.current.start(); });
-    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
-
-    expect(await pending).toBeNull();
-    expect(api.stopSystemCapture).toHaveBeenCalledOnce();
-    expect(api.removeCaptureListeners).toHaveBeenCalledTimes(2); // previous listeners and failed-start cleanup
-    expect(result.current.isCapturing).toBe(false);
-  });
-
-  it("releases the track and audio context when a ready helper later stops", async () => {
-    vi.useFakeTimers();
-    const track = { stop: vi.fn() };
-    const context = {
-      audioWorklet: { addModule: vi.fn().mockResolvedValue(undefined) },
-      createMediaStreamDestination: () => ({ stream: { getAudioTracks: () => [track] }, disconnect: vi.fn() }),
-      close: vi.fn().mockResolvedValue(undefined),
-    };
-    const worklet = { port: { postMessage: vi.fn() }, connect: vi.fn(), disconnect: vi.fn() };
-    vi.stubGlobal("AudioContext", class FakeAudioContext {
-      audioWorklet = context.audioWorklet;
-      createMediaStreamDestination = context.createMediaStreamDestination;
-      close = context.close;
-    });
-    vi.stubGlobal("AudioWorkletNode", class FakeAudioWorkletNode {
-      port = worklet.port;
-      connect = worklet.connect;
-      disconnect = worklet.disconnect;
-      constructor(_context: unknown, _name: string, _options: unknown) {}
-    });
-    const api = {
-      removeCaptureListeners: vi.fn(), onCaptureAudioError: vi.fn(), onCaptureAudioHeader: vi.fn(),
-      onCaptureAudioData: vi.fn(), onCaptureAudioStopped: vi.fn(),
-      startSystemCapture: vi.fn().mockResolvedValue(undefined), stopSystemCapture: vi.fn().mockResolvedValue(undefined),
-    };
-    Object.defineProperty(window, "electronAPI", { configurable: true, value: api });
-    const { result } = renderHook(() => useSystemAudioCapture());
-    let pending!: Promise<MediaStreamTrack | null>;
-    act(() => { pending = result.current.start(); });
-    const headerHandler = api.onCaptureAudioHeader.mock.calls[0][0] as (header: { sampleRate: number; channels: number; bitsPerSample: number; formatTag: number }) => Promise<void>;
-    await act(async () => { await headerHandler({ sampleRate: 48000, channels: 2, bitsPerSample: 32, formatTag: 3 }); });
-    expect(await pending).toBe(track);
-    expect(result.current.isCapturing).toBe(true);
-
-    const dataHandler = api.onCaptureAudioData.mock.calls[0][0] as (data: Uint8Array) => void;
-    const offsetBytes = new Uint8Array(9);
-    const offsetView = new DataView(offsetBytes.buffer);
-    offsetView.setFloat32(1, 0.25, true);
-    offsetView.setFloat32(5, -0.5, true);
-    act(() => dataHandler(offsetBytes.subarray(1)));
-    const samples = worklet.port.postMessage.mock.calls[0][0] as Float32Array;
-    expect(Array.from(samples)).toEqual([0.25, -0.5]);
-
-    const stoppedHandler = api.onCaptureAudioStopped.mock.calls[0][0] as () => void;
-    act(() => stoppedHandler());
-    expect(result.current.isCapturing).toBe(false);
-    expect(track.stop).toHaveBeenCalledOnce();
-    expect(context.close).toHaveBeenCalledOnce();
-    expect(api.removeCaptureListeners).toHaveBeenCalledTimes(2);
-  });
+it("synchronous admission retirement during construction returns null without native access or TDZ",async()=>{
+ h.syncRetire=true;const participant={}as import("livekit-client").LocalParticipant;const{result}=renderHook(()=>useSystemAudioCapture(participant));let value:MediaStreamTrack|null|undefined;await act(async()=>{value=await result.current.start();});expect(value).toBeNull();expect(api.reserveSystemCaptureLease).not.toHaveBeenCalled();expect(api.startSystemCaptureLease).not.toHaveBeenCalled();expect(api.releaseSystemCaptureLease).not.toHaveBeenCalled();expect(result.current.isCapturing).toBe(false);expect(h.toast).not.toHaveBeenCalled();
 });

@@ -203,6 +203,10 @@ interface ElectronAPI {
   ) => void;
 
   /** Start process-exclusive system audio capture (excludes our own audio) */
+  reserveSystemCaptureLease:(request:{kind:"guild"|"p2p"|"group";source:string})=>Promise<string>;
+  startSystemCaptureLease:(id:string)=>Promise<void>;
+  releaseSystemCaptureLease:(id:string)=>Promise<boolean>;
+  onSystemCaptureLeaseEvent:(cb:(event:{leaseId:string;type:"header"|"data"|"error"|"stopped";value?:unknown})=>void)=>(()=>void);
   startSystemCapture: () => Promise<void>;
   stopSystemCapture: () => Promise<void>;
   /** Read bundled helper lifecycle without receiving capture data. */

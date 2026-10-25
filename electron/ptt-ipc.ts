@@ -9,7 +9,7 @@ export function registerPTTLeaseHandlers(ipc:Pick<IpcMain,"handle">,trusted:(eve
    senders.add(event.sender);const id=event.sender.id;
    event.sender.on("destroyed",()=>owner.retire(id));
    event.sender.on("render-process-gone",()=>owner.retire(id));
-   event.sender.on("did-start-navigation",(_event,_url,_inPlace,isMainFrame)=>{if(isMainFrame)owner.retire(id);});
+   event.sender.on("did-start-navigation",(_event,_url,isInPlace,isMainFrame)=>{if(isMainFrame&&!isInPlace)owner.retire(id);});
   }
   return owner.acquire(event.sender.id,request);
  });
