@@ -64,6 +64,7 @@ func newTestMusicBotService(channelID, serverID string) *musicBotService {
 		currentTrack: &models.MusicTrack{VideoID: "already-playing"},
 		loopRunning:  true,
 	}
+	configureMusicAudienceFixture(svc, channelID, serverID)
 	return svc
 }
 

@@ -261,7 +261,7 @@ func newFailureCapTestBot(t *testing.T, play func(bot *botInstance, track *model
 	var mu sync.Mutex
 	var events []ws.Event
 	hub := &testutil.MockBroadcaster{
-		BroadcastToServerFn: func(_ string, e ws.Event) {
+		BroadcastToUsersFn: func(_ []string, e ws.Event) {
 			mu.Lock()
 			defer mu.Unlock()
 			events = append(events, e)
@@ -273,6 +273,7 @@ func newFailureCapTestBot(t *testing.T, play func(bot *botInstance, track *model
 		hub:         hub,
 		playTrackFn: play,
 	}
+	configureMusicAudienceFixture(svc, "chan-1", "srv-1")
 	bot := &botInstance{channelID: "chan-1", serverID: "srv-1", roomName: "srv-1:chan-1"}
 	for i := 0; i < 10; i++ {
 		bot.queue = append(bot.queue, models.MusicTrack{VideoID: fmt.Sprintf("vid-%d", i)})

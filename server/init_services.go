@@ -436,6 +436,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		services.NewEveryoneCosmeticEntitlements(repos.Cosmetic, repos.Server), hub)
 	musicBotService := services.NewMusicBotService(
 		repos.Channel, repos.LiveKit, channelPermService, hub, repos.User, encryptionKey, appLogService, repos.MusicSession, voiceService,
+		services.MusicAudienceDependencies{Voice: voiceService, Members: repos.Server},
 	)
 	if observer, ok := musicBotService.(services.MusicRequesterRetirementObserver); ok {
 		if setter, yes := authService.(interface {

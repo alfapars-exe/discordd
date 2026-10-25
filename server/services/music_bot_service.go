@@ -104,11 +104,14 @@ type botInstance struct {
 	// sessionMu serializes durable queue/session mutations. Lock order is
 	// sessionMu then mu; repository calls never hold mu.
 	sessionMu sync.Mutex
-	mu        sync.Mutex
-	channelID string
-	serverID  string
-	roomName  string
-	user      *requesterMeta // last user who issued a command (for "requested by" UI)
+	// Publication lock follows the global requester privacy fence; never acquire sessionMu from it.
+	publicationMu   sync.Mutex
+	publishedActive atomic.Bool
+	mu              sync.Mutex
+	channelID       string
+	serverID        string
+	roomName        string
+	user            *requesterMeta // last user who issued a command (for "requested by" UI)
 
 	// lkRoom / audioTrack are written under mu (connectBotToRoom sets them,
 	// stopBot clears them) and read under mu.
@@ -207,6 +210,7 @@ type musicBotService struct {
 	users         MusicBotUserGetter
 	sessions      MusicSessionStore
 	roomKeys      MusicRoomKeySource
+	audience      MusicAudienceDependencies
 
 	// playTrackFn is the per-track work seam (mirrors BackupService.runCmd):
 	// nil in production, where playLoop falls back to s.playTrack; tests set
@@ -270,6 +274,7 @@ func NewMusicBotService(
 	appLogger VoiceAppLogger,
 	sessions MusicSessionStore,
 	roomKeys MusicRoomKeySource,
+	audience ...MusicAudienceDependencies,
 ) MusicBotService {
 	service := &musicBotService{
 		bots:          make(map[string]*botInstance),
@@ -284,6 +289,9 @@ func NewMusicBotService(
 		sessions:      sessions,
 		roomKeys:      roomKeys,
 		extractSem:    make(chan struct{}, maxConcurrentMusicExtractions),
+	}
+	if len(audience) == 1 {
+		service.audience = audience[0]
 	}
 	if sessions != nil {
 		stored, err := sessions.List(context.Background())
@@ -960,9 +968,6 @@ func (s *musicBotService) stopBotLockedMode(bot *botInstance, broadcast bool) {
 	if room != nil {
 		room.Disconnect()
 	}
-	if !broadcast {
-		return
-	}
 
 	// A replacement bot may already serve the channel (an Enqueue landed
 	// after the map entry was removed, possibly during Disconnect). Clients
@@ -980,7 +985,7 @@ func (s *musicBotService) stopBotLockedMode(bot *botInstance, broadcast bool) {
 	// Broadcast a final state with IsActive=false so the frontend can hide
 	// the panel without waiting for the next state push. broadcastState
 	// skips stopping bots, so this is the last state this bot sends.
-	s.broadcastPrivateMusicState(bot, true)
+	s.broadcastPrivateMusicStateConditional(bot, true, !broadcast)
 	musicBotLogger.Info("bot stopped", "channel_id", bot.channelID)
 }
 
@@ -1441,6 +1446,7 @@ func (s *musicBotService) abandonConnectingBot(bot *botInstance, err error) {
 	if room != nil {
 		room.Disconnect()
 	}
+	s.broadcastPrivateMusicStateConditional(bot, true, true)
 	bot.readyErr = err
 	close(bot.ready)
 }
@@ -1499,15 +1505,15 @@ func (s *musicBotService) broadcastState(bot *botInstance) {
 // state push. Without the per-track event a single bad track would just
 // vanish from the panel with no explanation.
 //
-// The event goes to the whole server (BroadcastToServer); clients filter it
-// down to the voice channel they are in. The payload never carries error
+// Events go only to current participants with fresh channel view rights.
+// The payload never carries error
 // text — see models.MusicBotErrorPayload. track may be nil.
 func (s *musicBotService) broadcastPlaybackError(bot *botInstance, track *models.MusicTrack, reason musicBotErrorReason, failures int, fatal bool) {
 	title := ""
 	if track != nil {
 		title = track.Title
 	}
-	s.hub.BroadcastToServer(bot.serverID, ws.Event{
+	s.broadcastMusicAudience(bot.serverID, bot.channelID, ws.Event{
 		Op: "music_bot_error",
 		Data: models.MusicBotErrorPayload{
 			ChannelID:  bot.channelID,

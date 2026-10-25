@@ -127,7 +127,7 @@ func TestMusicRequesterPrivacyRepeatLocalCopyAndPublicSnapshots(t *testing.T) {
 	bot.currentTrack.RequestedByName = h.user.Username
 	bot.mu.Unlock()
 	var published *models.MusicBotChannelState
-	svc.hub = &testutil.MockBroadcaster{BroadcastToServerFn: func(_ string, event ws.Event) {
+	svc.hub = &testutil.MockBroadcaster{BroadcastToUsersFn: func(_ []string, event ws.Event) {
 		published = event.Data.(map[string]any)["state"].(*models.MusicBotChannelState)
 	}}
 	svc.broadcastState(bot)
@@ -182,7 +182,7 @@ func TestMusicRequesterPrivacyPublicationFenceOrdersEqualRevisionReplacement(t *
 		names = append(names, copy.CurrentTrack.RequestedByName)
 		mu.Unlock()
 	}
-	svc.hub = &testutil.MockBroadcaster{BroadcastToServerFn: func(_ string, event ws.Event) {
+	svc.hub = &testutil.MockBroadcaster{BroadcastToUsersFn: func(_ []string, event ws.Event) {
 		consume(event.Data.(map[string]any)["state"].(*models.MusicBotChannelState))
 	}}
 	getDone := make(chan error, 1)
@@ -242,7 +242,7 @@ func TestMusicRequesterPrivacyIdentityLookupFailureNeverPublishesOldName(t *test
 	_, _, _, svc := musicPrivacyFixture(t)
 	svc.sessions = failingMusicIdentityStore{svc.sessions, svc.sessions.(musicControlStore)}
 	var publications atomic.Int32
-	svc.hub = &testutil.MockBroadcaster{BroadcastToServerFn: func(string, ws.Event) { publications.Add(1) }}
+	svc.hub = &testutil.MockBroadcaster{BroadcastToUsersFn: func([]string, ws.Event) { publications.Add(1) }}
 	if state, err := svc.GetStateWithError(context.Background(), "ch"); err == nil || state != nil {
 		t.Fatalf("identity failure returned stale snapshot: %#v %v", state, err)
 	}
@@ -256,7 +256,7 @@ func TestMusicRequesterPrivacyAlreadyCanonicalCacheStillPublishesReplacement(t *
 	svc := newTestMusicBotService("ch", "srv")
 	svc.bots["ch"].queue = []models.MusicTrack{{QueueItemID: "same-item", RequestedByUserID: "retired", RequestedByName: "Deleted User"}}
 	var publications int
-	svc.hub = &testutil.MockBroadcaster{BroadcastToServerFn: func(string, ws.Event) { publications++ }}
+	svc.hub = &testutil.MockBroadcaster{BroadcastToUsersFn: func([]string, ws.Event) { publications++ }}
 	svc.AnonymizeMusicRequester("retired")
 	if publications != 1 || svc.GetState("ch").Revision != 0 || svc.GetState("ch").Queue[0].QueueItemID != "same-item" {
 		t.Fatal("already canonical cache did not fence a replacement for older deliveries")

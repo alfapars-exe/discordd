@@ -97,7 +97,7 @@ func TestMusicAccessScopeDeniedAfterExtractionNeverConnects(t *testing.T) {
 			before := f.svc.GetState("ch")
 			var connects, states atomic.Int32
 			f.svc.connectBotFn = func(context.Context, *botInstance) error { connects.Add(1); return nil }
-			f.svc.hub = &testutil.MockBroadcaster{BroadcastToServerFn: func(string, ws.Event) { states.Add(1) }}
+			f.svc.hub = &testutil.MockBroadcaster{BroadcastToUsersFn: func([]string, ws.Event) { states.Add(1) }}
 			started, release := make(chan struct{}), make(chan struct{})
 			var once sync.Once
 			t.Cleanup(func() { once.Do(func() { close(release) }) })
@@ -179,7 +179,7 @@ func TestMusicAccessScopeLossDuringConnectAndReadyCleansOnlyAttempt(t *testing.T
 			f.svc.mu.Lock()
 			f.svc.bots["unrelated"] = unrelated
 			f.svc.mu.Unlock()
-			f.svc.hub = &testutil.MockBroadcaster{BroadcastToServerFn: func(string, ws.Event) { events.Add(1) }}
+			f.svc.hub = &testutil.MockBroadcaster{BroadcastToUsersFn: func([]string, ws.Event) { events.Add(1) }}
 			started, release := make(chan struct{}), make(chan struct{})
 			var once sync.Once
 			t.Cleanup(func() { once.Do(func() { close(release) }) })
@@ -251,7 +251,7 @@ func TestMusicAccessScopeCommitDenialPreservesExistingPublisherAndRetry(t *testi
 	before := f.svc.GetState("ch")
 	var events, cancels atomic.Int32
 	bot.cancelFn = func() { cancels.Add(1) }
-	f.svc.hub = &testutil.MockBroadcaster{BroadcastToServerFn: func(string, ws.Event) { events.Add(1) }}
+	f.svc.hub = &testutil.MockBroadcaster{BroadcastToUsersFn: func([]string, ws.Event) { events.Add(1) }}
 	base := f.context()
 	var denyOnce atomic.Bool
 	denyOnce.Store(true)
@@ -373,7 +373,7 @@ func TestMusicAccessScopeAbandonPreservesOtherActorsPausedQueueEdits(t *testing.
 	}
 	accepted := f.svc.GetState("ch")
 	var states atomic.Int32
-	f.svc.hub = &testutil.MockBroadcaster{BroadcastToServerFn: func(string, ws.Event) { states.Add(1) }}
+	f.svc.hub = &testutil.MockBroadcaster{BroadcastToUsersFn: func([]string, ws.Event) { states.Add(1) }}
 	f.permission.Store(false)
 	once.Do(func() { close(release) })
 	select {
@@ -482,7 +482,7 @@ func TestMusicAccessScopeCommitDenialQuietlyDiscardsNewPublisher(t *testing.T) {
 	f := newMusicScopeFixture(t, true)
 	before := f.svc.GetState("ch")
 	var events, cancels atomic.Int32
-	f.svc.hub = &testutil.MockBroadcaster{BroadcastToServerFn: func(string, ws.Event) { events.Add(1) }}
+	f.svc.hub = &testutil.MockBroadcaster{BroadcastToUsersFn: func([]string, ws.Event) { events.Add(1) }}
 	f.svc.connectBotFn = func(_ context.Context, bot *botInstance) error {
 		bot.mu.Lock()
 		bot.cancelFn = func() { cancels.Add(1) }
