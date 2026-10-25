@@ -80,6 +80,9 @@ type DMMessage struct {
 	CreatedAt   time.Time  `json:"created_at"`
 	ReplyToID   *string    `json:"reply_to_id"`
 	IsPinned    bool       `json:"is_pinned"`
+	// ApplicationID is a send-time, server-derived game application origin.
+	// It is never accepted in a CreateDMMessageRequest.
+	ApplicationID *string `json:"application_id,omitempty"`
 
 	// E2EE — same pattern as Message: Content is nil, payload in Ciphertext
 	EncryptionVersion int     `json:"encryption_version"` // 0=plaintext, 1=E2EE

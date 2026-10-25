@@ -145,20 +145,9 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 							return nil, fmt.Errorf("failed to count messages: %w", err)
 						}
 						if msgCount == 0 {
-							// First message: transition channel to pending. One
-							// atomic UPDATE (status + initiated_by together) —
-							// previously two separate calls with discarded
-							// errors, so a mid-way failure could leave the
-							// channel pending with no initiated_by (or vice
-							// versa), corrupting the request-accept state
-							// machine SendMessage's own pending-channel branch
-							// above depends on. A failure here now surfaces as
-							// SendMessage's own error instead of silently
-							// sending the message against a half-transitioned
-							// channel.
-							if err := s.dmRepo.TransitionToPending(ctx, channelID, userID); err != nil {
-								return nil, fmt.Errorf("failed to transition DM channel to pending: %w", err)
-							}
+							// Commit the request transition with the message below.
+							// A rejected game grant or later write must not leave
+							// a pending channel without its request message.
 							channel.Status = models.DMStatusPending
 							channel.InitiatedBy = &userID
 							becamePending = true
@@ -214,6 +203,11 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 	// recipient actually has.
 	var requestNotif *models.Notification
 	txErr := s.txRunner.InTx(ctx, func(r *repository.DMTxRepos) error {
+		if becamePending {
+			if err := r.DM.TransitionToPending(ctx, channelID, userID); err != nil {
+				return fmt.Errorf("failed to transition DM channel to pending: %w", err)
+			}
+		}
 		if err := r.DM.CreateMessage(ctx, msg); err != nil {
 			return fmt.Errorf("failed to create DM message: %w", err)
 		}

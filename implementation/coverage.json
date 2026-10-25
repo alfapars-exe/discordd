@@ -6265,7 +6265,7 @@
       "id": "p8.linked-games",
       "title": "Linked-game messaging connections",
       "phase": "P8",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R05",
         "R06"
@@ -6279,14 +6279,22 @@
       "acceptance": [
         "List actual first-party app/game grants with revoke and messaging toggle; empty state appears when none exist."
       ],
-      "code": [],
-      "evidence": []
+      "code": [
+        "server/models/application_game.go",
+        "server/repository/application_game_grants.go",
+        "server/services/application_game_grants.go",
+        "server/handlers/application_game_grants.go",
+        "client/src/api/gameApplications.ts",
+        "client/src/components/settings/LinkedGameSettings.tsx",
+        "client/src/components/chat/GameMessageOrigin.tsx"
+      ],
+      "evidence": ["implementation/verification/p8-linked-game-grants-2026-10-25.json"]
     },
     {
       "id": "p8.game-message-delivery",
       "title": "Authorized game-origin messaging",
       "phase": "P8",
-      "status": "missing",
+      "status": "existing",
       "sources": [
         "R05",
         "R06"
@@ -6300,8 +6308,16 @@
       "acceptance": [
         "Included first-party test client sends messages through scoped grant and normal DM/block/request checks; app origin is visible."
       ],
-      "code": [],
-      "evidence": []
+      "code": [
+        "server/models/application_game.go",
+        "server/repository/application_game_grants.go",
+        "server/services/application_game_grants.go",
+        "server/handlers/application_game_grants.go",
+        "client/src/api/gameApplications.ts",
+        "client/src/components/settings/LinkedGameSettings.tsx",
+        "client/src/components/chat/GameMessageOrigin.tsx"
+      ],
+      "evidence": ["implementation/verification/p8-linked-game-grants-2026-10-25.json"]
     },
     {
       "id": "p9.input-device",

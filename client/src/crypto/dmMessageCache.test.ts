@@ -9,6 +9,14 @@ import {captureDMReceipt,observeDMMessage} from "./dmMessageVersions";
 import {useComposerDraftStore} from "../stores/composerDraftStore";
 const message={id:"m",dm_channel_id:"dm",user_id:"u",sender_device_id:"device",ciphertext:"abcd",e2ee_metadata:"{}",encryption_version:1,content:null,edited_at:null,created_at:"2026-10-24T00:00:00Z",attachments:[]} as unknown as DMMessage;
 beforeEach(()=>{records.clear();vi.clearAllMocks();useComposerDraftStore.getState().reset()});
+it("retains server-derived game origin for local encrypted search and never infers it from sender alone", async () => {
+  await cacheDMMessage({...message,application_id:"u"},{content:"encrypted game message"},()=>true);
+  expect(records.get("m")).toMatchObject({senderUserId:"u",applicationId:"u"});
+  await cacheDMMessage({...message,application_id:"someone-else"},{content:"ordinary"},()=>true);
+  expect(records.get("m")?.applicationId).toBeUndefined();
+  await cacheDMMessage(message,{content:"legacy"},()=>true);
+  expect(records.get("m")?.applicationId).toBeUndefined();
+});
 it("does not let an older receipt finish hashing and overwrite the newer live source",async()=>{
   const claim=captureDMReceipt("dm"),oldGuard=claim(message);
   expect(oldGuard).not.toBeNull();

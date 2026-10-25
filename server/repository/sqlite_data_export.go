@@ -72,6 +72,7 @@ func (r *sqliteDataExportRepo) Create(ctx context.Context, user *models.User) (*
 
 	queries := []struct{ name, sql string }{
 		{"preferences", `SELECT data, updated_at FROM user_preferences WHERE user_id=?`},
+		{"game_application_grants", `SELECT bot_user_id AS application_id, messaging_enabled, revision, authorized_at, updated_at, revoked_at FROM application_game_grants WHERE user_id=? ORDER BY bot_user_id`},
 		{"server_memberships", `SELECT server_id, joined_at FROM server_members WHERE user_id=?`},
 		{"authored_server_events", `SELECT id, server_id, name, description, starts_at, ends_at, channel_id, status, version, created_at, updated_at FROM server_events WHERE creator_id=? ORDER BY created_at, id`},
 		{"server_event_rsvps", `SELECT event_id, interested_at, updated_at FROM server_event_rsvps WHERE user_id=? ORDER BY interested_at, event_id`},
@@ -80,7 +81,7 @@ func (r *sqliteDataExportRepo) Create(ctx context.Context, user *models.User) (*
 		{"stream_notification_decisions", `SELECT publication_id, decided_at FROM stream_start_deliveries WHERE recipient_id=? ORDER BY decided_at, publication_id`},
 		{"friendships", `SELECT id, user_id, friend_id, status, created_at, updated_at, accepted_at FROM friendships WHERE user_id=? OR friend_id=?`},
 		{"channel_messages", `SELECT id, channel_id, content, edited_at, created_at, reply_to_id, encryption_version, ciphertext, sender_device_id, e2ee_metadata FROM messages WHERE user_id=? ORDER BY created_at`},
-		{"direct_messages", `SELECT id, dm_channel_id, content, edited_at, created_at, reply_to_id, encryption_version, ciphertext, sender_device_id, e2ee_metadata FROM dm_messages WHERE user_id=? ORDER BY created_at`},
+		{"direct_messages", `SELECT id, dm_channel_id, content, edited_at, created_at, reply_to_id, encryption_version, ciphertext, sender_device_id, e2ee_metadata, application_id FROM dm_messages WHERE user_id=? ORDER BY created_at`},
 		{"notifications", `SELECT id, kind, actor_id, server_id, channel_id, message_id, dm_channel_id, payload, read_at, created_at FROM notifications WHERE user_id=? ORDER BY created_at`},
 		{"saved_messages", `SELECT id, message_id, dm_message_id, note, created_at FROM saved_messages WHERE user_id=? ORDER BY created_at`},
 		{"spam_decisions", `SELECT source_kind, channel_id, message_id, revision, reasons, status, created_at, updated_at FROM spam_inbox WHERE user_id=? ORDER BY created_at, source_kind, message_id`},

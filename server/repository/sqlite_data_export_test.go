@@ -17,6 +17,9 @@ func TestSQLiteDataExportOwnershipExpiryAndSecretExclusion(t *testing.T) {
 	execSeed(t, db, []seedStmt{
 		{q: `INSERT INTO users(id,username,password_hash,email) VALUES(?,?,?,?)`, args: []any{"export-alice", "alice", "super-secret-hash", "alice@example.test"}},
 		{q: `INSERT INTO users(id,username,password_hash) VALUES(?,?,?)`, args: []any{"export-bob", "bob", "bob-secret"}},
+		{q: `INSERT INTO users(id,username,password_hash,is_bot,owner_user_id) VALUES('export-game','exportgame','game-secret',1,'export-bob'),('other-game','othergame','other-game-secret',1,'export-bob')`},
+		{q: `INSERT INTO application_game_identities(bot_user_id) VALUES('export-game'),('other-game')`},
+		{q: `INSERT INTO application_game_grants(user_id,bot_user_id,messaging_enabled,revision,authorized_at,updated_at) VALUES('export-alice','export-game',1,2,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),('export-bob','other-game',0,1,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`},
 		{q: `INSERT INTO servers(id,name,owner_id) VALUES('export-server','Export server','export-bob')`},
 		{q: `INSERT INTO server_events(id,server_id,creator_id,name,description,starts_at) VALUES
 			('alice-event','export-server','export-alice','Alice event','Alice event description','2026-11-01T12:00:00.000000000Z'),
@@ -44,6 +47,9 @@ func TestSQLiteDataExportOwnershipExpiryAndSecretExclusion(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(payload)
+	if !strings.Contains(text, `"game_application_grants"`) || !strings.Contains(text, `"application_id": "export-game"`) || strings.Contains(text, `"application_id": "other-game"`) || strings.Contains(text, "game-secret") {
+		t.Fatal("game grant export omitted own grant or leaked another user's grant/credential")
+	}
 	if !strings.Contains(text, "alice-media-label") || strings.Contains(text, "bob-media-label") {
 		t.Fatal("media-label export ownership failed")
 	}

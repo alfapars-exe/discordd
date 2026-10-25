@@ -28,7 +28,7 @@
     {
       "rule": "go.sql-concat",
       "path": "server/repository/sqlite_account_anonymization.go",
-      "file_sha256": "f1174396458923ebcf2b4e747d157640aad7d86d3eef89b28f85d5d5e332d349",
+      "file_sha256": "bcb822b8cb2f4c2d7122c3c91a26801ba23729ae502aa3814aa2164041a37793",
       "line_sha256": "d2e9044224e8e7f5a8f01f8a9f4b1290be8d6ba35155739655b714e2fd42231a",
       "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
       "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
@@ -272,6 +272,30 @@
       "line_sha256": "ef4b375aa03bc2946ff120d1dfaeaf1ad16a23916ef4990be4e95214a72213d7",
       "reason": "This exact call persists only a validated UserStatus enum as a UI preference under a per-user key; no session, token, credential, or user object is stored.",
       "proof_ref": "client/src/stores/authStore.test.ts:132-138;client/src/stores/authStore.ts:31-50"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/repository/application_game_grants.go",
+      "file_sha256": "8af0cb99e560e929953dd55edaf24dc3b78fac8f457b836a75172298250f2b6f",
+      "line_sha256": "ba47c188649c686f39ec2ae115d61190fe56ec2bfd6122467283dbeb45f594f7",
+      "reason": "Reviewed fixed SQL: compile-time SELECT suffixes and numeric revision=revision+1 arithmetic. Recipient/application IDs, enable state, time and expected revision remain bound parameters; there is no request-derived SQL fragment.",
+      "proof_ref": "server/repository/application_game_grants.go:54-68,95-153;server/repository/application_game_grants_test.go:TestGameGrantOwnershipRevisionAndIsolation,TestGameGrantConcurrentCASOnlyOneWins"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/repository/application_game_grants.go",
+      "file_sha256": "8af0cb99e560e929953dd55edaf24dc3b78fac8f457b836a75172298250f2b6f",
+      "line_sha256": "68149bf51d94e29556ddda5f4152c184028e1cb7f004a98d35956ccb3f4b6c24",
+      "reason": "Reviewed fixed SQL: compile-time SELECT suffixes and numeric revision=revision+1 arithmetic. Recipient/application IDs, enable state, time and expected revision remain bound parameters; there is no request-derived SQL fragment.",
+      "proof_ref": "server/repository/application_game_grants.go:54-68,95-153;server/repository/application_game_grants_test.go:TestGameGrantOwnershipRevisionAndIsolation,TestGameGrantConcurrentCASOnlyOneWins"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/repository/application_game_grants.go",
+      "file_sha256": "8af0cb99e560e929953dd55edaf24dc3b78fac8f457b836a75172298250f2b6f",
+      "line_sha256": "19a2a16e0381fb7de119ef3f5fce83cde13bd624959f056339c19baef0e13ce8",
+      "reason": "Reviewed fixed SQL: compile-time SELECT suffixes and numeric revision=revision+1 arithmetic. Recipient/application IDs, enable state, time and expected revision remain bound parameters; there is no request-derived SQL fragment.",
+      "proof_ref": "server/repository/application_game_grants.go:54-68,95-153;server/repository/application_game_grants_test.go:TestGameGrantOwnershipRevisionAndIsolation,TestGameGrantConcurrentCASOnlyOneWins"
     }
   ]
 }

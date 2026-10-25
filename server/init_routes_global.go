@@ -291,6 +291,10 @@ func (d *routeDeps) registerFriendRoutes() {
 func (d *routeDeps) registerBotRoutes() {
 	d.mux.Handle("POST /api/bots", d.auth(d.botHandler.Create))
 	d.mux.Handle("GET /api/bots", d.auth(d.botHandler.List))
+	d.mux.Handle("POST /api/bots/{botID}/game-identity", d.auth(d.botHandler.RegisterGameIdentity))
+	d.mux.Handle("GET /api/application-game-grants", d.auth(d.botHandler.ListGameGrants))
+	d.mux.Handle("PUT /api/application-game-grants/{botID}", d.auth(d.botHandler.PutGameGrant))
+	d.mux.Handle("DELETE /api/application-game-grants/{botID}", d.auth(d.botHandler.RevokeGameGrant))
 	d.mux.Handle("POST /api/bots/{botID}/revoke", d.auth(d.botHandler.Revoke))
 	d.mux.Handle("POST /api/bots/{botID}/remove", d.auth(d.h.Auth.RemoveApplication))
 	d.mux.Handle("POST /api/bots/{botID}/transfer-requests", d.auth(d.botHandler.RequestTransfer))

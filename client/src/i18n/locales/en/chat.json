@@ -194,5 +194,7 @@
   "forwardGroupPending": "The destination group has an unresolved send. Open that group to check the result before trying to forward again.",
   "groupPinsLoadFailed": "Pinned group messages could not be loaded.",
   "groupPinUpdateFailed": "The pin could not be updated. The message was kept.",
-  "groupPinsRetry": "Retry"
+  "groupPinsRetry": "Retry",
+  "gameMessageOrigin": "Game application",
+  "gameMessageOriginHint": "Game application identity recorded when sent: {{id}}. This does not verify the publisher."
 }

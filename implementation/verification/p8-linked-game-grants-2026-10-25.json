@@ -1,0 +1,44 @@
+{
+  "scope": "P8 connected-game personal messaging grants and immutable DM origin",
+  "status": "implemented_unverified",
+  "changes": [
+    "Owner can permanently register a bot identity as a game application type; this asserts no verified publisher or first-party trust.",
+    "Authenticated human recipients list, explicitly authorize, toggle, revoke and reauthorize their own revisioned grants. Stale writes fail with409/CONFLICT.",
+    "Shared DM transactions enforce grants for sends, edits and attachment completion; disabled/revoked permissions cannot be bypassed through ordinary bot DM routes.",
+    "Request-state transition and message insertion share a transaction, so rejected requests leave no empty pending conversation.",
+    "Persisted application_id is derived at send time; HTTP history, pins, search and WS retain it, while historical messages are not relabeled. UI and encrypted local search preserve the marker.",
+    "Personal exports include only the requester grants; anonymization deletes recipient and retired-bot grants while shared history remains."
+  ],
+  "verification": {
+    "full_client_before_final_origin_changes": {
+      "files": 339,
+      "passed": 3263,
+      "failed": 0
+    },
+    "final_origin_cache_and_grant_targeted_client": {
+      "files": 8,
+      "passed": 111,
+      "failed": 0
+    },
+    "client_typecheck": "passed",
+    "client_production_build": "passed; existing Vite chunk/dynamic-import warnings",
+    "scoped_eslint": "zero errors; existing TanStack Virtual compiler warning on MessageList",
+    "sqlite_repository": "GameGrant*, personal export and account anonymization focused suites passed",
+    "http_handler_unit": "strict human actor/body/conflict boundary tests passed; handler service is stubbed",
+    "postgres_repository": "Disposable PostgreSQL18.6 grants, content mutation, personal export, anonymization and pooled send/revoke lock graph passed",
+    "linux_race": "passed: Go1.26.8 CGO repository40.677s/services7.332s/handlers3.054s; focused grant+DM privacy/export/Send/Edit/Upload suites",
+    "go_vet": "passed for repository/services/handlers",
+    "routes": "golden and no-duplicate tests passed",
+    "self_scan": "passed: zero blocking matches,339 review rows;37 exact-source reviewed records. Three new fixed-SQL/arithmetic false-positive lines reviewed with hashes; unchanged arithmetic line in anonymization re-reviewed after additive private-data cleanup.",
+    "reviewed_scan_regressions": "6 tests passed; stale/malformed/new unsafe shapes remain blocking",
+    "guardrail_sync": "passed"
+  },
+  "remaining": [
+    "Real local HTTP+WebSocket game-client flow with recipient UI and actual cryptographic round-trip. Existing service WS assertion uses a test client, not a real network browser.",
+    "A first-party game test client using its own bot device/key flow is not implemented. Opaque ciphertext preservation tests are not proof of successful peer decryption.",
+    "Other DM controls such as reactions/pins and key-management APIs require separate scope review; this record only verifies content delivery mutations.",
+    "Browser/packaged Windows visual, keyboard, two-session synchronization and real E2EE acceptance.",
+    "Remote libSQL and additive migration backup/restore acceptance.",
+    "No new production or Windows release for this development slice. Published2.11.111 remains unchanged."
+  ]
+}

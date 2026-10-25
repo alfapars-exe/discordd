@@ -41,6 +41,8 @@ export type DMChannelWithUser = {
 };
 
 export type DMMessage = {
+  /** Immutable server-derived game application origin; absent for legacy/human messages. */
+  application_id?: string | null;
   id: string;
   dm_channel_id: string;
   user_id: string;

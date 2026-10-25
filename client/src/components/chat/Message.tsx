@@ -49,6 +49,7 @@ import MentionAutocomplete from "./MentionAutocomplete";
 import MessageAttachments from "./MessageAttachments";
 import MessageHoverActions from "./MessageHoverActions";
 import MessageReactions from "./MessageReactions";
+import GameMessageOrigin from "./GameMessageOrigin";
 import MobileMessageActions from "./MobileMessageActions";
 import ReportModal from "../shared/ReportModal";
 import {
@@ -491,6 +492,7 @@ function Message({
                 )}
               </span>
             )}
+            {mode === "dm" && <GameMessageOrigin applicationID={message.application_id} authorID={message.user_id} />}
             <span className="msg-time" title={formatFullDate(message.created_at)}>
               {formatTime(message.created_at)}
             </span>

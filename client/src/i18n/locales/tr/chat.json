@@ -194,5 +194,7 @@
   "forwardGroupPending": "Hedef grupta sonucu belirsiz bir gönderim var. Tekrar iletmeden önce grubu açıp sonucu kontrol et.",
   "groupPinsLoadFailed": "Sabitlenmiş grup mesajları yüklenemedi.",
   "groupPinUpdateFailed": "Sabitleme güncellenemedi. Mesaj korundu.",
-  "groupPinsRetry": "Tekrar dene"
+  "groupPinsRetry": "Tekrar dene",
+  "gameMessageOrigin": "Oyun uygulaması",
+  "gameMessageOriginHint": "Gönderildiğinde kaydedilen oyun uygulaması kimliği: {{id}}. Yayıncı doğrulaması değildir."
 }

@@ -47,6 +47,9 @@ func TestSQLiteAccountAnonymizationPreservesSharedHistory(t *testing.T) {
 				{q: `INSERT INTO dm_attachments(id,dm_message_id,filename,file_url) VALUES('shared-file','shared-message','file.bin','/api/uploads/dm/shared.bin')`},
 				{q: `INSERT INTO messages(id,channel_id,user_id,content) VALUES('shared-channel-message','shared-delete-channel','session-user','opaque-channel-ciphertext')`},
 				{q: `INSERT INTO user_preferences(user_id,data) VALUES('session-user','{}'),('session-other','{}')`},
+				{q: `INSERT INTO users(id,username,password_hash,is_bot,owner_user_id) VALUES('cleanup-game','cleanupgame','game-hash',1,'session-other')`},
+				{q: `INSERT INTO application_game_identities(bot_user_id) VALUES('cleanup-game')`},
+				{q: `INSERT INTO application_game_grants(user_id,bot_user_id,messaging_enabled,revision,authorized_at,updated_at) VALUES('session-user','cleanup-game',1,1,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),('session-other','cleanup-game',1,1,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`},
 				{q: `INSERT INTO server_events(id,server_id,creator_id,name,starts_at) VALUES
 					('deleted-user-event','preserved-server','session-user','Retained authored event','2026-10-25T12:00:00.000000000Z'),
 					('other-user-event','preserved-server','session-other','Other shared event','2026-10-26T12:00:00.000000000Z')`},
@@ -77,6 +80,16 @@ func TestSQLiteAccountAnonymizationPreservesSharedHistory(t *testing.T) {
 			now := time.Now().Unix()
 			if err := r.Anonymize(ctx, a.UserID, a.ID, "hash", "", now); err != nil {
 				t.Fatal(err)
+			}
+			var ownGrants, survivorGrants int
+			if err := db.Conn.QueryRow(`SELECT COUNT(*) FROM application_game_grants WHERE user_id='session-user'`).Scan(&ownGrants); err != nil {
+				t.Fatal(err)
+			}
+			if err := db.Conn.QueryRow(`SELECT COUNT(*) FROM application_game_grants WHERE user_id='session-other'`).Scan(&survivorGrants); err != nil {
+				t.Fatal(err)
+			}
+			if ownGrants != 0 || survivorGrants != 1 {
+				t.Fatalf("game grant cleanup = own:%d survivor:%d", ownGrants, survivorGrants)
 			}
 			if postgresFKOff {
 				// FK-off mode is needed only for the cleanup transaction. Restore

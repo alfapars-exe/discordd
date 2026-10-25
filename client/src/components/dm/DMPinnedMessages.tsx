@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useDMStore } from "../../stores/dmStore";
 import Avatar from "../shared/Avatar";
+import GameMessageOrigin from "../chat/GameMessageOrigin";
 import type { DMMessage } from "../../types";
 
 type DMPinnedMessagesProps = {
@@ -90,6 +91,7 @@ function DMPinnedMessages({ channelId, onClose }: DMPinnedMessagesProps) {
                     size={20}
                   />
                   <span className="pinned-item-author">{displayName}</span>
+                  <GameMessageOrigin applicationID={msg.application_id} authorID={msg.user_id} />
                   <span className="pinned-item-time">
                     {formatDate(msg.created_at)}
                   </span>

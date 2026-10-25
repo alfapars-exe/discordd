@@ -156,6 +156,10 @@ GET /api/friends
 DELETE /api/friends/{userId}
 POST /api/bots
 GET /api/bots
+POST /api/bots/{botID}/game-identity
+GET /api/application-game-grants
+PUT /api/application-game-grants/{botID}
+DELETE /api/application-game-grants/{botID}
 POST /api/bots/{botID}/revoke
 POST /api/bots/{botID}/remove
 POST /api/bots/{botID}/transfer-requests

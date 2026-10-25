@@ -8,6 +8,7 @@ import { useOpenAtMessage } from "../../hooks/useOpenAtMessage";
 import { searchCachedDMMessages } from "../../crypto/keyStorage";
 import Avatar from "../shared/Avatar";
 import SpamPreview from "../chat/SpamPreview";
+import GameMessageOrigin from "../chat/GameMessageOrigin";
 import type { DMMessage } from "../../types";
 
 /** Debounce delay (ms) */
@@ -89,7 +90,8 @@ function DMSearchPanel({ channelId, onClose }: DMSearchPanelProps) {
           const messages: DMMessage[] = paged.map((c) => ({
             id: c.messageId,
             dm_channel_id: channelId,
-            user_id: "",
+            user_id: c.senderUserId ?? "",
+            application_id: c.applicationId,
             content: c.content,
             created_at: new Date(c.timestamp).toISOString(),
             edited_at: null,
@@ -284,6 +286,7 @@ function DMSearchPanel({ channelId, onClose }: DMSearchPanelProps) {
                     />
                     <span className="search-result-author">{displayName}</span>
                     <span className="search-result-time">{formatDate(msg.created_at)}</span>
+                    <GameMessageOrigin applicationID={msg.application_id} authorID={msg.user_id} />
                   </div>
                   <div className="search-result-content">
                     <SpamPreview kind="dm" message={msg} />

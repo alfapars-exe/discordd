@@ -6,6 +6,7 @@ import {
   saveApplicationManifest, type ApplicationAction, type ApplicationManifest,
 } from "../../api/applications";
 import { getAuthGeneration } from "../../api/client";
+import { registerGameApplication } from "../../api/gameApplications";
 import { useAuthStore } from "../../stores/authStore";
 import { useConfirmStore } from "../../stores/confirmStore";
 import { useSettingsDraft } from "./settingsWorkspaceContext";
@@ -93,6 +94,23 @@ export default function ApplicationSettings() {
       if (!result.success) { setError(t("applications.revokeError")); return; }
       setNotice(t("applications.revoked"));
     } catch { if (current()) setError(t("applications.revokeError")); }
+    finally { pending.current = false; if (current()) setBusy(false); }
+  }
+
+  async function registerGame(application: ApplicationIdentity) {
+    if (pending.current || !current()) return;
+    const approved = await useConfirmStore.getState().open({
+      title: t("linkedGames.register"), message: t("linkedGames.registerConfirm", { name: application.display_name || application.username }),
+      confirmLabel: t("linkedGames.register"), cancelLabel: t("sessions.cancel"),
+    });
+    if (!approved || pending.current || !current()) return;
+    pending.current = true; setBusy(true); setError(""); setNotice("");
+    try {
+      const result = await registerGameApplication(application.id, current);
+      if (!current()) return;
+      if (!result.success || result.data?.application_id !== application.id) { setError(t("linkedGames.saveError")); return; }
+      setApplications(items => items.map(item => item.id === application.id ? { ...item, is_game_application: true } : item));
+    } catch { if (current()) setError(t("linkedGames.saveError")); }
     finally { pending.current = false; if (current()) setBusy(false); }
   }
 
@@ -184,6 +202,7 @@ export default function ApplicationSettings() {
     {!busy && applications.length === 0 && <p>{t("applications.empty")}</p>}
     <ul style={{ listStyle: "none", padding: 0 }}>{applications.map((application) => <li key={application.id} style={{ borderBottom: "1px solid var(--border-color, #555)", padding: "16px 0", overflowWrap: "anywhere" }}>
       <strong>{application.display_name || application.username}</strong><div className="settings-hint">@{application.username} · {application.id}</div>
+      {application.is_game_application ? <p className="settings-hint">{t("linkedGames.registered")}</p> : <button type="button" className="settings-btn" disabled={busy} onClick={() => void registerGame(application)}>{t("linkedGames.register")}</button>}
       <button type="button" className="settings-btn" disabled={busy} onClick={() => void revoke(application)}>{t("applications.revoke")}</button>{" "}
       <button type="button" className="settings-btn" disabled={busy} onClick={() => editManifest(application.id)}>{t("applications.configure")}</button>{" "}
       <button type="button" className="settings-btn" disabled={busy} onClick={() => { setTransferID(transferID === application.id ? null : application.id); setRecipientUsername(""); }}>{t("applications.transfer")}</button>{" "}

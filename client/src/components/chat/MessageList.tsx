@@ -377,6 +377,8 @@ function MessageList() {
     const previous = messages[index - 1];
 
     if (current.user_id !== previous.user_id) return false;
+    // Registration does not retroactively label older messages from this bot.
+    if ((current.application_id ?? null) !== (previous.application_id ?? null)) return false;
 
     const timeDiff =
       new Date(current.created_at).getTime() -

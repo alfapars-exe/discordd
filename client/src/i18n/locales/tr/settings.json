@@ -1446,5 +1446,23 @@
     },
     "unsubscribe": "Tüm pazarlama e-postalarından çık", "unsubscribeDesc": "İsteğe bağlı tüm e-posta kategorilerini tek adımda kapat.",
     "securityEmailNote": "Güvenlik ve hesap koruma e-postaları pazarlama tercihlerinden her zaman ayrıdır."
+  },
+  "linkedGames": {
+    "title": "Bağlı oyunlarda mesajlaşma",
+    "description": "Yetkilendirdiğin HiChat oyun uygulamalarının sana mesaj göndermesini yönet. Bu izin mesaj geçmişini okuma veya profil bağlantısının sahipliğini doğrulama izni vermez.",
+    "empty": "Yetkilendirilmiş oyun uygulaması yok.",
+    "applicationID": "Yetkilendirilecek oyun uygulamasının kimliği",
+    "authorize": "Mesajlaşmaya izin ver",
+    "authorizeConfirm": "{{name}} uygulamasının sana kendi uygulama kimliğiyle mesaj göndermesine izin verilsin mi? Mevcut engelleme ve mesaj isteği kuralları uygulanır.",
+    "allowMessages": "{{name}} mesaj gönderebilsin",
+    "revoke": "Yetkiyi kaldır",
+    "revokeConfirm": "{{name}} uygulamasının mesajlaşma yetkisi kaldırılsın mı? Yeniden izin verene kadar sana mesaj gönderemez.",
+    "revoked": "Yetki kaldırıldı",
+    "conflict": "İzin başka bir yerde değişti. Güncel durum yüklendi; seçimini yeniden dene.",
+    "loadError": "Oyun uygulaması izinleri yüklenemedi. Yeniden dene.",
+    "saveError": "Oyun uygulaması izni kaydedilemedi. Güncel durumu kontrol edip yeniden dene.",
+    "register": "Oyun uygulaması olarak kaydet",
+    "registerConfirm": "{{name}} kalıcı olarak oyun uygulaması türüne geçirilecek. Sana veya diğer kullanıcılara mesaj göndermek için alıcı izni gerekecek. Bu tür değişikliği geri alınamaz ve doğrulanmış sahiplik anlamına gelmez.",
+    "registered": "Oyun uygulaması; kişisel mesajlaşma için alıcı izni gerekir."
   }
 }

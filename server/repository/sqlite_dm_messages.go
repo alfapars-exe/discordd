@@ -24,7 +24,7 @@ func (r *sqliteDMRepo) GetMessages(ctx context.Context, channelID string, before
 		query = `
 			SELECT m.id, m.dm_channel_id, m.user_id, m.content, m.edited_at, m.created_at,
 			       m.reply_to_id, m.is_pinned,
-			       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata,
+			       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata, m.application_id,
 			       u.id, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, u.created_at,
 			       rm.id, rm.content,
 			       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.status, ru.custom_status, ru.created_at
@@ -51,7 +51,7 @@ func (r *sqliteDMRepo) GetMessages(ctx context.Context, channelID string, before
 		query = `
 			SELECT m.id, m.dm_channel_id, m.user_id, m.content, m.edited_at, m.created_at,
 			       m.reply_to_id, m.is_pinned,
-			       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata,
+			       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata, m.application_id,
 			       u.id, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, u.created_at,
 			       rm.id, rm.content,
 			       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.status, ru.custom_status, ru.created_at
@@ -100,7 +100,7 @@ func (r *sqliteDMRepo) GetMessages(ctx context.Context, channelID string, before
 const dmMessageHistorySelect = `
 	SELECT m.id, m.dm_channel_id, m.user_id, m.content, m.edited_at, m.created_at,
 	       m.reply_to_id, m.is_pinned,
-	       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata,
+	       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata, m.application_id,
 	       u.id, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, u.created_at,
 	       rm.id, rm.content,
 	       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.status, ru.custom_status, ru.created_at
@@ -217,7 +217,7 @@ func (r *sqliteDMRepo) GetMessageByID(ctx context.Context, id string) (*models.D
 	query := `
 		SELECT m.id, m.dm_channel_id, m.user_id, m.content, m.edited_at, m.created_at,
 		       m.reply_to_id, m.is_pinned,
-		       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata,
+		       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata, m.application_id,
 		       u.id, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, u.created_at,
 		       rm.id, rm.content,
 		       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.status, ru.custom_status, ru.created_at
@@ -245,7 +245,7 @@ func (r *sqliteDMRepo) GetMessageByID(ctx context.Context, id string) (*models.D
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
 		&msg.ID, &msg.DMChannelID, &msg.UserID, &content, &editedAt, &msg.CreatedAt,
 		&msg.ReplyToID, &isPinned,
-		&msg.EncryptionVersion, &msg.Ciphertext, &msg.SenderDeviceID, &msg.E2EEMetadata,
+		&msg.EncryptionVersion, &msg.Ciphertext, &msg.SenderDeviceID, &msg.E2EEMetadata, &msg.ApplicationID,
 		&authorID, &authorUsername, &displayName, &avatarURL, &authorStatus, &customStatus, &authorCreatedAt,
 		&refMsgID, &refMsgContent,
 		&refAuthorID, &refAuthorUsername, &refAuthorDisplayName, &refAuthorAvatarURL, &refAuthorStatus, &refAuthorCustomStatus, &refAuthorCreatedAt,
@@ -293,6 +293,9 @@ func (r *sqliteDMRepo) GetMessageByID(ctx context.Context, id string) (*models.D
 }
 
 func (r *sqliteDMRepo) CreateMessage(ctx context.Context, msg *models.DMMessage) error {
+	if err := r.authorizeGameMessage(ctx, msg); err != nil {
+		return err
+	}
 	// Content can be nil (file-only message)
 	var contentPtr *string
 	if msg.Content != nil && *msg.Content != "" {
@@ -307,10 +310,10 @@ func (r *sqliteDMRepo) CreateMessage(ctx context.Context, msg *models.DMMessage)
 
 	if _, err := r.db.ExecContext(ctx,
 		`INSERT INTO dm_messages (id, dm_channel_id, user_id, content, reply_to_id,
-			encryption_version, ciphertext, sender_device_id, e2ee_metadata)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			encryption_version, ciphertext, sender_device_id, e2ee_metadata, application_id)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		msg.ID, msg.DMChannelID, msg.UserID, contentPtr, msg.ReplyToID,
-		msg.EncryptionVersion, msg.Ciphertext, msg.SenderDeviceID, msg.E2EEMetadata,
+		msg.EncryptionVersion, msg.Ciphertext, msg.SenderDeviceID, msg.E2EEMetadata, msg.ApplicationID,
 	); err != nil {
 		return fmt.Errorf("failed to create DM message: %w", err)
 	}
@@ -325,6 +328,10 @@ func (r *sqliteDMRepo) CreateMessage(ctx context.Context, msg *models.DMMessage)
 // UpdateMessage edits a DM message.
 // E2EE messages update ciphertext; plaintext messages update content.
 func (r *sqliteDMRepo) UpdateMessage(ctx context.Context, id string, req *models.UpdateDMMessageRequest) error {
+	return r.withGameMessageMutation(ctx, id, func(txRepo *sqliteDMRepo) error { return txRepo.updateMessage(ctx, id, req) })
+}
+
+func (r *sqliteDMRepo) updateMessage(ctx context.Context, id string, req *models.UpdateDMMessageRequest) error {
 	now := time.Now().UTC()
 
 	var result sql.Result
@@ -455,7 +462,7 @@ func (r *sqliteDMRepo) SearchMessages(ctx context.Context, channelID string, sea
 	dataQuery := `
 		SELECT m.id, m.dm_channel_id, m.user_id, m.content, m.edited_at, m.created_at,
 		       m.reply_to_id, m.is_pinned,
-		       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata,
+		       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata, m.application_id,
 		       u.id, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, u.created_at,
 		       rm.id, rm.content,
 		       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.status, ru.custom_status, ru.created_at

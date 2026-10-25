@@ -1446,5 +1446,23 @@
     },
     "unsubscribe": "Unsubscribe from all marketing emails", "unsubscribeDesc": "Disable every optional email category in one step.",
     "securityEmailNote": "Security and account-protection emails are always separate from marketing preferences."
+  },
+  "linkedGames": {
+    "title": "Messaging in connected games",
+    "description": "Manage HiChat game applications you have authorized to message you. This does not permit reading your message history or verify ownership of a profile link.",
+    "empty": "No authorized game applications.",
+    "applicationID": "Game application ID to authorize",
+    "authorize": "Allow messaging",
+    "authorizeConfirm": "Allow {{name}} to send messages to you using its own application identity? Existing block and message-request rules still apply.",
+    "allowMessages": "Allow messages from {{name}}",
+    "revoke": "Revoke access",
+    "revokeConfirm": "Revoke messaging access for {{name}}? It cannot message you until you authorize it again.",
+    "revoked": "Access revoked",
+    "conflict": "Permission changed elsewhere. The current state has been loaded; retry your choice.",
+    "loadError": "Could not load game application permissions. Try again.",
+    "saveError": "Could not save the game application permission. Check the current state and try again.",
+    "register": "Register as game application",
+    "registerConfirm": "{{name}} will permanently become a game application. Sending personal messages will require recipient authorization. This type change cannot be undone and does not imply verified ownership.",
+    "registered": "Game application; personal messaging requires recipient authorization."
   }
 }

@@ -50,7 +50,7 @@ func (r *sqliteDMRepo) GetPinnedMessages(ctx context.Context, channelID string) 
 	query := `
 		SELECT m.id, m.dm_channel_id, m.user_id, m.content, m.edited_at, m.created_at,
 		       m.reply_to_id, m.is_pinned,
-		       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata,
+		       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata, m.application_id,
 		       u.id, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, u.created_at,
 		       rm.id, rm.content,
 		       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.status, ru.custom_status, ru.created_at

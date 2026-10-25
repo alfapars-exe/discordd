@@ -14,6 +14,10 @@ import (
 )
 
 func (r *sqliteDMRepo) CreateAttachment(ctx context.Context, attachment *models.DMAttachment) error {
+	return r.withGameMessageMutation(ctx, attachment.DMMessageID, func(txRepo *sqliteDMRepo) error { return txRepo.createAttachment(ctx, attachment) })
+}
+
+func (r *sqliteDMRepo) createAttachment(ctx context.Context, attachment *models.DMAttachment) error {
 	id, err := generateID()
 	if err != nil {
 		return fmt.Errorf("failed to create DM attachment: %w", err)
