@@ -120,7 +120,7 @@ func TestMusicPrivacyBackfillRejectsChangedPlanAndMalformedBatchWithoutPartialWr
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Conn.Exec(`UPDATE music_sessions SET revision=revision+1 WHERE channel_id='backfill-a'`); err != nil {
+	if _, err := db.Conn.Exec(`UPDATE music_sessions SET revision=? WHERE channel_id='backfill-a'`, 8); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := BackfillMusicPrivacyBatch(ctx, repo, plan.Cursor, plan.Limit, plan.SourceHash); !errors.Is(err, pkg.ErrConflict) {

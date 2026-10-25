@@ -136,10 +136,11 @@ func musicPrivacyCAS(result sql.Result, err error) error {
 }
 
 func collectMusicPrivacyBackfill(ctx context.Context, tx *sql.Tx, cursor MusicPrivacyCursor, limit int) (*musicPrivacyBackfillSnapshot, *MusicPrivacyBackfillReport, error) {
+	fetchLimit := limit + 1
 	snapshot := &musicPrivacyBackfillSnapshot{Cursor: cursor, Limit: limit, Queues: []musicPrivacyQueueChange{}, Receipts: []musicPrivacyReceiptRow{}, Exports: []musicPrivacyExportRow{}}
 	result := &MusicPrivacyBackfillReport{Format: musicPrivacyBackfillVersion, Cursor: cursor, NextCursor: cursor, Limit: limit, Done: true}
 	totalBytes := 0
-	rows, err := tx.QueryContext(ctx, `SELECT s.channel_id,s.queue_json,s.server_id,s.repeat_mode,s.revision,s.updated_at,COALESCE(h.session_id,'') FROM music_sessions s LEFT JOIN music_control_heads h ON h.channel_id=s.channel_id WHERE s.channel_id>? ORDER BY s.channel_id LIMIT ?`, cursor.QueueAfter, limit+1)
+	rows, err := tx.QueryContext(ctx, `SELECT s.channel_id,s.queue_json,s.server_id,s.repeat_mode,s.revision,s.updated_at,COALESCE(h.session_id,'') FROM music_sessions s LEFT JOIN music_control_heads h ON h.channel_id=s.channel_id WHERE s.channel_id>? ORDER BY s.channel_id LIMIT ?`, cursor.QueueAfter, fetchLimit)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -206,7 +207,7 @@ func collectMusicPrivacyBackfill(ctx context.Context, tx *sql.Tx, cursor MusicPr
 		result.NextCursor.QueueAfter = row.Channel
 	}
 	r := cursor.ReceiptAfter
-	rows, err = tx.QueryContext(ctx, `SELECT m.channel_id,m.actor_id,m.request_id,m.session_id,m.request_hash,m.expected_revision,m.result_json,m.created_at FROM music_operation_receipts m JOIN users u ON u.id=m.actor_id WHERE u.deleted_at IS NOT NULL AND (m.channel_id,m.actor_id,m.request_id)>(?,?,?) ORDER BY m.channel_id,m.actor_id,m.request_id LIMIT ?`, r[0], r[1], r[2], limit+1)
+	rows, err = tx.QueryContext(ctx, `SELECT m.channel_id,m.actor_id,m.request_id,m.session_id,m.request_hash,m.expected_revision,m.result_json,m.created_at FROM music_operation_receipts m JOIN users u ON u.id=m.actor_id WHERE u.deleted_at IS NOT NULL AND (m.channel_id,m.actor_id,m.request_id)>(?,?,?) ORDER BY m.channel_id,m.actor_id,m.request_id LIMIT ?`, r[0], r[1], r[2], fetchLimit)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -234,7 +235,7 @@ func collectMusicPrivacyBackfill(ctx context.Context, tx *sql.Tx, cursor MusicPr
 		return nil, nil, err
 	}
 	result.ReceiptsRemoved = len(snapshot.Receipts)
-	rows, err = tx.QueryContext(ctx, `SELECT e.id,e.user_id,e.status,e.payload,e.created_at,e.expires_at FROM data_exports e JOIN users u ON u.id=e.user_id WHERE u.deleted_at IS NOT NULL AND e.id>? ORDER BY e.id LIMIT ?`, cursor.ExportAfter, limit+1)
+	rows, err = tx.QueryContext(ctx, `SELECT e.id,e.user_id,e.status,e.payload,e.created_at,e.expires_at FROM data_exports e JOIN users u ON u.id=e.user_id WHERE u.deleted_at IS NOT NULL AND e.id>? ORDER BY e.id LIMIT ?`, cursor.ExportAfter, fetchLimit)
 	if err != nil {
 		return nil, nil, err
 	}

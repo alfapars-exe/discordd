@@ -209,7 +209,8 @@ func TestDataExportDisabledDeletedAndRevokedIdentityGuards(t *testing.T) {
 	if _, err = db.Conn.Exec(`UPDATE account_lifecycle SET disabled_at=NULL WHERE user_id='export-live'`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = db.Conn.Exec(`UPDATE users SET token_version=token_version+1 WHERE id='export-live'`); err != nil {
+	nextVersion := user.TokenVersion + 1
+	if _, err = db.Conn.Exec(`UPDATE users SET token_version=? WHERE id='export-live'`, nextVersion); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = repo.Create(context.Background(), user); !errors.Is(err, pkg.ErrUnauthorized) {
