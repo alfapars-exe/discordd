@@ -123,5 +123,22 @@
     "electron/voice-overlay.ts",
     "implementation/verification/p11-overlay-notification-reply-2026-10-25.json"
   ],
-  "release": "No commit, push, merge, production deployment or Windows update publication was performed by this slice. Overall goal remains incomplete."
+  "release": "No commit, push, merge, production deployment or Windows update publication was performed by this slice. Overall goal remains incomplete.",
+  "ci_follow_up": [
+    {
+      "source": "6077140b",
+      "run": 40182993017,
+      "result": "Security scan rejected nonempty test innerHTML assignment; replaced fixture with createElement/value/append and cleanup replaceChildren, no scanner exception.16 affected tests and ESLint passed; fix339e1309."
+    },
+    {
+      "source": "339e1309",
+      "run": 40183334813,
+      "result": "Security scan passed; client full test failed unrelated GeneralSettings late diagnostic test: findByRole found a still-disabled start button before initial status timer. Test now waits until enabled and asserts start called before unmount; deferred late return is resolved in act.9 affected tests and ESLint passed; fixdb745af8. Final exact-source CI remains required."
+    }
+  ],
+  "production_build": {
+    "result": "passed",
+    "log": "C:/Users/PARS/AppData/Local/Temp/hichat-spam-notification-build-20261025.log",
+    "limit": "Built before subsequent test-only fixture corrections; no application source changed in those corrections."
+  }
 }

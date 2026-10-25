@@ -2272,7 +2272,8 @@
         "client/src/components/settings/DataExportSettings.tsx"
       ],
       "evidence": [
-        "implementation/verification/p2-data-export-2026-10-23.json"
+        "implementation/verification/p2-data-export-2026-10-23.json",
+        "implementation/verification/p2-personal-music-export-retirement-fence-2026-10-25.json"
       ]
     },
     {
@@ -6329,7 +6330,7 @@
       "id": "p9.input-device",
       "title": "Microphone device selection",
       "phase": "P9",
-      "status": "missing",
+      "status": "existing",
       "sources": [
         "R28",
         "user-plan"
@@ -6343,14 +6344,14 @@
       "acceptance": [
         "Selected microphone is used by actual call capture; unplug/replug and denied permission recover safely."
       ],
-      "code": [],
-      "evidence": []
+      "code": ["client/src/components/settings/VoiceSettings.tsx", "client/src/hooks/useAudioDevices.ts", "client/src/audio/liveMicrophone.ts", "client/src/webrtc/p2pMicrophone.ts"],
+      "evidence": ["implementation/verification/p9-runtime-path-audit-2026-10-25.json"]
     },
     {
       "id": "p9.output-device",
       "title": "Speaker/output device selection",
       "phase": "P9",
-      "status": "missing",
+      "status": "existing",
       "sources": [
         "R28",
         "user-plan"
@@ -6364,14 +6365,14 @@
       "acceptance": [
         "Selected output and reset-to-default route real remote audio and preserve per-user volume."
       ],
-      "code": ["client/src/hooks/useOutputDeviceSync.ts", "client/src/hooks/useOutputDeviceSync.test.ts"],
-      "evidence": ["implementation/verification/p9-output-event-safety-2026-10-25.json"]
+      "code": ["client/src/hooks/useOutputDeviceSync.ts", "client/src/hooks/useOutputDeviceSync.test.ts", "client/src/audio/p2pPlayback.ts", "client/src/components/p2p/P2PAudioSink.tsx"],
+      "evidence": ["implementation/verification/p9-runtime-path-audit-2026-10-25.json", "implementation/verification/p9-p2p-output-2026-10-25.json", "implementation/verification/p9-output-event-safety-2026-10-25.json"]
     },
     {
       "id": "p9.microphone-level",
       "title": "Microphone gain and input meter",
       "phase": "P9",
-      "status": "missing",
+      "status": "existing",
       "sources": [
         "R28",
         "user-plan"
@@ -6385,14 +6386,14 @@
       "acceptance": [
         "Gain/meter reflect real capture; test mode stops tracks on close."
       ],
-      "code": [],
-      "evidence": []
+      "code": ["client/src/audio/liveMicrophone.ts", "client/src/webrtc/p2pMicrophone.ts", "client/src/hooks/useMicTest.ts", "client/src/hooks/useMicTest.test.tsx"],
+      "evidence": ["implementation/verification/p9-runtime-path-audit-2026-10-25.json"]
     },
     {
       "id": "p9.output-level",
       "title": "Output volume and deafen",
       "phase": "P9",
-      "status": "missing",
+      "status": "existing",
       "sources": [
         "R28",
         "user-plan"
@@ -6406,8 +6407,8 @@
       "acceptance": [
         "Personal output control and deafen affect actual playback without muting transmission unexpectedly."
       ],
-      "code": [],
-      "evidence": []
+      "code": ["client/src/hooks/useVolumeSync.ts", "client/src/audio/p2pPlayback.ts", "client/src/components/p2p/P2PAudioSink.tsx"],
+      "evidence": ["implementation/verification/p9-runtime-path-audit-2026-10-25.json", "implementation/verification/p9-p2p-output-2026-10-25.json"]
     },
     {
       "id": "p9.noise-processing",
@@ -7712,12 +7713,12 @@
         "windows"
       ],
       "persistence": "Device overlay notification preferences",
-      "authorization": "Partial persisted server mention/reply support: current owner/auth/source, fresh View/Read/Send and thread-parent ACL, block/ignore/mute/spam and crypto-device checks; opaque native action with one-shot confirmation. Complete incoming DM/group dispatch remains pending.",
+      "authorization": "Partial persisted server mention/reply and accepted one-to-one DM support: current owner/auth/source, server/thread ACL or accepted DM membership, block/ignore/mute/spam and crypto-device checks; opaque native action with one-shot confirmation. Group and ordinary channel message dispatch remain pending.",
       "acceptance": [
         "Enabled widget displays actual permitted incoming messages and reply action targets correct conversation."
       ],
       "code": ["client/src/hooks/useOverlayNotificationReply.ts", "client/src/utils/overlayNotificationReply.ts", "client/src/hooks/useOverlayNotifications.ts", "electron/overlay-action-regions.ts", "electron/voice-overlay.ts"],
-      "evidence": ["implementation/verification/p11-overlay-notification-reply-2026-10-25.json"]
+      "evidence": ["implementation/verification/p11-overlay-notification-reply-2026-10-25.json", "implementation/verification/p11-accepted-dm-notification-reply-2026-10-25.json", "implementation/verification/p11-dm-badge-read-order-2026-10-25.json"]
     },
     {
       "id": "p11.overlay-welcome",

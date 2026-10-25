@@ -1,0 +1,150 @@
+{
+  "phase": "P10",
+  "date": "2026-10-25",
+  "status": "measured_local_doubles",
+  "source_head": "58fb31fa9490295608d0c19351dfcca8ebf6c325",
+  "audience_source_sha256": "76c8aa3394dc3a5f998437aad741a7399d69edd89a5d9096aeed1dc660538aa1",
+  "environment": "Windows amd64, AMD Ryzen9 7950X3D; three repetitions,300ms per case, no benchmark parallelism; other development processes may add timing variance.",
+  "commands": [
+    "go test ./services -run '^$' -bench '^BenchmarkMusicAudienceCostQA$' -benchtime=300ms -count=3 -benchmem -timeout=2m",
+    "go test ./services -run '^$' -bench '^BenchmarkMusicAudienceRepoCostQA$' -benchtime=300ms -count=3 -benchmem -timeout=2m"
+  ],
+  "results": {
+    "helper_with_in_memory_fresh_permission_double": [
+      {
+        "participants": 0,
+        "nanoseconds_per_publication": [
+          357.2,
+          341.4,
+          300.3
+        ],
+        "channel_per_publication": 1.0,
+        "fresh_view_per_publication": 0.0,
+        "membership_per_publication": 0.0,
+        "targeted_send_per_publication": 0.0,
+        "bytes_per_publication": 448,
+        "allocations_per_publication": 5,
+        "median_nanoseconds": 341.4
+      },
+      {
+        "participants": 2,
+        "nanoseconds_per_publication": [
+          957.2,
+          983.1,
+          925.6
+        ],
+        "channel_per_publication": 1.0,
+        "fresh_view_per_publication": 4.0,
+        "membership_per_publication": 4.0,
+        "targeted_send_per_publication": 2.0,
+        "bytes_per_publication": 1632,
+        "allocations_per_publication": 11,
+        "median_nanoseconds": 957.2
+      },
+      {
+        "participants": 10,
+        "nanoseconds_per_publication": [
+          3276.0,
+          4044.0,
+          4056.0
+        ],
+        "channel_per_publication": 1.0,
+        "fresh_view_per_publication": 20.0,
+        "membership_per_publication": 20.0,
+        "targeted_send_per_publication": 10.0,
+        "bytes_per_publication": 7080,
+        "allocations_per_publication": 30,
+        "median_nanoseconds": 4044.0
+      },
+      {
+        "participants": 30,
+        "nanoseconds_per_publication": [
+          11700.0,
+          8664.0,
+          10641.0
+        ],
+        "channel_per_publication": 1.0,
+        "fresh_view_per_publication": 60.0,
+        "membership_per_publication": 60.0,
+        "targeted_send_per_publication": 30.0,
+        "bytes_per_publication": 20808,
+        "allocations_per_publication": 70,
+        "median_nanoseconds": 10641.0
+      }
+    ],
+    "production_fresh_resolver_with_counting_repository_doubles": [
+      {
+        "participants": 0,
+        "nanoseconds_per_publication": [
+          344.2,
+          299.9,
+          300.9
+        ],
+        "channel_per_publication": 1.0,
+        "fresh_view_per_publication": 0.0,
+        "membership_per_publication": 0.0,
+        "repo_roundtrips_per_publication": 1.0,
+        "targeted_send_per_publication": 0.0,
+        "bytes_per_publication": 448,
+        "allocations_per_publication": 5,
+        "median_nanoseconds": 300.9
+      },
+      {
+        "participants": 2,
+        "nanoseconds_per_publication": [
+          1991.0,
+          1979.0,
+          1365.0
+        ],
+        "channel_per_publication": 1.0,
+        "fresh_view_per_publication": 4.0,
+        "membership_per_publication": 4.0,
+        "repo_roundtrips_per_publication": 17.0,
+        "targeted_send_per_publication": 2.0,
+        "bytes_per_publication": 2400,
+        "allocations_per_publication": 19,
+        "median_nanoseconds": 1979.0
+      },
+      {
+        "participants": 10,
+        "nanoseconds_per_publication": [
+          7332.0,
+          10845.0,
+          9174.0
+        ],
+        "channel_per_publication": 1.0,
+        "fresh_view_per_publication": 20.0,
+        "membership_per_publication": 20.0,
+        "repo_roundtrips_per_publication": 81.0,
+        "targeted_send_per_publication": 10.0,
+        "bytes_per_publication": 10920,
+        "allocations_per_publication": 70,
+        "median_nanoseconds": 9174.0
+      },
+      {
+        "participants": 30,
+        "nanoseconds_per_publication": [
+          31162.0,
+          32746.0,
+          15600.0
+        ],
+        "channel_per_publication": 1.0,
+        "fresh_view_per_publication": 60.0,
+        "membership_per_publication": 60.0,
+        "repo_roundtrips_per_publication": 241.0,
+        "targeted_send_per_publication": 30.0,
+        "bytes_per_publication": 32328,
+        "allocations_per_publication": 190,
+        "median_nanoseconds": 31162.0
+      }
+    ]
+  },
+  "method": "Temporary test-only harness reused musicAudienceFixtureVoice, musicAudienceFixturePerms, permFixture and bulkRepoCounter. Second series used the actual NewChannelPermissionService caching decorator and fresh permission core with non-admin View/Read role; each repository method invocation counted. Assertions required exact 2N member calls,2N fresh resolves,1 outer channel lookup,N singleton targeted sends, and expected inner channel/role/override counts. Harness source removed afterwards; no production optimization or behavior change.",
+  "finding": "Current two-pass non-admin path performs8N+1 repository-method round trips per publication:0\u21921,2\u219217,10\u219281,30\u2192241;2N membership +6N fresh-permission inner channel/role/override calls +1 outer channel lookup. N targeted sends remain separate.",
+  "limits": [
+    "These are counting mocks and local Go timing/allocation measurements, not actual SQLite/PostgreSQL/libSQL latency, SQL execution plans or live WebSocket hub cost.",
+    "Fresh-resolver administrator/empty-role/DB-error branches can make fewer calls; measurements intentionally cover typical non-admin permitted participants.",
+    "No speculative optimization was implemented. Consider a separately reviewed single final per-recipient checked send only after preserving current security regressions and measuring real database/hub cost.",
+    "Once an event is enqueued a later revocation cannot recall it."
+  ]
+}
