@@ -22,6 +22,7 @@ export interface VoiceOverlayWindowGeometry extends VoiceOverlayWorkArea {
   notificationHeight: number;
   welcomeHeight: number;
   goLiveHeight: number;
+  mediaHeight: number;
 }
 
 const WINDOW_MARGIN = 24;
@@ -77,7 +78,9 @@ export function calculateVoiceOverlayGeometry(
 
   const goLiveHeight = snapshot.voiceOverlayMode === "game" && snapshot.voiceOverlayGoLive === true && snapshot.goLiveEligible === true && maxWidth >= 196 && maxHeight >= 192 ? 64 : 0;
   const welcomeHeight = snapshot.voiceOverlayWelcome === true && maxWidth >= 196 && maxHeight - goLiveHeight >= 128 ? 32 : 0;
-  const contentMaxHeight = maxHeight - welcomeHeight - goLiveHeight;
+  const mediaAvailable = maxHeight - welcomeHeight - goLiveHeight - ROOT_PADDING * 2;
+  const mediaHeight = (snapshot.voiceOverlayVideo || snapshot.voiceOverlayStreams) && maxWidth >= 196 && mediaAvailable >= 120 ? Math.min(320, mediaAvailable) : 0;
+  const contentMaxHeight = maxHeight - welcomeHeight - goLiveHeight - mediaHeight;
   const scale = snapshot.scale / 100;
   const rowHeight = snapshot.voiceOverlayAvatarSize === "large" ? LARGE_ROW_HEIGHT : SMALL_ROW_HEIGHT;
   const minimumUsableWidth = Math.ceil(WIDGET_MIN_WIDTH * scale + ROOT_PADDING * 2);
@@ -115,7 +118,7 @@ export function calculateVoiceOverlayGeometry(
   const activityHeight = activityRows > 0 ? 20 + activityRows * 40 : 0;
   const widgetWidth = Math.max(WIDGET_MIN_WIDTH, ROW_MAX_WIDTH) * scale;
   const desiredWidth = Math.ceil(widgetWidth + ROOT_PADDING * 2);
-  const desiredHeight = Math.ceil(contentHeight + ROOT_PADDING * 2 + actionsHeight + notificationHeight + activityHeight + chatHeight + welcomeHeight + goLiveHeight);
+  const desiredHeight = Math.ceil(contentHeight + ROOT_PADDING * 2 + actionsHeight + notificationHeight + activityHeight + chatHeight + welcomeHeight + goLiveHeight + mediaHeight);
   const width = clamp(desiredWidth, 1, maxWidth);
   const height = clamp(desiredHeight, 1, maxHeight);
 
@@ -135,7 +138,7 @@ export function calculateVoiceOverlayGeometry(
     y: Math.round(clamp(requestedY, minY, maxY)),
     width,
     height,
-    shouldShow: snapshot.enabled && (visibleParticipants > 0 || actionsHeight > 0 || activityHeight > 0 || notificationHeight > 0 || chatHeight > 0),
+    shouldShow: snapshot.enabled && (visibleParticipants > 0 || actionsHeight > 0 || activityHeight > 0 || notificationHeight > 0 || chatHeight > 0 || mediaHeight > 0),
     visibleParticipants,
     effectiveMaxParticipants,
     activityVisible: activityHeight > 0,
@@ -149,5 +152,6 @@ export function calculateVoiceOverlayGeometry(
     notificationHeight,
     welcomeHeight,
     goLiveHeight,
+    mediaHeight,
   };
 }

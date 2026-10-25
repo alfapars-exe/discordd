@@ -351,6 +351,27 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return () => { ipcRenderer.removeListener("voice-overlay-update", listener); };
   },
   sendVoiceOverlaySnapshot: (snapshot: unknown): Promise<boolean> => ipcRenderer.invoke("voice-overlay-snapshot", snapshot),
+  openOverlayMediaLease: (lease: unknown): Promise<boolean> => ipcRenderer.invoke("open-overlay-media-lease", lease),
+  sendOverlayMedia: (envelope: unknown): Promise<boolean> => ipcRenderer.invoke("send-overlay-media", envelope),
+  sendOverlayMediaViewport: (viewport: unknown): Promise<boolean> => ipcRenderer.invoke("send-overlay-media-viewport", viewport),
+  setOverlayMediaReceiverReady: (ready: boolean): Promise<boolean> => ipcRenderer.invoke("set-overlay-media-receiver-ready", ready),
+  getOverlayMediaAvailability: (): Promise<unknown> => ipcRenderer.invoke("get-overlay-media-availability"),
+  onOverlayMedia: (callback: (value: unknown) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, value: unknown) => callback(value);
+    ipcRenderer.on("overlay-media", listener); return () => ipcRenderer.removeListener("overlay-media", listener);
+  },
+  onOverlayMediaLease: (callback: (value: unknown) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, value: unknown) => callback(value);
+    ipcRenderer.on("overlay-media-lease", listener); return () => ipcRenderer.removeListener("overlay-media-lease", listener);
+  },
+  onOverlayMediaViewport: (callback: (value: unknown) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, value: unknown) => callback(value);
+    ipcRenderer.on("overlay-media-viewport", listener); return () => ipcRenderer.removeListener("overlay-media-viewport", listener);
+  },
+  onOverlayMediaAvailability: (callback: (value: unknown) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, value: unknown) => callback(value);
+    ipcRenderer.on("overlay-media-availability", listener); return () => ipcRenderer.removeListener("overlay-media-availability", listener);
+  },
   setOverlayShortcut: (binding: unknown): Promise<boolean> => ipcRenderer.invoke("set-overlay-shortcut", binding),
   resetOverlayLayout: (): Promise<boolean> => ipcRenderer.invoke("reset-overlay-layout"),
   sendOverlayVoiceAction: (action: unknown, session: unknown): Promise<boolean> => ipcRenderer.invoke("overlay-voice-action", action, session),

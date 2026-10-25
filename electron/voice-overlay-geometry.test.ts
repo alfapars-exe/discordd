@@ -203,3 +203,13 @@ test("Go Live guidance reserves bounded room only for an eligible game overlay a
   assert.equal(calculateVoiceOverlayGeometry(source, { ...area, height: 180 })?.goLiveHeight, 0);
   assert.equal(calculateVoiceOverlayGeometry({ ...source, participants: [], voiceOverlayMaxParticipants: 0 }, area)?.shouldShow, false);
 });
+
+test("opt-in media-only HUD reserves passive bounded space without participant/action requirements",()=>{
+ const source=snapshot({participants:[],voiceOverlayMaxParticipants:0,voiceOverlayVideo:true});
+ for(const area of [{x:0,y:0,width:1200,height:800},{x:-300,y:10,width:280,height:220},{x:0,y:0,width:50,height:80}]){
+  const geometry=calculateVoiceOverlayGeometry(source,area)!;
+  assert.ok(geometry.mediaHeight<=320);assert.ok(geometry.height<=area.height);assert.ok(geometry.width<=area.width);
+  assert.equal(geometry.shouldShow,geometry.mediaHeight>0);
+ }
+ const off=calculateVoiceOverlayGeometry({...source,voiceOverlayVideo:false},{x:0,y:0,width:1200,height:800})!;assert.equal(off.mediaHeight,0);assert.equal(off.shouldShow,false);
+});

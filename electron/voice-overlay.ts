@@ -8,6 +8,11 @@ import type { createOverlayLayoutStore, OverlayLayoutContext, OverlayLayoutPoint
 export type { VoiceOverlaySnapshot } from "./voice-overlay-contract";
 
 type TrustedOverlayMainWindow = { isDestroyed(): boolean; webContents: { mainFrame: unknown; send(channel: string, value: unknown): void } };
+const mediaLifecycleListeners = new Set<(revoke: boolean) => void>();
+export function subscribeVoiceOverlayMediaLifecycle(listener: (revoke: boolean) => void): () => void { mediaLifecycleListeners.add(listener); return () => { mediaLifecycleListeners.delete(listener); }; }
+function notifyMediaLifecycle(revoke = false): void { for (const listener of mediaLifecycleListeners) listener(revoke); }
+let mediaDocumentUsable = false;
+export function getVoiceOverlayMediaWindow() { return mediaDocumentUsable ? overlayWindow : null; }
 let overlayWindow: BrowserWindow | null = null;
 let latest: VoiceOverlaySnapshot | null = null;
 let latestArea: VoiceOverlayWorkArea | null = null;
@@ -84,7 +89,7 @@ let lastChatComposeActionAt = 0;
 function voiceOverlayPayload() {
   if (!latest) return null;
   const geometry = calculateVoiceOverlayGeometry(latest, latestArea ?? screen.getPrimaryDisplay().workArea);
-  return { ...latest, goLiveHeight: geometry?.goLiveHeight ?? 0,
+  return { ...latest, mediaHeight: geometry?.mediaHeight ?? 0, goLiveHeight: geometry?.goLiveHeight ?? 0,
     goLive: geometry?.goLiveHeight && latest.voiceOverlayGoLive && latest.goLiveEligible && latest.goLiveSession === goLiveNoticeSession ? goLiveLifecycle.current(Date.now()) : null,
     welcomeHeight: geometry?.welcomeHeight ?? 0,
     welcome: geometry?.welcomeHeight && latest.voiceOverlayWelcome ? welcomeLifecycle.current(Date.now()) : null,
@@ -672,9 +677,13 @@ function ensureOverlay(): BrowserWindow {
     }
   });
   createdWindow.on("move", () => { updateMousePolicy(); updateNotificationActionWindow(); updateChatActionWindow(); });
-  createdWindow.on("hide", () => { clearWelcome(); hideActionWindow(); hideNotificationActionWindow(); hideChatActionWindow(); });
+  createdWindow.on("hide", () => { if(createdWindow===overlayWindow)notifyMediaLifecycle(); clearWelcome(); hideActionWindow(); hideNotificationActionWindow(); hideChatActionWindow(); });
+  createdWindow.webContents.on("did-finish-load", () => { if (createdWindow === overlayWindow) { mediaDocumentUsable = true; notifyMediaLifecycle(); } });
+  createdWindow.webContents.on("render-process-gone", () => { if(createdWindow===overlayWindow){mediaDocumentUsable = false; notifyMediaLifecycle(true);} });
+  createdWindow.webContents.on("did-start-navigation", (_event: unknown, _url: string, isInPlace: boolean, isMainFrame: boolean) => { if (createdWindow===overlayWindow && isMainFrame && !isInPlace) { mediaDocumentUsable = false; notifyMediaLifecycle(true); } });
   createdWindow.on("closed", () => {
     if (overlayWindow === createdWindow) {
+      mediaDocumentUsable = false; notifyMediaLifecycle(true);
       lifecycle.close();
       clearWelcome();
       latest = null;
@@ -747,6 +756,7 @@ export function updateVoiceOverlay(snapshot: VoiceOverlaySnapshot, area?: VoiceO
       || snapshot.voiceOverlayChatCompose !== true || snapshot.chatStatus !== "ready"
       || !snapshot.chatComposeSession || snapshot.chatComposeSession !== chatComposeSessionScope)) closeChatComposerWindow();
   latest = snapshot;
+  notifyMediaLifecycle(contextChanged);
   latestArea = area ?? null;
   if (chatComposerWindow && !chatComposerWindow.isDestroyed()) {
     if (!chatComposeAvailable() || chatComposeSessionScope !== snapshot.chatComposeSession) closeChatComposerWindow();
@@ -795,6 +805,7 @@ export function updateVoiceOverlay(snapshot: VoiceOverlaySnapshot, area?: VoiceO
       // Paint the current privacy-scoped snapshot before re-showing a hidden window.
       win.webContents.send("voice-overlay-update", voiceOverlayPayload());
       win.showInactive();
+      notifyMediaLifecycle();
       publishWelcomeAfterShow(win);
       publishGoLiveAfterShow(win);
       win.webContents.send("voice-overlay-update", voiceOverlayPayload());
@@ -806,6 +817,7 @@ export function updateVoiceOverlay(snapshot: VoiceOverlaySnapshot, area?: VoiceO
 }
 
 export function closeVoiceOverlay(): void {
+  mediaDocumentUsable = false; notifyMediaLifecycle(true);
   lockVoiceOverlay();
   if (actionWindow && !actionWindow.isDestroyed()) actionWindow.close();
   actionWindow = null;

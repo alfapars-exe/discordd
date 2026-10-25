@@ -1,3 +1,4 @@
+import { createOverlayMediaBroker } from "./overlay-media-broker";
 import { registerGameNameIPC } from "./registered-game-name-ipc";
 import {registerSystemAudioLeaseIPC}from "./system-audio-ipc";
 import {registerPTTLeaseHandlers}from "./ptt-ipc";
@@ -82,7 +83,7 @@ import { DEFAULT_APP_SETTINGS, getSettings, setSetting } from "./settings";
 import { setTrayTooltip } from "./tray";
 import { wasPrelaunchChecked } from "./auto-updater";
 import { getMainWindow } from "./window";
-import { updateVoiceOverlay, toggleVoiceOverlayLock, lockVoiceOverlay, configureVoiceOverlayLayout, resetVoiceOverlayLayout, takeVoiceOverlayAction, takeVoiceOverlayOpenInboxIntent, confirmVoiceOverlayOpenInbox, takeVoiceOverlayNotificationReplyIntent, confirmVoiceOverlayNotificationReply, takeVoiceOverlayOpenChatIntent, confirmVoiceOverlayOpenChat, takeVoiceOverlayOpenChatComposerIntent, sendOverlayChatMessage, closeOverlayChatComposer, resolveOverlayChatSend } from "./voice-overlay";
+import { getVoiceOverlayMediaWindow, subscribeVoiceOverlayMediaLifecycle, updateVoiceOverlay, toggleVoiceOverlayLock, lockVoiceOverlay, configureVoiceOverlayLayout, resetVoiceOverlayLayout, takeVoiceOverlayAction, takeVoiceOverlayOpenInboxIntent, confirmVoiceOverlayOpenInbox, takeVoiceOverlayNotificationReplyIntent, confirmVoiceOverlayNotificationReply, takeVoiceOverlayOpenChatIntent, confirmVoiceOverlayOpenChat, takeVoiceOverlayOpenChatComposerIntent, sendOverlayChatMessage, closeOverlayChatComposer, resolveOverlayChatSend } from "./voice-overlay";
 import { createOverlayLayoutStore } from "./overlay-layout-store";
 import { createOverlayShortcutController, type OverlayShortcutBinding } from "./overlay-shortcut";
 import { isTrustedVoiceOverlaySender, applyAcknowledgedVoiceOverlaySnapshot } from "./voice-overlay-contract";
@@ -160,6 +161,14 @@ export function registerIpcHandlers(): void {
     if (binding === null) lockVoiceOverlay();
     return accepted;
   });
+  let overlayMediaPolicy: {enabled:boolean;voiceOverlayVideo?:boolean;voiceOverlayStreams?:boolean}|null = null;
+  const overlayMedia = createOverlayMediaBroker({main:getMainWindow,overlay:getVoiceOverlayMediaWindow,policy:()=>overlayMediaPolicy});
+  const stopOverlayMediaLifecycle = subscribeVoiceOverlayMediaLifecycle(revoke => { if(revoke)overlayMedia.revoke();else overlayMedia.refresh(); });
+  ipcMain.handle("open-overlay-media-lease", (event, raw:unknown) => overlayMedia.open(event,raw));
+  ipcMain.handle("send-overlay-media", (event, raw:unknown) => overlayMedia.send(event,raw));
+  ipcMain.handle("send-overlay-media-viewport", (event, raw:unknown) => overlayMedia.viewport(event,raw));
+  ipcMain.handle("set-overlay-media-receiver-ready", (event, ready:unknown) => overlayMedia.setReady(event,ready));
+  ipcMain.handle("get-overlay-media-availability", event => overlayMedia.getAvailability(event));
   let gameOverlay: ReturnType<typeof createGameOverlayController> | undefined;
   const gameHelperPath = app.isPackaged
     ? path.join(process.resourcesPath, "native", "game-window.exe")
@@ -189,14 +198,15 @@ export function registerIpcHandlers(): void {
   });
   void registeredGames.initialize().catch(() => undefined);
   app.on("web-contents-created", (_event, contents) => {
+    contents.on("destroyed", () => { overlayMedia.retireForContents(contents); });
     contents.on("render-process-gone", () => {
-      if (getMainWindow()?.webContents === contents) { gameOverlay?.clear(); overlayShortcut.setBinding(null); }
+      if (getMainWindow()?.webContents === contents) { overlayMediaPolicy=null; overlayMedia.revoke(); gameOverlay?.clear(); overlayShortcut.setBinding(null); }
     });
     contents.on("did-start-navigation", (_navigationEvent, _url, isInPlace, isMainFrame) => {
-      if (isMainFrame && !isInPlace && getMainWindow()?.webContents === contents) { gameOverlay?.clear(); overlayShortcut.setBinding(null); }
+      if (isMainFrame && !isInPlace && getMainWindow()?.webContents === contents) { overlayMediaPolicy=null; overlayMedia.revoke(); gameOverlay?.clear(); overlayShortcut.setBinding(null); }
     });
   });
-  app.once("before-quit", () => { overlayShortcut.dispose(); gameOverlay?.dispose(); registeredGames.dispose(); void gameWindowTracker.dispose(); });
+  app.once("before-quit", () => { stopOverlayMediaLifecycle(); overlayMedia.revoke(); overlayShortcut.dispose(); gameOverlay?.dispose(); registeredGames.dispose(); void gameWindowTracker.dispose(); });
 
   ipcMain.handle("get-registered-games", (event) => {
     assertTrustedMainWindowSender(event);
@@ -241,7 +251,7 @@ export function registerIpcHandlers(): void {
   const applyOverlaySnapshot = (event: Parameters<typeof isTrustedMainWindowSender>[0], raw: unknown): boolean =>
     applyAcknowledgedVoiceOverlaySnapshot(raw, isTrustedMainWindowSender(event), {
       setSuspended: value => overlayShortcut.setSuspended(value),
-      setSnapshot: snapshot => gameOverlay?.setSnapshot(snapshot),
+      setSnapshot: snapshot => { overlayMediaPolicy=snapshot; overlayMedia.refresh(); gameOverlay?.setSnapshot(snapshot); },
     });
   ipcMain.on("voice-overlay-snapshot", applyOverlaySnapshot);
   ipcMain.handle("voice-overlay-snapshot", applyOverlaySnapshot);

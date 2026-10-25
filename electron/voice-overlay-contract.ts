@@ -21,6 +21,8 @@ export type VoiceOverlaySnapshot = {
   voiceOverlayQuickActions?: boolean;
   voiceOverlayClickableActions?: boolean;
   voiceOverlayCompatibility?: boolean;
+  voiceOverlayVideo?: boolean;
+  voiceOverlayStreams?: boolean;
   voiceOverlayActivity?: boolean;
   voiceOverlayWelcome?: boolean;
   voiceOverlayGoLive?: boolean;
@@ -108,7 +110,7 @@ export function parseVoiceOverlaySnapshot(raw: unknown): VoiceOverlaySnapshot | 
   if (typeof raw.enabled !== "boolean" || typeof raw.speakingOnly !== "boolean") return null;
   if (raw.voiceOverlayMode !== undefined && raw.voiceOverlayMode !== "desktop" && raw.voiceOverlayMode !== "game") return null;
   if (raw.voiceOverlayPinned !== undefined && typeof raw.voiceOverlayPinned !== "boolean") return null;
-  for (const key of ["voiceOverlayQuickActions", "voiceOverlayClickableActions", "voiceOverlayCompatibility", "voiceOverlayActivity", "voiceOverlayWelcome", "voiceOverlayGoLive", "goLiveEligible", "voiceOverlayNotifications", "voiceOverlayNotificationActions", "voiceOverlayChat", "voiceOverlayChatActions", "voiceOverlayChatCompose", "selfMuted", "selfDeafened"]) if (raw[key] !== undefined && typeof raw[key] !== "boolean") return null;
+  for (const key of ["voiceOverlayQuickActions", "voiceOverlayClickableActions", "voiceOverlayCompatibility", "voiceOverlayVideo", "voiceOverlayStreams", "voiceOverlayActivity", "voiceOverlayWelcome", "voiceOverlayGoLive", "goLiveEligible", "voiceOverlayNotifications", "voiceOverlayNotificationActions", "voiceOverlayChat", "voiceOverlayChatActions", "voiceOverlayChatCompose", "selfMuted", "selfDeafened"]) if (raw[key] !== undefined && typeof raw[key] !== "boolean") return null;
   if (raw.goLiveSession !== undefined && !isBoundedText(raw.goLiveSession, 256)) return null;
   if (raw.goLiveEligible === true && (raw.voiceOverlayGoLive !== true || !isBoundedText(raw.goLiveSession, 256))) return null;
   if (raw.notificationStatus !== undefined && (typeof raw.notificationStatus !== "string" || !NOTIFICATION_STATUSES.has(raw.notificationStatus as VoiceOverlayNotificationStatus))) return null;
@@ -196,6 +198,8 @@ export function parseVoiceOverlaySnapshot(raw: unknown): VoiceOverlaySnapshot | 
     ...(raw.voiceOverlayMode !== undefined ? { voiceOverlayMode: raw.voiceOverlayMode as "desktop" | "game" } : {}),
     ...(raw.voiceOverlayPinned !== undefined ? { voiceOverlayPinned: raw.voiceOverlayPinned as boolean } : {}),
     ...(raw.voiceOverlayQuickActions !== undefined ? { voiceOverlayQuickActions: raw.voiceOverlayQuickActions as boolean } : {}),
+    ...(raw.voiceOverlayVideo !== undefined ? {voiceOverlayVideo:raw.voiceOverlayVideo as boolean}:{}),
+    ...(raw.voiceOverlayStreams !== undefined ? {voiceOverlayStreams:raw.voiceOverlayStreams as boolean}:{}),
     ...(raw.voiceOverlayCompatibility !== undefined ? { voiceOverlayCompatibility: raw.voiceOverlayCompatibility as boolean } : {}),
     ...(raw.voiceOverlayClickableActions !== undefined ? { voiceOverlayClickableActions: raw.voiceOverlayClickableActions as boolean } : {}),
     ...(raw.overlayNotificationDurationMs !== undefined ? { overlayNotificationDurationMs: raw.overlayNotificationDurationMs as number } : {}),
@@ -267,7 +271,7 @@ export function hasVoiceOverlayContent(snapshot: VoiceOverlaySnapshot): boolean 
     || (snapshot.voiceOverlayQuickActions === true && !!snapshot.voiceActionSession)
     || snapshot.voiceOverlayActivity === true
     || snapshot.voiceOverlayNotifications === true
-    || snapshot.voiceOverlayChat === true);
+    || snapshot.voiceOverlayChat === true || snapshot.voiceOverlayVideo === true || snapshot.voiceOverlayStreams === true);
 }
 
 /** Fences deferred renderer delivery so stale loads cannot resurrect an overlay. */

@@ -487,5 +487,18 @@ test("native overlay lock toggles only visible widgets and bounds unlocked game 
   exports.updateVoiceOverlay({...compatibilitySnapshot,voiceOverlayCompatibility:false},area);
   assert.equal(passiveHUD.ignored,true,"normal mode does not implicitly unlock after compatibility");
   assert.equal(passiveHUD.focusCount,0);assert.equal(focuses,focusBeforeCompatibility);
+  const mediaLifecycle:boolean[]=[];
+  const stopMediaLifecycle=exports.subscribeVoiceOverlayMediaLifecycle(revoke=>mediaLifecycle.push(revoke));
+  const actualHUD=exports.getVoiceOverlayMediaWindow();
+  passiveHUD.webContents.emit("did-finish-load");
+  assert.equal(exports.getVoiceOverlayMediaWindow(),passiveHUD,"only the actual passive HUD is exposed, never its action/composer windows");
+  passiveHUD.emit("hide");assert.equal(mediaLifecycle[mediaLifecycle.length-1],false,"hide refreshes visibility without discarding installed receiver listeners");
+  passiveHUD.webContents.emit("did-start-navigation",{},"app://hichat/overlay.html",false,true);
+  assert.equal(exports.getVoiceOverlayMediaWindow(),null,"in-flight navigation cannot reauthorize the old frame");
+  assert.equal(mediaLifecycle[mediaLifecycle.length-1],true);
+  passiveHUD.webContents.emit("did-finish-load");assert.equal(exports.getVoiceOverlayMediaWindow(),passiveHUD);
+  passiveHUD.webContents.emit("render-process-gone");assert.equal(exports.getVoiceOverlayMediaWindow(),null);
+  assert.equal(mediaLifecycle[mediaLifecycle.length-1],true);void actualHUD;
+  stopMediaLifecycle();
   exports.closeVoiceOverlay();
 });

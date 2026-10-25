@@ -328,3 +328,9 @@ test("acknowledged and legacy snapshot application share strict trust, parse and
  assert.equal(applyAcknowledgedVoiceOverlaySnapshot({...validSnapshot(),voiceOverlayCompatibility:true},true,{...target,setSuspended(){return false;}}),false);
  assert.equal(applied[applied.length - 1],"snapshot");
 });
+
+test("media preferences are opt-in typed booleans and count as passive HUD content",()=>{
+ assert.equal(parseVoiceOverlaySnapshot({...validSnapshot(),voiceOverlayVideo:true})?.voiceOverlayVideo,true);
+ assert.equal(parseVoiceOverlaySnapshot({...validSnapshot(),voiceOverlayStreams:false})?.voiceOverlayStreams,false);
+ for(const key of ["voiceOverlayVideo","voiceOverlayStreams"])for(const value of [1,"true",null])assert.equal(parseVoiceOverlaySnapshot({...validSnapshot(),[key]:value}),null);
+});

@@ -276,6 +276,15 @@ interface ElectronAPI {
   setAppSetting: (key: string, value: boolean) => Promise<void>;
   onVoiceOverlayUpdate?: (cb: (snapshot: unknown) => void) => (() => void);
   sendVoiceOverlaySnapshot?: (snapshot: unknown) => Promise<boolean>;
+  openOverlayMediaLease?: (lease: {session:string;revision:number;tiles:{tileId:string;kind:"camera"|"screen";label?:string}[]}) => Promise<boolean>;
+  sendOverlayMedia?: (envelope: unknown) => Promise<boolean>;
+  sendOverlayMediaViewport?: (viewport: {session:string;revision:number;tileId:string;visible:boolean;width:number;height:number;fps:number}) => Promise<boolean>;
+  setOverlayMediaReceiverReady?: (ready: boolean) => Promise<boolean>;
+  getOverlayMediaAvailability?: () => Promise<{ready:boolean;visible:boolean;allowedKinds:("camera"|"screen")[];windowGeneration:string}|null>;
+  onOverlayMedia?: (callback: (value: unknown) => void) => (() => void);
+  onOverlayMediaLease?: (callback: (value: unknown) => void) => (() => void);
+  onOverlayMediaViewport?: (callback: (value: unknown) => void) => (() => void);
+  onOverlayMediaAvailability?: (callback: (value: unknown) => void) => (() => void);
   setOverlayShortcut?: (binding: { code: string; ctrl: boolean; shift: boolean; alt: boolean; meta: boolean } | null) => Promise<boolean>;
 
   /** Custom titlebar window controls */
