@@ -1,7 +1,7 @@
 export type VoiceOverlayPosition = "top-left" | "bottom-left" | "top-right" | "bottom-right";
 export type VoiceOverlayAvatarSize = "small" | "large";
 export type VoiceOverlayNameDisplay = "always" | "speaking" | "never";
-export type VoiceOverlayNotificationCategory = "mention" | "reply" | "friend_request" | "dm_request" | "system";
+export type VoiceOverlayNotificationCategory = "mention" | "reply" | "friend_request" | "dm_request" | "system" | "message";
 export type VoiceOverlayNotificationStatus = "loading" | "ready" | "unavailable";
 export type VoiceOverlayChatStatus = "ready" | "unavailable";
 
@@ -62,7 +62,7 @@ const MAX_NAME_LENGTH = 128;
 const MAX_AVATAR_URL_LENGTH = 2048;
 const MAX_OVERLAY_NOTIFICATIONS = 3;
 const MAX_OVERLAY_CHAT_MESSAGES = 5;
-const NOTIFICATION_CATEGORIES = new Set<VoiceOverlayNotificationCategory>(["mention", "reply", "friend_request", "dm_request", "system"]);
+const NOTIFICATION_CATEGORIES = new Set<VoiceOverlayNotificationCategory>(["mention", "reply", "friend_request", "dm_request", "system", "message"]);
 const NOTIFICATION_STATUSES = new Set<VoiceOverlayNotificationStatus>(["loading", "ready", "unavailable"]);
 const CHAT_STATUSES = new Set<VoiceOverlayChatStatus>(["ready", "unavailable"]);
 const POSITIONS = new Set<VoiceOverlayPosition>(["top-left", "bottom-left", "top-right", "bottom-right"]);
@@ -124,7 +124,7 @@ export function parseVoiceOverlaySnapshot(raw: unknown): VoiceOverlaySnapshot | 
   if (notifications.length > 0 && raw.notificationStatus !== "ready") return null;
   const replyIds = raw.notificationReplyIds ?? [];
   if (!Array.isArray(replyIds) || replyIds.length > 3 || new Set(replyIds).size !== replyIds.length
-    || replyIds.some(id => !isBoundedText(id, 128) || !notifications.some(n => n.id === id && (n.category === "mention" || n.category === "reply")))) return null;
+    || replyIds.some(id => !isBoundedText(id, 128) || !notifications.some(n => n.id === id && (n.category === "mention" || n.category === "reply" || n.category === "message")))) return null;
   if (raw.notificationReplySession !== undefined && (!isBoundedText(raw.notificationReplySession, 256)
     || raw.voiceOverlayNotificationActions !== true || raw.voiceOverlayNotifications !== true || raw.notificationStatus !== "ready" || replyIds.length === 0)) return null;
   if (replyIds.length > 0 && !isBoundedText(raw.notificationReplySession, 256)) return null;

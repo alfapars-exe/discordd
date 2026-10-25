@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   openServer: vi.fn(),
   openTab: vi.fn(),
   openAtMessage: vi.fn(),
+  openAtDMMessage: vi.fn(), listDMs: vi.fn(),
   selectChannel: vi.fn(),
   selectDM: vi.fn(),
   fetchDMMessages: vi.fn(),
@@ -27,6 +28,8 @@ vi.mock("react-i18next", () => ({
   initReactI18next: { type: "3rdParty", init: () => {} },
 }));
 vi.mock("../api/client", () => ({ getAuthGeneration: () => mocks.generation }));
+vi.mock("../api/dm", () => ({ listDMChannels: mocks.listDMs }));
+vi.mock("../stores/preferencesStore", () => ({ usePreferencesStore: {getState:()=>({accountId:mocks.userId,isLoaded:true,get:()=>({ignoredUsers:{}})})} }));
 vi.mock("../stores/notificationStore", () => ({
   useNotificationStore: Object.assign((pick: (state: unknown) => unknown) => pick({ markRead: mocks.markRead, ownerId: mocks.feedOwner, authGeneration: mocks.feedGeneration }), {
     getState: () => ({ markRead: mocks.markRead, ownerId: mocks.feedOwner, authGeneration: mocks.feedGeneration }),
@@ -57,14 +60,14 @@ vi.mock("../stores/dmStore", () => ({
   useDMStore: Object.assign((pick: (state: unknown) => unknown) => pick({
     selectDM: mocks.selectDM, fetchMessages: mocks.fetchDMMessages, clearDMUnread: mocks.clearDMUnread,
     channels: mocks.dmChannels,
-  }), { getState: () => ({ selectDM: mocks.selectDM, fetchMessages: mocks.fetchDMMessages, clearDMUnread: mocks.clearDMUnread, channels: mocks.dmChannels }) }),
+  }), { getState: () => ({ ownerId:mocks.userId,authGeneration:mocks.generation,isLoading:false,selectDM: mocks.selectDM, fetchMessages: mocks.fetchDMMessages, clearDMUnread: mocks.clearDMUnread, channels: mocks.dmChannels }) }),
 }));
 vi.mock("../stores/groupDMStore", () => ({ useGroupDMStore: { getState: () => ({ groups: mocks.groups, fetchMessages: vi.fn() }) } }));
-vi.mock("../stores/blockStore", () => ({ useBlockStore: { getState: () => ({ blockedUserIds: mocks.blockedUserIds }) } }));
+vi.mock("../stores/blockStore", () => ({ useBlockStore: { getState: () => ({ ownerId:mocks.userId,authGeneration:mocks.generation,snapshotReady:true,isLoading:false,blockedUserIds: mocks.blockedUserIds }) } }));
 vi.mock("../stores/mobileStore", () => ({
   useMobileStore: (pick: (state: unknown) => unknown) => pick({ closeAllDrawers: mocks.closeAllDrawers }),
 }));
-vi.mock("./useOpenAtMessage", () => ({ useOpenAtMessage: () => ({ openAtMessage: mocks.openAtMessage }) }));
+vi.mock("./useOpenAtMessage", () => ({ useOpenAtMessage: () => ({ openAtMessage: mocks.openAtMessage,openAtDMMessage:mocks.openAtDMMessage }) }));
 
 import { useNotificationNavigation } from "./useNotificationNavigation";
 
@@ -87,6 +90,23 @@ describe("useNotificationNavigation server event notices", () => {
     mocks.channelTree = [];
     mocks.dmChannels = [];
     mocks.groups = [];
+  });
+
+  it("opens an accepted incoming DM at its exact source before acknowledging, without generic request navigation",async()=>{
+    const dm={id:"dm-1",status:"accepted",is_muted:false,other_user:{id:"actor"}};mocks.dmChannels=[dm];mocks.listDMs.mockResolvedValueOnce({success:true,data:[dm]});
+    let finish!:(value:boolean)=>void;mocks.openAtDMMessage.mockReturnValueOnce(new Promise(resolve=>{finish=resolve;}));
+    const {result}=renderHook(()=>useNotificationNavigation());
+    const n={...eventNotice(),server_id:null,actor_id:"actor",dm_channel_id:"dm-1",message_id:"message-1",payload:{action:"incoming_message",source:"dm"}};
+    await act(async()=>{result.current(n);});
+    expect(mocks.openAtDMMessage).toHaveBeenCalledWith("dm-1","message-1",expect.objectContaining({isCurrent:expect.any(Function)}));
+    expect(mocks.markRead).not.toHaveBeenCalled();expect(mocks.clearDMUnread).not.toHaveBeenCalled();
+    await act(async()=>{finish(true);});expect(mocks.markRead).toHaveBeenCalledExactlyOnceWith(n.id);
+  });
+  it("does not acknowledge an incoming DM when fresh access is denied",async()=>{
+    mocks.dmChannels=[{id:"dm-1",status:"accepted",is_muted:false,other_user:{id:"actor"}}];mocks.listDMs.mockResolvedValueOnce({success:true,data:[]});
+    const {result}=renderHook(()=>useNotificationNavigation());
+    await act(async()=>{result.current({...eventNotice(),server_id:null,actor_id:"actor",dm_channel_id:"dm-1",message_id:"message-1",payload:{action:"incoming_message",source:"dm"}});});
+    expect(mocks.openAtDMMessage).not.toHaveBeenCalled();expect(mocks.markRead).not.toHaveBeenCalled();
   });
 
   it("requests the event modal with the notification's server and original account", () => {

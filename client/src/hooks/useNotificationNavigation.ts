@@ -22,6 +22,9 @@ import { useGroupDMStore } from "../stores/groupDMStore";
 import { useMobileStore } from "../stores/mobileStore";
 import { useAuthStore } from "../stores/authStore";
 import { useBlockStore } from "../stores/blockStore";
+import { usePreferencesStore } from "../stores/preferencesStore";
+import { isDMMessageNotification } from "../utils/dmMessageNotification";
+import { listDMChannels } from "../api/dm";
 import { useOpenAtMessage } from "./useOpenAtMessage";
 import type { AppNotification } from "../types";
 
@@ -35,7 +38,7 @@ export function useNotificationNavigation() {
   const markRead = useNotificationStore((s) => s.markRead);
   const openTab = useUIStore((s) => s.openTab);
   const selectChannel = useChannelStore((s) => s.selectChannel);
-  const { openAtMessage } = useOpenAtMessage();
+  const { openAtMessage, openAtDMMessage } = useOpenAtMessage();
   const selectDM = useDMStore((s) => s.selectDM);
   const fetchDMMessages = useDMStore((s) => s.fetchMessages);
   const clearDMUnread = useDMStore((s) => s.clearDMUnread);
@@ -77,6 +80,27 @@ export function useNotificationNavigation() {
       if (useAuthStore.getState().user?.id !== currentUserId
         || useNotificationStore.getState().ownerId !== currentUserId
         || useNotificationStore.getState().authGeneration !== getAuthGeneration()) return;
+      if (isDMMessageNotification(n)) {
+        const generation = getAuthGeneration(), channelId = n.dm_channel_id!, messageId = n.message_id!;
+        const current = () => {
+          const dms = useDMStore.getState(), blocks = useBlockStore.getState(), prefs = usePreferencesStore.getState();
+          const dm = dms.channels.find(item => item.id === channelId);
+          return useAuthStore.getState().user?.id === currentUserId && getAuthGeneration() === generation
+            && dms.ownerId === currentUserId && dms.authGeneration === generation && !dms.isLoading
+            && !!dm && dm.status === "accepted" && !dm.is_muted && dm.other_user.id === n.actor_id
+            && blocks.ownerId === currentUserId && blocks.authGeneration === generation && blocks.snapshotReady && !blocks.isLoading
+            && !blocks.blockedUserIds.includes(n.actor_id!) && prefs.accountId === currentUserId && prefs.isLoaded
+            && !prefs.get<{ignoredUsers?:Record<string,boolean>}>("privacy")?.ignoredUsers?.[n.actor_id!];
+        };
+        if (!current()) return;
+        void (async () => {
+          const access = await listDMChannels({isCurrent:current});
+          const dm = access.success && access.data?.find(item => item.id === channelId);
+          if (!current() || !dm || dm.status !== "accepted" || dm.is_muted || dm.other_user.id !== n.actor_id) return;
+          if (await openAtDMMessage(channelId,messageId,{isCurrent:current}) && current()) void markRead(n.id);
+        })().catch(() => {});
+        return;
+      }
       markRead(n.id);
       const liveActiveServerId = useServerStore.getState().activeServerId;
 
@@ -154,7 +178,7 @@ export function useNotificationNavigation() {
       closeAllDrawers();
     },
     [
-      markRead, openTab, selectChannel, openAtMessage,
+      markRead, openTab, selectChannel, openAtMessage, openAtDMMessage,
       selectDM, fetchDMMessages, clearDMUnread, closeAllDrawers, t,
     ]
   );

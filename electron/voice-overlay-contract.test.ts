@@ -310,5 +310,6 @@ test("Go Live is optional bounded booleans only; renderer cannot author a native
 test("notification reply metadata contains only a unique visible mention/reply subset and an explicit bounded session", () => {
   const source = { ...validSnapshot(), voiceOverlayNotifications: true, voiceOverlayNotificationActions: true, notificationStatus: "ready", notifications: [{ id: "mention", category: "mention" }, { id: "friend", category: "friend_request" }], notificationReplyIds: ["mention"], notificationReplySession: "reply-session" };
   assert.deepEqual(parseVoiceOverlaySnapshot(source)?.notificationReplyIds, ["mention"]);
+  assert.deepEqual(parseVoiceOverlaySnapshot({ ...source,notifications:[{id:"dm-message",category:"message"}],notificationReplyIds:["dm-message"] })?.notificationReplyIds,["dm-message"]);
   for (const patch of [{ notificationReplyIds: ["missing"] }, { notificationReplyIds: ["friend"] }, { notificationReplyIds: ["mention", "mention"] }, { notificationReplyIds: ["mention"], notificationReplySession: undefined }, { notificationReplySession: "bad\nsession" }, { notificationReplyButtons: [{ id: "mention", row: 0 }] }, { voiceOverlayNotificationActions: false }]) assert.equal(parseVoiceOverlaySnapshot({ ...source, ...patch }), null);
 });

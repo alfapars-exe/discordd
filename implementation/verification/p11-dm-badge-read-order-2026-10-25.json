@@ -1,0 +1,35 @@
+{
+  "phase": "P11",
+  "status": "implemented_unverified",
+  "scope": [
+    "One authoritative SQL snapshot returns full inbox unread_count and badge_unread_count excluding only canonical accepted-DM message metadata already counted by dm_reads. No subtraction from loaded paginated items.",
+    "Backward-compatible optional concrete repository/service capability and additive count/WS fields preserve old consumers and mock/adaptor contracts. Inbox full counts remain unchanged.",
+    "Client owns separate badge count, preserves it for DM create/read while ordinary notifications change it, fences account/generation responses and retains old-server count fallback. Real hook keeps muted DM messages out of aggregate badge.",
+    "Bounded2048 exact read-ID tombstones suppress late creates even for unloaded pages. Overflow uses coalesced single-flight authoritative page/count refresh instead of unbounded cache or guessed read state.",
+    "Notification read WS IDs capped512 with refresh_required when truncated. DM repository independently updates all exact-cutoff rows and returns at most513; no dynamic per-message SQL parameter list."
+  ],
+  "verification": {
+    "repository_handler": "4 native tests passed;2 actual PostgreSQL repository tests passed2.843s; authoritative115/55 counts across >50page,11near-miss source shapes, otherowner/readstate and handlererrors/auth.",
+    "store": "30 tests passed after final bounded-refresh follow-up; scopedESLint passed.",
+    "real_hook": "7 tests across badgeformat+4actualhook/store integration cases passed; Canvas/IPC/API boundaries mocked, actual stores used.",
+    "service": "Focused TestNotification services passed2.622s after bounded512wire IDs regression.",
+    "integrated_before_final_followup": "357files3492clienttests + allGo ./... + productionwebbuild passed before final actual-cursor/boundedack followups; final focused DM/PG and store checks cover followups; final exact-source CI remains required.",
+    "static": "PinnedGo1.26.10 golangci-lint handlers/repository0issues; root services0issues before final bounded-wire follow-up. No scanner exception introduced."
+  },
+  "remaining": [
+    "Real Windows/game/nativehitregions/focus/screenreader/two-HiChat-client encrypted acceptance remains open.",
+    "Group/ordinarychannel incoming notifications and group badge/mute remain separate.",
+    "Existing revisionless dm_read client-event ordering is not claimed fixed; persisted exact cutoff/count consistency is tested.",
+    "GetCount/WS old-server fallback assumes old servers do not produce this new canonical ordinary-DM metadata category.",
+    "No production or installer publication for this slice."
+  ],
+  "final_client_candidate": {
+    "result": "passed",
+    "files": 359,
+    "tests": 3513,
+    "log": "C:/Users/PARS/AppData/Local/Temp/hichat-p2p-dm-final-full-20261025.log",
+    "build": "TypeScript+production Vite build passed; final cosmetic fixed-status CSS placement added afterwards, no application JS changed.",
+    "build_log": "C:/Users/PARS/AppData/Local/Temp/hichat-p2p-dm-final-build-20261025.log",
+    "limits": "Automated checks only; physical/two-HiChat-client/Windows acceptance remains open."
+  }
+}

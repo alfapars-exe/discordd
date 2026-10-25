@@ -25,6 +25,7 @@
   "messageRequests": "Mesaj istekleri",
   "youPrefix": "Sen:",
   "kind": {
+    "directMessage": "{{name}} sana bir özel mesaj gönderdi",
     "mention": "{{name}} seni #{{channel}} kanalında etiketledi",
     "reply": "{{name}} #{{channel}} kanalında sana yanıt verdi",
     "friendRequest": "{{name}} sana arkadaşlık isteği gönderdi",

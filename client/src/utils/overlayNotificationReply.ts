@@ -9,6 +9,9 @@ import { useMemberStore } from "../stores/memberStore";
 import { useChannelPermissionStore } from "../stores/channelPermissionStore";
 import { useThreadStore } from "../stores/threadStore";
 import { useMessageStore } from "../stores/messageStore";
+import { useDMStore } from "../stores/dmStore";
+import { isDMMessageNotification } from "./dmMessageNotification";
+import { listDMChannels } from "../api/dm";
 import { useE2EEStore } from "../stores/e2eeStore";
 import { composerKey, EMPTY_DRAFT, useComposerDraftStore } from "../stores/composerDraftStore";
 import { useUIStore } from "../stores/uiStore";
@@ -16,22 +19,32 @@ import { getLiveOverlayNotificationItems } from "./overlayNotificationAccess";
 import { resolveChatChannel } from "./resolveChatChannel";
 import { hasPermission, Permissions, resolveChannelPermissions } from "./permissions";
 import { shouldSuppressMessagePreview } from "./messageSpamPolicy";
-import type { OpenAtMessage } from "../hooks/useOpenAtMessage";
+import type { OpenAtMessage, OpenAtDMMessage } from "../hooks/useOpenAtMessage";
 import type { ChatMessage } from "../hooks/useChatContext";
 import { UI_SHELL_V2 } from "./uiShell";
 
 export type OverlayNotificationReplySource = {
+  mode?: "dm";
   notificationId: string; ownerId: string; generation: number; serverId: string;
   channelId: string; messageId: string; actorId: string; permissionChannelId: string; label: string;
 };
 const safeId = (value: unknown): value is string => typeof value === "string" && value.length > 0
   && value.length <= 128 && !Array.from(value).some(character => { const code = character.charCodeAt(0); return code < 32 || (code >= 127 && code <= 159); });
 
-function sourceMetadata(id: string) {
+function sourceMetadata(id: string): OverlayNotificationReplySource | null {
   const auth = getAuthSessionSnapshot();
   if (!auth.ownerId || useAuthStore.getState().user?.id !== auth.ownerId
     || !getLiveOverlayNotificationItems().some(item => item.id === id)) return null;
   const n = useNotificationStore.getState().items.find(item => item.id === id);
+  if (n && isDMMessageNotification(n) && n.user_id === auth.ownerId && safeId(n.dm_channel_id)
+    && safeId(n.message_id) && safeId(n.actor_id) && n.actor_id !== auth.ownerId) {
+    const dms = useDMStore.getState(), dm = dms.channels.find(item => item.id === n.dm_channel_id);
+    if (dms.ownerId !== auth.ownerId || dms.authGeneration !== auth.generation || dms.isLoading
+      || !dm || dm.status !== "accepted" || dm.other_user.id !== n.actor_id || dm.is_muted) return null;
+    return { mode: "dm" as const, notificationId: id, ownerId: auth.ownerId, generation: auth.generation,
+      serverId: "", channelId: n.dm_channel_id, messageId: n.message_id, actorId: n.actor_id,
+      permissionChannelId: "", label: dm.other_user.display_name || dm.other_user.username };
+  }
   if (!n || (n.kind !== "mention" && n.kind !== "reply") || n.user_id !== auth.ownerId
     || !safeId(n.server_id) || !safeId(n.channel_id) || !safeId(n.message_id) || !safeId(n.actor_id)
     || n.actor_id === auth.ownerId || n.dm_channel_id || n.payload.group_id !== undefined) return null;
@@ -49,7 +62,7 @@ function sourceMetadata(id: string) {
 /** Hydrate the existing ACL caches, never message bodies, for already-visible rows. */
 export async function primeOverlayNotificationReplyAccess(ids: readonly string[]): Promise<void> {
   const sources = ids.slice(0, 3).map(sourceMetadata).filter(source => source !== null);
-  await Promise.allSettled(sources.flatMap(source => [
+  await Promise.allSettled(sources.filter(source => source.mode !== "dm").flatMap(source => [
     useMemberStore.getState().fetchMembers(source.serverId),
     useChannelPermissionStore.getState().fetchOverrides(source.permissionChannelId, source.serverId),
   ]));
@@ -66,6 +79,15 @@ export function resolveOverlayNotificationReplySource(id: string, requireMessage
     || blocks.ownerId !== source.ownerId || blocks.authGeneration !== source.generation || !blocks.snapshotReady || blocks.isLoading
     || blocks.blockedUserIds.includes(source.actorId) || useServerStore.getState().mutedServerIds.has(source.serverId)
     || channels.mutedChannelIds.has(source.channelId) || channels.mutedChannelIds.has(source.permissionChannelId)) return null;
+  if (source.mode === "dm") {
+    const dms = useDMStore.getState(), message = dms.messagesByChannel[source.channelId]?.find(item => item.id === source.messageId);
+    if (!message) return requireMessage ? null : source;
+    if (message.dm_channel_id !== source.channelId || message.user_id !== source.actorId || shouldSuppressMessagePreview(message, "dm")) return null;
+    const e2ee = useE2EEStore.getState();
+    if (message.content === null || (message.encryption_version === 1 && (e2ee.initStatus !== "ready"
+      || e2ee.decryptionErrors.some(error => error.channelId === source.channelId && error.messageId === source.messageId)))) return null;
+    return source;
+  }
   const member = members.membersByServer[source.serverId]?.find(entry => entry.id === source.ownerId);
   const load = overrides.statusByChannel[source.permissionChannelId];
   if (!member || !Array.isArray(member.roles) || !member.roles.every(role => role && typeof role.id === "string")
@@ -90,7 +112,7 @@ export function resolveOverlayNotificationReplySource(id: string, requireMessage
 }
 
 export const notificationReplyBinding = (source: OverlayNotificationReplySource) => JSON.stringify([
-  source.notificationId, source.ownerId, source.generation, source.serverId, source.channelId, source.messageId, source.actorId, source.permissionChannelId,
+  source.mode ?? "channel", source.notificationId, source.ownerId, source.generation, source.serverId, source.channelId, source.messageId, source.actorId, source.permissionChannelId,
 ]);
 export type NotificationReplyPreparation = "prepared" | "conflict" | "unavailable";
 
@@ -112,7 +134,7 @@ function currentDraftIsBusy(): boolean {
 
 /** Open one main chat and select a reply; never send or replace an existing draft. */
 export async function prepareOverlayNotificationReply(source: OverlayNotificationReplySource, openAtMessage: OpenAtMessage,
-  isCurrent: () => boolean): Promise<NotificationReplyPreparation> {
+  isCurrent: () => boolean, openAtDMMessage?: OpenAtDMMessage): Promise<NotificationReplyPreparation> {
   const binding = notificationReplyBinding(source);
   const deviceId = useE2EEStore.getState().localDeviceId;
   const current = (requireMessage = false) => {
@@ -121,21 +143,29 @@ export async function prepareOverlayNotificationReply(source: OverlayNotificatio
   };
   if (!current()) return "unavailable";
   if (currentDraftIsBusy()) return "conflict";
-  const key = composerKey(source.ownerId, "channel", source.channelId, source.serverId);
+  if (source.mode === "dm" && !openAtDMMessage) return "unavailable";
+  if (source.mode === "dm") {
+    // Refresh the authoritative accepted-conversation permission before opening.
+    const result = await listDMChannels({ isCurrent: () => current() });
+    const live = result.success && result.data?.find(dm => dm.id === source.channelId);
+    if (!current() || !live || live.status !== "accepted" || live.is_muted || live.other_user.id !== source.actorId) return "unavailable";
+  }
+  const key = composerKey(source.ownerId, source.mode === "dm" ? "dm" : "channel", source.channelId, source.mode === "dm" ? undefined : source.serverId);
   const before = useComposerDraftStore.getState();
   const draft = before.drafts[key] ?? EMPTY_DRAFT;
   if (draft.sending || draft.groupEditingId || (draft.replyingTo && draft.replyingTo.id !== source.messageId)) return "conflict";
   const generation = before.generation, revision = draft.revision;
-  const opening = openAtMessage(source.serverId, source.channelId, source.messageId, source.label, { isCurrent: () => current() });
+  const opening = source.mode === "dm" ? openAtDMMessage!(source.channelId, source.messageId, { isCurrent: () => current() })
+    : openAtMessage(source.serverId, source.channelId, source.messageId, source.label, { isCurrent: () => current() });
   const navigationRevision = useUIStore.getState().navigationRevision;
   if (!await opening || !current(true)) return "unavailable";
   const ui = useUIStore.getState(), target = selectedConversation();
-  if (ui.navigationRevision !== navigationRevision || target?.type !== "text" || target.channelId !== source.channelId
-    || target.serverInfo?.serverId !== source.serverId) return "unavailable";
+  if (ui.navigationRevision !== navigationRevision || target?.type !== (source.mode === "dm" ? "dm" : "text") || target.channelId !== source.channelId
+    || (source.mode !== "dm" && target.serverInfo?.serverId !== source.serverId)) return "unavailable";
   const state = useComposerDraftStore.getState(), now = state.drafts[key] ?? EMPTY_DRAFT;
   if (currentDraftIsBusy() || state.generation !== generation || now.revision !== revision || now.sending || now.groupEditingId
     || (now.replyingTo && now.replyingTo.id !== source.messageId)) return "conflict";
-  const message = useMessageStore.getState().messagesByChannel[source.channelId]?.find(item => item.id === source.messageId);
+  const message = (source.mode === "dm" ? useDMStore.getState() : useMessageStore.getState()).messagesByChannel[source.channelId]?.find(item => item.id === source.messageId);
   if (!message || !current(true)) return "unavailable";
   const reply: ChatMessage = { ...message, is_pinned: false };
   state.patch(key, { replyingTo: reply });

@@ -89,6 +89,92 @@ func (r *sqliteNotificationRepo) CreateReactionIfAbsent(ctx context.Context, n *
 	return true, nil
 }
 
+// CreateDMMessageIfAbsent uses a source-specific stable identity. No message
+// content, ciphertext or arbitrary caller payload is copied into the inbox.
+func (r *sqliteNotificationRepo) CreateDMMessageIfAbsent(ctx context.Context, n *models.Notification) (bool, error) {
+	if n == nil || n.UserID == "" || n.ActorID == nil || n.MessageID == nil || n.DMChannelID == nil || n.UserID == *n.ActorID {
+		return false, fmt.Errorf("DM notification requires recipient, actor and source")
+	}
+	identity, _ := json.Marshal([]string{"dm", n.UserID, *n.DMChannelID, *n.MessageID})
+	n.ID = fmt.Sprintf("dm-message-%x", sha256.Sum256(identity))
+	n.Kind = models.NotificationKindSystem
+	n.ServerID, n.ChannelID = nil, nil
+	n.Payload = json.RawMessage(`{"action":"incoming_message","source":"dm"}`)
+	result, err := r.db.ExecContext(ctx, `INSERT INTO notifications(id,user_id,kind,actor_id,message_id,dm_channel_id,payload)
+		SELECT ?,?,?,?,?,?,? FROM dm_messages m JOIN dm_channels c ON c.id=m.dm_channel_id
+		WHERE m.id=? AND m.dm_channel_id=? AND m.user_id=? AND c.status='accepted'
+		AND ((c.user1_id=? AND c.user2_id=?) OR (c.user2_id=? AND c.user1_id=?))
+		ON CONFLICT(id) DO NOTHING`, n.ID, n.UserID, n.Kind, n.ActorID, n.MessageID, n.DMChannelID, string(n.Payload),
+		*n.MessageID, *n.DMChannelID, *n.ActorID, n.UserID, *n.ActorID, n.UserID, *n.ActorID)
+	if err != nil {
+		return false, fmt.Errorf("create DM notification: %w", err)
+	}
+	count, err := result.RowsAffected()
+	if err != nil || count == 0 {
+		return false, err
+	}
+	var createdAt string
+	if err := r.db.QueryRowContext(ctx, `SELECT created_at FROM notifications WHERE id=?`, n.ID).Scan(&createdAt); err != nil {
+		return false, err
+	}
+	n.CreatedAt = dbTextToRFC3339(createdAt)
+	return true, nil
+}
+
+func (r *sqliteNotificationRepo) MarkDMMessagesRead(ctx context.Context, userID, channelID string, messageID *string) ([]string, error) {
+	// The shared channel lock in DMTxRepos makes this captured cursor stable
+	// against concurrent sends. Never use notification wall-clock timestamps.
+	var cutoffID string
+	if messageID != nil {
+		// Use the effective watermark retained by the transaction's MarkRead.
+		if err := r.db.QueryRowContext(ctx, `SELECT last_read_message_id FROM dm_reads WHERE user_id=? AND dm_channel_id=?`, userID, channelID).Scan(&cutoffID); err != nil {
+			return nil, err
+		}
+	} else {
+		err := r.db.QueryRowContext(ctx, `SELECT id FROM dm_messages WHERE dm_channel_id=? ORDER BY created_at DESC,id DESC LIMIT 1`, channelID).Scan(&cutoffID)
+		if err == sql.ErrNoRows {
+			return []string{}, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	const query = `SELECT n.id FROM notifications n
+		JOIN dm_messages m ON m.id=n.message_id AND m.dm_channel_id=n.dm_channel_id
+		JOIN dm_messages cutoff ON cutoff.id=? AND cutoff.dm_channel_id=m.dm_channel_id
+		WHERE n.user_id=? AND n.dm_channel_id=? AND n.kind='system' AND n.payload=? AND n.read_at IS NULL
+		AND (m.created_at<cutoff.created_at OR (m.created_at=cutoff.created_at AND m.id<=cutoff.id))`
+	args := []any{cutoffID, userID, channelID, `{"action":"incoming_message","source":"dm"}`}
+	// Return one overflow sentinel beyond the WS budget, but acknowledge the
+	// entire cutoff with fixed-parameter SQL rather than an unbounded ID list.
+	const selectQuery = query + ` ORDER BY n.id LIMIT 513`
+	rows, err := r.db.QueryContext(ctx, selectQuery, args...)
+	if err != nil {
+		return nil, err
+	}
+	ids := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(ids) == 0 {
+		return ids, nil
+	}
+	const updateQuery = `UPDATE notifications SET read_at=datetime('now') WHERE read_at IS NULL AND id IN (` + query + `)`
+	if _, err := r.db.ExecContext(ctx, updateQuery, args...); err != nil {
+		return nil, err
+	}
+	return ids, nil
+}
+
 // dbTextToRFC3339 converts the table's 'YYYY-MM-DD HH:MM:SS' UTC text into
 // RFC3339 ('2006-01-02T15:04:05Z') for the API/WS boundary: the raw form
 // parses as LOCAL time on V8 and as NaN on WebKit. Text that does not match

@@ -202,7 +202,13 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 	// together, so the sidebar badge can never drift from the messages the
 	// recipient actually has.
 	var requestNotif *models.Notification
+	var incomingNotif *models.Notification
 	txErr := s.txRunner.InTx(ctx, func(r *repository.DMTxRepos) error {
+		if r.LockChannel != nil {
+			if err := r.LockChannel(ctx, channelID); err != nil {
+				return err
+			}
+		}
 		if becamePending {
 			if err := r.DM.TransitionToPending(ctx, channelID, userID); err != nil {
 				return fmt.Errorf("failed to transition DM channel to pending: %w", err)
@@ -226,6 +232,16 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 			}
 			if err := r.Notification.Create(ctx, requestNotif); err != nil {
 				return fmt.Errorf("failed to create dm_request notification: %w", err)
+			}
+		}
+		if !isSelf && !becamePending && channel.Status == models.DMStatusAccepted {
+			n := &models.Notification{UserID: otherUserID, ActorID: &userID, MessageID: &msg.ID, DMChannelID: &channelID}
+			created, err := r.Notification.CreateDMMessageIfAbsent(ctx, n)
+			if err != nil {
+				return fmt.Errorf("failed to create DM message notification: %w", err)
+			}
+			if created {
+				incomingNotif = n
 			}
 		}
 		return nil
@@ -262,6 +278,10 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 	if requestNotif != nil {
 		requestNotif.Actor = msg.Author
 		broadcastNotificationCreate(s.hub, requestNotif)
+	}
+	if incomingNotif != nil {
+		incomingNotif.Actor = msg.Author
+		broadcastNotificationCreate(s.hub, incomingNotif)
 	}
 
 	// Load reply reference
@@ -418,16 +438,41 @@ func (s *dmService) MarkRead(ctx context.Context, userID, channelID string, mess
 	if _, err := s.verifyChannelMembership(ctx, userID, channelID); err != nil {
 		return err
 	}
-	if err := s.dmReadRepo.MarkRead(ctx, userID, channelID, messageID); err != nil {
+	var ids []string
+	var unread *int
+	actualCursor := messageID // Legacy in-memory fixtures lack a stored-state reader.
+	if err := s.txRunner.InTx(ctx, func(r *repository.DMTxRepos) error {
+		if r.LockChannel != nil {
+			if err := r.LockChannel(ctx, channelID); err != nil {
+				return err
+			}
+		}
+		if err := r.DMRead.MarkRead(ctx, userID, channelID, messageID); err != nil {
+			return err
+		}
+		var err error
+		ids, err = r.Notification.MarkDMMessagesRead(ctx, userID, channelID, messageID)
+		if err == nil && r.ReadState != nil {
+			var count int
+			actualCursor, count, err = r.ReadState(ctx, userID, channelID)
+			unread = &count
+		}
+		return err
+	}); err != nil {
 		return err
 	}
+	if len(ids) > 0 {
+		if counts, err := NotificationUnreadSummary(ctx, s.notificationRepo, userID); err == nil {
+			broadcastNotificationRead(s.hub, userID, ids, false, counts.UnreadCount, counts.BadgeUnreadCount)
+		}
+	}
+	data := map[string]any{"dm_channel_id": channelID, "user_id": userID, "last_read_message_id": actualCursor}
+	if unread != nil {
+		data["unread_count"] = *unread
+	}
 	s.hub.BroadcastToUser(userID, ws.Event{
-		Op: ws.OpDMRead,
-		Data: map[string]any{
-			"dm_channel_id":        channelID,
-			"user_id":              userID,
-			"last_read_message_id": messageID,
-		},
+		Op:   ws.OpDMRead,
+		Data: data,
 	})
 	return nil
 }

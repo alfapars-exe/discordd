@@ -32,7 +32,7 @@ export type VoiceOverlaySnapshot = {
   notificationReplyButtons?: Array<{ id: string; row: number }>;
   notificationActionsUnavailable?: boolean;
   notificationStatus?: "loading" | "ready" | "unavailable";
-  notifications?: Array<{ id: string; category: "mention" | "reply" | "friend_request" | "dm_request" | "system" }>;
+  notifications?: Array<{ id: string; category: "mention" | "reply" | "friend_request" | "dm_request" | "system" | "message" }>;
   voiceActionSession?: string;
   selfMuted?: boolean;
   selfDeafened?: boolean;
@@ -292,6 +292,7 @@ export default function VoiceOverlayContent({ snapshot, actionsOnly = false, not
     reply: "overlayNotificationReply",
     friend_request: "overlayNotificationFriendRequest",
     dm_request: "overlayNotificationDMRequest",
+    message: "overlayNotificationMessage",
     system: "overlayNotificationSystem",
   } as const;
   const notificationStatus = snapshot.notificationStatus ?? "unavailable";

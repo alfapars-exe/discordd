@@ -5,9 +5,9 @@ import "context"
 // DMReadRepository is data access for dm_reads (migration 081) — the DM
 // counterpart of ReadStateRepository, keyed by (user_id, dm_channel_id).
 type DMReadRepository interface {
-	// MarkRead upserts the caller's row with unread_count = 0 and a fresh
-	// last_read_at. messageID nil keeps the existing last_read_message_id
-	// (a body-less POST .../read only clears the counter).
+	// MarkRead acknowledges through a validated source, retaining a monotonic
+	// watermark and counting later incoming messages. Nil captures the latest
+	// source; an empty conversation never erases an existing watermark.
 	MarkRead(ctx context.Context, userID, channelID string, messageID *string) error
 	MarkUnreadFrom(ctx context.Context, userID, channelID, messageID string) (int, error)
 	// IncrementUnread bumps unread_count by one for userID on channelID,

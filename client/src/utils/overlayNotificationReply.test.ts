@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
 const h = vi.hoisted(() => {
   function store() { let state: Record<string, unknown> = {}; return { getState: () => state, set: (value: Record<string, unknown>) => { state = { ...state, ...value }; } }; }
-  return { auth: store(), feed: store(), prefs: store(), blocks: store(), servers: store(), channels: store(), members: store(), overrides: store(), threads: store(), messages: store(), e2ee: store(), ui: store(),
+  return { dms: store(), listDMs: vi.fn(), auth: store(), feed: store(), prefs: store(), blocks: store(), servers: store(), channels: store(), members: store(), overrides: store(), threads: store(), messages: store(), e2ee: store(), ui: store(),
     scope: { ownerId: "owner", generation: 1 }, ignored: {} as Record<string, boolean>, spam: false, pending: false, visible: true, markRead: vi.fn(), primeMembers: vi.fn(), primeOverrides: vi.fn() };
 });
 vi.mock("../api/authSessionEvents", () => ({ getAuthSessionSnapshot: () => h.scope }));
@@ -15,6 +15,8 @@ vi.mock("../stores/memberStore", () => ({ useMemberStore: h.members }));
 vi.mock("../stores/channelPermissionStore", () => ({ useChannelPermissionStore: h.overrides }));
 vi.mock("../stores/threadStore", () => ({ useThreadStore: h.threads }));
 vi.mock("../stores/messageStore", () => ({ useMessageStore: h.messages }));
+vi.mock("../stores/dmStore", () => ({ useDMStore: h.dms }));
+vi.mock("../api/dm", () => ({ listDMChannels: h.listDMs }));
 vi.mock("../stores/e2eeStore", () => ({ useE2EEStore: h.e2ee }));
 vi.mock("../stores/uiStore", () => ({ useUIStore: h.ui }));
 vi.mock("./overlayNotificationAccess", () => ({ getLiveOverlayNotificationItems: () => h.visible ? [{ id: "notice", category: "mention" }] : [] }));
@@ -27,6 +29,13 @@ const key = composerKey("owner", "channel", "channel", "server");
 const notice = { id: "notice", user_id: "owner", kind: "mention", actor_id: "actor", server_id: "server", channel_id: "channel", message_id: "message", dm_channel_id: null, payload: {} };
 const message = { id: "message", channel_id: "channel", user_id: "actor", author: { id: "actor" }, content: "hello", attachments: [], reactions: [], encryption_version: 0 } as unknown as Message;
 const allowed = Permissions.ViewChannel | Permissions.ReadMessages | Permissions.SendMessages;
+const dm = { id: "dm", status: "accepted", is_muted: false, other_user: { id: "actor", username: "Actor" } };
+function setupDM() {
+  h.feed.set({ items: [{ ...notice, kind: "system", server_id: null, channel_id: null, dm_channel_id: "dm", payload: { action: "incoming_message", source: "dm" } }] });
+  h.dms.set({ownerId:"owner",authGeneration:1,isLoading:false,channels:[dm],messagesByChannel:{dm:[{...message,channel_id:undefined,dm_channel_id:"dm"}]}});
+  h.listDMs.mockResolvedValue({success:true,data:[dm]});
+  return resolveOverlayNotificationReplySource("notice")!;
+}
 beforeEach(() => {
   vi.clearAllMocks(); h.scope = { ownerId: "owner", generation: 1 }; h.ignored = {}; h.spam = false; h.pending = false; h.visible = true; document.body.replaceChildren();
   h.auth.set({ user: { id: "owner" } });
@@ -47,6 +56,45 @@ function deferred<T>() { let resolve!: (value: T) => void; const promise = new P
 function openSource(found: Promise<boolean> = Promise.resolve(true)) {
   return vi.fn(() => { h.ui.set({ destination: { type: "text", channelId: "channel", serverInfo: { serverId: "server" } }, navigationRevision: 1 }); return found; });
 }
+it("prepares an accepted DM's exact source after fresh access without copying or sending its draft", async () => {
+  const source=setupDM(), draftKey=composerKey("owner","dm","dm"), files=[new File(["x"],"draft.txt")];
+  useComposerDraftStore.getState().patch(draftKey,{content:"unfinished",files});
+  const openDM=vi.fn(async()=>{h.ui.set({destination:{type:"dm",channelId:"dm"},navigationRevision:1});return true;});
+  const channelOpen=vi.fn();
+  expect(await prepareOverlayNotificationReply(source,channelOpen,()=>true,openDM)).toBe("prepared");
+  expect(openDM).toHaveBeenCalledWith("dm","message",expect.objectContaining({isCurrent:expect.any(Function)}));
+  expect(channelOpen).not.toHaveBeenCalled();
+  expect(useComposerDraftStore.getState().drafts[draftKey]).toMatchObject({content:"unfinished",files,replyingTo:{id:"message",content:"hello"}});
+  expect(h.markRead).toHaveBeenCalledExactlyOnceWith("notice");
+});
+it.each(["pending","muted","blocked","ignored","stale","spam","classification pending","decrypt"])("denies DM reply preparation when %s", async reason => {
+  setupDM();
+  if(reason==="pending")h.dms.set({channels:[{...dm,status:"pending"}]});
+  if(reason==="muted")h.dms.set({channels:[{...dm,is_muted:true}]});
+  if(reason==="blocked")h.blocks.set({blockedUserIds:["actor"]});
+  if(reason==="ignored")h.ignored.actor=true;
+  if(reason==="stale")h.dms.set({authGeneration:0});
+  if(reason==="spam")h.spam=true;
+  if(reason==="classification pending")h.pending=true;
+  if(reason==="decrypt")h.dms.set({messagesByChannel:{dm:[{...message,dm_channel_id:"dm",encryption_version:1,content:null}]}});
+  expect(resolveOverlayNotificationReplySource("notice")).toBeNull();
+  expect(h.markRead).not.toHaveBeenCalled();
+});
+it("rejects authoritative DM denial and late account loss without opening or acknowledging",async()=>{
+  let source=setupDM();const open=vi.fn();h.listDMs.mockResolvedValueOnce({success:true,data:[{...dm,status:"pending"}]});
+  expect(await prepareOverlayNotificationReply(source,open,()=>true,open)).toBe("unavailable");
+  source=setupDM();const wait=deferred<{success:boolean;data:typeof dm[]}>();h.listDMs.mockReturnValueOnce(wait.promise);
+  const result=prepareOverlayNotificationReply(source,open,()=>true,open);h.scope={ownerId:"new-owner",generation:2};wait.resolve({success:true,data:[dm]});
+  expect(await result).toBe("unavailable");expect(open).not.toHaveBeenCalled();expect(h.markRead).not.toHaveBeenCalled();
+});
+it("preserves a DM draft changed during source fetching and never acknowledges a conflicted reply",async()=>{
+  const source=setupDM(),wait=deferred<boolean>(),draftKey=composerKey("owner","dm","dm");
+  const open=vi.fn(()=>{h.ui.set({destination:{type:"dm",channelId:"dm"},navigationRevision:1});return wait.promise;});
+  const result=prepareOverlayNotificationReply(source,vi.fn(),()=>true,open);
+  await vi.waitFor(()=>expect(open).toHaveBeenCalled());
+  useComposerDraftStore.getState().patch(draftKey,{content:"new draft"});wait.resolve(true);
+  expect(await result).toBe("conflict");expect(useComposerDraftStore.getState().drafts[draftKey].content).toBe("new draft");expect(h.markRead).not.toHaveBeenCalled();
+});
 it("prepares the exact persisted source in the single main chat without sending or changing text/files", async () => {
   const file = new File(["draft"], "draft.txt"), store = useComposerDraftStore.getState();
   store.patch(key, { content: "unfinished text", files: [file] });

@@ -15,6 +15,7 @@ vi.mock("../stores/memberStore", () => ({ useMemberStore: () => ({}) }));
 vi.mock("../stores/channelPermissionStore", () => ({ useChannelPermissionStore: () => ({}) }));
 vi.mock("../stores/threadStore", () => ({ useThreadStore: () => ({}) }));
 vi.mock("../stores/messageStore", () => ({ useMessageStore: () => ({}) }));
+vi.mock("../stores/dmStore", () => ({ useDMStore: () => ({}) }));
 vi.mock("../stores/e2eeStore", () => ({ useE2EEStore: () => ({}) }));
 vi.mock("../stores/spamDecisionStore", () => ({ useSpamDecisionStore: () => ({}) }));
 vi.mock("../stores/friendStore", () => ({ useFriendStore: () => ({}) }));

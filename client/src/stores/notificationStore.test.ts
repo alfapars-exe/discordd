@@ -44,6 +44,7 @@ function resetStore() {
   useNotificationStore.setState({
     items: [],
     unreadCount: 0,
+    badgeUnreadCount: 0,
     hasMore: false,
     isLoading: false,
     hasLoaded: false,
@@ -365,5 +366,79 @@ describe("account and request fencing", () => {
     useAuthStore.setState({ user: { id: "other" } as never });
     expect(useNotificationStore.getState().items).toEqual([]);
     expect(useNotificationStore.getState().ownerId).toBe("other");
+  });
+});
+
+describe("authoritative message notification badge and read ordering", () => {
+  const dm = (id = "dm-message-one") => makeNotification({ id, kind: "system", server_id: null,
+    channel_id: null, dm_channel_id: "dm", payload: { action: "incoming_message", source: "dm" } });
+
+  it("uses the server badge aggregate with a partial paginated inbox", async () => {
+    useNotificationStore.setState({ items: [dm()], hasMore: true });
+    vi.mocked(api.getNotificationCount).mockResolvedValueOnce({ success: true,
+      data: { unread_count: 115, badge_unread_count: 55 } });
+    await useNotificationStore.getState().fetchCount();
+    expect(useNotificationStore.getState()).toMatchObject({ unreadCount: 115, badgeUnreadCount: 55, hasMore: true });
+    expect(useNotificationStore.getState().items).toHaveLength(1);
+  });
+
+  it("counts a new DM in the inbox once but leaves its app badge to the DM counter", () => {
+    const store = useNotificationStore.getState();
+    store.handleCreate(dm()); store.handleCreate(dm());
+    expect(useNotificationStore.getState()).toMatchObject({ unreadCount: 1, badgeUnreadCount: 0 });
+    store.handleCreate(makeNotification({ id: "ordinary" }));
+    expect(useNotificationStore.getState()).toMatchObject({ unreadCount: 2, badgeUnreadCount: 1 });
+  });
+
+  it("does not resurrect a read source whose create arrives after its read event", () => {
+    const store = useNotificationStore.getState();
+    store.handleReadSync({ ids: ["dm-message-late"], all: false, unread_count: 0, badge_unread_count: 0 });
+    store.handleCreate(dm("dm-message-late"));
+    expect(useNotificationStore.getState().items[0].read_at).toBeTruthy();
+    expect(useNotificationStore.getState()).toMatchObject({ unreadCount: 0, badgeUnreadCount: 0 });
+    store.handleCreate(dm("dm-message-new"));
+    expect(useNotificationStore.getState()).toMatchObject({ unreadCount: 1, badgeUnreadCount: 0 });
+  });
+
+  it("keeps badge count when marking a DM and decrements an ordinary notification", async () => {
+    useNotificationStore.setState({ items: [dm(), makeNotification({ id: "ordinary" })], unreadCount: 2, badgeUnreadCount: 1 });
+    await useNotificationStore.getState().markRead("dm-message-one");
+    expect(useNotificationStore.getState()).toMatchObject({ unreadCount: 1, badgeUnreadCount: 1 });
+    await useNotificationStore.getState().markRead("ordinary");
+    expect(useNotificationStore.getState()).toMatchObject({ unreadCount: 0, badgeUnreadCount: 0 });
+  });
+
+  it("refreshes authoritative data instead of growing unbounded read tombstones", async () => {
+    const authoritative = makeNotification({ id: "server-confirmed" });
+    vi.mocked(api.listNotifications).mockResolvedValueOnce({ success: true,
+      data: { notifications: [authoritative], has_more: false } });
+    vi.mocked(api.getNotificationCount).mockResolvedValueOnce({ success: true,
+      data: { unread_count: 1, badge_unread_count: 1 } });
+    const store = useNotificationStore.getState();
+    store.handleReadSync({ ids: Array.from({ length: 2100 }, (_, i) => `read-${i}`), all: false, unread_count: 0, badge_unread_count: 0 });
+    store.handleCreate(dm("read-2099")); store.handleCreate(dm("another-stale-create"));
+    await vi.waitFor(() => expect(useNotificationStore.getState().items.map(item => item.id)).toEqual(["server-confirmed"]));
+    expect(api.listNotifications).toHaveBeenCalledOnce(); expect(api.getNotificationCount).toHaveBeenCalledOnce();
+    expect(useNotificationStore.getState()).toMatchObject({ unreadCount: 1, badgeUnreadCount: 1 });
+  });
+
+  it("clears badge and read tombstones on account transition", () => {
+    useNotificationStore.getState().handleReadSync({ ids: ["reuse"], all: false, unread_count: 5, badge_unread_count: 3 });
+    useAuthStore.setState({ user: { id: "other" } as never });
+    expect(useNotificationStore.getState()).toMatchObject({ unreadCount: 0, badgeUnreadCount: 0 });
+    useNotificationStore.getState().handleCreate(makeNotification({ id: "reuse", user_id: "other" }));
+    expect(useNotificationStore.getState().items[0].read_at).toBeNull();
+    expect(useNotificationStore.getState()).toMatchObject({ unreadCount: 1, badgeUnreadCount: 1 });
+  });
+
+  it("honors a bounded server read acknowledgement by reloading authoritative rows", async () => {
+    vi.mocked(api.listNotifications).mockResolvedValueOnce({ success: true,
+      data: { notifications: [dm("unread-new-source")], has_more: true } });
+    vi.mocked(api.getNotificationCount).mockResolvedValueOnce({ success: true,
+      data: { unread_count: 1, badge_unread_count: 0 } });
+    useNotificationStore.getState().handleReadSync({ ids: ["first-bounded-id"], all: false,
+      unread_count: 1, badge_unread_count: 0, refresh_required: true });
+    await vi.waitFor(() => expect(useNotificationStore.getState().items.map(item => item.id)).toEqual(["unread-new-source"]));
+    expect(useNotificationStore.getState()).toMatchObject({ unreadCount: 1, badgeUnreadCount: 0, hasMore: true });
   });
 });

@@ -37,3 +37,9 @@ it.each([["en", "Ada started streaming"], ["tr", "Ada yayın yapmaya başladı"]
   render(<I18nextProvider i18n={i18n}><NotificationItem notification={{ ...notification, payload: { action: "stream_start" } }} onOpen={vi.fn()} /></I18nextProvider>);
   expect(screen.getByText(headline)).toBeInTheDocument();
 });
+
+it.each([["en","Ada sent you a direct message"],["tr","Ada sana bir özel mesaj gönderdi"]] as const)("renders generic %s DM metadata without any payload preview",async(language,headline)=>{
+  const i18n=createInstance();await i18n.init({lng:language,resources:{en:{inbox:en},tr:{inbox:tr}},interpolation:{escapeValue:false}});
+  render(<I18nextProvider i18n={i18n}><NotificationItem notification={{...notification,dm_channel_id:"dm",message_id:"source",payload:{action:"incoming_message",source:"dm",body:"private body",preview:"private preview"}}} onOpen={vi.fn()} /></I18nextProvider>);
+  expect(screen.getByText(headline)).toBeInTheDocument();expect(screen.queryByText("private body")).not.toBeInTheDocument();expect(screen.queryByText("private preview")).not.toBeInTheDocument();
+});

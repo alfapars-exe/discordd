@@ -9,6 +9,7 @@ import { formatRelativePast } from "../../utils/dateFormat";
 import { notificationActorName } from "../../hooks/useNotificationNavigation";
 import type { AppNotification } from "../../types";
 import { anniversaryYears as getAnniversaryYears } from "../../utils/anniversaryNotifications";
+import { isDMMessageNotification } from "../../utils/dmMessageNotification";
 
 type NotificationItemProps = {
   notification: AppNotification;
@@ -33,7 +34,8 @@ function NotificationItem({ notification: n, onOpen }: NotificationItemProps) {
   const anniversaryYears = getAnniversaryYears(n);
   const isReaction = n.kind === "system" && n.payload.subtype === "reaction";
   const headline =
-    n.kind === "system" && n.payload.action === "stream_start"
+    isDMMessageNotification(n) ? t("kind.directMessage", { name })
+      : n.kind === "system" && n.payload.action === "stream_start"
       ? t("kind.streamStart", { name })
       : anniversaryYears !== null
       ? t("kind.friendAnniversary", { name, count: anniversaryYears })
@@ -45,7 +47,7 @@ function NotificationItem({ notification: n, onOpen }: NotificationItemProps) {
       ? n.payload.title
       : t(KIND_KEY[n.kind], { name, channel });
   const preview =
-    isReaction ? "" : n.kind === "system"
+    isReaction || isDMMessageNotification(n) ? "" : n.kind === "system"
       ? typeof n.payload.body === "string" ? n.payload.body : ""
       : typeof n.payload.preview === "string" ? n.payload.preview : "";
   const isUnread = n.read_at === null;

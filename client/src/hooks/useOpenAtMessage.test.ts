@@ -177,6 +177,17 @@ describe("useOpenAtMessage — channel", () => {
 });
 
 describe("useOpenAtMessage — DM", () => {
+  it("does not navigate with stale caller context, or scroll/toast after context expires during a fetch", async () => {
+    let current=false; const dm=useDMStore.getState();const {result}=renderHook(()=>useOpenAtMessage());
+    expect(await result.current.openAtDMMessage("dm-1","message",{isCurrent:()=>current})).toBe(false);
+    expect(dm.selectDM).not.toHaveBeenCalled();
+    current=true;let finish!:(value:boolean)=>void;
+    vi.mocked(dm.fetchMessagesAround).mockReturnValueOnce(new Promise(resolve=>{finish=resolve;}));
+    let opening!:Promise<boolean>;
+    act(()=>{opening=result.current.openAtDMMessage("dm-1","message",{isCurrent:()=>current});});
+    current=false;finish(false);
+    expect(await opening).toBe(false);expect(dm.setScrollToMessageId).not.toHaveBeenCalled();expect(addToast()).not.toHaveBeenCalled();
+  });
   it("opens the DM tab and scrolls after the around-fetch", async () => {
     const dm = useDMStore.getState();
     vi.mocked(dm.fetchMessagesAround).mockResolvedValue(true);

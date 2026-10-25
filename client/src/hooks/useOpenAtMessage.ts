@@ -30,7 +30,7 @@ export type OpenAtMessage = (
   context?: { isCurrent: () => boolean }
 ) => Promise<boolean>;
 
-export type OpenAtDMMessage = (dmChannelId: string, messageId: string) => Promise<boolean>;
+export type OpenAtDMMessage = (dmChannelId: string, messageId: string, context?: { isCurrent: () => boolean }) => Promise<boolean>;
 
 export function useOpenAtMessage(): {
   openAtMessage: OpenAtMessage;
@@ -98,7 +98,8 @@ export function useOpenAtMessage(): {
   );
 
   const openAtDMMessage = useCallback<OpenAtDMMessage>(
-    async (dmChannelId, messageId) => {
+    async (dmChannelId, messageId, context) => {
+      if (context && !context.isCurrent()) return false;
       const channel = useDMStore.getState().channels.find((c) => c.id === dmChannelId);
       const isSelf = !!channel && channel.other_user.id === currentUserId;
       const label = !channel
@@ -111,7 +112,8 @@ export function useOpenAtMessage(): {
       openTab(dmChannelId, "dm", label);
       const navigationRevision = useUIStore.getState().navigationRevision;
 
-      const found = await fetchMessagesAround(dmChannelId, messageId);
+      const found = await fetchMessagesAround(dmChannelId, messageId, context);
+      if (context && !context.isCurrent()) return false;
       const current = useUIStore.getState();
       if (UI_SHELL_V2 && (current.navigationRevision !== navigationRevision || current.destination.type !== "dm" || current.destination.channelId !== dmChannelId)) return found;
       if (!found) {

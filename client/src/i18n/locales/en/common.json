@@ -1,4 +1,5 @@
 {
+  "overlayNotificationMessage": "New message",
   "overlayPrepareReply": "Prepare reply",
   "overlayReplyDraftConflict": "Your existing draft or edit is preserved. Finish it before trying again.",
   "overlayReplyUnavailable": "A reply to this notification’s message could not be prepared.",

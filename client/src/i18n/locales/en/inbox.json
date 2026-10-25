@@ -25,6 +25,7 @@
   "messageRequests": "Message requests",
   "youPrefix": "You:",
   "kind": {
+    "directMessage": "{{name}} sent you a direct message",
     "mention": "{{name}} mentioned you in #{{channel}}",
     "reply": "{{name}} replied to you in #{{channel}}",
     "friendRequest": "{{name}} sent you a friend request",

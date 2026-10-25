@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 
 	"github.com/argeinfina/hichat/database"
@@ -16,10 +17,43 @@ func NewSQLiteDMReadRepo(db database.TxQuerier) DMReadRepository {
 	return &sqliteDMReadRepo{db: db}
 }
 
-// MarkRead — mirrors sqliteReadStateRepo.Upsert. The COALESCE keeps the
-// stored watermark when the caller sent no message_id, so an empty-body
-// read never regresses last_read_message_id to NULL.
+// MarkRead retains a monotonic source watermark. A bodyless read captures the
+// latest source while the caller holds the shared DM transaction lock.
 func (r *sqliteDMReadRepo) MarkRead(ctx context.Context, userID, channelID string, messageID *string) error {
+	if messageID == nil {
+		var latest string
+		err := r.db.QueryRowContext(ctx, `SELECT id FROM dm_messages WHERE dm_channel_id=? ORDER BY created_at DESC,id DESC LIMIT 1`, channelID).Scan(&latest)
+		if err == nil {
+			return r.MarkRead(ctx, userID, channelID, &latest)
+		}
+		if err != sql.ErrNoRows {
+			return err
+		}
+	}
+	if messageID != nil {
+		var exists int
+		if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM dm_messages WHERE id=? AND dm_channel_id=?`, *messageID, channelID).Scan(&exists); err != nil {
+			return err
+		}
+		if exists != 1 {
+			return pkg.ErrNotFound
+		}
+		// Late acknowledgements cannot move an existing read watermark backwards.
+		var cursor string
+		if err := r.db.QueryRowContext(ctx, `SELECT id FROM dm_messages WHERE dm_channel_id=? AND
+		 (id=? OR id=(SELECT last_read_message_id FROM dm_reads WHERE user_id=? AND dm_channel_id=?))
+		 ORDER BY created_at DESC,id DESC LIMIT 1`, channelID, *messageID, userID, channelID).Scan(&cursor); err != nil {
+			return err
+		}
+		_, err := r.db.ExecContext(ctx, `INSERT INTO dm_reads(user_id,dm_channel_id,last_read_message_id,last_read_at,unread_count)
+		 SELECT ?,m.dm_channel_id,m.id,datetime('now'),
+		 (SELECT COUNT(*) FROM dm_messages u WHERE u.dm_channel_id=m.dm_channel_id AND u.user_id!=?
+		 AND (u.created_at>m.created_at OR (u.created_at=m.created_at AND u.id>m.id)))
+		 FROM dm_messages m WHERE m.id=? AND m.dm_channel_id=?
+		 ON CONFLICT(user_id,dm_channel_id) DO UPDATE SET last_read_message_id=excluded.last_read_message_id,
+		 last_read_at=excluded.last_read_at,unread_count=excluded.unread_count`, userID, userID, cursor, channelID)
+		return err
+	}
 	query := `
 		INSERT INTO dm_reads (user_id, dm_channel_id, last_read_message_id, last_read_at, unread_count)
 		VALUES (?, ?, ?, datetime('now'), 0)

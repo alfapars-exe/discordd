@@ -1,0 +1,143 @@
+{
+  "date": "2026-10-25",
+  "scope": "P11 bounded accepted one-to-one DM persisted metadata and exact-source reply preparation",
+  "status": "implemented_unverified",
+  "acceptance": "Not accepted: real Windows physical overlay and two-client E2EE/device acceptance remain open. Parent-integrated badge/count/tombstone work and full regression are separately owned.",
+  "owned_paths": [
+    "client/src/components/inbox/NotificationItem.tsx",
+    "client/src/components/inbox/NotificationItem.anniversary.test.tsx",
+    "client/src/components/voice/VoiceOverlayContent.tsx",
+    "client/src/hooks/useNotificationNavigation.ts",
+    "client/src/hooks/useNotificationNavigation.test.ts",
+    "client/src/hooks/useOpenAtMessage.ts",
+    "client/src/hooks/useOpenAtMessage.test.ts",
+    "client/src/hooks/useOverlayNotificationReply.ts",
+    "client/src/hooks/useOverlayNotificationReply.test.tsx",
+    "client/src/i18n/locales/en/common.json",
+    "client/src/i18n/locales/en/inbox.json",
+    "client/src/i18n/locales/tr/common.json",
+    "client/src/i18n/locales/tr/inbox.json",
+    "client/src/utils/dmMessageNotification.ts",
+    "client/src/utils/overlayNotificationReply.ts",
+    "client/src/utils/overlayNotificationReply.test.ts",
+    "client/src/utils/overlayNotifications.ts",
+    "client/src/utils/overlayNotifications.test.ts",
+    "electron/voice-overlay-contract.ts",
+    "electron/voice-overlay-contract.test.ts",
+    "server/repository/dm_message_tx.go",
+    "server/repository/dm_read_repository.go",
+    "server/repository/notification_repository.go",
+    "server/repository/sqlite_dm_read.go",
+    "server/repository/sqlite_dm_read_test.go",
+    "server/repository/sqlite_dm_notification_test.go",
+    "server/repository/sqlite_notification.go",
+    "server/services/dm_message.go",
+    "server/services/dm_read_notification_test.go",
+    "server/testutil/mocks_notification.go",
+    "server/repository/sqlite_dm_notification_backlog_test.go",
+    "implementation/verification/p11-accepted-dm-notification-reply-2026-10-25.json"
+  ],
+  "implemented": [
+    "No schema migration: existing system kind with canonical payload action=incoming_message,source=dm; accepted nonself conversation/source/recipient validated in repository; no plaintext or ciphertext body copied.",
+    "Stable recipient/conversation/message notification identity makes duplicate insertion atomic, including concurrent workers. Message/unread/notification share existing transaction; channel row serializes sends and read cutoff capture.",
+    "Explicit read validates same-conversation source before writes, preserves furthest canonical created_at/id watermark, recomputes later incoming unread and acknowledges only matching metadata through the same watermark. Bodyless read captures latest source; empty conversations do not erase watermark.",
+    "Existing inbox and overlay metadata projection recognize generic message category. Existing raw DM dispatcher remains the sole desktop sound/toast path.",
+    "Existing native opaque notification ID/session and physical reply action reused; no free URL/body/target/new window or autosend. Fresh accepted-DM access preflight, owner/auth/device/source/block/ignore/mute/spam/E2EE checks guard exact-source open/decrypt and draft preparation. Existing text/files/reply/edit/sending conflicts preserved.",
+    "Final followups: dm_read broadcasts actual stored cursor and remaining count captured together under transaction lock; DM acknowledgements return at most513 IDs while fixed-parameter SQL acknowledges all matching source rows (601-row regression). Parent WS layer caps512 and emits refresh_required on overflow."
+  ],
+  "verification": {
+    "client_focused": {
+      "files": 7,
+      "tests": 97,
+      "result": "pass",
+      "command": "npm exec vitest -- run src/hooks/useNotificationNavigation.test.ts src/utils/overlayNotificationReply.test.ts src/hooks/useOverlayNotificationReply.test.tsx src/utils/overlayNotifications.test.ts src/hooks/useOpenAtMessage.test.ts src/components/voice/VoiceOverlayContent.test.tsx src/components/inbox/NotificationItem.anniversary.test.tsx"
+    },
+    "client_typescript": "pass: final npm exec tsc -- --noEmit -p tsconfig.app.json after parent count/store integration",
+    "scoped_client_lint": "pass: final 14 owned source/test files",
+    "electron_typescript": "pass: npm exec tsc -- -p electron/tsconfig.json",
+    "native_focused": {
+      "tests": 28,
+      "failed": 0,
+      "skipped": 0,
+      "result": "pass",
+      "files": [
+        "voice-overlay-contract.test.js",
+        "voice-overlay-window.test.js",
+        "overlay-action-regions.test.js"
+      ]
+    },
+    "go_sqlite": "pass: focused TestDMMessageNotification|TestDMReadRepo and DM send/read service tests",
+    "go_postgresql": {
+      "result": "pass",
+      "engine": "postgres:18.6-bookworm disposable loopback-only container, unique schema harness",
+      "command": "go test ./repository -run TestDMMessageNotification|TestDMReadRepo -count=1",
+      "latest_elapsed_seconds": 4.536,
+      "cleanup": "container removed; process-local credentials/DSN restored; no secret persisted"
+    },
+    "full_regression": "pending parent coordinated run",
+    "native_full": {
+      "result": "pass with existing host-conditional skip",
+      "tests": 170,
+      "passed": 169,
+      "failed": 0,
+      "skipped": 1,
+      "skip_reason": "Existing real symlink creation is unavailable on this Windows host; no skip introduced by this slice.",
+      "command": "npm exec tsc -- -p electron/tsconfig.json; node --test dist-electron/*.test.js",
+      "log": "C:/Users/PARS/AppData/Local/Temp/hichat-dm-notification-full-native-20261025.log"
+    },
+    "diff_check": "pass for owned tracked source/test paths",
+    "go_full": {
+      "result": "pass",
+      "command": "go test ./... -count=1",
+      "log": "C:/Users/PARS/AppData/Local/Temp/hichat-dm-notification-full-go-20261025.log",
+      "repository_seconds": 109.415,
+      "services_seconds": 50.296,
+      "scope_note": "Full Go PASS preceded final bounded-ID acknowledgement and actual-stored-cursor followups; final focused SQLite/service and PostgreSQL followup runs are recorded separately."
+    },
+    "go_followup_sqlite_services": {
+      "result": "pass",
+      "repository_seconds": 3.018,
+      "services_seconds": 2.824,
+      "coverage": "actual stored cursor+remaining unread event for nil/older requests; bounded601-source acknowledgement; prior concurrency/dedupe/cutoff/rollback regressions"
+    },
+    "go_followup_postgresql": {
+      "result": "pass",
+      "engine": "postgres:18.6-bookworm disposable loopback-only container + unique schema",
+      "elapsed_seconds": 5.528,
+      "coverage": "All TestDMMessageNotification +TestDMReadRepo, including601-row update-all/bounded-ID backlog, actual stored cursor getter, concurrent dedupe and rollback",
+      "cleanup": "container removed; process-local credentials/DSN restored"
+    }
+  },
+  "remaining": [
+    "Group incoming notifications and ordinary nonmention channel notification dispatch are not implemented by this slice.",
+    "Full Windows physical action/focus/DPI/game/native E2EE two-client acceptance remains open.",
+    "Canonical source cutoff is existing created_at/id ordering, not a new arrival-sequence model.",
+    "Existing DM unread sync lacks a server event revision; a delayed dm_read event can race newer raw DM events at client level. Persistent database cursor consistency is verified; broader multi-session sequencing remains a separate gap.",
+    "No production deployment or commit performed by this agent."
+  ],
+  "root_integration": {
+    "full_client": {
+      "result": "passed",
+      "files": 357,
+      "tests": 3492,
+      "log": "C:/Users/PARS/AppData/Local/Temp/hichat-dm-notification-full-20261025.log",
+      "limit": "Before final bounded-ack flag/store test and later P2P changes; final affected store30tests and DMfocused/PG follow-ups recorded separately."
+    },
+    "build": {
+      "result": "passed",
+      "log": "C:/Users/PARS/AppData/Local/Temp/hichat-dm-notification-build-20261025.log",
+      "limit": "Before final bounded-ack follow-up and later P2P slice."
+    },
+    "lint": "Root pinnedGo1.26.10 golangci-lint2.12.2 handlers/services/repository0issues before final bounded-ack follow-up.",
+    "aggregate_note": "Root companion count/store/badge changes are required in the same commit; ordinary DM inbox rows do not doublecount aggregate badge. Exact-read tombstones and bounded refresh flag handle delayed create and large backlog."
+  },
+  "final_client_candidate": {
+    "result": "passed",
+    "files": 359,
+    "tests": 3513,
+    "log": "C:/Users/PARS/AppData/Local/Temp/hichat-p2p-dm-final-full-20261025.log",
+    "build": "TypeScript+production Vite build passed; final cosmetic fixed-status CSS placement added afterwards, no application JS changed.",
+    "build_log": "C:/Users/PARS/AppData/Local/Temp/hichat-p2p-dm-final-build-20261025.log",
+    "limits": "Automated checks only; physical/two-HiChat-client/Windows acceptance remains open."
+  }
+}

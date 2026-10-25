@@ -138,7 +138,7 @@ export function useNotificationBadge(): void {
   const channelUnreads = useReadStateStore((s) => s.unreadCounts);
   const dmUnreads = useDMStore((s) => s.dmUnreadCounts);
   const dmChannels = useDMStore((s) => s.channels);
-  const notificationUnread = useNotificationStore((s) => s.unreadCount);
+  const notificationUnread = useNotificationStore((s) => s.badgeUnreadCount);
   const badgeEnabled = usePreferencesStore((s) => {
     const value = s.data.notifications;
     return !value || typeof value !== "object" || Array.isArray(value) || (value as Record<string, unknown>).unreadBadge !== false;
