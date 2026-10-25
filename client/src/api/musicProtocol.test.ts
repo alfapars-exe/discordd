@@ -23,3 +23,27 @@ it('authoritative refresh after another client replaces session triggers explici
 
 it('late older HTTP session cannot replace a newer authoritative read',async()=>{const {refreshMusicProtocolState}=await import('./musicProtocol');let resolve!:(value:unknown)=>void;h.send.mockReturnValueOnce(new Promise(done=>{resolve=done;}));const oldRead=refreshMusicProtocolState('s','c');h.send.mockResolvedValueOnce({success:true,data:{...snapshot(),session_id:'new-session',revision:0}});await refreshMusicProtocolState('s','c');resolve({success:true,data:snapshot()});expect((await oldRead).code).toBe('MUSIC_OBSOLETE');expect(h.voice.musicBotStates.c.session_id).toBe('new-session');});
 it('read-only GET state never adopts or sends a mutation',async()=>{const {getMusicState}=await import('./music');expect((await getMusicState('s','c')).success).toBe(true);expect(h.send).toHaveBeenCalledTimes(1);expect(h.send.mock.calls[0][0]).toContain('/music/state');expect(h.send.mock.calls[0][1].method).toBeUndefined();});
+
+it('first play in an empty voice channel adopts revision zero before sending the radio URL', async () => {
+  const url = 'https://www.youtube.com/watch?v=0KbRhUtFwkc&list=RD0KbRhUtFwkc&start_radio=1';
+  h.voice.musicBotStates = {};
+  const empty: MusicBotChannelState = {
+    channel_id: 'c', server_id: 's', session_id: 'first-session', revision: 0,
+    is_active: false, is_paused: true, queue: [], repeat_mode: 'off',
+  };
+  h.send.mockImplementation(async (path: string) => {
+    if (path.endsWith('/control-session')) return { success: true, data: {
+      channel_id: 'c', server_id: 's', session_id: 'first-session', revision: 0, minimum_protocol: 2,
+    } };
+    if (path.endsWith('/state')) return { success: true, data: empty };
+    return { success: true, data: { added_tracks: [{ video_id: '0KbRhUtFwkc' }] } };
+  });
+
+  expect((await playMusic('s', 'c', url)).success).toBe(true);
+  expect(h.send.mock.calls.map(([path]) => path)).toEqual([
+    '/servers/s/channels/c/music/control-session', '/servers/s/channels/c/music/state',
+    '/servers/s/channels/c/music/play', '/servers/s/channels/c/music/state',
+  ]);
+  const body = h.send.mock.calls.find(([path]) => path.endsWith('/play'))![1].body;
+  expect(body).toEqual({ url, session_id: 'first-session', expected_revision: 0, request_id: expect.any(String) });
+});

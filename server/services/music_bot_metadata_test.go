@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -9,6 +10,24 @@ import (
 	"strings"
 	"testing"
 )
+
+func TestMusicMetadataInterruptedError_PreservesCauseAndClassifiesDeadline(t *testing.T) {
+	for _, operation := range []string{"extraction", "search"} {
+		t.Run(operation, func(t *testing.T) {
+			deadline := musicMetadataInterruptedError(operation, context.DeadlineExceeded)
+			if !errors.Is(deadline, context.DeadlineExceeded) {
+				t.Fatalf("deadline cause was lost: %v", deadline)
+			}
+			if code := MusicErrorCode(fmt.Errorf("enqueue: %w", deadline)); code != "MUSIC_NETWORK" {
+				t.Fatalf("metadata deadline code = %q, want MUSIC_NETWORK", code)
+			}
+			canceled := musicMetadataInterruptedError(operation, context.Canceled)
+			if !errors.Is(canceled, context.Canceled) || MusicErrorCode(canceled) != "" {
+				t.Fatalf("caller cancellation was lost or reported as a provider failure: %v", canceled)
+			}
+		})
+	}
+}
 
 func TestExtractTracksArgs_BoundsAndIsolatesExtraction(t *testing.T) {
 	args := extractTracksArgs("https://www.youtube.com/playlist?list=example")
@@ -20,6 +39,18 @@ func TestExtractTracksArgs_BoundsAndIsolatesExtraction(t *testing.T) {
 	assertHasAdjacentPair(t, args, "--playlist-end", fmt.Sprint(maxQueueLen+1))
 	assertHasAdjacentPair(t, args, "--print", "%(.{id,title,uploader,channel,duration,thumbnail})j")
 	assertHasAdjacentPair(t, args, "--socket-timeout", "10")
+}
+
+func TestExtractTracksArgs_SelectsVideoFromRadioLink(t *testing.T) {
+	// A copied video/radio URL must select the requested song. Without this
+	// mode yt-dlp traverses the generated Mix before the bot can join, adding
+	// unrelated tracks or timing out the entire play request.
+	const raw = "https://www.youtube.com/watch?v=0KbRhUtFwkc&list=RD0KbRhUtFwkc&start_radio=1"
+	args := extractTracksArgs(raw)
+	if !slices.Contains(args, "--no-playlist") || slices.Contains(args, "--yes-playlist") {
+		t.Fatalf("video/radio link would expand its Mix: %v", args)
+	}
+	assertHasAdjacentPair(t, args, "--", raw)
 }
 
 func TestYtdlpEntryToTrack_CanonicalVideoOnly(t *testing.T) {
