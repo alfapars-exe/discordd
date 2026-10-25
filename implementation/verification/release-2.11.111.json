@@ -1,7 +1,7 @@
 {
   "version": "2.11.111",
   "authorization": "User explicitly requested a current-work checkpoint commit/push, production HF update and Windows update on 2026-10-25; remaining P0-P11 implementation continues afterwards.",
-  "status": "production_web_and_desktop_verified_ghcr_pending",
+  "status": "production_checkpoint_published_verified",
   "verified": [
     "Current local Go test ./..., go vet ./... and go build ./... passed using Go1.27.0 before CI baseline remediation.",
     "Client final local regression: 337 files, 3249 passed, zero failed/pending. Report C:/Users/PARS/AppData/Local/Temp/hichat-release-2.11.111-final.json.",
@@ -95,7 +95,20 @@
       ]
     },
     "tagged_windows_clean_install_and_upgrade": "passed in job121088644222 before publication",
-    "ghcr": "publication in progress; not accepted yet"
+    "ghcr": {
+      "status": "verified",
+      "image": "ghcr.io/alfapars-exe/hichat-server",
+      "tags": [
+        "v2.11.111",
+        "latest"
+      ],
+      "index_digest": "sha256:866a85be5ed185cd19716f03a7574c7f97ca10d35af6ee8adbffc6136e17e061",
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ],
+      "release_workflow_conclusion": "success"
+    }
   },
   "remaining_acceptance": [
     "Installer is unsigned; Windows reputation/trust is not certified.",
