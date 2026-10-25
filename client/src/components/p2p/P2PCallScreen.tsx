@@ -170,6 +170,7 @@ function P2PCallScreen() {
               <video
                 ref={remoteVideoRef}
                 className="p2p-remote-video"
+                muted
                 autoPlay
                 playsInline
               />

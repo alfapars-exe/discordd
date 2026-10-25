@@ -100,5 +100,8 @@
 
   "selectMicrophoneDevice": "Select microphone device",
   "selectSpeakerDevice": "Select speaker device",
-  "selectScreenShareSettings": "Screen share settings"
+  "selectScreenShareSettings": "Screen share settings",
+  "p2pAudioFailed": "Call audio could not start. Check audio permission and your selected speaker, then retry.",
+  "p2pAudioFallback": "The selected speaker is unavailable. Call audio is using the system default.",
+  "p2pAudioRetry": "Retry call audio"
 }
