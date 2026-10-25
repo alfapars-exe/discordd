@@ -33,6 +33,9 @@ func (c *Client) handleGameActivityUpdate(event Event) {
 }
 
 func validGameActivityInput(game *GameActivityClientGame) bool {
+	if game != nil && game.CanonicalGameID != "" && game.CanonicalGameID != "steam:730" {
+		return false
+	}
 	if game == nil || len(game.ID) != 36 || game.Name == "" || len(game.Name) > 80 {
 		return false
 	}

@@ -61,6 +61,9 @@ PATCH /api/users/me/saved/{id}
 DELETE /api/users/me/saved/{id}
 GET /api/users/{userId}/note
 PUT /api/users/{userId}/note
+POST /api/game-join/targets
+POST /api/game-join/tickets
+POST /api/game-join/tickets/consume
 GET /api/servers
 POST /api/servers
 POST /api/servers/join

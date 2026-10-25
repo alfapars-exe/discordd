@@ -86,6 +86,7 @@ type Hub struct {
 	onGameActivityDisconnect     GameActivityConnectionCallback
 	onGameActivityUpdate         GameActivityUpdateCallback
 	onGameActivityPresenceChange GameActivitySnapshotCallback
+	onGameJoinOffer              func(string, uint64, any) any
 
 	// Voice callbacks — set in main.go
 	onVoiceJoin             VoiceJoinCallback

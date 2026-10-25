@@ -23,6 +23,7 @@ func init() {
 		OpTyping:                (*Client).handleTyping,
 		OpPresenceUpdate:        (*Client).handlePresenceUpdate,
 		OpGameActivityUpdate:    (*Client).handleGameActivityUpdate,
+		"game_join_offer":       (*Client).handleGameJoinOffer,
 		OpVoiceJoin:             (*Client).handleVoiceJoin,
 		OpVoiceLeave:            func(c *Client, _ Event) { c.handleVoiceLeave() },
 		OpVoiceStateUpdateReq:   (*Client).handleVoiceStateUpdate,

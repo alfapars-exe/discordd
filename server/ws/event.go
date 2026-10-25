@@ -237,8 +237,9 @@ type GameActivityClientUpdate struct {
 // GameActivityClientGame contains self-reported local display metadata only.
 // It is not a verified game identity or catalog attribution.
 type GameActivityClientGame struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID              string `json:"id"`
+	Name            string `json:"name"`
+	CanonicalGameID string `json:"canonical_game_id,omitempty"`
 }
 
 // GameActivityData is sent server-to-client. ServerID is empty for the global
@@ -252,9 +253,10 @@ type GameActivityData struct {
 }
 
 type GameActivityGame struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	StartedAt string `json:"started_at"`
+	ID              string `json:"id"`
+	Name            string `json:"name"`
+	StartedAt       string `json:"started_at"`
+	CanonicalGameID string `json:"canonical_game_id,omitempty"`
 }
 
 type TypingData struct {
