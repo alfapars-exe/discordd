@@ -59,3 +59,22 @@ it("keeps a new source waiter pending across an unrelated outstanding offer answ
  await h.controller.applyRemoteDescription({...offer(3),type:"answer",reply_to_description_id:unrelated});await tick();expect(result).toBeUndefined();const sourceOffer=h.send.mock.lastCall![1];expect(sourceOffer.description_id).not.toBe(unrelated);expect(sourceOffer.sources).toContainEqual({mid:"1",source:"screen-audio"});
  await h.controller.applyRemoteDescription({...offer(4),type:"answer",reply_to_description_id:sourceOffer.description_id});expect(await wait).toBe(true);
 });
+
+it("remote screen-audio withdrawal preserves exact microphone and video leases even after a late ended event",async()=>{
+ const h=fixture(),video=new Track();video.kind="video";
+ h.transceivers.push({mid:"2",sender:{track:new Track()},receiver:{track:video},currentDirection:"sendrecv"});
+ const full=sdp()+"m=video 9 UDP/TLS/RTP/SAVPF 96\r\na=mid:2\r\na=sendrecv\r\n";
+ await h.controller.applyRemoteDescription({...offer(),sdp:full,sources:[...offer().sources!,{mid:"2",source:"screen-video"}]});
+ const initial=h.onMedia.mock.lastCall![0];expect(initial.screenAudio.getTracks()).toEqual([h.tracks[1]]);expect(initial.video.getTracks()).toEqual([video]);
+ await h.controller.applyRemoteDescription({...offer(2),sdp:full.replace("a=mid:1\r\na=sendrecv","a=mid:1\r\na=recvonly"),sources:[{mid:"0",source:"microphone"},{mid:"2",source:"screen-video"}]});
+ const next=h.onMedia.mock.lastCall![0];expect(next.screenAudio).toBeNull();expect(next.microphone).toBe(initial.microphone);expect(next.video).toBe(initial.video);expect(next.screenAudioSupported).toBe(true);
+ h.tracks[1].readyState="ended";h.tracks[1].dispatchEvent(new Event("ended"));expect(h.onMedia.mock.lastCall![0]).toBe(next);
+ expect(h.tracks[0].stop).not.toHaveBeenCalled();expect(video.stop).not.toHaveBeenCalled();expect(h.onError).not.toHaveBeenCalled();
+});
+it("a legacy answer to the initial v1 offer retains microphone and subsequent legacy renegotiation without enabling extra audio",async()=>{
+ const h=fixture(true);h.controller.setLocalSource(h.transceivers[0].sender as unknown as RTCRtpSender,"microphone");await tick();expect(h.send.mock.lastCall![1].media_protocol).toBe(1);
+ expect(await h.controller.applyRemoteDescription({call_id:"call",type:"answer",sdp:sdp()})).toBe("accepted");const initial=h.onMedia.mock.lastCall![0];expect(initial.microphone.getTracks()).toEqual([h.tracks[0]]);expect(initial.screenAudio).toBeNull();expect(h.controller.canSendScreenAudio()).toBe(false);
+ h.controller.requestNegotiation();await tick();expect(h.send.mock.lastCall![1].media_protocol).toBeUndefined();
+ const reordered="v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=mid:1\r\na=sendrecv\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=mid:0\r\na=sendrecv\r\n";
+ expect(await h.controller.applyRemoteDescription({call_id:"call",type:"answer",sdp:reordered})).toBe("accepted");expect(h.onMedia.mock.lastCall![0].microphone).toBe(initial.microphone);expect(h.onMedia.mock.lastCall![0].screenAudio).toBeNull();expect(h.controller.canSendScreenAudio()).toBe(false);expect(h.onError).not.toHaveBeenCalled();
+});

@@ -1,0 +1,19 @@
+{
+  "status": "partial_runtime_verified",
+  "source": "Frozen a12 client with numeric-only QA3 instrumentation; local API 5e755d48",
+  "fixture": "Two existing authenticated HiChat clients; synthetic microphone and same-picker synthetic screen; no physical capture claim",
+  "verified": [
+    "Both peers connected/stable with screen-audio-v1 capability and independent microphone receive PCM RMS about 0.071.",
+    "Explicit audio consent followed by screen picker produced separately authorized screen-audio receive PCM RMS 0.07084 while microphone RMS remained 0.06991.",
+    "Both calls ended and generated sources stopped after round184; both active call panels absent."
+  ],
+  "not_verified": [
+    "Share-volume zero UI action did not produce observed playback gain zero within five seconds; immediate preceding observation still showed gain1. Need distinguish UI input event behavior, source timer lifetime and actual application defect before change.",
+    "Video track existed but first observation had zero received bytes/decoded frames; video delivery and audio-only stop preservation remain open.",
+    "Physical picker, native WASAPI, output-device changes and physical noise processing remain open."
+  ],
+  "diagnostic": "QA_MIC_INIT_SCHEMA mapping inspected: stage3 is gateAddModule and errorNameCode21 is gateModuleTimeout. Both peers had running48000Hz/worklet-capable contexts; gate addModule timed out after about10000ms, twice. Context resume succeeded. No conclusion about physical RNNoise model failure.",
+  "scripts": ["round-182.mjs", "round-183.mjs", "round-184.mjs"],
+  "follow_up": "Round185 used native Home key instead of fill for range input but screen-audio did not become observable before15second deadline, so independent gain remains unverified. Both calls and generated sources cleaned. Round186 confirms both call panels absent, no ResourceTiming gate entries on either document; absence is not proof of absent network request. Separate static HTTP audit returns exact gate module200/javascript on both origins; no missingasset or CSP cause identified.",
+  "production": "Not deployed; no release acceptance inferred"
+}

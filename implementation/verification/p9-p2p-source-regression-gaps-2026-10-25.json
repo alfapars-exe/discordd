@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-25",
+  "scope": "P9 P2P receiver withdrawal and legacy-answer regression gaps",
+  "status": "static_verified_runtime_acceptance_open",
+  "owned_paths": [
+    "client/src/webrtc/p2pMediaController.test.ts"
+  ],
+  "source_hashes": {
+    "client/src/webrtc/p2pMediaController.test.ts": "20f9588c3e6407d62981cc376690b70a5ffccac2492170449eb0e834ef8a6e3f"
+  },
+  "changes": [
+    "Three-source accepted SDP withdrawal of screen-audio preserves exact microphone/video stream leases; obsolete ended event cannot clear either.",
+    "Initial v1 offer accepts legacy answer then emits legacy renegotiation; reordering legacy SDP preserves established microphone MID and quarantines extra audio."
+  ],
+  "production_changes": "None: existing implementation passes the new regressions. Existing store stop/video and legacy capture tests were reused rather than duplicated.",
+  "checks": {
+    "focused": "npx vitest run src/webrtc/p2pMediaController.test.ts src/stores/p2pCallStore.screen-audio.test.ts: 2 files29tests PASS3.34s",
+    "typescript": "npx tsc -b exit0",
+    "lint": "npx eslint src/webrtc/p2pMediaController.test.ts exit0",
+    "diff_check": "git diff --check exact owned path exit0"
+  },
+  "remaining": [
+    "Actual two-client screen-audio stop preserving video/microphone and new/legacy call acceptance remain runtime gates. No browser, physical capture, deployment, or logging files touched."
+  ]
+}
