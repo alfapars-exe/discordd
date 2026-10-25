@@ -1,6 +1,6 @@
 {
   "date": "2026-10-25",
-  "status": "runtime_defect_reproduced_not_accepted",
+  "status": "runtime_churn_observed_hmr_confounded_acceptance_pending",
   "scope": "Two full HiChat web clients against isolated local API and LiveKit",
   "environment": {
     "api": "http://127.0.0.1:18181",
@@ -32,5 +32,16 @@
     "client_suite": "381 files, 3725 tests PASS, 73.72 seconds; current combined worktree at 6d136901, not immutable release evidence",
     "client_build": "npm run build PASS: tsc -b and Vite, 1691 modules; existing chunk-size/config warnings remain"
   },
-  "next": "Fix repeated admission/session churn, then repeat two-client encrypted media and navigation tests."
+  "follow_up_diagnosis": {
+    "method": "Temporary DEV-only bounded numeric lifecycle diagnostics, removed before final source commit; no credentials or media content logged.",
+    "evidence": [
+      "SFU participant-closing reason was CLIENT_REQUEST_LEAVE, followed by immediate new sessions. ICE failure was not established.",
+      "Before frontend write freeze, admission cleanup was followed by new provider and worker identities with unchanged scope and token owner. Concurrent Vite HMR is a confounding variable.",
+      "During frontend write freeze and Friends navigation, the same numeric Room54/provider55/worker56 remained connected through repeated observations. No new admission_create or cleanup occurred in that interval.",
+      "Same-Room admission key-check/ready events continued with unchanged key scope; their trigger still needs investigation. This is not proof of a production reconnect defect.",
+      "The diagnostic call was explicitly left through UI and panel absence was verified."
+    ],
+    "conclusion": "Initial production-defect classification was premature. Reproduce from a frozen or immutable client build before prescribing a runtime fix; peer-audible media acceptance remains open."
+  },
+  "next": "Explain same-Room admission rechecks and repeat two-client encrypted media/navigation on a frozen build."
 }
