@@ -3438,7 +3438,12 @@
         "implementation/verification/p4-reviewed-file-source-receipts-2026-10-24.json",
         "implementation/verification/p4-transitive-file-receipts-2026-10-24.json",
         "implementation/verification/p4-confirmed-send-recovery-state-2026-10-24.json",
-        "implementation/verification/p4-durable-send-confirmation-2026-10-24.json"
+        "implementation/verification/p4-durable-send-confirmation-2026-10-24.json",
+        "implementation/verification/p11-group-source-sequence-2026-10-25.json",
+        "implementation/verification/p11-group-incoming-notifications-server-2026-10-25.json",
+        "implementation/verification/p11-group-incoming-notifications-client-2026-10-25.json",
+        "implementation/verification/p11-group-message-cues-2026-10-25.json",
+        "implementation/verification/p11-group-inbox-http-2026-10-25.json"
       ]
     },
     {
@@ -3492,7 +3497,10 @@
         "client/src/components/dm/GroupDMChat.tsx"
       ],
       "evidence": [
-        "implementation/verification/p4-group-dm-foundation-2026-10-23.json"
+        "implementation/verification/p4-group-dm-foundation-2026-10-23.json",
+        "implementation/verification/p9-web-e2ee-admission-2026-10-25.json",
+        "implementation/verification/p9-private-group-audio-2026-10-25.json",
+        "implementation/verification/p9-group-mute-control-owner-2026-10-25.json"
       ]
     },
     {
@@ -6345,7 +6353,11 @@
         "Selected microphone is used by actual call capture; unplug/replug and denied permission recover safely."
       ],
       "code": ["client/src/components/settings/VoiceSettings.tsx", "client/src/hooks/useAudioDevices.ts", "client/src/audio/liveMicrophone.ts", "client/src/webrtc/p2pMicrophone.ts"],
-      "evidence": ["implementation/verification/p9-runtime-path-audit-2026-10-25.json"]
+      "evidence": [
+        "implementation/verification/p9-runtime-path-audit-2026-10-25.json",
+        "implementation/verification/p9-device-enumeration-2026-10-25.json",
+        "implementation/verification/p9-private-group-audio-2026-10-25.json"
+      ]
     },
     {
       "id": "p9.output-device",
@@ -6366,7 +6378,12 @@
         "Selected output and reset-to-default route real remote audio and preserve per-user volume."
       ],
       "code": ["client/src/hooks/useOutputDeviceSync.ts", "client/src/hooks/useOutputDeviceSync.test.ts", "client/src/audio/p2pPlayback.ts", "client/src/components/p2p/P2PAudioSink.tsx"],
-      "evidence": ["implementation/verification/p9-runtime-path-audit-2026-10-25.json", "implementation/verification/p9-p2p-output-2026-10-25.json", "implementation/verification/p9-output-event-safety-2026-10-25.json"]
+      "evidence": [
+        "implementation/verification/p9-runtime-path-audit-2026-10-25.json",
+        "implementation/verification/p9-p2p-output-2026-10-25.json",
+        "implementation/verification/p9-output-event-safety-2026-10-25.json",
+        "implementation/verification/p9-private-group-audio-2026-10-25.json"
+      ]
     },
     {
       "id": "p9.microphone-level",
@@ -6408,7 +6425,13 @@
         "Personal output control and deafen affect actual playback without muting transmission unexpectedly."
       ],
       "code": ["client/src/hooks/useVolumeSync.ts", "client/src/audio/p2pPlayback.ts", "client/src/components/p2p/P2PAudioSink.tsx"],
-      "evidence": ["implementation/verification/p9-runtime-path-audit-2026-10-25.json", "implementation/verification/p9-p2p-output-2026-10-25.json"]
+      "evidence": [
+        "implementation/verification/p9-runtime-path-audit-2026-10-25.json",
+        "implementation/verification/p9-p2p-output-2026-10-25.json",
+        "implementation/verification/p9-deafen-mute-intent-2026-10-25.json",
+        "implementation/verification/p9-private-group-audio-2026-10-25.json",
+        "implementation/verification/p9-group-mute-control-owner-2026-10-25.json"
+      ]
     },
     {
       "id": "p9.noise-processing",
