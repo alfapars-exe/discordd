@@ -58,8 +58,9 @@ jobs:
                           count += 1
                           if re.search(r'(?i)error|failed|panic|fatal|denied|exit code|not found|no space|PostgreSQL 18 SQL connection verified|PostgreSQL build preflight skipped', line):
                               print(clean(line), flush=True)
-                          if count >= 3000:
+                          if count >= 10000:
                               break
+                      print('LOG_LINES_READ ' + kind + ' ' + str(count), flush=True)
               except httpx.HTTPError as error:
                   print('LOG_READ ' + type(error).__name__, flush=True)
           PY
