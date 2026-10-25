@@ -1,0 +1,12 @@
+{
+  "phase": "P8",
+  "status": "implemented_unverified",
+  "scope": "Ctrl+I toggles Inbox and a memory-only account/generation-scoped prior destination. Current membership and ready permission caches re-resolve the target; removed, revoked or unresolved destinations fall back to Home.",
+  "verification": [
+    "67 focused tests passed, including real File/reply/group reply/scroll draft retention, active call preservation and BrowserRouter/HashRouter URL round trips in jsdom.",
+    "Integrated client regression: 345 files, 3347 tests passed with the overlay welcome slice present.",
+    "TypeScript, scoped ESLint and integrated production Vite build passed."
+  ],
+  "remaining": ["Real Windows/web keyboard and assistive-technology acceptance remain open."],
+  "release": "Source development only; no production or Windows update publication."
+}

@@ -1,3 +1,4 @@
+vi.mock("./inboxShortcutToggle",()=>({toggleInboxShortcut:()=>fixture.navigate({type:"inbox",channelId:"inbox",label:"common:shellInbox"})}));
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { executeConversationShortcut, dispatchConversationCommand, CONVERSATION_COMMAND_EVENT, type ConversationCommandDetail } from "./conversationCommands";
 

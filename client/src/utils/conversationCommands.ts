@@ -1,3 +1,4 @@
+import { toggleInboxShortcut } from "./inboxShortcutToggle";
 import { useUIStore } from "../stores/uiStore";
 import { useToastStore } from "../stores/toastStore";
 import { useAuthStore } from "../stores/authStore";
@@ -150,7 +151,7 @@ export function executeConversationShortcut(command: ConversationShortcutId, eve
   if (command === "chat-oldest-unread") { void jumpToOldestUnread(); return; }
   if (command === "chat-open-inbox") {
     if (document.querySelector("dialog[open], .settings-overlay, .modal-backdrop, .report-overlay, .new-conversation-overlay")) return;
-    useUIStore.getState().navigate({ type: "inbox", channelId: "inbox", label: i18n.t("common:shellInbox") });
+    toggleInboxShortcut();
     return;
   }
   if (command === "chat-create-group") {
