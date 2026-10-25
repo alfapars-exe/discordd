@@ -84,3 +84,39 @@ test("readiness is idempotent and viewport/open rate limits are bounded",()=>{
  for(let revision=2;revision<=10;revision++)assert.equal(f.broker.open(f.main.event(),{...f.scope,revision}),true);
  assert.equal(f.broker.open(f.main.event(),{...f.scope,revision:11}),false);f.advance(10000);assert.equal(f.broker.open(f.main.event(),{...f.scope,revision:11}),true);
 });
+
+test("all public broker paths fail closed after actual-style destroyed window getters",()=>{
+ for(const side of ["main","overlay"] as const){
+  const f=fixture();f.open();const target=f[side],savedEvent=target.event(),savedContents=target.win.webContents;
+  Object.defineProperty(target.win,"webContents",{get(){if(target.state.destroyed)throw new TypeError("Object has been destroyed");return savedContents;}});
+  target.state.destroyed=true;
+  assert.doesNotThrow(()=>f.broker.refresh());
+  assert.doesNotThrow(()=>f.broker.revoke());
+  assert.doesNotThrow(()=>f.broker.retireForContents(savedContents));
+  assert.doesNotThrow(()=>f.broker.getAvailability(savedEvent));
+  assert.equal(f.broker.setReady(savedEvent,true),false);
+  assert.equal(f.broker.open(savedEvent,f.scope),false);
+  assert.equal(f.broker.send(savedEvent,f.offer()),false);
+  assert.equal(f.broker.viewport(savedEvent,{session,revision:1,tileId:"camera-a",visible:false,width:0,height:0,fps:0}),false);
+  const survivor=side==="main"?f.overlay:f.main;
+  assert.ok(survivor.sent.some(event=>event.channel==="overlay-media"&&(event.value as {kind:string}).kind==="end"));
+ }
+});
+test("WebContents can die or throw mainFrame while its BrowserWindow still reports live",()=>{
+ for(const side of ["main","overlay"] as const)for(const exposesDestroyed of [true,false]){
+  const f=fixture();f.open();const target=f[side],savedEvent=target.event(),mainEvent=f.main.event(),contents=target.win.webContents;let contentsDead=false;
+  contents.isDestroyed=()=>exposesDestroyed&&contentsDead;
+  const frame=contents.mainFrame;
+  Object.defineProperty(contents,"mainFrame",{get(){if(contentsDead)throw new TypeError("Object has been destroyed");return frame;}});
+  contentsDead=true;assert.equal(target.win.isDestroyed(),false);
+  assert.doesNotThrow(()=>f.broker.refresh());
+  assert.doesNotThrow(()=>f.broker.retireForContents(contents));
+  assert.doesNotThrow(()=>f.broker.revoke());
+  assert.equal(f.broker.setReady(savedEvent,true),false);
+  assert.equal(f.broker.open(savedEvent,f.scope),false);
+  assert.equal(f.broker.send(savedEvent,f.offer()),false);
+  assert.equal(f.broker.viewport(savedEvent,{session,revision:1,tileId:"camera-a",visible:true,width:10,height:10,fps:1}),false);
+  const status=f.broker.getAvailability(mainEvent);
+  assert.ok(status===null||status.ready===false);
+ }
+});

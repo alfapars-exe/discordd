@@ -16,8 +16,8 @@
     "implementation/verification/p11-overlay-media-native-2026-10-25.json"
   ],
   "source_sha256_lf": {
-    "electron/overlay-media-broker.ts": "5b18b74ae36347d64f7f256c22491d622793559dafc06fd278b8029a64c53671",
-    "electron/overlay-media-broker.test.ts": "373691a806a188002afe460f9e49e4e1830589196e0397527397540043ef49de",
+    "electron/overlay-media-broker.ts": "f068618c0eaadc9b3c15a85d79e751933a49f2f5c603f169a10416bc7c5dfe78",
+    "electron/overlay-media-broker.test.ts": "df8a941660835264577acfe4abd22351b0e797533b8bb52de17a040c7679375e",
     "electron/voice-overlay.ts": "38c8d57fd1a17d21950b86b0a366461767f24337835c7ca894ea6d6de040a00c",
     "electron/voice-overlay-window.test.ts": "aa3b34e0e4d6d1f7c55ed8029543cc423efd4c7811155543dd310a96b9879988",
     "electron/voice-overlay-contract.ts": "0ac82caf934c4040fb1ad331c1119989035d2f1ff9882eaf638fe1ba0a7eb283",
@@ -43,8 +43,8 @@
     },
     {
       "kind": "focused native node tests",
-      "result": "PASS:52 tests,0 skips across overlay-media-broker,voice-overlay-contract,voice-overlay-geometry,voice-overlay-window",
-      "details": "Includes13 broker tests, actual VM HUD lifecycle/getter navigation/crash checks, malformed/foreign/stale frames and sources, bounded queues/rates, delivery failure, hidden late offer/viewport denial and same-frame re-show."
+      "result": "PASS:54 tests,0 skips across overlay-media-broker,voice-overlay-contract,voice-overlay-geometry,voice-overlay-window",
+      "details": "Includes15 broker tests, actual VM HUD lifecycle/getter navigation/crash checks, malformed/foreign/stale frames and sources, bounded queues/rates, delivery failure, hidden late offer/viewport denial, same-frame re-show, and realistic throwing Electron teardown getters."
     },
     {
       "kind": "client TypeScript",
@@ -60,5 +60,17 @@
     "Renderer receiver/prefs/source catalog/main publisher integration is separately owned and is required before the feature is usable.",
     "Physical Windows windowed/borderless games, multi-monitor/DPI, Alt-Tab/background rendering and anti-cheat behavior remain unaccepted; exclusive fullscreen and injection remain unsupported.",
     "Parent coordinates combined source review, immutable whole-client/native gates and delivery. No staging/commit/push/deployment was performed in this slice."
-  ]
+  ],
+  "teardown_follow_up": {
+    "base_commit": "8010864c9a742f8d4d0ac7cd279e902edee65c46",
+    "owned_paths": [
+      "electron/overlay-media-broker.ts",
+      "electron/overlay-media-broker.test.ts",
+      "implementation/verification/p11-overlay-media-native-2026-10-25.json"
+    ],
+    "finding": "Actual Electron controlled harness closing a real BrowserWindow exposed Object has been destroyed when availability read webContents/mainFrame before checking endpoint lifetime. Initial synthetic video harness also had an independent fixture page-body setup issue; no successful video-runtime acceptance is claimed from those initial probes.",
+    "change": "All broker endpoint resolution now checks BrowserWindow and optional WebContents destruction inside a guarded getter before reading mainFrame; emit/trust/current/open/readiness/availability share it. Captured WebContents identities allow destroyed-content retirement without re-dereferencing destroyed windows. Main endpoint loss also suppresses readiness.",
+    "verification": "Native TypeScript and54 focused tests PASS0skip, including realistic throwing BrowserWindow.webContents and WebContents.mainFrame getters while BrowserWindow remains live; all public broker calls fail closed, retire lease and notify surviving endpoint.",
+    "remaining": "Final real Electron video acceptance must rerun from freshly committed fixed source; temporary harness safe getters do not substitute for this production correction."
+  }
 }

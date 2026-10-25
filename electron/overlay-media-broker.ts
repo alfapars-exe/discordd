@@ -24,6 +24,7 @@ export type OverlayMediaWindow = {
     isVisible(): boolean;
     webContents: {
         mainFrame: unknown;
+        isDestroyed?(): boolean;
         send(channel: string, value: unknown): void;
     };
 };
@@ -73,6 +74,8 @@ export function createOverlayMediaBroker(options: {
         overlay: OverlayMediaWindow;
         mainFrame: unknown;
         overlayFrame: unknown;
+        mainContents: OverlayMediaWindow["webContents"];
+        overlayContents: OverlayMediaWindow["webContents"];
         offer: Extract<OverlayMediaEnvelope, {
             kind: "offer";
         }> | null;
@@ -95,14 +98,28 @@ export function createOverlayMediaBroker(options: {
     const revisions = new Map<string, number>();
     let starts: number[] = [];
     const now = options.now ?? Date.now;
-    const live = (win: OverlayMediaWindow | null) => win && !win.isDestroyed();
-    const trusted = (event: Sender, win: OverlayMediaWindow | null) => !!live(win) && event.sender === win!.webContents && event.senderFrame === win!.webContents.mainFrame;
-    const emit = (win: OverlayMediaWindow, channel: string, value: unknown): boolean => {
+    type Endpoint = {window:OverlayMediaWindow;contents:OverlayMediaWindow["webContents"];frame:unknown};
+    // Electron can destroy WebContents before its BrowserWindow closed callback.
+    // Neither webContents nor mainFrame is safe to read after that boundary.
+    const endpoint = (win:OverlayMediaWindow|null):Endpoint|null => {
         try {
-            if (win.isDestroyed()) return false;
-            win.webContents.send(channel, value);
+            if (!win || win.isDestroyed()) return null;
+            const contents=win.webContents;
+            if (contents.isDestroyed?.()) return null;
+            const frame=contents.mainFrame;
+            return frame ? {window:win,contents,frame} : null;
+        } catch { return null; }
+    };
+    const mainEndpoint=()=>{try{return endpoint(options.main());}catch{return null;}};
+    const overlayEndpoint=()=>{try{return endpoint(options.overlay());}catch{return null;}};
+    const trusted=(event:Sender,target:Endpoint|null)=>{try{return !!target&&event.sender===target.contents&&event.senderFrame===target.frame;}catch{return false;}};
+    const emit = (win:OverlayMediaWindow,channel:string,value:unknown):boolean => {
+        try {
+            const target=endpoint(win);
+            if(!target)return false;
+            target.contents.send(channel,value);
             return true;
-        } catch { return false; }
+        } catch {return false;}
     };
     const retire = (reason: "closed" | "scope" | "source" | "error" = "scope") => {
         const old = lease;
@@ -119,17 +136,18 @@ export function createOverlayMediaBroker(options: {
             ? policy.voiceOverlayVideo === true : policy.voiceOverlayStreams === true);
     };
     const availability = () => {
-        const overlay = options.overlay(), policy = options.policy();
-        if (overlay !== generationWindow || overlay?.webContents.mainFrame !== generationFrame) {
+        const target = overlayEndpoint(), overlay = target?.window ?? null, frame = target?.frame, policy = options.policy();
+        if (overlay !== generationWindow || frame !== generationFrame) {
             generationWindow = overlay;
-            generationFrame = overlay?.webContents.mainFrame;
+            generationFrame = frame;
             generation = randomUUID();
             readyWindow = null;
             readyFrame = null;
         }
-        const visible = !!live(overlay) && overlay!.isVisible() && policy?.enabled === true;
+        let visible=false;
+        try {visible=!!mainEndpoint()&&!!target&&target.window.isVisible()&&policy?.enabled===true;} catch { /* Visibility teardown is unavailable. */ }
         return {
-            ready: visible && overlay === readyWindow && overlay?.webContents.mainFrame === readyFrame,
+            ready: visible && overlay === readyWindow && frame === readyFrame,
             visible,
             allowedKinds: !policy?.enabled ? [] : [
                 ...(policy.voiceOverlayVideo ? ["camera" as const] : []),
@@ -142,44 +160,46 @@ export function createOverlayMediaBroker(options: {
         const value = availability(), serialized = JSON.stringify(value);
         if (serialized !== lastAvailability) {
             lastAvailability = serialized;
-            const main = options.main();
-            if (live(main)) emit(main!,"overlay-media-availability",value);
+            const main = mainEndpoint();
+            if (main) emit(main.window,"overlay-media-availability",value);
         }
         return value;
     };
     const refresh = () => {
         const status = publishAvailability(), current = lease;
         if (!current) return;
-        const main = options.main(), overlay = options.overlay();
-        if (!live(main) || !live(overlay) || main !== current.main || overlay !== current.overlay
-            || main!.webContents.mainFrame !== current.mainFrame || overlay!.webContents.mainFrame !== current.overlayFrame
+        const main = mainEndpoint(), overlay = overlayEndpoint();
+        if (!main || !overlay || main.window !== current.main || overlay.window !== current.overlay
+            || main.frame !== current.mainFrame || overlay.frame !== current.overlayFrame
             || !status.ready || current.generation !== status.windowGeneration || !permitted(current.scope)) retire("scope");
     };
     const current = (event: Sender) => {
         refresh();
         const active = lease;
         if (!active) return null;
-        return trusted(event,active.main) ? {l:active,side:0 as const}
-            : trusted(event,active.overlay) ? {l:active,side:1 as const} : null;
+        return trusted(event,endpoint(active.main)) ? {l:active,side:0 as const}
+            : trusted(event,endpoint(active.overlay)) ? {l:active,side:1 as const} : null;
     };
     return {
         getAvailability(event: Sender) {
             refresh();
-            return trusted(event,options.main()) ? availability() : null;
+            return trusted(event,mainEndpoint()) ? availability() : null;
         },
         setReady(event: Sender,value: unknown): boolean {
-            if (typeof value !== "boolean" || !trusted(event,options.overlay())) return false;
+            if (typeof value !== "boolean" || !trusted(event,overlayEndpoint())) return false;
             availability();
-            readyWindow = value ? options.overlay() : null;
-            readyFrame = value ? options.overlay()?.webContents.mainFrame : null;
+            const target=overlayEndpoint();
+            if(!target)return false;
+            readyWindow = value ? target.window : null;
+            readyFrame = value ? target.frame : null;
             if (!value) { generation = randomUUID(); retire("scope"); }
             refresh();
             return true;
         },
         open(event: Sender, raw: unknown): boolean {
             refresh();
-            const scope = parseLease(raw), main = options.main(), overlay = options.overlay();
-            if (!scope || !trusted(event, main) || !live(overlay) || !availability().ready || !permitted(scope))
+            const scope = parseLease(raw), main = mainEndpoint(), overlay = overlayEndpoint();
+            if (!scope || !trusted(event, main) || !main || !overlay || !availability().ready || !permitted(scope))
                 return false;
             if ((revisions.get(scope.session) ?? 0) >= scope.revision)
                 return false;
@@ -191,8 +211,8 @@ export function createOverlayMediaBroker(options: {
             revisions.set(scope.session, scope.revision);
             if (revisions.size > 256)
                 revisions.delete(revisions.keys().next().value!);
-            lease = { scope, main: main!, overlay: overlay!, mainFrame: main!.webContents.mainFrame, overlayFrame: overlay!.webContents.mainFrame, offer: null, answer: null, pending: [], counts: [0, 0], viewports: 0, started: now(), generation };
-            if (!emit(overlay!, "overlay-media-lease", scope)) {
+            lease = { scope, main: main.window, overlay: overlay.window, mainContents:main.contents,overlayContents:overlay.contents,mainFrame:main.frame,overlayFrame:overlay.frame, offer: null, answer: null, pending: [], counts: [0, 0], viewports: 0, started: now(), generation };
+            if (!emit(overlay.window, "overlay-media-lease", scope)) {
                 retire("error");
                 return false;
             }
@@ -280,7 +300,7 @@ export function createOverlayMediaBroker(options: {
         },
         refresh,retire,
         retireForContents(contents: unknown) {
-            if (lease && (lease.main.webContents === contents || lease.overlay.webContents === contents)) {
+            if (lease && (lease.mainContents === contents || lease.overlayContents === contents)) {
                 readyWindow = null;
                 readyFrame = null;
                 retire("scope");
