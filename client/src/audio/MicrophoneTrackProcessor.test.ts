@@ -1,5 +1,5 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
-import { Track, type AudioProcessorOptions, type LocalAudioTrack } from "livekit-client";
+import { Track, LocalAudioTrack, type AudioProcessorOptions } from "livekit-client";
 import type { MicrophoneSettings } from "./microphoneSettings";
 import type { MicrophoneStatus } from "./pipelineStatus";
 import { MicrophoneTrackProcessor } from "./MicrophoneTrackProcessor";
@@ -51,6 +51,25 @@ beforeEach(() => { vi.clearAllMocks(); FakeContext.instances = []; vi.stubGlobal
 afterEach(() => vi.unstubAllGlobals());
 
 describe("LiveKit microphone processor adapter", () => {
+  it("lets the real SDK context-change path complete without queuing another SDK restart", async () => {
+    const h = setup();
+    await h.processor.init(h.opts);
+    const unlock = vi.fn();
+    const sdkTrack = {
+      audioContext: FakeContext.instances[0], processor: h.processor,
+      trackChangeLock: { lock: vi.fn(async () => unlock) },
+      log: { debug: vi.fn() }, logContext: {}, kind: Track.Kind.Audio,
+      _mediaStreamTrack: h.source, sender: undefined,
+      observeProcessedTrack: vi.fn(), emit: vi.fn(),
+    };
+    await LocalAudioTrack.prototype.setAudioContext.call(sdkTrack as unknown as LocalAudioTrack, new FakeContext() as unknown as AudioContext);
+    expect(sdkTrack.trackChangeLock.lock).toHaveBeenCalledOnce();
+    expect(unlock).toHaveBeenCalledOnce();
+    expect(sdkTrack.observeProcessedTrack).toHaveBeenCalledWith(h.processor.processedTrack);
+    expect(h.local.setAudioContext).toHaveBeenCalledOnce();
+    expect(h.pipelines).toHaveLength(2);
+    await h.processor.destroy();
+  });
   it("sets its context before SDK setProcessor and applies raw constraints without the SDK lock", async () => {
     const h = setup();
     expect(h.local.setAudioContext).toHaveBeenCalledWith(FakeContext.instances[0]);
@@ -79,7 +98,10 @@ describe("LiveKit microphone processor adapter", () => {
     expect(old.dispose).toHaveBeenCalledOnce();
     expect(FakeContext.instances).toHaveLength(2);
     expect(FakeContext.instances[0].close).toHaveBeenCalledOnce();
-    expect(h.local.setAudioContext).toHaveBeenLastCalledWith(FakeContext.instances[1]);
+    // SDK restart already owns trackChangeLock. Calling setAudioContext here
+    // queues another restart behind it, recursively replacing the processor.
+    expect(h.local.setAudioContext).toHaveBeenCalledOnce();
+    expect(h.local.setAudioContext).toHaveBeenCalledWith(FakeContext.instances[0]);
     expect(mocks.register).toHaveBeenCalledTimes(2);
     expect(h.processor.processedTrack).toBe(h.pipelines[1].processedTrack);
     expect(h.local.applyConstraints).toHaveBeenCalledOnce();

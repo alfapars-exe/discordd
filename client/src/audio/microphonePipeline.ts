@@ -2,7 +2,9 @@ import { postGateConfigToWorklet } from "./gateConfig";
 import { captureConstraints, desiredEngine, type MicrophoneSettings } from "./microphoneSettings";
 import type { MicrophoneStatus } from "./pipelineStatus";
 import type { EngineHandle } from "./engines/workletEngine";
-import gateUrl from "./vadGateWorklet.js?url";
+// Worklet modules must remain same-origin files: production CSP rejects data:
+// scripts, and Vite otherwise inlines this small module into a data URL.
+import gateUrl from "./vadGateWorklet.js?url&no-inline";
 import { awaitAudioStep, closeAudioContext } from "./audioOperation";
 
 export interface MicrophonePipeline {
