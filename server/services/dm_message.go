@@ -125,7 +125,13 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 
 		// First message on an accepted channel from a non-friend → transition to pending
 		if channel.Status == models.DMStatusAccepted && s.friendChecker != nil {
-			recipient, _ := s.userRepo.GetByID(ctx, otherUserID)
+			recipient, err := s.userRepo.GetByID(ctx, otherUserID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get DM recipient privacy: %w", err)
+			}
+			if recipient == nil {
+				return nil, fmt.Errorf("%w: DM recipient not found", pkg.ErrNotFound)
+			}
 			if recipient != nil && recipient.DMPrivacy == "message_request" {
 				friends, err := s.friendChecker.AreFriends(ctx, userID, otherUserID)
 				if err != nil {

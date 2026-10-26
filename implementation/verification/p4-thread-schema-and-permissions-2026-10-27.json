@@ -1,0 +1,12 @@
+{
+  "merge_commit": "f3fa18a35169fd883b4b3b63e9be1adca9dad116",
+  "scope": "Thread creation and archive/reopen authorization, and migration of the channel type constraint on SQLite, PostgreSQL and remote libSQL.",
+  "checks": [
+    "SQLite HTTP integration: creation, archive, access loss and reopen passed",
+    "SQLite migration data preservation, legacy foreign key violations, rollback and concurrent startup tests passed",
+    "Disposable remote sqld upgrade and injected-failure rollback passed using the pinned libSQL driver",
+    "PostgreSQL 18.6 database and repository contract runner: 678 pass events, zero failures or skips",
+    "PostgreSQL TLS reconnection passed on Go 1.26.10 and 1.27.3"
+  ],
+  "limitations": ["Production Turso routing, production migration and multi-user live acceptance were not verified."]
+}
