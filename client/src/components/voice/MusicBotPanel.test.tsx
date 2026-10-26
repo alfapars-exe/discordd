@@ -50,6 +50,20 @@ beforeEach(() => {
 });
 
 describe("MusicBotPanel", () => {
+  it("does not apply an old restored Stop click after another client starts a replacement session", async () => {
+    useVoiceStore.getState().setMusicBotState("a", song({ session_id: "saved", revision: 0, is_active: false, is_paused: true, current_track: null, queue: [{ ...song().current_track!, queue_item_id: "saved-item" }] }));
+    render(<MusicBotPanel channelId="a" />);
+    const stop = await screen.findByRole("button", { name: "stop" });
+    act(() => {
+      useVoiceStore.getState().setMusicBotState("a", song({ session_id: "replacement", revision: 0 }), true);
+      fireEvent.click(stop);
+    });
+    expect(stopMusic).not.toHaveBeenCalled();
+    expect(restoreMusicSession).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "stop" }));
+    await waitFor(() => expect(stopMusic).toHaveBeenCalledOnce());
+  });
+
   it("shows and edits restored queue entries without starting playback", async () => {
     useVoiceStore.getState().setMusicBotState("a", song({ session_id: "saved", revision: 3, is_active: false, is_paused: true, current_track: null, queue: [
       { ...song().current_track!, queue_item_id: "saved-one", title: "Duplicate saved song" },

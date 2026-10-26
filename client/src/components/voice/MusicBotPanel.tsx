@@ -245,6 +245,13 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
     void mutateQueue(() => reorderMusicQueue(serverId, channelId, ids, state.revision!));
   }
 
+  function controlRestored(action: typeof stopMusic) {
+    const latest = useVoiceStore.getState().musicBotStates[channelId];
+    if (!serverId || !state || !latest || latest.is_active || !latest.is_paused || latest.queue.length === 0
+      || latest.session_id !== state.session_id || latest.revision !== state.revision) return;
+    void mutateQueue(() => action(serverId, channelId));
+  }
+
   const searchBox = <div className="music-bot-search">
     {retryAvailable&&serverId&&<div role="status"><span>{t("retryOriginalHint")}</span><button disabled={pending} onClick={()=>void mutateQueue(()=>retryMusicMutation(serverId,channelId))}>{t("retryOriginal")}</button></div>}
     <form onSubmit={(event) => void runSearch(event)}>
@@ -310,8 +317,8 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
       <strong>{t("restoredTitle")}</strong>
       <p>{t("restoredDescription", { count: state.queue.length })}</p>
       {queueView}
-      <button className="music-bot-btn" disabled={pending} onClick={() => void mutateQueue(() => restoreMusicSession(serverId, channelId))} aria-label={t("restorePlayback")}>▶</button>
-      <button className="music-bot-btn music-bot-btn-danger" disabled={pending} onClick={() => void mutateQueue(() => stopMusic(serverId, channelId))} aria-label={t("stop")}>⏹</button>
+      <button className="music-bot-btn" disabled={pending} onClick={() => controlRestored(restoreMusicSession)} aria-label={t("restorePlayback")}>▶</button>
+      <button className="music-bot-btn music-bot-btn-danger" disabled={pending} onClick={() => controlRestored(stopMusic)} aria-label={t("stop")}>⏹</button>
     </div>;
   }
   if (!state?.is_active || !state.current_track || state.server_id !== serverId) {
