@@ -123,6 +123,41 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 			return nil, fmt.Errorf("%w: dm_request_not_accepted", pkg.ErrForbidden)
 		}
 
+		// Opening a DM window does not establish a conversation. Recheck the
+		// recipient's current server permissions before the first message so
+		// an empty channel created before a preference change cannot bypass it.
+		// Channels with history stay usable, as they do in GetOrCreateChannel.
+		if s.serverDMPolicy != nil {
+			friends := false
+			if s.friendChecker != nil {
+				friends, err = s.friendChecker.AreFriends(ctx, userID, otherUserID)
+				if err != nil {
+					return nil, fmt.Errorf("failed to check friendship: %w", err)
+				}
+			}
+			if !friends {
+				senderCount, err := s.dmRepo.CountMessagesBySender(ctx, channelID, userID)
+				if err != nil {
+					return nil, fmt.Errorf("failed to count DM history: %w", err)
+				}
+				if senderCount == 0 {
+					recipientCount, err := s.dmRepo.CountMessagesBySender(ctx, channelID, otherUserID)
+					if err != nil {
+						return nil, fmt.Errorf("failed to count DM history: %w", err)
+					}
+					if recipientCount == 0 {
+						allowed, err := s.serverDMPolicy.CanCreate(ctx, userID, otherUserID)
+						if err != nil {
+							return nil, fmt.Errorf("failed to check server DM policy: %w", err)
+						}
+						if !allowed {
+							return nil, fmt.Errorf("%w: this user disabled direct messages from shared servers", pkg.ErrForbidden)
+						}
+					}
+				}
+			}
+		}
+
 		// First message on an accepted channel from a non-friend → transition to pending
 		if channel.Status == models.DMStatusAccepted && s.friendChecker != nil {
 			recipient, err := s.userRepo.GetByID(ctx, otherUserID)
