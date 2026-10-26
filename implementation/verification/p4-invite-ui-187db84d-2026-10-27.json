@@ -33,7 +33,7 @@
     "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-ui-api-187db84d-20261027-4558180c\\invite-real390.png",
     "sha256": "7e818327c6968a3e78c6776c93eadc52c059ec3b6d73031b138bd8c5a6df8d57"
   },
-  "cleanup": "Dialog closed; emulation cleared; zoom reset; extra invite cleanup delegated to fixture owner; four unrelated tabs untouched.",
+  "cleanup": "Dialog closed; emulation cleared; zoomreset; finalfixtureowner cleanup verified onlybaselineinvite remains; fourunrelatedtabs untouched.",
   "delivery": "No source edits, commit, production mutation or external messages during browser audit.",
   "followup": {
     "source": "187db84d plus exact five authorized source overrides; real Vite HMR, no DOM style injection",
@@ -63,5 +63,13 @@
       "sha256": "e1f9a1e37dca5663c83d5292b6cae2211cee4a972522d3e4eee8fe2aedc93dcc"
     },
     "acceptance": "Both recorded layout/focus findings resolved in actual browser at390. Native200 zoom and music runtime remain unverified."
+  },
+  "native_zoom_investigation": {
+    "source_overrides_reverified_match_fixture_and_current_worktree": true,
+    "documented_page_keyboard_Control_Equal": "does not establish browser zoom; observedDPR1 and innerWidth2548",
+    "native_CUA_attempt": "Correct18190 document identified; native click rejected beforeinput for missingcoordinategeometry; screenshotrevealed usergame overlay; no nativezoom keys sent",
+    "accepted_200_percent": false,
+    "user_surface_untouched": true,
+    "control_returned": true
   }
 }
