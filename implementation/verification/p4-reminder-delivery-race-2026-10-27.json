@@ -1,0 +1,6 @@
+{
+  "commits": ["b30a6131", "9143975f"],
+  "scope": "Reminder claim rechecks due time, retries failed delivery, and preserves atomic notification and reminder state.",
+  "checks": ["Repository, service and handler reminder tests passed three times", "Disposable PostgreSQL 18 deterministic reschedule-versus-delivery race passed ten times", "Removing the due-time claim condition caused the same PostgreSQL test to fail as expected"],
+  "limitations": ["Production delivery, restart and multi-client UI acceptance were not verified by these checks."]
+}
