@@ -54,6 +54,35 @@ function openRemote(over: Record<string, unknown> = {}) {
 }
 
 describe("ImageLightbox", () => {
+  it("cycles Tab focus within the viewer and includes the open media menu", () => {
+    render(<ImageLightbox />);
+    openRemote();
+    // Zoom-out is disabled at 100%, so reset is the first tabbable control.
+    const first = screen.getByRole("button", { name: "lightboxResetZoom" });
+    const last = screen.getByRole("button", { name: "close" });
+    last.focus();
+    const tab = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
+    fireEvent(last, tab);
+    expect(tab.defaultPrevented).toBe(true);
+    expect(first).toHaveFocus();
+    fireEvent.keyDown(first, { key: "Tab", shiftKey: true });
+    expect(last).toHaveFocus();
+
+    fireEvent.click(screen.getByRole("button", { name: "mediaActions" }));
+    const menuAction = screen.getByRole("menuitem", { name: "lightboxDownload" });
+    menuAction.focus();
+    const within = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
+    fireEvent(menuAction, within);
+    expect(within.defaultPrevented).toBe(false);
+
+    const outside = document.createElement("button");
+    document.body.appendChild(outside);
+    outside.focus();
+    fireEvent.keyDown(outside, { key: "Tab" });
+    expect(first).toHaveFocus();
+    outside.remove();
+  });
+
   it("revokes an open preview when media preferences change", () => {
     render(<ImageLightbox />);
     openRemote();
@@ -200,6 +229,10 @@ describe("ImageLightbox", () => {
     await act(async () => {
       await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
     });
+    expect(document.activeElement).toBe(document.querySelector(".forward-search"));
+    const nestedTab = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
+    fireEvent(document.activeElement!, nestedTab);
+    expect(nestedTab.defaultPrevented).toBe(false);
     expect(document.activeElement).toBe(document.querySelector(".forward-search"));
 
     fireEvent.keyDown(document, { key: "Escape" });

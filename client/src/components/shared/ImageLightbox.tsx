@@ -82,6 +82,7 @@ function LightboxDialog({
   const { t } = useTranslation("chat");
   const { t: tCommon } = useTranslation("common");
   const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const menuBtnRef = useRef<HTMLButtonElement>(null);
   const prevFocusRef = useRef<Element | null>(null);
   const forwardFocusRef = useRef<HTMLElement | null>(null);
@@ -160,6 +161,23 @@ function LightboxDialog({
   // mount-only focus and scroll lifecycle above.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Keep keyboard focus inside this modal, but let the nested forward
+      // dialog manage its own controls while it is open.
+      if (e.key === "Tab" && !forwardOpen && !e.defaultPrevented) {
+        const controls = dialogRef.current?.querySelectorAll<HTMLElement>(
+          'button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex="0"]',
+        );
+        if (controls?.length) {
+          const first = controls[0];
+          const last = controls[controls.length - 1];
+          const active = document.activeElement;
+          if (!dialogRef.current?.contains(active) || (e.shiftKey ? active === first : active === last)) {
+            e.preventDefault();
+            (e.shiftKey ? last : first).focus();
+          }
+        }
+        return;
+      }
       const target = e.target;
       const isEditing = target instanceof HTMLElement && (
         target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)
@@ -204,6 +222,7 @@ function LightboxDialog({
 
   return (
     <div
+      ref={dialogRef}
       className="image-lightbox-backdrop"
       role="dialog"
       aria-modal="true"
