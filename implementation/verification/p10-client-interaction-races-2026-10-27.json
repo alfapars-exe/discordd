@@ -1,6 +1,7 @@
 {
-  "source_commits": ["569d9098", "403d7400"],
+  "source_commits": ["569d9098", "403d7400", "5abaa6aa", "155789d7"],
   "scope": "Partial music panel interaction regression verification",
   "result": "Seek drafts are bound to the current session and queue entry, preventing an old drag from seeking a replacement track. Queue drag operations are rejected when the session or revision changes; cancelled drags are cleared. Related suites passed 41 and 42 tests respectively, with lint and TypeScript checks.",
+  "search_follow_up": "Search prevents simultaneous duplicate submissions and discards responses from a previous query or closed panel. Related suites passed 47 and 49 tests respectively, with lint and TypeScript checks.",
   "limitations": "This is client regression evidence, not real multi-client audio or packaged release acceptance."
 }
