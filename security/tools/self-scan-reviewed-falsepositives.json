@@ -280,6 +280,14 @@
       "line_sha256": "19a2a16e0381fb7de119ef3f5fce83cde13bd624959f056339c19baef0e13ce8",
       "reason": "Reviewed fixed SQL: compile-time SELECT suffixes and numeric revision=revision+1 arithmetic. Recipient/application IDs, enable state, time and expected revision remain bound parameters; there is no request-derived SQL fragment.",
       "proof_ref": "server/repository/application_game_grants.go:54-68,95-153;server/repository/application_game_grants_test.go:TestGameGrantOwnershipRevisionAndIsolation,TestGameGrantConcurrentCASOnlyOneWins"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/database/postgres_thread_migration_test.go",
+      "file_sha256": "5b37bc150c27dd8e6040d4911c19f950bed8a8b862d651ac7f5a4da5eaea5bfe",
+      "line_sha256": "fb9879437de4b36ace22b67076b4aba070f0d691abc561263c44310bda9993da",
+      "reason": "Disposable local-only PostgreSQL fixture: schema is derived solely from the fixed hichat_threads_ prefix and time.Now().UnixNano(), never from request data. Cleanup drops only that generated schema; the test refuses non-loopback database hosts.",
+      "proof_ref": "server/database/postgres_thread_migration_test.go:14-32"
     }
   ]
 }
