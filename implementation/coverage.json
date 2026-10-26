@@ -6844,7 +6844,8 @@
       ],
       "evidence": [
         "implementation/verification/p10-music-control-protocol-2026-10-25.json",
-        "implementation/verification/p10-durable-transition-retry-2026-10-27.json"
+        "implementation/verification/p10-durable-transition-retry-2026-10-27.json",
+        "implementation/verification/p10-two-listeners-current-2026-10-27.json"
       ]
     },
     {
@@ -7092,7 +7093,8 @@
       ],
       "evidence": [
         "implementation/verification/p10-personal-volume-2026-10-23.json",
-        "implementation/verification/p10-two-electron-listeners-112d1e8b-2026-10-26.json"
+        "implementation/verification/p10-two-electron-listeners-112d1e8b-2026-10-26.json",
+        "implementation/verification/p10-two-listeners-current-2026-10-27.json"
       ]
     },
     {
@@ -7209,7 +7211,8 @@
       ],
       "evidence": [
         "implementation/verification/p10-encrypted-room-2026-10-23.json",
-        "implementation/verification/p10-two-electron-listeners-112d1e8b-2026-10-26.json"
+        "implementation/verification/p10-two-electron-listeners-112d1e8b-2026-10-26.json",
+        "implementation/verification/p10-two-listeners-current-2026-10-27.json"
       ]
     },
     {

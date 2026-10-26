@@ -1,0 +1,8 @@
+{
+  "source_commit": "3e576f63",
+  "scope": "Two isolated Electron component listeners with current backend, real public YouTube and local encrypted LiveKit room",
+  "result": "Both listeners received decoded encrypted audio. Listener B at 50 percent had a measured power ratio of 0.25; deafen produced zero output and undeafen restored approximately 0.2495. Listener A stayed at gain and power ratio 1 after B changed settings.",
+  "stop": "The original harness did not validate its Stop response and its result was discarded. A separate fresh scoped WebSocket and protocol2 Stop succeeded; subsequent state and durable database showed no active session or queue and one successful Stop receipt. No second play was started.",
+  "privacy_cleanup": "Synthetic accounts, local room, muted windows and no hardware capture or audio files. The test's own API and LiveKit containers and windows were removed.",
+  "limitations": "Component fixture rather than complete HiChat UI; physical listening, device behavior and key rotation were not tested in this run."
+}
