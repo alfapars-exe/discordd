@@ -411,18 +411,40 @@ func (r *sqliteGroupDMRepo) GetMessagesAround(ctx context.Context, groupID, anch
 }
 
 func (r *sqliteGroupDMRepo) UpdateMessage(ctx context.Context, groupID, messageID, userID string, req *models.UpdateGroupDMMessageRequest) error {
-	res, err := r.db.ExecContext(ctx, `UPDATE group_dm_messages SET content=NULL,ciphertext=?,sender_device_id=?,e2ee_metadata=?,key_epoch=?,edited_at=CURRENT_TIMESTAMP WHERE id=? AND group_id=? AND user_id=?`, req.Ciphertext, req.SenderDeviceID, req.E2EEMetadata, req.KeyEpoch, messageID, groupID, userID)
+	db := database.RawDB(r.db)
+	if db == nil {
+		return fmt.Errorf("group message edit requires transaction")
+	}
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	n, err := res.RowsAffected()
+	defer func() { _ = tx.Rollback() }()
+	// Serialize edits with membership changes, just like new message writes.
+	// A service-level snapshot may already be stale after a removal or rekey.
+	allowed, err := tx.ExecContext(ctx, `UPDATE group_dm_channels SET key_epoch=key_epoch WHERE id=? AND key_epoch=? AND EXISTS(SELECT 1 FROM group_dm_members WHERE group_id=? AND user_id=?)`, groupID, req.KeyEpoch, groupID, userID)
+	if err != nil {
+		return err
+	}
+	n, err := allowed.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n != 1 {
+		return pkg.ErrConflict
+	}
+	res, err := tx.ExecContext(ctx, `UPDATE group_dm_messages SET content=NULL,ciphertext=?,sender_device_id=?,e2ee_metadata=?,key_epoch=?,edited_at=CURRENT_TIMESTAMP WHERE id=? AND group_id=? AND user_id=?`, req.Ciphertext, req.SenderDeviceID, req.E2EEMetadata, req.KeyEpoch, messageID, groupID, userID)
+	if err != nil {
+		return err
+	}
+	n, err = res.RowsAffected()
 	if err != nil {
 		return err
 	}
 	if n == 0 {
 		return pkg.ErrNotFound
 	}
-	return nil
+	return tx.Commit()
 }
 func (r *sqliteGroupDMRepo) DeleteMessage(ctx context.Context, groupID, messageID, userID string) error {
 	db := database.RawDB(r.db)
