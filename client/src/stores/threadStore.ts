@@ -53,9 +53,14 @@ function nextThreadRevision(serverID: string, threadID: string): number {
   }
   return next;
 }
-function invalidateThreadRequestsForServer(serverID: string): void {
+function invalidateThreadRequestsForServer(serverID: string): string[] {
   serverRevisions.set(serverID, (serverRevisions.get(serverID) ?? 0) + 1);
-  for (const [key, request] of threadRequests) if (request.serverID === serverID) threadRequests.delete(key);
+  const invalidated: string[] = [];
+  for (const [key, request] of threadRequests) if (request.serverID === serverID) {
+    invalidated.push(request.threadID);
+    threadRequests.delete(key);
+  }
+  return invalidated;
 }
 function validThread(channel: unknown, parentID?: string): channel is Channel {
   if (!channel || typeof channel !== "object" || Array.isArray(channel)) return false;
@@ -140,7 +145,7 @@ export const useThreadStore = create<State>((set, get) => ({
     const key = parentKey(serverID, parentID);
     nextParentRevision(key);
     removeParentRequests(serverID, parentID);
-    invalidateThreadRequestsForServer(serverID);
+    const invalidatedRequests = invalidateThreadRequestsForServer(serverID);
     set((current) => {
       const byID = { ...current.byID };
       const serverIdByThread = { ...current.serverIdByThread };
@@ -157,6 +162,7 @@ export const useThreadStore = create<State>((set, get) => ({
       delete statusByParent[key];
       const loadedParents = { ...current.loadedParents };
       const statusByThread = { ...current.statusByThread };
+      for (const threadID of invalidatedRequests) if (statusByThread[threadID] === "loading") statusByThread[threadID] = "error";
       for (const threadID of Object.keys(statusByThread)) {
         if (current.serverIdByThread[threadID] === serverID && current.byID[threadID]?.parent_channel_id === parentID) delete statusByThread[threadID];
       }
@@ -215,7 +221,9 @@ export const useThreadStore = create<State>((set, get) => ({
             serverIdByThread[thread.id] = serverID;
             statusByThread[thread.id] = "ready";
           }
-          invalidateThreadRequestsForServer(serverID);
+          for (const threadID of invalidateThreadRequestsForServer(serverID)) {
+            if (statusByThread[threadID] === "loading") statusByThread[threadID] = "error";
+          }
           const byParent = { ...current.byParent, [parentID]: [...threads, ...otherServerRows] };
           return {
             byID, byParent, serverIdByThread,
