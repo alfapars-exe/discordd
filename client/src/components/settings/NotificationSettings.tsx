@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { usePreferencesStore } from "../../stores/preferencesStore";
 import { ensureNotificationPermission } from "../../utils/notifications";
@@ -39,6 +39,29 @@ export default function NotificationSettings() {
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">(
     typeof Notification === "undefined" ? "unsupported" : Notification.permission,
   );
+  useEffect(() => {
+    let active = true;
+    let status: PermissionStatus | undefined;
+    const refresh = () => {
+      if (active) setPermission(typeof Notification === "undefined" ? "unsupported" : Notification.permission);
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    if (typeof Notification !== "undefined" && navigator.permissions?.query) {
+      void navigator.permissions.query({ name: "notifications" }).then(result => {
+        if (!active) return;
+        status = result;
+        status.addEventListener("change", refresh);
+        refresh();
+      }).catch(() => { /* Focus/visibility refresh supports browsers without this query. */ });
+    }
+    return () => {
+      active = false;
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+      status?.removeEventListener("change", refresh);
+    };
+  }, []);
   const updateNotification = <K extends keyof NotificationPreferences>(key: K, value: NotificationPreferences[K]) => set({ notifications: { [key]: value } });
   const updateEmail = <K extends keyof EmailPreferences>(key: K, value: EmailPreferences[K]) => set({ email_preferences: { [key]: value } });
   const showDesktopDelay = !isCapacitor();
