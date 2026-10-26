@@ -111,6 +111,33 @@ describe("MusicBotPanel", () => {
     await waitFor(() => expect(seekMusic).toHaveBeenCalledWith("server-a", "a", 75));
   });
 
+  it("discards a seek draft when the same video advances to another queue entry", async () => {
+    const first = song({ session_id: "session", revision: 1, current_track: { ...song().current_track!, queue_item_id: "first" } });
+    useVoiceStore.getState().setMusicBotState("a", first);
+    render(<MusicBotPanel channelId="a" />);
+    const slider = await screen.findByRole("slider", { name: "seek" });
+    fireEvent.change(slider, { target: { value: "75" } });
+    const second = { ...first, revision: 2, current_track: { ...first.current_track!, queue_item_id: "second" }, elapsed_seconds: 5 };
+    act(() => useVoiceStore.getState().setMusicBotState("a", second));
+    expect(slider).not.toHaveValue("75");
+    // Continued pointer movement must not silently adopt the replacement track.
+    fireEvent.change(slider, { target: { value: "80" } });
+    fireEvent.pointerUp(slider, { target: { value: "75" } });
+    expect(seekMusic).not.toHaveBeenCalled();
+    fireEvent.change(slider, { target: { value: "15" } });
+    fireEvent.keyUp(slider, { key: "ArrowRight" });
+    await waitFor(() => expect(seekMusic).toHaveBeenCalledWith("server-a", "a", 15));
+  });
+
+  it.each(["pointerCancel", "blur"] as const)("does not commit an abandoned seek after %s", async (event) => {
+    render(<MusicBotPanel channelId="a" />);
+    const slider = await screen.findByRole("slider", { name: "seek" });
+    fireEvent.change(slider, { target: { value: "75" } });
+    fireEvent[event](slider);
+    fireEvent.pointerUp(slider, { target: { value: "75" } });
+    expect(seekMusic).not.toHaveBeenCalled();
+  });
+
   it("shows a restarted queue as paused and resumes only after explicit action", async () => {
     useVoiceStore.getState().setMusicBotState("a", song({ is_active: false, is_paused: true, current_track: null, queue: [
       { ...song().current_track!, queue_item_id: "saved", title: "Saved track" },

@@ -25,11 +25,15 @@ import { advanceMusicTimeline, musicElapsedAt, musicTrackKey, type MusicTimeline
 import { skipMusic, pauseMusic, resumeMusic, stopMusic, getMusicState, playMusic, searchMusic, removeMusicQueueItem, reorderMusicQueue, shuffleMusicQueue, setMusicRepeatMode, restoreMusicSession, seekMusic } from "../../api/music";
 import { captureMusicScope } from "../../api/musicProtocol";
 import { retryMusicMutation, hasPendingMusicMutation, subscribeMusicRetries } from "../../api/music";
-import type { APIResponse, MusicTrack } from "../../types";
+import type { APIResponse, MusicTrack, MusicBotChannelState } from "../../types";
 
 type MusicBotPanelProps = {
   channelId: string;
 };
+
+function seekTrackKey(state: MusicBotChannelState): string {
+  return JSON.stringify([state.server_id, state.channel_id, state.session_id, state.current_track?.queue_item_id, musicTrackKey(state)]);
+}
 
 function formatDuration(seconds: number): string {
   if (seconds <= 0) return "0:00";
@@ -58,7 +62,8 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<MusicTrack[]>([]);
-  const [seekDraft, setSeekDraft] = useState<number | null>(null);
+  const [seekDraft, setSeekDraft] = useState<{ key: string; value: number } | null>(null);
+  const seekScope = useRef<{ key: string; current: () => boolean } | null>(null);
   const dragItem = useRef<string | null>(null);
   const actionGeneration = useRef(0);
   const actionPending = useRef(false);
@@ -259,13 +264,23 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
   const total = track.duration_seconds || 0;
   const position = timeline?.key === musicTrackKey(state) ? Math.floor(musicElapsedAt(timeline, now)) : 0;
   const elapsed = total > 0 ? Math.min(total, position) : position;
-  const displayedElapsed = seekDraft ?? elapsed;
+  const trackKey = seekTrackKey(state);
+  const displayedElapsed = seekDraft?.key === trackKey ? seekDraft.value : elapsed;
   const pct = total > 0 ? Math.min(100, (displayedElapsed / total) * 100) : 0;
   const repeatMode = state.repeat_mode || "off";
   const nextRepeatMode = repeatMode === "off" ? "one" : repeatMode === "one" ? "all" : "off";
 
   async function control(fn: typeof pauseMusic) {
     if(serverId)await mutateQueue(()=>fn(serverId,channelId),undefined,"controlError");
+  }
+
+  function commitSeek(target: number) {
+    const interaction = seekScope.current;
+    seekScope.current = null;
+    setSeekDraft(null);
+    const latest = useVoiceStore.getState().musicBotStates[channelId];
+    if (!interaction?.current() || !latest || interaction.key !== seekTrackKey(latest)) return;
+    void mutateQueue(() => seekMusic(serverId!, channelId, target));
   }
 
   return (
@@ -290,17 +305,28 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
             disabled={pending}
             aria-label={t("seek")}
             aria-valuetext={`${formatDuration(displayedElapsed)} / ${formatDuration(total)}`}
-            onChange={(event) => setSeekDraft(Number(event.currentTarget.value))}
+            onPointerDown={() => {
+              const scope = captureMusicScope(serverId, channelId);
+              seekScope.current = { key: trackKey, current: scope.current };
+            }}
+            onChange={(event) => {
+              const scope = captureMusicScope(serverId, channelId);
+              const latest = useVoiceStore.getState().musicBotStates[channelId];
+              if (seekScope.current && (seekScope.current.key !== trackKey || !seekScope.current.current())) return;
+              if (!scope.current() || !latest || seekTrackKey(latest) !== trackKey) return;
+              seekScope.current = { key: trackKey, current: scope.current };
+              setSeekDraft({ key: trackKey, value: Number(event.currentTarget.value) });
+            }}
+            onPointerCancel={() => { seekScope.current = null; setSeekDraft(null); }}
+            onBlur={() => { seekScope.current = null; setSeekDraft(null); }}
             onPointerUp={(event) => {
               const target = Number(event.currentTarget.value);
-              setSeekDraft(null);
-              void mutateQueue(() => seekMusic(serverId, channelId, target));
+              commitSeek(target);
             }}
             onKeyUp={(event) => {
               if (!["ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"].includes(event.key)) return;
               const target = Number(event.currentTarget.value);
-              setSeekDraft(null);
-              void mutateQueue(() => seekMusic(serverId, channelId, target));
+              commitSeek(target);
             }}
           /> : <div className="music-bot-progress" aria-label={t("seekUnavailable")}>
             <div className="music-bot-progress-fill" style={{ width: `${pct}%` }} />
