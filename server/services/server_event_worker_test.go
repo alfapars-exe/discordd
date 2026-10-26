@@ -238,3 +238,23 @@ func TestServerEventWorkerStartStopsOnCancellation(t *testing.T) {
 		t.Fatal("worker cancellation lifecycle didn't reset")
 	}
 }
+
+func TestServerEventWorkerDoesNotDeliverAfterEventStartsDuringPage(t *testing.T) {
+	now := time.Now().UTC()
+	event := workerTestEvent("event-a", now.Add(time.Second))
+	worker, repo, hub := newEventWorkerTest(now, []models.ServerEvent{event}, []string{"user-a"})
+	clockReads := 0
+	worker.now = func() time.Time {
+		clockReads++
+		if clockReads == 1 {
+			return now // candidate selection happens before the event starts
+		}
+		return now.Add(2 * time.Second) // recipient lookup crossed the start
+	}
+	if err := worker.Tick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(repo.delivered) != 0 || len(hub.users) != 0 {
+		t.Fatalf("started event notified users: delivered=%v broadcasts=%v", repo.delivered, hub.users)
+	}
+}

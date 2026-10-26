@@ -261,6 +261,28 @@ func TestServerEventRepositoryRejectsInvalidTimes(t *testing.T) {
 	}
 }
 
+func TestServerEventRSVPRejectsMembershipRemovedBeforeWrite(t *testing.T) {
+	db := newTestDB(t)
+	seedEventServer(t, db)
+	repo := NewSQLiteServerEventRepo(wrapForRepo(db))
+	ctx := context.Background()
+	event := eventFixture("Membership race", time.Now().UTC().Add(time.Hour).Format(time.RFC3339))
+	if err := repo.Create(ctx, event); err != nil {
+		t.Fatal(err)
+	}
+	// Simulate removal after the service's membership check but before its
+	// repository write. Foreign keys on users/events alone cannot reject it.
+	if _, err := db.Conn.ExecContext(ctx, `DELETE FROM server_members WHERE server_id=? AND user_id=?`, event.ServerID, dmBob); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.SetInterested(ctx, event.ID, dmBob, true); !errors.Is(err, pkg.ErrConflict) {
+		t.Fatalf("RSVP after membership removal = %v, want conflict", err)
+	}
+	if interested, err := repo.IsInterested(ctx, event.ID, dmBob); err != nil || interested {
+		t.Fatalf("removed member RSVP = %v, %v; want absent", interested, err)
+	}
+}
+
 func TestServerEventRepositoryRejectsDescriptionOverRuneLimit(t *testing.T) {
 	db := newTestDB(t)
 	seedEventServer(t, db)

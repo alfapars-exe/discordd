@@ -2,6 +2,26 @@ package models
 
 import "testing"
 
+func TestProfileShowcaseEmptyCollectionsAndLinkLimit(t *testing.T) {
+	p := ProfileShowcase{}
+	if err := p.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if p.Links == nil || p.Widgets == nil {
+		t.Fatal("empty collections must be arrays")
+	}
+	for i := 0; i < 12; i++ {
+		p.Links = append(p.Links, ProfileLink{ID: string(rune('a' + i)), Label: "Site", URL: "https://example.com"})
+	}
+	if err := p.Validate(); err != nil {
+		t.Fatalf("12 links rejected: %v", err)
+	}
+	p.Links = append(p.Links, ProfileLink{ID: "extra", Label: "Site", URL: "https://example.com"})
+	if err := p.Validate(); err == nil {
+		t.Fatal("13 links accepted")
+	}
+}
+
 func TestProfileShowcaseValidate(t *testing.T) {
 	valid := ProfileShowcase{
 		Theme:    ProfileTheme{Primary: "#5865f2", Secondary: "#111214"},

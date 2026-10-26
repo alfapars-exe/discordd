@@ -162,7 +162,9 @@ func (w *ServerEventWorker) Tick(ctx context.Context) error {
 		if err := bounded.Err(); err != nil {
 			return err
 		}
-		notification, deliverErr := w.repo.Deliver(bounded, w.selectedEvent.ID, w.selectedEvent.Version, userID, now)
+		// A page can take seconds to deliver. Use the current clock for each
+		// recipient so an event that starts mid-page stops being eligible.
+		notification, deliverErr := w.repo.Deliver(bounded, w.selectedEvent.ID, w.selectedEvent.Version, userID, w.now().UTC())
 		if deliverErr != nil {
 			if firstDeliveryErr == nil {
 				firstDeliveryErr = deliverErr

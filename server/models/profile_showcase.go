@@ -45,6 +45,8 @@ var showcaseWidgetTypes = map[string]bool{
 }
 
 func (p *ProfileShowcase) Validate() error {
+	// Empty collections must stay JSON arrays: profile clients iterate them.
+	p.NormalizeCollections()
 	if len([]rune(strings.TrimSpace(p.Watching))) > 80 || len(p.Widgets) > 12 || len(p.Links) > 12 {
 		return ErrProfileShowcaseInvalid
 	}
@@ -79,6 +81,16 @@ func (p *ProfileShowcase) Validate() error {
 	}
 	p.Watching = strings.TrimSpace(p.Watching)
 	return nil
+}
+
+// NormalizeCollections also repairs older documents with omitted or null lists.
+func (p *ProfileShowcase) NormalizeCollections() {
+	if p.Widgets == nil {
+		p.Widgets = []ProfileWidget{}
+	}
+	if p.Links == nil {
+		p.Links = []ProfileLink{}
+	}
 }
 
 func validOptionalHex(s string) bool {

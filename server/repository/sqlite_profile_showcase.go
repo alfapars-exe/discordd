@@ -32,6 +32,7 @@ func (r *sqliteProfileShowcaseRepo) Get(ctx context.Context, userID, scope strin
 	if err := json.Unmarshal([]byte(raw), &out); err != nil {
 		return nil, err
 	}
+	out.NormalizeCollections()
 	out.ScopeServerID, out.Version, out.UpdatedAt = scope, version, updated
 	return &out, nil
 }

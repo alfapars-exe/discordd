@@ -226,9 +226,12 @@ func (r *sqliteServerEventRepo) SetInterested(ctx context.Context, eventID, user
 		return err
 	}
 	now := time.Now().UTC().Format("2006-01-02T15:04:05.000000000Z")
+	// Recheck membership in the write itself: the service's earlier check can
+	// become stale if the user leaves or is removed before this statement.
 	res, err := r.db.ExecContext(ctx, `INSERT INTO server_event_rsvps(event_id,user_id,interested_at,updated_at)
 		SELECT id,?,?,? FROM server_events WHERE id=? AND status='scheduled' AND starts_at>?
-		ON CONFLICT(event_id,user_id) DO UPDATE SET updated_at=excluded.updated_at`, userID, now, now, eventID, now)
+		AND EXISTS(SELECT 1 FROM server_members sm WHERE sm.server_id=server_events.server_id AND sm.user_id=?)
+		ON CONFLICT(event_id,user_id) DO UPDATE SET updated_at=excluded.updated_at`, userID, now, now, eventID, now, userID)
 	if err != nil {
 		return err
 	}
