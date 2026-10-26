@@ -268,6 +268,48 @@ describe("ImageLightbox", () => {
     expect(screen.getByRole("img", { name: "one.png" }).getAttribute("style")).toContain("translate(0px, 0px)");
   });
 
+  it("ignores a third finger and continues the original pinch as one-finger pan", () => {
+    render(<ImageLightbox />);
+    openRemote();
+    const stage = document.querySelector(".image-lightbox-stage")!;
+    const capture = vi.fn();
+    Object.assign(stage, { setPointerCapture: capture });
+    fireEvent.pointerDown(stage, { pointerId: 1, pointerType: "touch", clientX: 100, clientY: 100 });
+    fireEvent.pointerDown(stage, { pointerId: 2, pointerType: "touch", clientX: 200, clientY: 100 });
+    fireEvent.pointerDown(stage, { pointerId: 3, pointerType: "touch", clientX: 400, clientY: 100 });
+    fireEvent.pointerUp(stage, { pointerId: 3, pointerType: "touch", clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(stage, { pointerId: 2, pointerType: "touch", clientX: 300, clientY: 100 });
+    expect(screen.getByRole("button", { name: "lightboxResetZoom" })).toHaveTextContent("200%");
+    expect(capture.mock.calls).toEqual([[1], [2]]);
+    fireEvent.pointerUp(stage, { pointerId: 1, pointerType: "touch", clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(stage, { pointerId: 2, pointerType: "touch", clientX: 330, clientY: 120 });
+    expect(screen.getByRole("img", { name: "photo.png" }).getAttribute("style")).toContain("translate(30px, 20px)");
+    fireEvent.pointerUp(stage, { pointerId: 2, pointerType: "touch", clientX: 330, clientY: 120 });
+  });
+
+  it("ignores non-primary mouse buttons and abandons drag after capture loss or cancellation", () => {
+    render(<ImageLightbox />);
+    openRemote();
+    const stage = document.querySelector(".image-lightbox-stage")!;
+    const image = screen.getByRole("img", { name: "photo.png" });
+    fireEvent.click(screen.getByRole("button", { name: "lightboxZoomIn" }));
+    for (const button of [1, 2]) {
+      fireEvent.pointerDown(stage, { pointerId: 7, pointerType: "mouse", button, clientX: 10, clientY: 10 });
+      fireEvent.pointerMove(stage, { pointerId: 7, pointerType: "mouse", clientX: 40, clientY: 20 });
+      expect(image.getAttribute("style")).toContain("translate(0px, 0px)");
+    }
+    for (const cancel of ["pointerCancel", "lostPointerCapture"] as const) {
+      fireEvent.pointerDown(stage, { pointerId: 8, pointerType: "touch", clientX: 10, clientY: 10 });
+      fireEvent[cancel](stage, { pointerId: 8 });
+      fireEvent.pointerMove(stage, { pointerId: 8, pointerType: "touch", clientX: 40, clientY: 20 });
+      expect(image.getAttribute("style")).toContain("translate(0px, 0px)");
+    }
+    fireEvent.pointerDown(stage, { pointerId: 9, pointerType: "touch", clientX: 10, clientY: 10 });
+    fireEvent.pointerUp(stage, { pointerId: 99 });
+    fireEvent.pointerMove(stage, { pointerId: 9, pointerType: "touch", clientX: 40, clientY: 20 });
+    expect(image.getAttribute("style")).toContain("translate(30px, 10px)");
+  });
+
   it("closes on backdrop click", () => {
     render(<ImageLightbox />);
     openRemote();

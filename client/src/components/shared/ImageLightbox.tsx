@@ -294,7 +294,9 @@ function LightboxDialog({
               });
             }}
             onPointerDown={(e) => {
+              if ((e.pointerType === "mouse" && e.button !== 0) || pointersRef.current.size >= 2) return;
               pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+              e.currentTarget.setPointerCapture?.(e.pointerId);
               if (pointersRef.current.size === 2) {
                 const points = [...pointersRef.current.values()];
                 const dx = points[0].x - points[1].x;
@@ -306,12 +308,12 @@ function LightboxDialog({
                 gestureRef.current = { kind, startX: e.clientX, startY: e.clientY };
                 if (kind === "drag") {
                   dragRef.current = { pointerId: e.pointerId, x: e.clientX, y: e.clientY };
-                  e.currentTarget.setPointerCapture?.(e.pointerId);
                 }
               }
             }}
             onPointerMove={(e) => {
-              if (pointersRef.current.has(e.pointerId)) pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+              if (!pointersRef.current.has(e.pointerId)) return;
+              pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
               const gesture = gestureRef.current;
               if (gesture?.kind === "pinch" && pointersRef.current.size >= 2 && gesture.distance) {
                 const points = [...pointersRef.current.values()];
@@ -332,6 +334,7 @@ function LightboxDialog({
               dragRef.current = { pointerId: e.pointerId, x: e.clientX, y: e.clientY };
             }}
             onPointerUp={(e) => {
+              if (!pointersRef.current.has(e.pointerId)) return;
               const gesture = gestureRef.current;
               const start = pointersRef.current.get(e.pointerId);
               if (gesture?.kind === "swipe" && start && pointersRef.current.size === 1) {
@@ -342,11 +345,26 @@ function LightboxDialog({
                 }
               }
               pointersRef.current.delete(e.pointerId);
-              if (pointersRef.current.size < 2) gestureRef.current = null;
               dragRef.current = null;
+              gestureRef.current = null;
+              // Continue panning with the remaining finger after a pinch,
+              // without treating the end of the pinch as a gallery swipe.
+              const remaining = pointersRef.current.entries().next().value;
+              if (remaining && zoom > 1) {
+                const [pointerId, point] = remaining;
+                dragRef.current = { pointerId, x: point.x, y: point.y };
+                gestureRef.current = { kind: "drag", startX: point.x, startY: point.y };
+              }
             }}
             onPointerCancel={(e) => {
-              pointersRef.current.delete(e.pointerId);
+              if (!pointersRef.current.has(e.pointerId)) return;
+              pointersRef.current.clear();
+              gestureRef.current = null;
+              dragRef.current = null;
+            }}
+            onLostPointerCapture={(e) => {
+              if (!pointersRef.current.has(e.pointerId)) return;
+              pointersRef.current.clear();
               gestureRef.current = null;
               dragRef.current = null;
             }}
