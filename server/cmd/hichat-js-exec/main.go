@@ -15,8 +15,9 @@ import (
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	if err := run(ctx, os.Args[1:], os.Stdin, os.Stdout, os.Getenv(musicjs.SocketEnvironment)); err != nil {
+	err := run(ctx, os.Args[1:], os.Stdin, os.Stdout, os.Getenv(musicjs.SocketEnvironment))
+	stop()
+	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, musicjs.Diagnostic(err))
 		os.Exit(1)
 	}

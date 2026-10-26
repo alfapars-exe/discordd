@@ -132,11 +132,12 @@ func TestMusicRestoredQueueConcurrentEditsConflict(t *testing.T) {
 	close(results)
 	ok, conflicts := 0, 0
 	for err := range results {
-		if err == nil {
+		switch {
+		case err == nil:
 			ok++
-		} else if errors.Is(err, pkg.ErrConflict) {
+		case errors.Is(err, pkg.ErrConflict):
 			conflicts++
-		} else {
+		default:
 			t.Fatal(err)
 		}
 	}

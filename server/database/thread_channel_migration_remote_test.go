@@ -170,7 +170,9 @@ func TestRemoteThreadMigrationRetainsStreamAndRollsBack(t *testing.T) {
 }
 
 func TestThreadHranaSessionDoesNotExposeAuthenticationOnErrors(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Error(w, "private-token-sensitive-response", 401) }))
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "private-token-sensitive-response", http.StatusUnauthorized)
+	}))
 	defer server.Close()
 	s, err := newThreadHranaSession(server.URL + "?authToken=private-token")
 	if err != nil {

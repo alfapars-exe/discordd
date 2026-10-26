@@ -18,7 +18,11 @@ func (db *DB) applyThreadChannelTypeMigration(filename, content string) (result 
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil && result == nil {
+			result = fmt.Errorf("close thread migration connection: %w", err)
+		}
+	}()
 	var original int
 	if err := conn.QueryRowContext(ctx, "PRAGMA foreign_keys").Scan(&original); err != nil {
 		return fmt.Errorf("thread migration requires foreign_keys support: %w", err)

@@ -212,7 +212,7 @@ func runMusicWorkerJob(parent context.Context, config MusicWorkerRunnerConfig, b
 	}
 	if request.Operation != musicworker.OperationAudio {
 		allowNoFormats := request.Operation == musicworker.OperationMetadata && musicWorkerSingleVideo(request.Input)
-		if stderr.fatal || (stderr.noFormats && !allowNoFormats) || (err != nil && !(allowNoFormats && stderr.noFormats)) {
+		if stderr.fatal || (stderr.noFormats && !allowNoFormats) || (err != nil && (!allowNoFormats || !stderr.noFormats)) {
 			return &musicworker.Error{Code: string(classifyPlaybackFailure(err, stderr.tail.String()))}
 		}
 		filtered, filterErr := filterMusicWorkerMetadata(metadata.buf.Bytes(), authenticated)

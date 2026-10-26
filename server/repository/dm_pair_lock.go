@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -19,7 +20,13 @@ func lockDMCreationPair(ctx context.Context, tx *sql.Tx, a, b string, postgres b
 	if postgres {
 		encoded, _ := json.Marshal([]string{"hichat.dm.create-block.v1", a, b})
 		hash := sha256.Sum256(encoded)
-		_, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(?)`, int64(binary.BigEndian.Uint64(hash[:8])))
+		// Preserve the exact signed two's-complement key used by existing
+		// instances; decode signed bytes without an overflowing conversion.
+		var lockKey int64
+		if err := binary.Read(bytes.NewReader(hash[:8]), binary.BigEndian, &lockKey); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(?)`, lockKey)
 		return err
 	}
 	_, err := tx.ExecContext(ctx, `UPDATE dm_channels SET status=status WHERE user1_id=? AND user2_id=?`, a, b)
