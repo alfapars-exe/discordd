@@ -6973,7 +6973,8 @@
         "client/src/components/voice/MusicBotPanel.tsx"
       ],
       "evidence": [
-        "implementation/verification/p10-queue-mutations-2026-10-23.json"
+        "implementation/verification/p10-queue-mutations-2026-10-23.json",
+        "implementation/verification/p10-client-interaction-races-2026-10-27.json"
       ]
     },
     {
@@ -7001,7 +7002,8 @@
         "client/src/components/voice/MusicBotPanel.tsx"
       ],
       "evidence": [
-        "implementation/verification/p10-seek-2026-10-23.json"
+        "implementation/verification/p10-seek-2026-10-23.json",
+        "implementation/verification/p10-client-interaction-races-2026-10-27.json"
       ]
     },
     {
