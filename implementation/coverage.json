@@ -3787,7 +3787,8 @@
         "client/src/styles/globals.css"
       ],
       "evidence": [
-        "implementation/verification/p4-media-viewer-2026-10-23.json"
+        "implementation/verification/p4-media-viewer-2026-10-23.json",
+        "implementation/verification/p4-media-shortcuts-2026-10-26.json"
       ]
     },
     {
@@ -3866,7 +3867,8 @@
         "client/src/stores/lightboxStore.ts"
       ],
       "evidence": [
-        "implementation/verification/p4-media-actions-2026-10-23.json"
+        "implementation/verification/p4-media-actions-2026-10-23.json",
+        "implementation/verification/p4-media-shortcuts-2026-10-26.json"
       ]
     },
     {
@@ -7271,8 +7273,11 @@
         "Windows detects supported processes and updates current game without collecting unrelated process contents."
       ],
       "code": ["electron/registered-games.ts", "client/src/components/settings/RegisteredGamesSettings.tsx"],
-      "evidence": ["implementation/verification/p11-local-registered-games-2026-10-24.json",
-        "implementation/verification/p11-windows-process-provider-filter-2026-10-26.json"]
+      "evidence": [
+        "implementation/verification/p11-local-registered-games-2026-10-24.json",
+        "implementation/verification/p11-windows-process-provider-filter-2026-10-26.json",
+        "implementation/verification/p11-native-ipc-two-renderers-2026-10-26.json"
+      ]
     },
     {
       "id": "p11.manual-game",

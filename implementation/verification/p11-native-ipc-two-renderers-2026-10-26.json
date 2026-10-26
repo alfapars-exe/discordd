@@ -1,0 +1,8 @@
+{
+  "source_commit": "36095b269efee1e10540edb3ec97fac5daa01a92",
+  "backend_source_commit": "112d1e8b3f85953540d7fc15a1a0ddc36f74977f",
+  "scope": "Controlled native IPC, game activity hook and two renderer integration; partial P11 verification",
+  "result": "PASS: a registered owned generic Windows process was detected through the real filtered CIM service; activity propagated through real authenticated HTTP/WebSocket services to a second synthetic account. Per-game sharing revocation and account-wide opt-out each removed it from the other renderer. A foreign renderer was denied privileged IPC and observed activity payloads did not expose executable paths.",
+  "qualification": "Production IPC callback and trusted-frame source slices were used with a controlled harness, not the full central registrar, file picker or complete HiChat UI. The process was not a game; no Steam or CS2 was launched. Actual game, installed-app and physical two-client acceptance remain open.",
+  "cleanup": "Owned process, test windows and isolated container were removed."
+}
