@@ -6899,7 +6899,8 @@
       ],
       "evidence": [
         "implementation/verification/p10-youtube-search-2026-10-23.json",
-        "implementation/verification/p10-client-interaction-races-2026-10-27.json"
+        "implementation/verification/p10-client-interaction-races-2026-10-27.json",
+        "implementation/verification/p10-youtube-search-live-2026-10-27.json"
       ]
     },
     {
