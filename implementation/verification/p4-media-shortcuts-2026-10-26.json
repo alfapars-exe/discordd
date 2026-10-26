@@ -2,5 +2,6 @@
   "source_commit": "bf96b129",
   "scope": "Partial media viewer keyboard verification",
   "result": "Browser modifier shortcuts no longer change image zoom or gallery position; Escape dismisses the action menu before the viewer and returns focus to its trigger. Three related suites passed 44 tests; lint and TypeScript passed.",
+  "touch_follow_up": "Commit 191b3d33 fixes pointer ownership, pinch-to-pan transitions and cancellation. Three related suites passed 46 tests; lint and TypeScript passed. These are simulated pointer events.",
   "limitations": "Real touch gestures, browser zoom, viewport matrix and two-client permission changes remain unverified."
 }
