@@ -1,0 +1,6 @@
+{
+  "source_commit": "cc23f781",
+  "scope": "Partial message forwarding lifecycle verification",
+  "result": "When the source changes during attachment preparation, the stale send is suppressed and the destination lock is released. A retry sends the new source once. Three related suites passed 50 tests; lint and TypeScript passed.",
+  "limitations": "The tests do not replace real multi-user encrypted forwarding and authorization acceptance."
+}
