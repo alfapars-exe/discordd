@@ -3530,7 +3530,8 @@
         "client/src/components/servers/InviteFriendsModal.tsx"
       ],
       "evidence": [
-        "implementation/verification/p4-invite-sharing-2026-10-23.json"
+        "implementation/verification/p4-invite-sharing-2026-10-23.json",
+        "implementation/verification/p4-invite-focus-2026-10-26.json"
       ]
     },
     {

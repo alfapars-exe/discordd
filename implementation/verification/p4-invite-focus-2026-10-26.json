@@ -1,0 +1,12 @@
+{
+  "source_commit": "23a5e7ce",
+  "scope": "Invite friends dialog keyboard and accessibility regression; partial P4 verification",
+  "checks": {
+    "automated": "InviteFriendsModal and inviteStore suites passed: 2 files, 16 tests. The dialog test covers accessible naming, initial focus, Tab boundaries, focus containment, Escape and focus restoration.",
+    "static": "The dialog exposes aria-modal, a labelled title and description, and a labelled close button."
+  },
+  "limitations": [
+    "No actual browser rendering, screen reader, 390px or 200 percent zoom acceptance was performed in this run.",
+    "This does not verify delivery to real recipients or complete invitation and private-channel acceptance."
+  ]
+}
