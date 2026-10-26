@@ -13,11 +13,14 @@ import (
 // database.TxQuerier, so binding them to a *sql.Tx needs no repo changes.
 type DMTxRepos struct {
 	// LockChannel serializes message creation and read-cutoff capture without dialect-specific locks.
-	LockChannel  func(context.Context, string) error
-	ReadState    func(context.Context, string, string) (*string, int, error)
-	DM           DMRepository
-	DMRead       DMReadRepository
-	Notification NotificationRepository
+	LockChannel     func(context.Context, string) error
+	LockPreferences func(context.Context, string) error
+	Preferences     PreferencesRepository
+	Servers         ServerRepository
+	ReadState       func(context.Context, string, string) (*string, int, error)
+	DM              DMRepository
+	DMRead          DMReadRepository
+	Notification    NotificationRepository
 }
 
 // DMMessageTxRunner runs fn with repositories bound to a single transaction:
@@ -47,6 +50,20 @@ func (r *dmMessageTxRunner) InTx(ctx context.Context, fn func(*DMTxRepos) error)
 				_, err := tx.ExecContext(ctx, `UPDATE dm_channels SET status=status WHERE id=?`, id)
 				return err
 			},
+			LockPreferences: func(ctx context.Context, userID string) error {
+				if !database.IsPostgres(r.db) {
+					return nil
+				}
+				// Materialize absent preferences too, so the updater's INSERT /
+				// FOR UPDATE protocol serializes the first preference write.
+				if _, err := tx.ExecContext(ctx, `INSERT INTO user_preferences(user_id,data) VALUES(?,'{}') ON CONFLICT(user_id) DO NOTHING`, userID); err != nil {
+					return err
+				}
+				var id string
+				return tx.QueryRowContext(ctx, `SELECT user_id FROM user_preferences WHERE user_id=? FOR UPDATE`, userID).Scan(&id)
+			},
+			Preferences:  NewSQLitePreferencesRepo(tx),
+			Servers:      NewSQLiteServerRepo(tx),
 			DM:           NewSQLiteDMRepo(tx),
 			DMRead:       NewSQLiteDMReadRepo(tx),
 			Notification: NewSQLiteNotificationRepo(tx),

@@ -7,6 +7,8 @@ import (
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/repository"
+	"github.com/argeinfina/hichat/testutil"
 	"github.com/argeinfina/hichat/ws"
 )
 
@@ -78,6 +80,56 @@ func TestSendMessageServerDMPolicyForEmptyChannel(t *testing.T) {
 				}
 			} else if err != nil || writes != 1 {
 				t.Fatalf("err=%v writes=%d; expected permitted send", err, writes)
+			}
+		})
+	}
+}
+
+type dmTxPolicyPreferences struct {
+	repository.PreferencesRepository
+	friendRequestPrefsStub
+}
+
+func (p dmTxPolicyPreferences) Get(ctx context.Context, id string) (*models.UserPreferences, error) {
+	return p.friendRequestPrefsStub.Get(ctx, id)
+}
+
+func TestSendMessageRechecksPolicyAndPendingAfterChannelLock(t *testing.T) {
+	for _, pending := range []bool{false, true} {
+		name := "preferences changed after preflight"
+		if pending {
+			name = "another first message made channel pending"
+		}
+		t.Run(name, func(t *testing.T) {
+			f := newDMFixture()
+			locked := false
+			f.repo.GetChannelByIDFn = func(_ context.Context, id string) (*models.DMChannel, error) {
+				ch := &models.DMChannel{ID: id, User1ID: "alice", User2ID: "bob", Status: models.DMStatusAccepted}
+				if locked && pending {
+					ch.Status = models.DMStatusPending
+					ch.InitiatedBy = strPtr("alice")
+				}
+				return ch, nil
+			}
+			f.users.GetByIDFn = func(_ context.Context, id string) (*models.User, error) { return &models.User{ID: id}, nil }
+			s := f.svc.(*dmService)
+			s.SetServerDMPolicy(NewServerDMPolicy(friendRequestPrefsStub{`{}`}, serverListStub{"alice": {"shared"}, "bob": {"shared"}}))
+			writes := 0
+			f.repo.CreateMessageFn = func(context.Context, *models.DMMessage) error { writes++; return nil }
+			prefLocked := false
+			servers := &testutil.MockServerRepo{GetMemberServerIDsFn: func(context.Context, string) ([]string, error) { return []string{"shared"}, nil }}
+			s.txRunner = passthroughDMTxRunner{repos: repository.DMTxRepos{
+				DM: f.repo, DMRead: f.dmRead, Notification: f.notif,
+				LockChannel:     func(context.Context, string) error { locked = true; return nil },
+				LockPreferences: func(context.Context, string) error { prefLocked = true; return nil },
+				Preferences:     dmTxPolicyPreferences{friendRequestPrefsStub: friendRequestPrefsStub{`{"privacy":{"serverDMDefault":false}}`}}, Servers: servers,
+			}}
+			_, err := s.SendMessage(context.Background(), "alice", "channel", &models.CreateDMMessageRequest{Content: "hello"})
+			if !errors.Is(err, pkg.ErrForbidden) || writes != 0 {
+				t.Fatalf("err=%v writes=%d", err, writes)
+			}
+			if !pending && !prefLocked {
+				t.Fatal("authoritative policy read did not lock preferences")
 			}
 		})
 	}

@@ -86,6 +86,7 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 	// pending (the message-request transition below) — the one case that
 	// earns the recipient a dm_request inbox row.
 	becamePending := false
+	serverDMNonFriend := false
 
 	// Bidirectional block check — platform admins bypass
 	if !isSelf && !isPlatformAdmin && s.blockChecker != nil {
@@ -136,6 +137,7 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 				}
 			}
 			if !friends {
+				serverDMNonFriend = true
 				senderCount, err := s.dmRepo.CountMessagesBySender(ctx, channelID, userID)
 				if err != nil {
 					return nil, fmt.Errorf("failed to count DM history: %w", err)
@@ -249,6 +251,59 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 			if err := r.LockChannel(ctx, channelID); err != nil {
 				return err
 			}
+		}
+		if r.LockChannel != nil && !isPlatformAdmin && !isSelf {
+			// A concurrent first send may have made our preflight snapshot pending.
+			current, err := r.DM.GetChannelByID(ctx, channelID)
+			if err != nil {
+				return err
+			}
+			if current.Status == models.DMStatusPending {
+				if current.InitiatedBy != nil && *current.InitiatedBy == userID {
+					return fmt.Errorf("%w: dm_request_pending", pkg.ErrForbidden)
+				}
+				return fmt.Errorf("%w: dm_request_not_accepted", pkg.ErrForbidden)
+			}
+		}
+		// Production policies must read preferences and history through this
+		// transaction. The preferences row lock matches the PostgreSQL updater;
+		// SQLite's channel write already holds the database writer lock.
+		if _, ok := s.serverDMPolicy.(*RepositoryServerDMPolicy); ok && serverDMNonFriend && r.Preferences != nil && r.Servers != nil {
+			senderCount, err := r.DM.CountMessagesBySender(ctx, channelID, userID)
+			if err != nil {
+				return err
+			}
+			recipientCount, err := r.DM.CountMessagesBySender(ctx, channelID, otherUserID)
+			if err != nil {
+				return err
+			}
+			if senderCount == 0 && recipientCount == 0 {
+				if r.LockPreferences != nil {
+					if err := r.LockPreferences(ctx, otherUserID); err != nil {
+						return err
+					}
+				}
+				allowed, err := NewServerDMPolicy(r.Preferences, r.Servers).CanCreate(ctx, userID, otherUserID)
+				if err != nil {
+					return fmt.Errorf("failed to check server DM policy: %w", err)
+				}
+				if !allowed {
+					return fmt.Errorf("%w: this user disabled direct messages from shared servers", pkg.ErrForbidden)
+				}
+			}
+		}
+		if becamePending && r.LockChannel != nil {
+			// A request may have been sent and accepted while this call waited.
+			// Do not turn that established conversation back into a request.
+			senderCount, err := r.DM.CountMessagesBySender(ctx, channelID, userID)
+			if err != nil {
+				return err
+			}
+			recipientCount, err := r.DM.CountMessagesBySender(ctx, channelID, otherUserID)
+			if err != nil {
+				return err
+			}
+			becamePending = senderCount == 0 && recipientCount == 0
 		}
 		if becamePending {
 			if err := r.DM.TransitionToPending(ctx, channelID, userID); err != nil {

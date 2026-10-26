@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -280,6 +281,45 @@ func TestServerEventRSVPRejectsMembershipRemovedBeforeWrite(t *testing.T) {
 	}
 	if interested, err := repo.IsInterested(ctx, event.ID, dmBob); err != nil || interested {
 		t.Fatalf("removed member RSVP = %v, %v; want absent", interested, err)
+	}
+}
+
+func TestServerEventMembershipRemovalCleansRSVPAtomically(t *testing.T) {
+	for _, failCleanup := range []bool{false, true} {
+		t.Run(fmt.Sprintf("cleanup_failure_%t", failCleanup), func(t *testing.T) {
+			db := newTestDB(t)
+			seedEventServer(t, db)
+			ctx := context.Background()
+			repo := NewSQLiteServerEventRepo(wrapForRepo(db))
+			event := eventFixture("Member cleanup", time.Now().UTC().Add(time.Hour).Format(time.RFC3339))
+			if err := repo.Create(ctx, event); err != nil {
+				t.Fatal(err)
+			}
+			for _, user := range []string{dmAlice, dmBob} {
+				if err := repo.SetInterested(ctx, event.ID, user, true); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if failCleanup {
+				installDeleteFailure(t, db, "reject_rsvp_cleanup", "server_event_rsvps")
+			}
+			err := NewSQLiteServerRepo(wrapForRepo(db)).RemoveMember(ctx, event.ServerID, dmBob)
+			if (err != nil) != failCleanup {
+				t.Fatalf("RemoveMember = %v", err)
+			}
+			member, err := NewSQLiteServerRepo(wrapForRepo(db)).IsMember(ctx, event.ServerID, dmBob)
+			if err != nil || member != failCleanup {
+				t.Fatalf("membership = %v, %v", member, err)
+			}
+			interested, err := repo.IsInterested(ctx, event.ID, dmBob)
+			if err != nil || interested != failCleanup {
+				t.Fatalf("removed member RSVP = %v, %v", interested, err)
+			}
+			interested, err = repo.IsInterested(ctx, event.ID, dmAlice)
+			if err != nil || !interested {
+				t.Fatalf("other member RSVP = %v, %v", interested, err)
+			}
+		})
 	}
 }
 
