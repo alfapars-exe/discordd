@@ -247,6 +247,7 @@ func (s *musicBotService) playLoop(bot *botInstance) {
 	}()
 
 	consecutiveFailures := 0
+	transitionFailures := 0
 	for {
 		next, step := s.nextTrack(bot)
 		switch step {
@@ -257,7 +258,14 @@ func (s *musicBotService) playLoop(bot *botInstance) {
 			cleanExit = true
 			s.broadcastState(bot)
 			return
+		case loopRetry:
+			// The old live/durable revision remains authoritative. Retry only
+			// the transition, never replay the completed audio or spin on DB errors.
+			transitionFailures++
+			waitMusicTransitionRetry(bot, musicTransitionRetryDelay(transitionFailures))
+			continue
 		}
+		transitionFailures = 0
 
 		s.broadcastState(bot)
 
@@ -366,50 +374,91 @@ const (
 	loopPlay    loopStep = iota // a track was dequeued; play it
 	loopStopped                 // the bot was stopped; exit without touching state
 	loopDrained                 // the queue is empty; idle timer armed, exit
+	loopRetry                   // durable transition failed; retain state and retry
 )
 
-// nextTrack dequeues the next track under bot.mu. On loopStopped and
-// loopDrained it clears loopRunning in the same critical section, which is
-// what lets a later Enqueue start a new loop. The deferred unlock means a
-// panic in here cannot leave bot.mu held for playLoop's own cleanup.
+// Persistent storage failures retry at a bounded rate without abandoning a
+// pending queue. Stop remains responsive even at the maximum retry interval.
+func musicTransitionRetryDelay(attempt int) time.Duration {
+	if attempt >= 8 {
+		return 30 * time.Second
+	}
+	if attempt < 1 {
+		attempt = 1
+	}
+	return 250 * time.Millisecond * time.Duration(1<<uint(attempt-1))
+}
+
+func waitMusicTransitionRetry(bot *botInstance, delay time.Duration) {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	tick := time.NewTicker(50 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		bot.mu.Lock()
+		stopped := bot.stopFlag || bot.stopping.Load()
+		bot.mu.Unlock()
+		if stopped {
+			return
+		}
+		select {
+		case <-timer.C:
+			return
+		case <-tick.C:
+		}
+	}
+}
+
+// nextTrack commits its candidate before exposing a new live revision. A
+// failed write retains the queue/current item and lets guarded commands keep
+// using the durable revision while playLoop retries only this transition.
 func (s *musicBotService) nextTrack(bot *botInstance) (models.MusicTrack, loopStep) {
 	bot.sessionMu.Lock()
 	defer bot.sessionMu.Unlock()
 	bot.mu.Lock()
-	if bot.stopFlag {
+	if bot.stopFlag || bot.stopping.Load() {
 		bot.loopRunning = false
 		bot.mu.Unlock()
 		return models.MusicTrack{}, loopStopped
 	}
-	if len(bot.queue) == 0 {
-		if bot.currentTrack != nil {
-			bot.revision++
-		}
+	drained := len(bot.queue) == 0
+	revision := bot.revision
+	if !drained || bot.currentTrack != nil {
+		revision++
+	}
+	mode := bot.repeatMode
+	if mode == "" {
+		mode = "off"
+	}
+	// Pending items already contain the next current item, if any. The
+	// completed current item must not enter this durable transition again.
+	session := models.MusicSession{SessionID: bot.sessionID, ChannelID: bot.channelID,
+		ServerID: bot.serverID, Queue: cloneMusicTracks(bot.queue), RepeatMode: mode, Revision: revision}
+	bot.mu.Unlock()
+	if err := s.saveSession(session); err != nil {
+		musicBotLogger.Error("persist music playback transition", "channel_id", bot.channelID, "err", pkg.ErrText(err))
+		return models.MusicTrack{}, loopRetry
+	}
+	bot.mu.Lock()
+	bot.revision = revision
+	bot.startedAt = nil
+	bot.elapsed = 0
+	bot.playbackOffset = 0
+	bot.isPaused = false
+	if drained {
 		bot.loopRunning = false
 		bot.currentTrack = nil
-		bot.startedAt = nil
-		bot.elapsed = 0
-		bot.isPaused = false
 		s.scheduleIdleLeaveLocked(bot)
 		bot.mu.Unlock()
-		if err := s.persistBot(bot); err != nil {
-			musicBotLogger.Error("persist drained music playback state", "channel_id", bot.channelID, "err", pkg.ErrText(err))
-		}
+		s.refreshMusicRequesterCache(bot)
 		return models.MusicTrack{}, loopDrained
 	}
 	next := bot.queue[0]
 	bot.queue = bot.queue[1:]
-	bot.revision++
 	bot.currentTrack = &next
-	bot.startedAt = nil // Start the clock only when audio actually reaches LiveKit.
-	bot.elapsed = 0
-	bot.playbackOffset = 0
-	bot.isPaused = false
 	bot.skipFlag = false
 	bot.mu.Unlock()
-	if err := s.persistBot(bot); err != nil {
-		musicBotLogger.Error("persist music playback state", "channel_id", bot.channelID, "err", pkg.ErrText(err))
-	}
+	s.refreshMusicRequesterCache(bot)
 	return next, loopPlay
 }
 
