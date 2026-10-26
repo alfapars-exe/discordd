@@ -10,6 +10,9 @@ import (
 // on the same connection. Otherwise DROP TABLE executes cascading deletions.
 // A remote driver that cannot honor these settings fails before any DDL runs.
 func (db *DB) applyThreadChannelTypeMigration(filename, content string) (result error) {
+	if db.remoteMigrationDSN != "" {
+		return db.applyRemoteThreadChannelTypeMigration(filename, content)
+	}
 	ctx := context.Background()
 	conn, err := db.Conn.Conn(ctx)
 	if err != nil {
@@ -38,6 +41,19 @@ func (db *DB) applyThreadChannelTypeMigration(filename, content string) (result 
 		return err
 	}
 	defer tx.Rollback()
+	// Acquire the SQLite write reservation before taking any transaction
+	// snapshot. This is the BEGIN IMMEDIATE equivalent for database/sql's
+	// already-open transaction, and serializes concurrent startup migrations.
+	if _, err := tx.ExecContext(ctx, "UPDATE schema_migrations SET filename=filename WHERE 0"); err != nil {
+		return err
+	}
+	var applied int
+	if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM schema_migrations WHERE filename=?", filename).Scan(&applied); err != nil {
+		return err
+	}
+	if applied != 0 {
+		return tx.Commit()
+	}
 	// Legacy libSQL installations can already contain orphan rows. Reject only
 	// violations introduced by this rebuild, keeping existing rows for startup
 	// repair rather than making an unrelated orphan prevent every future boot.

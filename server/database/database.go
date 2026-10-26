@@ -34,7 +34,8 @@ var recoverableErrors = []string{
 }
 
 type DB struct {
-	Conn *sql.DB
+	Conn               *sql.DB
+	remoteMigrationDSN string
 }
 
 func IsPostgresDSN(dsn string) bool {
@@ -179,12 +180,15 @@ func New(dbPath string, migrationsFS fs.FS) (*DB, error) {
 	conn.SetMaxIdleConns(2)
 	conn.SetConnMaxIdleTime(5 * time.Second)
 	conn.SetConnMaxLifetime(5 * time.Minute)
+	if IsRemoteLibSQL(dbPath) {
+		return initializeSQLite(conn, migrationsFS, dbPath)
+	}
 	return initializeSQLite(conn, migrationsFS)
 }
 
 // Until initialization succeeds this function owns the pool, including every
 // ping and migration failure path. The caller owns it only after success.
-func initializeSQLite(conn *sql.DB, migrationsFS fs.FS) (*DB, error) {
+func initializeSQLite(conn *sql.DB, migrationsFS fs.FS, remoteDSN ...string) (*DB, error) {
 	ready := false
 	defer func() {
 		if !ready {
@@ -196,6 +200,9 @@ func initializeSQLite(conn *sql.DB, migrationsFS fs.FS) (*DB, error) {
 	}
 
 	db := &DB{Conn: conn}
+	if len(remoteDSN) > 0 {
+		db.remoteMigrationDSN = remoteDSN[0]
+	}
 
 	if err := db.runMigrations(migrationsFS); err != nil {
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
