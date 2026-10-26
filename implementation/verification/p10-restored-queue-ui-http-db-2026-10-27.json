@@ -1,0 +1,121 @@
+{
+  "date": "2026-10-27",
+  "source_commit": "0f2cadf64b9377450b7dd7dc22c5e69adf419e23",
+  "source_qualification": "Immutable Git archive plus exactly three authorized restored-queue source overrides. Additional isolated fixture-only presence/harness/cache files listed separately; no shared source modifications.",
+  "owned_overrides_lf_sha256": {
+    "server/services/music_control.go": "adbf0f4e498d2982f487321c406f2dd9ec63c47b76f21ae4390756447fac3ce9",
+    "server/services/music_restored_queue.go": "5c922225d0c97e3fbaad66aa5b17f7dd0fb91661a56d56f746d16268620848c1",
+    "client/src/components/voice/MusicBotPanel.tsx": "3fcc8e86247fee23728cae8672230620a6221c41e4850351e81575ea3a151d64"
+  },
+  "fixture_only_files_sha256": {
+    "server/init_handlers.go": "ee2440f22136ba1dfd0a35b41f236a68b4a3ac5cfcf1780ee5235bebd447bbcf",
+    "server/fixture_music_presence.go": "cf3786c2c655440c2639aac2451841877d5fba5748bf3f4285d22b7d7ed1f472",
+    "client/vite.config.ts": "bfea18027f08850903e260f7764bd38898d2c0adaf8d239857385f66b02e4719",
+    "client/fixture-restored.html": "e9a4a76f23db05a9415e848fb573b4d0ce2bb03d882e999d9ba615efcb486a91",
+    "client/src/fixture-restored.tsx": "77f1da1510ab4db2183829ca36096279334c0e89695d5f88c0536395847ade43",
+    "client/public/fixture-config.json": "4e42e64a2149fa36586181741a37a57d3a1979cf0c9222cd23fab9ca1491c735"
+  },
+  "fixture_root": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-restored-ui-zn7btd2a",
+  "runtime": {
+    "api": "127.0.0.1:18195",
+    "ui": "127.0.0.1:18194",
+    "browser": "Existing Ego Lite Space0/p1; four unrelated tabs untouched",
+    "real_components": [
+      "MusicBotPanel",
+      "api/musicProtocol",
+      "normal auth store login",
+      "MusicHandler",
+      "musicBotService",
+      "SQLite MusicSessionRepository"
+    ],
+    "synthetic_seam": "Only MusicAccess.Voice reports fixed owner/server/channel JoinedAt-generation. Real session validation, server membership and permissions retained. RoomContext has disconnected actual LiveKit Room; fixture rejects connect/capture."
+  },
+  "reorder": {
+    "revision": 1,
+    "duplicateVideoCount": 3,
+    "orderCorrect": true,
+    "replayStatus": 200,
+    "staleStatus": 409,
+    "safety": {
+      "captureCalls": 0,
+      "connectCalls": 0
+    }
+  },
+  "durable_after_single_remove": {
+    "revision": 2,
+    "count": 2,
+    "removedExactlyFirstOriginal": true
+  },
+  "restart": {
+    "same_api_binary": true,
+    "same_db": true,
+    "remaining_queue_reloaded_paused": true,
+    "same_queue_order_revision2": true
+  },
+  "final_remove": {
+    "revision": 4,
+    "count": 0,
+    "restoredControlsGone": true,
+    "requests": [
+      {
+        "method": "POST",
+        "status": 200,
+        "operation": "control-session"
+      },
+      {
+        "method": "GET",
+        "status": 200,
+        "operation": "state"
+      },
+      {
+        "method": "DELETE",
+        "status": 200,
+        "operation": "queue/cdb3c126-e170-4122-9bc5-351ada9f8edc"
+      },
+      {
+        "method": "GET",
+        "status": 200,
+        "operation": "state"
+      },
+      {
+        "method": "GET",
+        "status": 200,
+        "operation": "state"
+      },
+      {
+        "method": "DELETE",
+        "status": 200,
+        "operation": "queue/d5dc0772-c7ae-4beb-bd82-9626c9943a42"
+      },
+      {
+        "method": "GET",
+        "status": 200,
+        "operation": "state"
+      },
+      {
+        "method": "GET",
+        "status": 200,
+        "operation": "state"
+      }
+    ],
+    "safety": {
+      "captureCalls": 0,
+      "connectCalls": 0
+    }
+  },
+  "durable_empty": {
+    "sessions": 0,
+    "headRevision": 4
+  },
+  "permissions": {
+    "member_not_present": 403,
+    "unauthenticated": 401
+  },
+  "limitations": [
+    "Synthetic presence is not actual voice admission or audible playback acceptance.",
+    "No YouTube search, external media, LiveKit connection, microphone, camera or desktop capture requested.",
+    "This proves bounded restored queue UI/HTTP/persistence behavior, not full P10 or production readiness."
+  ],
+  "delivery": "No commit/stage/push/deploy; no production users or services touched.",
+  "cleanup": "Only verified owned API/UI processes stopped; source, DB and private fixture files retained for reproducibility."
+}

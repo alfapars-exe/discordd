@@ -50,6 +50,27 @@ beforeEach(() => {
 });
 
 describe("MusicBotPanel", () => {
+  it("shows and edits restored queue entries without starting playback", async () => {
+    useVoiceStore.getState().setMusicBotState("a", song({ session_id: "saved", revision: 3, is_active: false, is_paused: true, current_track: null, queue: [
+      { ...song().current_track!, queue_item_id: "saved-one", title: "Duplicate saved song" },
+      { ...song().current_track!, queue_item_id: "saved-two", title: "Duplicate saved song" },
+    ] }));
+    render(<MusicBotPanel channelId="a" />);
+    expect(await screen.findAllByText("Duplicate saved song")).toHaveLength(2);
+    fireEvent.click(screen.getAllByRole("button", { name: "moveTrackUp" })[1]);
+    await waitFor(() => expect(reorderMusicQueue).toHaveBeenCalledWith("server-a", "a", ["saved-two", "saved-one"], 3));
+    await waitFor(() => expect(screen.getAllByRole("button", { name: "removeTrack" })[0]).not.toBeDisabled());
+    fireEvent.click(screen.getAllByRole("button", { name: "removeTrack" })[0]);
+    await waitFor(() => expect(removeMusicQueueItem).toHaveBeenCalledWith("server-a", "a", "saved-one", 3));
+    await waitFor(() => expect(screen.getByRole("button", { name: "stop" })).not.toBeDisabled());
+    expect(restoreMusicSession).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "stop" }));
+    await waitFor(() => expect(stopMusic).toHaveBeenCalledWith("server-a", "a"));
+    expect(restoreMusicSession).not.toHaveBeenCalled();
+    expect(playMusic).not.toHaveBeenCalled();
+    expect(reorderMusicQueue).toHaveBeenCalledOnce();
+  });
+
   it("does not reinterpret an old Pause click after the server already paused playback", async () => {
     render(<MusicBotPanel channelId="a" />);
     const pause = await screen.findByRole("button", { name: "pause" });

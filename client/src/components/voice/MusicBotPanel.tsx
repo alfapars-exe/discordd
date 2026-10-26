@@ -267,6 +267,40 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
   </div>;
 
   if (!serverId) return null;
+  const queueView = <>
+      {state && state.queue.length > 0 && (
+        <div className="music-bot-queue">
+          <div className="music-bot-queue-label">
+            {t("upNext", { count: state.queue.length })}
+          </div>
+          <ul className="music-bot-queue-list">
+            {state.queue.map((q, i) => (
+              <li key={q.queue_item_id ?? `${q.video_id}-${i}`} className="music-bot-queue-item"
+                draggable={!!q.queue_item_id && state.revision !== undefined && !pending}
+                onDragStart={() => {
+                  dragItem.current = q.queue_item_id && state.revision !== undefined
+                    ? { id: q.queue_item_id, revision: state.revision, session: state.session_id, current: captureMusicScope(serverId, channelId).current }
+                    : null;
+                }}
+                onDragEnd={() => { dragItem.current = null; }}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={() => q.queue_item_id && dropQueueItem(q.queue_item_id)}>
+                <span className="music-bot-queue-pos">{i + 1}.</span>
+                <span className="music-bot-queue-title" title={q.title}>{q.title}</span>
+                <span className="music-bot-queue-dur">{formatDuration(q.duration_seconds)}</span>
+                {q.queue_item_id && state.revision !== undefined && <>
+                  <button className="music-bot-btn" disabled={pending || i === 0} aria-label={t("moveTrackUp", { title: q.title })} onClick={() => moveQueueItem(q.queue_item_id!, -1)}>↑</button>
+                  <button className="music-bot-btn" disabled={pending || i === state.queue.length - 1} aria-label={t("moveTrackDown", { title: q.title })} onClick={() => moveQueueItem(q.queue_item_id!, 1)}>↓</button>
+                </>}
+                {q.queue_item_id && state.revision !== undefined && <button className="music-bot-btn" disabled={pending}
+                  aria-label={t("removeTrack", { title: q.title })}
+                  onClick={() => void mutateQueue(() => removeMusicQueueItem(serverId, channelId, q.queue_item_id!, state.revision!))}>×</button>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+  </>;
   const statusMessage = loadStatus === "error" ? <div role="status" className="music-bot-status">
     <span>{t("stateError")}</span><button className="music-bot-btn" onClick={retry}>{t("retry")}</button>
   </div> : null;
@@ -275,7 +309,9 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
       {searchBox}{statusMessage}
       <strong>{t("restoredTitle")}</strong>
       <p>{t("restoredDescription", { count: state.queue.length })}</p>
+      {queueView}
       <button className="music-bot-btn" disabled={pending} onClick={() => void mutateQueue(() => restoreMusicSession(serverId, channelId))} aria-label={t("restorePlayback")}>▶</button>
+      <button className="music-bot-btn music-bot-btn-danger" disabled={pending} onClick={() => void mutateQueue(() => stopMusic(serverId, channelId))} aria-label={t("stop")}>⏹</button>
     </div>;
   }
   if (!state?.is_active || !state.current_track || state.server_id !== serverId) {
@@ -425,38 +461,7 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
         <span>{musicVolume}%</span>
       </label>
 
-      {queue.length > 0 && (
-        <div className="music-bot-queue">
-          <div className="music-bot-queue-label">
-            {t("upNext", { count: queue.length })}
-          </div>
-          <ul className="music-bot-queue-list">
-            {queue.map((q, i) => (
-              <li key={q.queue_item_id ?? `${q.video_id}-${i}`} className="music-bot-queue-item"
-                draggable={!!q.queue_item_id && state.revision !== undefined && !pending}
-                onDragStart={() => {
-                  dragItem.current = q.queue_item_id && state.revision !== undefined
-                    ? { id: q.queue_item_id, revision: state.revision, session: state.session_id, current: captureMusicScope(serverId, channelId).current }
-                    : null;
-                }}
-                onDragEnd={() => { dragItem.current = null; }}
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={() => q.queue_item_id && dropQueueItem(q.queue_item_id)}>
-                <span className="music-bot-queue-pos">{i + 1}.</span>
-                <span className="music-bot-queue-title" title={q.title}>{q.title}</span>
-                <span className="music-bot-queue-dur">{formatDuration(q.duration_seconds)}</span>
-                {q.queue_item_id && state.revision !== undefined && <>
-                  <button className="music-bot-btn" disabled={pending || i === 0} aria-label={t("moveTrackUp", { title: q.title })} onClick={() => moveQueueItem(q.queue_item_id!, -1)}>↑</button>
-                  <button className="music-bot-btn" disabled={pending || i === queue.length - 1} aria-label={t("moveTrackDown", { title: q.title })} onClick={() => moveQueueItem(q.queue_item_id!, 1)}>↓</button>
-                </>}
-                {q.queue_item_id && state.revision !== undefined && <button className="music-bot-btn" disabled={pending}
-                  aria-label={t("removeTrack", { title: q.title })}
-                  onClick={() => void mutateQueue(() => removeMusicQueueItem(serverId, channelId, q.queue_item_id!, state.revision!))}>×</button>}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {queueView}
     </div>
   );
 }

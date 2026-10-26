@@ -6954,7 +6954,8 @@
         "client/src/components/voice/MusicBotPanel.tsx"
       ],
       "evidence": [
-        "implementation/verification/p10-queue-mutations-2026-10-23.json"
+        "implementation/verification/p10-queue-mutations-2026-10-23.json",
+        "implementation/verification/p10-restored-queue-ui-http-db-2026-10-27.json"
       ]
     },
     {
@@ -6982,7 +6983,8 @@
       ],
       "evidence": [
         "implementation/verification/p10-queue-mutations-2026-10-23.json",
-        "implementation/verification/p10-client-interaction-races-2026-10-27.json"
+        "implementation/verification/p10-client-interaction-races-2026-10-27.json",
+        "implementation/verification/p10-restored-queue-ui-http-db-2026-10-27.json"
       ]
     },
     {
@@ -7156,7 +7158,8 @@
       "evidence": [
         "implementation/verification/p10-queue-persistence-2026-10-23.json",
         "implementation/verification/p10-persistence-failure-2026-10-24.json",
-        "implementation/verification/p10-music-control-protocol-2026-10-25.json"
+        "implementation/verification/p10-music-control-protocol-2026-10-25.json",
+        "implementation/verification/p10-restored-queue-ui-http-db-2026-10-27.json"
       ]
     },
     {
