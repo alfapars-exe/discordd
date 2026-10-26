@@ -1,6 +1,6 @@
 import {registerCaptureAdmission}from "../audio/microphoneAdmission";
 import { useLayoutEffect, useRef, useState } from "react";
-import { Room, RoomEvent, ConnectionState, type LocalTrack, type LocalTrackPublication, type RoomOptions, Track } from "livekit-client";
+import { Room, RoomEvent, ConnectionState, type LocalTrack, type LocalTrackPublication, type Participant, type RoomOptions, Track } from "livekit-client";
 import type { IndexedVoiceKeyProvider } from "../audio/voiceEncryptionKeys";
 import { mediaTokenSubject } from "../audio/voiceEncryptionKeys";
 import { getAuthSessionSnapshot, subscribeAuthOwnerChanges, subscribeAuthGenerationChanges } from "../api/authSessionEvents";
@@ -96,7 +96,11 @@ export function useEncryptedRoomAdmission(options: Options) {
         return publication;
       } finally { record.pending.delete(track); }
     };
-    const fatal = (error: unknown) => {
+    const fatal = (error: unknown, participant?: Participant) => {
+      // The SDK drops undecipherable remote frames. A remote sender with an
+      // obsolete/wrong key must not retire our valid local encryption context
+      // and disconnect every other participant. Local/worker failures remain fatal.
+      if (participant && participant !== record.room.localParticipant && participant.identity !== tokenOwner) return;
       if (!record.active) return;
       record.ready = false; record.error = error; record.revision++; pauseAll();
       void record.room.disconnect();

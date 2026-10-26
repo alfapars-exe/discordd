@@ -170,22 +170,17 @@ export async function handleSystemEvent(
         const previousChannel = voiceState.currentVoiceChannelId;
         const liveKitStillConnected = !!voiceState.livekitToken;
 
-        if (previousChannel && !liveKitStillConnected) {
-          // LiveKit also dropped — hot-swap token to avoid connect=false→true thrash
-          console.warn("[ws ready] Voice resume — LiveKit dropped, refreshing token", { channel: previousChannel });
-          voiceState.refreshVoiceToken(previousChannel).then((tokenResp) => {
-            if (tokenResp) {
-              ctx.sendVoiceJoin(previousChannel);
-            } else {
-              console.warn("[ws ready] Voice token refresh failed — user needs to rejoin manually");
-              voiceState.leaveVoiceChannel();
-            }
+        if (previousChannel) {
+          // A surviving WebRTC connection does not prove that its room key is
+          // current: the API process may have restarted while LiveKit stayed up.
+          // Refresh credentials on every ready before re-registering presence.
+          const generation = voiceState._joinGeneration;
+          void voiceState.refreshVoiceToken(previousChannel).then((tokenResp) => {
+            const current = useVoiceStore.getState();
+            if (current.currentVoiceChannelId !== previousChannel || current._joinGeneration !== generation) return;
+            if (tokenResp) ctx.sendVoiceJoin(previousChannel);
+            else if (!liveKitStillConnected) current.leaveVoiceChannel();
           });
-        } else if (previousChannel && liveKitStillConnected) {
-          // LiveKit still connected — just re-register with backend so orphan
-          // cleanup doesn't remove our state. Server silently refreshes (no broadcast).
-          console.warn("[ws ready] Voice re-register — LiveKit still connected", { channel: previousChannel });
-          ctx.sendVoiceJoin(previousChannel);
         }
       }
       return true;

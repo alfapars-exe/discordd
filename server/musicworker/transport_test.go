@@ -666,3 +666,42 @@ func TestRapidSequentialJobsDoNotRaceWorkerSlots(t *testing.T) {
 		}
 	}
 }
+
+func TestCompletedWorkerAudioSurvivesFailedReverseKeepalive(t *testing.T) {
+	payload := bytes.Repeat([]byte("audio"), 24000)
+	finished := make(chan struct{})
+	s := newTestSystem(t, func(ctx context.Context, req Request, out io.Writer) error {
+		_, err := out.Write(payload)
+		close(finished)
+		return err
+	})
+	s.broker.mu.Lock()
+	s.broker.jobKeepaliveInterval = 5 * time.Millisecond
+	s.broker.mu.Unlock()
+	body, _ := json.Marshal(Request{Operation: OperationAudio, Input: "url"})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	req := httptest.NewRequest(http.MethodPost, "http://private/run", bytes.NewReader(body)).WithContext(ctx)
+	response := &resumableResponse{headers: make(http.Header), entered: make(chan struct{}), resume: make(chan struct{}), abort: make(chan struct{})}
+	done := make(chan struct{})
+	go func() { s.broker.ExecutorHandler(response, req); close(done) }()
+	select {
+	case <-finished:
+	case <-ctx.Done():
+		t.Fatal("worker did not finish")
+	}
+	// Reverse keepalives hit the closed producer while the consumer is paused.
+	time.Sleep(150 * time.Millisecond)
+	close(response.resume)
+	select {
+	case <-done:
+	case <-ctx.Done():
+		t.Fatal("consumer did not finish")
+	}
+	if got := response.written.Load(); got != int64(len(payload)) {
+		t.Fatalf("truncated audio: got %d want %d", got, len(payload))
+	}
+	if code := response.headers.Get(jobErrorTrailer); code != "" {
+		t.Fatalf("terminal error: %s", code)
+	}
+}

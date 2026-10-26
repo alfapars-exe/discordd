@@ -52,6 +52,21 @@ function publication(source = Track.Source.Microphone) {
 beforeEach(() => { sdk.rooms.length = 0; sdk.enable.mockReset().mockResolvedValue(undefined); sdk.constructError = null; sdk.capture=async()=>[]; sdk.publish=async(track)=>({track}); publishAuthOwnerChange("owner"); publishAuthGenerationChange(10); });
 
 describe("encrypted room admission", () => {
+  it("keeps healthy encrypted audio connected when a remote sender cannot be decrypted", async () => {
+    const initial = { ...options(), keyReady: true };
+    const view = renderHook(() => useEncryptedRoomAdmission(initial));
+    await connectAndAdmit(view);
+    const room = view.result.current.room as unknown as TestRoom;
+    act(() => room.emit("encryption-error", new Error("InvalidKey"), { identity: "__music_bot__:channel" }));
+    expect(room.disconnect).not.toHaveBeenCalled();
+    expect(view.result.current.publishReady).toBe(true);
+    expect(view.result.current.error).toBeFalsy();
+    act(() => room.emit("encryption-error", new Error("local encryption failed"), room.localParticipant));
+    expect(room.disconnect).toHaveBeenCalled();
+    expect(view.result.current.publishReady).toBe(false);
+    view.unmount();
+  });
+
   it("does not connect or admit publishers before key readiness and awaited explicit GCM enable", async () => {
     const pending = deferred(); sdk.enable.mockReturnValue(pending.promise);
     const initial = { ...options(), worker: fakeWorker(false) };
