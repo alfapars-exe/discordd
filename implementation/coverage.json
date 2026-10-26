@@ -7296,7 +7296,10 @@
         "Add action chooses an eligible executable/window and stores user-readable label; invalid/removed executable is handled."
       ],
       "code": ["electron/registered-games.ts", "electron/registered-games.test.ts", "electron/ipc-handlers.ts", "client/src/components/settings/RegisteredGamesSettings.tsx"],
-      "evidence": ["implementation/verification/p11-local-registered-games-2026-10-24.json"]
+      "evidence": [
+        "implementation/verification/p11-local-registered-games-2026-10-24.json",
+        "implementation/verification/p11-registered-game-restart-2026-10-26.json"
+      ]
     },
     {
       "id": "p11.recent-games",

@@ -1,0 +1,6 @@
+{
+  "source_commit": "e965f86e1d5d84749628684dbdb5a211b4d6675f",
+  "scope": "Partial registered-game lifecycle verification using a controlled picker adapter",
+  "result": "Five separate Electron process lifecycles passed 36 checks covering cancel, duplicate and missing selection, private defaults, saved sharing preferences, restart persistence, process stop, missing executable retention and recovery. Actual native IPC and the production Windows CIM service were used with an owned generic process.",
+  "limitations": "The native operating-system picker was replaced with a controlled main-process adapter; the complete installed UI, protected executable paths and an actual supported game remain unverified. No Steam or real game was launched."
+}

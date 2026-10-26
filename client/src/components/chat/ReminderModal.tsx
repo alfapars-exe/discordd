@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   cancelReminder,
@@ -29,6 +29,50 @@ export default function ReminderModal({ source, onClose }: Props) {
 
 function ReminderForContext({source,onClose,owner,generation}:Props&{owner?:string;generation:number}) {
   const { t, i18n } = useTranslation("chat");
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const dueRef = useRef<HTMLInputElement>(null);
+  const closeRef = useRef(onClose);
+  const titleId = useId(), dueId = useId();
+  useLayoutEffect(() => { closeRef.current = onClose; }, [onClose]);
+  useLayoutEffect(() => {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const dialog = dialogRef.current;
+    const visible = (element: HTMLElement) => {
+      for (let node: HTMLElement | null = element; node; node = node.parentElement) {
+        const style = getComputedStyle(node);
+        if (node.hidden || node.inert || node.getAttribute("aria-hidden") === "true" || style.display === "none" || style.visibility === "hidden" || style.visibility === "collapse") return false;
+      }
+      return true;
+    };
+    const ownsFocus = () => Array.from(document.querySelectorAll<HTMLElement>('[aria-modal="true"][role="dialog"], [aria-modal="true"][role="alertdialog"]')).filter(visible).at(-1) === dialog;
+    const controls = () => Array.from(dialog?.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href], [tabindex="0"]') ?? [])
+      .filter(element => element.tabIndex >= 0 && !element.matches(":disabled") && visible(element));
+    dueRef.current?.focus();
+    function keydown(event: KeyboardEvent) {
+      if (!ownsFocus() || event.defaultPrevented) return;
+      if (event.key === "Escape") {
+        event.preventDefault(); event.stopPropagation(); closeRef.current();
+      } else if (event.key === "Tab") {
+        const available = controls(), first = available[0], last = available.at(-1);
+        if (!first) { event.preventDefault(); dialog?.focus(); }
+        else if (event.shiftKey && (document.activeElement === first || !dialog?.contains(document.activeElement))) {
+          event.preventDefault(); last?.focus();
+        } else if (!event.shiftKey && (document.activeElement === last || !dialog?.contains(document.activeElement))) {
+          event.preventDefault(); first.focus();
+        }
+      }
+    }
+    function contain(event: FocusEvent) {
+      if (ownsFocus() && !dialog?.contains(event.target as Node)) (controls()[0] ?? dialog)?.focus();
+    }
+    document.addEventListener("keydown", keydown, true);
+    document.addEventListener("focusin", contain);
+    return () => {
+      document.removeEventListener("keydown", keydown, true);
+      document.removeEventListener("focusin", contain);
+      if (previous?.isConnected && (document.activeElement === document.body || dialog?.contains(document.activeElement))) previous.focus();
+    };
+  }, []);
   const toast = useToastStore((s) => s.addToast);
   const [items, setItems] = useState<MessageReminder[]>([]);
   const [due, setDue] = useState(() => toLocalInput(new Date(Date.now() + 60 * 60_000)));
@@ -111,15 +155,15 @@ function ReminderForContext({source,onClose,owner,generation}:Props&{owner?:stri
 
   return (
     <div className="report-overlay" role="presentation" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="report-modal reminder-modal" role="dialog" aria-modal="true" aria-labelledby="reminder-title">
+      <div ref={dialogRef} className="report-modal reminder-modal" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
         <div className="report-header">
-          <h2 id="reminder-title" className="report-title">{t("reminderTitle")}</h2>
+          <h2 id={titleId} className="report-title">{t("reminderTitle")}</h2>
           <button className="report-close" onClick={onClose} aria-label={t("reminderClose")}>✕</button>
         </div>
         <div className="report-body">
           <div className="report-field">
-            <label className="report-label" htmlFor="reminder-due">{t("reminderDue")}</label>
-            <input id="reminder-due" className="reminder-datetime" type="datetime-local" value={due} min={toLocalInput(new Date())} onChange={(e) => setDue(e.target.value)} />
+            <label className="report-label" htmlFor={dueId}>{t("reminderDue")}</label>
+            <input ref={dueRef} id={dueId} className="reminder-datetime" type="datetime-local" value={due} min={toLocalInput(new Date())} onChange={(e) => setDue(e.target.value)} />
             <div className="reminder-presets">
               <button onClick={() => setDue(toLocalInput(new Date(Date.now() + 60 * 60_000)))}>{t("reminderInHour")}</button>
               <button onClick={() => setDue(toLocalInput(new Date(Date.now() + 24 * 60 * 60_000)))}>{t("reminderTomorrow")}</button>
