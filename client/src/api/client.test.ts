@@ -623,3 +623,28 @@ describe("bounded request and shared-refresh lifetimes", () => {
     expect(getAccessToken()).toBe(change === "logout" ? null : "replacement-account-token");
   });
 });
+
+describe("apiDownload session isolation", () => {
+  it("does not send a download when its owner is already stale", async () => {
+    const { apiDownload } = await loadClient();
+    const result = await apiDownload("/users/me/data-exports/job/download", "export.json", () => false);
+    expect(result.success).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+  it.each(["headers", "blob"] as const)("does not save an old session's export after replacement during %s", async (phase) => {
+    const client = await loadClient();
+    let resolveHeaders!: (value: Response) => void;
+    let resolveBlob!: (value: Blob) => void;
+    const blob = new Blob(["private account data"]);
+    const response = { ok: true, status: 200, blob: () => phase === "blob" ? new Promise<Blob>(resolve => { resolveBlob = resolve; }) : Promise.resolve(blob) } as Response;
+    fetchMock.mockImplementationOnce(() => phase === "headers" ? new Promise<Response>(resolve => { resolveHeaders = resolve; }) : Promise.resolve(response));
+    const createObjectURL = vi.fn();
+    vi.stubGlobal("URL", class extends URL { static createObjectURL = createObjectURL; });
+    const request = client.apiDownload("/users/me/data-exports/job/download", "export.json");
+    if (phase === "blob") await vi.waitFor(() => expect(resolveBlob).toBeDefined());
+    client.clearTokens();
+    if (phase === "headers") resolveHeaders(response); else resolveBlob(blob);
+    expect((await request).success).toBe(false);
+    expect(createObjectURL).not.toHaveBeenCalled();
+  });
+});

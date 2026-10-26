@@ -161,7 +161,7 @@ func TestPreferencesNormalizeHiddenNoiseEngines(t *testing.T) {
 }
 
 func TestVoiceEventNotificationPreferences(t *testing.T) {
-	for _, key := range []string{"voiceJoinSound", "voiceLeaveSound", "voiceWatchStartSound", "voiceWatchStopSound", "voiceMuteSound", "voiceUnmuteSound", "voiceDeafenSound", "voiceUndeafenSound"} {
+	for _, key := range []string{"voiceStreamStartSound", "voiceStreamStopSound", "voiceJoinSound", "voiceLeaveSound", "voiceWatchStartSound", "voiceWatchStopSound", "voiceMuteSound", "voiceUnmuteSound", "voiceDeafenSound", "voiceUndeafenSound"} {
 		for _, value := range []string{"true", "false"} {
 			if err := (&UpdatePreferencesRequest{Data: json.RawMessage(`{"notifications":{"` + key + `":` + value + `}}`)}).Validate(); err != nil {
 				t.Errorf("boolean %s rejected: %v", key, err)

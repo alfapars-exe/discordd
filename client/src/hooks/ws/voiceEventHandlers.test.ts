@@ -13,6 +13,7 @@ vi.mock("../../api/voice", () => ({}));
 vi.mock("../../api/client", () => ({ ensureFreshToken: vi.fn() }));
 vi.mock("../../utils/sounds", () => ({
   playJoinSound: vi.fn(),
+  playVoiceEventSound: vi.fn(),
   playWatchStartSound: vi.fn(),
   playWatchStopSound: vi.fn(),
   playLeaveSound: vi.fn(),
@@ -560,3 +561,27 @@ it("watcher cues require applied current events owned by the local streamer and 
  const sounds=await import("../../utils/sounds");vi.mocked(sounds.playWatchStartSound).mockClear();vi.mocked(sounds.playWatchStopSound).mockClear();vi.mocked(sounds.playJoinSound).mockClear();const applied=vi.spyOn(useVoiceStore.getState(),"handleScreenShareViewerUpdate").mockReturnValue(true);
  const data={streamer_user_id:"other",viewer_user_id:"viewer",viewer_count:1,action:"join" as const,channel_id:"ch1"};await handleVoiceEvent({op:"screen_share_viewer_update",d:data},ctx);expect(sounds.playWatchStartSound).not.toHaveBeenCalled();applied.mockReturnValueOnce(false);await handleVoiceEvent({op:"screen_share_viewer_update",d:{...data,streamer_user_id:"me"}},ctx);expect(sounds.playWatchStartSound).not.toHaveBeenCalled();await handleVoiceEvent({op:"screen_share_viewer_update",d:{...data,streamer_user_id:"me"}},ctx);expect(sounds.playWatchStartSound).toHaveBeenCalledOnce();await handleVoiceEvent({op:"screen_share_viewer_update",d:{...data,streamer_user_id:"me",action:"leave"}},ctx);expect(sounds.playWatchStopSound).toHaveBeenCalledOnce();expect(sounds.playJoinSound).not.toHaveBeenCalled();applied.mockRestore();
 });
+
+ describe("recorded voice event routing", () => {
+ beforeEach(() => { resetStore(); vi.clearAllMocks(); useVoiceStore.setState({currentVoiceChannelId: "ch1"}); });
+ it("plays stream transitions once, separately from channel membership", async () => {
+  const sounds = await import("../../utils/sounds");
+  useVoiceStore.setState({voiceStates: {ch1: [{...baseStateUpdate, is_streaming: false}]}});
+  for (const streaming of [true, true, false, false]) await handleVoiceEvent({op:"voice_state_update", d:{...baseStateUpdate, action:"update", is_streaming:streaming}},ctx);
+  expect(vi.mocked(sounds.playVoiceEventSound).mock.calls).toEqual([["streamStart"],["streamStop"]]);
+  expect(sounds.playJoinSound).not.toHaveBeenCalled(); expect(sounds.playLeaveSound).not.toHaveBeenCalled();
+ });
+ it("does not announce initial sync or an unknown participant update as a stream start", async () => {
+  const sounds = await import("../../utils/sounds");
+  await handleVoiceEvent({op:"voice_state_update",d:{...baseStateUpdate,action:"update",is_streaming:true}},ctx);
+  await handleVoiceEvent({op:"voice_states_sync",d:{states:[{...baseStateUpdate,is_streaming:true}]}},ctx);
+  expect(sounds.playVoiceEventSound).not.toHaveBeenCalled();
+ });
+ it("membership events never emit a second stream cue", async () => {
+  const sounds = await import("../../utils/sounds");
+  await handleVoiceEvent({op:"voice_state_update",d:{...baseStateUpdate,action:"join",is_streaming:true}},ctx);
+  await handleVoiceEvent({op:"voice_state_update",d:{...baseStateUpdate,action:"leave",is_streaming:false}},ctx);
+  expect(sounds.playJoinSound).toHaveBeenCalledOnce(); expect(sounds.playLeaveSound).toHaveBeenCalledOnce();
+  expect(sounds.playVoiceEventSound).not.toHaveBeenCalled();
+ });
+ });
