@@ -192,9 +192,13 @@ func runJob(parent context.Context, baseURL *url.URL, token, session string, mes
 	}
 	if ctx.Err() == nil {
 		_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-		_ = conn.WriteJSON(wireMessage{Type: "result", Code: errorCode(err)})
+		if conn.WriteJSON(wireMessage{Type: "result", Code: errorCode(err)}) != nil {
+			_ = conn.Close()
+		}
 	}
-	_ = conn.Close()
+	// A successful write only reaches the upstream proxy, not necessarily the
+	// playback-paced broker. Keep reading keepalives until the broker consumes
+	// the terminal frame and closes; cancellation still closes via stopClose.
 	<-readerDone
 }
 
