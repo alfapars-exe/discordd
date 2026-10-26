@@ -86,6 +86,71 @@ describe("InviteFriendsModal", () => {
     opener.remove();
   });
 
+  it("leaves focus and Escape to a newer portal dialog, then resumes trapping", () => {
+    const onClose = vi.fn();
+    render(<InviteFriendsModal serverId="s1" serverName="Team" onClose={onClose} />);
+    const nested = document.createElement("div");
+    nested.setAttribute("role", "alertdialog");
+    nested.setAttribute("aria-modal", "true");
+    const nestedButton = document.createElement("button");
+    nested.append(nestedButton);
+    document.body.append(nested);
+    nestedButton.focus();
+    expect(nestedButton).toHaveFocus();
+    const tab = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
+    nestedButton.dispatchEvent(tab);
+    expect(tab.defaultPrevented).toBe(false);
+    fireEvent.keyDown(nestedButton, { key: "Escape" });
+    expect(onClose).not.toHaveBeenCalled();
+    nested.remove();
+    document.body.focus();
+    const close = screen.getByRole("button", { name: "close" });
+    close.focus();
+    fireEvent.keyDown(close, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("skips hidden, negative-tabindex and disabled-fieldset controls at the Tab boundary", () => {
+    render(<InviteFriendsModal serverId="s1" serverName="Team" onClose={() => undefined} />);
+    const dialog = screen.getByRole("dialog");
+    const hidden = document.createElement("div");
+    hidden.style.display = "none";
+    hidden.append(document.createElement("button"));
+    const fieldset = document.createElement("fieldset");
+    fieldset.disabled = true;
+    fieldset.append(document.createElement("button"));
+    const untabbable = document.createElement("button");
+    untabbable.tabIndex = -1;
+    dialog.append(hidden, fieldset, untabbable);
+    const close = screen.getByRole("button", { name: "close" });
+    close.focus();
+    fireEvent.keyDown(close, { key: "Tab", shiftKey: true });
+    const last = document.activeElement;
+    expect(last).not.toBe(hidden.firstChild);
+    expect(last).not.toBe(fieldset.firstChild);
+    expect(last).not.toBe(untabbable);
+    fireEvent.keyDown(last!, { key: "Tab" });
+    expect(close).toHaveFocus();
+  });
+
+  it("does not steal a newer dialog's focus when the underlying invite unmounts", () => {
+    const opener = document.createElement("button");
+    document.body.append(opener);
+    opener.focus();
+    const view = render(<InviteFriendsModal serverId="s1" serverName="Team" onClose={() => undefined} />);
+    const nested = document.createElement("div");
+    nested.setAttribute("role", "dialog");
+    nested.setAttribute("aria-modal", "true");
+    const button = document.createElement("button");
+    nested.append(button);
+    document.body.append(nested);
+    button.focus();
+    view.unmount();
+    expect(button).toHaveFocus();
+    nested.remove();
+    opener.remove();
+  });
+
   it("loads and displays the same seven-day share link that it copies", async () => {
     render(<InviteFriendsModal serverId="s1" serverName="Team" onClose={() => undefined} />);
     const link = await screen.findByRole("textbox", { name: "inviteLink" });

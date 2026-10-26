@@ -24,6 +24,20 @@ type InviteFriendsModalProps = {
   onClose: () => void;
 };
 
+function isVisibleControl(element: HTMLElement): boolean {
+  for (let node: HTMLElement | null = element; node; node = node.parentElement) {
+    if (node.hidden || node.inert || node.getAttribute("aria-hidden") === "true") return false;
+    const style = getComputedStyle(node);
+    if (style.display === "none" || style.visibility === "hidden" || style.visibility === "collapse") return false;
+  }
+  return true;
+}
+
+function isActiveDialog(dialog: HTMLElement | null): boolean {
+  const dialogs = Array.from(document.querySelectorAll<HTMLElement>('[aria-modal="true"][role="dialog"], [aria-modal="true"][role="alertdialog"]'));
+  return dialogs.filter(isVisibleControl).at(-1) === dialog;
+}
+
 function InviteFriendsModal({ serverId, serverName, onClose }: InviteFriendsModalProps) {
   const { t } = useTranslation("servers");
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -36,12 +50,15 @@ function InviteFriendsModal({ serverId, serverName, onClose }: InviteFriendsModa
     const dialog = dialogRef.current;
     const controls = () => Array.from(dialog?.querySelectorAll<HTMLElement>(
       'button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex="0"]',
-    ) ?? []);
+    ) ?? []).filter((element) => element.tabIndex >= 0 && !element.matches(":disabled") && isVisibleControl(element));
     searchRef.current?.focus();
     function keydown(event: KeyboardEvent) {
-      if (event.key !== "Tab") return;
+      if (event.key !== "Tab" || !isActiveDialog(dialog)) return;
       const available = controls();
       const first = available[0], last = available.at(-1);
+      if (!first) {
+        event.preventDefault(); dialog?.focus(); return;
+      }
       if (event.shiftKey && (document.activeElement === first || !dialog?.contains(document.activeElement))) {
         event.preventDefault(); (last ?? dialog)?.focus();
       } else if (!event.shiftKey && (document.activeElement === last || !dialog?.contains(document.activeElement))) {
@@ -49,6 +66,7 @@ function InviteFriendsModal({ serverId, serverName, onClose }: InviteFriendsModa
       }
     }
     function contain(event: FocusEvent) {
+      if (!isActiveDialog(dialog)) return;
       if (!dialog?.contains(event.target as Node)) (controls()[0] ?? dialog)?.focus();
     }
     document.addEventListener("keydown", keydown, true);
@@ -56,7 +74,7 @@ function InviteFriendsModal({ serverId, serverName, onClose }: InviteFriendsModa
     return () => {
       document.removeEventListener("keydown", keydown, true);
       document.removeEventListener("focusin", contain);
-      if (previous?.isConnected) previous.focus();
+      if (previous?.isConnected && (document.activeElement === document.body || dialog?.contains(document.activeElement))) previous.focus();
     };
   }, []);
   const friends = useFriendStore((s) => s.friends);
@@ -138,7 +156,7 @@ function InviteFriendsModal({ serverId, serverName, onClose }: InviteFriendsModa
   // Close on Escape
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !isSending) {
+      if (e.key === "Escape" && !e.defaultPrevented && !isSending && isActiveDialog(dialogRef.current)) {
         e.preventDefault();
         e.stopPropagation();
         onClose();
