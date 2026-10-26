@@ -143,6 +143,11 @@ function InviteFriendsModal({ serverId, serverName, onClose, returnFocus }: Invi
     const requestContext = contextKey;
     const requestAccountId = accountId;
     activeContext.current = requestContext;
+    // A sent row and a resolved URL belong to one account/server/target.
+    // Changing the destination must allow sending the new link to that friend.
+    setRecipientStatus({});
+    setInviteUrl("");
+    setInviteLoading(true);
     void loadInviteUrl(requestContext, requestAccountId, serverId, targetChannelId).then((url) => {
       if (!active || !isCurrentContext(requestContext, requestAccountId)) return;
       setInviteUrl(url);
