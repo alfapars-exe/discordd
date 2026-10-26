@@ -68,5 +68,9 @@
   "protocolRequired": "Güvenli müzik kontrolleri için HiChat sunucusunu güncelleyin.",
   "retryOriginal": "Aynı isteği yeniden dene",
   "retryOriginalHint": "İşlemin sonucu bilinmiyor. Yeni komuttan önce aynı isteği güvenle yeniden deneyin.",
-  "conflictRefresh": "Kuyruk değişti. Durum yenilendi; işlemi yeniden seçin."
+  "conflictRefresh": "Kuyruk değişti. Durum yenilendi; işlemi yeniden seçin.",
+  "playSong": "Şarkı çal…",
+  "playNext": "Sıradaki şarkıyı çal",
+  "botControls": "MusicBot kontrolleri",
+  "songQuery": "YouTube bağlantısı veya şarkı adı"
 }
