@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { previewTextToSpeech, supportsTextToSpeech } from "../../utils/textToSpeech";
 import { usePreferencesStore } from "../../stores/preferencesStore";
 import { ensureNotificationPermission } from "../../utils/notifications";
 import { DEFAULT_NOTIFICATION_PREFERENCES, type NotificationPreferences } from "../../utils/notificationPreferences";
@@ -65,7 +66,7 @@ export default function NotificationSettings() {
   const updateNotification = <K extends keyof NotificationPreferences>(key: K, value: NotificationPreferences[K]) => set({ notifications: { [key]: value } });
   const updateEmail = <K extends keyof EmailPreferences>(key: K, value: EmailPreferences[K]) => set({ email_preferences: { [key]: value } });
   const showDesktopDelay = !isCapacitor();
-  const supportsSpeechSynthesis = typeof window !== "undefined" && "speechSynthesis" in window && typeof SpeechSynthesisUtterance !== "undefined";
+  const supportsSpeechSynthesis = supportsTextToSpeech();
 
   return <div className="vs-container">
     <h2 className="vs-title">{t("notifications.title")}</h2>
@@ -133,14 +134,8 @@ export default function NotificationSettings() {
         <div className="vs-slider-row">
           <div className="vs-label">{t("acc.ttsRate")}</div>
           <div className="vs-desc">{t("acc.ttsRateDesc", { rate: ttsRate.toFixed(1) })}</div>
-          <input type="range" min={0.5} max={2} step={0.1} value={ttsRate} disabled={!supportsSpeechSynthesis} onChange={(event) => setTtsRate(Number(event.target.value))} className="vs-range" />
-          <button type="button" className="settings-btn-secondary" disabled={!supportsSpeechSynthesis} onClick={() => {
-            if (!supportsSpeechSynthesis) return;
-            const utterance = new SpeechSynthesisUtterance(t("acc.ttsPreviewText"));
-            utterance.rate = ttsRate;
-            window.speechSynthesis.cancel();
-            window.speechSynthesis.speak(utterance);
-          }}>{t("acc.ttsPreview")}</button>
+          <input type="range" min={0.5} max={2} step={0.1} aria-label={t("acc.ttsRate")} value={ttsRate} disabled={!supportsSpeechSynthesis} onChange={(event) => setTtsRate(Number(event.target.value))} className="vs-range" />
+          <button type="button" className="settings-btn-secondary" disabled={!supportsSpeechSynthesis} onClick={() => previewTextToSpeech(t("acc.ttsPreviewText"))}>{t("acc.ttsPreview")}</button>
         </div>
       </details>
     </section>
