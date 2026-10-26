@@ -31,7 +31,12 @@ func (r *groupPrivateSettingsRepo) ListForUser(context.Context, string) ([]model
 	return []models.GroupDM{{ID: "group", KeyEpoch: 1}}, nil
 }
 func (r *groupPrivateSettingsRepo) GetReadState(_ context.Context, group, user string) (*models.GroupDMReadState, error) {
-	return &models.GroupDMReadState{GroupID: group, KeyEpoch: 1, LastReadSourceSequence: 17, IsMuted: r.muted && user == "bob", SettingsRevision: 1, Revision: 4, UnreadCount: 2}, nil
+	var anchor *string
+	if user == "bob" {
+		id := "bob-unread-anchor"
+		anchor = &id
+	}
+	return &models.GroupDMReadState{GroupID: group, KeyEpoch: 1, LastReadSourceSequence: 17, IsMuted: r.muted && user == "bob", SettingsRevision: 1, Revision: 4, UnreadCount: 2, OldestUnreadMessageID: anchor}, nil
 }
 func (r *groupPrivateSettingsRepo) SetMuted(ctx context.Context, group, user string, value bool, _ ...int64) (*models.GroupDMReadState, error) {
 	r.writes++
@@ -73,10 +78,20 @@ func TestGroupDMSettingsProjectionAndBroadcastRemainRecipientPrivate(t *testing.
 	if personal == nil || !personal.IsMuted || personal.ReadKeyEpoch != 1 || personal.LastReadSourceSequence != 17 {
 		t.Fatalf("requester lost private read projection: %+v", personal)
 	}
+	if personal.OldestUnreadMessageID == nil || *personal.OldestUnreadMessageID != "bob-unread-anchor" {
+		t.Fatalf("requester lost unread anchor: %+v", personal)
+	}
 	for _, id := range []string{"alice", "bob"} {
 		g := events[id].Data.(*models.GroupDM)
 		if g.IsMuted != (id == "bob") {
 			t.Fatalf("shared update leaked settings to %s: %+v", id, g)
+		}
+		if id == "bob" {
+			if g.OldestUnreadMessageID == nil || *g.OldestUnreadMessageID != "bob-unread-anchor" {
+				t.Fatalf("shared update lost unread anchor for %s: %+v", id, g)
+			}
+		} else if g.OldestUnreadMessageID != nil {
+			t.Fatalf("shared update leaked unread anchor to %s: %+v", id, g)
 		}
 	}
 }

@@ -42,14 +42,23 @@ func NewProfileAudiencePolicy(prefs profilePreferenceReader, friends profileFrie
 }
 
 func (p *profileAudiencePolicy) CanView(ctx context.Context, viewerID, targetID string) (bool, error) {
+	if viewerID == "" || targetID == "" {
+		return false, errors.New("profile audience: viewer and target IDs are required")
+	}
 	if viewerID == targetID {
 		return true, nil
+	}
+	if p.prefs == nil || p.friends == nil || p.servers == nil {
+		return false, errors.New("profile audience: required reader is unavailable")
 	}
 
 	audience := "all_servers"
 	prefs, err := p.prefs.Get(ctx, targetID)
 	if err != nil {
 		return false, err
+	}
+	if prefs == nil || !validPreferenceData(prefs.Data) {
+		return false, errors.New("profile audience: invalid target preferences")
 	}
 	var data struct {
 		Privacy struct {
@@ -66,7 +75,7 @@ func (p *profileAudiencePolicy) CanView(ctx context.Context, viewerID, targetID 
 	}
 
 	friendship, err := p.friends.GetByPair(ctx, viewerID, targetID)
-	if err == nil && friendship.Status == models.FriendshipStatusAccepted {
+	if err == nil && friendship != nil && friendship.Status == models.FriendshipStatusAccepted {
 		return true, nil
 	}
 	if err != nil && !errors.Is(err, pkg.ErrNotFound) {

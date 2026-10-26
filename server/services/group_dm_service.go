@@ -409,6 +409,7 @@ func (s *groupDMService) broadcastGroup(ctx context.Context, groupID, op string,
 			return nil, err
 		}
 		copy.UnreadCount, copy.ReadRevision = readState.UnreadCount, readState.Revision
+		copy.OldestUnreadMessageID = readState.OldestUnreadMessageID
 		copy.IsMuted, copy.SettingsRevision = readState.IsMuted, readState.SettingsRevision
 		copy.LastReadSourceSequence, copy.ReadKeyEpoch = readState.LastReadSourceSequence, readState.KeyEpoch
 		if len(viewerID) > 0 && member.ID == viewerID[0] {

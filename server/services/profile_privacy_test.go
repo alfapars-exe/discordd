@@ -78,3 +78,53 @@ func TestProfileAudiencePolicy(t *testing.T) {
 		})
 	}
 }
+
+type profileRawPrefsStub struct{ prefs *models.UserPreferences }
+
+func (s profileRawPrefsStub) Get(context.Context, string) (*models.UserPreferences, error) {
+	return s.prefs, nil
+}
+
+type profileNilFriendStub struct{}
+
+func (profileNilFriendStub) GetByPair(context.Context, string, string) (*models.Friendship, error) {
+	return nil, nil
+}
+
+func TestProfileAudienceRejectsInvalidPreferences(t *testing.T) {
+	shared := profileServersStub{byUser: map[string][]models.ServerListItem{
+		"viewer": {{ID: "shared"}}, "target": {{ID: "shared"}},
+	}}
+	for _, tt := range []struct {
+		name  string
+		prefs *models.UserPreferences
+	}{
+		{"missing", nil},
+		{"null", &models.UserPreferences{Data: []byte(`null`)}},
+		{"array", &models.UserPreferences{Data: []byte(`[]`)}},
+		{"malformed", &models.UserPreferences{Data: []byte(`{`)}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			policy := NewProfileAudiencePolicy(profileRawPrefsStub{tt.prefs}, profileFriendsStub{}, shared)
+			allowed, err := policy.CanView(context.Background(), "viewer", "target")
+			if allowed || err == nil {
+				t.Fatalf("invalid preferences allowed=%v err=%v", allowed, err)
+			}
+		})
+	}
+}
+
+func TestProfileAudienceMissingInputsFailClosed(t *testing.T) {
+	policy := NewProfileAudiencePolicy(nil, nil, nil)
+	for _, ids := range [][2]string{{"", ""}, {"", "target"}, {"viewer", ""}, {"viewer", "target"}} {
+		allowed, err := policy.CanView(context.Background(), ids[0], ids[1])
+		if allowed || err == nil {
+			t.Fatalf("IDs %q allowed=%v err=%v", ids, allowed, err)
+		}
+	}
+	policy = NewProfileAudiencePolicy(profilePrefsStub{audience: "friends_only"}, profileNilFriendStub{}, profileServersStub{})
+	allowed, err := policy.CanView(context.Background(), "viewer", "target")
+	if allowed || err != nil {
+		t.Fatalf("missing friendship allowed=%v err=%v", allowed, err)
+	}
+}
