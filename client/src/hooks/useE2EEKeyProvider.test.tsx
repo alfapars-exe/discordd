@@ -39,3 +39,16 @@ describe("scoped encryption material readiness", () => {
   await waitFor(()=>expect(view.result.current.keyReady).toBe(true)); expect(view.result.current.keyProvider).not.toBe(old); view.unmount();
  });
 });
+
+it("recreates the provider and worker with unchanged key material on explicit recovery", async () => {
+ const config = options();
+ const view = renderHook(({restartId}) => useE2EEKeyProvider("key", {...config, restartId}), {initialProps:{restartId:0}});
+ await waitFor(() => expect(view.result.current.keyReady).toBe(true));
+ const oldProvider=view.result.current.keyProvider, oldWorker=view.result.current.e2eeWorker;
+ view.rerender({restartId:1});
+ expect(view.result.current.keyReady).toBe(false);
+ await waitFor(() => expect(view.result.current.keyReady).toBe(true));
+ expect(view.result.current.keyProvider).not.toBe(oldProvider);
+ expect(view.result.current.e2eeWorker).not.toBe(oldWorker);
+ expect(oldWorker!.terminate).toHaveBeenCalledOnce(); view.unmount();
+});

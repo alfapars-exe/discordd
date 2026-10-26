@@ -9,8 +9,9 @@ import type { VoiceTokenResponse, VoiceState } from "../types";
  * Gets a LiveKit JWT token for joining a voice channel.
  * Backend decrypts the server's LiveKit credentials and generates the token.
  */
-export async function getVoiceToken(serverId: string, channelId: string) {
+export async function getVoiceToken(serverId: string, channelId: string, options?: { timeoutMs?: number }) {
   return apiClient<VoiceTokenResponse>(`/servers/${serverId}/voice/token`, {
+    ...options,
     method: "POST",
     body: { channel_id: channelId },
   });

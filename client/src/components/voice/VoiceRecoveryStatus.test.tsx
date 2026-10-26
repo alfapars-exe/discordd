@@ -1,0 +1,32 @@
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, expect, it, vi } from "vitest";
+import { createInstance } from "i18next";
+import { I18nextProvider } from "react-i18next";
+import tr from "../../i18n/locales/tr/voice.json";
+import en from "../../i18n/locales/en/voice.json";
+import { useVoiceRecoveryStore } from "../../stores/voiceRecoveryStore";
+import VoiceRecoveryStatus from "./VoiceRecoveryStatus";
+
+beforeEach(() => useVoiceRecoveryStore.setState({ phase: "idle", attempt: 0, retry: null, leave: null }));
+it.each(["tr", "en"])("announces one actionable recovery status in %s", async (lng) => {
+  const i18n = createInstance();
+  await i18n.init({ lng, resources: { tr: { voice: tr }, en: { voice: en } }, defaultNS: "voice" });
+  const retry = vi.fn(), leave = vi.fn();
+  useVoiceRecoveryStore.setState({ phase: "waiting", kind: "encryption", attempt: 2, retry, leave });
+  render(<I18nextProvider i18n={i18n}><VoiceRecoveryStatus /></I18nextProvider>);
+  expect(screen.getAllByRole("status")).toHaveLength(1);
+  expect(screen.getByRole("status").textContent).toContain("(2/3)");
+  expect(screen.queryByRole("button", { name: i18n.t("recoveryRetry") })).toBeNull();
+  act(() => useVoiceRecoveryStore.setState({ phase: "failed" }));
+  fireEvent.click(screen.getByRole("button", { name: i18n.t("recoveryRetry") }));
+  expect(retry).toHaveBeenCalledOnce();
+  fireEvent.click(screen.getByRole("button", { name: i18n.t("disconnect") }));
+  expect(leave).toHaveBeenCalledOnce();
+  act(() => useVoiceRecoveryStore.setState({ kind: "unsupported", retry: null }));
+  expect(screen.getByRole("status").textContent).toContain(i18n.t("recoveryUnsupported"));
+  expect(screen.queryByRole("button", { name: i18n.t("recoveryRetry") })).toBeNull();
+  act(() => useVoiceRecoveryStore.setState({ phase: "offline" }));
+  expect(screen.getByRole("status").textContent).toContain(i18n.t("recoveryOffline"));
+  act(() => useVoiceRecoveryStore.setState({ phase: "idle" }));
+  expect(screen.queryByRole("status")).toBeNull();
+});

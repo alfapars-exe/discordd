@@ -1,3 +1,4 @@
+import { useVoiceRecoveryStore } from "../../stores/voiceRecoveryStore";
 /**
  * UserBar — User info, voice controls, and status picker at the bottom of the sidebar.
  * Shows mic/deafen/screen/disconnect when in voice, status picker on avatar click.
@@ -72,6 +73,7 @@ function UserBar({
   const noiseReduction = useVoiceStore((s) => s.noiseReduction);
   const setNoiseReduction = useVoiceStore((s) => s.setNoiseReduction);
   const rtt = useVoiceStore((s) => s.rtt);
+  const recoveryPhase = useVoiceRecoveryStore(s => s.phase);
   const isInVoice = !!currentVoiceChannelId;
   const isPanelOpen = useSoundboardStore((s) => s.isPanelOpen);
   const togglePanel = useSoundboardStore((s) => s.togglePanel);
@@ -192,8 +194,8 @@ function UserBar({
           <div className="ub-voice-info">
             {UI_SHELL_V2 ? <Suspense fallback={<span className="ub-voice-label">{t("connectingToVoice")}</span>}>
               <VoiceConnectionStatus showConnected />
-            </Suspense> : <span className="ub-voice-label">{t("voiceConnected")}</span>}
-            {rtt > 0 && (
+            </Suspense> : recoveryPhase === "idle" ? <span className="ub-voice-label">{t("voiceConnected")}</span> : null}
+            {rtt > 0 && recoveryPhase === "idle" && (
               <div className="ub-ping-tooltip">
                 <span className={`ub-ping-value ${pingColor}`}>{rtt} ms</span>
               </div>

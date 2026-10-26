@@ -56,7 +56,7 @@
   "endCall": "End Call",
   "minimize": "Minimize",
   "livekitConnectionError": "Could not connect to the voice server. Please check that the server is running and try again.",
-  "voiceDisconnectedHint": "Voice disconnected — the voice server may be unavailable",
+  "voiceDisconnectedHint": "Voice connection lost.",
   "voiceJoinFailed": "Couldn't join the voice channel.",
   "voiceJoinTimedOut": "You can't join voice channels while timed out.",
   "ping": "Ping",
@@ -140,5 +140,13 @@
   "p2pScreenAudioVolume": "Personal shared-audio volume",
   "p2pScreenAudioPeerUnsupported": "The other client has not advertised separate shared-audio support.",
   "p2pScreenAudioOff": "System audio is not being shared.",
-  "p2pScreenAudioEnded": "System audio ended. Screen video continues without audio."
+  "p2pScreenAudioEnded": "System audio ended. Screen video continues without audio.",
+  "recoveryOffline": "Waiting for an internet connection. We will try again when you are back online.",
+  "recoveryFailed": "We could not reconnect to the voice channel. Check your internet connection and try again.",
+  "recoveryUnsupported": "This app version does not support secure voice. Please update the app.",
+  "recoveryAccess": "You no longer have access to this voice channel.",
+  "recoverySession": "Your session has changed. Sign in again to join voice.",
+  "recoveryEncryption": "Could not establish secure voice. Reconnecting… ({{attempt}}/{{max}})",
+  "recoveryConnection": "Voice connection lost. Reconnecting… ({{attempt}}/{{max}})",
+  "recoveryRetry": "Reconnect"
 }

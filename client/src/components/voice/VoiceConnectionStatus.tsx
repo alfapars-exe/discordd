@@ -1,13 +1,16 @@
+import { useVoiceRecoveryStore } from "../../stores/voiceRecoveryStore";
 /** VoiceConnectionStatus — LiveKit connection state indicator. Hidden when connected. */
 
-import { useConnectionState } from "@livekit/components-react";
+import { useMaybeRoomContext, useConnectionState } from "@livekit/components-react";
 import { ConnectionState } from "livekit-client";
 import { useTranslation } from "react-i18next";
 import { isNativeVoice } from "../../utils/nativePlugins";
 
-function VoiceConnectionStatus({ showConnected = false }: { showConnected?: boolean }) {
+function LiveVoiceConnectionStatus({ showConnected = false }: { showConnected?: boolean }) {
   const { t } = useTranslation("voice");
   const connectionState = useConnectionState();
+  const recoveryPhase = useVoiceRecoveryStore(s => s.phase);
+  if (recoveryPhase !== "idle") return null;
 
   // iOS native voice: connection is handled natively, JS SDK isn't connected — hide status
   if (isNativeVoice()) return showConnected ? <span className="ub-voice-label">{t("voiceConnected")}</span> : null;
@@ -48,4 +51,8 @@ function VoiceConnectionStatus({ showConnected = false }: { showConnected?: bool
   );
 }
 
-export default VoiceConnectionStatus;
+export default function VoiceConnectionStatus(props: { showConnected?: boolean }) {
+  const room = useMaybeRoomContext();
+  const phase = useVoiceRecoveryStore(s => s.phase);
+  return room && phase === "idle" ? <LiveVoiceConnectionStatus {...props} /> : null;
+}
