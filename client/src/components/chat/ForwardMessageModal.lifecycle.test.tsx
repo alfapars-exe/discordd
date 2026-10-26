@@ -41,6 +41,12 @@ it("closing the modal fences late attachment completion even before parent unmou
 });
 it("does not send an old source after the modal receives a replacement message",async()=>{
  const resolve=deferred(),view=await begin();view.rerender(<ForwardMessageModal message={{...message,id:"replacement",content:"new source"}} onClose={view.close}/>);await act(async()=>resolve(new File(["private"],"private.txt")));expect(state.send).not.toHaveBeenCalled();expect(state.toast).not.toHaveBeenCalled();
+ const destination=screen.getByText("Friend").closest("button")!;
+ await waitFor(()=>expect(destination).not.toBeDisabled());
+ state.decrypt.mockResolvedValueOnce(new File(["replacement"],"replacement.txt"));
+ fireEvent.click(destination);
+ await waitFor(()=>expect(state.send).toHaveBeenCalledWith("dm",expect.stringContaining("new source"),expect.arrayContaining([expect.objectContaining({name:"replacement.txt"})])));
+ expect(state.send).toHaveBeenCalledOnce();expect(view.close).toHaveBeenCalledOnce();
 });
 it("does not send after the modal unmounts",async()=>{
  const resolve=deferred(),view=await begin();view.unmount();await act(async()=>resolve(new File(["private"],"private.txt")));expect(state.send).not.toHaveBeenCalled();expect(state.toast).not.toHaveBeenCalled();
