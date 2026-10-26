@@ -311,6 +311,11 @@ func (db *DB) runMigrations(migrationsFS fs.FS) error {
 // matching the prior behaviour. Comment-only chunks emitted by the
 // splitter are also skipped.
 func (db *DB) applyMigrationFile(filename, content string) error {
+	// This runner is only used by initializeSQLite. PostgreSQL startup returns
+	// from New's native MigratePostgres branch before reaching this code.
+	if filename == "144_thread_channel_type.sql" {
+		return db.applyThreadChannelTypeMigration(filename, content)
+	}
 	tx, err := db.Conn.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction for migration %s: %w", filename, err)
