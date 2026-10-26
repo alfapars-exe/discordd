@@ -5,13 +5,23 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 )
 
 func TestWorkerKeepsCompletedStreamOpenUntilBrokerDrains(t *testing.T) {
+	for _, mode := range []string{"broker_finished", "canceled"} {
+		t.Run(mode, func(t *testing.T) { testCompletedStreamRelease(t, mode) })
+	}
+}
+
+func testCompletedStreamRelease(t *testing.T, mode string) {
+	t.Helper()
 	result := make(chan struct{})
 	release := make(chan struct{})
+	var releaseOnce sync.Once
+	finish := func() { releaseOnce.Do(func() { close(release) }) }
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := workerUpgrader.Upgrade(w, r, nil)
 		if err != nil {
@@ -26,7 +36,7 @@ func TestWorkerKeepsCompletedStreamOpenUntilBrokerDrains(t *testing.T) {
 		<-release // Proxy has accepted the terminal frame, but downstream is paused.
 	}))
 	defer server.Close()
-	defer close(release)
+	defer finish()
 	_, endpoint, err := workerURLs(server.URL)
 	if err != nil {
 		t.Fatal(err)
@@ -48,10 +58,14 @@ func TestWorkerKeepsCompletedStreamOpenUntilBrokerDrains(t *testing.T) {
 		t.Fatal("worker closed before broker drained terminal result")
 	case <-time.After(100 * time.Millisecond):
 	}
-	cancel()
+	if mode == "canceled" {
+		cancel()
+	} else {
+		finish()
+	}
 	select {
 	case <-done:
 	case <-time.After(time.Second):
-		t.Fatal("cancellation did not release completed stream")
+		t.Fatalf("%s did not release completed stream", mode)
 	}
 }
