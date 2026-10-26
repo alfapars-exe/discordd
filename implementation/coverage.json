@@ -2501,7 +2501,7 @@
         "All mode routes detected non-self spam from friends and nonfriends into the inbox before hiding; nonfriends mode does so only for nonfriends. Off disables automatic routing and hiding, leaving messages normally visible. Existing inbox decisions remain accessible; restore/dismiss must not delete the underlying message."
       ],
       "code": ["client/src/utils/spamClassification.ts", "client/src/utils/spamClassification.corpus.ts", "client/scripts/spam-classifier-eval.mjs", "client/src/hooks/useSpamVisibility.ts", "server/services/spam_inbox_service.go"],
-      "evidence": ["implementation/verification/p3-spam-rule-regressions-2026-10-24.json", "implementation/verification/p3-spam-relationship-readiness-2026-10-25.json"]
+      "evidence": ["implementation/verification/p3-spam-rule-regressions-2026-10-24.json", "implementation/verification/p3-spam-relationship-readiness-2026-10-25.json", "implementation/verification/p3-spam-spoiler-link-boundaries-2026-10-27.json"]
     },
     {
       "id": "p3.classifier",
@@ -3215,7 +3215,8 @@
       ],
       "evidence": [
         "implementation/verification/p4-message-reminder-2026-10-23.json",
-        "implementation/verification/p4-reminder-focus-2026-10-27.json"
+        "implementation/verification/p4-reminder-focus-2026-10-27.json",
+        "implementation/verification/p4-reminder-list-retry-2026-10-27.json"
       ]
     },
     {
