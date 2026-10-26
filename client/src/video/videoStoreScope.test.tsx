@@ -4,14 +4,14 @@ import{ConnectionState,RemoteVideoTrack,Track,TrackPublication,type Room}from "l
 const h=vi.hoisted(()=>({room:null as Room|null}));
 vi.mock("../hooks/useE2EEKeyProvider",()=>({useE2EEKeyProvider:()=>({keyProvider:{},e2eeWorker:{},keyReady:true,keyError:null,keyScope:"key",ownerScope:"owner"})}));
 vi.mock("../hooks/useEncryptedRoomAdmission",()=>({useEncryptedRoomAdmission:()=>({room:h.room,connect:true,publishReady:true,error:null})}));
-vi.mock("../hooks/useVoiceAutoRejoin",()=>({useVoiceAutoRejoin:()=>({handleDisconnected:()=>{}})}));
+vi.mock("../hooks/useVoiceAutoRejoin",()=>({useVoiceAutoRejoin:()=>({handleDisconnected:vi.fn(),handleFailure:vi.fn(),handleConnectionError:vi.fn(),markReady:vi.fn(),restartId:0,suspended:false})}));
 vi.mock("../components/voice/VoiceStateManager",()=>({default:()=>null}));
 vi.mock("../components/voice/StreamerPipPreview",()=>({default:()=>null}));
 vi.mock("../components/dm/GroupDMCallAudio",()=>({default:()=>null}));
 vi.mock("../components/dm/GroupDMCallCamera",()=>({default:()=>null}));
 vi.mock("../components/dm/GroupScreenShareControl",()=>({default:()=>null}));
 vi.mock("./GroupRemoteVideos",()=>({default:()=>null}));
-vi.mock("@livekit/components-react",()=>({LiveKitRoom:({children}:{children:React.ReactNode})=><>{children}</>,RoomAudioRenderer:()=>null,DisconnectButton:()=>null}));
+vi.mock("@livekit/components-react",async original=>({...await original<typeof import("@livekit/components-react")>(),LiveKitRoom:({children}:{children:React.ReactNode})=><>{children}</>,RoomAudioRenderer:()=>null,DisconnectButton:()=>null}));
 import VoiceProvider from "../components/voice/VoiceProvider";
 import GroupDMCall from "../components/dm/GroupDMCall";
 import{useVoiceStore}from "../stores/voiceStore";

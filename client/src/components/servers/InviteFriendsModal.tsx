@@ -102,6 +102,15 @@ function InviteFriendsModal({ serverId, serverName, onClose, returnFocus }: Invi
   const [recipientStatus, setRecipientStatus] = useState<Record<string, "sending" | "sent" | "failed">>({});
   const [targetChannelId, setTargetChannelId] = useState("");
   const contextKey = JSON.stringify([accountId, serverId, targetChannelId]);
+  const [stateContext, setStateContext] = useState(contextKey);
+  // These values belong to one destination. Reset them during rendering so
+  // the new destination never commits the previous link or recipient status.
+  if (stateContext !== contextKey) {
+    setStateContext(contextKey);
+    setRecipientStatus({});
+    setInviteUrl("");
+    setInviteLoading(true);
+  }
   const isSending = sendingContext === contextKey;
   const isCopying = copyingContext === contextKey;
   const activeContext = useRef(contextKey);
@@ -143,11 +152,6 @@ function InviteFriendsModal({ serverId, serverName, onClose, returnFocus }: Invi
     const requestContext = contextKey;
     const requestAccountId = accountId;
     activeContext.current = requestContext;
-    // A sent row and a resolved URL belong to one account/server/target.
-    // Changing the destination must allow sending the new link to that friend.
-    setRecipientStatus({});
-    setInviteUrl("");
-    setInviteLoading(true);
     void loadInviteUrl(requestContext, requestAccountId, serverId, targetChannelId).then((url) => {
       if (!active || !isCurrentContext(requestContext, requestAccountId)) return;
       setInviteUrl(url);

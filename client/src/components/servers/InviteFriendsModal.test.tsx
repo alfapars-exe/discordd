@@ -66,6 +66,7 @@ describe("InviteFriendsModal", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    authState.user = { id: "sender" };
     getOrCreateShareInvite.mockResolvedValue({ code: "seven-day" });
     createOrGetChannel.mockImplementation(async (userID: string) => `dm-${userID}`);
     sendMessage.mockResolvedValue(true);
@@ -218,6 +219,23 @@ describe("InviteFriendsModal", () => {
       ["dm-u1", "https://hichat.test/invite/server"],
       ["dm-u1", "https://hichat.test/invite/public"],
     ]);
+  });
+
+  it("clears the previous account's link and ignores its pending lookup after switching accounts", async () => {
+    let resolvePrevious!: (invite: { code: string }) => void;
+    let resolveCurrent!: (invite: { code: string }) => void;
+    getOrCreateShareInvite
+      .mockImplementationOnce(() => new Promise((resolve) => { resolvePrevious = resolve; }))
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveCurrent = resolve; }));
+    const view = render(<InviteFriendsModal serverId="s1" serverName="Team" onClose={() => undefined} />);
+    authState.user = { id: "another-sender" };
+    view.rerender(<InviteFriendsModal serverId="s1" serverName="Team" onClose={() => undefined} />);
+    resolvePrevious({ code: "previous-account" });
+    await waitFor(() => expect(getOrCreateShareInvite).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole("textbox", { name: "inviteLink" })).toHaveValue("loading");
+    resolveCurrent({ code: "current-account" });
+    await screen.findByDisplayValue("https://hichat.test/invite/current-account");
+    expect(screen.queryByDisplayValue("https://hichat.test/invite/previous-account")).toBeNull();
   });
 
   it("continues a bulk send after a thrown DM error and leaves that recipient retryable", async () => {
