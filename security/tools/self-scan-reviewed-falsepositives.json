@@ -140,7 +140,7 @@
     {
       "rule": "go.sql-concat",
       "path": "server/repository/sqlite_reminder.go",
-      "file_sha256": "ccc5553d20147d5c013bdc4fd68310c5c4a52acab91b516a3870bd2a84e339a9",
+      "file_sha256": "5779dd1975e2e2afb0e4cbcbc23f5e9b716b8b1d2aaa6909b5a3c133047e8e7d",
       "line_sha256": "42295064db8c6b35c7ec953a1fb519d0217d79955f2af32881f5dda1a0c33b31",
       "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
       "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
@@ -148,7 +148,7 @@
     {
       "rule": "go.sql-concat",
       "path": "server/repository/sqlite_reminder.go",
-      "file_sha256": "ccc5553d20147d5c013bdc4fd68310c5c4a52acab91b516a3870bd2a84e339a9",
+      "file_sha256": "5779dd1975e2e2afb0e4cbcbc23f5e9b716b8b1d2aaa6909b5a3c133047e8e7d",
       "line_sha256": "5dee87546cbaa838c47219cd9e6a2f82e61f2d720b7f48ec048b503af77e3a01",
       "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
       "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
@@ -156,7 +156,7 @@
     {
       "rule": "go.sql-concat",
       "path": "server/repository/sqlite_reminder.go",
-      "file_sha256": "ccc5553d20147d5c013bdc4fd68310c5c4a52acab91b516a3870bd2a84e339a9",
+      "file_sha256": "5779dd1975e2e2afb0e4cbcbc23f5e9b716b8b1d2aaa6909b5a3c133047e8e7d",
       "line_sha256": "840dacc0d5db1993811f5eebd28482872b2e71521424dd14a1c0bfcd5adb4be5",
       "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
       "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
