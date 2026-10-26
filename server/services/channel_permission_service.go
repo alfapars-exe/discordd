@@ -522,7 +522,7 @@ func (s *channelPermService) permissionChannel(ctx context.Context, channelID st
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to get parent channel: %w", err)
 	}
-	if parent.Type == models.ChannelTypeThread || parent.ServerID != channel.ServerID {
+	if parent.Type != models.ChannelTypeText || parent.ServerID != channel.ServerID {
 		return nil, "", fmt.Errorf("thread channel %s has invalid parent", channelID)
 	}
 	return parent, parent.ID, nil

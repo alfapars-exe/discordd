@@ -77,6 +77,27 @@ func TestResolveChannelPermissions_ThreadInheritsParentOverrides(t *testing.T) {
 	}
 }
 
+func TestResolveChannelPermissions_ThreadRejectsNonTextParent(t *testing.T) {
+	for _, parentType := range []models.ChannelType{models.ChannelTypeVoice, models.ChannelTypeAudit, models.ChannelTypeThread} {
+		t.Run(string(parentType), func(t *testing.T) {
+			parentID := "parent"
+			channels := &testutil.MockChannelRepo{GetByIDFn: func(_ context.Context, id string) (*models.Channel, error) {
+				if id == "thread" {
+					return &models.Channel{ID: id, ServerID: "srv", Type: models.ChannelTypeThread, ParentChannelID: &parentID}, nil
+				}
+				return &models.Channel{ID: id, ServerID: "srv", Type: parentType}, nil
+			}}
+			core := newUncachedChannelPermService(&testutil.MockChannelPermRepo{}, &testutil.MockRoleRepo{}, channels, &testutil.MockBroadcaster{})
+			if _, err := core.ResolveChannelPermissions(context.Background(), "user", "thread"); err == nil {
+				t.Fatal("single resolution accepted a non-text thread parent")
+			}
+			if _, err := core.ResolveChannelPermissionsBulk(context.Background(), "thread", []string{"user"}); err == nil {
+				t.Fatal("bulk resolution accepted a non-text thread parent")
+			}
+		})
+	}
+}
+
 func TestResolveChannelPermissions(t *testing.T) {
 	const (
 		userID    = "user-1"
