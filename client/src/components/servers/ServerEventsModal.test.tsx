@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ServerEventsModal from "./ServerEventsModal";
 
@@ -135,6 +135,27 @@ describe("ServerEventsModal", () => {
     render(<ServerEventsModal serverId="s1" serverName="Team" onClose={() => undefined} />);
     fireEvent.click(await screen.findByRole("button", { name: "eventInterested" }));
     await waitFor(() => expect(mocks.rsvp).toHaveBeenCalledWith("s1", "e1", false, expect.objectContaining({ expectedUserId: "u1" })));
+  });
+
+  it("expires RSVP actions for successive events while the modal stays open", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2099-01-01T12:00:00Z"));
+    mocks.list.mockResolvedValueOnce(ok({ events: [
+      event({ id: "first", starts_at: "2099-01-01T12:01:00Z" }),
+      event({ id: "second", starts_at: "2099-01-01T12:02:00Z" }),
+    ] }));
+    const view = render(<ServerEventsModal serverId="s1" serverName="Team" onClose={() => undefined} />);
+    try {
+      await act(async () => { await Promise.resolve(); });
+      expect(screen.getAllByRole("button", { name: "eventInterestedAction" })).toHaveLength(2);
+      await act(async () => { await vi.advanceTimersByTimeAsync(60_001); });
+      expect(screen.getAllByRole("button", { name: "eventInterestedAction" })).toHaveLength(1);
+      await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+      expect(screen.queryByRole("button", { name: "eventInterestedAction" })).toBeNull();
+    } finally {
+      view.unmount();
+      vi.useRealTimers();
+    }
   });
 
   it("validates name and description by Unicode code point limits", async () => {

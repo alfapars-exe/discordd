@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getChannels } from "../../api/channels";
+import { getAuthSessionSnapshot } from "../../api/authSessionEvents";
 import { decryptFile } from "../../crypto/fileEncryption";
 import { useDMStore } from "../../stores/dmStore";
 import { useMessageStore } from "../../stores/messageStore";
@@ -45,7 +46,7 @@ export default function ForwardMessageModal({ message, onClose }: Props) {
   const [loading, setLoading] = useState(true);
   const [loadError,setLoadError]=useState(false);
   const [loadRevision,setLoadRevision]=useState(0);
-  const owner=useRef({id:useAuthStore.getState().user?.id,generation:useComposerDraftStore.getState().generation});
+  const owner=useRef({id:useAuthStore.getState().user?.id,generation:useComposerDraftStore.getState().generation,authGeneration:getAuthSessionSnapshot().generation});
   const live=useRef(false),sending=useRef(false),source=useRef(message);
   useLayoutEffect(()=>{source.current=message},[message]);
   const isOwner=useCallback(()=>Boolean(owner.current.id&&useAuthStore.getState().user?.id===owner.current.id&&useComposerDraftStore.getState().generation===owner.current.generation),[]);
@@ -129,9 +130,11 @@ export default function ForwardMessageModal({ message, onClose }: Props) {
         await refreshed.restorePendingSends();if(!isCurrent())return;
       }else if(!useDMStore.getState().channels.some(channel=>channel.id===destination.id&&channel.status==="accepted"))throw new Error("forward_destination_changed");
       const content = buildForwardContent(message, t("forwardedFrom"));
+      // Keep the original forwarding intent fenced through asynchronous encryption/uploads.
+      const context={ownerId:owner.current.id!,authGeneration:owner.current.authGeneration,isCurrent};
       const ok = destination.kind === "channel"
-        ? await useMessageStore.getState().sendMessage(destination.id, content, files, undefined, destination.serverId)
-        : destination.kind==="group"?await useGroupDMStore.getState().send(destination.id,content,undefined,files):await useDMStore.getState().sendMessage(destination.id, content, files);
+        ? await useMessageStore.getState().sendMessage(destination.id, content, files, undefined, destination.serverId, context)
+        : destination.kind==="group"?await useGroupDMStore.getState().send(destination.id,content,undefined,files,context):await useDMStore.getState().sendMessage(destination.id, content, files, undefined, context);
       if (!ok) throw new Error("send_failed");
       if(!isCurrent())return;
       const recovery=destination.kind==="group"&&(useGroupDMStore.getState().pendingSends[destination.id]||(useGroupDMStore.getState().uploadRecoveries[destination.id]?.length??0)>0);

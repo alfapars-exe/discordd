@@ -119,7 +119,7 @@ function ServerEventsModal({ serverId, serverName, onClose, initialEventId }: Pr
     const delay = Math.min(nextStart - Date.now() + 1, 2_147_483_647);
     const timer = window.setTimeout(() => setNow(Date.now()), delay);
     return () => window.clearTimeout(timer);
-  }, [accountId, events, targetEvent, targetOwner]);
+  }, [accountId, events, now, targetEvent, targetOwner]);
 
   useEffect(() => {
     if (activeServerId !== serverId) onClose();

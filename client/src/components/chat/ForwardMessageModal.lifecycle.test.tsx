@@ -6,6 +6,7 @@ const groupState=vi.hoisted(()=>({groups:[] as Array<{id:string;name:string}>,gr
 vi.mock("../../stores/groupDMStore",()=>({useGroupDMStore:Object.assign((select:(s:unknown)=>unknown)=>select(groupState),{getState:()=>groupState})}));
 vi.mock("react-i18next",()=>({useTranslation:()=>({t:(key:string)=>key})}));
 vi.mock("../../api/channels",()=>({getChannels:state.getChannels}));
+vi.mock("../../api/authSessionEvents",()=>({getAuthSessionSnapshot:()=>({ownerId:state.id,generation:state.generation})}));
 vi.mock("../../crypto/fileEncryption",()=>({decryptFile:state.decrypt}));
 vi.mock("../../stores/authStore",()=>({useAuthStore:{getState:()=>({user:{id:state.id}}),subscribe:(listener:(next:{user:{id:string}},previous:{user:{id:string}})=>void)=>{state.authListeners.add(listener);return()=>state.authListeners.delete(listener)}}}));
 vi.mock("../../stores/composerDraftStore",()=>({useComposerDraftStore:{getState:()=>({generation:state.generation}),subscribe:(listener:(next:{generation:number},previous:{generation:number})=>void)=>{state.generationListeners.add(listener);return()=>state.generationListeners.delete(listener)}}}));
@@ -45,14 +46,14 @@ it("does not send an old source after the modal receives a replacement message",
  await waitFor(()=>expect(destination).not.toBeDisabled());
  state.decrypt.mockResolvedValueOnce(new File(["replacement"],"replacement.txt"));
  fireEvent.click(destination);
- await waitFor(()=>expect(state.send).toHaveBeenCalledWith("dm",expect.stringContaining("new source"),expect.arrayContaining([expect.objectContaining({name:"replacement.txt"})])));
+ await waitFor(()=>expect(state.send).toHaveBeenCalledWith("dm",expect.stringContaining("new source"),expect.arrayContaining([expect.objectContaining({name:"replacement.txt"})]),undefined,expect.objectContaining({isCurrent:expect.any(Function)})));
  expect(state.send).toHaveBeenCalledOnce();expect(view.close).toHaveBeenCalledOnce();
 });
 it("does not send after the modal unmounts",async()=>{
  const resolve=deferred(),view=await begin();view.unmount();await act(async()=>resolve(new File(["private"],"private.txt")));expect(state.send).not.toHaveBeenCalled();expect(state.toast).not.toHaveBeenCalled();
 });
 it("forwards once and reports success only for the current open session",async()=>{
- const resolve=deferred(),view=await begin();fireEvent.click(screen.getByText("Friend"));await act(async()=>resolve(new File(["private"],"private.txt")));await waitFor(()=>expect(state.send).toHaveBeenCalledOnce());expect(state.send).toHaveBeenCalledWith("dm","forwardedFrom Author:\nprivate",[expect.any(File)]);expect(view.close).toHaveBeenCalledOnce();expect(state.toast).toHaveBeenCalledWith("success","forwardSuccess");
+ const resolve=deferred(),view=await begin();fireEvent.click(screen.getByText("Friend"));await act(async()=>resolve(new File(["private"],"private.txt")));await waitFor(()=>expect(state.send).toHaveBeenCalledOnce());expect(state.send).toHaveBeenCalledWith("dm","forwardedFrom Author:\nprivate",[expect.any(File)],undefined,expect.objectContaining({ownerId:"owner",authGeneration:1,isCurrent:expect.any(Function)}));expect(view.close).toHaveBeenCalledOnce();expect(state.toast).toHaveBeenCalledWith("success","forwardSuccess");
 });
 it("keeps available targets and reports a partial destination load failure",async()=>{
  state.servers=[{id:"good",name:"Good"},{id:"bad",name:"Bad"}];state.getChannels.mockImplementation(async(id:string)=>{if(id==="bad")throw new Error("offline");return {success:true,data:[{channels:[{id:"text",name:"general",type:"text",effective_permissions:6176}]}]}});
@@ -75,7 +76,7 @@ it("rechecks selected channel permissions after decryption and refuses revoked s
  render(<ForwardMessageModal message={message} onClose={vi.fn()}/>);await screen.findByText("#target");fireEvent.click(screen.getByText("#target"));await waitFor(()=>expect(state.decrypt).toHaveBeenCalledOnce());await act(async()=>resolve(new File(["private"],"private.txt")));await waitFor(()=>expect(state.toast).toHaveBeenCalledWith("error","forwardFailed"));expect(state.send).not.toHaveBeenCalled();expect(state.getChannels).toHaveBeenCalledTimes(2);
 });
 it("forwards decrypted originals through the existing group encryption/send path",async()=>{
- const resolve=deferred();groupState.groups=[{id:"group",name:"Team"}];const close=vi.fn();render(<ForwardMessageModal message={message} onClose={close}/>);await screen.findByText("Team");fireEvent.click(screen.getByText("Team"));await waitFor(()=>expect(state.decrypt).toHaveBeenCalledOnce());const file=new File(["original"],"original.txt");await act(async()=>resolve(file));await waitFor(()=>expect(groupState.send).toHaveBeenCalledWith("group","forwardedFrom Author:\nprivate",undefined,[file]));expect(groupState.fetchGroups).toHaveBeenCalledOnce();expect(groupState.restorePendingSends).toHaveBeenCalledOnce();expect(state.send).not.toHaveBeenCalled();expect(close).toHaveBeenCalledOnce();
+ const resolve=deferred();groupState.groups=[{id:"group",name:"Team"}];const close=vi.fn();render(<ForwardMessageModal message={message} onClose={close}/>);await screen.findByText("Team");fireEvent.click(screen.getByText("Team"));await waitFor(()=>expect(state.decrypt).toHaveBeenCalledOnce());const file=new File(["original"],"original.txt");await act(async()=>resolve(file));await waitFor(()=>expect(groupState.send).toHaveBeenCalledWith("group","forwardedFrom Author:\nprivate",undefined,[file],expect.objectContaining({ownerId:"owner",authGeneration:1,isCurrent:expect.any(Function)})));expect(groupState.fetchGroups).toHaveBeenCalledOnce();expect(groupState.restorePendingSends).toHaveBeenCalledOnce();expect(state.send).not.toHaveBeenCalled();expect(close).toHaveBeenCalledOnce();
 });
 it("does not forward after refreshed group membership is removed",async()=>{
  const resolve=deferred();groupState.groups=[{id:"group",name:"Team"}];groupState.fetchGroups.mockImplementationOnce(async()=>{groupState.groups=[]});render(<ForwardMessageModal message={message} onClose={vi.fn()}/>);await screen.findByText("Team");fireEvent.click(screen.getByText("Team"));await waitFor(()=>expect(state.decrypt).toHaveBeenCalledOnce());await act(async()=>resolve(new File(["original"],"original.txt")));expect(groupState.send).not.toHaveBeenCalled();expect(state.toast).toHaveBeenCalledWith("error","forwardFailed");
@@ -96,4 +97,26 @@ it.each(["explicit","legacy"])("decrypts a retained attachment with its original
 });
 it("does not guess an attachment key when the explicit source position is invalid",async()=>{
  const source={...message,attachments:[{...message.attachments[0],file_key_index:-1}]};render(<ForwardMessageModal message={source} onClose={vi.fn()}/>);await screen.findByText("Friend");fireEvent.click(screen.getByText("Friend"));await waitFor(()=>expect(state.toast).toHaveBeenCalledWith("error","forwardFailed"));expect(state.decrypt).not.toHaveBeenCalled();expect(state.send).not.toHaveBeenCalled();
+});
+
+it.each(["dm","group","channel"])("fences %s encryption when the forwarding modal closes after store dispatch",async(kind)=>{
+ groupState.groups=kind==="group"?[{id:"group",name:"Team"}]:[];
+ if(kind==="channel"){
+  state.servers=[{id:"server",name:"Server"}];
+  state.getChannels.mockResolvedValue({success:true,data:[{channels:[{id:"target",name:"target",type:"text",effective_permissions:6176}]}]});
+ }
+ let context:{isCurrent:()=>boolean}|undefined;
+ let complete!:(ok:boolean)=>void;
+ const sending=new Promise<boolean>(resolve=>{complete=resolve});
+ const send=kind==="group"?groupState.send:state.send;
+ send.mockImplementationOnce(async(...args:unknown[])=>{context=args.at(-1) as typeof context;return sending});
+ state.decrypt.mockResolvedValueOnce(new File(["original"],"original.txt"));
+ render(<ForwardMessageModal message={message} onClose={vi.fn()}/>);
+ const label=kind==="group"?"Team":kind==="channel"?"#target":"Friend";
+ await screen.findByText(label);fireEvent.click(screen.getByText(label));
+ await waitFor(()=>expect(send).toHaveBeenCalledOnce());
+ expect(context?.isCurrent()).toBe(true);
+ fireEvent.click(screen.getByRole("button",{name:"forwardClose"}));
+ expect(context?.isCurrent()).toBe(false);
+ await act(async()=>complete(false));expect(state.toast).not.toHaveBeenCalled();
 });
