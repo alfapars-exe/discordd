@@ -58,6 +58,8 @@
   "reminderAlreadyProcessed": "Bu hatırlatıcı daha önce işlendi; yeni hatırlatıcı oluşturulmadı.",
   "reminderUpdated": "Hatırlatıcı güncellendi",
   "reminderCancelled": "Hatırlatıcı iptal edildi",
+  "reminderLoading": "Hatırlatıcılar yükleniyor…",
+  "reminderRetry": "Tekrar dene",
   "reminderLoadFailed": "Hatırlatıcılar yüklenemedi",
   "reminderSaveFailed": "Hatırlatıcı kaydedilemedi",
   "reminderCancelFailed": "Hatırlatıcı iptal edilemedi",

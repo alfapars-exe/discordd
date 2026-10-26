@@ -58,6 +58,8 @@
   "reminderAlreadyProcessed": "This reminder was already processed; no new reminder was created.",
   "reminderUpdated": "Reminder updated",
   "reminderCancelled": "Reminder cancelled",
+  "reminderLoading": "Loading reminders…",
+  "reminderRetry": "Try again",
   "reminderLoadFailed": "Reminders could not be loaded",
   "reminderSaveFailed": "Reminder could not be saved",
   "reminderCancelFailed": "Reminder could not be cancelled",

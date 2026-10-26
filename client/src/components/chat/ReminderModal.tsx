@@ -75,6 +75,7 @@ function ReminderForContext({source,onClose,owner,generation}:Props&{owner?:stri
   }, []);
   const toast = useToastStore((s) => s.addToast);
   const [items, setItems] = useState<MessageReminder[]>([]);
+  const [listState, setListState] = useState<"loading" | "ready" | "error">("loading");
   const [due, setDue] = useState(() => toLocalInput(new Date(Date.now() + 60 * 60_000)));
   const [editing, setEditing] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -85,12 +86,15 @@ function ReminderForContext({source,onClose,owner,generation}:Props&{owner?:stri
   const reload = useCallback(async () => {
     if(!current())return;
     const version=++readVersion.current;
+    setListState("loading");
     try {
       const result = await listReminders({expectedUserId:owner,isCurrent:current});
       if(!current()||version!==readVersion.current)return;
-      if (result.success && result.data) setItems(result.data.reminders);
-      else toast("error", t("reminderLoadFailed"));
-    } catch {if(current()&&version===readVersion.current)toast("error",t("reminderLoadFailed"));}
+      if (result.success && result.data) {
+        setItems(result.data.reminders);
+        setListState("ready");
+      } else setListState("error");
+    } catch {if(current()&&version===readVersion.current)setListState("error");}
   }, [t, toast,current,owner]);
 
   useEffect(() => {
@@ -110,7 +114,7 @@ function ReminderForContext({source,onClose,owner,generation}:Props&{owner?:stri
     const dueAt=parsed.toISOString();
     const payload=JSON.stringify([source.source_kind,source.server_id??null,source.channel_id,source.message_id,dueAt]);
     setBusy(true);
-    operation.current=true;++readVersion.current;
+    operation.current=true;
     try {
     const scope=JSON.stringify([SERVER_URL,owner]);
     if(!editing){
@@ -141,11 +145,13 @@ function ReminderForContext({source,onClose,owner,generation}:Props&{owner?:stri
 
   const remove = async (id: string) => {
     if(operation.current||!current())return;
-    operation.current=true;setBusy(true);++readVersion.current;
+    operation.current=true;setBusy(true);
     try {
     const result = await cancelReminder(id,{expectedUserId:owner,isCurrent:current});
     if(!current())return;
     if (!result.success) { toast("error", t("reminderCancelFailed")); return; }
+    ++readVersion.current;
+    setListState("ready");
     setItems((current) => current.filter((item) => item.id !== id));
     if (editing === id) setEditing(null);
     toast("success", t("reminderCancelled"));
@@ -175,7 +181,12 @@ function ReminderForContext({source,onClose,owner,generation}:Props&{owner?:stri
             <button className="report-btn reminder-save" disabled={busy} onClick={() => { void submit(); }}>{t(editing ? "reminderUpdate" : "reminderCreate")}</button>
           </div>
           <h3 className="reminder-list-title">{t("upcomingReminders")}</h3>
-          {items.length === 0 ? <p className="reminder-empty">{t("noUpcomingReminders")}</p> : (
+          {listState === "loading" ? <p className="reminder-empty" role="status">{t("reminderLoading")}</p> : listState === "error" ? (
+            <div role="alert">
+              <p>{t("reminderLoadFailed")}</p>
+              <button className="report-btn" disabled={busy} onClick={() => { void reload(); }}>{t("reminderRetry")}</button>
+            </div>
+          ) : items.length === 0 ? <p className="reminder-empty">{t("noUpcomingReminders")}</p> : (
             <div className="reminder-list">
               {items.map((item) => (
                 <div className="reminder-row" key={item.id}>
