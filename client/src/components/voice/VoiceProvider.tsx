@@ -31,8 +31,8 @@ import {resolveUserId}from "../../utils/constants";
  *     drives the real connection.
  */
 
-import { useCallback, useMemo } from "react";
-import { LiveKitRoom, RoomAudioRenderer } from "@livekit/components-react";
+import { useCallback, useEffect, useMemo } from "react";
+import { LiveKitRoom, RoomAudioRenderer, RoomContext } from "@livekit/components-react";
 import StreamerPipPreview from "./StreamerPipPreview";
 import { Track, type AudioCaptureOptions, type AudioPreset, type RoomOptions } from "livekit-client";
 
@@ -51,13 +51,12 @@ import { useVoiceStore } from "../../stores/voiceStore";
 import { micCaptureFor, micPublishFor } from "../../audio/micProfile";
 import { microphoneSettings } from "../../audio/microphoneSettings";
 import { useChannelStore } from "../../stores/channelStore";
-import { useToastStore } from "../../stores/toastStore";
+import VoiceRecoveryStatus from "./VoiceRecoveryStatus";
 import { useTranslation } from "react-i18next";
 import { isNativeVoice as checkIsNativeVoice } from "../../utils/nativePlugins";
 import { useEncryptedRoomAdmission } from "../../hooks/useEncryptedRoomAdmission";
 import { useE2EEKeyProvider } from "../../hooks/useE2EEKeyProvider";
 import { useVoiceAutoRejoin } from "../../hooks/useVoiceAutoRejoin";
-import { logToServer } from "../../api/clientLog";
 import VoiceStateManager from "./VoiceStateManager";
 
 type VoiceProviderProps = {
@@ -66,7 +65,6 @@ type VoiceProviderProps = {
 
 function VoiceProvider({ children }: VoiceProviderProps) {
   const { t } = useTranslation("voice");
-  const { t: tE2ee } = useTranslation("e2ee");
 
   const livekitUrl = useVoiceStore((s) => s.livekitUrl);
   const livekitToken = useVoiceStore((s) => s.livekitToken);
@@ -105,60 +103,15 @@ function VoiceProvider({ children }: VoiceProviderProps) {
   const isNativeVoice = checkIsNativeVoice();
   const isConnected = isInVoice && !isNativeVoice;
 
-  const handleE2eeKeyError = useCallback(
-    (err: unknown) => {
-      console.error("[VoiceProvider] Failed to set E2EE key:", err);
-      logToServer("error", "voice_e2ee_key_failed", {
-        errorMessage:
-          err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200),
-        errorName: err instanceof Error ? err.name : typeof err,
-        errorStack: err instanceof Error && err.stack ? err.stack.slice(0, 1024) : "",
-      });
-      useToastStore.getState().addToast("error", tE2ee("voiceE2eeError"), 8000);
-    },
-    [tE2ee],
-  );
-
+  const recovery = useVoiceAutoRejoin(isNativeVoice);
+  const { handleDisconnected, handleFailure: handleE2eeKeyError,
+    handleConnectionError: handleError, markReady } = recovery;
   const encryption = useE2EEKeyProvider(e2eePassphrase, {
-    onError: handleE2eeKeyError, enabled: isConnected,
+    onError: handleE2eeKeyError, enabled: isConnected && !recovery.suspended,
+    restartId: recovery.restartId,
     scope: JSON.stringify([currentVoiceChannelId, livekitUrl]), keyIndex, keyEpoch, keyContext,
   });
   const { keyProvider, e2eeWorker } = encryption;
-
-  const { handleDisconnected } = useVoiceAutoRejoin(isNativeVoice);
-
-  const handleError = useCallback(
-    (err: Error) => {
-      // "Client initiated" errors are emitted alongside our own disconnect
-      // calls — no user-facing toast for those.
-      if (err.message?.includes("Client initiated")) return;
-
-      console.error("[VoiceProvider] LiveKit error:", err);
-      logToServer("error", "livekit_room_error", {
-        errorMessage: err.message?.slice(0, 200) ?? "",
-        errorName: err.name,
-        errorStack: err.stack ? err.stack.slice(0, 1024) : "",
-        hasLivekitUrl: !!livekitUrl,
-        isInVoice,
-        isNativeVoice,
-      });
-      useToastStore.getState().addToast("error", t("livekitConnectionError"), 8000);
-    },
-    [t, livekitUrl, isInVoice, isNativeVoice],
-  );
-
-  const handleEncryptionError = useCallback(
-    (err: Error) => {
-      console.error("[VoiceProvider] E2EE encryption error:", err);
-      logToServer("error", "livekit_e2ee_encryption_error", {
-        errorMessage: err.message?.slice(0, 200) ?? "",
-        errorName: err.name,
-        errorStack: err.stack ? err.stack.slice(0, 1024) : "",
-      });
-      useToastStore.getState().addToast("error", tE2ee("voiceE2eeError"), 8000);
-    },
-    [tE2ee],
-  );
 
   // Capture + publish profile for the mic (Konuşma / Müzik). These feed the
   // room-level defaults, which is what the FIRST mic publish uses — the one
@@ -254,9 +207,10 @@ function VoiceProvider({ children }: VoiceProviderProps) {
     if (source === Track.Source.ScreenShare || source === Track.Source.ScreenShareAudio) return current.isStreaming;
     return false;
   }, []);
-  const admission = useEncryptedRoomAdmission({ enabled: isConnected, token: livekitToken ?? "", scope: encryption.ownerScope,
+  const admission = useEncryptedRoomAdmission({ enabled: isConnected && !recovery.suspended, token: livekitToken ?? "", scope: encryption.ownerScope,
     keyScope: encryption.keyScope, keyReady: encryption.keyReady, keyError: encryption.keyError,
     keyProvider, worker: e2eeWorker, roomOptions: roomOptions ?? {}, onError: handleE2eeKeyError, allowRestore });
+  useEffect(() => { markReady(admission.publishReady); }, [admission.publishReady, markReady]);
   const videoAuth=getAuthSessionSnapshot();
   const videoIdentity=useMemo(()=>({room:admission.room,nonce:crypto.randomUUID()}),[admission.room]);
   const videoLabel=useChannelStore(state=>state.categories.flatMap(category=>category.channels).find(channel=>channel.id===currentVoiceChannelId)?.name)??`${t("voiceConnected")} · ${currentVoiceChannelId??""}`;
@@ -266,29 +220,10 @@ function VoiceProvider({ children }: VoiceProviderProps) {
       &&auth.ownerId===videoAuth.ownerId&&auth.generation===videoAuth.generation;},
     authorized:(participant,publication)=>publication.source===Track.Source.Camera||!!useVoiceStore.getState().watchingScreenShares[resolveUserId(participant.identity)],
     subscribe:changed=>{const a=useVoiceStore.subscribe(changed),b=subscribeVideoPresentation(changed);return()=>{a();b()}},presented:()=>isPresentedVideoContext(currentVoiceChannelId??"","guild")});
-  const leaveFailedEncryption = () => {
-    const current = useVoiceStore.getState();
-    if (current._onLeaveCallback) current._onLeaveCallback(); else current.leaveVoiceChannel();
-  };
-  // Skip LiveKitRoom entirely when not in a voice session. Mounting it with
-  // connect=false and then flipping the prop to true causes the SDK wrapper
-  // to allocate a second Room instance during the transition; rendering it
-  // only when isInVoice is already true means the initial mount happens
-  // straight at connect=true (or connect=false for iOS native), with no
-  // false→true thrash and no duplicate SDK logs.
-  if (!isInVoice) {
-    return <>{children}</>;
-  }
-
-  if (!isNativeVoice && (!admission.room || (!admission.connect && !admission.error))) {
-    return <section role={admission.error ? "alert" : "status"}>
-      <p>{admission.error ? tE2ee("voiceE2eeError") : t("connecting")}</p>
-      <button type="button" onClick={leaveFailedEncryption}>{t("disconnect")}</button>
-    </section>;
-  }
-
+  if (!isInVoice) return <>{children}</>;
   return (
-    <LiveKitRoom
+    <RoomContext.Provider value={recovery.suspended ? undefined : admission.room ?? undefined}>
+    {(isNativeVoice || (!recovery.suspended && admission.room)) && <LiveKitRoom
       serverUrl={livekitUrl || "wss://placeholder.invalid"}
       token={livekitToken || ""}
       room={isNativeVoice ? undefined : admission.room ?? undefined}
@@ -301,7 +236,9 @@ function VoiceProvider({ children }: VoiceProviderProps) {
       connectOptions={{ autoSubscribe: false }}
       onDisconnected={handleDisconnected}
       onError={handleError}
-      onEncryptionError={handleEncryptionError}
+      // E2EE errors are owned by the participant-aware admission listener.
+      // The SDK React callback discards participant identity and would turn
+      // a remote decode failure into a global recovery of this healthy room.
       style={{ display: "contents" }}
     >
       {isConnected && admission.publishReady && <RoomAudioRenderer />}
@@ -310,9 +247,11 @@ function VoiceProvider({ children }: VoiceProviderProps) {
           so it can use useRoomContext / useLocalParticipant; renders only
           while isStreaming is true. Self-gated internally. */}
       {isConnected && admission.publishReady && <StreamerPipPreview />}
-      {Boolean(admission.error) && <p role="alert">{tE2ee("voiceE2eeError")}</p>}
-      {children}
-    </LiveKitRoom>
+      {isNativeVoice && children}
+    </LiveKitRoom>}
+    <VoiceRecoveryStatus />
+    {!isNativeVoice && children}
+    </RoomContext.Provider>
   );
 }
 

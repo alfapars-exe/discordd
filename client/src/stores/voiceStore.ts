@@ -1,3 +1,4 @@
+import { VoiceFailure } from "../audio/voiceFailure";
 /**
  * voiceStore — Voice channel state management.
  *
@@ -162,7 +163,7 @@ type VoiceCoreState = {
 type VoiceCoreActions = {
   joinVoiceChannel: (channelId: string) => Promise<VoiceTokenResponse | null>;
   /** Hot-swap LiveKit token without disconnect cycle — used for auto-rejoin. */
-  refreshVoiceToken: (channelId: string) => Promise<VoiceTokenResponse | null>;
+  refreshVoiceToken: (channelId: string, reportFailure?: boolean) => Promise<VoiceTokenResponse | null>;
   leaveVoiceChannel: () => void;
   /** Remove all transient state for a deleted voice channel and leave it if active. */
   handleChannelDeleted: (channelId: string) => void;
@@ -346,7 +347,7 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
     }
   },
 
-  refreshVoiceToken: async (channelId: string) => {
+  refreshVoiceToken: async (channelId: string, reportFailure = false) => {
     const request = ++voiceTokenRefreshIntent;
     const joinGeneration = get()._joinGeneration;
     const authGeneration = getAuthGeneration();
@@ -362,14 +363,14 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
       });
 
       await ensureFreshToken();
-      const response = await voiceApi.getVoiceToken(serverId, channelId);
+      const response = await voiceApi.getVoiceToken(serverId, channelId, reportFailure ? { timeoutMs: 15_000 } : undefined);
 
       // Race guard — callers (useVoiceAutoRejoin, systemEventHandlers
       // re-register) fire this around suspend/resume, so the user may have
       // left or switched channels while the token request was in flight.
       // Applying the stale credentials would re-mount LiveKitRoom for a
       // channel we're no longer in.
-      if (get().currentVoiceChannelId !== channelId || get()._joinGeneration !== joinGeneration || request !== voiceTokenRefreshIntent
+      if (get().wasReplaced || get().currentVoiceChannelId !== channelId || get()._joinGeneration !== joinGeneration || request !== voiceTokenRefreshIntent
         || getAuthGeneration() !== authGeneration || (useAuthStore.getState().user?.id ?? null) !== owner) {
         console.warn("[voiceStore] refreshVoiceToken STALE — channel changed during fetch", {
           requestedChannelId: channelId,
@@ -380,6 +381,8 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
 
       if (!response.success || !response.data) {
         console.warn("[voiceStore] refreshVoiceToken FAILED", { error: response.error });
+        if (reportFailure) throw new VoiceFailure(response.status === 401 ? "session"
+          : response.status === 403 || response.status === 404 ? "access" : "connection");
         return null;
       }
 
@@ -398,6 +401,7 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
       return response.data;
     } catch (err) {
       console.error("[voiceStore] refreshVoiceToken error:", err);
+      if (reportFailure) throw err;
       return null;
     }
   },

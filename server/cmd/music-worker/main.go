@@ -36,10 +36,23 @@ func run() error {
 	if cookieFile == "" || os.Getenv("HICHAT_MUSIC_WORKER_ENDPOINT") == "" {
 		return &musicworker.Error{Code: "tool_missing"}
 	}
-	runner, err := services.NewMusicWorkerRunner(services.MusicWorkerRunnerConfig{
+	config := services.MusicWorkerRunnerConfig{
 		YTDLPPath:  os.Getenv("HICHAT_MUSIC_WORKER_YTDLP_PATH"),
 		CookieFile: cookieFile,
-	})
+	}
+	if config.JSEndpoint = os.Getenv("HICHAT_MUSIC_JS_ENDPOINT"); config.JSEndpoint != "" {
+		config.JSToken, err = readPrivateTokenFile(os.Getenv("HICHAT_MUSIC_JS_TOKEN_FILE"))
+		if err != nil {
+			return err
+		}
+		config.JSExecPath = os.Getenv("HICHAT_MUSIC_JS_EXEC_PATH")
+		if config.JSExecPath == "" {
+			config.JSExecPath = "/usr/local/bin/hichat-js-exec"
+		}
+	} else if os.Getenv("HICHAT_MUSIC_JS_TOKEN_FILE") != "" || os.Getenv("HICHAT_MUSIC_JS_EXEC_PATH") != "" {
+		return &musicworker.Error{Code: "tool_missing"}
+	}
+	runner, err := services.NewMusicWorkerRunner(config)
 	if err != nil {
 		return err
 	}
@@ -75,8 +88,11 @@ func run() error {
 }
 
 func readWorkerToken() (string, error) {
+	return readPrivateTokenFile(os.Getenv("HICHAT_MUSIC_WORKER_TOKEN_FILE"))
+}
+
+func readPrivateTokenFile(path string) (string, error) {
 	invalid := &musicworker.Error{Code: "tool_missing"}
-	path := os.Getenv("HICHAT_MUSIC_WORKER_TOKEN_FILE")
 	if path == "" || !filepath.IsAbs(path) {
 		return "", invalid
 	}

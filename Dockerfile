@@ -77,7 +77,8 @@ RUN CGO_ENABLED=1 GOOS=linux \
     go build -trimpath -ldflags="-s -w" -o /out/hichat-server . && \
     CGO_ENABLED=1 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/hichat-pgprobe ./cmd/pgprobe && \
     CGO_ENABLED=1 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/hichat-media-exec ./cmd/hichat-media-exec && \
-    CGO_ENABLED=1 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/hichat-music-worker ./cmd/music-worker
+    CGO_ENABLED=1 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/hichat-music-worker ./cmd/music-worker && \
+    CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/hichat-js-exec ./cmd/hichat-js-exec
 
 # YouTube challenge solving requires a JS runtime. Use the official Deno
 # binary image, pinned to a multiarch manifest (amd64 + arm64).
@@ -190,6 +191,7 @@ COPY --from=backend /out/hichat-server /app/hichat-server
 COPY --from=backend /out/hichat-pgprobe /app/hichat-pgprobe
 COPY --from=backend /out/hichat-media-exec /usr/local/bin/hichat-media-exec
 COPY --from=backend /out/hichat-music-worker /usr/local/bin/hichat-music-worker
+COPY --from=backend /out/hichat-js-exec /usr/local/bin/hichat-js-exec
 # HF exposes existing secrets through ephemeral BuildKit mounts. Validate the
 # actual PostgreSQL TLS endpoint before accepting a new production image. No
 # database writes, secret ARG/ENV layer, or certificate files are retained.

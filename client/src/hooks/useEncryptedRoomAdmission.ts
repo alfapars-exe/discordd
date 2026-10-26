@@ -1,6 +1,7 @@
+import { VoiceFailure } from "../audio/voiceFailure";
 import {registerCaptureAdmission}from "../audio/microphoneAdmission";
 import { useLayoutEffect, useRef, useState } from "react";
-import { Room, RoomEvent, ConnectionState, type LocalTrack, type LocalTrackPublication, type RoomOptions, Track } from "livekit-client";
+import { Room, RoomEvent, ConnectionState, type LocalTrack, type LocalTrackPublication, type Participant, type RoomOptions, Track } from "livekit-client";
 import type { IndexedVoiceKeyProvider } from "../audio/voiceEncryptionKeys";
 import { mediaTokenSubject } from "../audio/voiceEncryptionKeys";
 import { getAuthSessionSnapshot, subscribeAuthOwnerChanges, subscribeAuthGenerationChanges } from "../api/authSessionEvents";
@@ -38,7 +39,7 @@ export function useEncryptedRoomAdmission(options: Options) {
     if (!enabled || !worker) return;
     const authScope = JSON.stringify(getAuthSessionSnapshot());
     if (!tokenOwner || tokenOwner !== getAuthSessionSnapshot().ownerId) {
-      const error = new Error("Media credentials belong to another session");
+      const error = new VoiceFailure("session");
       queueMicrotask(() => { if (latest.current.scope === scope) { setRoomFailure({ scope, error }); latest.current.onError(error); } });
       return;
     }
@@ -96,7 +97,11 @@ export function useEncryptedRoomAdmission(options: Options) {
         return publication;
       } finally { record.pending.delete(track); }
     };
-    const fatal = (error: unknown) => {
+    const fatal = (error: unknown, participant?: Participant) => {
+      // The SDK drops undecipherable remote frames. A remote sender with an
+      // obsolete/wrong key must not retire our valid local encryption context
+      // and disconnect every other participant. Local/worker failures remain fatal.
+      if (participant && participant !== record.room.localParticipant && participant.identity !== tokenOwner) return;
       if (!record.active) return;
       record.ready = false; record.error = error; record.revision++; pauseAll();
       void record.room.disconnect();
@@ -152,9 +157,13 @@ export function useEncryptedRoomAdmission(options: Options) {
       && latest.current.scope === scope && latest.current.keyScope === keyScope && latest.current.keyReady
       && latest.current.isCurrentSource?.() !== false && JSON.stringify(getAuthSessionSnapshot()) === authScope && mediaTokenSubject(latest.current.token) === getAuthSessionSnapshot().ownerId;
     let timer: ReturnType<typeof setTimeout>;
-    const timeout = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(new Error("Encrypted media admission timed out")), 10_000);
-    });
+    let rejectTimeout: (error: VoiceFailure) => void;
+    const timeout = new Promise<never>((_, reject) => { rejectTimeout = reject; });
+    const armTimeout = (kind: "connection_timeout" | "encryption_timeout", duration: number) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => rejectTimeout(new VoiceFailure(kind)), duration);
+    };
+    armTimeout("encryption_timeout", 10_000);
     let removeAcknowledgement = () => {};
     let removeConnectionWait = () => {};
     const enable = async () => {
@@ -163,10 +172,11 @@ export function useEncryptedRoomAdmission(options: Options) {
       // Transport may connect only after LocalParticipant's GCM flag is set,
       // but no capture/control owner is mounted until the real owner's ACK.
       record.admitted = true; changed((value) => value + 1);
+      armTimeout("connection_timeout", 30_000);
       await new Promise<void>((resolve, reject) => {
         const connected = () => {
           if (!current() || record.room.state !== ConnectionState.Connected) return;
-          if (record.room.localParticipant.identity !== mediaTokenSubject(latest.current.token)) { reject(new Error("Connected media identity does not match current owner")); return; }
+          if (record.room.localParticipant.identity !== mediaTokenSubject(latest.current.token)) { reject(new VoiceFailure("session")); return; }
           resolve();
         };
         record.room.on(RoomEvent.Connected, connected);
@@ -176,7 +186,8 @@ export function useEncryptedRoomAdmission(options: Options) {
       });
       if (!current()) return false;
       const identity = record.room.localParticipant.identity;
-      if (!identity || identity !== getAuthSessionSnapshot().ownerId) throw new Error("Encrypted media owner is unavailable");
+      if (!identity || identity !== getAuthSessionSnapshot().ownerId) throw new VoiceFailure("session");
+      armTimeout("encryption_timeout", 10_000);
       const request = crypto.randomUUID();
       await new Promise<void>((resolve) => {
         const acknowledge = (event: MessageEvent) => {

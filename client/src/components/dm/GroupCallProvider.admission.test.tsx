@@ -36,7 +36,12 @@ beforeAll(async()=>{await import("./GroupDMCall");});
 beforeEach(()=>{
  const old=useGroupCallStore.getState().session;if(old)useGroupCallStore.getState().leave(old.nonce);h.rooms=[];h.list.mockReset().mockResolvedValue({success:true,data:{group_dms:[group]}});h.token.mockReset().mockResolvedValue({success:true,data:{token:`header.${btoa(JSON.stringify({sub:'me'}))}.signature`,channel_id:"group",url:"wss://voice.test",e2ee_passphrase:"pass",e2ee_key_context:"context",e2ee_key_epoch:1,e2ee_key_index:1}});
  setTokens("access","refresh");useAuthStore.setState({user:{id:"me"} as never});publishAuthOwnerChange("me");useE2EEStore.setState({initStatus:"ready",localDeviceId:"device"});useGroupDMStore.setState({ownerId:"me",authGeneration:getAuthGeneration(),groupsReady:true,groups:[group]});
- vi.stubGlobal("Worker",class{listeners=new Set<(event:MessageEvent)=>void>();terminate=vi.fn();addEventListener(_event:string,fn:(event:MessageEvent)=>void){this.listeners.add(fn)}removeEventListener(_event:string,fn:(event:MessageEvent)=>void){this.listeners.delete(fn)}postMessage(data:unknown){queueMicrotask(()=>this.listeners.forEach(fn=>fn({data} as MessageEvent)))}});
+ // Match EventTarget event routing: normal worker message ACKs must never
+ // invoke error/messageerror listeners installed by the key provider.
+ vi.stubGlobal("Worker",class extends EventTarget{
+  terminate=vi.fn();
+  postMessage(data:unknown){queueMicrotask(()=>this.dispatchEvent(new MessageEvent("message",{data})));}
+ });
 });
 it.each([false,true])("keeps real admission/installed SDK room stable through parent navigation rerenders (strict=%s)",async strict=>{
  const body=(route:string)=><><section>{route}</section><GroupCallProvider/></>;

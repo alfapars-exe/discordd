@@ -26,3 +26,41 @@ it("processes ready with real store implementations and publishes the server lis
   expect(status).toHaveBeenCalledWith("connected");
   expect(useServerStore.getState().servers.map((server) => server.id)).toEqual(["ready-server"]);
 });
+
+
+it("refreshes keys even when a LiveKit token survives an API reconnect", async () => {
+  const { useVoiceStore } = await import("../../stores/voiceStore");
+  const original = useVoiceStore.getState().refreshVoiceToken;
+  let finish!: (value: never) => void;
+  const refresh = vi.fn(() => new Promise<never>((resolve) => { finish = resolve; }));
+  useVoiceStore.setState({ currentVoiceChannelId: "voice", currentVoiceServerId: "server", livekitToken: "retained", refreshVoiceToken: refresh });
+  const sendVoiceJoin = vi.fn();
+  await handleSystemEvent({ op: "ready", d: { online_user_ids: [], servers: [], muted_server_ids: [], muted_channel_ids: [], pref_status: "online", voice_epoch: "restarted", game_activity_epoch: "game" } } as unknown as WSMessage, { sendVoiceJoin }, vi.fn());
+  expect(refresh).toHaveBeenCalledWith("voice");
+  expect(sendVoiceJoin).not.toHaveBeenCalled();
+  finish({ token: "fresh" } as never);
+  await Promise.resolve();
+  expect(sendVoiceJoin).toHaveBeenCalledWith("voice");
+  useVoiceStore.setState({ currentVoiceChannelId: null, livekitToken: null, refreshVoiceToken: original });
+});
+
+
+it.each(["new-ready", "channel-switch", "owner-switch"])("ignores obsolete ready refresh completion after %s", async (change) => {
+ const { useVoiceStore } = await import("../../stores/voiceStore");
+ const original = useVoiceStore.getState().refreshVoiceToken;
+ const originalLeave = useVoiceStore.getState().leaveVoiceChannel;
+ const resolvers: ((value: never) => void)[] = [];
+ const refresh = vi.fn(() => new Promise<never>(resolve => resolvers.push(resolve)));
+ const leave = vi.fn();
+ useVoiceStore.setState({currentVoiceChannelId:"voice",livekitToken:null,refreshVoiceToken:refresh,leaveVoiceChannel:leave});
+ const sendVoiceJoin=vi.fn();
+ const ready={op:"ready",d:{online_user_ids:[],servers:[],muted_server_ids:[],muted_channel_ids:[],pref_status:"online",voice_epoch:"epoch",game_activity_epoch:"game"}} as unknown as WSMessage;
+ await handleSystemEvent(ready,{sendVoiceJoin},vi.fn());
+ if(change==="new-ready") await handleSystemEvent(ready,{sendVoiceJoin},vi.fn());
+ else if(change==="channel-switch") useVoiceStore.setState({currentVoiceChannelId:"other"});
+ else useAuthStore.setState({user:{id:"other-owner"} as never});
+ resolvers[0](null as never); await Promise.resolve();
+ expect(leave).not.toHaveBeenCalled();expect(sendVoiceJoin).not.toHaveBeenCalled();
+ if(change==="new-ready"){resolvers[1]({token:"fresh"} as never);await Promise.resolve();expect(sendVoiceJoin).toHaveBeenCalledWith("voice");}
+ useVoiceStore.setState({currentVoiceChannelId:null,refreshVoiceToken:original,leaveVoiceChannel:originalLeave});
+});

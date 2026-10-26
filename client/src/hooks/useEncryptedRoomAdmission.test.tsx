@@ -52,6 +52,24 @@ function publication(source = Track.Source.Microphone) {
 beforeEach(() => { sdk.rooms.length = 0; sdk.enable.mockReset().mockResolvedValue(undefined); sdk.constructError = null; sdk.capture=async()=>[]; sdk.publish=async(track)=>({track}); publishAuthOwnerChange("owner"); publishAuthGenerationChange(10); });
 
 describe("encrypted room admission", () => {
+  it.each(["local", "worker"])("isolates remote decode errors while keeping %s encryption failures fatal", async (source) => {
+    const initial = { ...options(), keyReady: true };
+    const view = renderHook(() => useEncryptedRoomAdmission(initial));
+    await connectAndAdmit(view);
+    const room = view.result.current.room as unknown as TestRoom;
+    act(() => room.emit("encryption-error", new Error("InvalidKey"), { identity: "__music_bot__:channel" }));
+    expect(room.disconnect).not.toHaveBeenCalled();
+    expect(view.result.current.publishReady).toBe(true);
+    expect(view.result.current.error).toBeFalsy();
+    expect(initial.onError).not.toHaveBeenCalled();
+    const failure=new Error("local encryption failed");
+    act(() => room.emit("encryption-error", failure, source === "local" ? room.localParticipant : undefined));
+    expect(initial.onError).toHaveBeenCalledExactlyOnceWith(failure);
+    expect(room.disconnect).toHaveBeenCalled();
+    expect(view.result.current.publishReady).toBe(false);
+    view.unmount();
+  });
+
   it("does not connect or admit publishers before key readiness and awaited explicit GCM enable", async () => {
     const pending = deferred(); sdk.enable.mockReturnValue(pending.promise);
     const initial = { ...options(), worker: fakeWorker(false) };
@@ -208,4 +226,35 @@ describe("encrypted room admission", () => {
     act(()=>publishAuthGenerationChange(22));expect(captureAdmissionCurrent(participant)).toBe(false);expect(closed.mock.calls.length).toBeGreaterThanOrEqual(2);unsubscribe();view.unmount();
   });
 
+});
+
+it("classifies a slow transport separately from the encryption acknowledgement deadline", async () => {
+ const initial={...options(),keyReady:true};
+ vi.useFakeTimers();
+ const view=renderHook(()=>useEncryptedRoomAdmission(initial));
+ await act(async()=>{await vi.advanceTimersByTimeAsync(0);});
+ expect(view.result.current.connect).toBe(true);
+ try {
+  await act(async()=>{await vi.advanceTimersByTimeAsync(10_000);});
+  expect(view.result.current.error).toBeNull();
+  await act(async()=>{await vi.advanceTimersByTimeAsync(20_000);});
+  expect(view.result.current.error).toMatchObject({kind:"connection_timeout"});
+  expect(view.result.current.publishReady).toBe(false);
+ } finally {view.unmount();vi.useRealTimers();}
+});
+it("starts the encryption acknowledgement deadline only after transport connects", async () => {
+ const initial={...options(),keyReady:true,worker:fakeWorker(false)};
+ vi.useFakeTimers();
+ const view=renderHook(()=>useEncryptedRoomAdmission(initial));
+ await act(async()=>{await vi.advanceTimersByTimeAsync(0);});
+ expect(view.result.current.connect).toBe(true);
+ const room=view.result.current.room as unknown as TestRoom;
+ try {
+  await act(async()=>{await vi.advanceTimersByTimeAsync(20_000);});
+  await act(async()=>{room.state="connected";room.localParticipant.identity="owner";room.emit("connected");});
+  await act(async()=>{await vi.advanceTimersByTimeAsync(9999);});
+  expect(view.result.current.error).toBeNull();expect(view.result.current.publishReady).toBe(false);
+  await act(async()=>{await vi.advanceTimersByTimeAsync(1);});
+  expect(view.result.current.error).toMatchObject({kind:"encryption_timeout"});
+ } finally {view.unmount();vi.useRealTimers();}
 });

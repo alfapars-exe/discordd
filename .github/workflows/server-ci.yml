@@ -62,6 +62,17 @@ jobs:
           go test ./... -count=1 -timeout=60s
           go vet ./...
 
+      - name: Pinned JS solver Linux process and real Deno contracts
+        shell: bash
+        run: |
+          docker build --tag hichat-js-solver-test deploy/music-worker/solver
+          # Process fixtures create executable test stubs in /tmp. The container
+          # remains network-isolated, read-only, and receives no runtime secrets.
+          docker run --rm --network none --read-only --memory 1g --cpus 2 \
+            --tmpfs /tmp:rw,exec,nosuid,nodev,mode=1777 \
+            --mount "type=bind,source=$PWD/deploy/music-worker/solver/test_app.py,target=/app/test_app.py,readonly" \
+            hichat-js-solver-test python -m unittest -v test_app
+
       - name: go test (race + cover, remaining packages)
         shell: bash
         run: |

@@ -33,10 +33,10 @@ services:
           create_host_path: false
     tmpfs:
       - /tmp:rw,nosuid,nodev,noexec,size=32m,mode=0700,uid=61150,gid=61150
-    mem_limit: 320m
-    mem_reservation: 224m
-    memswap_limit: 320m
-    cpus: 0.50
+    mem_limit: 1g
+    mem_reservation: 768m
+    memswap_limit: 1g
+    cpus: 2.00
     pids_limit: 64
     oom_score_adj: 500
     stop_grace_period: 10s

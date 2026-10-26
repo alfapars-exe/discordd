@@ -64,3 +64,8 @@ client/public/media-classifier/** -text
 # Audio runtime checksums must survive Windows checkout without CRLF rewriting.
 client/public/audio-engines/** -text
 client/public/dtln/** -text
+
+# EJS integrity checks require the exact upstream bytes on every platform.
+deploy/music-worker/solver/vendor/*.js -text
+# Keep this small test fixture in Git so ordinary CI checkouts need no LFS fetch.
+server/musicjs/testdata/ejs-0.8.0-prefix.gz -filter -diff -merge -text

@@ -327,6 +327,23 @@ func TestMusicWorkerIntegrationProviderFixture(t *testing.T) {
 			fail("inherited credential environment")
 		}
 	}
+	if os.Getenv("DENO_V8_FLAGS") != "--max-old-space-size=512,--max-semi-space-size=4" || os.Getenv("NODE_OPTIONS") != "" {
+		fail("Deno resource limit")
+	}
+	runtimeIndex := slices.Index(args, "--js-runtimes")
+	if !slices.Contains(args, "--no-js-runtimes") || runtimeIndex < 0 || runtimeIndex+1 >= len(args) || args[runtimeIndex+1] != "deno" {
+		fail("fixed Deno runtime")
+	}
+	metadataOnly := strings.HasPrefix(mode, "metadata")
+	if slices.Contains(args, "--ignore-no-formats-error") != metadataOnly {
+		fail("metadata-only optimization scope")
+	}
+	if metadataOnly {
+		index := slices.Index(args, "--extractor-args")
+		if index < 0 || index+1 >= len(args) || args[index+1] != "youtube:player_skip=js" {
+			fail("metadata JavaScript skip")
+		}
+	}
 	for _, flag := range []string{"--ignore-config", "--no-plugin-dirs", "--no-remote-components", "--no-cache-dir"} {
 		if !slices.Contains(args, flag) {
 			fail("missing isolation flag")

@@ -3,6 +3,7 @@
  * Handles: ready, presence, members, roles, servers, friends, blocks, P2P calls, E2EE, badges.
  */
 
+import { getAuthGeneration } from "../../api/client";
 import { useChannelStore } from "../../stores/channelStore";
 import { useGameJoinStore } from "../../stores/gameJoinStore";
 import { useMessageStore } from "../../stores/messageStore";
@@ -55,6 +56,7 @@ import type { WSHandlerContext } from "./types";
  * not rendered state.
  */
 let hadReadyBefore = false;
+let voiceReadyIntent = 0;
 
 function notificationTargetStillAvailable(n: { server_id: string | null; channel_id: string | null; dm_channel_id: string | null; payload: Record<string, unknown> }): boolean {
   if (n.server_id) {
@@ -91,6 +93,9 @@ export async function handleSystemEvent(
       return true;
 
     case "ready": {
+      const readyIntent = ++voiceReadyIntent;
+      const authGeneration = getAuthGeneration();
+      const owner = useAuthStore.getState().user?.id;
       useGameActivityStore.getState().start(msg.d.game_activity_epoch);
       const data = msg.d;
 
@@ -170,22 +175,18 @@ export async function handleSystemEvent(
         const previousChannel = voiceState.currentVoiceChannelId;
         const liveKitStillConnected = !!voiceState.livekitToken;
 
-        if (previousChannel && !liveKitStillConnected) {
-          // LiveKit also dropped — hot-swap token to avoid connect=false→true thrash
-          console.warn("[ws ready] Voice resume — LiveKit dropped, refreshing token", { channel: previousChannel });
-          voiceState.refreshVoiceToken(previousChannel).then((tokenResp) => {
-            if (tokenResp) {
-              ctx.sendVoiceJoin(previousChannel);
-            } else {
-              console.warn("[ws ready] Voice token refresh failed — user needs to rejoin manually");
-              voiceState.leaveVoiceChannel();
-            }
+        if (previousChannel) {
+          // A surviving WebRTC connection does not prove that its room key is
+          // current: the API process may have restarted while LiveKit stayed up.
+          // Refresh credentials on every ready before re-registering presence.
+          const generation = voiceState._joinGeneration;
+          void voiceState.refreshVoiceToken(previousChannel).then((tokenResp) => {
+            const current = useVoiceStore.getState();
+            if (readyIntent !== voiceReadyIntent || getAuthGeneration() !== authGeneration || useAuthStore.getState().user?.id !== owner
+              || current.currentVoiceChannelId !== previousChannel || current._joinGeneration !== generation) return;
+            if (tokenResp) ctx.sendVoiceJoin(previousChannel);
+            else if (!liveKitStillConnected) current.leaveVoiceChannel();
           });
-        } else if (previousChannel && liveKitStillConnected) {
-          // LiveKit still connected — just re-register with backend so orphan
-          // cleanup doesn't remove our state. Server silently refreshes (no broadcast).
-          console.warn("[ws ready] Voice re-register — LiveKit still connected", { channel: previousChannel });
-          ctx.sendVoiceJoin(previousChannel);
         }
       }
       return true;

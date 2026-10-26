@@ -56,7 +56,7 @@
   "endCall": "Aramayı Bitir",
   "minimize": "Küçült",
   "livekitConnectionError": "Ses sunucusuna bağlanılamadı. Lütfen sunucunun çalıştığından emin olun ve tekrar deneyin.",
-  "voiceDisconnectedHint": "Ses bağlantısı koptu — ses sunucusu erişilemez olabilir",
+  "voiceDisconnectedHint": "Ses bağlantısı kesildi.",
   "voiceJoinFailed": "Ses kanalına katılınamadı.",
   "voiceJoinTimedOut": "Susturulmuşken ses kanallarına katılamazsın.",
   "ping": "Gecikme",
@@ -140,5 +140,13 @@
   "p2pScreenAudioVolume": "Kişisel paylaşım sesi düzeyi",
   "p2pScreenAudioPeerUnsupported": "Diğer istemci ayrı paylaşım sesi desteği bildirmedi.",
   "p2pScreenAudioOff": "Sistem sesi paylaşılmıyor.",
-  "p2pScreenAudioEnded": "Sistem sesi sona erdi. Ekran videosu sessiz devam ediyor."
+  "p2pScreenAudioEnded": "Sistem sesi sona erdi. Ekran videosu sessiz devam ediyor.",
+  "recoveryOffline": "İnternet bağlantısı bekleniyor. Bağlantınız geldiğinde tekrar deneyeceğiz.",
+  "recoveryFailed": "Ses kanalına yeniden bağlanamadık. İnternet bağlantınızı kontrol edip tekrar deneyin.",
+  "recoveryUnsupported": "Bu uygulama sürümü güvenli ses bağlantısını desteklemiyor. Uygulamayı güncelleyin.",
+  "recoveryAccess": "Bu ses kanalına erişiminiz artık yok.",
+  "recoverySession": "Oturumunuz değişti. Ses kanalına katılmak için tekrar giriş yapın.",
+  "recoveryEncryption": "Güvenli ses bağlantısı kurulamadı. Yeniden bağlanıyoruz… ({{attempt}}/{{max}})",
+  "recoveryConnection": "Ses bağlantısı kesildi. Yeniden bağlanıyoruz… ({{attempt}}/{{max}})",
+  "recoveryRetry": "Tekrar bağlan"
 }

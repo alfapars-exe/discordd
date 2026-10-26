@@ -273,8 +273,8 @@ func keepJobAlive(job *brokerJob, conn *websocket.Conn, done <-chan struct{}, in
 		case <-ticker.C:
 			_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if conn.WriteMessage(websocket.TextMessage, []byte(jobKeepaliveMessage)) != nil {
-				job.cancel()
-				_ = conn.Close()
+				// The producer may have closed after buffering its complete result.
+				// Let the reader drain audio under backpressure and own the outcome.
 				return
 			}
 		}
