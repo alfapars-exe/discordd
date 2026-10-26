@@ -17,8 +17,8 @@ CREATE TABLE channels_thread_type_upgrade (
     archived_at DATETIME
 );
 INSERT INTO channels_thread_type_upgrade
-    (id,name,type,category_id,topic,position,user_limit,bitrate,created_at,server_id,parent_channel_id,starter_message_id,archived_at)
-SELECT id,name,type,category_id,topic,position,user_limit,bitrate,created_at,server_id,parent_channel_id,starter_message_id,archived_at FROM channels;
+    (rowid,id,name,type,category_id,topic,position,user_limit,bitrate,created_at,server_id,parent_channel_id,starter_message_id,archived_at)
+SELECT rowid,id,name,type,category_id,topic,position,user_limit,bitrate,created_at,server_id,parent_channel_id,starter_message_id,archived_at FROM channels;
 DROP TABLE channels;
 ALTER TABLE channels_thread_type_upgrade RENAME TO channels;
 CREATE INDEX idx_channels_server ON channels(server_id);

@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 )
 
@@ -37,6 +38,13 @@ func (db *DB) applyThreadChannelTypeMigration(filename, content string) (result 
 		return err
 	}
 	defer tx.Rollback()
+	// Legacy libSQL installations can already contain orphan rows. Reject only
+	// violations introduced by this rebuild, keeping existing rows for startup
+	// repair rather than making an unrelated orphan prevent every future boot.
+	before, err := threadMigrationForeignKeyViolations(ctx, tx)
+	if err != nil {
+		return err
+	}
 	// Preserve installation-specific indexes/triggers as well as the standard
 	// indexes recreated by the SQL file.
 	objects, err := tx.QueryContext(ctx, "SELECT name, sql FROM sqlite_master WHERE tbl_name='channels' AND type IN ('index','trigger') AND sql IS NOT NULL")
@@ -72,21 +80,40 @@ func (db *DB) applyThreadChannelTypeMigration(filename, content string) (result 
 			}
 		}
 	}
-	rows, err := tx.QueryContext(ctx, "PRAGMA foreign_key_check")
+	after, err := threadMigrationForeignKeyViolations(ctx, tx)
 	if err != nil {
-		return fmt.Errorf("thread migration cannot validate foreign keys: %w", err)
+		return err
 	}
-	violations := rows.Next()
-	checkErr := rows.Err()
-	rows.Close()
-	if checkErr != nil {
-		return checkErr
-	}
-	if violations {
-		return fmt.Errorf("thread migration foreign key validation failed")
+	for violation := range after {
+		if _, existed := before[violation]; !existed {
+			return fmt.Errorf("thread migration introduced foreign key violation in %s", violation.table)
+		}
 	}
 	if _, err := tx.ExecContext(ctx, "INSERT INTO schema_migrations(filename) VALUES (?)", filename); err != nil {
 		return err
 	}
 	return tx.Commit()
+}
+
+type threadMigrationFKViolation struct {
+	table, parent string
+	rowID         sql.NullInt64
+	foreignKeyID  int64
+}
+
+func threadMigrationForeignKeyViolations(ctx context.Context, tx *sql.Tx) (map[threadMigrationFKViolation]struct{}, error) {
+	rows, err := tx.QueryContext(ctx, "PRAGMA foreign_key_check")
+	if err != nil {
+		return nil, fmt.Errorf("thread migration cannot validate foreign keys: %w", err)
+	}
+	defer rows.Close()
+	violations := make(map[threadMigrationFKViolation]struct{})
+	for rows.Next() {
+		var violation threadMigrationFKViolation
+		if err := rows.Scan(&violation.table, &violation.rowID, &violation.parent, &violation.foreignKeyID); err != nil {
+			return nil, fmt.Errorf("thread migration cannot read foreign key violation: %w", err)
+		}
+		violations[violation] = struct{}{}
+	}
+	return violations, rows.Err()
 }
