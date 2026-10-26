@@ -304,18 +304,31 @@ export const useNotificationStore = create<NotificationState>((set, get) => {
       if (!session) return;
       unreadRevision += 1;
       const readAt = new Date().toISOString();
+      const revision = ++readRevision;
+      const unreadIds = new Set(get().items.filter((item) => !item.read_at).map((item) => item.id));
       pendingReadRevisions.clear();
+      for (const id of unreadIds) pendingReadRevisions.set(id, revision);
       set((state) => ({
         items: state.items.map((item) => (item.read_at ? item : { ...item, read_at: readAt })),
         unreadCount: 0,
         badgeUnreadCount: 0,
       }));
+      let succeeded = false;
       try {
         const res = await notificationsApi.markAllNotificationsRead();
-        if (!isSessionCurrent(session)) return;
-        if (!res.success) void get().fetchCount();
+        succeeded = res.success;
       } catch {
-        if (isSessionCurrent(session)) void get().fetchCount();
+        // Restore only this operation's optimistic rows below.
+      }
+      if (!isSessionCurrent(session)) return;
+      const ownedIds = new Set([...unreadIds].filter((id) => pendingReadRevisions.get(id) === revision));
+      for (const id of ownedIds) pendingReadRevisions.delete(id);
+      if (succeeded) {
+        rememberReadIds([...unreadIds]);
+      } else {
+        set((state) => ({ items: state.items.map((item) =>
+          ownedIds.has(item.id) && item.read_at === readAt ? { ...item, read_at: null } : item) }));
+        void get().fetchCount();
       }
     },
 
