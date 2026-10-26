@@ -7257,7 +7257,7 @@
       "id": "p11.detect-games",
       "title": "Detect running games",
       "phase": "P11",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R20"
       ],
@@ -7270,7 +7270,8 @@
         "Windows detects supported processes and updates current game without collecting unrelated process contents."
       ],
       "code": ["electron/registered-games.ts", "client/src/components/settings/RegisteredGamesSettings.tsx"],
-      "evidence": ["implementation/verification/p11-local-registered-games-2026-10-24.json"]
+      "evidence": ["implementation/verification/p11-local-registered-games-2026-10-24.json",
+        "implementation/verification/p11-windows-process-provider-filter-2026-10-26.json"]
     },
     {
       "id": "p11.manual-game",
