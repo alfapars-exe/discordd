@@ -134,6 +134,15 @@ func (r *sqliteGroupDMRepo) changeMember(ctx context.Context, groupID, userID st
 	}
 	var result sql.Result
 	if add {
+		// Recheck capacity under the group lock: concurrent admissions can both
+		// pass the service's earlier membership snapshot.
+		var memberCount int
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM group_dm_members WHERE group_id=?`, groupID).Scan(&memberCount); err != nil {
+			return 0, err
+		}
+		if memberCount >= 10 {
+			return 0, fmt.Errorf("%w: group member limit reached", pkg.ErrConflict)
+		}
 		result, err = tx.ExecContext(ctx, `INSERT INTO group_dm_members(group_id,user_id) VALUES(?,?) ON CONFLICT(group_id,user_id) DO NOTHING`, groupID, userID)
 	} else {
 		result, err = tx.ExecContext(ctx, `DELETE FROM group_dm_members WHERE group_id=? AND user_id=?`, groupID, userID)
