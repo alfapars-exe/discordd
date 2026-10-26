@@ -25,7 +25,7 @@ import type { Channel, PublicUser } from "../../types";
 
 type UserCardTarget = { user: PublicUser; top: number; left: number };
 type MutePickerTarget = { serverId: string; x: number; y: number };
-type InviteTarget = { serverId: string; serverName: string };
+type InviteTarget = { serverId: string; serverName: string; returnFocus?: HTMLElement };
 type EventsTarget = { serverId: string; serverName: string; initialEventId?: string };
 type VoiceCtxMenuTarget = {
   userId: string;
@@ -131,6 +131,7 @@ function ChannelTreeOverlays({
         <InviteFriendsModal
           serverId={inviteTarget.serverId}
           serverName={inviteTarget.serverName}
+          returnFocus={inviteTarget.returnFocus}
           onClose={() => setInviteTarget(null)}
         />
       )}

@@ -52,6 +52,18 @@ vi.mock("../shared/Avatar", () => ({ default: ({ name }: { name: string }) => <s
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }), initReactI18next: { type: "3rdParty", init: () => {} } }));
 
 describe("InviteFriendsModal", () => {
+  it("returns to an explicit surviving trigger when its original menu item has unmounted", () => {
+    const header = document.createElement("button");
+    const menuItem = document.createElement("button");
+    document.body.append(header, menuItem);
+    menuItem.focus();
+    const view = render(<InviteFriendsModal serverId="s1" serverName="Team" returnFocus={header} onClose={() => undefined} />);
+    menuItem.remove();
+    view.unmount();
+    expect(header).toHaveFocus();
+    header.remove();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     getOrCreateShareInvite.mockResolvedValue({ code: "seven-day" });

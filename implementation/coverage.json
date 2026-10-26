@@ -1126,7 +1126,8 @@
       "evidence": [
         "implementation/verification/p0-partial-visual-112d1e8b-2026-10-26.json",
         "implementation/verification/p7-preview-followup-render-2026-10-26.json",
-        "implementation/verification/p5-profile-cache-showcase-2026-10-26.json"
+        "implementation/verification/p5-profile-cache-showcase-2026-10-26.json",
+        "implementation/verification/p4-invite-ui-187db84d-2026-10-27.json"
       ]
     },
     {
@@ -3666,7 +3667,8 @@
         "client/src/stores/channelPermissionStore.ts"
       ],
       "evidence": [
-        "implementation/verification/p4-invite-target-2026-10-23.json"
+        "implementation/verification/p4-invite-target-2026-10-23.json",
+        "implementation/verification/p4-invite-ui-187db84d-2026-10-27.json"
       ]
     },
     {

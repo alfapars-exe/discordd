@@ -1,0 +1,67 @@
+{
+  "date": "2026-10-27",
+  "source_commit": "187db84d",
+  "environment": "Existing Ego Lite Space0 p1; isolated UI18190/API18191; syntheticA; no production account used",
+  "observed": {
+    "viewport": 390,
+    "document_scroll_width": 390,
+    "dialog_width": 351,
+    "dialog_bounds": {
+      "left": 19.5,
+      "right": 370.5,
+      "top": 63.296875,
+      "bottom": 780.6875
+    },
+    "private_target_warning": true,
+    "initial_focus": "friend search",
+    "shift_tab_from_close": "last enabled per-recipient Invite control",
+    "tab_wrap": "close",
+    "escape_closes": true
+  },
+  "findings": [
+    "Private-channel warning is squeezed into a narrow first grid column, causing excessive vertical wrapping; screenshot inspected.",
+    "Real server-menu opener unmounts before modal close, so focus falls to body rather than a surviving server-header trigger."
+  ],
+  "zoom_attempt": {
+    "keys": "Control+0 then Control+Equal five times",
+    "observed_dpr": 1,
+    "observed_inner_width": 2548,
+    "accepted_200_percent": false
+  },
+  "music_acceptance": "Not exercised: isolated fixture lacks LiveKit; no voice/capture/external playback started.",
+  "screenshot": {
+    "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-ui-api-187db84d-20261027-4558180c\\invite-real390.png",
+    "sha256": "7e818327c6968a3e78c6776c93eadc52c059ec3b6d73031b138bd8c5a6df8d57"
+  },
+  "cleanup": "Dialog closed; emulation cleared; zoom reset; extra invite cleanup delegated to fixture owner; four unrelated tabs untouched.",
+  "delivery": "No source edits, commit, production mutation or external messages during browser audit.",
+  "followup": {
+    "source": "187db84d plus exact five authorized source overrides; real Vite HMR, no DOM style injection",
+    "overrides_lf_sha256": {
+      "client/src/components/layout/ServerList.tsx": "f27f3c60cdbb995e666ec41e0540438db635c52b706ff1a2ac8fb536c266e39b",
+      "client/src/components/layout/ChannelTree.tsx": "6b2ebbbdaf99b77a52ef1c16e4a8ecca2f1c17e83f6229144a42e3362dc28b35",
+      "client/src/components/layout/ChannelTreeOverlays.tsx": "a37b0de3ac025560dd321b9938dc3e1d2a005924aa9f55976ce544422cbc82a9",
+      "client/src/components/servers/InviteFriendsModal.tsx": "deb2deba8920354190ef20fe22a243f68cc204391a096e8a87d22f2db86d8c2d",
+      "client/src/styles/globals.css": "a4ef7c779cec395cad65148ca1647a3e819f895acecf5f65c1a4ab0a325f418f"
+    },
+    "verification": {
+      "tests": 26,
+      "eslint_exit": 0,
+      "typescript_exit": 0,
+      "viewport": 390,
+      "document_scroll_width": 390,
+      "modal_width": 351,
+      "modal_height": 565.390625,
+      "warning_width": 301,
+      "warning_grid_column": "1 / -1",
+      "escape_closed": true,
+      "restored_focus_label": "Izole QA sunucusu + dropdown chevron",
+      "screenshot_visually_inspected": true
+    },
+    "screenshot": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-ui-api-187db84d-20261027-4558180c\\invite-fixed390.png",
+      "sha256": "e1f9a1e37dca5663c83d5292b6cae2211cee4a972522d3e4eee8fe2aedc93dcc"
+    },
+    "acceptance": "Both recorded layout/focus findings resolved in actual browser at390. Native200 zoom and music runtime remain unverified."
+  }
+}

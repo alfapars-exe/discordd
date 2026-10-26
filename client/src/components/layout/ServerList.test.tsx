@@ -62,6 +62,16 @@ describe("V2 server management entry", () => {
     expect(props.onOpenEvents).toHaveBeenCalledWith("s1", "Server One");
   });
 
+  it("passes the surviving server header as the invite dialog's return-focus target", () => {
+    state.members[0].effective_permissions = Permissions.ManageInvites;
+    render(<ServerList {...props} />);
+    const header = screen.getByRole("button", { name: /Server One/ });
+    fireEvent.click(header);
+    const invite = (state.openMenu.mock.calls[0][1] as ContextMenuItem[]).find(item => item.label === "inviteFriends");
+    invite?.onClick();
+    expect(props.onInviteServer).toHaveBeenCalledWith("s1", "Server One", header);
+  });
+
   it("previews server rail movement and persists only when dropped", async () => {
     state.uiShellV2 = false;
     state.server.servers = [
