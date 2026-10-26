@@ -45,6 +45,17 @@ func (s *dmService) GetOrCreateChannel(ctx context.Context, userID, otherUserID 
 	// Platform admins bypass all DM privacy restrictions
 	sender, _ := s.userRepo.GetByID(ctx, userID)
 	isPlatformAdmin := sender != nil && sender.IsPlatformAdmin
+	// Blocking also prevents creating an unsolicited channel/sidebar event.
+	// Existing history above remains readable; new sends have their own gate.
+	if !isPlatformAdmin && s.blockChecker != nil {
+		blocked, err := s.blockChecker.IsBlocked(ctx, userID, otherUserID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check block status: %w", err)
+		}
+		if blocked {
+			return nil, fmt.Errorf("%w: cannot create DM with blocked user", pkg.ErrForbidden)
+		}
+	}
 	isFriend := false
 	if !isPlatformAdmin && s.friendChecker != nil {
 		isFriend, err = s.friendChecker.AreFriends(ctx, userID, otherUserID)
