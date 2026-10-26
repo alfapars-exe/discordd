@@ -26,6 +26,9 @@ func (r *sqliteFriendshipRepo) CreateBlockAtomic(ctx context.Context, block *mod
 	}
 	removed := false
 	err := database.WithTx(ctx, raw, func(tx *sql.Tx) error {
+		if err := lockDMCreationPair(ctx, tx, block.UserID, block.FriendID, database.IsPostgres(r.db)); err != nil {
+			return err
+		}
 		// Match the DM acceptance lock order before changing relationship rows.
 		if _, err := tx.ExecContext(ctx, `UPDATE dm_channels SET status = status WHERE (user1_id = ? AND user2_id = ?) OR (user1_id = ? AND user2_id = ?)`, block.UserID, block.FriendID, block.FriendID, block.UserID); err != nil {
 			return err

@@ -52,6 +52,18 @@ vi.mock("../shared/Avatar", () => ({ default: ({ name }: { name: string }) => <s
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }), initReactI18next: { type: "3rdParty", init: () => {} } }));
 
 describe("InviteFriendsModal", () => {
+  it("returns to an explicit surviving trigger when its original menu item has unmounted", () => {
+    const header = document.createElement("button");
+    const menuItem = document.createElement("button");
+    document.body.append(header, menuItem);
+    menuItem.focus();
+    const view = render(<InviteFriendsModal serverId="s1" serverName="Team" returnFocus={header} onClose={() => undefined} />);
+    menuItem.remove();
+    view.unmount();
+    expect(header).toHaveFocus();
+    header.remove();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     getOrCreateShareInvite.mockResolvedValue({ code: "seven-day" });
@@ -182,6 +194,30 @@ describe("InviteFriendsModal", () => {
     expect(await screen.findByRole("note")).toHaveTextContent("invitePrivateChannelWarning");
     await waitFor(() => expect(getOrCreateShareInvite).toHaveBeenCalledWith("s1", "private"));
     expect(screen.getByRole("textbox", { name: "inviteLink" })).toHaveValue("https://hichat.test/invite/private");
+  });
+
+  it("allows a sent recipient to receive a different channel invite and clears the old link while loading", async () => {
+    let resolveTarget!: (invite: { code: string }) => void;
+    getOrCreateShareInvite.mockImplementation((_serverID: string, channelID?: string) => channelID
+      ? new Promise((resolve) => { resolveTarget = resolve; })
+      : Promise.resolve({ code: "server" }));
+    render(<InviteFriendsModal serverId="s1" serverName="Team" onClose={() => undefined} />);
+    await screen.findByDisplayValue("https://hichat.test/invite/server");
+    fireEvent.change(screen.getByRole("textbox", { name: "searchFriends" }), { target: { value: "alice" } });
+    fireEvent.click(screen.getByRole("button", { name: "invite" }));
+    expect(await screen.findByRole("button", { name: "inviteSent" })).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText("inviteTargetChannel"), { target: { value: "public" } });
+    expect(screen.getByRole("textbox", { name: "inviteLink" })).toHaveValue("loading");
+    expect(screen.getByRole("button", { name: "invite" })).toBeEnabled();
+    resolveTarget({ code: "public" });
+    await screen.findByDisplayValue("https://hichat.test/invite/public");
+    fireEvent.click(screen.getByRole("button", { name: "invite" }));
+    await screen.findByRole("button", { name: "inviteSent" });
+    expect(sendMessage.mock.calls).toEqual([
+      ["dm-u1", "https://hichat.test/invite/server"],
+      ["dm-u1", "https://hichat.test/invite/public"],
+    ]);
   });
 
   it("continues a bulk send after a thrown DM error and leaves that recipient retryable", async () => {

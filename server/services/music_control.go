@@ -268,6 +268,9 @@ func (s *musicBotService) applyImmediateMusicCommand(ctx context.Context, store 
 	if bot == nil {
 		bot = s.lookupBot(op.ChannelID)
 	}
+	if bot == nil && (command.Action == "remove" || command.Action == "reorder") {
+		return s.editRestoredMusicQueue(ctx, store, head, op, command)
+	}
 	if bot != nil {
 		bot.sessionMu.Lock()
 		defer bot.sessionMu.Unlock()

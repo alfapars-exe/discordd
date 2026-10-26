@@ -92,9 +92,9 @@ func (s *threadService) Get(ctx context.Context, serverID, threadID, actorID str
 }
 
 func (s *threadService) SetArchived(ctx context.Context, serverID, threadID, actorID string, archived bool) (*models.Channel, error) {
-	thread, err := s.channels.GetByID(ctx, threadID)
-	if err != nil || thread.ServerID != serverID || thread.Type != models.ChannelTypeThread || thread.ParentChannelID == nil {
-		return nil, pkg.ErrNotFound
+	thread, err := s.Get(ctx, serverID, threadID, actorID)
+	if err != nil {
+		return nil, err
 	}
 	perms, err := s.permissions.ResolveChannelPermissions(ctx, actorID, *thread.ParentChannelID)
 	if err != nil {

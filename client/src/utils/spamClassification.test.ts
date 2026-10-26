@@ -44,6 +44,6 @@ describe("local spam signals", () => {
       expect(result.status, sample.id).toBe(sample.content === null ? "unknown" : "classified");
       if (sample.expectedReasons) expect(result.reasons, sample.id).toEqual(sample.expectedReasons);
     }
-    expect(counts).toEqual({ tp: 10, fp: 0, tn: 8, fn: 0, unknown: 1 });
+    expect(counts).toEqual({ tp: 14, fp: 0, tn: 10, fn: 0, unknown: 1 });
   });
 });

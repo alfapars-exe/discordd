@@ -92,6 +92,7 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
   const [inviteTarget, setInviteTarget] = useState<{
     serverId: string;
     serverName: string;
+    returnFocus?: HTMLElement;
   } | null>(null);
 
   // Channel mute duration picker state
@@ -311,7 +312,7 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
           setCreateModalCategoryId(undefined);
           setShowCreateModal(true);
         }}
-        onInviteServer={(serverId, serverName) => setInviteTarget({ serverId, serverName })}
+        onInviteServer={(serverId, serverName, returnFocus) => setInviteTarget({ serverId, serverName, returnFocus })}
         onOpenEvents={(serverId, serverName) => {
           if (!currentUser?.id || !servers.some((server) => server.id === serverId)) return;
           useUIStore.getState().openServerEvents({ serverId, serverName, expectedUserId: currentUser.id, authGeneration: getAuthGeneration() });

@@ -704,5 +704,5 @@ describe("account-scoped preference synchronization", () => {
 });
 
 it("preserves account-scoped voice event booleans without leaking them to another account",()=>{
- state().reset();localStorage.clear();state().bindAccount("alice");const keys=["voiceJoinSound","voiceLeaveSound","voiceWatchStartSound","voiceWatchStopSound","voiceMuteSound","voiceUnmuteSound","voiceDeafenSound","voiceUndeafenSound"];for(const key of keys){state().set({notifications:{[key]:false}});expect(state().data.notifications).toMatchObject({[key]:false});}state().bindAccount("bob");for(const key of keys)expect((state().data.notifications as Record<string,unknown>|undefined)?.[key]).toBeUndefined();
+ state().reset();localStorage.clear();state().bindAccount("alice");const keys=["voiceStreamStartSound","voiceStreamStopSound","voiceJoinSound","voiceLeaveSound","voiceWatchStartSound","voiceWatchStopSound","voiceMuteSound","voiceUnmuteSound","voiceDeafenSound","voiceUndeafenSound"];for(const key of keys){state().set({notifications:{[key]:false}});expect(state().data.notifications).toMatchObject({[key]:false});}state().bindAccount("bob");for(const key of keys)expect((state().data.notifications as Record<string,unknown>|undefined)?.[key]).toBeUndefined();
 });

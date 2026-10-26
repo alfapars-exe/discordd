@@ -1447,7 +1447,7 @@
     "desktop": "Masaüstü bildirimleri",
     "voiceEffectsDesc": "Görüşme olay sesleri seçili çıkışı ve ana ses düzeyini kullanır. Sağırlaştırıldığında efektler ve önizlemeler sessizdir; sağırlaştırmayı kaldırmak yalnız kendi sesini çalar.",
     "voiceEffectPreview": "Önizle: {{event}}",
-    "voiceEffects": {"join": "Katılma", "leave": "Ayrılma", "watchStart": "İzlemeye başlama", "watchStop": "İzlemeyi bırakma", "mute": "Susturma", "unmute": "Susturmayı kaldırma", "deafen": "Sağırlaştırma", "undeafen": "Sağırlaştırmayı kaldırma"},
+    "voiceEffects": {"streamStart": "Yayın başladı", "streamStop": "Yayın sona erdi", "join": "Katılma", "leave": "Ayrılma", "watchStart": "İzlemeye başlama", "watchStop": "İzlemeyi bırakma", "mute": "Susturma", "unmute": "Susturmayı kaldırma", "deafen": "Sağırlaştırma", "undeafen": "Sağırlaştırmayı kaldırma"},
     "sounds": "Sesler",
     "email": "E-posta tercihleri",
     "requestPermission": "Masaüstü bildirimlerine izin ver",

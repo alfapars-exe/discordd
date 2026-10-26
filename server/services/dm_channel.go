@@ -9,6 +9,7 @@ import (
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
 )
 
@@ -45,6 +46,17 @@ func (s *dmService) GetOrCreateChannel(ctx context.Context, userID, otherUserID 
 	// Platform admins bypass all DM privacy restrictions
 	sender, _ := s.userRepo.GetByID(ctx, userID)
 	isPlatformAdmin := sender != nil && sender.IsPlatformAdmin
+	// Blocking also prevents creating an unsolicited channel/sidebar event.
+	// Existing history above remains readable; new sends have their own gate.
+	if !isPlatformAdmin && s.blockChecker != nil {
+		blocked, err := s.blockChecker.IsBlocked(ctx, userID, otherUserID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check block status: %w", err)
+		}
+		if blocked {
+			return nil, fmt.Errorf("%w: cannot create DM with blocked user", pkg.ErrForbidden)
+		}
+	}
 	isFriend := false
 	if !isPlatformAdmin && s.friendChecker != nil {
 		isFriend, err = s.friendChecker.AreFriends(ctx, userID, otherUserID)
@@ -74,7 +86,13 @@ func (s *dmService) GetOrCreateChannel(ctx context.Context, userID, otherUserID 
 		User2ID: user2,
 		Status:  models.DMStatusAccepted,
 	}
-	if err := s.dmRepo.CreateChannel(ctx, channel); err != nil {
+	created := true
+	if writer, ok := s.dmRepo.(repository.UnblockedDMChannelCreator); ok && !isPlatformAdmin {
+		created, err = writer.CreateChannelUnblocked(ctx, channel)
+	} else {
+		err = s.dmRepo.CreateChannel(ctx, channel)
+	}
+	if err != nil {
 		return nil, fmt.Errorf("failed to create DM channel: %w", err)
 	}
 
@@ -85,6 +103,10 @@ func (s *dmService) GetOrCreateChannel(ctx context.Context, userID, otherUserID 
 		InitiatedBy:   channel.InitiatedBy,
 		CreatedAt:     channel.CreatedAt,
 		LastMessageAt: channel.LastMessageAt,
+	}
+	if !created {
+		result.E2EEEnabled = channel.E2EEEnabled
+		return result, nil
 	}
 
 	// Notify both users (each sees the other as the "other user")

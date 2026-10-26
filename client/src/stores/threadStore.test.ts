@@ -29,6 +29,30 @@ beforeEach(() => {
 });
 
 describe("threadStore account and server provenance", () => {
+  it.each(["refresh", "remove"] as const)("makes an invalidated deep-link request retryable after parent %s", async (action) => {
+    const old = deferred<{ success: boolean; data: Channel }>();
+    const retry = deferred<{ success: boolean; data: Channel }>();
+    getThread.mockReturnValueOnce(old.promise).mockReturnValueOnce(retry.promise);
+    const first = useThreadStore.getState().loadThread("server-a", "deep");
+    expect(useThreadStore.getState().statusByThread.deep).toBe("loading");
+    if (action === "refresh") {
+      listThreads.mockResolvedValueOnce(ok([thread("listed", "another-parent")]));
+      await useThreadStore.getState().loadParent("server-a", "another-parent");
+      expect(useThreadStore.getState().statusByThread.listed).toBe("ready");
+    } else useThreadStore.getState().removeParent("another-parent", "server-a");
+    expect(useThreadStore.getState().statusByThread.deep).toBe("error");
+    const second = useThreadStore.getState().loadThread("server-a", "deep", true);
+    expect(getThread).toHaveBeenCalledTimes(2);
+    old.resolve({ success: true, data: thread("deep", "parent", { name: "obsolete" }) });
+    await first;
+    expect(useThreadStore.getState().statusByThread.deep).toBe("loading");
+    expect(useThreadStore.getState().byID.deep).toBeUndefined();
+    retry.resolve({ success: true, data: thread("deep", "parent", { name: "fresh" }) });
+    await second;
+    expect(useThreadStore.getState().statusByThread.deep).toBe("ready");
+    expect(useThreadStore.getState().byID.deep.name).toBe("fresh");
+  });
+
   it("requires a validated thread and explicit server provenance when remembering", () => {
     expect(useThreadStore.getState().ownerId).toBe("thread-test-owner");
     expect(useThreadStore.getState().authGeneration).toBe(getAuthSessionSnapshot().generation);

@@ -25,11 +25,15 @@ import { advanceMusicTimeline, musicElapsedAt, musicTrackKey, type MusicTimeline
 import { skipMusic, pauseMusic, resumeMusic, stopMusic, getMusicState, playMusic, searchMusic, removeMusicQueueItem, reorderMusicQueue, shuffleMusicQueue, setMusicRepeatMode, restoreMusicSession, seekMusic } from "../../api/music";
 import { captureMusicScope } from "../../api/musicProtocol";
 import { retryMusicMutation, hasPendingMusicMutation, subscribeMusicRetries } from "../../api/music";
-import type { APIResponse, MusicTrack } from "../../types";
+import type { APIResponse, MusicTrack, MusicBotChannelState } from "../../types";
 
 type MusicBotPanelProps = {
   channelId: string;
 };
+
+function seekTrackKey(state: MusicBotChannelState): string {
+  return JSON.stringify([state.server_id, state.channel_id, state.session_id, state.current_track?.queue_item_id, musicTrackKey(state)]);
+}
 
 function formatDuration(seconds: number): string {
   if (seconds <= 0) return "0:00";
@@ -58,15 +62,20 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<MusicTrack[]>([]);
-  const [seekDraft, setSeekDraft] = useState<number | null>(null);
-  const dragItem = useRef<string | null>(null);
+  const [seekDraft, setSeekDraft] = useState<{ key: string; value: number } | null>(null);
+  const seekScope = useRef<{ key: string; current: () => boolean } | null>(null);
+  const dragItem = useRef<{ id: string; revision: number; session?: string; current: () => boolean } | null>(null);
   const actionGeneration = useRef(0);
+  const searchGeneration = useRef(0);
+  const searchPending = useRef(false);
   const actionPending = useRef(false);
   const refreshRef = useRef<(() => void) | null>(null);
 
   const invalidateActions = useCallback(() => {
     ++actionGeneration.current;
     actionPending.current = false;
+    ++searchGeneration.current;
+    searchPending.current = false;
   }, []);
 
   useEffect(()=>{
@@ -159,21 +168,28 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
   async function runSearch(event: React.FormEvent) {
     event.preventDefault();
     const value = query.trim();
-    if (!serverId || !value || value.length > 100 || searching) return;
+    if (!serverId || !value || value.length > 100 || searchPending.current) return;
     const scope=captureMusicScope(serverId,channelId);
+    if (!scope.current()) return;
+    const generation = ++searchGeneration.current;
+    const current = () => generation === searchGeneration.current && scope.current();
+    searchPending.current = true;
     setSearching(true);
     try {
       const response = await searchMusic(serverId, channelId, value);
-      if (!scope.current()) return;
+      if (!current()) return;
       if (!response.success || !response.data) {
         showMusicRequestError(response, "play");
         return;
       }
       setResults(response.data.results ?? []);
     } catch {
-      if(scope.current())useToastStore.getState().addToast("error", t("searchError"));
+      if(current())useToastStore.getState().addToast("error", t("searchError"));
     } finally {
-      if(scope.current())setSearching(false);
+      if(generation === searchGeneration.current) {
+        searchPending.current = false;
+        if(current())setSearching(false);
+      }
     }
   }
 
@@ -205,9 +221,12 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
   }
 
   function dropQueueItem(targetID: string) {
-    const sourceID = dragItem.current;
+    const drag = dragItem.current;
     dragItem.current = null;
-    if (!sourceID || sourceID === targetID || !serverId || state?.revision === undefined) return;
+    const latest = useVoiceStore.getState().musicBotStates[channelId];
+    if (!drag?.current() || !latest || latest.revision !== drag.revision || latest.session_id !== drag.session) return;
+    const sourceID = drag.id;
+    if (sourceID === targetID || !serverId || state?.revision !== drag.revision || state.session_id !== drag.session) return;
     const ids = (state.queue ?? []).map((item) => item.queue_item_id).filter((id): id is string => !!id);
     if (ids.length !== state.queue.length) return;
     const from = ids.indexOf(sourceID), to = ids.indexOf(targetID);
@@ -226,10 +245,24 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
     void mutateQueue(() => reorderMusicQueue(serverId, channelId, ids, state.revision!));
   }
 
+  function controlRestored(action: typeof stopMusic) {
+    const latest = useVoiceStore.getState().musicBotStates[channelId];
+    if (!serverId || !state || !latest || latest.is_active || !latest.is_paused || latest.queue.length === 0
+      || latest.session_id !== state.session_id || latest.revision !== state.revision) return;
+    void mutateQueue(() => action(serverId, channelId));
+  }
+
   const searchBox = <div className="music-bot-search">
     {retryAvailable&&serverId&&<div role="status"><span>{t("retryOriginalHint")}</span><button disabled={pending} onClick={()=>void mutateQueue(()=>retryMusicMutation(serverId,channelId))}>{t("retryOriginal")}</button></div>}
     <form onSubmit={(event) => void runSearch(event)}>
-      <input value={query} maxLength={100} onChange={(event) => setQuery(event.target.value)} placeholder={t("searchPlaceholder")} aria-label={t("searchPlaceholder")} />
+      <input value={query} maxLength={100} onChange={(event) => {
+        // Results belong to the exact submitted query, not merely the voice room.
+        ++searchGeneration.current;
+        searchPending.current = false;
+        setSearching(false);
+        setResults([]);
+        setQuery(event.target.value);
+      }} placeholder={t("searchPlaceholder")} aria-label={t("searchPlaceholder")} />
       <button className="music-bot-btn" disabled={searching || !query.trim()}>{searching ? t("searching") : t("search")}</button>
     </form>
     {results.length > 0 && <ul className="music-bot-search-results">
@@ -241,6 +274,40 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
   </div>;
 
   if (!serverId) return null;
+  const queueView = <>
+      {state && state.queue.length > 0 && (
+        <div className="music-bot-queue">
+          <div className="music-bot-queue-label">
+            {t("upNext", { count: state.queue.length })}
+          </div>
+          <ul className="music-bot-queue-list">
+            {state.queue.map((q, i) => (
+              <li key={q.queue_item_id ?? `${q.video_id}-${i}`} className="music-bot-queue-item"
+                draggable={!!q.queue_item_id && state.revision !== undefined && !pending}
+                onDragStart={() => {
+                  dragItem.current = q.queue_item_id && state.revision !== undefined
+                    ? { id: q.queue_item_id, revision: state.revision, session: state.session_id, current: captureMusicScope(serverId, channelId).current }
+                    : null;
+                }}
+                onDragEnd={() => { dragItem.current = null; }}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={() => q.queue_item_id && dropQueueItem(q.queue_item_id)}>
+                <span className="music-bot-queue-pos">{i + 1}.</span>
+                <span className="music-bot-queue-title" title={q.title}>{q.title}</span>
+                <span className="music-bot-queue-dur">{formatDuration(q.duration_seconds)}</span>
+                {q.queue_item_id && state.revision !== undefined && <>
+                  <button className="music-bot-btn" disabled={pending || i === 0} aria-label={t("moveTrackUp", { title: q.title, position: i + 1, count: state.queue.length })} onClick={() => moveQueueItem(q.queue_item_id!, -1)}>↑</button>
+                  <button className="music-bot-btn" disabled={pending || i === state.queue.length - 1} aria-label={t("moveTrackDown", { title: q.title, position: i + 1, count: state.queue.length })} onClick={() => moveQueueItem(q.queue_item_id!, 1)}>↓</button>
+                </>}
+                {q.queue_item_id && state.revision !== undefined && <button className="music-bot-btn" disabled={pending}
+                  aria-label={t("removeTrack", { title: q.title, position: i + 1, count: state.queue.length })}
+                  onClick={() => void mutateQueue(() => removeMusicQueueItem(serverId, channelId, q.queue_item_id!, state.revision!))}>×</button>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+  </>;
   const statusMessage = loadStatus === "error" ? <div role="status" className="music-bot-status">
     <span>{t("stateError")}</span><button className="music-bot-btn" onClick={retry}>{t("retry")}</button>
   </div> : null;
@@ -249,7 +316,9 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
       {searchBox}{statusMessage}
       <strong>{t("restoredTitle")}</strong>
       <p>{t("restoredDescription", { count: state.queue.length })}</p>
-      <button className="music-bot-btn" disabled={pending} onClick={() => void mutateQueue(() => restoreMusicSession(serverId, channelId))} aria-label={t("restorePlayback")}>▶</button>
+      {queueView}
+      <button className="music-bot-btn" disabled={pending} onClick={() => controlRestored(restoreMusicSession)} aria-label={t("restorePlayback")}>▶</button>
+      <button className="music-bot-btn music-bot-btn-danger" disabled={pending} onClick={() => controlRestored(stopMusic)} aria-label={t("stop")}>⏹</button>
     </div>;
   }
   if (!state?.is_active || !state.current_track || state.server_id !== serverId) {
@@ -259,13 +328,27 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
   const total = track.duration_seconds || 0;
   const position = timeline?.key === musicTrackKey(state) ? Math.floor(musicElapsedAt(timeline, now)) : 0;
   const elapsed = total > 0 ? Math.min(total, position) : position;
-  const displayedElapsed = seekDraft ?? elapsed;
+  const trackKey = seekTrackKey(state);
+  const displayedElapsed = seekDraft?.key === trackKey ? seekDraft.value : elapsed;
   const pct = total > 0 ? Math.min(100, (displayedElapsed / total) * 100) : 0;
   const repeatMode = state.repeat_mode || "off";
   const nextRepeatMode = repeatMode === "off" ? "one" : repeatMode === "one" ? "all" : "off";
 
   async function control(fn: typeof pauseMusic) {
+    const latest = useVoiceStore.getState().musicBotStates[channelId];
+    // A WS update may precede React's next render. Do not reinterpret a click
+    // on the old track/control as authorization to control its replacement.
+    if (!latest || seekTrackKey(latest) !== trackKey || latest.is_paused !== is_paused) return;
     if(serverId)await mutateQueue(()=>fn(serverId,channelId),undefined,"controlError");
+  }
+
+  function commitSeek(target: number) {
+    const interaction = seekScope.current;
+    seekScope.current = null;
+    setSeekDraft(null);
+    const latest = useVoiceStore.getState().musicBotStates[channelId];
+    if (!interaction?.current() || !latest || interaction.key !== seekTrackKey(latest)) return;
+    void mutateQueue(() => seekMusic(serverId!, channelId, target));
   }
 
   return (
@@ -290,17 +373,28 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
             disabled={pending}
             aria-label={t("seek")}
             aria-valuetext={`${formatDuration(displayedElapsed)} / ${formatDuration(total)}`}
-            onChange={(event) => setSeekDraft(Number(event.currentTarget.value))}
+            onPointerDown={() => {
+              const scope = captureMusicScope(serverId, channelId);
+              seekScope.current = { key: trackKey, current: scope.current };
+            }}
+            onChange={(event) => {
+              const scope = captureMusicScope(serverId, channelId);
+              const latest = useVoiceStore.getState().musicBotStates[channelId];
+              if (seekScope.current && (seekScope.current.key !== trackKey || !seekScope.current.current())) return;
+              if (!scope.current() || !latest || seekTrackKey(latest) !== trackKey) return;
+              seekScope.current = { key: trackKey, current: scope.current };
+              setSeekDraft({ key: trackKey, value: Number(event.currentTarget.value) });
+            }}
+            onPointerCancel={() => { seekScope.current = null; setSeekDraft(null); }}
+            onBlur={() => { seekScope.current = null; setSeekDraft(null); }}
             onPointerUp={(event) => {
               const target = Number(event.currentTarget.value);
-              setSeekDraft(null);
-              void mutateQueue(() => seekMusic(serverId, channelId, target));
+              commitSeek(target);
             }}
             onKeyUp={(event) => {
               if (!["ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"].includes(event.key)) return;
               const target = Number(event.currentTarget.value);
-              setSeekDraft(null);
-              void mutateQueue(() => seekMusic(serverId, channelId, target));
+              commitSeek(target);
             }}
           /> : <div className="music-bot-progress" aria-label={t("seekUnavailable")}>
             <div className="music-bot-progress-fill" style={{ width: `${pct}%` }} />
@@ -374,33 +468,7 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
         <span>{musicVolume}%</span>
       </label>
 
-      {queue.length > 0 && (
-        <div className="music-bot-queue">
-          <div className="music-bot-queue-label">
-            {t("upNext", { count: queue.length })}
-          </div>
-          <ul className="music-bot-queue-list">
-            {queue.map((q, i) => (
-              <li key={q.queue_item_id ?? `${q.video_id}-${i}`} className="music-bot-queue-item"
-                draggable={!!q.queue_item_id && !pending}
-                onDragStart={() => { dragItem.current = q.queue_item_id ?? null; }}
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={() => q.queue_item_id && dropQueueItem(q.queue_item_id)}>
-                <span className="music-bot-queue-pos">{i + 1}.</span>
-                <span className="music-bot-queue-title" title={q.title}>{q.title}</span>
-                <span className="music-bot-queue-dur">{formatDuration(q.duration_seconds)}</span>
-                {q.queue_item_id && state.revision !== undefined && <>
-                  <button className="music-bot-btn" disabled={pending || i === 0} aria-label={t("moveTrackUp", { title: q.title })} onClick={() => moveQueueItem(q.queue_item_id!, -1)}>↑</button>
-                  <button className="music-bot-btn" disabled={pending || i === queue.length - 1} aria-label={t("moveTrackDown", { title: q.title })} onClick={() => moveQueueItem(q.queue_item_id!, 1)}>↓</button>
-                </>}
-                {q.queue_item_id && state.revision !== undefined && <button className="music-bot-btn" disabled={pending}
-                  aria-label={t("removeTrack", { title: q.title })}
-                  onClick={() => void mutateQueue(() => removeMusicQueueItem(serverId, channelId, q.queue_item_id!, state.revision!))}>×</button>}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {queueView}
     </div>
   );
 }

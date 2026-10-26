@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   cancelReminder,
@@ -29,8 +29,53 @@ export default function ReminderModal({ source, onClose }: Props) {
 
 function ReminderForContext({source,onClose,owner,generation}:Props&{owner?:string;generation:number}) {
   const { t, i18n } = useTranslation("chat");
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const dueRef = useRef<HTMLInputElement>(null);
+  const closeRef = useRef(onClose);
+  const titleId = useId(), dueId = useId();
+  useLayoutEffect(() => { closeRef.current = onClose; }, [onClose]);
+  useLayoutEffect(() => {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const dialog = dialogRef.current;
+    const visible = (element: HTMLElement) => {
+      for (let node: HTMLElement | null = element; node; node = node.parentElement) {
+        const style = getComputedStyle(node);
+        if (node.hidden || node.inert || node.getAttribute("aria-hidden") === "true" || style.display === "none" || style.visibility === "hidden" || style.visibility === "collapse") return false;
+      }
+      return true;
+    };
+    const ownsFocus = () => Array.from(document.querySelectorAll<HTMLElement>('[aria-modal="true"][role="dialog"], [aria-modal="true"][role="alertdialog"]')).filter(visible).at(-1) === dialog;
+    const controls = () => Array.from(dialog?.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href], [tabindex="0"]') ?? [])
+      .filter(element => element.tabIndex >= 0 && !element.matches(":disabled") && visible(element));
+    dueRef.current?.focus();
+    function keydown(event: KeyboardEvent) {
+      if (!ownsFocus() || event.defaultPrevented) return;
+      if (event.key === "Escape") {
+        event.preventDefault(); event.stopPropagation(); closeRef.current();
+      } else if (event.key === "Tab") {
+        const available = controls(), first = available[0], last = available.at(-1);
+        if (!first) { event.preventDefault(); dialog?.focus(); }
+        else if (event.shiftKey && (document.activeElement === first || !dialog?.contains(document.activeElement))) {
+          event.preventDefault(); last?.focus();
+        } else if (!event.shiftKey && (document.activeElement === last || !dialog?.contains(document.activeElement))) {
+          event.preventDefault(); first.focus();
+        }
+      }
+    }
+    function contain(event: FocusEvent) {
+      if (ownsFocus() && !dialog?.contains(event.target as Node)) (controls()[0] ?? dialog)?.focus();
+    }
+    document.addEventListener("keydown", keydown, true);
+    document.addEventListener("focusin", contain);
+    return () => {
+      document.removeEventListener("keydown", keydown, true);
+      document.removeEventListener("focusin", contain);
+      if (previous?.isConnected && (document.activeElement === document.body || dialog?.contains(document.activeElement))) previous.focus();
+    };
+  }, []);
   const toast = useToastStore((s) => s.addToast);
   const [items, setItems] = useState<MessageReminder[]>([]);
+  const [listState, setListState] = useState<"loading" | "ready" | "error">("loading");
   const [due, setDue] = useState(() => toLocalInput(new Date(Date.now() + 60 * 60_000)));
   const [editing, setEditing] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -41,12 +86,15 @@ function ReminderForContext({source,onClose,owner,generation}:Props&{owner?:stri
   const reload = useCallback(async () => {
     if(!current())return;
     const version=++readVersion.current;
+    setListState("loading");
     try {
       const result = await listReminders({expectedUserId:owner,isCurrent:current});
       if(!current()||version!==readVersion.current)return;
-      if (result.success && result.data) setItems(result.data.reminders);
-      else toast("error", t("reminderLoadFailed"));
-    } catch {if(current()&&version===readVersion.current)toast("error",t("reminderLoadFailed"));}
+      if (result.success && result.data) {
+        setItems(result.data.reminders);
+        setListState("ready");
+      } else setListState("error");
+    } catch {if(current()&&version===readVersion.current)setListState("error");}
   }, [t, toast,current,owner]);
 
   useEffect(() => {
@@ -66,7 +114,7 @@ function ReminderForContext({source,onClose,owner,generation}:Props&{owner?:stri
     const dueAt=parsed.toISOString();
     const payload=JSON.stringify([source.source_kind,source.server_id??null,source.channel_id,source.message_id,dueAt]);
     setBusy(true);
-    operation.current=true;++readVersion.current;
+    operation.current=true;
     try {
     const scope=JSON.stringify([SERVER_URL,owner]);
     if(!editing){
@@ -97,11 +145,13 @@ function ReminderForContext({source,onClose,owner,generation}:Props&{owner?:stri
 
   const remove = async (id: string) => {
     if(operation.current||!current())return;
-    operation.current=true;setBusy(true);++readVersion.current;
+    operation.current=true;setBusy(true);
     try {
     const result = await cancelReminder(id,{expectedUserId:owner,isCurrent:current});
     if(!current())return;
     if (!result.success) { toast("error", t("reminderCancelFailed")); return; }
+    ++readVersion.current;
+    setListState("ready");
     setItems((current) => current.filter((item) => item.id !== id));
     if (editing === id) setEditing(null);
     toast("success", t("reminderCancelled"));
@@ -111,15 +161,15 @@ function ReminderForContext({source,onClose,owner,generation}:Props&{owner?:stri
 
   return (
     <div className="report-overlay" role="presentation" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="report-modal reminder-modal" role="dialog" aria-modal="true" aria-labelledby="reminder-title">
+      <div ref={dialogRef} className="report-modal reminder-modal" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
         <div className="report-header">
-          <h2 id="reminder-title" className="report-title">{t("reminderTitle")}</h2>
+          <h2 id={titleId} className="report-title">{t("reminderTitle")}</h2>
           <button className="report-close" onClick={onClose} aria-label={t("reminderClose")}>✕</button>
         </div>
         <div className="report-body">
           <div className="report-field">
-            <label className="report-label" htmlFor="reminder-due">{t("reminderDue")}</label>
-            <input id="reminder-due" className="reminder-datetime" type="datetime-local" value={due} min={toLocalInput(new Date())} onChange={(e) => setDue(e.target.value)} />
+            <label className="report-label" htmlFor={dueId}>{t("reminderDue")}</label>
+            <input ref={dueRef} id={dueId} className="reminder-datetime" type="datetime-local" value={due} min={toLocalInput(new Date())} onChange={(e) => setDue(e.target.value)} />
             <div className="reminder-presets">
               <button onClick={() => setDue(toLocalInput(new Date(Date.now() + 60 * 60_000)))}>{t("reminderInHour")}</button>
               <button onClick={() => setDue(toLocalInput(new Date(Date.now() + 24 * 60 * 60_000)))}>{t("reminderTomorrow")}</button>
@@ -131,7 +181,12 @@ function ReminderForContext({source,onClose,owner,generation}:Props&{owner?:stri
             <button className="report-btn reminder-save" disabled={busy} onClick={() => { void submit(); }}>{t(editing ? "reminderUpdate" : "reminderCreate")}</button>
           </div>
           <h3 className="reminder-list-title">{t("upcomingReminders")}</h3>
-          {items.length === 0 ? <p className="reminder-empty">{t("noUpcomingReminders")}</p> : (
+          {listState === "loading" ? <p className="reminder-empty" role="status">{t("reminderLoading")}</p> : listState === "error" ? (
+            <div role="alert">
+              <p>{t("reminderLoadFailed")}</p>
+              <button className="report-btn" disabled={busy} onClick={() => { void reload(); }}>{t("reminderRetry")}</button>
+            </div>
+          ) : items.length === 0 ? <p className="reminder-empty">{t("noUpcomingReminders")}</p> : (
             <div className="reminder-list">
               {items.map((item) => (
                 <div className="reminder-row" key={item.id}>

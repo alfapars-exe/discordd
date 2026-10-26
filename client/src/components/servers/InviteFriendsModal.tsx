@@ -22,6 +22,7 @@ type InviteFriendsModalProps = {
   serverId: string;
   serverName: string;
   onClose: () => void;
+  returnFocus?: HTMLElement;
 };
 
 function isVisibleControl(element: HTMLElement): boolean {
@@ -38,7 +39,7 @@ function isActiveDialog(dialog: HTMLElement | null): boolean {
   return dialogs.filter(isVisibleControl).at(-1) === dialog;
 }
 
-function InviteFriendsModal({ serverId, serverName, onClose }: InviteFriendsModalProps) {
+function InviteFriendsModal({ serverId, serverName, onClose, returnFocus }: InviteFriendsModalProps) {
   const { t } = useTranslation("servers");
   const dialogRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -74,9 +75,10 @@ function InviteFriendsModal({ serverId, serverName, onClose }: InviteFriendsModa
     return () => {
       document.removeEventListener("keydown", keydown, true);
       document.removeEventListener("focusin", contain);
-      if (previous?.isConnected && (document.activeElement === document.body || dialog?.contains(document.activeElement))) previous.focus();
+      const restore = returnFocus?.isConnected ? returnFocus : previous;
+      if (restore?.isConnected && (document.activeElement === document.body || dialog?.contains(document.activeElement))) restore.focus();
     };
-  }, []);
+  }, [returnFocus]);
   const friends = useFriendStore((s) => s.friends);
   const getOrCreateShareInvite = useInviteStore((s) => s.getOrCreateShareInvite);
   const createOrGetChannel = useDMStore((s) => s.createOrGetChannel);
@@ -141,6 +143,11 @@ function InviteFriendsModal({ serverId, serverName, onClose }: InviteFriendsModa
     const requestContext = contextKey;
     const requestAccountId = accountId;
     activeContext.current = requestContext;
+    // A sent row and a resolved URL belong to one account/server/target.
+    // Changing the destination must allow sending the new link to that friend.
+    setRecipientStatus({});
+    setInviteUrl("");
+    setInviteLoading(true);
     void loadInviteUrl(requestContext, requestAccountId, serverId, targetChannelId).then((url) => {
       if (!active || !isCurrentContext(requestContext, requestAccountId)) return;
       setInviteUrl(url);

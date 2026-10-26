@@ -1,0 +1,6 @@
+{
+  "source_commit": "155c2e1a",
+  "scope": "Partial reminder dialog accessibility verification",
+  "result": "Initial focus, Tab containment, Escape, focus restoration and nested-dialog ownership were added. Three reminder suites passed 22 tests; lint and TypeScript passed.",
+  "limitations": "Real screen reader and browser acceptance remain open. This check does not establish end-to-end reminder delivery."
+}

@@ -10,6 +10,8 @@ export type NotificationPreferences = {
   currentChannelSound: boolean;
   incomingCallSound: boolean;
   muteAllSounds: boolean;
+  voiceStreamStartSound: boolean;
+  voiceStreamStopSound: boolean;
   voiceJoinSound: boolean;
   voiceLeaveSound: boolean;
   voiceWatchStartSound: boolean;
@@ -39,6 +41,8 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   currentChannelSound: false,
   incomingCallSound: true,
   muteAllSounds: false,
+  voiceStreamStartSound: true,
+  voiceStreamStopSound: true,
   voiceJoinSound: true,
   voiceLeaveSound: true,
   voiceWatchStartSound: true,

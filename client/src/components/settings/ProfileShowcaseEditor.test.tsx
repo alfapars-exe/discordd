@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProfileRequestContext, ProfileShowcase } from "../../api/profile";
 import ProfileShowcaseEditor from "./ProfileShowcaseEditor";
@@ -25,6 +26,19 @@ describe("ProfileShowcaseEditor", () => {
     vi.clearAllMocks(); mocks.owner = "a"; mocks.generation = 1; mocks.serverId = "s1";
     mocks.get.mockResolvedValue({ success: true, data: showcase() });
     mocks.save.mockImplementation(async (data: ProfileShowcase) => ({ success: true, data: { ...data, version: 2 } }));
+  });
+
+  it("allows typing several games and saves only nonempty trimmed items", async () => {
+    const user = userEvent.setup();
+    mocks.get.mockResolvedValue({ success: true, data: showcase([{ id: "games", type: "liked_games", items: [] }]) });
+    render(<ProfileShowcaseEditor />);
+    const items = await screen.findByLabelText("profileWidgetItems");
+    await user.type(items, "Counter Strike,  Deep Rock Galactic, ");
+    expect(items).toHaveValue("Counter Strike,  Deep Rock Galactic, ");
+    await user.click(screen.getByRole("button", { name: "saveChanges" }));
+    await waitFor(() => expect(mocks.save).toHaveBeenCalled());
+    expect(mocks.save.mock.calls[0][0].widgets[0].items).toEqual(["Counter Strike", "Deep Rock Galactic"]);
+    await waitFor(() => expect(screen.getByRole("button", { name: "saveChanges" })).toBeDisabled());
   });
 
   it("does not let a filtered wishlist index reorder the wrong widget", async () => {

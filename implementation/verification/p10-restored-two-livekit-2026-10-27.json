@@ -1,0 +1,7 @@
+{
+  "source_commit": "39b80f4a",
+  "scope": "Restored queue with two authenticated synthetic clients in a local E2EE-enabled LiveKit room",
+  "result": "Reorder and remove propagated to the other client through the production WebSocket handler; stale revision returned 409, exact replay preserved revision, and Stop succeeded. The durable database then held no session, revision 4 and four receipts.",
+  "fixture_correction": "An initial attempt stopped on a premature client participant-count assertion. The successful run checked exact synthetic participant identities against the server roster instead, because client roster visibility is asynchronous.",
+  "limitations": "The queue was seeded in an isolated database. No playback, actual hardware or full HiChat UI was used; this is not full music or device acceptance. Test resources were cleaned up."
+}

@@ -1126,7 +1126,8 @@
       "evidence": [
         "implementation/verification/p0-partial-visual-112d1e8b-2026-10-26.json",
         "implementation/verification/p7-preview-followup-render-2026-10-26.json",
-        "implementation/verification/p5-profile-cache-showcase-2026-10-26.json"
+        "implementation/verification/p5-profile-cache-showcase-2026-10-26.json",
+        "implementation/verification/p4-invite-ui-187db84d-2026-10-27.json"
       ]
     },
     {
@@ -2500,7 +2501,7 @@
         "All mode routes detected non-self spam from friends and nonfriends into the inbox before hiding; nonfriends mode does so only for nonfriends. Off disables automatic routing and hiding, leaving messages normally visible. Existing inbox decisions remain accessible; restore/dismiss must not delete the underlying message."
       ],
       "code": ["client/src/utils/spamClassification.ts", "client/src/utils/spamClassification.corpus.ts", "client/scripts/spam-classifier-eval.mjs", "client/src/hooks/useSpamVisibility.ts", "server/services/spam_inbox_service.go"],
-      "evidence": ["implementation/verification/p3-spam-rule-regressions-2026-10-24.json", "implementation/verification/p3-spam-relationship-readiness-2026-10-25.json"]
+      "evidence": ["implementation/verification/p3-spam-rule-regressions-2026-10-24.json", "implementation/verification/p3-spam-relationship-readiness-2026-10-25.json", "implementation/verification/p3-spam-spoiler-link-boundaries-2026-10-27.json"]
     },
     {
       "id": "p3.classifier",
@@ -2838,7 +2839,9 @@
         "client/src/components/settings/BlockedUsersSettings.tsx"
       ],
       "evidence": [
-        "implementation/verification/p3-blocked-users-2026-10-23.json"
+        "implementation/verification/p3-blocked-users-2026-10-23.json",
+        "implementation/verification/p3-p6-block-notification-2026-10-27.json",
+        "implementation/verification/p3-dm-block-race-2026-10-27.json"
       ]
     },
     {
@@ -3084,7 +3087,8 @@
         "implementation/verification/p4-forward-target-loading-2026-10-24.json",
         "implementation/verification/p4-forward-channel-permissions-2026-10-24.json",
         "implementation/verification/p4-forward-group-destinations-2026-10-24.json",
-        "implementation/verification/p4-forward-group-sources-2026-10-24.json"
+        "implementation/verification/p4-forward-group-sources-2026-10-24.json",
+        "implementation/verification/p4-forward-source-change-2026-10-27.json"
       ]
     },
     {
@@ -3149,7 +3153,8 @@
       ],
       "evidence": [
         "implementation/verification/p4-message-threads-2026-10-23.json",
-        "implementation/verification/p4-p11-thread-parity-2026-10-25.json"
+        "implementation/verification/p4-p11-thread-parity-2026-10-25.json",
+        "implementation/verification/p4-thread-invalidation-2026-10-27.json"
       ]
     },
     {
@@ -3209,7 +3214,9 @@
         "client/src/components/chat/Message.tsx"
       ],
       "evidence": [
-        "implementation/verification/p4-message-reminder-2026-10-23.json"
+        "implementation/verification/p4-message-reminder-2026-10-23.json",
+        "implementation/verification/p4-reminder-focus-2026-10-27.json",
+        "implementation/verification/p4-reminder-list-retry-2026-10-27.json"
       ]
     },
     {
@@ -3556,7 +3563,8 @@
         "client/src/stores/dmStore.ts"
       ],
       "evidence": [
-        "implementation/verification/p4-invite-sharing-2026-10-23.json"
+        "implementation/verification/p4-invite-sharing-2026-10-23.json",
+        "implementation/verification/p4-invite-destination-state-2026-10-27.json"
       ]
     },
     {
@@ -3581,7 +3589,8 @@
         "client/src/stores/inviteStore.ts"
       ],
       "evidence": [
-        "implementation/verification/p4-invite-sharing-2026-10-23.json"
+        "implementation/verification/p4-invite-sharing-2026-10-23.json",
+        "implementation/verification/p4-invite-destination-state-2026-10-27.json"
       ]
     },
     {
@@ -3637,7 +3646,8 @@
         "client/src/stores/inviteStore.ts"
       ],
       "evidence": [
-        "implementation/verification/p4-invite-target-2026-10-23.json"
+        "implementation/verification/p4-invite-target-2026-10-23.json",
+        "implementation/verification/p4-invite-destination-state-2026-10-27.json"
       ]
     },
     {
@@ -3663,7 +3673,8 @@
         "client/src/stores/channelPermissionStore.ts"
       ],
       "evidence": [
-        "implementation/verification/p4-invite-target-2026-10-23.json"
+        "implementation/verification/p4-invite-target-2026-10-23.json",
+        "implementation/verification/p4-invite-ui-187db84d-2026-10-27.json"
       ]
     },
     {
@@ -3787,7 +3798,8 @@
         "client/src/styles/globals.css"
       ],
       "evidence": [
-        "implementation/verification/p4-media-viewer-2026-10-23.json"
+        "implementation/verification/p4-media-viewer-2026-10-23.json",
+        "implementation/verification/p4-media-shortcuts-2026-10-26.json"
       ]
     },
     {
@@ -3866,7 +3878,8 @@
         "client/src/stores/lightboxStore.ts"
       ],
       "evidence": [
-        "implementation/verification/p4-media-actions-2026-10-23.json"
+        "implementation/verification/p4-media-actions-2026-10-23.json",
+        "implementation/verification/p4-media-shortcuts-2026-10-26.json"
       ]
     },
     {
@@ -4573,7 +4586,10 @@
         "User-enabled desktop notifications reach supported platform; denied permission and focus/DND preferences are honored."
       ],
       "code": ["client/src/components/settings/NotificationSettings.tsx", "client/src/utils/notifications.ts", "server/models/preferences.go"],
-      "evidence": ["implementation/verification/p6-notification-foundation-2026-10-23.json"]
+      "evidence": [
+        "implementation/verification/p6-notification-foundation-2026-10-23.json",
+        "implementation/verification/p3-p6-block-notification-2026-10-27.json"
+      ]
     },
     {
       "id": "p6.taskbar-flash",
@@ -6835,7 +6851,11 @@
         "server/services/music_bot_live_integration_test.go",
         "client/src/components/voice/MusicBotPanel.tsx"
       ],
-      "evidence": ["implementation/verification/p10-music-control-protocol-2026-10-25.json"]
+      "evidence": [
+        "implementation/verification/p10-music-control-protocol-2026-10-25.json",
+        "implementation/verification/p10-durable-transition-retry-2026-10-27.json",
+        "implementation/verification/p10-two-listeners-current-2026-10-27.json"
+      ]
     },
     {
       "id": "p10.playlist",
@@ -6888,7 +6908,9 @@
         "client/src/hooks/useMusicSlashCommand.ts"
       ],
       "evidence": [
-        "implementation/verification/p10-youtube-search-2026-10-23.json"
+        "implementation/verification/p10-youtube-search-2026-10-23.json",
+        "implementation/verification/p10-client-interaction-races-2026-10-27.json",
+        "implementation/verification/p10-youtube-search-live-2026-10-27.json"
       ]
     },
     {
@@ -6941,7 +6963,9 @@
         "client/src/components/voice/MusicBotPanel.tsx"
       ],
       "evidence": [
-        "implementation/verification/p10-queue-mutations-2026-10-23.json"
+        "implementation/verification/p10-queue-mutations-2026-10-23.json",
+        "implementation/verification/p10-restored-queue-ui-http-db-2026-10-27.json",
+        "implementation/verification/p10-restored-two-livekit-2026-10-27.json"
       ]
     },
     {
@@ -6968,7 +6992,10 @@
         "client/src/components/voice/MusicBotPanel.tsx"
       ],
       "evidence": [
-        "implementation/verification/p10-queue-mutations-2026-10-23.json"
+        "implementation/verification/p10-queue-mutations-2026-10-23.json",
+        "implementation/verification/p10-client-interaction-races-2026-10-27.json",
+        "implementation/verification/p10-restored-queue-ui-http-db-2026-10-27.json",
+        "implementation/verification/p10-restored-two-livekit-2026-10-27.json"
       ]
     },
     {
@@ -6996,7 +7023,8 @@
         "client/src/components/voice/MusicBotPanel.tsx"
       ],
       "evidence": [
-        "implementation/verification/p10-seek-2026-10-23.json"
+        "implementation/verification/p10-seek-2026-10-23.json",
+        "implementation/verification/p10-client-interaction-races-2026-10-27.json"
       ]
     },
     {
@@ -7078,7 +7106,8 @@
       ],
       "evidence": [
         "implementation/verification/p10-personal-volume-2026-10-23.json",
-        "implementation/verification/p10-two-electron-listeners-112d1e8b-2026-10-26.json"
+        "implementation/verification/p10-two-electron-listeners-112d1e8b-2026-10-26.json",
+        "implementation/verification/p10-two-listeners-current-2026-10-27.json"
       ]
     },
     {
@@ -7110,7 +7139,8 @@
       "evidence": [
         "implementation/verification/p10-queue-persistence-2026-10-23.json",
         "implementation/verification/p10-persistence-failure-2026-10-24.json",
-        "implementation/verification/p10-music-control-protocol-2026-10-25.json"
+        "implementation/verification/p10-music-control-protocol-2026-10-25.json",
+        "implementation/verification/p10-durable-transition-retry-2026-10-27.json"
       ]
     },
     {
@@ -7139,7 +7169,9 @@
       "evidence": [
         "implementation/verification/p10-queue-persistence-2026-10-23.json",
         "implementation/verification/p10-persistence-failure-2026-10-24.json",
-        "implementation/verification/p10-music-control-protocol-2026-10-25.json"
+        "implementation/verification/p10-music-control-protocol-2026-10-25.json",
+        "implementation/verification/p10-restored-queue-ui-http-db-2026-10-27.json",
+        "implementation/verification/p10-restored-two-livekit-2026-10-27.json"
       ]
     },
     {
@@ -7194,7 +7226,8 @@
       ],
       "evidence": [
         "implementation/verification/p10-encrypted-room-2026-10-23.json",
-        "implementation/verification/p10-two-electron-listeners-112d1e8b-2026-10-26.json"
+        "implementation/verification/p10-two-electron-listeners-112d1e8b-2026-10-26.json",
+        "implementation/verification/p10-two-listeners-current-2026-10-27.json"
       ]
     },
     {
@@ -7271,8 +7304,11 @@
         "Windows detects supported processes and updates current game without collecting unrelated process contents."
       ],
       "code": ["electron/registered-games.ts", "client/src/components/settings/RegisteredGamesSettings.tsx"],
-      "evidence": ["implementation/verification/p11-local-registered-games-2026-10-24.json",
-        "implementation/verification/p11-windows-process-provider-filter-2026-10-26.json"]
+      "evidence": [
+        "implementation/verification/p11-local-registered-games-2026-10-24.json",
+        "implementation/verification/p11-windows-process-provider-filter-2026-10-26.json",
+        "implementation/verification/p11-native-ipc-two-renderers-2026-10-26.json"
+      ]
     },
     {
       "id": "p11.manual-game",
@@ -7291,7 +7327,10 @@
         "Add action chooses an eligible executable/window and stores user-readable label; invalid/removed executable is handled."
       ],
       "code": ["electron/registered-games.ts", "electron/registered-games.test.ts", "electron/ipc-handlers.ts", "client/src/components/settings/RegisteredGamesSettings.tsx"],
-      "evidence": ["implementation/verification/p11-local-registered-games-2026-10-24.json"]
+      "evidence": [
+        "implementation/verification/p11-local-registered-games-2026-10-24.json",
+        "implementation/verification/p11-registered-game-restart-2026-10-26.json"
+      ]
     },
     {
       "id": "p11.recent-games",

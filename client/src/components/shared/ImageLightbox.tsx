@@ -82,6 +82,7 @@ function LightboxDialog({
   const { t } = useTranslation("chat");
   const { t: tCommon } = useTranslation("common");
   const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const menuBtnRef = useRef<HTMLButtonElement>(null);
   const prevFocusRef = useRef<Element | null>(null);
   const forwardFocusRef = useRef<HTMLElement | null>(null);
@@ -160,6 +161,23 @@ function LightboxDialog({
   // mount-only focus and scroll lifecycle above.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Keep keyboard focus inside this modal, but let the nested forward
+      // dialog manage its own controls while it is open.
+      if (e.key === "Tab" && !forwardOpen && !e.defaultPrevented) {
+        const controls = dialogRef.current?.querySelectorAll<HTMLElement>(
+          'button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex="0"]',
+        );
+        if (controls?.length) {
+          const first = controls[0];
+          const last = controls[controls.length - 1];
+          const active = document.activeElement;
+          if (!dialogRef.current?.contains(active) || (e.shiftKey ? active === first : active === last)) {
+            e.preventDefault();
+            (e.shiftKey ? last : first).focus();
+          }
+        }
+        return;
+      }
       const target = e.target;
       const isEditing = target instanceof HTMLElement && (
         target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)
@@ -204,6 +222,7 @@ function LightboxDialog({
 
   return (
     <div
+      ref={dialogRef}
       className="image-lightbox-backdrop"
       role="dialog"
       aria-modal="true"
@@ -294,7 +313,9 @@ function LightboxDialog({
               });
             }}
             onPointerDown={(e) => {
+              if ((e.pointerType === "mouse" && e.button !== 0) || pointersRef.current.size >= 2) return;
               pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+              e.currentTarget.setPointerCapture?.(e.pointerId);
               if (pointersRef.current.size === 2) {
                 const points = [...pointersRef.current.values()];
                 const dx = points[0].x - points[1].x;
@@ -306,12 +327,12 @@ function LightboxDialog({
                 gestureRef.current = { kind, startX: e.clientX, startY: e.clientY };
                 if (kind === "drag") {
                   dragRef.current = { pointerId: e.pointerId, x: e.clientX, y: e.clientY };
-                  e.currentTarget.setPointerCapture?.(e.pointerId);
                 }
               }
             }}
             onPointerMove={(e) => {
-              if (pointersRef.current.has(e.pointerId)) pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+              if (!pointersRef.current.has(e.pointerId)) return;
+              pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
               const gesture = gestureRef.current;
               if (gesture?.kind === "pinch" && pointersRef.current.size >= 2 && gesture.distance) {
                 const points = [...pointersRef.current.values()];
@@ -332,6 +353,7 @@ function LightboxDialog({
               dragRef.current = { pointerId: e.pointerId, x: e.clientX, y: e.clientY };
             }}
             onPointerUp={(e) => {
+              if (!pointersRef.current.has(e.pointerId)) return;
               const gesture = gestureRef.current;
               const start = pointersRef.current.get(e.pointerId);
               if (gesture?.kind === "swipe" && start && pointersRef.current.size === 1) {
@@ -342,11 +364,26 @@ function LightboxDialog({
                 }
               }
               pointersRef.current.delete(e.pointerId);
-              if (pointersRef.current.size < 2) gestureRef.current = null;
               dragRef.current = null;
+              gestureRef.current = null;
+              // Continue panning with the remaining finger after a pinch,
+              // without treating the end of the pinch as a gallery swipe.
+              const remaining = pointersRef.current.entries().next().value;
+              if (remaining && zoom > 1) {
+                const [pointerId, point] = remaining;
+                dragRef.current = { pointerId, x: point.x, y: point.y };
+                gestureRef.current = { kind: "drag", startX: point.x, startY: point.y };
+              }
             }}
             onPointerCancel={(e) => {
-              pointersRef.current.delete(e.pointerId);
+              if (!pointersRef.current.has(e.pointerId)) return;
+              pointersRef.current.clear();
+              gestureRef.current = null;
+              dragRef.current = null;
+            }}
+            onLostPointerCapture={(e) => {
+              if (!pointersRef.current.has(e.pointerId)) return;
+              pointersRef.current.clear();
               gestureRef.current = null;
               dragRef.current = null;
             }}

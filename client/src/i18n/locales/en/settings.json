@@ -1447,7 +1447,7 @@
     "desktop": "Desktop notifications",
     "voiceEffectsDesc": "Voice event effects use the selected output and master volume. All effects and previews stay silent while deafened; undeafening plays only its own cue.",
     "voiceEffectPreview": "Preview: {{event}}",
-    "voiceEffects": {"join": "Join", "leave": "Leave", "watchStart": "Start watching", "watchStop": "Stop watching", "mute": "Mute", "unmute": "Unmute", "deafen": "Deafen", "undeafen": "Undeafen"},
+    "voiceEffects": {"streamStart": "Stream started", "streamStop": "Stream ended", "join": "Join", "leave": "Leave", "watchStart": "Start watching", "watchStop": "Stop watching", "mute": "Mute", "unmute": "Unmute", "deafen": "Deafen", "undeafen": "Undeafen"},
     "sounds": "Sounds",
     "email": "Email preferences",
     "requestPermission": "Allow desktop notifications",

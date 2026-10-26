@@ -160,7 +160,12 @@ export default function ProfileShowcaseEditor() {
     const requestContext = contextKey;
     const requestAccount = accountId;
     const authGeneration = getAuthGeneration();
-    const snapshot = draft;
+    // Preserve a trailing separator while typing; normalize list entries only
+    // when taking the save snapshot so a second item can be entered normally.
+    const submittedDraft = draft;
+    const snapshot = { ...draft, widgets: draft.widgets.map((widget) => ({
+      ...widget, items: widget.items?.map((item) => item.trim()).filter(Boolean),
+    })) };
     const isCurrent = () => mounted.current && activeContext.current === requestContext && useAuthStore.getState().user?.id === requestAccount && getAuthGeneration() === authGeneration;
     const saveRequest = ++saveSequence.current;
     saveInFlight.current = true;
@@ -172,7 +177,7 @@ export default function ProfileShowcaseEditor() {
         draftCache.current.delete(requestContext);
         setConflictState(null);
         setSaved(res.data);
-        setDraft((current) => JSON.stringify(current) === JSON.stringify(snapshot) ? res.data! : current);
+        setDraft((current) => JSON.stringify(current) === JSON.stringify(submittedDraft) ? res.data! : current);
         addToast("success", t("profileShowcaseSaved"));
       } else {
         if (res.code === "VERSION_CONFLICT") {
@@ -211,7 +216,7 @@ export default function ProfileShowcaseEditor() {
         <div className="profile-board-tabs" role="tablist">{(["board", "activity", "wishlist"] as const).map((item) => <button type="button" role="tab" aria-selected={tab === item} key={item} onClick={() => setTab(item)}>{t(`profileTab_${item}`)}</button>)}</div>
         {tab === "activity" ? <p>{draft.watching || t("profileNoActivity")}</p> : <div className="profile-widget-list">{draft.widgets.map((widget, index) => ({ widget, index })).filter(({ widget }) => tab !== "wishlist" || widget.type === "wishlist").map(({ widget: w, index }) => <article className="profile-widget-card" key={w.id}>
           <input aria-label={t("profileWidgetTitle")} className="settings-input" value={w.title ?? ""} onChange={(e) => updateWidget(w.id, { title: e.target.value })}/>
-          <input aria-label={t("profileWidgetItems")} className="settings-input" value={(w.items ?? []).join(", ")} onChange={(e) => updateWidget(w.id, { items: e.target.value.split(",").map((v) => v.trim()).filter(Boolean) })}/>
+          <input aria-label={t("profileWidgetItems")} className="settings-input" value={(w.items ?? []).join(",")} onChange={(e) => updateWidget(w.id, { items: e.target.value.split(",") })}/>
           {w.type === "game_link" && <input aria-label={t("profileLinkUrl")} className="settings-input" value={w.url ?? ""} placeholder="https://" onChange={(e) => updateWidget(w.id, { url: e.target.value })}/>} 
           <div><button type="button" className="settings-btn settings-btn-secondary" aria-label={t("profileWidgetMoveUp", { name: w.title || t(`profileWidget_${w.type}`) })} onClick={() => moveWidget(index, -1)} disabled={index === 0}>↑</button><button type="button" className="settings-btn settings-btn-secondary" aria-label={t("profileWidgetMoveDown", { name: w.title || t(`profileWidget_${w.type}`) })} onClick={() => moveWidget(index, 1)} disabled={index === draft.widgets.length - 1}>↓</button><button type="button" className="settings-btn settings-btn-secondary" onClick={() => setDraft((d) => ({ ...d, widgets: d.widgets.filter((x) => x.id !== w.id) }))}>{t("remove", { ns: "common" })}</button></div>
         </article>)}</div>}

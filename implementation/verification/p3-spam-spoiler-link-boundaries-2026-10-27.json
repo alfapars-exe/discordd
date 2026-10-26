@@ -1,0 +1,13 @@
+{
+  "date": "2026-10-27",
+  "items": ["p3.spam", "p3.classifier"],
+  "status": "implemented_unverified",
+  "finding": "Chat renderer terminates URL tokens at pipes, while spam classification previously consumed pipes. Spoiler-wrapped credential links and pipe-separated link bursts could therefore evade the existing local signals.",
+  "change": "Local URL extraction now terminates at pipes, preserving the existing credential, repetition and mention rules. Encoded pipes inside one URL remain intact. Decrypted content remains local.",
+  "verification": {
+    "vitest": {"files_passed": 7, "tests_passed": 62, "command": "npm test -- src/utils/spamClassification.test.ts src/utils/messageSpamPolicy.test.ts src/hooks/useSpamVisibility.test.ts src/utils/messageParsers.test.tsx src/utils/registerSpamMessage.test.ts src/components/chat/SpamPreview.test.tsx src/components/chat/GroupSpamGate.test.tsx"},
+    "corpus": {"command": "node --experimental-strip-types scripts/spam-classifier-eval.mjs", "samples": 25, "true_positives": 14, "true_negatives": 10, "unknown": 1, "mismatches": []},
+    "diff_check": "passed"
+  },
+  "limitations": ["Curated regression corpus does not establish production spam accuracy.", "Installed Windows, independent-client runtime acceptance and deployment were not performed for this change."]
+}

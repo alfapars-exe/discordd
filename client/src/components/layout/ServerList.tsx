@@ -20,7 +20,7 @@ import { useKeyboardReorder } from "./keyboardReorder";
 type ServerListProps = {
   onAddServer: () => void;
   onCreateChannel: () => void;
-  onInviteServer: (serverId: string, serverName: string) => void;
+  onInviteServer: (serverId: string, serverName: string, returnFocus?: HTMLElement) => void;
   onOpenEvents: (serverId: string, serverName: string) => void;
   onMuteServer: (serverId: string, x: number, y: number) => void;
   /** Renders categories + channels for the active expanded server. */
@@ -178,6 +178,7 @@ function ServerList({
   }
 
   function handleServerContextMenu(e: React.MouseEvent, serverId: string, serverName: string) {
+    const returnFocus = e.currentTarget as HTMLElement;
     const isMuted = mutedServerIds.has(serverId);
     const isOwner = activeServer?.owner_id === currentUser?.id && activeServer?.id === serverId;
     const canInvite = serverId !== activeServerId || canManageInvites;
@@ -199,7 +200,7 @@ function ServerList({
         },
       },
       ...(canInvite
-        ? [{ label: tServers("inviteFriends"), onClick: () => onInviteServer(serverId, serverName) }]
+        ? [{ label: tServers("inviteFriends"), onClick: () => onInviteServer(serverId, serverName, returnFocus) }]
         : []),
       ...(serverId === activeServerId
         ? [{ label: tServers("serverEvents"), onClick: () => onOpenEvents(serverId, serverName) }]

@@ -1,0 +1,7 @@
+{
+  "source_qualification": "Music service sources at 5f91f6cc matched the previously built test binary snapshot after LF normalization.",
+  "scope": "Live public YouTube search and exact selection with a disposable local LiveKit room",
+  "result": "TestMusicYouTubeSearchLiveAcceptance passed: the supplied public video was found, selected by exact canonical identity, enqueued once with requester identity retained, and a local GCM track published. The test stopped its own bot and removed its containers.",
+  "privacy": "No account cookies, restriction bypass, external recipient messages, uploads, user media, hardware or recorded audio were used. The SDK attempted its default Google STUN discovery in addition to public YouTube reads.",
+  "limitations": "This service-level test did not exercise real UI selection, protocol2 HTTP acceptance, audible playback, physical clients or full release acceptance. External provider results and availability may change."
+}

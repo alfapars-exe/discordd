@@ -510,22 +510,31 @@ export async function apiClient<T>(
 }
 
 /** Authenticated binary download with the same cookie/token refresh boundary as apiClient. */
-export async function apiDownload(endpoint: string, filename: string): Promise<APIResponse<void>> {
+export async function apiDownload(endpoint: string, filename: string, isCurrent?: () => boolean): Promise<APIResponse<void>> {
+  const generation = getAuthGeneration();
+  const cancelled = () => generation !== getAuthGeneration() || (isCurrent && !isCurrent());
+  const cancelledResult: APIResponse<void> = { success: false, error: "request_cancelled", code: "REQUEST_CANCELLED" };
+  if (cancelled()) return cancelledResult;
   const headers = withUpstreamHeader({ [CLIENT_HINT_HEADER]: clientHint() });
   let token = getAccessToken();
   if (token && isTokenAboutToExpire(token)) {
     await refreshAccessToken();
     token = getAccessToken();
   }
+  if (cancelled()) return cancelledResult;
   if (token) headers.Authorization = `Bearer ${token}`;
   try {
     let res = await fetch(apiUrl(endpoint), { headers, credentials: "include" });
+    if (cancelled()) return cancelledResult;
     if (res.status === 401 && await refreshAccessToken()) {
+      if (cancelled()) return cancelledResult;
       headers.Authorization = `Bearer ${getAccessToken()}`;
       res = await fetch(apiUrl(endpoint), { headers, credentials: "include" });
     }
+    if (cancelled()) return cancelledResult;
     if (!res.ok) return { success: false, error: `download_failed: HTTP ${res.status}`, status: res.status };
     const blob = await res.blob();
+    if (cancelled()) return cancelledResult;
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;

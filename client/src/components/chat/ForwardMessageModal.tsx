@@ -141,8 +141,12 @@ export default function ForwardMessageModal({ message, onClose }: Props) {
       if(!isCurrent())return;
       const groupPending=destination.kind==="group"&&useGroupDMStore.getState().pendingSends[destination.id];
       useToastStore.getState().addToast(groupPending?"warning":"error", t(groupPending?"forwardGroupPending":"forwardFailed"));
-      setBusy(null);
-    }finally{sending.current=false}
+    }finally{
+      sending.current=false;
+      // A source replacement cancels the old send without closing the dialog.
+      // Its early-return path must release the visible destination lock too.
+      if(live.current&&isOwner())setBusy(null);
+    }
   };
 
   return (

@@ -142,6 +142,50 @@ describe("handleReadSync (another device marked read)", () => {
   });
 });
 
+describe("markAllRead failure recovery", () => {
+  it.each(["response", "network"])("restores unread rows after a %s failure and allows retry", async (failure) => {
+    useNotificationStore.setState({ items: [makeNotification()], unreadCount: 1, badgeUnreadCount: 1 });
+    vi.mocked(api.getNotificationCount).mockResolvedValueOnce({ success: true, data: { unread_count: 1 } });
+    if (failure === "network") vi.mocked(api.markAllNotificationsRead).mockRejectedValueOnce(new Error("offline"));
+    else vi.mocked(api.markAllNotificationsRead).mockResolvedValueOnce({ success: false, error: "offline" });
+
+    await useNotificationStore.getState().markAllRead();
+    expect(useNotificationStore.getState().items[0].read_at).toBeNull();
+    expect(useNotificationStore.getState().unreadCount).toBe(1);
+    await useNotificationStore.getState().markRead("n-1");
+    expect(api.markNotificationRead).toHaveBeenCalledWith("n-1");
+  });
+
+  it("preserves a confirmed read from another device while restoring other rows", async () => {
+    const pending = deferred<Awaited<ReturnType<typeof api.markAllNotificationsRead>>>();
+    vi.mocked(api.markAllNotificationsRead).mockReturnValueOnce(pending.promise);
+    useNotificationStore.setState({ items: [makeNotification({ id: "a" }), makeNotification({ id: "b" })], unreadCount: 2 });
+    const operation = useNotificationStore.getState().markAllRead();
+    useNotificationStore.getState().handleReadSync({ ids: ["a"], all: false, unread_count: 1 });
+    useNotificationStore.getState().handleCreate(makeNotification({ id: "new" }));
+    pending.resolve({ success: false, error: "offline" });
+    await operation;
+    expect(useNotificationStore.getState().items.find((item) => item.id === "a")?.read_at).not.toBeNull();
+    expect(useNotificationStore.getState().items.find((item) => item.id === "b")?.read_at).toBeNull();
+    expect(useNotificationStore.getState().items.find((item) => item.id === "new")?.read_at).toBeNull();
+  });
+
+  it("does not roll back another account after a delayed failure", async () => {
+    const pending = deferred<Awaited<ReturnType<typeof api.markAllNotificationsRead>>>();
+    vi.mocked(api.markAllNotificationsRead).mockReturnValueOnce(pending.promise);
+    useNotificationStore.setState({ items: [makeNotification()], unreadCount: 1 });
+    const operation = useNotificationStore.getState().markAllRead();
+    setTokens("other-access", "", "other");
+    useAuthStore.setState({ user: { id: "other" } as never });
+    const other = makeNotification({ id: "other-row", user_id: "other" });
+    useNotificationStore.setState({ items: [other], ownerId: "other", authGeneration: getAuthGeneration(), unreadCount: 1 });
+    pending.resolve({ success: false, error: "offline" });
+    await operation;
+    expect(useNotificationStore.getState().items).toEqual([other]);
+    expect(api.getNotificationCount).not.toHaveBeenCalled();
+  });
+});
+
 describe("markRead", () => {
   it("flips read_at optimistically, decrements the count and calls the API", async () => {
     useNotificationStore.setState({ items: [makeNotification({ id: "a" })], unreadCount: 1 });

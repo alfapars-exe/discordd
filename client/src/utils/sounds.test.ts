@@ -54,6 +54,8 @@ class FakeCtx {
     h.contexts.push(this);
     if (h.removeSinkApi) delete (this as Partial<FakeCtx>).setSinkId;
   }
+  decodeAudioData = vi.fn(async () => ({ duration: 1 } as AudioBuffer));
+  createBufferSource() { return { ...this.createOscillator(), buffer: null }; }
   createOscillator() {
     h.oscillators++;
     const node = {
@@ -75,12 +77,13 @@ class FakeCtx {
   }
 }
 
-import { playNotificationSound, playJoinSound, previewIncomingCallSound, playWatchStartSound, playVoiceEventSound, VOICE_SOUND_EVENTS, playToneAt, closeAudioContext } from "./sounds";
+import { playNotificationSound, playJoinSound, previewIncomingCallSound, playWatchStartSound, playVoiceEventSound, VOICE_SOUND_EVENTS, VOICE_SOUND_PREFERENCES, VOICE_SOUND_ASSETS, playToneAt, closeAudioContext } from "./sounds";
 const subscriptionsAtModuleImport = h.voiceListeners.length;
 
 beforeEach(() => {
   vi.useFakeTimers();
   vi.stubGlobal("AudioContext", FakeCtx);
+  vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) })));
   closeAudioContext();
   h.voice = { soundsEnabled: true, masterVolume: 100, outputDevice: "", isDeafened: false, isServerDeafened: false, currentVoiceChannelId: null, _joinGeneration: 0 };
   h.auth = { manualStatus: "online" };
@@ -157,7 +160,7 @@ describe("join sound / playToneAt", () => {
     h.voice.masterVolume = 40;
     playJoinSound();
     await vi.waitFor(() => expect(h.gains).toHaveLength(1));
-    expect(h.gains[0]).toBeCloseTo(0.4 * 0.3, 9);
+    expect(h.gains[0]).toBeCloseTo(0.4, 9);
   });
 
   it("playToneAt returns a stop function", () => {
@@ -304,9 +307,26 @@ it("volume zero immediately cancels sounding notification/preview but leaves mas
 });
 
 it.each(VOICE_SOUND_EVENTS)("uses actual %s catalog tone for preview and respects its individual switch",async event=>{
- playVoiceEventSound(event);await vi.waitFor(()=>expect(h.oscillators).toBeGreaterThan(0));closeAudioContext();h.oscillators=0;const key={join:"voiceJoinSound",leave:"voiceLeaveSound",watchStart:"voiceWatchStartSound",watchStop:"voiceWatchStopSound",mute:"voiceMuteSound",unmute:"voiceUnmuteSound",deafen:"voiceDeafenSound",undeafen:"voiceUndeafenSound"}[event];Object.assign(h.prefs,{[key]:false});playVoiceEventSound(event);await vi.advanceTimersByTimeAsync(100);expect(h.oscillators).toBe(0);
+ playVoiceEventSound(event);await vi.waitFor(()=>expect(h.oscillators).toBeGreaterThan(0));closeAudioContext();h.oscillators=0;const key=VOICE_SOUND_PREFERENCES[event];Object.assign(h.prefs,{[key]:false});playVoiceEventSound(event);await vi.advanceTimersByTimeAsync(100);expect(h.oscillators).toBe(0);
 });
 
 it("individual watch preference revoke/restore cannot resurrect its delayed second note",async()=>{
  playVoiceEventSound("watchStart");await vi.waitFor(()=>expect(h.oscillators).toBe(1));Object.assign(h.prefs,{voiceWatchStartSound:false});h.preferenceListeners.forEach(fn=>fn());Object.assign(h.prefs,{voiceWatchStartSound:true});h.preferenceListeners.forEach(fn=>fn());await vi.advanceTimersByTimeAsync(100);expect(h.oscillators).toBe(1);
+});
+
+it.each(Object.entries(VOICE_SOUND_ASSETS))("plays recorded %s exactly once", async (event, url) => {
+ playVoiceEventSound(event as keyof typeof VOICE_SOUND_ASSETS);
+ await vi.waitFor(() => expect(h.oscillatorNodes).toHaveLength(1));
+ expect(url).toContain(event + ".m4a");
+ expect(h.oscillatorNodes[0].start).toHaveBeenCalledOnce();
+ expect(h.gains[0]).toBe(1);
+});
+it("updates recorded cue volume and silences it when deafened", async () => {
+ playJoinSound(); await vi.waitFor(() => expect(h.gainNodes).toHaveLength(1));
+ const previous = h.voice; h.voice = { ...previous, masterVolume: 25 };
+ h.voiceListeners.forEach(fn => fn(h.voice, previous));
+ expect(h.gainNodes[0].gain.setValueAtTime).toHaveBeenLastCalledWith(0.25, 0);
+ const beforeDeafen = h.voice; h.voice = { ...beforeDeafen, isDeafened: true };
+ h.voiceListeners.forEach(fn => fn(h.voice, beforeDeafen));
+ expect(h.gainNodes[0].gain.setValueAtTime).toHaveBeenLastCalledWith(0, 0);
 });

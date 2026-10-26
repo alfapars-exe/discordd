@@ -12,6 +12,7 @@ vi.mock("../../api/voice", () => ({}));
 vi.mock("../../api/client", () => ({ ensureFreshToken: vi.fn() }));
 vi.mock("../../utils/sounds", () => ({
   playJoinSound: vi.fn(),
+  playVoiceEventSound: vi.fn(),
   playLeaveSound: vi.fn(),
   closeAudioContext: vi.fn(),
 }));

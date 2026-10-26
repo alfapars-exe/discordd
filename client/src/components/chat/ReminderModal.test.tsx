@@ -30,6 +30,84 @@ describe("ReminderModal", () => {
     vi.mocked(cancelReminder).mockResolvedValue({ success: true, data: undefined });
   });
 
+  it("distinguishes a pending list from an empty result", async () => {
+    let finish!: (result: Awaited<ReturnType<typeof listReminders>>) => void;
+    vi.mocked(listReminders).mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+    render(<ReminderModal source={source} onClose={vi.fn()} />);
+    expect(screen.getByRole("status")).toHaveTextContent("reminderLoading");
+    expect(screen.queryByText("noUpcomingReminders")).not.toBeInTheDocument();
+    await waitFor(() => expect(listReminders).toHaveBeenCalledOnce());
+    await act(async () => finish({ success: true, data: { reminders: [] } }));
+    expect(screen.getByText("noUpcomingReminders")).toBeInTheDocument();
+  });
+
+  it("keeps the pending list valid when a simultaneous save fails", async () => {
+    let finish!: (result: Awaited<ReturnType<typeof listReminders>>) => void;
+    vi.mocked(listReminders).mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+    vi.mocked(createReminder).mockResolvedValueOnce({ success: false, error: "offline" });
+    render(<ReminderModal source={source} onClose={vi.fn()} />);
+    await waitFor(() => expect(listReminders).toHaveBeenCalledOnce());
+    fireEvent.click(screen.getByRole("button", { name: "reminderCreate" }));
+    await waitFor(() => expect(createReminder).toHaveBeenCalledOnce());
+    await waitFor(() => expect(screen.getByRole("button", { name: "reminderCreate" })).not.toBeDisabled());
+    await act(async () => finish({ success: true, data: { reminders: [] } }));
+    expect(screen.getByText("noUpcomingReminders")).toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it.each(["response", "exception"])("allows retry after a list %s failure", async (failure) => {
+    if (failure === "response") vi.mocked(listReminders).mockResolvedValueOnce({ success: false, error: "offline" });
+    else vi.mocked(listReminders).mockRejectedValueOnce(new Error("offline"));
+    render(<ReminderModal source={source} onClose={vi.fn()} />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("reminderLoadFailed");
+    expect(screen.queryByText("noUpcomingReminders")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "reminderRetry" }));
+    expect(await screen.findByText("noUpcomingReminders")).toBeInTheDocument();
+    expect(listReminders).toHaveBeenCalledTimes(2);
+  });
+
+  it("contains keyboard focus, closes on Escape and restores the opener", () => {
+    const opener = document.createElement("button");
+    document.body.append(opener);
+    opener.focus();
+    const close = vi.fn();
+    const view = render(<ReminderModal source={source} onClose={close} />);
+    expect(screen.getByRole("dialog", { name: "reminderTitle" })).toBeInTheDocument();
+    expect(screen.getByLabelText("reminderDue")).toHaveFocus();
+    const first = screen.getByRole("button", { name: "reminderClose" });
+    first.focus();
+    fireEvent.keyDown(first, { key: "Tab", shiftKey: true });
+    const last = screen.getByRole("button", { name: "reminderCreate" });
+    expect(last).toHaveFocus();
+    fireEvent.keyDown(last, { key: "Tab" });
+    expect(first).toHaveFocus();
+    opener.focus();
+    expect(first).toHaveFocus();
+    fireEvent.keyDown(first, { key: "Escape" });
+    expect(close).toHaveBeenCalledOnce();
+    view.unmount();
+    expect(opener).toHaveFocus();
+    opener.remove();
+  });
+
+  it("yields focus and Escape to a newer dialog and does not steal focus on unmount", () => {
+    const close = vi.fn();
+    const view = render(<ReminderModal source={source} onClose={close} />);
+    const nested = document.createElement("div");
+    nested.setAttribute("role", "alertdialog");
+    nested.setAttribute("aria-modal", "true");
+    const button = document.createElement("button");
+    nested.append(button);
+    document.body.append(nested);
+    button.focus();
+    expect(button).toHaveFocus();
+    fireEvent.keyDown(button, { key: "Escape" });
+    expect(close).not.toHaveBeenCalled();
+    view.unmount();
+    expect(button).toHaveFocus();
+    nested.remove();
+  });
+
   it("does not expose the previous account's late reminder list",async()=>{
     let finish!:(result:Awaited<ReturnType<typeof listReminders>>)=>void;
     vi.mocked(listReminders).mockReturnValueOnce(new Promise(resolve=>{finish=resolve;}));

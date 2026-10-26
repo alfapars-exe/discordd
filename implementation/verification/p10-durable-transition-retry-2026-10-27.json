@@ -1,0 +1,8 @@
+{
+  "source_commit": "4dbfa7a6",
+  "scope": "Music transition persistence and retry regression verification",
+  "result": "Playback transitions are committed before the new live revision is exposed. Injected transient and persistent write failures retained the queue and revision, allowed recovery without replaying completed audio, and exercised stop and concurrent controls. Retry delay grows from 250 ms to a 30 second cap; stop interrupts the backoff.",
+  "checks": "Final isolated Linux CGO race run passed 261 tests and subtests, with zero failures and three conditional skips. Go vet and focused host tests passed. Source hashes matched the committed files.",
+  "ffmpeg_follow_up": "The previously skipped opt-in FFmpeg smoke was subsequently run against FFmpeg 5.1.9 in an isolated network-disabled runtime; synthetic audio yielded 26 valid stereo Opus packets and exit 0. No user media or physical device was used.",
+  "limitations": "Live YouTube/LiveKit and live search were skipped in the isolated race run. An in-flight database write may delay Stop until its existing timeout; a total database outage was not proven to allow a durable Stop. Full physical two-client and release acceptance remain open."
+}

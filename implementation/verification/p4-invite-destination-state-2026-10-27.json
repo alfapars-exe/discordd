@@ -1,0 +1,11 @@
+{
+  "date": "2026-10-27",
+  "items": ["p4.invite-per-recipient", "p4.invite-link", "p4.invite-target"],
+  "change": "Reset recipient delivery state and displayed link/loading state when account, server, or target channel changes. A friend who received the server invite can receive the newly selected channel invite.",
+  "verification": {
+    "command": "npm test -- src/components/servers/InviteFriendsModal.test.tsx src/stores/inviteStore.test.ts",
+    "result": "PASS: 2 test files, 21 tests",
+    "regression": "Send server link to Alice, change destination while its link is pending, verify loading state and recipient eligibility, then verify the second DM contains the channel link."
+  },
+  "limitations": ["No live two-account delivery or browser visual acceptance performed."]
+}

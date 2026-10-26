@@ -1,0 +1,6 @@
+{
+  "source_commit": "024ff08f",
+  "scope": "Partial thread detail request invalidation verification",
+  "result": "Invalidated pending detail requests move from loading to a retryable error without overwriting ready data or a newer request. Refresh and parent removal race regressions passed; five related suites passed 53 tests, lint and TypeScript passed.",
+  "limitations": "This does not establish full thread lifecycle, permissions, multi-user or real browser acceptance."
+}

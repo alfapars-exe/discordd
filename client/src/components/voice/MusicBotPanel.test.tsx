@@ -4,10 +4,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RoomEvent } from "livekit-client";
 import type { VoiceStore } from "../../stores/voiceStore";
 import type { MusicBotChannelState } from "../../types/music";
+import { createInstance } from "i18next";
+import musicEN from "../../i18n/locales/en/music.json";
+import musicTR from "../../i18n/locales/tr/music.json";
 
-const fixture = vi.hoisted(() => ({ room: { on: vi.fn(), off: vi.fn() }, toast: vi.fn(), showError: vi.fn() }));
+const fixture = vi.hoisted(() => ({ room: { on: vi.fn(), off: vi.fn() }, toast: vi.fn(), showError: vi.fn(), translate: null as ((key: string, options?: Record<string, unknown>) => string) | null }));
 vi.mock("@livekit/components-react", () => ({ useRoomContext: () => fixture.room }));
-vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }), initReactI18next: { type: "3rdParty", init: () => {} } }));
+vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string, options?: Record<string, unknown>) => fixture.translate?.(key, options) ?? key }), initReactI18next: { type: "3rdParty", init: () => {} } }));
 vi.mock("../../stores/voiceStore", async () => {
   const { create } = await import("zustand");
   const { createMusicBotSlice } = await import("../../stores/slices/musicBotSlice");
@@ -35,6 +38,7 @@ function song(overrides: Partial<MusicBotChannelState> = {}): MusicBotChannelSta
 
 beforeEach(() => {
   vi.clearAllMocks();
+  fixture.translate = null;
   useVoiceStore.setState({ currentVoiceChannelId: "a", currentVoiceServerId: "server-a", musicBotStates: {}, musicBotRevisions: {}, musicBotUpdatedAt: {}, musicBotResetRevision: 0, userVolumes: {} });
   useVoiceStore.getState().setMusicBotState("a", song());
   vi.mocked(getMusicState).mockImplementation(async () => ({ success: true, data: useVoiceStore.getState().musicBotStates.a }));
@@ -50,6 +54,152 @@ beforeEach(() => {
 });
 
 describe("MusicBotPanel", () => {
+  it.each(["en", "tr"] as const)("distinguishes duplicate queue controls by position using real %s translations", async (language) => {
+    const i18n = createInstance();
+    await i18n.init({ lng: language, fallbackLng: false, defaultNS: "music", resources: { en: { music: musicEN }, tr: { music: musicTR } } });
+    fixture.translate = (key, options) => i18n.t(key, options ?? {});
+    const first = { ...song().current_track!, title: "Duplicate", queue_item_id: "first" };
+    const second = { ...first, queue_item_id: "second" };
+    const saved = song({ revision: 3, is_active: false, is_paused: true, current_track: null, queue: [first, second] });
+    useVoiceStore.getState().setMusicBotState("a", saved);
+    render(<MusicBotPanel channelId="a" />);
+    const upSecond = language === "en" ? "Move Duplicate up (queue position 2 of 2)" : "Duplicate parçasını yukarı taşı (2 parçalık kuyrukta 2. sıra)";
+    fireEvent.click(await screen.findByRole("button", { name: upSecond }));
+    await waitFor(() => expect(reorderMusicQueue).toHaveBeenCalledWith("server-a", "a", ["second", "first"], 3));
+    act(() => useVoiceStore.getState().setMusicBotState("a", { ...saved, revision: 4, queue: [second, first] }));
+    const removeFirst = language === "en" ? "Remove Duplicate from queue (position 1 of 2)" : "Duplicate parçasını kuyruktan kaldır (2 parçalık kuyrukta 1. sıra)";
+    const remove = screen.getByRole("button", { name: removeFirst });
+    await waitFor(() => expect(remove).not.toBeDisabled());
+    fireEvent.click(remove);
+    await waitFor(() => expect(removeMusicQueueItem).toHaveBeenCalledWith("server-a", "a", "second", 4));
+    expect(restoreMusicSession).not.toHaveBeenCalled();
+  });
+
+  it("does not apply an old restored Stop click after another client starts a replacement session", async () => {
+    useVoiceStore.getState().setMusicBotState("a", song({ session_id: "saved", revision: 0, is_active: false, is_paused: true, current_track: null, queue: [{ ...song().current_track!, queue_item_id: "saved-item" }] }));
+    render(<MusicBotPanel channelId="a" />);
+    const stop = await screen.findByRole("button", { name: "stop" });
+    act(() => {
+      useVoiceStore.getState().setMusicBotState("a", song({ session_id: "replacement", revision: 0 }), true);
+      fireEvent.click(stop);
+    });
+    expect(stopMusic).not.toHaveBeenCalled();
+    expect(restoreMusicSession).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "stop" }));
+    await waitFor(() => expect(stopMusic).toHaveBeenCalledOnce());
+  });
+
+  it("shows and edits restored queue entries without starting playback", async () => {
+    useVoiceStore.getState().setMusicBotState("a", song({ session_id: "saved", revision: 3, is_active: false, is_paused: true, current_track: null, queue: [
+      { ...song().current_track!, queue_item_id: "saved-one", title: "Duplicate saved song" },
+      { ...song().current_track!, queue_item_id: "saved-two", title: "Duplicate saved song" },
+    ] }));
+    render(<MusicBotPanel channelId="a" />);
+    expect(await screen.findAllByText("Duplicate saved song")).toHaveLength(2);
+    fireEvent.click(screen.getAllByRole("button", { name: "moveTrackUp" })[1]);
+    await waitFor(() => expect(reorderMusicQueue).toHaveBeenCalledWith("server-a", "a", ["saved-two", "saved-one"], 3));
+    await waitFor(() => expect(screen.getAllByRole("button", { name: "removeTrack" })[0]).not.toBeDisabled());
+    fireEvent.click(screen.getAllByRole("button", { name: "removeTrack" })[0]);
+    await waitFor(() => expect(removeMusicQueueItem).toHaveBeenCalledWith("server-a", "a", "saved-one", 3));
+    await waitFor(() => expect(screen.getByRole("button", { name: "stop" })).not.toBeDisabled());
+    expect(restoreMusicSession).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "stop" }));
+    await waitFor(() => expect(stopMusic).toHaveBeenCalledWith("server-a", "a"));
+    expect(restoreMusicSession).not.toHaveBeenCalled();
+    expect(playMusic).not.toHaveBeenCalled();
+    expect(reorderMusicQueue).toHaveBeenCalledOnce();
+  });
+
+  it("does not reinterpret an old Pause click after the server already paused playback", async () => {
+    render(<MusicBotPanel channelId="a" />);
+    const pause = await screen.findByRole("button", { name: "pause" });
+    act(() => {
+      const current = useVoiceStore.getState().musicBotStates.a;
+      useVoiceStore.getState().setMusicBotState("a", { ...current, is_paused: true });
+      fireEvent.click(pause);
+    });
+    expect(pauseMusic).not.toHaveBeenCalled();
+    expect(resumeMusic).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "resume" }));
+    await waitFor(() => expect(resumeMusic).toHaveBeenCalledOnce());
+  });
+
+  it("does not apply an old rendered Skip control to a replacement track before React refreshes", async () => {
+    render(<MusicBotPanel channelId="a" />);
+    const skip = await screen.findByRole("button", { name: "skip" });
+    act(() => {
+      useVoiceStore.getState().setMusicBotState("a", song({ current_track: { ...song().current_track!, video_id: "replacement", title: "Replacement" } }));
+      fireEvent.click(skip);
+    });
+    expect(skipMusic).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "skip" }));
+    await waitFor(() => expect(skipMusic).toHaveBeenCalledOnce());
+  });
+
+  it.each(["success", "failure"] as const)("keeps a replacement query's results when the previous query returns %s late", async (outcome) => {
+    let finishOld!: (value: Awaited<ReturnType<typeof searchMusic>>) => void;
+    vi.mocked(searchMusic).mockReturnValueOnce(new Promise(resolve => { finishOld = resolve; }))
+      .mockResolvedValueOnce({ success: true, data: { results: [{ ...song().current_track!, video_id: "new", title: "New query result" }] } });
+    render(<MusicBotPanel channelId="a" />);
+    const input = screen.getByRole("textbox", { name: "searchPlaceholder" });
+    fireEvent.change(input, { target: { value: "old query" } });
+    fireEvent.submit(input.closest("form")!);
+    fireEvent.change(input, { target: { value: "new query" } });
+    expect(screen.getByRole("button", { name: "search" })).not.toBeDisabled();
+    fireEvent.submit(input.closest("form")!);
+    expect(await screen.findByText("New query result")).toBeInTheDocument();
+    await act(async () => finishOld(outcome === "success"
+      ? { success: true, data: { results: [{ ...song().current_track!, video_id: "old", title: "Obsolete result" }] } }
+      : { success: false, error: "old failure" }));
+    expect(screen.getByText("New query result")).toBeInTheDocument();
+    expect(screen.queryByText("Obsolete result")).toBeNull();
+    expect(fixture.showError).not.toHaveBeenCalled();
+    expect(fixture.toast).not.toHaveBeenCalled();
+    expect(playMusic).not.toHaveBeenCalled();
+  });
+
+  it.each(["reject", "failure"] as const)("ignores an unmounted search's late %s without global feedback", async (outcome) => {
+    let resolve!: (value: Awaited<ReturnType<typeof searchMusic>>) => void;
+    let reject!: (reason: Error) => void;
+    vi.mocked(searchMusic).mockReturnValueOnce(new Promise((done, fail) => { resolve = done; reject = fail; }));
+    const view = render(<MusicBotPanel channelId="a" />);
+    fireEvent.change(screen.getByRole("textbox", { name: "searchPlaceholder" }), { target: { value: "song" } });
+    const form = screen.getByRole("textbox", { name: "searchPlaceholder" }).closest("form")!;
+    act(() => { fireEvent.submit(form); fireEvent.submit(form); });
+    expect(searchMusic).toHaveBeenCalledOnce();
+    view.unmount();
+    await act(async () => {
+      if (outcome === "reject") reject(new Error("offline"));
+      else resolve({ success: false, error: "offline" });
+    });
+    expect(fixture.toast).not.toHaveBeenCalled();
+    expect(fixture.showError).not.toHaveBeenCalled();
+    expect(playMusic).not.toHaveBeenCalled();
+  });
+
+  it("rejects a stale or cancelled queue drag, then permits a fresh reorder", async () => {
+    const base = song({ session_id: "session", revision: 3, queue: [
+      { ...song().current_track!, queue_item_id: "first", title: "Queue first" },
+      { ...song().current_track!, queue_item_id: "second", title: "Queue second" },
+    ] });
+    useVoiceStore.getState().setMusicBotState("a", base);
+    render(<MusicBotPanel channelId="a" />);
+    const first = (await screen.findByText("Queue first")).closest("li")!;
+    const second = screen.getByText("Queue second").closest("li")!;
+    fireEvent.dragStart(first);
+    act(() => useVoiceStore.getState().setMusicBotState("a", { ...base, revision: 4 }));
+    fireEvent.drop(second);
+    expect(reorderMusicQueue).not.toHaveBeenCalled();
+    fireEvent.dragStart(first);
+    fireEvent.dragEnd(first);
+    fireEvent.drop(second);
+    expect(reorderMusicQueue).not.toHaveBeenCalled();
+    fireEvent.dragStart(first);
+    fireEvent.drop(second);
+    await waitFor(() => expect(reorderMusicQueue).toHaveBeenCalledWith("server-a", "a", ["second", "first"], 4));
+    expect(reorderMusicQueue).toHaveBeenCalledOnce();
+  });
+
   it("searches by name and queues the selected YouTube result", async () => {
     const result = { ...song().current_track!, video_id: "abcdefghijk", title: "Search result" };
     vi.mocked(searchMusic).mockResolvedValue({ success: true, data: { results: [result] } });
@@ -109,6 +259,33 @@ describe("MusicBotPanel", () => {
     fireEvent.change(slider, { target: { value: "75" } });
     fireEvent.pointerUp(slider, { target: { value: "75" } });
     await waitFor(() => expect(seekMusic).toHaveBeenCalledWith("server-a", "a", 75));
+  });
+
+  it("discards a seek draft when the same video advances to another queue entry", async () => {
+    const first = song({ session_id: "session", revision: 1, current_track: { ...song().current_track!, queue_item_id: "first" } });
+    useVoiceStore.getState().setMusicBotState("a", first);
+    render(<MusicBotPanel channelId="a" />);
+    const slider = await screen.findByRole("slider", { name: "seek" });
+    fireEvent.change(slider, { target: { value: "75" } });
+    const second = { ...first, revision: 2, current_track: { ...first.current_track!, queue_item_id: "second" }, elapsed_seconds: 5 };
+    act(() => useVoiceStore.getState().setMusicBotState("a", second));
+    expect(slider).not.toHaveValue("75");
+    // Continued pointer movement must not silently adopt the replacement track.
+    fireEvent.change(slider, { target: { value: "80" } });
+    fireEvent.pointerUp(slider, { target: { value: "75" } });
+    expect(seekMusic).not.toHaveBeenCalled();
+    fireEvent.change(slider, { target: { value: "15" } });
+    fireEvent.keyUp(slider, { key: "ArrowRight" });
+    await waitFor(() => expect(seekMusic).toHaveBeenCalledWith("server-a", "a", 15));
+  });
+
+  it.each(["pointerCancel", "blur"] as const)("does not commit an abandoned seek after %s", async (event) => {
+    render(<MusicBotPanel channelId="a" />);
+    const slider = await screen.findByRole("slider", { name: "seek" });
+    fireEvent.change(slider, { target: { value: "75" } });
+    fireEvent[event](slider);
+    fireEvent.pointerUp(slider, { target: { value: "75" } });
+    expect(seekMusic).not.toHaveBeenCalled();
   });
 
   it("shows a restarted queue as paused and resumes only after explicit action", async () => {

@@ -1,28 +1,4 @@
-/**
- * sounds.ts — Synthesized audio effects for voice join/leave, stream watch, and notifications.
- *
- * Uses Web Audio API OscillatorNode — no mp3 files needed.
- *
- * Voice (sine, 200-600Hz):
- *   Join:  Rising 350->600Hz, 0.15s
- *   Leave: Falling 400->200Hz, 0.12s
- *
- * Watch (triangle, 320-620Hz):
- *   Start: Double rising pop 380->500 + 500->620Hz
- *   Stop:  Falling 480->320Hz, 0.1s
- *
- * Notification (sine, 800-1000Hz):
- *   Double pop 800->900 + 900->1000Hz. Skipped in DND/invisible mode and when
- *   join/leave sounds are off.
- *
- * Volume: voice/watch effects follow voiceStore.masterVolume; the notification
- * pop follows accessibilityStore.notificationSoundVolume (Faz E bugfix — the
- * accessibility slider was previously never read). All sounds use a GainNode.
- *
- * `playToneAt` is exported for the entrance-sound preset synthesizer
- * (utils/entrancePreset.ts), which schedules several notes on one context.
- */
-
+/** Recorded voice cues and synthesized notification/manual-control effects. */
 import { awaitAudioStep } from "../audio/audioOperation";
 import { usePreferencesStore } from "../stores/preferencesStore";
 import { useVoiceStore } from "../stores/voiceStore";
@@ -31,10 +7,16 @@ import { useAccessibilityStore } from "../stores/accessibilityStore";
 import { getNotificationPreferences } from "./notificationPreferences";
 import { subscribeAuthGenerationChanges, subscribeAuthOwnerChanges } from "../api/authSessionEvents";
 
+import joinUrl from "../assets/voice-sounds/join.m4a?url&no-inline";
+import leaveUrl from "../assets/voice-sounds/leave.m4a?url&no-inline";
+import streamStartUrl from "../assets/voice-sounds/streamStart.m4a?url&no-inline";
+import streamStopUrl from "../assets/voice-sounds/streamStop.m4a?url&no-inline";
+import watchStartUrl from "../assets/voice-sounds/watchStart.m4a?url&no-inline";
+
 /** Lazily initialized — created on first sound play, resumed if suspended. */
 let audioCtx: AudioContext | null = null;
 type SinkAudioContext = AudioContext & { setSinkId?: (sinkId: string) => Promise<void> };
-type ActiveTone = { osc: OscillatorNode; gain: GainNode; volume: number; followsMaster: boolean; start: number; end: number; cancel: () => void };
+type ActiveTone = { osc: OscillatorNode | AudioBufferSourceNode; gain: GainNode; volume: number; followsMaster: boolean; start: number; end: number; recorded?: boolean; cancel: () => void };
 const activeTones = new Set<ActiveTone>();
 const requests = new Set<{ authorized: () => boolean; cancel: () => void }>();
 const effectsAllowed = () => useVoiceStore.getState().soundsEnabled && !getNotificationPreferences().muteAllSounds;
@@ -75,7 +57,8 @@ function refreshToneVolumes(): void {
     try {
       tone.gain.gain.cancelScheduledValues(now);
       const remaining = Math.max(0, Math.min(1, (tone.end - now) / Math.max(0.001, tone.end - tone.start)));
-      const peak = effectiveVolume(tone) * 0.3;
+      const peak = effectiveVolume(tone) * (tone.recorded ? 1 : 0.3);
+      if (tone.recorded) { tone.gain.gain.setValueAtTime(peak, now); continue; }
       if (now < tone.start) {
         tone.gain.gain.setValueAtTime(0, now);
         tone.gain.gain.setValueAtTime(peak, tone.start);
@@ -278,24 +261,75 @@ export function playToneAt(
   }
 }
 
-export type VoiceSoundEvent = "join" | "leave" | "watchStart" | "watchStop" | "mute" | "unmute" | "deafen" | "undeafen";
-export const VOICE_SOUND_EVENTS: readonly VoiceSoundEvent[] = ["join", "leave", "watchStart", "watchStop", "mute", "unmute", "deafen", "undeafen"];
-export const VOICE_SOUND_PREFERENCES = {join:"voiceJoinSound",leave:"voiceLeaveSound",watchStart:"voiceWatchStartSound",watchStop:"voiceWatchStopSound",mute:"voiceMuteSound",unmute:"voiceUnmuteSound",deafen:"voiceDeafenSound",undeafen:"voiceUndeafenSound"} as const;
-/** Current call effects and explicit previews share exactly the same tone and policy. */
+export const VOICE_SOUND_ASSETS = { join: joinUrl, leave: leaveUrl, streamStart: streamStartUrl, streamStop: streamStopUrl, watchStart: watchStartUrl } as const;
+const audioBuffers = new Map<string, Promise<AudioBuffer>>();
+function playRecordedSound(url: string, authorized: () => boolean): void {
+  let source: AudioBufferSourceNode | undefined;
+  let tone: ActiveTone | undefined;
+  let cancelled = false;
+  const cancel = () => {
+    if (cancelled) return;
+    cancelled = true;
+    requests.delete(request);
+    if (tone) activeTones.delete(tone);
+    try { source?.stop(); } catch { /* already ended */ }
+    source?.disconnect();
+    tone?.gain.disconnect();
+  };
+  const request = { authorized, cancel };
+  try {
+    const ctx = getAudioContext();
+    const generation = eventGeneration;
+    requests.add(request);
+    let buffer = audioBuffers.get(url);
+    if (!buffer) {
+      buffer = awaitAudioStep(fetch(url, { signal: AbortSignal.timeout(10000) }).then(response => {
+        if (!response.ok) throw new Error("Voice cue unavailable");
+        return response.arrayBuffer();
+      }).then(data => ctx.decodeAudioData(data)), "Voice cue decode");
+      audioBuffers.set(url, buffer);
+      void buffer.catch(() => { audioBuffers.delete(url); });
+    }
+    const selected = useVoiceStore.getState().outputDevice;
+    const resumed = ctx.state === "running" ? Promise.resolve() : awaitAudioStep(ctx.resume(), "Event sound context resume").catch(error => {
+      if (ctx === audioCtx) closeAudioContext();
+      throw error;
+    });
+    void Promise.all([awaitAudioStep(buffer, "Voice cue load"), resumed, routeToDevice(ctx, selected === "default" ? "" : selected || "")]).then(([decoded,, routed]) => {
+      if (cancelled || !routed || ctx !== audioCtx || generation !== eventGeneration || !authorized() || ctx.state !== "running") { cancel(); return; }
+      source = ctx.createBufferSource();
+      source.buffer = decoded;
+      const gain = ctx.createGain();
+      tone = { osc: source, gain, volume: 1, followsMaster: true, start: ctx.currentTime, end: ctx.currentTime + decoded.duration, recorded: true, cancel };
+      activeTones.add(tone);
+      gain.gain.setValueAtTime(effectiveVolume(tone), ctx.currentTime);
+      source.connect(gain);
+      gain.connect(ctx.destination);
+      source.onended = cancel;
+      source.start();
+      source.stop(ctx.currentTime + decoded.duration);
+    }).catch(cancel);
+  } catch { cancel(); }
+}
+
+export type VoiceSoundEvent = "join" | "leave" | "streamStart" | "streamStop" | "watchStart" | "watchStop" | "mute" | "unmute" | "deafen" | "undeafen";
+export const VOICE_SOUND_EVENTS: readonly VoiceSoundEvent[] = ["join", "leave", "streamStart", "streamStop", "watchStart", "watchStop", "mute", "unmute", "deafen", "undeafen"];
+export const VOICE_SOUND_PREFERENCES = {streamStart:"voiceStreamStartSound",streamStop:"voiceStreamStopSound",join:"voiceJoinSound",leave:"voiceLeaveSound",watchStart:"voiceWatchStartSound",watchStop:"voiceWatchStopSound",mute:"voiceMuteSound",unmute:"voiceUnmuteSound",deafen:"voiceDeafenSound",undeafen:"voiceUndeafenSound"} as const;
+/** Current call effects and explicit previews share exactly the same cue and policy. */
 export function playVoiceEventSound(event: VoiceSoundEvent): void {
   const revision=voiceEventRevisions.get(event)??0;
   const authorized = () => revision===(voiceEventRevisions.get(event)??0) && effectsAllowed() && getNotificationPreferences()[VOICE_SOUND_PREFERENCES[event]] !== false;
   if (!authorized()) return;
-  const notes: Record<VoiceSoundEvent, [number, number, number, OscillatorType]> = {
-    join:[350,600,0.15,"sine"],leave:[400,200,0.12,"sine"],watchStart:[380,500,0.08,"triangle"],watchStop:[480,320,0.1,"triangle"],
-    mute:[520,320,0.09,"sine"],unmute:[320,520,0.09,"sine"],deafen:[300,180,0.12,"triangle"],undeafen:[180,380,0.12,"triangle"],
-  };
-  const [from,to,duration,wave]=notes[event];
-  playToneAt(from,to,duration,1,wave,0,true,authorized);
-  if(event==="watchStart"){
-    const generation=eventGeneration;
-    setTimeout(()=>{if(generation===eventGeneration&&authorized())playToneAt(500,620,0.08,1,"triangle",0,true,authorized)},90);
+  if (event in VOICE_SOUND_ASSETS) {
+    playRecordedSound(VOICE_SOUND_ASSETS[event as keyof typeof VOICE_SOUND_ASSETS], authorized);
+    return;
   }
+  const notes = {
+    watchStop:[480,320,0.1,"triangle"], mute:[520,320,0.09,"sine"], unmute:[320,520,0.09,"sine"],
+    deafen:[300,180,0.12,"triangle"], undeafen:[180,380,0.12,"triangle"],
+  } satisfies Record<string, [number, number, number, OscillatorType]>;
+  const [from,to,duration,wave] = notes[event as keyof typeof notes];
+  playToneAt(from,to,duration,1,wave,0,true,authorized);
 }
 export function playJoinSound(): void { playVoiceEventSound("join"); }
 export function playLeaveSound(): void { playVoiceEventSound("leave"); }

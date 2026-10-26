@@ -11,7 +11,7 @@ import { useServerStore } from "../../stores/serverStore";
 import { useAuthStore } from "../../stores/authStore";
 import { useUIStore } from "../../stores/uiStore";
 import { useToastStore } from "../../stores/toastStore";
-import { playJoinSound, playLeaveSound, playWatchStartSound, playWatchStopSound } from "../../utils/sounds";
+import { playVoiceEventSound, playJoinSound, playLeaveSound, playWatchStartSound, playWatchStopSound } from "../../utils/sounds";
 import i18n from "../../i18n";
 import { isMusicBotErrorReason } from "../../types/music";
 import type { WSMessage } from "../../types";
@@ -28,7 +28,8 @@ export async function handleVoiceEvent(
       const voiceState = useVoiceStore.getState();
 
       const prevStates = voiceState.voiceStates[voiceData.channel_id] ?? [];
-      const prevStreaming = prevStates.find((s) => s.user_id === voiceData.user_id)?.is_streaming ?? false;
+      const previousParticipant = prevStates.find((s) => s.user_id === voiceData.user_id);
+      const prevStreaming = previousParticipant?.is_streaming ?? false;
       const myUserId = useAuthStore.getState().user?.id;
       const applied = voiceState.handleVoiceStateUpdate(
         { ...voiceData, server_id: msg.server_id },
@@ -46,9 +47,9 @@ export async function handleVoiceEvent(
         else if (voiceData.action === "leave") playLeaveSound();
       }
 
-      if (isSameChannel && !isMe && voiceData.action === "update") {
-        if (!prevStreaming && voiceData.is_streaming) playJoinSound();
-        else if (prevStreaming && !voiceData.is_streaming) playLeaveSound();
+      if (isSameChannel && !isMe && previousParticipant && voiceData.action === "update") {
+        if (!prevStreaming && voiceData.is_streaming) playVoiceEventSound("streamStart");
+        else if (prevStreaming && !voiceData.is_streaming) playVoiceEventSound("streamStop");
       }
 
       // Stream-stop cleanup — fires for ANY user in the same channel

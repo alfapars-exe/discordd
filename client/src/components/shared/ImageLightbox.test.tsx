@@ -54,6 +54,35 @@ function openRemote(over: Record<string, unknown> = {}) {
 }
 
 describe("ImageLightbox", () => {
+  it("cycles Tab focus within the viewer and includes the open media menu", () => {
+    render(<ImageLightbox />);
+    openRemote();
+    // Zoom-out is disabled at 100%, so reset is the first tabbable control.
+    const first = screen.getByRole("button", { name: "lightboxResetZoom" });
+    const last = screen.getByRole("button", { name: "close" });
+    last.focus();
+    const tab = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
+    fireEvent(last, tab);
+    expect(tab.defaultPrevented).toBe(true);
+    expect(first).toHaveFocus();
+    fireEvent.keyDown(first, { key: "Tab", shiftKey: true });
+    expect(last).toHaveFocus();
+
+    fireEvent.click(screen.getByRole("button", { name: "mediaActions" }));
+    const menuAction = screen.getByRole("menuitem", { name: "lightboxDownload" });
+    menuAction.focus();
+    const within = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
+    fireEvent(menuAction, within);
+    expect(within.defaultPrevented).toBe(false);
+
+    const outside = document.createElement("button");
+    document.body.appendChild(outside);
+    outside.focus();
+    fireEvent.keyDown(outside, { key: "Tab" });
+    expect(first).toHaveFocus();
+    outside.remove();
+  });
+
   it("revokes an open preview when media preferences change", () => {
     render(<ImageLightbox />);
     openRemote();
@@ -201,6 +230,10 @@ describe("ImageLightbox", () => {
       await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
     });
     expect(document.activeElement).toBe(document.querySelector(".forward-search"));
+    const nestedTab = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
+    fireEvent(document.activeElement!, nestedTab);
+    expect(nestedTab.defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(document.querySelector(".forward-search"));
 
     fireEvent.keyDown(document, { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "forwardMessage" })).toBeNull());
@@ -266,6 +299,48 @@ describe("ImageLightbox", () => {
     fireEvent.wheel(document.querySelector(".image-lightbox-stage")!, { deltaY: 100 });
     expect(screen.getByRole("button", { name: "lightboxResetZoom" })).toHaveTextContent("100%");
     expect(screen.getByRole("img", { name: "one.png" }).getAttribute("style")).toContain("translate(0px, 0px)");
+  });
+
+  it("ignores a third finger and continues the original pinch as one-finger pan", () => {
+    render(<ImageLightbox />);
+    openRemote();
+    const stage = document.querySelector(".image-lightbox-stage")!;
+    const capture = vi.fn();
+    Object.assign(stage, { setPointerCapture: capture });
+    fireEvent.pointerDown(stage, { pointerId: 1, pointerType: "touch", clientX: 100, clientY: 100 });
+    fireEvent.pointerDown(stage, { pointerId: 2, pointerType: "touch", clientX: 200, clientY: 100 });
+    fireEvent.pointerDown(stage, { pointerId: 3, pointerType: "touch", clientX: 400, clientY: 100 });
+    fireEvent.pointerUp(stage, { pointerId: 3, pointerType: "touch", clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(stage, { pointerId: 2, pointerType: "touch", clientX: 300, clientY: 100 });
+    expect(screen.getByRole("button", { name: "lightboxResetZoom" })).toHaveTextContent("200%");
+    expect(capture.mock.calls).toEqual([[1], [2]]);
+    fireEvent.pointerUp(stage, { pointerId: 1, pointerType: "touch", clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(stage, { pointerId: 2, pointerType: "touch", clientX: 330, clientY: 120 });
+    expect(screen.getByRole("img", { name: "photo.png" }).getAttribute("style")).toContain("translate(30px, 20px)");
+    fireEvent.pointerUp(stage, { pointerId: 2, pointerType: "touch", clientX: 330, clientY: 120 });
+  });
+
+  it("ignores non-primary mouse buttons and abandons drag after capture loss or cancellation", () => {
+    render(<ImageLightbox />);
+    openRemote();
+    const stage = document.querySelector(".image-lightbox-stage")!;
+    const image = screen.getByRole("img", { name: "photo.png" });
+    fireEvent.click(screen.getByRole("button", { name: "lightboxZoomIn" }));
+    for (const button of [1, 2]) {
+      fireEvent.pointerDown(stage, { pointerId: 7, pointerType: "mouse", button, clientX: 10, clientY: 10 });
+      fireEvent.pointerMove(stage, { pointerId: 7, pointerType: "mouse", clientX: 40, clientY: 20 });
+      expect(image.getAttribute("style")).toContain("translate(0px, 0px)");
+    }
+    for (const cancel of ["pointerCancel", "lostPointerCapture"] as const) {
+      fireEvent.pointerDown(stage, { pointerId: 8, pointerType: "touch", clientX: 10, clientY: 10 });
+      fireEvent[cancel](stage, { pointerId: 8 });
+      fireEvent.pointerMove(stage, { pointerId: 8, pointerType: "touch", clientX: 40, clientY: 20 });
+      expect(image.getAttribute("style")).toContain("translate(0px, 0px)");
+    }
+    fireEvent.pointerDown(stage, { pointerId: 9, pointerType: "touch", clientX: 10, clientY: 10 });
+    fireEvent.pointerUp(stage, { pointerId: 99 });
+    fireEvent.pointerMove(stage, { pointerId: 9, pointerType: "touch", clientX: 40, clientY: 20 });
+    expect(image.getAttribute("style")).toContain("translate(30px, 10px)");
   });
 
   it("closes on backdrop click", () => {

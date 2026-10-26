@@ -1,0 +1,6 @@
+{
+  "commit": "c97288e8",
+  "scope": "Reminder modal distinguishes loading, failed and empty list states; failed list loads can be retried, and a failed concurrent save no longer discards the pending list response.",
+  "checks": ["26 focused tests passed across three test files", "client TypeScript project build passed", "git diff --check passed"],
+  "limitations": ["Scheduler delivery, restart persistence and browser acceptance were not revalidated in this change."]
+}

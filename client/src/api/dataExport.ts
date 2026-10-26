@@ -6,6 +6,6 @@ export function createDataExport(isCurrent?: () => boolean) {
   return apiClient<DataExportJob>("/users/me/data-exports", { method: "POST", timeoutMs: 30000, isCurrent });
 }
 
-export function downloadDataExport(job: DataExportJob) {
-  return apiDownload(`/users/me/data-exports/${encodeURIComponent(job.id)}/download`, `hichat-personal-data-${job.id.slice(0, 12)}.json`);
+export function downloadDataExport(job: DataExportJob, isCurrent?: () => boolean) {
+  return apiDownload(`/users/me/data-exports/${encodeURIComponent(job.id)}/download`, `hichat-personal-data-${job.id.slice(0, 12)}.json`, isCurrent);
 }
