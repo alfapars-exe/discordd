@@ -31,7 +31,9 @@ export function classifySpam(content: string | null | undefined): SpamClassifica
   if (typeof content !== "string") return { status: "unknown", spam: false, reasons: [] };
   const reasons: SpamReason[] = [];
   const urls: URL[] = [];
-  for (const match of content.matchAll(/https?:\/\/[^\s<>]+/giu)) {
+  // Match the chat renderer's pipe boundary: spoiler delimiters and adjacent
+  // pipe-separated links must not become one invalid URL and evade detection.
+  for (const match of content.matchAll(/https?:\/\/[^\s<>|]+/giu)) {
     const candidate = trimSentencePunctuation(match[0]);
     try { urls.push(new URL(candidate)); } catch { /* Invalid text is not a link signal. */ }
   }
