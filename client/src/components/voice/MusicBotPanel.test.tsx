@@ -4,10 +4,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RoomEvent } from "livekit-client";
 import type { VoiceStore } from "../../stores/voiceStore";
 import type { MusicBotChannelState } from "../../types/music";
+import { createInstance } from "i18next";
+import musicEN from "../../i18n/locales/en/music.json";
+import musicTR from "../../i18n/locales/tr/music.json";
 
-const fixture = vi.hoisted(() => ({ room: { on: vi.fn(), off: vi.fn() }, toast: vi.fn(), showError: vi.fn() }));
+const fixture = vi.hoisted(() => ({ room: { on: vi.fn(), off: vi.fn() }, toast: vi.fn(), showError: vi.fn(), translate: null as ((key: string, options?: Record<string, unknown>) => string) | null }));
 vi.mock("@livekit/components-react", () => ({ useRoomContext: () => fixture.room }));
-vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }), initReactI18next: { type: "3rdParty", init: () => {} } }));
+vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string, options?: Record<string, unknown>) => fixture.translate?.(key, options) ?? key }), initReactI18next: { type: "3rdParty", init: () => {} } }));
 vi.mock("../../stores/voiceStore", async () => {
   const { create } = await import("zustand");
   const { createMusicBotSlice } = await import("../../stores/slices/musicBotSlice");
@@ -35,6 +38,7 @@ function song(overrides: Partial<MusicBotChannelState> = {}): MusicBotChannelSta
 
 beforeEach(() => {
   vi.clearAllMocks();
+  fixture.translate = null;
   useVoiceStore.setState({ currentVoiceChannelId: "a", currentVoiceServerId: "server-a", musicBotStates: {}, musicBotRevisions: {}, musicBotUpdatedAt: {}, musicBotResetRevision: 0, userVolumes: {} });
   useVoiceStore.getState().setMusicBotState("a", song());
   vi.mocked(getMusicState).mockImplementation(async () => ({ success: true, data: useVoiceStore.getState().musicBotStates.a }));
@@ -50,6 +54,27 @@ beforeEach(() => {
 });
 
 describe("MusicBotPanel", () => {
+  it.each(["en", "tr"] as const)("distinguishes duplicate queue controls by position using real %s translations", async (language) => {
+    const i18n = createInstance();
+    await i18n.init({ lng: language, fallbackLng: false, defaultNS: "music", resources: { en: { music: musicEN }, tr: { music: musicTR } } });
+    fixture.translate = (key, options) => i18n.t(key, options ?? {});
+    const first = { ...song().current_track!, title: "Duplicate", queue_item_id: "first" };
+    const second = { ...first, queue_item_id: "second" };
+    const saved = song({ revision: 3, is_active: false, is_paused: true, current_track: null, queue: [first, second] });
+    useVoiceStore.getState().setMusicBotState("a", saved);
+    render(<MusicBotPanel channelId="a" />);
+    const upSecond = language === "en" ? "Move Duplicate up (queue position 2 of 2)" : "Duplicate parçasını yukarı taşı (2 parçalık kuyrukta 2. sıra)";
+    fireEvent.click(await screen.findByRole("button", { name: upSecond }));
+    await waitFor(() => expect(reorderMusicQueue).toHaveBeenCalledWith("server-a", "a", ["second", "first"], 3));
+    act(() => useVoiceStore.getState().setMusicBotState("a", { ...saved, revision: 4, queue: [second, first] }));
+    const removeFirst = language === "en" ? "Remove Duplicate from queue (position 1 of 2)" : "Duplicate parçasını kuyruktan kaldır (2 parçalık kuyrukta 1. sıra)";
+    const remove = screen.getByRole("button", { name: removeFirst });
+    await waitFor(() => expect(remove).not.toBeDisabled());
+    fireEvent.click(remove);
+    await waitFor(() => expect(removeMusicQueueItem).toHaveBeenCalledWith("server-a", "a", "second", 4));
+    expect(restoreMusicSession).not.toHaveBeenCalled();
+  });
+
   it("does not apply an old restored Stop click after another client starts a replacement session", async () => {
     useVoiceStore.getState().setMusicBotState("a", song({ session_id: "saved", revision: 0, is_active: false, is_paused: true, current_track: null, queue: [{ ...song().current_track!, queue_item_id: "saved-item" }] }));
     render(<MusicBotPanel channelId="a" />);

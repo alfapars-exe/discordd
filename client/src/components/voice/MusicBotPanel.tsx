@@ -296,11 +296,11 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
                 <span className="music-bot-queue-title" title={q.title}>{q.title}</span>
                 <span className="music-bot-queue-dur">{formatDuration(q.duration_seconds)}</span>
                 {q.queue_item_id && state.revision !== undefined && <>
-                  <button className="music-bot-btn" disabled={pending || i === 0} aria-label={t("moveTrackUp", { title: q.title })} onClick={() => moveQueueItem(q.queue_item_id!, -1)}>↑</button>
-                  <button className="music-bot-btn" disabled={pending || i === state.queue.length - 1} aria-label={t("moveTrackDown", { title: q.title })} onClick={() => moveQueueItem(q.queue_item_id!, 1)}>↓</button>
+                  <button className="music-bot-btn" disabled={pending || i === 0} aria-label={t("moveTrackUp", { title: q.title, position: i + 1, count: state.queue.length })} onClick={() => moveQueueItem(q.queue_item_id!, -1)}>↑</button>
+                  <button className="music-bot-btn" disabled={pending || i === state.queue.length - 1} aria-label={t("moveTrackDown", { title: q.title, position: i + 1, count: state.queue.length })} onClick={() => moveQueueItem(q.queue_item_id!, 1)}>↓</button>
                 </>}
                 {q.queue_item_id && state.revision !== undefined && <button className="music-bot-btn" disabled={pending}
-                  aria-label={t("removeTrack", { title: q.title })}
+                  aria-label={t("removeTrack", { title: q.title, position: i + 1, count: state.queue.length })}
                   onClick={() => void mutateQueue(() => removeMusicQueueItem(serverId, channelId, q.queue_item_id!, state.revision!))}>×</button>}
               </li>
             ))}
