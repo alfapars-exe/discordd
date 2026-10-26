@@ -66,12 +66,16 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
   const seekScope = useRef<{ key: string; current: () => boolean } | null>(null);
   const dragItem = useRef<{ id: string; revision: number; session?: string; current: () => boolean } | null>(null);
   const actionGeneration = useRef(0);
+  const searchGeneration = useRef(0);
+  const searchPending = useRef(false);
   const actionPending = useRef(false);
   const refreshRef = useRef<(() => void) | null>(null);
 
   const invalidateActions = useCallback(() => {
     ++actionGeneration.current;
     actionPending.current = false;
+    ++searchGeneration.current;
+    searchPending.current = false;
   }, []);
 
   useEffect(()=>{
@@ -164,21 +168,28 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
   async function runSearch(event: React.FormEvent) {
     event.preventDefault();
     const value = query.trim();
-    if (!serverId || !value || value.length > 100 || searching) return;
+    if (!serverId || !value || value.length > 100 || searchPending.current) return;
     const scope=captureMusicScope(serverId,channelId);
+    if (!scope.current()) return;
+    const generation = ++searchGeneration.current;
+    const current = () => generation === searchGeneration.current && scope.current();
+    searchPending.current = true;
     setSearching(true);
     try {
       const response = await searchMusic(serverId, channelId, value);
-      if (!scope.current()) return;
+      if (!current()) return;
       if (!response.success || !response.data) {
         showMusicRequestError(response, "play");
         return;
       }
       setResults(response.data.results ?? []);
     } catch {
-      if(scope.current())useToastStore.getState().addToast("error", t("searchError"));
+      if(current())useToastStore.getState().addToast("error", t("searchError"));
     } finally {
-      if(scope.current())setSearching(false);
+      if(generation === searchGeneration.current) {
+        searchPending.current = false;
+        if(current())setSearching(false);
+      }
     }
   }
 

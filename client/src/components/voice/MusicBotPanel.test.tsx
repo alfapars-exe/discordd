@@ -50,6 +50,25 @@ beforeEach(() => {
 });
 
 describe("MusicBotPanel", () => {
+  it.each(["reject", "failure"] as const)("ignores an unmounted search's late %s without global feedback", async (outcome) => {
+    let resolve!: (value: Awaited<ReturnType<typeof searchMusic>>) => void;
+    let reject!: (reason: Error) => void;
+    vi.mocked(searchMusic).mockReturnValueOnce(new Promise((done, fail) => { resolve = done; reject = fail; }));
+    const view = render(<MusicBotPanel channelId="a" />);
+    fireEvent.change(screen.getByRole("textbox", { name: "searchPlaceholder" }), { target: { value: "song" } });
+    const form = screen.getByRole("textbox", { name: "searchPlaceholder" }).closest("form")!;
+    act(() => { fireEvent.submit(form); fireEvent.submit(form); });
+    expect(searchMusic).toHaveBeenCalledOnce();
+    view.unmount();
+    await act(async () => {
+      if (outcome === "reject") reject(new Error("offline"));
+      else resolve({ success: false, error: "offline" });
+    });
+    expect(fixture.toast).not.toHaveBeenCalled();
+    expect(fixture.showError).not.toHaveBeenCalled();
+    expect(playMusic).not.toHaveBeenCalled();
+  });
+
   it("rejects a stale or cancelled queue drag, then permits a fresh reorder", async () => {
     const base = song({ session_id: "session", revision: 3, queue: [
       { ...song().current_track!, queue_item_id: "first", title: "Queue first" },
