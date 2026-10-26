@@ -1,0 +1,73 @@
+{
+  "base": "0674b28527687d69a1813e75e0e9852934bac3f9",
+  "ownedLFHashes": {
+    "server/services/dm_channel.go": "4fe2442465dd92aa2495699473138ede88b02527b8c23742d3b376c3b5afa7b8",
+    "server/services/dm_channel_block_race_test.go": "def94777adfe3f7be2cb867dc0c8edaa282ec4107fe757f715f9f45902e8ca18",
+    "server/repository/dm_pair_lock.go": "91ba9819cc6ebfd29befe27e671b9ebb36d0797129de139bb45629bd067df510",
+    "server/repository/sqlite_dm_create_block.go": "87c081b4467533a7b8731ff6c918699c8ab7be8cb49c732728140ce12e533137",
+    "server/repository/sqlite_dm_create_block_test.go": "0678ec41fa04d1b9bdba5d98531b49a734af8c355712fe47f6c799a8a843bce8",
+    "server/repository/sqlite_friendship_block.go": "e9c4683cd9dd3103ac350b6b35b7454fa440247e28fe482d76483950c44c70d1"
+  },
+  "isolation": "git archive server from frozen HEAD plus six owned files only; concurrent dirty audio excluded",
+  "bugProof": "Real service precheck false, then real AtomicBlock commit before CreateChannel caused durable newDM+2channelEvents before fix. New regression failed red then passed with transactional creation.",
+  "design": "Optional CreateChannelUnblocked serializes pair creation with AtomicBlock; PostgreSQL namespace+sortedJSONpairSHA25664 transaction advisory lock; SQLite first transaction statement lockingUPDATE; pair->DMrow->friendship order. Existing history createdfalse suppresses newevents; intentional admin rawCreate semantics retained.",
+  "checks": {
+    "postgres.private.jsonl": {
+      "passedTestsAndSubtests": 8,
+      "failed": 0,
+      "skips": [],
+      "packageResults": [
+        {
+          "package": "github.com/argeinfina/hichat/repository",
+          "action": "pass",
+          "elapsed": 11.293
+        }
+      ]
+    },
+    "race.jsonl": {
+      "passedTestsAndSubtests": 15,
+      "failed": 0,
+      "skips": [],
+      "packageResults": [
+        {
+          "package": "github.com/argeinfina/hichat/services",
+          "action": "pass",
+          "elapsed": 8.372
+        },
+        {
+          "package": "github.com/argeinfina/hichat/repository",
+          "action": "pass",
+          "elapsed": 35.981
+        }
+      ]
+    }
+  },
+  "postgresOutcome": {
+    "exitCode": 0,
+    "elapsedSeconds": 17.83
+  },
+  "raceOutcome": {
+    "exitCode": 0,
+    "elapsedSeconds": 83.52
+  },
+  "hostBroad": {
+    "command": "go test ./services ./handlers ./repository -run DM|Block|Friend|ServerDM -count=1",
+    "exit": 0,
+    "servicesSeconds": 7.773,
+    "handlersSeconds": 3.885,
+    "repositorySeconds": 18.903
+  },
+  "vetServicesRepository": 0,
+  "diffCheck": 0,
+  "cleanup": {
+    "ownedPostgresContainerRemoved": true,
+    "ownedRaceContainerRemoved": true,
+    "ownBuildCacheRemoved": true,
+    "sharedModuleCacheReadOnly": true
+  },
+  "limitations": [
+    "Pair serialization covers production optional CreateChannelUnblocked and AtomicBlock paths. Trusted legacy/import/admin raw CreateChannel behavior intentionally retained.",
+    "Create-first then block retains earlier history; event delivery is after transaction commit, no claim of cross-request WebSocket delivery ordering.",
+    "No full UI or production acceptance."
+  ]
+}
