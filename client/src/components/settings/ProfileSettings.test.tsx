@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuthStore } from "../../stores/authStore";
+import type { User } from "../../types";
 
 const mocks = vi.hoisted(() => ({
   uploadAvatar: vi.fn(),
@@ -28,7 +29,7 @@ vi.mock("../../stores/toastStore", () => ({
 }));
 vi.mock("react-i18next", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react-i18next")>()),
-  useTranslation: () => ({ t: (key: string) => key, i18n: { changeLanguage: mocks.changeLanguage } }),
+  useTranslation: () => ({ t: (key: string) => key, i18n: { changeLanguage: mocks.changeLanguage, language: "tr", resolvedLanguage: "tr" } }),
 }));
 vi.mock("./AvatarUpload", () => ({
   default: ({ onUpload }: { onUpload: (file: File) => Promise<void> }) => (
@@ -41,7 +42,11 @@ vi.mock("./BannerUpload", () => ({
   ),
 }));
 vi.mock("./ColorPicker", () => ({ default: () => null }));
-vi.mock("./LanguageSelector", () => ({ default: () => null }));
+vi.mock("./LanguageSelector", () => ({ default: ({ currentLanguage, onChange }: { currentLanguage: string; onChange: (value: string) => void }) => (
+  <select aria-label="language-choice" value={currentLanguage} onChange={(event) => onChange(event.target.value)}>
+    <option value="en">English</option><option value="tr">Turkish</option>
+  </select>
+) }));
 vi.mock("./ProfileShowcaseEditor", () => ({ default: () => null }));
 vi.mock("./ProfilePreviewCard", () => ({
   default: (props: { username: string; displayName: string; bio: string; pronouns: string; customStatus: string }) => (
@@ -66,7 +71,7 @@ function makeUser(id: string, username: string) {
     bio: null,
     pronouns: null,
     accent_color: null,
-  } as never;
+  } as User;
 }
 
 function deferred<T>() {
@@ -97,6 +102,40 @@ describe("ProfileSettings", () => {
   });
 
   afterEach(() => vi.unstubAllGlobals());
+
+  it.each(["", "unsupported"])('saves only bio for legacy enum value "%s" without changing language/privacy', async (legacyValue) => {
+    useAuthStore.setState({ user: { ...makeUser("account-a", "alice"), language: legacyValue, dm_privacy: legacyValue } as unknown as User });
+    await renderProfile();
+    expect(screen.getByLabelText("language-choice")).toHaveValue("tr");
+    expect(screen.getByLabelText("dmPrivacy")).toHaveValue("message_request");
+    expect(screen.getByRole("button", { name: "saveChanges" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("profileBio"), { target: { value: "draft bio" } });
+    fireEvent.click(screen.getByRole("button", { name: "saveChanges" }));
+    await waitFor(() => expect(mocks.updateProfile).toHaveBeenCalledOnce());
+    expect(mocks.updateProfile.mock.calls[0][0]).toEqual({ bio: "draft bio" });
+    await waitFor(() => expect(mocks.addToast).toHaveBeenCalledWith("success", "profileSaved"));
+    expect(mocks.changeLanguage).not.toHaveBeenCalled();
+    expect(useAuthStore.getState().user).toMatchObject({ language: legacyValue, dm_privacy: legacyValue, bio: "draft bio" });
+  });
+
+  it("keeps valid enum values untouched on bio save and submits explicit enum edits", async () => {
+    useAuthStore.setState({ user: { ...makeUser("account-a", "alice"), language: "tr", dm_privacy: "friends_only" } });
+    await renderProfile();
+    expect(screen.getByLabelText("language-choice")).toHaveValue("tr");
+    expect(screen.getByLabelText("dmPrivacy")).toHaveValue("friends_only");
+    fireEvent.change(screen.getByLabelText("profileBio"), { target: { value: "draft bio" } });
+    fireEvent.click(screen.getByRole("button", { name: "saveChanges" }));
+    await waitFor(() => expect(mocks.addToast).toHaveBeenCalledWith("success", "profileSaved"));
+    expect(mocks.updateProfile.mock.calls[0][0]).toEqual({ bio: "draft bio" });
+    expect(mocks.changeLanguage).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText("language-choice"), { target: { value: "en" } });
+    fireEvent.change(screen.getByLabelText("dmPrivacy"), { target: { value: "everyone" } });
+    fireEvent.click(screen.getByRole("button", { name: "saveChanges" }));
+    await waitFor(() => expect(mocks.updateProfile).toHaveBeenCalledTimes(2));
+    expect(mocks.updateProfile.mock.calls[1][0]).toEqual({ language: "en", dm_privacy: "everyone" });
+    await waitFor(() => expect(mocks.changeLanguage).toHaveBeenCalledWith("en"));
+    expect(useAuthStore.getState().user).toMatchObject({ language: "en", dm_privacy: "everyone" });
+  });
 
   it("keeps the live preview in sync with unsaved fields and saves the draft", async () => {
     await renderProfile();

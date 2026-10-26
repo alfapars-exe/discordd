@@ -386,6 +386,10 @@ func (s *authService) Register(ctx context.Context, req *models.CreateUserReques
 		Email:        email,
 		PasswordHash: string(hash),
 		Status:       models.UserStatusOnline,
+		// Create explicitly inserts language, so a zero value bypasses its DB
+		// default. Return the same privacy default the DB applies on insertion.
+		Language:  "en",
+		DMPrivacy: "message_request",
 	}
 
 	// Refresh token bytes are pure randomness with no DB dependency, so they

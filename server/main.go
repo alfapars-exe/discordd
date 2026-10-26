@@ -326,6 +326,9 @@ func main() {
 	// cached user row so a bumped token_version is enforced on the next
 	// HTTP request instead of up to ~30s later.
 	svcs.Auth.SetUserCacheInvalidator(authMw)
+	// Profile writes must also be visible to the next authenticated /users/me
+	// read, rather than returning the pre-save cached profile for 30 seconds.
+	svcs.Member.SetUserCacheInvalidator(authMw)
 
 	// Wire the server-level permission cache (middleware/permission.go) into
 	// the same PermissionInvalidator fan-out as channelPermService's

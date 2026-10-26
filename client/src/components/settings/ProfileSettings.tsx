@@ -18,6 +18,12 @@ import ProfileShowcaseEditor from "./ProfileShowcaseEditor";
 const BIO_MAX_RUNES = 190;
 const PRONOUNS_MAX = 40;
 const ACCENT_RE = /^#[0-9a-f]{6}$/;
+const validLanguage = (value: unknown): value is "en" | "tr" => value === "en" || value === "tr";
+const validDMPrivacy = (value: unknown): value is "everyone" | "message_request" | "friends_only" =>
+  value === "everyone" || value === "message_request" || value === "friends_only";
+const languageSelection = (value: unknown, currentLanguage?: string) => validLanguage(value)
+  ? value : currentLanguage?.split("-")[0] === "tr" ? "tr" : "en";
+const privacySelection = (value: unknown) => validDMPrivacy(value) ? value : "message_request";
 
 /** Mirrors the server's bio normalisation ("\r" stripped, TrimSpace) so
  *  "changed?" and the rune counter agree with what will be stored. */
@@ -38,6 +44,7 @@ function withCacheBust(url: string): string {
 function ProfileSettings() {
   const { t } = useTranslation("settings");
   const { i18n } = useTranslation();
+  const currentUILanguage = i18n.resolvedLanguage ?? i18n.language;
   const user = useAuthStore((s) => s.user);
   const updateUser = useAuthStore((s) => s.updateUser);
   const addToast = useToastStore((s) => s.addToast);
@@ -45,8 +52,10 @@ function ProfileSettings() {
   const [username, setUsername] = useState(user?.username ?? "");
   const [displayName, setDisplayName] = useState(user?.display_name ?? "");
   const [customStatus, setCustomStatus] = useState(user?.custom_status ?? "");
-  const [pendingLanguage, setPendingLanguage] = useState(user?.language ?? "en");
-  const [pendingDMPrivacy, setPendingDMPrivacy] = useState(user?.dm_privacy ?? "message_request");
+  const [pendingLanguage, setPendingLanguage] = useState(() => languageSelection(user?.language, currentUILanguage));
+  const [languageEdited, setLanguageEdited] = useState(false);
+  const [pendingDMPrivacy, setPendingDMPrivacy] = useState(() => privacySelection(user?.dm_privacy));
+  const [privacyEdited, setPrivacyEdited] = useState(false);
   const [pendingAvatarFile, setPendingAvatarFile] = useState<File | null>(null);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
   const [bio, setBio] = useState(user?.bio ?? "");
@@ -97,8 +106,10 @@ function ProfileSettings() {
       setUsername(user?.username ?? "");
       setDisplayName(user?.display_name ?? "");
       setCustomStatus(user?.custom_status ?? "");
-      setPendingLanguage(user?.language ?? "en");
-      setPendingDMPrivacy(user?.dm_privacy ?? "message_request");
+      setPendingLanguage(languageSelection(user?.language, currentUILanguage));
+      setLanguageEdited(false);
+      setPendingDMPrivacy(privacySelection(user?.dm_privacy));
+      setPrivacyEdited(false);
       setPendingAvatarFile(null);
       setBio(user?.bio ?? "");
       setPronouns(user?.pronouns ?? "");
@@ -120,7 +131,7 @@ function ProfileSettings() {
     });
   }, [
     user?.username, user?.display_name, user?.custom_status, user?.language, user?.avatar_url, user?.dm_privacy,
-    user?.bio, user?.pronouns, user?.accent_color, user?.banner_url, user?.id,
+    user?.bio, user?.pronouns, user?.accent_color, user?.banner_url, user?.id, currentUILanguage,
   ]);
 
   useEffect(() => {
@@ -137,18 +148,25 @@ function ProfileSettings() {
   const normalizedBio = normalizeBio(bio);
   const normalizedPronouns = pronouns.trim();
   const accentValid = accentColor === "" || ACCENT_RE.test(accentColor);
+  const usernameChanged = username !== (user?.username ?? "");
+  const displayNameChanged = displayName !== (user?.display_name ?? "");
+  const customStatusChanged = customStatus !== (user?.custom_status ?? "");
+  // A valid display fallback for legacy values is not an edit or consent to
+  // change account language/privacy. Only an explicit selection is submitted.
+  const languageChanged = languageEdited && validLanguage(pendingLanguage) && pendingLanguage !== user?.language;
+  const privacyChanged = privacyEdited && validDMPrivacy(pendingDMPrivacy) && pendingDMPrivacy !== user?.dm_privacy;
   const bioChanged = normalizedBio !== (user?.bio ?? "");
   const pronounsChanged = normalizedPronouns !== (user?.pronouns ?? "");
   const accentChanged = accentColor !== (user?.accent_color ?? "");
   const bannerChanged = pendingBannerFile !== null || bannerRemoved;
 
   const hasChanges =
-    username !== (user?.username ?? "") ||
-    displayName !== (user?.display_name ?? "") ||
-    customStatus !== (user?.custom_status ?? "") ||
+    usernameChanged ||
+    displayNameChanged ||
+    customStatusChanged ||
     pendingAvatarFile !== null ||
-    pendingLanguage !== (user?.language ?? "en") ||
-    pendingDMPrivacy !== (user?.dm_privacy ?? "message_request") ||
+    languageChanged ||
+    privacyChanged ||
     bioChanged ||
     pronounsChanged ||
     accentChanged ||
@@ -190,6 +208,8 @@ function ProfileSettings() {
   }
 
   function handleLanguageChange(language: string) {
+    if (!validLanguage(language)) return;
+    setLanguageEdited(true);
     setPendingLanguage(language);
   }
 
@@ -254,11 +274,11 @@ function ProfileSettings() {
       }
 
       const profileChanged =
-        username !== (user?.username ?? "") ||
-        displayName !== (user?.display_name ?? "") ||
-        customStatus !== (user?.custom_status ?? "") ||
-        pendingLanguage !== (user?.language ?? "en") ||
-        pendingDMPrivacy !== (user?.dm_privacy ?? "message_request") ||
+        usernameChanged ||
+        displayNameChanged ||
+        customStatusChanged ||
+        languageChanged ||
+        privacyChanged ||
         bioChanged ||
         pronounsChanged ||
         accentChanged;
@@ -266,11 +286,11 @@ function ProfileSettings() {
       if (profileChanged) {
         if (!isCurrentSave()) return;
         const res = await profileApi.updateProfile({
-          ...(username !== (user?.username ?? "") ? { username } : {}),
-          display_name: displayName,
-          custom_status: customStatus,
-          language: pendingLanguage,
-          dm_privacy: pendingDMPrivacy,
+          ...(usernameChanged ? { username } : {}),
+          ...(displayNameChanged ? { display_name: displayName } : {}),
+          ...(customStatusChanged ? { custom_status: customStatus } : {}),
+          ...(languageChanged ? { language: pendingLanguage } : {}),
+          ...(privacyChanged ? { dm_privacy: pendingDMPrivacy } : {}),
           // Omitted = unchanged; "" clears on the server.
           ...(bioChanged ? { bio: normalizedBio } : {}),
           ...(pronounsChanged ? { pronouns: normalizedPronouns } : {}),
@@ -279,18 +299,18 @@ function ProfileSettings() {
 
         if (!isCurrentSave()) return;
         if (res.success && res.data) {
-          if (pendingLanguage !== (user?.language ?? "en")) {
+          if (languageChanged) {
             i18n.changeLanguage(pendingLanguage);
           }
           updateUser({
-            username: res.data.username,
-            display_name: res.data.display_name,
-            custom_status: res.data.custom_status,
-            language: pendingLanguage,
-            dm_privacy: pendingDMPrivacy,
-            bio: res.data.bio ?? null,
-            pronouns: res.data.pronouns ?? null,
-            accent_color: res.data.accent_color ?? null,
+            ...(usernameChanged ? { username: res.data.username } : {}),
+            ...(displayNameChanged ? { display_name: res.data.display_name } : {}),
+            ...(customStatusChanged ? { custom_status: res.data.custom_status } : {}),
+            ...(languageChanged ? { language: pendingLanguage } : {}),
+            ...(privacyChanged ? { dm_privacy: pendingDMPrivacy } : {}),
+            ...(bioChanged ? { bio: res.data.bio ?? null } : {}),
+            ...(pronounsChanged ? { pronouns: res.data.pronouns ?? null } : {}),
+            ...(accentChanged ? { accent_color: res.data.accent_color ?? null } : {}),
           });
         } else {
           showApiError(res, { fallbackKey: "settings:profileSaveError" });
@@ -479,7 +499,11 @@ function ProfileSettings() {
         <select
           id="dmPrivacy"
           value={pendingDMPrivacy}
-          onChange={(e) => setPendingDMPrivacy(e.target.value as "everyone" | "message_request" | "friends_only")}
+          onChange={(e) => {
+            if (!validDMPrivacy(e.target.value)) return;
+            setPrivacyEdited(true);
+            setPendingDMPrivacy(e.target.value);
+          }}
           className="settings-input"
         >
           <option value="everyone">{t("dmPrivacyEveryone")}</option>

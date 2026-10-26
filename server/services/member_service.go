@@ -51,6 +51,7 @@ type MemberService interface {
 	// role-assignment, kick, and ban operations drop the affected user's
 	// cached permissions immediately rather than after permCacheTTL.
 	SetPermInvalidator(inv PermissionInvalidator)
+	SetUserCacheInvalidator(inv UserCacheInvalidator)
 }
 
 // VoiceDisconnecter disconnects a user from voice on kick/ban (ISP).
@@ -70,6 +71,13 @@ type memberService struct {
 	permInvalidator PermissionInvalidator
 	profileUpdates  ProfileUpdateNotifier
 	gameActivity    GameActivityPrivacyInvalidator
+	userInvalidator UserCacheInvalidator
+}
+
+// SetUserCacheInvalidator keeps authenticated /users/me reads fresh after
+// profile writes, including avatar/banner uploads using the same service.
+func (s *memberService) SetUserCacheInvalidator(inv UserCacheInvalidator) {
+	s.userInvalidator = inv
 }
 
 func (s *memberService) SetPermInvalidator(inv PermissionInvalidator) {
@@ -346,6 +354,9 @@ func (s *memberService) UpdateProfile(ctx context.Context, userID string, req *m
 
 	if err := s.userRepo.Update(ctx, user); err != nil {
 		return nil, fmt.Errorf("failed to update user profile: %w", err)
+	}
+	if s.userInvalidator != nil {
+		s.userInvalidator.InvalidateUser(userID)
 	}
 
 	// Refresh the hub's cached profile info so typing/voice events carry the

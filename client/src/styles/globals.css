@@ -5436,14 +5436,16 @@ body.reduce-motion .lightning-overlay { display: none; }
   .group-dm-composer-context { order:-1; }
 }
 .profile-scope-row,.profile-color-row,.profile-widget-library,.profile-showcase-save { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0 16px; }
-.profile-showcase-grid { display:grid; grid-template-columns:minmax(210px,.8fr) minmax(300px,1.5fr) minmax(150px,.6fr); gap:16px; align-items:start; }
+.profile-showcase-grid { display:grid; grid-template-columns:minmax(0,.8fr) minmax(0,1.5fr) minmax(0,.6fr); gap:16px; align-items:start; }
 .profile-showcase-controls,.profile-showcase-preview,.profile-showcase-summary { border:1px solid var(--border-subtle); border-radius:12px; padding:16px; min-width:0; }
 .profile-showcase-preview { min-height:320px; }
-.profile-board-tabs { display:flex; gap:16px; border-bottom:1px solid color-mix(in srgb,var(--text-primary) 20%,transparent); margin-bottom:16px; }
+.profile-board-tabs { display:flex; flex-wrap:wrap; gap:16px; border-bottom:1px solid color-mix(in srgb,var(--text-primary) 20%,transparent); margin-bottom:16px; }
 .profile-board-tabs button { background:none; border:0; color:var(--text-muted); padding:8px 0; }
 .profile-board-tabs button[aria-selected="true"] { color:var(--text-primary); border-bottom:2px solid var(--text-primary); }
 .profile-widget-list,.profile-links-list { display:grid; gap:10px; }
 .profile-widget-card,.profile-link-editor { background:color-mix(in srgb,var(--bg-secondary) 88%,transparent); border-radius:8px; padding:10px; display:grid; gap:8px; }
-.profile-link-editor { grid-template-columns:1fr 2fr auto auto; align-items:center; }
+.profile-link-editor { grid-template-columns:minmax(0,1fr); align-items:center; }
+.profile-widget-card > div { display:flex; flex-wrap:wrap; gap:6px; }
+.profile-showcase-editor .settings-btn { max-width:100%; height:auto; min-height:36px; padding:8px 12px; white-space:normal; overflow-wrap:anywhere; }
 @media(max-width:1000px){.profile-showcase-grid{grid-template-columns:1fr}.profile-link-editor{grid-template-columns:1fr}}
 .member-profile-showcase{margin:8px 0;padding:10px;border-radius:8px;display:grid;gap:7px}.member-profile-activity{margin:0}.member-profile-widget{display:grid;gap:3px;font-size:12px}.member-profile-widget span{color:var(--text-muted)}.member-profile-links{display:flex;flex-wrap:wrap;gap:6px}.member-profile-links a{padding:4px 7px;border:1px solid var(--border-subtle);border-radius:6px}

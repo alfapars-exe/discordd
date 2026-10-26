@@ -136,7 +136,8 @@ func (s *stubMemberService) SetNickname(context.Context, string, string, string,
 	return nil, nil
 }
 
-func (s *stubMemberService) SetPermInvalidator(services.PermissionInvalidator) {}
+func (s *stubMemberService) SetPermInvalidator(services.PermissionInvalidator)     {}
+func (s *stubMemberService) SetUserCacheInvalidator(services.UserCacheInvalidator) {}
 
 var _ services.MemberService = (*stubMemberService)(nil)
 
