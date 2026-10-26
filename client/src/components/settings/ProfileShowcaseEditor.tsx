@@ -139,7 +139,8 @@ export default function ProfileShowcaseEditor() {
     const requestContext = contextKey;
     const requestAccount = accountId;
     const authGeneration = getAuthGeneration();
-    const isCurrent = () => mounted.current && activeContext.current === requestContext && useAuthStore.getState().user?.id === requestAccount && getAuthGeneration() === authGeneration;
+    const contextSequence = requestSequence.current;
+    const isCurrent = () => mounted.current && requestSequence.current === contextSequence && activeContext.current === requestContext && useAuthStore.getState().user?.id === requestAccount && getAuthGeneration() === authGeneration;
     setConflictState("loading");
     try {
       const res = await profileApi.getProfileShowcase(scope, { expectedUserId: requestAccount ?? undefined, isCurrent });
@@ -162,11 +163,12 @@ export default function ProfileShowcaseEditor() {
     const authGeneration = getAuthGeneration();
     // Preserve a trailing separator while typing; normalize list entries only
     // when taking the save snapshot so a second item can be entered normally.
+    const contextSequence = requestSequence.current;
     const submittedDraft = draft;
     const snapshot = { ...draft, widgets: draft.widgets.map((widget) => ({
       ...widget, items: widget.items?.map((item) => item.trim()).filter(Boolean),
     })) };
-    const isCurrent = () => mounted.current && activeContext.current === requestContext && useAuthStore.getState().user?.id === requestAccount && getAuthGeneration() === authGeneration;
+    const isCurrent = () => mounted.current && requestSequence.current === contextSequence && activeContext.current === requestContext && useAuthStore.getState().user?.id === requestAccount && getAuthGeneration() === authGeneration;
     const saveRequest = ++saveSequence.current;
     saveInFlight.current = true;
     setSaving(true);
