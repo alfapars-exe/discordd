@@ -138,23 +138,17 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 			}
 			if !friends {
 				serverDMNonFriend = true
-				senderCount, err := s.dmRepo.CountMessagesBySender(ctx, channelID, userID)
+				hasHistory, err := s.dmRepo.HasMessages(ctx, channelID)
 				if err != nil {
-					return nil, fmt.Errorf("failed to count DM history: %w", err)
+					return nil, fmt.Errorf("failed to check DM history: %w", err)
 				}
-				if senderCount == 0 {
-					recipientCount, err := s.dmRepo.CountMessagesBySender(ctx, channelID, otherUserID)
+				if !hasHistory {
+					allowed, err := s.serverDMPolicy.CanCreate(ctx, userID, otherUserID)
 					if err != nil {
-						return nil, fmt.Errorf("failed to count DM history: %w", err)
+						return nil, fmt.Errorf("failed to check server DM policy: %w", err)
 					}
-					if recipientCount == 0 {
-						allowed, err := s.serverDMPolicy.CanCreate(ctx, userID, otherUserID)
-						if err != nil {
-							return nil, fmt.Errorf("failed to check server DM policy: %w", err)
-						}
-						if !allowed {
-							return nil, fmt.Errorf("%w: this user disabled direct messages from shared servers", pkg.ErrForbidden)
-						}
+					if !allowed {
+						return nil, fmt.Errorf("%w: this user disabled direct messages from shared servers", pkg.ErrForbidden)
 					}
 				}
 			}
@@ -269,15 +263,11 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 		// transaction. The preferences row lock matches the PostgreSQL updater;
 		// SQLite's channel write already holds the database writer lock.
 		if _, ok := s.serverDMPolicy.(*RepositoryServerDMPolicy); ok && serverDMNonFriend && r.Preferences != nil && r.Servers != nil {
-			senderCount, err := r.DM.CountMessagesBySender(ctx, channelID, userID)
+			hasHistory, err := r.DM.HasMessages(ctx, channelID)
 			if err != nil {
 				return err
 			}
-			recipientCount, err := r.DM.CountMessagesBySender(ctx, channelID, otherUserID)
-			if err != nil {
-				return err
-			}
-			if senderCount == 0 && recipientCount == 0 {
+			if !hasHistory {
 				if r.LockPreferences != nil {
 					if err := r.LockPreferences(ctx, otherUserID); err != nil {
 						return err
@@ -295,15 +285,11 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 		if becamePending && r.LockChannel != nil {
 			// A request may have been sent and accepted while this call waited.
 			// Do not turn that established conversation back into a request.
-			senderCount, err := r.DM.CountMessagesBySender(ctx, channelID, userID)
+			hasHistory, err := r.DM.HasMessages(ctx, channelID)
 			if err != nil {
 				return err
 			}
-			recipientCount, err := r.DM.CountMessagesBySender(ctx, channelID, otherUserID)
-			if err != nil {
-				return err
-			}
-			becamePending = senderCount == 0 && recipientCount == 0
+			becamePending = !hasHistory
 		}
 		if becamePending {
 			if err := r.DM.TransitionToPending(ctx, channelID, userID); err != nil {

@@ -11,6 +11,7 @@ import (
 // by dm_message tests are populated by tests; the zero-value stub
 // returns a safe default so unrelated code paths don't panic.
 type MockDMRepo struct {
+	HasMessagesFn                      func(context.Context, string) (bool, error)
 	GetChannelByIDFn                   func(ctx context.Context, id string) (*models.DMChannel, error)
 	GetChannelByUsersFn                func(ctx context.Context, u1, u2 string) (*models.DMChannel, error)
 	CountMessagesBySenderFn            func(ctx context.Context, channelID, userID string) (int, error)
@@ -82,6 +83,12 @@ func (m *MockDMRepo) TransitionToPending(ctx context.Context, channelID, userID 
 		return m.TransitionToPendingFn(ctx, channelID, userID)
 	}
 	return nil
+}
+func (m *MockDMRepo) HasMessages(ctx context.Context, channelID string) (bool, error) {
+	if m.HasMessagesFn != nil {
+		return m.HasMessagesFn(ctx, channelID)
+	}
+	return false, nil
 }
 func (m *MockDMRepo) CountMessagesBySender(ctx context.Context, channelID, userID string) (int, error) {
 	if m.CountMessagesBySenderFn != nil {

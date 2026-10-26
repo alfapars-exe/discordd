@@ -272,6 +272,16 @@ func (r *sqliteDMRepo) TransitionToPending(ctx context.Context, channelID, userI
 	return nil
 }
 
+// HasMessages stops at the first channel message using the channel index.
+func (r *sqliteDMRepo) HasMessages(ctx context.Context, channelID string) (bool, error) {
+	var exists bool
+	err := r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM dm_messages WHERE dm_channel_id=?)`, channelID).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("failed to check DM history: %w", err)
+	}
+	return exists, nil
+}
+
 func (r *sqliteDMRepo) CountMessagesBySender(ctx context.Context, channelID, userID string) (int, error) {
 	var count int
 	err := r.db.QueryRowContext(ctx,

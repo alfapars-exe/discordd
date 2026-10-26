@@ -47,14 +47,11 @@ func TestSendMessageServerDMPolicyForEmptyChannel(t *testing.T) {
 				return &models.User{ID: id, IsPlatformAdmin: id == "alice" && tc.admin}, nil
 			}
 			f.friends.AreFriendsFn = func(context.Context, string, string) (bool, error) { return tc.friends, nil }
-			f.repo.CountMessagesBySenderFn = func(_ context.Context, _, userID string) (int, error) {
+			f.repo.HasMessagesFn = func(context.Context, string) (bool, error) {
 				if tc.countError {
-					return 0, errors.New("history unavailable")
+					return false, errors.New("history unavailable")
 				}
-				if userID == "alice" {
-					return tc.senderHistory, nil
-				}
-				return tc.recipientHistory, nil
+				return tc.senderHistory > 0 || tc.recipientHistory > 0, nil
 			}
 			f.svc.(*dmService).SetServerDMPolicy(NewServerDMPolicy(friendRequestPrefsStub{tc.preferences}, serverListStub{
 				"alice": {"shared", "second"}, "bob": {"shared", "second"},
@@ -132,5 +129,37 @@ func TestSendMessageRechecksPolicyAndPendingAfterChannelLock(t *testing.T) {
 				t.Fatal("authoritative policy read did not lock preferences")
 			}
 		})
+	}
+}
+
+func TestSendMessageHistoryCheckAfterLockUsesSingleExistenceQuery(t *testing.T) {
+	f := newDMFixture()
+	f.repo.GetChannelByIDFn = func(_ context.Context, id string) (*models.DMChannel, error) {
+		return &models.DMChannel{ID: id, User1ID: "alice", User2ID: "bob", Status: models.DMStatusAccepted}, nil
+	}
+	f.users.GetByIDFn = func(_ context.Context, id string) (*models.User, error) { return &models.User{ID: id}, nil }
+	locked, checks := false, 0
+	f.repo.HasMessagesFn = func(context.Context, string) (bool, error) { checks++; return locked, nil }
+	f.repo.CountMessagesBySenderFn = func(context.Context, string, string) (int, error) {
+		t.Fatal("server policy scanned sender history")
+		return 0, nil
+	}
+	s := f.svc.(*dmService)
+	s.SetServerDMPolicy(NewServerDMPolicy(friendRequestPrefsStub{`{}`}, serverListStub{"alice": {"shared"}, "bob": {"shared"}}))
+	s.txRunner = passthroughDMTxRunner{repos: repository.DMTxRepos{
+		DM: f.repo, DMRead: f.dmRead, Notification: f.notif,
+		LockChannel: func(context.Context, string) error { locked = true; return nil },
+		LockPreferences: func(context.Context, string) error {
+			t.Fatal("established history should bypass policy preferences")
+			return nil
+		},
+		Preferences: dmTxPolicyPreferences{friendRequestPrefsStub: friendRequestPrefsStub{`{"privacy":{"serverDMDefault":false}}`}},
+		Servers:     &testutil.MockServerRepo{},
+	}}
+	if _, err := s.SendMessage(context.Background(), "alice", "channel", &models.CreateDMMessageRequest{Content: "hello"}); err != nil {
+		t.Fatal(err)
+	}
+	if checks != 2 {
+		t.Fatalf("history checks=%d want one preflight and one transactional", checks)
 	}
 }
