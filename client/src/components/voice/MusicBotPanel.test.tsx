@@ -50,6 +50,29 @@ beforeEach(() => {
 });
 
 describe("MusicBotPanel", () => {
+  it("rejects a stale or cancelled queue drag, then permits a fresh reorder", async () => {
+    const base = song({ session_id: "session", revision: 3, queue: [
+      { ...song().current_track!, queue_item_id: "first", title: "Queue first" },
+      { ...song().current_track!, queue_item_id: "second", title: "Queue second" },
+    ] });
+    useVoiceStore.getState().setMusicBotState("a", base);
+    render(<MusicBotPanel channelId="a" />);
+    const first = (await screen.findByText("Queue first")).closest("li")!;
+    const second = screen.getByText("Queue second").closest("li")!;
+    fireEvent.dragStart(first);
+    act(() => useVoiceStore.getState().setMusicBotState("a", { ...base, revision: 4 }));
+    fireEvent.drop(second);
+    expect(reorderMusicQueue).not.toHaveBeenCalled();
+    fireEvent.dragStart(first);
+    fireEvent.dragEnd(first);
+    fireEvent.drop(second);
+    expect(reorderMusicQueue).not.toHaveBeenCalled();
+    fireEvent.dragStart(first);
+    fireEvent.drop(second);
+    await waitFor(() => expect(reorderMusicQueue).toHaveBeenCalledWith("server-a", "a", ["second", "first"], 4));
+    expect(reorderMusicQueue).toHaveBeenCalledOnce();
+  });
+
   it("searches by name and queues the selected YouTube result", async () => {
     const result = { ...song().current_track!, video_id: "abcdefghijk", title: "Search result" };
     vi.mocked(searchMusic).mockResolvedValue({ success: true, data: { results: [result] } });

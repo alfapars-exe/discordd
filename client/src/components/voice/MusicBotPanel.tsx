@@ -64,7 +64,7 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
   const [results, setResults] = useState<MusicTrack[]>([]);
   const [seekDraft, setSeekDraft] = useState<{ key: string; value: number } | null>(null);
   const seekScope = useRef<{ key: string; current: () => boolean } | null>(null);
-  const dragItem = useRef<string | null>(null);
+  const dragItem = useRef<{ id: string; revision: number; session?: string; current: () => boolean } | null>(null);
   const actionGeneration = useRef(0);
   const actionPending = useRef(false);
   const refreshRef = useRef<(() => void) | null>(null);
@@ -210,9 +210,12 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
   }
 
   function dropQueueItem(targetID: string) {
-    const sourceID = dragItem.current;
+    const drag = dragItem.current;
     dragItem.current = null;
-    if (!sourceID || sourceID === targetID || !serverId || state?.revision === undefined) return;
+    const latest = useVoiceStore.getState().musicBotStates[channelId];
+    if (!drag?.current() || !latest || latest.revision !== drag.revision || latest.session_id !== drag.session) return;
+    const sourceID = drag.id;
+    if (sourceID === targetID || !serverId || state?.revision !== drag.revision || state.session_id !== drag.session) return;
     const ids = (state.queue ?? []).map((item) => item.queue_item_id).filter((id): id is string => !!id);
     if (ids.length !== state.queue.length) return;
     const from = ids.indexOf(sourceID), to = ids.indexOf(targetID);
@@ -408,8 +411,13 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
           <ul className="music-bot-queue-list">
             {queue.map((q, i) => (
               <li key={q.queue_item_id ?? `${q.video_id}-${i}`} className="music-bot-queue-item"
-                draggable={!!q.queue_item_id && !pending}
-                onDragStart={() => { dragItem.current = q.queue_item_id ?? null; }}
+                draggable={!!q.queue_item_id && state.revision !== undefined && !pending}
+                onDragStart={() => {
+                  dragItem.current = q.queue_item_id && state.revision !== undefined
+                    ? { id: q.queue_item_id, revision: state.revision, session: state.session_id, current: captureMusicScope(serverId, channelId).current }
+                    : null;
+                }}
+                onDragEnd={() => { dragItem.current = null; }}
                 onDragOver={(event) => event.preventDefault()}
                 onDrop={() => q.queue_item_id && dropQueueItem(q.queue_item_id)}>
                 <span className="music-bot-queue-pos">{i + 1}.</span>
