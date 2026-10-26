@@ -2839,7 +2839,8 @@
         "client/src/components/settings/BlockedUsersSettings.tsx"
       ],
       "evidence": [
-        "implementation/verification/p3-blocked-users-2026-10-23.json"
+        "implementation/verification/p3-blocked-users-2026-10-23.json",
+        "implementation/verification/p3-p6-block-notification-2026-10-27.json"
       ]
     },
     {
@@ -4580,7 +4581,10 @@
         "User-enabled desktop notifications reach supported platform; denied permission and focus/DND preferences are honored."
       ],
       "code": ["client/src/components/settings/NotificationSettings.tsx", "client/src/utils/notifications.ts", "server/models/preferences.go"],
-      "evidence": ["implementation/verification/p6-notification-foundation-2026-10-23.json"]
+      "evidence": [
+        "implementation/verification/p6-notification-foundation-2026-10-23.json",
+        "implementation/verification/p3-p6-block-notification-2026-10-27.json"
+      ]
     },
     {
       "id": "p6.taskbar-flash",

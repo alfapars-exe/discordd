@@ -1,0 +1,6 @@
+{
+  "source_commits": ["fc152e30", "9db2e324"],
+  "scope": "Partial notification permission and blocked DM creation regression verification",
+  "result": "An open notification settings panel reflects external permission changes without requesting permission or changing account preferences. New direct-message channel creation is rejected for blocked relationships and block lookup failures while existing history remains accessible. Client and server targeted tests, broader DM/block tests, lint, TypeScript and Go vet passed.",
+  "limitations": "The DM creation check does not establish atomic behavior when blocking and creation occur concurrently. Real browser notification behavior and full multi-user privacy acceptance remain open."
+}
