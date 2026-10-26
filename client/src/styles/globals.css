@@ -5449,3 +5449,10 @@ body.reduce-motion .lightning-overlay { display: none; }
 .profile-showcase-editor .settings-btn { max-width:100%; height:auto; min-height:36px; padding:8px 12px; white-space:normal; overflow-wrap:anywhere; }
 @media(max-width:1000px){.profile-showcase-grid{grid-template-columns:1fr}.profile-link-editor{grid-template-columns:1fr}}
 .member-profile-showcase{margin:8px 0;padding:10px;border-radius:8px;display:grid;gap:7px}.member-profile-activity{margin:0}.member-profile-widget{display:grid;gap:3px;font-size:12px}.member-profile-widget span{color:var(--text-muted)}.member-profile-links{display:flex;flex-wrap:wrap;gap:6px}.member-profile-links a{padding:4px 7px;border:1px solid var(--border-subtle);border-radius:6px}
+
+.music-bot-participant { width:100%;border:0;background:none;text-align:left;font-family:inherit;cursor:pointer; }
+.music-bot-avatar { width:22px;height:22px;flex-shrink:0;display:grid;place-items:center;border-radius:50%;background:var(--primary);color:#fff; }
+.music-bot-avatar svg { width:16px;height:16px; }
+.music-bot-badge { margin-left:auto;font-size:9px;font-weight:700;padding:1px 4px;border-radius:3px;background:var(--bg-3);color:var(--t2); }
+.music-bot-play-form { display:flex;flex-direction:column;gap:12px;padding:16px; }
+.music-bot-play-form input { padding:10px;border-radius:6px;border:1px solid var(--border-subtle);background:var(--bg-2);color:var(--t1); }
