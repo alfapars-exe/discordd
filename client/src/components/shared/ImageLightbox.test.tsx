@@ -127,6 +127,43 @@ describe("ImageLightbox", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "lightboxResetZoom" })).toHaveTextContent("100%"));
   });
 
+  it("preserves browser zoom and history shortcuts without changing image zoom or gallery", () => {
+    render(<ImageLightbox />);
+    act(() => useLightboxStore.getState().openGallery([
+      { kind: "remote", src: "https://cdn.test/one.png", href: "https://cdn.test/one.png", filename: "one.png" },
+      { kind: "remote", src: "https://cdn.test/two.png", href: "https://cdn.test/two.png", filename: "two.png" },
+    ]));
+    fireEvent.click(screen.getByRole("button", { name: "lightboxZoomIn" }));
+    for (const modifiers of [{ ctrlKey: true }, { metaKey: true }, { altKey: true }]) {
+      for (const key of ["+", "-", "0", "ArrowRight"]) {
+        const event = new KeyboardEvent("keydown", { key, ...modifiers, bubbles: true, cancelable: true });
+        fireEvent(document, event);
+        expect(event.defaultPrevented).toBe(false);
+        expect(screen.getByRole("button", { name: "lightboxResetZoom" })).toHaveTextContent("125%");
+        expect(screen.getByRole("img", { name: "one.png" })).toBeInTheDocument();
+      }
+    }
+    fireEvent.keyDown(document, { key: "+" });
+    expect(screen.getByRole("button", { name: "lightboxResetZoom" })).toHaveTextContent("150%");
+  });
+
+  it("dismisses the media menu before the viewer and restores the menu trigger focus", async () => {
+    render(<ImageLightbox />);
+    openRemote();
+    const trigger = screen.getByRole("button", { name: "mediaActions" });
+    fireEvent.click(trigger);
+    const action = screen.getByRole("menuitem", { name: "lightboxDownload" });
+    action.focus();
+    fireEvent.keyDown(action, { key: "+" });
+    expect(screen.getByRole("button", { name: "lightboxResetZoom" })).toHaveTextContent("100%");
+    fireEvent.keyDown(action, { key: "Escape" });
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(screen.getByRole("dialog", { name: "imagePreview" })).toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+    fireEvent.keyDown(trigger, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
   it("clears image pan when zoom reaches 100% through the button or keyboard", () => {
     render(<ImageLightbox />);
     openRemote();

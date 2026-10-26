@@ -82,6 +82,7 @@ function LightboxDialog({
   const { t } = useTranslation("chat");
   const { t: tCommon } = useTranslation("common");
   const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const menuBtnRef = useRef<HTMLButtonElement>(null);
   const prevFocusRef = useRef<Element | null>(null);
   const forwardFocusRef = useRef<HTMLElement | null>(null);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
@@ -167,10 +168,17 @@ function LightboxDialog({
       // A nested forward dialog owns its Escape key; do not close both dialogs.
       if (e.key === "Escape") {
         if (forwardOpen) setForwardOpen(false);
+        else if (menuOpen) {
+          e.preventDefault();
+          setMenuOpen(false);
+          menuBtnRef.current?.focus();
+        }
         else onClose();
         return;
       }
-      if (forwardOpen) return;
+      // Browser zoom/history and OS shortcuts retain their native behavior.
+      // An open action menu also owns navigation until it is dismissed.
+      if (forwardOpen || menuOpen || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key === "ArrowLeft") onPrevious();
       if (e.key === "ArrowRight") onNext();
       if (e.key === "+" || e.key === "=") setZoom((value) => Math.min(4, value + 0.25));
@@ -188,7 +196,7 @@ function LightboxDialog({
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [forwardOpen, onClose, onNext, onPrevious]);
+  }, [forwardOpen, menuOpen, onClose, onNext, onPrevious]);
 
   const src = item.kind === "blob" ? blobUrl : retry.src;
   const href = item.kind === "blob" ? blobUrl : item.href;
@@ -240,7 +248,7 @@ function LightboxDialog({
           <button type="button" className="image-lightbox-action" onClick={openForward}>{t("forwardMessage")}</button>
         )}
         <div className="image-lightbox-menu-wrap">
-          <button type="button" className="image-lightbox-action" aria-label={t("mediaActions")} aria-expanded={menuOpen} onClick={() => setMenuOpen((value) => !value)}>⋯</button>
+          <button ref={menuBtnRef} type="button" className="image-lightbox-action" aria-label={t("mediaActions")} aria-expanded={menuOpen} onClick={() => setMenuOpen((value) => !value)}>⋯</button>
           {menuOpen && <div className="image-lightbox-menu" role="menu">
             {item.message && <button role="menuitem" onClick={openForward}>{t("forwardMessage")}</button>}
             {href && <a role="menuitem" href={href} target="_blank" rel="noopener noreferrer">{t("lightboxOpenOriginal")}</a>}
