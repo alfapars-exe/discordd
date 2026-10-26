@@ -9,6 +9,7 @@ import (
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
 )
 
@@ -85,7 +86,13 @@ func (s *dmService) GetOrCreateChannel(ctx context.Context, userID, otherUserID 
 		User2ID: user2,
 		Status:  models.DMStatusAccepted,
 	}
-	if err := s.dmRepo.CreateChannel(ctx, channel); err != nil {
+	created := true
+	if writer, ok := s.dmRepo.(repository.UnblockedDMChannelCreator); ok && !isPlatformAdmin {
+		created, err = writer.CreateChannelUnblocked(ctx, channel)
+	} else {
+		err = s.dmRepo.CreateChannel(ctx, channel)
+	}
+	if err != nil {
 		return nil, fmt.Errorf("failed to create DM channel: %w", err)
 	}
 
@@ -96,6 +103,10 @@ func (s *dmService) GetOrCreateChannel(ctx context.Context, userID, otherUserID 
 		InitiatedBy:   channel.InitiatedBy,
 		CreatedAt:     channel.CreatedAt,
 		LastMessageAt: channel.LastMessageAt,
+	}
+	if !created {
+		result.E2EEEnabled = channel.E2EEEnabled
+		return result, nil
 	}
 
 	// Notify both users (each sees the other as the "other user")
