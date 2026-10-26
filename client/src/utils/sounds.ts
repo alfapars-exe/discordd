@@ -7,12 +7,13 @@ import { useAccessibilityStore } from "../stores/accessibilityStore";
 import { getNotificationPreferences } from "./notificationPreferences";
 import { subscribeAuthGenerationChanges, subscribeAuthOwnerChanges } from "../api/authSessionEvents";
 
-/** Lazily initialized — created on first sound play, resumed if suspended. */
 import joinUrl from "../assets/voice-sounds/join.m4a?url&no-inline";
 import leaveUrl from "../assets/voice-sounds/leave.m4a?url&no-inline";
 import streamStartUrl from "../assets/voice-sounds/streamStart.m4a?url&no-inline";
 import streamStopUrl from "../assets/voice-sounds/streamStop.m4a?url&no-inline";
 import watchStartUrl from "../assets/voice-sounds/watchStart.m4a?url&no-inline";
+
+/** Lazily initialized — created on first sound play, resumed if suspended. */
 let audioCtx: AudioContext | null = null;
 type SinkAudioContext = AudioContext & { setSinkId?: (sinkId: string) => Promise<void> };
 type ActiveTone = { osc: OscillatorNode | AudioBufferSourceNode; gain: GainNode; volume: number; followsMaster: boolean; start: number; end: number; recorded?: boolean; cancel: () => void };
@@ -267,6 +268,7 @@ function playRecordedSound(url: string, authorized: () => boolean): void {
   let tone: ActiveTone | undefined;
   let cancelled = false;
   const cancel = () => {
+    if (cancelled) return;
     cancelled = true;
     requests.delete(request);
     if (tone) activeTones.delete(tone);
@@ -281,10 +283,10 @@ function playRecordedSound(url: string, authorized: () => boolean): void {
     requests.add(request);
     let buffer = audioBuffers.get(url);
     if (!buffer) {
-      buffer = fetch(url).then(response => {
+      buffer = awaitAudioStep(fetch(url, { signal: AbortSignal.timeout(10000) }).then(response => {
         if (!response.ok) throw new Error("Voice cue unavailable");
         return response.arrayBuffer();
-      }).then(data => ctx.decodeAudioData(data));
+      }).then(data => ctx.decodeAudioData(data)), "Voice cue decode");
       audioBuffers.set(url, buffer);
       void buffer.catch(() => { audioBuffers.delete(url); });
     }
@@ -313,7 +315,7 @@ function playRecordedSound(url: string, authorized: () => boolean): void {
 export type VoiceSoundEvent = "join" | "leave" | "streamStart" | "streamStop" | "watchStart" | "watchStop" | "mute" | "unmute" | "deafen" | "undeafen";
 export const VOICE_SOUND_EVENTS: readonly VoiceSoundEvent[] = ["join", "leave", "streamStart", "streamStop", "watchStart", "watchStop", "mute", "unmute", "deafen", "undeafen"];
 export const VOICE_SOUND_PREFERENCES = {streamStart:"voiceStreamStartSound",streamStop:"voiceStreamStopSound",join:"voiceJoinSound",leave:"voiceLeaveSound",watchStart:"voiceWatchStartSound",watchStop:"voiceWatchStopSound",mute:"voiceMuteSound",unmute:"voiceUnmuteSound",deafen:"voiceDeafenSound",undeafen:"voiceUndeafenSound"} as const;
-/** Current call effects and explicit previews share exactly the same tone and policy. */
+/** Current call effects and explicit previews share exactly the same cue and policy. */
 export function playVoiceEventSound(event: VoiceSoundEvent): void {
   const revision=voiceEventRevisions.get(event)??0;
   const authorized = () => revision===(voiceEventRevisions.get(event)??0) && effectsAllowed() && getNotificationPreferences()[VOICE_SOUND_PREFERENCES[event]] !== false;
