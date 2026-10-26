@@ -50,6 +50,28 @@ beforeEach(() => {
 });
 
 describe("MusicBotPanel", () => {
+  it.each(["success", "failure"] as const)("keeps a replacement query's results when the previous query returns %s late", async (outcome) => {
+    let finishOld!: (value: Awaited<ReturnType<typeof searchMusic>>) => void;
+    vi.mocked(searchMusic).mockReturnValueOnce(new Promise(resolve => { finishOld = resolve; }))
+      .mockResolvedValueOnce({ success: true, data: { results: [{ ...song().current_track!, video_id: "new", title: "New query result" }] } });
+    render(<MusicBotPanel channelId="a" />);
+    const input = screen.getByRole("textbox", { name: "searchPlaceholder" });
+    fireEvent.change(input, { target: { value: "old query" } });
+    fireEvent.submit(input.closest("form")!);
+    fireEvent.change(input, { target: { value: "new query" } });
+    expect(screen.getByRole("button", { name: "search" })).not.toBeDisabled();
+    fireEvent.submit(input.closest("form")!);
+    expect(await screen.findByText("New query result")).toBeInTheDocument();
+    await act(async () => finishOld(outcome === "success"
+      ? { success: true, data: { results: [{ ...song().current_track!, video_id: "old", title: "Obsolete result" }] } }
+      : { success: false, error: "old failure" }));
+    expect(screen.getByText("New query result")).toBeInTheDocument();
+    expect(screen.queryByText("Obsolete result")).toBeNull();
+    expect(fixture.showError).not.toHaveBeenCalled();
+    expect(fixture.toast).not.toHaveBeenCalled();
+    expect(playMusic).not.toHaveBeenCalled();
+  });
+
   it.each(["reject", "failure"] as const)("ignores an unmounted search's late %s without global feedback", async (outcome) => {
     let resolve!: (value: Awaited<ReturnType<typeof searchMusic>>) => void;
     let reject!: (reason: Error) => void;

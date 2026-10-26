@@ -248,7 +248,14 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
   const searchBox = <div className="music-bot-search">
     {retryAvailable&&serverId&&<div role="status"><span>{t("retryOriginalHint")}</span><button disabled={pending} onClick={()=>void mutateQueue(()=>retryMusicMutation(serverId,channelId))}>{t("retryOriginal")}</button></div>}
     <form onSubmit={(event) => void runSearch(event)}>
-      <input value={query} maxLength={100} onChange={(event) => setQuery(event.target.value)} placeholder={t("searchPlaceholder")} aria-label={t("searchPlaceholder")} />
+      <input value={query} maxLength={100} onChange={(event) => {
+        // Results belong to the exact submitted query, not merely the voice room.
+        ++searchGeneration.current;
+        searchPending.current = false;
+        setSearching(false);
+        setResults([]);
+        setQuery(event.target.value);
+      }} placeholder={t("searchPlaceholder")} aria-label={t("searchPlaceholder")} />
       <button className="music-bot-btn" disabled={searching || !query.trim()}>{searching ? t("searching") : t("search")}</button>
     </form>
     {results.length > 0 && <ul className="music-bot-search-results">
