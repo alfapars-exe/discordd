@@ -1,36 +1,17 @@
 /** BlockedUsersSettings — View and unblock blocked users. */
 
-import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useBlockStore } from "../../stores/blockStore";
-import * as blockApi from "../../api/block";
+import { useBlockedUsers } from "../../hooks/useBlockedUsers";
 import Avatar from "../shared/Avatar";
-import type { FriendshipWithUser } from "../../types";
 
 function BlockedUsersSettings() {
   const { t } = useTranslation("settings");
   const unblockUser = useBlockStore((s) => s.unblockUser);
-  const [blockedUsers, setBlockedUsers] = useState<FriendshipWithUser[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    queueMicrotask(() => setIsLoading(true));
-    blockApi.listBlocked().then((res) => {
-      if (cancelled) return;
-      if (res.success && res.data) {
-        setBlockedUsers(res.data);
-      }
-      setIsLoading(false);
-    });
-    return () => { cancelled = true; };
-  }, []);
+  const { blockedUsers, isLoading } = useBlockedUsers();
 
   async function handleUnblock(userId: string) {
-    const ok = await unblockUser(userId);
-    if (ok) {
-      setBlockedUsers((prev) => prev.filter((u) => u.user_id !== userId));
-    }
+    await unblockUser(userId);
   }
 
   return (
