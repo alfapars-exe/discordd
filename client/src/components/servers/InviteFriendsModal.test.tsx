@@ -59,6 +59,33 @@ describe("InviteFriendsModal", () => {
     sendMessage.mockResolvedValue(true);
   });
 
+  it("names the dialog, contains keyboard focus and restores its opener on close", async () => {
+    const opener = document.createElement("button");
+    document.body.append(opener);
+    opener.focus();
+    const onClose = vi.fn();
+    const view = render(<InviteFriendsModal serverId="s1" serverName="Team" onClose={onClose} />);
+    const dialog = screen.getByRole("dialog", { name: "inviteFriends" });
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+    expect(screen.getByRole("textbox", { name: "searchFriends" })).toHaveFocus();
+    const close = screen.getByRole("button", { name: "close" });
+    close.focus();
+    fireEvent.keyDown(close, { key: "Tab", shiftKey: true });
+    const last = document.activeElement;
+    expect(last).not.toBe(close);
+    expect(dialog.contains(last)).toBe(true);
+    expect(last).not.toBeDisabled();
+    fireEvent.keyDown(last!, { key: "Tab" });
+    expect(close).toHaveFocus();
+    opener.focus();
+    expect(close).toHaveFocus();
+    fireEvent.keyDown(close, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledOnce();
+    view.unmount();
+    expect(opener).toHaveFocus();
+    opener.remove();
+  });
+
   it("loads and displays the same seven-day share link that it copies", async () => {
     render(<InviteFriendsModal serverId="s1" serverName="Team" onClose={() => undefined} />);
     const link = await screen.findByRole("textbox", { name: "inviteLink" });

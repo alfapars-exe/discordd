@@ -3,7 +3,7 @@
  * Select friends from checkbox list, sends invite URL as DM to each.
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useId, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { useFriendStore } from "../../stores/friendStore";
@@ -26,6 +26,39 @@ type InviteFriendsModalProps = {
 
 function InviteFriendsModal({ serverId, serverName, onClose }: InviteFriendsModalProps) {
   const { t } = useTranslation("servers");
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const titleId = useId();
+  const descriptionId = useId();
+
+  useLayoutEffect(() => {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const dialog = dialogRef.current;
+    const controls = () => Array.from(dialog?.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex="0"]',
+    ) ?? []);
+    searchRef.current?.focus();
+    function keydown(event: KeyboardEvent) {
+      if (event.key !== "Tab") return;
+      const available = controls();
+      const first = available[0], last = available.at(-1);
+      if (event.shiftKey && (document.activeElement === first || !dialog?.contains(document.activeElement))) {
+        event.preventDefault(); (last ?? dialog)?.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !dialog?.contains(document.activeElement))) {
+        event.preventDefault(); (first ?? dialog)?.focus();
+      }
+    }
+    function contain(event: FocusEvent) {
+      if (!dialog?.contains(event.target as Node)) (controls()[0] ?? dialog)?.focus();
+    }
+    document.addEventListener("keydown", keydown, true);
+    document.addEventListener("focusin", contain);
+    return () => {
+      document.removeEventListener("keydown", keydown, true);
+      document.removeEventListener("focusin", contain);
+      if (previous?.isConnected) previous.focus();
+    };
+  }, []);
   const friends = useFriendStore((s) => s.friends);
   const getOrCreateShareInvite = useInviteStore((s) => s.getOrCreateShareInvite);
   const createOrGetChannel = useDMStore((s) => s.createOrGetChannel);
@@ -105,7 +138,11 @@ function InviteFriendsModal({ serverId, serverName, onClose }: InviteFriendsModa
   // Close on Escape
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !isSending) onClose();
+      if (e.key === "Escape" && !isSending) {
+        e.preventDefault();
+        e.stopPropagation();
+        onClose();
+      }
     },
     [onClose, isSending],
   );
@@ -274,16 +311,17 @@ function InviteFriendsModal({ serverId, serverName, onClose }: InviteFriendsModa
         if (e.target === e.currentTarget && !isSending) onClose();
       }}
     >
-      <div className="modal-card invite-friends-modal" onClick={(e) => e.stopPropagation()}>
+      <div ref={dialogRef} className="modal-card invite-friends-modal" role="dialog" aria-modal="true"
+        aria-labelledby={titleId} aria-describedby={descriptionId} tabIndex={-1} onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="modal-header">
           <div>
-            <h2 className="modal-title">{t("inviteFriends")}</h2>
-            <p className="invite-friends-desc">
+            <h2 id={titleId} className="modal-title">{t("inviteFriends")}</h2>
+            <p id={descriptionId} className="invite-friends-desc">
               {t("inviteFriendsDesc", { server: serverName })}
             </p>
           </div>
-          <button onClick={onClose} className="toast-close" disabled={isSending}>
+          <button onClick={onClose} className="toast-close" aria-label={t("close", { ns: "common" })} disabled={isSending}>
             &#x2715;
           </button>
         </div>
@@ -308,6 +346,7 @@ function InviteFriendsModal({ serverId, serverName, onClose }: InviteFriendsModa
         </div>
 
         <input
+          ref={searchRef}
           className="invite-friends-search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
