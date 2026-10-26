@@ -129,6 +129,10 @@ func (r *sqliteReminderRepo) DeliverDue(ctx context.Context, now time.Time, limi
 		}
 		due = append(due, *m)
 	}
+	if err = rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
 	if err = rows.Close(); err != nil {
 		return nil, err
 	}
@@ -139,7 +143,9 @@ func (r *sqliteReminderRepo) DeliverDue(ctx context.Context, now time.Time, limi
 			return nil, e
 		}
 		// First claim the reminder atomically without notification_id to prevent races
-		res, e := tx.ExecContext(ctx, `UPDATE message_reminders SET status='delivered',delivered_at=?,updated_at=? WHERE id=? AND status='scheduled'`, reminderTime(now), reminderTime(now), m.ID)
+		// A concurrent reschedule can commit after the SELECT under READ COMMITTED.
+		// Recheck the due time when claiming so postponed reminders stay scheduled.
+		res, e := tx.ExecContext(ctx, `UPDATE message_reminders SET status='delivered',delivered_at=?,updated_at=? WHERE id=? AND status='scheduled' AND due_at<=?`, reminderTime(now), reminderTime(now), m.ID, reminderTime(now))
 		if e != nil {
 			return nil, e
 		}
