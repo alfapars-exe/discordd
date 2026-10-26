@@ -18,12 +18,31 @@ Both the repository-root production Dockerfile and `server/Dockerfile`
 
 YouTube challenge solving requires a supported JavaScript runtime. The
 official yt-dlp executable already bundles matching EJS solver scripts;
-Deno is enabled automatically. See the upstream
+Deno is enabled automatically for local server execution and explicitly
+selected by the optional outbound worker. See the upstream
 [EJS setup guide](https://github.com/yt-dlp/yt-dlp/wiki/EJS) and
 [pinned yt-dlp release](https://github.com/yt-dlp/yt-dlp/releases/tag/2026.10.21).
 The application disables remote component downloads, third-party plugins, and
 user/system yt-dlp configuration. Do not depend on `yt-dlp.conf` for runtime
-options. No browser cookies or logged-in YouTube account are required or read.
+options. Local execution does not read browser cookies. The optional outbound
+worker accepts only an operator-provided dedicated account cookie file; see
+[worker deployment and resource limits](deploy/music-worker/README.md).
+
+The worker sets the fixed child environment value
+`DENO_V8_FLAGS=--max-old-space-size=512,--max-semi-space-size=4`, skips unnecessary
+player JavaScript for single-video metadata, and serializes extraction startup.
+Explicit provider denials still fail metadata requests. Full audio extraction
+uses normal JavaScript processing and public-content checks. Metadata/search
+holds the extraction slot until its process exits; audio releases it at first
+media output, which does not prove that all solver memory has been released.
+
+The local-Deno worker profile requires a 1 GiB container memory limit and two CPUs. Heap
+settings do not cap total process or container memory. The existing 1 GB
+PostgreSQL host and its previous 320 MiB worker allowance do not meet this
+profile. Reserve at least 1 GiB for the worker plus host and other-service
+headroom; a dedicated 2 GB host is a practical minimum. Do not automatically
+provision paid infrastructure. Measure concurrent audio/metadata usage on the
+target host before enabling the worker.
 
 Native development servers need `yt-dlp`, `deno`, and `ffmpeg` on their process
 PATH before starting the Go backend. Installing these only on the frontend
@@ -107,7 +126,7 @@ responses use fixed reason codes, not subprocess stderr or credentials.
 | --- | --- |
 | Tool unavailable | Check tools on the backend PATH and rebuild/restart. |
 | YouTube unavailable | Check the public video in a browser; removed/private videos cannot play. |
-| Bot check, forbidden, rate limited, region/age restricted | YouTube can reject the hosting IP or media independently of application health. Use another public video or wait; do not disable URL guards or add account cookies as a workaround. |
+| Bot check, forbidden, rate limited, region/age restricted | YouTube can reject a session or media independently of application health. In dedicated-account worker deployments, replace expired cookies using the account owner's normal session. Preserve provider denials and URL/public-content guards; do not automate login or bypass restrictions. |
 | Metadata succeeds, no audio | Inspect FFmpeg errors, LiveKit connection/publication, listener audio/autoplay permissions and local volume. |
 | Playback stalled | Check backend outbound networking and CPU capacity; the watchdog cleans up the stuck pipeline. |
 
@@ -191,10 +210,21 @@ passed, including decoding non-silent received audio and exercising
 pause/resume, queue, skip and stop. This establishes that tested local path;
 packet counts and run times are not availability or performance guarantees.
 
-The updated Docker images have **not been built/verified** in this session
-because the Docker daemon was unavailable. Nothing was deployed to production.
-YouTube may still reject a deployment's hosting IP or restricted media even
-when the same public video works locally.
+On 2026-10-26, a controlled local container using the production image with
+Deno 2.9.8, the fixed 512/4 MiB V8 settings, a 1 GiB memory limit and two CPUs
+downloaded 2,791,315 audio bytes from the original public video in 3.94 seconds.
+Container peak memory was 437,067,776 bytes (about 417 MiB). FFmpeg decoded ten
+seconds of non-silent audio with an RMS level of -20.364 dB. This verifies that
+controlled local extraction and decoding, not the deployed worker, LiveKit
+publication or Windows client playback. YouTube may still reject a deployment's
+session or restricted media even when the same public video works locally.
+
+The optional [split computation profile](deploy/music-worker/README.md#separate-javascript-computation)
+keeps normal authenticated YouTube networking on Oracle and sends only bounded
+EJS computation data to HF. On 2026-10-26 it downloaded the same 2,791,315 audio
+bytes in 20.615 seconds with a 172,347,392-byte Oracle peak under a 320 MiB cap.
+The sample decoded with the same non-silent RMS level. This result still does
+not establish actual channel or Windows client playback.
 
 Before releasing, build both relevant images and test a public video and
 playlist from the deployed backend with two real app clients. Verify audible

@@ -1,0 +1,19 @@
+# Combine with compose.yaml only when the pinned remote solver is available.
+# docker compose -f compose.yaml -f compose.split.yaml up -d
+services:
+  worker:
+    environment:
+      HICHAT_MUSIC_JS_ENDPOINT: ${HICHAT_MUSIC_JS_ENDPOINT:?Set the authenticated HTTPS solver origin}
+      HICHAT_MUSIC_JS_TOKEN_FILE: /run/secrets/js-solver.token
+      HICHAT_MUSIC_JS_EXEC_PATH: /usr/local/bin/hichat-js-exec
+    volumes:
+      - type: bind
+        source: ./secrets/js-solver.token
+        target: /run/secrets/js-solver.token
+        read_only: true
+        bind:
+          create_host_path: false
+    mem_limit: 320m
+    mem_reservation: 192m
+    memswap_limit: 320m
+    cpus: 1.00
