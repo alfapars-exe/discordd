@@ -292,6 +292,10 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
   const nextRepeatMode = repeatMode === "off" ? "one" : repeatMode === "one" ? "all" : "off";
 
   async function control(fn: typeof pauseMusic) {
+    const latest = useVoiceStore.getState().musicBotStates[channelId];
+    // A WS update may precede React's next render. Do not reinterpret a click
+    // on the old track/control as authorization to control its replacement.
+    if (!latest || seekTrackKey(latest) !== trackKey || latest.is_paused !== is_paused) return;
     if(serverId)await mutateQueue(()=>fn(serverId,channelId),undefined,"controlError");
   }
 

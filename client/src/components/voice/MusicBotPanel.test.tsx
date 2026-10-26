@@ -50,6 +50,32 @@ beforeEach(() => {
 });
 
 describe("MusicBotPanel", () => {
+  it("does not reinterpret an old Pause click after the server already paused playback", async () => {
+    render(<MusicBotPanel channelId="a" />);
+    const pause = await screen.findByRole("button", { name: "pause" });
+    act(() => {
+      const current = useVoiceStore.getState().musicBotStates.a;
+      useVoiceStore.getState().setMusicBotState("a", { ...current, is_paused: true });
+      fireEvent.click(pause);
+    });
+    expect(pauseMusic).not.toHaveBeenCalled();
+    expect(resumeMusic).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "resume" }));
+    await waitFor(() => expect(resumeMusic).toHaveBeenCalledOnce());
+  });
+
+  it("does not apply an old rendered Skip control to a replacement track before React refreshes", async () => {
+    render(<MusicBotPanel channelId="a" />);
+    const skip = await screen.findByRole("button", { name: "skip" });
+    act(() => {
+      useVoiceStore.getState().setMusicBotState("a", song({ current_track: { ...song().current_track!, video_id: "replacement", title: "Replacement" } }));
+      fireEvent.click(skip);
+    });
+    expect(skipMusic).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "skip" }));
+    await waitFor(() => expect(skipMusic).toHaveBeenCalledOnce());
+  });
+
   it.each(["success", "failure"] as const)("keeps a replacement query's results when the previous query returns %s late", async (outcome) => {
     let finishOld!: (value: Awaited<ReturnType<typeof searchMusic>>) => void;
     vi.mocked(searchMusic).mockReturnValueOnce(new Promise(resolve => { finishOld = resolve; }))
