@@ -1,0 +1,15 @@
+{
+  "source_commit": "edb49c60464eb6f4b15d262dcf12ee712b2e3855",
+  "scope": "Partial profile verification; not full P0 or P5 acceptance",
+  "checks": {
+    "legacy_profile_save": "A biography-only save succeeded without changing the legacy language or DM privacy values; immediate reload returned the saved biography through the fixed user cache.",
+    "registration_and_cache": "Registration defaults and authenticated profile cache invalidation were exercised with SQLite and HTTP regression tests; the full Go suite passed on the isolated source snapshot with these backend changes.",
+    "showcase": "A synthetic favorite widget and manual link persisted after reload. A second synthetic account saw the visible link and did not receive it after visibility was disabled. Test data was removed.",
+    "layout": "Actual web UI showed no showcase grid overflow at widths 390, 768, 1024, 1440 and 2560 pixels; link fields were at least 288 pixels wide and action controls 36 pixels high.",
+    "client": "The scoped profile and locale suites passed 78 tests; production TypeScript and Vite build passed with the final profile changes. An earlier isolated client snapshot passed 4222 tests before the last showcase presentation changes."
+  },
+  "limitations": [
+    "This does not establish full visual, Windows device, multi-user, security or release acceptance.",
+    "The full client suite predates the final showcase presentation changes; the scoped suite and final build include them."
+  ]
+}

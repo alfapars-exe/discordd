@@ -1125,7 +1125,8 @@
       "code": [],
       "evidence": [
         "implementation/verification/p0-partial-visual-112d1e8b-2026-10-26.json",
-        "implementation/verification/p7-preview-followup-render-2026-10-26.json"
+        "implementation/verification/p7-preview-followup-render-2026-10-26.json",
+        "implementation/verification/p5-profile-cache-showcase-2026-10-26.json"
       ]
     },
     {
@@ -3890,7 +3891,9 @@
         "client/src/components/settings/CosmeticsSettings.tsx",
         "client/src/components/members/MemberCard.tsx"
       ],
-      "evidence": []
+      "evidence": [
+        "implementation/verification/p5-profile-cache-showcase-2026-10-26.json"
+      ]
     },
     {
       "id": "p5.profile-avatar",
@@ -4069,7 +4072,8 @@
         "client/src/components/members/MemberCard.tsx"
       ],
       "evidence": [
-        "implementation/verification/p5-profile-showcase-foundation-2026-10-23.json"
+        "implementation/verification/p5-profile-showcase-foundation-2026-10-23.json",
+        "implementation/verification/p5-profile-cache-showcase-2026-10-26.json"
       ]
     },
     {
@@ -4306,7 +4310,8 @@
         "client/src/components/members/MemberCard.tsx"
       ],
       "evidence": [
-        "implementation/verification/p5-profile-showcase-foundation-2026-10-23.json"
+        "implementation/verification/p5-profile-showcase-foundation-2026-10-23.json",
+        "implementation/verification/p5-profile-cache-showcase-2026-10-26.json"
       ]
     },
     {
@@ -4514,7 +4519,8 @@
         "client/src/components/members/MemberCard.tsx"
       ],
       "evidence": [
-        "implementation/verification/p5-profile-showcase-foundation-2026-10-23.json"
+        "implementation/verification/p5-profile-showcase-foundation-2026-10-23.json",
+        "implementation/verification/p5-profile-cache-showcase-2026-10-26.json"
       ]
     },
     {
