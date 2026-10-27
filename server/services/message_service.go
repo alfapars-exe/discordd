@@ -268,6 +268,11 @@ func (s *messageService) Create(ctx context.Context, serverID, channelID, userID
 				return fmt.Errorf("failed to create %s notification: %w", n.Kind, err)
 			}
 		}
+		if channel.ServerID != "" && r.ChannelMessageNotifications != nil {
+			if err := r.ChannelMessageNotifications.Enqueue(ctx, message.ID, channel.ServerID, channelID, userID); err != nil {
+				return fmt.Errorf("failed to enqueue channel message notifications: %w", err)
+			}
+		}
 		return nil
 	})
 	if txErr != nil {

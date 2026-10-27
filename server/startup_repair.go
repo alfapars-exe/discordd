@@ -246,6 +246,12 @@ func repairOrphanedServerData(db *database.DB) {
 			SELECT 1 FROM servers s WHERE s.id = notifications.server_id)`},
 		{"notifications", `DELETE FROM notifications WHERE channel_id IS NOT NULL AND NOT EXISTS (
 			SELECT 1 FROM channels c WHERE c.id = notifications.channel_id)`},
+		{"channel_message_notification_jobs", `DELETE FROM channel_message_notification_jobs WHERE NOT EXISTS (
+			SELECT 1 FROM messages m JOIN channels c ON c.id=m.channel_id
+			WHERE m.id=channel_message_notification_jobs.message_id
+			AND m.channel_id=channel_message_notification_jobs.channel_id
+			AND c.server_id=channel_message_notification_jobs.server_id
+			AND m.user_id=channel_message_notification_jobs.actor_id)`},
 		// saved_messages (migration 083) — a bookmark whose message (channel
 		// or DM) is gone. The live delete paths remove these explicitly; this
 		// catches rows left by any path that predates them or that ran on
@@ -400,6 +406,13 @@ func resetStalePresence(db *database.DB) {
 func purgeExpiredNotifications(db *database.DB) {
 	cutoff := notificationRetentionCutoff(time.Now(), database.IsPostgres(db.Conn))
 	result, err := db.Conn.ExecContext(context.Background(),
+		`DELETE FROM channel_message_notification_jobs WHERE created_at < ?`, cutoff)
+	if err != nil {
+		startupLogger.Error("failed to purge expired channel notification job(s)", "err", pkg.ErrText(err))
+	} else if affected, _ := result.RowsAffected(); affected > 0 {
+		startupLogger.Info("purged expired channel notification job(s)", "count", affected)
+	}
+	result, err = db.Conn.ExecContext(context.Background(),
 		`DELETE FROM notifications WHERE created_at < ?`, cutoff)
 	if err != nil {
 		startupLogger.Error("failed to purge expired notifications", "err", pkg.ErrText(err))

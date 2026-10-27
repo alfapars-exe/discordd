@@ -211,7 +211,7 @@ func (r *sqliteUserRepo) hardDeleteUserStmts(ctx context.Context, q database.TxQ
 		return fmt.Errorf("failed to list owned servers: %w", err)
 	}
 	for _, serverID := range ownedIDs {
-		if err := deleteServerCascade(ctx, q, serverID); err != nil {
+		if err := deleteServerCascadeWithDialect(ctx, q, serverID, r.postgres); err != nil {
 			return fmt.Errorf("failed to delete owned server %s: %w", serverID, err)
 		}
 	}

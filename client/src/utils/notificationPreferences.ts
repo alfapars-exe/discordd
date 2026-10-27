@@ -4,6 +4,8 @@ export type NotificationPreferences = {
   desktopEnabled: boolean;
   taskbarFlash: boolean;
   unreadBadge: boolean;
+  /** Account-synced explicit opt-in; absent on legacy accounts means false. */
+  channelMessageNotifications: boolean;
   reactionMode: "all" | "direct" | "none";
   soundPack: "classic" | "soft" | "minimal";
   messageSound: boolean;
@@ -35,6 +37,7 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   desktopEnabled: true,
   taskbarFlash: true,
   unreadBadge: true,
+  channelMessageNotifications: false,
   reactionMode: "direct",
   soundPack: "classic",
   messageSound: true,

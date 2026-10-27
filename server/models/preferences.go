@@ -151,7 +151,10 @@ var preferenceNamespaces = map[string]preferenceValidator{
 	}),
 	"notifications": preferenceObject(map[string]preferenceValidator{
 		"desktopEnabled": preferenceBool, "taskbarFlash": preferenceBool,
-		"unreadBadge": preferenceBool, "reactionMode": preferenceEnum("all", "direct", "none"),
+		// Account-synced, explicit opt-in for body-free ordinary channel
+		// message notices. Missing values are deliberately treated as false.
+		"channelMessageNotifications": preferenceBool,
+		"unreadBadge":                 preferenceBool, "reactionMode": preferenceEnum("all", "direct", "none"),
 		"soundPack":    preferenceEnum("classic", "soft", "minimal"),
 		"messageSound": preferenceBool, "currentChannelSound": preferenceBool,
 		"incomingCallSound": preferenceBool, "muteAllSounds": preferenceBool,
