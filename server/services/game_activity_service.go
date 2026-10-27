@@ -50,6 +50,11 @@ type gameActivityRecipientServerReader interface {
 // never stores process paths or treats a client title as verified identity.
 type GameActivityService struct {
 	mu              sync.Mutex // protects maps; never held across repository calls
+	lifecycleMu     sync.Mutex
+	started         bool
+	stopped         bool
+	workerDone      chan struct{}
+	tickerFactory   func(time.Duration) (<-chan time.Time, func())
 	targetLocks     [64]sync.Mutex
 	policy          GameActivityPrivacyPolicy
 	epoch           string
@@ -64,7 +69,6 @@ type GameActivityService struct {
 	published       map[string]gameActivityPublished
 	reconcileCursor string
 	stop            chan struct{}
-	once            sync.Once
 	gameJoin        *GameJoinService
 }
 
@@ -81,7 +85,10 @@ func NewGameActivityService(policy GameActivityPrivacyPolicy, friends gameActivi
 	if provider, ok := hub.(interface{ GameActivityEpoch() string }); ok && provider.GameActivityEpoch() != "" {
 		epoch = provider.GameActivityEpoch()
 	}
-	return &GameActivityService{policy: policy, epoch: epoch, friends: friends, servers: servers, hub: hub, sources: map[string]map[uint64]gameActivitySource{}, connections: map[string]map[uint64]bool{}, lastSequences: map[string]map[uint64]uint64{}, grants: map[string]map[gameActivityGrant]bool{}, revisions: map[string]uint64{}, published: map[string]gameActivityPublished{}, stop: make(chan struct{})}
+	return &GameActivityService{policy: policy, epoch: epoch, friends: friends, servers: servers, hub: hub, sources: map[string]map[uint64]gameActivitySource{}, connections: map[string]map[uint64]bool{}, lastSequences: map[string]map[uint64]uint64{}, grants: map[string]map[gameActivityGrant]bool{}, revisions: map[string]uint64{}, published: map[string]gameActivityPublished{}, stop: make(chan struct{}), workerDone: make(chan struct{}), tickerFactory: func(interval time.Duration) (<-chan time.Time, func()) {
+		ticker := time.NewTicker(interval)
+		return ticker.C, ticker.Stop
+	}}
 }
 
 func (s *GameActivityService) Connect(userID string, connectionID uint64) {
@@ -427,12 +434,22 @@ func (s *GameActivityService) ExpireAndReconcile(ctx context.Context) {
 }
 
 func (s *GameActivityService) Start() {
+	s.lifecycleMu.Lock()
+	if s.started || s.stopped {
+		s.lifecycleMu.Unlock()
+		return
+	}
+	s.started = true
+	ticks, stopTicker := s.tickerFactory(10 * time.Second)
 	go func() {
-		ticker := time.NewTicker(10 * time.Second)
-		defer ticker.Stop()
+		defer close(s.workerDone)
+		defer stopTicker()
 		for {
 			select {
-			case <-ticker.C:
+			case _, ok := <-ticks:
+				if !ok {
+					return
+				}
 				ctx, cancel := BroadcastContext()
 				s.ExpireAndReconcile(ctx)
 				cancel()
@@ -441,8 +458,20 @@ func (s *GameActivityService) Start() {
 			}
 		}
 	}()
+	s.lifecycleMu.Unlock()
 }
-func (s *GameActivityService) Stop() { s.once.Do(func() { close(s.stop) }) }
+func (s *GameActivityService) Stop() {
+	s.lifecycleMu.Lock()
+	if !s.stopped {
+		s.stopped = true
+		close(s.stop)
+	}
+	started := s.started
+	s.lifecycleMu.Unlock()
+	if started {
+		<-s.workerDone
+	}
+}
 
 func (s *GameActivityService) reconcileTargetLocked(ctx context.Context, targetID string, transition ...gameActivityTransition) {
 	if s.gameJoin != nil {

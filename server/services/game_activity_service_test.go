@@ -159,6 +159,68 @@ func TestGameActivityServiceExpiredLeaseRevokesImmediately(t *testing.T) {
 	}
 }
 
+func TestGameActivityServiceStartedWorkerExpiresLeaseAndStopJoins(t *testing.T) {
+	events := make(chan ws.Event, 4)
+	ticks := make(chan time.Time, 1)
+	stoppedTicker := make(chan struct{})
+	hub := &testutil.MockBroadcaster{BroadcastToUsersFn: func(ids []string, event ws.Event) {
+		if len(ids) == 1 && ids[0] == "viewer" {
+			events <- event
+		}
+	}}
+	policy := gameActivityPolicy(`{"privacy":{"shareGameActivity":true}}`, gameActivityFriendsStub{accepted: true}, gameActivityServersStub{}, gameActivityPresenceStub{visible: true}, nil)
+	svc := NewGameActivityService(policy, activityServiceFriends{}, activityServiceServers{}, hub)
+	svc.tickerFactory = func(interval time.Duration) (<-chan time.Time, func()) {
+		if interval != 10*time.Second {
+			t.Errorf("worker interval = %s, want 10s", interval)
+		}
+		return ticks, func() { close(stoppedTicker) }
+	}
+	svc.Connect("target", 1)
+	svc.Update(context.Background(), "target", 1, 1, &ws.GameActivityClientGame{ID: "x", Name: "X"})
+	select {
+	case <-events: // initial publication
+	default:
+		t.Fatal("initial activity publication was not emitted")
+	}
+	svc.mu.Lock()
+	source := svc.sources["target"][1]
+	source.leaseUntil = time.Now().Add(-time.Second)
+	svc.sources["target"][1] = source
+	svc.mu.Unlock()
+
+	svc.Start()
+	svc.Start() // duplicate lifecycle calls must not create another worker
+	ticks <- time.Now()
+	select {
+	case event := <-events:
+		data, ok := event.Data.(ws.GameActivityData)
+		if !ok || data.Game != nil {
+			t.Fatalf("expiry event = %#v, want revocation", event.Data)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("started worker did not process the expiry tick")
+	}
+	svc.Stop()
+	svc.Stop() // Stop is idempotent and waits for worker completion
+	select {
+	case <-stoppedTicker:
+	default:
+		t.Fatal("Stop returned before stopping the worker ticker")
+	}
+	select {
+	case <-svc.workerDone:
+	default:
+		t.Fatal("Stop returned before the expiry worker exited")
+	}
+	svc.mu.Lock()
+	_, remains := svc.sources["target"]
+	svc.mu.Unlock()
+	if remains {
+		t.Fatal("expired source remains after worker reconciliation")
+	}
+}
+
 func TestGameActivityServiceExpiryKeepsSelectedSourceAndSwitchesDirectlyToFallback(t *testing.T) {
 	newService := func(t *testing.T) (*GameActivityService, *[]ws.Event) {
 		t.Helper()
