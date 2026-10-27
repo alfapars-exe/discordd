@@ -1384,6 +1384,7 @@
     "downloadAttachments": "Ekleri ZIP olarak indir",
     "attachmentsPreparing": "Ek arşivin hazırlanıyor. Bu işlem birkaç dakika sürebilir.",
     "attachmentsUnavailable": "Ek arşivi hazırlanamadı. JSON dışa aktarımın kullanılabilir; yeniden denemek için yeni dışa aktarım hazırla.",
+    "attachmentsMissing": "ZIP arşivi bu sunucuda kullanılamıyor. JSON dışa aktarımın kullanılabilir. Yeniden denemek için yeni dışa aktarım hazırla; özgün ek dosyalarının hâlâ saklanıyor olması gerekir.",
     "error": "Dışa aktarım hazırlanamadı.",
     "jobUnavailable": "Bu oturum için dışa aktarım artık kullanılamıyor. Yeni bir dışa aktarım hazırla.",
     "downloadError": "Dışa aktarım indirilemedi veya süresi doldu."

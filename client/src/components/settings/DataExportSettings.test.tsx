@@ -189,6 +189,74 @@ describe("DataExportSettings", () => {
     await new Promise(resolve => setTimeout(resolve, 1700));
     expect(mocks.get).toHaveBeenCalledOnce();
   });
+  it("explains a missing local ZIP, keeps JSON, and recreates only on an explicit request", async () => {
+    const missing = { ...job, attachments_status: "ready", attachments_ready: false, attachments_error: "archive_file_unavailable" };
+    mocks.create.mockResolvedValueOnce({ success: true, data: missing }).mockResolvedValueOnce({ success: true, data: { ...job, id: "export-b", attachments_status: "ready", attachments_ready: true } });
+    render(<DataExportSettings userID="a" />); create();
+    await screen.findByText("dataExport.attachmentsMissing");
+    expect(screen.getByRole("button", { name: "dataExport.download" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "dataExport.downloadAttachments" })).not.toBeInTheDocument();
+    expect(mocks.create).toHaveBeenCalledOnce();
+    expect(mocks.get).not.toHaveBeenCalled();
+    create();
+    await screen.findByRole("button", { name: "dataExport.downloadAttachments" });
+    expect(screen.queryByText("dataExport.attachmentsMissing")).not.toBeInTheDocument();
+  });
+  it("rechecks status when the ZIP disappears after a ready response", async () => {
+    const ready = { ...job, attachments_status: "ready", attachments_ready: true };
+    mocks.create.mockResolvedValueOnce({ success: true, data: ready });
+    mocks.downloadAttachments.mockResolvedValueOnce({ success: false, status: 404 });
+    mocks.get.mockResolvedValueOnce({ success: true, data: { ...ready, attachments_ready: false, attachments_error: "archive_file_unavailable" } });
+    render(<DataExportSettings userID="a" />); create();
+    fireEvent.click(await screen.findByRole("button", { name: "dataExport.downloadAttachments" }));
+    await screen.findByText("dataExport.attachmentsMissing");
+    await waitFor(() => expect(mocks.get).toHaveBeenCalledWith(job.id, expect.any(Function)));
+    expect(screen.queryByRole("button", { name: "dataExport.downloadAttachments" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "dataExport.download" })).toBeInTheDocument();
+  });
+  it.each([401, 403, 404])("retires a disappeared ZIP job when its refreshed status is terminal (%i)", async status => {
+    mocks.create.mockResolvedValueOnce({ success: true, data: { ...job, attachments_status: "ready", attachments_ready: true } });
+    mocks.downloadAttachments.mockResolvedValueOnce({ success: false, status: 404 });
+    mocks.get.mockResolvedValueOnce({ success: false, status });
+    render(<DataExportSettings userID="a" />); create();
+    fireEvent.click(await screen.findByRole("button", { name: "dataExport.downloadAttachments" }));
+    await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith("error", "dataExport.jobUnavailable"));
+    expect(screen.queryByRole("button", { name: "dataExport.download" })).not.toBeInTheDocument();
+    expect(screen.queryByText("dataExport.attachmentsMissing")).not.toBeInTheDocument();
+  });
+  it.each([401, 403])("retires a ZIP job when download authorization is rejected (%i)", async status => {
+    mocks.create.mockResolvedValueOnce({ success: true, data: { ...job, attachments_status: "ready", attachments_ready: true } });
+    mocks.downloadAttachments.mockResolvedValueOnce({ success: false, status });
+    render(<DataExportSettings userID="a" />); create();
+    fireEvent.click(await screen.findByRole("button", { name: "dataExport.downloadAttachments" }));
+    await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith("error", "dataExport.jobUnavailable"));
+    expect(mocks.get).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "dataExport.download" })).not.toBeInTheDocument();
+  });
+  it("does not install another job returned by a stale availability refresh", async () => {
+    mocks.create.mockResolvedValueOnce({ success: true, data: { ...job, attachments_status: "ready", attachments_ready: true } });
+    mocks.downloadAttachments.mockResolvedValueOnce({ success: false, status: 404 });
+    mocks.get.mockResolvedValueOnce({ success: true, data: { ...job, id: "export-other", attachments_status: "ready", attachments_ready: true } });
+    render(<DataExportSettings userID="a" />); create();
+    fireEvent.click(await screen.findByRole("button", { name: "dataExport.downloadAttachments" }));
+    await waitFor(() => expect(mocks.get).toHaveBeenCalledOnce());
+    expect(screen.getByText("dataExport.attachmentsMissing")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "dataExport.downloadAttachments" })).not.toBeInTheDocument();
+  });
+  it("does not restore a ZIP button from a late status response after auth changes", async () => {
+    let finish!: (value: unknown) => void;
+    const ready = { ...job, attachments_status: "ready", attachments_ready: true };
+    mocks.create.mockResolvedValueOnce({ success: true, data: ready });
+    mocks.downloadAttachments.mockResolvedValueOnce({ success: false, status: 404 });
+    mocks.get.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    render(<DataExportSettings userID="a" />); create();
+    fireEvent.click(await screen.findByRole("button", { name: "dataExport.downloadAttachments" }));
+    await waitFor(() => expect(mocks.get).toHaveBeenCalledOnce());
+    advanceGeneration();
+    await act(async () => finish({ success: true, data: ready }));
+    expect(screen.queryByRole("button", { name: "dataExport.downloadAttachments" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "dataExport.download" })).not.toBeInTheDocument();
+  });
   it("reports a failed binary archive while keeping JSON available", async () => {
     mocks.create.mockResolvedValueOnce({ success: true, data: { ...job, attachments_status: "pending" } });
     mocks.get.mockResolvedValueOnce({ success: true, data: { ...job, attachments_status: "failed", attachments_error: "archive_unavailable" } });

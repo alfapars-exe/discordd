@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-27",
+  "status": "implemented_unverified",
+  "scope": "Truthful instance-local archive availability after a database-only restore; no global ready-state or byte-ledger mutation from filesystem absence.",
+  "base_commit": "e6c534f36036be3111756653a90daeeb95724a73",
+  "source_hash_normalization": "SHA256 UTF8 source with CRLF normalized to LF",
+  "source_sha256": {
+    "server/models/data_export.go": "0ce04823ad994c7821e394340d54c28655b43e1f27e2689ebfc2697121b6b556",
+    "server/repository/sqlite_data_export.go": "a2bf8c283cb6d0222a788c88460aee83e21bcb43e41b3ccfec30c9205c031c14",
+    "server/repository/data_export_local_availability_test.go": "804aa9d215a4a4a8aad966b0c849b2864ef47a717c6c36b0adad510f00bbeaa4",
+    "client/src/components/settings/DataExportSettings.tsx": "6781f3eff54c15fa1f7fee75c1ca828ef3acdbb8850890c70b4e77eb5cf9d6d4",
+    "client/src/components/settings/DataExportSettings.test.tsx": "5fd59dc7cd96c2d21b9fa5835688f50153269bf204dd2fbcc13812a168080e99",
+    "client/src/i18n/locales/en/settings.json": "33d5746974eaab5cd6011acb55a96ea7bac85be3ad8afb9b2c7f5b4bc1db928d",
+    "client/src/i18n/locales/tr/settings.json": "7a01fd019ce589bf0f69264028b00baf2224fc0cb4a09b00b5214cb16297dfab"
+  },
+  "behavior": [
+    "Owner Get reuses the exact generation, account, expiry and safe-file-open checks used by attachment download.",
+    "A missing or unreadable local ZIP projects attachments_ready=false and archive_file_unavailable in the response only; persisted attachment_status, attachment_error, reservations and quota remain untouched.",
+    "Another instance with the same DB and its own valid ZIP remains ready; restoring the missing ZIP makes the same job available on its next Get.",
+    "JSON remains downloadable; localized UI explains missing archive availability and that explicit recreation requires retained source attachments.",
+    "A 404 during ZIP download triggers a nonce/job/account-generation-fenced status refresh; revoked or expired jobs are retired, and stale responses cannot restore download controls."
+  ],
+  "checks": [
+    {
+      "command": "go test -p 2 ./repository -run TestDataExportReadyAvailabilityIsLocal -count=1 -timeout=90s",
+      "result": "PASS 1.867s SQLite"
+    },
+    {
+      "command": "go test -p 2 ./repository -run TestDataExportReadyAvailabilityIsLocalAndDoesNotMutateSharedLedger -count=2 -timeout=90s",
+      "result": "PASS 2.389s real disposable PostgreSQL18.6; container removed"
+    },
+    {
+      "command": "go test -p 2 ./repository ./handlers -run DataExport -count=1 -timeout=120s",
+      "result": "PASS repository7.497s handlers1.818s"
+    },
+    {
+      "command": "go vet ./repository ./handlers",
+      "result": "PASS"
+    },
+    {
+      "command": "vitest run src/components/settings/DataExportSettings.test.tsx --maxWorkers=1",
+      "result": "25 tests PASS 17.85s"
+    },
+    {
+      "command": "ESLint scoped files; TypeScript tsc -b; Vite build",
+      "result": "PASS; existing Vite configuration/chunk warnings remain"
+    }
+  ],
+  "authenticated_sqlite_http": {
+    "full": {
+      "both_identities_verified": true,
+      "owner_get_status": 200,
+      "response_attachment_status": "ready",
+      "response_ready": true,
+      "response_error": null,
+      "owner_download_status": 200,
+      "peer_get_status": 404,
+      "peer_download_status": 404,
+      "json_download_status": 200,
+      "quota_before": 1001,
+      "quota_after_status_read": 1001,
+      "persisted_status_unchanged": true,
+      "zip_sha256": "be349345fc1e4e3ea17655885e755be09aac4dcab058890d0f10551b57a0a33e",
+      "api_stopped": true
+    },
+    "missing": {
+      "both_identities_verified": true,
+      "owner_get_status": 200,
+      "response_attachment_status": "ready",
+      "response_ready": false,
+      "response_error": "archive_file_unavailable",
+      "owner_download_status": 404,
+      "peer_get_status": 404,
+      "peer_download_status": 404,
+      "json_download_status": 200,
+      "quota_before": 1001,
+      "quota_after_status_read": 1001,
+      "persisted_status_unchanged": true,
+      "zip_sha256": null,
+      "explicit_recreate_http": 201,
+      "recreated_ready": true,
+      "recreated_download_http": 200,
+      "api_stopped": true
+    }
+  },
+  "private_probe_receipt_sha256": "41525ceabbc2b35e8b0ca075ba6fa11c23df07c15fe142fe98837725930fba60",
+  "postgres_probe_receipt_sha256": "3796787215c586d4c39c23114faa3a166118ef1f98f970987f8e86d53615f271",
+  "remaining_acceptance": [
+    "Actual browser UI and installed Windows behavior are not accepted by mocked component tests or loopback HTTP.",
+    "No full uploads/private ZIP/device-key backup consistency or cryptographic decryption acceptance.",
+    "Existing expiry cleanup may release global budget based on node-local file absence; independent filesystems require a separate shared-storage/owner-routing design before claiming multi-node physical-byte accounting. This patch does not change cleanup or quotas.",
+    "The existing attachment download handler ignores io.Copy errors after setting Content-Length and HTTP200. Incomplete transfer/corrupt ZIP handling remains separate; this patch validates local availability, not archive integrity or successful transport completion.",
+    "Official package, production deployment and PostgreSQL API/TLS acceptance remain open."
+  ]
+}
