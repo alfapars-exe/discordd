@@ -53,7 +53,7 @@ try {
     assert.throws(() => removeSyntheticExportArchive(jobID), /regular owned file/);
     unlinkSync(zip);
   } catch (error) {
-    if (error?.code !== "EPERM") throw error;
+    if (process.platform !== "win32" || error?.code !== "EPERM") throw error;
     fileSymlinkSkipped = true; // Windows may forbid file symlink creation; junction rejection above still ran.
   }
   writeFileSync(zip, Buffer.from([0x50, 0x4b, 0x03, 0x04]));

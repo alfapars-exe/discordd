@@ -455,6 +455,10 @@ jobs:
         run: npm ci
         working-directory: e2e
 
+      - name: Verify disposable E2E isolation guards
+        run: npm run test:isolation
+        working-directory: e2e
+
       # Chromium only — the suite pins one project, and downloading the other
       # engines would dominate the job's runtime.
       - name: Install Playwright chromium
