@@ -123,7 +123,12 @@ type playRequest struct {
 }
 
 type playResponse struct {
-	AddedTracks []models.MusicTrack `json:"added_tracks"`
+	AddedTracks          []models.MusicTrack `json:"added_tracks"`
+	MayHaveSkippedTracks bool                `json:"may_have_skipped_tracks,omitempty"`
+}
+
+type detailedMusicEnqueuer interface {
+	EnqueueWithResult(context.Context, string, string, string) (services.MusicEnqueueResult, error)
 }
 
 // Play — POST /api/servers/{serverId}/channels/{channelId}/music/play
@@ -194,7 +199,16 @@ func (h *MusicHandler) Play(w http.ResponseWriter, r *http.Request) {
 		pkg.Error(w, err)
 		return
 	}
-	tracks, err := h.music.Enqueue(ctx, user.ID, channelID, req.URL)
+	var tracks []models.MusicTrack
+	var mayHaveSkippedTracks bool
+	var enqueueErr error
+	if detailed, ok := h.music.(detailedMusicEnqueuer); ok {
+		result, err := detailed.EnqueueWithResult(ctx, user.ID, channelID, req.URL)
+		tracks, mayHaveSkippedTracks, enqueueErr = result.AddedTracks, result.MayHaveSkippedTracks, err
+	} else {
+		tracks, enqueueErr = h.music.Enqueue(ctx, user.ID, channelID, req.URL)
+	}
+	err = enqueueErr
 	if err != nil {
 		if errors.Is(err, services.ErrMusicProtocolRequired) {
 			musicControlError(w, err)
@@ -224,7 +238,7 @@ func (h *MusicHandler) Play(w http.ResponseWriter, r *http.Request) {
 		pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "failed to queue track", err)
 		return
 	}
-	pkg.JSON(w, http.StatusOK, playResponse{AddedTracks: tracks})
+	pkg.JSON(w, http.StatusOK, playResponse{AddedTracks: tracks, MayHaveSkippedTracks: mayHaveSkippedTracks})
 }
 
 // Skip — POST /api/servers/{serverId}/channels/{channelId}/music/skip

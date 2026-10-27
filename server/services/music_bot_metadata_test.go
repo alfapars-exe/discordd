@@ -202,6 +202,47 @@ func TestParseMusicMetadata_SkipsInvalidEntriesAndBoundsPlaylist(t *testing.T) {
 	}
 }
 
+func TestParseMusicMetadataDetailed_ReportsObservedInvalidEntry(t *testing.T) {
+	input := "{\"id\":\"BaW_jenozKc\",\"title\":\"ok\"}\n{\"id\":\"not-a-video-id\"}\n"
+	result, err := parseMusicMetadataDetailed(strings.NewReader(input), "u", "n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Tracks) != 1 || !result.SawSkippedEntry {
+		t.Fatalf("result=%+v, want one track and observed skipped entry", result)
+	}
+	clean, err := parseMusicMetadataDetailed(strings.NewReader("{\"id\":\"BaW_jenozKc\"}\n"), "u", "n")
+	if err != nil || clean.SawSkippedEntry {
+		t.Fatalf("valid metadata marked partial: result=%+v err=%v", clean, err)
+	}
+}
+
+func TestMusicMetadataStderr_RemembersErrorOutsideTail(t *testing.T) {
+	stderr := newMusicMetadataStderr(32)
+	// Split the marker across writes and then scroll it outside the bounded
+	// diagnostic tail. The user-facing advisory must not depend on tail size.
+	_, _ = stderr.Write([]byte("ERR"))
+	_, _ = stderr.Write([]byte("OR: unavailable item\n"))
+	_, _ = stderr.Write([]byte(strings.Repeat("WARNING: benign\n", 20)))
+	if !stderr.SawError() {
+		t.Fatal("lost observed ERROR line after stderr tail overflow")
+	}
+}
+
+func TestMusicMetadataStderr_ReportsHiddenPlaylistItems(t *testing.T) {
+	stderr := newMusicMetadataStderr(32)
+	_, _ = stderr.Write([]byte("WARNING: [youtube:tab] YouTube said: INFO - 1 unavailable video is hidden\n"))
+	_, _ = stderr.Write([]byte(strings.Repeat("WARNING: benign\n", 20)))
+	if !stderr.SawError() {
+		t.Fatal("lost observed hidden-item warning after stderr tail overflow")
+	}
+	clean := newMusicMetadataStderr(32)
+	_, _ = clean.Write([]byte("WARNING: [youtube:tab] transient network retry\n"))
+	if clean.SawError() {
+		t.Fatal("unrelated warning marked as partial playlist")
+	}
+}
+
 func TestParseMusicMetadata_RejectsOversizedLine(t *testing.T) {
 	_, err := parseMusicMetadata(strings.NewReader(strings.Repeat("x", 256<<10)), "u", "n")
 	if err == nil {

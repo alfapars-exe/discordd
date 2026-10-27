@@ -196,8 +196,9 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
   async function addResult(track: MusicTrack) {
     if(!serverId)return;
     await mutateQueue(()=>playMusic(serverId,channelId,track.url),response=>{
-      const data=response.data as {added_tracks?:MusicTrack[]}|undefined;
+      const data=response.data as {added_tracks?:MusicTrack[];may_have_skipped_tracks?:boolean}|undefined;
       useToastStore.getState().addToast("success",t("addedToQueue",{count:data?.added_tracks?.length??1}));
+      if(data?.may_have_skipped_tracks)useToastStore.getState().addToast("info",t("playlistItemsUnavailable"));
       setResults(items=>items.filter(item=>item.video_id!==track.video_id));
     });
   }
@@ -253,7 +254,7 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
   }
 
   const searchBox = <div className="music-bot-search">
-    {retryAvailable&&serverId&&<div role="status"><span>{t("retryOriginalHint")}</span><button disabled={pending} onClick={()=>void mutateQueue(()=>retryMusicMutation(serverId,channelId))}>{t("retryOriginal")}</button></div>}
+    {retryAvailable&&serverId&&<div role="status"><span>{t("retryOriginalHint")}</span><button disabled={pending} onClick={()=>void mutateQueue(()=>retryMusicMutation(serverId,channelId),response=>{if((response.data as {may_have_skipped_tracks?:boolean}|undefined)?.may_have_skipped_tracks)useToastStore.getState().addToast("info",t("playlistItemsUnavailable"));})}>{t("retryOriginal")}</button></div>}
     <form onSubmit={(event) => void runSearch(event)}>
       <input value={query} maxLength={100} onChange={(event) => {
         // Results belong to the exact submitted query, not merely the voice room.
