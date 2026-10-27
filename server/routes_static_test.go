@@ -1,12 +1,33 @@
 package main
 
 import (
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"testing/fstest"
 )
+
+type frontendProbeFS struct{ calls int }
+
+func (f *frontendProbeFS) Open(name string) (fs.File, error) {
+	f.calls++
+	return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
+}
+
+func TestFrontendRejectsTraversalBeforeFilesystemLookup(t *testing.T) {
+	for _, path := range []string{"/../private", "/assets/../../private", "/%2e%2e/private", "/assets/%2e%2e/", "/assets/%5c..%5cprivate", "//private", "/assets/bad%00.js"} {
+		t.Run(path, func(t *testing.T) {
+			files := &frontendProbeFS{}
+			r := httptest.NewRecorder()
+			serveFrontend(r, httptest.NewRequest(http.MethodGet, path, nil), files, []byte("application document"))
+			if r.Code != http.StatusNotFound || files.calls != 0 || r.Header().Get("Cache-Control") != "no-store" {
+				t.Fatalf("invalid path reached frontend FS: status %d, calls %d, headers %v", r.Code, files.calls, r.Header())
+			}
+		})
+	}
+}
 
 func TestFrontendMissingBundleDoesNotReturnSPA(t *testing.T) {
 	files := fstest.MapFS{"assets/current.js": {Data: []byte("export const current = true;")}}
@@ -32,7 +53,7 @@ func TestFrontendKeepsCurrentAssetsAndNavigation(t *testing.T) {
 	if asset.Code != http.StatusOK || asset.Body.String() != js || !strings.Contains(asset.Header().Get("Cache-Control"), "immutable") {
 		t.Fatalf("current asset failed: status %d headers %v", asset.Code, asset.Header())
 	}
-	for _, path := range []string{"/channels/server/channel", "/invite/example"} {
+	for _, path := range []string{"/channels/server/channel", "/channels/server/channel/", "/invite/example", "/invite/example/"} {
 		r := httptest.NewRecorder()
 		serveFrontend(r, httptest.NewRequest(http.MethodGet, path, nil), files, index)
 		if r.Code != http.StatusOK || r.Body.String() != string(index) || r.Header().Get("Cache-Control") != "no-cache" {

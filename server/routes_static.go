@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -200,6 +201,16 @@ func serveFrontend(w http.ResponseWriter, r *http.Request, frontendFS fs.FS, ind
 	path := strings.TrimPrefix(r.URL.Path, "/")
 	if path == "" {
 		path = "index.html"
+	}
+	// A terminal slash is valid client navigation. Remove only that suffix;
+	// never clean away traversal segments before validating them.
+	path = strings.TrimSuffix(path, "/")
+	// Keep the lookup in the frontend's relative slash-separated namespace,
+	// even if a future FS implementation is not the current bounded embed FS.
+	if !fs.ValidPath(path) || !filepath.IsLocal(path) || strings.ContainsAny(path, "\\\x00") {
+		w.Header().Set("Cache-Control", "no-store")
+		http.NotFound(w, r)
+		return
 	}
 	if f, err := frontendFS.Open(path); err == nil {
 		_ = f.Close() // existence probe; FileServer opens the actual response
