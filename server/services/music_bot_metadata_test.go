@@ -9,6 +9,8 @@ import (
 	"io"
 	"log/slog"
 	"math"
+	"os"
+	"os/exec"
 	"slices"
 	"strings"
 	"testing"
@@ -54,10 +56,22 @@ func TestMusicMetadataDiagnostic_BoundedAndKeepsLastWarning(t *testing.T) {
 }
 
 func TestLogMusicMetadataFailure_EmitsSafeTimingsWithoutChangingError(t *testing.T) {
+	// The logger is process-wide. Other service fixtures can still be draining
+	// asynchronous callbacks; capture logs in a dedicated process, never by
+	// mutating their logger in the parent test process.
+	const isolated = "HICHAT_METADATA_LOG_TEST_PROCESS"
+	if os.Getenv(isolated) != "1" {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestLogMusicMetadataFailure_EmitsSafeTimingsWithoutChangingError$", "-test.count=1")
+		cmd.Env = append(os.Environ(), isolated+"=1")
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("isolated logging assertion failed: %v\n%s", err, output)
+		}
+		return
+	}
 	var output bytes.Buffer
-	originalLogger := musicBotLogger
 	musicBotLogger = slog.New(slog.NewJSONHandler(&output, nil))
-	t.Cleanup(func() { musicBotLogger = originalLogger })
 	err := musicMetadataInterruptedError("extraction", context.DeadlineExceeded)
 	logMusicMetadataFailure("extraction", 7*time.Millisecond, 30000*time.Millisecond, err,
 		"WARNING: read timed out fetching https://example.com/?token=secret")
