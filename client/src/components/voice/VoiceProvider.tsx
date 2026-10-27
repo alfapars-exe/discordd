@@ -1,3 +1,4 @@
+import AudioPlaybackRecovery from "./AudioPlaybackRecovery";
 import {getAuthSessionSnapshot}from "../../api/authSessionEvents";
 import {useAuthorizedRoomVideos,manualNativeVideo}from "../../video/useAuthorizedRoomVideos";
 import {isPresentedVideoContext,subscribeVideoPresentation}from "../../video/videoPresentation";
@@ -242,6 +243,7 @@ function VoiceProvider({ children }: VoiceProviderProps) {
       style={{ display: "contents" }}
     >
       {isConnected && admission.publishReady && <RoomAudioRenderer />}
+      {!isNativeVoice && isConnected && admission.publishReady && admission.room && <AudioPlaybackRecovery room={admission.room} />}
       {isConnected && admission.publishReady && <VoiceStateManager />}
       {/* Floating broadcaster-self mini-preview. Lives inside LiveKitRoom
           so it can use useRoomContext / useLocalParticipant; renders only

@@ -41,6 +41,12 @@ func TestPurgeExpiredNotificationsPostgres(t *testing.T) {
 	)`); err != nil {
 		t.Fatal("create isolated notifications table")
 	}
+	if _, err := db.ExecContext(ctx, `CREATE TABLE channel_message_notification_jobs (
+		message_id TEXT PRIMARY KEY,
+		created_at TIMESTAMPTZ NOT NULL
+	)`); err != nil {
+		t.Fatal("create isolated channel notification jobs table")
+	}
 	cutoff := time.Now().UTC().Add(-90 * 24 * time.Hour)
 	for _, row := range []struct {
 		id        string
@@ -51,6 +57,9 @@ func TestPurgeExpiredNotificationsPostgres(t *testing.T) {
 	} {
 		if _, err := db.ExecContext(ctx, `INSERT INTO notifications(id,created_at) VALUES(?,?)`, row.id, row.createdAt); err != nil {
 			t.Fatalf("seed %s notification: %v", row.id, err)
+		}
+		if _, err := db.ExecContext(ctx, `INSERT INTO channel_message_notification_jobs(message_id,created_at) VALUES(?,?)`, row.id, row.createdAt); err != nil {
+			t.Fatalf("seed %s channel notification job: %v", row.id, err)
 		}
 	}
 
@@ -66,6 +75,12 @@ func TestPurgeExpiredNotificationsPostgres(t *testing.T) {
 		}
 		if got != want.count {
 			t.Errorf("%s notification count = %d, want %d", want.id, got, want.count)
+		}
+		if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM channel_message_notification_jobs WHERE message_id=?`, want.id).Scan(&got); err != nil {
+			t.Fatalf("count %s channel notification job: %v", want.id, err)
+		}
+		if got != want.count {
+			t.Errorf("%s channel notification job count = %d, want %d", want.id, got, want.count)
 		}
 	}
 }

@@ -1457,6 +1457,7 @@
     "unreadBadge": "Okunmamış rozetini göster", "unreadBadgeDesc": "Görev çubuğu, başlık ve tarayıcı simgesinde okunmamış toplamını göster.",
     "focused": "Odaktayken bildir", "focusedDesc": "HiChat'i kullanırken de masaüstü bildirimi göster.",
     "reactions": "Tepki bildirimleri", "reactionAll": "Mesajlarıma verilen tüm tepkiler", "reactionDirect": "Yalnızca özel konuşmalardaki tepkiler", "reactionNone": "Hiçbiri",
+    "channelMessages": "Kanal mesajı bildirimleri", "channelMessagesDesc": "Gövde içeriği taşımayan okunmamış kanal bildirimlerini gelen kutusu ve ayrıca etkinleştirilmiş masaüstü penceresinde göster. Kanal ve sunucu sessize alma, yoksayılan veya engellenen kullanıcılar ve okuma izni denetimleri uygulanır.",
     "stream": "Yayın bildirimleri", "streamDesc": "Uygun arkadaşlar yayın açtığında bildir.",
     "onlineFriends": "Çevrimiçi arkadaş bildirimleri", "onlineFriendsDesc": "Uygun arkadaşlar çevrimiçi olduğunda bildir.",
     "anniversary": "Arkadaşlık yıl dönümü bildirimleri", "anniversaryDesc": "Arkadaşlık yıl dönümlerinde bildir.",

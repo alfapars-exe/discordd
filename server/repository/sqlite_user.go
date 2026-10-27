@@ -15,7 +15,8 @@ import (
 )
 
 type sqliteUserRepo struct {
-	db database.TxQuerier
+	db       database.TxQuerier
+	postgres bool
 	// rawDB is the underlying *sql.DB reached by unwrapping db (see
 	// database.RawDB) — nil when constructed inside another transaction (db
 	// is already a *sql.Tx, which has nothing further to unwrap).
@@ -25,7 +26,7 @@ type sqliteUserRepo struct {
 }
 
 func NewSQLiteUserRepo(db database.TxQuerier) UserRepository {
-	return &sqliteUserRepo{db: db, rawDB: database.RawDB(db)}
+	return &sqliteUserRepo{db: db, rawDB: database.RawDB(db), postgres: database.IsPostgres(db)}
 }
 
 func (r *sqliteUserRepo) Create(ctx context.Context, user *models.User) error {

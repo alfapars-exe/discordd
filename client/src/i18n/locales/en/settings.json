@@ -1457,6 +1457,7 @@
     "unreadBadge": "Show unread badge", "unreadBadgeDesc": "Show the unread total on the taskbar, title, and browser icon.",
     "focused": "Notify while focused", "focusedDesc": "Also show desktop notifications while you are already using HiChat.",
     "reactions": "Reaction notifications", "reactionAll": "All reactions to my messages", "reactionDirect": "Private conversation reactions only", "reactionNone": "None",
+    "channelMessages": "Channel message notices", "channelMessagesDesc": "Allow unread, body-free channel message notices in your inbox and opted-in desktop overlay. Channel and server mutes, ignored or blocked users, and read access are still enforced.",
     "stream": "Stream notifications", "streamDesc": "Notify when eligible friends start a stream.",
     "onlineFriends": "Online friend notifications", "onlineFriendsDesc": "Notify when eligible friends come online.",
     "anniversary": "Friend anniversary notifications", "anniversaryDesc": "Notify on friendship anniversaries.",

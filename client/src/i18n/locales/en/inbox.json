@@ -37,7 +37,8 @@
     "friendAnniversary": "You and {{name}} have been friends for {{count}} years!",
     "friendAnniversary_one": "You and {{name}} have been friends for {{count}} year!",
     "friendAnniversary_other": "You and {{name}} have been friends for {{count}} years!",
-    "groupMessage": "{{name}} sent a group message"
+    "groupMessage": "{{name}} sent a group message",
+    "channelMessage": "{{name}} sent a channel message"
   },
   "friendRequestToast": "{{name}} sent you a friend request"
 }

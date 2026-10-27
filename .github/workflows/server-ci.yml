@@ -499,6 +499,13 @@ jobs:
       - name: Install root deps
         run: npm ci
 
+      # Install once before parallel node:test imports, without launching
+      # Chromium or requiring a graphical/sandbox configuration on the runner.
+      - name: Resolve Electron binary
+        run: |
+          node node_modules/electron/install.js
+          node -e "require('node:fs').accessSync(require('electron'))"
+
       - name: electron:test (resolve-path + regression suite)
         run: npm run electron:test
 

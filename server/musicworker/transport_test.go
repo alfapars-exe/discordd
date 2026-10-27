@@ -299,7 +299,7 @@ func TestOutputFailureCancelsRemoteRunner(t *testing.T) {
 	}
 }
 
-func TestControlDisconnectCancelsJobsAndReconnects(t *testing.T) {
+func TestControlReconnectKeepsActiveJobUntilParentCancellation(t *testing.T) {
 	started := make(chan struct{}, 1)
 	stopped := make(chan struct{}, 1)
 	s := newTestSystem(t, func(ctx context.Context, req Request, out io.Writer) error {
@@ -321,14 +321,35 @@ func TestControlDisconnectCancelsJobsAndReconnects(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("job not started")
 	}
-	s.broker.mu.Lock()
-	old := s.broker.session
-	_ = old.conn.Close()
-	s.broker.mu.Unlock()
+	for attempt := 0; attempt < 3; attempt++ {
+		s.broker.mu.Lock()
+		old := s.broker.session
+		_ = old.conn.Close()
+		s.broker.mu.Unlock()
+		waitFor(t, func() bool {
+			s.broker.mu.Lock()
+			defer s.broker.mu.Unlock()
+			return s.broker.session != nil && s.broker.session != old && s.broker.session.ready
+		})
+		select {
+		case <-stopped:
+			t.Fatal("control disconnect canceled active runner")
+		default:
+		}
+		requireCode(t, s.execute(context.Background(), Request{Operation: OperationAudio, Input: "second"}, io.Discard), "busy")
+		var output bytes.Buffer
+		if err := s.execute(context.Background(), Request{Operation: OperationMetadata, Input: "ok"}, &output); err != nil {
+			t.Fatal(err)
+		}
+		if output.String() != "ready" {
+			t.Fatal("reconnected metadata lane failed")
+		}
+	}
+	s.cancel()
 	select {
 	case <-stopped:
 	case <-time.After(time.Second):
-		t.Fatal("runner survived control disconnect")
+		t.Fatal("parent cancellation did not stop runner")
 	}
 	select {
 	case err := <-done:
@@ -338,18 +359,7 @@ func TestControlDisconnectCancelsJobsAndReconnects(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("request did not end")
 	}
-	waitFor(t, func() bool {
-		s.broker.mu.Lock()
-		defer s.broker.mu.Unlock()
-		return s.broker.session != nil && s.broker.session != old && len(s.broker.jobs) == 0
-	})
-	var output bytes.Buffer
-	if err := s.execute(context.Background(), Request{Operation: OperationMetadata, Input: "ok"}, &output); err != nil {
-		t.Fatal(err)
-	}
-	if output.String() != "ready" {
-		t.Fatal("reconnected worker returned wrong data")
-	}
+	waitFor(t, func() bool { s.broker.mu.Lock(); defer s.broker.mu.Unlock(); return len(s.broker.jobs) == 0 })
 }
 
 // This writer models a paused consumer whose socket buffers are full. The only

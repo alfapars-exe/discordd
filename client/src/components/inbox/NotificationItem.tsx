@@ -9,7 +9,7 @@ import { formatRelativePast } from "../../utils/dateFormat";
 import { notificationActorName } from "../../hooks/useNotificationNavigation";
 import type { AppNotification } from "../../types";
 import { anniversaryYears as getAnniversaryYears } from "../../utils/anniversaryNotifications";
-import { isGroupMessageNotification, isPrivateMessageNotification } from "../../utils/dmMessageNotification";
+import { isChannelMessageNotification, isGroupMessageNotification, isPrivateMessageNotification } from "../../utils/dmMessageNotification";
 
 type NotificationItemProps = {
   notification: AppNotification;
@@ -35,7 +35,7 @@ function NotificationItem({ notification: n, onOpen }: NotificationItemProps) {
   const isReaction = n.kind === "system" && n.payload.subtype === "reaction";
   const isIncomingMessage = n.kind === "system" && n.payload.action === "incoming_message";
   const headline =
-    isGroupMessageNotification(n) ? t("kind.groupMessage", { name }) : isPrivateMessageNotification(n) ? t("kind.directMessage", { name })
+    isChannelMessageNotification(n) ? t("kind.channelMessage", { name }) : isGroupMessageNotification(n) ? t("kind.groupMessage", { name }) : isPrivateMessageNotification(n) ? t("kind.directMessage", { name })
       : isIncomingMessage ? t("kind.system", { name }) : n.kind === "system" && n.payload.action === "stream_start"
       ? t("kind.streamStart", { name })
       : anniversaryYears !== null
