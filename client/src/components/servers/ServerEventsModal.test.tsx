@@ -42,7 +42,7 @@ const ok = <T,>(data: T) => ({ success: true, data });
 
 describe("ServerEventsModal", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     mocks.auth.user = { id: "u1" };
     mocks.server.activeServerId = "s1";
     mocks.members.membersByServer = { s1: [{ id: "u1", effective_permissions: 1 << 23 }] };
@@ -190,7 +190,7 @@ describe("ServerEventsModal", () => {
     render(<ServerEventsModal serverId="s1" serverName="Team" initialEventId="deep" onClose={() => undefined} />);
     const deepTarget = await screen.findByRole("heading", { name: "Deep event" });
     expect(deepTarget.closest("article")).toHaveClass("server-event-target");
-    expect(document.activeElement).toBe(deepTarget.closest("article"));
+    await waitFor(() => expect(document.activeElement).toBe(deepTarget.closest("article")));
     expect(mocks.detail.mock.calls[0][2]).toMatchObject({ expectedUserId: "u1" });
     fireEvent.click(within(deepTarget.closest("article")!).getByRole("button", { name: "eventInterestedAction" }));
     await waitFor(() => expect(mocks.rsvp).toHaveBeenCalledWith("s1", "deep", true, expect.objectContaining({ expectedUserId: "u1" })));
