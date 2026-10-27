@@ -76,7 +76,7 @@ func (r *sqlitePreferencesRepo) Upsert(ctx context.Context, userID string, parti
 		THEN user_preferences.data ELSE json('invalid stored preferences') END,
 		excluded.data), '$.voice_settings.inputDevice', '$.voice_settings.outputDevice',
 		'$.voice_settings.cameraDevice', '$.voice_settings.muteHotkeyGlobal')`
-	row := r.db.QueryRowContext(ctx,
+	rows, err := r.db.QueryContext(ctx,
 		`INSERT INTO user_preferences (user_id, data, updated_at)
 		 VALUES (?, ?, CURRENT_TIMESTAMP)
 		 ON CONFLICT(user_id) DO UPDATE SET
@@ -86,14 +86,31 @@ func (r *sqlitePreferencesRepo) Upsert(ctx context.Context, userID string, parti
 		 RETURNING user_id, data, updated_at`,
 		userID, string(filtered), models.MaxPreferencesStoredBytes,
 	)
-	var p models.UserPreferences
-	var dataStr string
-	err = row.Scan(&p.UserID, &dataStr, &p.UpdatedAt)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, fmt.Errorf("preferences storage limit exceeded: %w", pkg.ErrBadRequest)
-	}
 	if err != nil {
 		return nil, fmt.Errorf("upsert preferences: %w", err)
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return nil, fmt.Errorf("upsert preferences: %w", err)
+		}
+		return nil, fmt.Errorf("preferences storage limit exceeded: %w", pkg.ErrBadRequest)
+	}
+	var p models.UserPreferences
+	var dataStr string
+	err = rows.Scan(&p.UserID, &dataStr, &p.UpdatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("upsert preferences: %w", err)
+	}
+	// Complete the RETURNING stream before acknowledging the write. The
+	// QueryRow path discards its tail after one row; live libSQL concurrency
+	// tests observed stale immediate pooled reads on that path. Consuming EOF
+	// also surfaces late execution/close errors instead of reporting success.
+	if rows.Next() {
+		return nil, fmt.Errorf("upsert preferences returned multiple rows")
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("complete preferences write: %w", err)
 	}
 	p.SchemaVersion = models.PreferencesSchemaVersion
 	p.Data = json.RawMessage(dataStr)

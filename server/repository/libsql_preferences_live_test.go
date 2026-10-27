@@ -92,4 +92,7 @@ func TestLibSQLPreferencesLive(t *testing.T) {
 	if len(data.Sidebar) != writers {
 		t.Fatalf("concurrent updates lost: %s", got.Data)
 	}
+	t.Run("large RETURNING completion", func(t *testing.T) {
+		assertLiveLibSQLPreferenceCompletion(t, db, 200)
+	})
 }
