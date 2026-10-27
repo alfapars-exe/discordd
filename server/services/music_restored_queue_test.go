@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
@@ -151,6 +152,8 @@ func TestMusicRestoredQueueEditOrStopWinsConnectingRestore(t *testing.T) {
 		t.Run(action, func(t *testing.T) {
 			s, _, ids := restoredQueueFixture(t)
 			started, release := make(chan struct{}), make(chan struct{})
+			var releaseOnce sync.Once
+			t.Cleanup(func() { releaseOnce.Do(func() { close(release) }) })
 			s.connectBotFn = func(context.Context, *botInstance) error { close(started); <-release; return nil }
 			restore := guardedCommand(t, s, "restore")
 			done := make(chan error, 1)
@@ -162,8 +165,19 @@ func TestMusicRestoredQueueEditOrStopWinsConnectingRestore(t *testing.T) {
 			}
 			command := restore
 			command.Action, command.RequestID, command.QueueItemID = action, uuid.NewString(), ids[0]
+			restoreStripe := sha256.Sum256([]byte("actor\x00ch\x00" + restore.RequestID))
+			for attempts := 0; ; attempts++ {
+				commandStripe := sha256.Sum256([]byte("actor\x00ch\x00" + command.RequestID))
+				if commandStripe[0] != restoreStripe[0] {
+					break
+				}
+				if attempts == 16 {
+					t.Fatal("could not select a different request lock stripe")
+				}
+				command.RequestID = uuid.NewString()
+			}
 			_, editErr := s.ApplyMusicCommand(context.Background(), "actor", "ch", command)
-			close(release)
+			releaseOnce.Do(func() { close(release) })
 			if editErr != nil {
 				t.Fatal(editErr)
 			}
