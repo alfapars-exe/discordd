@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { lstatSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 
-const base = "http://127.0.0.1:9090/api";
+const apiBase = new URL("http://127.0.0.1:9090/api/");
 const runDir = resolve(process.env.E2E_RUN_DIR ?? "");
 if (!/^run-\d+-\d+-[a-f0-9]{16}$/.test(runDir.split(/[\\/]/).at(-1) ?? "")) {
   throw new Error("invalid disposable run identity");
@@ -23,7 +23,16 @@ const owner = makeAccount();
 const recipient = makeAccount();
 
 async function request(path, token, method = "GET", body) {
-  const response = await fetch(`${base}${path}`, {
+  if (!path.startsWith("/") || path.startsWith("//")) throw new Error("fixture API route must be relative");
+  const segments = path.split("/").filter(Boolean);
+  if (segments.length === 0 || segments.some((segment) => !/^[A-Za-z0-9_-]+$/.test(segment))) {
+    throw new Error("fixture API route contains an invalid segment");
+  }
+  const url = new URL(segments.map(encodeURIComponent).join("/"), apiBase);
+  if (url.origin !== apiBase.origin || !url.pathname.startsWith(apiBase.pathname)) {
+    throw new Error("fixture API route escaped the disposable loopback API");
+  }
+  const response = await fetch(url, {
     method,
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -67,10 +76,16 @@ const server = await request("/servers", ownerToken, "POST", {
   livekit_key: "e2e-test-only-key",
   livekit_secret: "e2e-test-only-secret",
 });
+if (typeof server.id !== "string" || !/^[a-f0-9]{16}$/.test(server.id)) {
+  throw new Error("fixture API returned an invalid server identifier");
+}
 const grouped = await request(`/servers/${server.id}/channels`, ownerToken);
 const channels = grouped.flatMap((group) => group.channels ?? []);
 const general = channels.find((channel) => channel.name === "general" && channel.type === "text");
 if (!general) throw new Error("fixture server has no seeded general text channel");
+if (!/^[a-f0-9]{16}$/.test(general.id) || (general.category_id && !/^[a-f0-9]{16}$/.test(general.category_id))) {
+  throw new Error("fixture API returned an invalid general channel identifier");
+}
 
 async function createChannel(name) {
   return request(`/servers/${server.id}/channels`, ownerToken, "POST", {
@@ -83,9 +98,15 @@ async function createChannel(name) {
 
 const muted = await createChannel("fixture-muted");
 const privateChannel = await createChannel("fixture-private");
+if (![muted.id, privateChannel.id].every((id) => typeof id === "string" && /^[a-f0-9]{16}$/.test(id))) {
+  throw new Error("fixture API returned an invalid fixture channel identifier");
+}
 const roles = await request(`/servers/${server.id}/roles`, ownerToken);
 const everyone = roles.find((role) => role.name.toLowerCase() === "everyone");
 if (!everyone) throw new Error("fixture server has no everyone role");
+if (typeof everyone.id !== "string" || !/^[a-f0-9]{16}$/.test(everyone.id)) {
+  throw new Error("fixture API returned an invalid everyone role identifier");
+}
 await request(`/servers/${server.id}/channels/${privateChannel.id}/permissions/${everyone.id}`, ownerToken, "PUT", {
   allow: 0,
   deny: 6144,
