@@ -1385,6 +1385,7 @@
       "attachmentsPreparing": "Your attachment archive is being prepared. This can take a few minutes.",
       "attachmentsUnavailable": "The attachment archive could not be prepared. Your JSON export is still available; prepare a new export to retry.",
     "error": "The export could not be prepared.",
+    "jobUnavailable": "This export is no longer available for this sign-in. Prepare a new export.",
     "downloadError": "The export could not be downloaded or has expired."
   },
   "accountStatus": {
