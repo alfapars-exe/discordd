@@ -1863,7 +1863,7 @@ body.high-contrast :where(button,a,input,select,[tabindex]):focus-visible { outl
 .image-lightbox-counter { position:fixed;bottom:calc(16px + var(--safe-area-inset-bottom));padding:5px 10px;border-radius:999px;background:rgba(0,0,0,.62);color:#fff;font-size:12px;cursor:default; }
 .ctx-item-wrap { position:relative; }
 .ctx-item-wrap > .ctx-item { display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%; }
-.ctx-submenu { position:absolute;left:calc(100% - 4px);top:-5px;min-width:190px;padding:6px;background:var(--bg-floating);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow-high);z-index:1; }
+.ctx-submenu { position:absolute;left:calc(100% - 4px);top:-5px;min-width:190px;padding:6px;background:var(--bg-2);border:1px solid var(--b1);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.5);z-index:1;max-height:calc(100vh - 16px);overflow-y:auto; }
 .ctx-submenu .ctx-item { width:100%;text-align:left; }
 .image-lightbox-error { color:rgba(255,255,255,0.85);font-size:14px;cursor:default; }
 .crop-modal-actions { display:flex;gap:8px; }
@@ -4057,6 +4057,7 @@ body.high-contrast :where(button,a,input,select,[tabindex]):focus-visible { outl
   }
 
   /* ─── Input Area ─── */
+  .ctx-submenu { position:static;min-width:0;margin:4px 0;max-height:40vh; }
   .input-area {
     position: sticky;
     bottom: 0;

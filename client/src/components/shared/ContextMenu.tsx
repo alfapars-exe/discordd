@@ -30,7 +30,18 @@ function ContextMenu({ state, onClose }: ContextMenuProps) {
 
   useEffect(() => {
     if (openSubmenu === null) return;
-    menuRef.current?.querySelector<HTMLButtonElement>(".ctx-submenu button:not(:disabled)")?.focus();
+    const submenu = menuRef.current?.querySelector<HTMLElement>(".ctx-submenu");
+    if (submenu && getComputedStyle(submenu).position === "absolute") {
+      const rect = submenu.getBoundingClientRect();
+      if (rect.right > window.innerWidth - 8) {
+        submenu.style.left = "auto";
+        submenu.style.right = "calc(100% - 4px)";
+      }
+      if (rect.bottom > window.innerHeight - 8) {
+        submenu.style.top = `${-5 - (rect.bottom - window.innerHeight + 8)}px`;
+      }
+    }
+    submenu?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
   }, [openSubmenu]);
 
   // Close on outside click or Escape
