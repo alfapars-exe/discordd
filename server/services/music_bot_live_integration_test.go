@@ -220,6 +220,11 @@ func TestMusicYouTubeLiveKitSmoke(t *testing.T) {
 	// An opt-in external controller can interrupt the disposable LiveKit server
 	// at this point. The ordinary smoke test never waits for this handshake.
 	if marker := os.Getenv("MUSIC_SMOKE_INTERRUPT_MARKER"); marker != "" {
+		if _, err := os.Stat(marker + ".resume"); err == nil {
+			t.Fatal("interruption resume marker already exists; use a fresh marker path")
+		} else if !os.IsNotExist(err) {
+			t.Fatalf("check interruption resume marker: %v", err)
+		}
 		if err := os.WriteFile(marker, []byte("audio-ready"), 0600); err != nil {
 			t.Fatalf("write interruption marker: %v", err)
 		}
