@@ -218,6 +218,11 @@ jobs:
       # Exercise the real upgrade path on this clean GitHub-hosted Windows
       # runner before publishing either updater feed. Never run installers on
       # a developer workstation: NSIS replaces the installed application.
+      - name: Verify Windows upgrade runner guard
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: ./scripts/test-windows-upgrade-runner-guard.ps1
+
       - name: Verify Windows install and upgrade
         if: matrix.platform == 'windows-latest'
         shell: pwsh
