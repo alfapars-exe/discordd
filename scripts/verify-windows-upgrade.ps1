@@ -108,9 +108,13 @@ function Assert-CurrentPackage {
     }
 }
 
-if ($env:GITHUB_ACTIONS -ne 'true' -or -not $IsWindows -or [string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) {
-    throw 'RUNNER_TEMP is required; this smoke test must run on a GitHub-hosted runner.'
-}
+. (Join-Path $PSScriptRoot 'windows-upgrade-runner-guard.ps1')
+Assert-GitHubHostedWindowsRunner `
+    -GitHubActions $env:GITHUB_ACTIONS `
+    -RunnerEnvironment $env:RUNNER_ENVIRONMENT `
+    -RunnerOS $env:RUNNER_OS `
+    -RunnerTemp $env:RUNNER_TEMP `
+    -IsWindowsHost $IsWindows
 
 $currentVersion = (Get-Content -LiteralPath (Join-Path $PSScriptRoot '../package.json') -Raw | ConvertFrom-Json).version
 if ($currentVersion -notmatch '^\d+\.\d+\.\d+$') {
