@@ -5,14 +5,10 @@ package repository
 import (
 	"context"
 	"errors"
-	"io/fs"
-	"net/url"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/google/uuid"
@@ -20,23 +16,7 @@ import (
 
 // This integration test requires an explicitly disposable loopback libSQL DB.
 func TestLibSQLAcceptDeclinePendingDMRace(t *testing.T) {
-	dsn := os.Getenv("HICHAT_TEST_LIBSQL_DSN")
-	if dsn == "" {
-		t.Skip("set HICHAT_TEST_LIBSQL_DSN to a disposable loopback server")
-	}
-	u, err := url.Parse(dsn)
-	if err != nil || (u.Hostname() != "127.0.0.1" && u.Hostname() != "localhost" && u.Hostname() != "::1") {
-		t.Fatal("test requires a disposable loopback libSQL server")
-	}
-	migrations, err := fs.Sub(database.EmbeddedMigrations, "migrations")
-	if err != nil {
-		t.Fatal(err)
-	}
-	db, err := database.New(dsn, migrations)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := newLiveLibSQLTestDB(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()

@@ -14,7 +14,8 @@ import (
 	"github.com/argeinfina/hichat/pkg"
 )
 
-func TestDeclinePendingDeletesAtomicallyAndReturnsPostCommitData(t *testing.T) {
+func newDMDeclineFixture(t *testing.T) (*database.DB, DMRepository, *models.DMChannel, *models.DMMessage) {
+	t.Helper()
 	db := newDMDeclineFKOffDB(t)
 	seedDMUsers(t, db)
 	ctx := context.Background()
@@ -30,13 +31,19 @@ func TestDeclinePendingDeletesAtomicallyAndReturnsPostCommitData(t *testing.T) {
 	if _, err := db.Conn.ExecContext(ctx, `INSERT INTO notifications(id,user_id,kind,dm_channel_id) VALUES('request-n',?,'dm_request',?)`, dmBob, channel.ID); err != nil {
 		t.Fatal(err)
 	}
+	seedDMDeclineDependents(t, db, channel.ID, message.ID)
+	return db, repo, channel, message
+}
+
+func TestDeclinePendingDeletesAtomicallyAndReturnsPostCommitData(t *testing.T) {
+	db, repo, channel, message := newDMDeclineFixture(t)
+	ctx := context.Background()
 	if _, err := db.Conn.ExecContext(ctx, `INSERT INTO dm_reads(user_id,dm_channel_id) VALUES(?,?)`, dmBob, channel.ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Conn.ExecContext(ctx, `INSERT INTO saved_messages(id,user_id,dm_message_id) VALUES('saved-n',?,?)`, dmBob, message.ID); err != nil {
 		t.Fatal(err)
 	}
-	seedDMDeclineDependents(t, db, channel.ID, message.ID)
 
 	changed, files, ids, err := repo.(PendingDMDecliner).DeclinePending(ctx, channel.ID, dmBob)
 	if err != nil || !changed {
@@ -77,22 +84,8 @@ func TestDeclinePendingDeletesAtomicallyAndReturnsPostCommitData(t *testing.T) {
 }
 
 func TestDeclinePendingRollsBackAllRowsOnDeleteFailure(t *testing.T) {
-	db := newDMDeclineFKOffDB(t)
-	seedDMUsers(t, db)
+	db, repo, channel, message := newDMDeclineFixture(t)
 	ctx := context.Background()
-	repo := NewSQLiteDMRepo(wrapForRepo(db))
-	channel := newDMChannel(t, ctx, repo, dmAlice, dmBob, models.DMStatusPending)
-	if err := repo.SetInitiatedBy(ctx, channel.ID, dmAlice); err != nil {
-		t.Fatal(err)
-	}
-	message := newDMMessage(t, ctx, repo, channel.ID, dmAlice, "hello")
-	if err := repo.CreateAttachment(ctx, &models.DMAttachment{DMMessageID: message.ID, Filename: "x.png", FileURL: "/api/uploads/x.png"}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Conn.ExecContext(ctx, `INSERT INTO notifications(id,user_id,kind,dm_channel_id) VALUES('request-n',?,'dm_request',?)`, dmBob, channel.ID); err != nil {
-		t.Fatal(err)
-	}
-	seedDMDeclineDependents(t, db, channel.ID, message.ID)
 	if _, err := db.Conn.ExecContext(ctx, `CREATE TRIGGER fail_dm_message_delete BEFORE DELETE ON dm_messages BEGIN SELECT RAISE(ABORT, 'forced delete failure'); END`); err != nil {
 		t.Fatal(err)
 	}
