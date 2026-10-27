@@ -502,7 +502,9 @@ jobs:
       # Resolve Electron once before node:test starts its files in parallel.
       # Otherwise concurrent imports can race Electron's lazy binary install.
       - name: Resolve Electron binary
-        run: npx electron --version
+        run: |
+          node node_modules/electron/install.js
+          node -e "require('node:fs').accessSync(require('electron'))"
 
       - name: electron:test (resolve-path + regression suite)
         run: npm run electron:test
