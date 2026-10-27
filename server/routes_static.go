@@ -4,6 +4,7 @@ package main
 
 import (
 	"fmt"
+	"io/fs"
 	"net"
 	"net/http"
 	"net/url"
@@ -191,4 +192,31 @@ func setStaticCacheHeaders(w http.ResponseWriter, path string) {
 		return
 	}
 	w.Header().Set("Cache-Control", "no-cache")
+}
+
+// Only client navigation may fall back to HTML. A stale hashed bundle must
+// fail as a resource, so normal import-error recovery can fetch the new index.
+func serveFrontend(w http.ResponseWriter, r *http.Request, frontendFS fs.FS, indexHTMLWeb []byte) {
+	path := strings.TrimPrefix(r.URL.Path, "/")
+	if path == "" {
+		path = "index.html"
+	}
+	if f, err := frontendFS.Open(path); err == nil {
+		_ = f.Close() // existence probe; FileServer opens the actual response
+		setStaticCacheHeaders(w, path)
+		http.FileServer(http.FS(frontendFS)).ServeHTTP(w, r)
+		return
+	}
+	if strings.HasPrefix(path, "assets/") {
+		w.Header().Set("Cache-Control", "no-store")
+		http.NotFound(w, r)
+		return
+	}
+	if len(indexHTMLWeb) == 0 {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache")
+	_, _ = w.Write(indexHTMLWeb)
 }
