@@ -59,8 +59,13 @@ func RunWorker(ctx context.Context, config WorkerConfig, runner Runner) error {
 	if delay > time.Minute {
 		delay = time.Minute
 	}
+	// A control socket can be renewed while an authenticated data socket is
+	// still draining. Jobs and quotas belong to this worker, not that socket.
+	ctx, cancel := context.WithCancel(ctx)
+	jobs := workerJobs{audioSlots: make(chan struct{}, 1), metadataSlots: make(chan struct{}, 1)}
+	defer func() { cancel(); jobs.wg.Wait() }()
 	for {
-		err = runSession(ctx, controlURL, jobURL, config.Token, runner)
+		err = runSession(ctx, controlURL, jobURL, config.Token, runner, &jobs)
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -85,7 +90,7 @@ func dialWorker(ctx context.Context, endpoint string, headers http.Header) (*web
 		_ = response.Body.Close()
 	}
 	if err != nil {
-		if response != nil && response.StatusCode == http.StatusUnauthorized {
+		if response != nil && (response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden) {
 			return nil, &Error{Code: "forbidden"}
 		}
 		return nil, &Error{Code: "network"}
@@ -101,7 +106,13 @@ func validID(id string) bool {
 	return err == nil
 }
 
-func runSession(parent context.Context, controlURL, jobURL *url.URL, token string, runner Runner) error {
+type workerJobs struct {
+	wg            sync.WaitGroup
+	audioSlots    chan struct{}
+	metadataSlots chan struct{}
+}
+
+func runSession(parent context.Context, controlURL, jobURL *url.URL, token string, runner Runner, jobs *workerJobs) error {
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 	header := http.Header{"Authorization": []string{"Bearer " + token}}
@@ -122,10 +133,6 @@ func runSession(parent context.Context, controlURL, jobURL *url.URL, token strin
 	slog.Info("music worker connected")
 	defer slog.Info("music worker disconnected")
 	go heartbeat(conn, ctx.Done())
-	var wg sync.WaitGroup
-	defer func() { cancel(); _ = conn.Close(); wg.Wait() }()
-	audioSlots := make(chan struct{}, 1)
-	metadataSlots := make(chan struct{}, 1)
 	for {
 		var message wireMessage
 		if conn.ReadJSON(&message) != nil {
@@ -134,9 +141,9 @@ func runSession(parent context.Context, controlURL, jobURL *url.URL, token strin
 		if message.Type != "job" || !validID(message.ID) || message.Request == nil || message.Request.validate() != nil {
 			return &Error{Code: "unknown"}
 		}
-		slots := metadataSlots
+		slots := jobs.metadataSlots
 		if message.Request.Operation == OperationAudio {
-			slots = audioSlots
+			slots = jobs.audioSlots
 		}
 		// The broker may observe the final frame before the previous callback
 		// finishes reaping its subprocess. Wait for that slot instead of
@@ -146,11 +153,11 @@ func runSession(parent context.Context, controlURL, jobURL *url.URL, token strin
 		case <-ctx.Done():
 			return ctx.Err()
 		}
-		wg.Add(1)
+		jobs.wg.Add(1)
 		go func(message wireMessage, slots chan struct{}) {
-			defer wg.Done()
+			defer jobs.wg.Done()
 			defer func() { <-slots }()
-			runJob(ctx, jobURL, token, hello.Session, message, runner)
+			runJob(parent, jobURL, token, hello.Session, message, runner)
 		}(message, slots)
 	}
 }
