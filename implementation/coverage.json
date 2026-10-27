@@ -1618,6 +1618,13 @@
           "result": "passed",
           "verified_at": "2026-10-22T21:45:15Z",
           "summary": "Automated coverage plus one local SQLite-backed browser save/failure/retry/reload scenario. Full independent-device, installed-Windows and live-LibSQL acceptance is still outstanding."
+        },
+        {
+          "kind": "integration",
+          "path": "implementation/verification/p1-libsql-preferences-5853b2d0-2026-10-27.json",
+          "result": "passed",
+          "verified_at": "2026-10-27T01:22:46Z",
+          "summary": "Disposable loopback libSQL migration, nested merge and eight concurrent updates passed; hosted service and device acceptance remain open."
         }
       ],
       "remaining_acceptance": [
