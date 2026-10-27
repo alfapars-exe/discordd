@@ -229,6 +229,20 @@ func TestMusicMetadataStderr_RemembersErrorOutsideTail(t *testing.T) {
 	}
 }
 
+func TestMusicMetadataStderr_ReportsHiddenPlaylistItems(t *testing.T) {
+	stderr := newMusicMetadataStderr(32)
+	_, _ = stderr.Write([]byte("WARNING: [youtube:tab] YouTube said: INFO - 1 unavailable video is hidden\n"))
+	_, _ = stderr.Write([]byte(strings.Repeat("WARNING: benign\n", 20)))
+	if !stderr.SawError() {
+		t.Fatal("lost observed hidden-item warning after stderr tail overflow")
+	}
+	clean := newMusicMetadataStderr(32)
+	_, _ = clean.Write([]byte("WARNING: [youtube:tab] transient network retry\n"))
+	if clean.SawError() {
+		t.Fatal("unrelated warning marked as partial playlist")
+	}
+}
+
 func TestParseMusicMetadata_RejectsOversizedLine(t *testing.T) {
 	_, err := parseMusicMetadata(strings.NewReader(strings.Repeat("x", 256<<10)), "u", "n")
 	if err == nil {

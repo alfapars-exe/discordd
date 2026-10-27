@@ -41,7 +41,7 @@ type musicMetadataBuffer struct {
 }
 
 // musicMetadataStderr retains the usual bounded diagnostic tail while also
-// remembering whether yt-dlp emitted an ERROR line. That signal is kept
+// remembering observed errors or hidden-item warnings. That signal is kept
 // separately because the relevant line can scroll out of the tail when a
 // playlist produces many diagnostics.
 type musicMetadataStderr struct {
@@ -58,15 +58,14 @@ func (s *musicMetadataStderr) Write(p []byte) (int, error) {
 	n, err := s.tail.Write(p)
 	for _, b := range p {
 		if b == '\n' {
-			if bytes.HasPrefix(bytes.TrimSpace(s.linePrefix), []byte("ERROR:")) {
+			if musicMetadataPartialDiagnostic(s.linePrefix) {
 				s.sawError = true
 			}
 			s.linePrefix = s.linePrefix[:0]
 			continue
 		}
-		// Only a short line prefix is needed to recognize "ERROR:". Keeping
-		// this bounded avoids duplicating arbitrarily long provider output.
-		if len(s.linePrefix) < len("ERROR:")+8 {
+		// Bound the prefix while retaining YouTube's hidden-item warnings.
+		if len(s.linePrefix) < 512 {
 			s.linePrefix = append(s.linePrefix, b)
 		}
 	}
@@ -76,7 +75,18 @@ func (s *musicMetadataStderr) Write(p []byte) (int, error) {
 func (s *musicMetadataStderr) String() string { return s.tail.String() }
 
 func (s *musicMetadataStderr) SawError() bool {
-	return s.sawError || bytes.HasPrefix(bytes.TrimSpace(s.linePrefix), []byte("ERROR:"))
+	return s.sawError || musicMetadataPartialDiagnostic(s.linePrefix)
+}
+
+func musicMetadataPartialDiagnostic(line []byte) bool {
+	line = bytes.TrimSpace(line)
+	if bytes.HasPrefix(line, []byte("ERROR:")) {
+		return true
+	}
+	// yt-dlp may retry a playlist after YouTube reports hidden unavailable
+	// videos; the retry can succeed, so the UI presents this as a possibility.
+	return bytes.HasPrefix(line, []byte("WARNING: [youtube:tab] YouTube said:")) &&
+		bytes.Contains(line, []byte("unavailable video")) && bytes.Contains(line, []byte("hidden"))
 }
 
 type musicMetadataResult struct {
