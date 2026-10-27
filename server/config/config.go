@@ -17,6 +17,7 @@ type Config struct {
 	JWT                          JWTConfig
 	LiveKit                      LiveKitConfig
 	Upload                       UploadConfig
+	DataExport                   DataExportConfig
 	Email                        EmailConfig
 	DiagSMTP                     DiagSMTPConfig
 	Klipy                        KlipyConfig
@@ -94,6 +95,13 @@ type LiveKitConfig struct {
 type UploadConfig struct {
 	Dir     string
 	MaxSize int64 // bytes (default: 25MB)
+}
+
+// DataExportConfig controls private, short-lived personal data export files.
+type DataExportConfig struct {
+	Dir             string
+	MaxArchiveBytes int64
+	MaxTotalBytes   int64
 }
 
 // BackupConfig — disaster-recovery snapshots to a Hugging Face Storage
@@ -193,6 +201,14 @@ func Load() (*Config, error) {
 	maxSize, err := strconv.ParseInt(getEnv("UPLOAD_MAX_SIZE", "26214400"), 10, 64) // 25MB
 	if err != nil {
 		return nil, fmt.Errorf("invalid UPLOAD_MAX_SIZE: %w", err)
+	}
+	maxExportArchiveBytes, err := strconv.ParseInt(getEnv("DATA_EXPORT_MAX_ARCHIVE_BYTES", "536870912"), 10, 64) // 512 MiB
+	if err != nil || maxExportArchiveBytes <= 0 {
+		return nil, fmt.Errorf("DATA_EXPORT_MAX_ARCHIVE_BYTES must be a positive byte count")
+	}
+	maxTotalExportBytes, err := strconv.ParseInt(getEnv("DATA_EXPORT_MAX_TOTAL_ARCHIVE_BYTES", "2147483648"), 10, 64) // 2 GiB
+	if err != nil || maxTotalExportBytes <= 0 {
+		return nil, fmt.Errorf("DATA_EXPORT_MAX_TOTAL_ARCHIVE_BYTES must be a positive byte count")
 	}
 
 	// Diagnostics-report SMTP port (Gmail STARTTLS = 587). A bad value falls
@@ -360,6 +376,11 @@ func Load() (*Config, error) {
 		Upload: UploadConfig{
 			Dir:     getEnv("UPLOAD_DIR", "./data/uploads"),
 			MaxSize: maxSize,
+		},
+		DataExport: DataExportConfig{
+			Dir:             getEnv("DATA_EXPORT_DIR", "./data/exports"),
+			MaxArchiveBytes: maxExportArchiveBytes,
+			MaxTotalBytes:   maxTotalExportBytes,
 		},
 		Email: EmailConfig{
 			ResendAPIKey: getEnv("RESEND_API_KEY", ""),

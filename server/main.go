@@ -142,9 +142,14 @@ func main() {
 	if err := os.MkdirAll(cfg.Upload.Dir, 0o750); err != nil {
 		logx.Fatal("boot", "failed to create upload directory", err)
 	}
+	if err := repository.EnsureDataExportStorage(cfg.Upload.Dir, cfg.DataExport.Dir); err != nil {
+		logx.Fatal("boot", "invalid private data export storage", err)
+	}
 
 	// 5. Repository layer
-	repos := initRepositories(db.Conn)
+	repos := initRepositories(db.Conn, repository.DataExportStorageOptions{
+		UploadDir: cfg.Upload.Dir, ArchiveDir: cfg.DataExport.Dir, MaxArchiveBytes: cfg.DataExport.MaxArchiveBytes, MaxTotalArchiveBytes: cfg.DataExport.MaxTotalBytes,
+	})
 
 	// 6. Encryption key
 	encryptionKey, err := crypto.DeriveKey(cfg.EncryptionKey)
@@ -162,6 +167,12 @@ func main() {
 	repairOrphanedCosmetics(db, cfg.Upload.Dir)
 	resetStalePresence(db)
 	purgeExpiredNotifications(db)
+	if err := repos.DataExport.PurgeExpired(context.Background()); err != nil {
+		bootLogger.Warn("expired data export cleanup failed", "err", pkg.ErrText(err))
+	}
+	if err := repos.DataExport.StartPendingArchives(context.Background()); err != nil {
+		bootLogger.Warn("data export archive recovery failed", "err", pkg.ErrText(err))
+	}
 	seedPlatformLiveKit(db, repos, cfg, encryptionKey)
 	// PLATFORM_ADMIN_USERNAME is read from env so the "who's admin?"
 	// decision lives in HF Space secrets, not in committed source.
@@ -270,7 +281,7 @@ func main() {
 	// link-preview cache rows (audit P1-BD-04: DeleteExpired had no caller,
 	// so both tables grew without bound). The same pass runs a read-only
 	// orphan census; it logs a warning per affected table and deletes nothing.
-	stopMaintenance := startMaintenanceSweeper(repos.Session, repos.LinkPreview, db.Conn, time.Hour)
+	stopMaintenance := startMaintenanceSweeper(repos.Session, repos.LinkPreview, db.Conn, time.Hour, repos.DataExport)
 	stopAuthMaintenance := services.StartAuthMaintenance(context.Background(), svcs.Auth)
 	defer stopAuthMaintenance()
 	stopAccountAssetCleanup := svcs.AccountAssetCleanup.Start(context.Background())
@@ -476,6 +487,11 @@ func main() {
 
 	stopRuntimeStats()
 	stopMaintenance()
+	archiveShutdownCtx, archiveShutdownCancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	if err := repos.DataExport.StopArchiveWorker(archiveShutdownCtx); err != nil {
+		bootLogger.Warn("data export archive worker shutdown failed", "err", pkg.ErrText(err))
+	}
+	archiveShutdownCancel()
 	stopAuthMaintenance()
 	stopAccountAssetCleanup()
 	stopMessageReminders()

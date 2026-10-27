@@ -163,6 +163,7 @@ func startMaintenanceSweeper(
 	previews repository.LinkPreviewRepository,
 	conn *sql.DB,
 	interval time.Duration,
+	dataExports ...repository.DataExportRepository,
 ) func() {
 	stop := make(chan struct{})
 	go func() {
@@ -175,6 +176,19 @@ func startMaintenanceSweeper(
 			defer cancel()
 			if err := sessions.DeleteExpired(ctx); err != nil {
 				logger.Error("expired session sweep failed", "err", pkg.ErrText(err))
+			}
+			for _, exports := range dataExports {
+				if exports == nil {
+					continue
+				}
+				if err := exports.PurgeExpired(ctx); err != nil {
+					logger.Error("expired data export cleanup failed", "err", pkg.ErrText(err))
+				}
+				// Re-kick durable pending archive jobs after transient worker/DB
+				// failures. The repository owns single-worker coordination.
+				if err := exports.StartPendingArchives(ctx); err != nil {
+					logger.Error("data export archive worker recovery failed", "err", pkg.ErrText(err))
+				}
 			}
 			deleted, err := previews.DeleteExpired(ctx, time.Now().Add(-linkPreviewRetention))
 			if err != nil {

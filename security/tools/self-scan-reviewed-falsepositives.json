@@ -4,18 +4,18 @@
     {
       "rule": "go.sql-concat",
       "path": "server/database/postgres_import.go",
-      "file_sha256": "e082836bd5e8bbcc428012b647093086b2bafd9860ae8e6c63f67e02c58a6e5d",
+      "file_sha256": "ecbd55138aef9e268e1fc5709dd6603ee73f5a8401234f06fd508b1f4d9e913a",
       "line_sha256": "cb03e402039c6d4ee5383d25d325e12adbc40d9d1b9aaee38d4ae6c9d5bd62d8",
       "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
-      "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
+      "proof_ref": "server/database/postgres_import.go:33-45,58-68,98-128,150-180,268;server/database/postgres_import_test.go:48-78,146-164"
     },
     {
       "rule": "go.sql-concat",
       "path": "server/database/postgres_import_test.go",
-      "file_sha256": "d74f8a0e27ec7714788f566749601207d7d9c2f3cb154266a3a3f16d9cff5c1b",
+      "file_sha256": "82020a66835978210c7b2eb83245c38cb97135347bfe2528c08e2ee8f348bc39",
       "line_sha256": "fb9879437de4b36ace22b67076b4aba070f0d691abc561263c44310bda9993da",
       "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
-      "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
+      "proof_ref": "server/database/postgres_import.go:33-45,58-68,98-128,150-180,268;server/database/postgres_import_test.go:48-78,146-164"
     },
     {
       "rule": "go.sql-concat",
@@ -212,26 +212,26 @@
     {
       "rule": "go.sql-sprintf",
       "path": "server/database/postgres_import.go",
-      "file_sha256": "e082836bd5e8bbcc428012b647093086b2bafd9860ae8e6c63f67e02c58a6e5d",
+      "file_sha256": "ecbd55138aef9e268e1fc5709dd6603ee73f5a8401234f06fd508b1f4d9e913a",
       "line_sha256": "2c2e6ec94ef6a617bbb5c617d66f58fef056233b0af207b0cd077262fa8d74b0",
       "reason": "The matched formatting does not interpolate attacker-controlled SQL: repository snapshot identifiers are schema-derived, allowlisted/quoted, and row values stay bound; test timestamp formatting is passed only to a placeholder.",
-      "proof_ref": "server/database/postgres_import.go:23-30,37-78,239-249;server/database/postgres_import_test.go;server/repository/sqlite_group_dm_unread_anchor_test.go:80-87"
+      "proof_ref": "server/database/postgres_import.go:33-45,58-68,98-128,150-180,268;server/database/postgres_import_test.go:48-78,146-164"
     },
     {
       "rule": "go.sql-sprintf",
       "path": "server/database/postgres_import.go",
-      "file_sha256": "e082836bd5e8bbcc428012b647093086b2bafd9860ae8e6c63f67e02c58a6e5d",
+      "file_sha256": "ecbd55138aef9e268e1fc5709dd6603ee73f5a8401234f06fd508b1f4d9e913a",
       "line_sha256": "c51c6db83e52d23399cc118e3b7dd183b50a79b7e45683d8afd98927ea1c0900",
       "reason": "The matched formatting does not interpolate attacker-controlled SQL: repository snapshot identifiers are schema-derived, allowlisted/quoted, and row values stay bound; test timestamp formatting is passed only to a placeholder.",
-      "proof_ref": "server/database/postgres_import.go:23-30,37-78,239-249;server/database/postgres_import_test.go;server/repository/sqlite_group_dm_unread_anchor_test.go:80-87"
+      "proof_ref": "server/database/postgres_import.go:33-45,58-68,98-128,150-180,268;server/database/postgres_import_test.go:48-78,146-164"
     },
     {
       "rule": "go.sql-sprintf",
       "path": "server/database/postgres_import.go",
-      "file_sha256": "e082836bd5e8bbcc428012b647093086b2bafd9860ae8e6c63f67e02c58a6e5d",
+      "file_sha256": "ecbd55138aef9e268e1fc5709dd6603ee73f5a8401234f06fd508b1f4d9e913a",
       "line_sha256": "ed507a732f31e71d68131ccbd9280584b694766f6e0dd3715413f5a9562f9fb4",
       "reason": "The matched formatting does not interpolate attacker-controlled SQL: repository snapshot identifiers are schema-derived, allowlisted/quoted, and row values stay bound; test timestamp formatting is passed only to a placeholder.",
-      "proof_ref": "server/database/postgres_import.go:23-30,37-78,239-249;server/database/postgres_import_test.go;server/repository/sqlite_group_dm_unread_anchor_test.go:80-87"
+      "proof_ref": "server/database/postgres_import.go:33-45,58-68,98-128,150-180,268;server/database/postgres_import_test.go:48-78,146-164"
     },
     {
       "rule": "go.sql-sprintf",

@@ -17,6 +17,7 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -56,6 +57,8 @@ type stubMemberService struct {
 	profileUserID string
 	profile       *models.UserProfile
 	profileErr    error
+	memberList    []models.MemberWithRoles
+	member        *models.MemberWithRoles
 }
 
 type stubProfileAudiencePolicy struct {
@@ -66,13 +69,23 @@ type stubProfileAudiencePolicy struct {
 func (s stubProfileAudiencePolicy) CanView(context.Context, string, string) (bool, error) {
 	return s.allowed, s.err
 }
+func (s stubProfileAudiencePolicy) CanViewInServer(_ context.Context, _, _, _ string) (bool, error) {
+	return s.allowed, s.err
+}
+func (s stubProfileAudiencePolicy) CanViewInServerMany(_ context.Context, _ string, ids []string, _ string) (map[string]bool, error) {
+	result := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		result[id] = s.allowed
+	}
+	return result, s.err
+}
 
 func (s *stubMemberService) GetAll(context.Context, string) ([]models.MemberWithRoles, error) {
-	return nil, nil
+	return s.memberList, nil
 }
 
 func (s *stubMemberService) GetByID(context.Context, string, string) (*models.MemberWithRoles, error) {
-	return nil, nil
+	return s.member, nil
 }
 
 func (s *stubMemberService) UpdateProfile(_ context.Context, _ string, req *models.UpdateProfileRequest) (*models.MemberWithRoles, error) {
@@ -96,7 +109,7 @@ func (s *stubMemberService) UpdatePresence(context.Context, string, models.UserS
 }
 
 func (s *stubMemberService) ModifyRoles(context.Context, string, string, string, []string) (*models.MemberWithRoles, error) {
-	return nil, nil
+	return s.member, nil
 }
 
 func (s *stubMemberService) Kick(context.Context, string, string, string) error { return nil }
@@ -133,7 +146,7 @@ func (s *stubMemberService) IsTimedOut(context.Context, string, string) (*models
 }
 
 func (s *stubMemberService) SetNickname(context.Context, string, string, string, *string) (*models.MemberWithRoles, error) {
-	return nil, nil
+	return s.member, nil
 }
 
 func (s *stubMemberService) SetPermInvalidator(services.PermissionInvalidator)     {}
@@ -522,6 +535,124 @@ func TestUpdateProfile_ProfileFields_RealService(t *testing.T) {
 		}
 	})
 }
+
+func TestMemberProfileAudienceFiltersRosterAndSingleMember(t *testing.T) {
+	bio, pronouns, accent, animated, banner, bannerAnimated := "bio", "they/them", "#123456", "/animated", "/banner", "/banner-animated"
+	display, avatar := "Display", "/avatar"
+	makeMember := func(id string) models.MemberWithRoles {
+		return models.MemberWithRoles{
+			ID: id, Username: "user-" + id, DisplayName: &display, AvatarURL: &avatar,
+			AvatarAnimatedURL: &animated, BannerURL: &banner, BannerAnimatedURL: &bannerAnimated,
+			Bio: &bio, Pronouns: &pronouns, AccentColor: &accent,
+		}
+	}
+
+	t.Run("roster hides optional profile fields but preserves member identity", func(t *testing.T) {
+		stub := &stubMemberService{memberList: []models.MemberWithRoles{makeMember("target")}}
+		req := httptest.NewRequest(http.MethodGet, "/api/servers/server/members", nil)
+		req = req.WithContext(context.WithValue(req.Context(), ServerIDContextKey, "server"))
+		req = req.WithContext(context.WithValue(req.Context(), UserContextKey, &models.User{ID: "viewer"}))
+		rec := httptest.NewRecorder()
+		NewMemberHandler(stub, stubProfileAudiencePolicy{allowed: false}).List(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
+		}
+		var got []models.MemberWithRoles
+		decodeEnvelope(t, rec, &got)
+		if len(got) != 1 || got[0].Bio != nil || got[0].Pronouns != nil || got[0].AccentColor != nil || got[0].BannerURL != nil || got[0].BannerAnimatedURL != nil || got[0].AvatarAnimatedURL != nil {
+			t.Fatalf("restricted profile fields leaked: %+v", got)
+		}
+		if got[0].Username != "user-target" || got[0].DisplayName == nil || *got[0].DisplayName != display || got[0].AvatarURL == nil || *got[0].AvatarURL != avatar {
+			t.Fatalf("base member identity was unexpectedly hidden: %+v", got[0])
+		}
+	})
+
+	t.Run("single member uses server-scoped decision", func(t *testing.T) {
+		stub := &stubMemberService{member: ptrMember(makeMember("target"))}
+		req := httptest.NewRequest(http.MethodGet, "/api/servers/server/members/target", nil)
+		req.SetPathValue("id", "target")
+		req = req.WithContext(context.WithValue(req.Context(), ServerIDContextKey, "server"))
+		req = req.WithContext(context.WithValue(req.Context(), UserContextKey, &models.User{ID: "viewer"}))
+		rec := httptest.NewRecorder()
+		NewMemberHandler(stub, stubProfileAudiencePolicy{allowed: false}).Get(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
+		}
+		var got models.MemberWithRoles
+		decodeEnvelope(t, rec, &got)
+		if got.Bio != nil || got.BannerURL != nil || got.Pronouns != nil || got.AccentColor != nil || got.AvatarAnimatedURL != nil {
+			t.Fatalf("restricted profile fields leaked: %+v", got)
+		}
+	})
+
+	t.Run("missing policy fails closed for roster profile fields", func(t *testing.T) {
+		stub := &stubMemberService{memberList: []models.MemberWithRoles{makeMember("target")}}
+		req := httptest.NewRequest(http.MethodGet, "/api/servers/server/members", nil)
+		req = req.WithContext(context.WithValue(req.Context(), ServerIDContextKey, "server"))
+		rec := httptest.NewRecorder()
+		NewMemberHandler(stub).List(rec, req)
+		var got []models.MemberWithRoles
+		decodeEnvelope(t, rec, &got)
+		if rec.Code != http.StatusOK || len(got) != 1 || got[0].Bio != nil || got[0].BannerURL != nil {
+			t.Fatalf("missing policy did not fail closed: status=%d members=%+v", rec.Code, got)
+		}
+	})
+}
+
+func TestMemberMutationResponsesRespectProfileAudience(t *testing.T) {
+	bio := "sensitive bio"
+	newMember := func() *models.MemberWithRoles { return &models.MemberWithRoles{ID: "target", Username: "user", Bio: &bio} }
+	for _, tt := range []struct {
+		name string
+		run  func(http.ResponseWriter, *http.Request, *MemberHandler)
+		body string
+	}{
+		{name: "role mutation", body: `{"role_ids":["role-1"]}`, run: func(w http.ResponseWriter, r *http.Request, h *MemberHandler) { h.ModifyRoles(w, r) }},
+		{name: "nickname mutation", body: `{"nickname":"new nick"}`, run: func(w http.ResponseWriter, r *http.Request, h *MemberHandler) { h.SetNickname(w, r) }},
+	} {
+		t.Run(tt.name+" hides fields from denied viewer", func(t *testing.T) {
+			stub := &stubMemberService{member: newMember()}
+			req := newModerationRequest(http.MethodPatch, "/api/servers/server/members/target", tt.body, "server", "target")
+			rec := httptest.NewRecorder()
+			tt.run(rec, req, NewMemberHandler(stub, stubProfileAudiencePolicy{allowed: false}))
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
+			}
+			var got models.MemberWithRoles
+			decodeEnvelope(t, rec, &got)
+			if got.Bio != nil || !got.ProfileFieldsRedacted {
+				t.Fatalf("mutation leaked profile fields or missed invalidation marker: %+v", got)
+			}
+		})
+		t.Run(tt.name+" preserves fields for allowed viewer", func(t *testing.T) {
+			stub := &stubMemberService{member: newMember()}
+			req := newModerationRequest(http.MethodPatch, "/api/servers/server/members/target", tt.body, "server", "target")
+			rec := httptest.NewRecorder()
+			tt.run(rec, req, NewMemberHandler(stub, stubProfileAudiencePolicy{allowed: true}))
+			var got models.MemberWithRoles
+			decodeEnvelope(t, rec, &got)
+			if rec.Code != http.StatusOK || got.Bio == nil || *got.Bio != bio {
+				t.Fatalf("allowed mutation response was changed: status=%d member=%+v", rec.Code, got)
+			}
+		})
+		t.Run(tt.name+" fails closed on policy read error", func(t *testing.T) {
+			stub := &stubMemberService{member: newMember()}
+			req := newModerationRequest(http.MethodPatch, "/api/servers/server/members/target", tt.body, "server", "target")
+			rec := httptest.NewRecorder()
+			tt.run(rec, req, NewMemberHandler(stub, stubProfileAudiencePolicy{allowed: true, err: errors.New("preferences unavailable")}))
+			if rec.Code != http.StatusOK {
+				t.Fatalf("successful mutation became an HTTP error: status=%d body=%q", rec.Code, rec.Body.String())
+			}
+			var got models.MemberWithRoles
+			decodeEnvelope(t, rec, &got)
+			if got.Bio != nil || !got.ProfileFieldsRedacted {
+				t.Fatalf("policy failure leaked profile fields: %+v", got)
+			}
+		})
+	}
+}
+
+func ptrMember(member models.MemberWithRoles) *models.MemberWithRoles { return &member }
 
 func TestGetUserProfileHandler(t *testing.T) {
 	newReq := func(userID string) *http.Request {

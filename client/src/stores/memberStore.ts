@@ -59,6 +59,7 @@ type MemberState = {
   handleMemberJoin: (serverId: string, member: MemberWithRoles) => void;
   handleMemberLeave: (serverId: string, userId: string) => void;
   handleMemberUpdate: (serverId: string, member: MemberWithRoles) => void;
+  handleProfileAudienceInvalidated: (userId: string) => void;
   handleRoleCreate: (serverId: string, role: Role) => void;
   handleRoleUpdate: (serverId: string, role: Role) => void;
   handleRoleDelete: (serverId: string, roleId: string) => void;
@@ -80,6 +81,8 @@ const EMPTY_MEMBERS: MemberWithRoles[] = [];
 /** Tracks in-flight fetches to prevent duplicate requests */
 const fetchingServers = new Set<string>();
 const fetchVersions = new Map<string, number>();
+const privacyRefreshServers = new Set<string>();
+const privacyRefreshDirtyServers = new Set<string>();
 
 /**
  * Pending expiry timers, keyed by `${serverId}:${userId}`. Lives in
@@ -118,6 +121,12 @@ function clearAllTimers(): void {
   timerHandles.clear();
 }
 
+function finishPrivacyRefresh(serverId: string): void {
+  if (!privacyRefreshServers.has(serverId)) return;
+  privacyRefreshServers.delete(serverId);
+  privacyRefreshDirtyServers.delete(serverId);
+}
+
 /**
  * Drop every account-owned cache synchronously when identity or token
  * generation changes. In-flight responses are invalidated by the per-server
@@ -139,6 +148,8 @@ function synchronizeAuthScope(): void {
   ]);
   for (const serverId of serverIds) fetchVersions.set(serverId, (fetchVersions.get(serverId) ?? 0) + 1);
   fetchingServers.clear();
+  privacyRefreshServers.clear();
+  privacyRefreshDirtyServers.clear();
   clearAllTimers();
   useMemberStore.setState({
     ownerId,
@@ -215,6 +226,15 @@ export const useMemberStore = create<MemberState>((set, get) => ({
 
     if (fetchVersions.get(serverId) !== version) return;
 
+    // A second privacy invalidation during this read means its snapshot may
+    // predate the revocation. Discard it and perform one coalesced fresh read
+    // instead of ever installing that older profile data.
+    if (privacyRefreshServers.has(serverId) && privacyRefreshDirtyServers.delete(serverId)) {
+      fetchingServers.delete(serverId);
+      void get().fetchMembers(serverId, true);
+      return;
+    }
+
     fetchingServers.delete(serverId);
     if (getAuthSessionOwner() !== ownerId || getAuthGeneration() !== generation
       || get().ownerId !== ownerId || get().authGeneration !== generation) {
@@ -256,6 +276,7 @@ export const useMemberStore = create<MemberState>((set, get) => ({
           },
         };
       });
+      finishPrivacyRefresh(serverId);
     } else {
       set((state) => {
         const newLoading = new Set(state.loadingServers);
@@ -265,6 +286,7 @@ export const useMemberStore = create<MemberState>((set, get) => ({
           statusByServer: { ...state.statusByServer, [serverId]: "error" },
         };
       });
+      finishPrivacyRefresh(serverId);
     }
   },
 
@@ -364,6 +386,15 @@ export const useMemberStore = create<MemberState>((set, get) => ({
             return {
               ...m,
               ...updated,
+              profile_fields_redacted: updated.profile_fields_redacted ?? false,
+              ...(updated.profile_fields_redacted ? {
+                avatar_animated_url: null,
+                banner_url: null,
+                banner_animated_url: null,
+                bio: null,
+                pronouns: null,
+                accent_color: null,
+              } : {}),
               roles: hasRoles ? updated.roles : m.roles,
               effective_permissions: hasRoles
                 ? updated.effective_permissions
@@ -373,6 +404,34 @@ export const useMemberStore = create<MemberState>((set, get) => ({
         },
       };
     });
+  },
+
+  handleProfileAudienceInvalidated: (userId) => {
+    synchronizeAuthScope();
+    set((state) => {
+      const updated: Record<string, MemberWithRoles[]> = {};
+      for (const [serverId, members] of Object.entries(state.membersByServer)) {
+        if (!members.some((member) => member.id === userId)) continue;
+        updated[serverId] = members.map((member) => member.id === userId
+          ? {
+              ...member,
+              avatar_animated_url: null,
+              banner_url: null,
+              banner_animated_url: null,
+              bio: null,
+              pronouns: null,
+              accent_color: null,
+              profile_fields_redacted: true,
+            }
+          : member);
+      }
+      return Object.keys(updated).length > 0
+        ? { membersByServer: { ...state.membersByServer, ...updated } }
+        : state;
+    });
+    for (const serverId of new Set([...Object.keys(get().membersByServer), ...fetchingServers])) {
+      invalidateMemberRosterFetch(serverId);
+    }
   },
 
   handleRoleCreate: (_serverId, _role) => {
@@ -498,6 +557,32 @@ export const useMemberStore = create<MemberState>((set, get) => ({
     });
   },
 }));
+
+/** Invalidate an in-flight roster read after a privacy-redacted WS update.
+ * The sanitized event is already applied locally; a future normal fetch may
+ * restore fields only after the server re-evaluates the current audience. */
+export function invalidateMemberRosterFetch(serverId: string): void {
+  if (!serverId || !fetchingServers.has(serverId)) return;
+  if (privacyRefreshServers.has(serverId)) {
+    privacyRefreshDirtyServers.add(serverId);
+    return;
+  }
+  fetchVersions.set(serverId, (fetchVersions.get(serverId) ?? 0) + 1);
+  fetchingServers.delete(serverId);
+  privacyRefreshServers.add(serverId);
+  useMemberStore.setState((state) => {
+    const loadingServers = new Set(state.loadingServers);
+    loadingServers.add(serverId);
+    return {
+      loadingServers,
+      statusByServer: {
+        ...state.statusByServer,
+        [serverId]: "loading",
+      },
+    };
+  });
+  void useMemberStore.getState().fetchMembers(serverId, true);
+}
 
 // Auth state transitions are published through the cycle-free session bus,
 // synchronously before scoped caches can be consumed under a new identity.

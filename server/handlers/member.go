@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
@@ -35,6 +36,32 @@ func (h *MemberHandler) List(w http.ResponseWriter, r *http.Request) {
 		pkg.Error(w, err)
 		return
 	}
+	memberAudience, audienceEnabled := h.profileAudience.(services.ProfileMemberAudiencePolicy)
+	if !audienceEnabled {
+		for i := range members {
+			hideMemberProfileFields(&members[i])
+		}
+	} else {
+		viewer, ok := r.Context().Value(UserContextKey).(*models.User)
+		if !ok || viewer == nil || viewer.IsBot {
+			pkg.Error(w, pkg.ErrUnauthorized)
+			return
+		}
+		targetIDs := make([]string, 0, len(members))
+		for _, member := range members {
+			targetIDs = append(targetIDs, member.ID)
+		}
+		visible, err := memberAudience.CanViewInServerMany(r.Context(), viewer.ID, targetIDs, serverID)
+		if err != nil {
+			pkg.Error(w, err)
+			return
+		}
+		for i := range members {
+			if !visible[members[i].ID] {
+				hideMemberProfileFields(&members[i])
+			}
+		}
+	}
 
 	pkg.JSON(w, http.StatusOK, members)
 }
@@ -54,8 +81,51 @@ func (h *MemberHandler) Get(w http.ResponseWriter, r *http.Request) {
 		pkg.Error(w, err)
 		return
 	}
+	memberAudience, audienceEnabled := h.profileAudience.(services.ProfileMemberAudiencePolicy)
+	if !audienceEnabled {
+		hideMemberProfileFields(member)
+	} else {
+		viewer, ok := r.Context().Value(UserContextKey).(*models.User)
+		if !ok || viewer == nil || viewer.IsBot {
+			pkg.Error(w, pkg.ErrUnauthorized)
+			return
+		}
+		visible, err := memberAudience.CanViewInServer(r.Context(), viewer.ID, id, serverID)
+		if err != nil {
+			pkg.Error(w, err)
+			return
+		}
+		if !visible {
+			hideMemberProfileFields(member)
+		}
+	}
 
 	pkg.JSON(w, http.StatusOK, member)
+}
+
+// These fields are the optional public-profile attributes added for the
+// profile card. The normal member identity/avatar fields remain available so
+// server rosters continue to function when a profile is restricted.
+func hideMemberProfileFields(member *models.MemberWithRoles) {
+	member.RedactProfileFields()
+}
+
+// Mutation responses must not fail after the write has succeeded. If the
+// audience check itself fails, redact and still return the successful mutation.
+func (h *MemberHandler) redactMutationProfileUnlessVisible(ctx context.Context, viewer *models.User, targetID, serverID string, member *models.MemberWithRoles) {
+	if viewer == nil || viewer.IsBot {
+		member.RedactProfileFields()
+		return
+	}
+	policy, ok := h.profileAudience.(services.ProfileMemberAudiencePolicy)
+	if !ok {
+		member.RedactProfileFields()
+		return
+	}
+	visible, err := policy.CanViewInServer(ctx, viewer.ID, targetID, serverID)
+	if err != nil || !visible {
+		member.RedactProfileFields()
+	}
 }
 
 // ModifyRoles handles PATCH /api/servers/{serverId}/members/{id}/roles
@@ -94,6 +164,7 @@ func (h *MemberHandler) ModifyRoles(w http.ResponseWriter, r *http.Request) {
 		pkg.Error(w, err)
 		return
 	}
+	h.redactMutationProfileUnlessVisible(r.Context(), actor, targetID, serverID, member)
 
 	pkg.JSON(w, http.StatusOK, member)
 }
@@ -242,6 +313,7 @@ func (h *MemberHandler) SetNickname(w http.ResponseWriter, r *http.Request) {
 		pkg.Error(w, err)
 		return
 	}
+	h.redactMutationProfileUnlessVisible(r.Context(), actor, targetID, serverID, updated)
 	pkg.JSON(w, http.StatusOK, updated)
 }
 

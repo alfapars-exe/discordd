@@ -225,6 +225,7 @@ RUN chown -R 1000:1000 /app
 ENV SERVER_HOST=0.0.0.0 \
     SERVER_PORT=7860 \
     UPLOAD_DIR=/data/uploads \
+    DATA_EXPORT_DIR=/data/exports \
     DATABASE_PATH=/data/hichat.db
 
 EXPOSE 7860

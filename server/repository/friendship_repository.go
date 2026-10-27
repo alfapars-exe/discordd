@@ -37,3 +37,9 @@ type FriendshipRepository interface {
 	// IsBlocked checks if a block exists in either direction between two users.
 	IsBlocked(ctx context.Context, userA, userB string) (bool, error)
 }
+
+// ProfileAudienceBlockReader bulk-checks blocked relationships for audience
+// invalidation fanout. It returns candidate IDs blocked in either direction.
+type ProfileAudienceBlockReader interface {
+	ListBlockedUserIDs(ctx context.Context, userID string, candidateIDs []string) (map[string]bool, error)
+}

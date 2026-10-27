@@ -198,6 +198,12 @@ function main() {
     // point this run at the production database.
     DATABASE_URL: "",
     UPLOAD_DIR: uploadDir,
+    // Keep data-export ZIPs inside this exact disposable run, beside uploads.
+    // The repository stores private archives under DATA_EXPORT_DIR; leaving
+    // its default relative path would still be run-local only because cwd is
+    // runDir, but pinning it prevents a future cwd change from writing into
+    // workspace data.
+    DATA_EXPORT_DIR: join(runDir, "exports"),
     JWT_SECRET,
     ENCRYPTION_KEY,
     // HF_TOKEN empty => BackupConfig.Enabled=false, so no bucket sync runs.

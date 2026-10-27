@@ -60,18 +60,23 @@ type VoiceDisconnecter interface {
 }
 
 type memberService struct {
-	userRepo        repository.UserRepository
-	roleRepo        repository.RoleRepository
-	banRepo         repository.BanRepository
-	timeoutRepo     repository.MemberTimeoutRepository
-	serverRepo      repository.ServerRepository
-	hub             ws.BroadcastAndManage
-	voiceKick       VoiceDisconnecter
-	auditLogger     AuditWriter
-	permInvalidator PermissionInvalidator
-	profileUpdates  ProfileUpdateNotifier
-	gameActivity    GameActivityPrivacyInvalidator
-	userInvalidator UserCacheInvalidator
+	userRepo                   repository.UserRepository
+	roleRepo                   repository.RoleRepository
+	banRepo                    repository.BanRepository
+	timeoutRepo                repository.MemberTimeoutRepository
+	serverRepo                 repository.ServerRepository
+	hub                        ws.BroadcastAndManage
+	voiceKick                  VoiceDisconnecter
+	auditLogger                AuditWriter
+	permInvalidator            PermissionInvalidator
+	profileUpdates             ProfileUpdateNotifier
+	profileAudienceInvalidator ProfileAudienceInvalidator
+	gameActivity               GameActivityPrivacyInvalidator
+	userInvalidator            UserCacheInvalidator
+}
+
+func (s *memberService) SetProfileAudienceInvalidator(invalidator ProfileAudienceInvalidator) {
+	s.profileAudienceInvalidator = invalidator
 }
 
 // SetUserCacheInvalidator keeps authenticated /users/me reads fresh after
@@ -213,7 +218,6 @@ func (s *memberService) GetByID(ctx context.Context, serverID, userID string) (*
 	if err != nil {
 		return nil, err
 	}
-
 	roles, err := s.roleRepo.GetByUserIDAndServer(ctx, userID, serverID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get roles for user: %w", err)
@@ -268,10 +272,14 @@ func (s *memberService) SetNickname(ctx context.Context, serverID, actorID, targ
 
 	// Same WS op the regular member_update path uses, so existing
 	// client handlers (memberStore, voiceStore, messageStore) refresh
-	// their cached display names without any new wiring.
+	// their cached display names without any new wiring. Profile-card fields
+	// are omitted from this server-wide update and refetched through the
+	// audience-filtered member endpoint by clients.
+	safeUpdated := *updated
+	safeUpdated.RedactProfileFields()
 	s.hub.BroadcastToServer(serverID, ws.Event{
 		Op:   ws.OpMemberUpdate,
-		Data: updated,
+		Data: &safeUpdated,
 	})
 
 	// Optional audit row — useful when a moderator renames someone
@@ -303,6 +311,13 @@ func (s *memberService) UpdateProfile(ctx context.Context, userID string, req *m
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
 		return nil, err
+	}
+	var audienceViewers []string
+	if s.profileAudienceInvalidator != nil {
+		audienceViewers, err = s.profileAudienceInvalidator.ListProfileAudienceViewers(ctx, userID)
+		if err != nil {
+			return nil, fmt.Errorf("resolve profile update recipients: %w", err)
+		}
 	}
 
 	if req.Username != nil && !strings.EqualFold(*req.Username, user.Username) {
@@ -375,14 +390,24 @@ func (s *memberService) UpdateProfile(ctx context.Context, userID string, req *m
 
 	// Broadcast to all servers the user belongs to (not BroadcastToAll)
 	member := models.ToMemberWithRoles(user, nil)
+	safeMember := member
+	safeMember.RedactProfileFields()
 	servers, srvErr := s.serverRepo.GetUserServers(ctx, userID)
 	if srvErr == nil {
 		for _, srv := range servers {
 			s.hub.BroadcastToServer(srv.ID, ws.Event{
 				Op:   ws.OpMemberUpdate,
-				Data: &member,
+				Data: &safeMember,
 			})
 		}
+	}
+	// Profile cards can be open from DM/friend surfaces with no server-member
+	// roster cache. Invalidate only viewers admitted by the current policy.
+	if len(audienceViewers) > 0 {
+		s.hub.BroadcastToUsers(audienceViewers, ws.Event{
+			Op:   ws.OpProfileAudienceInvalidated,
+			Data: map[string]string{"user_id": userID},
+		})
 	}
 	if s.profileUpdates != nil && hasShareableProfileChange(req) {
 		if err := s.profileUpdates.NotifyProfileUpdated(ctx, userID); err != nil {
@@ -548,9 +573,11 @@ func (s *memberService) ModifyRoles(ctx context.Context, serverID, actorID, targ
 	s.invalidateUserPerms(targetID)
 
 	// Role changes are server-scoped — only broadcast to that server
+	safeMember := *member
+	safeMember.RedactProfileFields()
 	s.hub.BroadcastToServer(serverID, ws.Event{
 		Op:   ws.OpMemberUpdate,
-		Data: member,
+		Data: &safeMember,
 	})
 
 	return member, nil

@@ -67,6 +67,7 @@ export interface WSPayloadMap {
   game_activity_update: import("../stores/gameActivityStore").GameActivityUpdate;
   game_join_offer_state: import("../stores/gameJoinStore").GameJoinOfferState;
   preferences_changed: { user_id: string };
+  profile_audience_invalidated: { user_id: string };
   presence_update: { user_id: string; status: UserStatus; is_auto?: boolean };
   member_join: MemberWithRoles;
   audit_event: AuditLog;

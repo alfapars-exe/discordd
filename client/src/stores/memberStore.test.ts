@@ -23,7 +23,7 @@ vi.mock("../api/members", () => ({
   getMembers: vi.fn(async () => ({ success: true, data: [] })),
 }));
 
-import { useMemberStore } from "./memberStore";
+import { invalidateMemberRosterFetch, useMemberStore } from "./memberStore";
 import { useServerStore } from "./serverStore";
 import { getAuthGeneration, setTokens } from "../api/client";
 import { publishAuthOwnerChange } from "../api/authSessionEvents";
@@ -117,6 +117,68 @@ describe("memberStore — timeout seeding from fetchMembers", () => {
     finish({ success: true, data: [makeMember()] });
     await old;
     expect(useMemberStore.getState().membersByServer["srv-1"]).toBeUndefined();
+  });
+
+  it("does not let a pre-invalidation roster response restore restricted profile fields", async () => {
+    let finish!: (value: Awaited<ReturnType<typeof memberApi.getMembers>>) => void;
+    vi.mocked(memberApi.getMembers).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    vi.mocked(memberApi.getMembers).mockResolvedValueOnce({
+      success: true,
+      data: [makeMember({ bio: null, profile_fields_redacted: true })],
+    });
+    useMemberStore.setState({ membersByServer: { "srv-1": [makeMember({ bio: "stale private bio" })] } });
+    const old = useMemberStore.getState().fetchMembers("srv-1");
+
+    useMemberStore.getState().handleMemberUpdate("srv-1", makeMember({ profile_fields_redacted: true }));
+    invalidateMemberRosterFetch("srv-1");
+    finish({ success: true, data: [makeMember({ bio: "stale private bio" })] });
+    await old;
+    await vi.waitFor(() => expect(useMemberStore.getState().loadingServers.has("srv-1")).toBe(false));
+
+    const member = useMemberStore.getState().membersByServer["srv-1"]![0];
+    expect(member.bio).toBeNull();
+    expect(member.profile_fields_redacted).toBe(true);
+  });
+
+  it("retries an initial roster read when a privacy update arrives during that read", async () => {
+    let finishInitial!: (value: Awaited<ReturnType<typeof memberApi.getMembers>>) => void;
+    vi.mocked(memberApi.getMembers)
+      .mockImplementationOnce(() => new Promise(resolve => { finishInitial = resolve; }))
+      .mockResolvedValueOnce({ success: true, data: [makeMember({ bio: null, profile_fields_redacted: true })] });
+    const initial = useMemberStore.getState().fetchMembers("srv-1");
+
+    invalidateMemberRosterFetch("srv-1");
+    finishInitial({ success: true, data: [makeMember({ bio: "stale private bio" })] });
+    await initial;
+    await vi.waitFor(() => expect(useMemberStore.getState().statusByServer["srv-1"]).toBe("ready"));
+
+    const roster = useMemberStore.getState().membersByServer["srv-1"];
+    expect(roster).toHaveLength(1);
+    expect(roster![0].bio).toBeNull();
+    expect(roster![0].profile_fields_redacted).toBe(true);
+  });
+
+  it("discards a superseded audience snapshot and keeps the redaction if the retry fails", async () => {
+    let finishInitial!: (value: Awaited<ReturnType<typeof memberApi.getMembers>>) => void;
+    let finishPrivacyRefresh!: (value: Awaited<ReturnType<typeof memberApi.getMembers>>) => void;
+    vi.mocked(memberApi.getMembers)
+      .mockImplementationOnce(() => new Promise(resolve => { finishInitial = resolve; }))
+      .mockImplementationOnce(() => new Promise(resolve => { finishPrivacyRefresh = resolve; }))
+      .mockResolvedValueOnce({ success: false, error: "temporary failure" });
+    useMemberStore.setState({ membersByServer: { "srv-1": [makeMember({ bio: "stale private bio" })] } });
+    const initial = useMemberStore.getState().fetchMembers("srv-1");
+
+    useMemberStore.getState().handleMemberUpdate("srv-1", makeMember({ profile_fields_redacted: true }));
+    invalidateMemberRosterFetch("srv-1");
+    invalidateMemberRosterFetch("srv-1");
+    finishInitial({ success: true, data: [makeMember({ bio: "stale private bio" })] });
+    await initial;
+    finishPrivacyRefresh({ success: true, data: [makeMember({ bio: "stale private bio" })] });
+    await vi.waitFor(() => expect(useMemberStore.getState().statusByServer["srv-1"]).toBe("error"));
+
+    const member = useMemberStore.getState().membersByServer["srv-1"]![0];
+    expect(member.bio).toBeNull();
+    expect(member.profile_fields_redacted).toBe(true);
   });
 
   it("marks only a successful current-owner roster ready and reports failed refreshes explicitly", async () => {

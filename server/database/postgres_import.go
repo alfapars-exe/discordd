@@ -67,7 +67,7 @@ func ImportSQLiteSnapshot(ctx context.Context, source, target *sql.DB) ([]Import
 		return nil, fmt.Errorf("target schema has no tables")
 	}
 	known := make(map[string]bool, len(tables))
-	seedTables := map[string]bool{"badges": true, "cosmetic_items": true}
+	seedTables := map[string]bool{"badges": true, "cosmetic_items": true, "data_export_archive_budget": true}
 	for _, table := range tables {
 		known[table] = true
 	}
@@ -95,11 +95,25 @@ func ImportSQLiteSnapshot(ctx context.Context, source, target *sql.DB) ([]Import
 		return nil, err
 	}
 	// Refuse reusing a schema that already contains application state. The
-	// baseline's cosmetic catalog is the only seeded application table.
+	// baseline catalogs and the zeroed archive budget are the only seeded
+	// tables allowed; the archive budget seed is validated below.
 	for _, table := range tables {
 		var count int
 		if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+importQuote(table)).Scan(&count); err != nil {
 			return nil, err
+		}
+		if table == "data_export_archive_budget" && count > 0 {
+			if count != 1 {
+				return nil, fmt.Errorf("target table %s is not empty", table)
+			}
+			var id int
+			var reservedBytes int64
+			if err = tx.QueryRowContext(ctx, `SELECT id,reserved_bytes FROM data_export_archive_budget`).Scan(&id, &reservedBytes); err != nil {
+				return nil, err
+			}
+			if id != 1 || reservedBytes != 0 {
+				return nil, fmt.Errorf("target table %s is not empty", table)
+			}
 		}
 		if count != 0 && !seedTables[table] {
 			return nil, fmt.Errorf("target table %s is not empty", table)

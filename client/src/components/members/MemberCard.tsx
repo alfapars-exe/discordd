@@ -1,7 +1,7 @@
 /** MemberCard — Unified user profile popover. Works in server context (with roles/mod)
  *  and global context (DM sidebar, friend list — no server-specific sections). */
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { MemberWithRoles, PublicUser } from "../../types";
@@ -14,6 +14,7 @@ import MemberCardModeration from "./memberCard/MemberCardModeration";
 import MemberCardNote from "./memberCard/MemberCardNote";
 import { useUserBadges } from "../../hooks/useUserBadges";
 import { useUserProfile } from "../../hooks/useUserProfile";
+import { useUserProfileShowcase } from "../../hooks/useUserProfileShowcase";
 import { useAuthStore } from "../../stores/authStore";
 import { useVoiceStore } from "../../stores/voiceStore";
 import { useActiveMembers, useMemberTimeout } from "../../stores/memberStore";
@@ -33,8 +34,6 @@ import ModDurationPicker from "./ModDurationPicker";
 import { TIMEOUT_PRESETS, TEMPBAN_PRESETS } from "./modDurationPresets";
 import { formatDate } from "../../utils/dateFormat";
 import { showApiError } from "../../utils/apiError";
-import * as profileApi from "../../api/profile";
-import type { ProfileShowcase } from "../../api/profile";
 import GameActivityLabel from "../shared/GameActivityLabel";
 
 type MemberCardProps = {
@@ -62,14 +61,13 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
   const createdAt = target?.created_at ?? "";
   const isServerContext = !!member;
 
-  // Profile fields (banner, bio, pronouns, accent, animated avatar) ride on
-  // MemberWithRoles in server context; a bare PublicUser (DM, friends,
-  // inbox) lacks them, so fetch the public profile lazily — except for the
-  // viewer's own card, which reads the auth store's user instead.
+  // Always resolve another user's optional profile fields through the
+  // audience-filtered profile endpoint. Member roster data is also filtered,
+  // but can be stale after an audience preference changes.
   const isOwnTarget = !!currentUser && currentUser.id === userId;
-  const needsProfile = !member && !!userProp && !isOwnTarget;
+  const needsProfile = !!target && !isOwnTarget;
   const { profile } = useUserProfile(userId, needsProfile);
-  const prof = member ?? profile ?? (isOwnTarget ? currentUser : null);
+  const prof = isOwnTarget ? currentUser : profile;
   const animatedUrl = prof?.avatar_animated_url;
   const bannerUrl = prof?.banner_url;
   const animatedBannerUrl = prof?.banner_animated_url;
@@ -82,15 +80,7 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
   // before the first WS event arrives. Subscribes to the store so the
   // banner disappears live when handleMemberTimeoutRemove fires.
   const activeServerId = useServerStore((s) => s.activeServerId);
-  const [showcase, setShowcase] = useState<ProfileShowcase | null>(null);
-  useEffect(() => {
-    let active = true;
-    if (!userId) return () => { active = false; };
-    void profileApi.getUserProfileShowcase(userId, isServerContext ? activeServerId : null).then((res) => {
-      if (active) setShowcase(res.success && res.data ? res.data : null);
-    });
-    return () => { active = false; };
-  }, [userId, isServerContext, activeServerId]);
+  const showcase = useUserProfileShowcase(userId, isServerContext ? activeServerId : null);
   const storeTimeout = useMemberTimeout(activeServerId, userId);
   const timeoutExpiresAt =
     storeTimeout?.expires_at ?? (isServerContext ? member?.timeout_expires_at ?? undefined : undefined);

@@ -112,6 +112,32 @@ func TestSQLiteDataExportOwnershipExpiryAndSecretExclusion(t *testing.T) {
 	}
 }
 
+func TestSQLiteDataExportWithoutStorageKeepsMetadataOnlyContract(t *testing.T) {
+	db := newTestDB(t)
+	execSeed(t, db, []seedStmt{
+		{q: `INSERT INTO users(id,username,password_hash) VALUES('legacy-export-owner','legacyowner','x')`},
+		{q: `INSERT INTO servers(id,name,owner_id) VALUES('legacy-export-server','Legacy','legacy-export-owner')`},
+		{q: `INSERT INTO channels(id,name,type,server_id) VALUES('legacy-export-channel','general','text','legacy-export-server')`},
+		{q: `INSERT INTO messages(id,channel_id,user_id,content) VALUES('legacy-export-message','legacy-export-channel','legacy-export-owner','hello')`},
+		{q: `INSERT INTO attachments(id,message_id,filename,file_url,file_size) VALUES('legacy-export-attachment','legacy-export-message','opaque.bin','/api/uploads/opaque.bin',4)`},
+	})
+	repo := NewSQLiteDataExportRepo(wrapForRepo(db))
+	job, err := repo.Create(context.Background(), &models.User{ID: "legacy-export-owner"})
+	if err != nil {
+		t.Fatalf("metadata-only export failed without archive storage: %v", err)
+	}
+	if job.AttachmentsStatus != "not_configured" || job.AttachmentsReady {
+		t.Fatalf("legacy constructor attachment status = %q ready=%v", job.AttachmentsStatus, job.AttachmentsReady)
+	}
+	payload, err := repo.Download(context.Background(), "legacy-export-owner", job.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(payload), "legacy-export-attachment") {
+		t.Fatal("metadata-only export omitted attachment metadata")
+	}
+}
+
 func ptrString(value string) *string { return &value }
 
 func TestDataExportIncludesOnlyOwnNotificationDecisions(t *testing.T) {

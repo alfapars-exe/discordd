@@ -81,6 +81,76 @@ func TestSQLitePreferencesRecursiveMergeAndCompatibility(t *testing.T) {
 	}
 }
 
+func TestSQLitePreferencesGetManyStrictIsBoundedAndDefaultsMissingRows(t *testing.T) {
+	_, repo := preferencesTestRepo(t)
+	ctx := context.Background()
+	if _, err := repo.Upsert(ctx, "prefs-user", json.RawMessage(`{"privacy":{"profileAudience":"friends_only"}}`)); err != nil {
+		t.Fatal(err)
+	}
+	bulk, ok := repo.(interface {
+		GetManyStrict(context.Context, []string) (map[string]*models.UserPreferences, error)
+	})
+	if !ok {
+		t.Fatal("preferences repo does not implement strict bounded bulk reads")
+	}
+	ids := make([]string, 1001)
+	for i := range ids {
+		ids[i] = fmt.Sprintf("missing-%d", i)
+	}
+	ids[1000] = "prefs-user"
+	ids = append(ids, "prefs-user") // duplicates must not alter the result.
+	got, err := bulk.GetManyStrict(ctx, ids)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1001 {
+		t.Fatalf("GetManyStrict returned %d IDs, want 1001 unique IDs", len(got))
+	}
+	if string(got["missing-0"].Data) != `{}` {
+		t.Fatalf("missing-row default = %s, want {}", got["missing-0"].Data)
+	}
+	if !strings.Contains(string(got["prefs-user"].Data), `"friends_only"`) {
+		t.Fatalf("stored preference missing from batch result: %s", got["prefs-user"].Data)
+	}
+}
+
+func TestProfileAudienceBatchReaderRejectsCorruptPreferences(t *testing.T) {
+	db, repo := preferencesTestRepo(t)
+	execSeed(t, db, []seedStmt{{q: `INSERT INTO users (id, username, password_hash) VALUES (?, ?, ?)`, args: []any{"valid-prefs-user", "validprefsuser", "x"}}})
+	ctx := context.Background()
+	const optIn = `{"notifications":{"channelMessageNotifications":true},"privacy":{"profileAudience":"friends_only"}}`
+	if _, err := repo.Upsert(ctx, "valid-prefs-user", json.RawMessage(optIn)); err != nil {
+		t.Fatal(err)
+	}
+	privacyReader := repo.(interface {
+		GetManyStrict(context.Context, []string) (map[string]*models.UserPreferences, error)
+	})
+	for name, corrupt := range map[string]string{
+		"malformed": `{`, "array": `[]`, "null": `null`, "string": `"text"`, "number": `42`, "boolean": `true`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := db.Conn.Exec(`INSERT INTO user_preferences (user_id, data) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET data=excluded.data`, "prefs-user", corrupt); err != nil {
+				t.Fatal(err)
+			}
+			ids := []string{"prefs-user", "valid-prefs-user"}
+			// A corrupt recipient must not poison the healthy opt-in on the same page.
+			got, err := repo.(PreferencesBatchReader).GetMany(ctx, ids)
+			if err != nil {
+				t.Fatalf("tolerant notification preference read: %v", err)
+			}
+			if got["prefs-user"] == nil || string(got["prefs-user"].Data) != `{}` {
+				t.Fatalf("corrupt notification preferences = %#v, want opt-out {}", got["prefs-user"])
+			}
+			if got["valid-prefs-user"] == nil || !strings.Contains(string(got["valid-prefs-user"].Data), `"channelMessageNotifications":true`) {
+				t.Fatal("healthy opt-in recipient was lost from tolerant preference page")
+			}
+			if _, err := privacyReader.GetManyStrict(ctx, ids); err == nil {
+				t.Fatal("strict profile reader accepted corrupt preference and could expose default all_servers profile")
+			}
+		})
+	}
+}
+
 func TestSQLitePreferencesConcurrentDisjointLeafUpdates(t *testing.T) {
 	_, repo := preferencesTestRepo(t)
 	ctx := context.Background()

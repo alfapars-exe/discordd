@@ -49,6 +49,8 @@ export type MemberWithRoles = {
   bio?: string | null;
   pronouns?: string | null;
   accent_color?: string | null;
+  /** A broad WS update omitted profile-card fields; refetch this member under the current audience policy. */
+  profile_fields_redacted?: boolean;
 };
 
 /** Badge template created by the badge admin. */

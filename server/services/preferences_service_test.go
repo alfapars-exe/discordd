@@ -9,6 +9,8 @@ import (
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/testutil"
+	"github.com/argeinfina/hichat/ws"
 )
 
 type preferencesRepoStub struct {
@@ -111,5 +113,36 @@ func TestPreferencesServiceMigratesHiddenNoiseEnginesOnReadAndWrite(t *testing.T
 				t.Fatal("read normalization mutated repository-owned data")
 			}
 		})
+	}
+}
+
+func TestPreferencesServiceInvalidatesProfileAudienceWithoutBroadcastingPreferenceData(t *testing.T) {
+	repo := &preferencesRepoStub{prefs: &models.UserPreferences{UserID: "target-user", Data: json.RawMessage(`{"privacy":{"profileAudience":"all_servers"}}`)}}
+	var recipients []string
+	var event ws.Event
+	hub := &testutil.MockBroadcaster{BroadcastToUsersFn: func(users []string, got ws.Event) {
+		recipients, event = users, got
+	}}
+	svc := NewPreferencesService(repo).(*preferencesService)
+	svc.SetGameActivitySync(nil, hub)
+	svc.SetProfileAudienceInvalidator(profileAudienceInvalidatorStub{viewers: []string{"friend-viewer", "shared-server-viewer"}})
+
+	if _, err := svc.Update(context.Background(), "target-user", json.RawMessage(`{"privacy":{"profileAudience":"friends_only"}}`)); err != nil {
+		t.Fatal(err)
+	}
+	if len(recipients) != 2 || recipients[0] != "friend-viewer" || recipients[1] != "shared-server-viewer" || event.Op != ws.OpProfileAudienceInvalidated {
+		t.Fatalf("invalid audience invalidation: recipients=%v event=%+v", recipients, event)
+	}
+	data, ok := event.Data.(map[string]string)
+	if !ok || len(data) != 1 || data["user_id"] != "target-user" {
+		t.Fatalf("invalidation leaked preference/profile data: %#v", event.Data)
+	}
+
+	recipients, event = nil, ws.Event{}
+	if _, err := svc.Update(context.Background(), "target-user", json.RawMessage(`{"privacy":{"ignoredUsers":{"other":true}}}`)); err != nil {
+		t.Fatal(err)
+	}
+	if event.Op != "" || len(recipients) != 0 {
+		t.Fatalf("unrelated privacy patch triggered profile invalidation: %+v", event)
 	}
 }
