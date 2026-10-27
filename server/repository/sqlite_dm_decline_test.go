@@ -233,8 +233,3 @@ func TestDeclinePendingRemovesDependentsOnConfiguredBackend(t *testing.T) {
 	}
 }
 
-func newSQLiteTestDB(t testing.TB) *database.DB {
-	t.Helper()
-	db, _ := newSQLiteTestDBWithPath(t)
-	return db
-}
