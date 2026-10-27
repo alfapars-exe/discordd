@@ -72,14 +72,18 @@ services:
   # In production, build output is served via nginx instead.
   client:
     build:
-      context: ./client
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: client/Dockerfile
       target: development
     ports:
       - "3030:3030"
     volumes:
-      - ./client/src:/app/src
-      - ./client/public:/app/public
+      - ./client/src:/app/client/src
+      - ./client/public:/app/client/public
+      # Keep shared browser-facing contracts live while editing Electron sources.
+      - ./electron/voice-overlay-contract.ts:/app/electron/voice-overlay-contract.ts:ro
+      - ./electron/overlay-media-contract.ts:/app/electron/overlay-media-contract.ts:ro
+      - ./electron/cs2-join-contract.ts:/app/electron/cs2-join-contract.ts:ro
     environment:
       - VITE_API_URL=http://localhost:9090
     depends_on:
