@@ -24,7 +24,9 @@ async function openFixtureChannel(page: Page, serverName: string, channelName: s
 async function sendMessage(page: Page, text: string): Promise<void> {
   await composer(page).fill(text);
   await composer(page).press("Enter");
-  await expect(messageList(page).getByText(text, { exact: true })).toBeVisible({ timeout: 15_000 });
+  // Grouped follow-up messages share a rendered text node with their timestamp,
+  // so assert the unique marker in its message article instead of exact text.
+  await expect(messageList(page).locator("article").filter({ hasText: text })).toBeVisible({ timeout: 15_000 });
 }
 
 async function setChannelNoticePreference(page: Page, enabled: boolean): Promise<void> {
