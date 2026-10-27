@@ -11,8 +11,8 @@
     "server/repository/data_export_local_availability_test.go": "804aa9d215a4a4a8aad966b0c849b2864ef47a717c6c36b0adad510f00bbeaa4",
     "client/src/components/settings/DataExportSettings.tsx": "6781f3eff54c15fa1f7fee75c1ca828ef3acdbb8850890c70b4e77eb5cf9d6d4",
     "client/src/components/settings/DataExportSettings.test.tsx": "5fd59dc7cd96c2d21b9fa5835688f50153269bf204dd2fbcc13812a168080e99",
-    "client/src/i18n/locales/en/settings.json": "33d5746974eaab5cd6011acb55a96ea7bac85be3ad8afb9b2c7f5b4bc1db928d",
-    "client/src/i18n/locales/tr/settings.json": "7a01fd019ce589bf0f69264028b00baf2224fc0cb4a09b00b5214cb16297dfab"
+    "client/src/i18n/locales/en/settings.json": "9ca212835706fb222e271101ac0a22b95fbd6ad49672ff213046008457f22935",
+    "client/src/i18n/locales/tr/settings.json": "28957de86e3e5f8cc28af6e677cb935a1c0a013453439f58d3431a565e9ed1b2"
   },
   "behavior": [
     "Owner Get reuses the exact generation, account, expiry and safe-file-open checks used by attachment download.",
@@ -45,6 +45,10 @@
     {
       "command": "ESLint scoped files; TypeScript tsc -b; Vite build",
       "result": "PASS; existing Vite configuration/chunk warnings remain"
+    },
+    {
+      "command": "120 integration: DataExportSettings target; client lint/build; repository+handlers DataExport; release version guard",
+      "result": "PASS: 25 client tests; lint zero errors/six existing warnings; build; repository7.614s handlers2.652s; six release guard tests"
     }
   ],
   "authenticated_sqlite_http": {
@@ -92,5 +96,7 @@
     "Existing expiry cleanup may release global budget based on node-local file absence; independent filesystems require a separate shared-storage/owner-routing design before claiming multi-node physical-byte accounting. This patch does not change cleanup or quotas.",
     "The existing attachment download handler ignores io.Copy errors after setting Content-Length and HTTP200. Incomplete transfer/corrupt ZIP handling remains separate; this patch validates local availability, not archive integrity or successful transport completion.",
     "Official package, production deployment and PostgreSQL API/TLS acceptance remain open."
-  ]
+  ],
+  "author_checks_source_commit": "d22a163bcc49c659469f8cab210d37984a6ba099",
+  "integration_copy_note": "120 localized availability copy also explains that recreation can wait for available archive quota; archive state and byte-ledger behavior are unchanged."
 }
