@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { accessSync, constants, existsSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -12,8 +13,38 @@ const container = `hichat-nginx-csp-test-${suffix}`;
 const wsOrigin = authority => ['ws:', '//', authority].join('');
 const wssOrigin = authority => ['wss:', '//', authority].join('');
 
+function resolveDockerExecutable() {
+  const override = process.env.DOCKER_EXECUTABLE;
+  if (override !== undefined && !path.isAbsolute(override)) {
+    throw new Error('DOCKER_EXECUTABLE must be an absolute path; PATH lookup is intentionally disabled');
+  }
+
+  const candidates = override
+    ? [override]
+    : process.platform === 'win32'
+      ? [path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Docker', 'Docker', 'resources', 'bin', 'docker.exe')]
+    : process.platform === 'darwin'
+      ? ['/usr/local/bin/docker', '/opt/homebrew/bin/docker', '/Applications/Docker.app/Contents/Resources/bin/docker']
+      : ['/usr/bin/docker', '/usr/local/bin/docker', '/bin/docker'];
+
+  for (const candidate of candidates) {
+    if (!path.isAbsolute(candidate) || !existsSync(candidate)) continue;
+    try {
+      if (!statSync(candidate).isFile()) continue;
+      if (process.platform !== 'win32') accessSync(candidate, constants.X_OK);
+      return candidate;
+    } catch {
+      // Ignore inaccessible candidates and fail with a clear diagnostic below.
+    }
+  }
+
+  throw new Error(`Docker CLI not found in configured absolute path or trusted installation locations: ${candidates.join(', ')}`);
+}
+
+const dockerExecutable = resolveDockerExecutable();
+
 function docker(args, { allowFailure = false, inherit = false } = {}) {
-  const result = spawnSync('docker', args, {
+  const result = spawnSync(dockerExecutable, args, {
     cwd: repoRoot,
     encoding: 'utf8',
     stdio: inherit ? 'inherit' : 'pipe',
