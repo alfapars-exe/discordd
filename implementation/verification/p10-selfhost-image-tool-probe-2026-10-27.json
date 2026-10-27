@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-27",
+  "scope": "Read-only acceptance build and in-container tool probe for the self-host server/Dockerfile",
+  "source": {
+    "ref": "origin/main",
+    "commit": "e3f915d41e30315b872d4866c0c269aa82cfa0c7",
+    "worktree_clean_before_build": true,
+    "build_context": "server"
+  },
+  "build": {
+    "command": "docker build --platform linux/amd64 -f Dockerfile -t hichat-p10-selfhost-acceptance:origin-main-e3f915d4 .",
+    "result": "PASS",
+    "image": "hichat-p10-selfhost-acceptance:origin-main-e3f915d4",
+    "image_id": "sha256:6bd989475b2d077520b3b44a28e859d50c3ddc49b1486d37ca9f32a202718f9b",
+    "platform": "linux/amd64",
+    "size_bytes": 1092786695,
+    "note": "Dockerfile's tool-install and build-time FFmpeg/libopus probe layers were cached; the resulting image was independently run for the probe below."
+  },
+  "runtime_tool_probe": {
+    "command": "docker run --rm --network none --entrypoint /bin/sh hichat-p10-selfhost-acceptance:origin-main-e3f915d4 -ec 'printf \"yt-dlp=\"; yt-dlp --version; printf \"deno=\"; deno --version | head -n 1; printf \"ffmpeg=\"; ffmpeg -version | head -n 1; ffmpeg -hide_banner -loglevel error -f lavfi -i anullsrc=r=48000:cl=stereo -t 0.1 -c:a libopus -f ogg /tmp/hichat-p10-libopus-probe.ogg; test -s /tmp/hichat-p10-libopus-probe.ogg; printf \"libopus_encode=PASS bytes=\"; wc -c < /tmp/hichat-p10-libopus-probe.ogg'",
+    "result": "PASS",
+    "yt_dlp": "2026.10.21",
+    "deno": "2.9.8",
+    "ffmpeg": "5.1.9-0+deb12u1",
+    "libopus_encode": {
+      "result": "PASS",
+      "ogg_bytes": 188
+    },
+    "isolation": "Ephemeral container used --rm and --network none, with no host volume or port; probe output was written only inside that container."
+  },
+  "host_impact": {
+    "existing_containers_changed": false,
+    "services_started_or_stopped": false,
+    "user_data_or_secrets_accessed": false,
+    "local_image_created": true
+  },
+  "limits": [
+    "This verifies only the self-host SQLite server image; the repository-root production/HF image was not built in this run.",
+    "No API service was started, and no YouTube extraction, LiveKit publication, real client playback, or two-client E2EE acceptance was tested.",
+    "This local image build does not prove deployment, production runtime readiness, or P10 release acceptance."
+  ]
+}
