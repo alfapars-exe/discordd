@@ -166,8 +166,9 @@ func (r *sqlitePreferencesRepo) GetMany(ctx context.Context, userIDs []string) (
 			}
 			p.Data, err = models.FilterDeviceLocalPreferences(json.RawMessage(raw))
 			if err != nil {
-				_ = rows.Close()
-				return nil, fmt.Errorf("read preferences batch: %w", err)
+				// Valid JSON can still be an invalid preference document (null,
+				// arrays or scalars). Isolate that recipient just like malformed JSON.
+				p.Data = json.RawMessage(`{}`)
 			}
 			out[p.UserID] = p
 		}
