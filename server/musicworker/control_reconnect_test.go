@@ -148,9 +148,10 @@ func TestWorkerQuotasAndAuthenticationAcrossReconnect(t *testing.T) {
 					if conn.WriteJSON(wireMessage{Type: "job", ID: id, Request: &Request{Operation: operation, Input: input}}) != nil {
 						return
 					}
-					if n == 1 {
+					switch n {
+					case 1:
 						firstControl <- conn
-					} else if n == 2 {
+					case 2:
 						close(secondControl)
 					}
 					_, _, _ = conn.ReadMessage()
