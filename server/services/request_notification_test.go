@@ -8,10 +8,13 @@ package services
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/testutil"
 	"github.com/argeinfina/hichat/ws"
 )
@@ -45,7 +48,7 @@ func (s *stubFriendRepo) ListOutgoing(_ context.Context, _ string) ([]models.Fri
 func (s *stubFriendRepo) UpdateStatus(_ context.Context, _ string, _ models.FriendshipStatus) error {
 	return nil
 }
-func (s *stubFriendRepo) Delete(_ context.Context, _ string) error           { return nil }
+func (s *stubFriendRepo) Delete(_ context.Context, _ string) error          { return nil }
 func (s *stubFriendRepo) DeleteByPair(_ context.Context, _, _ string) error { return nil }
 func (s *stubFriendRepo) ListBlocked(_ context.Context, _ string) ([]models.FriendshipWithUser, error) {
 	return nil, nil
@@ -186,32 +189,95 @@ func TestDMAcceptRequest_SettlesRecipientNotification(t *testing.T) {
 	}
 }
 
-// TestDMDeclineRequest_SettlesBeforeChannelDelete — the mark must happen
-// before DeleteChannel wipes the channel's notifications, or there would
-// be no ids left to push.
-func TestDMDeclineRequest_SettlesBeforeChannelDelete(t *testing.T) {
+// Decline publishes the channel event and notification ids only after the
+// atomic repository operation reports a committed delete.
+func TestDMDeclineRequestPublishesCommittedNotificationIDs(t *testing.T) {
 	f := newDMFixture()
 	pendingDMFixture(f)
-	var order []string
-	f.notif.MarkDMRequestReadFn = func(_ context.Context, userID, channelID string) ([]string, error) {
-		order = append(order, "mark:"+userID+"@"+channelID)
-		return []string{"n-dm"}, nil
-	}
-	f.repo.DeleteChannelFn = func(_ context.Context, id string) error {
-		order = append(order, "delete:"+id)
-		return nil
+	committed := false
+	f.repo.DeclinePendingFn = func(_ context.Context, channelID, recipientID string) (bool, []string, []string, error) {
+		if channelID != "ch-1" || recipientID != "bob" {
+			t.Fatalf("DeclinePending(%q,%q)", channelID, recipientID)
+		}
+		committed = true
+		return true, nil, []string{"n-dm"}, nil
 	}
 	ev := &readEvents{}
-	f.hub.BroadcastToUserFn = ev.hook()
+	f.hub.BroadcastToUserFn = func(userID string, event ws.Event) {
+		if !committed {
+			t.Fatalf("event %s published before commit", event.Op)
+		}
+		ev.hook()(userID, event)
+	}
 
 	if err := f.svc.DeclineRequest(context.Background(), "bob", "ch-1"); err != nil {
 		t.Fatalf("DeclineRequest: %v", err)
 	}
-	if len(order) != 2 || order[0] != "mark:bob@ch-1" || order[1] != "delete:ch-1" {
-		t.Errorf("call order = %v, want mark before delete", order)
-	}
 	if len(ev.to) != 1 || ev.to[0] != "bob" {
 		t.Errorf("notification_read sent to %v, want [bob]", ev.to)
+	}
+	if len(ev.data) != 1 || ev.data[0]["ids"] == nil {
+		t.Fatalf("notification_read data = %v, want committed ids", ev.data)
+	}
+	ids, ok := ev.data[0]["ids"].([]string)
+	if !ok || len(ids) != 1 || ids[0] != "n-dm" {
+		t.Errorf("notification ids = %#v, want [n-dm]", ev.data[0]["ids"])
+	}
+}
+
+func TestDMDeclineRequestFailureHasNoSideEffects(t *testing.T) {
+	f := newDMFixture()
+	pendingDMFixture(f)
+	dir := t.TempDir()
+	f.svc.(*dmService).SetUploadDir(dir)
+	path := filepath.Join(dir, "still-live.png")
+	if err := os.WriteFile(path, []byte("attachment"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	failure := errors.New("transaction rolled back")
+	f.repo.DeclinePendingFn = func(context.Context, string, string) (bool, []string, []string, error) {
+		return false, []string{"/api/uploads/still-live.png"}, []string{"notification-1"}, failure
+	}
+	broadcasts := 0
+	f.hub.BroadcastToUserFn = func(string, ws.Event) { broadcasts++ }
+	if err := f.svc.DeclineRequest(context.Background(), "bob", "ch-1"); !errors.Is(err, failure) {
+		t.Fatalf("DeclineRequest error=%v, want transaction failure", err)
+	}
+	if broadcasts != 0 {
+		t.Errorf("broadcasts=%d after failed transaction, want 0", broadcasts)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("attachment removed after rollback: %v", err)
+	}
+}
+
+func TestDMDeclineRequestLosingRaceHasNoSideEffects(t *testing.T) {
+	f := newDMFixture()
+	pendingDMFixture(f)
+	dir := t.TempDir()
+	f.svc.(*dmService).SetUploadDir(dir)
+	path := filepath.Join(dir, "must-stay.png")
+	if err := os.WriteFile(path, []byte("attachment"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	f.notif.MarkDMRequestReadFn = func(context.Context, string, string) ([]string, error) {
+		t.Fatal("losing decline must not mutate notifications")
+		return nil, nil
+	}
+	f.repo.DeclinePendingFn = func(context.Context, string, string) (bool, []string, []string, error) {
+		return false, []string{"/api/uploads/must-stay.png"}, []string{"notification-1"}, nil
+	}
+	broadcasts := 0
+	f.hub.BroadcastToUserFn = func(string, ws.Event) { broadcasts++ }
+	err := f.svc.DeclineRequest(context.Background(), "bob", "ch-1")
+	if !errors.Is(err, pkg.ErrConflict) {
+		t.Fatalf("DeclineRequest error=%v, want ErrConflict", err)
+	}
+	if broadcasts != 0 {
+		t.Errorf("broadcasts=%d for losing decline, want 0", broadcasts)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("attachment removed for losing decline: %v", err)
 	}
 }
 

@@ -17,8 +17,9 @@ import (
 	"github.com/google/uuid"
 )
 
-// This test is opt-in and must use a disposable loopback database.
-func TestLibSQLPreferencesLive(t *testing.T) {
+// newLiveLibSQLTestDB requires an explicitly disposable loopback database.
+func newLiveLibSQLTestDB(t *testing.T) *database.DB {
+	t.Helper()
 	dsn := os.Getenv("HICHAT_TEST_LIBSQL_DSN")
 	if dsn == "" {
 		t.Skip("set HICHAT_TEST_LIBSQL_DSN to a disposable loopback server")
@@ -35,7 +36,12 @@ func TestLibSQLPreferencesLive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	t.Cleanup(func() { _ = db.Close() })
+	return db
+}
+
+func TestLibSQLPreferencesLive(t *testing.T) {
+	db := newLiveLibSQLTestDB(t)
 	ctx := context.Background()
 	userID := "libsql-" + uuid.NewString()
 	if _, err := db.Conn.ExecContext(ctx, `INSERT INTO users (id, username, password_hash) VALUES (?, ?, ?)`, userID, userID, "x"); err != nil {

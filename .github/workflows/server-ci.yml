@@ -171,14 +171,15 @@ jobs:
             sleep 1
           done
           exit 1
-      - name: Verify migrations and concurrent preference updates
+      - name: Verify migrations, preferences and DM request races
         working-directory: server
         env:
           CGO_ENABLED: '1'
           HICHAT_TEST_LIBSQL_DSN: http://127.0.0.1:8080
         run: |
-          go test -v -tags libsql_integration ./repository -run '^TestLibSQLPreferencesLive$' -count=2 | tee "$RUNNER_TEMP/libsql-test.log"
+          go test -v -tags libsql_integration ./repository -run '^(TestLibSQLPreferencesLive|TestLibSQLAcceptDeclinePendingDMRace)$' -count=2 | tee "$RUNNER_TEMP/libsql-test.log"
           test "$(grep -c '^--- PASS: TestLibSQLPreferencesLive ' "$RUNNER_TEMP/libsql-test.log")" -eq 2
+          test "$(grep -c '^--- PASS: TestLibSQLAcceptDeclinePendingDMRace ' "$RUNNER_TEMP/libsql-test.log")" -eq 2
 
   server-postgres:
     name: PostgreSQL repository and migration contracts
