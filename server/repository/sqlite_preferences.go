@@ -116,6 +116,72 @@ func stringArgs(values []string) []any {
 	return args
 }
 
+// GetMany tolerates corrupt rows as opt-out so a single bad preference cannot
+// poison or starve a notification fanout page. Privacy-sensitive callers must
+// use GetManyStrict instead.
+func (r *sqlitePreferencesRepo) GetMany(ctx context.Context, userIDs []string) (map[string]*models.UserPreferences, error) {
+	out := make(map[string]*models.UserPreferences, len(userIDs))
+	if len(userIDs) == 0 {
+		return out, nil
+	}
+	unique := make([]string, 0, len(userIDs))
+	seen := make(map[string]struct{}, len(userIDs))
+	for _, id := range userIDs {
+		if id == "" {
+			continue
+		}
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		unique = append(unique, id)
+	}
+	const batchSize = 400
+	for start := 0; start < len(unique); start += batchSize {
+		end := start + batchSize
+		if end > len(unique) {
+			end = len(unique)
+		}
+		ids := unique[start:end]
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+		rows, err := r.db.QueryContext(ctx,
+			`SELECT user_id, data, updated_at FROM user_preferences WHERE user_id IN (`+placeholders+`)`,
+			stringArgs(ids)...,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("read preferences batch: %w", err)
+		}
+		for rows.Next() {
+			p := &models.UserPreferences{SchemaVersion: models.PreferencesSchemaVersion}
+			var raw string
+			if err = rows.Scan(&p.UserID, &raw, &p.UpdatedAt); err != nil {
+				_ = rows.Close()
+				return nil, fmt.Errorf("scan preferences batch: %w", err)
+			}
+			// A malformed row is opt-out for this recipient. Keep fanout moving.
+			if !json.Valid([]byte(raw)) {
+				p.Data = json.RawMessage(`{}`)
+				out[p.UserID] = p
+				continue
+			}
+			p.Data, err = models.FilterDeviceLocalPreferences(json.RawMessage(raw))
+			if err != nil {
+				_ = rows.Close()
+				return nil, fmt.Errorf("read preferences batch: %w", err)
+			}
+			out[p.UserID] = p
+		}
+		if err = rows.Err(); err != nil {
+			_ = rows.Close()
+			return nil, fmt.Errorf("iterate preferences batch: %w", err)
+		}
+		if err = rows.Close(); err != nil {
+			return nil, fmt.Errorf("close preferences batch: %w", err)
+		}
+	}
+	return out, nil
+}
+
 func (r *sqlitePreferencesRepo) Upsert(ctx context.Context, userID string, partial json.RawMessage) (*models.UserPreferences, error) {
 	if database.IsPostgres(r.db) {
 		return r.upsertPostgres(ctx, userID, partial)
@@ -143,7 +209,7 @@ func (r *sqlitePreferencesRepo) Upsert(ctx context.Context, userID string, parti
 		THEN user_preferences.data ELSE json('invalid stored preferences') END,
 		excluded.data), '$.voice_settings.inputDevice', '$.voice_settings.outputDevice',
 		'$.voice_settings.cameraDevice', '$.voice_settings.muteHotkeyGlobal')`
-	row := r.db.QueryRowContext(ctx,
+	rows, err := r.db.QueryContext(ctx,
 		`INSERT INTO user_preferences (user_id, data, updated_at)
 		 VALUES (?, ?, CURRENT_TIMESTAMP)
 		 ON CONFLICT(user_id) DO UPDATE SET
@@ -153,14 +219,31 @@ func (r *sqlitePreferencesRepo) Upsert(ctx context.Context, userID string, parti
 		 RETURNING user_id, data, updated_at`,
 		userID, string(filtered), models.MaxPreferencesStoredBytes,
 	)
-	var p models.UserPreferences
-	var dataStr string
-	err = row.Scan(&p.UserID, &dataStr, &p.UpdatedAt)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, fmt.Errorf("preferences storage limit exceeded: %w", pkg.ErrBadRequest)
-	}
 	if err != nil {
 		return nil, fmt.Errorf("upsert preferences: %w", err)
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return nil, fmt.Errorf("upsert preferences: %w", err)
+		}
+		return nil, fmt.Errorf("preferences storage limit exceeded: %w", pkg.ErrBadRequest)
+	}
+	var p models.UserPreferences
+	var dataStr string
+	err = rows.Scan(&p.UserID, &dataStr, &p.UpdatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("upsert preferences: %w", err)
+	}
+	// Complete the RETURNING stream before acknowledging the write. The
+	// QueryRow path discards its tail after one row; live libSQL concurrency
+	// tests observed stale immediate pooled reads on that path. Consuming EOF
+	// also surfaces late execution/close errors instead of reporting success.
+	if rows.Next() {
+		return nil, fmt.Errorf("upsert preferences returned multiple rows")
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("complete preferences write: %w", err)
 	}
 	p.SchemaVersion = models.PreferencesSchemaVersion
 	p.Data = json.RawMessage(dataStr)

@@ -23,6 +23,28 @@ func (activityServiceFriends) ListFriends(context.Context, string) ([]models.Fri
 	return []models.FriendshipWithUser{{UserID: "viewer", Status: models.FriendshipStatusAccepted}}, nil
 }
 
+type blockingActivityServiceFriends struct {
+	entered chan struct{}
+	once    sync.Once
+}
+
+type observingDoneContext struct {
+	context.Context
+	doneObserved chan struct{}
+	once         sync.Once
+}
+
+func (c *observingDoneContext) Done() <-chan struct{} {
+	c.once.Do(func() { close(c.doneObserved) })
+	return c.Context.Done()
+}
+
+func (f *blockingActivityServiceFriends) ListFriends(ctx context.Context, _ string) ([]models.FriendshipWithUser, error) {
+	f.once.Do(func() { close(f.entered) })
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
 type activityServiceServers struct{}
 
 func (activityServiceServers) IsMember(context.Context, string, string) (bool, error) {
@@ -156,6 +178,147 @@ func TestGameActivityServiceExpiredLeaseRevokesImmediately(t *testing.T) {
 	svc.ExpireAndReconcile(context.Background())
 	if len(events) != 2 || events[1].Data.(ws.GameActivityData).Game != nil {
 		t.Fatalf("expired lease did not revoke immediately: %#v", events)
+	}
+}
+
+func TestGameActivityServiceStartedWorkerExpiresLeaseAndStopJoins(t *testing.T) {
+	events := make(chan ws.Event, 4)
+	ticks := make(chan time.Time, 1)
+	stoppedTicker := make(chan struct{})
+	hub := &testutil.MockBroadcaster{BroadcastToUsersFn: func(ids []string, event ws.Event) {
+		if len(ids) == 1 && ids[0] == "viewer" {
+			events <- event
+		}
+	}}
+	policy := gameActivityPolicy(`{"privacy":{"shareGameActivity":true}}`, gameActivityFriendsStub{accepted: true}, gameActivityServersStub{}, gameActivityPresenceStub{visible: true}, nil)
+	svc := NewGameActivityService(policy, activityServiceFriends{}, activityServiceServers{}, hub)
+	svc.tickerFactory = func(interval time.Duration) (<-chan time.Time, func()) {
+		if interval != 10*time.Second {
+			t.Errorf("worker interval = %s, want 10s", interval)
+		}
+		return ticks, func() { close(stoppedTicker) }
+	}
+	svc.Connect("target", 1)
+	svc.Update(context.Background(), "target", 1, 1, &ws.GameActivityClientGame{ID: "x", Name: "X"})
+	select {
+	case <-events: // initial publication
+	default:
+		t.Fatal("initial activity publication was not emitted")
+	}
+	svc.mu.Lock()
+	source := svc.sources["target"][1]
+	source.leaseUntil = time.Now().Add(-time.Second)
+	svc.sources["target"][1] = source
+	svc.mu.Unlock()
+
+	svc.Start()
+	svc.Start() // duplicate lifecycle calls must not create another worker
+	ticks <- time.Now()
+	select {
+	case event := <-events:
+		data, ok := event.Data.(ws.GameActivityData)
+		if !ok || data.Game != nil {
+			t.Fatalf("expiry event = %#v, want revocation", event.Data)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("started worker did not process the expiry tick")
+	}
+	svc.Stop()
+	svc.Stop() // Stop is idempotent and waits for worker completion
+	select {
+	case <-stoppedTicker:
+	default:
+		t.Fatal("Stop returned before stopping the worker ticker")
+	}
+	select {
+	case <-svc.workerDone:
+	default:
+		t.Fatal("Stop returned before the expiry worker exited")
+	}
+	svc.mu.Lock()
+	_, remains := svc.sources["target"]
+	svc.mu.Unlock()
+	if remains {
+		t.Fatal("expired source remains after worker reconciliation")
+	}
+}
+
+func TestGameActivityTargetLockWaitHonorsContextCancellation(t *testing.T) {
+	svc := NewGameActivityService(&activityPolicyStub{}, activityServiceFriends{}, activityServiceServers{}, &testutil.MockBroadcaster{})
+	unlock := svc.lockTarget("target")
+	lockHeld := true
+	t.Cleanup(func() {
+		if lockHeld {
+			unlock()
+		}
+	})
+
+	baseCtx, cancel := context.WithCancel(context.Background())
+	ctx := &observingDoneContext{Context: baseCtx, doneObserved: make(chan struct{})}
+	defer cancel()
+	started := make(chan struct{})
+	done := make(chan bool, 1)
+	go func() {
+		close(started)
+		_, ok := svc.lockTargetContext(ctx, "target")
+		done <- ok
+	}()
+	<-started
+	select {
+	case <-ctx.doneObserved:
+	case <-time.After(time.Second):
+		t.Fatal("lock waiter never reached the context-aware wait")
+	}
+	cancel()
+	select {
+	case acquired := <-done:
+		if acquired {
+			t.Fatal("cancelled lock waiter acquired target lock")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("target lock waiter did not return after context cancellation")
+	}
+	unlock()
+	lockHeld = false
+	if release, ok := svc.lockTargetContext(context.Background(), "target"); !ok {
+		t.Fatal("cancelled waiter consumed target lock token")
+	} else {
+		release()
+	}
+}
+
+func TestGameActivityServiceStopCancelsInFlightReconcile(t *testing.T) {
+	ticks := make(chan time.Time, 1)
+	friends := &blockingActivityServiceFriends{entered: make(chan struct{})}
+	svc := NewGameActivityService(&activityPolicyStub{}, friends, activityServiceServers{}, &testutil.MockBroadcaster{})
+	svc.tickerFactory = func(time.Duration) (<-chan time.Time, func()) { return ticks, func() {} }
+	svc.mu.Lock()
+	svc.sources["target"] = map[uint64]gameActivitySource{
+		1: {incarnation: "source", game: ws.GameActivityClientGame{ID: "game", Name: "Game"}, changedAt: time.Now(), leaseUntil: time.Now().Add(gameActivityLease)},
+	}
+	svc.mu.Unlock()
+	svc.Start()
+	ticks <- time.Now()
+	select {
+	case <-friends.entered:
+	case <-time.After(time.Second):
+		t.Fatal("worker did not reach the controlled in-flight repository call")
+	}
+
+	stopped := make(chan struct{})
+	go func() {
+		svc.Stop()
+		close(stopped)
+	}()
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("Stop did not cancel and join the in-flight reconcile worker")
+	}
+	select {
+	case <-svc.workerDone:
+	default:
+		t.Fatal("worker remains active after Stop returned")
 	}
 }
 

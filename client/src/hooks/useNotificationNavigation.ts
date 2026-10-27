@@ -17,15 +17,20 @@ import { useNotificationStore } from "../stores/notificationStore";
 import { useUIStore, type TabServerInfo } from "../stores/uiStore";
 import { useServerStore } from "../stores/serverStore";
 import { useChannelStore } from "../stores/channelStore";
+import { useThreadStore } from "../stores/threadStore";
 import { useDMStore } from "../stores/dmStore";
 import { useGroupDMStore } from "../stores/groupDMStore";
 import { useMobileStore } from "../stores/mobileStore";
 import { useAuthStore } from "../stores/authStore";
 import { useBlockStore } from "../stores/blockStore";
 import { usePreferencesStore } from "../stores/preferencesStore";
+import { useMemberStore } from "../stores/memberStore";
+import { useChannelPermissionStore } from "../stores/channelPermissionStore";
 import { groupNotificationSource, refreshGroupNotificationAccess } from "../utils/groupMessageNotification";
 import { useE2EEStore } from "../stores/e2eeStore";
-import { isGroupMessageNotification, isDMMessageNotification } from "../utils/dmMessageNotification";
+import { isChannelMessageNotification, isGroupMessageNotification, isDMMessageNotification } from "../utils/dmMessageNotification";
+import { resolveChatChannel } from "../utils/resolveChatChannel";
+import { hasPermission, Permissions, resolveChannelPermissions } from "../utils/permissions";
 import { listDMChannels } from "../api/dm";
 import { useOpenAtMessage } from "./useOpenAtMessage";
 import type { AppNotification } from "../types";
@@ -64,8 +69,11 @@ export function useNotificationNavigation() {
       if (n.server_id && !liveServers.some((server) => server.id === n.server_id)) return;
       if (n.channel_id) {
         if (!n.server_id) return;
-        const tree = useChannelStore.getState().categoriesByServer[n.server_id];
-        if (!tree?.some((category) => category.channels.some((channel) => channel.id === n.channel_id))) return;
+        const threads = useThreadStore.getState();
+        if (!resolveChatChannel(n.channel_id, n.server_id, {
+          categoriesByServer: useChannelStore.getState().categoriesByServer,
+          threads, currentOwnerId: currentUserId, currentAuthGeneration: getAuthGeneration(),
+        })) return;
       }
       if (n.dm_channel_id) {
         const dm = useDMStore.getState().channels.find((channel) => channel.id === n.dm_channel_id);
@@ -97,7 +105,7 @@ export function useNotificationNavigation() {
         })().catch(() => {});
         return;
       }
-      if (n.payload.action === "incoming_message" && !isDMMessageNotification(n)) return;
+      if (n.payload.action === "incoming_message" && !isDMMessageNotification(n) && !isChannelMessageNotification(n)) return;
       if (isDMMessageNotification(n)) {
         const generation = getAuthGeneration(), channelId = n.dm_channel_id!, messageId = n.message_id!;
         const current = () => {
@@ -116,6 +124,57 @@ export function useNotificationNavigation() {
           const dm = access.success && access.data?.find(item => item.id === channelId);
           if (!current() || !dm || dm.status !== "accepted" || dm.is_muted || dm.other_user.id !== n.actor_id) return;
           if (await openAtDMMessage(channelId,messageId,{isCurrent:current}) && current()) void markRead(n.id);
+        })().catch(() => {});
+        return;
+      }
+      if (n.payload.action === "incoming_message") {
+        if (!isChannelMessageNotification(n)) return;
+        const generation = getAuthGeneration();
+        const channelCurrent = () => {
+          const prefs = usePreferencesStore.getState();
+          const blocks = useBlockStore.getState();
+          const feedState = useNotificationStore.getState();
+          const auth = useAuthStore.getState();
+          const servers = useServerStore.getState();
+          const channels = useChannelStore.getState();
+          const ignored = prefs.get<{ ignoredUsers?: Record<string, boolean> }>("privacy")?.ignoredUsers;
+          if (auth.user?.id !== currentUserId || getAuthGeneration() !== generation
+            || feedState.ownerId !== currentUserId || feedState.authGeneration !== generation
+            || prefs.accountId !== currentUserId || !prefs.isLoaded
+            || prefs.get<{ channelMessageNotifications?: boolean }>("notifications")?.channelMessageNotifications !== true
+            || ignored?.[n.actor_id!] || blocks.ownerId !== currentUserId || blocks.authGeneration !== generation
+            || !blocks.snapshotReady || blocks.isLoading || blocks.blockedUserIds.includes(n.actor_id!)
+            || !servers.servers.some(server => server.id === n.server_id)
+            || servers.mutedServerIds.has(n.server_id!)
+            || channels.mutedChannelIds.has(n.channel_id!)) return false;
+          const resolved = resolveChatChannel(n.channel_id!, n.server_id!, {
+            categoriesByServer: channels.categoriesByServer, threads: useThreadStore.getState(),
+            currentOwnerId: currentUserId, currentAuthGeneration: generation,
+          });
+          if (!resolved || channels.mutedChannelIds.has(resolved.permissionChannelId)) return false;
+          const members = useMemberStore.getState();
+          const member = members.membersByServer[n.server_id!]?.find(entry => entry.id === currentUserId);
+          const overrides = useChannelPermissionStore.getState();
+          const load = overrides.statusByChannel[resolved.permissionChannelId];
+          const rows = overrides.overridesByChannel[resolved.permissionChannelId];
+          if (members.ownerId !== currentUserId || members.authGeneration !== generation
+            || members.statusByServer[n.server_id!] !== "ready" || members.loadingServers.has(n.server_id!)
+            || !member || !Array.isArray(member.roles)
+            || load?.status !== "ready" || load.ownerId !== currentUserId || load.authGeneration !== generation
+            || load.serverId !== n.server_id || !Array.isArray(rows)
+            || !rows.every(entry => entry && typeof entry.role_id === "string"
+              && Number.isSafeInteger(entry.allow) && Number.isSafeInteger(entry.deny))) return false;
+          const permissions = resolveChannelPermissions(member.effective_permissions ?? 0,
+            member.roles.map(role => role.id), rows);
+          return hasPermission(permissions, Permissions.ViewChannel)
+            && hasPermission(permissions, Permissions.ReadMessages);
+        };
+        if (!channelCurrent()) return;
+        void (async () => {
+          const opened = await openAtMessage(n.server_id!, n.channel_id!, n.message_id!, "", {
+            isCurrent: channelCurrent,
+          });
+          if (opened && channelCurrent()) void markRead(n.id);
         })().catch(() => {});
         return;
       }

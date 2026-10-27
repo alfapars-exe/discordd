@@ -120,6 +120,16 @@ func TestProfileAudienceBatchReaderRejectsCorruptPreferences(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
+	// Notification fanout treats corrupt stored preferences as opt-out for this
+	// recipient, allowing the rest of a page to proceed without retry starvation.
+	got, err := repo.(PreferencesBatchReader).GetMany(ctx, []string{"prefs-user"})
+	if err != nil {
+		t.Fatalf("tolerant notification preference read: %v", err)
+	}
+	if got["prefs-user"] == nil || string(got["prefs-user"].Data) != `{}` {
+		t.Fatalf("corrupt notification preferences = %#v, want opt-out {}", got["prefs-user"])
+	}
+
 	privacyReader := repo.(interface {
 		GetManyStrict(context.Context, []string) (map[string]*models.UserPreferences, error)
 	})

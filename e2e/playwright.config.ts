@@ -25,11 +25,19 @@
  */
 
 import { defineConfig, devices } from "@playwright/test";
+import { randomBytes } from "node:crypto";
 import { join } from "node:path";
 
 const CLIENT_PORT = 3030;
 const SERVER_PORT = 9090;
 const BASE_URL = `http://localhost:${CLIENT_PORT}`;
+export const E2E_RUN_ID = process.env.HICHAT_E2E_RUN_ID
+  ?? `run-${Date.now()}-${process.pid}-${randomBytes(8).toString("hex")}`;
+if (!/^run-\d+-\d+-[a-f0-9]{16}$/.test(E2E_RUN_ID)) {
+  throw new Error("HICHAT_E2E_RUN_ID must be a valid generated run identity");
+}
+// Playwright worker processes inherit this value when they load test helpers.
+process.env.HICHAT_E2E_RUN_ID = E2E_RUN_ID;
 
 /**
  * Credentials for the single account the run shares, written by
@@ -44,10 +52,13 @@ const BASE_URL = `http://localhost:${CLIENT_PORT}`;
  * limiter on success, so successful logins never accumulate toward the cap.
  */
 export const ACCOUNT_FILE = join(__dirname, ".tmp", "account.json");
+export const CHANNEL_NOTIFICATION_FIXTURE_FILE = join(__dirname, ".tmp", "channel-notification-fixture.json");
+export const PENDING_NOTIFICATION_RECIPIENT_FILE = join(__dirname, ".tmp", "notification-recipient-pending.json");
 
 export default defineConfig({
   testDir: "./tests",
   outputDir: "./test-results",
+  globalTeardown: "./scripts/cleanup-test-credentials.mjs",
 
   // The suite shares one backend, one account and one server/channel, so
   // parallelism across files would interleave writes to the same message
@@ -64,7 +75,9 @@ export default defineConfig({
 
   use: {
     baseURL: BASE_URL,
-    trace: "on-first-retry",
+    // These tests type generated credentials into real forms. Traces can retain
+    // action arguments and DOM snapshots, so keep them off for this suite.
+    trace: "off",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
     navigationTimeout: 30_000,
@@ -99,6 +112,8 @@ export default defineConfig({
       // Never adopt a developer's running dev server — it would be pointed at
       // their real database rather than the throwaway one.
       reuseExistingServer: false,
+      // Do not let a developer's E2E_SERVER_PORT redirect the isolated API.
+      env: { E2E_SERVER_PORT: String(SERVER_PORT), HICHAT_E2E_RUN_ID: E2E_RUN_ID },
       stdout: "pipe",
       stderr: "pipe",
     },
@@ -108,7 +123,10 @@ export default defineConfig({
       url: BASE_URL,
       // Vite's first cold dep-optimize pass on this client is slow.
       timeout: 180_000,
-      reuseExistingServer: !process.env.CI,
+      // Never reuse a developer Vite process: it may proxy credentials to a
+      // non-disposable API. Always spawn Vite with the isolated loopback API.
+      reuseExistingServer: false,
+      env: { HICHAT_DEV_API_TARGET: `http://127.0.0.1:${SERVER_PORT}` },
       stdout: "pipe",
       stderr: "pipe",
     },

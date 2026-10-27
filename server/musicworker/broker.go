@@ -182,7 +182,10 @@ func (b *Broker) removeSession(s *brokerSession) {
 		b.session = nil
 	}
 	for _, job := range b.jobs {
-		if job.session == s {
+		// Already authenticated data sockets own their remaining lifetime.
+		// A stale session still cannot attach new jobs (JobHandler checks the
+		// current session under this same lock). Cancel only unclaimed work.
+		if job.session == s && !job.claimed {
 			job.cancel()
 			if job.conn != nil {
 				_ = job.conn.Close()
@@ -223,7 +226,9 @@ func (b *Broker) JobHandler(w http.ResponseWriter, r *http.Request) {
 	for {
 		kind, data, err := conn.ReadMessage()
 		if err != nil {
-			job.deliver(jobEvent{code: "network", terminal: true})
+			// A genuinely lost data socket must interrupt a paused downstream
+			// HTTP write as well; enqueueing an error behind it cannot do so.
+			job.cancel()
 			return
 		}
 		switch kind {

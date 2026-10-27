@@ -56,6 +56,16 @@ func PermCanReadChannel(p Permission) bool {
 	return p.Has(PermViewChannel) && p.Has(PermReadMessages)
 }
 
+// EffectiveChannelPermission applies the shared Discord-style channel
+// override rule: deny inherited bits, then apply explicit allows; admin
+// bypasses overrides. Reused by request authorization and durable fanout.
+func EffectiveChannelPermission(base, allow, deny Permission) Permission {
+	if base.Has(PermAdmin) {
+		return PermAll
+	}
+	return (base &^ deny) | allow
+}
+
 // OwnerRoleID is kept for backward compatibility with seeded data.
 // New servers identify the owner role via the IsOwner field.
 const OwnerRoleID = "owner"

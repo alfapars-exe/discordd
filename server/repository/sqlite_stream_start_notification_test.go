@@ -387,8 +387,20 @@ func TestStreamStartPostgresLockConflictRollsBackDecisionAndRetryRechecks(t *tes
 	}
 	cleanupCtx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	if _, err := raw.ExecContext(cleanupCtx, `UPDATE channels SET name='Still available' WHERE id='stream-channel'`); err != nil {
-		t.Fatalf("failed attempt retained a prefix authorization lock: %v", err)
+	cleanupTx, err := raw.BeginTx(cleanupCtx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanupTx.Rollback()
+	// Probe the channel relation lock directly. Updating a row here would run
+	// its authorization trigger and wait on writerTx's intentional server gate,
+	// masking whether Deliver leaked its earlier table lock after the later
+	// roles NOWAIT conflict.
+	if _, err := cleanupTx.ExecContext(cleanupCtx, `LOCK TABLE channels IN ROW EXCLUSIVE MODE NOWAIT`); err != nil {
+		t.Fatalf("failed attempt retained a channel table lock: %v", err)
+	}
+	if err := cleanupTx.Rollback(); err != nil {
+		t.Fatalf("release channel table lock probe: %v", err)
 	}
 	if err := writerTx.Commit(); err != nil {
 		t.Fatal(err)

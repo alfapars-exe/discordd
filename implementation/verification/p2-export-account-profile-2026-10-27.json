@@ -1,0 +1,59 @@
+{
+  "status": "implemented_unverified",
+  "base_commit": "31e2269ddc487f60694adf2c0d4a5f010c43474e",
+  "scope": "P2 personal data export account profile projection",
+  "verified_at": "2026-10-27T09:46:56.846266+00:00",
+  "source_lf_sha256": {
+    "server/repository/sqlite_data_export.go": "beced5fb99c9cbe90de6cf0acc9a557bcdf86d7bc228bc6a3c777a0715e95f5e",
+    "server/repository/data_export_profile_test.go": "6fb94633c1c2d931b4ae12e2034b611e8315a84c808267f30bd57f206b9afa2f"
+  },
+  "contract": {
+    "format": "hichat-personal-data-v1",
+    "change": "Additive explicit owner account allowlist, with 19 fields in total",
+    "added_fields": [
+      "avatar_url",
+      "avatar_animated_url",
+      "banner_url",
+      "banner_animated_url",
+      "wallpaper_url",
+      "bio",
+      "pronouns",
+      "accent_color",
+      "custom_status",
+      "status",
+      "pref_status",
+      "dm_privacy",
+      "last_seen_at"
+    ],
+    "excluded": [
+      "password and token material",
+      "platform administrator flags",
+      "moderation and ban metadata",
+      "bot ownership metadata",
+      "other users profile data"
+    ],
+    "null_and_empty": "Preserved distinctly",
+    "snapshot": "Uses existing authenticated User snapshot and final account/token-version publication fence; not an atomic snapshot across every export section"
+  },
+  "verification": {
+    "sqlite_export_suite": {
+      "result": "passed",
+      "count": 2,
+      "seconds": 4.782
+    },
+    "postgres18_export_suite": {
+      "result": "passed",
+      "count": 2,
+      "seconds": 23.734,
+      "fixture": "owned disposable loopback28291; no production access"
+    },
+    "baseline_negative": "Original repository source fails the new exact profile-projection test for populated, NULL and empty profile fields",
+    "go_vet_repository": "passed",
+    "git_diff_check": "passed"
+  },
+  "remaining_acceptance": [
+    "Actual owner browser download and installed Windows acceptance",
+    "Profile showcase, equipped cosmetics and any other separately stored profile sections are outside this bounded account-projection change",
+    "PR CI and production deployment remain separate; coverage.json unchanged"
+  ]
+}

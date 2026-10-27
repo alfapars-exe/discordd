@@ -1,4 +1,8 @@
 {
+  "audioPlaybackStart": "Start audio",
+  "audioPlaybackStarting": "Starting audio…",
+  "audioPlaybackBlocked": "Tap to hear audio.",
+  "audioPlaybackRetry": "Audio could not start. Try again.",
   "privateScreenAudioWindowsConsent": "Include system audio from all other apps (HiChat excluded)",
   "privateScreenAudioBrowserConsent": "Request audio from the selected source when the browser offers it",
   "privateScreenAudioShared": "Screen audio is shared",

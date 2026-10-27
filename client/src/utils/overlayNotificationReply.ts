@@ -12,7 +12,7 @@ import { useMessageStore } from "../stores/messageStore";
 import { useDMStore } from "../stores/dmStore";
 import { useGroupDMStore } from "../stores/groupDMStore";
 import { groupNotificationSource, refreshGroupNotificationAccess } from "./groupMessageNotification";
-import { isGroupMessageNotification, isDMMessageNotification } from "./dmMessageNotification";
+import { isChannelMessageNotification, isGroupMessageNotification, isDMMessageNotification } from "./dmMessageNotification";
 import { listDMChannels } from "../api/dm";
 import { useE2EEStore } from "../stores/e2eeStore";
 import { composerKey, EMPTY_DRAFT, useComposerDraftStore } from "../stores/composerDraftStore";
@@ -26,7 +26,7 @@ import type { ChatMessage } from "../hooks/useChatContext";
 import { UI_SHELL_V2 } from "./uiShell";
 
 export type OverlayNotificationReplySource = {
-  mode?: "dm" | "group"; keyEpoch?: number;
+  mode?: "dm" | "group"; channelMessage?: boolean; keyEpoch?: number;
   notificationId: string; ownerId: string; generation: number; serverId: string;
   channelId: string; messageId: string; actorId: string; permissionChannelId: string; label: string;
 };
@@ -54,7 +54,8 @@ function sourceMetadata(id: string): OverlayNotificationReplySource | null {
       serverId: "", channelId: n.dm_channel_id, messageId: n.message_id, actorId: n.actor_id,
       permissionChannelId: "", label: dm.other_user.display_name || dm.other_user.username };
   }
-  if (!n || (n.kind !== "mention" && n.kind !== "reply") || n.user_id !== auth.ownerId
+  const channelMessage = !!n && isChannelMessageNotification(n);
+  if (!n || (!channelMessage && n.kind !== "mention" && n.kind !== "reply") || n.user_id !== auth.ownerId
     || !safeId(n.server_id) || !safeId(n.channel_id) || !safeId(n.message_id) || !safeId(n.actor_id)
     || n.actor_id === auth.ownerId || n.dm_channel_id || n.group_dm_channel_id || n.payload.group_id !== undefined) return null;
   const resolved = resolveChatChannel(n.channel_id, n.server_id, {
@@ -65,7 +66,7 @@ function sourceMetadata(id: string): OverlayNotificationReplySource | null {
     || resolved.channel.archived_at != null) return null;
   return { notificationId: id, ownerId: auth.ownerId, generation: auth.generation, serverId: n.server_id,
     channelId: n.channel_id, messageId: n.message_id, actorId: n.actor_id,
-    permissionChannelId: resolved.permissionChannelId, label: resolved.channel.name };
+    permissionChannelId: resolved.permissionChannelId, label: resolved.channel.name, channelMessage };
 }
 
 /** Hydrate the existing ACL caches, never message bodies, for already-visible rows. */
@@ -85,6 +86,7 @@ export function resolveOverlayNotificationReplySource(id: string, requireMessage
   const channels = useChannelStore.getState(), members = useMemberStore.getState(), overrides = useChannelPermissionStore.getState();
   const ignored = prefs.get<{ ignoredUsers?: Record<string, boolean> }>("privacy")?.ignoredUsers;
   if (prefs.accountId !== source.ownerId || !prefs.isLoaded || ignored?.[source.actorId]
+    || (source.channelMessage && prefs.get<{ channelMessageNotifications?: boolean }>("notifications")?.channelMessageNotifications !== true)
     || blocks.ownerId !== source.ownerId || blocks.authGeneration !== source.generation || !blocks.snapshotReady || blocks.isLoading
     || blocks.blockedUserIds.includes(source.actorId) || useServerStore.getState().mutedServerIds.has(source.serverId)
     || channels.mutedChannelIds.has(source.channelId) || channels.mutedChannelIds.has(source.permissionChannelId)) return null;
@@ -125,7 +127,7 @@ export function resolveOverlayNotificationReplySource(id: string, requireMessage
 }
 
 export const notificationReplyBinding = (source: OverlayNotificationReplySource) => JSON.stringify([
-  source.mode ?? "channel", source.keyEpoch, source.notificationId, source.ownerId, source.generation, source.serverId, source.channelId, source.messageId, source.actorId, source.permissionChannelId,
+  source.mode ?? "channel", source.channelMessage ?? false, source.keyEpoch, source.notificationId, source.ownerId, source.generation, source.serverId, source.channelId, source.messageId, source.actorId, source.permissionChannelId,
 ]);
 export type NotificationReplyPreparation = "prepared" | "conflict" | "unavailable";
 

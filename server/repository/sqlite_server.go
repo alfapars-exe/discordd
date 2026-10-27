@@ -15,11 +15,18 @@ import (
 )
 
 type sqliteServerRepo struct {
-	db database.TxQuerier
+	db       database.TxQuerier
+	postgres bool
 }
 
 func NewSQLiteServerRepo(db database.TxQuerier) ServerRepository {
-	return &sqliteServerRepo{db: db}
+	return NewSQLiteServerRepoWithDialect(db, database.IsPostgres(db))
+}
+
+// NewSQLiteServerRepoWithDialect preserves the parent database dialect when
+// db is a *sql.Tx, which intentionally cannot reveal its driver.
+func NewSQLiteServerRepoWithDialect(db database.TxQuerier, postgres bool) ServerRepository {
+	return &sqliteServerRepo{db: db, postgres: postgres}
 }
 
 // ─── Server CRUD ───
@@ -101,7 +108,7 @@ func (r *sqliteServerRepo) Update(ctx context.Context, server *models.Server) er
 // (NewSQLiteServerRepo(tx)), matching the database.WithTx pattern
 // CreateServer already uses.
 func (r *sqliteServerRepo) Delete(ctx context.Context, serverID string) error {
-	if err := deleteServerCascade(ctx, r.db, serverID); err != nil {
+	if err := deleteServerCascadeWithDialect(ctx, r.db, serverID, r.postgres); err != nil {
 		return fmt.Errorf("failed to delete server: %w", err)
 	}
 	return nil

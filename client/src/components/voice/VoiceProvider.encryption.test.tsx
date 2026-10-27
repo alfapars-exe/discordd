@@ -23,6 +23,7 @@ vi.mock("@livekit/components-react",async(importOriginal)=>{
   return <div>{props.children}</div>;
  }, RoomAudioRenderer:()=><div data-testid="audio"/>};
 });
+vi.mock("./AudioPlaybackRecovery",()=>({default:()=><div data-testid="playback-recovery"/>}));
 vi.mock("./VoiceStateManager",()=>({default:()=><div data-testid="publishers"/>}));
 vi.mock("./StreamerPipPreview",()=>({default:()=><div data-testid="pip"/>}));
 import VoiceProvider from "./VoiceProvider";
@@ -31,10 +32,10 @@ describe("main encrypted publication wiring",()=>{
  it("leaves SDK auto-capture off and mounts no publication owners until the actual-owner ACK",()=>{
   const view=render(<VoiceProvider><p>app</p></VoiceProvider>);
   expect(fixture.room.mock.lastCall?.[0]).toMatchObject({audio:false,video:false,screen:false,connect:true});
-  expect(screen.queryByTestId("publishers")).toBeNull();expect(screen.queryByTestId("audio")).toBeNull();expect(screen.getByText("app")).toBeTruthy();
+  expect(screen.queryByTestId("playback-recovery")).toBeNull();expect(screen.queryByTestId("publishers")).toBeNull();expect(screen.queryByTestId("audio")).toBeNull();expect(screen.getByText("app")).toBeTruthy();
   expect((fixture.admissionInput.mock.lastCall![0] as {allowRestore:(source:string)=>boolean}).allowRestore("microphone")).toBe(false);
   fixture.admission.publishReady=true;view.rerender(<VoiceProvider><p>app</p></VoiceProvider>);
-  expect(screen.getByTestId("publishers")).toBeTruthy();
+  expect(screen.getByTestId("playback-recovery")).toBeTruthy();expect(screen.getByTestId("publishers")).toBeTruthy();
   fixture.admission.publishReady=false;view.rerender(<VoiceProvider><p>app</p></VoiceProvider>);expect(screen.queryByTestId("publishers")).toBeNull();
  });
  it("does not connect the JS room or mount JS publishers in native mode",()=>{

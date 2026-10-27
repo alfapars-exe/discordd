@@ -68,61 +68,51 @@ function emitPickerDiagnostic(phase: string, extra: Record<string, unknown> = {}
   }
 }
 
+let thumbnailQueryPending = false;
+
 async function querySources() {
-  // thumbnailSize halved (480×270 → 240×135) — each PNG dataURL was ~200-400
-  // KB; on machines with 30+ windows the combined IPC payload ran past 10 MB
-  // in a single message and crashed V8 string allocation. 240×135 stays
-  // clear enough for picker UX while shrinking IPC ~4×.
-  //
-  // fetchWindowIcons disabled — icons are another 50-100 KB per source and
-  // are the specific surface Electron has crashed on for users with
-  // elevated/protected windows (Vanguard, EAC, some banking apps).
-  const queryStart = Date.now();
+  const safe = arePickerThumbnailsDisabled() || thumbnailQueryPending;
 
-  // Safe mode (set after a prior screen-picker crash on this machine) skips
-  // thumbnail bitmap capture entirely: `{ 0, 0 }` enumerates ids + names only
-  // and never touches the GPU/compositor path that natively crashes. Healthy
-  // machines keep full thumbnails. See picker-safe-mode.ts.
-  const safe = arePickerThumbnailsDisabled();
-  emitPickerDiagnostic("sources_query_start", { thumbnails: !safe });
+  async function query(thumbnails: boolean, timeoutMs: number) {
+    const queryStart = Date.now();
+    emitPickerDiagnostic("sources_query_start", { thumbnails });
+    if (thumbnails) { thumbnailQueryPending = true; beginThumbnailCapture(); }
+    // The timeout cannot cancel native enumeration. Keep its crash breadcrumb
+    // until the native operation actually settles, including after fallback.
+    const native = Promise.resolve().then(() => desktopCapturer.getSources({
+      types: ["screen", "window"],
+      thumbnailSize: thumbnails ? { width: 240, height: 135 } : { width: 0, height: 0 },
+      fetchWindowIcons: false,
+    })).finally(() => { if (thumbnails) { thumbnailQueryPending = false; endThumbnailCapture(); } });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const sources = await Promise.race([native, new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`desktopCapturer.getSources timed out after ${timeoutMs}ms`)), timeoutMs);
+      })]);
+      emitPickerDiagnostic("sources_query_done", { durationMs: Date.now() - queryStart, sourceCount: sources.length, thumbnails });
+      return sources;
+    } catch (error) {
+      emitPickerDiagnostic("sources_query_error", {
+        durationMs: Date.now() - queryStart,
+        error: error instanceof Error ? error.message : String(error),
+        timedOut: error instanceof Error && /timed out/.test(error.message),
+        thumbnails,
+      });
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
 
-  // Breadcrumb the crash-prone call so a process death during it self-heals on
-  // next launch. Only on the thumbnail path — the safe path can't crash here.
-  if (!safe) beginThumbnailCapture();
-
-  const sourcesPromise = desktopCapturer.getSources({
-    types: ["screen", "window"],
-    thumbnailSize: safe ? { width: 0, height: 0 } : { width: 240, height: 135 },
-    fetchWindowIcons: false,
-  });
-
-  let queryTimer: ReturnType<typeof setTimeout> | undefined;
-  const timeoutPromise = new Promise<never>((_, reject) =>
-    queryTimer = setTimeout(
-      () => reject(new Error(`desktopCapturer.getSources timed out after ${GET_SOURCES_TIMEOUT_MS}ms`)),
-      GET_SOURCES_TIMEOUT_MS,
-    ),
-  );
-
+  if (safe) return query(false, 10_000);
   try {
-    const sources = await Promise.race([sourcesPromise, timeoutPromise]);
-    emitPickerDiagnostic("sources_query_done", {
-      durationMs: Date.now() - queryStart,
-      sourceCount: sources.length,
-      thumbnails: !safe,
-    });
-    return sources;
-  } catch (err) {
-    emitPickerDiagnostic("sources_query_error", {
-      durationMs: Date.now() - queryStart,
-      error: err instanceof Error ? err.message : String(err),
-      timedOut: err instanceof Error && /timed out/.test(err.message),
-    });
-    throw err;
-  } finally {
-    clearTimeout(queryTimer);
-    // Clears the breadcrumb + in-flight flag. A no-op on the safe path.
-    if (!safe) endThumbnailCapture();
+    return await query(true, GET_SOURCES_TIMEOUT_MS);
+  } catch (error) {
+    if (!(error instanceof Error) || !/timed out/.test(error.message)) throw error;
+    // Some Windows compositors stall bitmap capture while source IDs remain
+    // enumerable. A bounded previewless picker still lets the user choose.
+    emitPickerDiagnostic("sources_query_fallback", { thumbnails: false });
+    return query(false, 10_000);
   }
 }
 
@@ -151,7 +141,7 @@ export function installScreenPicker(): void {
     const win = getMainWindow();
     if (activePicker || !win || win.isDestroyed() || win.webContents.isDestroyed()
       || !request.frame || request.frame !== win.webContents.mainFrame) {
-      callback({});
+      callback(null);
       return;
     }
     const ownerWindow = win;
@@ -161,13 +151,13 @@ export function installScreenPicker(): void {
     let finished = false;
     let sources: Awaited<ReturnType<typeof querySources>> = [];
     let refreshing = false;
-    const owner = { cancel: () => finish({}) };
+    const owner = { cancel: () => finish(null) };
     activePicker = owner;
     const current = () => !finished && activePicker === owner && !win.isDestroyed()
       && !contents.isDestroyed() && contents.mainFrame === frame;
     const trusted = (event: Electron.IpcMainEvent) => current()
       && event.sender === contents && event.senderFrame === frame;
-    const timeout = setTimeout(() => finish({}), PICKER_TIMEOUT_MS);
+    const timeout = setTimeout(() => finish(null), PICKER_TIMEOUT_MS);
 
     function finish(streams: Parameters<typeof callback>[0]) {
       if (finished) return;
@@ -180,7 +170,13 @@ export function installScreenPicker(): void {
       contents.off("render-process-gone", owner.cancel);
       contents.off("did-navigate", owner.cancel);
       if (activePicker === owner) activePicker = null;
-      callback(streams);
+      try {
+        callback(streams);
+      } catch (error) {
+        // Electron may invalidate a frame while a picker is closing. Its
+        // one-shot callback must never escape as a main-process exception.
+        emitPickerDiagnostic("handler_error", { stage: "complete_request", errorName: error instanceof Error ? error.name : "unknown" });
+      }
     }
     function onResult(event: Electron.IpcMainEvent, sourceId: unknown) {
       if (!trusted(event)) return;
@@ -191,7 +187,7 @@ export function installScreenPicker(): void {
         picked: !!selected,
         sourceKind: selected?.id?.startsWith("screen:") ? "screen" : (selected ? "window" : "none"),
       });
-      finish(selected ? { video: selected } : {});
+      finish(selected ? { video: selected } : null);
     }
     async function onRefresh(event: Electron.IpcMainEvent) {
       if (!trusted(event) || refreshing) return;
@@ -214,10 +210,10 @@ export function installScreenPicker(): void {
     emitPickerDiagnostic("request_handler_start");
     try {
       sources = await querySources();
-      if (!current()) { finish({}); return; }
+      if (!current()) { finish(null); return; }
       if (!sources.length) {
         emitPickerDiagnostic("no_sources", { msSinceHandlerStart: Date.now() - handlerStart });
-        finish({});
+        finish(null);
         return;
       }
       ipcMain.on("screen-picker-result", onResult);
@@ -230,7 +226,7 @@ export function installScreenPicker(): void {
         msSinceHandlerStart: Date.now() - handlerStart,
         error: error instanceof Error ? error.message : String(error),
       });
-      finish({});
+      finish(null);
     }
   });
 }
