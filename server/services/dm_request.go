@@ -66,35 +66,29 @@ func (s *dmService) DeclineRequest(ctx context.Context, userID, channelID string
 	if err := verifyDMRequestRecipient(channel, userID, "decline"); err != nil {
 		return err
 	}
-
-	s.broadcastToBothUsers(channel, ws.Event{
-		Op: ws.OpDMRequestDecline,
-		Data: map[string]string{
-			"dm_channel_id": channelID,
-		},
-	})
-
-	// Retire the recipient's dm_request inbox row BEFORE DeleteChannel
-	// removes every notification on this channel: marking first yields the
-	// ids for the notification_read push, and the unread count it carries
-	// already excludes them (best-effort, see settleRequestNotifications).
-	ids, markErr := s.notificationRepo.MarkDMRequestRead(ctx, userID, channelID)
-	settleRequestNotifications(ctx, s.notificationRepo, s.hub, userID, ids, markErr)
-
-	// Pre-fetch attachment file_urls for the post-delete disk cleanup below.
-	// A fetch failure here is logged and non-fatal — the decline still
-	// proceeds, it just can't clean up files it couldn't enumerate.
-	fileURLs, urlErr := s.dmRepo.GetAttachmentFileURLsByChannelID(ctx, channelID)
-	if urlErr != nil {
-		dmLogger.Error("failed to fetch DM attachment file urls before channel delete", "channel_id", channelID, "err", pkg.ErrText(urlErr))
+	decliner, ok := s.dmRepo.(repository.PendingDMDecliner)
+	if !ok {
+		// An unconditional legacy DeleteChannel fallback would recreate the
+		// accept/decline data-loss race. Do not imply it is safe.
+		return fmt.Errorf("%w: atomic pending DM decline is unavailable", pkg.ErrInternal)
 	}
-
-	if err := s.dmRepo.DeleteChannel(ctx, channelID); err != nil {
+	changed, fileURLs, ids, err := decliner.DeclinePending(ctx, channelID, userID)
+	if err != nil {
 		return fmt.Errorf("failed to decline DM request: %w", err)
 	}
+	if !changed {
+		return fmt.Errorf("%w: DM request changed before decline", pkg.ErrConflict)
+	}
 
-	// Only remove files once the DB delete has actually committed — see
-	// upload_cleanup.go for why the ordering matters.
+	// The repository commits the channel and notification deletion atomically.
+	// Publish only after commit, using the exact unread ids captured in that
+	// transaction, then remove files whose attachment rows were committed away.
+	s.broadcastToBothUsers(channel, ws.Event{
+		Op:   ws.OpDMRequestDecline,
+		Data: map[string]string{"dm_channel_id": channelID},
+	})
+	settleRequestNotifications(ctx, s.notificationRepo, s.hub, userID, ids, nil)
+
 	removeUploadFilesByURL(s.uploadDir, fileURLs)
 
 	return nil
