@@ -144,24 +144,46 @@ it("preserves failed server saves and rejects an old response after changing the
   expect(screen.getByRole("textbox", { name: "serverName" })).toHaveValue("Second");
 });
 
-it("does not erase new LiveKit secrets typed while the old draft is saving", async () => {
+it("does not erase new LiveKit URL or secrets typed while the old draft is saving", async () => {
   let done!: (res: Awaited<ReturnType<typeof servers.updateServer>>) => void;
   vi.mocked(servers.updateServer).mockImplementationOnce(() => new Promise(resolve => { done = resolve; }));
   render(<Harness platform={false} />);
   const secret = await screen.findByLabelText("livekitApiSecret");
   const key = screen.getByLabelText("livekitApiKey");
+  const liveKitUrl = screen.getByLabelText("livekitUrl");
+  fireEvent.change(liveKitUrl, { target: { value: "  wss://submitted.test  " } });
   fireEvent.change(key, { target: { value: "submitted-key" } });
   fireEvent.change(secret, { target: { value: "submitted-secret" } });
   const buttons = screen.getAllByRole("button", { name: "saveChanges" });
   fireEvent.click(buttons[buttons.length - 1]);
+  fireEvent.change(liveKitUrl, { target: { value: "  wss://newer.test  " } });
   fireEvent.change(key, { target: { value: "new-key" } });
   fireEvent.change(secret, { target: { value: "new-secret" } });
   await act(async () => { done({ success: true, data: server }); });
   expect(key).toHaveValue("new-key"); expect(secret).toHaveValue("new-secret");
+  expect(liveKitUrl).toHaveValue("  wss://newer.test  ");
   fireEvent.click(screen.getByText("Close editor")); expect(useConfirmStore.getState().options).not.toBeNull();
   for (const storage of [localStorage, sessionStorage]) {
     expect(JSON.stringify(Object.values(storage))).not.toContain("new-secret");
   }
+});
+
+it("normalizes an acknowledged unchanged LiveKit URL and clears the successful draft", async () => {
+  vi.mocked(servers.updateServer).mockResolvedValueOnce({ success: true, data: server });
+  render(<Harness platform={false} />);
+  const liveKitUrl = await screen.findByLabelText("livekitUrl");
+  fireEvent.change(liveKitUrl, { target: { value: "  wss://saved.test  " } });
+  fireEvent.change(screen.getByLabelText("livekitApiKey"), { target: { value: "local-key" } });
+  fireEvent.change(screen.getByLabelText("livekitApiSecret"), { target: { value: "local-secret" } });
+  const buttons = screen.getAllByRole("button", { name: "saveChanges" });
+  fireEvent.click(buttons[buttons.length - 1]);
+  await waitFor(() => expect(liveKitUrl).toHaveValue("wss://saved.test"));
+  expect(servers.updateServer).toHaveBeenCalledWith("server-a", { livekit_url: "wss://saved.test", livekit_key: "local-key", livekit_secret: "local-secret" });
+  expect(screen.getByLabelText("livekitApiKey")).toHaveValue("");
+  expect(screen.getByLabelText("livekitApiSecret")).toHaveValue("");
+  fireEvent.click(screen.getByText("Close editor"));
+  await waitFor(() => expect(closed).toHaveBeenCalledOnce());
+  expect(useConfirmStore.getState().options).toBeNull();
 });
 
 it("keeps a failed create draft and drops a successful response from a replaced account", async () => {

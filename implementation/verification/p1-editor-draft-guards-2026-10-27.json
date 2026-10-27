@@ -4,34 +4,45 @@
   "scope": [
     "p1.settings-dialog"
   ],
-  "verified_at": "2026-10-27T09:13:28.930612+00:00",
+  "verified_at": "2026-10-27T09:25:56.065412+00:00",
   "source_lf_sha256": {
-    "client/src/components/settings/ServerGeneralSettings.tsx": "4159b11749a4da8bd61c7e23ab338e7a682839d7d861063d5ecae901455f8cfd",
+    "client/src/components/settings/ServerGeneralSettings.tsx": "130d67e34fd83a1132c01290cb02c8c96865ee978d1853564b539e903bd59dba",
     "client/src/components/settings/PlatformSettings.tsx": "8977a73fd37d669b4ed941f2a040d64e55ba8f2f2b4dad6b2546e7259568fda4",
     "client/src/components/settings/InstanceForm.tsx": "2f38a10a43eba4b5b0b58a37854cba2bc30077e42f1afe3bff8ca5fffcb837dd",
-    "client/src/components/settings/EditorDraftGuards.test.tsx": "df9e6fa899884620a016acc193de67b3fe4d69968484a71240b3492863c144ea"
+    "client/src/components/settings/EditorDraftGuards.test.tsx": "1ca9fe51847a7c9617bccd058cc33c3a9fea4924abcf9f269143fae0d6937366"
   },
   "implementation": [
     "Use existing owner-registered useSettingsDraft for server and platform fields, including LiveKit credentials and active saves.",
     "Platform record selection/new/cancel confirmation pins account, auth generation and current draft. API writes are serialized; fields are disabled until completion.",
     "Server acknowledgement updates only unchanged submitted fields; newer edits survive. Scope-keyed editor lifetimes clear secrets on account/server replacement.",
-    "Failed platform DELETE response does not remove local record or report success. No credentials are written to browser storage."
+    "Failed platform DELETE response does not remove local record or report success. No credentials are written to browser storage.",
+    "A successful LiveKit URL save normalizes the field only when it still equals the submitted raw value; newer URL input remains unchanged."
   ],
   "verification": {
     "targeted_tests": {
       "result": "passed",
       "files": 3,
-      "tests": 23
+      "tests": 24,
+      "seconds": 3.46,
+      "coverage": [
+        "Whitespace-only LiveKit URL normalization leaves acknowledged draft clean",
+        "Newer URL and secret edits survive an older save acknowledgement"
+      ]
     },
     "settings_regression": {
       "result": "passed",
       "files": 37,
       "tests": 238,
-      "seconds": 39.55
+      "seconds": 39.55,
+      "source_commit": "6e3d78492521e89e714cc32ce9645ea9d0de7cc2"
     },
     "eslint": "passed",
     "typescript": "passed",
-    "production_client_build": "passed",
+    "production_client_build": {
+      "result": "passed",
+      "source_commit": "6e3d78492521e89e714cc32ce9645ea9d0de7cc2",
+      "followup": "Whitespace normalization follow-up validated by targeted tests, ESLint and TypeScript; full build was not repeated."
+    },
     "coverage_validator": {
       "structure": "valid",
       "tests": 32,

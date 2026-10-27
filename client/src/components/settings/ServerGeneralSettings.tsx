@@ -167,7 +167,7 @@ function ServerGeneralEditor() {
       return;
     }
 
-    const submitted = { url: editLkUrl.trim(), key: editLkKey, secret: editLkSecret };
+    const submitted = { rawUrl: editLkUrl, url: editLkUrl.trim(), key: editLkKey, secret: editLkSecret };
     setIsLkSaving(true);
     try {
       const res = await serverApi.updateServer(activeServerId, {
@@ -182,6 +182,7 @@ function ServerGeneralEditor() {
         setLkSettings((prev) =>
           prev ? { ...prev, url: submitted.url } : prev
         );
+        setEditLkUrl(value => value === submitted.rawUrl ? submitted.url : value);
         // Clear key/secret inputs for security
         setEditLkKey(value => value === submitted.key ? "" : value);
         setEditLkSecret(value => value === submitted.secret ? "" : value);
