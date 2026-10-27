@@ -189,6 +189,23 @@ afterEach(async () => {
 });
 
 describe("guild screen-share profile lifecycle", () => {
+  it.each([[false, true], [true, false]])("uses Electron audio intent changed in the picker from %s to %s", async (initial, chosen) => {
+    h.electron = true;
+    voice.setState({ screenShareAudio: initial });
+    const pickerGate = deferred();
+    const f = fixture({ pickerGate });
+    await tick();
+    expect(h.startAudio).not.toHaveBeenCalled();
+    change({ screenShareAudio: chosen });
+    await act(async () => { pickerGate.resolve(); });
+    await tick();
+    expect(f.participant.setScreenShareEnabled).toHaveBeenCalledTimes(1);
+    expect(f.participant.setScreenShareEnabled.mock.calls[0][1]?.audio).toBe(false);
+    expect(h.startAudio).toHaveBeenCalledTimes(chosen ? 1 : 0);
+    expect(f.publications.has(Track.Source.ScreenShareAudio)).toBe(chosen);
+    expect(f.raw.stop).not.toHaveBeenCalled();
+  });
+
   it("starts browser video with the current content/codec/rate and separate screen-audio policy", async () => {
     voice.setState({ screenShareQuality: "1440p", screenShareFps: 120, screenShareLowLatency: true, screenShareMode: "detail" });
     const f = fixture();
