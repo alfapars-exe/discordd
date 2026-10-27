@@ -3,7 +3,7 @@
  *
  * Flow: main process sends "show-screen-picker" IPC with desktopCapturer sources ->
  * user picks a source -> "screen-picker-result" IPC sends source ID back ->
- * cancel sends null -> main callback({}) cancels the stream.
+ * cancel sends null -> main callback(null) cancels the stream.
  */
 
 import { useState, useEffect, useCallback } from "react";

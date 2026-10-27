@@ -1277,7 +1277,7 @@
       "phase": "P1",
       "status": "implemented_unverified",
       "remaining_implementation": [
-        "Extend owner-provided unsaved-form guards to remaining server/platform editors; complete installed-Windows and all-dialog acceptance."
+        "Server general and platform LiveKit editors now register unsaved and in-flight drafts and guard platform record/new/cancel transitions. Complete installed-Windows/browser focus and keyboard acceptance and audit other editors separately."
       ],
       "sources": [
         "R01",
@@ -1323,9 +1323,13 @@
         "client/src/components/settings/SettingsModal.tsx",
         "client/src/hooks/useSettingsWorkspace.ts",
         "client/src/components/settings/settingsWorkspaceContext.ts",
-        "client/src/components/shared/ConfirmDialog.tsx"
+        "client/src/components/shared/ConfirmDialog.tsx",
+        "client/src/components/settings/ServerGeneralSettings.tsx",
+        "client/src/components/settings/PlatformSettings.tsx",
+        "client/src/components/settings/InstanceForm.tsx"
       ],
       "evidence": [
+        "implementation/verification/p1-editor-draft-guards-2026-10-27.json",
         {
           "kind": "integration",
           "path": "implementation/verification/p1-workspace-2026-10-23.json",
@@ -7955,20 +7959,25 @@
       "id": "p11.overlay-message",
       "title": "Overlay message notifications",
       "phase": "P11",
-      "status": "existing",
+      "status": "implemented_unverified",
       "sources": [
         "R25"
       ],
       "platforms": [
         "windows"
       ],
-      "persistence": "Device overlay notification preferences",
-      "authorization": "Partial persisted server mention/reply and accepted one-to-one DM support: current owner/auth/source, server/thread ACL or accepted DM membership, block/ignore/mute/spam and crypto-device checks; opaque native action with one-shot confirmation. Group and ordinary channel message dispatch remain pending.",
+      "persistence": "Account opt-in, durable channel fanout jobs and inbox rows; device overlay preferences",
+      "authorization": "Ordinary server/thread notices require explicit opt-in, current membership and effective View plus Read permissions, fresh ignore/block/channel-parent/server mute policy, and account/auth provenance on client actions. Queue and native projection contain metadata only. Existing mention/reply and accepted DM paths retain their separate acceptance boundaries.",
       "acceptance": [
         "Enabled widget displays actual permitted incoming messages and reply action targets correct conversation."
       ],
-      "code": ["client/src/hooks/useOverlayNotificationReply.ts", "client/src/utils/overlayNotificationReply.ts", "client/src/hooks/useOverlayNotifications.ts", "electron/overlay-action-regions.ts", "electron/voice-overlay.ts"],
-      "evidence": ["implementation/verification/p11-overlay-notification-reply-2026-10-25.json", "implementation/verification/p11-accepted-dm-notification-reply-2026-10-25.json", "implementation/verification/p11-dm-badge-read-order-2026-10-25.json"]
+      "remaining_acceptance": [
+        "Actual browser and two independent HiChat users: opt-in synchronization, live ACL and mute/ignore changes, thread navigation and encrypted reply to the correct conversation.",
+        "Installed Windows/game overlay: visible notice, native action regions, focus, DPI, keyboard and reply confirmation with real clients.",
+        "Release artifact, migration backup/restore and previous-artifact rollback rehearsal on migrated SQLite/PostgreSQL; no production deployment or rollback is established by these tests."
+      ],
+      "code": ["server/database/migrations/145_channel_message_notification_jobs.sql", "server/database/postgres_migrations/047_channel_message_notification_jobs.sql", "server/repository/sqlite_channel_message_notification_queue.go", "server/services/channel_message_notification_worker.go", "client/src/hooks/useNotificationNavigation.ts", "client/src/hooks/useOverlayNotificationReply.ts", "client/src/utils/overlayNotificationReply.ts", "client/src/hooks/useOverlayNotifications.ts", "electron/overlay-action-regions.ts", "electron/voice-overlay.ts"],
+      "evidence": ["implementation/verification/p11-overlay-notification-reply-2026-10-25.json", "implementation/verification/p11-accepted-dm-notification-reply-2026-10-25.json", "implementation/verification/p11-dm-badge-read-order-2026-10-25.json", "implementation/verification/p11-channel-message-dispatch-2026-10-27.json"]
     },
     {
       "id": "p11.overlay-welcome",

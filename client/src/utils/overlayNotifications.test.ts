@@ -68,3 +68,13 @@ it("projects canonical group metadata only and refuses ambiguous sources or body
  expect(project([{...n,dm_channel_id:"dm"}])).toEqual([]);
  expect(project([{...n,payload:{...n.payload,body:"secret"}}])).toEqual([]);
 });
+it("projects opaque channel message metadata only when the account opted in", () => {
+  const channel = notification({ kind: "system", server_id: "server", channel_id: "channel", message_id: "message",
+    payload: { action: "incoming_message", source: "channel" } });
+  expect(project([channel])).toEqual([]);
+  expect(project([channel], { preferences: { ...DEFAULT_NOTIFICATION_PREFERENCES, channelMessageNotifications: true } }))
+    .toEqual([{ id: "n1", category: "message" }]);
+  expect(project([{ ...channel, payload: { ...channel.payload, body: "secret" } }], {
+    preferences: { ...DEFAULT_NOTIFICATION_PREFERENCES, channelMessageNotifications: true },
+  })).toEqual([]);
+});

@@ -269,9 +269,10 @@ function logPublishedAudioTrackDetails(
  */
 type ShareBranch = "capacitor" | "electron-audio" | "browser";
 
-function computeShareBranch(screenShareAudio: boolean): ShareBranch {
+function computeShareBranch(): ShareBranch {
   if (isCapacitor()) return "capacitor";
-  if (isElectron() && screenShareAudio) return "electron-audio";
+  // The picker can change audio intent while video capture is pending.
+  if (isElectron()) return "electron-audio";
   return "browser";
 }
 
@@ -493,6 +494,12 @@ export function useScreenShareToggle(
       notifyServerStarted();
       logPublishedTrackDetails(localParticipant, branch);
 
+      // Read the choice after the picker closes: both enabling and disabling
+      // its audio checkbox must apply to this capture, without a second picker.
+      if (!useVoiceStore.getState().screenShareAudio) {
+        logToServer("info", "screen_share_success", { branch, audio: false, durationMs: Date.now() - attemptStart });
+        return;
+      }
       const audioTrack = await systemAudioCaptureRef.current.start(()=>!shouldCancel());
       if (shouldCancel() || !audioTrack) {
         // Video already published; audio track failed (Mac/Linux no
@@ -639,7 +646,7 @@ export function useScreenShareToggle(
       // a queued new start, so SDK pending capture reuse cannot revive it.
       if (cancelled && isStreaming) return;
 
-      const branch = computeShareBranch(useVoiceStore.getState().screenShareAudio);
+      const branch = computeShareBranch();
 
       if (isStreaming) {
         const { screenShareQuality: ssq, screenShareFps: ssFps } =
@@ -748,11 +755,11 @@ export function useScreenShareToggle(
   ): Promise<void> {
     if (myGen !== restartGenRef.current) return;
 
-    const { isStreaming: streaming, screenShareAudio: ssa } =
+    const { isStreaming: streaming } =
       useVoiceStore.getState();
     if (!streaming) return;
 
-    const branch = computeShareBranch(ssa);
+    const branch = computeShareBranch();
     const shouldCancel = () => myGen !== restartGenRef.current;
 
     isRestartingRef.current = true;

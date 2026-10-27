@@ -286,6 +286,7 @@ func main() {
 	defer stopAuthMaintenance()
 	stopAccountAssetCleanup := svcs.AccountAssetCleanup.Start(context.Background())
 	stopMessageReminders := svcs.ReminderWorker.Start(context.Background())
+	stopChannelMessageNotifications := svcs.ChannelNotifWorker.Start(context.Background())
 	stopServerEvents := svcs.ServerEventWorker.Start(context.Background())
 	stopFriendAnniversaries := svcs.FriendAnniversaryWorker.Start(context.Background())
 	stopEmailDelivery := svcs.EmailDelivery.Start(context.Background())
@@ -419,27 +420,7 @@ func main() {
 			}
 		}
 
-		// Try static file first
-		path := strings.TrimPrefix(r.URL.Path, "/")
-		if path == "" {
-			path = "index.html"
-		}
-		if f, openErr := frontendFS.Open(path); openErr == nil {
-			defer func() { _ = f.Close() }() // existence probe only — nothing was read
-			setStaticCacheHeaders(w, path)
-			http.FileServer(http.FS(frontendFS)).ServeHTTP(w, r)
-			return
-		}
-
-		// SPA fallback — index.html must never be cached or users miss new
-		// /assets/<hash>.js filenames after a deploy and run a broken half-old build.
-		if len(indexHTMLWeb) == 0 {
-			http.NotFound(w, r)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Header().Set("Cache-Control", "no-cache")
-		_, _ = w.Write(indexHTMLWeb) // error means the peer is gone; nothing left to do
+		serveFrontend(w, r, frontendFS, indexHTMLWeb)
 	})
 
 	// 17. Security headers
@@ -514,6 +495,7 @@ func main() {
 	stopAuthMaintenance()
 	stopAccountAssetCleanup()
 	stopMessageReminders()
+	stopChannelMessageNotifications()
 	stopServerEvents()
 	stopFriendAnniversaries()
 	stopEmailDelivery()

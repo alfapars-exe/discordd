@@ -17,6 +17,8 @@ type musicSampleController struct {
 	sink    sampleWriter
 	onStart func()
 	ready   func() bool
+	now     func() time.Time
+	wait    func(context.Context, time.Duration) error
 	next    time.Time
 }
 
@@ -32,20 +34,30 @@ func (c *musicSampleController) WriteSample(sample media.Sample, opts *lksdk.Sam
 		}
 		paused := c.bot.isPaused
 		ready := c.ready == nil || c.ready()
-		delay := time.Until(c.next)
+		now := c.clockNow()
+		if paused || !ready {
+			// Resume from the current time, never from a paused backlog.
+			c.next = time.Time{}
+		}
+		delay := c.next.Sub(now)
 		if !paused && ready && delay <= 0 {
+			deadline := c.next
+			// Keep ordinary timer/write overhead out of the media clock. A
+			// whole missed frame starts a new schedule instead of a burst.
+			if deadline.IsZero() || now.Sub(deadline) >= sample.Duration {
+				deadline = now
+			}
 			// Serialize the write with Pause: once Pause returns no further
 			// sample can escape until Resume. SDK WriteSample is a local RTP
 			// write, not a request waiting for a remote peer's reply.
 			err := c.sink.WriteSample(sample, opts)
 			first := c.bot.startedAt == nil
 			if err == nil {
-				now := time.Now()
 				if first {
 					c.bot.startedAt = &now
 				}
 				c.bot.elapsed += sample.Duration
-				c.next = now.Add(sample.Duration)
+				c.next = deadline.Add(sample.Duration)
 			}
 			c.bot.mu.Unlock()
 			if err == nil && first && c.onStart != nil {
@@ -57,12 +69,29 @@ func (c *musicSampleController) WriteSample(sample media.Sample, opts *lksdk.Sam
 		if paused || !ready || delay > 20*time.Millisecond {
 			delay = 20 * time.Millisecond
 		}
-		timer := time.NewTimer(delay)
-		select {
-		case <-c.ctx.Done():
-			timer.Stop()
-			return c.ctx.Err()
-		case <-timer.C:
+		if err := c.waitFor(delay); err != nil {
+			return err
 		}
+	}
+}
+
+func (c *musicSampleController) clockNow() time.Time {
+	if c.now != nil {
+		return c.now()
+	}
+	return time.Now()
+}
+
+func (c *musicSampleController) waitFor(delay time.Duration) error {
+	if c.wait != nil {
+		return c.wait(c.ctx, delay)
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-c.ctx.Done():
+		return c.ctx.Err()
+	case <-timer.C:
+		return nil
 	}
 }

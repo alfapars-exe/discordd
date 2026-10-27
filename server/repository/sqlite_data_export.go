@@ -106,6 +106,9 @@ func (r *sqliteDataExportRepo) Create(ctx context.Context, user *models.User) (*
 		{"preferences", `SELECT data, updated_at FROM user_preferences WHERE user_id=?`},
 		{"game_application_grants", `SELECT bot_user_id AS application_id, messaging_enabled, revision, authorized_at, updated_at, revoked_at FROM application_game_grants WHERE user_id=? ORDER BY bot_user_id`},
 		{"server_memberships", `SELECT server_id, joined_at FROM server_members WHERE user_id=?`},
+		// Export only the owner's conversation membership and attachments to
+		// their own authored messages. Shared-channel access is not ownership of
+		// another author's files; neither this list nor the archive embeds keys.
 		{"direct_message_memberships", `SELECT id AS dm_channel_id,user1_id,user2_id,e2ee_enabled,status,initiated_by,created_at,last_message_at FROM dm_channels WHERE ? IN (user1_id,user2_id) ORDER BY created_at,id`},
 		{"group_memberships", `SELECT g.id AS group_id,g.name,g.icon_url,g.owner_id,g.key_epoch,g.created_at,g.updated_at,m.joined_at,m.is_muted,m.settings_revision FROM group_dm_members m JOIN group_dm_channels g ON g.id=m.group_id WHERE m.user_id=? ORDER BY m.joined_at,g.id`},
 		{"channel_attachments", `SELECT a.id,a.message_id,m.channel_id,a.filename,a.file_url,a.file_size,a.mime_type,a.created_at,m.encryption_version FROM attachments a JOIN messages m ON m.id=a.message_id WHERE m.user_id=? ORDER BY a.created_at,a.id`},

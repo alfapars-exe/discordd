@@ -5,7 +5,41 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"testing/fstest"
 )
+
+func TestFrontendMissingBundleDoesNotReturnSPA(t *testing.T) {
+	files := fstest.MapFS{"assets/current.js": {Data: []byte("export const current = true;")}}
+	index := []byte("<!doctype html><title>current application</title>")
+	for _, path := range []string{"/assets/previous.js", "/assets/missing.css", "/assets/missing-worker.js?version=old"} {
+		r := httptest.NewRecorder()
+		serveFrontend(r, httptest.NewRequest(http.MethodGet, path, nil), files, index)
+		if r.Code != http.StatusNotFound || strings.Contains(r.Body.String(), "current application") {
+			t.Fatalf("%s returned an application document: status %d body %q", path, r.Code, r.Body.String())
+		}
+		if r.Header().Get("Cache-Control") != "no-store" || strings.Contains(r.Header().Get("Content-Type"), "text/html") {
+			t.Fatalf("%s has unsafe resource failure headers: %v", path, r.Header())
+		}
+	}
+}
+
+func TestFrontendKeepsCurrentAssetsAndNavigation(t *testing.T) {
+	js := "export const current = true;"
+	files := fstest.MapFS{"assets/current.js": {Data: []byte(js)}}
+	index := []byte("<!doctype html><title>current application</title>")
+	asset := httptest.NewRecorder()
+	serveFrontend(asset, httptest.NewRequest(http.MethodGet, "/assets/current.js", nil), files, index)
+	if asset.Code != http.StatusOK || asset.Body.String() != js || !strings.Contains(asset.Header().Get("Cache-Control"), "immutable") {
+		t.Fatalf("current asset failed: status %d headers %v", asset.Code, asset.Header())
+	}
+	for _, path := range []string{"/channels/server/channel", "/invite/example"} {
+		r := httptest.NewRecorder()
+		serveFrontend(r, httptest.NewRequest(http.MethodGet, path, nil), files, index)
+		if r.Code != http.StatusOK || r.Body.String() != string(index) || r.Header().Get("Cache-Control") != "no-cache" {
+			t.Fatalf("navigation %s failed: status %d headers %v", path, r.Code, r.Header())
+		}
+	}
+}
 
 func TestTrustedLiveKitWSSource(t *testing.T) {
 	tests := []struct {

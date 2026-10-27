@@ -497,10 +497,7 @@ func (s *channelPermService) ResolveUserChannelPermissions(ctx context.Context, 
 // Both paths call this — do not inline the formula anywhere else, or the fast
 // path can silently disagree with the slow one about who may read a channel.
 func effectiveChannelPermission(base, allow, deny models.Permission) models.Permission {
-	if base.Has(models.PermAdmin) {
-		return models.PermAll
-	}
-	return (base &^ deny) | allow
+	return models.EffectiveChannelPermission(base, allow, deny)
 }
 
 // permissionChannel resolves the channel whose overrides govern channelID.

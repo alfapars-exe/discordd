@@ -1,0 +1,42 @@
+{
+  "verified_at": "2026-10-27",
+  "status": "implemented_unverified",
+  "baseline_commit": "19f15d6c",
+  "ci_failure_job": "122037251695",
+  "scope": "Finish the SQLite/libSQL preferences RETURNING stream before acknowledging an atomic preference patch; PostgreSQL upsert remains unchanged.",
+  "environment": {
+    "go": "1.26.10 Linux CGO",
+    "libsql_server": "ghcr.io/tursodatabase/libsql-server@sha256:6dd3eb276d9d3604e4a48ac4a999a2e267814732d57d7e94c04ba71482333a67",
+    "topology": "Disposable standalone primary, private container network, no external credentials or production connection.",
+    "comparison_cpu": "Compiler/test container limited to2CPUs with GOMAXPROCS2."
+  },
+  "observed_failure": {
+    "ci": "All eight concurrent patches returned successfully, but the immediate Get omitted section4.",
+    "reproduction": "With200valid padding keys, baseline failed3of200runs. First pooled read had207keys; independent fresh driver and immediate repeated pooled read both had208. Each RETURNING snapshot contained its own patch and the final snapshot already had208keys.",
+    "interpretation": "The observed case is stale immediate read visibility, not a missing persisted merge. QueryRow stops after its first row; draining RETURNING to EOF removes this completion-boundary failure in the tested workload. Internal native driver/server causation beyond that boundary was not instrumented."
+  },
+  "change": [
+    "Keep the same validated, bounded, atomic JSON merge SQL and RETURNING response.",
+    "Use QueryContext, read the single returned row, consume EOF and check Rows.Err before returning success.",
+    "Do not add read retries, sleeps, per-process locks, transaction changes or extra SQL reads to production.",
+    "Extend the existing required live test with a valid larger-payload concurrency case; failure-only fresh reads diagnose visibility without changing its failing assertion.",
+    "Add deterministic database/sql driver tests rejecting success before EOF and propagating late execution errors."
+  ],
+  "verification": {
+    "baseline_completion_contract": "Old19f code fails both deterministic cases: premature success and hidden late execution error.",
+    "eof_drain_comparison": "300original+300larger-payload concurrency cases passed55.199s with EOF-drain overlay.",
+    "exec_control": "Independent no-RETURNING Exec plus fresh SELECT experiment passed600cases63.464s; this larger production change was not selected.",
+    "candidate_live": "Required libSQL preferences/DM-race selector plus completion contract passed100counts26.513s. After tightening every writer-own-patch assertion, required selector passed50counts12.708s.",
+    "sqlite_preferences": "Repository/services/handlers preference regressions passed8.186s/2.425s/2.120s.",
+    "postgres_preferences": "Real disposable PostgreSQL18 preference regressions passed30.897s; PostgreSQL production branch was not changed."
+  },
+  "log_sha256": {
+    "baseline_larger_payload": "d80d59b8d07b7e2aa4d8c97a4725eb9cc0a1bb1c192f30c90a1168d2966125b5",
+    "final_tightened_live": "c329ddc503be2919b64918746e4fdcbcddb0199519c93da2e18cea3f008d8690"
+  },
+  "remaining": [
+    "Run final integration CI on the eventual merged source.",
+    "No production deployment, tag, push, account mutation or installed-client acceptance occurred.",
+    "No existing stored preference data was rewritten or repaired; the reproduced data was already present on the primary."
+  ]
+}

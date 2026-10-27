@@ -1,0 +1,47 @@
+{
+  "verified_at": "2026-10-27",
+  "status": "implemented_unverified",
+  "source_commit": "e75c5be29dafff548ff1c4a41b4a9e89acce98cc",
+  "scope": "Explicit opt-in ordinary server/thread message fanout and client metadata routing; automated/local database evidence only.",
+  "verified": [
+    "SQLite repository and service channel-notification tests passed after final SQL changes: 2.696s and 2.303s, Go1.26.10.",
+    "Disposable local PostgreSQL18 target repository tests and independent actual advisory-lock order probe passed23.125s. Reversed/duplicate candidates blocked at the middle user lock while the earlier lock was held and the later lock was not.",
+    "Bound JSON recipient-list parity passed on SQLite1.881s and PostgreSQL2.790s: quote/backslash-bearing IDs, duplicates, nonmembers, empty list, server mute, ignore and effective ACL filtering. Final advisory-array follow-up retained the same recipient queries.",
+    "Independent actual CommitBatch probe reproduced the first-deny phantom before fencing. The fixed implementation prevented that interleave: the deny writer waited on the server fence until fanout committed. Fixed probe plus policy/retirement tests passed14.995s.",
+    "Independent actual transactional server deletion versus CommitBatch reproduced PostgreSQL40P01 before the cascade-entry fence. The fixed dialect-preserving production path passed the same interleave2.966s.",
+    "Without artificial page sleeps, both207-recipient jobs completed with each candidate visited once in40/40 runs14.233s. Actual worker.Start with its200ms ticker completed the same workload3/3 times at about1.225s each. Strict round-robin order is not guaranteed by equal timestamp tie-breaks.",
+    "Client navigation, overlay projection and reply suites passed59 tests3.12s during review; subsequent source type-only lint changes do not establish browser or installed-overlay acceptance.",
+    "SQLite legacy-bootstrap and rollback-on-DDL-failure tests passed2.465s. Migration145 has the exact additive bootstrap marker and creates only an idempotent table/index. This is migration transaction coverage, not application rollback acceptance."
+  ],
+  "source_sha256_normalized_lf": {
+    "server/database/migrations/145_channel_message_notification_jobs.sql": "c6fd92530b17ddbd2f2d485c3178977f9322f24aee954eba8416d408877af13a",
+    "server/database/postgres_migrations/047_channel_message_notification_jobs.sql": "490046e7f83f6511d31b8aa14443eec25ff73a98a03b940702d40336625c5fdb",
+    "server/repository/sqlite_channel_message_notification_queue.go": "7aa1549261b9104a15a21fd09eb9936e004bc438f67fa27830bb228595494e3b"
+  },
+  "reproducible_tests": [
+    "server/repository/sqlite_channel_message_notification_queue_test.go",
+    "server/repository/postgres_channel_message_notification_test.go",
+    "server/services/channel_message_notification_worker_test.go",
+    "client/src/hooks/useNotificationNavigation.test.ts",
+    "client/src/utils/overlayNotifications.test.ts",
+    "client/src/utils/overlayNotificationReply.test.ts"
+  ],
+  "rollback_boundary": {
+    "status": "not_rehearsed",
+    "plan": [
+      "Take and verify a consistent database backup before release; record exact previous and candidate artifacts and migration history.",
+      "Coordinate all instances and stop candidate workers before reverting the application. Keep additive tables, PostgreSQL triggers and migration history; do not automatically drop migration047 fences while any new worker remains active.",
+      "Revert frontend and backend together. Old readers preserve the stored opt-in field, but old servers reject PATCH requests for the new preference key.",
+      "Rehearse the previous artifact against a migrated disposable SQLite/PostgreSQL copy, including normal/admin server deletion, account retirement, roles, membership, mutes, blocks and preference writes. Verify later redeployment handles retained jobs and deleted sources.",
+      "Treat backup restore as a separate stateful recovery operation with post-backup writes accounted for; validate readiness and representative authenticated flows after recovery."
+    ],
+    "not_proven": "No previous release artifact was started against the migrated database in this review; no installed Windows update/rollback or production deployment occurred."
+  },
+  "remaining_acceptance": [
+    "Actual browser and two independent HiChat-user synchronization, encrypted message/reply and permission-revocation flows.",
+    "Installed Windows overlay/game/focus/DPI/action-region and keyboard acceptance.",
+    "Fresh release artifacts, consistent backup/restore and old-artifact rollback rehearsal on migrated SQLite/PostgreSQL.",
+    "Production rollout/readiness and runtime observations remain separate authorized delivery steps."
+  ],
+  "limits": "Scoped independent review and disposable database tests do not establish whole-application security, hardware behavior or complete P0-P11 acceptance."
+}
