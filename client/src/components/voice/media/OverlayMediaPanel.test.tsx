@@ -21,7 +21,7 @@ it("rejects disabled/invalid kinds, retires on hidden document, and reacks after
 });
 
 it("shows playback failure instead of a fake video preview and releases viewport demand",async()=>{
- vi.mocked(HTMLMediaElement.prototype.play).mockRejectedValue(new DOMException("blocked","NotAllowedError"));render(<OverlayMediaPanel video streams={false} height={320} bottom={8}/>);act(()=>lease(metadata()));const raw=Object.assign(new EventTarget(),{kind:"video",stop:vi.fn()})as unknown as MediaStreamTrack;act(()=>h.options[0].onVideos([{tileId:"camera",kind:"camera",track:raw}]));expect(await screen.findByText("voiceOverlayMediaUnavailable")).toBeInTheDocument();expect(api.sendOverlayMediaViewport).toHaveBeenLastCalledWith(expect.objectContaining({tileId:"camera",visible:false,width:0,height:0,fps:0}));expect(raw.stop).not.toHaveBeenCalled();
+ vi.mocked(HTMLMediaElement.prototype.play).mockRejectedValue(new DOMException("blocked","NotAllowedError"));render(<OverlayMediaPanel video streams={false} height={320} bottom={8}/>);act(()=>lease(metadata()));const raw=Object.assign(new EventTarget(),{kind:"video",stop:vi.fn()})as unknown as MediaStreamTrack;act(()=>h.options[0].onVideos([{tileId:"camera",kind:"camera",track:raw}]));expect(await screen.findByText("voiceOverlayMediaUnavailable")).toBeInTheDocument();await waitFor(()=>expect(api.sendOverlayMediaViewport).toHaveBeenLastCalledWith(expect.objectContaining({tileId:"camera",visible:false,width:0,height:0,fps:0})));expect(raw.stop).not.toHaveBeenCalled();
 });
 
 it("kind permission changes remove current video immediately and obsolete callbacks cannot restore it",()=>{
