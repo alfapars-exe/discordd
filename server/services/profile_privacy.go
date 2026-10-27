@@ -88,7 +88,6 @@ func (p *profileAudiencePolicy) CanView(ctx context.Context, viewerID, targetID 
 		return false, nil
 	}
 
-	audience := "all_servers"
 	prefs, err := p.prefs.Get(ctx, targetID)
 	if err != nil {
 		return false, err
@@ -96,7 +95,7 @@ func (p *profileAudiencePolicy) CanView(ctx context.Context, viewerID, targetID 
 	if prefs == nil || !validPreferenceData(prefs.Data) {
 		return false, errors.New("profile audience: invalid target preferences")
 	}
-	audience, err = profileAudienceFromPreferences(prefs)
+	audience, err := profileAudienceFromPreferences(prefs)
 	if err != nil {
 		return false, err
 	}
