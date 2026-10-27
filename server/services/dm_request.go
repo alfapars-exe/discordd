@@ -24,9 +24,11 @@ func (s *dmService) AcceptRequest(ctx context.Context, userID, channelID string)
 		return fmt.Errorf("%w: channel is not pending", pkg.ErrBadRequest)
 	}
 
-	// Only the recipient (non-initiator) can accept
-	if channel.InitiatedBy != nil && *channel.InitiatedBy == userID {
-		return fmt.Errorf("%w: only the recipient can accept a DM request", pkg.ErrForbidden)
+	// A pending request without a valid channel-member initiator cannot
+	// establish which participant is the recipient. Fail closed rather than
+	// allowing either participant to accept a malformed/legacy row.
+	if err := verifyDMRequestRecipient(channel, userID, "accept"); err != nil {
+		return err
 	}
 	if err := s.verifyRequestNotBlocked(ctx, channel); err != nil {
 		return err
@@ -61,9 +63,8 @@ func (s *dmService) DeclineRequest(ctx context.Context, userID, channelID string
 		return fmt.Errorf("%w: channel is not pending", pkg.ErrBadRequest)
 	}
 
-	// Only the recipient can decline
-	if channel.InitiatedBy != nil && *channel.InitiatedBy == userID {
-		return fmt.Errorf("%w: only the recipient can decline a DM request", pkg.ErrForbidden)
+	if err := verifyDMRequestRecipient(channel, userID, "decline"); err != nil {
+		return err
 	}
 
 	s.broadcastToBothUsers(channel, ws.Event{
@@ -96,6 +97,17 @@ func (s *dmService) DeclineRequest(ctx context.Context, userID, channelID string
 	// upload_cleanup.go for why the ordering matters.
 	removeUploadFilesByURL(s.uploadDir, fileURLs)
 
+	return nil
+}
+
+func verifyDMRequestRecipient(channel *models.DMChannel, userID, action string) error {
+	if channel.InitiatedBy == nil || *channel.InitiatedBy == "" ||
+		(*channel.InitiatedBy != channel.User1ID && *channel.InitiatedBy != channel.User2ID) {
+		return fmt.Errorf("%w: cannot %s DM request with unknown initiator", pkg.ErrForbidden, action)
+	}
+	if *channel.InitiatedBy == userID {
+		return fmt.Errorf("%w: only the recipient can %s a DM request", pkg.ErrForbidden, action)
+	}
 	return nil
 }
 
