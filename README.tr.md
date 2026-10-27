@@ -204,6 +204,28 @@ mqvi'ye git, yeni sunucu olustur, **"Self-Hosted"** sec ve bu 3 degeri gir. Bu k
 
 mqvi platformunun tamamini kendi altyapinda calistir. mqvi.net'ten tamamen bagimsiz — her seyi sen kontrol edersin: hesaplar, mesajlar, dosyalar, ses.
 
+### Opsiyonel Docker Nginx arayuzu
+
+Standart self-host kurulum betigi gomulu web arayuzunu Go sunucusundan sunar; ayri frontend image'ini kullanmaz. Client'i ayri bir Nginx container'inda calistiracaksan, ortak Electron TypeScript contract dosyalarini icermesi icin image'i depo kokunden derle:
+
+```bash
+docker build --file client/Dockerfile --target production --tag hichat-client:local .
+```
+
+Yalnizca istemciyle LiveKit ayni cihazda calisiyorsa ve yerel LiveKit'e sifresiz `ws://` baglanmasi gerekiyorsa `LIVEKIT_CSP_WS_ORIGIN` degerini **production Nginx container'ini baslatirken** ver. Yalnizca `localhost`, IPv4 loopback (`127.0.0.0/8`) ve koseli parantezli IPv6 loopback (`[::1]` ve genisletilmis hexadecimal yazimi) kabul edilir; opsiyonel port olabilir ama path veya sondaki `/` olamaz. Uzak `ws://` adresleri reddedilir; uzaktaki LiveKit icin `wss://` kullan. IPv6 zone ID ve IPv4 gomulu IPv6 bicimleri kabul edilmez. Bu bir build argumani degil, deployment ayaridir. Ornek:
+
+```bash
+docker run --detach --name hichat-client \
+  --network <backend-network> \
+  --publish 80:80 \
+  --env LIVEKIT_CSP_WS_ORIGIN=ws://localhost:7880 \
+  hichat-client:local
+```
+
+Tarayici bu loopback LiveKit adresine kendi cihazindan erisebilmelidir; `localhost` Nginx container'inda degil tarayicida cozulur. Production image Nginx'i root olmayan `nginx` kullanicisi olarak calistirirken container portu 80'i korur; Docker'in varsayilan `CAP_NET_BIND_SERVICE` yetenegiyle mevcut `--publish 80:80` eslemesi gecerlidir. Guvenlik profili bu yetenegi kaldiriyorsa Nginx'in 80 portunu acabilmesi icin yalnizca `NET_BIND_SERVICE` yetkisini geri ver. Backend'in `LIVEKIT_URL` ayri bir sunucu ayaridir ve Docker'a ozel hostname kullanabilir; bu dahili hostname'i `LIVEKIT_CSP_WS_ORIGIN` icin kullanma. Nginx `/api` ve `/ws` isteklerini `server:8080` adresine iletir; backend secilen network uzerinde bu ad ve porttan erisilebilir olmali (ya da dagitimina gore proxy hedefini guncelle).
+
+Uzak LiveKit ve HTTPS web uygulamalari icin `wss://` LiveKit URL'i kullan: tarayicilar HTTPS sayfalarindan sifresiz `ws://` baglantilarini mixed content olarak engeller ve bu politika uzaktaki sifresiz kaynaklari reddeder. Varsayilan CSP zaten `wss:` ve `https:` kaynaklarini kabul eder, bu durumda `LIVEKIT_CSP_WS_ORIGIN` ayarini bos birak. Repo Compose dosyasindaki `client` servisi Vite gelistirme sunucusu olarak kalir; production Nginx image'ini calistirmaz.
+
 ### Gereksinimler
 
 - Linux sunucu (Ubuntu 22.04+ / Debian 12+ onerilir), x86_64 veya arm64
