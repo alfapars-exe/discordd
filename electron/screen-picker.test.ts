@@ -5,11 +5,13 @@ import path from "node:path";
 import test from "node:test";
 import vm from "node:vm";
 
-function fixture() {
+function fixture(safe = true) {
   const ipc = new EventEmitter();
   const frame = {};
   const messages: string[] = [];
   const diagnostics: Array<{ phase: string; sourceKind?: string }> = [];
+  const queries: unknown[] = [];
+  let begins = 0, ends = 0;
   const timers = new Map<number, { callback: () => void; delay: number }>();
   let timerId = 0;
   const contents = Object.assign(new EventEmitter(), {
@@ -29,14 +31,14 @@ function fixture() {
     setTimeout: (callback: () => void, delay: number) => { const id = ++timerId; timers.set(id, { callback, delay }); return id; },
     clearTimeout: (id: number) => timers.delete(id),
     require: (name: string) => {
-      if (name === "electron") return { ipcMain: ipc, desktopCapturer: { getSources: () => query() }, session: { defaultSession: { setDisplayMediaRequestHandler: (value: typeof handler) => { handler = value; } } } };
+      if (name === "electron") return { ipcMain: ipc, desktopCapturer: { getSources: (options: unknown) => { queries.push(options); return query(); } }, session: { defaultSession: { setDisplayMediaRequestHandler: (value: typeof handler) => { handler = value; } } } };
       if (name === "./window") return { getMainWindow: () => window };
-      if (name === "./picker-safe-mode") return { arePickerThumbnailsDisabled: () => true };
+      if (name === "./picker-safe-mode") return { arePickerThumbnailsDisabled: () => safe, beginThumbnailCapture: () => { begins++; }, endThumbnailCapture: () => { ends++; } };
       throw new Error(name);
     },
   });
   exports.installScreenPicker();
-  return { ipc, contents, window, frame, source, messages, diagnostics, timers, request: (callback: Parameters<typeof handler>[1], requestFrame = frame) => handler({ frame: requestFrame }, callback),
+  return { ipc, contents, window, frame, source, messages, diagnostics, timers, queries, captures: () => ({ begins, ends }), request: (callback: Parameters<typeof handler>[1], requestFrame = frame) => handler({ frame: requestFrame }, callback),
     event: { sender: contents, senderFrame: frame }, setQuery: (value: typeof query) => { query = value; } };
 }
 
@@ -80,6 +82,7 @@ test("a destroyed owner cannot be revived by a late native source query", async 
   f.setQuery(() => new Promise((done) => { resolve = done; }));
   const results: unknown[] = [];
   const pending = f.request((value) => results.push(value));
+  await new Promise(resolve => setImmediate(resolve));
   f.window.emit("closed");
   resolve([f.source]);
   await pending;
@@ -108,3 +111,81 @@ for (const phase of ["no_sources", "handler_error"]) {
     assert.equal(f.timers.size, 0);
   });
 }
+
+
+test("a thumbnail timeout falls back to names without losing the native crash breadcrumb", async () => {
+  const f = fixture(false);
+  let release!: (sources: typeof f.source[]) => void;
+  let calls = 0;
+  f.setQuery(() => ++calls === 1 ? new Promise(done => { release = done; }) : Promise.resolve([f.source]));
+  const results: unknown[] = [];
+  const pending = f.request(value => results.push(value));
+  await new Promise(resolve => setImmediate(resolve));
+  [...f.timers.values()].find(timer => timer.delay === 2500)!.callback();
+  await pending;
+  assert.equal(f.queries.length, 2);
+  assert.deepEqual(JSON.parse(JSON.stringify(f.queries[1])), { types: ["screen", "window"], thumbnailSize: { width: 0, height: 0 }, fetchWindowIcons: false });
+  assert.ok(f.messages.includes("show-screen-picker"));
+  assert.deepEqual(f.captures(), { begins: 1, ends: 0 });
+  f.ipc.emit("screen-picker-result", f.event, "screen:1");
+  assert.equal((results[0] as { video: unknown }).video, f.source);
+  release([f.source]);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(f.captures(), { begins: 1, ends: 1 });
+  assert.equal(f.timers.size, 0);
+});
+
+test("a stalled previewless fallback remains bounded and never opens a late picker", async () => {
+  const f = fixture(false);
+  f.setQuery(() => new Promise(() => {}));
+  const results: unknown[] = [];
+  const pending = f.request(value => results.push(value));
+  await new Promise(resolve => setImmediate(resolve));
+  [...f.timers.values()].find(timer => timer.delay === 2500)!.callback();
+  await new Promise(resolve => setImmediate(resolve));
+  [...f.timers.values()].find(timer => timer.delay === 10_000)!.callback();
+  await pending;
+  assert.equal(results.length, 1);
+  assert.ok(!f.messages.includes("show-screen-picker"));
+  assert.equal(f.timers.size, 0);
+  assert.deepEqual(f.captures(), { begins: 1, ends: 0 });
+});
+
+
+test("new pickers reuse previewless enumeration while the original native capture is pending", async () => {
+  const f = fixture(false);
+  let calls = 0;
+  f.setQuery(() => ++calls === 1 ? new Promise(() => {}) : Promise.resolve([f.source]));
+  const first = f.request(() => {});
+  await new Promise(resolve => setImmediate(resolve));
+  [...f.timers.values()].find(timer => timer.delay === 2500)!.callback();
+  await first;
+  f.ipc.emit("screen-picker-result", f.event, null);
+  await f.request(() => {});
+  assert.equal(f.queries.length, 3);
+  assert.equal((f.queries[2] as { thumbnailSize: { width: number } }).thumbnailSize.width, 0);
+  assert.deepEqual(f.captures(), { begins: 1, ends: 0 });
+  f.ipc.emit("screen-picker-result", f.event, null);
+});
+
+test("a closed fallback owner cannot revive on late success or original rejection", async () => {
+  const f = fixture(false);
+  let rejectOriginal!: (error: Error) => void;
+  let resolveFallback!: (sources: typeof f.source[]) => void;
+  let calls = 0;
+  f.setQuery(() => ++calls === 1 ? new Promise((_, reject) => { rejectOriginal = reject; }) : new Promise(resolve => { resolveFallback = resolve; }));
+  const results: unknown[] = [];
+  const pending = f.request(value => results.push(value));
+  await new Promise(resolve => setImmediate(resolve));
+  [...f.timers.values()].find(timer => timer.delay === 2500)!.callback();
+  await new Promise(resolve => setImmediate(resolve));
+  f.window.emit("closed");
+  rejectOriginal(new Error("late native failure"));
+  resolveFallback([f.source]);
+  await pending;
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(results.length, 1);
+  assert.ok(!f.messages.includes("show-screen-picker"));
+  assert.equal(f.timers.size, 0);
+  assert.deepEqual(f.captures(), { begins: 1, ends: 1 });
+});
