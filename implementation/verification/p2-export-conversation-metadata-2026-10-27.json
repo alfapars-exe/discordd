@@ -1,0 +1,56 @@
+{
+  "status": "implemented_unverified",
+  "base_commit": "31e2269ddc487f60694adf2c0d4a5f010c43474e",
+  "scope": "P2 owner message attachment metadata and personal DM/group membership export",
+  "verified_at": "2026-10-27T10:08:09.274961+00:00",
+  "source_lf_sha256": {
+    "server/repository/sqlite_data_export.go": "7b9a8d1ec4bb12a487345887ec705b2ae29a38b59479494bbf209144ca3da9b3",
+    "server/repository/data_export_conversations_test.go": "637b6f4110c12a69e2501fe9f5af0e7696ec33becb1976b39f54b70b7763b46b"
+  },
+  "contract": {
+    "format": "hichat-personal-data-v1",
+    "added_sections": [
+      "direct_message_memberships",
+      "group_memberships",
+      "channel_attachments",
+      "direct_message_attachments",
+      "group_attachments"
+    ],
+    "ownership": "Attachment rows join only messages authored by export owner; DM channels include owner in either position; group membership joins only current owner member row, never full roster. Own authored historical attachments remain exportable after leaving a group, consistently with the existing authored-message export.",
+    "metadata_only": "Stored filename, URL, size, MIME, timestamps, parent IDs and group file_key_index. No binary download or implicit file-access grant.",
+    "encryption": "Stored ciphertext and opaque e2ee_metadata are preserved unchanged. file_key_index is an ordinal, key_epoch a version; neither raw file/room keys nor new plaintext are exported. call_room_key is excluded.",
+    "empty": "Empty metadata sections serialize as []"
+  },
+  "verification": {
+    "sqlite_export_suite": {
+      "result": "passed",
+      "count": 2,
+      "seconds": 4.522
+    },
+    "postgres18_export_suite": {
+      "result": "passed",
+      "count": 2,
+      "seconds": 21.265,
+      "fixture": "owned disposable loopback28292; no production access"
+    },
+    "new_tests": [
+      "authored files only across shared and foreign conversations",
+      "both DM owner positions including pending request metadata",
+      "only own group mute and settings revision, no peer member rows or room secret",
+      "historical own group attachment metadata after membership removal",
+      "exact attachment/membership keys, nullable sizes/MIME/key-index and deterministic attachment order",
+      "unchanged ciphertext, encryption_version and opaque metadata",
+      "cross-owner download denied",
+      "empty arrays"
+    ],
+    "baseline_negative": "Original source fails both new tests because all five metadata sections are missing",
+    "go_vet_repository": "passed",
+    "diff_check": "passed"
+  },
+  "remaining_acceptance": [
+    "Actual owner browser download and installed Windows acceptance",
+    "Attachment binary archive and full decrypted/offline-key export are not implemented or claimed",
+    "Profile account projection is tracked independently in PR179",
+    "No coverage.json change; no main merge, publication or installation"
+  ]
+}
