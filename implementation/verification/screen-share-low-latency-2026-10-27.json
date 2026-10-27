@@ -1,0 +1,35 @@
+{
+  "date": "2026-10-27",
+  "timezone": "Europe/Istanbul",
+  "scope": "Desktop/browser screen-share profile consistency and live reconfiguration across guild LiveKit, group LiveKit and P2P calls",
+  "implementation": [
+    "Shared codec, bitrate and degradation policy; detail mode preserves resolution priority even with low latency enabled",
+    "Distinct H264 lower layers, at most two, with bounded lower-layer frame rates",
+    "LiveKit retains the captured source and republishes only video for codec/encoding changes; profile-only changes apply in place",
+    "LiveKit transitions serialize, restore the prior publication on failure, retain SDK negotiated options, and retire pending sources on stop/admission loss",
+    "Guild initial starts/stops serialize; cancelled picker results cannot stop a newer share; screen audio stops even during a video publication gap",
+    "P2P codec preference changes use existing serialized negotiation with exact offer acknowledgement, capability checks, reported fallback detection and camera policy restoration",
+    "Private/group controls expose low-latency and content-profile preferences"
+  ],
+  "validation": {
+    "targeted_regressions": {
+      "command": "npx vitest run src/webrtc src/stores/p2pCallStore src/components/dm/GroupScreenShare src/hooks/useScreenShareToggle.test.tsx src/utils/privateScreenQuality.test.ts src/utils/screenShareProfile.test.ts src/hooks/useEncryptedRoomAdmission.test.tsx",
+      "working_directory": "client",
+      "files_passed": 22,
+      "tests_passed": 284,
+      "exit_code": 0
+    },
+    "production_build": { "command": "npm run build", "working_directory": "client", "includes": ["tsc -b", "vite build"], "exit_code": 0 },
+    "scoped_eslint": { "result": "passed", "exit_code": 0 },
+    "git_diff_check": { "result": "passed", "exit_code": 0 },
+    "build_warnings": ["Large minified chunks", "Ineffective dynamic imports", "Vite native-config compatibility warning"]
+  },
+  "limits": [
+    "Tests use simulated capture/signaling with real SDK track wrappers where applicable; they do not establish production browser/peer interoperability",
+    "Hardware encoding, capture-to-display latency, packet-loss recovery, actual quality and long-duration calls have not been measured",
+    "Codec/encoding republishing can briefly interrupt received video; zero-gap switching is not claimed",
+    "P2P preference acknowledgement does not prove hardware encoding; absent/stale codec stats remain unknown",
+    "Native Capacitor screen-sharing bridge is outside this change",
+    "No deployment or production settings changes were performed"
+  ]
+}

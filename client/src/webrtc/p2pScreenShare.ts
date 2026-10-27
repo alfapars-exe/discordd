@@ -1,8 +1,12 @@
 import { isElectron } from "../utils/constants";
 import { mutateOwnedVideoSender, replaceOwnedVideoTrack } from "./videoSenderMutation";
 import { privateScreenConstraints, updatePrivateScreenQuality, type PrivateScreenQuality, type ScreenMetrics } from "../utils/privateScreenQuality";
+import { resolveScreenSharePublishDefaults } from "../utils/screenShareProfile";
+import { P2PScreenCodecPolicy } from "./p2pScreenCodec";
 
 const hasEnded = (track: MediaStreamTrack) => track.readyState === "ended";
+type CameraPolicy = { owner: MediaStreamTrack; encodings: RTCRtpEncodingParameters[]; degradation: RTCDegradationPreference | undefined; codec: P2PScreenCodecPolicy };
+const cameraPolicies = new WeakMap<RTCRtpSender, CameraPolicy>();
 
 export interface StartScreenShareResult { sender: RTCRtpSender; track: MediaStreamTrack; audioTrack: MediaStreamTrack | null; update: (settings: PrivateScreenQuality) => Promise<boolean>; dispose: () => void }
 export type ScreenShareOptions = { audioRequested?: boolean; audioCurrent?: () => boolean; restoreCurrent?: () => boolean; subscribeScope?: (retire: () => void) => () => void; subscribeAudioScope?: (retire: () => void) => () => void; isCurrent: () => boolean; settings: PrivateScreenQuality; display?: ScreenMetrics | null; getDisplayMetrics?: () => Promise<ScreenMetrics>; getCameraTrack?: () => MediaStreamTrack | null };
@@ -67,14 +71,44 @@ export async function startScreenShare(pc: RTCPeerConnection, options: ScreenSha
     }
     if (!current()) { dispose(); return null; }
     previousTrack = sender.track; replacedSender = sender;
+    const original = sender.getParameters();
+    const inherited = cameraPolicies.get(sender);
+    const codec = inherited?.owner === previousTrack ? inherited.codec : new P2PScreenCodecPolicy(pc, sender);
     await replaceOwnedVideoTrack(sender, track, current);
     if (!current() || hasEnded(track)) { dispose(); await restoreCancelled().catch(() => {}); return null; }
     const ownedSender = sender;
     const sourceCurrent = () => current() && ownedSender.track === track;
-    await updatePrivateScreenQuality(track, sender, options.settings, sourceCurrent, display);
+    cameraPolicies.set(sender, { owner: track, codec, encodings: inherited?.owner === previousTrack ? inherited.encodings : original.encodings?.map(value => ({ ...value })) ?? [], degradation: inherited?.owner === previousTrack ? inherited.degradation : original.degradationPreference });
+    let revision = 0, applied: PrivateScreenQuality | undefined;
+    let updates = Promise.resolve(false);
+    const update = (settings: PrivateScreenQuality) => {
+      const choice = { ...settings }, selectedRevision = ++revision;
+      const selectedCurrent = () => sourceCurrent() && selectedRevision === revision;
+      updates = updates.catch(() => false).then(async () => {
+        if (!selectedCurrent()) return false;
+        const previous = applied;
+        try {
+          const profile = resolveScreenSharePublishDefaults(choice, display);
+          if (!await codec.apply(profile.screenSharePublish.videoCodec, choice.screenShareLowLatency === true, selectedCurrent)) return false;
+          if (!selectedCurrent()) return false;
+          const updated = await updatePrivateScreenQuality(track, ownedSender, choice, selectedCurrent, display);
+          if (updated) applied = choice;
+          return updated;
+        } catch (error) {
+          if (selectedCurrent() && previous) {
+            const previousProfile = resolveScreenSharePublishDefaults(previous, display);
+            await codec.apply(previousProfile.screenSharePublish.videoCodec, false, selectedCurrent).catch(() => {});
+            if (selectedCurrent()) await updatePrivateScreenQuality(track, ownedSender, previous, selectedCurrent, display).catch(() => {});
+          }
+          throw error;
+        }
+      });
+      return updates;
+    };
+    await update(options.settings);
     if (!sourceCurrent()) { dispose(); await restoreCancelled().catch(() => {}); return null; }
     track.enabled = true;
-    return { sender, track, get audioTrack() { return audioCurrent() && audioTrack && !hasEnded(audioTrack) ? audioTrack : null; }, dispose, update: settings => updatePrivateScreenQuality(track, ownedSender, settings, sourceCurrent, display) };
+    return { sender, track, get audioTrack() { return audioCurrent() && audioTrack && !hasEnded(audioTrack) ? audioTrack : null; }, dispose, update };
   } catch (error) {
     dispose(); await restoreCancelled().catch(() => {}); if (options.isCurrent()) throw error; return null;
   }
@@ -82,14 +116,27 @@ export async function startScreenShare(pc: RTCPeerConnection, options: ScreenSha
 
 export async function stopScreenShare(sender: RTCRtpSender | null, cameraTrack: MediaStreamTrack | null, isCurrent: () => boolean): Promise<boolean> {
   if (!sender) return false;
+  const policy = cameraPolicies.get(sender);
   const restored = await replaceOwnedVideoTrack(sender, cameraTrack, isCurrent);
   if (!restored) return false;
-  return mutateOwnedVideoSender(sender, () => isCurrent() && sender.track === cameraTrack, async () => {
+  const owns = () => isCurrent() && sender.track === cameraTrack;
+  const updated = await mutateOwnedVideoSender(sender, owns, async () => {
     const parameters = sender.getParameters();
-    if (!parameters.encodings?.length) return;
-    parameters.encodings = parameters.encodings.map(encoding => { const clean = { ...encoding }; delete clean.maxFramerate; delete clean.maxBitrate; return clean; });
+    if (policy) parameters.degradationPreference = policy.degradation ?? "balanced";
+    parameters.encodings = parameters.encodings?.map((encoding, index) => {
+      const clean = { ...encoding };
+      delete clean.maxFramerate; delete clean.maxBitrate;
+      const original = policy?.encodings[index];
+      if (original?.maxFramerate !== undefined) clean.maxFramerate = original.maxFramerate;
+      if (original?.maxBitrate !== undefined) clean.maxBitrate = original.maxBitrate;
+      return clean;
+    });
     await sender.setParameters(parameters);
   });
+  if (!updated) return false;
+  if (policy && !await policy.codec.restore(owns)) return false;
+  if (owns() && cameraPolicies.get(sender) === policy) cameraPolicies.delete(sender);
+  return owns();
 }
 
 /** A closed, replaced, or never-negotiated peer cannot retain an unbounded picker task. */

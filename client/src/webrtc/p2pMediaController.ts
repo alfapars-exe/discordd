@@ -3,6 +3,7 @@ import { parseP2PMediaSDP, validateP2PDescription } from "./p2pMediaProtocol";
 export type P2PRemoteMedia={microphone:MediaStream|null;screenAudio:MediaStream|null;video:MediaStream|null;camera?:MediaStream|null;screenVideo?:MediaStream|null;screenAudioSupported:boolean};
 type SourceLease={sender:RTCRtpSender;track:MediaStreamTrack;source:P2PMediaSource};
 type SourceWaiter=SourceLease&{current:()=>boolean;promise:Promise<boolean>;finish:(accepted:boolean)=>void};
+type NegotiationWaiter={current:()=>boolean;description:string|null;finish:(accepted:boolean)=>void};
 type Options={callId:string;polite:boolean;isCaller:boolean;isCurrent:()=>boolean;send:(op:string,data:unknown)=>void;onMedia:(media:P2PRemoteMedia)=>void;onError:(error:unknown)=>void;onDispose?:()=>void};
 const controllers=new WeakMap<RTCPeerConnection,P2PMediaController>();
 export const getP2PMediaController=(pc:RTCPeerConnection)=>controllers.get(pc);
@@ -16,11 +17,29 @@ export class P2PMediaController {
  private pendingTracks=new Map<RTCRtpTransceiver,MediaStreamTrack>();
  private sourceMap=new Map<string,P2PMediaSource>();private acceptedReceivers=new Map<RTCRtpTransceiver,MediaStreamTrack>();
  private localSources=new Map<RTCRtpSender,P2PMediaSource>();private remoteTracks=new Map<RTCRtpTransceiver,{track:MediaStreamTrack;ended:()=>void}>();
+ private negotiationWaiters:NegotiationWaiter[]=[];
  private media:P2PRemoteMedia={microphone:null,screenAudio:null,video:null,screenAudioSupported:false};
  readonly pc:RTCPeerConnection;private options:Options;
  constructor(pc:RTCPeerConnection,options:Options){this.pc=pc;this.options=options;controllers.get(pc)?.dispose();controllers.set(pc,this)}
  private current(){return !this.retired&&this.options.isCurrent()&&this.pc.signalingState!=="closed"}
  private enqueue<T>(task:()=>Promise<T>):Promise<T>{const result=this.serial.catch(()=>{}).then(task);this.serial=result.then(()=>{},()=>{});return result}
+ /** Queue codec preferences before an offer, and acknowledge that exact offer.
+  * An earlier in-flight negotiation cannot acknowledge newer preferences. */
+ negotiateMutation(mutation:()=>void,isCurrent:()=>boolean,timeoutMs=10000):Promise<boolean>{
+  return new Promise<boolean>((resolve,reject)=>{
+   let settled=false;
+   const finish=(accepted:boolean)=>{if(settled)return;settled=true;clearTimeout(timer);clearInterval(cancel);this.negotiationWaiters=this.negotiationWaiters.filter(value=>value!==waiter);resolve(accepted)};
+   const waiter:NegotiationWaiter={current:isCurrent,description:null,finish};
+   const timer=setTimeout(()=>finish(false),Math.min(10000,Math.max(1,timeoutMs)));
+   const cancel=setInterval(()=>{if(!this.current()||!isCurrent())finish(false)},25);
+   void this.enqueue(async()=>{
+    if(settled||!this.current()||!isCurrent()){finish(false);return}
+    mutation();if(!this.current()||!isCurrent()){finish(false);return}
+    this.negotiationWaiters.push(waiter);this.requestNegotiation();
+   }).catch(error=>{if(settled)return;settled=true;clearTimeout(timer);clearInterval(cancel);this.negotiationWaiters=this.negotiationWaiters.filter(value=>value!==waiter);reject(error)});
+  });
+ }
+ private confirmNegotiation(description:string|null){for(const waiter of [...this.negotiationWaiters]){if(!waiter.current()){waiter.finish(false);continue}if(waiter.description===description)waiter.finish(true)}}
  setLocalSource(sender:RTCRtpSender,source:P2PMediaSource|null){
   if(!this.current()||!this.pc.getSenders().includes(sender))return;
   if(source&&sender.track&&sender.track.kind!==(source==="microphone"||source==="screen-audio"?"audio":"video"))throw new Error("Local source kind mismatch");
@@ -67,10 +86,14 @@ export class P2PMediaController {
   validateP2PDescription(result);return result;
  }
  private async offer(){if(!this.current()||!this.dirty||this.pc.signalingState!=="stable"||!this.options.isCaller&&this.protocol==="unknown")return;this.dirty=false;
+  const preferenceWaiters=this.negotiationWaiters.filter(waiter=>waiter.description===null&&waiter.current());
+  try{
   const offer=await this.pc.createOffer();if(!this.current())return;await this.pc.setLocalDescription(offer);if(!this.current())return;
   const signal=this.outgoing("offer");this.pendingOffer=signal.description_id??"legacy";
+  for(const waiter of preferenceWaiters)waiter.description=this.pendingOffer;
   this.pendingSources=this.pc.getTransceivers().flatMap(transceiver=>{const source=this.localSources.get(transceiver.sender),track=transceiver.sender.track;return source&&track&&signal.sources?.some(value=>value.mid===transceiver.mid&&value.source===source)?[{sender:transceiver.sender,track,source}]:[]});
   this.options.send("p2p_signal",signal);
+  }catch(error){if(preferenceWaiters.length){for(const waiter of preferenceWaiters)waiter.finish(false);return}throw error}
  }
  async applyRemoteDescription(data:P2PSignalPayload):Promise<"accepted"|"ignored">{
   const validated=validateP2PDescription(data);return this.enqueue(async()=>{
@@ -80,7 +103,7 @@ export class P2PMediaController {
    if(data.type==="answer"&&(!this.pendingOffer||this.pc.signalingState!=="have-local-offer"||validated.protocol===1&&data.reply_to_description_id!==this.pendingOffer))return"ignored";
    const collision=data.type==="offer"&&this.pc.signalingState!=="stable";
    if(collision&&!this.options.polite)return"ignored";
-   if(collision){await this.pc.setLocalDescription({type:"rollback"});if(!this.current())return"ignored";this.pendingOffer=null;this.pendingSources=[]}
+   if(collision){await this.pc.setLocalDescription({type:"rollback"});if(!this.current())return"ignored";for(const waiter of this.negotiationWaiters)if(waiter.description===this.pendingOffer)waiter.description=null;this.pendingOffer=null;this.pendingSources=[]}
    this.staging=true;
    try{await this.pc.setRemoteDescription({type:data.type as "offer"|"answer",sdp:data.sdp})}catch(error){this.pendingTracks.clear();throw error}finally{this.staging=false}
    if(!this.current())return"ignored";
@@ -96,8 +119,8 @@ export class P2PMediaController {
    if(data.type==="offer"){
     this.dirty=false;
     const answer=await this.pc.createAnswer();if(!this.current())return"ignored";await this.pc.setLocalDescription(answer);if(!this.current())return"ignored";
-    const response=this.outgoing("answer",validated.protocol===1?data.description_id:undefined);this.pendingOffer=null;this.options.send("p2p_signal",response);
-   }else{this.confirmSources(data);this.pendingOffer=null;this.pendingSources=[];}
+    const response=this.outgoing("answer",validated.protocol===1?data.description_id:undefined);this.pendingOffer=null;this.options.send("p2p_signal",response);this.confirmNegotiation(null);
+   }else{this.confirmSources(data);this.confirmNegotiation(this.pendingOffer);this.pendingOffer=null;this.pendingSources=[];}
    if(this.waiters.length)this.dirty=true;
    if(this.dirty)this.requestNegotiation();return"accepted";
   });
@@ -122,5 +145,5 @@ export class P2PMediaController {
   const next={microphone:stream(this.media.microphone,microphone),screenAudio:stream(this.media.screenAudio,screenAudio),video:stream(this.media.video,video),camera:stream(this.media.camera??null,camera),screenVideo:stream(this.media.screenVideo??null,screenVideo),screenAudioSupported:supported};
   if(next.microphone!==this.media.microphone||next.screenAudio!==this.media.screenAudio||next.video!==this.media.video||next.camera!==this.media.camera||next.screenVideo!==this.media.screenVideo||next.screenAudioSupported!==this.media.screenAudioSupported){this.media=next;this.options.onMedia(next)}
  }
- dispose(){if(this.retired)return;this.retired=true;this.pendingOffer=null;this.pendingSources=[];this.acknowledged=[];for(const waiter of [...this.waiters])waiter.finish(false);for(const value of this.remoteTracks.values())value.track.removeEventListener("ended",value.ended);this.remoteTracks.clear();this.pendingTracks.clear();this.localSources.clear();this.sourceMap.clear();this.acceptedReceivers.clear();this.media={microphone:null,screenAudio:null,video:null,screenAudioSupported:false};controllers.delete(this.pc);this.options.onDispose?.()}
+ dispose(){if(this.retired)return;this.retired=true;for(const waiter of [...this.negotiationWaiters])waiter.finish(false);this.pendingOffer=null;this.pendingSources=[];this.acknowledged=[];for(const waiter of [...this.waiters])waiter.finish(false);for(const value of this.remoteTracks.values())value.track.removeEventListener("ended",value.ended);this.remoteTracks.clear();this.pendingTracks.clear();this.localSources.clear();this.sourceMap.clear();this.acceptedReceivers.clear();this.media={microphone:null,screenAudio:null,video:null,screenAudioSupported:false};controllers.delete(this.pc);this.options.onDispose?.()}
 }

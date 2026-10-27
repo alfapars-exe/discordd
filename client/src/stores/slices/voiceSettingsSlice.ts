@@ -147,15 +147,10 @@ export type VoiceSettings = {
    */
   screenShareShowCursor: boolean;
   /**
-   * Low-latency screen share mode. When true:
-   *   - codec switches VP9 → H264 (hardware-encoded on most platforms,
-   *     50-150ms lower encoder latency at the cost of ~30% bandwidth
-   *     efficiency).
-   *   - encoder degradation pref biases toward maintaining framerate over
-   *     resolution (applied at room level — see useScreenSharePublishDefaults).
-   *
-   * Default false (better quality). Power-user toggle in the screen share
-   * options popup. Trade-off documented in user-visible tooltip.
+   * Requests H264 instead of VP9 on desktop/browser screen shares, including
+   * an active share. Hardware support and latency gains depend on the device.
+   * The selected content profile still determines the degradation preference.
+   * Default false; codec transitions may briefly interrupt remote video.
    */
   screenShareLowLatency: boolean;
   /**
@@ -169,9 +164,7 @@ export type VoiceSettings = {
    *
    * Default "motion" because most users share gameplay/video. Power users
    * sharing slides or text should switch to "detail" via Voice Settings.
-   * Setting takes effect immediately on the next screen-share start (and
-   * mid-stream when the publish opts are passed per-publish — see
-   * useScreenShareToggle).
+   * Also applies during an active desktop/browser share.
    */
   screenShareMode: ScreenShareMode;
   /**

@@ -1,6 +1,7 @@
 import { mutateOwnedVideoSender } from "../webrtc/videoSenderMutation";
+import { resolveScreenSharePublishDefaults, type ScreenShareProfileSettings } from "./screenShareProfile";
 const hasEnded = (track: MediaStreamTrack) => track.readyState === "ended";
-export type PrivateScreenQuality = { screenShareQuality: string; screenShareFps: number };
+export type PrivateScreenQuality = ScreenShareProfileSettings;
 export type ScreenMetrics = { width: number; height: number; refreshRate: number };
 
 /** Browser refresh rate is unknown; a saved native-rate choice falls back to 60. */
@@ -20,9 +21,7 @@ export function privateScreenConstraints(settings: PrivateScreenQuality, display
 
 /** Same device-quality bitrate tiers as the guild screen publisher. */
 export function privateScreenBitrate(settings: PrivateScreenQuality, display?: ScreenMetrics | null) {
-  const {width,frameRate}=privateScreenResolution(settings,display);
-  const tiers=width>=3840?[14_000_000,20_000_000,30_000_000]:width>=2560?[8_000_000,12_000_000,18_000_000]:width>=1920?[5_000_000,8_000_000,12_000_000]:[1_500_000,2_500_000,4_000_000];
-  return frameRate>=120?Math.round(tiers[2]*Math.min(frameRate/120,1.5)):frameRate>=60?tiers[1]:tiers[0];
+  return resolveScreenSharePublishDefaults(settings, display).screenSharePublish.screenShareEncoding.maxBitrate;
 }
 
 /** Update the existing source. Never reacquire a screen or enable a retired source. */
@@ -30,15 +29,30 @@ export async function updatePrivateScreenQuality(track: MediaStreamTrack, sender
   settings: PrivateScreenQuality, current: () => boolean, display?: ScreenMetrics | null, bitrate = privateScreenBitrate(settings, display)) {
   const owns = () => current() && (!sender || sender.track === track);
   if (!owns() || hasEnded(track)) return false;
-  await track.applyConstraints(privateScreenConstraints(settings, display));
-  if (!owns() || hasEnded(track)) return false;
-  if (sender) await mutateOwnedVideoSender(sender, owns, async () => {
-    const parameters = sender.getParameters();
-    if (parameters.encodings?.length) {
-      const fps = privateScreenResolution(settings, display).frameRate;
-      parameters.encodings = parameters.encodings.map(encoding => ({ ...encoding, maxFramerate: fps, maxBitrate: Math.round(bitrate / Math.max(1, encoding.scaleResolutionDownBy ?? 1) ** 2) }));
-      await sender.setParameters(parameters);
+  const apply = async () => {
+    const previousConstraints = track.getConstraints?.();
+    const previousHint = track.contentHint;
+    const profile = resolveScreenSharePublishDefaults(settings, display);
+    try {
+      await track.applyConstraints(privateScreenConstraints(settings, display));
+      if (!owns() || hasEnded(track)) return;
+      track.contentHint = profile.screenShareCapture.contentHint;
+      if (sender) {
+        const parameters = sender.getParameters();
+        const fps = privateScreenResolution(settings, display).frameRate;
+        parameters.degradationPreference = profile.screenSharePublish.degradationPreference;
+        parameters.encodings = parameters.encodings?.map(encoding => ({ ...encoding, maxFramerate: fps, maxBitrate: Math.round(bitrate / Math.max(1, encoding.scaleResolutionDownBy ?? 1) ** 2) }));
+        await sender.setParameters(parameters);
+      }
+    } catch (error) {
+      if (owns() && !hasEnded(track)) {
+        track.contentHint = previousHint;
+        if (previousConstraints) await track.applyConstraints(previousConstraints).catch(() => {});
+      }
+      throw error;
     }
-  });
+  };
+  if (sender) await mutateOwnedVideoSender(sender, owns, apply);
+  else await apply();
   return owns();
 }

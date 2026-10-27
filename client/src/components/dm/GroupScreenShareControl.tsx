@@ -41,7 +41,9 @@ export default function GroupScreenShareControl({ room, groupId, keyEpoch, isCur
   }, [room, groupId, keyEpoch, owner]);
   useEffect(() => {
     const source = session.current;
-    void source?.update(useVoiceStore.getState(), defaults.screenSharePublish).catch(() => { if (session.current === source && current()) setError(true); });
+    void source?.update(useVoiceStore.getState(), defaults.screenSharePublish).then(() => {
+      if (session.current === source && current()) setError(false);
+    }).catch(() => { if (session.current === source && current()) { if (!source.active) stop(); setError(true); } });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [defaults.screenSharePublish, room, groupId, keyEpoch]);
   const toggle = async () => {
@@ -56,7 +58,9 @@ export default function GroupScreenShareControl({ room, groupId, keyEpoch, isCur
       source.onEnded(() => { if (session.current === source) stop(); });
       setSharing(true); setPending(false);
       // A preference changed while the picker was open must apply to this source too.
-      await source.update(useVoiceStore.getState(), latestDefaults.current.screenSharePublish);
+      await source.update(useVoiceStore.getState(), latestDefaults.current.screenSharePublish).catch(() => {
+        if (session.current === source && current()) { if (!source.active) stop(); setError(true); }
+      });
     } catch { if (session.current === source && current()) { stop(); setError(true); } }
   };
   return <><button type="button" aria-pressed={sharing} onClick={() => void toggle()}>{t("screenShare")}{pending ? "\u2026" : ""}</button>
