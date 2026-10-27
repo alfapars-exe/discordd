@@ -10,6 +10,7 @@ import { useAuthStore } from "../../stores/authStore";
 import { useActiveMembers } from "../../stores/memberStore";
 import { hasPermission, Permissions } from "../../utils/permissions";
 import * as serverApi from "../../api/servers";
+import { useSettingsDraft } from "./settingsWorkspaceContext";
 import AvatarUpload from "./AvatarUpload";
 import ServerOwnershipTransfer from "./ServerOwnershipTransfer";
 import type { Server } from "../../types";
@@ -21,13 +22,22 @@ type LiveKitSettings = {
 };
 
 function ServerGeneralSettings() {
+  const userID = useAuthStore(s => s.user?.id);
+  const serverID = useServerStore(s => s.activeServerId);
+  return <ServerGeneralEditor key={`${serverID}:${userID}:${getAuthGeneration()}`} />;
+}
+
+function ServerGeneralEditor() {
   const { t } = useTranslation("settings");
   const { t: tServers } = useTranslation("servers");
   const addToast = useToastStore((s) => s.addToast);
   const activeServerId = useServerStore((s) => s.activeServerId);
   const deleteServerAction = useServerStore((s) => s.deleteServer);
   const currentUser = useAuthStore((s) => s.user);
-  const scope = `${activeServerId}:${currentUser?.id}:${getAuthGeneration()}`;
+  const generation = getAuthGeneration();
+  const scope = `${activeServerId}:${currentUser?.id}:${generation}`;
+  const alive = useRef(true);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   const scopeRef = useRef(scope);
   useLayoutEffect(() => { scopeRef.current = scope; }, [scope]);
 
@@ -68,6 +78,8 @@ function ServerGeneralSettings() {
     // post-commit work, not a cascading render.
     queueMicrotask(() => {
       if (!current()) return;
+      setIsSaving(false);
+      setIsLkSaving(false);
       setServer(null);
       setIsLoaded(false);
       setLkSettings(null);
@@ -115,30 +127,34 @@ function ServerGeneralSettings() {
       editCommunity !== (server.is_community === true) ||
       editAFKTimeout !== (server.afk_timeout_minutes ?? 60));
 
+  const hasLiveKitChanges = !!(editLkKey || editLkSecret || (lkSettings && editLkUrl !== lkSettings.url));
+  useSettingsDraft(hasChanges || hasLiveKitChanges || isSaving || isLkSaving);
+  const currentScope = () => alive.current && scopeRef.current === scope && useServerStore.getState().activeServerId === activeServerId && useAuthStore.getState().user?.id === currentUser?.id && getAuthGeneration() === generation;
+
   async function handleSave() {
     if (!hasChanges || isSaving) return;
 
+    const submitted = { name: editName, invite_required: editInviteRequired, is_community: editCommunity, afk_timeout_minutes: editAFKTimeout };
     setIsSaving(true);
     try {
       if (!activeServerId) return;
-      const res = await serverApi.updateServer(activeServerId, {
-        name: editName,
-        invite_required: editInviteRequired,
-        is_community: editCommunity,
-        afk_timeout_minutes: editAFKTimeout,
-      });
-      if (scopeRef.current !== scope) return;
+      const res = await serverApi.updateServer(activeServerId, submitted);
+      if (!currentScope()) return;
       if (res.success && res.data) {
-        setServer(res.data);
-        setEditInviteRequired(res.data.invite_required);
+        const saved = res.data;
+        setServer(saved);
+        setEditName(value => value === submitted.name ? saved.name : value);
+        setEditInviteRequired(value => value === submitted.invite_required ? saved.invite_required : value);
+        setEditCommunity(value => value === submitted.is_community ? saved.is_community === true : value);
+        setEditAFKTimeout(value => value === submitted.afk_timeout_minutes ? saved.afk_timeout_minutes ?? 60 : value);
         addToast("success", t("serverSaved"));
       } else {
         showApiError(res, { fallbackKey: "settings:serverSaveError" });
       }
     } catch {
-      addToast("error", t("serverSaveError"));
+      if (currentScope()) addToast("error", t("serverSaveError"));
     } finally {
-      setIsSaving(false);
+      if (currentScope()) setIsSaving(false);
     }
   }
 
@@ -151,6 +167,7 @@ function ServerGeneralSettings() {
       return;
     }
 
+    const submitted = { rawUrl: editLkUrl, url: editLkUrl.trim(), key: editLkKey, secret: editLkSecret };
     setIsLkSaving(true);
     try {
       const res = await serverApi.updateServer(activeServerId, {
@@ -158,22 +175,24 @@ function ServerGeneralSettings() {
         livekit_key: editLkKey.trim(),
         livekit_secret: editLkSecret.trim(),
       });
+      if (!currentScope()) return;
       if (res.success) {
         addToast("success", t("livekitSaved"));
         // Update local lkSettings with new URL
         setLkSettings((prev) =>
-          prev ? { ...prev, url: editLkUrl.trim() } : prev
+          prev ? { ...prev, url: submitted.url } : prev
         );
+        setEditLkUrl(value => value === submitted.rawUrl ? submitted.url : value);
         // Clear key/secret inputs for security
-        setEditLkKey("");
-        setEditLkSecret("");
+        setEditLkKey(value => value === submitted.key ? "" : value);
+        setEditLkSecret(value => value === submitted.secret ? "" : value);
       } else {
         showApiError(res, { fallbackKey: "settings:livekitSaveError" });
       }
     } catch {
-      addToast("error", t("livekitSaveError"));
+      if (currentScope()) addToast("error", t("livekitSaveError"));
     } finally {
-      setIsLkSaving(false);
+      if (currentScope()) setIsLkSaving(false);
     }
   }
 
