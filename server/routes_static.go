@@ -113,23 +113,12 @@ func trustedLiveKitWSSource(rawURL string) string {
 		return ""
 	}
 	host := u.Hostname()
-	if host == "" || !safeCSPHost(host) || strings.HasSuffix(u.Host, ":") {
+	if host == "" || !safeCSPHost(host) || !loopbackCSPHost(host) || strings.HasSuffix(u.Host, ":") {
 		return ""
 	}
-	if ip := net.ParseIP(host); ip != nil {
-		if !ip.IsLoopback() {
-			return ""
-		}
-	} else if !strings.EqualFold(host, "localhost") {
+	port, validPort := trustedLiveKitPort(u)
+	if !validPort {
 		return ""
-	}
-	port := 80
-	if rawPort := u.Port(); rawPort != "" {
-		parsedPort, err := strconv.Atoi(rawPort)
-		if err != nil || parsedPort < 1 || parsedPort > 65535 {
-			return ""
-		}
-		port = parsedPort
 	}
 	if net.ParseIP(host) != nil && strings.Contains(host, ":") {
 		host = "[" + strings.ToLower(host) + "]"
@@ -137,6 +126,22 @@ func trustedLiveKitWSSource(rawURL string) string {
 		host = strings.ToLower(host)
 	}
 	return u.Scheme + "://" + host + ":" + strconv.Itoa(port)
+}
+
+func loopbackCSPHost(host string) bool {
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback()
+	}
+	return strings.EqualFold(host, "localhost")
+}
+
+func trustedLiveKitPort(u *url.URL) (int, bool) {
+	rawPort := u.Port()
+	if rawPort == "" {
+		return 80, true
+	}
+	port, err := strconv.Atoi(rawPort)
+	return port, err == nil && port >= 1 && port <= 65535
 }
 
 func safeCSPHost(host string) bool {
