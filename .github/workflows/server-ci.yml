@@ -357,7 +357,7 @@ jobs:
 
   # ─── React client: lint + type check + test + build + production image ───
   client-check:
-    name: Client lint, type, test, build & production image
+    name: Client lint, type, test & build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
