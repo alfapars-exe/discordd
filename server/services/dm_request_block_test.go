@@ -125,3 +125,53 @@ func TestDMAcceptRequestRejectsBlockBeforeSideEffects(t *testing.T) {
 		}
 	}
 }
+
+func TestDMRequestResolutionFailsClosedForUnknownInitiator(t *testing.T) {
+	for _, malformed := range []struct {
+		name        string
+		initiatedBy *string
+	}{
+		{name: "null initiator", initiatedBy: nil},
+		{name: "empty initiator", initiatedBy: strPtr("")},
+		{name: "non-member initiator", initiatedBy: strPtr("mallory")},
+	} {
+		for _, action := range []string{"accept", "decline"} {
+			for _, actor := range []string{"alice", "bob"} {
+				t.Run(malformed.name+"/"+action+"/"+actor, func(t *testing.T) {
+					f := newDMFixture()
+					pendingChannelFixture(t, f, malformed.initiatedBy)
+					f.repo.UpdateChannelStatusFn = func(context.Context, string, string) error {
+						t.Fatal("malformed request changed status")
+						return nil
+					}
+					f.repo.GetAttachmentFileURLsByChannelIDFn = func(context.Context, string) ([]string, error) {
+						t.Fatal("malformed request read attachment URLs")
+						return nil, nil
+					}
+					f.repo.DeleteChannelFn = func(context.Context, string) error {
+						t.Fatal("malformed request deleted channel")
+						return nil
+					}
+					f.hub.BroadcastToUserFn = func(string, ws.Event) {
+						t.Fatal("malformed request broadcast an event")
+					}
+					f.notif.MarkDMRequestReadFn = func(context.Context, string, string) ([]string, error) {
+						t.Fatal("malformed request settled notifications")
+						return nil, nil
+					}
+
+					var err error
+					switch action {
+					case "accept":
+						err = f.svc.AcceptRequest(context.Background(), actor, "ch-1")
+					case "decline":
+						err = f.svc.DeclineRequest(context.Background(), actor, "ch-1")
+					}
+					if !errors.Is(err, pkg.ErrForbidden) {
+						t.Fatalf("%s by %s: error=%v, want ErrForbidden", action, actor, err)
+					}
+				})
+			}
+		}
+	}
+}

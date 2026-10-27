@@ -29,6 +29,7 @@ import {useAuthStore}from "../../stores/authStore";
 import {useE2EEStore}from "../../stores/e2eeStore";
 import {getAuthGeneration,setTokens}from "../../api/client";
 import {publishAuthOwnerChange}from "../../api/authSessionEvents";
+import {RoomEvent}from "livekit-client";
 const group={id:"group",owner_id:"me",name:"Group",members:[{id:"me",username:"me",display_name:null,avatar_url:null,custom_status:null,status:"online" as const,created_at:"2026-01-01"}],icon_url:null,key_epoch:1,call_room_key:"room",unread_count:0,created_at:"2026-01-01",updated_at:"2026-01-01"};
 // Exercise admission and navigation with the real SDK module already loaded.
 // Cold module transformation under full-suite load is not admission latency.
@@ -52,4 +53,23 @@ it.each([false,true])("keeps real admission/installed SDK room stable through pa
  expect(h.rooms).toHaveLength(rooms);expect(h.rooms.reduce((sum,room)=>sum+room.connect.mock.calls.length,0)).toBe(sessions);expect(h.token).toHaveBeenCalledTimes(1);
  vi.useFakeTimers();try{await act(async()=>vi.advanceTimersByTimeAsync(45_000));expect(h.rooms).toHaveLength(rooms);expect(h.rooms.reduce((sum,room)=>sum+room.connect.mock.calls.length,0)).toBe(sessions);expect(h.token).toHaveBeenCalledTimes(1)}finally{vi.useRealTimers()}
  view.unmount();const source=useGroupCallStore.getState().session;if(source)useGroupCallStore.getState().leave(source.nonce);
+});
+it("keeps the group call bound across navigation during an SDK reconnect",async()=>{
+ const body=(route:string)=><><section>{route}</section><GroupCallProvider/></>;
+ const view=render(body("group"));
+ act(()=>{expect(useGroupCallStore.getState().join("group")).toBe(true)});
+ await screen.findByTestId("admitted-audio");
+ const session=useGroupCallStore.getState().session;
+ const room=h.rooms.at(-1) as typeof h.rooms[number] & {state:string;emit:(event:string)=>void};
+ const connections=room.connect.mock.calls.length;
+ act(()=>{room.state="reconnecting";room.emit(RoomEvent.Reconnecting)});
+ view.rerender(body("friends"));
+ expect(useGroupCallStore.getState().session).toEqual(session);
+ act(()=>{room.state="connected";room.emit(RoomEvent.Reconnected)});
+ await waitFor(()=>expect(screen.getByTestId("admitted-audio")).toBeInTheDocument());
+ expect(useGroupCallStore.getState().session).toEqual(session);
+ expect(room.connect).toHaveBeenCalledTimes(connections);
+ expect(h.token).toHaveBeenCalledTimes(1);
+ view.unmount();
+ if(session)useGroupCallStore.getState().leave(session.nonce);
 });

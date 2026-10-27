@@ -62,11 +62,16 @@ type DMRepository interface {
 	// verify the requester is a participant of the DM that owns the file.
 	GetAttachmentByFileURL(ctx context.Context, fileURL string) (*models.DMAttachment, error)
 	// GetAttachmentFileURLsByChannelID returns every attachment file_url
-	// belonging to messages in the given DM channel. Used by
-	// DeclineRequest to clean up on-disk files before the channel (and its
-	// messages/attachments) are deleted — see removeUploadFilesByURL.
+	// belonging to messages in the given DM channel.
 	GetAttachmentFileURLsByChannelID(ctx context.Context, channelID string) ([]string, error)
 
 	// Search operations (FTS5 full-text search with pagination)
 	SearchMessages(ctx context.Context, channelID string, query string, limit, offset int) ([]models.DMMessage, int, error)
+}
+
+// PendingDMDecliner atomically claims a pending request for its recipient,
+// removes the channel graph and returns post-commit cleanup/broadcast data.
+// Repositories without this capability must not emulate it with DeleteChannel.
+type PendingDMDecliner interface {
+	DeclinePending(context.Context, string, string) (changed bool, fileURLs, notificationIDs []string, err error)
 }

@@ -25,6 +25,7 @@ type MockDMRepo struct {
 	GetAttachmentsByMessageIDsFn       func(ctx context.Context, messageIDs []string) (map[string][]models.DMAttachment, error)
 	GetAttachmentFileURLsByChannelIDFn func(ctx context.Context, channelID string) ([]string, error)
 	DeleteChannelFn                    func(ctx context.Context, channelID string) error
+	DeclinePendingFn                   func(ctx context.Context, channelID, recipientID string) (bool, []string, []string, error)
 	CreateChannelFn                    func(ctx context.Context, channel *models.DMChannel) error
 	GetMessagesAroundFn                func(ctx context.Context, channelID, anchorID string, limit int) ([]models.DMMessage, bool, bool, error)
 	GetMessagesAfterFn                 func(ctx context.Context, channelID, afterID string, limit int) ([]models.DMMessage, error)
@@ -101,6 +102,12 @@ func (m *MockDMRepo) DeleteChannel(ctx context.Context, channelID string) error 
 		return m.DeleteChannelFn(ctx, channelID)
 	}
 	return nil
+}
+func (m *MockDMRepo) DeclinePending(ctx context.Context, channelID, recipientID string) (bool, []string, []string, error) {
+	if m.DeclinePendingFn != nil {
+		return m.DeclinePendingFn(ctx, channelID, recipientID)
+	}
+	return false, nil, nil, nil
 }
 func (m *MockDMRepo) SetE2EEEnabled(_ context.Context, _ string, _ bool) error { return nil }
 
