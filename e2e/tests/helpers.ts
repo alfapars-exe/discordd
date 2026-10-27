@@ -440,6 +440,10 @@ export async function resetChannelNotificationFixture(page: Page): Promise<void>
   }
   await provisionChannelNotificationFixture(page, fixture.owner, fixture.recipient);
   await page.reload();
+  // Reloading after fixture provisioning can render first-run overlays again
+  // before the test reaches the server rail. Wait for profile hydration and
+  // dismiss them through the same UI path used during login.
+  await dismissOnboardingOverlays(page);
 }
 
 /**

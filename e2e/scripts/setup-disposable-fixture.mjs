@@ -145,10 +145,4 @@ const fixture = {
   initialRecipientPreference: "channelMessageNotifications=false",
 };
 writeFileSync(secretPath, JSON.stringify(fixture, null, 2), { mode: 0o600, flag: "w" });
-console.log(JSON.stringify({
-  baseURL: fixture.baseURL,
-  runId: fixture.runId,
-  server: fixture.server,
-  channels: fixture.channels,
-  secretFile: secretPath,
-}));
+console.log("Disposable channel notification fixture created.");
