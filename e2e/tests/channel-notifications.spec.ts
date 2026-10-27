@@ -26,7 +26,7 @@ async function sendMessage(page: Page, text: string): Promise<void> {
   await composer(page).press("Enter");
   // Grouped follow-up messages share a rendered text node with their timestamp,
   // so assert the unique marker in its message article instead of exact text.
-  await expect(messageList(page).locator("article").filter({ hasText: text })).toBeVisible({ timeout: 15_000 });
+  await expect(messageList(page).getByRole("article").filter({ hasText: text })).toBeVisible({ timeout: 15_000 });
 }
 
 async function setChannelNoticePreference(page: Page, enabled: boolean): Promise<void> {
