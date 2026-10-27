@@ -1,0 +1,12 @@
+{
+  "source_commit": "5853b2d0",
+  "test_harness": "TestMusicYouTubeLiveKitSmoke with opt-in interruption marker",
+  "result": "passed",
+  "environment": "Disposable LiveKit v1.9.12 paused for 22 seconds while independent Go SDK listener and music publisher shared its network namespace; no real user credentials.",
+  "video_id": "0KbRhUtFwkc",
+  "observations": "ICE disconnected and resumed, both connections returned to connected, at least 100 further decrypted RTP packets arrived after the interruption; key rotation and pause/resume/queue/skip/stop subsequently passed.",
+  "total_packets": 1266,
+  "duration_seconds": 68.72,
+  "cleanup": "Disposable LiveKit container removed.",
+  "limitations": "One independent RTP listener, not two full HiChat clients; no physical listening, restart or playback-rate measurement. The SDK resumed the existing connections, so terminal publisher recovery was not separately established."
+}

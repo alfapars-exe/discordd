@@ -1,0 +1,18 @@
+{
+  "source_commit": "5853b2d0",
+  "scope": "Live YouTube extraction and encrypted LiveKit server integration with one independent RTP listener",
+  "result": "passed",
+  "test": "TestMusicYouTubeLiveKitSmoke",
+  "duration_seconds": 28.35,
+  "video_id": "0KbRhUtFwkc",
+  "observations": {
+    "decrypted_packets": 361,
+    "decoded_peak": 0.2753,
+    "rotated_key_frames": 260,
+    "rotated_decoded_peak": 0.4156,
+    "pause_resume_queue_skip_stop": "passed"
+  },
+  "environment": "Disposable local LiveKit v1.9.12, existing music acceptance runtime image, Linux test binary built from source commit; no user credentials",
+  "cleanup": "The disposable LiveKit container was removed after the test.",
+  "limitations": "Not full HiChat UI, physical device playback, two independent users, or network interruption acceptance."
+}
