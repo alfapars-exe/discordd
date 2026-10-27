@@ -1,4 +1,8 @@
 {
+  "audioPlaybackStart": "Sesi başlat",
+  "audioPlaybackStarting": "Ses başlatılıyor…",
+  "audioPlaybackBlocked": "Sesleri duymak için dokunun.",
+  "audioPlaybackRetry": "Ses başlatılamadı. Yeniden deneyin.",
   "privateScreenAudioWindowsConsent": "HiChat hariç diğer tüm uygulamaların sistem sesini paylaş",
   "privateScreenAudioBrowserConsent": "Tarayıcı sunuyorsa seçilen kaynağın sesini iste",
   "privateScreenAudioShared": "Ekran sesi paylaşılıyor",
