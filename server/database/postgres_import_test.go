@@ -45,6 +45,37 @@ func TestPostgresImportPreservesDataAndRejectsReuse(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer source.Close()
+	if _, err = target.Exec(`UPDATE data_export_archive_budget SET reserved_bytes=1 WHERE id=1`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = ImportSQLiteSnapshot(ctx, source.Conn, target); err == nil {
+		t.Fatal("non-default archive budget seed accepted")
+	}
+	if _, err = target.Exec(`UPDATE data_export_archive_budget SET reserved_bytes=0 WHERE id=1`); err != nil {
+		t.Fatal(err)
+	}
+	legacySource, err := New(filepath.Join(t.TempDir(), "legacy-snapshot.db"), migrations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = legacySource.Conn.Exec(`DROP TABLE data_export_archive_budget`); err != nil {
+		legacySource.Close()
+		t.Fatal(err)
+	}
+	if _, err = ImportSQLiteSnapshot(ctx, legacySource.Conn, target); err == nil {
+		legacySource.Close()
+		t.Fatal("source missing archive budget table accepted")
+	}
+	if err = legacySource.Close(); err != nil {
+		t.Fatal(err)
+	}
+	var seededBudgetRows, seededBudgetBytes int
+	if err = target.QueryRow(`SELECT COUNT(*),COALESCE(MAX(reserved_bytes),-1) FROM data_export_archive_budget`).Scan(&seededBudgetRows, &seededBudgetBytes); err != nil {
+		t.Fatal(err)
+	}
+	if seededBudgetRows != 1 || seededBudgetBytes != 0 {
+		t.Fatalf("legacy import did not preserve migration seed after rollback: rows=%d bytes=%d", seededBudgetRows, seededBudgetBytes)
+	}
 	for _, q := range []string{
 		`INSERT INTO users(id,username,password_hash) VALUES('import-user','import-user','opaque-password-hash')`,
 		`INSERT INTO dm_channels(id,user1_id,user2_id) VALUES('import-dm','import-user','import-user')`,
@@ -112,11 +143,24 @@ func TestPostgresImportPreservesDataAndRejectsReuse(t *testing.T) {
 	if len(report) != len(expectedTables) || !expectedTables["group_dm_pins"] || !expectedTables["users"] {
 		t.Fatalf("incomplete schema report: got %d tables, expected %d", len(report), len(expectedTables))
 	}
+	var foundArchiveBudget bool
 	for _, table := range report {
 		if !expectedTables[table.Table] || len(table.SHA256) != 64 {
 			t.Fatalf("unexpected, duplicate or unhashed table in import report: %s", table.Table)
 		}
+		if table.Table == "data_export_archive_budget" {
+			foundArchiveBudget = table.Rows == 1
+		}
 		delete(expectedTables, table.Table)
+	}
+	if !foundArchiveBudget {
+		t.Fatal("archive budget source row was not included in import report")
+	}
+	if err = target.QueryRow(`SELECT COUNT(*),COALESCE(MAX(reserved_bytes),-1) FROM data_export_archive_budget`).Scan(&seededBudgetRows, &seededBudgetBytes); err != nil {
+		t.Fatal(err)
+	}
+	if seededBudgetRows != 1 || seededBudgetBytes != 0 {
+		t.Fatalf("archive budget source row was not preserved: rows=%d bytes=%d", seededBudgetRows, seededBudgetBytes)
 	}
 	var hash, ciphertext, url string
 	if err = target.QueryRow(`SELECT u.password_hash,m.content,a.file_url FROM users u JOIN messages m ON m.user_id=u.id JOIN attachments a ON a.message_id=m.id WHERE m.id='import-message'`).Scan(&hash, &ciphertext, &url); err != nil {
