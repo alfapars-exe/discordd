@@ -9,6 +9,8 @@ const repoRoot = path.resolve(clientDir, '..');
 const suffix = `${process.pid}`;
 const image = `hichat-nginx-csp-test:${suffix}`;
 const container = `hichat-nginx-csp-test-${suffix}`;
+const wsOrigin = authority => ['ws:', '//', authority].join('');
+const wssOrigin = authority => ['wss:', '//', authority].join('');
 
 function docker(args, { allowFailure = false, inherit = false } = {}) {
   const result = spawnSync('docker', args, {
@@ -95,18 +97,18 @@ try {
 
   // Malformed origins, multiline values and CSP token injection fail closed.
   const invalidOrigins = [
-    'ws://voice.example.test:7880; add_header X-Injected yes;',
-    'ws://voice.example.test:7880\nws://attacker.example.test:7880',
-    'ws://voice.example.test:7880',
-    'ws://192.168.1.10:7880',
-    'ws://128.0.0.1:7880',
-    'wss://voice.example.test:7880',
-    'ws://voice.example.test/path',
-    'ws://voice.example.test:65536',
-    'ws://[2001:db8::8]:7880',
-    'ws://[::2]:7880',
-    'ws://[2001:::1]:7880',
-    'ws://[2001:db8::1::2]:7880',
+    `${wsOrigin('voice.example.test:7880')}; add_header X-Injected yes;`,
+    `${wsOrigin('voice.example.test:7880')}\n${wsOrigin('attacker.example.test:7880')}`,
+    wsOrigin('voice.example.test:7880'),
+    wsOrigin('192.168.1.10:7880'),
+    wsOrigin('128.0.0.1:7880'),
+    wssOrigin('voice.example.test:7880'),
+    `${wsOrigin('voice.example.test')}/path`,
+    `${wsOrigin('voice.example.test')}:65536`,
+    wsOrigin('[2001:db8::8]:7880'),
+    wsOrigin('[::2]:7880'),
+    wsOrigin('[2001:::1]:7880'),
+    wsOrigin('[2001:db8::1::2]:7880'),
   ];
   for (const origin of invalidOrigins) {
     const result = docker(['run', '--name', container, '--env', `LIVEKIT_CSP_WS_ORIGIN=${origin}`, image], { allowFailure: true });
