@@ -13,7 +13,9 @@ const PREFERENCE_PATH = "/api/users/me/preferences";
 const NOTIFICATION_LIST_PATH = "/api/users/me/notifications";
 
 async function openFixtureChannel(page: Page, serverName: string, channelName: string): Promise<void> {
-  await page.getByRole("button", { name: serverName, exact: true }).click();
+  // The active server name also appears in the server-list header menu button;
+  // scope to the rail so this selects the server rather than its context menu.
+  await page.locator("nav.server-rail").getByRole("button", { name: serverName, exact: true }).click();
   const channel = page.locator("button.ch-tree-item", { hasText: channelName }).first();
   await expect(channel).toBeVisible({ timeout: 15_000 });
   await channel.click();
