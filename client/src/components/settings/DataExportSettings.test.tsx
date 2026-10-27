@@ -105,9 +105,10 @@ describe("DataExportSettings", () => {
   });
   it("ignores a late poll from the previous job after a new export is requested", async () => {
     let finishPoll!: (value: unknown) => void;
+    let finishSecondCreate!: (value: unknown) => void;
     const first = { ...job, id: "export-a", attachments_status: "pending" as const };
-    const second = { ...job, id: "export-b", expires_at: "2026-10-29T00:00:00Z", attachments_status: "pending" as const };
-    mocks.create.mockResolvedValueOnce({ success: true, data: first }).mockResolvedValueOnce({ success: true, data: second });
+    const second = { ...job, id: "export-b", expires_at: "2026-10-29T00:00:00Z", attachments_status: "failed" as const };
+    mocks.create.mockResolvedValueOnce({ success: true, data: first }).mockImplementationOnce(() => new Promise(resolve => { finishSecondCreate = resolve; }));
     mocks.get.mockImplementationOnce(() => new Promise(resolve => { finishPoll = resolve; }));
 
     render(<DataExportSettings userID="a" />); create();
@@ -116,9 +117,15 @@ describe("DataExportSettings", () => {
 
     create();
     await waitFor(() => expect(mocks.create).toHaveBeenCalledTimes(2));
-    await act(async () => finishPoll({ success: true, data: { ...first, attachments_ready: true, attachments_status: "ready" } }));
+    // Settle B and A in one React batch before effect cleanup can cancel A's request.
+    await act(async () => {
+      finishSecondCreate({ success: true, data: second });
+      finishPoll({ success: true, data: { ...first, attachments_ready: true, attachments_status: "ready" } });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
 
-    expect(screen.getByText("dataExport.attachmentsPreparing")).toBeInTheDocument();
+    expect(screen.getByText("dataExport.attachmentsUnavailable")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "dataExport.downloadAttachments" })).not.toBeInTheDocument();
   });
   it("stops polling when the export job has expired or disappeared", async () => {
