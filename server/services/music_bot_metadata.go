@@ -79,13 +79,15 @@ func (s *musicMetadataStderr) SawError() bool {
 }
 
 func musicMetadataPartialDiagnostic(line []byte) bool {
-	line = bytes.TrimSpace(line)
-	if bytes.HasPrefix(line, []byte("ERROR:")) {
+	line = bytes.ToLower(bytes.TrimSpace(line))
+	if bytes.HasPrefix(line, []byte("error:")) {
 		return true
 	}
 	// yt-dlp may retry a playlist after YouTube reports hidden unavailable
 	// videos; the retry can succeed, so the UI presents this as a possibility.
-	return bytes.HasPrefix(line, []byte("WARNING: [youtube:tab] YouTube said:")) &&
+	// Current yt-dlp's own YoutubeTab tests expect variants such as
+	// "Unavailable videos will be hidden", so match case-insensitively.
+	return bytes.HasPrefix(line, []byte("warning: [youtube:tab] youtube said:")) &&
 		bytes.Contains(line, []byte("unavailable video")) && bytes.Contains(line, []byte("hidden"))
 }
 

@@ -2,8 +2,16 @@
 
 The bot resolves public YouTube video/playlist URLs, joins the selected voice
 channel through LiveKit, and publishes an Opus audio track. Everyone in the
-room hears the same queue. Playback state is in memory and is cleared on a
-backend restart. This is not a browser-side YouTube embed.
+room hears the same queue. The live connection and playback position are in
+memory; non-empty queues and their repeat mode are saved in the configured
+music-session store. On graceful shutdown, the service attempts to save the
+active track at the front of the queue (unless it is being skipped), followed
+by pending tracks. After a backend restart, a saved queue is loaded inactive
+and paused; it does not reconnect or resume automatically. Restoring starts
+the saved current track from the beginning because elapsed position is not
+persisted. After an abrupt process failure, recovery is limited to the last
+committed session snapshot and may omit the active track. This is not a
+browser-side YouTube embed.
 
 ## Runtime requirements
 
@@ -87,18 +95,22 @@ server may already have accepted the track.
 | `/skip` | End the current track and advance to the next queued track. |
 | `/stop` | Disconnect the bot and clear the entire queue. |
 
-The music panel also provides pause/resume, skip and stop buttons. It shows
-buffering/playing/paused state, title, artist, elapsed time and a preview of
-the next three queued tracks (plus the remaining count). State is refreshed
+The music panel also supports video search and selection, pause/resume, skip,
+stop, queue reorder/removal, shuffle, repeat and seeking in finite tracks. It
+shows buffering/playing/paused state, title, artist, elapsed time and a preview
+of the next three queued tracks (plus the remaining count). State is refreshed
 after reconnect and on focus. Playback commands require the channel's Speak
 permission; Stop requires Manage Channels because it affects every listener.
 
-The API supports enqueue, skip, pause, resume, stop and state retrieval under
-`/api/servers/{serverId}/channels/{channelId}/music/`.
+The API under `/api/servers/{serverId}/channels/{channelId}/music/` supports
+YouTube search and enqueue, skip/pause/resume/stop, queue removal/reordering,
+shuffle, repeat mode, finite-track seek, paused-session restore and state
+retrieval.
 
 - Use a video URL (`watch`, `youtu.be`, `shorts`, `embed`, `live`) or a YouTube
-  playlist URL. Other providers, free-text searches, private videos and
-  account-restricted media are not supported.
+  playlist URL. You can also search public YouTube videos in the music panel;
+  `/play <search phrase>` queues the first search result. Other providers,
+  private videos and account-restricted media are not supported.
 - Queue entries are reconstructed as canonical, individual `watch?v=...`
   URLs. Playback never replays an entire playlist for each entry or retains
   an expiring CDN URL from metadata.

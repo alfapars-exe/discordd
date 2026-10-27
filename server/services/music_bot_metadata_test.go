@@ -230,11 +230,16 @@ func TestMusicMetadataStderr_RemembersErrorOutsideTail(t *testing.T) {
 }
 
 func TestMusicMetadataStderr_ReportsHiddenPlaylistItems(t *testing.T) {
-	stderr := newMusicMetadataStderr(32)
-	_, _ = stderr.Write([]byte("WARNING: [youtube:tab] YouTube said: INFO - 1 unavailable video is hidden\n"))
-	_, _ = stderr.Write([]byte(strings.Repeat("WARNING: benign\n", 20)))
-	if !stderr.SawError() {
-		t.Fatal("lost observed hidden-item warning after stderr tail overflow")
+	for _, warning := range []string{
+		"WARNING: [youtube:tab] YouTube said: INFO - 1 unavailable video is hidden\n",
+		"WARNING: [youtube:tab] YouTube said: INFO - Unavailable videos will be hidden during playback\n",
+	} {
+		stderr := newMusicMetadataStderr(32)
+		_, _ = stderr.Write([]byte(warning))
+		_, _ = stderr.Write([]byte(strings.Repeat("WARNING: benign\n", 20)))
+		if !stderr.SawError() {
+			t.Errorf("lost observed hidden-item warning after stderr tail overflow: %q", warning)
+		}
 	}
 	clean := newMusicMetadataStderr(32)
 	_, _ = clean.Write([]byte("WARNING: [youtube:tab] transient network retry\n"))
