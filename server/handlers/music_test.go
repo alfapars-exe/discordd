@@ -45,7 +45,7 @@ type stubDetailedMusicService struct {
 }
 
 func (s *stubDetailedMusicService) EnqueueWithResult(ctx context.Context, userID, channelID, url string) (services.MusicEnqueueResult, error) {
-	tracks, err := s.stubMusicService.Enqueue(ctx, userID, channelID, url)
+	tracks, err := s.Enqueue(ctx, userID, channelID, url)
 	return services.MusicEnqueueResult{AddedTracks: tracks, MayHaveSkippedTracks: s.mayHaveSkippedTracks}, err
 }
 func (s *stubMusicService) Skip(string) error                            { return nil }
