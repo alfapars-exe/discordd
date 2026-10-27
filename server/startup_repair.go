@@ -395,11 +395,12 @@ func resetStalePresence(db *database.DB) {
 // purgeExpiredNotifications drops inbox rows older than 90 days. The
 // notifications table (migration 082) has no other retention mechanism, and
 // an inbox nobody scrolls back that far in would otherwise grow forever.
-// created_at is 'YYYY-MM-DD HH:MM:SS' UTC text, so the datetime() comparison
-// is lexical and correct on Turso as well as local SQLite.
+// The cutoff is calculated in UTC and bound as a timestamp string so the same
+// comparison works with SQLite text timestamps and PostgreSQL TIMESTAMPTZ.
 func purgeExpiredNotifications(db *database.DB) {
+	cutoff := notificationRetentionCutoff(time.Now(), database.IsPostgres(db.Conn))
 	result, err := db.Conn.ExecContext(context.Background(),
-		`DELETE FROM notifications WHERE created_at < datetime('now', '-90 days')`)
+		`DELETE FROM notifications WHERE created_at < ?`, cutoff)
 	if err != nil {
 		startupLogger.Error("failed to purge expired notifications", "err", pkg.ErrText(err))
 		return
@@ -407,6 +408,14 @@ func purgeExpiredNotifications(db *database.DB) {
 	if affected, _ := result.RowsAffected(); affected > 0 {
 		startupLogger.Info("purged expired notification(s)", "count", affected)
 	}
+}
+
+func notificationRetentionCutoff(now time.Time, postgres bool) any {
+	cutoff := now.UTC().Add(-90 * 24 * time.Hour)
+	if postgres {
+		return cutoff
+	}
+	return cutoff.Format("2006-01-02 15:04:05")
 }
 
 // seedPlatformLiveKit ensures a platform-managed LiveKit instance exists in

@@ -18,14 +18,54 @@ class PostgreSQLRunnerTests(unittest.TestCase):
             return runner.main()
 
     def completed(self):
-        return [{"Action": "pass", "Package": "repository"}, {"Action": "pass", "Package": "database"}]
+        return [
+            {"Action": "pass", "Package": "github.com/argeinfina/hichat", "Test": "TestPurgeExpiredNotificationsPostgres"},
+            {"Action": "pass", "Package": "github.com/argeinfina/hichat"},
+            {"Action": "pass", "Package": "github.com/argeinfina/hichat/repository"},
+            {"Action": "pass", "Package": "github.com/argeinfina/hichat/database"},
+        ]
 
     def test_required_skip_cannot_be_a_green_run(self):
         self.assertEqual(self.execute(self.completed()), 0)
         self.assertEqual(self.execute(self.completed() + [{"Action": "skip", "Test": "TestPostgresLock"}]), 1)
 
+    def test_postgres_retention_skip_fails_but_unrelated_server_skip_is_allowed(self):
+        self.assertEqual(
+            self.execute(self.completed() + [{
+                "Action": "skip",
+                "Package": "github.com/argeinfina/hichat",
+                "Test": "TestPurgeExpiredNotificationsPostgres",
+            }]),
+            1,
+        )
+        self.assertEqual(
+            self.execute(self.completed() + [{
+                "Action": "skip",
+                "Package": "github.com/argeinfina/hichat",
+                "Test": "TestMusicWorkerBridgePrivateExecutorLifecycle",
+            }]),
+            0,
+        )
+
+    def test_postgres_retention_must_emit_an_explicit_pass(self):
+        target_pass = self.completed()[0]
+        without_target = self.completed()[1:]
+        self.assertEqual(self.execute(without_target), 1)  # package pass, target missing
+        self.assertEqual(self.execute(self.completed()[:-1]), 1)  # database package missing
+        self.assertEqual(self.execute(without_target + [{
+            "Action": "fail",
+            "Package": "github.com/argeinfina/hichat",
+            "Test": "TestPurgeExpiredNotificationsPostgres",
+        }]), 1)
+        self.assertEqual(self.execute(without_target + [{
+            "Action": "skip",
+            "Package": "github.com/argeinfina/hichat",
+            "Test": "TestPurgeExpiredNotificationsPostgres",
+        }]), 1)
+        self.assertEqual(self.execute([event for event in self.completed() if event != target_pass]), 1)
+
     def test_missing_package_or_process_failure_is_retained(self):
-        self.assertEqual(self.execute(self.completed()[:1]), 1)
+        self.assertEqual(self.execute(self.completed()[:2]), 1)
         self.assertEqual(self.execute(self.completed(), code=2), 2)
 
     def test_remote_or_absent_dsn_is_rejected_before_launch(self):
