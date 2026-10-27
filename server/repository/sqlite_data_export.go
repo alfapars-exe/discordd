@@ -92,7 +92,19 @@ func (r *sqliteDataExportRepo) Create(ctx context.Context, user *models.User) (*
 	}
 	doc := map[string]any{
 		"format": "hichat-personal-data-v1", "exported_at": time.Now().UTC(),
-		"account": map[string]any{"id": user.ID, "username": user.Username, "display_name": user.DisplayName, "email": user.Email, "language": user.Language, "created_at": user.CreatedAt},
+		// Explicit owner-only allowlist: do not marshal User itself, even fields
+		// currently exposed by its API JSON tags. Administrative/moderation
+		// metadata and authentication secrets must never enter this archive.
+		"account": map[string]any{
+			"id": user.ID, "username": user.Username, "display_name": user.DisplayName,
+			"email": user.Email, "language": user.Language, "created_at": user.CreatedAt,
+			"avatar_url": user.AvatarURL, "avatar_animated_url": user.AvatarAnimatedURL,
+			"banner_url": user.BannerURL, "banner_animated_url": user.BannerAnimatedURL,
+			"wallpaper_url": user.WallpaperURL, "bio": user.Bio, "pronouns": user.Pronouns,
+			"accent_color": user.AccentColor, "custom_status": user.CustomStatus,
+			"status": user.Status, "pref_status": user.PrefStatus,
+			"dm_privacy": user.DMPrivacy, "last_seen_at": user.LastSeenAt,
+		},
 	}
 	for _, item := range queries {
 		args := []any{user.ID}
