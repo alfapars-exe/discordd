@@ -29,6 +29,13 @@ beforeEach(() => {
 });
 
 describe("music command call ownership", () => {
+  it("reports possible omitted playlist items after adding available tracks", async () => {
+    vi.mocked(playMusic).mockResolvedValue({ success: true, data: { added_tracks: [{}], may_have_skipped_tracks: true } as PlayMusicResponse });
+    const { result } = renderHook(() => useMusicSlashCommand());
+    expect(await result.current("/play https://youtube.com/playlist?list=example")).toEqual({ handled: true, outcome: "success" });
+    expect(fixture.toast).toHaveBeenCalledWith("success", "addedToQueue");
+    expect(fixture.toast).toHaveBeenCalledWith("info", "playlistItemsUnavailable");
+  });
   it("targets the connected voice server while browsing another server", async () => {
     const { result } = renderHook(() => useMusicSlashCommand());
     expect(await result.current("/skip")).toEqual({ handled: true, outcome: "success" });

@@ -36,6 +36,7 @@
   "stop": "Durdur ve botu at",
   "controlError": "İşlem başarısız",
   "addedToQueue_one": "1 şarkı kuyruğa eklendi",
+  "playlistItemsUnavailable": "Çalma listesindeki bazı öğeler alınamamış olabilir. Kuyruğu kontrol et.",
   "addedToQueue_other": "{{count}} şarkı kuyruğa eklendi",
   "addingTrack": "Şarkı kuyruğa ekleniyor…",
   "playError": "Müzik başlatılamadı",

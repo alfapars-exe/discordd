@@ -38,6 +38,16 @@ func (s *stubMusicService) Enqueue(_ context.Context, _, _, url string) ([]model
 	}
 	return []models.MusicTrack{}, nil
 }
+
+type stubDetailedMusicService struct {
+	*stubMusicService
+	mayHaveSkippedTracks bool
+}
+
+func (s *stubDetailedMusicService) EnqueueWithResult(ctx context.Context, userID, channelID, url string) (services.MusicEnqueueResult, error) {
+	tracks, err := s.stubMusicService.Enqueue(ctx, userID, channelID, url)
+	return services.MusicEnqueueResult{AddedTracks: tracks, MayHaveSkippedTracks: s.mayHaveSkippedTracks}, err
+}
 func (s *stubMusicService) Skip(string) error                            { return nil }
 func (s *stubMusicService) Pause(string) error                           { return nil }
 func (s *stubMusicService) Resume(string) error                          { return nil }
@@ -253,6 +263,20 @@ func TestPlay_AcceptsHTTPSchemes(t *testing.T) {
 				t.Fatalf("Enqueue got url=%q, want %q", music.lastURL, url)
 			}
 		})
+	}
+}
+
+func TestPlay_ReportsObservedPlaylistOmissions(t *testing.T) {
+	music := &stubDetailedMusicService{stubMusicService: &stubMusicService{}, mayHaveSkippedTracks: true}
+	h := NewMusicHandler(music, stubPermResolver{}, nil)
+	rec := httptest.NewRecorder()
+	req := newPlayRequest(t, `{"url":"https://www.youtube.com/playlist?list=public"}`)
+	h.Play(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"may_have_skipped_tracks":true`) {
+		t.Fatalf("response omitted observed partial-result advisory: %s", rec.Body.String())
 	}
 }
 

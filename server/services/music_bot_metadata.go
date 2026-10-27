@@ -40,6 +40,50 @@ type musicMetadataBuffer struct {
 	overflow bool
 }
 
+// musicMetadataStderr retains the usual bounded diagnostic tail while also
+// remembering whether yt-dlp emitted an ERROR line. That signal is kept
+// separately because the relevant line can scroll out of the tail when a
+// playlist produces many diagnostics.
+type musicMetadataStderr struct {
+	tail       *tailBuffer
+	linePrefix []byte
+	sawError   bool
+}
+
+func newMusicMetadataStderr(max int) *musicMetadataStderr {
+	return &musicMetadataStderr{tail: newTailBuffer(max)}
+}
+
+func (s *musicMetadataStderr) Write(p []byte) (int, error) {
+	n, err := s.tail.Write(p)
+	for _, b := range p {
+		if b == '\n' {
+			if bytes.HasPrefix(bytes.TrimSpace(s.linePrefix), []byte("ERROR:")) {
+				s.sawError = true
+			}
+			s.linePrefix = s.linePrefix[:0]
+			continue
+		}
+		// Only a short line prefix is needed to recognize "ERROR:". Keeping
+		// this bounded avoids duplicating arbitrarily long provider output.
+		if len(s.linePrefix) < len("ERROR:")+8 {
+			s.linePrefix = append(s.linePrefix, b)
+		}
+	}
+	return n, err
+}
+
+func (s *musicMetadataStderr) String() string { return s.tail.String() }
+
+func (s *musicMetadataStderr) SawError() bool {
+	return s.sawError || bytes.HasPrefix(bytes.TrimSpace(s.linePrefix), []byte("ERROR:"))
+}
+
+type musicMetadataResult struct {
+	Tracks          []models.MusicTrack
+	SawSkippedEntry bool
+}
+
 func (b *musicMetadataBuffer) Write(p []byte) (int, error) {
 	if len(p) > maxMusicMetadataBytes-b.buf.Len() {
 		b.overflow = true
@@ -99,12 +143,17 @@ var ytDlpPath = sync.OnceValues(func() (string, error) {
 // The subprocess sees at most maxQueueLen+1 entries; output is additionally
 // byte-bounded. 30s context timeout — playlist resolution never takes minutes.
 func extractTracks(parent context.Context, urlStr, requesterID, requesterName string) ([]models.MusicTrack, error) {
+	result, err := extractTracksDetailed(parent, urlStr, requesterID, requesterName)
+	return result.Tracks, err
+}
+
+func extractTracksDetailed(parent context.Context, urlStr, requesterID, requesterName string) (musicMetadataResult, error) {
 	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
 	defer cancel()
 
 	validationStart := time.Now()
 	if err := validateMusicURLNetwork(ctx, urlStr); err != nil {
-		return nil, err
+		return musicMetadataResult{}, err
 	}
 	validationDuration := time.Since(validationStart)
 
@@ -115,41 +164,46 @@ func extractTracks(parent context.Context, urlStr, requesterID, requesterName st
 	// closest to the actual subprocess.
 	bin, err := ytDlpPath()
 	if err != nil {
-		return nil, fmt.Errorf("%w: yt-dlp not available: %w", errToolMissing, err)
+		return musicMetadataResult{}, fmt.Errorf("%w: yt-dlp not available: %w", errToolMissing, err)
 	}
 	cmd := exec.CommandContext(ctx, bin, extractTracksArgs(urlStr)...) // #nosec G204 -- urlStr is user-supplied, but bin is an absolute path resolved once by ytDlpPath, exec.CommandContext never invokes a shell (no metacharacter-injection vector), validateMusicURLNetwork above enforces a host allow-list (SSRF's primary control here — see music_url_guard.go doc comment) plus a post-DNS private/reserved-IP check, and "--" in extractTracksArgs stops urlStr from being parsed as a yt-dlp flag
 	stdout := &musicMetadataBuffer{}
-	stderr := newTailBuffer(ytDlpStderrTailBytes)
+	stderr := newMusicMetadataStderr(ytDlpStderrTailBytes)
 	cmd.Stdout, cmd.Stderr = stdout, stderr
 	cmd.WaitDelay = subprocessWaitDelay
 	runDuration, runErr := runMusicMetadataCommand(ctx, cmd, "extraction", validationDuration, stderr)
 	// A cancelled request must not enqueue partially extracted tracks after
 	// the caller has left. Keep deadlines classifiable as network failures.
 	if ctx.Err() != nil {
-		return nil, musicMetadataInterruptedError("extraction", ctx.Err())
+		return musicMetadataResult{}, musicMetadataInterruptedError("extraction", ctx.Err())
 	}
 	if stdout.overflow {
-		return nil, errMusicMetadataTooLarge
+		return musicMetadataResult{}, errMusicMetadataTooLarge
 	}
-	out, err := parseMusicMetadata(bytes.NewReader(stdout.buf.Bytes()), requesterID, requesterName)
+	parsed, err := parseMusicMetadataDetailed(bytes.NewReader(stdout.buf.Bytes()), requesterID, requesterName)
 	if err != nil {
-		return nil, err
+		return musicMetadataResult{}, err
 	}
+	out := parsed.Tracks
+	// A non-zero exit alongside playable output is also direct evidence of an
+	// incomplete extraction even if the provider's ERROR line was truncated or
+	// formatted unexpectedly.
+	sawSkippedEntry := parsed.SawSkippedEntry || stderr.SawError() || runErr != nil
 	// A playlist may contain unavailable entries. Keep valid entries on a
 	// partial exit, but preserve classified errors if nothing can play.
 	if len(out) == 0 {
 		logMusicMetadataFailure("extraction", validationDuration, runDuration, runErr, stderr.String())
 	}
 	if len(out) == 0 && runErr != nil {
-		return nil, &trackPlaybackError{
+		return musicMetadataResult{}, &trackPlaybackError{
 			Reason: classifyPlaybackFailure(runErr, stderr.String()),
 			err:    fmt.Errorf("yt-dlp metadata failed: %w", runErr),
 		}
 	}
 	if len(out) == 0 {
-		return nil, &trackPlaybackError{Reason: reasonUnavailable, err: errors.New("no playable YouTube videos found")}
+		return musicMetadataResult{}, &trackPlaybackError{Reason: reasonUnavailable, err: errors.New("no playable YouTube videos found")}
 	}
-	return out, nil
+	return musicMetadataResult{Tracks: out, SawSkippedEntry: sawSkippedEntry}, nil
 }
 
 // Metadata deadlines are provider/network failures, not unclassified HTTP
@@ -163,7 +217,7 @@ func musicMetadataInterruptedError(operation string, cause error) error {
 	return err
 }
 
-func runMusicMetadataCommand(ctx context.Context, cmd *exec.Cmd, operation string, validationDuration time.Duration, stderr *tailBuffer) (time.Duration, error) {
+func runMusicMetadataCommand(ctx context.Context, cmd *exec.Cmd, operation string, validationDuration time.Duration, stderr interface{ String() string }) (time.Duration, error) {
 	started := time.Now()
 	err := cmd.Run()
 	duration := time.Since(started)
@@ -210,24 +264,31 @@ func logMusicMetadataFailure(operation string, validationDuration, runDuration t
 }
 
 func parseMusicMetadata(r io.Reader, requesterID, requesterName string) ([]models.MusicTrack, error) {
+	result, err := parseMusicMetadataDetailed(r, requesterID, requesterName)
+	return result.Tracks, err
+}
+
+func parseMusicMetadataDetailed(r io.Reader, requesterID, requesterName string) (musicMetadataResult, error) {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 4096), 256<<10)
-	out := make([]models.MusicTrack, 0)
+	result := musicMetadataResult{Tracks: make([]models.MusicTrack, 0)}
 	for scanner.Scan() {
 		var raw ytdlpEntry
 		if json.Unmarshal(scanner.Bytes(), &raw) != nil {
+			result.SawSkippedEntry = true
 			continue
 		}
 		track := raw.toTrack("", requesterID, requesterName)
 		if track.VideoID == "" {
+			result.SawSkippedEntry = true
 			continue
 		}
-		out = append(out, track)
-		if len(out) == maxQueueLen+1 {
+		result.Tracks = append(result.Tracks, track)
+		if len(result.Tracks) == maxQueueLen+1 {
 			break
 		}
 	}
-	return out, scanner.Err()
+	return result, scanner.Err()
 }
 
 // extractTracksArgs builds extractTracks's yt-dlp argv. Factored out (rather

@@ -196,8 +196,9 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
   async function addResult(track: MusicTrack) {
     if(!serverId)return;
     await mutateQueue(()=>playMusic(serverId,channelId,track.url),response=>{
-      const data=response.data as {added_tracks?:MusicTrack[]}|undefined;
+      const data=response.data as {added_tracks?:MusicTrack[];may_have_skipped_tracks?:boolean}|undefined;
       useToastStore.getState().addToast("success",t("addedToQueue",{count:data?.added_tracks?.length??1}));
+      if(data?.may_have_skipped_tracks)useToastStore.getState().addToast("info",t("playlistItemsUnavailable"));
       setResults(items=>items.filter(item=>item.video_id!==track.video_id));
     });
   }
