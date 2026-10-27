@@ -116,25 +116,38 @@ func TestSQLitePreferencesGetManyStrictIsBoundedAndDefaultsMissingRows(t *testin
 
 func TestProfileAudienceBatchReaderRejectsCorruptPreferences(t *testing.T) {
 	db, repo := preferencesTestRepo(t)
-	if _, err := db.Conn.Exec(`INSERT INTO user_preferences (user_id, data) VALUES (?, ?)`, "prefs-user", `{`); err != nil {
+	execSeed(t, db, []seedStmt{{q: `INSERT INTO users (id, username, password_hash) VALUES (?, ?, ?)`, args: []any{"valid-prefs-user", "validprefsuser", "x"}}})
+	ctx := context.Background()
+	const optIn = `{"notifications":{"channelMessageNotifications":true},"privacy":{"profileAudience":"friends_only"}}`
+	if _, err := repo.Upsert(ctx, "valid-prefs-user", json.RawMessage(optIn)); err != nil {
 		t.Fatal(err)
 	}
-	ctx := context.Background()
-	// Notification fanout treats corrupt stored preferences as opt-out for this
-	// recipient, allowing the rest of a page to proceed without retry starvation.
-	got, err := repo.(PreferencesBatchReader).GetMany(ctx, []string{"prefs-user"})
-	if err != nil {
-		t.Fatalf("tolerant notification preference read: %v", err)
-	}
-	if got["prefs-user"] == nil || string(got["prefs-user"].Data) != `{}` {
-		t.Fatalf("corrupt notification preferences = %#v, want opt-out {}", got["prefs-user"])
-	}
-
 	privacyReader := repo.(interface {
 		GetManyStrict(context.Context, []string) (map[string]*models.UserPreferences, error)
 	})
-	if _, err := privacyReader.GetManyStrict(ctx, []string{"prefs-user"}); err == nil {
-		t.Fatal("strict profile reader accepted corrupt preference and could expose default all_servers profile")
+	for name, corrupt := range map[string]string{
+		"malformed": `{`, "array": `[]`, "null": `null`, "string": `"text"`, "number": `42`, "boolean": `true`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := db.Conn.Exec(`INSERT INTO user_preferences (user_id, data) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET data=excluded.data`, "prefs-user", corrupt); err != nil {
+				t.Fatal(err)
+			}
+			ids := []string{"prefs-user", "valid-prefs-user"}
+			// A corrupt recipient must not poison the healthy opt-in on the same page.
+			got, err := repo.(PreferencesBatchReader).GetMany(ctx, ids)
+			if err != nil {
+				t.Fatalf("tolerant notification preference read: %v", err)
+			}
+			if got["prefs-user"] == nil || string(got["prefs-user"].Data) != `{}` {
+				t.Fatalf("corrupt notification preferences = %#v, want opt-out {}", got["prefs-user"])
+			}
+			if got["valid-prefs-user"] == nil || !strings.Contains(string(got["valid-prefs-user"].Data), `"channelMessageNotifications":true`) {
+				t.Fatal("healthy opt-in recipient was lost from tolerant preference page")
+			}
+			if _, err := privacyReader.GetManyStrict(ctx, ids); err == nil {
+				t.Fatal("strict profile reader accepted corrupt preference and could expose default all_servers profile")
+			}
+		})
 	}
 }
 
