@@ -62,12 +62,13 @@ function assertContains(text, needle, message) {
 }
 
 async function waitForNginx() {
-  for (let attempt = 0; attempt < 10; attempt++) {
+  for (let attempt = 0; attempt < 20; attempt++) {
     const result = docker(['exec', container, 'nginx', '-t'], { allowFailure: true });
-    if (result.status === 0) return;
-    await new Promise(resolve => setTimeout(resolve, 250));
+    const health = docker(['inspect', '--format', '{{.State.Health.Status}}', container], { allowFailure: true });
+    if (result.status === 0 && health.status === 0 && health.output.trim() === 'healthy') return;
+    await new Promise(resolve => setTimeout(resolve, 500));
   }
-  throw new Error(`nginx did not start with a valid config:\n${docker(['logs', container]).output}`);
+  throw new Error(`nginx did not become healthy with a valid config:\n${docker(['logs', container]).output}`);
 }
 
 function startContainer(extraArgs = []) {
@@ -89,14 +90,21 @@ try {
     '--tag', image, repoRoot,
   ], { inherit: true });
 
+  const configuredUser = docker(['inspect', '--format', '{{.Config.User}}', image]).output.trim();
+  assert.equal(configuredUser, 'nginx', 'production image must run Nginx as the non-root nginx user');
+  const exposedPorts = docker(['inspect', '--format', '{{json .Config.ExposedPorts}}', image]).output;
+  assertContains(exposedPorts, '80/tcp', 'production image must preserve the container port 80 contract');
+
   // Default policy keeps the existing wss:/https: sources and adds no ws: source.
   startContainer();
   await waitForNginx();
+  const runtimeUid = docker(['exec', container, 'sh', '-c', "awk '/^Uid:/ { print $2 }' /proc/1/status"]).output.trim();
+  assert.match(runtimeUid, /^[1-9]\d*$/, 'Nginx master process must not run as uid 0');
   const defaultConfig = docker(['exec', container, 'nginx', '-T']).output;
   assertContains(defaultConfig, "connect-src 'self' wss: https: ;", 'default CSP lost wss:/https: or has an unexpected source');
   assertContains(defaultConfig, 'proxy_set_header Host $host;', 'envsubst modified an Nginx $host variable');
   assertContains(defaultConfig, 'proxy_set_header X-Forwarded-Proto $scheme;', 'envsubst modified an Nginx $scheme variable');
-  const defaultResponse = docker(['exec', container, 'sh', '-c', 'wget -qSO- http://127.0.0.1/ 2>&1']).output;
+  const defaultResponse = docker(['exec', container, 'sh', '-c', 'wget -qSO- http://127.0.0.1:80/ 2>&1']).output;
   assertContains(defaultResponse, "connect-src 'self' wss: https: ;", 'default HTTP CSP header is missing baseline sources');
   assert.ok(!defaultResponse.includes('ws://'), 'default CSP unexpectedly allows a ws:// origin');
   removeContainer();
@@ -104,25 +112,25 @@ try {
   // Only local endpoints may use plaintext WebSockets; remote services need wss:.
   startContainer(['--env', 'LIVEKIT_CSP_WS_ORIGIN=ws://localhost:7880']);
   await waitForNginx();
-  const configuredResponse = docker(['exec', container, 'sh', '-c', 'wget -qSO- http://127.0.0.1/ 2>&1']).output;
+  const configuredResponse = docker(['exec', container, 'sh', '-c', 'wget -qSO- http://127.0.0.1:80/ 2>&1']).output;
   assertContains(configuredResponse, "connect-src 'self' wss: https: ws://localhost:7880;", 'response CSP lacks the exact localhost origin or baseline sources');
   removeContainer();
 
   startContainer(['--env', 'LIVEKIT_CSP_WS_ORIGIN=ws://127.0.0.2:7880']);
   await waitForNginx();
-  const ipv4Response = docker(['exec', container, 'sh', '-c', 'wget -qSO- http://127.0.0.1/ 2>&1']).output;
+  const ipv4Response = docker(['exec', container, 'sh', '-c', 'wget -qSO- http://127.0.0.1:80/ 2>&1']).output;
   assertContains(ipv4Response, "connect-src 'self' wss: https: ws://127.0.0.2:7880;", 'response CSP lacks the exact loopback IPv4 origin');
   removeContainer();
 
   startContainer(['--env', 'LIVEKIT_CSP_WS_ORIGIN=ws://[::1]:7880']);
   await waitForNginx();
-  const ipv6Response = docker(['exec', container, 'sh', '-c', 'wget -qSO- http://127.0.0.1/ 2>&1']).output;
+  const ipv6Response = docker(['exec', container, 'sh', '-c', 'wget -qSO- http://127.0.0.1:80/ 2>&1']).output;
   assertContains(ipv6Response, "connect-src 'self' wss: https: ws://[::1]:7880;", 'response CSP lacks the exact IPv6 loopback origin');
   removeContainer();
 
   startContainer(['--env', 'LIVEKIT_CSP_WS_ORIGIN=ws://[0:0:0:0:0:0:0:1]:7880']);
   await waitForNginx();
-  const expandedIPv6Response = docker(['exec', container, 'sh', '-c', 'wget -qSO- http://127.0.0.1/ 2>&1']).output;
+  const expandedIPv6Response = docker(['exec', container, 'sh', '-c', 'wget -qSO- http://127.0.0.1:80/ 2>&1']).output;
   assertContains(expandedIPv6Response, "connect-src 'self' wss: https: ws://[0:0:0:0:0:0:0:1]:7880;", 'response CSP lacks the exact expanded IPv6 loopback origin');
   removeContainer();
 

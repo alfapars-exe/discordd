@@ -228,12 +228,12 @@ Set `LIVEKIT_CSP_WS_ORIGIN` **when starting the production Nginx container** onl
 ```bash
 docker run --detach --name hichat-client \
   --network <backend-network> \
-  --publish 8080:80 \
+  --publish 80:80 \
   --env LIVEKIT_CSP_WS_ORIGIN=ws://localhost:7880 \
   hichat-client:local
 ```
 
-The browser must be able to reach that loopback LiveKit address on its own device; `localhost` is resolved by the browser, not by the Nginx container. The backend's `LIVEKIT_URL` is a separate server-side setting and may use a Docker-only hostname; do not use that internal hostname for `LIVEKIT_CSP_WS_ORIGIN`. This Nginx config forwards `/api` and `/ws` to `server:8080`, so the backend must be reachable by that name and port on the selected network (or update the proxy target for your deployment).
+The browser must be able to reach that loopback LiveKit address on its own device; `localhost` is resolved by the browser, not by the Nginx container. The production image runs Nginx as the non-root `nginx` user while preserving container port 80, so the existing `--publish 80:80` mapping remains valid with Docker's default `CAP_NET_BIND_SERVICE` capability. If a hardened runtime drops that capability, grant only `NET_BIND_SERVICE` so Nginx can bind port 80. The backend's `LIVEKIT_URL` is a separate server-side setting and may use a Docker-only hostname; do not use that internal hostname for `LIVEKIT_CSP_WS_ORIGIN`. This Nginx config forwards `/api` and `/ws` to `server:8080`, so the backend must be reachable by that name and port on the selected network (or update the proxy target for your deployment).
 
 For remote LiveKit and HTTPS web apps, use a `wss://` LiveKit URL: browsers block plaintext `ws://` as mixed content on HTTPS pages, and this policy rejects remote plaintext origins. The baseline CSP already allows `wss:` and `https:`, so leave `LIVEKIT_CSP_WS_ORIGIN` unset in that setup. The repository Compose `client` service remains the Vite development server; it does not run this production Nginx image.
 

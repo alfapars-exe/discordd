@@ -38,8 +38,16 @@ RUN npm run build
 # runtime stage and then replaces the placeholder index with the Vite output.
 FROM nginx:alpine AS nginx-runtime
 
-# wget for HEALTHCHECK (curl not in nginx:alpine by default)
-RUN apk add --no-cache wget
+# wget for HEALTHCHECK (curl not in nginx:alpine by default). The official
+# image's default config is removed because envsubst creates our config in a
+# dedicated writable runtime directory, included by nginx.conf.
+RUN apk add --no-cache wget \
+    && rm /etc/nginx/conf.d/default.conf \
+    && mkdir -p /tmp/nginx-conf \
+    && chown nginx:nginx /tmp/nginx-conf /var/cache/nginx \
+    && sed -i -e '/^user[[:space:]]/d' -e 's#^pid[[:space:]].*/run/nginx.pid;#pid /tmp/nginx.pid;#' -e 's#/etc/nginx/conf.d/\*\.conf;#/tmp/nginx-conf/*.conf;#' /etc/nginx/nginx.conf \
+    && grep -q '^pid /tmp/nginx.pid;' /etc/nginx/nginx.conf \
+    && grep -Fq 'include /tmp/nginx-conf/*.conf;' /etc/nginx/nginx.conf
 
 # Placeholder only for the nginx-runtime validation target.
 COPY client/index.html /usr/share/nginx/html/index.html
@@ -49,20 +57,23 @@ COPY --chmod=755 client/scripts/validate-livekit-csp-origin.sh /docker-entrypoin
 # Only the trusted, operator-supplied CSP origin may be expanded in the
 # template. Nginx variables such as $host and $scheme remain untouched.
 ENV NGINX_ENVSUBST_FILTER="^LIVEKIT_CSP_WS_ORIGIN$" \
+    NGINX_ENVSUBST_OUTPUT_DIR="/tmp/nginx-conf" \
     LIVEKIT_CSP_WS_ORIGIN=""
 
 EXPOSE 80
 
-# HEALTHCHECK — wget against root index; verifies nginx is serving SPA.
+# HEALTHCHECK — wget against the unchanged HTTP port; verifies the SPA.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD wget --quiet --spider http://localhost:80/ || exit 1
 
+USER nginx
+
+# nginx runs as `nginx`; Docker's default CAP_NET_BIND_SERVICE allows this
+# unprivileged process to preserve the existing container port 80 contract.
 CMD ["nginx", "-g", "daemon off;"]
 
 # ─── Production Stage ───
 FROM nginx-runtime AS production
 COPY --from=build /app/client/dist /usr/share/nginx/html
 
-# nginx:alpine already runs as non-root user `nginx` by default for the
-# worker processes, but the master starts as root to bind privileged ports.
-# Port 80 is privileged but nginx drops privileges for workers.
+# nginx master and workers run as the unprivileged `nginx` user.

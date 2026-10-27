@@ -217,12 +217,12 @@ Yalnizca istemciyle LiveKit ayni cihazda calisiyorsa ve yerel LiveKit'e sifresiz
 ```bash
 docker run --detach --name hichat-client \
   --network <backend-network> \
-  --publish 8080:80 \
+  --publish 80:80 \
   --env LIVEKIT_CSP_WS_ORIGIN=ws://localhost:7880 \
   hichat-client:local
 ```
 
-Tarayici bu loopback LiveKit adresine kendi cihazindan erisebilmelidir; `localhost` Nginx container'inda degil tarayicida cozulur. Backend'in `LIVEKIT_URL` ayri bir sunucu ayaridir ve Docker'a ozel hostname kullanabilir; bu dahili hostname'i `LIVEKIT_CSP_WS_ORIGIN` icin kullanma. Nginx `/api` ve `/ws` isteklerini `server:8080` adresine iletir; backend secilen network uzerinde bu ad ve porttan erisilebilir olmali (ya da dagitimina gore proxy hedefini guncelle).
+Tarayici bu loopback LiveKit adresine kendi cihazindan erisebilmelidir; `localhost` Nginx container'inda degil tarayicida cozulur. Production image Nginx'i root olmayan `nginx` kullanicisi olarak calistirirken container portu 80'i korur; Docker'in varsayilan `CAP_NET_BIND_SERVICE` yetenegiyle mevcut `--publish 80:80` eslemesi gecerlidir. Guvenlik profili bu yetenegi kaldiriyorsa Nginx'in 80 portunu acabilmesi icin yalnizca `NET_BIND_SERVICE` yetkisini geri ver. Backend'in `LIVEKIT_URL` ayri bir sunucu ayaridir ve Docker'a ozel hostname kullanabilir; bu dahili hostname'i `LIVEKIT_CSP_WS_ORIGIN` icin kullanma. Nginx `/api` ve `/ws` isteklerini `server:8080` adresine iletir; backend secilen network uzerinde bu ad ve porttan erisilebilir olmali (ya da dagitimina gore proxy hedefini guncelle).
 
 Uzak LiveKit ve HTTPS web uygulamalari icin `wss://` LiveKit URL'i kullan: tarayicilar HTTPS sayfalarindan sifresiz `ws://` baglantilarini mixed content olarak engeller ve bu politika uzaktaki sifresiz kaynaklari reddeder. Varsayilan CSP zaten `wss:` ve `https:` kaynaklarini kabul eder, bu durumda `LIVEKIT_CSP_WS_ORIGIN` ayarini bos birak. Repo Compose dosyasindaki `client` servisi Vite gelistirme sunucusu olarak kalir; production Nginx image'ini calistirmaz.
 
