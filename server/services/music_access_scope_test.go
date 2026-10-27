@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"reflect"
 	"sync"
@@ -365,8 +366,23 @@ func TestMusicAccessScopeAbandonPreservesOtherActorsPausedQueueEdits(t *testing.
 	command.URL = "https://youtu.be/0KbRhUtFwkc"
 	done := make(chan error, 1)
 	go func() { _, err := f.svc.ApplyMusicCommand(f.context(), f.h.user.ID, "ch", command); done <- err }()
-	<-started
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("creator did not start connecting")
+	}
 	other := guardedCommand(t, f.svc, "repeat")
+	firstStripe := sha256.Sum256([]byte(f.h.user.ID + "\x00ch\x00" + command.RequestID))
+	for attempts := 0; ; attempts++ {
+		otherStripe := sha256.Sum256([]byte("other\x00ch\x00" + other.RequestID))
+		if otherStripe[0] != firstStripe[0] {
+			break
+		}
+		if attempts == 16 {
+			t.Fatal("could not select a different request lock stripe")
+		}
+		other = guardedCommand(t, f.svc, "repeat")
+	}
 	other.Mode = "all"
 	if _, err := f.svc.ApplyMusicCommand(WithMusicAccessCheck(context.Background(), func(context.Context) error { return nil }), "other", "ch", other); err != nil {
 		t.Fatal(err)
@@ -443,6 +459,17 @@ func TestMusicAccessScopeDeniedCreatorCannotStopPublisherClaimedByOtherActor(t *
 	}
 	bot := f.svc.lookupBot("ch")
 	other := guardedCommand(t, f.svc, "play")
+	firstStripe := sha256.Sum256([]byte(f.h.user.ID + "\x00ch\x00" + first.RequestID))
+	for attempts := 0; ; attempts++ {
+		otherStripe := sha256.Sum256([]byte("other\x00ch\x00" + other.RequestID))
+		if otherStripe[0] != firstStripe[0] {
+			break
+		}
+		if attempts == 16 {
+			t.Fatal("could not select a different request lock stripe")
+		}
+		other = guardedCommand(t, f.svc, "play")
+	}
 	other.URL = first.URL
 	if _, err := f.svc.ApplyMusicCommand(WithMusicAccessCheck(context.Background(), func(context.Context) error { return nil }), "other", "ch", other); err != nil {
 		t.Fatal(err)
