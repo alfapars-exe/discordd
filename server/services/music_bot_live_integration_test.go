@@ -217,6 +217,19 @@ func TestMusicYouTubeLiveKitSmoke(t *testing.T) {
 	})
 	captureStarted.Store(true)
 	await("actual RTP audio", func() bool { return packets.Load() >= 100 })
+	// An opt-in external controller can interrupt the disposable LiveKit server
+	// at this point. The ordinary smoke test never waits for this handshake.
+	if marker := os.Getenv("MUSIC_SMOKE_INTERRUPT_MARKER"); marker != "" {
+		if err := os.WriteFile(marker, []byte("audio-ready"), 0600); err != nil {
+			t.Fatalf("write interruption marker: %v", err)
+		}
+		await("interruption controller", func() bool {
+			_, err := os.Stat(marker + ".resume")
+			return err == nil
+		})
+		before := packets.Load()
+		await("audio after interruption", func() bool { return packets.Load() >= before+100 })
+	}
 	// Preinstall the new listener key before advancing the publisher's source.
 	// Old in-flight frames remain decryptable, while new key-index lookups prove
 	// that continued audio is not merely buffered pre-rotation media.
