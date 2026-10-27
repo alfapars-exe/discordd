@@ -1,7 +1,8 @@
 #!/bin/sh
 # Runs before the nginx image's 20-envsubst-on-templates.sh entrypoint hook.
 # LIVEKIT_CSP_WS_ORIGIN is operator-controlled deployment config; reject
-# anything except one plain ws:// DNS hostname (with optional valid port).
+# only loopback ws:// origins (localhost or a loopback IP) with an optional
+# valid port. Remote LiveKit endpoints must use wss://.
 set -eu
 
 origin=${LIVEKIT_CSP_WS_ORIGIN:-}
@@ -11,7 +12,7 @@ if [ -z "$origin" ]; then
 fi
 
 reject_origin() {
-    printf '%s\n' 'Invalid LIVEKIT_CSP_WS_ORIGIN: expected one exact ws://hostname[:port] origin (single line, no path, query, credentials, or extra CSP tokens).' >&2
+    printf '%s\n' 'Invalid LIVEKIT_CSP_WS_ORIGIN: only one exact ws://localhost or loopback IP origin is allowed (with optional port; remote endpoints must use wss://).' >&2
     exit 1
 }
 
@@ -61,6 +62,53 @@ if ! printf '%s' "$origin" | awk '
         return port ~ /^[0-9]+$/ && length(port) <= 5 && port + 0 >= 1 && port + 0 <= 65535
     }
 
+    function ipv4_loopback(address, octets, count, i) {
+        if (address !~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) {
+            return 0
+        }
+        count = split(address, octets, ".")
+        if (count != 4) {
+            return 0
+        }
+        for (i = 1; i <= count; i++) {
+            if (octets[i] !~ /^[0-9]+$/ || length(octets[i]) > 3 || (length(octets[i]) > 1 && substr(octets[i], 1, 1) == "0") || octets[i] + 0 > 255) {
+                return 0
+            }
+        }
+        return octets[1] + 0 == 127
+    }
+
+    function ipv6_loopback(address, compression, left, right, left_count, right_count, left_groups, right_groups, groups, i, zero_fill) {
+        if (!valid_ipv6(address)) {
+            return 0
+        }
+        compression = index(address, "::")
+        if (compression > 0) {
+            left = substr(address, 1, compression - 1)
+            right = substr(address, compression + 2)
+            left_count = ipv6_group_count(left, left_groups)
+            right_count = ipv6_group_count(right, right_groups)
+            zero_fill = 8 - left_count - right_count
+            for (i = 1; i <= left_count; i++) {
+                groups[i] = left_groups[i]
+            }
+            for (i = 1; i <= zero_fill; i++) {
+                groups[left_count + i] = "0"
+            }
+            for (i = 1; i <= right_count; i++) {
+                groups[left_count + zero_fill + i] = right_groups[i]
+            }
+        } else {
+            ipv6_group_count(address, groups)
+        }
+        for (i = 1; i < 8; i++) {
+            if (groups[i] !~ /^0+$/) {
+                return 0
+            }
+        }
+        return groups[8] ~ /^0*1$/
+    }
+
     {
         value = $0
         if (length(value) > 300 || value !~ /^ws:\/\//) {
@@ -75,7 +123,7 @@ if ! printf '%s' "$origin" | awk '
             }
             host = substr(authority, 2, close_bracket - 2)
             suffix = substr(authority, close_bracket + 1)
-            if (!valid_ipv6(host)) {
+            if (!ipv6_loopback(host)) {
                 exit 1
             }
             if (suffix != "") {
@@ -84,7 +132,7 @@ if ! printf '%s' "$origin" | awk '
                 }
             }
         } else {
-            if (authority !~ /^([A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)(\.([A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?))*(:[0-9]+)?$/) {
+            if (authority !~ /^([A-Za-z0-9.-]+)(:[0-9]+)?$/) {
                 exit 1
             }
             if (authority ~ /:/) {
@@ -92,6 +140,12 @@ if ! printf '%s' "$origin" | awk '
                 if (!valid_port(parts[2])) {
                     exit 1
                 }
+                host = parts[1]
+            } else {
+                host = authority
+            }
+            if (tolower(host) != "localhost" && !ipv4_loopback(host)) {
+                exit 1
             }
         }
     }

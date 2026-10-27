@@ -223,19 +223,19 @@ The standard self-host installer serves the bundled web UI from the Go server; i
 docker build --file client/Dockerfile --target production --tag hichat-client:local .
 ```
 
-Set `LIVEKIT_CSP_WS_ORIGIN` **when starting the production Nginx container** only when browsers need to connect to a plaintext `ws://` LiveKit endpoint. It must be the exact browser-reachable origin (DNS/IPv4 host or bracketed hexadecimal IPv6 literal, with an optional port), with no path or trailing slash. IPv6 zone IDs and IPv4-embedded IPv6 forms are not accepted. The value is deployment config, not a build argument. For example:
+Set `LIVEKIT_CSP_WS_ORIGIN` **when starting the production Nginx container** only when a client on the same device needs plaintext `ws://` access to its local LiveKit endpoint. Only `localhost`, IPv4 loopback (`127.0.0.0/8`), and bracketed IPv6 loopback (`[::1]`, including its expanded hexadecimal form) are accepted, with an optional port and no path or trailing slash. Remote `ws://` endpoints are rejected; remote LiveKit deployments must use `wss://`. IPv6 zone IDs and IPv4-embedded IPv6 forms are not accepted. The value is deployment config, not a build argument. For example:
 
 ```bash
 docker run --detach --name hichat-client \
   --network <backend-network> \
   --publish 8080:80 \
-  --env LIVEKIT_CSP_WS_ORIGIN=ws://voice.example.com:7880 \
+  --env LIVEKIT_CSP_WS_ORIGIN=ws://localhost:7880 \
   hichat-client:local
 ```
 
-The browser must be able to reach that LiveKit address directly. The backend's `LIVEKIT_URL` is a separate server-side setting and may use a Docker-only hostname; do not use that internal hostname for `LIVEKIT_CSP_WS_ORIGIN`. This Nginx config forwards `/api` and `/ws` to `server:8080`, so the backend must be reachable by that name and port on the selected network (or update the proxy target for your deployment).
+The browser must be able to reach that loopback LiveKit address on its own device; `localhost` is resolved by the browser, not by the Nginx container. The backend's `LIVEKIT_URL` is a separate server-side setting and may use a Docker-only hostname; do not use that internal hostname for `LIVEKIT_CSP_WS_ORIGIN`. This Nginx config forwards `/api` and `/ws` to `server:8080`, so the backend must be reachable by that name and port on the selected network (or update the proxy target for your deployment).
 
-For an HTTPS web app, use a `wss://` LiveKit URL instead: browsers block plaintext `ws://` as mixed content on HTTPS pages. The baseline CSP already allows `wss:` and `https:`, so leave `LIVEKIT_CSP_WS_ORIGIN` unset in that setup. The repository Compose `client` service remains the Vite development server; it does not run this production Nginx image.
+For remote LiveKit and HTTPS web apps, use a `wss://` LiveKit URL: browsers block plaintext `ws://` as mixed content on HTTPS pages, and this policy rejects remote plaintext origins. The baseline CSP already allows `wss:` and `https:`, so leave `LIVEKIT_CSP_WS_ORIGIN` unset in that setup. The repository Compose `client` service remains the Vite development server; it does not run this production Nginx image.
 
 ### Requirements
 

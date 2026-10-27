@@ -212,19 +212,19 @@ Standart self-host kurulum betigi gomulu web arayuzunu Go sunucusundan sunar; ay
 docker build --file client/Dockerfile --target production --tag hichat-client:local .
 ```
 
-Tarayicilarin sifresiz `ws://` LiveKit uc noktasina baglanmasi gerekiyorsa `LIVEKIT_CSP_WS_ORIGIN` degerini **production Nginx container'ini baslatirken** ver. Deger, tarayicinin erisebildigi tam origin olmali (DNS/IPv4 host veya koseli parantezli hexadecimal IPv6 literal'i; opsiyonel port), path ya da sondaki `/` olmamali. IPv6 zone ID ve IPv4 gomulu IPv6 bicimleri kabul edilmez. Bu bir build argumani degil, deployment ayaridir. Ornek:
+Yalnizca istemciyle LiveKit ayni cihazda calisiyorsa ve yerel LiveKit'e sifresiz `ws://` baglanmasi gerekiyorsa `LIVEKIT_CSP_WS_ORIGIN` degerini **production Nginx container'ini baslatirken** ver. Yalnizca `localhost`, IPv4 loopback (`127.0.0.0/8`) ve koseli parantezli IPv6 loopback (`[::1]` ve genisletilmis hexadecimal yazimi) kabul edilir; opsiyonel port olabilir ama path veya sondaki `/` olamaz. Uzak `ws://` adresleri reddedilir; uzaktaki LiveKit icin `wss://` kullan. IPv6 zone ID ve IPv4 gomulu IPv6 bicimleri kabul edilmez. Bu bir build argumani degil, deployment ayaridir. Ornek:
 
 ```bash
 docker run --detach --name hichat-client \
   --network <backend-network> \
   --publish 8080:80 \
-  --env LIVEKIT_CSP_WS_ORIGIN=ws://voice.example.com:7880 \
+  --env LIVEKIT_CSP_WS_ORIGIN=ws://localhost:7880 \
   hichat-client:local
 ```
 
-Tarayici LiveKit adresine dogrudan erisebilmelidir. Backend'in `LIVEKIT_URL` ayri bir sunucu ayaridir ve Docker'a ozel hostname kullanabilir; bu dahili hostname'i `LIVEKIT_CSP_WS_ORIGIN` icin kullanma. Nginx `/api` ve `/ws` isteklerini `server:8080` adresine iletir; backend secilen network uzerinde bu ad ve porttan erisilebilir olmali (ya da dagitimina gore proxy hedefini guncelle).
+Tarayici bu loopback LiveKit adresine kendi cihazindan erisebilmelidir; `localhost` Nginx container'inda degil tarayicida cozulur. Backend'in `LIVEKIT_URL` ayri bir sunucu ayaridir ve Docker'a ozel hostname kullanabilir; bu dahili hostname'i `LIVEKIT_CSP_WS_ORIGIN` icin kullanma. Nginx `/api` ve `/ws` isteklerini `server:8080` adresine iletir; backend secilen network uzerinde bu ad ve porttan erisilebilir olmali (ya da dagitimina gore proxy hedefini guncelle).
 
-HTTPS web uygulamasinda `wss://` LiveKit URL'i kullan; tarayicilar HTTPS sayfalarindan sifresiz `ws://` baglantilarini mixed content olarak engeller. Varsayilan CSP zaten `wss:` ve `https:` kaynaklarini kabul eder, bu durumda `LIVEKIT_CSP_WS_ORIGIN` ayarini bos birak. Repo Compose dosyasindaki `client` servisi Vite gelistirme sunucusu olarak kalir; production Nginx image'ini calistirmaz.
+Uzak LiveKit ve HTTPS web uygulamalari icin `wss://` LiveKit URL'i kullan: tarayicilar HTTPS sayfalarindan sifresiz `ws://` baglantilarini mixed content olarak engeller ve bu politika uzaktaki sifresiz kaynaklari reddeder. Varsayilan CSP zaten `wss:` ve `https:` kaynaklarini kabul eder, bu durumda `LIVEKIT_CSP_WS_ORIGIN` ayarini bos birak. Repo Compose dosyasindaki `client` servisi Vite gelistirme sunucusu olarak kalir; production Nginx image'ini calistirmaz.
 
 ### Gereksinimler
 
