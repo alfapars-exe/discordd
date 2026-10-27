@@ -27,8 +27,12 @@ func (db *DB) applyThreadChannelTypeMigration(filename, content string) (result 
 	if err := conn.QueryRowContext(ctx, "PRAGMA foreign_keys").Scan(&original); err != nil {
 		return fmt.Errorf("thread migration requires foreign_keys support: %w", err)
 	}
+	restoreForeignKeys := "PRAGMA foreign_keys = OFF"
+	if original != 0 {
+		restoreForeignKeys = "PRAGMA foreign_keys = ON"
+	}
 	defer func() {
-		_, err := conn.ExecContext(ctx, fmt.Sprintf("PRAGMA foreign_keys = %d", original))
+		_, err := conn.ExecContext(ctx, restoreForeignKeys)
 		if err != nil && result == nil {
 			result = fmt.Errorf("restore foreign keys after thread migration: %w", err)
 		}

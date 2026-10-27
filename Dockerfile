@@ -131,9 +131,12 @@ RUN set -eux; \
     # any WAL sidecar). python3-pip is needed to install the hf CLI.
     apt-get install -y --no-install-recommends \
       ca-certificates tzdata ffmpeg python3 python3-pip sqlite3 \
-      curl wget \
+      curl wget openssl libssl3 \
       bash procps \
       git git-lfs; \
+    # Fail closed if a stale mirror would retain CVE-2026-84782.
+    dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libssl3)" ge '3.0.22-1~deb12u2'; \
+    dpkg --compare-versions "$(dpkg-query -W -f='${Version}' openssl)" ge '3.0.22-1~deb12u2'; \
     # hf CLI for backup snapshots to the configured HF Storage Bucket.
     # `--break-system-packages` is required on Debian Bookworm (PEP 668);
     # the image is dedicated to this app so the venv ceremony would add

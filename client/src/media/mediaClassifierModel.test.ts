@@ -11,16 +11,16 @@ const asset=async(name:string)=>{
 };
 beforeAll(async()=>{model=await loadMediaModel(await asset("model.json"),await asset("group1-shard1of1"));},30000);
 afterAll(()=>model?.dispose());
-it("runs the actual pinned model on CPU without leaking prediction tensors",async()=>{
+// Each real inference gets its own bounded budget: V8 coverage substantially
+// slows CPU kernels on shared CI runners. Check tensor cleanup for every input.
+it.each([0,127,255])("runs the actual pinned model on CPU without leaking prediction tensors (input %i)",async(value)=>{
   expect(tf.getBackend()).toBe("cpu");
   const before=tf.memory().numTensors;
-  for(const value of [0,127,255]){
-    const result=await predictMediaPixels(model,new Uint8Array(12*8*3).fill(value),12,8);
-    expect(result.model).toBe(MEDIA_MODEL.id);
-    expect(result.sexualProbability).toBeGreaterThanOrEqual(0);
-    expect(result.sexualProbability).toBeLessThanOrEqual(1.001);
-    expect(result.disturbing).toBe("unknown");
-  }
+  const result=await predictMediaPixels(model,new Uint8Array(12*8*3).fill(value),12,8);
+  expect(result.model).toBe(MEDIA_MODEL.id);
+  expect(result.sexualProbability).toBeGreaterThanOrEqual(0);
+  expect(result.sexualProbability).toBeLessThanOrEqual(1.001);
+  expect(result.disturbing).toBe("unknown");
   expect(tf.memory().numTensors).toBe(before);
 },30000);
 it("rejects corrupted assets before deserialization",async()=>{
