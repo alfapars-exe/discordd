@@ -77,6 +77,9 @@ export function useSpamVisibility(message: { id: string; user_id: string; conten
           const decision = await decideSpam(reference, "restore", { signal: controller.signal, isCurrent });
           if (!isCurrent()) return;
           if (!decision.success) { setErrorKey(key); return; }
+          // The socket event may be delayed or lost; retain the confirmed
+          // decision across remounts even when the preference map is full.
+          useSpamDecisionStore.getState().apply({ user_id: userId, source_kind: kind, message_id: message.id, revision, status: "restored" });
           setErrorKey(null);
         }
         if (!isCurrent()) return;
