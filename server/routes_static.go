@@ -16,6 +16,8 @@ import (
 	"github.com/google/uuid"
 )
 
+const cacheControlNoStore = "no-store"
+
 // startupID is regenerated on every server start. The frontend polls
 // /api/version and compares; a different value means a new deploy and
 // triggers an in-app "update available" banner.
@@ -44,7 +46,7 @@ func registerStaticAndUploads(mux *http.ServeMux, cfg *config.Config) {
 	// connected clients show an "update available" banner.
 	mux.HandleFunc("GET /api/version", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Cache-Control", cacheControlNoStore)
 		fmt.Fprintf(w, `{"version":"%s"}`, startupID)
 	})
 }
@@ -208,7 +210,7 @@ func serveFrontend(w http.ResponseWriter, r *http.Request, frontendFS fs.FS, ind
 	// Keep the lookup in the frontend's relative slash-separated namespace,
 	// even if a future FS implementation is not the current bounded embed FS.
 	if !fs.ValidPath(path) || !filepath.IsLocal(path) || strings.ContainsAny(path, "\\\x00") {
-		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Cache-Control", cacheControlNoStore)
 		http.NotFound(w, r)
 		return
 	}
@@ -219,7 +221,7 @@ func serveFrontend(w http.ResponseWriter, r *http.Request, frontendFS fs.FS, ind
 		return
 	}
 	if strings.HasPrefix(path, "assets/") {
-		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Cache-Control", cacheControlNoStore)
 		http.NotFound(w, r)
 		return
 	}
