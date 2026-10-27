@@ -150,6 +150,36 @@ jobs:
           path: ${{ runner.temp }}/go-coverage/
           if-no-files-found: error
 
+  server-libsql:
+    name: libSQL preferences integration
+    runs-on: ubuntu-latest
+    services:
+      libsql:
+        image: ghcr.io/tursodatabase/libsql-server@sha256:6dd3eb276d9d3604e4a48ac4a999a2e267814732d57d7e94c04ba71482333a67
+        ports:
+          - 127.0.0.1:8080:8080
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.10'
+          cache-dependency-path: server/go.sum
+      - name: Wait for the disposable database
+        run: |
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:8080/health > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Verify migrations and concurrent preference updates
+        working-directory: server
+        env:
+          CGO_ENABLED: '1'
+          HICHAT_TEST_LIBSQL_DSN: http://127.0.0.1:8080
+        run: |
+          go test -v -tags libsql_integration ./repository -run '^TestLibSQLPreferencesLive$' -count=2 | tee "$RUNNER_TEMP/libsql-test.log"
+          test "$(grep -c '^--- PASS: TestLibSQLPreferencesLive ' "$RUNNER_TEMP/libsql-test.log")" -eq 2
+
   server-postgres:
     name: PostgreSQL repository and migration contracts
     runs-on: ubuntu-latest
