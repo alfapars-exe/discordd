@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"os"
 	"sync"
 	"testing"
@@ -11,6 +12,64 @@ import (
 	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/models"
 )
+
+type postgresChannelBatchResult struct {
+	created   []*models.Notification
+	committed bool
+	err       error
+}
+
+func postgresChannelBatchNotifications(ids []string) []*models.Notification {
+	rows := make([]*models.Notification, 0, len(ids))
+	for _, id := range ids {
+		rows = append(rows, &models.Notification{UserID: id})
+	}
+	return rows
+}
+
+func startPostgresChannelBatchCommit(ctx context.Context, queue ChannelMessageNotificationQueue, job *ChannelMessageNotificationJob, ids []string, eligible []*models.Notification) <-chan postgresChannelBatchResult {
+	finished := make(chan postgresChannelBatchResult, 1)
+	go func() {
+		created, committed, err := queue.CommitBatch(ctx, job, ids[len(ids)-1], true, eligible)
+		finished <- postgresChannelBatchResult{created: created, committed: committed, err: err}
+	}()
+	return finished
+}
+
+// Assert the queue worker cannot pass an in-flight policy/cascade writer, then
+// release it and return its result. A direct assertion that the worker waits
+// is important: checking only the final rows would miss an unsafe early send.
+func finishPostgresChannelWriterRace(t *testing.T, writer *sql.Tx, finished <-chan postgresChannelBatchResult, description string) postgresChannelBatchResult {
+	t.Helper()
+	select {
+	case result := <-finished:
+		_ = writer.Rollback()
+		t.Fatalf("fanout bypassed in-flight %s writer: %#v", description, result)
+	case <-time.After(100 * time.Millisecond):
+	}
+	if err := writer.Commit(); err != nil {
+		t.Fatalf("commit %s writer: %v", description, err)
+	}
+	select {
+	case result := <-finished:
+		return result
+	case <-time.After(5 * time.Second):
+		t.Fatalf("fanout did not resume after %s writer committed", description)
+		return postgresChannelBatchResult{}
+	}
+}
+
+func postgresChannelQueuePage(t *testing.T, ctx context.Context, queue ChannelMessageNotificationQueue, msg *models.Message) (*ChannelMessageNotificationJob, []string) {
+	t.Helper()
+	if err := queue.Enqueue(ctx, msg.ID, "srv-1", msgChannel, msgAuthor); err != nil {
+		t.Fatal(err)
+	}
+	job, ids, err := queue.NextBatch(ctx, ChannelMessageNotificationBatchSize)
+	if err != nil || job == nil || len(ids) != 2 {
+		t.Fatalf("queue page: %#v %#v %v", job, ids, err)
+	}
+	return job, ids
+}
 
 // The queue is created over *sql.Tx in MessageTxRunner. Dialect selection must
 // come from the parent *sql.DB because the transaction itself is opaque.
@@ -86,13 +145,7 @@ func TestPostgresChannelNotificationWritersSharePolicyFence(t *testing.T) {
 			if _, err := db.Conn.Exec(`INSERT INTO user_roles(user_id,role_id,server_id) VALUES(?, 'reader','srv-1')`, msgSecondUser); err != nil {
 				t.Fatal(err)
 			}
-			if err := queue.Enqueue(ctx, msg.ID, "srv-1", msgChannel, msgAuthor); err != nil {
-				t.Fatal(err)
-			}
-			job, ids, err := queue.NextBatch(ctx, ChannelMessageNotificationBatchSize)
-			if err != nil || job == nil || len(ids) != 2 {
-				t.Fatalf("queue page: %#v %#v %v", job, ids, err)
-			}
+			job, ids := postgresChannelQueuePage(t, ctx, queue, msg)
 			writer, err := db.Conn.BeginTx(ctx, nil)
 			if err != nil {
 				t.Fatal(err)
@@ -102,33 +155,10 @@ func TestPostgresChannelNotificationWritersSharePolicyFence(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			type result struct {
-				created   []*models.Notification
-				committed bool
-				err       error
-			}
-			finished := make(chan result, 1)
-			go func() {
-				created, committed, err := queue.CommitBatch(ctx, job, ids[len(ids)-1], true,
-					[]*models.Notification{{UserID: ids[0]}, {UserID: ids[1]}})
-				finished <- result{created, committed, err}
-			}()
-			select {
-			case r := <-finished:
-				_ = writer.Rollback()
-				t.Fatalf("fanout bypassed in-flight %s policy write: %#v %v", tc.name, r, r.err)
-			case <-time.After(100 * time.Millisecond):
-			}
-			if err := writer.Commit(); err != nil {
-				t.Fatal(err)
-			}
-			select {
-			case r := <-finished:
-				if r.err != nil || !r.committed || len(r.created) != 0 {
-					t.Fatalf("fanout result after %s: %#v", tc.name, r)
-				}
-			case <-time.After(5 * time.Second):
-				t.Fatal("fanout did not resume after policy writer committed")
+			result := finishPostgresChannelWriterRace(t, writer,
+				startPostgresChannelBatchCommit(ctx, queue, job, ids, postgresChannelBatchNotifications(ids)), tc.name)
+			if result.err != nil || !result.committed || len(result.created) != 0 {
+				t.Fatalf("fanout result after %s: %#v", tc.name, result)
 			}
 			if got := countRows(t, db, `SELECT COUNT(*) FROM notifications WHERE message_id=?`, msg.ID); got != 0 {
 				t.Fatalf("%s race delivered %d notification(s)", tc.name, got)
@@ -152,13 +182,7 @@ func TestPostgresChannelNotificationFreshSnapshotAfterConcurrentOverrideInsert(t
 	if _, err := db.Conn.Exec(`INSERT INTO user_roles(user_id,role_id,server_id) VALUES(?, 'reader','srv-1')`, msgSecondUser); err != nil {
 		t.Fatal(err)
 	}
-	if err := queue.Enqueue(ctx, msg.ID, "srv-1", msgChannel, msgAuthor); err != nil {
-		t.Fatal(err)
-	}
-	job, ids, err := queue.NextBatch(ctx, ChannelMessageNotificationBatchSize)
-	if err != nil || job == nil || len(ids) != 2 {
-		t.Fatalf("queue page: %#v %#v %v", job, ids, err)
-	}
+	job, ids := postgresChannelQueuePage(t, ctx, queue, msg)
 
 	// This override row did not exist at fanout page-read time, so row locks
 	// cannot protect it. Its trigger must hold the shared server gate.
@@ -170,33 +194,10 @@ func TestPostgresChannelNotificationFreshSnapshotAfterConcurrentOverrideInsert(t
 		_ = writer.Rollback()
 		t.Fatal(err)
 	}
-	type result struct {
-		created   []*models.Notification
-		committed bool
-		err       error
-	}
-	finished := make(chan result, 1)
-	go func() {
-		created, committed, err := queue.CommitBatch(ctx, job, ids[len(ids)-1], true,
-			[]*models.Notification{{UserID: ids[0]}, {UserID: ids[1]}})
-		finished <- result{created, committed, err}
-	}()
-	select {
-	case r := <-finished:
-		_ = writer.Rollback()
-		t.Fatalf("fanout did not wait for override transaction: %#v", r)
-	case <-time.After(100 * time.Millisecond):
-	}
-	if err := writer.Commit(); err != nil {
-		t.Fatal(err)
-	}
-	select {
-	case r := <-finished:
-		if r.err != nil || !r.committed || len(r.created) != 0 {
-			t.Fatalf("fanout result after deny override: %#v", r)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("fanout did not resume after ACL writer committed")
+	result := finishPostgresChannelWriterRace(t, writer,
+		startPostgresChannelBatchCommit(ctx, queue, job, ids, postgresChannelBatchNotifications(ids)), "ACL deny override")
+	if result.err != nil || !result.committed || len(result.created) != 0 {
+		t.Fatalf("fanout result after deny override: %#v", result)
 	}
 	if got := countRows(t, db, `SELECT COUNT(*) FROM notifications WHERE message_id=?`, msg.ID); got != 0 {
 		t.Fatalf("new private ACL deny leaked %d notification(s)", got)
@@ -212,13 +213,7 @@ func TestPostgresChannelNotificationRetirementBarrierPrecedesRecipientFences(t *
 	if !database.IsPostgres(db.Conn) {
 		t.Skip("requires PostgreSQL retirement barrier")
 	}
-	if err := queue.Enqueue(ctx, msg.ID, "srv-1", msgChannel, msgAuthor); err != nil {
-		t.Fatal(err)
-	}
-	job, ids, err := queue.NextBatch(ctx, ChannelMessageNotificationBatchSize)
-	if err != nil || job == nil || len(ids) != 2 {
-		t.Fatalf("queue page: %#v %#v %v", job, ids, err)
-	}
+	job, ids := postgresChannelQueuePage(t, ctx, queue, msg)
 	retirement, err := db.Conn.BeginTx(ctx, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -227,33 +222,10 @@ func TestPostgresChannelNotificationRetirementBarrierPrecedesRecipientFences(t *
 		_ = retirement.Rollback()
 		t.Fatal(err)
 	}
-	type result struct {
-		created   []*models.Notification
-		committed bool
-		err       error
-	}
-	finished := make(chan result, 1)
-	go func() {
-		created, committed, err := queue.CommitBatch(ctx, job, ids[len(ids)-1], true,
-			[]*models.Notification{{UserID: ids[0]}, {UserID: ids[1]}})
-		finished <- result{created, committed, err}
-	}()
-	select {
-	case r := <-finished:
-		_ = retirement.Rollback()
-		t.Fatalf("fanout bypassed PG005 retirement barrier: %#v", r)
-	case <-time.After(100 * time.Millisecond):
-	}
-	if err := retirement.Commit(); err != nil {
-		t.Fatal(err)
-	}
-	select {
-	case r := <-finished:
-		if r.err != nil || !r.committed || len(r.created) != 0 {
-			t.Fatalf("fanout result after retirement: %#v", r)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("fanout deadlocked with account retirement")
+	result := finishPostgresChannelWriterRace(t, retirement,
+		startPostgresChannelBatchCommit(ctx, queue, job, ids, postgresChannelBatchNotifications(ids)), "PG005 account retirement")
+	if result.err != nil || !result.committed || len(result.created) != 0 {
+		t.Fatalf("fanout result after retirement: %#v", result)
 	}
 	if got := countRows(t, db, `SELECT COUNT(*) FROM notifications WHERE message_id=?`, msg.ID); got != 0 {
 		t.Fatalf("retired recipient received %d notification(s)", got)
@@ -272,13 +244,7 @@ func TestPostgresChannelDeleteAndNotificationFanoutUseFenceOrder(t *testing.T) {
 	if _, err := db.Conn.Exec(`INSERT INTO channel_mutes(user_id,channel_id,server_id) VALUES(?,?,?)`, msgSecondUser, msgChannel, "srv-1"); err != nil {
 		t.Fatal(err)
 	}
-	if err := queue.Enqueue(ctx, msg.ID, "srv-1", msgChannel, msgAuthor); err != nil {
-		t.Fatal(err)
-	}
-	job, ids, err := queue.NextBatch(ctx, ChannelMessageNotificationBatchSize)
-	if err != nil || job == nil || len(ids) != 2 {
-		t.Fatalf("queue page: %#v %#v %v", job, ids, err)
-	}
+	job, ids := postgresChannelQueuePage(t, ctx, queue, msg)
 	deletion, err := db.Conn.BeginTx(ctx, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -287,33 +253,10 @@ func TestPostgresChannelDeleteAndNotificationFanoutUseFenceOrder(t *testing.T) {
 		_ = deletion.Rollback()
 		t.Fatal(err)
 	}
-	type result struct {
-		created   []*models.Notification
-		committed bool
-		err       error
-	}
-	finished := make(chan result, 1)
-	go func() {
-		created, committed, err := queue.CommitBatch(ctx, job, ids[len(ids)-1], true,
-			[]*models.Notification{{UserID: ids[0]}, {UserID: ids[1]}})
-		finished <- result{created, committed, err}
-	}()
-	select {
-	case r := <-finished:
-		_ = deletion.Rollback()
-		t.Fatalf("fanout did not wait for channel cascade writer: %#v", r)
-	case <-time.After(100 * time.Millisecond):
-	}
-	if err := deletion.Commit(); err != nil {
-		t.Fatal(err)
-	}
-	select {
-	case r := <-finished:
-		if len(r.created) != 0 {
-			t.Fatalf("deleted channel produced notifications: %#v", r.created)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("fanout deadlocked with channel/mute cascade")
+	result := finishPostgresChannelWriterRace(t, deletion,
+		startPostgresChannelBatchCommit(ctx, queue, job, ids, postgresChannelBatchNotifications(ids)), "channel/mute cascade")
+	if (result.err != nil && !errors.Is(result.err, sql.ErrNoRows)) || result.committed || len(result.created) != 0 {
+		t.Fatalf("deleted channel produced notification result: %#v", result)
 	}
 	if got := countRows(t, db, `SELECT COUNT(*) FROM notifications WHERE message_id=?`, msg.ID); got != 0 {
 		t.Fatalf("deleted channel left %d notification(s)", got)
@@ -329,13 +272,7 @@ func TestPostgresServerCascadeAndNotificationFanoutUseFenceOrder(t *testing.T) {
 	if !database.IsPostgres(db.Conn) {
 		t.Skip("requires PostgreSQL cascade fencing")
 	}
-	if err := queue.Enqueue(ctx, msg.ID, "srv-1", msgChannel, msgAuthor); err != nil {
-		t.Fatal(err)
-	}
-	job, ids, err := queue.NextBatch(ctx, ChannelMessageNotificationBatchSize)
-	if err != nil || job == nil || len(ids) == 0 {
-		t.Fatalf("queue page: %#v %#v %v", job, ids, err)
-	}
+	job, ids := postgresChannelQueuePage(t, ctx, queue, msg)
 	// Pause the cascade after its first queue-row DELETE. The cascade must
 	// already own the shared retirement barrier and server fence at this point;
 	// fanout therefore waits on the server fence instead of owning it while

@@ -7,9 +7,9 @@
  * per 10 minutes per IP (server/init_services.go:
  * `NewLoginRateLimiter(3, 10*time.Minute)`), and unlike the login limiter the
  * counter is NOT reset on success — handlers/auth.go bumps it before the
- * request body is even decoded. One registration per test would 429 the fourth
- * test of the run, and a CI retry would 429 sooner. Registering exactly once
- * leaves plenty of headroom.
+ * request body is even decoded. This setup registers the shared UI account and
+ * one synthetic notification recipient (two registrations total), leaving one
+ * registration attempt available for an isolated retry.
  *
  * What this hands off is the *credentials*, not a session. See ACCOUNT_FILE in
  * playwright.config.ts for why a Playwright storageState snapshot cannot work
@@ -17,21 +17,62 @@
  */
 
 import { test as setup, expect } from "@playwright/test";
+import { existsSync } from "node:fs";
+import { ACCOUNT_FILE, CHANNEL_NOTIFICATION_FIXTURE_FILE } from "../playwright.config";
 import {
   dismissOnboardingOverlays,
   expectSignedInShell,
   forceEnglish,
   generateTestPassword,
+  loginAsCredentials,
+  provisionChannelNotificationFixture,
+  resetChannelNotificationFixture,
   uniqueUsername,
   writeTestAccount,
+  readTestAccount,
 } from "./helpers";
 
 setup("register a fresh account, then log back in", async ({ page }) => {
-  const username = uniqueUsername();
-  // Generated per run and handed to the specs through ACCOUNT_FILE below, so
-  // no credential is written down in the repo.
-  const password = generateTestPassword();
+  const isRetry = existsSync(ACCOUNT_FILE);
+  const account = isRetry ? readTestAccount() : { username: uniqueUsername(), password: generateTestPassword() };
+  const { username, password } = account;
   await forceEnglish(page);
+
+  if (isRetry) {
+    // Credentials are persisted before the first registration request. On a
+    // setup retry, authenticate the same account; only register it if that
+    // first attempt failed before the account was created. This avoids
+    // burning the per-IP registration limit with duplicate submissions.
+    const status = await page.evaluate(async (candidate) => {
+      const login = await fetch("/api/auth/login", {
+        method: "POST",
+        credentials: "omit",
+        headers: { "Content-Type": "application/json", "X-HiChat-Client": "web" },
+        body: JSON.stringify(candidate),
+      });
+      if (login.status !== 401) return login.status;
+      const register = await fetch("/api/auth/register", {
+        method: "POST",
+        credentials: "omit",
+        headers: { "Content-Type": "application/json", "X-HiChat-Client": "web" },
+        body: JSON.stringify({ ...candidate, display_name: candidate.username, email: `${candidate.username}@example.test` }),
+      });
+      return register.status;
+    }, account);
+    if (status < 200 || status >= 300) throw new Error(`setup account recovery failed (${status})`);
+    await loginAsCredentials(page, account);
+    if (existsSync(CHANNEL_NOTIFICATION_FIXTURE_FILE)) {
+      await resetChannelNotificationFixture(page);
+    } else {
+      await provisionChannelNotificationFixture(page, account);
+    }
+    return;
+  }
+
+  // Persist generated credentials before network requests so a Playwright
+  // retry can safely reuse them if registration succeeds but a later UI step
+  // fails. They live only under ignored e2e/.tmp and are removed at teardown.
+  writeTestAccount(account);
 
   // ─── Register ──────────────────────────────────────────────────────────
   await page.goto("/register");
@@ -73,5 +114,9 @@ setup("register a fresh account, then log back in", async ({ page }) => {
   await expect(page).toHaveURL(/\/channels/, { timeout: 20_000 });
   await expectSignedInShell(page);
 
-  writeTestAccount({ username, password });
+  if (existsSync(CHANNEL_NOTIFICATION_FIXTURE_FILE)) {
+    await resetChannelNotificationFixture(page);
+  } else {
+    await provisionChannelNotificationFixture(page, account);
+  }
 });
