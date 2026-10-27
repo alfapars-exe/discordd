@@ -101,9 +101,9 @@ func securityHeaders(next http.Handler, trustedLiveKitURL string) http.Handler {
 }
 
 // trustedLiveKitWSSource returns a CSP source for the exact origin of the
-// operator-configured LiveKit WebSocket URL. The host and effective port are
-// reconstructed from parsed components; raw URL text is never copied into a
-// response header. User-controlled per-server URLs are deliberately excluded.
+// operator-configured LiveKit URL. Cleartext WebSockets are allowed only for
+// loopback because remote WS exposes the participant token; remote LiveKit
+// endpoints must use WSS. User-controlled per-server URLs are excluded.
 func trustedLiveKitWSSource(rawURL string) string {
 	if rawURL == "" || strings.ContainsAny(rawURL, "\r\n\t \x00") {
 		return ""
@@ -114,6 +114,13 @@ func trustedLiveKitWSSource(rawURL string) string {
 	}
 	host := u.Hostname()
 	if host == "" || !safeCSPHost(host) || strings.HasSuffix(u.Host, ":") {
+		return ""
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		if !ip.IsLoopback() {
+			return ""
+		}
+	} else if !strings.EqualFold(host, "localhost") {
 		return ""
 	}
 	port := 80
@@ -129,7 +136,7 @@ func trustedLiveKitWSSource(rawURL string) string {
 	} else {
 		host = strings.ToLower(host)
 	}
-	return "ws://" + host + ":" + strconv.Itoa(port)
+	return u.Scheme + "://" + host + ":" + strconv.Itoa(port)
 }
 
 func safeCSPHost(host string) bool {

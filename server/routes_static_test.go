@@ -14,10 +14,14 @@ func TestTrustedLiveKitWSSource(t *testing.T) {
 		want string
 	}{
 		{name: "exact IPv4 origin", url: "ws://127.0.0.1:7880", want: "ws://127.0.0.1:7880"},
-		{name: "default ws port is explicit", url: "ws://livekit.example.test", want: "ws://livekit.example.test:80"},
+		{name: "default ws port is explicit", url: "ws://localhost", want: "ws://localhost:80"},
 		{name: "IPv6 origin", url: "ws://[::1]:7880", want: "ws://[::1]:7880"},
-		{name: "path does not widen origin", url: "ws://livekit.example.test/rtc", want: "ws://livekit.example.test:80"},
+		{name: "path does not widen origin", url: "ws://localhost/rtc", want: "ws://localhost:80"},
+		{name: "local hostname case is normalized", url: "ws://LOCALHOST:7880", want: "ws://localhost:7880"},
 		{name: "secure ws is already covered by existing policy", url: "wss://livekit.example.test", want: ""},
+		{name: "remote hostname must use wss", url: "ws://livekit.example.test:7880", want: ""},
+		{name: "remote IPv4 must use wss", url: "ws://192.0.2.20:7880", want: ""},
+		{name: "remote IPv6 must use wss", url: "ws://[2001:db8::20]:7880", want: ""},
 		{name: "empty", url: "", want: ""},
 		{name: "wrong scheme", url: "https://livekit.example.test", want: ""},
 		{name: "userinfo", url: "ws://user:pass@livekit.example.test:7880", want: ""},
