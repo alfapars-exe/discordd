@@ -1,6 +1,6 @@
 /** PlatformSettings — Platform admin LiveKit instance management (CRUD + metrics). */
 
-import { useEffect, useLayoutEffect, useState, useMemo, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useState, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useToastStore } from "../../stores/toastStore";
 import { showApiError } from "../../utils/apiError";
@@ -11,12 +11,16 @@ import {
   updateLiveKitInstance,
   deleteLiveKitInstance,
 } from "../../api/admin";
+import { getAuthGeneration } from "../../api/client";
+import { useAuthStore } from "../../stores/authStore";
+import { useSettingsDraft } from "./settingsWorkspaceContext";
 import InstanceForm from "./InstanceForm";
 import MetricsPanel from "./MetricsPanel";
 import type { LiveKitInstanceAdmin } from "../../types";
 
 function PlatformSettings() {
-  return <LiveKitTab />;
+  const user = useAuthStore(s => s.user);
+  return user?.is_platform_admin ? <LiveKitTab key={`${user.id}:${getAuthGeneration()}`} /> : null;
 }
 
 
@@ -24,6 +28,13 @@ function LiveKitTab() {
   const { t } = useTranslation("settings");
   const addToast = useToastStore((s) => s.addToast);
   const confirm = useConfirm();
+  const alive = useRef(true);
+  const pending = useRef(false);
+  const confirming = useRef(false);
+  const generation = getAuthGeneration();
+  const owner = useAuthStore.getState().user?.id;
+  const isCurrent = useCallback(() => alive.current && getAuthGeneration() === generation && useAuthStore.getState().user?.id === owner && useAuthStore.getState().user?.is_platform_admin === true, [generation, owner]);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
 
   const tRef = useRef(t);
   // Mirror the latest translator fn into a ref so callbacks (toasts,
@@ -73,6 +84,7 @@ function LiveKitTab() {
       try {
         const res = await listLiveKitInstances();
         if (cancelled) return;
+        if (!isCurrent()) return;
         if (res.success && res.data) {
           setInstances(res.data);
         } else {
@@ -85,42 +97,41 @@ function LiveKitTab() {
       }
     })();
     return () => { cancelled = true; };
-  }, [addToast]);
+  }, [addToast, isCurrent]);
 
-  // Form initialisation when selection / mode changes: derive
-  // initial form values from the source-of-truth instance object
-  // without a sync useEffect. We compute them from a stable memo and
-  // a tiny stateful sub-component below would let us avoid mirroring
-  // entirely, but for now we use a microtask-based init so the lint
-  // sees the setState as deferred, not cascading.
-  useEffect(() => {
-    if (isCreating) {
-      queueMicrotask(() => {
-        setFormUrl("");
-        setFormApiKey("");
-        setFormApiSecret("");
-        setFormMaxServers(0);
-        setFormHetznerServerID("");
-        setFormIsPlatformManaged(true); // new entries default to LiveKit Cloud
-      });
-    } else {
-      const inst = instances.find((i) => i.id === selectedId);
-      if (inst) {
-        queueMicrotask(() => {
-          setFormUrl(inst.url);
-          setFormApiKey("");
-          setFormApiSecret("");
-          setFormMaxServers(inst.max_servers);
-          setFormHetznerServerID(inst.hetzner_server_id ?? "");
-          setFormIsPlatformManaged(inst.is_platform_managed);
-        });
-      }
+  const dirty = isCreating
+    ? !!(formUrl || formApiKey || formApiSecret || formMaxServers || formHetznerServerID || !formIsPlatformManaged)
+    : !!selectedInstance && (formUrl !== selectedInstance.url || !!formApiKey || !!formApiSecret || formMaxServers !== selectedInstance.max_servers || formHetznerServerID !== (selectedInstance.hetzner_server_id ?? "") || formIsPlatformManaged !== selectedInstance.is_platform_managed);
+  useSettingsDraft(dirty || isSaving);
+  const draftVersion = JSON.stringify([selectedId, isCreating, formUrl, formApiKey, formApiSecret, formMaxServers, formHetznerServerID, formIsPlatformManaged, migrateTargetId]);
+  const latestDraft = useRef(draftVersion);
+  useLayoutEffect(() => { latestDraft.current = draftVersion; }, [draftVersion]);
+
+  async function selectEditor(id: string | null, creating = false) {
+    if (pending.current || confirming.current || (id === selectedId && creating === isCreating)) return;
+    const version = draftVersion;
+    if (dirty) {
+      confirming.current = true;
+      try {
+        const discard = await confirm({ title: t("workspace.unsavedTitle"), message: t("workspace.unsavedMessage"), confirmLabel: t("workspace.discard"), cancelLabel: t("workspace.keepEditing"), danger: true });
+        if (!discard || !isCurrent() || pending.current || latestDraft.current !== version) return;
+      } finally { confirming.current = false; }
     }
-  }, [selectedId, isCreating, instances]);
+    if (!isCurrent()) return;
+    const inst = instances.find(i => i.id === id);
+    setFormUrl(inst?.url ?? "");
+    setFormApiKey(""); setFormApiSecret("");
+    setFormMaxServers(inst?.max_servers ?? 0);
+    setFormHetznerServerID(inst?.hetzner_server_id ?? "");
+    setFormIsPlatformManaged(inst?.is_platform_managed ?? true);
+    setMigrateTargetId("");
+    setSelectedId(id); setIsCreating(creating);
+  }
 
   // ─── Create ───
   async function handleCreate() {
-    if (!formUrl || !formApiKey || !formApiSecret) return;
+    if (!isCurrent() || pending.current || confirming.current || !formUrl || !formApiKey || !formApiSecret) return;
+    pending.current = true;
     try {
       setIsSaving(true);
       const res = await createLiveKitInstance({
@@ -131,8 +142,10 @@ function LiveKitTab() {
         hetzner_server_id: formHetznerServerID || undefined,
         is_platform_managed: formIsPlatformManaged,
       });
+      if (!isCurrent()) return;
       if (res.success && res.data) {
         setInstances((prev) => [...prev, res.data!]);
+        setFormApiKey(""); setFormApiSecret("");
         setIsCreating(false);
         setSelectedId(res.data.id);
         addToast("success", t("platformInstanceCreated"));
@@ -140,14 +153,16 @@ function LiveKitTab() {
         showApiError(res, { fallbackKey: "settings:platformInstanceCreateError" });
       }
     } catch {
-      addToast("error", t("platformInstanceCreateError"));
+      if (isCurrent()) addToast("error", t("platformInstanceCreateError"));
     } finally {
-      setIsSaving(false);
+      pending.current = false;
+      if (isCurrent()) setIsSaving(false);
     }
   }
 
   // ─── Update ───
   async function handleUpdate() {
+    if (!isCurrent() || pending.current || confirming.current) return;
     if (selectedId === null) {
       addToast("error", t("platformNoInstanceSelected"));
       return;
@@ -175,11 +190,14 @@ function LiveKitTab() {
       return;
     }
 
+    pending.current = true;
     try {
       setIsSaving(true);
       const res = await updateLiveKitInstance(selectedId, body);
+      if (!isCurrent()) return;
       if (res.success && res.data) {
         const updated = res.data;
+        setFormApiKey(""); setFormApiSecret("");
         setInstances((prev) =>
           prev.map((i) => (i.id === updated.id ? updated : i))
         );
@@ -188,15 +206,16 @@ function LiveKitTab() {
         showApiError(res, { fallbackKey: "settings:platformInstanceUpdateError" });
       }
     } catch {
-      addToast("error", t("platformInstanceUpdateError"));
+      if (isCurrent()) addToast("error", t("platformInstanceUpdateError"));
     } finally {
-      setIsSaving(false);
+      pending.current = false;
+      if (isCurrent()) setIsSaving(false);
     }
   }
 
   // ─── Delete ───
   async function handleDelete() {
-    if (!selectedInstance) return;
+    if (!isCurrent() || pending.current || confirming.current || !selectedInstance) return;
 
     if (selectedInstance.server_count > 0) {
       if (!migrateTargetId) {
@@ -205,7 +224,10 @@ function LiveKitTab() {
       }
     }
 
-    const ok = await confirm({
+    const version = draftVersion;
+    confirming.current = true;
+    let ok: boolean;
+    try { ok = await confirm({
       message:
         selectedInstance.server_count > 0
           ? t("platformDeleteMigrateConfirm", {
@@ -213,21 +235,25 @@ function LiveKitTab() {
             })
           : t("platformDeleteConfirm"),
       danger: true,
-    });
-    if (!ok) return;
+    }); } finally { confirming.current = false; }
+    if (!ok || !isCurrent() || pending.current || latestDraft.current !== version) return;
+    pending.current = true;
+    setIsSaving(true);
 
     try {
-      await deleteLiveKitInstance(
+      const res = await deleteLiveKitInstance(
         selectedInstance.id,
         selectedInstance.server_count > 0 ? migrateTargetId : undefined
       );
+      if (!isCurrent()) return;
+      if (!res.success) { showApiError(res, { fallbackKey: "settings:platformInstanceDeleteError" }); return; }
       setInstances((prev) => prev.filter((i) => i.id !== selectedInstance.id));
       setSelectedId(null);
       setMigrateTargetId("");
       addToast("success", t("platformInstanceDeleted"));
     } catch {
-      addToast("error", t("platformInstanceDeleteError"));
-    }
+      if (isCurrent()) addToast("error", t("platformInstanceDeleteError"));
+    } finally { pending.current = false; if (isCurrent()) setIsSaving(false); }
   }
 
   // ─── Helpers ───
@@ -270,10 +296,8 @@ function LiveKitTab() {
           </span>
           <button
             className="settings-btn channel-settings-header-btn"
-            onClick={() => {
-              setIsCreating(true);
-              setSelectedId(null);
-            }}
+            disabled={isSaving}
+            onClick={() => void selectEditor(null, true)}
           >
             +
           </button>
@@ -290,10 +314,13 @@ function LiveKitTab() {
             <div
               key={inst.id}
               className={`role-list-item platform-instance-item${selectedId === inst.id ? " active" : ""}`}
-              onClick={() => {
-                setSelectedId(inst.id);
-                setIsCreating(false);
+              role="button"
+              tabIndex={0}
+              aria-disabled={isSaving}
+              onKeyDown={event => {
+                if (event.key === "Enter" || event.key === " ") { event.preventDefault(); void selectEditor(inst.id); }
               }}
+              onClick={() => void selectEditor(inst.id)}
             >
               <span className="role-list-name" title={inst.url}>
                 {inst.url}
@@ -313,7 +340,7 @@ function LiveKitTab() {
             mode="create"
             {...formProps}
             onSave={handleCreate}
-            onCancel={() => setIsCreating(false)}
+            onCancel={() => void selectEditor(null)}
           />
         ) : selectedInstance ? (
           <div className="lk-edit-layout">

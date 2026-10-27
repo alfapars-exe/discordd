@@ -1,0 +1,46 @@
+{
+  "status": "implemented_unverified",
+  "base_commit": "8f443aac",
+  "scope": [
+    "p1.settings-dialog"
+  ],
+  "verified_at": "2026-10-27T09:13:28.930612+00:00",
+  "source_lf_sha256": {
+    "client/src/components/settings/ServerGeneralSettings.tsx": "4159b11749a4da8bd61c7e23ab338e7a682839d7d861063d5ecae901455f8cfd",
+    "client/src/components/settings/PlatformSettings.tsx": "8977a73fd37d669b4ed941f2a040d64e55ba8f2f2b4dad6b2546e7259568fda4",
+    "client/src/components/settings/InstanceForm.tsx": "2f38a10a43eba4b5b0b58a37854cba2bc30077e42f1afe3bff8ca5fffcb837dd",
+    "client/src/components/settings/EditorDraftGuards.test.tsx": "df9e6fa899884620a016acc193de67b3fe4d69968484a71240b3492863c144ea"
+  },
+  "implementation": [
+    "Use existing owner-registered useSettingsDraft for server and platform fields, including LiveKit credentials and active saves.",
+    "Platform record selection/new/cancel confirmation pins account, auth generation and current draft. API writes are serialized; fields are disabled until completion.",
+    "Server acknowledgement updates only unchanged submitted fields; newer edits survive. Scope-keyed editor lifetimes clear secrets on account/server replacement.",
+    "Failed platform DELETE response does not remove local record or report success. No credentials are written to browser storage."
+  ],
+  "verification": {
+    "targeted_tests": {
+      "result": "passed",
+      "files": 3,
+      "tests": 23
+    },
+    "settings_regression": {
+      "result": "passed",
+      "files": 37,
+      "tests": 238,
+      "seconds": 39.55
+    },
+    "eslint": "passed",
+    "typescript": "passed",
+    "production_client_build": "passed",
+    "coverage_validator": {
+      "structure": "valid",
+      "tests": 32,
+      "acceptance_complete": false
+    }
+  },
+  "remaining_acceptance": [
+    "Actual browser and installed Windows visual/focus/Escape interaction with unsaved confirmation",
+    "Full P0-P11 acceptance; other settings editors are not asserted complete",
+    "PR CI and deployment are separate gates; no merge, publication or installation performed"
+  ]
+}

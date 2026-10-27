@@ -1277,7 +1277,7 @@
       "phase": "P1",
       "status": "implemented_unverified",
       "remaining_implementation": [
-        "Extend owner-provided unsaved-form guards to remaining server/platform editors; complete installed-Windows and all-dialog acceptance."
+        "Server general and platform LiveKit editors now register unsaved and in-flight drafts and guard platform record/new/cancel transitions. Complete installed-Windows/browser focus and keyboard acceptance and audit other editors separately."
       ],
       "sources": [
         "R01",
@@ -1323,9 +1323,13 @@
         "client/src/components/settings/SettingsModal.tsx",
         "client/src/hooks/useSettingsWorkspace.ts",
         "client/src/components/settings/settingsWorkspaceContext.ts",
-        "client/src/components/shared/ConfirmDialog.tsx"
+        "client/src/components/shared/ConfirmDialog.tsx",
+        "client/src/components/settings/ServerGeneralSettings.tsx",
+        "client/src/components/settings/PlatformSettings.tsx",
+        "client/src/components/settings/InstanceForm.tsx"
       ],
       "evidence": [
+        "implementation/verification/p1-editor-draft-guards-2026-10-27.json",
         {
           "kind": "integration",
           "path": "implementation/verification/p1-workspace-2026-10-23.json",

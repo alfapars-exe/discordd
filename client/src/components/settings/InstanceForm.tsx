@@ -66,7 +66,7 @@ function InstanceForm({
       : false;
 
   return (
-    <div className="channel-perm-section">
+    <fieldset disabled={isSaving} className="channel-perm-section" style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
       <h2 className="settings-section-title channel-settings-right-title">
         {isCreate ? t("platformAddInstance") : t("platformEditInstance")}
       </h2>
@@ -240,7 +240,7 @@ function InstanceForm({
           </div>
         </>
       )}
-    </div>
+    </fieldset>
   );
 }
 
