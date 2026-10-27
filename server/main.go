@@ -432,7 +432,7 @@ func main() {
 	})
 
 	// 17. Security headers
-	securedHandler := securityHeaders(finalHandler)
+	securedHandler := securityHeaders(finalHandler, cfg.LiveKit.URL)
 
 	// 17b. Observability + resource-limit middleware wrapping every route
 	// (API, static, SPA). RequestLogger stays the true outermost layer (see
