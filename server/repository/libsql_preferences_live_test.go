@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/argeinfina/hichat/database"
+	"github.com/google/uuid"
 )
 
 // This test is opt-in and must use a disposable loopback database.
@@ -36,14 +37,15 @@ func TestLibSQLPreferencesLive(t *testing.T) {
 	}
 	defer db.Close()
 	ctx := context.Background()
-	if _, err := db.Conn.ExecContext(ctx, `INSERT INTO users (id, username, password_hash) VALUES (?, ?, ?)`, "libsql-prefs-user", "libsqlprefs", "x"); err != nil {
+	userID := "libsql-" + uuid.NewString()
+	if _, err := db.Conn.ExecContext(ctx, `INSERT INTO users (id, username, password_hash) VALUES (?, ?, ?)`, userID, userID, "x"); err != nil {
 		t.Fatal(err)
 	}
 	repo := NewSQLitePreferencesRepo(wrapForRepo(db))
-	if _, err := repo.Upsert(ctx, "libsql-prefs-user", json.RawMessage(`{"accessibility":{"chatFontSize":18}}`)); err != nil {
+	if _, err := repo.Upsert(ctx, userID, json.RawMessage(`{"accessibility":{"chatFontSize":18}}`)); err != nil {
 		t.Fatal(err)
 	}
-	got, err := repo.Upsert(ctx, "libsql-prefs-user", json.RawMessage(`{"accessibility":{"alwaysUnderlineLinks":true}}`))
+	got, err := repo.Upsert(ctx, userID, json.RawMessage(`{"accessibility":{"alwaysUnderlineLinks":true}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +61,7 @@ func TestLibSQLPreferencesLive(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			<-start
-			_, err := repo.Upsert(ctx, "libsql-prefs-user", json.RawMessage(fmt.Sprintf(`{"sidebar_sections":{"section-%d":true}}`, i)))
+			_, err := repo.Upsert(ctx, userID, json.RawMessage(fmt.Sprintf(`{"sidebar_sections":{"section-%d":true}}`, i)))
 			errs <- err
 		}(i)
 	}
@@ -71,7 +73,7 @@ func TestLibSQLPreferencesLive(t *testing.T) {
 			t.Fatalf("concurrent update: %v", err)
 		}
 	}
-	got, err = repo.Get(ctx, "libsql-prefs-user")
+	got, err = repo.Get(ctx, userID)
 	if err != nil {
 		t.Fatal(err)
 	}
