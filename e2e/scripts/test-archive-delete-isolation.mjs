@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, rmdirSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { assertRealE2ETempRoot, removeSyntheticExportArchive } from "./remove-synthetic-export-archive.cjs";
+import { assertRealE2ETempRoot, removeSyntheticExportArchive } from "./remove-synthetic-export-archive.js";
 
 const e2eRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const e2eStat = lstatSync(e2eRoot);

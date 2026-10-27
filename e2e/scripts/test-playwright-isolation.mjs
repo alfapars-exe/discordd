@@ -60,7 +60,7 @@ assert.match(archiveSpec, /expect\(peerCheck\.authenticated\)\.toBe\(true\)[\s\S
   "cross-owner denial must prove the generated peer is authenticated and reject 401 as an auth failure");
 
 
-const deletionHelper = readFileSync(join(here, "remove-synthetic-export-archive.cjs"), "utf8");
+const deletionHelper = readFileSync(join(here, "remove-synthetic-export-archive.js"), "utf8");
 assert.match(deletionHelper, /hex48\.test\(jobID\)/);
 assert.match(deletionHelper, /fresh disposable run identity/);
 assert.match(deletionHelper, /realpathSync/);

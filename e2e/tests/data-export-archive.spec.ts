@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { removeSyntheticExportArchive } from "../scripts/remove-synthetic-export-archive.cjs";
+import { removeSyntheticExportArchive } from "../scripts/remove-synthetic-export-archive.js";
 import { test, expect } from "@playwright/test";
 import {
   dismissOnboardingOverlays,
