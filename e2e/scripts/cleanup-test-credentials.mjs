@@ -8,6 +8,8 @@ const TMP_DIR = join(E2E_DIR, ".tmp");
 // Remove only the generated credential/fixture files after all Playwright
 // workers exit. The isolated SQLite run directories remain for short-term
 // failure diagnosis and are pruned by start-server.mjs.
-for (const name of ["account.json", "channel-notification-fixture.json", "notification-recipient-pending.json"]) {
-  rmSync(join(TMP_DIR, name), { force: true });
+export default async function cleanupTestCredentials() {
+  for (const name of ["account.json", "channel-notification-fixture.json", "notification-recipient-pending.json"]) {
+    rmSync(join(TMP_DIR, name), { force: true });
+  }
 }

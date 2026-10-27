@@ -43,6 +43,8 @@ setup("register a fresh account, then log back in", async ({ page }) => {
     // setup retry, authenticate the same account; only register it if that
     // first attempt failed before the account was created. This avoids
     // burning the per-IP registration limit with duplicate submissions.
+    // The recovery fetches below are relative to the current page origin.
+    await page.goto("/login");
     const status = await page.evaluate(async (candidate) => {
       const login = await fetch("/api/auth/login", {
         method: "POST",

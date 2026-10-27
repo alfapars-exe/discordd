@@ -266,7 +266,8 @@ export async function provisionChannelNotificationFixture(page: Page, owner: Tes
   const recipient = existingRecipient ?? pendingRecipient ?? { username: uniqueUsername(), password: generateTestPassword() };
   if (!existingRecipient) writePendingNotificationRecipient(recipient);
   const serverName = `E2E Notification ${Date.now()}`;
-  const ids = await page.evaluate(async ({ recipient, serverName, existingRecipient }) => {
+  const ids = await page.evaluate(async ({ recipient, serverName, existingRecipient, pendingRecipient }) => {
+    const reuseRecipient = existingRecipient || pendingRecipient;
     type Envelope<T> = { success?: boolean; data?: T };
     type Server = { id: string };
     type Channel = { id: string; name: string; type: string; category_id?: string | null };
@@ -306,12 +307,12 @@ export async function provisionChannelNotificationFixture(page: Page, owner: Tes
     const ownerToken = ownerEnvelope.data?.access_token;
     if (ownerEnvelope.success !== true || !ownerToken) return fail("/auth/refresh", refresh.status);
 
-    let recipientResponse = await fetch(existingRecipient || pendingRecipient ? "/api/auth/login" : "/api/auth/register", {
+    let recipientResponse = await fetch(reuseRecipient ? "/api/auth/login" : "/api/auth/register", {
       method: "POST",
       // Avoid replacing the owner browser's refresh cookie with the recipient's.
       credentials: "omit",
       headers: { "Content-Type": "application/json", "X-HiChat-Client": "web" },
-      body: JSON.stringify(existingRecipient
+      body: JSON.stringify(reuseRecipient
         ? { username: recipient.username, password: recipient.password }
         : {
           username: recipient.username,
@@ -320,7 +321,7 @@ export async function provisionChannelNotificationFixture(page: Page, owner: Tes
           email: `${recipient.username}@example.test`,
         }),
     });
-    if ((existingRecipient || pendingRecipient) && recipientResponse.status === 401) {
+    if (reuseRecipient && recipientResponse.status === 401) {
       // A setup retry may have persisted credentials just before registration
       // succeeded. Reuse those same credentials instead of consuming another
       // registration slot for a duplicate account.
@@ -336,7 +337,7 @@ export async function provisionChannelNotificationFixture(page: Page, owner: Tes
         }),
       });
     }
-    const recipientAuthPath = existingRecipient || pendingRecipient ? "/auth/login" : "/auth/register";
+    const recipientAuthPath = reuseRecipient ? "/auth/login" : "/auth/register";
     if (!recipientResponse.ok) return fail(recipientAuthPath, recipientResponse.status);
     const recipientEnvelope = await recipientResponse.json() as Envelope<{ access_token?: string; user?: { id?: string } }>;
     const recipientToken = recipientEnvelope.data?.access_token;
@@ -385,7 +386,12 @@ export async function provisionChannelNotificationFixture(page: Page, owner: Tes
     });
 
     return { serverId: server.id, channelId: general.id, mutedChannelId: muted.id, privateChannelId: privateChannel.id };
-  }, { recipient, serverName, existingRecipient: !!existingRecipient });
+  }, {
+    recipient,
+    serverName,
+    existingRecipient: !!existingRecipient,
+    pendingRecipient: !!pendingRecipient,
+  });
 
   writeChannelNotificationFixture({ owner, recipient, serverName, ...ids });
   if (!existingRecipient) rmSync(PENDING_NOTIFICATION_RECIPIENT_FILE, { force: true });
