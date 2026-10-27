@@ -77,6 +77,7 @@ export default function NotificationSettings() {
       <Toggle label={t("notifications.desktopEnabled")} description={t("notifications.desktopEnabledDesc")} checked={notifications.desktopEnabled} disabled={permission === "unsupported" || permission === "denied"} onChange={(value) => updateNotification("desktopEnabled", value)} />
       <Toggle label={t("notifications.taskbarFlash")} description={t("notifications.taskbarFlashDesc")} checked={notifications.taskbarFlash} onChange={(value) => updateNotification("taskbarFlash", value)} />
       <Toggle label={t("notifications.unreadBadge")} description={t("notifications.unreadBadgeDesc")} checked={notifications.unreadBadge} onChange={(value) => updateNotification("unreadBadge", value)} />
+      <Toggle label={t("notifications.channelMessages")} description={t("notifications.channelMessagesDesc")} checked={notifications.channelMessageNotifications} onChange={(value) => updateNotification("channelMessageNotifications", value)} />
       <Toggle label={t("notifications.focused")} description={t("notifications.focusedDesc")} checked={notifications.notifyWhenFocused} onChange={(value) => updateNotification("notifyWhenFocused", value)} />
       <label className="vs-label" htmlFor="reaction-mode">{t("notifications.reactions")}</label>
       <select id="reaction-mode" className="vs-select" value={notifications.reactionMode} onChange={(event) => updateNotification("reactionMode", event.target.value as NotificationPreferences["reactionMode"])}>

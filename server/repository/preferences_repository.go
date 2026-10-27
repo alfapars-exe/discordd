@@ -16,3 +16,8 @@ type PreferencesRepository interface {
 	// Creates the row if it doesn't exist.
 	Upsert(ctx context.Context, userID string, partial json.RawMessage) (*models.UserPreferences, error)
 }
+
+// PreferencesBatchReader provides one bounded round trip for fanout workers.
+type PreferencesBatchReader interface {
+	GetMany(context.Context, []string) (map[string]*models.UserPreferences, error)
+}

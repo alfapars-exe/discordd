@@ -339,6 +339,9 @@ func (r *sqliteNotificationRepo) CountUnread(ctx context.Context, userID string)
 }
 
 func (r *sqliteNotificationRepo) DeleteByMessageID(ctx context.Context, messageID string) error {
+	if _, err := r.db.ExecContext(ctx, `DELETE FROM channel_message_notification_jobs WHERE message_id = ?`, messageID); err != nil {
+		return fmt.Errorf("failed to delete channel notification job: %w", err)
+	}
 	if _, err := r.db.ExecContext(ctx, `DELETE FROM notifications WHERE message_id = ?`, messageID); err != nil {
 		return fmt.Errorf("failed to delete notifications for message: %w", err)
 	}
@@ -346,6 +349,9 @@ func (r *sqliteNotificationRepo) DeleteByMessageID(ctx context.Context, messageI
 }
 
 func (r *sqliteNotificationRepo) DeleteByChannelID(ctx context.Context, channelID string) error {
+	if _, err := r.db.ExecContext(ctx, `DELETE FROM channel_message_notification_jobs WHERE channel_id = ?`, channelID); err != nil {
+		return fmt.Errorf("failed to delete channel notification jobs: %w", err)
+	}
 	if _, err := r.db.ExecContext(ctx, `DELETE FROM notifications WHERE channel_id = ?`, channelID); err != nil {
 		return fmt.Errorf("failed to delete notifications for channel: %w", err)
 	}

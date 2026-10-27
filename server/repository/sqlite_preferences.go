@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/models"
@@ -47,6 +48,47 @@ func (r *sqlitePreferencesRepo) Get(ctx context.Context, userID string) (*models
 		return nil, fmt.Errorf("read preferences: %w", err)
 	}
 	return &p, nil
+}
+
+func (r *sqlitePreferencesRepo) GetMany(ctx context.Context, userIDs []string) (map[string]*models.UserPreferences, error) {
+	out := make(map[string]*models.UserPreferences, len(userIDs))
+	if len(userIDs) == 0 {
+		return out, nil
+	}
+	placeholders := make([]string, len(userIDs))
+	args := make([]any, len(userIDs))
+	for i, id := range userIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	rows, err := r.db.QueryContext(ctx, `SELECT user_id,data,updated_at FROM user_preferences WHERE user_id IN (`+strings.Join(placeholders, ",")+`)`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("read preferences batch: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		p := &models.UserPreferences{SchemaVersion: models.PreferencesSchemaVersion}
+		var raw string
+		if err = rows.Scan(&p.UserID, &raw, &p.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan preferences batch: %w", err)
+		}
+		// Corrupt stored data is opt-out for this recipient. Do not let one
+		// malformed row poison and repeatedly retry an otherwise healthy page.
+		if !json.Valid([]byte(raw)) {
+			p.Data = json.RawMessage(`{}`)
+			out[p.UserID] = p
+			continue
+		}
+		p.Data, err = models.FilterDeviceLocalPreferences(json.RawMessage(raw))
+		if err != nil {
+			return nil, fmt.Errorf("read preferences batch: %w", err)
+		}
+		out[p.UserID] = p
+	}
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate preferences batch: %w", err)
+	}
+	return out, nil
 }
 
 func (r *sqlitePreferencesRepo) Upsert(ctx context.Context, userID string, partial json.RawMessage) (*models.UserPreferences, error) {

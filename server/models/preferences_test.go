@@ -10,6 +10,7 @@ import (
 func TestPreferencesValidateKnownNamespaces(t *testing.T) {
 	valid := []string{
 		`{"notifications":{"upcomingEventNotifications":false}}`,
+		`{"notifications":{"channelMessageNotifications":true}}`,
 		`{"privacy":{"shareOnlineUpdates":false}}`,
 		`{"privacy":{"shareStreamUpdates":true}}`,
 		`{"privacy":{"shareGameActivity":true,"gameActivityNewServerAudience":"small","gameActivityServerOverrides":{"server-1":true,"server-2":false}}}`,

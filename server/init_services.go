@@ -102,6 +102,7 @@ type Services struct {
 	ServerEvent             services.ServerEventService
 	ServerEventWorker       *services.ServerEventWorker
 	FriendAnniversaryWorker *services.FriendAnniversaryWorker
+	ChannelNotifWorker      *services.ChannelMessageNotificationWorker
 	OnlineFriendNotifier    services.OnlineFriendNotifier
 	EmailDelivery           *services.EmailDeliveryService
 }
@@ -250,6 +251,9 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		repos.Mention, repos.RoleMention, repos.Role, repos.Reaction, repos.ReadState,
 		repos.MemberTimeout, repository.NewMessageTxRunner(db), hub, channelPermService, auditLogService,
 		repos.Notification,
+	)
+	channelMessageNotificationWorker := services.NewChannelMessageNotificationWorker(
+		repository.NewSQLiteChannelMessageNotificationQueue(db), repos.Preferences, repos.User, hub,
 	)
 	messageService.SetUploadDir(cfg.Upload.Dir)
 	uploadService := services.NewUploadService(repos.Attachment, cfg.Upload.Dir, cfg.Upload.MaxSize)
@@ -609,6 +613,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		ServerEvent:             serverEventService,
 		ServerEventWorker:       services.NewServerEventWorker(repos.ServerEventDelivery, hub),
 		FriendAnniversaryWorker: services.NewFriendAnniversaryWorker(repos.FriendAnniversary, hub),
+		ChannelNotifWorker:      channelMessageNotificationWorker,
 		OnlineFriendNotifier:    onlineFriendNotifier,
 	}
 

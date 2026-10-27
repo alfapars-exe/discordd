@@ -156,6 +156,10 @@ func TestPurgeExpiredNotifications(t *testing.T) {
 			VALUES ('old', 'u1', 'mention', datetime('now', '-91 days'))`,
 		`INSERT INTO notifications (id, user_id, kind, created_at)
 			VALUES ('fresh', 'u1', 'mention', datetime('now', '-1 days'))`,
+		`INSERT INTO channel_message_notification_jobs (message_id, server_id, channel_id, actor_id, created_at)
+			VALUES ('old-job', 's1', 'c1', 'u1', datetime('now', '-91 days'))`,
+		`INSERT INTO channel_message_notification_jobs (message_id, server_id, channel_id, actor_id, created_at)
+			VALUES ('fresh-job', 's1', 'c1', 'u1', datetime('now', '-1 days'))`,
 	)
 
 	purgeExpiredNotifications(db)
@@ -174,6 +178,20 @@ func TestPurgeExpiredNotifications(t *testing.T) {
 	}
 	if n != 1 {
 		t.Errorf("1-day-old notification was purged (got %d, want 1)", n)
+	}
+	if err := db.Conn.QueryRowContext(context.Background(),
+		`SELECT COUNT(*) FROM channel_message_notification_jobs WHERE message_id = 'old-job'`).Scan(&n); err != nil {
+		t.Fatalf("count expired channel notification job: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("91-day-old channel notification job survived the purge")
+	}
+	if err := db.Conn.QueryRowContext(context.Background(),
+		`SELECT COUNT(*) FROM channel_message_notification_jobs WHERE message_id = 'fresh-job'`).Scan(&n); err != nil {
+		t.Fatalf("count recent channel notification job: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("1-day-old channel notification job was purged (got %d, want 1)", n)
 	}
 
 	purgeExpiredNotifications(db) // second run on a clean table must be a silent no-op

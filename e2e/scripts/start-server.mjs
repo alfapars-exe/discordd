@@ -16,13 +16,13 @@
  * deliberately does not do.
  *
  * Isolation: every run gets a brand-new SQLite file and uploads dir under
- * e2e/.tmp/run-<timestamp>/, and the child's cwd is that directory so the Go
+ * e2e/.tmp/<unique-run-id>/, and the child's cwd is that directory so the Go
  * server's godotenv.Load() cannot pick up a developer's repo-root .env.
  */
 
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, rmSync, readdirSync, statSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { existsSync, lstatSync, mkdirSync, realpathSync, rmSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -45,7 +45,7 @@ const JWT_SECRET = "hichat-playwright-e2e-secret-key-not-for-production-use";
 // so keep this as an obviously-countable repeated nibble run.
 const ENCRYPTION_KEY = "0123456789abcdef".repeat(4);
 
-/** Keep the newest few run dirs for post-mortem; drop the rest. */
+/** Keep the newest few completed run dirs for post-mortem; never remove a live run. */
 function pruneOldRuns(keep = 3) {
   if (!existsSync(TMP_ROOT)) return;
   const runs = readdirSync(TMP_ROOT)
@@ -60,6 +60,22 @@ function pruneOldRuns(keep = 3) {
     })
     .sort();
   for (const stale of runs.slice(0, Math.max(0, runs.length - keep))) {
+    const ownerPath = join(stale, "owner.json");
+    let active = false;
+    try {
+      const owner = JSON.parse(readFileSync(ownerPath, "utf8"));
+      if (Number.isSafeInteger(owner.pid) && owner.pid > 0) {
+        try {
+          process.kill(owner.pid, 0);
+          active = true;
+        } catch (error) {
+          active = error?.code === "EPERM";
+        }
+      }
+    } catch {
+      /* Missing or malformed markers are stale; only known live owners are protected. */
+    }
+    if (active) continue;
     // Windows can hold the .exe/.db handle briefly after a killed run; a
     // failed cleanup is cosmetic, so never let it abort the suite.
     try {
@@ -89,10 +105,35 @@ function resolveGo() {
   return "go";
 }
 
-function buildServer() {
+function buildServer(runDir) {
   const binName = process.platform === "win32" ? "hichat-e2e.exe" : "hichat-e2e";
-  const binPath = join(TMP_ROOT, "bin", binName);
-  mkdirSync(dirname(binPath), { recursive: true });
+  const probeName = process.platform === "win32" ? "hichat-e2e-queue-probe.exe" : "hichat-e2e-queue-probe";
+  const realTmpRoot = realpathSync(TMP_ROOT);
+  const realRunDir = realpathSync(runDir);
+  const runRelative = relative(realTmpRoot, realRunDir);
+  if (!runRelative || runRelative === ".." || runRelative.startsWith(`..${sep}`)) {
+    throw new Error("[e2e-server] unique run directory escaped disposable root");
+  }
+  const runStat = lstatSync(runDir);
+  if (!runStat.isDirectory() || runStat.isSymbolicLink()) {
+    throw new Error("[e2e-server] unique run directory must be a real directory");
+  }
+  const binDir = join(runDir, "bin");
+  mkdirSync(binDir);
+  const binStat = lstatSync(binDir);
+  if (!binStat.isDirectory() || binStat.isSymbolicLink()) {
+    throw new Error("[e2e-server] binary output directory must be a real directory");
+  }
+  const realBinDir = realpathSync(binDir);
+  const binRelative = relative(realRunDir, realBinDir);
+  if (!binRelative || binRelative === ".." || binRelative.startsWith(`..${sep}`)) {
+    throw new Error("[e2e-server] binary output directory escaped unique run directory");
+  }
+  const binPath = join(binDir, binName);
+  const probePath = join(binDir, probeName);
+  if (existsSync(binPath) || existsSync(probePath)) {
+    throw new Error("[e2e-server] binary output path already exists");
+  }
 
   const goBin = resolveGo();
   console.log(`[e2e-server] ${goBin} build (CGO_ENABLED=0) -> ${binPath}`);
@@ -107,18 +148,45 @@ function buildServer() {
   if (res.status !== 0) {
     throw new Error(`[e2e-server] go build failed with exit code ${res.status}`);
   }
+  const builtBin = lstatSync(binPath);
+  if (!builtBin.isFile() || builtBin.isSymbolicLink() || dirname(realpathSync(binPath)) !== realBinDir) {
+    throw new Error("[e2e-server] server binary was not created inside the owned run directory");
+  }
+  const probe = spawnSync(goBin, ["build", "-o", probePath, join(E2E_DIR, "scripts", "queue-probe.go")], {
+    cwd: SERVER_DIR,
+    stdio: "inherit",
+    env: { ...process.env, CGO_ENABLED: "0" },
+  });
+  if (probe.error) throw probe.error;
+  if (probe.status !== 0) throw new Error(`[e2e-server] queue probe build failed with exit code ${probe.status}`);
+  const builtProbe = lstatSync(probePath);
+  if (!builtProbe.isFile() || builtProbe.isSymbolicLink() || dirname(realpathSync(probePath)) !== realBinDir) {
+    throw new Error("[e2e-server] queue probe was not created inside the owned run directory");
+  }
   console.log(`[e2e-server] build finished in ${((Date.now() - started) / 1000).toFixed(1)}s`);
   return binPath;
 }
 
 function main() {
+  mkdirSync(TMP_ROOT, { recursive: true });
+  const tmpStat = lstatSync(TMP_ROOT);
+  if (!tmpStat.isDirectory() || tmpStat.isSymbolicLink()) {
+    throw new Error("[e2e-server] disposable root must be a real directory");
+  }
   pruneOldRuns();
 
-  const runDir = join(TMP_ROOT, `run-${Date.now()}`);
+  const runId = process.env.HICHAT_E2E_RUN_ID ?? "";
+  if (!/^run-\d+-\d+-[a-f0-9]{16}$/.test(runId)) {
+    throw new Error("[e2e-server] Playwright must provide a unique HICHAT_E2E_RUN_ID");
+  }
+  const runDir = join(TMP_ROOT, runId);
   const uploadDir = join(runDir, "uploads");
-  mkdirSync(uploadDir, { recursive: true });
+  mkdirSync(runDir);
+  mkdirSync(uploadDir);
 
-  const binPath = buildServer();
+  const binPath = buildServer(runDir);
+  const ownerPath = join(runDir, "owner.json");
+  writeFileSync(ownerPath, JSON.stringify({ pid: process.pid }), { mode: 0o600 });
 
   const env = {
     ...process.env,
@@ -151,6 +219,10 @@ function main() {
     LOG_LEVEL: process.env.E2E_LOG_LEVEL ?? "warn",
     LOG_FORMAT: "text",
   };
+  // These variables enable hosted-space integrations/probes. A local fixture
+  // must not inherit them from an IDE or user shell.
+  delete env.SPACE_ID;
+  delete env.SDK_SPACE;
 
   console.log(`[e2e-server] starting ${binPath} on http://${HOST}:${PORT}`);
   console.log(`[e2e-server] run dir: ${runDir}`);
@@ -159,6 +231,7 @@ function main() {
 
   child.on("exit", (code, signal) => {
     console.log(`[e2e-server] exited (code=${code} signal=${signal})`);
+    rmSync(ownerPath, { force: true });
     process.exit(code ?? 1);
   });
   child.on("error", (err) => {
@@ -173,7 +246,10 @@ function main() {
   };
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
-  process.on("exit", stop);
+  process.on("exit", () => {
+    stop();
+    rmSync(ownerPath, { force: true });
+  });
 }
 
 main();

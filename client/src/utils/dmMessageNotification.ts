@@ -14,4 +14,11 @@ export function isGroupMessageNotification(n: AppNotification): boolean {
     && typeof n.message_id === "string" && !!n.message_id && !!n.actor_id
     && !n.server_id && !n.channel_id && !n.dm_channel_id;
 }
+/** Strict metadata-only server channel source. */
+export function isChannelMessageNotification(n: AppNotification): boolean {
+  return n.kind === "system" && n.payload.action === "incoming_message" && n.payload.source === "channel"
+    && Object.keys(n.payload).length === 2 && typeof n.server_id === "string" && !!n.server_id
+    && typeof n.channel_id === "string" && !!n.channel_id && typeof n.message_id === "string" && !!n.message_id
+    && typeof n.actor_id === "string" && !!n.actor_id && !n.dm_channel_id && !n.group_dm_channel_id;
+}
 export const isPrivateMessageNotification = (n: AppNotification) => isDMMessageNotification(n) || isGroupMessageNotification(n);

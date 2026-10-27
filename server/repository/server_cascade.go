@@ -42,6 +42,10 @@ var deleteServerCascadeStmts = []struct {
 	args  func(serverID string) []any
 }{
 	{
+		query: `DELETE FROM channel_message_notification_jobs WHERE server_id = ?`,
+		args:  func(id string) []any { return []any{id} },
+	},
+	{
 		// Music protocol heads deliberately outlive queue deletion, but not
 		// their server. Remove receipts before heads even with FKs disabled.
 		query: `DELETE FROM music_operation_receipts WHERE channel_id IN (SELECT channel_id FROM music_control_heads WHERE server_id = ?)`,
@@ -271,6 +275,22 @@ var deleteServerCascadeStmts = []struct {
 // (see server_service.go / admin_server_service.go DeleteServer, which
 // follow the same database.WithTx pattern already used for CreateServer).
 func deleteServerCascade(ctx context.Context, q database.TxQuerier, serverID string) error {
+	return deleteServerCascadeWithDialect(ctx, q, serverID, database.IsPostgres(q))
+}
+
+// deleteServerCascadeWithDialect takes the same PostgreSQL advisory fences as
+// notification fanout before its first delete. Queue jobs are removed early
+// in the cascade, so acquiring the server fence after that DELETE can invert
+// CommitBatch's server-fence -> queue-row order and deadlock.
+func deleteServerCascadeWithDialect(ctx context.Context, q database.TxQuerier, serverID string, postgres bool) error {
+	if postgres {
+		if _, err := q.ExecContext(ctx, `SELECT pg_advisory_xact_lock_shared(7341982002)`); err != nil {
+			return fmt.Errorf("failed to acquire server cascade barrier: %w", err)
+		}
+		if _, err := q.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended(?,0))`, serverID); err != nil {
+			return fmt.Errorf("failed to acquire server cascade fence: %w", err)
+		}
+	}
 	last := len(deleteServerCascadeStmts) - 1
 	for i, stmt := range deleteServerCascadeStmts {
 		result, err := q.ExecContext(ctx, stmt.query, stmt.args(serverID)...)

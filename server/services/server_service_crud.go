@@ -386,7 +386,7 @@ func (s *serverService) DeleteServer(ctx context.Context, serverID, userID strin
 	// auto-committed statement and could strand a half-cleaned server on a
 	// mid-cascade failure.
 	if err := database.WithTx(ctx, s.db, func(tx *sql.Tx) error {
-		return repository.NewSQLiteServerRepo(tx).Delete(ctx, serverID)
+		return repository.NewSQLiteServerRepoWithDialect(tx, database.IsPostgres(s.db)).Delete(ctx, serverID)
 	}); err != nil {
 		return fmt.Errorf("failed to delete server: %w", err)
 	}
