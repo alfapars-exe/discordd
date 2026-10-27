@@ -499,10 +499,12 @@ jobs:
       - name: Install root deps
         run: npm ci
 
-      # Resolve Electron once before node:test starts its files in parallel.
-      # Otherwise concurrent imports can race Electron's lazy binary install.
+      # Install once before parallel node:test imports, without launching
+      # Chromium or requiring a graphical/sandbox configuration on the runner.
       - name: Resolve Electron binary
-        run: npx electron --version
+        run: |
+          node node_modules/electron/install.js
+          node -e "require('node:fs').accessSync(require('electron'))"
 
       - name: electron:test (resolve-path + regression suite)
         run: npm run electron:test
