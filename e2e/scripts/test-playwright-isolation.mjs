@@ -71,5 +71,8 @@ assert.doesNotMatch(deletionHelper, /rmSync|recursive\s*:/, "the deletion probe 
 assert.match(archiveSpec, /removeSyntheticExportArchive\(jobID\)/);
 assert.match(archiveSpec, /newJobID\)\.not\.toBe\(jobID\)/);
 
+const guardSelfTest = readFileSync(join(here, "test-archive-delete-isolation.mjs"), "utf8");
+assert.match(guardSelfTest, /lstatSync\(e2eRoot\)[\s\S]*realpathSync\(e2eRoot\)[\s\S]*assertRealE2ETempRoot\(realE2eRoot, tmpRoot\)[\s\S]*mkdirSync\(runDir\)/,
+  "the guard self-test must verify its real .tmp root before creating fixture paths");
 execFileSync(process.execPath, [join(here, "test-archive-delete-isolation.mjs")], { stdio: "inherit" });
 console.log("Playwright server isolation contract passed");

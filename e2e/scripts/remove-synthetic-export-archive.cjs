@@ -22,6 +22,14 @@ function regularChild(parent, path) {
   return stat;
 }
 
+/** Validate the self-test root before it creates any run or fixture files. */
+function assertRealE2ETempRoot(root, tmpRoot) {
+  if (resolve(tmpRoot) !== join(resolve(root), ".tmp")) throw new Error("archive guard requires the exact E2E temporary root");
+  realDirectory(root);
+  realDirectory(tmpRoot);
+  realChild(root, tmpRoot);
+}
+
 /** Delete one immutable ZIP from this fresh Playwright-owned fixture only. */
 function removeSyntheticExportArchive(jobID) {
   if (!hex48.test(jobID)) throw new Error("archive deletion requires the exact 48-hex job ID");
@@ -67,3 +75,4 @@ function removeSyntheticExportArchive(jobID) {
 }
 
 exports.removeSyntheticExportArchive = removeSyntheticExportArchive;
+exports.assertRealE2ETempRoot = assertRealE2ETempRoot;

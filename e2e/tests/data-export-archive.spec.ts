@@ -12,9 +12,12 @@ import {
 import { createOpaqueAttachmentFixture, readExportZipEntries } from "./dataExportArchive.helpers";
 
 const EXPORT_CREATE_PATH = "/api/users/me/data-exports";
+const ARCHIVE_READY_TIMEOUT_MS = 45_000;
+const HTTP_DOWNLOAD_TIMEOUT_MS = 15_000;
 
 test("owner recreates a missing opaque attachment archive; authenticated peer is denied", async ({ browser }) => {
-  test.setTimeout(120_000);
+  // Two bounded preparation windows plus login, JSON/ZIP transfers and peer checks.
+  test.setTimeout(180_000);
   const ownerContext = await browser.newContext();
   const recipientContext = await browser.newContext();
   const ownerPage = await ownerContext.newPage();
@@ -39,7 +42,7 @@ test("owner recreates a missing opaque attachment archive; authenticated peer is
     const createResponsePromise = ownerPage.waitForResponse((response) => {
       const url = new URL(response.url());
       return url.pathname === EXPORT_CREATE_PATH && response.request().method() === "POST";
-    });
+    }, { timeout: HTTP_DOWNLOAD_TIMEOUT_MS });
     await exportSection.getByRole("button", { name: "Prepare a new export", exact: true }).click();
     const createResponse = await createResponsePromise;
     expect(createResponse.status()).toBe(201);
@@ -50,12 +53,12 @@ test("owner recreates a missing opaque attachment archive; authenticated peer is
     if (!jobID) throw new Error("export API did not return a job ID");
 
     const archiveButton = exportSection.getByRole("button", { name: "Download attachments ZIP", exact: true });
-    await expect(archiveButton).toBeVisible({ timeout: 60_000 });
+    await expect(archiveButton).toBeVisible({ timeout: ARCHIVE_READY_TIMEOUT_MS });
     const downloadResponsePromise = ownerPage.waitForResponse((response) => {
       const url = new URL(response.url());
       return url.pathname === `${EXPORT_CREATE_PATH}/${jobID}/attachments` && response.request().method() === "GET";
-    });
-    const downloadPromise = ownerPage.waitForEvent("download");
+    }, { timeout: HTTP_DOWNLOAD_TIMEOUT_MS });
+    const downloadPromise = ownerPage.waitForEvent("download", { timeout: HTTP_DOWNLOAD_TIMEOUT_MS });
     await archiveButton.click();
     const [downloadResponse, download] = await Promise.all([downloadResponsePromise, downloadPromise]);
     expect(downloadResponse.status()).toBe(200);
@@ -85,7 +88,7 @@ test("owner recreates a missing opaque attachment archive; authenticated peer is
     const missingResponsePromise = ownerPage.waitForResponse(response => {
       const url = new URL(response.url());
       return url.origin === "http://localhost:3030" && url.pathname === `${EXPORT_CREATE_PATH}/${jobID}/attachments` && response.request().method() === "GET";
-    });
+    }, { timeout: HTTP_DOWNLOAD_TIMEOUT_MS });
     await archiveButton.click();
     expect((await missingResponsePromise).status()).toBe(404);
     await expect(exportSection.getByRole("status")).toBeVisible();
@@ -94,7 +97,7 @@ test("owner recreates a missing opaque attachment archive; authenticated peer is
     await expect(archiveButton).toHaveCount(0);
 
     // Missing binary storage must not remove the separately retained JSON.
-    const jsonDownloadPromise = ownerPage.waitForEvent("download");
+    const jsonDownloadPromise = ownerPage.waitForEvent("download", { timeout: HTTP_DOWNLOAD_TIMEOUT_MS });
     await exportSection.getByRole("button", { name: "Download JSON file", exact: true }).click();
     const jsonDownload = await jsonDownloadPromise;
     const jsonPath = await jsonDownload.path();
@@ -107,7 +110,7 @@ test("owner recreates a missing opaque attachment archive; authenticated peer is
     const recreatePromise = ownerPage.waitForResponse(response => {
       const url = new URL(response.url());
       return url.origin === "http://localhost:3030" && url.pathname === EXPORT_CREATE_PATH && response.request().method() === "POST";
-    });
+    }, { timeout: HTTP_DOWNLOAD_TIMEOUT_MS });
     await exportSection.getByRole("button", { name: "Prepare a new export", exact: true }).click();
     const recreateResponse = await recreatePromise;
     expect(recreateResponse.status()).toBe(201);
@@ -116,9 +119,9 @@ test("owner recreates a missing opaque attachment archive; authenticated peer is
     expect(newJobID).toMatch(/^[a-f0-9]{48}$/);
     expect(newJobID).not.toBe(jobID);
     if (!newJobID) throw new Error("synthetic replacement export has no job ID");
-    await expect(archiveButton).toBeVisible({ timeout: 60_000 });
-    const recreatedDownloadResponse = ownerPage.waitForResponse(response => new URL(response.url()).pathname === `${EXPORT_CREATE_PATH}/${newJobID}/attachments` && response.request().method() === "GET");
-    const recreatedDownloadPromise = ownerPage.waitForEvent("download");
+    await expect(archiveButton).toBeVisible({ timeout: ARCHIVE_READY_TIMEOUT_MS });
+    const recreatedDownloadResponse = ownerPage.waitForResponse(response => new URL(response.url()).pathname === `${EXPORT_CREATE_PATH}/${newJobID}/attachments` && response.request().method() === "GET", { timeout: HTTP_DOWNLOAD_TIMEOUT_MS });
+    const recreatedDownloadPromise = ownerPage.waitForEvent("download", { timeout: HTTP_DOWNLOAD_TIMEOUT_MS });
     await archiveButton.click();
     expect((await recreatedDownloadResponse).status()).toBe(200);
     const recreatedDownload = await recreatedDownloadPromise;
