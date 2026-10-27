@@ -211,6 +211,35 @@ func TestAcceptAndDeclinePendingDMSerialize(t *testing.T) {
 	}
 }
 
+func TestDeclinePendingRemovesDependentsOnConfiguredBackend(t *testing.T) {
+	db := newTestDB(t)
+	seedDMUsers(t, db)
+	ctx := context.Background()
+	repo := NewSQLiteDMRepo(wrapForRepo(db))
+	channel := newDMChannel(t, ctx, repo, dmAlice, dmBob, models.DMStatusPending)
+	if err := repo.SetInitiatedBy(ctx, channel.ID, dmAlice); err != nil {
+		t.Fatal(err)
+	}
+	message := newDMMessage(t, ctx, repo, channel.ID, dmAlice, "hello")
+	seedDMDeclineDependents(t, db, channel.ID, message.ID)
+	changed, _, _, err := repo.(PendingDMDecliner).DeclinePending(ctx, channel.ID, dmBob)
+	if err != nil || !changed {
+		t.Fatalf("decline changed=%v err=%v", changed, err)
+	}
+	for _, check := range []struct {
+		query string
+		arg   string
+	}{
+		{`SELECT COUNT(*) FROM dm_reactions WHERE dm_message_id=?`, message.ID},
+		{`SELECT COUNT(*) FROM email_delivery_jobs WHERE dm_message_id=?`, message.ID},
+		{`SELECT COUNT(*) FROM user_dm_settings WHERE dm_channel_id=?`, channel.ID},
+	} {
+		if n := countRows(t, db, check.query, check.arg); n != 0 {
+			t.Errorf("%s count=%d, want 0", check.query, n)
+		}
+	}
+}
+
 func newSQLiteTestDB(t testing.TB) *database.DB {
 	t.Helper()
 	db, _ := newSQLiteTestDBWithPath(t)
