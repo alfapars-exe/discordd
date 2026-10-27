@@ -136,15 +136,20 @@ func safeCSPHost(host string) bool {
 	if net.ParseIP(host) != nil {
 		return true
 	}
-	if len(host) == 0 || len(host) > 253 {
+	if host == "" || len(host) > 253 {
 		return false
 	}
 	for _, label := range strings.Split(host, ".") {
-		if len(label) == 0 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
 			return false
 		}
 		for _, r := range label {
-			if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-') {
+			switch {
+			case r >= 'a' && r <= 'z':
+			case r >= 'A' && r <= 'Z':
+			case r >= '0' && r <= '9':
+			case r == '-':
+			default:
 				return false
 			}
 		}
