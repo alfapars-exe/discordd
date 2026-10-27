@@ -73,3 +73,11 @@ type GameActivityMembershipSnapshotRepository interface {
 	AddMemberWithGameActivityAudience(ctx context.Context, serverID, userID string, allowed bool) error
 	GetMemberGameActivityAudience(ctx context.Context, serverID, userID string) (*bool, error)
 }
+
+// ProfileAudienceSharedServerReader is an optional bulk capability for
+// evaluating small-server profile visibility without a query per roster
+// member. Results include targets sharing at least one server with viewer
+// whose member count does not exceed maxMembers.
+type ProfileAudienceSharedServerReader interface {
+	ListSmallSharedServerUserIDs(ctx context.Context, viewerID string, targetIDs []string, maxMembers int) (map[string]bool, error)
+}

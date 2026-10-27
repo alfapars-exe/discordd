@@ -50,43 +50,134 @@ func (r *sqlitePreferencesRepo) Get(ctx context.Context, userID string) (*models
 	return &p, nil
 }
 
+// GetManyStrict is a bounded bulk reader for profile audience checks. Unlike
+// notification fanout's tolerant GetMany contract, malformed preferences
+// fail the privacy read so they can never default to all_servers.
+func (r *sqlitePreferencesRepo) GetManyStrict(ctx context.Context, userIDs []string) (map[string]*models.UserPreferences, error) {
+	const batchSize = 400
+	result := make(map[string]*models.UserPreferences, len(userIDs))
+	unique := make([]string, 0, len(userIDs))
+	seen := make(map[string]struct{}, len(userIDs))
+	for _, id := range userIDs {
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		unique = append(unique, id)
+		result[id] = &models.UserPreferences{SchemaVersion: models.PreferencesSchemaVersion, UserID: id, Data: json.RawMessage(`{}`)}
+	}
+	for start := 0; start < len(unique); start += batchSize {
+		end := start + batchSize
+		if end > len(unique) {
+			end = len(unique)
+		}
+		ids := unique[start:end]
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+		rows, err := r.db.QueryContext(ctx,
+			`SELECT user_id, data, updated_at FROM user_preferences WHERE user_id IN (`+placeholders+`)`,
+			stringArgs(ids)...,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("read preferences batch: %w", err)
+		}
+		for rows.Next() {
+			var id, raw string
+			var updatedAt string
+			if err := rows.Scan(&id, &raw, &updatedAt); err != nil {
+				_ = rows.Close()
+				return nil, fmt.Errorf("scan preferences batch: %w", err)
+			}
+			filtered, err := models.FilterDeviceLocalPreferences(json.RawMessage(raw))
+			if err != nil {
+				_ = rows.Close()
+				return nil, fmt.Errorf("filter preferences batch: %w", err)
+			}
+			result[id] = &models.UserPreferences{SchemaVersion: models.PreferencesSchemaVersion, UserID: id, Data: filtered, UpdatedAt: updatedAt}
+		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return nil, fmt.Errorf("iterate preferences batch: %w", err)
+		}
+		if err := rows.Close(); err != nil {
+			return nil, fmt.Errorf("close preferences batch: %w", err)
+		}
+	}
+	return result, nil
+}
+
+func stringArgs(values []string) []any {
+	args := make([]any, len(values))
+	for i := range values {
+		args[i] = values[i]
+	}
+	return args
+}
+
+// GetMany tolerates corrupt rows as opt-out so a single bad preference cannot
+// poison or starve a notification fanout page. Privacy-sensitive callers must
+// use GetManyStrict instead.
 func (r *sqlitePreferencesRepo) GetMany(ctx context.Context, userIDs []string) (map[string]*models.UserPreferences, error) {
 	out := make(map[string]*models.UserPreferences, len(userIDs))
 	if len(userIDs) == 0 {
 		return out, nil
 	}
-	placeholders := make([]string, len(userIDs))
-	args := make([]any, len(userIDs))
-	for i, id := range userIDs {
-		placeholders[i] = "?"
-		args[i] = id
-	}
-	rows, err := r.db.QueryContext(ctx, `SELECT user_id,data,updated_at FROM user_preferences WHERE user_id IN (`+strings.Join(placeholders, ",")+`)`, args...)
-	if err != nil {
-		return nil, fmt.Errorf("read preferences batch: %w", err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		p := &models.UserPreferences{SchemaVersion: models.PreferencesSchemaVersion}
-		var raw string
-		if err = rows.Scan(&p.UserID, &raw, &p.UpdatedAt); err != nil {
-			return nil, fmt.Errorf("scan preferences batch: %w", err)
-		}
-		// Corrupt stored data is opt-out for this recipient. Do not let one
-		// malformed row poison and repeatedly retry an otherwise healthy page.
-		if !json.Valid([]byte(raw)) {
-			p.Data = json.RawMessage(`{}`)
-			out[p.UserID] = p
+	unique := make([]string, 0, len(userIDs))
+	seen := make(map[string]struct{}, len(userIDs))
+	for _, id := range userIDs {
+		if id == "" {
 			continue
 		}
-		p.Data, err = models.FilterDeviceLocalPreferences(json.RawMessage(raw))
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		unique = append(unique, id)
+	}
+	const batchSize = 400
+	for start := 0; start < len(unique); start += batchSize {
+		end := start + batchSize
+		if end > len(unique) {
+			end = len(unique)
+		}
+		ids := unique[start:end]
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+		rows, err := r.db.QueryContext(ctx,
+			`SELECT user_id, data, updated_at FROM user_preferences WHERE user_id IN (`+placeholders+`)`,
+			stringArgs(ids)...,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("read preferences batch: %w", err)
 		}
-		out[p.UserID] = p
-	}
-	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate preferences batch: %w", err)
+		for rows.Next() {
+			p := &models.UserPreferences{SchemaVersion: models.PreferencesSchemaVersion}
+			var raw string
+			if err = rows.Scan(&p.UserID, &raw, &p.UpdatedAt); err != nil {
+				_ = rows.Close()
+				return nil, fmt.Errorf("scan preferences batch: %w", err)
+			}
+			// A malformed row is opt-out for this recipient. Keep fanout moving.
+			if !json.Valid([]byte(raw)) {
+				p.Data = json.RawMessage(`{}`)
+				out[p.UserID] = p
+				continue
+			}
+			p.Data, err = models.FilterDeviceLocalPreferences(json.RawMessage(raw))
+			if err != nil {
+				_ = rows.Close()
+				return nil, fmt.Errorf("read preferences batch: %w", err)
+			}
+			out[p.UserID] = p
+		}
+		if err = rows.Err(); err != nil {
+			_ = rows.Close()
+			return nil, fmt.Errorf("iterate preferences batch: %w", err)
+		}
+		if err = rows.Close(); err != nil {
+			return nil, fmt.Errorf("close preferences batch: %w", err)
+		}
 	}
 	return out, nil
 }

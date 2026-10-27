@@ -8,6 +8,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/argeinfina/hichat/database"
@@ -265,6 +266,56 @@ func (r *sqliteFriendshipRepo) IsBlocked(ctx context.Context, userA, userB strin
 		return false, fmt.Errorf("friendship is blocked check: %w", err)
 	}
 	return exists, nil
+}
+
+func (r *sqliteFriendshipRepo) ListBlockedUserIDs(ctx context.Context, userID string, candidateIDs []string) (map[string]bool, error) {
+	blocked := make(map[string]bool)
+	const batchSize = 300
+	for start := 0; start < len(candidateIDs); start += batchSize {
+		end := start + batchSize
+		if end > len(candidateIDs) {
+			end = len(candidateIDs)
+		}
+		ids := candidateIDs[start:end]
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+		args := make([]any, 0, len(ids)*2+2)
+		args = append(args, userID)
+		for _, id := range ids {
+			args = append(args, id)
+		}
+		args = append(args, userID)
+		for _, id := range ids {
+			args = append(args, id)
+		}
+		rows, err := r.db.QueryContext(ctx, `SELECT user_id, friend_id FROM friendships
+			WHERE status = 'blocked' AND (
+				(user_id = ? AND friend_id IN (`+placeholders+`)) OR
+				(friend_id = ? AND user_id IN (`+placeholders+`))
+			)`, args...)
+		if err != nil {
+			return nil, fmt.Errorf("list profile audience blocks: %w", err)
+		}
+		for rows.Next() {
+			var blocker, blockedID string
+			if err := rows.Scan(&blocker, &blockedID); err != nil {
+				_ = rows.Close()
+				return nil, fmt.Errorf("scan profile audience block: %w", err)
+			}
+			if blocker == userID {
+				blocked[blockedID] = true
+			} else {
+				blocked[blocker] = true
+			}
+		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return nil, fmt.Errorf("iterate profile audience blocks: %w", err)
+		}
+		if err := rows.Close(); err != nil {
+			return nil, fmt.Errorf("close profile audience blocks: %w", err)
+		}
+	}
+	return blocked, nil
 }
 
 // scanFriendshipList is a shared scan helper for ListIncoming, ListOutgoing, and ListBlocked.

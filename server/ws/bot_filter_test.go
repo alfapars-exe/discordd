@@ -39,6 +39,7 @@ func TestBotReadableOps_WithholdsSensitive(t *testing.T) {
 		OpPresenceUpdate,
 		OpGameActivityUpdate,
 		OpPreferencesChanged,
+		OpProfileAudienceInvalidated,
 		OpFriendRequestCreate,
 	}
 	for _, op := range withheld {

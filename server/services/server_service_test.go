@@ -17,6 +17,7 @@ import (
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/testutil"
+	"github.com/argeinfina/hichat/ws"
 )
 
 // passthroughMembershipTxRunner satisfies repository.ServerMembershipTxRunner
@@ -135,6 +136,32 @@ func TestJoinServer_ValidInvite_AddsMemberAndMarksUsed(t *testing.T) {
 	}
 	if !assignRoleCalled {
 		t.Error("expected default role to be assigned")
+	}
+}
+
+func TestJoinServerMemberBroadcastRedactsProfileFields(t *testing.T) {
+	h := newJoinServerHarness()
+	bio := "profile only"
+	h.userRepo.GetByIDFn = func(_ context.Context, id string) (*models.User, error) {
+		return &models.User{ID: id, Username: "joiner", Bio: &bio}, nil
+	}
+	var broadcast ws.Event
+	h.hub.BroadcastToServerFn = func(serverID string, event ws.Event) {
+		if serverID == joinTestServerID && event.Op == ws.OpMemberJoin {
+			broadcast = event
+		}
+	}
+	if _, err := h.svc.JoinServer(context.Background(), joinTestUserID, joinTestCode); err != nil {
+		t.Fatal(err)
+	}
+	member, ok := broadcast.Data.(models.MemberWithRoles)
+	if !ok {
+		if pointer, pointerOK := broadcast.Data.(*models.MemberWithRoles); pointerOK && pointer != nil {
+			member, ok = *pointer, true
+		}
+	}
+	if !ok || member.Bio != nil || !member.ProfileFieldsRedacted {
+		t.Fatalf("member_join broadcast exposed profile data: %#v", broadcast.Data)
 	}
 }
 

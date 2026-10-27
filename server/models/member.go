@@ -45,6 +45,24 @@ type MemberWithRoles struct {
 	Bio               *string `json:"bio"`
 	Pronouns          *string `json:"pronouns"`
 	AccentColor       *string `json:"accent_color"`
+	// ProfileFieldsRedacted marks an audience-filtered or invalidation payload.
+	// Clients can refetch through the same server-side policy to refresh fields.
+	ProfileFieldsRedacted bool `json:"profile_fields_redacted,omitempty"`
+}
+
+// RedactProfileFields clears optional profile-card data before a broad
+// broadcast or a response whose viewer failed the profile audience policy.
+func (m *MemberWithRoles) RedactProfileFields() {
+	if m == nil {
+		return
+	}
+	m.AvatarAnimatedURL = nil
+	m.BannerURL = nil
+	m.BannerAnimatedURL = nil
+	m.Bio = nil
+	m.Pronouns = nil
+	m.AccentColor = nil
+	m.ProfileFieldsRedacted = true
 }
 
 // ToMemberWithRoles builds a MemberWithRoles from a User and their roles.

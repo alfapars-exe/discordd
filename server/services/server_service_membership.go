@@ -161,6 +161,7 @@ func (s *serverService) JoinServer(ctx context.Context, userID, inviteCode strin
 	} else {
 		roles, _ := s.roleRepo.GetByUserIDAndServer(ctx, userID, serverID)
 		member := models.ToMemberWithRoles(user, roles)
+		member.RedactProfileFields()
 		s.hub.BroadcastToServer(serverID, ws.Event{
 			Op:   ws.OpMemberJoin,
 			Data: member,
