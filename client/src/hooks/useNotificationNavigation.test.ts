@@ -1,5 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Channel } from "../types";
 
 const mocks = vi.hoisted(() => ({
   userId: "u1" as string | null,
@@ -11,10 +12,10 @@ const mocks = vi.hoisted(() => ({
   ignoredUsers: {} as Record<string, boolean>,
   mutedChannels: new Set<string>(),
   mutedServers: new Set<string>(),
-  channelMemberState: { ownerId: "u1" as string | null, authGeneration: 7, statusByServer: { "server-1": "ready" }, loadingServers: new Set<string>(), membersByServer: { "server-1": [{ id: "u1", roles: [{ id: "role" }], effective_permissions: 6144 }] } } as any,
-  channelOverridesState: { overridesByChannel: { "channel-1": [] }, statusByChannel: { "channel-1": { serverId: "server-1", ownerId: "u1", authGeneration: 7, status: "ready" } } } as any,
+  channelMemberState: { ownerId: "u1" as string | null, authGeneration: 7, statusByServer: { "server-1": "ready" }, loadingServers: new Set<string>(), membersByServer: { "server-1": [{ id: "u1", roles: [{ id: "role" }], effective_permissions: 6144 }] } } as { ownerId: string | null; authGeneration: number; statusByServer: Record<string, string>; loadingServers: Set<string>; membersByServer: Record<string, { id: string; roles: { id: string }[]; effective_permissions: number }[]> },
+  channelOverridesState: { overridesByChannel: { "channel-1": [] }, statusByChannel: { "channel-1": { serverId: "server-1", ownerId: "u1", authGeneration: 7, status: "ready" } } } as { overridesByChannel: Record<string, { role_id: string; allow: number; deny: number }[]>; statusByChannel: Record<string, { serverId: string; ownerId: string; authGeneration: number; status: string }> },
   channelTree: [] as { channels: { id: string; type?: string }[] }[],
-  threadState: { ownerId: "u1" as string | null, authGeneration: 7, byID: {} as Record<string, any>, serverIdByThread: {} as Record<string, string>, statusByParent: {} as Record<string, "loading" | "ready" | "error">, statusByThread: {} as Record<string, "loading" | "ready" | "error"> },
+  threadState: { ownerId: "u1" as string | null, authGeneration: 7, byID: {} as Record<string, Partial<Channel>>, serverIdByThread: {} as Record<string, string>, statusByParent: {} as Record<string, "loading" | "ready" | "error">, statusByThread: {} as Record<string, "loading" | "ready" | "error"> },
   dmChannels: [] as { id: string; status: string; is_muted: boolean; other_user: { id: string } }[],
   groups: [] as { id: string; name: string; key_epoch?:number;read_key_epoch?:number;is_muted?:boolean; members: { id: string }[] }[],
   markRead: vi.fn(),

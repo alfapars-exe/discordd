@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
-	"strings"
 
 	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/models"
@@ -113,27 +112,18 @@ func (r *sqliteChannelMessageNotificationQueue) SuppressedRecipients(ctx context
 	if len(userIDs) == 0 {
 		return out, nil
 	}
-	pl := make([]string, len(userIDs))
-	args := make([]any, 0, len(userIDs)+2)
-	args = append(args, job.ServerID)
-	for i, id := range userIDs {
-		pl[i] = "?"
-		args = append(args, id)
+	userIDsJSON, err := json.Marshal(userIDs)
+	if err != nil {
+		return nil, err
 	}
-	args = append(args, job.ActorID)
 	query := `SELECT sm.user_id,
 	 EXISTS(SELECT 1 FROM channel_mutes cm WHERE cm.user_id=sm.user_id AND cm.channel_id IN(c.id,c.parent_channel_id) AND (cm.muted_until IS NULL OR cm.muted_until>CURRENT_TIMESTAMP)),
 	 EXISTS(SELECT 1 FROM server_mutes mu WHERE mu.user_id=sm.user_id AND mu.server_id=c.server_id AND (mu.muted_until IS NULL OR mu.muted_until>CURRENT_TIMESTAMP)),
 	 EXISTS(SELECT 1 FROM friendships f WHERE f.status='blocked' AND ((f.user_id=sm.user_id AND f.friend_id=?) OR (f.user_id=? AND f.friend_id=sm.user_id))),
 	 EXISTS(SELECT 1 FROM json_each(CASE WHEN json_valid(p.data) THEN COALESCE(json_extract(p.data,'$.privacy.ignoredUsers'),'{}') ELSE '{}' END) WHERE key=? AND value=1)
 	 FROM server_members sm JOIN channels c ON c.id=? JOIN user_preferences p ON p.user_id=sm.user_id
-	 WHERE sm.server_id=? AND sm.user_id IN (` + strings.Join(pl, ",") + `)`
-	// Keep the common query unambiguous: the server and actor are captured by
-	// scalar predicates, while the candidate IDs remain a bounded IN list.
-	args = []any{job.ActorID, job.ActorID, job.ActorID, job.ChannelID, job.ServerID}
-	for _, id := range userIDs {
-		args = append(args, id)
-	}
+	 WHERE sm.server_id=? AND sm.user_id IN (SELECT value FROM json_each(?))`
+	args := []any{job.ActorID, job.ActorID, job.ActorID, job.ChannelID, job.ServerID, string(userIDsJSON)}
 	if r.postgres {
 		query = `SELECT sm.user_id,
 		 EXISTS(SELECT 1 FROM channel_mutes cm WHERE cm.user_id=sm.user_id AND cm.channel_id IN(c.id,c.parent_channel_id) AND (cm.muted_until IS NULL OR cm.muted_until>CURRENT_TIMESTAMP)),
@@ -141,7 +131,8 @@ func (r *sqliteChannelMessageNotificationQueue) SuppressedRecipients(ctx context
 		 EXISTS(SELECT 1 FROM friendships f WHERE f.status='blocked' AND ((f.user_id=sm.user_id AND f.friend_id=?) OR (f.user_id=? AND f.friend_id=sm.user_id))),
 		 COALESCE((CASE WHEN pg_input_is_valid(p.data,'jsonb') THEN p.data::jsonb ELSE '{}'::jsonb END #> '{privacy,ignoredUsers}') ->> ?,'false')='true'
 		 FROM server_members sm JOIN channels c ON c.id=? JOIN user_preferences p ON p.user_id=sm.user_id
-		 WHERE sm.server_id=? AND sm.user_id IN (` + strings.Join(pl, ",") + `)`
+		 WHERE sm.server_id=? AND sm.user_id IN (SELECT jsonb_array_elements_text(?::jsonb))`
+		args[len(args)-1] = string(userIDsJSON)
 	}
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -200,12 +191,11 @@ func (r *sqliteChannelMessageNotificationQueue) CommitBatch(ctx context.Context,
 		}
 		sort.Strings(orderedUsers)
 		if len(orderedUsers) > 0 {
-			values := make([]string, len(orderedUsers))
-			args := make([]any, len(orderedUsers))
-			for i, id := range orderedUsers {
-				values[i], args[i] = "(?)", id
+			orderedUsersJSON, marshalErr := json.Marshal(orderedUsers)
+			if marshalErr != nil {
+				return nil, false, marshalErr
 			}
-			rows, lockErr := tx.QueryContext(ctx, `WITH sorted_users AS MATERIALIZED (SELECT policy.user_id FROM (VALUES `+strings.Join(values, ",")+`) AS policy(user_id) ORDER BY policy.user_id) SELECT pg_advisory_xact_lock(hashtextextended('user:' || sorted_users.user_id,0)) FROM sorted_users`, args...)
+			rows, lockErr := tx.QueryContext(ctx, `WITH sorted_users AS MATERIALIZED (SELECT user_id FROM jsonb_array_elements_text(?::jsonb) AS policy(user_id) ORDER BY user_id) SELECT pg_advisory_xact_lock(hashtextextended('user:' || sorted_users.user_id,0)) FROM sorted_users`, string(orderedUsersJSON))
 			if lockErr != nil {
 				return nil, false, lockErr
 			}
@@ -348,15 +338,20 @@ func channelReadAccessInTx(ctx context.Context, tx *sql.Tx, db *sql.DB, job *Cha
 		}
 		channelID = parent.String
 	}
-	placeholders := make([]string, len(eligible))
-	args := make([]any, 0, len(eligible)+1)
-	args = append(args, job.ServerID)
-	for i, n := range eligible {
-		placeholders[i] = "?"
-		args = append(args, n.UserID)
+	eligibleIDs := make([]string, 0, len(eligible))
+	for _, n := range eligible {
+		eligibleIDs = append(eligibleIDs, n.UserID)
 	}
-	roleQuery := `SELECT ur.user_id,r.id,r.permissions FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE ur.server_id=? AND ur.user_id IN (` + strings.Join(placeholders, ",") + `)`
-	rows, err := tx.QueryContext(ctx, roleQuery, args...)
+	eligibleIDsJSON, err := json.Marshal(eligibleIDs)
+	if err != nil {
+		return nil, err
+	}
+	roleQuery := `SELECT ur.user_id,r.id,r.permissions FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE ur.server_id=? AND ur.user_id IN (SELECT value FROM json_each(?))`
+	roleArgs := []any{job.ServerID, string(eligibleIDsJSON)}
+	if database.IsPostgres(db) {
+		roleQuery = `SELECT ur.user_id,r.id,r.permissions FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE ur.server_id=? AND ur.user_id IN (SELECT jsonb_array_elements_text(?::jsonb))`
+	}
+	rows, err := tx.QueryContext(ctx, roleQuery, roleArgs...)
 	if err != nil {
 		return nil, err
 	}
