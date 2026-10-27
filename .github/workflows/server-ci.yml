@@ -499,6 +499,11 @@ jobs:
       - name: Install root deps
         run: npm ci
 
+      # Resolve Electron once before node:test starts its files in parallel.
+      # Otherwise concurrent imports can race Electron's lazy binary install.
+      - name: Resolve Electron binary
+        run: npx electron --version
+
       - name: electron:test (resolve-path + regression suite)
         run: npm run electron:test
 
