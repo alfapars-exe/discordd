@@ -1,0 +1,389 @@
+{
+  "date": "2026-10-27",
+  "status": "partial_failure",
+  "live_environment": "Production HiChat API, WebSocket and LiveKit; two distinct authenticated accounts in a temporary voice channel",
+  "client_source_revision": "8f443aac23649e8468a320850498e823826a0c5f",
+  "test_method": "Production-source WS handlers and sound playback instrumented in browser clients; generated oscillator audio and canvas video. Physical microphones and a full end-to-end app UI call were not validated.",
+  "notification_results": {
+    "participant_join": "pass: one recorded join cue at the existing participant on peer rejoin",
+    "participant_leave": "pass: one recorded leave cue at the remaining participant",
+    "stream_start": "pass: one recorded streamStart cue per transition at the other participant",
+    "stream_stop": "pass: one recorded streamStop cue per transition at the other participant",
+    "viewer_join": "pass: recorded watchStart at broadcaster only in the instrumented client module",
+    "ws_reconnect_initial_sync": "pass: recorded cue count unchanged (5 before, 5 after), real ready and voice_states_sync received"
+  },
+  "media_results": {
+    "encrypted_room_connection": "pass: both connected with E2EE enabled",
+    "video": "pass: received 320x180 video, more than 2000 frames decoded",
+    "audio": "FAIL / unverified: outbound generated audio energy was nonzero and inbound Opus bytes increased, but receiver totalAudioEnergy and decoded sample counts remained zero in both instrumented clients. This does not establish a product regression independently of the harness.",
+    "red_disabled_diagnostic": "A fresh encrypted connection with RED and DTX disabled did not resolve the zero-sample observation; no production media setting was changed."
+  },
+  "lint_results": {
+    "local_client": "ESLint: 0 errors, 6 pre-existing warnings; InviteFriendsModal 12 tests and client production build passed",
+    "local_go": "CI-pinned Go 1.26.10 and golangci-lint 2.12.2: 0 issues; targeted database/repository/service tests and Go build passed",
+    "concurrent_resolution": "The same five lint fixes landed on origin/main while the isolated change was being validated; redundant local commit 331fdcfe was skipped during rebase instead of overwriting them.",
+    "github_ci": {
+      "run": 40461915155,
+      "head": "a0a8ccc46a01817dc863305af0d9a7a726db9986",
+      "golangci_lint": "success",
+      "client_lint_type_test_build": "success",
+      "other_failures": [
+        "Electron main-process tests",
+        "PostgreSQL repository and migration contracts",
+        "Go test & build"
+      ]
+    }
+  },
+  "cleanup": {
+    "disposableAccountsRemaining": 0,
+    "testChannelRemaining": false,
+    "testInvitesRemaining": false,
+    "originalAccountPreserved": true
+  },
+  "observations": {
+    "date": "2026-10-27",
+    "environment": "production HiChat API and LiveKit, browser clients instrumented with production source modules",
+    "accounts": 2,
+    "mediaSource": "generated oscillator audio and canvas video; no physical microphone validation",
+    "a": {
+      "connected": "connected",
+      "encryption": true,
+      "cues": [
+        {
+          "event": "watchStart",
+          "at": 1793084737719,
+          "duration": 0.9734791666666667
+        },
+        {
+          "event": "watchStart",
+          "at": 1793084737719,
+          "duration": 0.9734791666666667
+        },
+        {
+          "event": "watchStart",
+          "at": 1793085015765,
+          "duration": 0.9734791666666667
+        },
+        {
+          "event": "watchStart",
+          "at": 1793085015766,
+          "duration": 0.9734791666666667
+        },
+        {
+          "event": "leave",
+          "at": 1793085048175,
+          "duration": 1.6065208333333334
+        },
+        {
+          "event": "join",
+          "at": 1793085088018,
+          "duration": 0.8629375
+        }
+      ],
+      "events": [
+        {
+          "op": "voice_states_sync",
+          "at": 1793084570978
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "streaming": false,
+          "at": 1793084615159
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "streaming": false,
+          "at": 1793084619065
+        },
+        {
+          "op": "voice_state_update",
+          "action": "update",
+          "streaming": true,
+          "at": 1793084719030
+        },
+        {
+          "op": "screen_share_viewer_update",
+          "action": "join",
+          "at": 1793084737566
+        },
+        {
+          "op": "voice_state_update",
+          "action": "update",
+          "streaming": false,
+          "at": 1793084936514
+        },
+        {
+          "op": "screen_share_viewer_update",
+          "action": "leave",
+          "at": 1793084936991
+        },
+        {
+          "op": "voice_state_update",
+          "action": "update",
+          "streaming": true,
+          "at": 1793085015014
+        },
+        {
+          "op": "screen_share_viewer_update",
+          "action": "join",
+          "at": 1793085015766
+        },
+        {
+          "op": "voice_state_update",
+          "action": "update",
+          "streaming": false,
+          "at": 1793085047031
+        },
+        {
+          "op": "screen_share_viewer_update",
+          "action": "leave",
+          "at": 1793085047523
+        },
+        {
+          "op": "voice_state_update",
+          "action": "leave",
+          "streaming": false,
+          "at": 1793085048020
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "streaming": false,
+          "at": 1793085088018
+        }
+      ],
+      "errors": [],
+      "received": [
+        {
+          "kind": "audio",
+          "source": "microphone"
+        },
+        {
+          "kind": "audio",
+          "source": "microphone"
+        }
+      ],
+      "remote": [
+        {
+          "kind": "audio",
+          "bytesReceived": 33716,
+          "packetsReceived": 228,
+          "totalAudioEnergy": 0
+        }
+      ],
+      "audioSignal": [
+        0,
+        0
+      ]
+    },
+    "b": {
+      "connected": "connected",
+      "encryption": true,
+      "cues": [
+        {
+          "event": "join",
+          "at": 1793084615314,
+          "duration": 0.8629375
+        },
+        {
+          "event": "join",
+          "at": 1793084619085,
+          "duration": 0.8629375
+        },
+        {
+          "event": "streamStart",
+          "at": 1793084719190,
+          "duration": 0.9498958333333334
+        },
+        {
+          "event": "watchStart",
+          "at": 1793084737720,
+          "duration": 0.9734791666666667
+        },
+        {
+          "event": "streamStop",
+          "at": 1793084936668,
+          "duration": 1.0325208333333333
+        },
+        {
+          "event": "streamStart",
+          "at": 1793085015014,
+          "duration": 0.9498958333333334
+        },
+        {
+          "event": "watchStart",
+          "at": 1793085015763,
+          "duration": 0.9734791666666667
+        },
+        {
+          "event": "streamStop",
+          "at": 1793085047030,
+          "duration": 1.0325208333333333
+        },
+        {
+          "event": "leave",
+          "at": 1793085048175,
+          "duration": 1.6065208333333334
+        },
+        {
+          "event": "join",
+          "at": 1793085088017,
+          "duration": 0.8629375
+        }
+      ],
+      "events": [
+        {
+          "op": "voice_states_sync",
+          "at": 1793084580731
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "streaming": false,
+          "at": 1793084615192
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "streaming": false,
+          "at": 1793084619067
+        },
+        {
+          "op": "voice_state_update",
+          "action": "update",
+          "streaming": true,
+          "at": 1793084719033
+        },
+        {
+          "op": "screen_share_viewer_update",
+          "action": "join",
+          "at": 1793084737567
+        },
+        {
+          "op": "voice_state_update",
+          "action": "update",
+          "streaming": false,
+          "at": 1793084936514
+        },
+        {
+          "op": "screen_share_viewer_update",
+          "action": "leave",
+          "at": 1793084936987
+        },
+        {
+          "op": "voice_state_update",
+          "action": "update",
+          "streaming": true,
+          "at": 1793085015014
+        },
+        {
+          "op": "screen_share_viewer_update",
+          "action": "join",
+          "at": 1793085015767
+        },
+        {
+          "op": "voice_state_update",
+          "action": "update",
+          "streaming": false,
+          "at": 1793085047030
+        },
+        {
+          "op": "screen_share_viewer_update",
+          "action": "leave",
+          "at": 1793085047524
+        },
+        {
+          "op": "voice_state_update",
+          "action": "leave",
+          "streaming": false,
+          "at": 1793085048019
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "streaming": false,
+          "at": 1793085088016
+        },
+        {
+          "op": "voice_states_sync",
+          "at": 1793085090489
+        }
+      ],
+      "errors": [],
+      "received": [
+        {
+          "kind": "audio",
+          "source": "microphone"
+        },
+        {
+          "kind": "video",
+          "source": "screen_share"
+        },
+        {
+          "kind": "audio",
+          "source": "microphone"
+        },
+        {
+          "kind": "audio",
+          "source": "microphone"
+        },
+        {
+          "kind": "audio",
+          "source": "microphone"
+        }
+      ],
+      "remote": [
+        {
+          "kind": "audio",
+          "bytesReceived": 160371,
+          "packetsReceived": 239,
+          "totalAudioEnergy": 0
+        }
+      ],
+      "audioSignal": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "filteredA": [
+      {
+        "event": "watchStart",
+        "at": 1793085015766
+      },
+      {
+        "event": "leave",
+        "at": 1793085048175
+      },
+      {
+        "event": "join",
+        "at": 1793085088018
+      }
+    ],
+    "filteredB": [
+      {
+        "event": "streamStop",
+        "at": 1793084936668
+      },
+      {
+        "event": "streamStart",
+        "at": 1793085015014
+      },
+      {
+        "event": "streamStop",
+        "at": 1793085047030
+      },
+      {
+        "event": "leave",
+        "at": 1793085048175
+      },
+      {
+        "event": "join",
+        "at": 1793085088017
+      }
+    ]
+  }
+}
