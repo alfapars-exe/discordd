@@ -61,13 +61,25 @@ try {
     & docker rm --force $container | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'could not remove configured-origin test container' }
 
+    # Bracketed IPv6 literals are valid exact URL authorities and must retain
+    # their brackets in the serialized CSP source.
+    Start-TestContainer -Arguments @('--env', 'LIVEKIT_CSP_WS_ORIGIN=ws://[2001:db8::8]:7880')
+    Wait-Nginx
+    $ipv6Response = (& docker exec $container sh -c 'wget -qSO- http://127.0.0.1/ 2>&1') -join "`n"
+    if ($LASTEXITCODE -ne 0) { throw 'IPv6-origin container did not serve the SPA' }
+    Assert-Contains $ipv6Response "connect-src 'self' wss: https: ws://[2001:db8::8]:7880;" 'response CSP lacks the exact bracketed IPv6 origin'
+    & docker rm --force $container | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'could not remove IPv6-origin test container' }
+
     # Malformed origins and CSP/token injection are rejected before nginx starts.
     $invalidOrigins = @(
         'ws://voice.example.test:7880; add_header X-Injected yes;',
         "ws://voice.example.test:7880`nws://attacker.example.test:7880",
         'wss://voice.example.test:7880',
         'ws://voice.example.test/path',
-        'ws://voice.example.test:65536'
+        'ws://voice.example.test:65536',
+        'ws://[2001:::1]:7880',
+        'ws://[2001:db8::1::2]:7880'
     )
     foreach ($invalidOrigin in $invalidOrigins) {
         $injection = "LIVEKIT_CSP_WS_ORIGIN=$invalidOrigin"
@@ -78,7 +90,7 @@ try {
         & docker rm --force $container 2>$null | Out-Null
     }
 
-    Write-Output 'PASS: production nginx default, exact ws:// origin, Nginx variable preservation, response CSP, malformed-origin rejection, and newline/token injection rejection.'
+    Write-Output 'PASS: production nginx default, exact DNS and IPv6 ws:// origins, Nginx variable preservation, response CSP, malformed-origin rejection, and newline/token injection rejection.'
 }
 finally {
     & docker rm --force $container 2>$null | Out-Null

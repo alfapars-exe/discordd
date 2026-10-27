@@ -197,12 +197,10 @@ docker run --rm -v "C:\Users\harun\OneDrive\Desktop\Discord\tayfa-deploy:/src" `
 #### 2.5 Nginx Config Syntax Test
 
 ```powershell
-# Docker ile
-docker run --rm `
-  -v "C:\Users\harun\OneDrive\Desktop\Discord\tayfa-deploy\client\nginx.conf:/etc/nginx/conf.d/default.conf:ro" `
-  nginx:alpine nginx -t
+# Repo kokunden calistir; production imajini kurup Nginx/CSP yanitlarini dogrular.
+powershell -NoProfile -ExecutionPolicy Bypass -File .\client\scripts\test-nginx-csp.ps1
 
-# Beklenen: "syntax is ok" + "test is successful"
+# Beklenen: PASS mesaji; config syntax'i, default/origin CSP ve injection reddi dogrulanir.
 ```
 
 #### 2.6 Native Build Doğrulaması
@@ -293,9 +291,8 @@ npx tsc --noEmit -p electron/tsconfig.json   # exit 0
 docker run --rm -v "${PWD}:/src" -w /src/server golang:1.25-bookworm `
   bash -c "apt-get install -yq gcc && go test ./..."
 
-# === NGINX ===
-docker run --rm -v "${PWD}/client/nginx.conf:/etc/nginx/conf.d/default.conf:ro" `
-  nginx:alpine nginx -t
+# === NGINX (repo kokunden) ===
+powershell -NoProfile -ExecutionPolicy Bypass -File .\client\scripts\test-nginx-csp.ps1
 
 # === SECURITY SMOKE ===
 # 1. .gitignore'da SSH key engellenmiş

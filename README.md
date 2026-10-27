@@ -215,6 +215,28 @@ Go to mqvi, create a new server, select **"Self-Hosted"**, and enter these 3 val
 
 Run the entire mqvi platform on your own infrastructure. Completely independent from mqvi.net — you control everything: accounts, messages, files, voice.
 
+### Optional Docker Nginx frontend
+
+The standard self-host installer serves the bundled web UI from the Go server; it does not use this separate frontend image. If your deployment runs the client in its own Nginx container, build it from the repository root so the shared Electron TypeScript contracts are included:
+
+```bash
+docker build --file client/Dockerfile --target production --tag hichat-client:local .
+```
+
+Set `LIVEKIT_CSP_WS_ORIGIN` **when starting the production Nginx container** only when browsers need to connect to a plaintext `ws://` LiveKit endpoint. It must be the exact browser-reachable origin (DNS/IPv4 host or bracketed hexadecimal IPv6 literal, with an optional port), with no path or trailing slash. IPv6 zone IDs and IPv4-embedded IPv6 forms are not accepted. The value is deployment config, not a build argument. For example:
+
+```bash
+docker run --detach --name hichat-client \
+  --network <backend-network> \
+  --publish 8080:80 \
+  --env LIVEKIT_CSP_WS_ORIGIN=ws://voice.example.com:7880 \
+  hichat-client:local
+```
+
+The browser must be able to reach that LiveKit address directly. The backend's `LIVEKIT_URL` is a separate server-side setting and may use a Docker-only hostname; do not use that internal hostname for `LIVEKIT_CSP_WS_ORIGIN`. This Nginx config forwards `/api` and `/ws` to `server:8080`, so the backend must be reachable by that name and port on the selected network (or update the proxy target for your deployment).
+
+For an HTTPS web app, use a `wss://` LiveKit URL instead: browsers block plaintext `ws://` as mixed content on HTTPS pages. The baseline CSP already allows `wss:` and `https:`, so leave `LIVEKIT_CSP_WS_ORIGIN` unset in that setup. The repository Compose `client` service remains the Vite development server; it does not run this production Nginx image.
+
 ### Requirements
 
 - Linux server (Ubuntu 22.04+ / Debian 12+ recommended), x86_64 or arm64
