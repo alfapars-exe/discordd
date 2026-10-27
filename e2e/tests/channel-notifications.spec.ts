@@ -43,7 +43,9 @@ async function setChannelNoticePreference(page: Page, enabled: boolean): Promise
     });
     // The checkbox is visually hidden (width/height 0); click its visible
     // switch label, which is the control a user actually operates.
-    await settings.locator("label.vs-switch").filter({ has: toggle }).click();
+    const switchLabel = toggle.locator("xpath=..");
+    await expect(switchLabel).toHaveClass(/\bvs-switch\b/);
+    await switchLabel.click();
     await saved;
     await expect(toggle).toBeChecked({ checked: enabled });
   }
