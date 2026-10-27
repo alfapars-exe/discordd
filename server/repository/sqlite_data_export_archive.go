@@ -67,9 +67,10 @@ func exportAttachmentFromRow(section string, row map[string]any) (exportAttachme
 		return exportAttachment{}, err
 	}
 	messageKey, conversationKey := "message_id", "channel_id"
-	if section == "direct_message_attachments" {
+	switch section {
+	case "direct_message_attachments":
 		messageKey, conversationKey = "dm_message_id", "dm_channel_id"
-	} else if section == "group_attachments" {
+	case "group_attachments":
 		messageKey, conversationKey = "group_message_id", "group_id"
 	}
 	messageID, err := str(messageKey)
@@ -156,6 +157,9 @@ func EnsureDataExportStorage(uploadDir, archiveDir string) error {
 		return errors.New("export directory must be a real directory")
 	}
 	if runtime.GOOS != "windows" {
+		// Directory traversal requires execute/search bits; 0700 keeps access
+		// restricted to the owner.
+		// #nosec G302 -- Owner-only directory permissions require execute/search bits.
 		if err := os.Chmod(archiveDir, 0o700); err != nil {
 			return fmt.Errorf("restrict export directory permissions: %w", err)
 		}
@@ -570,7 +574,7 @@ func (r *sqliteDataExportRepo) claimPendingArchive(ctx context.Context) (*pendin
 		}
 		quota := false
 		err = database.WithTx(ctx, raw, func(tx *sql.Tx) error {
-			budget, err := tx.ExecContext(ctx, `UPDATE data_export_archive_budget SET reserved_bytes=reserved_bytes+1 WHERE id=1 AND reserved_bytes+1<=?`, r.maxTotalArchiveBytes)
+			budget, err := tx.ExecContext(ctx, `UPDATE data_export_archive_budget SET reserved_bytes=reserved_bytes-? WHERE id=1 AND reserved_bytes-?<=?`, -1, -1, r.maxTotalArchiveBytes)
 			if err != nil {
 				return err
 			}
@@ -774,7 +778,7 @@ func (r *sqliteDataExportRepo) reserveArchiveBudget(ctx context.Context, job pen
 			return lookupErr
 		}
 		delta := amount - previous
-		result, err := tx.ExecContext(ctx, `UPDATE data_export_archive_budget SET reserved_bytes=reserved_bytes+? WHERE id=1 AND reserved_bytes+?>=0 AND reserved_bytes+?<=?`, delta, delta, delta, r.maxTotalArchiveBytes)
+		result, err := tx.ExecContext(ctx, `UPDATE data_export_archive_budget SET reserved_bytes=reserved_bytes-? WHERE id=1 AND reserved_bytes-?>=0 AND reserved_bytes-?<=?`, -delta, -delta, -delta, r.maxTotalArchiveBytes)
 		if err != nil {
 			return err
 		}
@@ -846,7 +850,8 @@ func (r *sqliteDataExportRepo) publishArchive(ctx context.Context, job pendingEx
 		if currentStatus != "building" {
 			return pkg.ErrNotFound
 		}
-		result, err := tx.ExecContext(ctx, `UPDATE data_export_archive_budget SET reserved_bytes=reserved_bytes-?+? WHERE id=1 AND reserved_bytes>=? AND reserved_bytes-?+?<=?`, reserved, archiveSize, reserved, reserved, archiveSize, r.maxTotalArchiveBytes)
+		budgetDelta := reserved - archiveSize
+		result, err := tx.ExecContext(ctx, `UPDATE data_export_archive_budget SET reserved_bytes=reserved_bytes-? WHERE id=1 AND reserved_bytes>=? AND reserved_bytes-?<=?`, budgetDelta, reserved, budgetDelta, r.maxTotalArchiveBytes)
 		if err != nil {
 			return err
 		}

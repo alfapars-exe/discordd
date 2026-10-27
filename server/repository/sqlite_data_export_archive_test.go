@@ -85,7 +85,12 @@ func TestDataExportAttachmentArchiveOwnerOpaqueBytesAndAuthorization(t *testing.
 		}
 		entries[entry.Name] = data
 	}
-	if !(bytes.Equal(entries["files/000001.bin"], plain) && bytes.Equal(entries["files/000002.bin"], ciphertext)) && !(bytes.Equal(entries["files/000001.bin"], ciphertext) && bytes.Equal(entries["files/000002.bin"], plain)) {
+	plainFirst := bytes.Equal(entries["files/000001.bin"], plain) && bytes.Equal(entries["files/000002.bin"], ciphertext)
+	ciphertextFirst := bytes.Equal(entries["files/000001.bin"], ciphertext) && bytes.Equal(entries["files/000002.bin"], plain)
+	switch {
+	case plainFirst, ciphertextFirst:
+		// Both file orders preserve the opaque bytes; order is intentionally unspecified.
+	default:
 		t.Fatalf("archived bytes differ: %#v", entries)
 	}
 	manifest := string(entries["manifest.json"])
