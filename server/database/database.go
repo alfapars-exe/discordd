@@ -261,7 +261,12 @@ func (db *DB) runMigrations(migrationsFS fs.FS) error {
 	}
 
 	// Bootstrap: if schema_migrations is empty but tables already exist,
-	// mark all migrations as applied to avoid re-running ALTER TABLE etc.
+	// mark historical migrations as applied to avoid re-running ALTER TABLE
+	// etc. A migration can opt into this path only when it is independently
+	// safe to apply to an unknown existing schema (for example, CREATE TABLE IF
+	// NOT EXISTS for a new queue table). Apply those migrations in the same
+	// transaction as the bootstrap records so a failure cannot leave a partial
+	// history that causes the regular runner to replay old migrations.
 	if len(applied) == 0 {
 		var tableCount int
 		if err := db.Conn.QueryRow(
@@ -271,14 +276,37 @@ func (db *DB) runMigrations(migrationsFS fs.FS) error {
 		}
 
 		if tableCount > 0 {
+			tx, err := db.Conn.Begin()
+			if err != nil {
+				return fmt.Errorf("failed to begin migration bootstrap: %w", err)
+			}
+			committed := false
+			defer func() {
+				if !committed {
+					_ = tx.Rollback()
+				}
+			}()
 			for _, file := range sqlFiles {
-				if _, err := db.Conn.Exec(
+				content, err := fs.ReadFile(migrationsFS, file)
+				if err != nil {
+					return fmt.Errorf("failed to read bootstrap migration %s: %w", file, err)
+				}
+				if isBootstrapSafeAdditiveMigration(string(content)) {
+					if err := execStatementsTx(tx, file, string(content)); err != nil {
+						return fmt.Errorf("failed to apply bootstrap-safe migration %s: %w", file, err)
+					}
+				}
+				if _, err := tx.Exec(
 					"INSERT INTO schema_migrations (filename) VALUES (?)", file,
 				); err != nil {
 					return fmt.Errorf("failed to bootstrap migration %s: %w", file, err)
 				}
 				applied[file] = true
 			}
+			if err := tx.Commit(); err != nil {
+				return fmt.Errorf("failed to commit migration bootstrap: %w", err)
+			}
+			committed = true
 			logger.Info("bootstrapped existing migrations", "count", len(sqlFiles))
 			return nil
 		}
@@ -302,6 +330,17 @@ func (db *DB) runMigrations(migrationsFS fs.FS) error {
 	}
 
 	return nil
+}
+
+// isBootstrapSafeAdditiveMigration reports whether a migration explicitly
+// opts into execution against an existing database whose prior schema version
+// is unknown. Only migrations that are safe to re-run on an arbitrary current
+// schema should carry this header; CREATE TABLE/INDEX IF NOT EXISTS is the
+// intended use. The bootstrap path records all other migrations as historical
+// without executing them.
+func isBootstrapSafeAdditiveMigration(content string) bool {
+	firstLine := strings.TrimSpace(strings.SplitN(content, "\n", 2)[0])
+	return strings.TrimSuffix(firstLine, "\r") == "-- bootstrap-safe: additive"
 }
 
 // applyMigrationFile runs all statements in a single transaction so a

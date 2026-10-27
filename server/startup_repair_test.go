@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"testing"
+	"time"
 )
 
 // TestRepairOrphanedServerData_PurgesEveryOrphanedTable seeds one orphan row
@@ -176,6 +177,17 @@ func TestPurgeExpiredNotifications(t *testing.T) {
 	}
 
 	purgeExpiredNotifications(db) // second run on a clean table must be a silent no-op
+}
+
+func TestNotificationRetentionCutoffUsesDatabaseCompatibleTypes(t *testing.T) {
+	now := time.Date(2026, time.October, 27, 10, 20, 30, 0, time.FixedZone("test", 3*60*60))
+	wantUTC := time.Date(2026, time.July, 29, 7, 20, 30, 0, time.UTC)
+	if got, ok := notificationRetentionCutoff(now, true).(time.Time); !ok || !got.Equal(wantUTC) {
+		t.Fatalf("PostgreSQL cutoff = %#v, want UTC time %s", notificationRetentionCutoff(now, true), wantUTC)
+	}
+	if got, ok := notificationRetentionCutoff(now, false).(string); !ok || got != "2026-07-29 07:20:30" {
+		t.Fatalf("SQLite cutoff = %#v, want UTC timestamp string", notificationRetentionCutoff(now, false))
+	}
 }
 
 // TestRepairOrphanedServerData_IsIdempotent proves a second run on an
