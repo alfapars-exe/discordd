@@ -49,9 +49,12 @@ func guardedCommand(t *testing.T, svc *musicBotService, action string) MusicComm
 func TestMusicControlEnqueueConcurrentReplayAndIntentionalDuplicate(t *testing.T) {
 	svc, _ := guardedMusicFixture(t)
 	var extracts atomic.Int32
-	svc.extractTracksFn = func(context.Context, string, string, string) ([]models.MusicTrack, error) {
+	svc.extractTracksDetailedFn = func(context.Context, string, string, string) (musicMetadataResult, error) {
 		extracts.Add(1)
-		return []models.MusicTrack{{URL: "https://youtu.be/0KbRhUtFwkc", VideoID: "same-video"}}, nil
+		return musicMetadataResult{
+			Tracks:          []models.MusicTrack{{URL: "https://youtu.be/0KbRhUtFwkc", VideoID: "same-video"}},
+			SawSkippedEntry: true,
+		}, nil
 	}
 	command := guardedCommand(t, svc, "play")
 	command.URL = "https://youtu.be/0KbRhUtFwkc"
@@ -82,6 +85,13 @@ func TestMusicControlEnqueueConcurrentReplayAndIntentionalDuplicate(t *testing.T
 	}
 	if first, second := <-responses, <-responses; first != second {
 		t.Fatalf("retry result differed: %s %s", first, second)
+	} else {
+		var decoded struct {
+			MayHaveSkippedTracks bool `json:"may_have_skipped_tracks"`
+		}
+		if err := json.Unmarshal([]byte(first), &decoded); err != nil || !decoded.MayHaveSkippedTracks {
+			t.Fatalf("persisted play receipt lost partial-result flag: %s err=%v", first, err)
+		}
 	}
 	if extracts.Load() != 1 || len(svc.GetState("ch").Queue) != 1 {
 		t.Fatalf("replayed extraction/queue: %d %#v", extracts.Load(), svc.GetState("ch"))

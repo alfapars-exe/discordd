@@ -77,6 +77,7 @@ export function useMusicSlashCommand() {
               return { handled: true, outcome: "failed" };
             }
             addToast("success", t("addedToQueue", { count: tracks.length }));
+            if (res.data?.may_have_skipped_tracks) addToast("info", t("playlistItemsUnavailable"));
             return { handled: true, outcome: "success" };
           }
           showMusicRequestError(res, "play");

@@ -45,6 +45,7 @@ export type MusicBotChannelState = {
 
 export type PlayMusicResponse = {
   added_tracks: MusicTrack[];
+  may_have_skipped_tracks?: boolean;
 };
 
 export type SearchMusicResponse = { results: MusicTrack[] };

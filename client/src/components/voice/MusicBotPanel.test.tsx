@@ -28,7 +28,7 @@ vi.mock("../../api/music", () => ({ getMusicState: vi.fn(), retryMusicMutation:v
 
 import MusicBotPanel from "./MusicBotPanel";
 import { useVoiceStore } from "../../stores/voiceStore";
-import { getMusicState, pauseMusic, resumeMusic, skipMusic, stopMusic, searchMusic, playMusic, removeMusicQueueItem, reorderMusicQueue, shuffleMusicQueue, setMusicRepeatMode, restoreMusicSession, seekMusic } from "../../api/music";
+import { getMusicState, pauseMusic, resumeMusic, skipMusic, stopMusic, searchMusic, playMusic, removeMusicQueueItem, reorderMusicQueue, shuffleMusicQueue, setMusicRepeatMode, restoreMusicSession, seekMusic, hasPendingMusicMutation, retryMusicMutation } from "../../api/music";
 
 function song(overrides: Partial<MusicBotChannelState> = {}): MusicBotChannelState {
   return { channel_id: "a", server_id: "server-a", is_active: true, is_paused: false, queue: [], elapsed_seconds: 30,
@@ -54,6 +54,13 @@ beforeEach(() => {
 });
 
 describe("MusicBotPanel", () => {
+  it("shows the partial playlist advisory when retrying the original request", async () => {
+    vi.mocked(hasPendingMusicMutation).mockReturnValueOnce(true).mockReturnValue(false);
+    vi.mocked(retryMusicMutation).mockResolvedValue({success:true,data:{may_have_skipped_tracks:true}});
+    render(<MusicBotPanel channelId="a" />);
+    fireEvent.click(await screen.findByRole("button", {name:"retryOriginal"}));
+    await waitFor(()=>expect(fixture.toast).toHaveBeenCalledWith("info", "playlistItemsUnavailable"));
+  });
   it.each(["en", "tr"] as const)("distinguishes duplicate queue controls by position using real %s translations", async (language) => {
     const i18n = createInstance();
     await i18n.init({ lng: language, fallbackLng: false, defaultNS: "music", resources: { en: { music: musicEN }, tr: { music: musicTR } } });
