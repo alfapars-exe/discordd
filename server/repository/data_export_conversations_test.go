@@ -85,6 +85,13 @@ func TestDataExportOwnAttachmentsAndConversationMemberships(t *testing.T) {
 			t.Fatalf("%s: got %v; want %v", section, ids, wantIDs)
 		}
 	}
+	var archiveSnapshot string
+	if err := db.Conn.QueryRow(`SELECT attachment_payload FROM data_exports WHERE id=?`, job.ID).Scan(&archiveSnapshot); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(archiveSnapshot, `"encryption_version":1`) || !strings.Contains(archiveSnapshot, `"file_url":"/files/channel-b"`) {
+		t.Fatal("private archive snapshot omitted metadata needed to package owned attachments")
+	}
 	files := decode("channel_attachments")
 	if files[0]["id"] != "channel-file-a" || files[0]["file_size"] != nil || files[0]["mime_type"] != nil || files[1]["file_size"] != float64(99) || files[1]["file_url"] != "/files/channel-b" {
 		t.Fatal("attachment ordering or nullable metadata changed")

@@ -37,7 +37,7 @@ type exportAttachment struct {
 	MessageID         string  `json:"message_id"`
 	ConversationID    string  `json:"conversation_id"`
 	Filename          string  `json:"filename"`
-	FileURL           string  `json:"-"`
+	FileURL           string  `json:"file_url"`
 	FileSize          *int64  `json:"file_size"`
 	MIMEType          *string `json:"mime_type"`
 	CreatedAt         any     `json:"created_at"`
@@ -544,16 +544,16 @@ func (r *sqliteDataExportRepo) hasBuildingArchive(ctx context.Context) (bool, er
 }
 
 type pendingExportArchive struct {
-	id, userID string
-	payload    string
-	workerID   string
-	expiresAt  time.Time
+	id, userID        string
+	attachmentPayload string
+	workerID          string
+	expiresAt         time.Time
 }
 
 func (r *sqliteDataExportRepo) claimPendingArchive(ctx context.Context) (*pendingExportArchive, error) {
 	for {
 		var job pendingExportArchive
-		err := r.db.QueryRowContext(ctx, `SELECT id,user_id,payload,expires_at FROM data_exports WHERE status='ready' AND attachment_status='pending' AND expires_at>CURRENT_TIMESTAMP AND NOT EXISTS(SELECT 1 FROM data_export_archive_reservations r WHERE r.user_id=data_exports.user_id AND r.state='building') AND EXISTS(SELECT 1 FROM users u WHERE u.id=data_exports.user_id AND u.is_bot=0 AND u.deleted_at IS NULL AND u.is_platform_banned=0 AND NOT EXISTS(SELECT 1 FROM account_lifecycle l WHERE l.user_id=u.id AND l.disabled_at IS NOT NULL)) ORDER BY created_at,id LIMIT 1`).Scan(&job.id, &job.userID, &job.payload, &job.expiresAt)
+		err := r.db.QueryRowContext(ctx, `SELECT id,user_id,COALESCE(attachment_payload,''),expires_at FROM data_exports WHERE status='ready' AND attachment_status='pending' AND expires_at>CURRENT_TIMESTAMP AND NOT EXISTS(SELECT 1 FROM data_export_archive_reservations r WHERE r.user_id=data_exports.user_id AND r.state='building') AND EXISTS(SELECT 1 FROM users u WHERE u.id=data_exports.user_id AND u.is_bot=0 AND u.deleted_at IS NULL AND u.is_platform_banned=0 AND NOT EXISTS(SELECT 1 FROM account_lifecycle l WHERE l.user_id=u.id AND l.disabled_at IS NOT NULL)) ORDER BY created_at,id LIMIT 1`).Scan(&job.id, &job.userID, &job.attachmentPayload, &job.expiresAt)
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
@@ -640,28 +640,6 @@ func (r *sqliteDataExportRepo) archiveWorkerLoop(ctx context.Context) {
 	}
 }
 
-func attachmentsFromPayload(raw string) ([]exportAttachment, error) {
-	var document map[string]json.RawMessage
-	if err := json.Unmarshal([]byte(raw), &document); err != nil {
-		return nil, err
-	}
-	var attachments []exportAttachment
-	for _, section := range []string{"channel_attachments", "direct_message_attachments", "group_attachments"} {
-		var rows []map[string]any
-		if err := json.Unmarshal(document[section], &rows); err != nil {
-			return nil, err
-		}
-		for _, row := range rows {
-			item, err := exportAttachmentFromRow(section, row)
-			if err != nil {
-				return nil, err
-			}
-			attachments = append(attachments, item)
-		}
-	}
-	return attachments, nil
-}
-
 func (r *sqliteDataExportRepo) processPendingArchive(workerCtx context.Context, job pendingExportArchive) {
 	ctx, cancel := context.WithCancel(workerCtx)
 	defer cancel()
@@ -676,8 +654,16 @@ func (r *sqliteDataExportRepo) processPendingArchive(workerCtx context.Context, 
 	heartbeatDone := make(chan struct{})
 	go r.heartbeatArchiveLease(ctx, cancel, job.id, job.workerID, heartbeatDone)
 	defer close(heartbeatDone)
-	attachments, err := attachmentsFromPayload(job.payload)
-	if err != nil {
+	if ctx.Err() != nil {
+		r.failArchive(job.id, job.workerID, "worker_interrupted")
+		return
+	}
+	var attachments []exportAttachment
+	if job.attachmentPayload == "" {
+		r.failArchive(job.id, job.workerID, "snapshot_unavailable")
+		return
+	}
+	if err := json.Unmarshal([]byte(job.attachmentPayload), &attachments); err != nil || len(attachments) == 0 {
 		r.failArchive(job.id, job.workerID, "invalid_snapshot")
 		return
 	}

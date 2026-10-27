@@ -155,7 +155,6 @@ func (r *sqliteDataExportRepo) Create(ctx context.Context, user *models.User) (*
 		if err != nil {
 			return nil, fmt.Errorf("export %s: %w", item.name, err)
 		}
-		doc[item.name] = rows
 		if isExportAttachmentSection(item.name) {
 			for _, row := range rows {
 				attachment, err := exportAttachmentFromRow(item.name, row)
@@ -163,8 +162,10 @@ func (r *sqliteDataExportRepo) Create(ctx context.Context, user *models.User) (*
 					return nil, fmt.Errorf("export %s: %w", item.name, err)
 				}
 				attachments = append(attachments, attachment)
+				delete(row, "encryption_version")
 			}
 		}
+		doc[item.name] = rows
 	}
 	music, err := r.ownMusicQueueItems(ctx, user.ID)
 	if err != nil {
@@ -177,6 +178,10 @@ func (r *sqliteDataExportRepo) Create(ctx context.Context, user *models.User) (*
 	}
 	if len(payload) > maxDataExportBytes {
 		return nil, fmt.Errorf("data export too large: %w", pkg.ErrBadRequest)
+	}
+	attachmentPayload, err := json.Marshal(attachments)
+	if err != nil {
+		return nil, err
 	}
 	id, err := exportID()
 	if err != nil {
@@ -224,8 +229,8 @@ func (r *sqliteDataExportRepo) Create(ctx context.Context, user *models.User) (*
 		if err := tx.QueryRowContext(ctx, `SELECT id FROM data_exports WHERE user_id=?`, user.ID).Scan(&supersededID); err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO data_exports(id,user_id,status,payload,expires_at,attachment_status,attachment_error) VALUES(?,?,'ready',?,?,?,NULL)
-		 ON CONFLICT(user_id) DO UPDATE SET id=excluded.id,status='ready',payload=excluded.payload,error_code=NULL,created_at=CURRENT_TIMESTAMP,expires_at=excluded.expires_at,attachment_status=excluded.attachment_status,attachment_error=NULL`, id, user.ID, string(payload), expires, attachmentStatus); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO data_exports(id,user_id,status,payload,expires_at,attachment_status,attachment_error,attachment_payload) VALUES(?,?,'ready',?,?,?,NULL,?)
+		 ON CONFLICT(user_id) DO UPDATE SET id=excluded.id,status='ready',payload=excluded.payload,error_code=NULL,created_at=CURRENT_TIMESTAMP,expires_at=excluded.expires_at,attachment_status=excluded.attachment_status,attachment_error=NULL,attachment_payload=excluded.attachment_payload`, id, user.ID, string(payload), expires, attachmentStatus, string(attachmentPayload)); err != nil {
 			return err
 		}
 		var err error

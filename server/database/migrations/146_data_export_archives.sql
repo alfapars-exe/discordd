@@ -1,6 +1,7 @@
 ALTER TABLE data_exports ADD COLUMN attachment_status TEXT NOT NULL DEFAULT 'not_configured'
     CHECK (attachment_status IN ('none','not_configured','pending','building','ready','failed'));
 ALTER TABLE data_exports ADD COLUMN attachment_error TEXT;
+ALTER TABLE data_exports ADD COLUMN attachment_payload TEXT;
 
 CREATE TABLE IF NOT EXISTS data_export_archive_budget (
     id INTEGER PRIMARY KEY CHECK (id = 1),

@@ -295,7 +295,7 @@ func TestDataExportCanceledArchiveWorkerFailsClosedAndReleasesBudget(t *testing.
 	repo := &sqliteDataExportRepo{db: wrapForRepo(db), maxArchiveBytes: 1 << 20, maxTotalArchiveBytes: 1 << 20}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	repo.processPendingArchive(ctx, pendingExportArchive{id: jobID, userID: "cancel-export-owner", payload: payload, workerID: workerID})
+	repo.processPendingArchive(ctx, pendingExportArchive{id: jobID, userID: "cancel-export-owner", attachmentPayload: `[]`, workerID: workerID})
 	var status, code string
 	if err := db.Conn.QueryRow(`SELECT attachment_status,attachment_error FROM data_exports WHERE id=?`, jobID).Scan(&status, &code); err != nil {
 		t.Fatal(err)
@@ -309,6 +309,43 @@ func TestDataExportCanceledArchiveWorkerFailsClosedAndReleasesBudget(t *testing.
 	}
 	if status != "failed" || code != "worker_interrupted" || reservations != 0 || budget != 0 {
 		t.Fatalf("canceled worker status/error/reservations/budget = %q/%q/%d/%d", status, code, reservations, budget)
+	}
+}
+
+func TestDataExportLegacyPendingArchiveWithoutInternalSnapshotFailsClosedAndReleasesBudget(t *testing.T) {
+	db := newTestDB(t)
+	jobID := strings.Repeat("7", 48)
+	expires := time.Now().UTC().Add(time.Hour)
+	execSeed(t, db, []seedStmt{{q: `INSERT INTO users(id,username,password_hash) VALUES('legacy-archive-owner','legacyarchive','x')`}})
+	// Simulate a pending export created before attachment_payload existed. The
+	// public payload still has attachment metadata, but the worker must not
+	// reconstruct a private snapshot from the downloadable JSON document.
+	legacyPayload := `{"channel_attachments":[{"id":"old-file","file_url":"/uploads/old-file"}]}`
+	if _, err := db.Conn.Exec(`INSERT INTO data_exports(id,user_id,status,payload,expires_at,attachment_status) VALUES(?,?,'ready',?,?,'pending')`, jobID, "legacy-archive-owner", legacyPayload, expires); err != nil {
+		t.Fatal(err)
+	}
+	repo := &sqliteDataExportRepo{db: wrapForRepo(db), maxTotalArchiveBytes: 1 << 20}
+	job, err := repo.claimPendingArchive(context.Background())
+	if err != nil || job == nil {
+		t.Fatalf("claim legacy pending export = %#v, %v", job, err)
+	}
+	if job.attachmentPayload != "" {
+		t.Fatalf("legacy internal snapshot unexpectedly populated: %q", job.attachmentPayload)
+	}
+	repo.processPendingArchive(context.Background(), *job)
+	var status, code string
+	if err := db.Conn.QueryRow(`SELECT attachment_status,attachment_error FROM data_exports WHERE id=?`, jobID).Scan(&status, &code); err != nil {
+		t.Fatal(err)
+	}
+	var reservations, budget int
+	if err := db.Conn.QueryRow(`SELECT COUNT(*) FROM data_export_archive_reservations WHERE job_id=?`, jobID).Scan(&reservations); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Conn.QueryRow(`SELECT reserved_bytes FROM data_export_archive_budget WHERE id=1`).Scan(&budget); err != nil {
+		t.Fatal(err)
+	}
+	if status != "failed" || code != "snapshot_unavailable" || reservations != 0 || budget != 0 {
+		t.Fatalf("legacy snapshot recovery status/error/reservations/budget = %q/%q/%d/%d", status, code, reservations, budget)
 	}
 }
 
