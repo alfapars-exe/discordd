@@ -304,6 +304,14 @@
       "line_sha256": "0b6f4b7ac741e849e4d3d521d2848279f8c6ec0155ec63e7d1ba6ac91741341c",
       "reason": "Fixed SQL in a disposable PostgreSQL concurrency fixture. Arithmetic and interval are compile-time literals; the event ID remains a bound parameter. No request-derived SQL fragment.",
       "proof_ref": "server/repository/sqlite_server_event_delivery_test.go:410-426"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/repository/postgres_group_dm_edit_race_test.go",
+      "file_sha256": "fd82c9f6a84f1c4322e265d10ad6c0d276afbb5ecc2d0bdd62f43dfd8448cf38",
+      "line_sha256": "fe1c4e231bfee0e3754cf19cea05ba9bae5e4b5cdc11a496e7c013bb649dedb2",
+      "reason": "Fixed SQL arithmetic in the isolated PostgreSQL group-edit concurrency fixture. The group ID remains a bound parameter; no request-derived SQL fragment.",
+      "proof_ref": "server/repository/postgres_group_dm_edit_race_test.go:62-94"
     }
   ]
 }
