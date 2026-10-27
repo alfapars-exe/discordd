@@ -2,10 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import DataExportSettings from "./DataExportSettings";
 
-const mocks = vi.hoisted(() => ({ create: vi.fn(), download: vi.fn(), toast: vi.fn(), generation: 1, owner: "a" }));
+const mocks = vi.hoisted(() => ({ create: vi.fn(), get: vi.fn(), download: vi.fn(), downloadAttachments: vi.fn(), toast: vi.fn(), generation: 1, owner: "a" }));
 const t = (key: string) => key;
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t }), initReactI18next: { type: "3rdParty", init: () => {} } }));
-vi.mock("../../api/dataExport", () => ({ createDataExport: mocks.create, downloadDataExport: mocks.download }));
+vi.mock("../../api/dataExport", () => ({ createDataExport: mocks.create, getDataExport: mocks.get, downloadDataExport: mocks.download, downloadDataExportAttachments: mocks.downloadAttachments }));
 vi.mock("../../api/client", () => ({ getAuthGeneration: () => mocks.generation }));
 vi.mock("../../stores/authStore", () => ({ useAuthStore: { getState: () => ({ user: { id: mocks.owner } }) } }));
 vi.mock("../../stores/toastStore", () => ({ useToastStore: (selector: (state: unknown) => unknown) => selector({ addToast: mocks.toast }) }));
@@ -17,6 +17,8 @@ describe("DataExportSettings", () => {
     vi.clearAllMocks(); mocks.owner = "a"; mocks.generation = 1;
     mocks.create.mockResolvedValue({ success: true, data: job });
     mocks.download.mockResolvedValue({ success: true });
+    mocks.downloadAttachments.mockResolvedValue({ success: true });
+    mocks.get.mockResolvedValue({ success: true, data: job });
   });
   it("reports failed export jobs as errors and allows another request", async () => {
     mocks.create.mockResolvedValueOnce({ success: true, data: { ...job, status: "failed" } });
@@ -68,5 +70,30 @@ describe("DataExportSettings", () => {
     await act(async () => finish({ success: true, data: job }));
     expect(mocks.toast).not.toHaveBeenCalled();
     expect(mocks.create.mock.calls[0][0]()).toBe(false);
+  });
+  it("offers a separate attachment archive only when the server created one", async () => {
+    mocks.create.mockResolvedValueOnce({ success: true, data: { ...job, attachments_ready: true } });
+    render(<DataExportSettings userID="a" />); create();
+    const attachmentButton = await screen.findByRole("button", { name: "dataExport.downloadAttachments" });
+    fireEvent.click(attachmentButton);
+    await waitFor(() => expect(mocks.downloadAttachments).toHaveBeenCalledWith(expect.objectContaining({ id: job.id, attachments_ready: true }), expect.any(Function)));
+    expect(screen.getByRole("button", { name: "dataExport.download" })).toBeInTheDocument();
+  });
+  it("polls a durable pending archive until the server publishes it", async () => {
+    mocks.create.mockResolvedValueOnce({ success: true, data: { ...job, attachments_ready: false, attachments_status: "pending" } });
+    mocks.get.mockResolvedValueOnce({ success: true, data: { ...job, attachments_status: "building" } });
+    mocks.get.mockResolvedValueOnce({ success: true, data: { ...job, attachments_ready: true, attachments_status: "ready" } });
+    render(<DataExportSettings userID="a" />); create();
+    expect(await screen.findByText("dataExport.attachmentsPreparing")).toBeInTheDocument();
+    await screen.findByRole("button", { name: "dataExport.downloadAttachments" }, { timeout: 5000 });
+    expect(mocks.get).toHaveBeenCalledWith(job.id, expect.any(Function));
+  });
+  it("reports a failed binary archive while keeping JSON available", async () => {
+    mocks.create.mockResolvedValueOnce({ success: true, data: { ...job, attachments_status: "pending" } });
+    mocks.get.mockResolvedValueOnce({ success: true, data: { ...job, attachments_status: "failed", attachments_error: "archive_unavailable" } });
+    render(<DataExportSettings userID="a" />); create();
+    expect(await screen.findByText("dataExport.attachmentsUnavailable", {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "dataExport.download" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "dataExport.downloadAttachments" })).not.toBeInTheDocument();
   });
 });

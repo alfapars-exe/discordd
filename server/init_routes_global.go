@@ -56,6 +56,7 @@ func (d *routeDeps) registerUserRoutes() {
 	d.mux.Handle("POST /api/users/me/data-exports", d.auth(d.h.DataExport.Create))
 	d.mux.Handle("GET /api/users/me/data-exports/{id}", d.auth(d.h.DataExport.Get))
 	d.mux.Handle("GET /api/users/me/data-exports/{id}/download", d.auth(d.h.DataExport.Download))
+	d.mux.Handle("GET /api/users/me/data-exports/{id}/attachments", d.auth(d.h.DataExport.DownloadAttachments))
 	d.mux.Handle("GET /api/users/me/recommendations", d.auth(d.h.Personalization.Recommendations))
 
 	// Inbox notifications — literal "count" / "read-all" before the {id}
