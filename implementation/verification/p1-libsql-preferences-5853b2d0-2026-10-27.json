@@ -1,0 +1,8 @@
+{
+  "source_commit": "5853b2d0",
+  "test": "TestLibSQLPreferencesLive",
+  "result": "passed",
+  "environment": "Disposable local libSQL server 0.24.33 and Linux CGO driver; production migration path applied through migration 144.",
+  "observations": "Two sequential nested preference patches merged; eight concurrent disjoint preference patches all persisted.",
+  "limitations": "Local disposable libSQL only; hosted Turso, independent devices, installed Windows UI and all preference consumers remain unverified."
+}
