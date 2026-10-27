@@ -23,7 +23,7 @@ function fixture(safe = true) {
   });
   const window = Object.assign(new EventEmitter(), { webContents: contents, isDestroyed: () => false });
   const source = { id: "screen:1", name: "screen", thumbnail: { isEmpty: () => true }, appIcon: null };
-  let handler!: (request: { frame: object }, callback: (streams: { video?: typeof source }) => void) => Promise<void>;
+  let handler!: (request: { frame: object }, callback: (streams: { video?: typeof source } | null) => void) => Promise<void>;
   let query: () => Promise<typeof source[]> = async () => [source];
   const exports = {} as typeof import("./screen-picker");
   vm.runInNewContext(readFileSync(path.join(__dirname, "screen-picker.js"), "utf8"), {
@@ -48,7 +48,7 @@ test("only one owner can receive a selection; foreign senders/frames cannot fini
   await f.request((value) => first.push(value));
   await f.request((value) => second.push(value));
   assert.equal(second.length, 1);
-  assert.equal(Object.keys(second[0] as object).length, 0);
+  assert.equal(second[0], null);
   f.ipc.emit("screen-picker-result", { sender: {}, senderFrame: f.frame }, "screen:1");
   f.ipc.emit("screen-picker-result", { sender: f.contents, senderFrame: {} }, "screen:1");
   assert.equal(first.length, 0);
@@ -69,7 +69,7 @@ for (const termination of ["closed", "destroyed", "render-process-gone", "did-na
     else (termination === "closed" ? f.window : f.contents).emit(termination);
     f.ipc.emit("screen-picker-result", f.event, "screen:1");
     assert.equal(results.length, 1);
-    assert.equal(Object.keys(results[0] as object).length, 0);
+    assert.equal(results[0], null);
     assert.equal(f.timers.size, 0);
     assert.equal(f.contents.listenerCount("destroyed"), 0);
     assert.equal(f.ipc.listenerCount("screen-picker-result"), 0);
@@ -188,4 +188,28 @@ test("a closed fallback owner cannot revive on late success or original rejectio
   assert.ok(!f.messages.includes("show-screen-picker"));
   assert.equal(f.timers.size, 0);
   assert.deepEqual(f.captures(), { begins: 1, ends: 1 });
+});
+
+
+test("cancel denies with null, matching Electron's native display-capture contract", async () => {
+  const f = fixture();
+  const results: unknown[] = [];
+  await f.request(value => {
+    if (value !== null && !value.video) throw new TypeError("Video was requested, but no video stream was provided");
+    results.push(value);
+  });
+  f.ipc.emit("screen-picker-result", f.event, null);
+  assert.deepEqual(results, [null]);
+  assert.equal(f.timers.size, 0);
+});
+
+test("a callback invalidated by native frame teardown cannot escape the main process", async () => {
+  const f = fixture();
+  let calls = 0;
+  await f.request(() => { calls++; throw new TypeError("frame was destroyed"); });
+  assert.doesNotThrow(() => f.ipc.emit("screen-picker-result", f.event, "screen:1"));
+  f.window.emit("closed");
+  assert.equal(calls, 1);
+  assert.equal(f.timers.size, 0);
+  assert.ok(f.diagnostics.some(event => event.phase === "handler_error"));
 });
