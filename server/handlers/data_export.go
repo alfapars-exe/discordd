@@ -66,3 +66,24 @@ func (h *DataExportHandler) Download(w http.ResponseWriter, r *http.Request) {
 		return // the client disconnected while receiving the attachment
 	}
 }
+
+func (h *DataExportHandler) DownloadAttachments(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	user, _, ok := sessionActor(w, r)
+	if !ok {
+		return
+	}
+	id := r.PathValue("id")
+	archive, size, err := h.repo.DownloadAttachments(r.Context(), user.ID, id)
+	if err != nil {
+		pkg.Error(w, err)
+		return
+	}
+	defer archive.Close()
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", size))
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="hichat-data-%s-attachments.zip"`, id[:12]))
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.Copy(w, archive)
+}

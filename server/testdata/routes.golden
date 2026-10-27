@@ -37,6 +37,7 @@ PATCH /api/users/me/preferences
 POST /api/users/me/data-exports
 GET /api/users/me/data-exports/{id}
 GET /api/users/me/data-exports/{id}/download
+GET /api/users/me/data-exports/{id}/attachments
 GET /api/users/me/recommendations
 GET /api/users/me/notifications
 GET /api/users/me/notifications/count

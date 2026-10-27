@@ -1375,12 +1375,15 @@
   },
   "dataExport": {
     "title": "Export your personal data",
-    "description": "Prepares a JSON copy of your account details, preferences, memberships, and chat records you authored. Passwords, session keys, and MFA secrets are never exported.",
+      "description": "Prepares a JSON copy of your account details, preferences, memberships, and chat records you authored, plus a separate archive of your attachments. Encrypted files stay encrypted and require your existing device keys. Passwords, session keys, and MFA secrets are never exported.",
     "create": "Prepare a new export",
     "preparing": "Preparing…",
     "ready": "Your export is ready to download.",
     "expires": "This download expires on {{date}}.",
     "download": "Download JSON file",
+      "downloadAttachments": "Download attachments ZIP",
+      "attachmentsPreparing": "Your attachment archive is being prepared. This can take a few minutes.",
+      "attachmentsUnavailable": "The attachment archive could not be prepared. Your JSON export is still available; prepare a new export to retry.",
     "error": "The export could not be prepared.",
     "downloadError": "The export could not be downloaded or has expired."
   },

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/argeinfina/hichat/database"
@@ -16,11 +17,42 @@ import (
 )
 
 const maxDataExportBytes = 50 << 20
+const defaultMaxTotalExportArchiveBytes int64 = 2 << 30
 
-type sqliteDataExportRepo struct{ db database.TxQuerier }
+type DataExportStorageOptions struct {
+	UploadDir            string
+	ArchiveDir           string
+	MaxArchiveBytes      int64
+	MaxTotalArchiveBytes int64
+}
 
-func NewSQLiteDataExportRepo(db database.TxQuerier) DataExportRepository {
-	return &sqliteDataExportRepo{db: db}
+type sqliteDataExportRepo struct {
+	db                   database.TxQuerier
+	uploadDir            string
+	archiveDir           string
+	maxArchiveBytes      int64
+	maxTotalArchiveBytes int64
+	workerMu             sync.Mutex
+	workerRunning        bool
+	workerStopping       bool
+	workerCtx            context.Context
+	workerCancel         context.CancelFunc
+	workerDone           chan struct{}
+}
+
+func NewSQLiteDataExportRepo(db database.TxQuerier, options ...DataExportStorageOptions) DataExportRepository {
+	r := &sqliteDataExportRepo{db: db, maxArchiveBytes: defaultMaxExportArchiveBytes, maxTotalArchiveBytes: defaultMaxTotalExportArchiveBytes}
+	if len(options) > 0 {
+		r.uploadDir = options[0].UploadDir
+		r.archiveDir = options[0].ArchiveDir
+		if options[0].MaxArchiveBytes > 0 {
+			r.maxArchiveBytes = options[0].MaxArchiveBytes
+		}
+		if options[0].MaxTotalArchiveBytes > 0 {
+			r.maxTotalArchiveBytes = options[0].MaxTotalArchiveBytes
+		}
+	}
+	return r
 }
 
 func exportID() (string, error) {
@@ -35,7 +67,7 @@ func (r *sqliteDataExportRepo) Create(ctx context.Context, user *models.User) (*
 	if user == nil || user.ID == "" || user.IsBot {
 		return nil, pkg.ErrUnauthorized
 	}
-	_, _ = r.db.ExecContext(ctx, `DELETE FROM data_exports WHERE expires_at <= CURRENT_TIMESTAMP`)
+	var attachments []exportAttachment
 
 	type rowMap map[string]any
 	query := func(q string, args ...any) ([]rowMap, error) {
@@ -74,6 +106,11 @@ func (r *sqliteDataExportRepo) Create(ctx context.Context, user *models.User) (*
 		{"preferences", `SELECT data, updated_at FROM user_preferences WHERE user_id=?`},
 		{"game_application_grants", `SELECT bot_user_id AS application_id, messaging_enabled, revision, authorized_at, updated_at, revoked_at FROM application_game_grants WHERE user_id=? ORDER BY bot_user_id`},
 		{"server_memberships", `SELECT server_id, joined_at FROM server_members WHERE user_id=?`},
+		{"direct_message_memberships", `SELECT id AS dm_channel_id,user1_id,user2_id,e2ee_enabled,status,initiated_by,created_at,last_message_at FROM dm_channels WHERE ? IN (user1_id,user2_id) ORDER BY created_at,id`},
+		{"group_memberships", `SELECT g.id AS group_id,g.name,g.icon_url,g.owner_id,g.key_epoch,g.created_at,g.updated_at,m.joined_at,m.is_muted,m.settings_revision FROM group_dm_members m JOIN group_dm_channels g ON g.id=m.group_id WHERE m.user_id=? ORDER BY m.joined_at,g.id`},
+		{"channel_attachments", `SELECT a.id,a.message_id,m.channel_id,a.filename,a.file_url,a.file_size,a.mime_type,a.created_at,m.encryption_version FROM attachments a JOIN messages m ON m.id=a.message_id WHERE m.user_id=? ORDER BY a.created_at,a.id`},
+		{"direct_message_attachments", `SELECT a.id,a.dm_message_id,m.dm_channel_id,a.filename,a.file_url,a.file_size,a.mime_type,a.created_at,m.encryption_version FROM dm_attachments a JOIN dm_messages m ON m.id=a.dm_message_id WHERE m.user_id=? ORDER BY a.created_at,a.id`},
+		{"group_attachments", `SELECT a.id,a.group_message_id,m.group_id,a.filename,a.file_url,a.file_size,a.mime_type,a.file_key_index,a.created_at,m.encryption_version FROM group_dm_attachments a JOIN group_dm_messages m ON m.id=a.group_message_id WHERE m.user_id=? ORDER BY a.created_at,a.id`},
 		{"authored_server_events", `SELECT id, server_id, name, description, starts_at, ends_at, channel_id, status, version, created_at, updated_at FROM server_events WHERE creator_id=? ORDER BY created_at, id`},
 		{"server_event_rsvps", `SELECT event_id, interested_at, updated_at FROM server_event_rsvps WHERE user_id=? ORDER BY interested_at, event_id`},
 		{"server_event_deliveries", `SELECT event_id, starts_at, delivered_at FROM server_event_deliveries WHERE user_id=? ORDER BY delivered_at, event_id, starts_at`},
@@ -116,6 +153,15 @@ func (r *sqliteDataExportRepo) Create(ctx context.Context, user *models.User) (*
 			return nil, fmt.Errorf("export %s: %w", item.name, err)
 		}
 		doc[item.name] = rows
+		if isExportAttachmentSection(item.name) {
+			for _, row := range rows {
+				attachment, err := exportAttachmentFromRow(item.name, row)
+				if err != nil {
+					return nil, fmt.Errorf("export %s: %w", item.name, err)
+				}
+				attachments = append(attachments, attachment)
+			}
+		}
 	}
 	music, err := r.ownMusicQueueItems(ctx, user.ID)
 	if err != nil {
@@ -133,12 +179,23 @@ func (r *sqliteDataExportRepo) Create(ctx context.Context, user *models.User) (*
 	if err != nil {
 		return nil, err
 	}
+	attachmentStatus := "none"
+	if len(attachments) > 0 {
+		if r.uploadDir == "" || r.archiveDir == "" {
+			// Preserve the historical metadata export for older constructors that
+			// do not configure private binary storage.
+			attachmentStatus = "not_configured"
+		} else {
+			attachmentStatus = "pending"
+		}
+	}
 	expires := time.Now().UTC().Add(24 * time.Hour).Truncate(time.Second)
 	raw := database.RawDB(r.db)
 	if raw == nil {
 		return nil, fmt.Errorf("data export requires a transactional database")
 	}
 	var job *models.DataExportJob
+	var supersededID string
 	err = database.WithTx(ctx, raw, func(tx *sql.Tx) error {
 		// Collect snapshots without the global retirement lock. Publication is
 		// serialized and the authenticated identity is rechecked at commit.
@@ -161,23 +218,35 @@ func (r *sqliteDataExportRepo) Create(ctx context.Context, user *models.User) (*
 		if tokenVersion != user.TokenVersion {
 			return pkg.ErrUnauthorized
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO data_exports(id,user_id,status,payload,expires_at) VALUES(?,?,'ready',?,?)
-		 ON CONFLICT(user_id) DO UPDATE SET id=excluded.id,status='ready',payload=excluded.payload,error_code=NULL,created_at=CURRENT_TIMESTAMP,expires_at=excluded.expires_at`, id, user.ID, string(payload), expires); err != nil {
+		if err := tx.QueryRowContext(ctx, `SELECT id FROM data_exports WHERE user_id=?`, user.ID).Scan(&supersededID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO data_exports(id,user_id,status,payload,expires_at,attachment_status,attachment_error) VALUES(?,?,'ready',?,?,?,NULL)
+		 ON CONFLICT(user_id) DO UPDATE SET id=excluded.id,status='ready',payload=excluded.payload,error_code=NULL,created_at=CURRENT_TIMESTAMP,expires_at=excluded.expires_at,attachment_status=excluded.attachment_status,attachment_error=NULL`, id, user.ID, string(payload), expires, attachmentStatus); err != nil {
 			return err
 		}
 		var err error
-		job, err = (&sqliteDataExportRepo{db: tx}).Get(ctx, user.ID, id)
+		job, err = (&sqliteDataExportRepo{db: tx, uploadDir: r.uploadDir, archiveDir: r.archiveDir}).Get(ctx, user.ID, id)
 		return err
 	})
+	if err == nil {
+		if supersededID != "" && supersededID != id {
+			r.cleanupSupersededArchive(ctx, supersededID)
+		}
+		if attachmentStatus == "pending" {
+			r.kickArchiveWorker()
+		}
+	}
 	return job, err
 }
 
 func (r *sqliteDataExportRepo) Get(ctx context.Context, userID, id string) (*models.DataExportJob, error) {
 	var j models.DataExportJob
-	err := r.db.QueryRowContext(ctx, `SELECT id,status,error_code,created_at,expires_at FROM data_exports WHERE id=? AND user_id=? AND expires_at>CURRENT_TIMESTAMP AND EXISTS(SELECT 1 FROM users u WHERE u.id=data_exports.user_id AND u.is_bot=0 AND u.deleted_at IS NULL AND u.is_platform_banned=0 AND NOT EXISTS(SELECT 1 FROM account_lifecycle l WHERE l.user_id=u.id AND l.disabled_at IS NOT NULL))`, id, userID).Scan(&j.ID, &j.Status, &j.ErrorCode, &j.CreatedAt, &j.ExpiresAt)
+	err := r.db.QueryRowContext(ctx, `SELECT id,status,error_code,created_at,expires_at,attachment_status,attachment_error FROM data_exports WHERE id=? AND user_id=? AND expires_at>CURRENT_TIMESTAMP AND EXISTS(SELECT 1 FROM users u WHERE u.id=data_exports.user_id AND u.is_bot=0 AND u.deleted_at IS NULL AND u.is_platform_banned=0 AND NOT EXISTS(SELECT 1 FROM account_lifecycle l WHERE l.user_id=u.id AND l.disabled_at IS NOT NULL))`, id, userID).Scan(&j.ID, &j.Status, &j.ErrorCode, &j.CreatedAt, &j.ExpiresAt, &j.AttachmentsStatus, &j.AttachmentsError)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, pkg.ErrNotFound
 	}
+	j.AttachmentsReady = err == nil && j.AttachmentsStatus == "ready"
 	return &j, err
 }
 

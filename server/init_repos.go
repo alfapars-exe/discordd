@@ -87,7 +87,7 @@ type Repositories struct {
 // surfacing as a 500 — see database/retry.go for why that is safe and why
 // registration was the path that exposed it. Transactions deliberately keep
 // using the raw connection.
-func initRepositories(conn *sql.DB) *Repositories {
+func initRepositories(conn *sql.DB, dataExportOptions ...repository.DataExportStorageOptions) *Repositories {
 	db := database.NewRetryingQuerier(conn)
 	return &Repositories{
 		User:                    repository.NewSQLiteUserRepo(db),
@@ -153,7 +153,7 @@ func initRepositories(conn *sql.DB) *Repositories {
 		Saved:                   repository.NewSQLiteSavedRepo(db),
 		UserNote:                repository.NewSQLiteUserNoteRepo(db),
 		MusicSession:            repository.NewSQLiteMusicSessionRepo(db),
-		DataExport:              repository.NewSQLiteDataExportRepo(db),
+		DataExport:              repository.NewSQLiteDataExportRepo(db, dataExportOptions...),
 		ProfileShowcase:         repository.NewSQLiteProfileShowcaseRepo(db),
 		ServerEvent:             repository.NewSQLiteServerEventRepo(db),
 		ServerEventDelivery:     repository.NewSQLiteServerEventDeliveryRepo(db),

@@ -1375,12 +1375,15 @@
   },
   "dataExport": {
     "title": "Kişisel verilerini dışa aktar",
-    "description": "Hesap bilgilerin, tercihlerin, üyeliklerin ve sana ait sohbet kayıtlarının JSON kopyasını hazırlar. Parola, oturum anahtarı ve MFA sırrı hiçbir zaman dışa aktarılmaz.",
+    "description": "Hesap bilgilerin, tercihlerin, üyeliklerin ve sana ait sohbet kayıtlarının JSON kopyasını ve eklerinin ayrı arşivini hazırlar. Şifreli dosyalar şifreli kalır; açmak için mevcut cihaz anahtarların gerekir. Parola, oturum anahtarı ve MFA sırrı dışa aktarılmaz.",
     "create": "Yeni dışa aktarım hazırla",
     "preparing": "Hazırlanıyor…",
     "ready": "Dışa aktarım indirilmeye hazır.",
     "expires": "Bu indirme {{date}} tarihinde sona erer.",
     "download": "JSON dosyasını indir",
+    "downloadAttachments": "Ekleri ZIP olarak indir",
+    "attachmentsPreparing": "Ek arşivin hazırlanıyor. Bu işlem birkaç dakika sürebilir.",
+    "attachmentsUnavailable": "Ek arşivi hazırlanamadı. JSON dışa aktarımın kullanılabilir; yeniden denemek için yeni dışa aktarım hazırla.",
     "error": "Dışa aktarım hazırlanamadı.",
     "downloadError": "Dışa aktarım indirilemedi veya süresi doldu."
   },
