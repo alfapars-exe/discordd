@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { createDataExport, downloadDataExport, downloadDataExportAttachments, getDataExport, type DataExportJob } from "../../api/dataExport";
 import { getAuthGeneration } from "../../api/client";
@@ -7,6 +7,9 @@ import { useAuthStore } from "../../stores/authStore";
 import { useToastStore } from "../../stores/toastStore";
 import { formatDateTime } from "../../utils/dateFormat";
 
+const subscribeAuthGeneration = (onChange: () => void) => subscribeAuthGenerationChanges(() => onChange());
+const getAuthGenerationSnapshot = () => getAuthGeneration();
+
 export default function DataExportSettings({ userID }: { userID: string }) {
   const { t } = useTranslation("settings");
   const toast = useToastStore((s) => s.addToast);
@@ -14,33 +17,28 @@ export default function DataExportSettings({ userID }: { userID: string }) {
   const pending = useRef(false);
   const [job, setJob] = useState<DataExportJob | null>(null);
   const [busy, setBusy] = useState(false);
-  const [authGeneration, setAuthGeneration] = useState(getAuthGeneration);
-  const jobGeneration = useRef<number | null>(null);
+  const authGeneration = useSyncExternalStore(subscribeAuthGeneration, getAuthGenerationSnapshot, getAuthGenerationSnapshot);
+  const [jobGeneration, setJobGeneration] = useState<number | null>(null);
   const operationNonce = useRef(0);
   const currentJobID = useRef<string | null>(null);
   const alive = useRef(true);
   const current = () => alive.current && authOwnerID === userID && useAuthStore.getState().user?.id === userID;
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   useEffect(() => {
-    const unsubscribe = subscribeAuthGenerationChanges(() => setAuthGeneration(getAuthGeneration()));
-    setAuthGeneration(getAuthGeneration());
-    return unsubscribe;
-  }, []);
-  useEffect(() => {
-    if (authOwnerID === userID && (jobGeneration.current === null || jobGeneration.current === authGeneration)) return;
+    if (authOwnerID === userID && (jobGeneration === null || jobGeneration === authGeneration)) return;
     if (!currentJobID.current) return;
     operationNonce.current++;
     currentJobID.current = null;
-    jobGeneration.current = null;
+    setJobGeneration(null);
     setJob(null);
     if (authOwnerID === userID) toast("error", t("dataExport.jobUnavailable"));
-  }, [authGeneration, authOwnerID, t, toast, userID]);
+  }, [authGeneration, authOwnerID, jobGeneration, t, toast, userID]);
 
   useEffect(() => {
     const jobID = job?.id;
     const attachmentStatus = job?.attachments_status;
     if (!jobID || (attachmentStatus !== "pending" && attachmentStatus !== "building")) return;
-    const generation = jobGeneration.current;
+    const generation = jobGeneration;
     const nonce = operationNonce.current;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -49,7 +47,7 @@ export default function DataExportSettings({ userID }: { userID: string }) {
       if (operationNonce.current !== nonce || currentJobID.current !== jobID) return;
       operationNonce.current++;
       currentJobID.current = null;
-      jobGeneration.current = null;
+      setJobGeneration(null);
       setJob(null);
       toast("error", t(message));
     };
@@ -82,13 +80,13 @@ export default function DataExportSettings({ userID }: { userID: string }) {
     };
     timer = setTimeout(() => void poll(), 1000);
     return () => { cancelled = true; if (timer !== undefined) clearTimeout(timer); };
-  }, [job?.id, job?.attachments_status, userID]);
+  }, [job?.id, job?.attachments_status, jobGeneration, t, toast, userID]);
 
   async function create() {
     if (pending.current || !current()) return;
     const nonce = ++operationNonce.current;
     currentJobID.current = null;
-    jobGeneration.current = null;
+    setJobGeneration(null);
     setJob(null);
     pending.current = true; setBusy(true);
     const generation = getAuthGeneration();
@@ -99,7 +97,7 @@ export default function DataExportSettings({ userID }: { userID: string }) {
       if (!result.success || !result.data || result.data.status !== "ready") {
         toast("error", t("dataExport.error")); return;
       }
-      jobGeneration.current = generation;
+      setJobGeneration(generation);
       currentJobID.current = result.data.id;
       setJob(result.data);
       toast("success", t("dataExport.ready"));
@@ -113,7 +111,7 @@ export default function DataExportSettings({ userID }: { userID: string }) {
 
   async function download() {
     if (!job || pending.current || !current()) return;
-    if (jobGeneration.current !== getAuthGeneration()) {
+    if (jobGeneration !== getAuthGeneration()) {
       setJob(null); toast("error", t("dataExport.downloadError")); return;
     }
     pending.current = true; setBusy(true);
@@ -132,7 +130,7 @@ export default function DataExportSettings({ userID }: { userID: string }) {
 
   async function downloadAttachments() {
     if (!job || !job.attachments_ready || pending.current || !current()) return;
-    if (jobGeneration.current !== getAuthGeneration()) { setJob(null); toast("error", t("dataExport.downloadError")); return; }
+    if (jobGeneration !== getAuthGeneration()) { setJob(null); toast("error", t("dataExport.downloadError")); return; }
     pending.current = true; setBusy(true);
     const generation = getAuthGeneration();
     const requestCurrent = () => current() && getAuthGeneration() === generation;
@@ -143,7 +141,7 @@ export default function DataExportSettings({ userID }: { userID: string }) {
     finally { pending.current = false; if (current()) setBusy(false); }
   }
 
-  const visibleJob = authOwnerID === userID && jobGeneration.current === authGeneration ? job : null;
+  const visibleJob = authOwnerID === userID && jobGeneration === authGeneration ? job : null;
   return <section className="settings-subsection" data-settings-section="data-export">
     <div className="settings-divider" />
     <h3 className="settings-section-subtitle">{t("dataExport.title")}</h3>
