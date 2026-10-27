@@ -497,7 +497,7 @@ export function useScreenShareToggle(
       // Read the choice after the picker closes: both enabling and disabling
       // its audio checkbox must apply to this capture, without a second picker.
       if (!useVoiceStore.getState().screenShareAudio) {
-        logToServer("info", "screen_share_success", { branch, audio: false, durationMs: Date.now() - attemptStart });
+        void logToServer("info", "screen_share_success", { branch, audio: false, durationMs: Date.now() - attemptStart });
         return;
       }
       const audioTrack = await systemAudioCaptureRef.current.start(()=>!shouldCancel());
