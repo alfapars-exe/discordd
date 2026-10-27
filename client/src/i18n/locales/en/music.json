@@ -36,6 +36,7 @@
   "stop": "Stop and kick bot",
   "controlError": "Action failed",
   "addedToQueue_one": "1 track added to queue",
+  "playlistItemsUnavailable": "Some playlist items may not have been added. Check the queue.",
   "addedToQueue_other": "{{count}} tracks added to queue",
   "addingTrack": "Adding track to the queue…",
   "playError": "Could not start playback",

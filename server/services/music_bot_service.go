@@ -83,6 +83,13 @@ type MusicBotService interface {
 	StopAllForChannel(channelID string)
 }
 
+// MusicEnqueueResult is the opt-in detailed result used by HTTP callers. The
+// legacy Enqueue method remains available for existing service consumers.
+type MusicEnqueueResult struct {
+	AddedTracks          []models.MusicTrack
+	MayHaveSkippedTracks bool
+}
+
 // MusicBotStopper — the shutdown-path contract, kept separate from
 // MusicBotService so main.go can drain the bots without every handler-level
 // stub having to implement it.
@@ -221,6 +228,10 @@ type musicBotService struct {
 	// package-level extractTracks; tests substitute a stub so extraction
 	// concurrency can be driven without real yt-dlp subprocesses.
 	extractTracksFn func(ctx context.Context, urlStr, requesterID, requesterName string) ([]models.MusicTrack, error)
+	// extractTracksDetailedFn is the metadata extraction seam when callers need
+	// an observed partial-result signal; legacy tests and callers keep using the
+	// original seam above.
+	extractTracksDetailedFn func(ctx context.Context, urlStr, requesterID, requesterName string) (musicMetadataResult, error)
 	// connectBotFn is the LiveKit connect seam, same shape as playTrackFn:
 	// nil in production, where getOrCreateBot falls back to
 	// s.connectBotToRoom; tests substitute a stub so connect races can be
@@ -312,12 +323,19 @@ func NewMusicBotService(
 // (1 for a single video URL, N for a playlist). Lazy-starts the bot on first
 // call per channel. PermSpeak is enforced by the HTTP handler.
 func (s *musicBotService) Enqueue(ctx context.Context, userID, channelID, url string) ([]models.MusicTrack, error) {
+	result, err := s.EnqueueWithResult(ctx, userID, channelID, url)
+	return result.AddedTracks, err
+}
+
+// EnqueueWithResult returns accepted tracks plus an advisory only when
+// extraction observed evidence that playlist entries were skipped.
+func (s *musicBotService) EnqueueWithResult(ctx context.Context, userID, channelID, url string) (MusicEnqueueResult, error) {
 	if err := RecheckMusicAccess(ctx); err != nil {
-		return nil, err
+		return MusicEnqueueResult{}, err
 	}
 	if ctx.Value(musicCommandContextKey{}) == nil {
 		if err := s.CheckLegacyControl(ctx, channelID); err != nil {
-			return nil, err
+			return MusicEnqueueResult{}, err
 		}
 	}
 	musicBotLogger.Info("enqueue request", "channel_id", channelID, "user_id", userID, "url", url)
@@ -325,15 +343,15 @@ func (s *musicBotService) Enqueue(ctx context.Context, userID, channelID, url st
 	channel, err := s.channels.GetByID(ctx, channelID)
 	if err != nil {
 		musicBotLogger.DebugContext(ctx, "enqueue: channel lookup failed", "channel_id", channelID, "err", pkg.ErrText(err))
-		return nil, fmt.Errorf("channel lookup failed: %w", err)
+		return MusicEnqueueResult{}, fmt.Errorf("channel lookup failed: %w", err)
 	}
 	if channel.Type != models.ChannelTypeVoice {
 		musicBotLogger.Warn("enqueue: not a voice channel", "channel_id", channelID, "channel_type", channel.Type)
-		return nil, fmt.Errorf("%w: not a voice channel", pkg.ErrBadRequest)
+		return MusicEnqueueResult{}, fmt.Errorf("%w: not a voice channel", pkg.ErrBadRequest)
 	}
-	if s.extractTracksFn == nil {
+	if s.extractTracksFn == nil && s.extractTracksDetailedFn == nil {
 		if _, err := ffmpegPath(); err != nil {
-			return nil, &trackPlaybackError{Reason: reasonToolMissing, err: fmt.Errorf("%w: ffmpeg: %w", errToolMissing, err)}
+			return MusicEnqueueResult{}, &trackPlaybackError{Reason: reasonToolMissing, err: fmt.Errorf("%w: ffmpeg: %w", errToolMissing, err)}
 		}
 	}
 
@@ -356,35 +374,44 @@ func (s *musicBotService) Enqueue(ctx context.Context, userID, channelID, url st
 	case s.extractSem <- struct{}{}:
 	default:
 		musicBotLogger.Warn("enqueue: extraction backpressure, all slots busy", "channel_id", channelID)
-		return nil, fmt.Errorf("%w: music extraction is busy, try again shortly", pkg.ErrBadRequest)
+		return MusicEnqueueResult{}, fmt.Errorf("%w: music extraction is busy, try again shortly", pkg.ErrBadRequest)
 	}
 
 	extract := s.extractTracksFn
-	if extract == nil {
-		extract = extractTracks
-	}
 	extractStart := time.Now()
 	// The release is deferred inside this closure (rather than a plain
 	// statement after the call) so a panic inside extract -- caught further
 	// up by middleware.Recover -- can't leak the semaphore slot for the rest
 	// of the process's lifetime.
 	var tracks []models.MusicTrack
+	var sawSkippedEntry bool
 	func() {
 		defer func() { <-s.extractSem }()
-		tracks, err = extract(ctx, url, userID, requesterName)
+		switch {
+		case s.extractTracksDetailedFn != nil:
+			var result musicMetadataResult
+			result, err = s.extractTracksDetailedFn(ctx, url, userID, requesterName)
+			tracks, sawSkippedEntry = result.Tracks, result.SawSkippedEntry
+		case extract != nil:
+			tracks, err = extract(ctx, url, userID, requesterName)
+		default:
+			var result musicMetadataResult
+			result, err = extractTracksDetailed(ctx, url, userID, requesterName)
+			tracks, sawSkippedEntry = result.Tracks, result.SawSkippedEntry
+		}
 	}()
 	extractMs := time.Since(extractStart).Milliseconds()
 	if err != nil {
 		musicBotLogger.DebugContext(ctx, "enqueue: yt-dlp extract failed",
 			"channel_id", channelID, "source", "youtube", "err", pkg.ErrText(err), "duration_ms", extractMs)
-		return nil, fmt.Errorf("yt-dlp extraction failed: %w", err)
+		return MusicEnqueueResult{}, fmt.Errorf("yt-dlp extraction failed: %w", err)
 	}
 	musicBotLogger.Info("enqueue: extracted tracks", "track_count", len(tracks), "channel_id", channelID, "duration_ms", extractMs)
 	if len(tracks) == 0 {
-		return nil, fmt.Errorf("%w: no playable tracks found at URL", pkg.ErrBadRequest)
+		return MusicEnqueueResult{}, fmt.Errorf("%w: no playable tracks found at URL", pkg.ErrBadRequest)
 	}
 	if err := RecheckMusicAccess(ctx); err != nil {
-		return nil, err
+		return MusicEnqueueResult{}, err
 	}
 
 	// lockLiveBot returns with sessionMu and bot.mu held so the edit and save
@@ -392,7 +419,7 @@ func (s *musicBotService) Enqueue(ctx context.Context, userID, channelID, url st
 	bot, err := s.lockLiveBot(ctx, channel.ServerID, channelID)
 	if err != nil {
 		musicBotLogger.DebugContext(ctx, "enqueue: getOrCreateBot failed", "channel_id", channelID, "err", pkg.ErrText(err))
-		return nil, err
+		return MusicEnqueueResult{}, err
 	}
 	lifecycleLock := s.channelLifecycleLock(channelID)
 	lifecycleLocked := true // lockLiveBot returns with this held
@@ -415,7 +442,7 @@ func (s *musicBotService) Enqueue(ctx context.Context, userID, channelID, url st
 			bot.mu.Unlock()
 			bot.sessionMu.Unlock()
 			releaseLifecycleLock()
-			return nil, pkg.ErrConflict
+			return MusicEnqueueResult{}, pkg.ErrConflict
 		}
 	}
 
@@ -434,7 +461,7 @@ func (s *musicBotService) Enqueue(ctx context.Context, userID, channelID, url st
 		bot.mu.Unlock()
 		bot.sessionMu.Unlock()
 		releaseLifecycleLock()
-		return nil, fmt.Errorf("%w: music queue is full (maximum %d tracks)", pkg.ErrBadRequest, maxQueueLen)
+		return MusicEnqueueResult{}, fmt.Errorf("%w: music queue is full (maximum %d tracks)", pkg.ErrBadRequest, maxQueueLen)
 	}
 	previousQueue := cloneMusicTracks(bot.queue)
 	previousRevision := bot.revision
@@ -460,7 +487,7 @@ func (s *musicBotService) Enqueue(ctx context.Context, userID, channelID, url st
 	bot.cancelIdleTimer()
 	queueLen := len(bot.queue)
 	bot.mu.Unlock()
-	if err := s.persistEnqueue(ctx, bot, accepted, userID); err != nil {
+	if err := s.persistEnqueue(ctx, bot, accepted, userID, sawSkippedEntry); err != nil {
 		bot.mu.Lock()
 		bot.queue = previousQueue
 		bot.revision = previousRevision
@@ -488,7 +515,7 @@ func (s *musicBotService) Enqueue(ctx context.Context, userID, channelID, url st
 		}
 		bot.sessionMu.Unlock()
 		releaseLifecycleLock()
-		return nil, err
+		return MusicEnqueueResult{}, err
 	}
 	s.mu.Lock()
 	delete(s.restored, channelID)
@@ -507,7 +534,7 @@ func (s *musicBotService) Enqueue(ctx context.Context, userID, channelID, url st
 	}
 
 	s.broadcastState(bot)
-	return accepted, nil
+	return MusicEnqueueResult{AddedTracks: accepted, MayHaveSkippedTracks: sawSkippedEntry}, nil
 }
 
 // lockLiveBot returns the channel's bot with bot.mu HELD, creating and

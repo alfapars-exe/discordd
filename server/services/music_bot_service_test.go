@@ -86,6 +86,23 @@ func TestMusicQueueItemsHaveDistinctStableIDs(t *testing.T) {
 	}
 }
 
+func TestEnqueueWithResult_PropagatesObservedSkippedEntry(t *testing.T) {
+	svc := newTestMusicBotService("ch-1", "srv-1")
+	svc.extractTracksDetailedFn = func(context.Context, string, string, string) (musicMetadataResult, error) {
+		return musicMetadataResult{
+			Tracks:          []models.MusicTrack{{VideoID: "BaW_jenozKc"}},
+			SawSkippedEntry: true,
+		}, nil
+	}
+	result, err := svc.EnqueueWithResult(context.Background(), "user", "ch-1", "https://www.youtube.com/playlist?list=x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.AddedTracks) != 1 || !result.MayHaveSkippedTracks {
+		t.Fatalf("result=%+v, want one accepted track and skipped-entry advisory", result)
+	}
+}
+
 func TestMusicQueueRemoveAndReorderRequireCurrentRevision(t *testing.T) {
 	svc := newTestMusicBotService("ch-1", "srv-1")
 	bot := svc.bots["ch-1"]
