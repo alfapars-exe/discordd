@@ -21,6 +21,8 @@ assert.match(serverLauncher, /delete env\.SPACE_ID;\s*delete env\.SDK_SPACE;/,
   "the isolated API must not inherit hosted-space integration/probe selectors");
 assert.match(serverLauncher, /process\.env\.HICHAT_E2E_RUN_ID[\s\S]*mkdirSync\(runDir\)/,
   "the API launcher must create the database under the unique run identity passed by Playwright");
+assert.match(serverLauncher, /DATABASE_PATH:\s*join\(runDir, "hichat-e2e\.db"\)[\s\S]*UPLOAD_DIR:\s*uploadDir,[\s\S]*DATA_EXPORT_DIR:\s*join\(runDir, "exports"\)/,
+  "the disposable database, uploads, and generated export archives must be confined to this exact run directory");
 assert.match(serverLauncher, /function buildServer\(runDir\)[\s\S]*lstatSync\(binDir\)[\s\S]*realpathSync\(binDir\)[\s\S]*relative\(realRunDir, realBinDir\)/,
   "Go build output must be a real directory contained inside the unique run before compilation");
 assert.match(serverLauncher, /const binPath = join\(binDir, binName\)[\s\S]*existsSync\(binPath\) \|\| existsSync\(probePath\)/,
@@ -42,5 +44,18 @@ assert.match(queueProbe, /mode=ro/,
   "the E2E queue observer must open the disposable SQLite file read-only");
 assert.match(queueProbe, /COUNT\(\*\),COALESCE\(SUM[\s\S]*FROM messages m[\s\S]*COALESCE\(m\.content,''\)=\?/,
   "queue completion must match the exact unique message before accepting an empty queue");
+
+const archiveSpec = readFileSync(join(here, "..", "tests", "data-export-archive.spec.ts"), "utf8");
+assert.match(archiveSpec, /expectedOrigin:\s*"http:\/\/localhost:3030"/);
+assert.match(archiveSpec, /window\.location\.origin\s*!==\s*expectedOrigin\s*\|\|\s*target\.origin\s*!==\s*expectedOrigin/,
+  "archive acceptance requests must be pinned to the exact disposable loopback UI origin");
+assert.match(archiveSpec, /target\.origin\s*!==\s*expectedOrigin[\s\S]*fetch\("\/api\/auth\/refresh"/,
+  "the exact loopback destination must be checked before refreshing or using recipient credentials");
+assert.match(archiveSpec, /fetch\("\/api\/users\/me"[\s\S]*Authorization:\s*`Bearer \$\{token\}`[\s\S]*fetch\(target[\s\S]*Authorization:\s*`Bearer \$\{token\}`/,
+  "the peer archive denial must use an authenticated recipient identity and bearer-authenticated request");
+assert.match(archiveSpec, /identity\.status\s*!==\s*200/,
+  "the peer identity check must require an exact successful status, not merely any 2xx response");
+assert.match(archiveSpec, /expect\(peerCheck\.authenticated\)\.toBe\(true\)[\s\S]*expect\(peerCheck\.username\)\.toBe\(fixture\.recipient\.username\)[\s\S]*expect\(\[403, 404\]\)\.toContain\(peerCheck\.archiveStatus\)/,
+  "cross-owner denial must prove the generated peer is authenticated and reject 401 as an auth failure");
 
 console.log("Playwright server isolation contract passed");
