@@ -2,7 +2,9 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -13,7 +15,7 @@ import (
 )
 
 func TestDeclinePendingDeletesAtomicallyAndReturnsPostCommitData(t *testing.T) {
-	db := newSQLiteTestDB(t)
+	db := newDMDeclineFKOffDB(t)
 	seedDMUsers(t, db)
 	ctx := context.Background()
 	repo := NewSQLiteDMRepo(wrapForRepo(db))
@@ -34,6 +36,7 @@ func TestDeclinePendingDeletesAtomicallyAndReturnsPostCommitData(t *testing.T) {
 	if _, err := db.Conn.ExecContext(ctx, `INSERT INTO saved_messages(id,user_id,dm_message_id) VALUES('saved-n',?,?)`, dmBob, message.ID); err != nil {
 		t.Fatal(err)
 	}
+	seedDMDeclineDependents(t, db, channel.ID, message.ID)
 
 	changed, files, ids, err := repo.(PendingDMDecliner).DeclinePending(ctx, channel.ID, dmBob)
 	if err != nil || !changed {
@@ -55,9 +58,12 @@ func TestDeclinePendingDeletesAtomicallyAndReturnsPostCommitData(t *testing.T) {
 		{`SELECT COUNT(*) FROM saved_messages WHERE dm_message_id=?`, 0},
 		{`SELECT COUNT(*) FROM dm_reads WHERE dm_channel_id=?`, 0},
 		{`SELECT COUNT(*) FROM notifications WHERE dm_channel_id=?`, 0},
+		{`SELECT COUNT(*) FROM dm_reactions WHERE dm_message_id=?`, 0},
+		{`SELECT COUNT(*) FROM user_dm_settings WHERE dm_channel_id=?`, 0},
+		{`SELECT COUNT(*) FROM email_delivery_jobs WHERE dm_message_id=?`, 0},
 	} {
 		arg := channel.ID
-		if check.query == `SELECT COUNT(*) FROM dm_attachments WHERE dm_message_id=?` || check.query == `SELECT COUNT(*) FROM saved_messages WHERE dm_message_id=?` {
+		if strings.Contains(check.query, `dm_message_id=?`) {
 			arg = message.ID
 		}
 		if n := countRows(t, db, check.query, arg); n != check.want {
@@ -71,7 +77,7 @@ func TestDeclinePendingDeletesAtomicallyAndReturnsPostCommitData(t *testing.T) {
 }
 
 func TestDeclinePendingRollsBackAllRowsOnDeleteFailure(t *testing.T) {
-	db := newSQLiteTestDB(t)
+	db := newDMDeclineFKOffDB(t)
 	seedDMUsers(t, db)
 	ctx := context.Background()
 	repo := NewSQLiteDMRepo(wrapForRepo(db))
@@ -86,6 +92,7 @@ func TestDeclinePendingRollsBackAllRowsOnDeleteFailure(t *testing.T) {
 	if _, err := db.Conn.ExecContext(ctx, `INSERT INTO notifications(id,user_id,kind,dm_channel_id) VALUES('request-n',?,'dm_request',?)`, dmBob, channel.ID); err != nil {
 		t.Fatal(err)
 	}
+	seedDMDeclineDependents(t, db, channel.ID, message.ID)
 	if _, err := db.Conn.ExecContext(ctx, `CREATE TRIGGER fail_dm_message_delete BEFORE DELETE ON dm_messages BEGIN SELECT RAISE(ABORT, 'forced delete failure'); END`); err != nil {
 		t.Fatal(err)
 	}
@@ -101,6 +108,9 @@ func TestDeclinePendingRollsBackAllRowsOnDeleteFailure(t *testing.T) {
 		{`SELECT COUNT(*) FROM dm_messages WHERE dm_channel_id=?`, channel.ID},
 		{`SELECT COUNT(*) FROM dm_attachments WHERE dm_message_id=?`, message.ID},
 		{`SELECT COUNT(*) FROM notifications WHERE id='request-n'`, nil},
+		{`SELECT COUNT(*) FROM dm_reactions WHERE dm_message_id=?`, message.ID},
+		{`SELECT COUNT(*) FROM user_dm_settings WHERE dm_channel_id=?`, channel.ID},
+		{`SELECT COUNT(*) FROM email_delivery_jobs WHERE dm_message_id=?`, message.ID},
 	} {
 		var n int
 		var scanErr error
@@ -113,6 +123,38 @@ func TestDeclinePendingRollsBackAllRowsOnDeleteFailure(t *testing.T) {
 			t.Errorf("after rollback %s count=%d err=%v, want 1", check.query, n, scanErr)
 		}
 	}
+}
+
+func seedDMDeclineDependents(t *testing.T, db *database.DB, channelID, messageID string) {
+	t.Helper()
+	for _, statement := range []struct {
+		query string
+		args  []any
+	}{
+		{`INSERT INTO dm_reactions(id,dm_message_id,user_id,emoji) VALUES('decline-reaction',?,?,?)`, []any{messageID, dmBob, "👍"}},
+		{`INSERT INTO user_dm_settings(user_id,dm_channel_id,is_hidden) VALUES(?,?,1)`, []any{dmBob, channelID}},
+		{`INSERT INTO email_delivery_jobs(id,user_id,category,dedupe_key,subject,body_html,dm_message_id) VALUES('decline-email',?,'communication','decline-key','subject','body',?)`, []any{dmBob, messageID}},
+	} {
+		if _, err := db.Conn.Exec(statement.query, statement.args...); err != nil {
+			t.Fatalf("seed decline dependent: %v", err)
+		}
+	}
+}
+
+func newDMDeclineFKOffDB(t *testing.T) *database.DB {
+	t.Helper()
+	_, path := newSQLiteTestDBWithPath(t)
+	conn, err := sql.Open("sqlite", path+"?_pragma=foreign_keys(0)&_pragma=busy_timeout(5000)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = conn.Close() })
+	var foreignKeys int
+	if err := conn.QueryRow(`PRAGMA foreign_keys`).Scan(&foreignKeys); err != nil || foreignKeys != 0 {
+		t.Fatalf("foreign_keys=%d err=%v; test requires FK enforcement off", foreignKeys, err)
+	}
+	return &database.DB{Conn: conn}
 }
 
 func TestAcceptAndDeclinePendingDMSerialize(t *testing.T) {

@@ -81,11 +81,14 @@ func (r *sqliteDMRepo) DeclinePending(ctx context.Context, channelID, recipientI
 		// Explicit child cleanup is required for Turso/libSQL, which does not
 		// enforce the declared foreign keys. Keep it in this same transaction.
 		for _, statement := range []string{
+			`DELETE FROM email_delivery_jobs WHERE dm_message_id IN (SELECT id FROM dm_messages WHERE dm_channel_id=?)`,
+			`DELETE FROM dm_reactions WHERE dm_message_id IN (SELECT id FROM dm_messages WHERE dm_channel_id=?)`,
 			`DELETE FROM dm_attachments WHERE dm_message_id IN (SELECT id FROM dm_messages WHERE dm_channel_id=?)`,
 			`DELETE FROM saved_messages WHERE dm_message_id IN (SELECT id FROM dm_messages WHERE dm_channel_id=?)`,
 			`DELETE FROM dm_messages WHERE dm_channel_id=?`,
 			`DELETE FROM dm_reads WHERE dm_channel_id=?`,
 			`DELETE FROM notifications WHERE dm_channel_id=?`,
+			`DELETE FROM user_dm_settings WHERE dm_channel_id=?`,
 			`DELETE FROM dm_channels WHERE id=? AND status='pending'`,
 		} {
 			result, execErr := tx.ExecContext(ctx, statement, channelID)
