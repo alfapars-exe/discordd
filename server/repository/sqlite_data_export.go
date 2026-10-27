@@ -254,8 +254,28 @@ func (r *sqliteDataExportRepo) Get(ctx context.Context, userID, id string) (*mod
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, pkg.ErrNotFound
 	}
-	j.AttachmentsReady = err == nil && j.AttachmentsStatus == "ready"
-	return &j, err
+	if err != nil {
+		return nil, err
+	}
+	if j.AttachmentsStatus == "ready" {
+		// Readiness is local to the serving storage namespace. A restored DB
+		// or another instance may still have the ready row without this ZIP.
+		// Reuse the owner/generation/expiry checks and safe file open used by
+		// download; never mutate the global reservation or quota from a local
+		// filesystem observation.
+		archive, _, openErr := r.DownloadAttachments(ctx, userID, id)
+		switch {
+		case openErr == nil:
+			_ = archive.Close()
+			j.AttachmentsReady = true
+		case errors.Is(openErr, pkg.ErrNotFound):
+			code := "archive_file_unavailable"
+			j.AttachmentsError = &code
+		default:
+			return nil, openErr
+		}
+	}
+	return &j, nil
 }
 
 func (r *sqliteDataExportRepo) Download(ctx context.Context, userID, id string) ([]byte, error) {

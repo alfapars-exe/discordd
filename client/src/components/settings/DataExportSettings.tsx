@@ -133,10 +133,40 @@ export default function DataExportSettings({ userID }: { userID: string }) {
     if (jobGeneration !== getAuthGeneration()) { setJob(null); toast("error", t("dataExport.downloadError")); return; }
     pending.current = true; setBusy(true);
     const generation = getAuthGeneration();
-    const requestCurrent = () => current() && getAuthGeneration() === generation;
+    const nonce = operationNonce.current;
+    const jobID = job.id;
+    const requestCurrent = () => current() && getAuthGeneration() === generation
+      && operationNonce.current === nonce && currentJobID.current === jobID;
     try {
       const result = await downloadDataExportAttachments(job, requestCurrent);
-      if (requestCurrent() && !result.success) toast("error", t("dataExport.downloadError"));
+      if (!requestCurrent() || result.success) return;
+      if (result.status === 401 || result.status === 403) {
+        operationNonce.current++;
+        currentJobID.current = null;
+        setJobGeneration(null);
+        setJob(null);
+        toast("error", t("dataExport.jobUnavailable"));
+        return;
+      }
+      if (result.status === 404) {
+        // The ZIP can disappear after a successful status read. Preserve JSON
+        // and offer recreation while rechecking expiry and this instance's
+        // availability; an old job/session response cannot restore its button.
+        setJob({ ...job, attachments_ready: false, attachments_error: "archive_file_unavailable" });
+        const refreshed = await getDataExport(jobID, requestCurrent);
+        if (!requestCurrent()) return;
+        if (refreshed.success && refreshed.data?.id === jobID) {
+          setJob(refreshed.data);
+        } else if (refreshed.status === 401 || refreshed.status === 403 || refreshed.status === 404) {
+          operationNonce.current++;
+          currentJobID.current = null;
+          setJobGeneration(null);
+          setJob(null);
+          toast("error", t("dataExport.jobUnavailable"));
+        }
+        return;
+      }
+      toast("error", t("dataExport.downloadError"));
     } catch { if (requestCurrent()) toast("error", t("dataExport.downloadError")); }
     finally { pending.current = false; if (current()) setBusy(false); }
   }
@@ -149,6 +179,7 @@ export default function DataExportSettings({ userID }: { userID: string }) {
     {visibleJob && <p className="settings-hint">{t("dataExport.expires", { date: formatDateTime(visibleJob.expires_at) })}</p>}
     {visibleJob?.attachments_status === "pending" || visibleJob?.attachments_status === "building" ? <p className="settings-hint">{t("dataExport.attachmentsPreparing")}</p> : null}
     {visibleJob?.attachments_status === "failed" || visibleJob?.attachments_status === "not_configured" ? <p className="settings-hint">{t("dataExport.attachmentsUnavailable")}</p> : null}
+    {visibleJob?.attachments_status === "ready" && !visibleJob.attachments_ready ? <p className="settings-hint" role="status">{t("dataExport.attachmentsMissing")}</p> : null}
     <div className="settings-btn-row">
       <button className="settings-btn" disabled={busy} onClick={() => void create()}>{busy && !visibleJob ? t("dataExport.preparing") : t("dataExport.create")}</button>
       {visibleJob?.status === "ready" && <button className="settings-btn" disabled={busy} onClick={() => void download()}>{t("dataExport.download")}</button>}

@@ -1384,6 +1384,7 @@
       "downloadAttachments": "Download attachments ZIP",
       "attachmentsPreparing": "Your attachment archive is being prepared. This can take a few minutes.",
       "attachmentsUnavailable": "The attachment archive could not be prepared. Your JSON export is still available; prepare a new export to retry.",
+      "attachmentsMissing": "The ZIP archive is currently unavailable. Your JSON export is still available. You can prepare a new export if the original attachments are still stored; if the archive quota is full, you may need to wait.",
     "error": "The export could not be prepared.",
     "jobUnavailable": "This export is no longer available for this sign-in. Prepare a new export.",
     "downloadError": "The export could not be downloaded or has expired."
