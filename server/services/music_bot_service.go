@@ -487,7 +487,7 @@ func (s *musicBotService) EnqueueWithResult(ctx context.Context, userID, channel
 	bot.cancelIdleTimer()
 	queueLen := len(bot.queue)
 	bot.mu.Unlock()
-	if err := s.persistEnqueue(ctx, bot, accepted, userID); err != nil {
+	if err := s.persistEnqueue(ctx, bot, accepted, userID, sawSkippedEntry); err != nil {
 		bot.mu.Lock()
 		bot.queue = previousQueue
 		bot.revision = previousRevision

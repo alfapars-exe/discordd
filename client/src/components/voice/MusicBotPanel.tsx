@@ -254,7 +254,7 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
   }
 
   const searchBox = <div className="music-bot-search">
-    {retryAvailable&&serverId&&<div role="status"><span>{t("retryOriginalHint")}</span><button disabled={pending} onClick={()=>void mutateQueue(()=>retryMusicMutation(serverId,channelId))}>{t("retryOriginal")}</button></div>}
+    {retryAvailable&&serverId&&<div role="status"><span>{t("retryOriginalHint")}</span><button disabled={pending} onClick={()=>void mutateQueue(()=>retryMusicMutation(serverId,channelId),response=>{if((response.data as {may_have_skipped_tracks?:boolean}|undefined)?.may_have_skipped_tracks)useToastStore.getState().addToast("info",t("playlistItemsUnavailable"));})}>{t("retryOriginal")}</button></div>}
     <form onSubmit={(event) => void runSearch(event)}>
       <input value={query} maxLength={100} onChange={(event) => {
         // Results belong to the exact submitted query, not merely the voice room.

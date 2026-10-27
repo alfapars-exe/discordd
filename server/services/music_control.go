@@ -199,7 +199,7 @@ func (s *musicBotService) ApplyMusicCommand(ctx context.Context, actorID, channe
 
 // persistEnqueue is called with the live bot session lock held. Its receipt and
 // queue snapshot commit together; failed extraction/connect never writes one.
-func (s *musicBotService) persistEnqueue(ctx context.Context, bot *botInstance, tracks []models.MusicTrack, actor string) error {
+func (s *musicBotService) persistEnqueue(ctx context.Context, bot *botInstance, tracks []models.MusicTrack, actor string, mayHaveSkippedTracks bool) error {
 	if err := RecheckMusicAccess(ctx); err != nil {
 		return err
 	}
@@ -225,7 +225,10 @@ func (s *musicBotService) persistEnqueue(ctx context.Context, bot *botInstance, 
 	if session.SessionID != pending.operation.SessionID {
 		return pkg.ErrConflict
 	}
-	result, _ := json.Marshal(map[string]any{"added_tracks": tracks})
+	result, _ := json.Marshal(struct {
+		AddedTracks          []models.MusicTrack `json:"added_tracks"`
+		MayHaveSkippedTracks bool                `json:"may_have_skipped_tracks,omitempty"`
+	}{AddedTracks: tracks, MayHaveSkippedTracks: mayHaveSkippedTracks})
 	head := models.MusicControlHead{ChannelID: bot.channelID, ServerID: bot.serverID, SessionID: session.SessionID, Revision: session.Revision, MinimumProtocol: 2}
 	receipt, replayed, err := store.CommitMusicOperation(ctx, models.MusicOperationCommit{Operation: pending.operation, NextHead: head, Session: &session, Result: result})
 	if err != nil {
