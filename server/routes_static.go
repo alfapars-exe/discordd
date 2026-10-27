@@ -4,7 +4,10 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/argeinfina/hichat/config"
@@ -58,10 +61,15 @@ func registerStaticAndUploads(mux *http.ServeMux, cfg *config.Config) {
 //     2026 Lighthouse follow-up).
 //   - font-src 'self' data:: self-hosted woff2 only
 //   - img-src includes data: + blob: for avatars/attachments/E2EE thumbnails
-//   - connect-src includes wss: for WebSocket + same-origin for API
+//   - connect-src keeps wss: + same-origin API access and adds only the
+//     exact operator-configured ws:// LiveKit origin when it validates
 //   - frame-ancestors 'none' + X-Frame-Options DENY = double clickjacking defense
 //   - HSTS forces HTTPS for 2 years (production deployments behind Caddy/Nginx)
-func securityHeaders(next http.Handler) http.Handler {
+func securityHeaders(next http.Handler, trustedLiveKitURL string) http.Handler {
+	connectSrc := "connect-src 'self' wss: https:"
+	if liveKitWSSource := trustedLiveKitWSSource(trustedLiveKitURL); liveKitWSSource != "" {
+		connectSrc += " " + liveKitWSSource
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
@@ -81,7 +89,7 @@ func securityHeaders(next http.Handler) http.Handler {
 				"img-src 'self' data: blob: https:; "+
 				"font-src 'self' data:; "+
 				"media-src 'self' blob:; "+
-				"connect-src 'self' wss: https:; "+
+				connectSrc+"; "+
 				"worker-src 'self' blob:; "+
 				"frame-ancestors 'none'; "+
 				"frame-src 'none'; "+
@@ -90,6 +98,58 @@ func securityHeaders(next http.Handler) http.Handler {
 				"form-action 'self'")
 		next.ServeHTTP(w, r)
 	})
+}
+
+// trustedLiveKitWSSource returns a CSP source for the exact origin of the
+// operator-configured LiveKit WebSocket URL. The host and effective port are
+// reconstructed from parsed components; raw URL text is never copied into a
+// response header. User-controlled per-server URLs are deliberately excluded.
+func trustedLiveKitWSSource(rawURL string) string {
+	if rawURL == "" || strings.ContainsAny(rawURL, "\r\n\t \x00") {
+		return ""
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Scheme != "ws" || u.Opaque != "" || u.User != nil || u.Host == "" || u.RawQuery != "" || u.Fragment != "" {
+		return ""
+	}
+	host := u.Hostname()
+	if host == "" || !safeCSPHost(host) || strings.HasSuffix(u.Host, ":") {
+		return ""
+	}
+	port := 80
+	if rawPort := u.Port(); rawPort != "" {
+		parsedPort, err := strconv.Atoi(rawPort)
+		if err != nil || parsedPort < 1 || parsedPort > 65535 {
+			return ""
+		}
+		port = parsedPort
+	}
+	if net.ParseIP(host) != nil && strings.Contains(host, ":") {
+		host = "[" + strings.ToLower(host) + "]"
+	} else {
+		host = strings.ToLower(host)
+	}
+	return "ws://" + host + ":" + strconv.Itoa(port)
+}
+
+func safeCSPHost(host string) bool {
+	if net.ParseIP(host) != nil {
+		return true
+	}
+	if len(host) == 0 || len(host) > 253 {
+		return false
+	}
+	for _, label := range strings.Split(host, ".") {
+		if len(label) == 0 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, r := range label {
+			if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-') {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // setStaticCacheHeaders applies cache lifetimes to embedded frontend assets.
