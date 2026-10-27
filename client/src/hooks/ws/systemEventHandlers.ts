@@ -4,6 +4,7 @@
  */
 
 import { getAuthGeneration } from "../../api/client";
+import { invalidateUserProfile } from "../useUserProfile";
 import { useChannelStore } from "../../stores/channelStore";
 import { useGameJoinStore } from "../../stores/gameJoinStore";
 import { useMessageStore } from "../../stores/messageStore";
@@ -57,6 +58,12 @@ import type { WSHandlerContext } from "./types";
  */
 let hadReadyBefore = false;
 let voiceReadyIntent = 0;
+
+function invalidateRedactedMemberProfile(userId: string): void {
+  // The redacted event itself clears cached roster fields. Only a currently
+  // open profile card refetches through the audience-filtered profile API.
+  invalidateUserProfile(userId);
+}
 
 function notificationTargetStillAvailable(n: { server_id: string | null; channel_id: string | null; dm_channel_id: string | null; payload: Record<string, unknown> }): boolean {
   if (n.server_id) {
@@ -223,7 +230,12 @@ export async function handleSystemEvent(
 
     case "member_join": {
       const serverId = msg.server_id;
-      if (serverId) useMemberStore.getState().handleMemberJoin(serverId, msg.d);
+      if (serverId) {
+        useMemberStore.getState().handleMemberJoin(serverId, msg.d);
+        if (msg.d.profile_fields_redacted) {
+          invalidateRedactedMemberProfile(msg.d.id);
+        }
+      }
       // New member — every channel's Sender Key recipient set potentially
       // grew; payload carries no per-channel breakdown, so mark all.
       markAllChannelRecipientsStale();
@@ -257,12 +269,18 @@ export async function handleSystemEvent(
       if (serverId) {
         // Server-scoped update (role change, nickname, etc.)
         useMemberStore.getState().handleMemberUpdate(serverId, updatedMember);
+        if (updatedMember.profile_fields_redacted) {
+          invalidateRedactedMemberProfile(updatedMember.id);
+        }
       } else {
         // Profile update (display_name, avatar) — broadcast to all servers.
         // Update every cached server's member list.
         const cached = useMemberStore.getState().membersByServer;
         for (const sid of Object.keys(cached)) {
           useMemberStore.getState().handleMemberUpdate(sid, updatedMember);
+          if (updatedMember.profile_fields_redacted) {
+            invalidateRedactedMemberProfile(updatedMember.id);
+          }
         }
       }
       useVoiceStore.getState().updateUserInfo(
@@ -280,6 +298,14 @@ export async function handleSystemEvent(
       if (updatedMember.id === myUserId && serverId) {
         useChannelStore.getState().fetchChannels(serverId);
       }
+      return true;
+    }
+
+    case "profile_audience_invalidated": {
+      const userId = msg.d?.user_id;
+      if (typeof userId !== "string" || !userId) return true;
+      useMemberStore.getState().handleProfileAudienceInvalidated(userId);
+      invalidateUserProfile(userId);
       return true;
     }
 

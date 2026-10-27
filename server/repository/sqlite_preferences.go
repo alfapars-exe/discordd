@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/models"
@@ -47,6 +48,72 @@ func (r *sqlitePreferencesRepo) Get(ctx context.Context, userID string) (*models
 		return nil, fmt.Errorf("read preferences: %w", err)
 	}
 	return &p, nil
+}
+
+// GetManyStrict is a bounded bulk reader for profile audience checks. Unlike
+// notification fanout's tolerant GetMany contract, malformed preferences
+// fail the privacy read so they can never default to all_servers.
+func (r *sqlitePreferencesRepo) GetManyStrict(ctx context.Context, userIDs []string) (map[string]*models.UserPreferences, error) {
+	const batchSize = 400
+	result := make(map[string]*models.UserPreferences, len(userIDs))
+	unique := make([]string, 0, len(userIDs))
+	seen := make(map[string]struct{}, len(userIDs))
+	for _, id := range userIDs {
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		unique = append(unique, id)
+		result[id] = &models.UserPreferences{SchemaVersion: models.PreferencesSchemaVersion, UserID: id, Data: json.RawMessage(`{}`)}
+	}
+	for start := 0; start < len(unique); start += batchSize {
+		end := start + batchSize
+		if end > len(unique) {
+			end = len(unique)
+		}
+		ids := unique[start:end]
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+		rows, err := r.db.QueryContext(ctx,
+			`SELECT user_id, data, updated_at FROM user_preferences WHERE user_id IN (`+placeholders+`)`,
+			stringArgs(ids)...,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("read preferences batch: %w", err)
+		}
+		for rows.Next() {
+			var id, raw string
+			var updatedAt string
+			if err := rows.Scan(&id, &raw, &updatedAt); err != nil {
+				_ = rows.Close()
+				return nil, fmt.Errorf("scan preferences batch: %w", err)
+			}
+			filtered, err := models.FilterDeviceLocalPreferences(json.RawMessage(raw))
+			if err != nil {
+				_ = rows.Close()
+				return nil, fmt.Errorf("filter preferences batch: %w", err)
+			}
+			result[id] = &models.UserPreferences{SchemaVersion: models.PreferencesSchemaVersion, UserID: id, Data: filtered, UpdatedAt: updatedAt}
+		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return nil, fmt.Errorf("iterate preferences batch: %w", err)
+		}
+		if err := rows.Close(); err != nil {
+			return nil, fmt.Errorf("close preferences batch: %w", err)
+		}
+	}
+	return result, nil
+}
+
+func stringArgs(values []string) []any {
+	args := make([]any, len(values))
+	for i := range values {
+		args[i] = values[i]
+	}
+	return args
 }
 
 func (r *sqlitePreferencesRepo) Upsert(ctx context.Context, userID string, partial json.RawMessage) (*models.UserPreferences, error) {

@@ -43,7 +43,7 @@ vi.mock("../../stores/messageStore", () => ({
   },
 }));
 vi.mock("../../stores/memberStore", () => ({
-  useMemberStore: { getState: () => ({ handleReady: vi.fn(), fetchMembers: vi.fn(), membersByServer: {}, handlePresenceUpdate: vi.fn(), handleMemberUpdate: vi.fn(), handleRoleUpdate: vi.fn(), handleRoleDelete: vi.fn() }) },
+  useMemberStore: { getState: () => ({ handleReady: vi.fn(), fetchMembers: vi.fn(), membersByServer: {}, handlePresenceUpdate: vi.fn(), handleMemberUpdate: vi.fn(), handleProfileAudienceInvalidated: vi.fn(), handleRoleUpdate: vi.fn(), handleRoleDelete: vi.fn() }) },
 }));
 vi.mock("../../stores/presenceStore", () => ({
   usePresenceStore: { getState: () => ({ handleReady: vi.fn(), handlePresenceUpdate: vi.fn() }) },
@@ -277,6 +277,41 @@ describe("handleSystemEvent — ready reconnect refetch", () => {
     vi.spyOn(useMemberStore, "getState").mockReturnValue(members);
     await handleSystemEvent({ op: "server_update", d: { id: "background-server", owner_id: "new-owner", e2ee_enabled: false } } as WSMessage, ctx, vi.fn());
     expect(members.fetchMembers).toHaveBeenCalledExactlyOnceWith("background-server", true);
+  });
+  it("invalidates only an open profile card on a redacted member event", async () => {
+    const { handleSystemEvent } = await loadFresh();
+    const { useMemberStore } = await import("../../stores/memberStore");
+    const members = useMemberStore.getState();
+    vi.spyOn(useMemberStore, "getState").mockReturnValue(members);
+    const dispatchSpy = vi.spyOn(window, "dispatchEvent");
+
+    await handleSystemEvent({
+      op: "member_update",
+      server_id: "background-server",
+      d: { id: "target", profile_fields_redacted: true },
+    } as WSMessage, ctx, vi.fn());
+    expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({
+      type: "hichat:profile-invalidated",
+      detail: { userId: "target" },
+    }));
+  });
+  it("invalidates an open DM/friend profile on the privacy-safe global signal", async () => {
+    const { handleSystemEvent } = await loadFresh();
+    const { useMemberStore } = await import("../../stores/memberStore");
+    const members = useMemberStore.getState();
+    vi.spyOn(useMemberStore, "getState").mockReturnValue(members);
+    const dispatchSpy = vi.spyOn(window, "dispatchEvent");
+
+    await handleSystemEvent({
+      op: "profile_audience_invalidated",
+      d: { user_id: "target" },
+    } as WSMessage, ctx, vi.fn());
+
+    expect(members.handleProfileAudienceInvalidated).toHaveBeenCalledExactlyOnceWith("target");
+    expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({
+      type: "hichat:profile-invalidated",
+      detail: { userId: "target" },
+    }));
   });
   it.each(["role_update", "role_delete", "member_update"] as const)("%s refreshes the originating server rather than the currently browsed one", async (op) => {
     const { handleSystemEvent } = await loadFresh();

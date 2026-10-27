@@ -7,7 +7,7 @@ vi.mock("../api/profile", () => ({
 }));
 
 import { getUserProfile } from "../api/profile";
-import { useUserProfile } from "./useUserProfile";
+import { invalidateUserProfile, useUserProfile } from "./useUserProfile";
 
 const mockGet = vi.mocked(getUserProfile);
 
@@ -85,5 +85,24 @@ describe("useUserProfile", () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(result.current.profile?.id).toBe("u2");
+  });
+
+  it("drops an in-flight profile response after audience invalidation and refetches", async () => {
+    const stale = deferred<Res>();
+    const fresh = deferred<Res>();
+    mockGet.mockReturnValueOnce(stale.promise).mockReturnValueOnce(fresh.promise);
+    const { result } = renderHook(() => useUserProfile("u1", true));
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(1));
+
+    invalidateUserProfile("u1");
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(2));
+    expect(result.current).toEqual({ profile: null, loading: true });
+
+    stale.resolve({ success: true, data: profile("u1", "stale restricted bio") } as Res);
+    await Promise.resolve();
+    expect(result.current.profile).toBeNull();
+
+    fresh.resolve({ success: true, data: profile("u1", "current allowed bio") } as Res);
+    await waitFor(() => expect(result.current.profile?.bio).toBe("current allowed bio"));
   });
 });

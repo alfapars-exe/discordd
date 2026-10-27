@@ -468,25 +468,36 @@ func TestUnban_DeletesRow(t *testing.T) {
 func TestUpdateProfile_RefreshesHubUserInfoCache(t *testing.T) {
 	h := newMemberHarness()
 	const uid = "u1"
+	bio := "profile only"
 
 	h.userRepo.GetByIDFn = func(_ context.Context, id string) (*models.User, error) {
-		return &models.User{ID: id, Username: "alice"}, nil
+		return &models.User{ID: id, Username: "alice", Bio: &bio}, nil
 	}
 	h.userRepo.UpdateFn = func(_ context.Context, _ *models.User) error { return nil }
 	h.serverRepo.GetUserServersFn = func(_ context.Context, _ string) ([]models.ServerListItem, error) {
-		return nil, nil
+		return []models.ServerListItem{{ID: "server-1"}}, nil
 	}
+	h.svc.(*memberService).SetProfileAudienceInvalidator(profileAudienceInvalidatorStub{viewers: []string{"friend-1", "server-member-1"}})
 
 	var gotUserID, gotUsername, gotDisplay, gotAvatar string
 	h.hub.UpdateUserInfoFn = func(userID, username, displayName, avatarURL string) {
 		gotUserID, gotUsername, gotDisplay, gotAvatar = userID, username, displayName, avatarURL
 	}
+	var invalidation ws.Event
+	var invalidationRecipients []string
+	h.hub.BroadcastToUsersFn = func(users []string, event ws.Event) {
+		invalidationRecipients, invalidation = users, event
+	}
 
 	display := "Alice Yeni"
 	avatar := "/uploads/new.png"
 	req := &models.UpdateProfileRequest{DisplayName: &display, AvatarURL: &avatar}
-	if _, err := h.svc.UpdateProfile(context.Background(), uid, req); err != nil {
+	updated, err := h.svc.UpdateProfile(context.Background(), uid, req)
+	if err != nil {
 		t.Fatalf("UpdateProfile error: %v", err)
+	}
+	if updated.Bio == nil || *updated.Bio != bio {
+		t.Fatalf("owner response lost own profile data: %+v", updated)
 	}
 
 	if gotUserID != uid || gotUsername != "alice" {
@@ -494,6 +505,23 @@ func TestUpdateProfile_RefreshesHubUserInfoCache(t *testing.T) {
 	}
 	if gotDisplay != display || gotAvatar != avatar {
 		t.Errorf("UpdateUserInfo display/avatar = %q/%q, want %q/%q", gotDisplay, gotAvatar, display, avatar)
+	}
+	if len(h.broadcasts) != 1 {
+		t.Fatalf("profile broadcasts = %d, want one server broadcast", len(h.broadcasts))
+	}
+	broadcast, ok := h.broadcasts[0].Data.(*models.MemberWithRoles)
+	if !ok {
+		t.Fatalf("profile broadcast payload type = %T", h.broadcasts[0].Data)
+	}
+	if broadcast.Bio != nil || !broadcast.ProfileFieldsRedacted {
+		t.Fatalf("server broadcast included profile data or missed invalidation marker: %+v", broadcast)
+	}
+	if len(invalidationRecipients) != 2 || invalidationRecipients[0] != "friend-1" || invalidationRecipients[1] != "server-member-1" || invalidation.Op != ws.OpProfileAudienceInvalidated {
+		t.Fatalf("scoped profile invalidation recipients=%v event %+v", invalidationRecipients, invalidation)
+	}
+	data, ok := invalidation.Data.(map[string]string)
+	if !ok || len(data) != 1 || data["user_id"] != uid {
+		t.Fatalf("global invalidation leaked profile data: %#v", invalidation.Data)
 	}
 	if len(h.profileUpdates.actors) != 1 || h.profileUpdates.actors[0] != uid {
 		t.Errorf("profile update notifications = %v, want [%s]", h.profileUpdates.actors, uid)
@@ -533,6 +561,31 @@ func TestUpdateProfile_NoCacheRefreshWhenUpdateFails(t *testing.T) {
 	}
 	if called {
 		t.Error("UpdateUserInfo must not be called when the DB update fails")
+	}
+}
+
+func TestSetNicknameBroadcastRedactsProfileFields(t *testing.T) {
+	h := newMemberHarness()
+	bio := "profile only"
+	h.userRepo.GetByIDFn = func(_ context.Context, id string) (*models.User, error) {
+		return &models.User{ID: id, Username: "target", Bio: &bio}, nil
+	}
+	h.roleRepo.GetByUserIDAndServerFn = func(context.Context, string, string) ([]models.Role, error) { return nil, nil }
+	h.timeoutRepo.GetFn = func(context.Context, string, string) (*models.MemberTimeout, error) { return nil, nil }
+	nickname := "new nick"
+	updated, err := h.svc.SetNickname(context.Background(), "server", "target", "target", &nickname)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Bio == nil || *updated.Bio != bio {
+		t.Fatalf("mutation result lost profile data for self: %+v", updated)
+	}
+	if len(h.broadcasts) != 1 {
+		t.Fatalf("broadcasts=%d, want 1", len(h.broadcasts))
+	}
+	broadcast, ok := h.broadcasts[0].Data.(*models.MemberWithRoles)
+	if !ok || broadcast.Bio != nil || !broadcast.ProfileFieldsRedacted {
+		t.Fatalf("nickname WS broadcast is not safely redacted: %#v", h.broadcasts[0].Data)
 	}
 }
 
@@ -583,13 +636,25 @@ func TestModifyRoles_AvoidsN_Plus_1_UsesSingleGetAllByServer(t *testing.T) {
 	}
 	// GetByID on member (post-modify enrichment) is unrelated to the N+1.
 	// UserRepo returns a plain user so member enrichment succeeds.
+	bio := "target profile"
 	h.userRepo.GetByIDFn = func(_ context.Context, id string) (*models.User, error) {
-		return &models.User{ID: id, Username: id}, nil
+		return &models.User{ID: id, Username: id, Bio: &bio}, nil
 	}
 
-	if _, err := h.svc.ModifyRoles(context.Background(), srv, actor, target,
-		[]string{"r-1", "r-2"}); err != nil {
+	updated, err := h.svc.ModifyRoles(context.Background(), srv, actor, target,
+		[]string{"r-1", "r-2"})
+	if err != nil {
 		t.Fatalf("ModifyRoles: %v", err)
+	}
+	if updated.Bio == nil || *updated.Bio != bio {
+		t.Fatalf("authorized mutation result unexpectedly lost target fields: %+v", updated)
+	}
+	if len(h.broadcasts) != 1 {
+		t.Fatalf("role-update broadcasts=%d, want 1", len(h.broadcasts))
+	}
+	broadcast, ok := h.broadcasts[0].Data.(*models.MemberWithRoles)
+	if !ok || broadcast.Bio != nil || !broadcast.ProfileFieldsRedacted {
+		t.Fatalf("role-update broadcast is not safely redacted: %#v", h.broadcasts[0].Data)
 	}
 
 	if getByIDCalls != 0 {

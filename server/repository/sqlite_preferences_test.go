@@ -81,6 +81,53 @@ func TestSQLitePreferencesRecursiveMergeAndCompatibility(t *testing.T) {
 	}
 }
 
+func TestSQLitePreferencesGetManyStrictIsBoundedAndDefaultsMissingRows(t *testing.T) {
+	_, repo := preferencesTestRepo(t)
+	ctx := context.Background()
+	if _, err := repo.Upsert(ctx, "prefs-user", json.RawMessage(`{"privacy":{"profileAudience":"friends_only"}}`)); err != nil {
+		t.Fatal(err)
+	}
+	bulk, ok := repo.(interface {
+		GetManyStrict(context.Context, []string) (map[string]*models.UserPreferences, error)
+	})
+	if !ok {
+		t.Fatal("preferences repo does not implement strict bounded bulk reads")
+	}
+	ids := make([]string, 1001)
+	for i := range ids {
+		ids[i] = fmt.Sprintf("missing-%d", i)
+	}
+	ids[1000] = "prefs-user"
+	ids = append(ids, "prefs-user") // duplicates must not alter the result.
+	got, err := bulk.GetManyStrict(ctx, ids)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1001 {
+		t.Fatalf("GetManyStrict returned %d IDs, want 1001 unique IDs", len(got))
+	}
+	if string(got["missing-0"].Data) != `{}` {
+		t.Fatalf("missing-row default = %s, want {}", got["missing-0"].Data)
+	}
+	if !strings.Contains(string(got["prefs-user"].Data), `"friends_only"`) {
+		t.Fatalf("stored preference missing from batch result: %s", got["prefs-user"].Data)
+	}
+}
+
+func TestProfileAudienceBatchReaderRejectsCorruptPreferences(t *testing.T) {
+	db, repo := preferencesTestRepo(t)
+	if _, err := db.Conn.Exec(`INSERT INTO user_preferences (user_id, data) VALUES (?, ?)`, "prefs-user", `{`); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	privacyReader := repo.(interface {
+		GetManyStrict(context.Context, []string) (map[string]*models.UserPreferences, error)
+	})
+	if _, err := privacyReader.GetManyStrict(ctx, []string{"prefs-user"}); err == nil {
+		t.Fatal("strict profile reader accepted corrupt preference and could expose default all_servers profile")
+	}
+}
+
 func TestSQLitePreferencesConcurrentDisjointLeafUpdates(t *testing.T) {
 	_, repo := preferencesTestRepo(t)
 	ctx := context.Background()

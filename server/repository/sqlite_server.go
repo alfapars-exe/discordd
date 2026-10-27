@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/models"
@@ -517,6 +518,66 @@ func (r *sqliteServerRepo) GetMemberServerIDs(ctx context.Context, userID string
 func (r *sqliteServerRepo) ListMemberIDs(ctx context.Context, serverID string) ([]string, error) {
 	query := `SELECT user_id FROM server_members WHERE server_id = ?`
 	return r.queryStringColumn(ctx, "failed to list member ids", "member id", query, serverID)
+}
+
+// ListSmallSharedServerUserIDs returns targets sharing any small server with
+// viewer. It is deliberately bulk so member-roster privacy checks do not
+// issue a membership/count query for every target.
+func (r *sqliteServerRepo) ListSmallSharedServerUserIDs(ctx context.Context, viewerID string, targetIDs []string, maxMembers int) (map[string]bool, error) {
+	const batchSize = 400
+	result := make(map[string]bool, len(targetIDs))
+	seen := make(map[string]struct{}, len(targetIDs))
+	unique := make([]string, 0, len(targetIDs))
+	for _, id := range targetIDs {
+		if id == "" || id == viewerID {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		unique = append(unique, id)
+	}
+	for start := 0; start < len(unique); start += batchSize {
+		end := start + batchSize
+		if end > len(unique) {
+			end = len(unique)
+		}
+		ids := unique[start:end]
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+		args := make([]any, 0, len(ids)+2)
+		args = append(args, maxMembers, viewerID)
+		for _, id := range ids {
+			args = append(args, id)
+		}
+		rows, err := r.db.QueryContext(ctx, `
+			SELECT DISTINCT target.user_id
+			FROM server_members AS viewer
+			JOIN server_members AS target ON target.server_id = viewer.server_id
+			JOIN (
+				SELECT server_id FROM server_members GROUP BY server_id HAVING COUNT(*) <= ?
+			) AS small_servers ON small_servers.server_id = viewer.server_id
+			WHERE viewer.user_id = ? AND target.user_id IN (`+placeholders+`)`, args...)
+		if err != nil {
+			return nil, fmt.Errorf("list profile audience shared small servers: %w", err)
+		}
+		for rows.Next() {
+			var id string
+			if err := rows.Scan(&id); err != nil {
+				_ = rows.Close()
+				return nil, fmt.Errorf("scan profile audience shared small server: %w", err)
+			}
+			result[id] = true
+		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return nil, fmt.Errorf("iterate profile audience shared small servers: %w", err)
+		}
+		if err := rows.Close(); err != nil {
+			return nil, fmt.Errorf("close profile audience shared small servers: %w", err)
+		}
+	}
+	return result, nil
 }
 
 // queryStringColumn runs a single-string-column query and collects the

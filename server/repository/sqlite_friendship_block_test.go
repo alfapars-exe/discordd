@@ -54,6 +54,29 @@ func TestFriendshipIndependentDirectedBlocks(t *testing.T) {
 	}
 }
 
+func TestListBlockedUserIDsReturnsEitherDirectionInBoundedBulkLookup(t *testing.T) {
+	db := newTestDB(t)
+	seedDMUsers(t, db)
+	ctx := context.Background()
+	repo := NewSQLiteFriendshipRepo(db.Conn).(ProfileAudienceBlockReader)
+	now := time.Now().UTC()
+	for _, f := range []*models.Friendship{
+		{ID: "target-blocks-bob", UserID: dmAlice, FriendID: dmBob, Status: models.FriendshipStatusBlocked, CreatedAt: now, UpdatedAt: now},
+		{ID: "carol-blocks-target", UserID: dmCarol, FriendID: dmAlice, Status: models.FriendshipStatusBlocked, CreatedAt: now, UpdatedAt: now},
+	} {
+		if err := NewSQLiteFriendshipRepo(db.Conn).Create(ctx, f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	blocked, err := repo.ListBlockedUserIDs(ctx, dmAlice, []string{dmBob, dmCarol, "dm-dave"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !blocked[dmBob] || !blocked[dmCarol] || blocked["dm-dave"] {
+		t.Fatalf("blocked candidates = %v", blocked)
+	}
+}
+
 func TestAtomicBlockWinsConcurrentPendingAcceptance(t *testing.T) {
 	db := newTestDB(t)
 	seedDMUsers(t, db)

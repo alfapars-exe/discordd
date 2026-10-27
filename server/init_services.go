@@ -428,6 +428,16 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	}); ok {
 		setter.SetGameActivitySync(gameActivityService, hub)
 	}
+	if setter, ok := preferencesService.(interface {
+		SetProfileAudienceInvalidator(services.ProfileAudienceInvalidator)
+	}); ok {
+		setter.SetProfileAudienceInvalidator(profileAudiencePolicy)
+	}
+	if setter, ok := memberService.(interface {
+		SetProfileAudienceInvalidator(services.ProfileAudienceInvalidator)
+	}); ok {
+		setter.SetProfileAudienceInvalidator(profileAudiencePolicy)
+	}
 	appLogService := services.NewAppLogService(repos.AppLog)
 	clipRecordingService := services.NewClipRecordingService(voiceService, repos.Preferences, appLogService)
 	// auditLogService itself was constructed earlier (right after
