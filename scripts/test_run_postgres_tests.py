@@ -19,6 +19,7 @@ class PostgreSQLRunnerTests(unittest.TestCase):
 
     def completed(self):
         return [
+            {"Action": "pass", "Package": "github.com/argeinfina/hichat", "Test": "TestPurgeExpiredNotificationsPostgres"},
             {"Action": "pass", "Package": "github.com/argeinfina/hichat"},
             {"Action": "pass", "Package": "github.com/argeinfina/hichat/repository"},
             {"Action": "pass", "Package": "github.com/argeinfina/hichat/database"},
@@ -45,6 +46,23 @@ class PostgreSQLRunnerTests(unittest.TestCase):
             }]),
             0,
         )
+
+    def test_postgres_retention_must_emit_an_explicit_pass(self):
+        target_pass = self.completed()[0]
+        without_target = self.completed()[1:]
+        self.assertEqual(self.execute(without_target), 1)  # package pass, target missing
+        self.assertEqual(self.execute(self.completed()[:-1]), 1)  # database package missing
+        self.assertEqual(self.execute(without_target + [{
+            "Action": "fail",
+            "Package": "github.com/argeinfina/hichat",
+            "Test": "TestPurgeExpiredNotificationsPostgres",
+        }]), 1)
+        self.assertEqual(self.execute(without_target + [{
+            "Action": "skip",
+            "Package": "github.com/argeinfina/hichat",
+            "Test": "TestPurgeExpiredNotificationsPostgres",
+        }]), 1)
+        self.assertEqual(self.execute([event for event in self.completed() if event != target_pass]), 1)
 
     def test_missing_package_or_process_failure_is_retained(self):
         self.assertEqual(self.execute(self.completed()[:2]), 1)

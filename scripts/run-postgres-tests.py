@@ -31,6 +31,7 @@ def main():
     process = subprocess.Popen(command, cwd=root / "server", stdout=subprocess.PIPE, text=True)
     skipped = []
     completed = set()
+    postgres_retention_passed = False
     invalid_output = False
     for line in process.stdout:
         # Persist ordinary go-test output without printing database credentials.
@@ -48,6 +49,10 @@ def main():
             if (event.get("Package") != "github.com/argeinfina/hichat"
                     or event.get("Test") == REQUIRED_SERVER_POSTGRES_TEST):
                 skipped.append(event["Test"])
+        if (event.get("Action") == "pass"
+                and event.get("Package") == "github.com/argeinfina/hichat"
+                and event.get("Test") == REQUIRED_SERVER_POSTGRES_TEST):
+            postgres_retention_passed = True
         if event.get("Action") == "pass" and not event.get("Test"):
             completed.add(event.get("Package"))
         if event.get("Action") in {"pass", "fail", "skip"}:
@@ -65,7 +70,9 @@ def main():
     missing_packages = REQUIRED_PACKAGES - completed
     if missing_packages:
         print("Required PostgreSQL packages did not complete: " + ", ".join(sorted(missing_packages)), file=sys.stderr)
-    return code or int(bool(skipped) or bool(missing_packages) or invalid_output)
+    if not postgres_retention_passed:
+        print(f"Required PostgreSQL test did not pass: {REQUIRED_SERVER_POSTGRES_TEST}", file=sys.stderr)
+    return code or int(bool(skipped) or bool(missing_packages) or not postgres_retention_passed or invalid_output)
 
 
 if __name__ == "__main__":
