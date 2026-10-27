@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -58,4 +59,17 @@ assert.match(archiveSpec, /identity\.status\s*!==\s*200/,
 assert.match(archiveSpec, /expect\(peerCheck\.authenticated\)\.toBe\(true\)[\s\S]*expect\(peerCheck\.username\)\.toBe\(fixture\.recipient\.username\)[\s\S]*expect\(\[403, 404\]\)\.toContain\(peerCheck\.archiveStatus\)/,
   "cross-owner denial must prove the generated peer is authenticated and reject 401 as an auth failure");
 
+
+const deletionHelper = readFileSync(join(here, "remove-synthetic-export-archive.cjs"), "utf8");
+assert.match(deletionHelper, /hex48\.test\(jobID\)/);
+assert.match(deletionHelper, /fresh disposable run identity/);
+assert.match(deletionHelper, /realpathSync/);
+assert.match(deletionHelper, /isSymbolicLink/);
+assert.match(deletionHelper, /fstatSync/);
+assert.match(deletionHelper, /unlinkSync\(path\)/);
+assert.doesNotMatch(deletionHelper, /rmSync|recursive\s*:/, "the deletion probe must never recursively remove a directory");
+assert.match(archiveSpec, /removeSyntheticExportArchive\(jobID\)/);
+assert.match(archiveSpec, /newJobID\)\.not\.toBe\(jobID\)/);
+
+execFileSync(process.execPath, [join(here, "test-archive-delete-isolation.mjs")], { stdio: "inherit" });
 console.log("Playwright server isolation contract passed");
