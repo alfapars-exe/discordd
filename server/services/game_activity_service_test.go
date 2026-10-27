@@ -23,6 +23,28 @@ func (activityServiceFriends) ListFriends(context.Context, string) ([]models.Fri
 	return []models.FriendshipWithUser{{UserID: "viewer", Status: models.FriendshipStatusAccepted}}, nil
 }
 
+type blockingActivityServiceFriends struct {
+	entered chan struct{}
+	once    sync.Once
+}
+
+type observingDoneContext struct {
+	context.Context
+	doneObserved chan struct{}
+	once         sync.Once
+}
+
+func (c *observingDoneContext) Done() <-chan struct{} {
+	c.once.Do(func() { close(c.doneObserved) })
+	return c.Context.Done()
+}
+
+func (f *blockingActivityServiceFriends) ListFriends(ctx context.Context, _ string) ([]models.FriendshipWithUser, error) {
+	f.once.Do(func() { close(f.entered) })
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
 type activityServiceServers struct{}
 
 func (activityServiceServers) IsMember(context.Context, string, string) (bool, error) {
@@ -218,6 +240,85 @@ func TestGameActivityServiceStartedWorkerExpiresLeaseAndStopJoins(t *testing.T) 
 	svc.mu.Unlock()
 	if remains {
 		t.Fatal("expired source remains after worker reconciliation")
+	}
+}
+
+func TestGameActivityTargetLockWaitHonorsContextCancellation(t *testing.T) {
+	svc := NewGameActivityService(&activityPolicyStub{}, activityServiceFriends{}, activityServiceServers{}, &testutil.MockBroadcaster{})
+	unlock := svc.lockTarget("target")
+	lockHeld := true
+	t.Cleanup(func() {
+		if lockHeld {
+			unlock()
+		}
+	})
+
+	baseCtx, cancel := context.WithCancel(context.Background())
+	ctx := &observingDoneContext{Context: baseCtx, doneObserved: make(chan struct{})}
+	defer cancel()
+	started := make(chan struct{})
+	done := make(chan bool, 1)
+	go func() {
+		close(started)
+		_, ok := svc.lockTargetContext(ctx, "target")
+		done <- ok
+	}()
+	<-started
+	select {
+	case <-ctx.doneObserved:
+	case <-time.After(time.Second):
+		t.Fatal("lock waiter never reached the context-aware wait")
+	}
+	cancel()
+	select {
+	case acquired := <-done:
+		if acquired {
+			t.Fatal("cancelled lock waiter acquired target lock")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("target lock waiter did not return after context cancellation")
+	}
+	unlock()
+	lockHeld = false
+	if release, ok := svc.lockTargetContext(context.Background(), "target"); !ok {
+		t.Fatal("cancelled waiter consumed target lock token")
+	} else {
+		release()
+	}
+}
+
+func TestGameActivityServiceStopCancelsInFlightReconcile(t *testing.T) {
+	ticks := make(chan time.Time, 1)
+	friends := &blockingActivityServiceFriends{entered: make(chan struct{})}
+	svc := NewGameActivityService(&activityPolicyStub{}, friends, activityServiceServers{}, &testutil.MockBroadcaster{})
+	svc.tickerFactory = func(time.Duration) (<-chan time.Time, func()) { return ticks, func() {} }
+	svc.mu.Lock()
+	svc.sources["target"] = map[uint64]gameActivitySource{
+		1: {incarnation: "source", game: ws.GameActivityClientGame{ID: "game", Name: "Game"}, changedAt: time.Now(), leaseUntil: time.Now().Add(gameActivityLease)},
+	}
+	svc.mu.Unlock()
+	svc.Start()
+	ticks <- time.Now()
+	select {
+	case <-friends.entered:
+	case <-time.After(time.Second):
+		t.Fatal("worker did not reach the controlled in-flight repository call")
+	}
+
+	stopped := make(chan struct{})
+	go func() {
+		svc.Stop()
+		close(stopped)
+	}()
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("Stop did not cancel and join the in-flight reconcile worker")
+	}
+	select {
+	case <-svc.workerDone:
+	default:
+		t.Fatal("worker remains active after Stop returned")
 	}
 }
 

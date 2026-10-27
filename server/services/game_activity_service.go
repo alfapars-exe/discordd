@@ -54,8 +54,9 @@ type GameActivityService struct {
 	started         bool
 	stopped         bool
 	workerDone      chan struct{}
+	workerCancel    context.CancelFunc
 	tickerFactory   func(time.Duration) (<-chan time.Time, func())
-	targetLocks     [64]sync.Mutex
+	targetLocks     [64]chan struct{}
 	policy          GameActivityPrivacyPolicy
 	epoch           string
 	friends         gameActivityRecipientFriendReader
@@ -72,12 +73,35 @@ type GameActivityService struct {
 	gameJoin        *GameJoinService
 }
 
-func (s *GameActivityService) lockTarget(userID string) func() {
+func (s *GameActivityService) targetLock(userID string) chan struct{} {
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(userID))
-	lock := &s.targetLocks[h.Sum32()%uint32(len(s.targetLocks))]
-	lock.Lock()
-	return lock.Unlock
+	return s.targetLocks[h.Sum32()%uint32(len(s.targetLocks))]
+}
+
+func (s *GameActivityService) lockTarget(userID string) func() {
+	lock, ok := s.lockTargetContext(context.Background(), userID)
+	if !ok {
+		panic("unbounded game activity target lock acquisition was cancelled")
+	}
+	return lock
+}
+
+func (s *GameActivityService) lockTargetContext(ctx context.Context, userID string) (func(), bool) {
+	if err := ctx.Err(); err != nil {
+		return nil, false
+	}
+	lock := s.targetLock(userID)
+	select {
+	case <-lock:
+		if err := ctx.Err(); err != nil {
+			lock <- struct{}{}
+			return nil, false
+		}
+		return func() { lock <- struct{}{} }, true
+	case <-ctx.Done():
+		return nil, false
+	}
 }
 
 func NewGameActivityService(policy GameActivityPrivacyPolicy, friends gameActivityRecipientFriendReader, servers gameActivityRecipientServerReader, hub ws.Broadcaster) *GameActivityService {
@@ -85,10 +109,15 @@ func NewGameActivityService(policy GameActivityPrivacyPolicy, friends gameActivi
 	if provider, ok := hub.(interface{ GameActivityEpoch() string }); ok && provider.GameActivityEpoch() != "" {
 		epoch = provider.GameActivityEpoch()
 	}
-	return &GameActivityService{policy: policy, epoch: epoch, friends: friends, servers: servers, hub: hub, sources: map[string]map[uint64]gameActivitySource{}, connections: map[string]map[uint64]bool{}, lastSequences: map[string]map[uint64]uint64{}, grants: map[string]map[gameActivityGrant]bool{}, revisions: map[string]uint64{}, published: map[string]gameActivityPublished{}, stop: make(chan struct{}), workerDone: make(chan struct{}), tickerFactory: func(interval time.Duration) (<-chan time.Time, func()) {
+	service := &GameActivityService{policy: policy, epoch: epoch, friends: friends, servers: servers, hub: hub, sources: map[string]map[uint64]gameActivitySource{}, connections: map[string]map[uint64]bool{}, lastSequences: map[string]map[uint64]uint64{}, grants: map[string]map[gameActivityGrant]bool{}, revisions: map[string]uint64{}, published: map[string]gameActivityPublished{}, stop: make(chan struct{}), workerDone: make(chan struct{}), tickerFactory: func(interval time.Duration) (<-chan time.Time, func()) {
 		ticker := time.NewTicker(interval)
 		return ticker.C, ticker.Stop
 	}}
+	for i := range service.targetLocks {
+		service.targetLocks[i] = make(chan struct{}, 1)
+		service.targetLocks[i] <- struct{}{}
+	}
+	return service
 }
 
 func (s *GameActivityService) Connect(userID string, connectionID uint64) {
@@ -361,6 +390,9 @@ func (s *GameActivityService) ServerDeleted(ctx context.Context, serverID string
 }
 
 func (s *GameActivityService) ExpireAndReconcile(ctx context.Context) {
+	if ctx.Err() != nil {
+		return
+	}
 	// Take a stable list, then serialize expiry with updates per target. The
 	// global map lock is never held while waiting for a target lock.
 	s.mu.Lock()
@@ -372,7 +404,17 @@ func (s *GameActivityService) ExpireAndReconcile(ctx context.Context) {
 	sort.Strings(allIDs)
 	now := time.Now()
 	for _, userID := range allIDs {
-		unlock := s.lockTarget(userID)
+		if ctx.Err() != nil {
+			return
+		}
+		unlock, ok := s.lockTargetContext(ctx, userID)
+		if !ok {
+			return
+		}
+		if ctx.Err() != nil {
+			unlock()
+			return
+		}
 		s.mu.Lock()
 		byConnection := s.sources[userID]
 		expired := false
@@ -416,8 +458,18 @@ func (s *GameActivityService) ExpireAndReconcile(ctx context.Context) {
 	}
 	s.mu.Unlock()
 	for i := 0; i < limit; i++ {
+		if ctx.Err() != nil {
+			return
+		}
 		userID := ids[(start+i)%len(ids)]
-		unlock := s.lockTarget(userID)
+		unlock, ok := s.lockTargetContext(ctx, userID)
+		if !ok {
+			return
+		}
+		if ctx.Err() != nil {
+			unlock()
+			return
+		}
 		s.mu.Lock()
 		_, exists := s.sources[userID]
 		s.mu.Unlock()
@@ -440,17 +492,20 @@ func (s *GameActivityService) Start() {
 		return
 	}
 	s.started = true
+	workerCtx, workerCancel := context.WithCancel(context.Background())
+	s.workerCancel = workerCancel
 	ticks, stopTicker := s.tickerFactory(10 * time.Second)
 	go func() {
 		defer close(s.workerDone)
 		defer stopTicker()
+		defer workerCancel()
 		for {
 			select {
 			case _, ok := <-ticks:
 				if !ok {
 					return
 				}
-				ctx, cancel := BroadcastContext()
+				ctx, cancel := context.WithTimeout(workerCtx, broadcastResolveTimeout)
 				s.ExpireAndReconcile(ctx)
 				cancel()
 			case <-s.stop:
@@ -465,6 +520,9 @@ func (s *GameActivityService) Stop() {
 	if !s.stopped {
 		s.stopped = true
 		close(s.stop)
+		if s.workerCancel != nil {
+			s.workerCancel()
+		}
 	}
 	started := s.started
 	s.lifecycleMu.Unlock()
