@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { lstatSync, realpathSync, writeFileSync } from "node:fs";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 const apiBase = new URL("http://127.0.0.1:9090/api/");
 const runDir = resolve(process.env.E2E_RUN_DIR ?? "");
@@ -21,6 +21,29 @@ const makeAccount = () => ({
 });
 const owner = makeAccount();
 const recipient = makeAccount();
+
+function windowsSystemTool(name) {
+  if (!/^[a-z]+$/.test(name)) throw new Error("invalid Windows system tool");
+  const windowsRoot = process.env.SystemRoot ?? process.env.WINDIR;
+  if (!windowsRoot || !isAbsolute(windowsRoot)) throw new Error("Windows system root is unavailable");
+  const realWindowsRoot = realpathSync(windowsRoot);
+  const system32 = realpathSync(join(realWindowsRoot, "System32"));
+  const systemRelative = relative(realWindowsRoot, system32);
+  if (systemRelative === ".." || systemRelative.startsWith(`..${sep}`) || isAbsolute(systemRelative)) {
+    throw new Error("Windows system directory escaped system root");
+  }
+  const executable = join(system32, `${name}.exe`);
+  const executableStat = lstatSync(executable);
+  if (!executableStat.isFile() || executableStat.isSymbolicLink()) {
+    throw new Error("Windows system tool is not a regular executable");
+  }
+  const realExecutable = realpathSync(executable);
+  const executableRelative = relative(system32, realExecutable);
+  if (executableRelative === ".." || executableRelative.startsWith(`..${sep}`) || isAbsolute(executableRelative)) {
+    throw new Error("Windows system tool escaped System32");
+  }
+  return realExecutable;
+}
 
 async function request(path, token, method = "GET", body) {
   if (!path.startsWith("/") || path.startsWith("//")) throw new Error("fixture API route must be relative");
@@ -125,10 +148,10 @@ await request("/users/me/preferences", recipientToken, "PATCH", {
 
 const secretPath = join(runDir, "synthetic-fixture.json");
 writeFileSync(secretPath, "", { mode: 0o600, flag: "wx" });
-const who = execFileSync("whoami", ["/user", "/fo", "csv", "/nh"], { encoding: "utf8" });
+const who = execFileSync(windowsSystemTool("whoami"), ["/user", "/fo", "csv", "/nh"], { encoding: "utf8" });
 const userSid = who.match(/S-1-[0-9-]+/i)?.[0];
 if (!userSid) throw new Error("could not resolve current Windows user SID for fixture ACL");
-execFileSync("icacls", [
+execFileSync(windowsSystemTool("icacls"), [
   secretPath,
   "/inheritance:r",
   "/grant:r",

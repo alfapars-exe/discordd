@@ -52,27 +52,29 @@ async function setChannelNoticePreference(page: Page, enabled: boolean): Promise
 }
 
 async function refreshNotificationRows(page: Page) {
-  const popover = page.getByRole("dialog", { name: "Notifications" });
-  const bell = page.getByRole("button", { name: "Notifications", exact: true });
-  if (await popover.isVisible().catch(() => false)) {
-    await bell.click();
-    await expect(popover).toBeHidden();
-  }
+  // Use the left home navigation: its Notifications entry opens the full view
+  // directly. Scope the buttons so they cannot match the header bell or a
+  // Settings dialog's Notifications control.
+  const navigation = page.getByRole("navigation", { name: "Navigation", exact: true });
+  const friends = navigation.getByRole("button", { name: "Friends", exact: true });
+  const notifications = navigation.getByRole("button", { name: "Notifications", exact: true });
+
+  // Leave and re-enter the view to trigger the normal list fetch on every
+  // assertion, including when Notifications is already the active destination.
+  await friends.click();
+  await expect(friends).toHaveAttribute("aria-current", "page");
   const loaded = page.waitForResponse((response) => {
     const url = new URL(response.url());
     return url.pathname === NOTIFICATION_LIST_PATH
       && response.request().method() === "GET"
       && response.ok();
   });
-  await bell.click();
-  await expect(popover).toBeVisible();
+  await notifications.click();
   await loaded;
-  // The bell panel is only the entry point. The actual Notifications screen
-  // is a tab/container, not a dialog; assert the full-view UI used by users.
-  await popover.getByRole("button", { name: "View all", exact: true }).click();
   const notificationsView = page.locator(".inbox-view").filter({
     has: page.getByRole("heading", { name: "Notifications", exact: true }),
   });
+  await expect(notifications).toHaveAttribute("aria-current", "page");
   await expect(notificationsView).toBeVisible();
   return notificationsView.locator(".notif-row");
 }

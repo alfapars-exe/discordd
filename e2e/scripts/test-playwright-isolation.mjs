@@ -26,6 +26,14 @@ assert.match(serverLauncher, /function buildServer\(runDir\)[\s\S]*lstatSync\(bi
 assert.match(serverLauncher, /const binPath = join\(binDir, binName\)[\s\S]*existsSync\(binPath\) \|\| existsSync\(probePath\)/,
   "Go output paths must be fresh files under that verified directory");
 
+const fixtureSetup = readFileSync(join(here, "setup-disposable-fixture.mjs"), "utf8");
+assert.match(fixtureSetup, /function windowsSystemTool\(name\)[\s\S]*realpathSync\(join\(realWindowsRoot, "System32"\)\)[\s\S]*lstatSync\(executable\)/,
+  "fixture system utilities must resolve to verified regular files under the Windows System32 directory");
+assert.match(fixtureSetup, /execFileSync\(windowsSystemTool\("whoami"\)/);
+assert.match(fixtureSetup, /execFileSync\(windowsSystemTool\("icacls"\)/);
+assert.doesNotMatch(fixtureSetup, /execFileSync\("(?:whoami|icacls)"/,
+  "fixture setup must not select system utilities through inherited PATH search");
+
 const helpers = readFileSync(join(here, "..", "tests", "helpers.ts"), "utf8");
 assert.match(helpers, /E2E_RUN_ID[\s\S]*realpathSync\(runDir\)[\s\S]*realpathSync\(dbPath\)[\s\S]*execFileSync\(realProbePath/,
   "the queue observer must use the exact run identity and validate realpath containment before execution");
