@@ -76,3 +76,24 @@ it("loads the previous version-one envelope with every command enabled", async (
   expect(reloadedStore.getState().bindings.disabledCommands).toBeUndefined();
   expect(resolveDefaultShortcut(new KeyboardEvent("keydown", { code: "F8" }), false, reloadedStore.getState().bindings)).toBe("toggle-mute");
 });
+it("reloads assignments that reuse a later command's freed default chord", async () => {
+  const store = useShortcutBindingsStore.getState();
+  const moved = { ...f8, code: "KeyM", key: "m", ctrl: true, shift: true };
+  expect(store.save("toggle-mute", f8)).toBeNull();
+  expect(store.save("quick-switcher", moved)).toBeNull();
+  vi.resetModules();
+  const { useShortcutBindingsStore: reloaded } = await import("./shortcutBindingsStore");
+  expect(reloaded.getState().bindings["quick-switcher"]).toEqual(moved);
+  expect(reloaded.getState().bindings["toggle-mute"]).toEqual(f8);
+});
+it("retains disabled assignments when another command reuses their chord", async () => {
+  const store = useShortcutBindingsStore.getState();
+  expect(store.save("toggle-mute", f8)).toBeNull();
+  expect(store.setEnabled("toggle-mute", false)).toBeNull();
+  expect(store.save("toggle-deafen", f8)).toBeNull();
+  vi.resetModules();
+  const { useShortcutBindingsStore: reloaded } = await import("./shortcutBindingsStore");
+  expect(reloaded.getState().bindings["toggle-mute"]).toEqual(f8);
+  expect(reloaded.getState().bindings["toggle-deafen"]).toEqual(f8);
+  expect(reloaded.getState().setEnabled("toggle-mute", true)).toBe("conflict");
+});

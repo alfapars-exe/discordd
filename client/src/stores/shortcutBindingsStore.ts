@@ -18,9 +18,17 @@ function load(): ShortcutBindings {
       if (("customizable" in command) && !command.customizable) continue;
       const candidate = data.bindings[command.id];
       if (!validBinding(command.id, candidate, "context" in command)) continue;
-      const next = { ...bindings, [command.id]: candidate };
-      if (!shortcutConflict(command.id, next)) bindings[command.id] = candidate;
+      bindings[command.id] = candidate;
     }
+    // Resolve conflicts against the complete saved map: an earlier command may
+    // reuse a default chord that a later command has moved away from.
+    let conflicting;
+    do {
+      conflicting = shortcutRegistry.find((command) => bindings[command.id]
+        && !disabled.includes(command.id)
+        && shortcutConflict(command.id, bindings));
+      if (conflicting) delete bindings[conflicting.id];
+    } while (conflicting);
     return bindings;
   } catch { return {}; }
 }

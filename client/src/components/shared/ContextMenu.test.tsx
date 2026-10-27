@@ -16,6 +16,9 @@ describe("ContextMenu", () => {
     expect(screen.getByRole("menuitem", { name:/Applications/ })).toHaveFocus();
     fireEvent.keyDown(document.activeElement!, { key:"ArrowRight" });
     expect(screen.getByRole("menuitem", { name:"Child" })).toHaveFocus();
+    // Reflow can move a different row under a stationary pointer on mobile.
+    fireEvent.mouseEnter(screen.getByRole("menuitem", { name:"First" }).parentElement!);
+    expect(screen.getByRole("menuitem", { name:"Child" })).toHaveFocus();
     fireEvent.keyDown(document.activeElement!, { key:"Escape" });
     expect(screen.queryByRole("menuitem", { name:"Child" })).not.toBeInTheDocument();
     expect(close).not.toHaveBeenCalled();

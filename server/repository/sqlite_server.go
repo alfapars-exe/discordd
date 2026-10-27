@@ -264,7 +264,7 @@ func (r *sqliteServerRepo) RemoveMember(ctx context.Context, serverID, userID st
 	})
 }
 
-// removeMemberStmts runs RemoveMember's two DELETEs against q, which is
+// removeMemberStmts runs RemoveMember's DELETEs against q, which is
 // either the transaction WithTx opened or the caller-supplied *sql.Tx when
 // RawDB found none of its own to start.
 func (r *sqliteServerRepo) removeMemberStmts(ctx context.Context, q database.TxQuerier, serverID, userID string) error {
@@ -281,6 +281,15 @@ func (r *sqliteServerRepo) removeMemberStmts(ctx context.Context, q database.TxQ
 	}
 	if affected == 0 {
 		return pkg.ErrNotFound
+	}
+
+	// Delete membership first so a concurrent RSVP's membership lock has
+	// finished before cleanup. The transaction then removes any RSVP that
+	// committed before removal, including when the user later rejoins.
+	if _, err := q.ExecContext(ctx,
+		`DELETE FROM server_event_rsvps WHERE user_id=? AND event_id IN (SELECT id FROM server_events WHERE server_id=?)`,
+		userID, serverID); err != nil {
+		return fmt.Errorf("failed to clean up event RSVPs on member removal: %w", err)
 	}
 
 	// Hard-delete all role assignments for this user in this server.

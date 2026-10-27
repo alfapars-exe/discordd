@@ -408,6 +408,22 @@ func TestPostgresServerEventDeliverySerializesEligibilityChanges(t *testing.T) {
 		prepareWriter func(context.Context, *sql.Tx, string) error
 	}{
 		{
+			name:      "event_cancelled",
+			lockQuery: "UPDATE server_events SET status=status",
+			prepareWriter: func(ctx context.Context, tx *sql.Tx, eventID string) error {
+				_, err := tx.ExecContext(ctx, `UPDATE server_events SET status='cancelled',version=version+1 WHERE id=?`, eventID)
+				return err
+			},
+		},
+		{
+			name:      "event_rescheduled",
+			lockQuery: "UPDATE server_events SET status=status",
+			prepareWriter: func(ctx context.Context, tx *sql.Tx, eventID string) error {
+				_, err := tx.ExecContext(ctx, `UPDATE server_events SET starts_at=starts_at + INTERVAL '1 minute',version=version+1 WHERE id=?`, eventID)
+				return err
+			},
+		},
+		{
 			name:      "member_removed",
 			lockQuery: "UPDATE server_members SET server_id=server_id",
 			prepareWriter: func(ctx context.Context, tx *sql.Tx, eventID string) error {

@@ -1863,7 +1863,7 @@ body.high-contrast :where(button,a,input,select,[tabindex]):focus-visible { outl
 .image-lightbox-counter { position:fixed;bottom:calc(16px + var(--safe-area-inset-bottom));padding:5px 10px;border-radius:999px;background:rgba(0,0,0,.62);color:#fff;font-size:12px;cursor:default; }
 .ctx-item-wrap { position:relative; }
 .ctx-item-wrap > .ctx-item { display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%; }
-.ctx-submenu { position:absolute;left:calc(100% - 4px);top:-5px;min-width:190px;padding:6px;background:var(--bg-floating);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow-high);z-index:1; }
+.ctx-submenu { position:absolute;left:calc(100% - 4px);top:-5px;min-width:190px;padding:6px;background:var(--bg-2);border:1px solid var(--b1);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.5);z-index:1;max-height:calc(100vh - 16px);overflow-y:auto; }
 .ctx-submenu .ctx-item { width:100%;text-align:left; }
 .image-lightbox-error { color:rgba(255,255,255,0.85);font-size:14px;cursor:default; }
 .crop-modal-actions { display:flex;gap:8px; }
@@ -4057,6 +4057,7 @@ body.high-contrast :where(button,a,input,select,[tabindex]):focus-visible { outl
   }
 
   /* ─── Input Area ─── */
+  .ctx-submenu { position:static;min-width:0;margin:4px 0;max-height:40vh; }
   .input-area {
     position: sticky;
     bottom: 0;
@@ -5455,3 +5456,9 @@ body.reduce-motion .lightning-overlay { display: none; }
 .voice-recovery-status p { margin:0 0 10px;line-height:1.5; }
 .voice-recovery-status button { padding:6px 12px;margin-right:8px;border-radius:6px;cursor:pointer; }
 .voice-recovery-status button:focus-visible { outline:2px solid var(--primary, #7777ff);outline-offset:3px; }
+.music-bot-participant { width:100%;border:0;background:none;text-align:left;font-family:inherit;cursor:pointer; }
+.music-bot-avatar { width:22px;height:22px;flex-shrink:0;display:grid;place-items:center;border-radius:50%;background:var(--primary);color:#fff; }
+.music-bot-avatar svg { width:16px;height:16px; }
+.music-bot-badge { margin-left:auto;font-size:9px;font-weight:700;padding:1px 4px;border-radius:3px;background:var(--bg-3);color:var(--t2); }
+.music-bot-play-form { display:flex;flex-direction:column;gap:12px;padding:16px; }
+.music-bot-play-form input { padding:10px;border-radius:6px;border:1px solid var(--border-subtle);background:var(--bg-2);color:var(--t1); }

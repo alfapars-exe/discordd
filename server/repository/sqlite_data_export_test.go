@@ -83,6 +83,18 @@ func TestSQLiteDataExportOwnershipExpiryAndSecretExclusion(t *testing.T) {
 		t.Fatalf("superseded export = %v", err)
 	}
 	job = replacement
+	// Jobs and payloads belong to the database, so a fresh repository must
+	// recover exactly the snapshot that was published by the prior instance.
+	reopened := NewSQLiteDataExportRepo(wrapForRepo(db))
+	persisted, err := reopened.Get(context.Background(), user.ID, job.ID)
+	if err != nil || persisted.ID != job.ID || persisted.Status != "ready" {
+		t.Fatalf("persisted export metadata: %+v, %v", persisted, err)
+	}
+	persistedPayload, err := reopened.Download(context.Background(), user.ID, job.ID)
+	currentPayload, currentErr := repo.Download(context.Background(), user.ID, job.ID)
+	if err != nil || currentErr != nil || string(persistedPayload) != string(currentPayload) {
+		t.Fatalf("persisted export payload differs: %v, %v", err, currentErr)
+	}
 	if _, err := repo.Get(context.Background(), "export-bob", job.ID); !errors.Is(err, pkg.ErrNotFound) {
 		t.Fatalf("cross-owner get = %v", err)
 	}
@@ -94,6 +106,9 @@ func TestSQLiteDataExportOwnershipExpiryAndSecretExclusion(t *testing.T) {
 	}
 	if _, err := repo.Download(context.Background(), user.ID, job.ID); !errors.Is(err, pkg.ErrNotFound) {
 		t.Fatalf("expired download = %v", err)
+	}
+	if _, err := repo.Get(context.Background(), user.ID, job.ID); !errors.Is(err, pkg.ErrNotFound) {
+		t.Fatalf("expired get = %v", err)
 	}
 }
 

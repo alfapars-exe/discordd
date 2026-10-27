@@ -52,8 +52,8 @@ func (l *eventLog) snapshot() []ws.Event {
 }
 
 // newConcurrencyTestService wires a service with stubbed extraction and the
-// given per-track work. No bot is seeded. Every bot's idle timer is
-// cancelled at cleanup so none outlives its test.
+// given per-track work. No bot is seeded. Stop bots at cleanup so a playback
+// loop that finishes later cannot re-arm an idle timer after the test returns.
 func newConcurrencyTestService(t *testing.T, log *eventLog, play func(*botInstance, *models.MusicTrack) error) *musicBotService {
 	t.Helper()
 	svc := &musicBotService{
@@ -81,9 +81,7 @@ func newConcurrencyTestService(t *testing.T, log *eventLog, play func(*botInstan
 		}
 		svc.mu.RUnlock()
 		for _, b := range bots {
-			b.mu.Lock()
-			b.cancelIdleTimer()
-			b.mu.Unlock()
+			svc.stopBot(b)
 		}
 	})
 	return svc

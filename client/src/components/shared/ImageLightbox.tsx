@@ -96,7 +96,12 @@ function LightboxDialog({
   const gestureRef = useRef<{ kind: "pinch" | "drag" | "swipe"; startX: number; startY: number; distance?: number; zoom?: number } | null>(null);
 
   const openForward = () => {
-    forwardFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const active = document.activeElement;
+    // Menu actions unmount when the forward dialog opens. Restore focus to
+    // their persistent trigger instead of keeping a detached menu item.
+    forwardFocusRef.current = active instanceof HTMLElement
+      ? active.closest('[role="menu"]') ? menuBtnRef.current : active
+      : menuBtnRef.current;
     setMenuOpen(false);
     setForwardOpen(true);
   };
@@ -227,7 +232,11 @@ function LightboxDialog({
       role="dialog"
       aria-modal="true"
       aria-label={t("imagePreview")}
-      onClick={onClose}
+      onClick={(event) => {
+        // Nested dialogs also bubble through this React tree, including when
+        // rendered in a portal. Only the viewer's own backdrop closes it.
+        if (event.target === event.currentTarget) onClose();
+      }}
     >
       {/* Top bar swallows clicks so link/button taps never close the viewer */}
       <div className="image-lightbox-topbar" onClick={(e) => e.stopPropagation()}>

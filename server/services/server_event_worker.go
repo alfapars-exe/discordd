@@ -134,6 +134,11 @@ func (w *ServerEventWorker) Tick(ctx context.Context) error {
 		for i := range candidates {
 			if candidates[i].ID == w.selectedEvent.ID {
 				selected := candidates[i]
+				// A changed start is a new delivery occurrence. Earlier users
+				// must be reconsidered immediately, not after an event scan wrap.
+				if selected.StartsAt != w.selectedEvent.StartsAt {
+					w.recipientCursor = ""
+				}
 				w.selectedEvent = &selected
 				refreshed = true
 				break

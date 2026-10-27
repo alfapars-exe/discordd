@@ -30,12 +30,9 @@
  *      share window for other clients. Suppressed during programmatic
  *      restarts via `isRestartingRef`.
  *
- *   4. Restart watcher: when the user changes screenShareQuality or
- *      screenShareFps mid-stream, debounce 350 ms then run stop→start with
- *      the new values. The browser branch will re-prompt the OS source
- *      picker; Electron + Capacitor branches restart silently. A
- *      generation counter cancels in-flight restarts when a newer change
- *      lands during the debounce or stop phase.
+ *   4. Apply resolution, FPS, codec and content-profile changes to the owned
+ *      capture. Video-only republishing rebuilds SDK encoding state without
+ *      reopening the picker or stopping screen audio.
  *
  * The hook also calls `useSystemAudioCapture()` and holds it in a latest-ref
  * — that consumer was inline in VoiceStateManager.tsx.
@@ -48,6 +45,7 @@ import {
   LocalAudioTrack as LKLocalAudioTrack,
   type LocalParticipant,
   type LocalTrackPublication,
+  type LocalVideoTrack,
   type Room,
 } from "livekit-client";
 
@@ -60,7 +58,9 @@ import { useServerStore } from "../stores/serverStore";
 import { useToastStore } from "../stores/toastStore";
 import { useSystemAudioCapture } from "./useSystemAudioCapture";
 import { useDisplayInfo, type DisplayInfo } from "./useDisplayInfo";
-import { useScreenSharePublishDefaults } from "./useScreenSharePublishDefaults";
+import { resolveScreenSharePublishDefaults, type ScreenSharePublishDefaults } from "../utils/screenShareProfile";
+import { privateScreenResolution } from "../utils/privateScreenQuality";
+import { isScreenShareReconfiguring, LiveKitScreenShareUpdater } from "../webrtc/livekitScreenShareUpdate";
 import {
   isElectron,
   isCapacitor,
@@ -97,15 +97,7 @@ function resolutionFor(
   fps: number,
   display: DisplayInfo | null,
 ): ScreenShareResolution {
-  const resolvedFps =
-    fps === -1 ? (display?.refreshRate && display.refreshRate > 0 ? display.refreshRate : 60) : fps;
-
-  if (quality === "native" && display && display.width > 0) {
-    return { width: display.width, height: display.height, frameRate: resolvedFps };
-  }
-  if (quality === "1440p") return { width: 2560, height: 1440, frameRate: resolvedFps };
-  if (quality === "1080p") return { width: 1920, height: 1080, frameRate: resolvedFps };
-  return { width: 1280, height: 720, frameRate: resolvedFps };
+  return privateScreenResolution({ screenShareQuality: quality, screenShareFps: fps }, display);
 }
 
 function notifyServerStopped() {
@@ -289,12 +281,13 @@ export function useScreenShareToggle(
   initialSyncDoneRef: React.RefObject<boolean>,
 ): void {
   const isStreaming = useVoiceStore((s) => s.isStreaming);
-  const screenShareAudio = useVoiceStore((s) => s.screenShareAudio);
   // Subscribed so Effect 4 re-runs when the user picks a new value in the
   // ScreenShareQualityPopup. Effect 1 doesn't depend on these — they're
   // read fresh from getState() at start time.
   const screenShareQuality = useVoiceStore((s) => s.screenShareQuality);
   const screenShareFps = useVoiceStore((s) => s.screenShareFps);
+  const screenShareLowLatency = useVoiceStore((s) => s.screenShareLowLatency);
+  const screenShareMode = useVoiceStore((s) => s.screenShareMode);
 
   // Monitor metrics — used to resolve the "native"/-1 sentinels in
   // (quality, fps) into concrete numbers at publish time. Held in a ref
@@ -305,16 +298,8 @@ export function useScreenShareToggle(
     displayRef.current = display;
   });
 
-  // Per-publish encoder + capture options. Held in a ref so the toggle
-  // effect captures the latest value at publish time without re-running
-  // every time the user opens settings. Was previously applied via the
-  // room-level publishDefaults (one-shot at room creation), which made
-  // mid-session quality / mode changes a no-op until the user reconnected.
-  const publishOpts = useScreenSharePublishDefaults();
-  const publishOptsRef = useRef(publishOpts);
-  useLayoutEffect(() => {
-    publishOptsRef.current = publishOpts;
-  });
+  const screenUpdaterRef = useRef<LiveKitScreenShareUpdater | null>(null);
+  const lifecycleRef = useRef<Promise<void>>(Promise.resolve());
 
   // Native Electron audio capture — excludes our own process tree to prevent
   // screen-share echo. Held in a latest-ref so the toggle effect doesn't
@@ -347,6 +332,49 @@ export function useScreenShareToggle(
   const restartTimerRef = useRef<number | null>(null);
   const isRestartingRef = useRef(false);
 
+  function updatePublishedShare(updater: LiveKitScreenShareUpdater) {
+    const state = useVoiceStore.getState();
+    const settings = isMobileBrowser()
+      ? { ...state, screenShareQuality: "720p", screenShareFps: 30 }
+      : state;
+    const opts = resolveScreenSharePublishDefaults(settings, displayRef.current);
+    return updater.update({ settings, publish: opts.screenSharePublish,
+      contentHint: opts.screenShareCapture.contentHint, display: displayRef.current }).then(applied => {
+        if (screenUpdaterRef.current === updater && !updater.active && useVoiceStore.getState().isStreaming) notifyServerStopped();
+        return applied;
+      });
+  }
+
+  function reportUpdateFailure(updater: LiveKitScreenShareUpdater, error: unknown) {
+    if (screenUpdaterRef.current !== updater) return;
+    logToServer("warn", "screen_share_update_failed", { error: error instanceof Error ? error.message : String(error) });
+    useToastStore.getState().addToast("error", i18n.t("screenShareQualityFailed", { ns: "voice" }), 6000);
+    if (!updater.active) notifyServerStopped();
+  }
+
+  function ownPublishedShare(
+    q: ScreenShareQuality, fps: ScreenShareFps, opts: ScreenSharePublishDefaults, shouldCancel: () => boolean,
+  ) {
+    const track = localParticipant.getTrackPublication(Track.Source.ScreenShare)?.track as LocalVideoTrack | undefined;
+    if (!track || shouldCancel() || track.mediaStreamTrack.readyState === "ended") return false;
+    if (screenUpdaterRef.current?.track === track) return true;
+    const state = useVoiceStore.getState();
+    const channelId = state.currentVoiceChannelId;
+    const updater: LiveKitScreenShareUpdater = new LiveKitScreenShareUpdater(localParticipant, track,
+      (): boolean => !shouldCancel() && screenUpdaterRef.current === updater && useVoiceStore.getState().isStreaming
+        && useVoiceStore.getState().currentVoiceChannelId === channelId,
+      { settings: { ...state, screenShareQuality: q, screenShareFps: fps },
+        publish: { ...opts.screenSharePublish, source: Track.Source.ScreenShare, stream: track.publishOptions?.stream },
+        contentHint: opts.screenShareCapture.contentHint, display: displayRef.current });
+    screenUpdaterRef.current = updater;
+    track.mediaStreamTrack.addEventListener("ended", () => {
+      if (screenUpdaterRef.current === updater && useVoiceStore.getState().isStreaming) notifyServerStopped();
+    }, { once: true });
+    // Apply preferences changed while the source picker or publication was pending.
+    void updatePublishedShare(updater).catch(error => reportUpdateFailure(updater, error));
+    return true;
+  }
+
   // ──────────────────────────────────────────────────────────────────────
   // Shared start/stop helpers used by Effect 1 AND `runRestart`.
   //
@@ -362,6 +390,17 @@ export function useScreenShareToggle(
     shouldCancel: () => boolean,
   ): Promise<void> {
     if (shouldCancel()) return;
+    const streamName = `screenshare-${crypto.randomUUID()}`;
+    const retireCancelledStart = async (publication: LocalTrackPublication | undefined) => {
+      const publications = new Set([publication, ...localParticipant.trackPublications.values()]);
+      for (const pub of publications) {
+        const track = pub?.track;
+        if (!track || pub?.options?.stream !== streamName) continue;
+        track.mediaStreamTrack.enabled = false;
+        track.stop();
+        await localParticipant.unpublishTrack(track).catch(() => {});
+      }
+    };
 
     // Diagnostic — record the publish attempt with every input that
     // could influence the encode path. Captured BEFORE the branch so a
@@ -431,23 +470,22 @@ export function useScreenShareToggle(
         durationMs: Date.now() - attemptStart,
       });
     } else if (branch === "electron-audio") {
-      const opts = publishOptsRef.current;
+      const opts = resolveScreenSharePublishDefaults({ ...useVoiceStore.getState(), screenShareQuality: ssq, screenShareFps: ssFps }, displayRef.current);
       // captureOptions (2nd arg) — getDisplayMedia hints; we suppress
       // audio in this branch because the native helper publishes a
       // separate audio track later.
-      // publishOptions (3rd arg) — encoder + simulcast + codec are
-      // taken from useScreenSharePublishDefaults so quality / FPS /
-      // mode changes apply on the NEXT screen-share start without a
-      // full room reconnect.
-      await localParticipant.setScreenShareEnabled(true, {
+      // The updater retains this capture for subsequent profile changes.
+      const publication = await localParticipant.setScreenShareEnabled(true, {
         audio: false,
         resolution: resolutionFor(ssq, ssFps, displayRef.current),
         contentHint: opts.screenShareCapture.contentHint,
         // Name the video's MediaStream so the separately-published WASAPI
         // audio track (below) can join the same stream → A/V sync grouping.
-      }, { ...opts.screenSharePublish, stream: "screenshare" });
+      }, { ...opts.screenSharePublish, stream: streamName });
 
-      if (shouldCancel()) return;
+      if (shouldCancel()) { await retireCancelledStart(publication); return; }
+
+      if (!ownPublishedShare(ssq, ssFps, opts, shouldCancel)) throw new DOMException("Screen source ended before publication", "AbortError");
 
       // Video is published — tell the server now so viewers see is_streaming=true
       // even if the audio capture below fails (which is logged as
@@ -481,7 +519,7 @@ export function useScreenShareToggle(
         // which is the "yayın sesi kalitesiz" bug.
         ...opts.screenShareAudioPublish,
         // Same stream name as the video above → one MediaStream for A/V sync.
-        stream: "screenshare",
+        stream: streamName,
       });
       if(shouldCancel()||audioTrack.readyState!=="live"){lkTrack.stop();await localParticipant.unpublishTrack(lkTrack).catch(()=>{});return;}
       await lkTrack.unmute();
@@ -512,13 +550,12 @@ export function useScreenShareToggle(
       // and trips OOM on weak GPUs.
       const effQ = isMobileBrowser() ? "720p" : ssq;
       const effFps = isMobileBrowser() ? 30 : ssFps;
-      const opts = publishOptsRef.current;
-      await localParticipant.setScreenShareEnabled(true, {
+      const opts = resolveScreenSharePublishDefaults({ ...useVoiceStore.getState(), screenShareQuality: effQ, screenShareFps: effFps }, displayRef.current);
+      const publication = await localParticipant.setScreenShareEnabled(true, {
         // Clean STEREO capture for media audio: voice DSP (echo cancellation /
         // noise suppression / AGC) would mangle music/game audio, so disable it
-        // and request two channels. setScreenShareEnabled groups the
-        // screen_share + screen_share_audio tracks into one MediaStream by
-        // default, so no explicit stream name is needed on this path.
+        // and request two channels. A unique stream groups this capture's
+        // audio/video and lets a cancelled picker retire only its own source.
         audio: ss.screenShareAudio
           ? {
               echoCancellation: false,
@@ -531,8 +568,9 @@ export function useScreenShareToggle(
         contentHint: opts.screenShareCapture.contentHint,
         // Audio publish profile (stereo + DTX-off) merged into the single
         // publishOptions; the video track ignores audio-only fields and vice-versa.
-      }, { ...opts.screenSharePublish, ...opts.screenShareAudioPublish });
-      if (shouldCancel()) return;
+      }, { ...opts.screenSharePublish, ...opts.screenShareAudioPublish, stream: streamName });
+      if (shouldCancel()) { await retireCancelledStart(publication); return; }
+      if (!ownPublishedShare(effQ, effFps, opts, shouldCancel)) throw new DOMException("Screen source ended before publication", "AbortError");
       notifyServerStarted();
       logPublishedTrackDetails(localParticipant, branch);
       if (ss.screenShareAudio) logPublishedAudioTrackDetails(localParticipant, branch);
@@ -549,7 +587,10 @@ export function useScreenShareToggle(
     if (branch === "capacitor") {
       await stopNativeScreenShare();
     } else {
-      const audio=customAudioPubRef.current;
+      const updater = screenUpdaterRef.current;
+      screenUpdaterRef.current = null;
+      updater?.dispose();
+      const audio=customAudioPubRef.current ?? localParticipant.getTrackPublication(Track.Source.ScreenShareAudio);
       customAudioPubRef.current=null;
       systemAudioCaptureRef.current.stop();
       if(audio?.track)await localParticipant.unpublishTrack(audio.track);
@@ -594,9 +635,11 @@ export function useScreenShareToggle(
     let cancelled = false;
 
     async function toggleScreenShare() {
-      if (cancelled) return;
+      // Retired starts can be skipped. An explicit stop still drains before
+      // a queued new start, so SDK pending capture reuse cannot revive it.
+      if (cancelled && isStreaming) return;
 
-      const branch = computeShareBranch(screenShareAudio);
+      const branch = computeShareBranch(useVoiceStore.getState().screenShareAudio);
 
       if (isStreaming) {
         const { screenShareQuality: ssq, screenShareFps: ssFps } =
@@ -607,7 +650,9 @@ export function useScreenShareToggle(
       }
     }
 
-    toggleScreenShare().catch((err: unknown) => {
+    const lifecycle = lifecycleRef.current.catch(() => {}).then(toggleScreenShare);
+    lifecycleRef.current = lifecycle;
+    void lifecycle.catch((err: unknown) => {
       if (!cancelled) {
         console.error("[useScreenShareToggle] Failed to toggle screen share:", err);
         if (isStreaming) {
@@ -618,9 +663,22 @@ export function useScreenShareToggle(
 
     return () => {
       cancelled = true;
+      const updater = screenUpdaterRef.current;
+      screenUpdaterRef.current = null;
+      updater?.dispose();
+      // Video may already be temporarily unpublished. Stop its audio explicitly;
+      // the SDK's setScreenShareEnabled(false) only finds audio via a video pub.
+      const audio = customAudioPubRef.current ?? localParticipant.getTrackPublication(Track.Source.ScreenShareAudio);
+      customAudioPubRef.current = null;
+      systemAudioCaptureRef.current.stop();
+      if (audio?.track) {
+        audio.track.mediaStreamTrack.enabled = false;
+        audio.track.stop();
+        void localParticipant.unpublishTrack(audio.track).catch(() => {});
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isStreaming, screenShareAudio, localParticipant, initialSyncDoneRef]);
+  }, [isStreaming, localParticipant, initialSyncDoneRef]);
 
   // Effect 2: Capacitor — listen for native-side external stops.
   // Track is already torn down by the native side at this point, so the
@@ -666,7 +724,11 @@ export function useScreenShareToggle(
         return;
       }
       if (pub.source !== Track.Source.ScreenShare) return;
+      if (isScreenShareReconfiguring(pub.track)) return;
       if (isRestartingRef.current) return;
+      // An old cancelled picker may finish while a newer start is queued.
+      // Its cleanup must never flip the new share's requested state off.
+      if (!screenUpdaterRef.current || screenUpdaterRef.current.track !== pub.track) return;
       const { isStreaming: streaming } = useVoiceStore.getState();
       if (streaming) {
         notifyServerStopped();
@@ -736,6 +798,15 @@ export function useScreenShareToggle(
   useEffect(() => {
     if (!initialSyncDoneRef.current) return;
 
+    if (!isCapacitor()) {
+      const updater = screenUpdaterRef.current;
+      if (!updater || !useVoiceStore.getState().isStreaming) return;
+      const timer = window.setTimeout(() => {
+        void updatePublishedShare(updater).catch(error => reportUpdateFailure(updater, error));
+      }, 200);
+      return () => window.clearTimeout(timer);
+    }
+
     // First mount: record the current (q, fps) without triggering a restart.
     // This skips the "load from localStorage" hydration path.
     if (prevSettingsRef.current === null) {
@@ -776,5 +847,5 @@ export function useScreenShareToggle(
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screenShareQuality, screenShareFps, localParticipant, initialSyncDoneRef]);
+  }, [screenShareQuality, screenShareFps, screenShareLowLatency, screenShareMode, display, localParticipant, initialSyncDoneRef]);
 }

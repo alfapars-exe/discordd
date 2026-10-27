@@ -215,6 +215,35 @@ describe("ImageLightbox", () => {
     expect(image.getAttribute("style")).toContain("translate(0px, 0px)");
   });
 
+  it("restores the persistent menu trigger after forwarding from an unmounted menu action", async () => {
+    render(<ImageLightbox />);
+    openRemote({ message: { id: "m1", user_id: "u1", content: "photo", attachments: [], reactions: [], created_at: "2026-01-01T00:00:00Z", edited_at: null, reply_to_id: null, is_pinned: false, referenced_message: null, author: { id: "u1", username: "alice" } } });
+    await waitFor(() => expect(screen.getByRole("button", { name: "close" })).toHaveFocus());
+    const menuTrigger = screen.getByRole("button", { name: "mediaActions" });
+    fireEvent.click(menuTrigger);
+    const action = screen.getByRole("menuitem", { name: "forwardMessage" });
+    action.focus();
+    fireEvent.click(action);
+    expect(action.isConnected).toBe(false);
+    expect(screen.getByRole("dialog", { name: "forwardMessage" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "forwardClose" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "forwardMessage" })).toBeNull());
+    expect(menuTrigger).toHaveFocus();
+    expect(screen.getByRole("dialog", { name: "imagePreview" })).toBeInTheDocument();
+    fireEvent.click(menuTrigger);
+    const nextAction = screen.getByRole("menuitem", { name: "forwardMessage" });
+    nextAction.focus();
+    fireEvent.click(nextAction);
+    // Interacting with nested controls must never dismiss the parent viewer.
+    fireEvent.click(document.querySelector(".forward-search")!);
+    expect(screen.getByRole("dialog", { name: "forwardMessage" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "imagePreview" })).toBeInTheDocument();
+    fireEvent.click(document.querySelector(".report-overlay")!);
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "forwardMessage" })).toBeNull());
+    expect(screen.getByRole("dialog", { name: "imagePreview" })).toBeInTheDocument();
+    expect(menuTrigger).toHaveFocus();
+  });
+
   it("Escape closes the nested forward dialog and restores its trigger focus", async () => {
     const opener = document.createElement("button");
     document.body.appendChild(opener);

@@ -258,3 +258,33 @@ func TestServerEventWorkerDoesNotDeliverAfterEventStartsDuringPage(t *testing.T)
 		t.Fatalf("started event notified users: delivered=%v broadcasts=%v", repo.delivered, hub.users)
 	}
 }
+
+func TestServerEventWorkerRestartsRecipientCursorAfterReschedule(t *testing.T) {
+	now := time.Now().UTC()
+	event := workerTestEvent("event-a", now.Add(5*time.Minute))
+	users := make([]string, 105)
+	for i := range users {
+		users[i] = fmt.Sprintf("user-%03d", i)
+	}
+	worker, repo, hub := newEventWorkerTest(now, []models.ServerEvent{event}, users)
+	if err := worker.Tick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	// Delivery deduplication is scoped to starts_at in the real repository.
+	// Moving the event creates a fresh occurrence for every interested user.
+	repo.events[0].StartsAt = now.Add(10 * time.Minute).Format(time.RFC3339Nano)
+	repo.events[0].Version++
+	repo.delivered = make(map[string]bool)
+	if err := worker.Tick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if repo.lastRecipientAfter != "" || len(hub.users) != 200 {
+		t.Fatalf("rescheduled occurrence continued old cursor: after=%q broadcasts=%d", repo.lastRecipientAfter, len(hub.users))
+	}
+	if err := worker.Tick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(repo.delivered) != len(users) {
+		t.Fatalf("rescheduled recipients=%d want %d", len(repo.delivered), len(users))
+	}
+}

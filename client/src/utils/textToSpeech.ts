@@ -3,6 +3,19 @@ import { useAccessibilityStore } from "../stores/accessibilityStore";
 
 const MAX_SPOKEN_CHARS = 500;
 
+export function supportsTextToSpeech(): boolean {
+  return typeof window !== "undefined" && typeof window.speechSynthesis?.speak === "function" && typeof SpeechSynthesisUtterance !== "undefined";
+}
+
+/** Preview replaces queued speech and uses the same rate and language as messages. */
+export function previewTextToSpeech(content: string): boolean {
+  if (!supportsTextToSpeech()) return false;
+  try {
+    window.speechSynthesis.cancel();
+    return speakMessage("", content);
+  } catch { return false; }
+}
+
 /** Reads one incoming plaintext message when the account preference allows it. */
 export function speakIncomingMessage(author: string, content: string | null | undefined): boolean {
   const prefs = useAccessibilityStore.getState();
@@ -18,7 +31,7 @@ export function speakMessage(author: string, content: string | null | undefined)
 function speakText(author: string, content: string | null | undefined, limit: number): boolean {
   const prefs = useAccessibilityStore.getState();
   if (!content?.trim()) return false;
-  if (typeof window === "undefined" || !("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") return false;
+  if (!supportsTextToSpeech()) return false;
 
   const normalized = content.replace(/https?:\/\/\S+/gi, " link ").replace(/\s+/g, " ").trim().slice(0, limit);
   if (!normalized) return false;

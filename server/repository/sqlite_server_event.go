@@ -225,10 +225,32 @@ func (r *sqliteServerEventRepo) SetInterested(ctx context.Context, eventID, user
 		_, err := r.db.ExecContext(ctx, `DELETE FROM server_event_rsvps WHERE event_id=? AND user_id=?`, eventID, userID)
 		return err
 	}
+	if database.IsPostgres(r.db) {
+		return database.WithTx(ctx, database.RawDB(r.db), func(tx *sql.Tx) error {
+			// An EXISTS snapshot alone can see a membership being deleted by
+			// another transaction. Lock the membership until the RSVP commits;
+			// a removal already in progress must finish before this check.
+			var member int
+			err := tx.QueryRowContext(ctx, `SELECT 1 FROM server_members sm
+				JOIN server_events e ON e.server_id=sm.server_id
+				WHERE e.id=? AND sm.user_id=? FOR KEY SHARE OF sm`, eventID, userID).Scan(&member)
+			if err == sql.ErrNoRows {
+				return fmt.Errorf("%w: event is unavailable for RSVP", pkg.ErrConflict)
+			}
+			if err != nil {
+				return err
+			}
+			return r.setInterested(ctx, tx, eventID, userID)
+		})
+	}
+	return r.setInterested(ctx, r.db, eventID, userID)
+}
+
+func (r *sqliteServerEventRepo) setInterested(ctx context.Context, q database.TxQuerier, eventID, userID string) error {
 	now := time.Now().UTC().Format("2006-01-02T15:04:05.000000000Z")
 	// Recheck membership in the write itself: the service's earlier check can
 	// become stale if the user leaves or is removed before this statement.
-	res, err := r.db.ExecContext(ctx, `INSERT INTO server_event_rsvps(event_id,user_id,interested_at,updated_at)
+	res, err := q.ExecContext(ctx, `INSERT INTO server_event_rsvps(event_id,user_id,interested_at,updated_at)
 		SELECT id,?,?,? FROM server_events WHERE id=? AND status='scheduled' AND starts_at>?
 		AND EXISTS(SELECT 1 FROM server_members sm WHERE sm.server_id=server_events.server_id AND sm.user_id=?)
 		ON CONFLICT(event_id,user_id) DO UPDATE SET updated_at=excluded.updated_at`, userID, now, now, eventID, now, userID)

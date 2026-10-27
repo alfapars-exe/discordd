@@ -1,3 +1,4 @@
+import MusicBotParticipant from "../voice/MusicBotParticipant";
 /**
  * ChannelTree — Collapsible tree with Friends, DMs, and Server sections.
  * Friends and DM sections are extracted into their own components.
@@ -41,7 +42,6 @@ type ChannelTreeProps = {
 };
 
 function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
-  const musicBotStates = useVoiceStore((s) => s.musicBotStates);
   const { t: tCommon } = useTranslation("common");
   const destinationServerId = useUIStore((s) => s.destination.serverInfo?.serverId);
   const activeTabKey = useUIStore((s) => `${s.activePanelId}:${s.panels[s.activePanelId]?.activeTabId ?? ""}`);
@@ -440,13 +440,7 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
                         renameEmojiBtnRef={rename.renameEmojiBtnRef}
                         onOpenRenameEmoji={rename.toggleEmojiPicker}
                       >
-                        {isVoice && musicBotStates[ch.id]?.is_active && musicBotStates[ch.id]?.server_id === srvId && (
-                          <div className="ch-tree-voice-users" aria-label="MusicBot">
-                            <div className="ch-tree-voice-user">
-                              <span aria-hidden="true">♫</span><span className="ch-tree-vu-name">MusicBot</span><span>BOT</span>
-                            </div>
-                          </div>
-                        )}
+                        {isVoice && <MusicBotParticipant serverId={srvId} channelId={ch.id} />}
                         {isVoice && participants.length > 0 && (
                           <VoiceParticipantList
                             participants={participants}

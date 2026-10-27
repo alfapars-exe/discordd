@@ -158,6 +158,32 @@ describe("ProfileShowcaseEditor", () => {
     expect(mocks.toast).not.toHaveBeenCalledWith("success", "profileShowcaseSaved");
   });
 
+  it("keeps a save invalid after leaving and returning to the same server", async () => {
+    let finishSave!: (value: unknown) => void;
+    mocks.save.mockImplementationOnce(() => new Promise((resolve) => { finishSave = resolve; }));
+    const view = render(<ProfileShowcaseEditor />);
+    await screen.findByLabelText("profileWatching");
+    fireEvent.click(screen.getByRole("button", { name: /profileScopeServer/ }));
+    await waitFor(() => expect(mocks.get).toHaveBeenCalledTimes(2));
+    await screen.findByLabelText("profileWatching");
+    fireEvent.change(screen.getByLabelText("profileWatching"), { target: { value: "pending save" } });
+    fireEvent.click(screen.getByRole("button", { name: "saveChanges" }));
+    await waitFor(() => expect(mocks.save).toHaveBeenCalledTimes(1));
+    const context = mocks.save.mock.calls[0][3] as ProfileRequestContext;
+
+    mocks.serverId = "s2";
+    view.rerender(<ProfileShowcaseEditor />);
+    await waitFor(() => expect(mocks.get).toHaveBeenCalledTimes(3));
+    mocks.serverId = "s1";
+    view.rerender(<ProfileShowcaseEditor />);
+    await waitFor(() => expect(mocks.get).toHaveBeenCalledTimes(4));
+    await screen.findByDisplayValue("pending save");
+    expect(context.isCurrent?.()).toBe(false);
+    await act(async () => finishSave({ success: true, data: { ...showcase(), watching: "stale response", version: 2 } }));
+    expect(screen.getByLabelText("profileWatching")).toHaveValue("pending save");
+    expect(mocks.toast).not.toHaveBeenCalledWith("success", "profileShowcaseSaved");
+  });
+
   it("does not write links with non-web protocols", async () => {
     render(<ProfileShowcaseEditor />);
     await screen.findByRole("tab", { name: "profileTab_board" });

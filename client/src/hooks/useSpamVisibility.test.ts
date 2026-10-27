@@ -6,12 +6,14 @@ import { useFriendStore } from "../stores/friendStore";
 import { useAuthStore } from "../stores/authStore";
 import { clearTokens, getAuthGeneration } from "../api/client";
 import { recordSpam, decideSpam } from "../api/spam";
+import { useSpamDecisionStore } from "../stores/spamDecisionStore";
 vi.mock("../api/spam", () => ({ recordSpam: vi.fn(), decideSpam: vi.fn() }));
 vi.mock("../api/preferences", () => ({ getPreferences: vi.fn(), updatePreferences: vi.fn(async () => ({ success: true })) }));
 
 beforeEach(() => {
   clearTokens();
   useAuthStore.setState({ user: { id: "spam-test-user" } as never });
+  useSpamDecisionStore.setState({ accountId: null, decisions: {}, syncError: false });
   vi.mocked(recordSpam).mockReset().mockResolvedValue({ success: true });
   vi.mocked(decideSpam).mockReset().mockResolvedValue({ success: true });
   usePreferencesStore.getState().reset();
@@ -91,6 +93,20 @@ it("retains a synchronized restore after remount but rechecks edited messages", 
   next.rerender({ value: { ...message, edited_at: "2026-10-24T12:00:00Z" } });
   expect(next.result.current.hidden).toBe(true);
   expect(JSON.stringify(usePreferencesStore.getState().data)).not.toContain("https://");
+});
+
+it("retains a confirmed restore across remounts at the preference limit without a socket event", async () => {
+  const restored = Object.fromEntries(Array.from({ length: 1024 }, (_, index) => [`saved-${index}`, "original"]));
+  usePreferencesStore.setState({ data: { privacy: { spamRestoredMessages: restored } } });
+  const message = { id: "over-limit", user_id: "other", content: "https://a.test@b.test" };
+  const first = renderHook(() => useSpamVisibility(message, { kind: "dm", channelId: "dm" }));
+  await act(async () => { await first.result.current.restore(); });
+  expect(useSpamDecisionStore.getState().decisions["dm:over-limit"]?.status).toBe("restored");
+  expect(Object.keys(usePreferencesStore.getState().get<{ spamRestoredMessages: Record<string, string> }>("privacy")!.spamRestoredMessages)).toHaveLength(1024);
+  first.unmount();
+  const next = renderHook(() => useSpamVisibility(message, { kind: "dm", channelId: "dm" }));
+  expect(next.result.current.hidden).toBe(false);
+  expect(message.content).toBe("https://a.test@b.test");
 });
 
 it("keeps unknown friendship pending without recording spam and releases a confirmed friend", async () => {

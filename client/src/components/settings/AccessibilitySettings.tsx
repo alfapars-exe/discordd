@@ -12,11 +12,13 @@
  */
 
 import { useTranslation } from "react-i18next";
+import { previewTextToSpeech, supportsTextToSpeech } from "../../utils/textToSpeech";
 import { useAccessibilityStore } from "../../stores/accessibilityStore";
 import type { Density, MessageStyle } from "../../styles/accessibility";
 
 function AccessibilitySettings() {
   const { t } = useTranslation("settings");
+  const supportsSpeechSynthesis = supportsTextToSpeech();
 
   // Pull every field individually so re-renders stay scoped to the
   // section that actually owns the changed value. This matches the
@@ -369,14 +371,8 @@ function AccessibilitySettings() {
         <div className="vs-slider-row">
           <div className="vs-label">{t("acc.ttsRate")}</div>
           <div className="vs-desc">{t("acc.ttsRateDesc", { rate: ttsRate.toFixed(1) })}</div>
-          <input type="range" min={0.5} max={2} step={0.1} value={ttsRate} onChange={(e) => setTtsRate(Number(e.target.value))} className="vs-range" />
-          <button type="button" className="settings-btn-secondary" onClick={() => {
-            if (!("speechSynthesis" in window)) return;
-            const utterance = new SpeechSynthesisUtterance(t("acc.ttsPreviewText"));
-            utterance.rate = ttsRate;
-            window.speechSynthesis.cancel();
-            window.speechSynthesis.speak(utterance);
-          }}>{t("acc.ttsPreview")}</button>
+          <input type="range" min={0.5} max={2} step={0.1} aria-label={t("acc.ttsRate")} value={ttsRate} disabled={!supportsSpeechSynthesis} onChange={(e) => setTtsRate(Number(e.target.value))} className="vs-range" />
+          <button type="button" className="settings-btn-secondary" disabled={!supportsSpeechSynthesis} onClick={() => previewTextToSpeech(t("acc.ttsPreviewText"))}>{t("acc.ttsPreview")}</button>
         </div>
 
         <div className="vs-toggle-row">
@@ -456,6 +452,8 @@ function AccessibilitySettings() {
           <label className="vs-switch">
             <input
               type="checkbox"
+              aria-label={t("acc.ttsEnabled")}
+              disabled={!supportsSpeechSynthesis}
               checked={ttsEnabled}
               onChange={(e) => setTtsEnabled(e.target.checked)}
             />

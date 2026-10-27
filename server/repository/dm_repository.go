@@ -22,6 +22,7 @@ type DMRepository interface {
 	// statement on one row needs no explicit transaction: SQLite already
 	// applies one UPDATE atomically.
 	TransitionToPending(ctx context.Context, channelID, userID string) error
+	HasMessages(ctx context.Context, channelID string) (bool, error)
 	CountMessagesBySender(ctx context.Context, channelID, userID string) (int, error)
 	DeleteChannel(ctx context.Context, channelID string) error
 	SetE2EEEnabled(ctx context.Context, channelID string, enabled bool) error

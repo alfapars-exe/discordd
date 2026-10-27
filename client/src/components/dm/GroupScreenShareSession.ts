@@ -4,7 +4,9 @@ import {isElectron}from "../../utils/constants";
 import {SCREEN_SHARE_AUDIO_PUBLISH}from "../../hooks/useScreenSharePublishDefaults";
 import { ConnectionState, LocalAudioTrack, LocalVideoTrack, Track, type LocalTrack, type Room, type TrackPublishOptions } from "livekit-client";
 import { captureAdmissionCurrent } from "../../audio/microphoneAdmission";
-import { privateScreenResolution, updatePrivateScreenQuality, type PrivateScreenQuality, type ScreenMetrics } from "../../utils/privateScreenQuality";
+import { privateScreenResolution, type PrivateScreenQuality, type ScreenMetrics } from "../../utils/privateScreenQuality";
+import { resolveScreenSharePublishDefaults } from "../../utils/screenShareProfile";
+import { LiveKitScreenShareUpdater } from "../../webrtc/livekitScreenShareUpdate";
 
 export type GroupShareAudioStatus="off"|"starting"|"shared"|"not_returned"|"unavailable"|"ended";
 const hasEnded = (track: MediaStreamTrack) => track.readyState === "ended";
@@ -15,14 +17,14 @@ export class GroupScreenShareSession {
   private audioTracks=new Set<LocalTrack>();private nativeAudio:SystemAudioCaptureSession|null=null;private audioNotify:(status:GroupShareAudioStatus)=>void;
   private disposed = false;
   private started = false;
-  private revision = 0;
-  private updates = Promise.resolve();
+  private videoUpdates = new Map<LocalVideoTrack, LiveKitScreenShareUpdater>();
   private room: Room;
   private scope: () => boolean;
   private display?: ScreenMetrics | null;
   constructor(room: Room, scope: () => boolean, display?: ScreenMetrics | null,audioNotify:(status:GroupShareAudioStatus)=>void=()=>{}) { this.room = room; this.scope = scope; this.display = display;this.audioNotify=audioNotify; }
   private current = () => !this.disposed && this.scope() && this.room.state === ConnectionState.Connected
     && this.room.localParticipant.permissions?.canPublish === true && captureAdmissionCurrent(this.room.localParticipant);
+  get active() { return this.current() && [...this.videoUpdates.values()].some(updater => updater.active); }
   async start(settings: PrivateScreenQuality, publish: TrackPublishOptions, contentHint: "motion" | "detail",audioRequested=false) {
     if (this.started || !this.current()) return false;
     this.started = true;
@@ -46,6 +48,10 @@ export class GroupScreenShareSession {
         }
         await track.unmute();
         if (!this.current()) { track.mediaStreamTrack.enabled = false; track.stop(); await this.room.localParticipant.unpublishTrack(track).catch(() => {}); this.dispose(); return false; }
+        if (track instanceof LocalVideoTrack) this.videoUpdates.set(track, new LiveKitScreenShareUpdater(
+          this.room.localParticipant, track, this.current,
+          { settings, publish: { ...publish, source: Track.Source.ScreenShare, stream: "screenshare" }, contentHint, display: this.display },
+        ));
       }
       if(audioRequested&&this.current()){
         this.audioNotify("starting");
@@ -74,29 +80,23 @@ export class GroupScreenShareSession {
   }
   ownsAudio(track:LocalTrack|undefined){return !!track&&this.audioTracks.has(track);}
   stopAudio(){const tracks=[...this.audioTracks];this.audioTracks.clear();this.tracks=this.tracks.filter(track=>!tracks.includes(track));this.nativeAudio?.stop();this.nativeAudio=null;for(const track of tracks){track.mediaStreamTrack.enabled=false;track.stop();void this.room.localParticipant.unpublishTrack(track).catch(()=>{});}}
-  update(settings: PrivateScreenQuality, publish?: TrackPublishOptions) {
-    const revision = ++this.revision;
-    this.updates = this.updates.catch(() => {}).then(async () => {
-      if (revision !== this.revision || !this.current()) return;
-      for (const track of this.tracks) if (track instanceof LocalVideoTrack) {
-        const current = () => revision === this.revision && this.current();
-        if (publish) track.publishOptions = { ...track.publishOptions, screenShareEncoding: publish.screenShareEncoding };
-        await updatePrivateScreenQuality(track.mediaStreamTrack, track.sender, settings, current, this.display, publish?.screenShareEncoding?.maxBitrate);
-        for (const [codec, backup] of track.simulcastCodecs) {
-          if (!current()) return;
-          const backupCodec = publish?.backupCodec;
-          const bitrate = typeof backupCodec === "object" && backupCodec.codec === codec ? backupCodec.encoding?.maxBitrate : publish?.screenShareEncoding?.maxBitrate;
-          await updatePrivateScreenQuality(backup.mediaStreamTrack, backup.sender, settings, current, this.display, bitrate);
-        }
-      }
-    });
-    return this.updates;
+  async update(settings: PrivateScreenQuality, publish?: TrackPublishOptions) {
+    if (!this.current()) return;
+    const profile = resolveScreenSharePublishDefaults(settings, this.display);
+    for (const updater of this.videoUpdates.values()) {
+      await updater.update({ settings, publish: publish ?? profile.screenSharePublish,
+        contentHint: profile.screenShareCapture.contentHint, display: this.display });
+    }
   }
   onEnded(callback: () => void) { for (const track of this.tracks.filter(track=>track.kind===Track.Kind.Video)) track.mediaStreamTrack.addEventListener("ended", callback, { once: true }); }
   dispose() {
     if (this.disposed) return;
-    this.disposed = true; ++this.revision;this.stopAudio();
+    this.disposed = true;this.stopAudio();
+    const ownedVideos = new Set(this.videoUpdates.keys());
+    for (const updater of this.videoUpdates.values()) updater.dispose();
+    this.videoUpdates.clear();
     for (const track of this.tracks) {
+      if (ownedVideos.has(track as LocalVideoTrack)) continue;
       track.mediaStreamTrack.enabled = false; track.stop();
       void this.room.localParticipant.unpublishTrack(track).catch(() => {});
     }

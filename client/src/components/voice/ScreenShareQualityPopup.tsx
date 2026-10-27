@@ -4,10 +4,10 @@
  * touches voiceStore + useDisplayInfo, and UserBar was a 567-line god file).
  *
  * Surfaced from the chevron next to the screen-share button. Resolution and
- * frame-rate changes mid-share automatically stop + restart the share with
- * the new values (350 ms debounce — see useScreenShareToggle Effect 4). In
- * the browser path the restart re-prompts the OS source picker; Electron
- * and Capacitor restart silently. The audio toggle still takes effect only
+ * frame-rate and codec changes retain the current desktop/browser capture
+ * and republish only video after a short debounce. Content-profile changes
+ * apply in place. Native mobile capture has its separate lifecycle.
+ * The audio toggle still takes effect only
  * on the next share start — flipping mid-share doesn't add/remove the audio
  * track without a manual restart.
  */

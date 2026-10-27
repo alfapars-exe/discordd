@@ -17,7 +17,7 @@ class FakeUtterance {
   constructor(text: string) { this.text = text; }
 }
 
-import { speakIncomingMessage, speakMessage } from "./textToSpeech";
+import { previewTextToSpeech, supportsTextToSpeech, speakIncomingMessage, speakMessage } from "./textToSpeech";
 
 beforeEach(() => {
   h.prefs = { ttsEnabled: true, ttsRate: 1.4 };
@@ -56,5 +56,26 @@ describe("speakIncomingMessage", () => {
   it("reports synchronous speech engine failures instead of throwing", () => {
     vi.spyOn(window.speechSynthesis, "speak").mockImplementation(() => { throw new Error("unavailable"); });
     expect(speakMessage("QA", "hello")).toBe(false);
+  });
+});
+
+
+describe("TTS preview", () => {
+  it("replaces queued speech with the saved rate and message language", () => {
+    const cancel = vi.fn();
+    Object.assign(window.speechSynthesis, { cancel });
+    h.prefs.ttsEnabled = false;
+    expect(previewTextToSpeech("Önizleme")).toBe(true);
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(h.spoken).toEqual([{ text: "Önizleme", rate: 1.4, lang: "tr-TR" }]);
+  });
+  it("disables unsupported engines and contains cancellation failures", () => {
+    vi.stubGlobal("SpeechSynthesisUtterance", undefined);
+    expect(supportsTextToSpeech()).toBe(false);
+    expect(previewTextToSpeech("hello")).toBe(false);
+    vi.stubGlobal("SpeechSynthesisUtterance", FakeUtterance);
+    Object.assign(window.speechSynthesis, { cancel: () => { throw new Error("unavailable"); } });
+    expect(previewTextToSpeech("hello")).toBe(false);
+    expect(h.spoken).toEqual([]);
   });
 });

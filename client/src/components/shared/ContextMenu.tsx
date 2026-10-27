@@ -15,6 +15,7 @@ type ContextMenuProps = {
 
 function ContextMenu({ state, onClose }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
+  const keyboardNavigation = useRef(false);
   const [openSubmenu, setOpenSubmenu] = useState<number | null>(null);
 
   useEffect(() => {
@@ -30,7 +31,18 @@ function ContextMenu({ state, onClose }: ContextMenuProps) {
 
   useEffect(() => {
     if (openSubmenu === null) return;
-    menuRef.current?.querySelector<HTMLButtonElement>(".ctx-submenu button:not(:disabled)")?.focus();
+    const submenu = menuRef.current?.querySelector<HTMLElement>(".ctx-submenu");
+    if (submenu && getComputedStyle(submenu).position === "absolute") {
+      const rect = submenu.getBoundingClientRect();
+      if (rect.right > window.innerWidth - 8) {
+        submenu.style.left = "auto";
+        submenu.style.right = "calc(100% - 4px)";
+      }
+      if (rect.bottom > window.innerHeight - 8) {
+        submenu.style.top = `${-5 - (rect.bottom - window.innerHeight + 8)}px`;
+      }
+    }
+    submenu?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
   }, [openSubmenu]);
 
   // Close on outside click or Escape
@@ -94,8 +106,10 @@ function ContextMenu({ state, onClose }: ContextMenuProps) {
       className="ctx-menu"
       role="menu"
       tabIndex={-1}
+      onMouseMove={() => { keyboardNavigation.current = false; }}
       style={{ left: state.x, top: state.y }}
       onKeyDown={(event) => {
+        keyboardNavigation.current = true;
         const target = event.target as HTMLElement;
         const menu = target.closest<HTMLElement>("[role='menu']");
         if (!menu) return;
@@ -123,8 +137,7 @@ function ContextMenu({ state, onClose }: ContextMenuProps) {
         <div
           key={i}
           className="ctx-item-wrap"
-          onMouseEnter={() => setOpenSubmenu(item.children?.length ? i : null)}
-          onMouseLeave={() => setOpenSubmenu(null)}
+          onMouseEnter={() => { if (!keyboardNavigation.current) setOpenSubmenu(item.children?.length ? i : null); }}
         >
           {item.separator && <div className="ctx-separator" />}
           <button

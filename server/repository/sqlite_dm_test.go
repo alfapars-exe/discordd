@@ -1110,3 +1110,25 @@ func TestDMRepo_CountMessagesBySender(t *testing.T) {
 }
 
 func strPtr(s string) *string { return &s }
+
+func TestDMRepo_HasMessages(t *testing.T) {
+	db := newTestDB(t)
+	seedDMUsers(t, db)
+	repo := NewSQLiteDMRepo(db.Conn)
+	ctx := context.Background()
+	ch := newDMChannel(t, ctx, repo, dmAlice, dmBob, models.DMStatusAccepted)
+	if has, err := repo.HasMessages(ctx, ch.ID); err != nil || has {
+		t.Fatalf("empty: has=%v err=%v", has, err)
+	}
+	newDMMessage(t, ctx, repo, ch.ID, dmBob, "history")
+	if has, err := repo.HasMessages(ctx, ch.ID); err != nil || !has {
+		t.Fatalf("recipient history: has=%v err=%v", has, err)
+	}
+	newDMMessage(t, ctx, repo, ch.ID, dmAlice, "history")
+	if has, err := repo.HasMessages(ctx, ch.ID); err != nil || !has {
+		t.Fatalf("both history: has=%v err=%v", has, err)
+	}
+	if has, err := repo.HasMessages(ctx, "missing"); err != nil || has {
+		t.Fatalf("other channel: has=%v err=%v", has, err)
+	}
+}
