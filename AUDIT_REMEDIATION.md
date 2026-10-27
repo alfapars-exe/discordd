@@ -198,7 +198,7 @@ docker run --rm -v "C:\Users\harun\OneDrive\Desktop\Discord\tayfa-deploy:/src" `
 
 ```powershell
 # Repo kokunden calistir; production imajini kurup Nginx/CSP yanitlarini dogrular.
-powershell -NoProfile -ExecutionPolicy Bypass -File .\client\scripts\test-nginx-csp.ps1
+node client/scripts/test-nginx-csp.mjs
 
 # Beklenen: PASS mesaji; config syntax'i, default/origin CSP ve injection reddi dogrulanir.
 ```
@@ -292,7 +292,7 @@ docker run --rm -v "${PWD}:/src" -w /src/server golang:1.25-bookworm `
   bash -c "apt-get install -yq gcc && go test ./..."
 
 # === NGINX (repo kokunden) ===
-powershell -NoProfile -ExecutionPolicy Bypass -File .\client\scripts\test-nginx-csp.ps1
+node client/scripts/test-nginx-csp.mjs
 
 # === SECURITY SMOKE ===
 # 1. .gitignore'da SSH key engellenmiş

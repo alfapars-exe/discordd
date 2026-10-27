@@ -355,9 +355,9 @@ jobs:
           gosec ./...
         working-directory: server
 
-  # ─── React client: lint + type check + test + build ───
+  # ─── React client: lint + type check + test + build + production image ───
   client-check:
-    name: Client lint, type, test & build
+    name: Client lint, type, test, build & production image
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -397,6 +397,13 @@ jobs:
 
       - name: Microphone worklet CSP packaging
         run: node --test scripts/audio-build-csp.test.mjs
+        working-directory: client
+
+      # Build the exact Nginx production target from the repository-root
+      # context (including the shared Electron contracts), then exercise its
+      # runtime CSP generation and fail-closed origin validation.
+      - name: Production client image and Nginx CSP
+        run: node scripts/test-nginx-csp.mjs
         working-directory: client
 
       # npm audit — dependency advisories. Advisory (continue-on-error):
