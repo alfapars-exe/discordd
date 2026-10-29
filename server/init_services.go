@@ -194,7 +194,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	// nothing calls compiles fine and silently drops every audit event (see
 	// wiring_test.go); a constructor parameter can't be forgotten without a
 	// compile error.
-	auditLogService := services.NewAuditLogService(repos.AuditLog, repos.User, repos.Role, hub, hub, cfg.AuditLogRetentionDays)
+	auditLogService := services.NewAuditLogService(repos.AuditLog, repos.User, repos.Role, hub, hub)
 	voiceService := services.NewVoiceService(
 		repos.Channel, repos.LiveKit, channelPermService, hub, hub, repos.Server, encryptionKey, repos.MemberTimeout, repos.Ban, auditLogService,
 	)
