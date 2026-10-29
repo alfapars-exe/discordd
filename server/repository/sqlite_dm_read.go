@@ -29,14 +29,14 @@ func (r *sqliteDMReadRepo) MarkRead(ctx context.Context, userID, channelID strin
 		if err != sql.ErrNoRows {
 			return err
 		}
-		_, err = r.db.ExecContext(ctx, `INSERT INTO dm_reads(user_id,dm_channel_id,last_read_at,unread_count) VALUES(?,?,datetime('now'),0) ON CONFLICT(user_id,dm_channel_id) DO UPDATE SET last_read_at=excluded.last_read_at,unread_count=0`, userID, channelID)
+		_, err = r.db.ExecContext(ctx, `INSERT INTO dm_reads(user_id,dm_channel_id,last_read_at,unread_count) VALUES(?,?,CURRENT_TIMESTAMP,0) ON CONFLICT(user_id,dm_channel_id) DO UPDATE SET last_read_at=excluded.last_read_at,unread_count=0`, userID, channelID)
 		return err
 	}
 	result, err := r.db.ExecContext(ctx, `INSERT INTO dm_reads(user_id,dm_channel_id,last_read_message_id,last_read_source_sequence,last_read_at,unread_count)
  SELECT ?,m.dm_channel_id,
  CASE WHEN m.source_sequence>=COALESCE(dr.last_read_source_sequence,0) THEN m.id ELSE dr.last_read_message_id END,
  CASE WHEN m.source_sequence>=COALESCE(dr.last_read_source_sequence,0) THEN m.source_sequence ELSE dr.last_read_source_sequence END,
- datetime('now'),(SELECT COUNT(*) FROM dm_messages u WHERE u.dm_channel_id=m.dm_channel_id AND u.user_id<>? AND u.source_sequence>(CASE WHEN m.source_sequence>=COALESCE(dr.last_read_source_sequence,0) THEN m.source_sequence ELSE dr.last_read_source_sequence END))
+ CURRENT_TIMESTAMP,(SELECT COUNT(*) FROM dm_messages u WHERE u.dm_channel_id=m.dm_channel_id AND u.user_id<>? AND u.source_sequence>(CASE WHEN m.source_sequence>=COALESCE(dr.last_read_source_sequence,0) THEN m.source_sequence ELSE dr.last_read_source_sequence END))
  FROM dm_messages m LEFT JOIN dm_reads dr ON dr.dm_channel_id=m.dm_channel_id AND dr.user_id=? WHERE m.id=? AND m.dm_channel_id=?
  ON CONFLICT(user_id,dm_channel_id) DO UPDATE SET last_read_message_id=excluded.last_read_message_id,last_read_source_sequence=excluded.last_read_source_sequence,last_read_at=excluded.last_read_at,unread_count=excluded.unread_count`, userID, userID, userID, *messageID, channelID)
 	if err != nil {
@@ -54,7 +54,7 @@ func (r *sqliteDMReadRepo) MarkRead(ctx context.Context, userID, channelID strin
 
 func (r *sqliteDMReadRepo) MarkUnreadFrom(ctx context.Context, userID, channelID, messageID string) (int, error) {
 	result, err := r.db.ExecContext(ctx, `INSERT INTO dm_reads(user_id,dm_channel_id,last_read_message_id,last_read_source_sequence,last_read_at,unread_count)
- SELECT ?,m.dm_channel_id,(SELECT p.id FROM dm_messages p WHERE p.dm_channel_id=m.dm_channel_id AND p.source_sequence<m.source_sequence ORDER BY p.source_sequence DESC LIMIT 1),m.source_sequence-1,datetime('now'),
+ SELECT ?,m.dm_channel_id,(SELECT p.id FROM dm_messages p WHERE p.dm_channel_id=m.dm_channel_id AND p.source_sequence<m.source_sequence ORDER BY p.source_sequence DESC LIMIT 1),m.source_sequence-1,CURRENT_TIMESTAMP,
  (SELECT COUNT(*) FROM dm_messages u WHERE u.dm_channel_id=m.dm_channel_id AND u.user_id<>? AND u.source_sequence>=m.source_sequence)
  FROM dm_messages m WHERE m.id=? AND m.dm_channel_id=?
  ON CONFLICT(user_id,dm_channel_id) DO UPDATE SET last_read_message_id=excluded.last_read_message_id,last_read_source_sequence=excluded.last_read_source_sequence,last_read_at=excluded.last_read_at,unread_count=excluded.unread_count`, userID, userID, messageID, channelID)
@@ -79,7 +79,7 @@ func (r *sqliteDMReadRepo) MarkUnreadFrom(ctx context.Context, userID, channelID
 func (r *sqliteDMReadRepo) IncrementUnread(ctx context.Context, userID, channelID string) error {
 	query := `
 		INSERT INTO dm_reads (user_id, dm_channel_id, last_read_message_id, last_read_at, unread_count)
-		VALUES (?, ?, NULL, datetime('now'), 1)
+		VALUES (?, ?, NULL, CURRENT_TIMESTAMP, 1)
 		ON CONFLICT(user_id, dm_channel_id)
 		DO UPDATE SET unread_count = dm_reads.unread_count + 1`
 

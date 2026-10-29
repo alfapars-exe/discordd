@@ -13,6 +13,7 @@ import (
 // so binding them to a *sql.Tx requires no changes to the repositories
 // themselves.
 type MessageTxRepos struct {
+	SQL                         *sql.Tx
 	Message                     MessageRepository
 	Mention                     MentionRepository
 	RoleMention                 RoleMentionRepository
@@ -38,11 +39,16 @@ func NewMessageTxRunner(db *sql.DB) MessageTxRunner {
 func (r *messageTxRunner) InTx(ctx context.Context, fn func(*MessageTxRepos) error) error {
 	postgres := database.IsPostgres(r.db)
 	return database.WithTx(ctx, r.db, func(tx *sql.Tx) error {
+		readState := NewSQLiteReadStateRepo(tx)
+		if database.IsPostgres(r.db) {
+			readState = NewPostgresReadStateRepo(tx)
+		}
 		return fn(&MessageTxRepos{
+			SQL:                         tx,
 			Message:                     NewSQLiteMessageRepo(tx),
 			Mention:                     NewSQLiteMentionRepo(tx),
 			RoleMention:                 NewSQLiteRoleMentionRepo(tx),
-			ReadState:                   NewSQLiteReadStateRepo(tx),
+			ReadState:                   readState,
 			Notification:                NewSQLiteNotificationRepo(tx),
 			ChannelMessageNotifications: NewChannelMessageNotificationQueueWithDialect(tx, postgres),
 		})

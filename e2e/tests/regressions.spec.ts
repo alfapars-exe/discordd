@@ -19,6 +19,30 @@ test.beforeEach(async ({ page }) => {
   await openFreshChannel(page);
 });
 
+test("a committed send with a lost HTTP response retries once without duplicating the message", async ({page}) => {
+  const content = `durable retry ${Date.now()}`;
+  const identities: string[] = [];
+  await page.route("**/api/servers/*/channels/*/messages", async (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    identities.push(route.request().postDataJSON().client_message_id);
+    if (identities.length === 1) {
+      const committed = await route.fetch();
+      expect(committed.status()).toBe(201);
+      return route.abort("connectionfailed");
+    }
+    return route.continue();
+  });
+  await composer(page).fill(content);
+  await composer(page).press("Enter");
+  await expect(composer(page)).toHaveValue("", {timeout:20_000});
+  expect(identities.length).toBe(2);
+  expect(identities[0]).toMatch(/^[a-f0-9-]{36}$/);
+  expect(identities[1]).toBe(identities[0]);
+  await expect(messageList(page).getByText(content,{exact:true})).toHaveCount(1);
+  await page.reload();
+  await expect(messageList(page).getByText(content,{exact:true})).toHaveCount(1,{timeout:15_000});
+});
+
 /**
  * Regression 1 — image attachments survive the media-cookie auth path.
  *

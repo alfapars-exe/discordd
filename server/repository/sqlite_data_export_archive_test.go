@@ -103,10 +103,10 @@ func TestDataExportAttachmentArchiveOwnerOpaqueBytesAndAuthorization(t *testing.
 	if err := archiveFile.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Conn.Exec(`UPDATE data_exports SET expires_at=datetime('now','-1 second') WHERE id=?`, job.ID); err != nil {
+	if _, err := db.Conn.Exec(`UPDATE data_exports SET expires_at=`+fixtureRelativeTimestamp("-1 second")+` WHERE id=?`, job.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Conn.Exec(`UPDATE data_export_archive_reservations SET expires_at=datetime('now','-1 second') WHERE job_id=?`, job.ID); err != nil {
+	if _, err := db.Conn.Exec(`UPDATE data_export_archive_reservations SET expires_at=`+fixtureRelativeTimestamp("-1 second")+` WHERE job_id=?`, job.ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := repo.DownloadAttachments(context.Background(), "archive-owner", job.ID); !errors.Is(err, pkg.ErrNotFound) {
@@ -435,7 +435,7 @@ func TestDataExportArchiveExpiredLeaseKeepsBudgetUntilFilesAreGone(t *testing.T)
 	if err := repo.reserveArchiveBudget(context.Background(), job, workerID, 50); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Conn.Exec(`UPDATE data_export_archive_reservations SET lease_until=datetime('now','-1 second') WHERE job_id=?`, jobID); err != nil {
+	if _, err := db.Conn.Exec(`UPDATE data_export_archive_reservations SET lease_until=`+fixtureRelativeTimestamp("-1 second")+` WHERE job_id=?`, jobID); err != nil {
 		t.Fatal(err)
 	}
 	if err := repo.recoverExpiredArchiveLeases(context.Background()); err != nil {
@@ -455,7 +455,7 @@ func TestDataExportArchiveExpiredLeaseKeepsBudgetUntilFilesAreGone(t *testing.T)
 	if _, err := os.Stat(tmpPath); err != nil {
 		t.Fatalf("grace-period worker file was removed: %v", err)
 	}
-	if _, err := db.Conn.Exec(`UPDATE data_export_archive_reservations SET expires_at=datetime('now','-1 second') WHERE job_id=?`, jobID); err != nil {
+	if _, err := db.Conn.Exec(`UPDATE data_export_archive_reservations SET expires_at=`+fixtureRelativeTimestamp("-1 second")+` WHERE job_id=?`, jobID); err != nil {
 		t.Fatal(err)
 	}
 	if err := repo.removeStaleArchives(context.Background()); err != nil {
@@ -479,7 +479,7 @@ func TestDataExportArchiveRecoverySerializesWithConcurrentReservation(t *testing
 	if err := repo.reserveArchiveBudget(context.Background(), pendingExportArchive{id: jobID, userID: "expired-user", expiresAt: time.Now().Add(time.Hour)}, workerID, 40); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Conn.Exec(`UPDATE data_export_archive_reservations SET lease_until=datetime('now','-1 second') WHERE job_id=?`, jobID); err != nil {
+	if _, err := db.Conn.Exec(`UPDATE data_export_archive_reservations SET lease_until=`+fixtureRelativeTimestamp("-1 second")+` WHERE job_id=?`, jobID); err != nil {
 		t.Fatal(err)
 	}
 	start := make(chan struct{})

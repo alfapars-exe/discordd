@@ -164,7 +164,7 @@ func TestBotDownloadRealResolverRejectsRetiredCredentials(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db, err := database.New(filepath.Join(t.TempDir(), "media-bot.db"), migrations)
+	db, err := database.NewLegacy(filepath.Join(t.TempDir(), "media-bot.db"), migrations)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -71,6 +71,7 @@ func (d *routeDeps) registerChannelRoutes() {
 func (d *routeDeps) registerMessageRoutes() {
 	// Messages
 	d.mux.Handle("GET /api/servers/{serverId}/channels/{id}/messages", d.authServer(d.h.Message.List))
+	d.mux.Handle("GET /api/servers/{serverId}/channels/{id}/message-events", d.authServer(d.h.Message.Events))
 	d.mux.Handle("POST /api/servers/{serverId}/channels/{id}/messages", d.authServer(d.h.Message.Create))
 	d.mux.Handle("PATCH /api/servers/{serverId}/messages/{id}", d.authServer(d.h.Message.Update))
 	d.mux.Handle("DELETE /api/servers/{serverId}/messages/{id}", d.authServerPermLoad(d.h.Message.Delete))

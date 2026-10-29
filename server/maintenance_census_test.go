@@ -32,7 +32,7 @@ func newCensusDB(t *testing.T) (*database.DB, string) {
 		t.Fatalf("fs.Sub: %v", err)
 	}
 	path := filepath.Join(t.TempDir(), "census.db")
-	db, err := database.New(path, migrationsFS)
+	db, err := database.NewLegacy(path, migrationsFS)
 	if err != nil {
 		t.Fatalf("database.New: %v", err)
 	}

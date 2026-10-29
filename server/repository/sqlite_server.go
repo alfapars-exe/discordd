@@ -185,9 +185,8 @@ func (r *sqliteServerRepo) GetUserServers(ctx context.Context, userID string) ([
 
 func (r *sqliteServerRepo) AddMember(ctx context.Context, serverID, userID string) error {
 	// New member appended at end: position = max + 1 (atomic via subquery).
-	query := `
-		INSERT OR IGNORE INTO server_members (server_id, user_id, position)
-		VALUES (?, ?, COALESCE((SELECT MAX(position) FROM server_members WHERE user_id = ?), -1) + 1)`
+	query := `INSERT INTO server_members (server_id, user_id, position)
+		VALUES (?, ?, COALESCE((SELECT MAX(position) FROM server_members WHERE user_id = ?), -1) + 1) ON CONFLICT DO NOTHING`
 
 	_, err := r.db.ExecContext(ctx, query, serverID, userID, userID)
 	if err != nil {
@@ -200,8 +199,8 @@ func (r *sqliteServerRepo) AddMember(ctx context.Context, serverID, userID strin
 // AddMemberWithGameActivityAudience snapshots the owner's default activity
 // audience at membership creation. Existing rows remain NULL and fail closed.
 func (r *sqliteServerRepo) AddMemberWithGameActivityAudience(ctx context.Context, serverID, userID string, allowed bool) error {
-	query := `INSERT OR IGNORE INTO server_members (server_id,user_id,position,game_activity_audience)
-		VALUES (?,?,COALESCE((SELECT MAX(position) FROM server_members WHERE user_id=?),-1)+1,?)`
+	query := `INSERT INTO server_members (server_id,user_id,position,game_activity_audience)
+		VALUES (?,?,COALESCE((SELECT MAX(position) FROM server_members WHERE user_id=?),-1)+1,?) ON CONFLICT DO NOTHING`
 	if _, err := r.db.ExecContext(ctx, query, serverID, userID, userID, allowed); err != nil {
 		return fmt.Errorf("failed to add server member with activity snapshot: %w", err)
 	}

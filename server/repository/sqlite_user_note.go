@@ -41,7 +41,7 @@ func (r *sqliteUserNoteRepo) Get(ctx context.Context, ownerUserID, targetUserID 
 func (r *sqliteUserNoteRepo) Upsert(ctx context.Context, ownerUserID, targetUserID, note string) (string, error) {
 	if _, err := r.db.ExecContext(ctx,
 		`INSERT INTO user_notes (owner_user_id, target_user_id, note, updated_at)
-		 VALUES (?, ?, ?, datetime('now'))
+		 VALUES (?, ?, ?, CURRENT_TIMESTAMP)
 		 ON CONFLICT(owner_user_id, target_user_id) DO UPDATE SET
 		   note = excluded.note,
 		   updated_at = excluded.updated_at`,

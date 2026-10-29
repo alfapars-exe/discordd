@@ -20,6 +20,8 @@ import { useToastStore } from "../toastStore";
 import type { APIResponse } from "../../types";
 
 export type SendWithRetryOptions = {
+  /** Only callers backed by a durable server identity may enable replay. */
+  idempotent?: boolean;
   /** Suppress toast on final failure — caller wants to show its own UI. */
   silent?: boolean;
   /** Fence abandoned sessions before dispatch and before user-visible effects. */
@@ -38,7 +40,13 @@ export async function sendWithRetryAndToast<T>(
   // Only a persisted server-side idempotency contract can make retries safe.
   // Keep the caller's draft on failure; never silently replay this write.
   if(options.isCurrent&&!options.isCurrent())return {success:false,error:"send_context_changed"};
-  const res = await send();
+  let res = await send();
+  for (let attempt = 0; options.idempotent && attempt < 2 && !res.success &&
+    (res.isNetworkError || res.isTimeout || [502, 503, 504].includes(res.status ?? 0)); attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** attempt));
+    if (options.isCurrent && !options.isCurrent()) return {success:false,error:"send_context_changed"};
+    res = await send();
+  }
   if(options.isCurrent&&!options.isCurrent())return {success:false,error:"send_context_changed"};
 
   if (res.success) return res;

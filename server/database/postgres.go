@@ -100,8 +100,8 @@ func postgresPoolLimits() (int, int, error) {
 			*entry.dest = n
 		}
 	}
-	if open < 1 || idle > open {
-		return 0, 0, errors.New("PostgreSQL pool requires max-open >= 1 and max-idle <= max-open")
+	if open < 2 || idle > open {
+		return 0, 0, errors.New("PostgreSQL pool requires max-open >= 2 (one dedicated backend owner) and max-idle <= max-open")
 	}
 	return open, idle, nil
 }

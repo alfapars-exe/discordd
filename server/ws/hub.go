@@ -49,6 +49,7 @@ type cachedUserInfo struct {
 // Hub manages all WebSocket connections (Observer pattern).
 // A single goroutine processes register/unregister via channels.
 type Hub struct {
+	durableChannelSends atomic.Bool
 	// clients: userID -> set of Client connections (multi-tab support)
 	clients map[string]map[*Client]bool
 

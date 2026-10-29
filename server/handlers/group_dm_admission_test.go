@@ -21,7 +21,7 @@ func TestGroupAdmissionHTTPRealServiceKnownIDAndActorCannotBypassFriendGate(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	db, err := database.New(filepath.Join(t.TempDir(), "group_admission.db"), migrations)
+	db, err := database.NewLegacy(filepath.Join(t.TempDir(), "group_admission.db"), migrations)
 	if err != nil {
 		t.Fatal(err)
 	}

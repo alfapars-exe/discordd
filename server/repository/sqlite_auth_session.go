@@ -211,7 +211,7 @@ func (r *sqliteAuthSessionRepo) UpdatePasswordAndRevoke(ctx context.Context, use
 			query += ` AND password_hash=?`
 			args = append(args, expectedHash)
 		} else {
-			query += ` AND EXISTS(SELECT 1 FROM password_reset_tokens WHERE user_id=? AND token_hash=? AND CAST(strftime('%s',expires_at) AS INTEGER)>?)`
+			query += ` AND EXISTS(SELECT 1 FROM password_reset_tokens WHERE user_id=? AND token_hash=? AND ` + epochSecondsSQL(r.db, "expires_at") + `>?)`
 			args = append(args, userID, resetHash, now)
 		}
 		result, err := tx.ExecContext(ctx, query, args...)

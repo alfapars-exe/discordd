@@ -162,7 +162,7 @@ func TestFriendAnniversaryMigrationBackfillsHistoricalGoTime(t *testing.T) {
 		}
 		files[entry.Name()] = &fstest.MapFile{Data: data}
 	}
-	db, err := database.New(filepath.Join(t.TempDir(), "anniversary_migration.db"), files)
+	db, err := database.NewLegacy(filepath.Join(t.TempDir(), "anniversary_migration.db"), files)
 	if err != nil {
 		t.Fatal(err)
 	}

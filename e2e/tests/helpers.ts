@@ -200,7 +200,7 @@ export function channelNotificationQueueState(messageMarker: string): { messages
   if (!realRunRelative || realRunRelative === ".." || realRunRelative.startsWith(`..${sep}`)) {
     throw new Error("real disposable E2E run directory escaped its owner root");
   }
-  const dbPath = resolve(runDir, "hichat-e2e.db");
+  const dbPath = resolve(runDir, "hichat-e2e-postgres.json");
   const dbStat = existsSync(dbPath) ? lstatSync(dbPath) : null;
   if (dirname(dbPath) !== runDir || !dbStat?.isFile() || dbStat.isSymbolicLink()) {
     throw new Error("owned E2E run does not contain a regular disposable database");
@@ -533,17 +533,14 @@ export async function provisionServerForE2E(page: Page, name: string): Promise<v
   // Playwright's separate APIRequestContext cannot authenticate directly.
   // Refresh and create within the page origin; keep the token in-page and out
   // of test logs, then reload so the app adopts the rotated refresh cookie.
+  await expect(page.getByRole("button", {name:"User Profile",exact:true})).toBeVisible({timeout:20_000});
   const result = await page.evaluate(async (serverName) => {
-    const refresh = await fetch("/api/auth/refresh", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-HiChat-Client": "web" },
-      credentials: "include",
-      body: JSON.stringify({}),
-    });
-    if (!refresh.ok) return { status: refresh.status, server: null };
-    const refreshed = await refresh.json();
-    const token = refreshed?.data?.access_token;
-    if (!token) return { status: refresh.status, server: null };
+    // Reuse the app's shared in-memory auth state instead of independently
+    // rotating its refresh cookie while /users/me requests are still running.
+    const authModulePath = "/src/api/client.ts";
+    const {ensureFreshToken} = await import(authModulePath);
+    const token = await ensureFreshToken();
+    if (!token) return {status:401,server:null};
 
     const response = await fetch("/api/servers", {
       method: "POST",

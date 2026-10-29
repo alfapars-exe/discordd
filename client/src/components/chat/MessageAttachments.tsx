@@ -36,8 +36,10 @@ function isGifAttachment(attachment: ChatAttachment): boolean {
 }
 
 function MessageAttachments({ message }: Readonly<MessageAttachmentsProps>) {
-  const attachments = message.attachments;
-  if (!attachments || attachments.length === 0) return null;
+  const { t } = useTranslation("chat");
+  const attachments = message.attachments ?? [];
+  const states = (message.attachment_states ?? []).filter((state) => state.status !== "ready");
+  if (attachments.length === 0 && states.length === 0) return null;
 
   const plaintextGallery: LightboxItem[] =
     message.encryption_version === 1
@@ -62,7 +64,7 @@ function MessageAttachments({ message }: Readonly<MessageAttachmentsProps>) {
     <div className="msg-attachments">
       {attachments.map((attachment, idx) => {
         const isEncrypted = message.encryption_version === 1;
-        const fileMeta = isEncrypted ? message.e2ee_file_keys?.[idx] : undefined;
+        const fileMeta = isEncrypted ? message.e2ee_file_keys?.[attachment.file_key_index ?? idx] : undefined;
 
         if (isEncrypted && !fileMeta) {
           return <MissingKeyPlaceholder key={attachment.id} attachment={attachment} />;
@@ -92,6 +94,10 @@ function MessageAttachments({ message }: Readonly<MessageAttachmentsProps>) {
           />
         );
       })}
+      {states.map((state) => <div className="msg-file" role="status" key={`preparation-${state.index}`}>
+        <span>{message.encryption_version === 1 ? message.e2ee_file_keys?.[state.index]?.filename ?? state.filename : state.filename}</span>
+        <span>{t(state.status === "preparing" ? "attachmentPreparing" : "attachmentFailed")}</span>
+      </div>)}
     </div>
   );
   const mediaInputs = attachments.flatMap((attachment, index) => {

@@ -15,14 +15,7 @@ import (
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/pkg/logx"
 
-	_ "modernc.org/sqlite" // pure-Go SQLite driver for local files (registers "sqlite")
-	// Remote libSQL/Turso driver is imported in database_libsql.go behind
-	// `!windows && cgo` — go-libsql is a cgo package and needs a C toolchain,
-	// which Windows dev machines and pure-Go Linux builds don't have. Local
-	// SQLite still works via the pure-Go driver above, so tests and the
-	// self-host image run cross-platform. A build without that driver that is
-	// then pointed at a libsql:// DSN fails at sql.Open with "unknown driver",
-	// which is the intended, legible outcome — see New below.
+	_ "modernc.org/sqlite" // Offline import sources and historical migration fixtures only.
 )
 
 var logger = logx.Component("database")
@@ -95,9 +88,18 @@ func RedactDSN(dsn string) string {
 	return dsn[:i] + "authToken=***"
 }
 
-// New opens a database connection and runs pending migrations.
-// Supports both local SQLite (file path) and remote Turso/libSQL (libsql://...).
+// New is the product entrypoint. Legacy file opening is available only through
+// NewLegacy for offline migration tooling and historical migration fixtures.
 func New(dbPath string, migrationsFS fs.FS) (*DB, error) {
+	if !IsPostgresDSN(dbPath) {
+		return nil, fmt.Errorf("PostgreSQL DATABASE_URL is required; use the offline migration tool for legacy data")
+	}
+	return NewLegacy(dbPath, migrationsFS)
+}
+
+// NewLegacy opens migration sources and historical test fixtures. Product
+// startup must use New, which never falls back to a local file or libSQL.
+func NewLegacy(dbPath string, migrationsFS fs.FS) (*DB, error) {
 	if IsPostgresDSN(dbPath) {
 		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 		defer cancel()
@@ -116,12 +118,7 @@ func New(dbPath string, migrationsFS fs.FS) (*DB, error) {
 	var err error
 
 	if IsRemoteLibSQL(dbPath) {
-		// Turso/libSQL remote — connection-level pragmas don't apply (server manages WAL).
-		conn, err = sql.Open("libsql", dbPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to open libsql database: %w", err)
-		}
-		logger.Info("using remote libSQL backend")
+		return nil, fmt.Errorf("libSQL support has been removed; import an offline SQLite snapshot into PostgreSQL")
 	} else {
 		// Local SQLite file — ensure parent directory exists. 0750 keeps
 		// the DB file's parent directory closed to "other" on the host so

@@ -21,7 +21,7 @@ func TestEmailUnsubscribeHandlerSQLiteIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db, err := database.New(filepath.Join(t.TempDir(), "email-unsubscribe.db"), migrations)
+	db, err := database.NewLegacy(filepath.Join(t.TempDir(), "email-unsubscribe.db"), migrations)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -22,8 +22,8 @@ assert.match(serverLauncher, /delete env\.SPACE_ID;\s*delete env\.SDK_SPACE;/,
   "the isolated API must not inherit hosted-space integration/probe selectors");
 assert.match(serverLauncher, /process\.env\.HICHAT_E2E_RUN_ID[\s\S]*mkdirSync\(runDir\)/,
   "the API launcher must create the database under the unique run identity passed by Playwright");
-assert.match(serverLauncher, /DATABASE_PATH:\s*join\(runDir, "hichat-e2e\.db"\)[\s\S]*UPLOAD_DIR:\s*uploadDir,[\s\S]*DATA_EXPORT_DIR:\s*join\(runDir, "exports"\)/,
-  "the disposable database, uploads, and generated export archives must be confined to this exact run directory");
+assert.match(serverLauncher, /DATABASE_PATH:\s*"",[\s\S]*DATABASE_URL:\s*databaseURL,[\s\S]*UPLOAD_DIR:\s*uploadDir,[\s\S]*DATA_EXPORT_DIR:\s*join\(runDir, "exports"\)/,
+  "the API must use its generated PostgreSQL database and run-local assets");
 assert.match(serverLauncher, /function buildServer\(runDir\)[\s\S]*lstatSync\(binDir\)[\s\S]*realpathSync\(binDir\)[\s\S]*relative\(realRunDir, realBinDir\)/,
   "Go build output must be a real directory contained inside the unique run before compilation");
 assert.match(serverLauncher, /const binPath = join\(binDir, binName\)[\s\S]*existsSync\(binPath\) \|\| existsSync\(probePath\)/,
@@ -41,8 +41,10 @@ const helpers = readFileSync(join(here, "..", "tests", "helpers.ts"), "utf8");
 assert.match(helpers, /E2E_RUN_ID[\s\S]*realpathSync\(runDir\)[\s\S]*realpathSync\(dbPath\)[\s\S]*execFileSync\(realProbePath/,
   "the queue observer must use the exact run identity and validate realpath containment before execution");
 const queueProbe = readFileSync(join(here, "queue-probe.go"), "utf8");
-assert.match(queueProbe, /mode=ro/,
-  "the E2E queue observer must open the disposable SQLite file read-only");
+assert.match(queueProbe, /127\.0\.0\.1/);
+assert.match(queueProbe, /hichat_e2e_/);
+assert.match(queueProbe, /ReadOnly:\s*true/,
+  "the E2E queue observer must use a read-only PostgreSQL transaction");
 assert.match(queueProbe, /COUNT\(\*\),COALESCE\(SUM[\s\S]*FROM messages m[\s\S]*COALESCE\(m\.content,''\)=\?/,
   "queue completion must match the exact unique message before accepting an empty queue");
 

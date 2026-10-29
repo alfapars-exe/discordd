@@ -40,6 +40,14 @@ func (r *sqliteAttachmentRepo) Create(ctx context.Context, attachment *models.At
 	query := `
 		INSERT INTO attachments (id, message_id, filename, file_url, file_size, mime_type)
 		VALUES (?, ?, ?, ?, ?, ?)`
+	if attachment.PreparationIndex != nil && database.IsPostgres(r.db) {
+		_, err := r.db.ExecContext(ctx, `INSERT INTO attachments(id,message_id,filename,file_url,file_size,mime_type,channel_file_index) VALUES(?,?,?,?,?,?,?)`, attachment.ID, attachment.MessageID, attachment.Filename, attachment.FileURL, attachment.FileSize, attachment.MimeType, attachment.PreparationIndex)
+		if err != nil {
+			return fmt.Errorf("failed to create attachment: %w", err)
+		}
+		_ = r.db.QueryRowContext(ctx, "SELECT created_at FROM attachments WHERE id=?", attachment.ID).Scan(&attachment.CreatedAt)
+		return nil
+	}
 
 	if _, err := r.db.ExecContext(ctx, query,
 		attachment.ID,

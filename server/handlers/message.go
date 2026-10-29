@@ -1,13 +1,17 @@
 package handlers
 
 import (
+	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
@@ -216,10 +220,51 @@ func (h *MessageHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if isMultipart(contentType) {
+		req.ClientMessageID = r.FormValue("client_message_id")
+		if r.MultipartForm != nil {
+			defer r.MultipartForm.RemoveAll()
+		}
+	}
+	// Hash semantic request fields plus each file's bytes and name before any
+	// durable mutation. Multipart boundaries and filenames alone aren't identity.
+	hash := sha256.New()
+	encoded, _ := json.Marshal(req)
+	hash.Write(encoded)
+	if r.MultipartForm != nil {
+		for _, fh := range r.MultipartForm.File["files"] {
+			req.FileNames = append(req.FileNames, fh.Filename)
+			meta, _ := json.Marshal([]any{fh.Filename, fh.Size, fh.Header.Get("Content-Type")})
+			hash.Write(meta)
+			file, openErr := fh.Open()
+			if openErr != nil {
+				pkg.ErrorWithMessage(w, 400, "could not read attachment")
+				return
+			}
+			_, readErr := io.Copy(hash, file)
+			file.Close()
+			if readErr != nil {
+				pkg.ErrorWithMessage(w, 400, "could not read attachment")
+				return
+			}
+		}
+	}
+	req.RequestHash = fmt.Sprintf("%x", hash.Sum(nil))
 	message, err := h.messageService.Create(r.Context(), serverID, channelID, user.ID, &req)
 	if err != nil {
 		pkg.Error(w, err)
 		return
+	}
+	if message.Replayed {
+		pkg.JSON(w, http.StatusOK, message)
+		return
+	}
+	if req.HasFiles {
+		if durable, ok := h.messageService.(interface {
+			KeepChannelSendAlive(context.Context, string) func()
+		}); ok {
+			defer durable.KeepChannelSendAlive(r.Context(), message.ID)()
+		}
 	}
 
 	// Upload files after message creation. Failures used to be silently
@@ -236,7 +281,7 @@ func (h *MessageHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if isMultipart(contentType) && r.MultipartForm != nil {
 		isEncrypted := req.EncryptionVersion == 1
 		files := r.MultipartForm.File["files"]
-		for _, fileHeader := range files {
+		for index, fileHeader := range files {
 			file, err := fileHeader.Open()
 			if err != nil {
 				slog.WarnContext(r.Context(), "message attachment open failed", "err", pkg.ErrText(err))
@@ -244,10 +289,11 @@ func (h *MessageHandler) Create(w http.ResponseWriter, r *http.Request) {
 					Filename: fileHeader.Filename,
 					Error:    "could not open file",
 				})
+				h.attachmentOutcome(message.ID, index, nil, "could not open file")
 				continue
 			}
 
-			attachment, err := h.uploadService.Upload(r.Context(), message.ID, file, fileHeader, isEncrypted)
+			attachment, err := h.uploadService.Upload(context.WithValue(r.Context(), models.ChannelAttachmentIndexKey{}, index), message.ID, file, fileHeader, isEncrypted)
 			// Read-side handle — nothing buffered to flush, safe to ignore.
 			// Not deferred — this runs per file in the loop above; a defer
 			// here would pin every attachment's handle open until the whole
@@ -268,10 +314,12 @@ func (h *MessageHandler) Create(w http.ResponseWriter, r *http.Request) {
 					Filename: fileHeader.Filename,
 					Error:    failMsg,
 				})
+				h.attachmentOutcome(message.ID, index, nil, failMsg)
 				continue
 			}
 
 			message.Attachments = append(message.Attachments, *attachment)
+			h.attachmentOutcome(message.ID, index, attachment, "")
 		}
 	}
 
@@ -286,9 +334,17 @@ func (h *MessageHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// resolve (up to the 5s broadcast budget) against a small remote DB pool,
 	// and the 201 must not wait on it. The sender's own view doesn't depend
 	// on the echo either — the client inserts this response body directly.
-	logx.Go("handlers.message.broadcast", func() {
-		h.messageService.BroadcastCreate(message)
-	})
+	if durable, ok := h.messageService.(interface {
+		CompleteChannelSend(context.Context, *models.Message) error
+	}); ok {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := durable.CompleteChannelSend(ctx, message); err != nil {
+			slog.Error("channel send completion deferred to recovery")
+		}
+		cancel()
+	} else {
+		logx.Go("handlers.message.broadcast", func() { h.messageService.BroadcastCreate(message) })
+	}
 
 	// If some attachments failed to upload, return a multi-status response
 	// (the message itself was created, but some files didn't make it). The
@@ -303,6 +359,61 @@ func (h *MessageHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pkg.JSON(w, http.StatusCreated, message)
+}
+
+func (h *MessageHandler) attachmentOutcome(id string, index int, a *models.Attachment, failure string) {
+	if durable, ok := h.messageService.(interface {
+		AttachmentOutcome(context.Context, string, int, *models.Attachment, string) error
+	}); ok {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := durable.AttachmentOutcome(ctx, id, index, a, failure); err != nil {
+			slog.Error("channel attachment state persistence failed")
+		}
+	}
+}
+
+func (h *MessageHandler) Events(w http.ResponseWriter, r *http.Request) {
+	user, ok := r.Context().Value(UserContextKey).(*models.User)
+	if !ok {
+		pkg.Error(w, pkg.ErrUnauthorized)
+		return
+	}
+	server, _ := r.Context().Value(ServerIDContextKey).(string)
+	after, err := strconv.ParseInt(r.URL.Query().Get("after_sequence"), 10, 64)
+	if err != nil || after < 0 {
+		pkg.Error(w, pkg.ErrBadRequest)
+		return
+	}
+	reader, ok := h.messageService.(interface {
+		ChannelEvents(context.Context, string, string, string, int64) (*services.ChannelEventPage, error)
+	})
+	if !ok {
+		pkg.Error(w, pkg.ErrNotFound)
+		return
+	}
+	page, err := reader.ChannelEvents(r.Context(), server, r.PathValue("id"), user.ID, after)
+	if err != nil {
+		pkg.Error(w, err)
+		return
+	}
+	pkg.JSON(w, 200, page)
+}
+
+func (h *MessageHandler) DeliveryHealth(w http.ResponseWriter, r *http.Request) {
+	monitor, ok := h.messageService.(interface {
+		ChannelDeliveryHealth(context.Context) (*services.ChannelDeliveryHealth, error)
+	})
+	if !ok {
+		pkg.Error(w, pkg.ErrNotFound)
+		return
+	}
+	health, err := monitor.ChannelDeliveryHealth(r.Context())
+	if err != nil {
+		pkg.Error(w, err)
+		return
+	}
+	pkg.JSON(w, 200, health)
 }
 
 // Update handles PATCH /api/messages/{id} (owner only).

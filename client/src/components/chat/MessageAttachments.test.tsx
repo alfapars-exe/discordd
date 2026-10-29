@@ -56,6 +56,11 @@ function makeMessage(over: Partial<ChatMessage> = {}): ChatMessage {
 }
 
 describe("MessageAttachments", () => {
+  it("shows interrupted attachment preparation even without a successful file", () => {
+    render(<MessageAttachments message={makeMessage({attachment_states:[{index:0,filename:"lost.txt",status:"failed"}]})} />);
+    expect(screen.getByRole("status")).toHaveTextContent("lost.txt");
+    expect(screen.getByRole("status")).toHaveTextContent("attachmentFailed");
+  });
   beforeEach(() => {
     usePreferencesStore.setState({ data: { privacy: { sensitiveMedia: { channels: "show" }, disturbingMedia: { channels: "show" } } } });
     vi.mocked(ensureFreshToken).mockClear();

@@ -208,7 +208,7 @@ func scanReport(rows *sql.Rows) (models.ReportWithUsers, error) {
 func (r *sqliteReportRepo) UpdateStatus(ctx context.Context, id string, status models.ReportStatus, resolvedBy string) error {
 	query := `
 		UPDATE reports
-		SET status = ?, resolved_by = ?, resolved_at = datetime('now')
+		SET status = ?, resolved_by = ?, resolved_at = CURRENT_TIMESTAMP
 		WHERE id = ?`
 
 	result, err := r.db.ExecContext(ctx, query, status, resolvedBy, id)

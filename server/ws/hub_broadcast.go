@@ -16,6 +16,10 @@ import (
 // site, so a wording change can't drift between them.
 const errMarshalBroadcastEvent = "failed to marshal broadcast event"
 
+// Configured before serving. Older servers omit this capability, so a new
+// client must never assume that merely sending an identity makes retries safe.
+func (h *Hub) SetDurableChannelSends(enabled bool) { h.durableChannelSends.Store(enabled) }
+
 // deliver enqueues pre-marshaled bytes to one client, applying the bot
 // read-only filter. This is the SINGLE place per-client delivery happens —
 // every broadcast method funnels through it so the bot allow-list cannot be
@@ -79,11 +83,8 @@ func (h *Hub) BroadcastToUsers(userIDs []string, event Event) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	for userID, clients := range h.clients {
-		if !allowed[userID] {
-			continue
-		}
-		for client := range clients {
+	for userID := range allowed {
+		for client := range h.clients[userID] {
 			h.deliver(client, event.Op, data)
 		}
 	}

@@ -16,7 +16,6 @@ require (
 	github.com/pion/webrtc/v4 v4.2.25
 	github.com/resend/resend-go/v3 v3.17.0
 	github.com/rs/cors v1.11.1
-	github.com/tursodatabase/go-libsql v0.0.0-20260424063416-3051e37e6e04
 	github.com/twitchtv/twirp v8.1.3+incompatible
 	golang.org/x/crypto v0.58.0
 	golang.org/x/image v0.47.0
@@ -52,7 +51,6 @@ require (
 	github.com/jxskiss/base62 v1.1.0 // indirect
 	github.com/klauspost/compress v1.20.1 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
-	github.com/libsql/sqlite-antlr4-parser v0.0.0-20240327125255-dbf53b6cbf06 // indirect
 	github.com/lithammer/shortuuid/v4 v4.3.0 // indirect
 	github.com/livekit/mageutil v0.0.0-20250511045019-0f1ff63f7731 // indirect
 	github.com/livekit/mediatransportutil v0.0.0-20260821083140-f234b534b095 // indirect

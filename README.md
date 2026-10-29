@@ -110,7 +110,7 @@ Popular communication platforms are increasingly demanding government-issued IDs
 | Desktop | Electron (Windows, macOS, Linux) |
 | State | Zustand |
 | Voice/Video | LiveKit (self-hosted SFU) with SFrame E2EE |
-| Database | SQLite (modernc.org/sqlite, pure Go) with FTS5 trigram search |
+| Database | PostgreSQL 18 with verified mutual TLS; SQLite retained for offline import |
 | Auth | JWT (access + refresh tokens) |
 | E2EE | Signal Protocol (X3DH + Double Ratchet), Sender Key, `@noble/curves` |
 
@@ -305,7 +305,7 @@ git clone https://github.com/akinalpfdn/Mqvi.git && cd Mqvi && less deploy/insta
 systemctl restart mqvi-server
 ```
 
-Your data lives in `/opt/mqvi/data/` (SQLite database + uploaded files). Back it up.
+Uploaded files live in `/opt/mqvi/data/`. The backend requires an external PostgreSQL 18 database with verified mutual TLS. Back up both PostgreSQL and uploaded files. See [database and delivery rollout](implementation/channel-delivery.md) before upgrading.
 
 ### Manual Caddy snippet (existing-Caddy mode)
 
@@ -348,7 +348,7 @@ The install script generates sensible defaults. If you need to tweak them, edit 
 | `CORS_ORIGINS` | *generated* | Auto-set to your public URL (`https://yourdomain` or `https://<ip>.sslip.io`) |
 | `JWT_SECRET` | *generated* | Random string for token signing |
 | `ENCRYPTION_KEY` | *generated* | AES-256 key for encrypting stored LiveKit credentials |
-| `DATABASE_PATH` | `/opt/mqvi/data/mqvi.db` | SQLite database path |
+| `DATABASE_URL` | Required | PostgreSQL 18 URL with `sslmode=verify-full`; configure `HICHAT_PG_CA_PEM`, `HICHAT_PG_CERT_PEM`, `HICHAT_PG_KEY_PEM` |
 | `UPLOAD_DIR` | `/opt/mqvi/data/uploads` | File upload directory |
 | `UPLOAD_MAX_SIZE` | `26214400` | Max upload size in bytes (25 MB) |
 | `LIVEKIT_URL` | `ws://127.0.0.1:7880` | Auto-seeded local LiveKit instance |
@@ -500,7 +500,7 @@ mqvi/
 ### Architecture
 
 ```
-handlers/ → services/ → repository/ → SQLite
+handlers/ → services/ → repository/ → PostgreSQL
     ↕            ↕
 middleware    ws/hub (WebSocket broadcast)
 ```

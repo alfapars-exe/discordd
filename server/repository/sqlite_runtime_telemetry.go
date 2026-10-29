@@ -22,13 +22,12 @@ func (r *sqliteRuntimeTelemetryRepo) Insert(ctx context.Context, row *models.Run
 	// startRuntimeStatsLogger firing twice for the same minute — e.g. a
 	// restart lands on the same minute boundary as the previous process's
 	// last tick — without erroring on the UNIQUE violation.
-	query := `
-		INSERT OR REPLACE INTO runtime_telemetry (
+	query := `INSERT INTO runtime_telemetry (
 			bucket_at, goroutines, heap_alloc_bytes, online_users,
 			db_open_conns, db_in_use, db_idle, db_wait_count,
 			ws_dispatch_total, ws_rate_limit_drops_total,
 			http_requests, http_5xx, http_max_latency_ms, http_avg_latency_ms,diagnostics
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (bucket_at) DO UPDATE SET goroutines=excluded.goroutines,heap_alloc_bytes=excluded.heap_alloc_bytes,online_users=excluded.online_users,db_open_conns=excluded.db_open_conns,db_in_use=excluded.db_in_use,db_idle=excluded.db_idle,db_wait_count=excluded.db_wait_count,ws_dispatch_total=excluded.ws_dispatch_total,ws_rate_limit_drops_total=excluded.ws_rate_limit_drops_total,http_requests=excluded.http_requests,http_5xx=excluded.http_5xx,http_max_latency_ms=excluded.http_max_latency_ms,http_avg_latency_ms=excluded.http_avg_latency_ms,diagnostics=excluded.diagnostics`
 
 	if row.Diagnostics == "" {
 		row.Diagnostics = "{}"

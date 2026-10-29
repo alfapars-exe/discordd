@@ -111,7 +111,7 @@ func TestMigration144PreservesChannelDependentsAndRollsBack(t *testing.T) {
 				}
 				prior[e.Name()] = &fstest.MapFile{Data: raw}
 			}
-			db, err := New(filepath.Join(t.TempDir(), "upgrade.db"), prior)
+			db, err := NewLegacy(filepath.Join(t.TempDir(), "upgrade.db"), prior)
 			if err != nil {
 				t.Fatal(err)
 			}

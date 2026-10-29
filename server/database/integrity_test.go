@@ -148,7 +148,7 @@ func TestProbeForeignKeys_AgainstRealSchema(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fs.Sub: %v", err)
 	}
-	db, err := New(filepath.Join(t.TempDir(), "real.db"), migrationsFS)
+	db, err := NewLegacy(filepath.Join(t.TempDir(), "real.db"), migrationsFS)
 	if err != nil {
 		t.Fatalf("database.New: %v", err)
 	}

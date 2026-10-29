@@ -329,9 +329,8 @@ func Load() (*Config, error) {
 			Port: port,
 		},
 		Database: DatabaseConfig{
-			// DATABASE_URL takes precedence (libsql://... for Turso). Falls back to
-			// DATABASE_PATH (local SQLite file) for backward compatibility.
-			Path: firstNonEmpty(os.Getenv("DATABASE_URL"), getEnv("DATABASE_PATH", "./data/mqvi.db")),
+			// Product startup requires PostgreSQL 18; legacy snapshots use the offline importer.
+			Path: os.Getenv("DATABASE_URL"),
 		},
 		JWT: JWTConfig{
 			Secret:             jwtSecret,

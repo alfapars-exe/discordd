@@ -54,7 +54,11 @@ func TestMessageTxRunner_CommitsWholeWriteSet(t *testing.T) {
 	if n := countRows(t, db, `SELECT COUNT(*) FROM message_mentions WHERE message_id = ?`, msg.ID); n != 1 {
 		t.Errorf("mentions = %d, want 1", n)
 	}
-	if n := countRows(t, db, `SELECT unread_count FROM channel_reads WHERE user_id = ?`, readerID); n != 1 {
+	unreadQuery := `SELECT unread_count FROM channel_reads WHERE user_id = ?`
+	if database.IsPostgres(db.Conn) {
+		unreadQuery = `SELECT COUNT(*) FROM messages m JOIN channel_reads cr ON cr.channel_id=m.channel_id WHERE cr.user_id=? AND m.user_id<>cr.user_id AND m.source_sequence>cr.last_read_source_sequence`
+	}
+	if n := countRows(t, db, unreadQuery, readerID); n != 1 {
 		t.Errorf("reader unread_count = %d, want 1", n)
 	}
 }

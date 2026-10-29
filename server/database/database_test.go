@@ -195,7 +195,7 @@ func TestAllMigrationsApplyCleanly(t *testing.T) {
 		t.Fatalf("sub fs: %v", err)
 	}
 	dbPath := filepath.Join(t.TempDir(), "migrate_all.db")
-	db, err := New(dbPath, sub)
+	db, err := NewLegacy(dbPath, sub)
 	if err != nil {
 		t.Fatalf("embedded migrations failed to apply on a fresh DB: %v", err)
 	}

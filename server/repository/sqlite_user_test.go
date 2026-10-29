@@ -172,7 +172,7 @@ func TestSQLiteUserCreateWithSession_RollsBackUserOnSessionFailure(t *testing.T)
 	execSeed(t, db, []seedStmt{
 		{
 			q: `INSERT INTO sessions (id, user_id, refresh_token_hash, refresh_token, expires_at)
-				VALUES ('preexisting0000', ?, ?, ?, datetime('now', '+1 day'))`,
+				VALUES ('preexisting0000', ?, ?, ?, ` + fixtureRelativeTimestamp("+1 day") + `)`,
 			args: []any{seedUser.ID, hash, hash},
 		},
 	})

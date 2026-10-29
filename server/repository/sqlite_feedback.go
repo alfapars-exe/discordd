@@ -140,7 +140,7 @@ func (r *sqliteFeedbackRepo) scanTickets(ctx context.Context, query string, tota
 }
 
 func (r *sqliteFeedbackRepo) UpdateStatus(ctx context.Context, id string, status models.FeedbackStatus) error {
-	query := `UPDATE feedback_tickets SET status = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`
+	query := `UPDATE feedback_tickets SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
 	result, err := r.db.ExecContext(ctx, query, status, id)
 	if err != nil {
 		return fmt.Errorf("failed to update feedback status: %w", err)
@@ -177,7 +177,7 @@ func (r *sqliteFeedbackRepo) CreateReply(ctx context.Context, reply *models.Feed
 	_ = r.db.QueryRowContext(ctx, "SELECT created_at FROM feedback_replies WHERE id = ?", reply.ID).Scan(&reply.CreatedAt)
 
 	// Update ticket's updated_at timestamp
-	updateQuery := `UPDATE feedback_tickets SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`
+	updateQuery := `UPDATE feedback_tickets SET updated_at = CURRENT_TIMESTAMP WHERE id = ?`
 	_, _ = r.db.ExecContext(ctx, updateQuery, reply.TicketID)
 
 	return nil

@@ -48,6 +48,9 @@ func main() {
 		logx.Fatal("boot", "failed to load config", err)
 	}
 	bootLogger.Info("config loaded", "port", cfg.Server.Port)
+	if !database.IsPostgresDSN(cfg.Database.Path) {
+		logx.Fatal("boot", "PostgreSQL DATABASE_URL is required; migrate legacy data before starting", nil)
+	}
 	if os.Getenv("HICHAT_MAINTENANCE") == "1" {
 		if err := serveMaintenance(cfg.Server.Host, cfg.Server.Port); err != nil {
 			logx.Fatal("boot", "maintenance listener failed", err)
@@ -105,6 +108,16 @@ func main() {
 	if err != nil {
 		logx.Fatal("boot", "failed to initialize database", err)
 	}
+	ownerCtx, stopOwner := context.WithCancel(context.Background())
+	owner, err := database.AcquireBackendOwner(ownerCtx, db.Conn)
+	if err != nil {
+		logx.Fatal("boot", "another backend owns this database", err)
+	}
+	defer func() { stopOwner(); owner.Close() }()
+	go database.WatchBackendOwner(ownerCtx, owner, func() {
+		bootLogger.Error("backend ownership lost; stopping service")
+		os.Exit(1)
+	})
 
 	// Is referential integrity actually enforced? We could not previously
 	// answer that for production: foreign_keys(1) is only set on the local
@@ -290,6 +303,8 @@ func main() {
 	stopServerEvents := svcs.ServerEventWorker.Start(context.Background())
 	stopFriendAnniversaries := svcs.FriendAnniversaryWorker.Start(context.Background())
 	stopEmailDelivery := svcs.EmailDelivery.Start(context.Background())
+	stopChannelDelivery := services.StartChannelDelivery(context.Background(), svcs.Message)
+	defer stopChannelDelivery()
 
 	// 10h. Readiness checker — polls the deep dependency checks every 30s and
 	// caches the verdict. /api/health reads that cache so monitors can see

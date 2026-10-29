@@ -66,7 +66,7 @@ func run() (runErr error) {
 	if err != nil {
 		return err
 	}
-	source, err := database.New(copyPath, migrations)
+	source, err := database.NewLegacy(copyPath, migrations)
 	if err != nil {
 		return fmt.Errorf("copy migration failed: %w", err)
 	}

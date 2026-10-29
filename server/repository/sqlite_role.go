@@ -285,7 +285,7 @@ func (r *sqliteRoleRepo) UpdatePositions(ctx context.Context, items []models.Pos
 // ─── User-Role mapping ───
 
 func (r *sqliteRoleRepo) AssignToUser(ctx context.Context, userID, roleID, serverID string) error {
-	query := `INSERT OR IGNORE INTO user_roles (user_id, role_id, server_id) VALUES (?, ?, ?)`
+	query := `INSERT INTO user_roles (user_id, role_id, server_id) VALUES (?, ?, ?) ON CONFLICT DO NOTHING`
 	_, err := r.db.ExecContext(ctx, query, userID, roleID, serverID)
 	if err != nil {
 		return fmt.Errorf("failed to assign role to user: %w", err)

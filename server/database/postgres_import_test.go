@@ -40,7 +40,7 @@ func TestPostgresImportPreservesDataAndRejectsReuse(t *testing.T) {
 		t.Fatal(err)
 	}
 	migrations, _ := fs.Sub(EmbeddedMigrations, "migrations")
-	source, err := New(filepath.Join(t.TempDir(), "snapshot.db"), migrations)
+	source, err := NewLegacy(filepath.Join(t.TempDir(), "snapshot.db"), migrations)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +54,7 @@ func TestPostgresImportPreservesDataAndRejectsReuse(t *testing.T) {
 	if _, err = target.Exec(`UPDATE data_export_archive_budget SET reserved_bytes=0 WHERE id=1`); err != nil {
 		t.Fatal(err)
 	}
-	legacySource, err := New(filepath.Join(t.TempDir(), "legacy-snapshot.db"), migrations)
+	legacySource, err := NewLegacy(filepath.Join(t.TempDir(), "legacy-snapshot.db"), migrations)
 	if err != nil {
 		t.Fatal(err)
 	}

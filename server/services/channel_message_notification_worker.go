@@ -25,10 +25,17 @@ type channelNotificationPreferences struct {
 }
 
 type ChannelMessageNotificationWorker struct {
-	queue repository.ChannelMessageNotificationQueue
-	prefs repository.PreferencesRepository
-	users repository.UserRepository
-	hub   ws.Broadcaster
+	durablePublication bool
+	queue              repository.ChannelMessageNotificationQueue
+	prefs              repository.PreferencesRepository
+	users              repository.UserRepository
+	hub                ws.Broadcaster
+}
+
+// PostgreSQL publication is recorded by the notification INSERT trigger in the
+// same transaction as CommitBatch; only legacy fixtures use direct fan-out.
+func (w *ChannelMessageNotificationWorker) SetDurablePublication(enabled bool) {
+	w.durablePublication = enabled
 }
 
 func NewChannelMessageNotificationWorker(queue repository.ChannelMessageNotificationQueue, prefs repository.PreferencesRepository,
@@ -86,6 +93,9 @@ func (w *ChannelMessageNotificationWorker) ProcessNextBatch(ctx context.Context)
 		return false, w.failBatch(ctx, job, err)
 	}
 	if !committed {
+		return true, nil
+	}
+	if w.durablePublication {
 		return true, nil
 	}
 	if len(created) > 0 {

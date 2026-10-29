@@ -17,6 +17,9 @@ type sqliteMessageRepo struct {
 }
 
 func NewSQLiteMessageRepo(db database.TxQuerier) MessageRepository {
+	if database.IsPostgres(db) {
+		return &postgresMessageRepo{&sqliteMessageRepo{db: db}}
+	}
 	return &sqliteMessageRepo{db: db}
 }
 

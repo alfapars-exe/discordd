@@ -20,7 +20,7 @@ func TestBackfillCLIDryRunApplyRequiresOfflineAndReviewedTarget(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := filepath.Join(t.TempDir(), "existing.db")
-	db, err := database.New(path, migrations)
+	db, err := database.NewLegacy(path, migrations)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -23,6 +23,10 @@ function httpErr<T>(status: number, error: string): APIResponse<T> {
 }
 
 describe("sendWithRetryAndToast", () => {
+  it("retries uncertain errors only with durable idempotency",async()=>{
+    const send=vi.fn().mockResolvedValueOnce(netErr()).mockResolvedValueOnce(ok({id:"one"}));
+    const result=sendWithRetryAndToast(send,{idempotent:true});await vi.runAllTimersAsync();expect((await result).success).toBe(true);expect(send).toHaveBeenCalledTimes(2);expect(addToast).not.toHaveBeenCalled();
+  });
   it("does not dispatch or toast after its caller context is abandoned",async()=>{
     const send=vi.fn().mockResolvedValue(ok());const result=await sendWithRetryAndToast(send,{isCurrent:()=>false});expect(result.success).toBe(false);expect(send).not.toHaveBeenCalled();expect(addToast).not.toHaveBeenCalled();
   });

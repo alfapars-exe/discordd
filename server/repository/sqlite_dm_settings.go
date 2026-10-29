@@ -128,7 +128,7 @@ func (r *sqliteDMSettingsRepo) GetMutedChannelIDs(ctx context.Context, userID st
 		SELECT dm_channel_id FROM user_dm_settings
 		WHERE user_id = ?
 		  AND muted_until IS NOT NULL
-		  AND muted_until > datetime('now')`
+		  AND muted_until > CURRENT_TIMESTAMP`
 
 	rows, err := r.db.QueryContext(ctx, query, userID)
 	if err != nil {

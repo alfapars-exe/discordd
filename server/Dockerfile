@@ -1,30 +1,5 @@
-# mqvi Go Backend — secondary Dockerfile, used by docker-compose.yml.
-#
-# NOTE: The PRIMARY production image is the repo-root /Dockerfile (HF Space
-# build, multi-arch, CGO + libsql). This file is the lighter local-dev /
-# self-host path: pure-Go SQLite only, no libsql. Music tools match the
-# production image so enabling a voice channel works in both deployments.
-#
-# Why bookworm rather than alpine?
-# go.mod requires `go 1.26`. Alpine's Go toolchain is fine, but matching
-# the root Dockerfile (debian:bookworm-slim runtime + golang:1.27.3-bookworm
-# builder) keeps the two images on the same glibc baseline so behaviour
-# debugging in one transfers to the other.
-#
-# Why CGO_ENABLED=0 works?
-# The libsql driver import lives in database/database_libsql.go behind
-# `//go:build !windows && cgo`, so with CGO off it is excluded and the
-# pure-Go modernc.org/sqlite driver supplies DATABASE_PATH=... Remote
-# Turso/libSQL is unavailable from this image — operators using libsql://
-# URLs should run the root Dockerfile (CGO + libsql) instead.
-#
-# That build tag used to be `!windows` only, and this comment used to claim
-# Go merely warned and continued. It does not: the file was still compiled on
-# Linux, go-libsql's own sources are all cgo-gated, and the build failed hard
-# with "build constraints exclude all Go files in .../go-libsql". This image
-# could not be built at all until that tag was corrected.
-
-# ─── Builder Stage ───
+# HiChat self-host backend. Requires PostgreSQL 18 with verified mutual TLS.
+# SQLite is retained only for offline imports; libSQL is removed.
 FROM golang:1.27.3-bookworm AS builder
 
 WORKDIR /build

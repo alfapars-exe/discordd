@@ -350,6 +350,7 @@ func (d *routeDeps) registerAdminRoutes() {
 	// Platform Admin — App Logs
 	d.mux.Handle("GET /api/admin/logs", d.authAdmin(d.h.Admin.ListAppLogs))
 	d.mux.Handle("GET /api/admin/logs/health", d.authAdmin(d.h.Admin.AppLogHealth))
+	d.mux.Handle("GET /api/admin/channel-delivery/health", d.authAdmin(d.h.Message.DeliveryHealth))
 	d.mux.Handle("DELETE /api/admin/logs", d.authAdmin(d.h.Admin.ClearAppLogs))
 }
 

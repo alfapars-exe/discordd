@@ -199,5 +199,7 @@
   "spamFilterPending": "Mesaj filtreleri kontrol ediliyor.",
   "spamFilterPendingError": "Arkadaşlık durumu kontrol edilemedi. Mesaj içeriği gizli tutuluyor; spam olarak işaretlenmedi.",
   "spamFilterRetry": "Yeniden kontrol et",
-  "spamPendingNotification": "Yeni mesaj var. Mesaj filtreleri kontrol edilirken içerik gizli tutuluyor."
+  "spamPendingNotification": "Yeni mesaj var. Mesaj filtreleri kontrol edilirken içerik gizli tutuluyor.",
+  "attachmentPreparing": "Ek hazırlanıyor",
+  "attachmentFailed": "Ek yüklenemedi"
 }

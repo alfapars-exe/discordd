@@ -51,8 +51,15 @@ function removeSyntheticExportArchive(jobID) {
   const owner = JSON.parse(readFileSync(marker, "utf8"));
   if (!Number.isSafeInteger(owner.pid) || owner.pid <= 0) throw new Error("archive deletion requires a live fixture owner");
   process.kill(owner.pid, 0);
-  const db = join(runDir, "hichat-e2e.db");
-  if (regularChild(runDir, db).size < 4096) throw new Error("archive deletion requires the initialized disposable database");
+  const db = join(runDir, "hichat-e2e-postgres.json");
+  if (regularChild(runDir, db).size > 16_384) throw new Error("invalid disposable database descriptor");
+  const descriptor = JSON.parse(readFileSync(db, "utf8"));
+  const databaseURL = new URL(descriptor.url);
+  if (descriptor.run_id !== runID || databaseURL.hostname !== "127.0.0.1"
+    || databaseURL.pathname !== `/hichat_e2e_${runID.replaceAll("-", "_")}`
+    || databaseURL.searchParams.get("sslmode") !== "verify-full") {
+    throw new Error("archive deletion requires this run's verified loopback PostgreSQL descriptor");
+  }
   const matching = readdirSync(exportsDir).filter(name => name.length === 101 && name.startsWith(`${jobID}-`) && name.endsWith(".zip") && hex48.test(name.slice(49, -4)));
   if (matching.length !== 1) throw new Error("archive deletion requires exactly one matching synthetic ZIP");
   const path = join(exportsDir, matching[0]);

@@ -2,6 +2,9 @@ package services
 
 import (
 	"context"
+	"crypto/sha256"
+	"database/sql"
+	"encoding/json"
 	"fmt"
 
 	"github.com/argeinfina/hichat/models"
@@ -27,6 +30,7 @@ type MessageService interface {
 }
 
 type messageService struct {
+	deliveryDB      *sql.DB
 	messageRepo     repository.MessageRepository
 	attachmentRepo  repository.AttachmentRepository
 	channelRepo     repository.ChannelRepository
@@ -240,16 +244,41 @@ func (s *messageService) Create(ctx context.Context, serverID, channelID, userID
 	// someone who cannot see the channel must not leak its name/preview.
 	notifications := s.buildMessageNotifications(ctx, channel, message, req, mentionedIDs, replyTargetID)
 
+	// Resolve required response data before committing. A failed enrichment
+	// must never turn a durable send into an apparent failure.
+	author, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get message author: %w", err)
+	}
+	message.Author = models.ToPublicUser(author)
+	if req.RequestHash == "" {
+		encoded, _ := json.Marshal(req)
+		req.RequestHash = fmt.Sprintf("%x", sha256.Sum256(encoded))
+	}
+	var replayID string
+
 	// Atomic write set: message INSERT + unread bumps + mention rows +
 	// notification rows commit or roll back together. Previously each ran
 	// auto-commit with failures only logged, which left drifting unread
 	// badges and missing mention rows next to an already-persisted message.
 	txErr := s.txRunner.InTx(ctx, func(r *repository.MessageTxRepos) error {
+		if s.deliveryDB != nil {
+			id, replay, err := claimChannelSend(ctx, r.SQL, channelID, userID, req)
+			if err != nil {
+				return err
+			}
+			if replay {
+				replayID = id
+				return nil
+			}
+		}
 		if err := r.Message.Create(ctx, message); err != nil {
 			return fmt.Errorf("failed to create message: %w", err)
 		}
-		if err := r.ReadState.IncrementUnreadCounts(ctx, channelID, userID); err != nil {
-			return fmt.Errorf("failed to increment unread counts: %w", err)
+		if s.deliveryDB == nil {
+			if err := r.ReadState.IncrementUnreadCounts(ctx, channelID, userID); err != nil {
+				return fmt.Errorf("failed to increment unread counts: %w", err)
+			}
 		}
 		if len(mentionedIDs) > 0 {
 			if err := r.Mention.SaveMentions(ctx, message.ID, mentionedIDs); err != nil {
@@ -273,27 +302,59 @@ func (s *messageService) Create(ctx context.Context, serverID, channelID, userID
 				return fmt.Errorf("failed to enqueue channel message notifications: %w", err)
 			}
 		}
+		if s.deliveryDB != nil {
+			if req.ClientMessageID != "" {
+				if _, err := r.SQL.ExecContext(ctx, `UPDATE channel_send_operations SET message_id=? WHERE user_id=? AND channel_id=? AND client_message_id=?`, message.ID, userID, channelID, req.ClientMessageID); err != nil {
+					return err
+				}
+			}
+			for index, name := range req.FileNames {
+				if _, err := r.SQL.ExecContext(ctx, `INSERT INTO channel_attachment_jobs(message_id,file_index,filename) VALUES(?,?,?)`, message.ID, index, name); err != nil {
+					return err
+				}
+			}
+			if err := r.SQL.QueryRowContext(ctx, `SELECT source_sequence FROM messages WHERE id=?`, message.ID).Scan(&message.SourceSequence); err != nil {
+				return err
+			}
+			if !req.HasFiles {
+				if _, err := r.SQL.ExecContext(ctx, `UPDATE channel_delivery_outbox SET ready=TRUE WHERE message_id=?`, message.ID); err != nil {
+					return err
+				}
+			}
+		}
 		return nil
 	})
 	if txErr != nil {
 		return nil, txErr
 	}
+	if replayID != "" {
+		existing, err := s.messageRepo.GetByID(ctx, replayID)
+		if err != nil {
+			return nil, err
+		}
+		hydrated, err := s.hydrateMessages(ctx, []models.Message{*existing})
+		if err != nil {
+			return nil, err
+		}
+		existing = &hydrated[0]
+		existing.Replayed = true
+		existing.ClientMessageID = req.ClientMessageID
+		return existing, nil
+	}
+	message.ClientMessageID = req.ClientMessageID
 
 	message.Mentions = mentionedIDs
 	message.RoleMentions = roleMentionIDs
 
-	author, err := s.userRepo.GetByID(ctx, userID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get message author: %w", err)
-	}
-	message.Author = models.ToPublicUser(author)
 	message.Attachments = []models.Attachment{}
 	message.Reactions = []models.ReactionGroup{}
 
 	// Post-commit only — see broadcastNotificationCreate.
 	for _, n := range notifications {
 		n.Actor = message.Author
-		broadcastNotificationCreate(s.hub, n)
+		if s.deliveryDB == nil {
+			broadcastNotificationCreate(s.hub, n)
+		}
 	}
 
 	// Load reply reference for API response / WS broadcast
@@ -364,6 +425,9 @@ func (s *messageService) allowedViewers(channelID string) ([]string, bool) {
 // BroadcastCreate sends the message via WS after file uploads complete.
 // Only sends to users with ViewChannel + ReadMessages permission on the channel.
 func (s *messageService) BroadcastCreate(message *models.Message) {
+	if s.deliveryDB != nil {
+		return
+	}
 	viewers, ok := s.allowedViewers(message.ChannelID)
 	if !ok {
 		// Viewer resolve failed (transient DB error / 5s broadcast budget
@@ -448,10 +512,6 @@ func (s *messageService) Update(ctx context.Context, serverID, id, userID string
 		message.Content = &req.Content
 	}
 
-	if err := s.messageRepo.Update(ctx, message); err != nil {
-		return nil, err
-	}
-
 	attachments, err := s.attachmentRepo.GetByMessageID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get attachments: %w", err)
@@ -460,48 +520,49 @@ func (s *messageService) Update(ctx context.Context, serverID, id, userID string
 	if message.Attachments == nil {
 		message.Attachments = []models.Attachment{}
 	}
-
-	// Re-parse mentions (server can't read E2EE content)
+	var mentions, roles []string
 	if req.EncryptionVersion == 0 {
-		channel, _ := s.channelRepo.GetByID(ctx, message.ChannelID)
-		serverID := ""
-		if channel != nil {
-			serverID = channel.ServerID
-		}
-
-		if err := s.mentionRepo.DeleteByMessageID(ctx, id); err != nil {
-			messageLogger.Error("failed to delete old mentions", "message_id", id, "err", pkg.ErrText(err))
-		}
-		mentionedIDs := s.extractMentions(ctx, req.Content)
-		if len(mentionedIDs) > 0 {
-			if err := s.mentionRepo.SaveMentions(ctx, id, mentionedIDs); err != nil {
-				messageLogger.Error("failed to save mentions", "message_id", id, "err", pkg.ErrText(err))
-			}
-		}
-		message.Mentions = mentionedIDs
-
-		if err := s.roleMentionRepo.DeleteByMessageID(ctx, id); err != nil {
-			messageLogger.Error("failed to delete old role mentions", "message_id", id, "err", pkg.ErrText(err))
-		}
-		roleMentionIDs := s.extractRoleMentions(ctx, req.Content, serverID)
-		if len(roleMentionIDs) > 0 {
-			if err := s.roleMentionRepo.SaveRoleMentions(ctx, id, roleMentionIDs); err != nil {
-				messageLogger.Error("failed to save role mentions", "message_id", id, "err", pkg.ErrText(err))
-			}
-		}
-		message.RoleMentions = roleMentionIDs
+		mentions = s.extractMentions(ctx, req.Content)
+		roles = s.extractRoleMentions(ctx, req.Content, channel.ServerID)
 	} else {
-		message.Mentions = []string{}
-		message.RoleMentions = []string{}
+		mentions = s.extractMentionsFromMetadata(ctx, req.E2EEMetadata)
 	}
+	if err := s.txRunner.InTx(ctx, func(r *repository.MessageTxRepos) error {
+		if err := r.Message.Update(ctx, message); err != nil {
+			return err
+		}
+		if err := r.Mention.DeleteByMessageID(ctx, id); err != nil {
+			return err
+		}
+		if err := r.RoleMention.DeleteByMessageID(ctx, id); err != nil {
+			return err
+		}
+		if len(mentions) > 0 {
+			if err := r.Mention.SaveMentions(ctx, id, mentions); err != nil {
+				return err
+			}
+		}
+		if len(roles) > 0 {
+			if err := r.RoleMention.SaveRoleMentions(ctx, id, roles); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	message.Mentions = mentions
+	message.RoleMentions = roles
 
 	// Fail-closed on resolve failure (ok ignored): an undelivered edit is
 	// recoverable via refetch and never leaks content to the wrong users.
-	updateViewers, _ := s.allowedViewers(message.ChannelID)
-	s.hub.BroadcastToUsers(updateViewers, ws.Event{
-		Op:   ws.OpMessageUpdate,
-		Data: message,
-	})
+	if s.deliveryDB == nil {
+		updateViewers, _ := s.allowedViewers(message.ChannelID)
+		s.hub.BroadcastToUsers(updateViewers, ws.Event{
+			Op:   ws.OpMessageUpdate,
+			Data: message,
+		})
+	}
 
 	return message, nil
 }
@@ -567,14 +628,16 @@ func (s *messageService) Delete(ctx context.Context, serverID, id, userID string
 
 	// Fail-closed on resolve failure (ok ignored) — same rationale as the
 	// update broadcast above.
-	deleteViewers, _ := s.allowedViewers(message.ChannelID)
-	s.hub.BroadcastToUsers(deleteViewers, ws.Event{
-		Op: ws.OpMessageDelete,
-		Data: map[string]string{
-			"id":         id,
-			"channel_id": message.ChannelID,
-		},
-	})
+	if s.deliveryDB == nil {
+		deleteViewers, _ := s.allowedViewers(message.ChannelID)
+		s.hub.BroadcastToUsers(deleteViewers, ws.Event{
+			Op: ws.OpMessageDelete,
+			Data: map[string]string{
+				"id":         id,
+				"channel_id": message.ChannelID,
+			},
+		})
+	}
 
 	// Audit only on moderator-delete (author-delete is not a mod action).
 	// Server-scoped audit_logs require a serverID; if channel lookup failed
