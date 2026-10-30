@@ -70,6 +70,11 @@ vi.mock("../utils/nativePlugins", () => ({
   APP_RESUME_EVENT: "mqvi:app-resume",
 }));
 
+// Channel history repair is a collaborator of the socket lifecycle tested here.
+vi.mock("../stores/messageStore", () => ({
+  useMessageStore: { getState: () => ({ messagesByChannel: {}, fetchMessages: vi.fn() }) },
+}));
+
 vi.mock("../stores/p2pCallStore", () => ({
   useP2PCallStore: { getState: () => ({ registerSendWS: vi.fn() }) },
 }));
