@@ -7,6 +7,7 @@ import CustomTitleBar from "./components/layout/CustomTitleBar";
 import UpdateBanner from "./components/shared/UpdateBanner";
 import { isElectron, isNativeApp } from "./utils/constants";
 import { logToServer } from "./api/clientLog";
+import { ALL_NAMESPACES, ensureNamespaces } from "./i18n";
 import { usePreferencesSync } from "./hooks/usePreferencesSync";
 
 // Lazy-load route components so each path bundles separately. The
@@ -15,16 +16,16 @@ import { usePreferencesSync } from "./hooks/usePreferencesSync";
 // arrives only when its route is matched. Trade-off: a 50-150ms
 // loading flash on first route entry (mitigated by the shared
 // spinner fallback below) in exchange for ~40% smaller first paint.
-const LandingPage = lazy(() => import("./components/landing/LandingPage"));
-const PrivacyPage = lazy(() => import("./components/landing/PrivacyPage"));
-const TermsPage = lazy(() => import("./components/landing/TermsPage"));
-const LoginPage = lazy(() => import("./components/auth/LoginPage"));
-const RegisterPage = lazy(() => import("./components/auth/RegisterPage"));
-const ForgotPasswordPage = lazy(() => import("./components/auth/ForgotPasswordPage"));
-const ResetPasswordPage = lazy(() => import("./components/auth/ResetPasswordPage"));
-const VerifyEmailPage = lazy(() => import("./components/auth/VerifyEmailPage"));
-const InviteJoinPage = lazy(() => import("./components/servers/InviteJoinPage"));
-const AppLayout = lazy(() => import("./components/layout/AppLayout"));
+const LandingPage = lazy(async () => { await ensureNamespaces(["landing"]); return import("./components/landing/LandingPage"); });
+const PrivacyPage = lazy(async () => { await ensureNamespaces(["privacy"]); return import("./components/landing/PrivacyPage"); });
+const TermsPage = lazy(async () => { await ensureNamespaces(["terms"]); return import("./components/landing/TermsPage"); });
+const LoginPage = lazy(async () => { await ensureNamespaces(["auth"]); return import("./components/auth/LoginPage"); });
+const RegisterPage = lazy(async () => { await ensureNamespaces(["auth"]); return import("./components/auth/RegisterPage"); });
+const ForgotPasswordPage = lazy(async () => { await ensureNamespaces(["auth"]); return import("./components/auth/ForgotPasswordPage"); });
+const ResetPasswordPage = lazy(async () => { await ensureNamespaces(["auth"]); return import("./components/auth/ResetPasswordPage"); });
+const VerifyEmailPage = lazy(async () => { await ensureNamespaces(["auth"]); return import("./components/auth/VerifyEmailPage"); });
+const InviteJoinPage = lazy(async () => { await ensureNamespaces(["servers", "auth"]); return import("./components/servers/InviteJoinPage"); });
+const AppLayout = lazy(async () => { await ensureNamespaces(ALL_NAMESPACES); return import("./components/layout/AppLayout"); });
 
 /**
  * App — Root component. Handles routing and auth initialization.

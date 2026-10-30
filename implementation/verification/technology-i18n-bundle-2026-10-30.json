@@ -1,0 +1,13 @@
+{
+  "method": "Vite production manifests, index.html static import closure, same Node26/dependencies/host; excludes later dynamic imports",
+  "baseline": {
+    "initial_js_bytes": 1749855,
+    "initial_js_gzip_bytes": 514593,
+    "chunks": 10
+  },
+  "lazy": {
+    "initial_js_bytes": 1404531,
+    "initial_js_gzip_bytes": 406898,
+    "chunks": 10
+  }
+}

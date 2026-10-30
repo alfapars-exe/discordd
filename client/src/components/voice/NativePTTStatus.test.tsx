@@ -1,7 +1,7 @@
 import {act,fireEvent,render,renderHook,screen}from "@testing-library/react";
 import {afterEach,beforeEach,expect,it,vi}from "vitest";
 import {create}from "zustand";
-import i18n from "../../i18n";
+import i18n, { changeLanguage, ensureNamespaces } from "../../i18n";
 import NativePTTStatus from "./NativePTTStatus";
 import {usePushToTalk}from "../../hooks/usePushToTalk";
 import {useVoiceStore}from "../../stores/voiceStore";
@@ -9,7 +9,7 @@ import {publishAuthGenerationChange,publishAuthOwnerChange}from "../../api/authS
 vi.mock("../../utils/constants",()=>({isElectron:()=>true}));
 vi.mock("../../stores/voiceStore",()=>({useVoiceStore:create(()=>({inputMode:"push_to_talk",pttKey:"Space",currentVoiceChannelId:"voice",isMuted:false,isServerMuted:false,isDeafened:false}))}));
 let acquire:ReturnType<typeof vi.fn>;
-beforeEach(async()=>{await i18n.changeLanguage("en");publishAuthOwnerChange("owner");publishAuthGenerationChange(1);useVoiceStore.setState({currentVoiceChannelId:"voice"});acquire=vi.fn().mockResolvedValueOnce(null).mockResolvedValue("ready");window.electronAPI={acquirePTTLease:acquire,releasePTTLease:vi.fn(async()=>{}),onPTTLeaseSignal:()=>()=>{}}as unknown as Window["electronAPI"];});
+beforeEach(async()=>{await ensureNamespaces(["voice"]); await changeLanguage("en");publishAuthOwnerChange("owner");publishAuthGenerationChange(1);useVoiceStore.setState({currentVoiceChannelId:"voice"});acquire=vi.fn().mockResolvedValueOnce(null).mockResolvedValue("ready");window.electronAPI={acquirePTTLease:acquire,releasePTTLease:vi.fn(async()=>{}),onPTTLeaseSignal:()=>()=>{}}as unknown as Window["electronAPI"];});
 afterEach(()=>{window.electronAPI=undefined;});
 it("renders translated guild failure and explicit Retry reacquires without enabling capture",async()=>{
  const microphone=vi.fn();function View(){const ptt=usePushToTalk({setMicEnabled:microphone});return <NativePTTStatus unavailable={ptt.nativeUnavailable} retry={ptt.retryNative}/>;}

@@ -1,8 +1,9 @@
-/** ProfileSettings — User profile settings tab. */
+/** ProfileSettings â€” User profile settings tab. */
 
 import { useState, useEffect, useRef } from "react";
 import { useSettingsDraft } from "./settingsWorkspaceContext";
 import { useTranslation } from "react-i18next";
+import { changeLanguage } from "../../i18n";
 import { useAuthStore } from "../../stores/authStore";
 import { getAuthGeneration } from "../../api/client";
 import { useToastStore } from "../../stores/toastStore";
@@ -233,7 +234,7 @@ function ProfileSettings() {
           // Cache-bust: server reuses the same path on overwrite, so the
           // <img src=...> reference stays identical and the browser keeps
           // serving the stale image from disk cache. Append a timestamp
-          // query string so every upload yields a fresh URL — the auth
+          // query string so every upload yields a fresh URL â€” the auth
           // store + WS member_update broadcast carry this version forward
           // to every other UI consumer (sidebar, voice tile, member list).
           const cacheBustedUrl = withCacheBust(avatarRes.data.avatar_url ?? "");
@@ -300,7 +301,12 @@ function ProfileSettings() {
         if (!isCurrentSave()) return;
         if (res.success && res.data) {
           if (languageChanged) {
-            i18n.changeLanguage(pendingLanguage);
+            if (!await changeLanguage(pendingLanguage)) {
+              showApiError({ success: false }, { fallbackKey: "settings:profileSaveError" });
+              setIsSaving(false);
+              return;
+            }
+            if (!isCurrentSave()) return;
           }
           updateUser({
             ...(usernameChanged ? { username: res.data.username } : {}),
