@@ -189,3 +189,8 @@ func TestUnreadConversationDigestSQLiteIntegration(t *testing.T) {
 		t.Fatalf("delivery rows=%d cancelled=%d", delivered, cancelled)
 	}
 }
+
+func (s *integrationCategorySender) CategoryFrom() string { return "HiChat <from@example.test>" }
+func (s *integrationCategorySender) SendPreparedCategoryEmail(ctx context.Context, key string, p models.EmailDeliveryPayload) (string, error) {
+	return "provider-id", s.SendCategoryEmail(ctx, p.To, p.Subject, p.HTML)
+}
