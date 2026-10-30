@@ -264,6 +264,7 @@ export default function GroupDMChat({ groupId }: { groupId: string }) {
     const before = previousFirst.current;
     previousFirst.current = visibleMessages[0]?.id;
     const anchor = scrollAnchor.current;
+    if (!anchor && visibleMessages[0]) scrollAnchor.current = { id: visibleMessages[0].id, offset: 0 };
     if (!virtualized || !before || !anchor || visibleMessages.findIndex(message => message.id === before) <= 0) return;
     const index = visibleMessages.findIndex(message => message.id === anchor.id);
     if (index >= 0) {
