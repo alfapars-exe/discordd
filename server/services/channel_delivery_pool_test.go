@@ -1,21 +1,20 @@
+//go:build poolcomparison
+
 package services
 
 import (
 	"context"
 	"fmt"
 	"github.com/argeinfina/hichat/models"
-	"os"
 	"sort"
 	"sync"
 	"testing"
 	"time"
 )
 
-// Opt-in local comparison; production defaults are never changed by this test.
+// Run with -tags poolcomparison against an isolated PostgreSQL instance.
+// Production defaults are never changed by this test.
 func TestChannelDeliveryPoolComparison(t *testing.T) {
-	if os.Getenv("HICHAT_POOL_COMPARISON") != "1" {
-		t.Skip("opt-in pool comparison")
-	}
 	for round := 0; round < 3; round++ {
 		for _, size := range []int{4, 6, 8} {
 			t.Run(fmt.Sprintf("round%d/pool%d", round, size), func(t *testing.T) {
