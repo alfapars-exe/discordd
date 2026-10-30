@@ -56,9 +56,10 @@ func (r *sqliteEmailDeliveryRepo) FinishAttempt(ctx context.Context, j *models.E
 	}
 	defer tx.Rollback()
 	status, reason := "cancelled", "delivery requires review"
-	if outcome == "delivered" {
+	switch outcome {
+	case "delivered":
 		status, reason = "delivered", ""
-	} else if outcome == "failed" {
+	case "failed":
 		reason = "provider rejected immutable payload"
 	}
 	res, err := tx.ExecContext(ctx, `UPDATE email_delivery_jobs SET status=?,last_error=?,delivered_at=CASE WHEN ?='delivered' THEN ? ELSE delivered_at END,claim_token=NULL,lease_expires_at=NULL WHERE id=? AND status='delivering' AND claim_token=? AND lease_expires_at>?`, status, reason, status, emailTime(now), j.ID, j.ClaimToken, emailTime(now))
