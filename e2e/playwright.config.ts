@@ -100,6 +100,11 @@ export default defineConfig({
       dependencies: ["setup"],
       use: { ...devices["Desktop Chrome"] },
     },
+    {
+      name: "webkit-smoke",
+      testMatch: /webkit-smoke\.spec\.ts/,
+      use: { ...devices["Desktop Safari"] },
+    },
   ],
 
   webServer: [
