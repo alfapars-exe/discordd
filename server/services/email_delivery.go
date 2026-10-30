@@ -120,8 +120,21 @@ func (s *EmailDeliveryService) DeliverBatch(ctx context.Context, now time.Time) 
 			}
 			continue
 		}
+		attempt, readErr := s.repo.ReadAttempt(ctx, j.ID)
+		if readErr != nil {
+			return done, errors.Join(batchErr, errors.New("email attempt lookup failed"))
+		}
+		if attempt != nil {
+			j.Address = attempt.Payload.To
+			if attempt.Outcome != "prepared" || time.Now().UnixMilli()-attempt.FirstAttemptMS >= (24*time.Hour-emailDeliverySendTimeout).Milliseconds() {
+				if finishErr := s.repo.FinishAttempt(ctx, &j, "", "review", time.Now()); finishErr != nil {
+					batchErr = errors.Join(batchErr, errors.New("email review persistence failed"))
+				}
+				continue
+			}
+		}
 		body := j.BodyHTML
-		if s.emailUnsubscribeOn {
+		if attempt == nil && s.emailUnsubscribeOn {
 			link, linkErr := s.issueEmailUnsubscribeLink(ctx, j.UserID, j.Category, j.Address, now)
 			if linkErr != nil {
 				// Do not persist or log token/repository/configuration details.
@@ -153,7 +166,7 @@ func (s *EmailDeliveryService) DeliverBatch(ctx context.Context, now time.Time) 
 			}
 			continue
 		}
-		if j.DMMessageID != "" && j.DMUnreadCount > 0 {
+		if attempt == nil && j.DMMessageID != "" && j.DMUnreadCount > 0 {
 			// Summarize metadata only. Never decrypt or include sender identities,
 			// conversation names, message snippets or ciphertext in an email.
 			count := j.DMUnreadCount
@@ -166,10 +179,46 @@ func (s *EmailDeliveryService) DeliverBatch(ctx context.Context, now time.Time) 
 			}
 			body = fmt.Sprintf("<p>You have %d unread messages in a HiChat conversation. Open HiChat to read them.</p>", count) + footer
 		}
+		if attempt == nil {
+			attempt, err = s.repo.PrepareAttempt(ctx, &j, models.EmailDeliveryPayload{From: s.sender.CategoryFrom(), To: j.Address, Subject: j.Subject, HTML: body}, time.Now())
+			if err != nil {
+				return done, errors.Join(batchErr, errors.New("email preparation failed"))
+			}
+		}
+		// Preparing the immutable payload must complete before the first external call.
+		allowed, eligibilityErr = s.repo.CanDeliver(ctx, &j, time.Now())
+		if eligibilityErr != nil || !allowed || emailDeliveryJobExpired(j, time.Now()) {
+			reason, maxAttempts := "recipient is no longer eligible", 1
+			if eligibilityErr != nil {
+				reason, maxAttempts = "recipient eligibility unavailable", 5
+			}
+			if retryErr := s.repo.Retry(ctx, j.ID, j.ClaimToken, reason, time.Now().Add(time.Minute), maxAttempts); retryErr != nil {
+				batchErr = errors.Join(batchErr, errors.New("email cancellation persistence failed"))
+			}
+			continue
+		}
+		// Eligibility checks may block on the database. Check the provider
+		// deadline again immediately before the external call.
+		if time.Now().UnixMilli()-attempt.FirstAttemptMS >= (24*time.Hour - emailDeliverySendTimeout).Milliseconds() {
+			if finishErr := s.repo.FinishAttempt(ctx, &j, "", "review", time.Now()); finishErr != nil {
+				batchErr = errors.Join(batchErr, errors.New("email review persistence failed"))
+			}
+			continue
+		}
 		sendCtx, cancelSend := context.WithTimeout(ctx, emailDeliverySendTimeout)
-		sendErr := s.sender.SendCategoryEmail(sendCtx, j.Address, j.Subject, body)
+		providerID, sendErr := s.sender.SendPreparedCategoryEmail(sendCtx, attempt.Key, attempt.Payload)
 		cancelSend()
 		if sendErr != nil {
+			if errors.Is(sendErr, email.ErrImmutableEmailPayload) || j.Attempts >= 5 {
+				outcome := "review"
+				if errors.Is(sendErr, email.ErrImmutableEmailPayload) {
+					outcome = "failed"
+				}
+				if finishErr := s.repo.FinishAttempt(ctx, &j, "", outcome, time.Now()); finishErr != nil {
+					batchErr = errors.Join(batchErr, errors.New("email outcome persistence failed"))
+				}
+				continue
+			}
 			backoff := time.Duration(1<<min(j.Attempts, 6)) * time.Minute
 			// Provider errors may include recipient, body, headers, or proof tokens.
 			// Keep persisted errors and returned batch diagnostics content-free.
@@ -178,7 +227,7 @@ func (s *EmailDeliveryService) DeliverBatch(ctx context.Context, now time.Time) 
 			}
 			continue
 		}
-		if err = s.repo.MarkDelivered(ctx, j.ID, j.ClaimToken, now); err != nil {
+		if err = s.repo.FinishAttempt(ctx, &j, providerID, "delivered", time.Now()); err != nil {
 			return done, errors.Join(batchErr, errors.New("email delivery acknowledgment failed"))
 		}
 		done++

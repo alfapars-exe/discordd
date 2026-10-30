@@ -10,6 +10,9 @@ import (
 var ErrStaleEmailDeliveryClaim = errors.New("stale email delivery claim")
 
 type EmailDeliveryRepository interface {
+	ReadAttempt(context.Context, string) (*models.EmailDeliveryAttempt, error)
+	PrepareAttempt(context.Context, *models.EmailDeliveryJob, models.EmailDeliveryPayload, time.Time) (*models.EmailDeliveryAttempt, error)
+	FinishAttempt(context.Context, *models.EmailDeliveryJob, string, string, time.Time) error
 	EnqueueIfEligible(context.Context, *models.EmailDeliveryJob) (bool, error)
 	ClaimDue(context.Context, time.Time, int) ([]models.EmailDeliveryJob, error)
 	CanDeliver(context.Context, *models.EmailDeliveryJob, time.Time) (bool, error)

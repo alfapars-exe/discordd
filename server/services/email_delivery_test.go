@@ -9,10 +9,12 @@ import (
 	"time"
 
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg/email"
 	"github.com/argeinfina/hichat/repository"
 )
 
 type emailQueueFake struct {
+	attempts           map[string]*models.EmailDeliveryAttempt
 	jobs               []models.EmailDeliveryJob
 	delivered, retried int
 	retryReasons       []string
@@ -332,5 +334,101 @@ func TestEmailDeliveryUsesBoundedSendContext(t *testing.T) {
 	}
 	if sender.deadline.IsZero() || sender.deadline.Before(start) || sender.deadline.After(start.Add(emailDeliverySendTimeout+time.Second)) {
 		t.Fatalf("send context deadline = %v; expected within %v", sender.deadline, emailDeliverySendTimeout)
+	}
+}
+
+func (f *emailQueueFake) ReadAttempt(_ context.Context, id string) (*models.EmailDeliveryAttempt, error) {
+	return f.attempts[id], nil
+}
+func (f *emailQueueFake) PrepareAttempt(_ context.Context, j *models.EmailDeliveryJob, p models.EmailDeliveryPayload, now time.Time) (*models.EmailDeliveryAttempt, error) {
+	if f.attempts == nil {
+		f.attempts = map[string]*models.EmailDeliveryAttempt{}
+	}
+	a := &models.EmailDeliveryAttempt{Key: "hichat-email/" + j.ID, Payload: p, FirstAttemptMS: now.UnixMilli(), Outcome: "prepared"}
+	f.attempts[j.ID] = a
+	return a, nil
+}
+func (f *emailQueueFake) FinishAttempt(ctx context.Context, j *models.EmailDeliveryJob, provider, outcome string, now time.Time) error {
+	if outcome == "delivered" {
+		if err := f.MarkDelivered(ctx, j.ID, j.ClaimToken, now); err != nil {
+			return err
+		}
+	}
+	f.attempts[j.ID].ProviderID = provider
+	f.attempts[j.ID].Outcome = outcome
+	return nil
+}
+
+func (f categorySenderFake) CategoryFrom() string { return "HiChat <from@example.test>" }
+func (f categorySenderFake) SendPreparedCategoryEmail(ctx context.Context, key string, p models.EmailDeliveryPayload) (string, error) {
+	return "provider-id", f.SendCategoryEmail(ctx, p.To, p.Subject, p.HTML)
+}
+
+func (f *recordingCategorySender) CategoryFrom() string { return "HiChat <from@example.test>" }
+func (f *recordingCategorySender) SendPreparedCategoryEmail(ctx context.Context, key string, p models.EmailDeliveryPayload) (string, error) {
+	return "provider-id", f.SendCategoryEmail(ctx, p.To, p.Subject, p.HTML)
+}
+
+func (f *deadlineCategorySender) CategoryFrom() string { return "HiChat <from@example.test>" }
+func (f *deadlineCategorySender) SendPreparedCategoryEmail(ctx context.Context, key string, p models.EmailDeliveryPayload) (string, error) {
+	return "provider-id", f.SendCategoryEmail(ctx, p.To, p.Subject, p.HTML)
+}
+
+func TestEmailDeliveryRetriesFrozenPayloadAfterLostResponseOrAck(t *testing.T) {
+	for _, lostAck := range []bool{false, true} {
+		t.Run(fmt.Sprint(lostAck), func(t *testing.T) {
+			job := models.EmailDeliveryJob{ID: "immutable", UserID: "user", Category: models.EmailCategoryCommunication, Address: "user@example.test", Subject: "original", BodyHTML: "body", DMMessageID: "dm", DMUnreadCount: 2, Attempts: 1}
+			q := &emailQueueFake{jobs: []models.EmailDeliveryJob{job}}
+			sender := &recordingCategorySender{}
+			unsub := &emailUnsubscribeFake{token: "first-proof"}
+			if lostAck {
+				q.markErr = errors.New("database unavailable")
+			} else {
+				sender.err = errors.New("response lost")
+			}
+			svc := NewEmailDeliveryService(q, sender, WithEmailUnsubscribe(unsub, "https://example.test"))
+			_, _ = svc.DeliverBatch(context.Background(), time.Now())
+			first := *q.attempts[job.ID]
+			if first.Outcome != "prepared" {
+				t.Fatal("ambiguous attempt retired")
+			}
+			job.Subject = "changed"
+			job.BodyHTML = "changed"
+			job.DMUnreadCount = 9
+			job.Attempts = 2
+			q.jobs = []models.EmailDeliveryJob{job}
+			q.markErr = nil
+			sender.err = nil
+			unsub.token = "second-proof"
+			done, err := svc.DeliverBatch(context.Background(), time.Now())
+			if err != nil || done != 1 {
+				t.Fatalf("retry: %d %v", done, err)
+			}
+			after := q.attempts[job.ID]
+			if after.Payload != first.Payload || after.Key != first.Key || after.FirstAttemptMS != first.FirstAttemptMS || unsub.calls != 1 || sender.body != first.Payload.HTML || after.ProviderID != "provider-id" {
+				t.Fatal("retry changed persisted send")
+			}
+		})
+	}
+}
+func TestEmailDeliveryExpiredIdempotencyAndMismatchNeverRetry(t *testing.T) {
+	for _, expired := range []bool{false, true} {
+		t.Run(fmt.Sprint(expired), func(t *testing.T) {
+			job := models.EmailDeliveryJob{ID: "job", Address: "to@example.test", Attempts: 2}
+			attempt := &models.EmailDeliveryAttempt{Key: "key", Outcome: "prepared", Payload: models.EmailDeliveryPayload{To: job.Address}, FirstAttemptMS: time.Now().UnixMilli()}
+			if expired {
+				attempt.FirstAttemptMS = time.Now().Add(-24 * time.Hour).UnixMilli()
+			}
+			q := &emailQueueFake{jobs: []models.EmailDeliveryJob{job}, attempts: map[string]*models.EmailDeliveryAttempt{"job": attempt}}
+			sender := &recordingCategorySender{err: email.ErrImmutableEmailPayload}
+			done, err := NewEmailDeliveryService(q, sender).DeliverBatch(context.Background(), time.Now())
+			expected, sends := "failed", 1
+			if expired {
+				expected, sends = "review", 0
+			}
+			if err != nil || done != 0 || sender.sends != sends || q.retried != 0 || attempt.Outcome != expected {
+				t.Fatalf("outcome %s sends %d err %v", attempt.Outcome, sender.sends, err)
+			}
+		})
 	}
 }
