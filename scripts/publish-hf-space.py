@@ -9,12 +9,9 @@ import time
 
 from huggingface_hub import HfApi, CommitOperationAdd, CommitOperationDelete
 
-FRONTEND_CONTRACTS = {"electron/voice-overlay-contract.ts", "electron/overlay-media-contract.ts", "electron/cs2-join-contract.ts"}
-ROOT_FILES = {"Dockerfile", ".dockerignore", "README.md", "package.json", "package-lock.json"} | FRONTEND_CONTRACTS
+from hf_source_manifest import MANIFEST, managed
 
-
-def managed(path):
-    return path in ROOT_FILES or path.startswith(("client/", "server/"))
+FRONTEND_CONTRACTS = {p for p in MANIFEST["files"] if p.startswith("electron/")}
 
 
 def record_deployed_commit(commit):

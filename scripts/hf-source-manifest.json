@@ -1,0 +1,5 @@
+{
+  "files": ["Dockerfile", ".dockerignore", "README.md", "package.json", "package-lock.json", "electron/voice-overlay-contract.ts", "electron/overlay-media-contract.ts", "electron/cs2-join-contract.ts"],
+  "directories": ["client/", "server/"],
+  "hub_metadata": [".gitattributes"]
+}
