@@ -50,7 +50,7 @@ die()  { printf '\033[1;31m[mqvi]\033[0m %s\n' "$*" >&2; exit 1; }
 
 # PostgreSQL is provisioned separately. Refuse an upgrade from an unmigrated
 # SQLite configuration before downloading/replacing any binaries.
-if [ -f "${INSTALL_DIR}/.env" ]; then
+if [[ -f "${INSTALL_DIR}/.env" ]]; then
     grep -Eq "^DATABASE_URL=[\"']?postgres(ql)?://" "${INSTALL_DIR}/.env" || die "Migrate legacy data and configure PostgreSQL DATABASE_URL before upgrading."
 else
     case "${DATABASE_URL:-}" in

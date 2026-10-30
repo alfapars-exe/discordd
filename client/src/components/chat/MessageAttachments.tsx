@@ -94,10 +94,10 @@ function MessageAttachments({ message }: Readonly<MessageAttachmentsProps>) {
           />
         );
       })}
-      {states.map((state) => <div className="msg-file" role="status" key={`preparation-${state.index}`}>
+      {states.map((state) => <output className="msg-file" key={`preparation-${state.index}`}>
         <span>{message.encryption_version === 1 ? message.e2ee_file_keys?.[state.index]?.filename ?? state.filename : state.filename}</span>
         <span>{t(state.status === "preparing" ? "attachmentPreparing" : "attachmentFailed")}</span>
-      </div>)}
+      </output>)}
     </div>
   );
   const mediaInputs = attachments.flatMap((attachment, index) => {

@@ -84,10 +84,17 @@ func (r *sqliteServerOwnershipRepo) Transfer(ctx context.Context, actor, sid, ha
 		if _, err := tx.ExecContext(ctx, `INSERT INTO user_roles(user_id,role_id,server_id) VALUES(?,?,?)`, target, ids[0], serverID); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO audit_logs(server_id,actor_user_id,target_user_id,event_type,metadata,actor_snapshot,target_snapshot)
-		VALUES(?1,?2,?3,?4,`+snapshotObjectSQL(r.db)+`('old_owner_id',?2,'new_owner_id',?3),
-		(SELECT `+snapshotObjectSQL(r.db)+`('id',id,'username',username,'display_name',COALESCE(display_name,''),'avatar_url',COALESCE(avatar_url,'')) FROM users WHERE id=?2),
-		(SELECT `+snapshotObjectSQL(r.db)+`('id',id,'username',username,'display_name',COALESCE(display_name,''),'avatar_url',COALESCE(avatar_url,'')) FROM users WHERE id=?3))`, serverID, actor, target, models.AuditEventServerOwnershipTransfer); err != nil {
+		auditQuery := `INSERT INTO audit_logs(server_id,actor_user_id,target_user_id,event_type,metadata,actor_snapshot,target_snapshot)
+		VALUES(?1,?2,?3,?4,json_object('old_owner_id',?2,'new_owner_id',?3),
+		(SELECT json_object('id',id,'username',username,'display_name',COALESCE(display_name,''),'avatar_url',COALESCE(avatar_url,'')) FROM users WHERE id=?2),
+		(SELECT json_object('id',id,'username',username,'display_name',COALESCE(display_name,''),'avatar_url',COALESCE(avatar_url,'')) FROM users WHERE id=?3))`
+		if database.IsPostgres(r.db) {
+			auditQuery = `INSERT INTO audit_logs(server_id,actor_user_id,target_user_id,event_type,metadata,actor_snapshot,target_snapshot)
+		VALUES(?1,?2,?3,?4,hichat_json_object('old_owner_id',?2,'new_owner_id',?3),
+		(SELECT hichat_json_object('id',id,'username',username,'display_name',COALESCE(display_name,''),'avatar_url',COALESCE(avatar_url,'')) FROM users WHERE id=?2),
+		(SELECT hichat_json_object('id',id,'username',username,'display_name',COALESCE(display_name,''),'avatar_url',COALESCE(avatar_url,'')) FROM users WHERE id=?3))`
+		}
+		if _, err := tx.ExecContext(ctx, auditQuery, serverID, actor, target, models.AuditEventServerOwnershipTransfer); err != nil {
 			return err
 		}
 		result, err = NewSQLiteServerRepo(tx).GetByID(ctx, serverID)

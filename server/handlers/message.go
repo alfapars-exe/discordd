@@ -223,7 +223,7 @@ func (h *MessageHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if isMultipart(contentType) {
 		req.ClientMessageID = r.FormValue("client_message_id")
 		if r.MultipartForm != nil {
-			defer r.MultipartForm.RemoveAll()
+			defer func() { _ = r.MultipartForm.RemoveAll() }()
 		}
 	}
 	// Hash semantic request fields plus each file's bytes and name before any

@@ -19,8 +19,8 @@ ALTER TABLE messages ADD COLUMN source_sequence BIGINT;
 ALTER TABLE channel_reads ADD COLUMN last_read_source_sequence BIGINT NOT NULL DEFAULT 0;
 WITH ranked AS (SELECT id,row_number() OVER(PARTITION BY channel_id ORDER BY created_at,id) seq FROM messages)
 UPDATE messages SET source_sequence=ranked.seq FROM ranked WHERE ranked.id=messages.id;
-UPDATE channels SET last_source_sequence=COALESCE((SELECT MAX(source_sequence) FROM messages WHERE channel_id=channels.id),0);
-UPDATE channel_reads SET last_read_source_sequence=COALESCE((SELECT source_sequence FROM messages WHERE id=last_read_message_id AND channel_id=channel_reads.channel_id),0);
+UPDATE channels SET last_source_sequence=COALESCE((SELECT MAX(source_sequence) FROM messages WHERE channel_id=channels.id),0) WHERE last_source_sequence=0;
+UPDATE channel_reads SET last_read_source_sequence=COALESCE((SELECT source_sequence FROM messages WHERE id=last_read_message_id AND channel_id=channel_reads.channel_id),0) WHERE last_read_source_sequence=0;
 CREATE UNIQUE INDEX idx_channel_source_sequence ON messages(channel_id,source_sequence);
 CREATE TABLE channel_delivery_outbox (
  event_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

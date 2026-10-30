@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/argeinfina/hichat/database"
+	"github.com/jackc/pgx/v5"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -51,15 +52,19 @@ func runFixture() error {
 	if len(name) > 63 {
 		return fmt.Errorf("run database name too long")
 	}
+	// PostgreSQL identifiers cannot be bound. Quote the regex-validated local run identifier.
+	quotedName := pgx.Identifier{name}.Sanitize()
+	createQuery := fmt.Sprintf("CREATE DATABASE %s", quotedName)
+	dropQuery := fmt.Sprintf("DROP DATABASE IF EXISTS %s WITH (FORCE)", quotedName)
 	descriptor := filepath.Join(dir, "hichat-e2e-postgres.json")
 	if action == "drop" {
-		_, err = db.ExecContext(ctx, `DROP DATABASE IF EXISTS "`+name+`" WITH (FORCE)`)
+		_, err = db.ExecContext(ctx, dropQuery)
 		return err
 	}
 	if action != "create" {
 		return fmt.Errorf("unknown action")
 	}
-	if _, err = db.ExecContext(ctx, `CREATE DATABASE "`+name+`"`); err != nil {
+	if _, err = db.ExecContext(ctx, createQuery); err != nil {
 		return fmt.Errorf("cannot create unique run database")
 	}
 	runURL := *control
@@ -67,7 +72,7 @@ func runFixture() error {
 	encoded, _ := json.Marshal(map[string]string{"url": runURL.String(), "run_id": id})
 	file, err := os.OpenFile(descriptor, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
-		db.ExecContext(ctx, `DROP DATABASE "`+name+`"`)
+		_, _ = db.ExecContext(ctx, dropQuery)
 		return fmt.Errorf("cannot create run descriptor")
 	}
 	_, err = file.Write(encoded)

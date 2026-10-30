@@ -121,9 +121,9 @@ func (s *messageService) loadAttachmentStates(ctx context.Context, m *models.Mes
 func StartChannelDelivery(parent context.Context, service MessageService) func() {
 	s, ok := service.(*messageService)
 	if !ok || s.deliveryDB == nil {
-		return func() {}
+		return func() { /* No worker exists for a legacy fixture. */ }
 	}
-	ctx, cancel := context.WithCancel(parent)
+	ctx, cancel := channelWorkerContext(parent)
 	done := make(chan struct{})
 	// Called before HTTP serving under the singleton owner. No live upload
 	// can own a preparation left by the previous process.
@@ -159,9 +159,9 @@ func StartChannelDelivery(parent context.Context, service MessageService) func()
 
 func (s *messageService) KeepChannelSendAlive(parent context.Context, id string) func() {
 	if s.deliveryDB == nil {
-		return func() {}
+		return func() { /* No worker exists for a legacy fixture. */ }
 	}
-	ctx, cancel := context.WithCancel(parent)
+	ctx, cancel := channelWorkerContext(parent)
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -288,33 +288,7 @@ func (s *messageService) deliveryPayload(ctx context.Context, e channelDeliveryE
 		return e.Data, nil
 	}
 	if e.Op == ws.OpNotificationCreate {
-		// Deleted notification rows (e.g. message deletion) must not be resurrected.
-		var readAt sql.NullTime
-		var n models.Notification
-		if err := json.Unmarshal(e.Data, &n); err != nil {
-			return nil, err
-		}
-		err := s.deliveryDB.QueryRowContext(ctx, `SELECT read_at FROM notifications WHERE id=?`, n.ID).Scan(&readAt)
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil
-		}
-		if err != nil {
-			return nil, err
-		}
-		if readAt.Valid {
-			value := readAt.Time.UTC().Format(time.RFC3339Nano)
-			n.ReadAt = &value
-		}
-		if n.ActorID != nil {
-			u, err := s.userRepo.GetByID(ctx, *n.ActorID)
-			if err != nil && !errors.Is(err, pkg.ErrNotFound) {
-				return nil, err
-			}
-			if u != nil {
-				n.Actor = models.ToPublicUser(u)
-			}
-		}
-		return json.Marshal(n)
+		return s.deliveryNotificationPayload(ctx, e)
 	}
 	m, err := s.messageRepo.GetByID(ctx, e.Message)
 	if errors.Is(err, pkg.ErrNotFound) {
@@ -355,6 +329,36 @@ func (s *messageService) deliveryPayload(ctx context.Context, e channelDeliveryE
 		return nil, err
 	}
 	return json.Marshal(m)
+}
+
+func (s *messageService) deliveryNotificationPayload(ctx context.Context, e channelDeliveryEvent) ([]byte, error) {
+	// Deleted notification rows (e.g. message deletion) must not be resurrected.
+	var readAt sql.NullTime
+	var n models.Notification
+	if err := json.Unmarshal(e.Data, &n); err != nil {
+		return nil, err
+	}
+	err := s.deliveryDB.QueryRowContext(ctx, `SELECT read_at FROM notifications WHERE id=?`, n.ID).Scan(&readAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if readAt.Valid {
+		value := readAt.Time.UTC().Format(time.RFC3339Nano)
+		n.ReadAt = &value
+	}
+	if n.ActorID != nil {
+		u, err := s.userRepo.GetByID(ctx, *n.ActorID)
+		if err != nil && !errors.Is(err, pkg.ErrNotFound) {
+			return nil, err
+		}
+		if u != nil {
+			n.Actor = models.ToPublicUser(u)
+		}
+	}
+	return json.Marshal(n)
 }
 
 type ChannelEventPage struct {
@@ -430,19 +434,8 @@ func (s *messageService) ChannelEvents(ctx context.Context, server, channel, use
 	if page.HasMore {
 		events = events[:100]
 	}
-	for _, e := range events {
-		page.Cursor = e.Sequence
-		if e.Recipient.Valid && e.Recipient.String != user {
-			continue
-		}
-		data, loadErr := s.deliveryPayload(ctx, e)
-		if loadErr != nil {
-			return nil, loadErr
-		}
-		if data != nil {
-			e.Data = data
-			page.Events = append(page.Events, e)
-		}
+	if err = s.hydrateReplayEvents(ctx, page, events, user); err != nil {
+		return nil, err
 	}
 	// Authorization is rechecked after hydration as well.
 	perms, err = s.permResolver.ResolveChannelPermissions(ctx, user, channel)
@@ -453,4 +446,27 @@ func (s *messageService) ChannelEvents(ctx context.Context, server, channel, use
 		return nil, pkg.ErrForbidden
 	}
 	return page, nil
+}
+
+// channelWorkerContext transfers cancellation ownership to the returned worker stop function.
+func channelWorkerContext(parent context.Context) (context.Context, context.CancelFunc) {
+	return context.WithCancel(parent)
+}
+
+func (s *messageService) hydrateReplayEvents(ctx context.Context, page *ChannelEventPage, events []channelDeliveryEvent, user string) error {
+	for _, e := range events {
+		page.Cursor = e.Sequence
+		if e.Recipient.Valid && e.Recipient.String != user {
+			continue
+		}
+		data, loadErr := s.deliveryPayload(ctx, e)
+		if loadErr != nil {
+			return loadErr
+		}
+		if data != nil {
+			e.Data = data
+			page.Events = append(page.Events, e)
+		}
+	}
+	return nil
 }

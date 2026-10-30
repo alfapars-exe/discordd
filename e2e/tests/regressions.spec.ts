@@ -35,7 +35,7 @@ test("a committed send with a lost HTTP response retries once without duplicatin
   await composer(page).fill(content);
   await composer(page).press("Enter");
   await expect(composer(page)).toHaveValue("", {timeout:20_000});
-  expect(identities.length).toBe(2);
+  expect(identities).toHaveLength(2);
   expect(identities[0]).toMatch(/^[a-f0-9-]{36}$/);
   expect(identities[1]).toBe(identities[0]);
   await expect(messageList(page).getByText(content,{exact:true})).toHaveCount(1);

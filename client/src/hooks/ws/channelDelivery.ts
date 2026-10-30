@@ -41,14 +41,22 @@ export async function resyncChannelDelivery(server: string, channel: string, app
     if (!isCurrent()) return;
     if (!response.success || !response.data) { await snapshot(); return; }
     const page = response.data;
-    if (page.reset) {
-      await snapshot();
-      if (!isCurrent()) return;
-    } else {
-      for (const event of page.events) { if (!isCurrent()) return; await apply({...event, server_id: server}); }
-    }
+    await applyReplayPage(page, server, apply, snapshot, isCurrent);
+    if (!isCurrent()) return;
     cursors.set(key, page.cursor);
     if (!page.has_more || page.cursor <= after) return;
     after = page.cursor;
+  }
+}
+
+async function applyReplayPage(page: EventPage, server: string, apply: (event: WSMessage) => Promise<void>, snapshot: () => Promise<void>, isCurrent: () => boolean) {
+  if (page.reset) {
+    await snapshot();
+    return;
+  }
+  // Preserve event order: asynchronous message decryption must finish before the next edit.
+  for (const event of page.events) {
+    if (!isCurrent()) return;
+    await apply({...event, server_id: server});
   }
 }

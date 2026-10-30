@@ -5,8 +5,8 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
@@ -140,64 +140,74 @@ func (s *messageService) hydrateMessages(ctx context.Context, messages []models.
 		}
 	}
 	if s.deliveryDB != nil {
-		marks := make([]string, len(messageIDs))
-		args := make([]any, len(messageIDs))
-		for i, id := range messageIDs {
-			marks[i] = "?"
-			args[i] = id
-		}
-		rows, err := s.deliveryDB.QueryContext(ctx, `SELECT m.id,m.source_sequence,c.server_id FROM messages m JOIN channels c ON c.id=m.channel_id WHERE m.id IN (`+strings.Join(marks, ",")+`)`, args...)
-		if err != nil {
+		if err := s.hydrateDeliveryMetadata(ctx, messages, messageIDs); err != nil {
 			return nil, err
-		}
-		positions := map[string]int{}
-		for i := range messages {
-			positions[messages[i].ID] = i
-		}
-		for rows.Next() {
-			var id, server string
-			var seq int64
-			if err = rows.Scan(&id, &seq, &server); err != nil {
-				rows.Close()
-				return nil, err
-			}
-			i := positions[id]
-			messages[i].SourceSequence = seq
-			messages[i].ServerID = server
-		}
-		err = rows.Err()
-		rows.Close()
-		if err != nil {
-			return nil, err
-		}
-		stateRows, stateErr := s.deliveryDB.QueryContext(ctx, `SELECT message_id,file_index,filename,status,error,attachment_id FROM channel_attachment_jobs WHERE message_id IN (`+strings.Join(marks, ",")+`) ORDER BY message_id,file_index`, args...)
-		if stateErr != nil {
-			return nil, stateErr
-		}
-		for stateRows.Next() {
-			var id string
-			var state models.AttachmentPreparation
-			var attachmentID *string
-			if stateErr = stateRows.Scan(&id, &state.Index, &state.Filename, &state.Status, &state.Error, &attachmentID); stateErr != nil {
-				stateRows.Close()
-				return nil, stateErr
-			}
-			i := positions[id]
-			messages[i].AttachmentStates = append(messages[i].AttachmentStates, state)
-			if attachmentID != nil {
-				for j := range messages[i].Attachments {
-					if messages[i].Attachments[j].ID == *attachmentID {
-						index := state.Index
-						messages[i].Attachments[j].PreparationIndex = &index
-					}
-				}
-			}
-		}
-		stateErr = stateRows.Err()
-		stateRows.Close()
-		if stateErr != nil {
-			return nil, stateErr
 		}
 	}
 	return messages, nil
+}
+
+func (s *messageService) hydrateDeliveryMetadata(ctx context.Context, messages []models.Message, messageIDs []string) error {
+	encodedIDs, err := json.Marshal(messageIDs)
+	if err != nil {
+		return err
+	}
+	rows, err := s.deliveryDB.QueryContext(ctx, `SELECT m.id,m.source_sequence,c.server_id FROM messages m JOIN channels c ON c.id=m.channel_id WHERE m.id IN (SELECT jsonb_array_elements_text(?::jsonb))`, string(encodedIDs))
+	if err != nil {
+		return err
+	}
+	positions := map[string]int{}
+	for i := range messages {
+		positions[messages[i].ID] = i
+	}
+	for rows.Next() {
+		var id, server string
+		var seq int64
+		if err = rows.Scan(&id, &seq, &server); err != nil {
+			rows.Close()
+			return err
+		}
+		i := positions[id]
+		messages[i].SourceSequence = seq
+		messages[i].ServerID = server
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	stateRows, stateErr := s.deliveryDB.QueryContext(ctx, `SELECT message_id,file_index,filename,status,error,attachment_id FROM channel_attachment_jobs WHERE message_id IN (SELECT jsonb_array_elements_text(?::jsonb)) ORDER BY message_id,file_index`, string(encodedIDs))
+	if stateErr != nil {
+		return stateErr
+	}
+	for stateRows.Next() {
+		var id string
+		var state models.AttachmentPreparation
+		var attachmentID *string
+		if stateErr = stateRows.Scan(&id, &state.Index, &state.Filename, &state.Status, &state.Error, &attachmentID); stateErr != nil {
+			stateRows.Close()
+			return stateErr
+		}
+		i := positions[id]
+		messages[i].AttachmentStates = append(messages[i].AttachmentStates, state)
+		applyAttachmentPreparationIndex(&messages[i], state.Index, attachmentID)
+	}
+	stateErr = stateRows.Err()
+	stateRows.Close()
+	if stateErr != nil {
+		return stateErr
+	}
+	return nil
+}
+
+func applyAttachmentPreparationIndex(message *models.Message, index int, attachmentID *string) {
+	if attachmentID == nil {
+		return
+	}
+	for i := range message.Attachments {
+		if message.Attachments[i].ID == *attachmentID {
+			slot := index
+			message.Attachments[i].PreparationIndex = &slot
+		}
+	}
 }

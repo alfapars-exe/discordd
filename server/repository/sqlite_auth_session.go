@@ -211,6 +211,7 @@ func (r *sqliteAuthSessionRepo) UpdatePasswordAndRevoke(ctx context.Context, use
 			query += ` AND password_hash=?`
 			args = append(args, expectedHash)
 		} else {
+			// #nosec G202 -- epochSecondsSQL selects a fixed dialect expression; token and user values stay bound.
 			query += ` AND EXISTS(SELECT 1 FROM password_reset_tokens WHERE user_id=? AND token_hash=? AND ` + epochSecondsSQL(r.db, "expires_at") + `>?)`
 			args = append(args, userID, resetHash, now)
 		}

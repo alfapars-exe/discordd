@@ -260,6 +260,11 @@ export function useWebSocket() {
     await handleSystemEvent(msg, ctx, setConnectionStatus);
     if (!isCurrent()) return;
     if (msg.op === "ready") {
+      resyncLoadedChannels(isCurrent);
+    }
+  }
+
+  function resyncLoadedChannels(isCurrent: () => boolean) {
       const messages = useMessageStore.getState().messagesByChannel;
       for (const [channel, rows] of Object.entries(messages)) {
         const server = rows.find((row) => row.server_id)?.server_id;
@@ -268,7 +273,6 @@ export function useWebSocket() {
           (event) => routeEvent(event, isCurrent),
           () => useMessageStore.getState().fetchMessages(channel, server), isCurrent);
       }
-    }
   }
 
   // Latest-ref mirror — updated after every commit so onmessage in

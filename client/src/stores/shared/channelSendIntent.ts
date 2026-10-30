@@ -16,7 +16,7 @@ export function setDurableChannelSends(supported: boolean) { durableChannelSends
 export function supportsDurableChannelSends() { return durableChannelSends; }
 export function channelSendIntent(key: string, content: string, files: File[] = [], reply?: string): ChannelSendIntent {
   const old = pending.get(key);
-  if (old && old.content === content && old.reply === reply && old.files.length === files.length && old.files.every((f, i) => f === files[i])) return old;
+  if (old?.content === content && old.reply === reply && old.files.length === files.length && old.files.every((f, i) => f === files[i])) return old;
   const intent = { id: crypto.randomUUID(), content, files: [...files], reply };
   pending.set(key, intent);
   return intent;

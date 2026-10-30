@@ -109,11 +109,12 @@ func main() {
 		logx.Fatal("boot", "failed to initialize database", err)
 	}
 	ownerCtx, stopOwner := context.WithCancel(context.Background())
+	defer stopOwner()
 	owner, err := database.AcquireBackendOwner(ownerCtx, db.Conn)
 	if err != nil {
 		logx.Fatal("boot", "another backend owns this database", err)
 	}
-	defer func() { stopOwner(); owner.Close() }()
+	defer func() { _ = owner.Close() }()
 	go database.WatchBackendOwner(ownerCtx, owner, func() {
 		bootLogger.Error("backend ownership lost; stopping service")
 		os.Exit(1)

@@ -17,7 +17,7 @@ func AcquireBackendOwner(ctx context.Context, db *sql.DB) (*sql.Conn, error) {
 	var acquired bool
 	err = conn.QueryRowContext(ctx, `SELECT pg_try_advisory_lock(7341982,30)`).Scan(&acquired)
 	if err != nil || !acquired {
-		conn.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("single backend ownership unavailable")
 	}
 	return conn, nil
