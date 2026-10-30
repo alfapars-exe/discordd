@@ -551,3 +551,33 @@ it("shows a failed member removal and lets the owner retry it", async () => {
   await waitFor(() => expect(removeMember).toHaveBeenCalledTimes(2));
   await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
 });
+
+it("bounds mounted rows in a long history without removing store messages", () => {
+  gate.hidden = false;
+  const history = Array.from({ length: 2000 }, (_, i) => message(`long-${i}`, "me"));
+  useGroupDMStore.setState({ messages: { group: history } });
+  const height = vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(600);
+  const width = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(800);
+  const rowHeight = vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(140);
+  const { container, unmount } = render(<GroupDMChat groupId="group" />);
+  const rows = container.querySelectorAll("article[data-index]");
+  expect(rows.length).toBeGreaterThan(0);
+  expect(rows.length).toBeLessThan(80);
+  expect(useGroupDMStore.getState().messages.group).toHaveLength(2000);
+  unmount(); height.mockRestore(); width.mockRestore(); rowHeight.mockRestore();
+});
+
+it.skipIf(!process.env.HICHAT_GROUP_BENCHMARK)("measures long group history rendering", () => {
+  gate.hidden=false;
+  const height=vi.spyOn(HTMLElement.prototype,"clientHeight","get").mockReturnValue(600);
+  const width=vi.spyOn(HTMLElement.prototype,"clientWidth","get").mockReturnValue(800);
+  const rowHeight=vi.spyOn(HTMLElement.prototype,"offsetHeight","get").mockReturnValue(140);
+  useGroupDMStore.setState({messages:{group:Array.from({length:2000},(_,i)=>message(`bench-${i}`,"me"))}});
+  const samples=[];
+  for(let run=0;run<3;run++){
+    const start=performance.now();const view=render(<GroupDMChat groupId="group"/>);
+    samples.push({milliseconds:performance.now()-start,articles:view.container.querySelectorAll("article").length,nodes:view.container.querySelectorAll("*").length});view.unmount();
+  }
+  console.log("GROUP_BENCHMARK",JSON.stringify(samples));
+  height.mockRestore();width.mockRestore();rowHeight.mockRestore();
+});

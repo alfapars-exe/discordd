@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { defaultRangeExtractor, useVirtualizer } from "@tanstack/react-virtual";
 import { useConversationCommand } from "../../hooks/useConversationCommand";
 import { useConversationPageShortcut } from "../../hooks/useConversationPageShortcut";
 import { useFocusComposerOnTyping } from "../../hooks/useFocusComposerOnTyping";
@@ -223,6 +224,54 @@ export default function GroupDMChat({ groupId }: { groupId: string }) {
   },[currentForward,group?.members]);
   const availableFriends = useMemo(() => friends.filter((friend) => !group?.members.some((member) => member.id === friend.user_id)), [friends, group]);
   const visibleMessages = useMemo(() => { const q=search.trim().toLocaleLowerCase(); return q ? messages.filter((m)=>(m.content??"").toLocaleLowerCase().includes(q)) : messages; }, [messages,search]);
+  const messageIndex = useMemo(() => new Map(messages.map(message => [message.id, message])), [messages]);
+  const memberIndex = useMemo(() => new Map(group?.members.map(member => [member.id, member]) ?? []), [group?.members]);
+  const [focusedMessage, setFocusedMessage] = useState<string | null>(null);
+  const focusedElement = useRef<HTMLElement | null>(null);
+  const virtualized = visibleMessages.length > 80;
+  const scrollAnchor = useRef<{ id: string; offset: number } | null>(null);
+  const previousFirst = useRef<string | undefined>(undefined);
+  const getMessageKey = useCallback((index: number) => visibleMessages[index].id, [visibleMessages]);
+  const virtualizer = useVirtualizer({
+    count: visibleMessages.length,
+    enabled: virtualized,
+    getScrollElement: () => messagesScrollRef.current,
+    estimateSize: () => 140,
+    getItemKey: getMessageKey,
+    overscan: 12,
+    initialRect: { width: 800, height: 600 },
+    onChange: (instance, scrolling) => {
+      if (!scrolling) return;
+      const offset = instance.scrollOffset ?? 0;
+      const first = instance.getVirtualItems().find(item => item.end > offset);
+      if (first) scrollAnchor.current = { id: String(first.key), offset: offset - first.start };
+    },
+    rangeExtractor: range => {
+      const indexes = defaultRangeExtractor(range);
+      const focused = visibleMessages.findIndex(message => message.id === focusedMessage);
+      if (focused >= 0 && !indexes.includes(focused)) indexes.push(focused);
+      return indexes.sort((a, b) => a - b);
+    },
+  });
+  const virtualRows = virtualizer.getVirtualItems();
+  useLayoutEffect(() => {
+    // Chromium drops DOM focus when React reorders a retained keyed row.
+    if (focusedMessage && focusedElement.current?.isConnected && document.activeElement === document.body) {
+      focusedElement.current.focus({ preventScroll: true });
+    }
+  }, [virtualRows, focusedMessage]);
+  useLayoutEffect(() => {
+    const before = previousFirst.current;
+    previousFirst.current = visibleMessages[0]?.id;
+    const anchor = scrollAnchor.current;
+    if (!anchor && visibleMessages[0]) scrollAnchor.current = { id: visibleMessages[0].id, offset: 0 };
+    if (!virtualized || !before || !anchor || visibleMessages.findIndex(message => message.id === before) <= 0) return;
+    const index = visibleMessages.findIndex(message => message.id === anchor.id);
+    if (index >= 0) {
+      const target = virtualizer.getOffsetForIndex(index, "start");
+      if (target) virtualizer.scrollToOffset(target[0] + anchor.offset);
+    }
+  }, [visibleMessages, virtualized, virtualizer]);
   useEffect(()=>{if(editingId)composerInput.current?.focus()},[editingId,draftKey]);
 
   useEffect(() => {
@@ -251,13 +300,16 @@ export default function GroupDMChat({ groupId }: { groupId: string }) {
     }
     const target=Array.from(messagesScrollRef.current?.querySelectorAll<HTMLElement>("[data-group-message-id]")??[])
       .find(element=>element.dataset.groupMessageId===scrollTarget.messageId);
-    if(!target)return;
+    if(!target){
+      if(virtualized)virtualizer.scrollToIndex(visibleMessages.findIndex(message=>message.id===scrollTarget.messageId),{align:"center"});
+      return;
+    }
     if(typeof target.scrollIntoView==="function")target.scrollIntoView({block:"center"});
-    else if(messagesScrollRef.current)messagesScrollRef.current.scrollTop=Math.max(0,target.offsetTop-messagesScrollRef.current.clientHeight/2);
+    else if(messagesScrollRef.current)messagesScrollRef.current.scrollTop=Math.max(0,messagesScrollRef.current.scrollTop + target.getBoundingClientRect().top - messagesScrollRef.current.getBoundingClientRect().top - messagesScrollRef.current.clientHeight/2);
     target.classList.add("msg-highlight");
     window.setTimeout(()=>target.classList.remove("msg-highlight"),2000);
     clear();
-  },[scrollTarget,visibleMessages,messages,search,groupId]);
+  },[scrollTarget,visibleMessages,messages,search,groupId,virtualized,virtualizer,virtualRows]);
   useVoiceShortcutAction("group-call-start", () => {
     const destination = useUIStore.getState().destination;
     const activeUserId = useAuthStore.getState().user?.id;
@@ -347,9 +399,10 @@ export default function GroupDMChat({ groupId }: { groupId: string }) {
     </header>
     <div className="group-dm-body">
       <main ref={messagesScrollRef} className="group-dm-messages" aria-live="polite">
-        {visibleMessages.map((message) => {
-          const author = message.user ?? group.members.find((member) => member.id === message.user_id);
-          const referenced = message.reply_to_id ? messages.find((item) => item.id === message.reply_to_id) : undefined;
+        <div style={virtualized ? {height:virtualizer.getTotalSize(),position:"relative"} : undefined}>
+        {(virtualized ? virtualRows.map(row=>({message:visibleMessages[row.index],row})) : visibleMessages.map(message=>({message,row:undefined}))).map(({message,row}) => {
+          const author = message.user ?? memberIndex.get(message.user_id);
+          const referenced = message.reply_to_id ? messageIndex.get(message.reply_to_id) : undefined;
           const edit = () => { useComposerDraftStore.getState().beginGroupEdit(draftKey,message.id,message.content ?? ""); };
           const remove = () => { void deleteGroupMessage(message.id); };
           const copy = () => { if (message.content) void copyToClipboard(message.content).catch(() => useToastStore.getState().addToast("error", t("shortcutCopyFailed"))); };
@@ -371,7 +424,12 @@ export default function GroupDMChat({ groupId }: { groupId: string }) {
             ...(message.content?.trim() ? [{id:"copy" as const,label:t("chat:copyMessage"),run:copy},{id:"speak" as const,label:t("shortcutMessageSpeak"),run:speak}] : []),
             ...(message.user_id === currentUserId ? [...(message.content !== null ? [{id:"edit" as const,label:t("edit"),disabled:sending||Boolean(editingId&&editingId!==message.id),run:edit}] : []),{id:"delete" as const,label:t("delete"),run:remove}] : []),
           ];
-          return <article key={message.id} className="group-dm-message" data-group-message-id={message.id}>
+          return <article key={message.id} ref={row ? virtualizer.measureElement : undefined} data-index={row?.index}
+            style={row ? {position:"absolute",top:0,left:0,width:"100%",transform:`translateY(${row.start}px)`,marginBottom:0,paddingBottom:16} : undefined}
+            onFocusCapture={event=>{focusedElement.current=event.target as HTMLElement;setFocusedMessage(message.id)}}
+            onBlurCapture={event=>{if(event.relatedTarget && !event.currentTarget.contains(event.relatedTarget as Node)){focusedElement.current=null;setFocusedMessage(null)}}}
+            aria-posinset={row ? row.index+1 : undefined} aria-setsize={virtualized ? visibleMessages.length : undefined}
+            className="group-dm-message" data-group-message-id={message.id}>
             <Avatar name={author?.display_name || author?.username || "?"} avatarUrl={author?.avatar_url ?? undefined} size={36} />
             <div><strong>{author?.display_name || author?.username || t("unknownUser")}</strong><time>{formatDateTime(message.created_at)}</time>
               <GroupSpamGate message={message} keyboardActions={keyboardActions}>
@@ -392,6 +450,7 @@ export default function GroupDMChat({ groupId }: { groupId: string }) {
             </div>
           </article>;
         })}
+        </div>
       </main>
       {hasMoreAfter&&<JumpToPresentPill onClick={()=>useGroupDMStore.getState().jumpToPresent(groupId)}/>}
       {showPins && <GroupDMPinsPanel key={expressionScope} groupId={groupId} onClose={() => setPinsScope(null)} />}
