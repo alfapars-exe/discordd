@@ -43,7 +43,7 @@ export type ChatMessage = {
   role_mentions?: string[];
   /** E2EE: 0 = plaintext, 1 = encrypted */
   encryption_version?: number;
-  /** E2EE: File encryption keys (index-matched to attachments) */
+  /** E2EE: File keys in send order; prefer attachment.file_key_index when present */
   e2ee_file_keys?: EncryptedFileMeta[];
 };
 

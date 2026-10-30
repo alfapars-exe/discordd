@@ -199,6 +199,20 @@ describe("MessageAttachments", () => {
     expect(screen.getByText("example.png")).toBeInTheDocument();
     expect(screen.getByText(/e2eeKeyMissing/)).toBeInTheDocument();
   });
+  it("keeps the media policy gate when a failed earlier file leaves a nonzero key slot", () => {
+    usePreferencesStore.setState({data:{privacy:{sensitiveMedia:{channels:"block"},disturbingMedia:{channels:"block"}}}});
+    const message = makeMessage({
+      encryption_version: 1,
+      attachments: [makeAttachment({filename:"encrypted_1.bin",mime_type:"application/octet-stream",file_key_index:1})],
+      e2ee_file_keys: [
+        {key:"text-key",iv:"i",digest:"d",filename:"failed.txt",mimeType:"text/plain",originalSize:3},
+        {key:"video-key",iv:"i",digest:"d",filename:"retained.mp4",mimeType:"video/mp4",originalSize:3},
+      ],
+    });
+    render(<MessageAttachments message={message}/>);
+    expect(screen.getByText("mediaSafetyBlocked")).toBeInTheDocument();
+    expect(screen.queryByTestId("encrypted-attachment")).not.toBeInTheDocument();
+  });
   it("gates encrypted video even when the outer attachment MIME is opaque",()=>{
     usePreferencesStore.setState({data:{privacy:{sensitiveMedia:{channels:"block"},disturbingMedia:{channels:"block"}}}});
     const message=makeMessage({encryption_version:1,attachments:[makeAttachment({filename:"encrypted_0.bin",mime_type:"application/octet-stream"})],e2ee_file_keys:[{key:"k",iv:"i",digest:"d",filename:"video.mp4",mimeType:"video/mp4",originalSize:3}]});
