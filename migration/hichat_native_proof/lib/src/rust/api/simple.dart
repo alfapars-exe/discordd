@@ -19,3 +19,13 @@ Future<String> restoreHistory({
   password: password,
   owner: owner,
 );
+
+Future<void> updateOverlay({
+  required String target,
+  required String text,
+  required bool enabled,
+}) => RustLib.instance.api.crateApiSimpleUpdateOverlay(
+  target: target,
+  text: text,
+  enabled: enabled,
+);

@@ -9,6 +9,9 @@ import '../src/rust/api/simple.dart' as rust;
 import 'api.dart';
 import 'media.dart';
 import 'archive_store.dart';
+import 'p2p.dart';
+import 'p2p_view.dart';
+import 'game_overlay.dart';
 
 typedef HistoryReader = Future<String> Function({
   required String backupJson,
@@ -34,14 +37,20 @@ class _HiChatScreenState extends State<HiChatScreen> {
   final recovery = TextEditingController(), backup = TextEditingController();
   HiChatApi? api;
   VoiceController? voice;
+  P2PController? p2p;
+  GameOverlay? overlay;
   String? error, serverId, channelId;
   bool busy = false, restoring = false;
+  bool shareAudio = false;
   int selection = 0;
   List<dynamic> servers = [], channels = [], history = [];
   @override
   void dispose() {
+    overlay?.removeListener(_changed);
     voice?.removeListener(_changed);
     voice?.leave();
+    p2p?.shutdown();
+    overlay?.shutdown();
     api?.close();
     for (final c in [origin, username, password, mfa, recovery, backup]) {
       c.dispose();
@@ -63,6 +72,7 @@ class _HiChatScreenState extends State<HiChatScreen> {
         'REQUEST_TIMEOUT': 'Sunucu zamanında yanıt vermedi. Tekrar deneyin.',
         'HTTPS_ORIGIN_REQUIRED': 'Geçerli bir HTTPS sunucu adresi girin.',
         'LOGIN_REQUIRED': 'Devam etmek için giriş yapın.',
+        'SCREEN_AUDIO_UNAVAILABLE': 'Paylaşım sesi alınamadı. Paylaşım durduruldu; ses iznini ve Windows desteğini kontrol edin.',
         'SESSION_CHANGED': 'Oturum değişti. Gerekirse tekrar giriş yapın.',
       };
       if (messages.containsKey(e.code)) return messages[e.code]!;
@@ -99,6 +109,8 @@ class _HiChatScreenState extends State<HiChatScreen> {
     mfa.clear();
     if (!mounted || api != client) return;
     voice = VoiceController(client)..addListener(_changed);
+    p2p = P2PController(client);
+    overlay = GameOverlay(voice!, p2p!)..addListener(_changed);
     setState(() {});
     final scope = client.generation;
     final result = await client.request('GET', '/api/servers');
@@ -119,6 +131,11 @@ class _HiChatScreenState extends State<HiChatScreen> {
   Future<void> _logout() async {
     final old = api;
     final oldVoice = voice;
+    final oldP2P = p2p;
+    final oldOverlay = overlay;
+    oldOverlay?.removeListener(_changed);
+    overlay = null;
+    p2p = null;
     setState(() {
       voice = null;
       api = null;
@@ -136,6 +153,8 @@ class _HiChatScreenState extends State<HiChatScreen> {
     final revoke = old?.logout();
     try {
       await oldVoice?.leave();
+      await oldOverlay?.shutdown();
+      await oldP2P?.shutdown();
       await revoke;
     } catch (_) {
       if (mounted) {
@@ -370,7 +389,9 @@ class _HiChatScreenState extends State<HiChatScreen> {
           TargetPlatform.macOS,
         ].contains(defaultTargetPlatform)) {
       final sources = await rtc.desktopCapturer.getSources(
-        types: [rtc.SourceType.Screen, rtc.SourceType.Window],
+        types: shareAudio && defaultTargetPlatform == TargetPlatform.windows
+            ? [rtc.SourceType.Screen]
+            : [rtc.SourceType.Screen, rtc.SourceType.Window],
       );
       if (!mounted || controller != voice) return;
       sourceId = await showDialog<String>(
@@ -389,7 +410,7 @@ class _HiChatScreenState extends State<HiChatScreen> {
       if (sourceId == null) return;
     }
     if (controller == voice) {
-      await controller.setScreen(true, sourceId: sourceId);
+      await controller.setScreen(true, sourceId: sourceId, audio: shareAudio);
     }
   }
 
@@ -435,6 +456,50 @@ class _HiChatScreenState extends State<HiChatScreen> {
       padding: const EdgeInsets.all(20),
       children: [
         const Text('Ses ve görüntü', style: TextStyle(fontSize: 24)),
+        if (overlay?.supported == true)
+          OutlinedButton(
+            onPressed: busy
+                ? null
+                : () => _run(() async {
+                    final hud = overlay!;
+                    if (hud.target != null) {
+                      await hud.select(null);
+                      return;
+                    }
+                    final sources = await rtc.desktopCapturer.getSources(
+                      types: [rtc.SourceType.Window],
+                    );
+                    if (!mounted || hud != overlay) return;
+                    final selected = await showDialog<String>(
+                      context: context,
+                      builder: (context) => SimpleDialog(
+                        title: const Text('Oyun penceresini seç'),
+                        children: [
+                          for (final source in sources)
+                            SimpleDialogOption(
+                              onPressed: () =>
+                                  Navigator.pop(context, source.id),
+                              child: Text(source.name),
+                            ),
+                        ],
+                      ),
+                    );
+                    if (hud == overlay && selected != null) {
+                      await hud.select(selected);
+                    }
+                  }),
+            child: Text(
+              overlay!.target == null
+                  ? 'Oyun katmanını aç'
+                  : 'Oyun katmanını kapat',
+            ),
+          ),
+        if (overlay?.supported == true)
+          const Text(
+            'Katman, seçilen oyun öndeyken görünür. Pencereli ve kenarlıksız mod desteklenir.',
+          ),
+        if (overlay?.failure != null)
+          Text(overlay!.failure!, style: const TextStyle(color: Colors.orange)),
         DropdownButtonFormField<String>(
           key: const Key('servers'),
           initialValue: serverId,
@@ -464,6 +529,17 @@ class _HiChatScreenState extends State<HiChatScreen> {
           onChanged: (id) => setState(() => channelId = id),
         ),
         const SizedBox(height: 16),
+        if (kIsWeb || defaultTargetPlatform == TargetPlatform.windows)
+          SwitchListTile(
+            title: const Text('Paylaşım sesini dahil et'),
+            subtitle: Text(
+              kIsWeb ? 'Tarayıcı seçiminde ses iznini de etkinleştirin.' : 'Ekran ile sistem sesi paylaşılır; HiChat kendi sesini dışlar.',
+            ),
+            value: shareAudio,
+            onChanged: controller.screen || controller.connecting
+                ? null
+                : (value) => setState(() => shareAudio = value),
+          ),
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -471,7 +547,10 @@ class _HiChatScreenState extends State<HiChatScreen> {
             FilledButton(
               onPressed: busy || controller.connecting || channelId == null
                   ? null
-                  : () => _run(() => controller.join(serverId!, channelId!)),
+                  : () => _run(() async {
+                      await p2p?.disconnect();
+                      await controller.join(serverId!, channelId!);
+                    }),
               child: Text(
                 controller.connecting ? 'Bağlanıyor…' : 'Şifreli odaya katıl',
               ),
@@ -579,7 +658,14 @@ class _HiChatScreenState extends State<HiChatScreen> {
               ),
             Expanded(
               child: signedIn
-                  ? (selection == 0 ? _voiceView() : _historyView())
+                  ? (selection == 0
+                        ? _voiceView()
+                        : selection == 1
+                        ? _historyView()
+                        : P2PView(
+                            controller: p2p!,
+                            beforeConnect: () => voice!.leave(),
+                          ))
                   : _loginView(),
             ),
           ],
@@ -597,6 +683,10 @@ class _HiChatScreenState extends State<HiChatScreen> {
                 NavigationDestination(
                   icon: Icon(Icons.history),
                   label: 'Geçmiş',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.call),
+                  label: 'Doğrudan ara',
                 ),
               ],
             )

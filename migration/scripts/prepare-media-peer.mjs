@@ -8,6 +8,8 @@ const invite=await api(`/servers/${qa.serverId}/invites`,{channel_id:qa.voiceCha
 const username=`rustpeer${Date.now()}`,password=`Aa1!${randomBytes(18).toString('hex')}`;
 const peer=await api('/auth/register',{username,password,email:`${username}@example.test`,display_name:'Flutter web peer'});
 await api('/servers/join',{invite_code:invite.code},peer.access_token);
+const friendship=await api('/friends/requests',{username},owner.access_token);
+await api(`/friends/requests/${friendship.id}/accept`,{},peer.access_token);
 qa.peer={username,password,userId:peer.user.id};
 await writeFile(file,JSON.stringify(qa),{mode:0o600});
 console.log('Synthetic media peer prepared in local-only fixture');

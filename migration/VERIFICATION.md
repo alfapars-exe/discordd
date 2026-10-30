@@ -54,3 +54,68 @@ separate gates. Android SDK remains absent; macOS/iOS require external hardware.
 
 No production deployment, updater-feed change, schema migration, existing store
 mutation, or Go/Rust traffic split was performed.
+
+## Incremental media work — 2026-10-31
+
+- Added a direct WebRTC call adapter and Flutter call UI using the existing Go
+  ticket/WS/call authorization contract. Microphone/camera capture starts after
+  acceptance. Auth invalidation, hangup, transport failure and deadlines release
+  owned tracks and peer connections. The initial microphone/camera contract is
+  implemented; P2P screen-source negotiation, TURN deployment and mid-call
+  renegotiation remain separate work.
+- Two isolated Chromium peers passed real Go call authorization, no capture while
+  ringing, bidirectional decoded video plus positive synthetic-tone audio energy,
+  connected DTLS transports and hangup closing both peers. This test found and
+  fixed SDK muting caused by tagging a remote stream as local.
+- Added opt-in screen audio. Windows uses the SDK's WASAPI application/system
+  loopback support. The UI only offers screens when system audio is requested;
+  unsupported or absent audio publication fails and stops sharing. A disposable
+  owned Chrome window generated a tone; Windows captured that application's audio
+  and published it through the encrypted room. The browser receiver measured
+  positive audio energy; stopping removed the audio publication. This is not a
+  full-desktop own-process-exclusion, headphone feedback or long-call acceptance.
+- Added a Rust Win32 HUD bound to a locally selected external window. It carries
+  voice/mute/share status, uses no-activate/click-through/tool-window styles, and
+  hides when the selected game is not foreground. The explicit hidden-window
+  runtime test passed without capturing user media or changing foreground focus.
+  Visible gameplay, exclusive fullscreen, anti-cheat compatibility, DPI/multi-monitor
+  geometry and global PTT remain unaccepted.
+- Eight ordinary Rust tests pass; the separately invoked hidden Win32 runtime test
+  also passes (its helper test stays ignored during ordinary runs). Clippy and
+  portable WASM core check pass. Ten Flutter tests and analyzer pass.
+
+Active device/ratchet handoff is **not implemented**. This is an implementation
+limitation, not a missing physical-device test. See `HANDOFF.md` for source-bound
+prerequisites and crash/concurrency acceptance. No old device store is modified.
+
+Reproduction additions:
+
+```powershell
+cargo test --manifest-path migration/Cargo.toml -p hichat-client-core --release overlay::tests::hidden_window_runtime -- --ignored --exact
+node migration/scripts/p2p-browser-qa.cjs
+# Start native-audio-qa.cjs, then run native_audio_test.dart on Windows.
+# Start native-p2p-qa.cjs, then run p2p_peer_test.dart on Windows.
+```
+
+Local scripts use the existing loopback-only fixture host and disposable Go API.
+Native audio fixtures create only their own Chrome source window and do not capture
+an existing user window. They produce no recording of user media. Read individual
+receipts for the final status of the Windows-to-browser direct-call test.
+
+### Windows direct-call result and failed video direction
+
+The native/browser fixture verifies **bidirectional synthetic audio and
+browser-to-Windows video**, not bidirectional Windows video. The broader initial
+attempt failed: the browser decoded zero frames from the native SDK's synthetic
+window source, while its audio energy was positive. Bringing that owned source
+window to the foreground did not resolve the video direction. The final scoped
+test explicitly retains the browser's frame count in its receipt. Native outbound
+window capture/camera interoperability remains an open implementation/acceptance
+item; the narrowed test is not evidence that this failed direction was repaired.
+
+Final scoped native P2P receipt: Windows decoded 16 browser video frames and
+positive audio energy; the browser received positive native audio energy over
+connected DTLS, with zero native window-video frames. Desktop/Android-UA/iPhone-UA
+Chromium login, Rust history and logout clearing were rerun successfully after the
+final web build. Sanitized results and source/runtime hashes are in
+`evidence/windows-media.json`; no physical-device or release claim is implied.

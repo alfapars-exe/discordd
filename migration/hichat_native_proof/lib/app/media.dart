@@ -290,22 +290,35 @@ class VoiceController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setScreen(bool enabled, {String? sourceId}) async {
+  Future<void> setScreen(
+    bool enabled, {
+    String? sourceId,
+    bool audio = false,
+  }) async {
     final active = room;
     final operation = _operation;
     if (active == null || connecting) return;
     await active.localParticipant?.setScreenShareEnabled(
       enabled,
-      captureScreenAudio: kIsWeb,
+      captureScreenAudio: audio,
       screenShareCaptureOptions: ScreenShareCaptureOptions(
         sourceId: sourceId,
-        captureScreenAudio: kIsWeb,
+        captureScreenAudio: audio,
         selfBrowserSurface: 'exclude',
       ),
     );
     if (operation != _operation) {
       await active.localParticipant?.setScreenShareEnabled(false);
       return;
+    }
+    if (enabled &&
+        audio &&
+        active.localParticipant?.getTrackPublicationBySource(
+              TrackSource.screenShareAudio,
+            ) ==
+            null) {
+      await active.localParticipant?.setScreenShareEnabled(false);
+      throw const ApiFailure('SCREEN_AUDIO_UNAVAILABLE');
     }
     screen = enabled;
     _socket?.sink.add(

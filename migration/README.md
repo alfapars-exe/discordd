@@ -22,9 +22,9 @@ changes are excluded, and this reference is not asserted to be the deployed rele
   selection. Media uses authoritative key indices, closes on rekey/moderation or
   auth invalidation, and releases owned tracks and key provider on leave.
 - Windows screen/window picker. Browser capture uses the browser chooser; mobile
-  browser capture is subject to browser support. Native process-exclusive system
-  audio, seamless rekey/reconnect, P2P calls, game overlay, DSP parity and background
-  mobile calling are still separate implementation/acceptance work.
+  browser capture is subject to browser support. See the incremental media slice
+  below for native audio, direct calls and the HUD. Seamless rekey/reconnect,
+  DSP parity and background mobile calling remain open.
 
 ## Build and test
 
@@ -78,3 +78,12 @@ See `VERIFICATION.md` and `DEVICE_ACCEPTANCE.md` for evidence and open gates.
 No database schema, existing client store, production service or update feed has
 been changed. No automatic device-identity takeover or downgrade to an old ratchet
 snapshot is allowed. A backend cutover still requires one active Hub/writer/scheduler.
+
+## Incremental Windows media slice
+
+The Flutter call tab now implements accepted direct microphone/camera calls against
+the existing Go WS contract. Windows also has an opt-in native loopback audio path
+and a Rust HUD for a selected external game's foreground window. These additions
+are locally exercised proof features, not complete product parity. See the dated
+2026-10-31 entries in VERIFICATION.md and DEVICE_ACCEPTANCE.md, and HANDOFF.md for
+the still-unimplemented live encryption-device transfer.

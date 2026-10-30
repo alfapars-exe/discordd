@@ -14,3 +14,7 @@ pub fn init_app() {
 pub fn restore_history(backup_json: String, password: String, owner: String) -> Result<String, String> {
     hichat_client_core::history::restore_history(backup_json, password, owner)
 }
+
+pub fn update_overlay(target: String, text: String, enabled: bool) -> Result<(), String> {
+    hichat_client_core::overlay::update_overlay(target, text, enabled)
+}

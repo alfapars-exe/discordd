@@ -19,9 +19,28 @@ acceptance is tracked separately; lack of hardware/signing is never counted as p
 - History reader is deliberately read-only. Active device identity/ratchet handoff,
   pending-send transfer, encrypted attachment opening and future E2EE sends are not
   implemented by displaying the backup's cached messages.
-- P2P signaling/calling, original noise-engine parity, global PTT/game overlay,
-  process-exclusive native system-audio capture and gapless rekey remain open.
+- Full P2P/media/HUD parity and acceptance, original noise-engine parity,
+  global PTT, system-audio exclusion acceptance and gapless rekey remain open.
 - No latency/quality/memory improvement or all-platform feature parity is claimed.
 - Chromium user-agent emulation is not Android hardware or iOS Safari evidence.
 - Production credentials, release signing, hosted CI and auto-update acceptance
   have not been exercised. The Go production runtime remains authoritative.
+
+## 2026-10-31 incremental status
+
+| Item | Local implementation/evidence | Outstanding acceptance |
+|---|---|---|
+| Active device/ratchet handoff | not implemented; history reader stays read-only; see HANDOFF.md | Rust send/receive engines, source freeze/tombstone, pending-send rewrap, atomic ownership and crash/replay tests before any real-device test |
+| P2P | Flutter microphone/camera call adapter; two Chromium peers exchange decoded video and nonzero synthetic-tone audio through direct DTLS-SRTP | exact legacy-client interop, screen-source renegotiation, NAT/TURN, physical capture/long calls/network changes |
+| Windows HUD | Rust external-window HUD; hidden Win32 runtime validates creation/styles/background hiding | visible real game, DPI/multiple monitors, fullscreen/anti-cheat, global PTT |
+| Windows audio | opt-in SDK WASAPI path; owned synthetic application tone arrives in encrypted browser receiver; stop unpublishes audio | full-system own-process exclusion/feedback, device changes, actual game/output devices and sustained capture |
+| Web/mobile browser | existing login/history remains the priority; system audio uses explicit browser permission/chooser | actual Android Chrome and Safari/WebKit permission/background/device behavior |
+
+Native Android/iOS/macOS/Linux device acceptance remains separate. No row above
+counts an emulated browser, hidden HWND or synthetic tone as physical acceptance.
+
+
+Known local failure: in the Windows/native P2P fixture, the browser receives audio
+but decodes **zero native window-video frames**. Browser-to-Windows video works.
+This is tracked as an open software/capture-path issue, not deferred solely as a
+physical-device test. The final scoped native test does not assert this direction.
