@@ -14,7 +14,7 @@ export function syncMobileVersion(root, check = false) {
   const version = mobileVersion(JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')).version);
   const files = [
     ['client/android/app/build.gradle', text => text.replace(/versionCode \d+/g, `versionCode ${version.code}`).replace(/versionName "[^"]+"/g, `versionName "${version.name}"`)],
-    ['client/ios/App/App.xcodeproj/project.pbxproj', text => text.replace(/CURRENT_PROJECT_VERSION = [^;]+;/g, `CURRENT_PROJECT_VERSION = ${version.code};`).replace(/MARKETING_VERSION = [^;]+;/g, `MARKETING_VERSION = ${version.name};`)],
+    ['client/ios/App/App.xcodeproj/project.pbxproj', text => text.replace(/CURRENT_PROJECT_VERSION = [^;]+;/g, `CURRENT_PROJECT_VERSION = ${version.name};`).replace(/MARKETING_VERSION = [^;]+;/g, `MARKETING_VERSION = ${version.name};`)],
   ];
   for (const [name, transform] of files) {
     const path = resolve(root, name), before = readFileSync(path, 'utf8'), after = transform(before);
