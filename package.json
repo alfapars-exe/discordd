@@ -43,7 +43,8 @@
     "files": [
       "dist-electron",
       "client/dist",
-      "icons"
+      "icons",
+      "!**/*.map"
     ],
     "artifactName": "hichat-setup.${ext}",
     "npmRebuild": false,

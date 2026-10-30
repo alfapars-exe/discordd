@@ -30,7 +30,12 @@ COPY electron/voice-overlay-contract.ts /app/electron/voice-overlay-contract.ts
 COPY electron/overlay-media-contract.ts /app/electron/overlay-media-contract.ts
 COPY electron/cs2-join-contract.ts /app/electron/cs2-join-contract.ts
 COPY package.json /app/package.json
-RUN npm run build
+ARG VITE_SENTRY_DSN
+ENV VITE_SENTRY_DSN=${VITE_SENTRY_DSN}
+RUN --mount=type=secret,id=SENTRY_AUTH_TOKEN \
+    --mount=type=secret,id=SENTRY_ORG \
+    --mount=type=secret,id=SENTRY_PROJECT \
+    npm run build
 
 # ─── Nginx Runtime Stage ───
 # Kept independent of the frontend build so the nginx config and entrypoint
