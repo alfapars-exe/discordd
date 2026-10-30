@@ -7,6 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
@@ -297,8 +298,12 @@ func TestMusicControlAdoptionWinningAfterLegacyPrecheckRejectsEveryMutation(t *t
 func TestMusicControlStopDuringExtractionDoesNotReconnectStaleSession(t *testing.T) {
 	svc, _ := guardedMusicFixture(t)
 	play := guardedCommand(t, svc, "play")
+	// These two request IDs share the old 8-bit lock stripe.
+	play.RequestID = "00000000-0000-4000-8000-000000000015"
 	play.URL = "https://youtu.be/0KbRhUtFwkc"
 	started, release := make(chan struct{}), make(chan struct{})
+	releaseExtraction := sync.OnceFunc(func() { close(release) })
+	defer releaseExtraction()
 	svc.extractTracksFn = func(context.Context, string, string, string) ([]models.MusicTrack, error) {
 		close(started)
 		<-release
@@ -310,10 +315,18 @@ func TestMusicControlStopDuringExtractionDoesNotReconnectStaleSession(t *testing
 	go func() { _, err := svc.ApplyMusicCommand(context.Background(), "actor", "ch", play); done <- err }()
 	<-started
 	stop := guardedCommand(t, svc, "stop")
-	if _, err := svc.ApplyMusicCommand(context.Background(), "actor", "ch", stop); err != nil {
-		t.Fatal(err)
+	stop.RequestID = "00000000-0000-4000-8000-000000000018"
+	stopDone := make(chan error, 1)
+	go func() { _, err := svc.ApplyMusicCommand(context.Background(), "actor", "ch", stop); stopDone <- err }()
+	select {
+	case err := <-stopDone:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("independent stop blocked behind extraction request")
 	}
-	close(release)
+	releaseExtraction()
 	if err := <-done; !errors.Is(err, pkg.ErrConflict) {
 		t.Fatalf("stale enqueue=%v", err)
 	}
