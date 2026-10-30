@@ -247,3 +247,57 @@ func TestChannelDeliveryMessageProgressPastDeferredNotification(t *testing.T) {
 		t.Fatal("wrong message published")
 	}
 }
+
+// Lock every reader row to prove that a send neither writes nor waits on the
+// reader population. xmin also detects writes that leave counter values equal.
+func TestChannelDeliveryDoesNotWriteReaderRows(t *testing.T) {
+	s, db, _, _ := channelDeliveryFixture(t)
+	ctx := context.Background()
+	for _, query := range []string{
+		`INSERT INTO users(id,username,password_hash) SELECT 'scale_reader_'||n,'scale_reader_'||n,'x' FROM generate_series(1,1000) n`,
+		`INSERT INTO channel_reads(user_id,channel_id,last_read_source_sequence) SELECT id,'channel',0 FROM users WHERE id LIKE 'scale_reader_%'`,
+	} {
+		if _, err := db.ExecContext(ctx, query); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var before, after int64
+	if err := db.QueryRowContext(ctx, `SELECT SUM(xmin::text::bigint) FROM channel_reads WHERE channel_id='channel'`).Scan(&before); err != nil {
+		t.Fatal(err)
+	}
+	locked, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer locked.Rollback()
+	rows, err := locked.QueryContext(ctx, `SELECT user_id FROM channel_reads WHERE channel_id='channel' FOR UPDATE`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	readers := 0
+	for rows.Next() {
+		readers++
+	}
+	rowErr := rows.Err()
+	rows.Close()
+	if rowErr != nil {
+		t.Fatal(rowErr)
+	}
+	if readers != 1000 {
+		t.Fatalf("locked readers=%d", readers)
+	}
+	bounded, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	started := time.Now()
+	if _, err := s.Create(bounded, "default", "channel", "sender", &models.CreateMessageRequest{Content: "reader-independent send", ClientMessageID: "reader-scale"}); err != nil {
+		t.Fatalf("send waited on reader rows: %v", err)
+	}
+	elapsed := time.Since(started)
+	if err := db.QueryRowContext(ctx, `SELECT SUM(xmin::text::bigint) FROM channel_reads WHERE channel_id='channel'`).Scan(&after); err != nil {
+		t.Fatal(err)
+	}
+	if before != after {
+		t.Fatal("send rewrote read state")
+	}
+	t.Logf("readers=%d reader_row_writes=0 send_elapsed=%s", readers, elapsed)
+}
