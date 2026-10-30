@@ -12,5 +12,3 @@ hichat-client-core = { path = "../../crates/client-core" }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
-
-
