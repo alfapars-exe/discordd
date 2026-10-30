@@ -40,16 +40,18 @@ def stop_previous_backend(api, repo):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--expected-head", required=True)
+    parser.add_argument("--expected-head", default="", help="Reviewed Space commit; required when publishing")
     parser.add_argument("--publish", action="store_true")
     parser.add_argument("--reviewed-plan-sha256", default="")
     options = parser.parse_args()
+    if options.publish and not options.expected_head:
+        raise SystemExit("Publish requires a reviewed expected Space HEAD; nothing published")
     if not os.environ.get("HF_TOKEN"):
         raise SystemExit("HF_TOKEN is not configured; nothing published")
     api = HfApi()
     repo = "infinayazilim/discord"
     current = api.space_info(repo).sha
-    if current != options.expected_head:
+    if options.expected_head and current != options.expected_head:
         raise SystemExit("Space HEAD changed; review its new revision before publishing")
     source = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
     paths = subprocess.check_output(["git", "ls-files", "-z"]).decode().split("\0")

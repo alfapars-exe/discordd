@@ -80,6 +80,22 @@ class PublishSafetyTests(unittest.TestCase):
         self.assertNotIn("data/uploads/user.png", result)
         self.assertNotIn("disposable-test-value", result)
 
+    def test_read_only_preview_can_discover_the_current_parent(self):
+        output = io.StringIO()
+        with patch("sys.argv", ["publish-hf-space.py"]), contextlib.redirect_stdout(output):
+            release.main()
+        plan = json.JSONDecoder().raw_decode(output.getvalue())[0]
+        self.assertEqual(plan["space_parent"], "reviewed-parent")
+        self.api.pause_space.assert_not_called()
+        self.api.create_commit.assert_not_called()
+
+    def test_publish_cannot_discover_or_guess_an_unreviewed_parent(self):
+        with patch("sys.argv", ["publish-hf-space.py", "--publish"]), self.assertRaisesRegex(SystemExit, "reviewed expected"):
+            release.main()
+        self.api.space_info.assert_not_called()
+        self.api.pause_space.assert_not_called()
+        self.api.create_commit.assert_not_called()
+
     def test_changed_parent_aborts_before_reading_sources_or_mutating(self):
         self.api.space_info.return_value.sha = "concurrent-parent"
         with self.assertRaisesRegex(SystemExit, "HEAD changed"):

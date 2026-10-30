@@ -4,8 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       expected_space_head:
-        description: Reviewed current HF Space commit (compare-and-swap)
-        required: true
+        description: Reviewed HF Space commit (required to publish; omit for read-only preview)
+        required: false
+        default: ''
         type: string
       publish:
         description: Publish reviewed application sources (otherwise preview only)
