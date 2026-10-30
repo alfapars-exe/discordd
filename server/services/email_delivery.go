@@ -197,6 +197,14 @@ func (s *EmailDeliveryService) DeliverBatch(ctx context.Context, now time.Time) 
 			}
 			continue
 		}
+		// Eligibility checks may block on the database. Check the provider
+		// deadline again immediately before the external call.
+		if time.Now().UnixMilli()-attempt.FirstAttemptMS >= (24*time.Hour - emailDeliverySendTimeout).Milliseconds() {
+			if finishErr := s.repo.FinishAttempt(ctx, &j, "", "review", time.Now()); finishErr != nil {
+				batchErr = errors.Join(batchErr, errors.New("email review persistence failed"))
+			}
+			continue
+		}
 		sendCtx, cancelSend := context.WithTimeout(ctx, emailDeliverySendTimeout)
 		providerID, sendErr := s.sender.SendPreparedCategoryEmail(sendCtx, attempt.Key, attempt.Payload)
 		cancelSend()
