@@ -10,7 +10,7 @@ vi.mock("../utils/constants", () => ({
   isAppProtocolPage: () => true,
 }));
 
-import i18n from "../i18n";
+import i18n, { changeLanguage, ensureNamespaces } from "../i18n";
 import { clearTokens } from "./client";
 import { publishAuthGenerationChange, publishAuthOwnerChange } from "./authSessionEvents";
 import { useVoiceStore } from "../stores/voiceStore";
@@ -48,7 +48,7 @@ afterEach(() => {
 });
 
 describe.each(["tr", "en"])("music API to toast feedback (%s)", (locale) => {
-  beforeEach(async () => { await i18n.changeLanguage(locale); });
+  beforeEach(async () => { await ensureNamespaces(["music"]); await changeLanguage(locale); });
 
   it.each(["play", "search"])("identifies server-to-YouTube failure from JSON 502 on %s", async (action) => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({

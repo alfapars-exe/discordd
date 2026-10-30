@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   updateProfile: vi.fn(),
   showApiError: vi.fn(),
   addToast: vi.fn(),
-  changeLanguage: vi.fn(),
+  changeLanguage: vi.fn(async () => true),
   generation: 1,
   createObjectURL: vi.fn(() => "blob:staged-avatar"),
   revokeObjectURL: vi.fn(),
@@ -23,6 +23,7 @@ vi.mock("../../api/profile", () => ({
   updateProfile: mocks.updateProfile,
 }));
 vi.mock("../../api/client", () => ({ getAuthGeneration: () => mocks.generation }));
+vi.mock("../../i18n", async (original) => ({ ...(await original<typeof import("../../i18n")>()), changeLanguage: mocks.changeLanguage }));
 vi.mock("../../utils/apiError", () => ({ showApiError: mocks.showApiError }));
 vi.mock("../../stores/toastStore", () => ({
   useToastStore: (select: (state: { addToast: typeof mocks.addToast }) => unknown) => select({ addToast: mocks.addToast }),

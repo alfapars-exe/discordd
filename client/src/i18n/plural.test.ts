@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import i18n from "./index";
+import i18n, { changeLanguage, ensureNamespaces } from "./index";
 
 // Guards i18next's plural resolution for the last-seen labels, which mix two
 // valid strategies across languages:
@@ -18,11 +18,11 @@ describe("lastSeenHours plural resolution", () => {
   const original = i18n.language;
 
   beforeAll(async () => {
-    await i18n.changeLanguage("tr");
+    await ensureNamespaces(["common"]); await changeLanguage("tr");
   });
 
   afterAll(async () => {
-    await i18n.changeLanguage(original);
+    await ensureNamespaces(["common"]); await changeLanguage(original);
   });
 
   it("resolves TR via the un-suffixed base key for any count", () => {
@@ -31,9 +31,9 @@ describe("lastSeenHours plural resolution", () => {
   });
 
   it("resolves EN via _one / _other plural suffixes", async () => {
-    await i18n.changeLanguage("en");
+    await ensureNamespaces(["common"]); await changeLanguage("en");
     expect(i18n.t("lastSeenHours", { count: 1 })).toBe("1 hour ago");
     expect(i18n.t("lastSeenHours", { count: 5 })).toBe("5 hours ago");
-    await i18n.changeLanguage("tr");
+    await ensureNamespaces(["common"]); await changeLanguage("tr");
   });
 });
