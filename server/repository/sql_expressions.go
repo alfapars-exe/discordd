@@ -20,9 +20,3 @@ func reactionUsersSQL(db database.TxQuerier) string {
 	}
 	return "GROUP_CONCAT(user_id)"
 }
-func snapshotObjectSQL(db database.TxQuerier) string {
-	if database.IsPostgres(db) {
-		return "hichat_json_object"
-	}
-	return "json_object"
-}
