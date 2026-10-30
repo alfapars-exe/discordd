@@ -172,6 +172,11 @@ jobs:
         env:
           HICHAT_TEST_POSTGRES_DSN: postgres://postgres@127.0.0.1:5432/hichat_test?sslmode=disable
         run: python3 scripts/run-postgres-tests.py
+      - name: Race-check durable delivery against PostgreSQL
+        working-directory: server
+        env:
+          HICHAT_TEST_POSTGRES_DSN: postgres://postgres@127.0.0.1:5432/hichat_test?sslmode=disable
+        run: go test -race ./services -run '^TestChannelDelivery' -count=1 -timeout=5m
 
   server-postgres-tls:
     name: PostgreSQL client certificate reconnect
