@@ -343,13 +343,14 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) {
 	client.sendEvent(Event{
 		Op: OpReady,
 		Data: ReadyData{
-			OnlineUserIDs:     h.hub.GetVisibleOnlineUserIDs(),
-			Servers:           readyServers,
-			MutedServerIDs:    mutedServerIDs,
-			MutedChannelIDs:   mutedChannelIDs,
-			PrefStatus:        prefStatus,
-			VoiceEpoch:        voiceEpoch,
-			GameActivityEpoch: h.hub.GameActivityEpoch(),
+			DurableChannelSends: h.hub.durableChannelSends.Load(),
+			OnlineUserIDs:       h.hub.GetVisibleOnlineUserIDs(),
+			Servers:             readyServers,
+			MutedServerIDs:      mutedServerIDs,
+			MutedChannelIDs:     mutedChannelIDs,
+			PrefStatus:          prefStatus,
+			VoiceEpoch:          voiceEpoch,
+			GameActivityEpoch:   h.hub.GameActivityEpoch(),
 		},
 	})
 	h.hub.RequestGameActivitySnapshot(claims.UserID)

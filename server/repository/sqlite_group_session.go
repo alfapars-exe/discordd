@@ -77,7 +77,7 @@ func (r *sqliteGroupSessionRepo) Upsert(ctx context.Context, channelID, senderUs
 	// PRIMARY KEY (not INTEGER PRIMARY KEY), so it does NOT alias rowid; the
 	// implicit rowid this table still has increases monotonically with
 	// insertion order, which is what "most recent" actually means here.
-	if _, err := tx.ExecContext(ctx, `
+	pruneQuery := `
 		DELETE FROM channel_sender_key_envelopes
 		WHERE channel_id = ? AND sender_user_id = ? AND sender_device_id = ?
 		  AND rowid NOT IN (
@@ -91,7 +91,25 @@ func (r *sqliteGroupSessionRepo) Upsert(ctx context.Context, channelID, senderUs
 				WHERE channel_id = ? AND sender_user_id = ? AND sender_device_id = ?
 			) ranked
 			WHERE ranked.rn <= 3
-		  )`,
+		  )`
+	if database.IsPostgres(sqlDB) {
+		pruneQuery = `
+		DELETE FROM channel_sender_key_envelopes
+		WHERE channel_id = ? AND sender_user_id = ? AND sender_device_id = ?
+		  AND insertion_order NOT IN (
+			SELECT insertion_order FROM (
+				SELECT insertion_order,
+					ROW_NUMBER() OVER (
+						PARTITION BY recipient_user_id, recipient_device_id
+						ORDER BY created_at DESC, insertion_order DESC
+					) AS rn
+				FROM channel_sender_key_envelopes
+				WHERE channel_id = ? AND sender_user_id = ? AND sender_device_id = ?
+			) ranked
+			WHERE ranked.rn <= 3
+		  )`
+	}
+	if _, err := tx.ExecContext(ctx, pruneQuery,
 		channelID, senderUserID, senderDeviceID,
 		channelID, senderUserID, senderDeviceID,
 	); err != nil {

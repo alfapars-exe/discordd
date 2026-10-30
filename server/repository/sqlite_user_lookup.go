@@ -6,6 +6,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/argeinfina/hichat/database"
+	"strings"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
@@ -48,6 +50,10 @@ func (r *sqliteUserRepo) GetByUsername(ctx context.Context, username string) (*m
 			platform_ban_reason, platform_banned_by, platform_banned_at, token_version, created_at, is_bot, owner_user_id,
 			avatar_animated_url, banner_url, banner_animated_url, bio, pronouns, accent_color
 		FROM users WHERE username = ? COLLATE NOCASE`
+
+	if database.IsPostgres(r.db) {
+		query = strings.Replace(query, "username = ? COLLATE NOCASE", "hichat_ascii_lower(username) = hichat_ascii_lower(?)", 1)
+	}
 
 	user := &models.User{}
 	err := r.db.QueryRowContext(ctx, query, username).Scan(

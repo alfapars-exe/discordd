@@ -26,7 +26,7 @@ func newBotTestDB(t *testing.T) *database.DB {
 	if err != nil {
 		t.Fatalf("fs.Sub: %v", err)
 	}
-	db, err := database.New(filepath.Join(t.TempDir(), "bot_test.db"), migrationsFS)
+	db, err := database.NewLegacy(filepath.Join(t.TempDir(), "bot_test.db"), migrationsFS)
 	if err != nil {
 		t.Fatalf("database.New: %v", err)
 	}

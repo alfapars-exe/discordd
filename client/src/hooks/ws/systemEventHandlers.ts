@@ -8,6 +8,7 @@ import { invalidateUserProfile } from "../useUserProfile";
 import { useChannelStore } from "../../stores/channelStore";
 import { useGameJoinStore } from "../../stores/gameJoinStore";
 import { useMessageStore } from "../../stores/messageStore";
+import { setDurableChannelSends } from "../../stores/shared/channelSendIntent";
 import { useMemberStore } from "../../stores/memberStore";
 import { useRoleStore } from "../../stores/roleStore";
 import { useVoiceStore } from "../../stores/voiceStore";
@@ -100,6 +101,7 @@ export async function handleSystemEvent(
       return true;
 
     case "ready": {
+      setDurableChannelSends(msg.d.durable_channel_sends === true);
       const readyIntent = ++voiceReadyIntent;
       const authGeneration = getAuthGeneration();
       const owner = useAuthStore.getState().user?.id;

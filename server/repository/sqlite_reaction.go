@@ -22,11 +22,14 @@ func NewSQLiteReactionRepo(db database.TxQuerier) ReactionRepository {
 // INSERT OR IGNORE -> rowsAffected == 0 means UNIQUE hit (already exists) -> DELETE.
 // Atomic toggle, no race conditions (UNIQUE constraint enforced at DB level).
 func (r *sqliteReactionRepo) Toggle(ctx context.Context, messageID, userID, emoji string) (bool, error) {
-	insertQuery := `
-		INSERT OR IGNORE INTO reactions (id, message_id, user_id, emoji)
-		VALUES (lower(hex(randomblob(8))), ?, ?, ?)`
+	id, err := generateID()
+	if err != nil {
+		return false, err
+	}
+	insertQuery := `INSERT INTO reactions (id, message_id, user_id, emoji)
+		VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING`
 
-	result, err := r.db.ExecContext(ctx, insertQuery, messageID, userID, emoji)
+	result, err := r.db.ExecContext(ctx, insertQuery, id, messageID, userID, emoji)
 	if err != nil {
 		return false, fmt.Errorf("toggle reaction insert: %w", err)
 	}
@@ -68,7 +71,7 @@ func (r *sqliteReactionRepo) RemoveReaction(ctx context.Context, messageID, user
 
 func (r *sqliteReactionRepo) GetByMessageID(ctx context.Context, messageID string) ([]models.ReactionGroup, error) {
 	query := `
-		SELECT emoji, COUNT(*) as count, GROUP_CONCAT(user_id) as users
+		SELECT emoji, COUNT(*) as count, ` + reactionUsersSQL(r.db) + ` as users
 		FROM reactions
 		WHERE message_id = ?
 		GROUP BY emoji
@@ -98,7 +101,7 @@ func (r *sqliteReactionRepo) GetByMessageIDs(ctx context.Context, messageIDs []s
 	}
 
 	query := fmt.Sprintf(`
-		SELECT message_id, emoji, COUNT(*) as count, GROUP_CONCAT(user_id) as users
+		SELECT message_id, emoji, COUNT(*) as count, `+reactionUsersSQL(r.db)+` as users
 		FROM reactions
 		WHERE message_id IN (%s)
 		GROUP BY message_id, emoji

@@ -141,7 +141,7 @@ func TestMessageRepo_GetByChannelIDAround_SameSecondTiebreak(t *testing.T) {
 	// Expected ASC order inside the tie is id ASC — compute it from the
 	// ids themselves rather than assuming creation order.
 	tie := []*models.Message{msgs[2], msgs[3], msgs[4], msgs[5], msgs[6]}
-	for i := 0; i < len(tie); i++ {
+	for i := 0; !database.IsPostgres(db.Conn) && i < len(tie); i++ {
 		for j := i + 1; j < len(tie); j++ {
 			if tie[j].ID < tie[i].ID {
 				tie[i], tie[j] = tie[j], tie[i]

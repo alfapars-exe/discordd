@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import time
 
 from huggingface_hub import HfApi, CommitOperationAdd, CommitOperationDelete
 
@@ -25,18 +26,32 @@ def record_deployed_commit(commit):
             destination.write(f"deployed_commit={commit}\n")
 
 
+def stop_previous_backend(api, repo):
+    # Older binaries do not hold the singleton lock. A rolling build could
+    # otherwise serve both versions against the same PostgreSQL database.
+    runtime = api.pause_space(repo)
+    for _ in range(60):
+        if runtime.stage == "PAUSED":
+            return
+        time.sleep(2)
+        runtime = api.get_space_runtime(repo)
+    raise SystemExit("Previous backend did not stop; no sources published")
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--expected-head", required=True)
+    parser.add_argument("--expected-head", default="", help="Reviewed Space commit; required when publishing")
     parser.add_argument("--publish", action="store_true")
     parser.add_argument("--reviewed-plan-sha256", default="")
     options = parser.parse_args()
+    if options.publish and not options.expected_head:
+        raise SystemExit("Publish requires a reviewed expected Space HEAD; nothing published")
     if not os.environ.get("HF_TOKEN"):
         raise SystemExit("HF_TOKEN is not configured; nothing published")
     api = HfApi()
     repo = "infinayazilim/discord"
     current = api.space_info(repo).sha
-    if current != options.expected_head:
+    if options.expected_head and current != options.expected_head:
         raise SystemExit("Space HEAD changed; review its new revision before publishing")
     source = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
     paths = subprocess.check_output(["git", "ls-files", "-z"]).decode().split("\0")
@@ -72,7 +87,9 @@ def main():
         print(json.dumps({"status": "already_current", "commit": current}))
         record_deployed_commit(current)
         return
+    stop_previous_backend(api, repo)
     result = api.create_commit(repo, repo_type="space", parent_commit=current, operations=operations, commit_message=f"Deploy HiChat {source[:12]}")
+    api.restart_space(repo)
     print(json.dumps({"status": "published", "commit": result.oid, "url": result.commit_url}))
     record_deployed_commit(result.oid)
 

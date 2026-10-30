@@ -121,6 +121,7 @@ var handlerInternalGates = map[string]string{
 
 	// ── Messages / reactions / pins — per-channel, not server-wide ──
 	"GET /api/servers/{serverId}/channels/{id}/messages":                                                    "per-channel PermViewChannel+PermReadMessages enforced inside messageService — can't be one server-wide authServerPerm bit",
+	"GET /api/servers/{serverId}/channels/{id}/message-events":                                              "ChannelEvents checks server/channel scope and current ViewChannel+ReadMessages before and after hydration; personal notification recipients are filtered",
 	"POST /api/servers/{serverId}/channels/{id}/messages":                                                   "per-channel PermSendMessages enforced inside messageService",
 	"PATCH /api/servers/{serverId}/messages/{id}":                                                           "author-ownership (or moderator override) enforced inside messageService.Update, evaluated per-message",
 	"POST /api/servers/{serverId}/messages/{messageId}/reactions":                                           "per-channel permission enforced inside reactionService",

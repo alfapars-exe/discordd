@@ -96,7 +96,7 @@ func TestSQLiteAuthSessionPasswordCommitAndResetProof(t *testing.T) {
 			ctx := context.Background()
 			now := time.Now().Unix()
 			s, old := createLogicalSession(t, r, "session-user", "credential", "credential-refresh")
-			if _, err := db.Conn.Exec(`INSERT INTO password_reset_tokens(user_id,token_hash,expires_at) VALUES('session-user','reset-proof',datetime('now','+1 hour')),('session-other','other-proof',datetime('now','+1 hour'))`); err != nil {
+			if _, err := db.Conn.Exec(`INSERT INTO password_reset_tokens(user_id,token_hash,expires_at) VALUES('session-user','reset-proof',` + fixtureRelativeTimestamp("+1 hour") + `),('session-other','other-proof',` + fixtureRelativeTimestamp("+1 hour") + `)`); err != nil {
 				t.Fatal(err)
 			}
 			expected, proof := "hash", ""
@@ -135,7 +135,7 @@ func TestSQLiteAuthSessionPasswordFailureRollsBackProofAndCredential(t *testing.
 	ctx := context.Background()
 	now := time.Now().Unix()
 	s, _ := createLogicalSession(t, r, "session-user", "failed-credential", "failed-refresh")
-	if _, err := db.Conn.Exec(`INSERT INTO password_reset_tokens(user_id,token_hash,expires_at) VALUES('session-user','proof',datetime('now','+1 hour'))`); err != nil {
+	if _, err := db.Conn.Exec(`INSERT INTO password_reset_tokens(user_id,token_hash,expires_at) VALUES('session-user','proof',` + fixtureRelativeTimestamp("+1 hour") + `)`); err != nil {
 		t.Fatal(err)
 	}
 	installDeleteFailure(t, db, "fail_reset_cleanup", "password_reset_tokens")
@@ -154,7 +154,7 @@ func TestSQLiteAuthSessionPasswordFailureRollsBackProofAndCredential(t *testing.
 		t.Fatal("proof consumed despite rollback", err)
 	}
 	dropFailureTrigger(t, db, "fail_reset_cleanup", "password_reset_tokens")
-	if _, err := db.Conn.Exec(`UPDATE password_reset_tokens SET expires_at=datetime('now','-1 second') WHERE token_hash='proof'`); err != nil {
+	if _, err := db.Conn.Exec(`UPDATE password_reset_tokens SET expires_at=` + fixtureRelativeTimestamp("-1 second") + ` WHERE token_hash='proof'`); err != nil {
 		t.Fatal(err)
 	}
 	if err := r.UpdatePasswordAndRevoke(ctx, s.UserID, "", "proof", "expired", now); err == nil {

@@ -144,6 +144,13 @@ func (r *sqliteMetricsHistoryRepo) GetTimeSeries(ctx context.Context, instanceID
 			ORDER BY ts ASC`
 	}
 
+	if database.IsPostgres(r.db) && period != "24h" {
+		bucket := `date_trunc('hour',collected_at)`
+		if period == "30d" {
+			bucket = `date_bin(INTERVAL '6 hours',collected_at,TIMESTAMPTZ '2000-01-01 00:00:00+00')`
+		}
+		query = `SELECT ` + bucket + `,AVG(cpu_pct),AVG(bandwidth_in_bps),AVG(bandwidth_out_bps),CAST(AVG(participant_count) AS INTEGER),CAST(AVG(memory_bytes) AS BIGINT),CAST(AVG(screen_share_count) AS INTEGER) FROM livekit_metrics_history WHERE instance_id=? AND available=1 AND collected_at>=? GROUP BY 1 ORDER BY 1`
+	}
 	rows, qErr := r.db.QueryContext(ctx, query, instanceID, cutoff)
 	if qErr != nil {
 		return nil, fmt.Errorf("failed to get metrics time series: %w", qErr)

@@ -30,11 +30,7 @@ jobs:
           cache: true
           cache-dependency-path: server/go.sum
 
-      # go-libsql (database/database.go) is a CGO-only driver.
-      # Ubuntu runners ship with gcc, so CGO defaults to enabled here.
-      # Self-host distribution moved to a multi-arch Docker image (see
-      # build-desktop.yml's docker-publish job), so we no longer maintain
-      # a CGO_ENABLED=0 fallback build path.
+      # Production uses PostgreSQL; legacy SQLite fixtures cover offline import.
       - name: go vet
         run: go vet ./...
         working-directory: server
@@ -149,37 +145,6 @@ jobs:
           name: go-coverage-${{ matrix.package == './repository' && 'repository' || 'services' }}-${{ matrix.shard }}
           path: ${{ runner.temp }}/go-coverage/
           if-no-files-found: error
-
-  server-libsql:
-    name: libSQL preferences integration
-    runs-on: ubuntu-latest
-    services:
-      libsql:
-        image: ghcr.io/tursodatabase/libsql-server@sha256:6dd3eb276d9d3604e4a48ac4a999a2e267814732d57d7e94c04ba71482333a67
-        ports:
-          - 127.0.0.1:8080:8080
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
-        with:
-          go-version: '1.26.10'
-          cache-dependency-path: server/go.sum
-      - name: Wait for the disposable database
-        run: |
-          for attempt in {1..30}; do
-            if curl --fail --silent http://127.0.0.1:8080/health > /dev/null; then exit 0; fi
-            sleep 1
-          done
-          exit 1
-      - name: Verify migrations, preferences and DM request races
-        working-directory: server
-        env:
-          CGO_ENABLED: '1'
-          HICHAT_TEST_LIBSQL_DSN: http://127.0.0.1:8080
-        run: |
-          go test -v -tags libsql_integration ./repository -run '^(TestLibSQLPreferencesLive|TestLibSQLAcceptDeclinePendingDMRace)$' -count=2 | tee "$RUNNER_TEMP/libsql-test.log"
-          test "$(grep -c '^--- PASS: TestLibSQLPreferencesLive ' "$RUNNER_TEMP/libsql-test.log")" -eq 2
-          test "$(grep -c '^--- PASS: TestLibSQLAcceptDeclinePendingDMRace ' "$RUNNER_TEMP/libsql-test.log")" -eq 2
 
   server-postgres:
     name: PostgreSQL repository and migration contracts
@@ -415,14 +380,7 @@ jobs:
         working-directory: client
 
   # ─── Playwright E2E: real Go binary + Vite dev client ───
-  # No Docker and no services block: server/Dockerfile documents that with
-  # CGO_ENABLED=0 the go-libsql import is excluded by build constraints and
-  # modernc.org/sqlite (pure Go) drives a local DATABASE_PATH. So this runs
-  # the same binary a developer runs, against a throwaway SQLite file that
-  # e2e/scripts/start-server.mjs creates per run.
-  #
-  # Playwright's `webServer` owns both processes (Go on :9090, Vite on :3030),
-  # so there is nothing to start or tear down here.
+  # Uses the real Go binary and a unique verified-mTLS PostgreSQL database per run.
   e2e:
     name: Playwright E2E
     runs-on: ubuntu-latest
@@ -465,11 +423,19 @@ jobs:
         run: npx playwright install --with-deps chromium
         working-directory: e2e
 
+      - name: Start isolated PostgreSQL with mutual TLS
+        run: bash scripts/start-e2e-postgres.sh
+
       - name: Playwright test
         run: npx playwright test
         working-directory: e2e
         env:
           CGO_ENABLED: "0"
+
+      - name: Stop isolated PostgreSQL
+        if: always()
+        run: |
+          if [[ "${HICHAT_E2E_PG_CONTAINER:-}" == hichat-e2e-pg-* ]]; then docker rm -f "$HICHAT_E2E_PG_CONTAINER"; fi
 
       - name: Upload report on failure
         if: failure()

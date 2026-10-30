@@ -162,7 +162,7 @@ func (r *sqliteNotificationRepo) MarkDMMessagesRead(ctx context.Context, userID,
 	if len(ids) == 0 {
 		return ids, nil
 	}
-	const updateQuery = `UPDATE notifications SET read_at=datetime('now') WHERE read_at IS NULL AND id IN (` + query + `)`
+	const updateQuery = `UPDATE notifications SET read_at=CURRENT_TIMESTAMP WHERE read_at IS NULL AND id IN (` + query + `)`
 	if _, err := r.db.ExecContext(ctx, updateQuery, args...); err != nil {
 		return nil, err
 	}
@@ -300,7 +300,7 @@ func nullStringPtr(s sql.NullString) *string {
 // reports true (200) rather than a spurious 404.
 func (r *sqliteNotificationRepo) MarkRead(ctx context.Context, userID, id string) (bool, error) {
 	result, err := r.db.ExecContext(ctx,
-		`UPDATE notifications SET read_at = COALESCE(read_at, datetime('now')) WHERE id = ? AND user_id = ? AND (group_dm_channel_id IS NULL OR EXISTS(SELECT 1 FROM group_dm_members gm JOIN group_dm_channels gc ON gc.id=gm.group_id JOIN group_dm_messages src ON src.group_id=gm.group_id AND src.id=notifications.message_id WHERE gm.group_id=notifications.group_dm_channel_id AND gm.user_id=notifications.user_id))`,
+		`UPDATE notifications SET read_at = COALESCE(read_at, CURRENT_TIMESTAMP) WHERE id = ? AND user_id = ? AND (group_dm_channel_id IS NULL OR EXISTS(SELECT 1 FROM group_dm_members gm JOIN group_dm_channels gc ON gc.id=gm.group_id JOIN group_dm_messages src ON src.group_id=gm.group_id AND src.id=notifications.message_id WHERE gm.group_id=notifications.group_dm_channel_id AND gm.user_id=notifications.user_id))`,
 		id, userID,
 	)
 	if err != nil {
@@ -315,7 +315,7 @@ func (r *sqliteNotificationRepo) MarkRead(ctx context.Context, userID, id string
 
 func (r *sqliteNotificationRepo) MarkAllRead(ctx context.Context, userID string) (int64, error) {
 	result, err := r.db.ExecContext(ctx,
-		`UPDATE notifications SET read_at = datetime('now') WHERE user_id = ? AND read_at IS NULL AND (group_dm_channel_id IS NULL OR EXISTS(SELECT 1 FROM group_dm_members gm JOIN group_dm_channels gc ON gc.id=gm.group_id JOIN group_dm_messages src ON src.group_id=gm.group_id AND src.id=notifications.message_id WHERE gm.group_id=notifications.group_dm_channel_id AND gm.user_id=notifications.user_id))`,
+		`UPDATE notifications SET read_at = CURRENT_TIMESTAMP WHERE user_id = ? AND read_at IS NULL AND (group_dm_channel_id IS NULL OR EXISTS(SELECT 1 FROM group_dm_members gm JOIN group_dm_channels gc ON gc.id=gm.group_id JOIN group_dm_messages src ON src.group_id=gm.group_id AND src.id=notifications.message_id WHERE gm.group_id=notifications.group_dm_channel_id AND gm.user_id=notifications.user_id))`,
 		userID,
 	)
 	if err != nil {
@@ -406,7 +406,7 @@ func (r *sqliteNotificationRepo) markUnreadByRef(ctx context.Context, selectQuer
 		updArgs = append(updArgs, id)
 	}
 	if _, err := r.db.ExecContext(ctx,
-		`UPDATE notifications SET read_at = datetime('now') WHERE read_at IS NULL AND id IN (`+strings.Join(placeholders, ",")+`)`,
+		`UPDATE notifications SET read_at = CURRENT_TIMESTAMP WHERE read_at IS NULL AND id IN (`+strings.Join(placeholders, ",")+`)`,
 		updArgs...,
 	); err != nil {
 		return nil, fmt.Errorf("failed to mark request notifications as read: %w", err)

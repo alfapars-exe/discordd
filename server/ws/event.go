@@ -3,12 +3,14 @@ package ws
 // Event is the WebSocket message format.
 // Seq is a monotonic counter for gap detection on the client side.
 type Event struct {
-	Op            string `json:"op"`
-	Data          any    `json:"d,omitempty"`
-	Seq           int64  `json:"seq,omitempty"`
-	ServerID      string `json:"server_id,omitempty"`
-	VoiceEpoch    string `json:"voice_epoch,omitempty"`
-	VoiceRevision uint64 `json:"voice_revision,omitempty"`
+	EventID         string `json:"event_id,omitempty"`
+	ChannelSequence int64  `json:"channel_sequence,omitempty"`
+	Op              string `json:"op"`
+	Data            any    `json:"d,omitempty"`
+	Seq             int64  `json:"seq,omitempty"`
+	ServerID        string `json:"server_id,omitempty"`
+	VoiceEpoch      string `json:"voice_epoch,omitempty"`
+	VoiceRevision   uint64 `json:"voice_revision,omitempty"`
 }
 
 // ─── Operation Constants ───
@@ -205,13 +207,14 @@ var BotReadableOps = map[string]bool{
 
 // ReadyData is the payload sent to a client on initial connection.
 type ReadyData struct {
-	OnlineUserIDs     []string          `json:"online_user_ids"`
-	Servers           []ReadyServerItem `json:"servers"`
-	MutedServerIDs    []string          `json:"muted_server_ids"`
-	MutedChannelIDs   []string          `json:"muted_channel_ids"`
-	PrefStatus        string            `json:"pref_status"`
-	VoiceEpoch        string            `json:"voice_epoch,omitempty"`
-	GameActivityEpoch string            `json:"game_activity_epoch"`
+	DurableChannelSends bool              `json:"durable_channel_sends"`
+	OnlineUserIDs       []string          `json:"online_user_ids"`
+	Servers             []ReadyServerItem `json:"servers"`
+	MutedServerIDs      []string          `json:"muted_server_ids"`
+	MutedChannelIDs     []string          `json:"muted_channel_ids"`
+	PrefStatus          string            `json:"pref_status"`
+	VoiceEpoch          string            `json:"voice_epoch,omitempty"`
+	GameActivityEpoch   string            `json:"game_activity_epoch"`
 }
 
 // ReadyServerItem is a minimal server representation for the ready event.

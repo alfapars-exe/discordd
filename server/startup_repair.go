@@ -4,6 +4,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -114,9 +116,10 @@ func repairCorruptIDs(db *database.DB) {
 		startupLogger.Error("failed to check empty-ID livekit instances", "err", pkg.ErrText(err))
 	}
 	if emptyLK > 0 {
-		var newLKID string
-		if err := db.Conn.QueryRowContext(ctx,
-			`SELECT lower(hex(randomblob(8)))`).Scan(&newLKID); err != nil {
+		var idBytes [8]byte
+		_, err := rand.Read(idBytes[:])
+		newLKID := hex.EncodeToString(idBytes[:])
+		if err != nil {
 			startupLogger.Error("failed to generate new livekit ID", "err", pkg.ErrText(err))
 		} else {
 			if _, err := db.Conn.ExecContext(ctx,

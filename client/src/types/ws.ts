@@ -56,6 +56,7 @@ export interface WSPayloadMap {
   // ─── System ───
   heartbeat_ack: unknown;
   ready: {
+    durable_channel_sends?: boolean;
     online_user_ids: string[];
     servers: ServerListItem[];
     muted_server_ids: string[];
@@ -249,6 +250,8 @@ export interface WSPayloadMap {
  *   - server_id: injected by BroadcastToServer for server-scoped events
  */
 export interface WSEnvelope {
+  event_id?: string;
+  channel_sequence?: number;
   seq?: number;
   server_id?: string;
   /** Voice-domain mutation fence, separate from the transport sequence. */

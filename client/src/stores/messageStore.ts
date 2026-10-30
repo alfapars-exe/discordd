@@ -37,6 +37,7 @@ import {
   updateAuthorInRecord,
 } from "./shared/messageUtils";
 import { sendWithRetryAndToast } from "./shared/sendWithRetry";
+import { channelSendIntent, completeChannelSendIntent, clearChannelSendIntents, supportsDurableChannelSends } from "./shared/channelSendIntent";
 
 /** The sidebar server list is only labels/icons, never an encryption policy. */
 async function resolveMessageServer(serverId: string): Promise<Server | null> {
@@ -191,6 +192,7 @@ function sendSessionStillCurrent(session: MessageSession): boolean {
 }
 
 function clearMessageCaches(ownerId: string | null, authGeneration: number): void {
+  clearChannelSendIntents();
   for (const controller of inflightFetches.values()) controller.abort();
   for (const controller of aroundPending.values()) controller.abort();
   for (const request of inflightOlderFetches.values()) request.controller.abort();
@@ -637,6 +639,8 @@ export const useMessageStore = create<MessageState>((set, get) => {
     if (get().hasMoreAfterByChannel[channelId]) get().jumpToPresent(channelId, serverId);
 
     // E2EE: encrypt with Sender Key
+    const intentKey = JSON.stringify([session.ownerId, session.authGeneration, serverId, channelId]);
+    const intent = channelSendIntent(intentKey, content, files, replyToId);
     const e2eeState = useE2EEStore.getState();
     if (server.e2ee_enabled) {
       const currentUserId = getAuthSessionOwner();
@@ -646,10 +650,10 @@ export const useMessageStore = create<MessageState>((set, get) => {
       }
       if (currentUserId) {
         try {
-          let encryptedFiles: File[] | undefined;
-          let fileMetas: import("../crypto/fileEncryption").EncryptedFileMeta[] | undefined;
+          let encryptedFiles = intent.encrypted?.files;
+          let fileMetas = intent.encrypted?.metas;
 
-          if (files && files.length > 0) {
+          if (!intent.encrypted && files && files.length > 0) {
             const result = await encryptFilesForE2EE(files);
             if (!isCurrentSession()) return false;
             encryptedFiles = result.files;
@@ -659,7 +663,7 @@ export const useMessageStore = create<MessageState>((set, get) => {
           const plaintext = encodePayload(content, fileMetas);
           if (!isCurrentSession()) return false;
 
-          const senderKeyMsg = await encryptChannelMessage(
+          const senderKeyMsg = intent.encrypted ? null : await encryptChannelMessage(
             channelId,
             currentUserId,
             e2eeState.localDeviceId,
@@ -667,7 +671,7 @@ export const useMessageStore = create<MessageState>((set, get) => {
             serverId
           );
           if (!isCurrentSession()) return false;
-          const ciphertext = JSON.stringify(senderKeyMsg);
+          const ciphertext = intent.encrypted?.ciphertext ?? JSON.stringify(senderKeyMsg);
           // The server cannot read mentions out of ciphertext, so the
           // recipient ids ride along in plaintext metadata (ids only — no
           // message text). `content` is already tokenised (<@userId>);
@@ -675,10 +679,12 @@ export const useMessageStore = create<MessageState>((set, get) => {
           const mentionUserIds = [
             ...new Set([...content.matchAll(/<@([a-z0-9]+)>/g)].map((m) => m[1])),
           ];
-          const metadata = JSON.stringify({
-            distribution_id: senderKeyMsg.distributionId,
+          const metadata = intent.encrypted?.metadata ?? JSON.stringify({
+            distribution_id: senderKeyMsg!.distributionId,
             ...(mentionUserIds.length ? { mention_user_ids: mentionUserIds } : {}),
           });
+
+          intent.encrypted ??= { ciphertext, metadata, device: e2eeState.localDeviceId, files: encryptedFiles, metas: fileMetas };
 
           if (!isCurrentSession()) return false;
           const res = await sendWithRetryAndToast(() => isCurrentSession()
@@ -686,14 +692,15 @@ export const useMessageStore = create<MessageState>((set, get) => {
               serverId,
               channelId,
               ciphertext,
-              e2eeState.localDeviceId!,
+              intent.encrypted!.device,
               metadata,
               encryptedFiles,
               replyToId,
-              ...(context ? ([{ isCurrent: isCurrentSession }] as const) : ([] as const))
-            ) : Promise.resolve({ success: false }), { isCurrent: isCurrentSession });
+              { isCurrent: isCurrentSession, clientMessageId: intent.id }
+            ) : Promise.resolve({ success: false }), { isCurrent: isCurrentSession, idempotent: supportsDurableChannelSends() });
           if (!isCurrentSession()) return false;
           if (res.success) {
+            completeChannelSendIntent(intentKey, intent);
             const created = unwrapSentMessage(res.data);
             if (created) {
               // Insert the 201 body so the sender's own message never depends
@@ -744,10 +751,11 @@ export const useMessageStore = create<MessageState>((set, get) => {
     // Only a confirmed non-E2EE origin server may use plaintext.
     const res = await sendWithRetryAndToast(() => isCurrentSession()
       ? messageApi.sendMessage(serverId, channelId, content, files, replyToId,
-        ...(context ? ([{ isCurrent: isCurrentSession }] as const) : ([] as const)))
-      : Promise.resolve({ success: false }), { isCurrent: isCurrentSession });
+        { isCurrent: isCurrentSession, clientMessageId: intent.id })
+      : Promise.resolve({ success: false }), { isCurrent: isCurrentSession, idempotent: supportsDurableChannelSends() });
     if (!isCurrentSession()) return false;
     if (res.success) {
+      completeChannelSendIntent(intentKey, intent);
       // Insert the 201 body directly: the sender's view of their own message
       // must not depend on the WS echo, which a dead/reconnecting socket
       // silently loses. handleMessageCreate dedupes by id, so the echo

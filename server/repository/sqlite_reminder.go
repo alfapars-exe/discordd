@@ -95,7 +95,7 @@ func (r *sqliteReminderRepo) List(ctx context.Context, userID string) ([]models.
 	return out, rows.Err()
 }
 func (r *sqliteReminderRepo) UpdateDue(ctx context.Context, userID, id string, due time.Time) (bool, error) {
-	res, err := r.db.ExecContext(ctx, `UPDATE message_reminders SET due_at=?,updated_at=datetime('now') WHERE id=? AND user_id=? AND status='scheduled'`, reminderTime(due), id, userID)
+	res, err := r.db.ExecContext(ctx, `UPDATE message_reminders SET due_at=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id=? AND status='scheduled'`, reminderTime(due), id, userID)
 	if err != nil {
 		return false, err
 	}
@@ -103,7 +103,7 @@ func (r *sqliteReminderRepo) UpdateDue(ctx context.Context, userID, id string, d
 	return n > 0, err
 }
 func (r *sqliteReminderRepo) Cancel(ctx context.Context, userID, id string) (bool, error) {
-	res, err := r.db.ExecContext(ctx, `UPDATE message_reminders SET status='cancelled',updated_at=datetime('now') WHERE id=? AND user_id=? AND status='scheduled'`, id, userID)
+	res, err := r.db.ExecContext(ctx, `UPDATE message_reminders SET status='cancelled',updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id=? AND status='scheduled'`, id, userID)
 	if err != nil {
 		return false, err
 	}

@@ -34,7 +34,7 @@ func TestEmailDeliveryAndUnsubscribeSQLiteIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("migration sub-FS: %v", err)
 	}
-	db, err := database.New(filepath.Join(t.TempDir(), "email_delivery_integration.db"), migrations)
+	db, err := database.NewLegacy(filepath.Join(t.TempDir(), "email_delivery_integration.db"), migrations)
 	if err != nil {
 		t.Fatalf("open SQLite test database: %v", err)
 	}
@@ -142,7 +142,7 @@ func TestUnreadConversationDigestSQLiteIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db, err := database.New(filepath.Join(t.TempDir(), "digest.db"), migrations)
+	db, err := database.NewLegacy(filepath.Join(t.TempDir(), "digest.db"), migrations)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/argeinfina/hichat/config"
+	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/pkg/crypto"
@@ -256,6 +257,13 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		repository.NewSQLiteChannelMessageNotificationQueue(db), repos.Preferences, repos.User, hub,
 	)
 	messageService.SetUploadDir(cfg.Upload.Dir)
+	if database.IsPostgres(db) {
+		services.ConfigureChannelDelivery(messageService, db)
+		channelMessageNotificationWorker.SetDurablePublication(true)
+		if capabilities, ok := hub.(interface{ SetDurableChannelSends(bool) }); ok {
+			capabilities.SetDurableChannelSends(true)
+		}
+	}
 	uploadService := services.NewUploadService(repos.Attachment, cfg.Upload.Dir, cfg.Upload.MaxSize)
 	profileUpdateNotifier := services.NewProfileUpdateNotifier(repos.Preferences, repos.Friendship, repos.Notification, hub)
 	onlineFriendNotifier := services.NewOnlineFriendNotifier(repos.User, repos.Preferences, repos.Friendship, repos.Notification, hub, hub)

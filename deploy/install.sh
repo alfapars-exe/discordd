@@ -48,6 +48,17 @@ log()  { printf '\033[1;34m[mqvi]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[mqvi]\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31m[mqvi]\033[0m %s\n' "$*" >&2; exit 1; }
 
+# PostgreSQL is provisioned separately. Refuse an upgrade from an unmigrated
+# SQLite configuration before downloading/replacing any binaries.
+if [[ -f "${INSTALL_DIR}/.env" ]]; then
+    grep -Eq "^DATABASE_URL=[\"']?postgres(ql)?://" "${INSTALL_DIR}/.env" || die "Migrate legacy data and configure PostgreSQL DATABASE_URL before upgrading."
+else
+    case "${DATABASE_URL:-}" in
+        postgres://*|postgresql://*) ;;
+        *) die "Set DATABASE_URL for PostgreSQL 18 with sslmode=verify-full and sslrootcert/sslcert/sslkey paths readable by mqvi." ;;
+    esac
+fi
+
 # ─── Parse flags ─────────────────────────────────────────────────────────────
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -246,7 +257,7 @@ if [ ! -f "${INSTALL_DIR}/.env" ]; then
 SERVER_HOST=${BIND_HOST}
 SERVER_PORT=${MQVI_PORT}
 
-DATABASE_PATH=${DATA_DIR}/mqvi.db
+DATABASE_URL=${DATABASE_URL}
 
 JWT_SECRET=${JWT_SECRET}
 JWT_ACCESS_EXPIRY_MINUTES=1440

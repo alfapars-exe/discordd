@@ -3801,6 +3801,8 @@ paths:
           description: Channel ID.
       requestBody: { $ref: '#/components/requestBodies/CreateMessageRequestBody' }
       responses:
+        '200': { description: Identical retry returns the original persisted message in the standard envelope. }
+        '409': { $ref: '#/components/responses/ConflictError' }
         '201': { $ref: '#/components/responses/MessageCreated' }
         '207': { $ref: '#/components/responses/MessageCreatePartial' }
         '400': { $ref: '#/components/responses/BadRequestError' }
@@ -3808,6 +3810,31 @@ paths:
         '403': { $ref: '#/components/responses/ForbiddenError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
         '429': { $ref: '#/components/responses/TooManyRequestsError' }
+  /api/servers/{serverId}/channels/{id}/message-events:
+    get:
+      operationId: channelMessageEvents
+      summary: Replay durable channel events under current read permissions.
+      description: A zero or expired cursor returns reset=true and the current cursor; refetch the snapshot. Apply events in order and continue while has_more=true. The replay window is seven days. Unready attachments block forward progress. Dedupe event_id and reject stale message versions using channel_sequence. Enqueue is not recipient delivery.
+      tags: [Messages]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: after_sequence, in: query, required: true, schema: { type: integer, minimum: 0 } }
+      responses:
+        '200': { description: "Envelope containing events (event_id, channel_sequence, op, d), cursor, has_more and reset." }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/admin/channel-delivery/health:
+    get:
+      operationId: adminChannelDeliveryHealth
+      summary: Inspect channel publication backlog (platform admin only).
+      tags: [Admin]
+      responses:
+        '200': { description: "Envelope containing pending, preparing, retrying, oldest_pending_seconds and max_attempts." }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
   /api/servers/{serverId}/messages/{id}:
     patch:
       operationId: messagesUpdate
@@ -6401,6 +6428,7 @@ components:
         ignored.
       type: object
       properties:
+        client_message_id: { type: string, maxLength: 128, description: "Stable identity scoped to user and channel; identical retries return the saved result and changed payloads return 409. Optional for legacy clients, which have no retry protection." }
         content:
           type: string
           maxLength: 999
@@ -6426,6 +6454,7 @@ components:
         rejected (400) rather than silently treated as plaintext.
       type: object
       properties:
+        client_message_id: { type: string, maxLength: 128, description: "Keep the same identity, file bytes and ciphertext across retries." }
         content: { type: string, description: Plaintext content form field. May be empty if files are attached. }
         reply_to_id: { type: string }
         encryption_version:

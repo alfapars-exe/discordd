@@ -27,7 +27,7 @@ const unrelated = join(exportsDir, `${"c".repeat(48)}-${generation}.zip`);
 let fileSymlinkSkipped = false;
 mkdirSync(runDir); mkdirSync(exportsDir); mkdirSync(outside); mkdirSync(fakeE2eRoot);
 writeFileSync(join(runDir, "owner.json"), JSON.stringify({ pid: process.pid }));
-writeFileSync(join(runDir, "hichat-e2e.db"), Buffer.alloc(4096));
+writeFileSync(join(runDir, "hichat-e2e-postgres.json"), JSON.stringify({run_id:runID,url:`postgres://fixture@127.0.0.1/hichat_e2e_${runID.replaceAll("-","_")}?sslmode=verify-full`}));
 writeFileSync(join(outside, "keep.zip"), Buffer.from([0x50, 0x4b, 0x03, 0x04]));
 try {
   process.env.HICHAT_E2E_RUN_ID = runID;
@@ -67,7 +67,7 @@ try {
   if (previous === undefined) delete process.env.HICHAT_E2E_RUN_ID;
   else process.env.HICHAT_E2E_RUN_ID = previous;
   // Explicit known fixture paths only; no recursive cleanup or directory glob.
-  for (const path of [zip, unrelated, join(runDir, "owner.json"), join(runDir, "hichat-e2e.db"), join(outside, "keep.zip")]) {
+  for (const path of [zip, unrelated, join(runDir, "owner.json"), join(runDir, "hichat-e2e-postgres.json"), join(outside, "keep.zip")]) {
     if (existsSync(path)) unlinkSync(path);
   }
   if (existsSync(fakeTmpRoot)) unlinkSync(fakeTmpRoot);

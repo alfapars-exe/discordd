@@ -207,7 +207,7 @@ func TestStreamStartRequiresCurrentMembershipChannelAndViewPermission(t *testing
 		setup string
 	}{
 		{name: "actor stream permission revoked", setup: `UPDATE roles SET permissions=4160 WHERE id='stream-actor-role'`},
-		{name: "actor timed out", setup: `INSERT INTO member_timeouts(server_id,user_id,expires_at,applied_by) VALUES('stream-server','stream-actor',datetime('now','+1 hour'),'moderator')`},
+		{name: "actor timed out", setup: `INSERT INTO member_timeouts(server_id,user_id,expires_at,applied_by) VALUES('stream-server','stream-actor',` + fixtureRelativeTimestamp("+1 hour") + `,'moderator')`},
 		{name: "actor banned", setup: `INSERT INTO bans(server_id,user_id,username,banned_by) VALUES('stream-server','stream-actor','streamactor','moderator')`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -44,7 +44,7 @@ func groupOperationFixture(t *testing.T) (*GroupDMHandler, repository.GroupDMRep
 	if err != nil {
 		t.Fatal(err)
 	}
-	db, err := database.New(filepath.Join(t.TempDir(), "operations.db"), migrations)
+	db, err := database.NewLegacy(filepath.Join(t.TempDir(), "operations.db"), migrations)
 	if err != nil {
 		t.Fatal(err)
 	}

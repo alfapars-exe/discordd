@@ -122,7 +122,7 @@ func (r *BotRepository) InstallApplication(ctx context.Context, actorID, serverI
 		if affected != 1 {
 			return pkg.ErrNotFound
 		}
-		_, err = tx.ExecContext(ctx, `INSERT OR IGNORE INTO server_members(server_id,user_id) VALUES(?,?)`, serverID, botID)
+		_, err = tx.ExecContext(ctx, `INSERT INTO server_members(server_id,user_id) VALUES(?,?) ON CONFLICT DO NOTHING`, serverID, botID)
 		return err
 	})
 	if err != nil {

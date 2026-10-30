@@ -41,6 +41,15 @@ func newTestDB(t testing.TB) *database.DB {
 	return db
 }
 
+// Fixture SQL is explicit for each test backend; production drivers no longer
+// translate SQLite expressions into PostgreSQL expressions.
+func fixtureRelativeTimestamp(delta string) string {
+	if os.Getenv("HICHAT_TEST_POSTGRES_DSN") != "" {
+		return "(CURRENT_TIMESTAMP + INTERVAL '" + delta + "')"
+	}
+	return "datetime('now','" + delta + "')"
+}
+
 // newTestDBWithPath also returns the file path, for tests that need a second
 // connection with different pragmas (see execWithoutFKs).
 //
@@ -66,7 +75,7 @@ func newSQLiteTestDBWithPath(t testing.TB) (*database.DB, string) {
 		t.Fatalf("fs.Sub: %v", err)
 	}
 	path := filepath.Join(t.TempDir(), "repo_test.db")
-	db, err := database.New(path, migrationsFS)
+	db, err := database.NewLegacy(path, migrationsFS)
 	if err != nil {
 		t.Fatalf("database.New: %v", err)
 	}

@@ -101,7 +101,7 @@ func TestSQLiteDataExportOwnershipExpiryAndSecretExclusion(t *testing.T) {
 	if _, err := repo.Download(context.Background(), "export-bob", job.ID); !errors.Is(err, pkg.ErrNotFound) {
 		t.Fatalf("cross-owner download = %v", err)
 	}
-	if _, err := db.Conn.Exec(`UPDATE data_exports SET expires_at=datetime('now','-1 second') WHERE id=?`, job.ID); err != nil {
+	if _, err := db.Conn.Exec(`UPDATE data_exports SET expires_at=`+fixtureRelativeTimestamp("-1 second")+` WHERE id=?`, job.ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := repo.Download(context.Background(), user.ID, job.ID); !errors.Is(err, pkg.ErrNotFound) {

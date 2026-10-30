@@ -24,7 +24,7 @@ func (r *sqliteAccountDeletionStatusRepo) Get(ctx context.Context, owner string,
 	 SELECT 'server' kind,id,name FROM servers WHERE owner_id=?1
 	 UNION ALL SELECT 'application',id,COALESCE(NULLIF(display_name,''),username) FROM users WHERE owner_user_id=?1
 	), page AS (SELECT * FROM owned ORDER BY kind,id LIMIT 51 OFFSET ?2)
-	SELECT u.is_platform_admin,(SELECT COUNT(*) FROM owned),CAST(strftime('%s','now') AS INTEGER),p.kind,p.id,p.name
+	SELECT u.is_platform_admin,(SELECT COUNT(*) FROM owned),`+epochSecondsSQL(r.db, "'now'")+`,p.kind,p.id,p.name
 	FROM users u LEFT JOIN page p ON 1=1 WHERE u.id=?1 AND u.deleted_at IS NULL ORDER BY p.kind,p.id`, owner, offset)
 	if err != nil {
 		return nil, err

@@ -57,11 +57,19 @@ beforeEach(() => {
 });
 
 describe("channel sends use the origin's encryption policy", () => {
+  it("reuses the prepared encrypted body and identity on a manual retry", async () => {
+    vi.mocked(api.sendEncryptedMessage).mockResolvedValueOnce({success:false,status:500,error:"temporary"}).mockResolvedValueOnce({success:true});
+    expect(await useMessageStore.getState().sendMessage("channel-A", "retry private", undefined, undefined, "origin-server")).toBe(false);
+    expect(await useMessageStore.getState().sendMessage("channel-A", "retry private", undefined, undefined, "origin-server")).toBe(true);
+    const calls=vi.mocked(api.sendEncryptedMessage).mock.calls;
+    expect(calls[0][2]).toBe(calls[1][2]);expect(calls[0][4]).toBe(calls[1][4]);expect(calls[0][7]?.clientMessageId).toBe(calls[1][7]?.clientMessageId);
+    expect(encryptChannelMessage).toHaveBeenCalledTimes(1);
+  });
   it("encrypts the origin even while a plaintext server is selected", async () => {
     expect(await useMessageStore.getState().sendMessage("channel-A", "private", undefined, undefined, "origin-server")).toBe(true);
     expect(getServer).toHaveBeenCalledWith("origin-server");
     expect(encryptChannelMessage).toHaveBeenCalledWith("channel-A", "user-1", "device-1", expect.any(String), "origin-server");
-    expect(api.sendEncryptedMessage).toHaveBeenCalledWith("origin-server", "channel-A", expect.any(String), "device-1", expect.any(String), undefined, undefined);
+    expect(api.sendEncryptedMessage).toHaveBeenCalledWith("origin-server", "channel-A", expect.any(String), "device-1", expect.any(String), undefined, undefined, expect.objectContaining({clientMessageId: expect.any(String), isCurrent: expect.any(Function)}));
     expect(api.sendMessage).not.toHaveBeenCalled();
   });
 
@@ -69,7 +77,7 @@ describe("channel sends use the origin's encryption policy", () => {
     fixture.activeServer.e2ee_enabled = true;
     vi.mocked(getServer).mockResolvedValue({ success: true, data: originServer(false) });
     await useMessageStore.getState().sendMessage("channel-A", "public", undefined, undefined, "origin-server");
-    expect(api.sendMessage).toHaveBeenCalledWith("origin-server", "channel-A", "public", undefined, undefined);
+    expect(api.sendMessage).toHaveBeenCalledWith("origin-server", "channel-A", "public", undefined, undefined, expect.objectContaining({clientMessageId: expect.any(String), isCurrent: expect.any(Function)}));
     expect(encryptChannelMessage).not.toHaveBeenCalled();
     expect(api.sendEncryptedMessage).not.toHaveBeenCalled();
   });

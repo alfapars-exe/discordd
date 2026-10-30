@@ -4,18 +4,15 @@
  * Invoked by playwright.config.ts's first `webServer` entry. Playwright waits
  * on http://127.0.0.1:9090/api/health and tears this process down afterwards.
  *
- * Why no Docker: server/Dockerfile documents that with CGO_ENABLED=0 the
- * go-libsql import is excluded by build constraints and modernc.org/sqlite
- * (pure Go) supplies the driver for a local DATABASE_PATH. Verified — the
- * binary builds and runs natively on Windows and on ubuntu-latest, so the
- * developer and CI exercise the identical binary.
+ * Requires HICHAT_E2E_POSTGRES_DSN for a loopback, verified-mTLS PostgreSQL
+ * control database. Each run creates and drops its own database.
  *
  * Why port 9090 is not configurable: client/vite.config.ts hardcodes the dev
  * proxy target as http://localhost:9090 for /api and ws://localhost:9090 for
  * /ws. Changing that would mean editing production source, which this suite
  * deliberately does not do.
  *
- * Isolation: every run gets a brand-new SQLite file and uploads dir under
+ * Isolation: every run gets a brand-new PostgreSQL database and uploads dir under
  * e2e/.tmp/<unique-run-id>/, and the child's cwd is that directory so the Go
  * server's godotenv.Load() cannot pick up a developer's repo-root .env.
  */
@@ -141,7 +138,7 @@ function buildServer(runDir) {
   const res = spawnSync(goBin, ["build", "-o", binPath, "."], {
     cwd: SERVER_DIR,
     stdio: "inherit",
-    // CGO off is what excludes go-libsql and selects the pure-Go driver.
+    // The product and fixture both use the pure-Go PostgreSQL driver.
     env: { ...process.env, CGO_ENABLED: "0" },
   });
   if (res.error) throw res.error;
@@ -164,6 +161,9 @@ function buildServer(runDir) {
     throw new Error("[e2e-server] queue probe was not created inside the owned run directory");
   }
   console.log(`[e2e-server] build finished in ${((Date.now() - started) / 1000).toFixed(1)}s`);
+  const fixturePath = join(binDir, process.platform === "win32" ? "hichat-e2e-pg-fixture.exe" : "hichat-e2e-pg-fixture");
+  const fixture = spawnSync(goBin, ["build", "-o", fixturePath, join(E2E_DIR, "scripts", "pg-fixture.go")], {cwd: SERVER_DIR, stdio: "inherit", env: {...process.env, CGO_ENABLED: "0"}});
+  if (fixture.error || fixture.status !== 0) throw new Error("cannot build PostgreSQL E2E fixture");
   return binPath;
 }
 
@@ -188,15 +188,22 @@ function main() {
   const ownerPath = join(runDir, "owner.json");
   writeFileSync(ownerPath, JSON.stringify({ pid: process.pid }), { mode: 0o600 });
 
+  const fixturePath = join(runDir, "bin", process.platform === "win32" ? "hichat-e2e-pg-fixture.exe" : "hichat-e2e-pg-fixture");
+  const fixtureEnv = {...process.env, HICHAT_PG_CA_PEM: "", HICHAT_PG_CERT_PEM: "", HICHAT_PG_KEY_PEM: ""};
+  const prepared = spawnSync(fixturePath, ["create", runDir, runId], {env: fixtureEnv, encoding: "utf8", timeout: 30_000});
+  if (prepared.error || prepared.status !== 0) throw new Error("PostgreSQL fixture creation failed; configure HICHAT_E2E_POSTGRES_DSN for a verified loopback hichat_e2e_control database");
+  const databaseURL = JSON.parse(readFileSync(join(runDir, "hichat-e2e-postgres.json"), "utf8")).url;
+  let dropped = false;
+  const dropDatabase = () => { if (!dropped) { dropped = true; spawnSync(fixturePath, ["drop", runDir, runId], {env: fixtureEnv, stdio: "ignore", timeout: 30_000}); } };
   const env = {
     ...process.env,
     SERVER_HOST: HOST,
     SERVER_PORT: PORT,
-    DATABASE_PATH: join(runDir, "hichat-e2e.db"),
-    // config.go prefers DATABASE_URL over DATABASE_PATH via firstNonEmpty.
-    // Blank it explicitly so a developer's exported Turso DSN can never
-    // point this run at the production database.
-    DATABASE_URL: "",
+    DATABASE_PATH: "",
+    DATABASE_URL: databaseURL,
+    HICHAT_PG_CA_PEM: "",
+    HICHAT_PG_CERT_PEM: "",
+    HICHAT_PG_KEY_PEM: "",
     UPLOAD_DIR: uploadDir,
     // Keep data-export ZIPs inside this exact disposable run, beside uploads.
     // The repository stores private archives under DATA_EXPORT_DIR; leaving
@@ -238,10 +245,12 @@ function main() {
   child.on("exit", (code, signal) => {
     console.log(`[e2e-server] exited (code=${code} signal=${signal})`);
     rmSync(ownerPath, { force: true });
+    dropDatabase();
     process.exit(code ?? 1);
   });
   child.on("error", (err) => {
     console.error(`[e2e-server] spawn failed: ${err.message}`);
+    dropDatabase();
     process.exit(1);
   });
 
@@ -254,6 +263,7 @@ function main() {
   process.on("SIGTERM", stop);
   process.on("exit", () => {
     stop();
+    dropDatabase();
     rmSync(ownerPath, { force: true });
   });
 }

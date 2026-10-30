@@ -36,6 +36,9 @@ func (r *sqliteReadStateRepo) PrepareMessageDeletion(ctx context.Context, messag
 }
 
 func NewSQLiteReadStateRepo(db database.TxQuerier) ReadStateRepository {
+	if database.IsPostgres(db) {
+		return NewPostgresReadStateRepo(db)
+	}
 	return &sqliteReadStateRepo{db: db}
 }
 

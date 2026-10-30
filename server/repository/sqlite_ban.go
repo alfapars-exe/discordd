@@ -32,9 +32,8 @@ func scanBan(rows *sql.Rows) (models.Ban, error) {
 // extending an existing temp ban) refreshes the row instead of failing
 // on the PRIMARY KEY (server_id, user_id) conflict.
 func (r *sqliteBanRepo) Create(ctx context.Context, ban *models.Ban) error {
-	query := `
-		INSERT OR REPLACE INTO bans (server_id, user_id, username, reason, banned_by, expires_at)
-		VALUES (?, ?, ?, ?, ?, ?)`
+	query := `INSERT INTO bans (server_id, user_id, username, reason, banned_by, expires_at)
+		VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (server_id,user_id) DO UPDATE SET username=excluded.username,reason=excluded.reason,banned_by=excluded.banned_by,expires_at=excluded.expires_at,created_at=excluded.created_at`
 
 	// expires_at is bound as a pre-formatted "YYYY-MM-DD HH:MM:SS" string, not
 	// the raw *time.Time — go-libsql writes time.Time as RFC3339 ("...T...Z"),
@@ -68,7 +67,7 @@ func (r *sqliteBanRepo) GetByUserID(ctx context.Context, serverID, userID string
 		SELECT server_id, user_id, username, reason, banned_by, created_at, expires_at
 		FROM bans
 		WHERE server_id = ? AND user_id = ?
-		  AND (expires_at IS NULL OR expires_at > datetime('now'))`
+		  AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)`
 
 	ban := &models.Ban{}
 	err := r.db.QueryRowContext(ctx, query, serverID, userID).Scan(
@@ -92,7 +91,7 @@ func (r *sqliteBanRepo) GetAllByServer(ctx context.Context, serverID string) ([]
 		SELECT server_id, user_id, username, reason, banned_by, created_at, expires_at
 		FROM bans
 		WHERE server_id = ?
-		  AND (expires_at IS NULL OR expires_at > datetime('now'))
+		  AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
 		ORDER BY created_at DESC`
 
 	rows, err := r.db.QueryContext(ctx, query, serverID)
@@ -129,7 +128,7 @@ func (r *sqliteBanRepo) Exists(ctx context.Context, serverID, userID string) (bo
 	query := `
 		SELECT 1 FROM bans
 		WHERE server_id = ? AND user_id = ?
-		  AND (expires_at IS NULL OR expires_at > datetime('now'))
+		  AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
 		LIMIT 1`
 
 	var dummy int

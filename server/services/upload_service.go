@@ -124,6 +124,9 @@ func (s *uploadService) Upload(ctx context.Context, messageID string, file multi
 		FileSize:  &fileSize,
 		MimeType:  &mimeForRecord,
 	}
+	if index, ok := ctx.Value(models.ChannelAttachmentIndexKey{}).(int); ok {
+		attachment.PreparationIndex = &index
+	}
 
 	if err := s.attachmentRepo.Create(ctx, attachment); err != nil {
 		_ = os.Remove(destPath)

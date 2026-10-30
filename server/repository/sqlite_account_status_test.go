@@ -15,7 +15,7 @@ func TestSQLiteAccountStatusModerationSnapshot(t *testing.T) {
 	r := NewSQLiteAccountStatusRepo(wrapForRepo(db))
 	execSeed(t, db, []seedStmt{
 		{q: `INSERT INTO bans(server_id,user_id,username,reason,banned_by) VALUES(?,?,'target','actual ban reason',?)`, args: []any{banServer, banTarget, banOwner}},
-		{q: `INSERT INTO member_timeouts(server_id,user_id,expires_at,applied_by,reason) VALUES(?,?,datetime('now','+1 hour'),?,'actual timeout')`, args: []any{banServer, banTarget, banOwner}},
+		{q: `INSERT INTO member_timeouts(server_id,user_id,expires_at,applied_by,reason) VALUES(?,?,` + fixtureRelativeTimestamp("+1 hour") + `,?,'actual timeout')`, args: []any{banServer, banTarget, banOwner}},
 	})
 	status, err := r.Get(ctx, banTarget, 0)
 	if err != nil {
@@ -40,7 +40,7 @@ func TestSQLiteAccountStatusModerationSnapshot(t *testing.T) {
 	if _, err := db.Conn.Exec(`UPDATE users SET is_platform_banned=1,platform_ban_reason='platform reason' WHERE id=?`, banTarget); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Conn.Exec(`UPDATE bans SET expires_at=datetime('now','-1 second'); UPDATE member_timeouts SET expires_at=datetime('now','-1 second')`); err != nil {
+	if _, err := db.Conn.Exec(`UPDATE bans SET expires_at=` + fixtureRelativeTimestamp("-1 second") + `; UPDATE member_timeouts SET expires_at=` + fixtureRelativeTimestamp("-1 second") + ``); err != nil {
 		t.Fatal(err)
 	}
 	status, err = r.Get(ctx, banTarget, 0)

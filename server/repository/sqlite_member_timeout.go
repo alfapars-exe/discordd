@@ -23,10 +23,9 @@ func NewSQLiteMemberTimeoutRepo(db database.TxQuerier) MemberTimeoutRepository {
 // (server_id, user_id), so the REPLACE keeps exactly one row per user
 // per server.
 func (r *sqliteMemberTimeoutRepo) Upsert(ctx context.Context, t *models.MemberTimeout) error {
-	query := `
-		INSERT OR REPLACE INTO member_timeouts
+	query := `INSERT INTO member_timeouts
 			(server_id, user_id, expires_at, applied_by, reason)
-		VALUES (?, ?, ?, ?, ?)`
+		VALUES (?, ?, ?, ?, ?) ON CONFLICT (server_id,user_id) DO UPDATE SET expires_at=excluded.expires_at,applied_by=excluded.applied_by,reason=excluded.reason,created_at=excluded.created_at`
 	// expires_at is bound as a pre-formatted "YYYY-MM-DD HH:MM:SS" string, not
 	// the raw time.Time — go-libsql writes time.Time as RFC3339 ("...T...Z"),
 	// which sorts lexically AFTER sqlite's datetime('now') output because 'T' >
@@ -51,7 +50,7 @@ func (r *sqliteMemberTimeoutRepo) Get(ctx context.Context, serverID, userID stri
 		SELECT server_id, user_id, expires_at, applied_by, reason, created_at
 		FROM member_timeouts
 		WHERE server_id = ? AND user_id = ?
-		  AND expires_at > datetime('now')`
+		  AND expires_at > CURRENT_TIMESTAMP`
 	t := &models.MemberTimeout{}
 	err := r.db.QueryRowContext(ctx, query, serverID, userID).Scan(
 		&t.ServerID, &t.UserID, &t.ExpiresAt, &t.AppliedBy, &t.Reason, &t.CreatedAt,
@@ -87,7 +86,7 @@ func (r *sqliteMemberTimeoutRepo) IsActive(ctx context.Context, serverID, userID
 	err := r.db.QueryRowContext(ctx,
 		`SELECT 1 FROM member_timeouts
 		 WHERE server_id = ? AND user_id = ?
-		   AND expires_at > datetime('now')
+		   AND expires_at > CURRENT_TIMESTAMP
 		 LIMIT 1`,
 		serverID, userID,
 	).Scan(&dummy)
@@ -109,7 +108,7 @@ func (r *sqliteMemberTimeoutRepo) ListActive(ctx context.Context, serverID strin
 		`SELECT server_id, user_id, expires_at, applied_by, reason, created_at
 		 FROM member_timeouts
 		 WHERE server_id = ?
-		   AND expires_at > datetime('now')`,
+		   AND expires_at > CURRENT_TIMESTAMP`,
 		serverID,
 	)
 	if err != nil {

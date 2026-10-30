@@ -163,11 +163,15 @@ func anonymizeIdentityTx(ctx context.Context, tx *sql.Tx, owner, expectedHash st
 	// frees the original without preserving it in a recovery table. The
 	// stable internal ID remains linkable through shared authorship; this is
 	// identity stripping, not a promise of unlinkable anonymous history.
-	result, err := tx.ExecContext(ctx, `UPDATE users SET username='deleted_'||lower(hex(randomblob(16))),display_name='Deleted User',
+	replacementID, err := generateIDN(16)
+	if err != nil {
+		return err
+	}
+	result, err := tx.ExecContext(ctx, `UPDATE users SET username='deleted_'||?,display_name='Deleted User',
 		 avatar_url=NULL,avatar_animated_url=NULL,banner_url=NULL,banner_animated_url=NULL,wallpaper_url=NULL,bio=NULL,pronouns=NULL,accent_color=NULL,
 		 password_hash='!deleted!',status='offline',pref_status='offline',custom_status=NULL,owner_user_id=NULL,
 		 last_seen_at=NULL,last_voice_activity=NULL,language='en',dm_privacy='friends_only',
-		 created_at='1970-01-01 00:00:00',token_version=token_version+1,deleted_at=? WHERE id=? AND password_hash=? AND deleted_at IS NULL`, now, owner, expectedHash)
+		 created_at='1970-01-01 00:00:00',token_version=token_version+1,deleted_at=? WHERE id=? AND password_hash=? AND deleted_at IS NULL`, replacementID, now, owner, expectedHash)
 	if err != nil {
 		return err
 	}

@@ -80,11 +80,12 @@ export async function sendMessage(
   content: string,
   files?: File[],
   replyToId?: string,
-  context?: { isCurrent: () => boolean }
+  context?: { isCurrent: () => boolean; clientMessageId?: string }
 ) {
   if (files && files.length > 0) {
     const formData = new FormData();
     formData.append("content", content);
+    if (context?.clientMessageId) formData.append("client_message_id", context.clientMessageId);
     if (replyToId) {
       formData.append("reply_to_id", replyToId);
     }
@@ -101,7 +102,7 @@ export async function sendMessage(
 
   return apiClient<Message>(`/servers/${serverId}/channels/${channelId}/messages`, {
     method: "POST",
-    body: { content, reply_to_id: replyToId },
+    body: { content, reply_to_id: replyToId, ...(context?.clientMessageId ? { client_message_id: context.clientMessageId } : {}) },
     ...(context ? { isCurrent: context.isCurrent } : {}),
     timeoutMs: SEND_TIMEOUT_MS,
   });
@@ -119,11 +120,12 @@ export async function sendEncryptedMessage(
   metadata: string,
   files?: File[],
   replyToId?: string,
-  context?: { isCurrent: () => boolean }
+  context?: { isCurrent: () => boolean; clientMessageId?: string }
 ) {
   if (files && files.length > 0) {
     const formData = new FormData();
     formData.append("encryption_version", "1");
+    if (context?.clientMessageId) formData.append("client_message_id", context.clientMessageId);
     formData.append("ciphertext", ciphertext);
     formData.append("sender_device_id", senderDeviceId);
     formData.append("e2ee_metadata", metadata);
@@ -148,6 +150,7 @@ export async function sendEncryptedMessage(
       ciphertext,
       sender_device_id: senderDeviceId,
       e2ee_metadata: metadata,
+      ...(context?.clientMessageId ? { client_message_id: context.clientMessageId } : {}),
       ...(replyToId ? { reply_to_id: replyToId } : {}),
     },
     ...(context ? { isCurrent: context.isCurrent } : {}),

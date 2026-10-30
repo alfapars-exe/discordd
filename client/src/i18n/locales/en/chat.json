@@ -199,5 +199,7 @@
   "spamFilterPending": "Checking message filters.",
   "spamFilterPendingError": "Friendship could not be checked. Message content stays hidden; it has not been marked as spam.",
   "spamFilterRetry": "Check again",
-  "spamPendingNotification": "New message. Content is hidden while message filters are checked."
+  "spamPendingNotification": "New message. Content is hidden while message filters are checked.",
+  "attachmentPreparing": "Preparing attachment",
+  "attachmentFailed": "Attachment upload failed"
 }

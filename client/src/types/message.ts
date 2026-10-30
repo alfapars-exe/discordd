@@ -19,6 +19,9 @@ export type MessageReference = {
 };
 
 export type Message = {
+  attachment_states?: {index: number; filename: string; status: "preparing" | "ready" | "failed"; error?: string}[];
+  client_message_id?: string;
+  source_sequence?: number;
   id: string;
   channel_id: string;
   user_id: string;
@@ -43,6 +46,7 @@ export type Message = {
 };
 
 export type Attachment = {
+  file_key_index?: number;
   id: string;
   message_id: string;
   filename: string;

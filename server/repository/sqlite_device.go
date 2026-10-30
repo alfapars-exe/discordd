@@ -187,9 +187,8 @@ func (r *sqliteDeviceRepo) UpdateLastSeen(ctx context.Context, userID, deviceID 
 
 // UploadPrekeys batch-inserts one-time prekeys. Duplicates are silently ignored.
 func (r *sqliteDeviceRepo) UploadPrekeys(ctx context.Context, userID, deviceID string, prekeys []models.OTPKey) error {
-	query := `
-		INSERT OR IGNORE INTO device_one_time_prekeys (user_id, device_id, prekey_id, public_key)
-		VALUES (?, ?, ?, ?)`
+	query := `INSERT INTO device_one_time_prekeys (user_id, device_id, prekey_id, public_key)
+		VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING`
 
 	for _, pk := range prekeys {
 		_, err := r.db.ExecContext(ctx, query, userID, deviceID, pk.PrekeyID, pk.PublicKey)

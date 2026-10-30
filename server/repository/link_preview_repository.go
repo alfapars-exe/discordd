@@ -58,7 +58,7 @@ func (r *sqliteLinkPreviewRepo) Upsert(ctx context.Context, preview *models.Link
 	}
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO link_previews (url, title, description, image_url, site_name, favicon_url, fetched_at, error)
-		VALUES (?, ?, ?, ?, ?, ?, datetime('now'), ?)
+		VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
 		ON CONFLICT(url) DO UPDATE SET
 			title = excluded.title,
 			description = excluded.description,

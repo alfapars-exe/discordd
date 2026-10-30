@@ -15,6 +15,7 @@ import type { EncryptedFileMeta } from "../crypto/fileEncryption";
 // Display-relevant intersection of Message and DMMessage.
 
 export type ChatAttachment = {
+  file_key_index?: number | null;
   id: string;
   filename: string;
   file_url: string;
@@ -23,6 +24,7 @@ export type ChatAttachment = {
 };
 
 export type ChatMessage = {
+  attachment_states?: {index: number; filename: string; status: "preparing" | "ready" | "failed"; error?: string}[];
   application_id?: string | null;
   id: string;
   user_id: string;

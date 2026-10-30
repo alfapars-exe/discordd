@@ -42,7 +42,7 @@ func (r *sqliteServerOwnershipRepo) Transfer(ctx context.Context, actor, sid, ha
 		AND EXISTS(SELECT 1 FROM users t JOIN server_members sm ON sm.user_id=t.id
 		 WHERE t.id=?1 AND sm.server_id=?2 AND t.is_bot=0 AND t.deleted_at IS NULL AND t.is_platform_banned=0
 		 AND NOT EXISTS(SELECT 1 FROM account_lifecycle WHERE user_id=t.id AND disabled_at IS NOT NULL)
-		 AND NOT EXISTS(SELECT 1 FROM bans b WHERE b.user_id=t.id AND b.server_id=?2 AND (b.expires_at IS NULL OR b.expires_at>datetime('now')))
+		 AND NOT EXISTS(SELECT 1 FROM bans b WHERE b.user_id=t.id AND b.server_id=?2 AND (b.expires_at IS NULL OR b.expires_at>CURRENT_TIMESTAMP))
 		 AND (t.is_platform_admin=1 OR NOT EXISTS(SELECT 1 FROM livekit_instances li WHERE li.id=servers.livekit_instance_id AND li.is_platform_managed=1)
 		 OR NOT EXISTS(SELECT 1 FROM servers other JOIN livekit_instances li ON li.id=other.livekit_instance_id WHERE other.owner_id=t.id AND other.id<>?2 AND li.is_platform_managed=1)))`, target, serverID, actor, hash, sid, now, mfa)
 		if err != nil {
@@ -84,10 +84,17 @@ func (r *sqliteServerOwnershipRepo) Transfer(ctx context.Context, actor, sid, ha
 		if _, err := tx.ExecContext(ctx, `INSERT INTO user_roles(user_id,role_id,server_id) VALUES(?,?,?)`, target, ids[0], serverID); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO audit_logs(server_id,actor_user_id,target_user_id,event_type,metadata,actor_snapshot,target_snapshot)
+		auditQuery := `INSERT INTO audit_logs(server_id,actor_user_id,target_user_id,event_type,metadata,actor_snapshot,target_snapshot)
 		VALUES(?1,?2,?3,?4,json_object('old_owner_id',?2,'new_owner_id',?3),
 		(SELECT json_object('id',id,'username',username,'display_name',COALESCE(display_name,''),'avatar_url',COALESCE(avatar_url,'')) FROM users WHERE id=?2),
-		(SELECT json_object('id',id,'username',username,'display_name',COALESCE(display_name,''),'avatar_url',COALESCE(avatar_url,'')) FROM users WHERE id=?3))`, serverID, actor, target, models.AuditEventServerOwnershipTransfer); err != nil {
+		(SELECT json_object('id',id,'username',username,'display_name',COALESCE(display_name,''),'avatar_url',COALESCE(avatar_url,'')) FROM users WHERE id=?3))`
+		if database.IsPostgres(r.db) {
+			auditQuery = `INSERT INTO audit_logs(server_id,actor_user_id,target_user_id,event_type,metadata,actor_snapshot,target_snapshot)
+		VALUES(?1,?2,?3,?4,hichat_json_object('old_owner_id',?2,'new_owner_id',?3),
+		(SELECT hichat_json_object('id',id,'username',username,'display_name',COALESCE(display_name,''),'avatar_url',COALESCE(avatar_url,'')) FROM users WHERE id=?2),
+		(SELECT hichat_json_object('id',id,'username',username,'display_name',COALESCE(display_name,''),'avatar_url',COALESCE(avatar_url,'')) FROM users WHERE id=?3))`
+		}
+		if _, err := tx.ExecContext(ctx, auditQuery, serverID, actor, target, models.AuditEventServerOwnershipTransfer); err != nil {
 			return err
 		}
 		result, err = NewSQLiteServerRepo(tx).GetByID(ctx, serverID)

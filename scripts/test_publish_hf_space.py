@@ -50,6 +50,7 @@ class PublishSafetyTests(unittest.TestCase):
         Path("server/main.go").write_text("package main\n")
         self.api = Mock()
         self.api.space_info.return_value.sha = "reviewed-parent"
+        self.api.pause_space.return_value.stage = "PAUSED"
         self.api.list_repo_tree.return_value = [SimpleNamespace(path="server/old.go", blob_id="old", lfs=None), SimpleNamespace(path="data/uploads/user.png", blob_id="user", lfs=None)]
         self.api.create_commit.return_value = SimpleNamespace(oid="new", commit_url="https://example.test/new")
         self.stack = contextlib.ExitStack()
@@ -73,9 +74,27 @@ class PublishSafetyTests(unittest.TestCase):
     def test_preview_never_mutates_and_only_plans_managed_deletion(self):
         result = self.run_command()
         self.api.create_commit.assert_not_called()
+        self.api.pause_space.assert_not_called()
+        self.api.restart_space.assert_not_called()
         self.assertIn('"server/old.go"', result)
         self.assertNotIn("data/uploads/user.png", result)
         self.assertNotIn("disposable-test-value", result)
+
+    def test_read_only_preview_can_discover_the_current_parent(self):
+        output = io.StringIO()
+        with patch("sys.argv", ["publish-hf-space.py"]), contextlib.redirect_stdout(output):
+            release.main()
+        plan = json.JSONDecoder().raw_decode(output.getvalue())[0]
+        self.assertEqual(plan["space_parent"], "reviewed-parent")
+        self.api.pause_space.assert_not_called()
+        self.api.create_commit.assert_not_called()
+
+    def test_publish_cannot_discover_or_guess_an_unreviewed_parent(self):
+        with patch("sys.argv", ["publish-hf-space.py", "--publish"]), self.assertRaisesRegex(SystemExit, "reviewed expected"):
+            release.main()
+        self.api.space_info.assert_not_called()
+        self.api.pause_space.assert_not_called()
+        self.api.create_commit.assert_not_called()
 
     def test_changed_parent_aborts_before_reading_sources_or_mutating(self):
         self.api.space_info.return_value.sha = "concurrent-parent"
@@ -93,6 +112,22 @@ class PublishSafetyTests(unittest.TestCase):
         call = self.api.create_commit.call_args
         self.assertEqual(call.kwargs["parent_commit"], "reviewed-parent")
         self.assertEqual([operation.path_in_repo for operation in call.kwargs["operations"]], ["server/main.go", "server/old.go"])
+
+    def test_publish_stops_old_process_before_commit_and_restarts_afterward(self):
+        digest = self.preview_hash()
+        self.run_command("--publish", "--reviewed-plan-sha256", digest)
+        actions = [call[0] for call in self.api.mock_calls]
+        self.assertLess(actions.index("pause_space"), actions.index("create_commit"))
+        self.assertLess(actions.index("create_commit"), actions.index("restart_space"))
+
+    def test_unconfirmed_stop_refuses_publication(self):
+        digest = self.preview_hash()
+        self.api.pause_space.return_value.stage = "RUNNING"
+        self.api.get_space_runtime.return_value.stage = "RUNNING"
+        with patch.object(release.time, "sleep"), self.assertRaisesRegex(SystemExit, "did not stop"):
+            self.run_command("--publish", "--reviewed-plan-sha256", digest)
+        self.api.create_commit.assert_not_called()
+        self.api.restart_space.assert_not_called()
 
     def preview_hash(self):
         return json.loads(self.run_command().splitlines()[-1])["plan_sha256"]

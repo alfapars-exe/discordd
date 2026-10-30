@@ -24,13 +24,13 @@ func (r *sqliteAccountStatusRepo) Get(ctx context.Context, owner string, offset 
 	// One statement supplies a consistent owner/platform/restriction snapshot.
 	// Do not require current membership: a ban normally removes that membership.
 	rows, err := r.db.QueryContext(ctx, `WITH active AS (
-SELECT 'ban' kind,b.server_id,s.name server_name,b.reason,CAST(strftime('%s',b.created_at) AS INTEGER) created_at,CAST(strftime('%s',b.expires_at) AS INTEGER) expires_at
-FROM bans b JOIN servers s ON s.id=b.server_id WHERE b.user_id=? AND (b.expires_at IS NULL OR b.expires_at>datetime('now'))
+SELECT 'ban' kind,b.server_id,s.name server_name,b.reason,`+epochSecondsSQL(r.db, "b.created_at")+` created_at,`+epochSecondsSQL(r.db, "b.expires_at")+` expires_at
+FROM bans b JOIN servers s ON s.id=b.server_id WHERE b.user_id=? AND (b.expires_at IS NULL OR b.expires_at>CURRENT_TIMESTAMP)
 UNION ALL
-SELECT 'timeout',m.server_id,s.name,m.reason,CAST(strftime('%s',m.created_at) AS INTEGER),CAST(strftime('%s',m.expires_at) AS INTEGER)
-FROM member_timeouts m JOIN servers s ON s.id=m.server_id WHERE m.user_id=? AND m.expires_at>datetime('now')
+SELECT 'timeout',m.server_id,s.name,m.reason,`+epochSecondsSQL(r.db, "m.created_at")+`,`+epochSecondsSQL(r.db, "m.expires_at")+`
+FROM member_timeouts m JOIN servers s ON s.id=m.server_id WHERE m.user_id=? AND m.expires_at>CURRENT_TIMESTAMP
 ), page AS (SELECT * FROM active ORDER BY created_at DESC,kind,server_id LIMIT 51 OFFSET ?)
-SELECT u.is_platform_banned,CASE WHEN u.is_platform_banned THEN COALESCE(u.platform_ban_reason,'') ELSE '' END,CAST(strftime('%s','now') AS INTEGER),p.kind,p.server_id,p.server_name,p.reason,p.created_at,p.expires_at
+SELECT u.is_platform_banned,CASE WHEN u.is_platform_banned <> 0 THEN COALESCE(u.platform_ban_reason,'') ELSE '' END,`+epochSecondsSQL(r.db, "'now'")+`,p.kind,p.server_id,p.server_name,p.reason,p.created_at,p.expires_at
 FROM users u LEFT JOIN page p ON 1=1 WHERE u.id=? ORDER BY p.created_at DESC,p.kind,p.server_id`, owner, owner, offset, owner)
 	if err != nil {
 		return nil, err

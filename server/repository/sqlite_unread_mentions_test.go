@@ -6,6 +6,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/models"
 )
 
@@ -107,7 +108,9 @@ func TestReadStateUnreadMentionsNotNotificationPageLimited(t *testing.T) {
 	if err != nil || len(rows) != 1 || rows[0].MentionCount != 60 {
 		t.Fatalf("full mention counts: %+v, %v", rows, err)
 	}
-	sort.Strings(ids)
+	if !database.IsPostgres(db.Conn) {
+		sort.Strings(ids)
+	}
 	if err := read.Upsert(ctx, msgSecondUser, msgChannel, ids[30]); err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +159,11 @@ func TestReadStateUnreadMentionsNotNotificationPageLimited(t *testing.T) {
 		t.Fatal(err)
 	}
 	var count int
-	if err := db.Conn.QueryRow(`SELECT unread_count FROM channel_reads WHERE user_id=? AND channel_id=?`, msgSecondUser, msgChannel).Scan(&count); err != nil {
+	unreadQuery := `SELECT unread_count FROM channel_reads WHERE user_id=? AND channel_id=?`
+	if database.IsPostgres(db.Conn) {
+		unreadQuery = `SELECT COUNT(*) FROM messages m JOIN channel_reads cr ON cr.channel_id=m.channel_id WHERE cr.user_id=? AND cr.channel_id=? AND m.user_id<>cr.user_id AND m.source_sequence>cr.last_read_source_sequence`
+	}
+	if err := db.Conn.QueryRow(unreadQuery, msgSecondUser, msgChannel).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != 28 {

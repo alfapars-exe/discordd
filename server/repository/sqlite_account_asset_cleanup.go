@@ -63,7 +63,11 @@ func (r *sqliteAccountAssetCleanupRepo) Process(ctx context.Context, url string,
 			return nil
 		}
 		var referenced bool
-		if err := tx.QueryRowContext(ctx, accountAssetReferences, url).Scan(&referenced); err != nil {
+		references := accountAssetReferences
+		if database.IsPostgres(raw) {
+			references = postgresAccountAssetReferences
+		}
+		if err := tx.QueryRowContext(ctx, references, url).Scan(&referenced); err != nil {
 			return err
 		}
 		if referenced {
@@ -103,5 +107,22 @@ const accountAssetReferences = `
  OR EXISTS(SELECT 1 FROM badges WHERE icon=?1 COLLATE NOCASE)
  OR EXISTS(SELECT 1 FROM cosmetic_items WHERE file_url=?1 COLLATE NOCASE OR animated_url=?1 COLLATE NOCASE)
  OR EXISTS(SELECT 1 FROM link_previews WHERE image_url=?1 COLLATE NOCASE OR favicon_url=?1 COLLATE NOCASE)
+ OR EXISTS(SELECT 1 FROM user_equipped WHERE instr(lower(asset_snapshot),lower(?1))>0)
+ `
+
+const postgresAccountAssetReferences = `
+ SELECT EXISTS(SELECT 1 FROM users WHERE hichat_ascii_lower(avatar_url)=hichat_ascii_lower(?1) OR hichat_ascii_lower(avatar_animated_url)=hichat_ascii_lower(?1) OR hichat_ascii_lower(banner_url)=hichat_ascii_lower(?1) OR hichat_ascii_lower(banner_animated_url)=hichat_ascii_lower(?1) OR hichat_ascii_lower(wallpaper_url)=hichat_ascii_lower(?1))
+ OR EXISTS(SELECT 1 FROM servers WHERE hichat_ascii_lower(icon_url)=hichat_ascii_lower(?1) OR hichat_ascii_lower(banner_url)=hichat_ascii_lower(?1))
+ OR EXISTS(SELECT 1 FROM attachments WHERE hichat_ascii_lower(file_url)=hichat_ascii_lower(?1))
+ OR EXISTS(SELECT 1 FROM dm_attachments WHERE hichat_ascii_lower(file_url)=hichat_ascii_lower(?1))
+ OR EXISTS(SELECT 1 FROM report_attachments WHERE hichat_ascii_lower(file_url)=hichat_ascii_lower(?1))
+ OR EXISTS(SELECT 1 FROM feedback_attachments WHERE hichat_ascii_lower(file_url)=hichat_ascii_lower(?1))
+ OR EXISTS(SELECT 1 FROM server_emojis WHERE hichat_ascii_lower(file_url)=hichat_ascii_lower(?1) OR hichat_ascii_lower(animated_url)=hichat_ascii_lower(?1))
+ OR EXISTS(SELECT 1 FROM server_stickers WHERE hichat_ascii_lower(file_url)=hichat_ascii_lower(?1) OR hichat_ascii_lower(animated_url)=hichat_ascii_lower(?1))
+ OR EXISTS(SELECT 1 FROM user_entrance_sounds WHERE hichat_ascii_lower(file_url)=hichat_ascii_lower(?1))
+ OR EXISTS(SELECT 1 FROM soundboard_sounds WHERE hichat_ascii_lower(file_url)=hichat_ascii_lower(?1))
+ OR EXISTS(SELECT 1 FROM badges WHERE hichat_ascii_lower(icon)=hichat_ascii_lower(?1))
+ OR EXISTS(SELECT 1 FROM cosmetic_items WHERE hichat_ascii_lower(file_url)=hichat_ascii_lower(?1) OR hichat_ascii_lower(animated_url)=hichat_ascii_lower(?1))
+ OR EXISTS(SELECT 1 FROM link_previews WHERE hichat_ascii_lower(image_url)=hichat_ascii_lower(?1) OR hichat_ascii_lower(favicon_url)=hichat_ascii_lower(?1))
  OR EXISTS(SELECT 1 FROM user_equipped WHERE instr(lower(asset_snapshot),lower(?1))>0)
  `

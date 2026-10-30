@@ -23,7 +23,7 @@ func TestProfileWriteImmediatelyRefreshesAuthenticatedMe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db, err := database.New(filepath.Join(t.TempDir(), "profile-cache.db"), os.DirFS(migrations))
+	db, err := database.NewLegacy(filepath.Join(t.TempDir(), "profile-cache.db"), os.DirFS(migrations))
 	if err != nil {
 		t.Fatal(err)
 	}

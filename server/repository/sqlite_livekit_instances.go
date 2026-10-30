@@ -15,11 +15,9 @@ import (
 
 func (r *sqliteLiveKitRepo) Create(ctx context.Context, instance *models.LiveKitInstance) error {
 	// Generate ID in Go rather than relying on RETURNING for safer cross-driver compat.
-	var generatedID string
-	if err := r.db.QueryRowContext(ctx,
-		`SELECT lower(hex(randomblob(8)))`,
-	).Scan(&generatedID); err != nil {
-		return fmt.Errorf("failed to generate livekit instance id: %w", err)
+	generatedID, err := generateID()
+	if err != nil {
+		return err
 	}
 
 	// Apply sane defaults so callers that only fill the credential fields
@@ -46,7 +44,7 @@ func (r *sqliteLiveKitRepo) Create(ctx context.Context, instance *models.LiveKit
 		)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
-	_, err := r.db.ExecContext(ctx, query,
+	_, err = r.db.ExecContext(ctx, query,
 		generatedID, instance.URL, instance.APIKey, instance.APISecret,
 		instance.IsPlatformManaged, instance.ServerCount, instance.MaxServers, instance.HetznerServerID,
 		instance.Priority, instance.MonthlyQuotaMinutes, instance.QuotaResetDay,
@@ -143,7 +141,7 @@ func (r *sqliteLiveKitRepo) IncrementServerCount(ctx context.Context, instanceID
 }
 
 func (r *sqliteLiveKitRepo) DecrementServerCount(ctx context.Context, instanceID string) error {
-	query := `UPDATE livekit_instances SET server_count = MAX(server_count - 1, 0) WHERE id = ?`
+	query := `UPDATE livekit_instances SET server_count = CASE WHEN server_count>0 THEN server_count-1 ELSE 0 END WHERE id = ?`
 
 	result, err := r.db.ExecContext(ctx, query, instanceID)
 	if err != nil {

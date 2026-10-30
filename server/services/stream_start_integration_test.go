@@ -21,7 +21,7 @@ func TestStreamStartNotifierSQLiteCommittedRealtimeIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db, err := database.New(filepath.Join(t.TempDir(), "stream.db"), migrations)
+	db, err := database.NewLegacy(filepath.Join(t.TempDir(), "stream.db"), migrations)
 	if err != nil {
 		t.Fatal(err)
 	}

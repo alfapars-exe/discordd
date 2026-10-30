@@ -13,6 +13,7 @@ REQUIRED_PACKAGES = {
     "github.com/argeinfina/hichat/repository",
     "github.com/argeinfina/hichat/database",
 }
+REDACTED_DATABASE = "[test-database]"
 REQUIRED_SERVER_POSTGRES_TEST = "TestPurgeExpiredNotificationsPostgres"
 
 
@@ -60,8 +61,8 @@ def main():
         elif event.get("Action") == "output":
             # Repository fixtures use synthetic records, but database driver
             # errors may contain a DSN; never echo it in CI.
-            output = event.get("Output", "").replace(dsn, "[test-database]")
-            output = re.sub(r"\bpostgres(?:ql)?://\S+", "[test-database]", output)
+            output = event.get("Output", "").replace(dsn, REDACTED_DATABASE)
+            output = re.sub(r"\bpostgres(?:ql)?://\S+", REDACTED_DATABASE, output)
             if not output.startswith(("=== ", "--- PASS", "--- SKIP")):
                 print(output, end="", flush=True)
     code = process.wait()
@@ -72,7 +73,15 @@ def main():
         print("Required PostgreSQL packages did not complete: " + ", ".join(sorted(missing_packages)), file=sys.stderr)
     if not postgres_retention_passed:
         print(f"Required PostgreSQL test did not pass: {REQUIRED_SERVER_POSTGRES_TEST}", file=sys.stderr)
-    return code or int(bool(skipped) or bool(missing_packages) or not postgres_retention_passed or invalid_output)
+    if code or skipped or missing_packages or not postgres_retention_passed or invalid_output:
+        return code or 1
+    # Durable delivery must run on PostgreSQL too; the ordinary service lane
+    # uses mocks/legacy fixtures and cannot validate these transactions.
+    delivery = subprocess.run(["go", "test", "-v", "-count=1", "-timeout=2m", "./services",
+                               "-run", "^TestChannelDelivery"], cwd=root / "server",
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    print(delivery.stdout.replace(dsn, REDACTED_DATABASE), end="", flush=True)
+    return delivery.returncode or int("--- SKIP:" in delivery.stdout or "[no tests to run]" in delivery.stdout)
 
 
 if __name__ == "__main__":

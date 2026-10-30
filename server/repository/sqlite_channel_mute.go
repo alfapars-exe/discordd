@@ -45,7 +45,7 @@ func (r *sqliteChannelMuteRepo) GetMutedChannelIDs(ctx context.Context, userID s
 	query := `
 		SELECT channel_id FROM channel_mutes
 		WHERE user_id = ?
-		  AND (muted_until IS NULL OR muted_until > datetime('now'))`
+		  AND (muted_until IS NULL OR muted_until > CURRENT_TIMESTAMP)`
 
 	rows, err := r.db.QueryContext(ctx, query, userID)
 	if err != nil {

@@ -20,40 +20,54 @@ type MessageReference struct {
 }
 
 type Message struct {
-	ID          string      `json:"id"`
-	ChannelID   string      `json:"channel_id"`
-	UserID      string      `json:"user_id"`
+	ClientMessageID  string                  `json:"client_message_id,omitempty"`
+	SourceSequence   int64                   `json:"source_sequence,omitempty"`
+	Replayed         bool                    `json:"-"`
+	AttachmentStates []AttachmentPreparation `json:"attachment_states,omitempty"`
+	ID               string                  `json:"id"`
+	ChannelID        string                  `json:"channel_id"`
+	UserID           string                  `json:"user_id"`
 	// ServerID is a transient field (not stored in DB) populated before WS broadcast
 	// so clients know which server a message belongs to without a channel lookup.
-	ServerID    string      `json:"server_id,omitempty"`
-	Content     *string     `json:"content"`
-	EditedAt    *time.Time  `json:"edited_at"`
-	CreatedAt   time.Time   `json:"created_at"`
-	ReplyToID   *string     `json:"reply_to_id"`
-	Author      *PublicUser `json:"author,omitempty"` // populated via JOIN
-	Attachments []Attachment    `json:"attachments,omitempty"`
-	Mentions     []string        `json:"mentions"`
-	RoleMentions []string        `json:"role_mentions"`
-	Reactions   []ReactionGroup `json:"reactions"`
+	ServerID          string            `json:"server_id,omitempty"`
+	Content           *string           `json:"content"`
+	EditedAt          *time.Time        `json:"edited_at"`
+	CreatedAt         time.Time         `json:"created_at"`
+	ReplyToID         *string           `json:"reply_to_id"`
+	Author            *PublicUser       `json:"author,omitempty"` // populated via JOIN
+	Attachments       []Attachment      `json:"attachments,omitempty"`
+	Mentions          []string          `json:"mentions"`
+	RoleMentions      []string          `json:"role_mentions"`
+	Reactions         []ReactionGroup   `json:"reactions"`
 	ReferencedMessage *MessageReference `json:"referenced_message,omitempty"`
 
 	// E2EE fields — when encryption_version > 0, Content is nil
 	// and the payload is in Ciphertext (opaque base64 blob).
-	EncryptionVersion int     `json:"encryption_version"`         // 0=plaintext, 1=E2EE
+	EncryptionVersion int     `json:"encryption_version"` // 0=plaintext, 1=E2EE
 	Ciphertext        *string `json:"ciphertext,omitempty"`
 	SenderDeviceID    *string `json:"sender_device_id,omitempty"`
 	E2EEMetadata      *string `json:"e2ee_metadata,omitempty"`
 }
 
 type Attachment struct {
-	ID        string    `json:"id"`
-	MessageID string    `json:"message_id"`
-	Filename  string    `json:"filename"`
-	FileURL   string    `json:"file_url"`
-	FileSize  *int64    `json:"file_size"`
-	MimeType  *string   `json:"mime_type"`
-	CreatedAt time.Time `json:"created_at"`
+	PreparationIndex *int      `json:"file_key_index,omitempty"`
+	ID               string    `json:"id"`
+	MessageID        string    `json:"message_id"`
+	Filename         string    `json:"filename"`
+	FileURL          string    `json:"file_url"`
+	FileSize         *int64    `json:"file_size"`
+	MimeType         *string   `json:"mime_type"`
+	CreatedAt        time.Time `json:"created_at"`
 }
+
+type AttachmentPreparation struct {
+	Index    int     `json:"index"`
+	Filename string  `json:"filename"`
+	Status   string  `json:"status"`
+	Error    *string `json:"error,omitempty"`
+}
+
+type ChannelAttachmentIndexKey struct{}
 
 // MessagePage is the cursor-based pagination response. Messages are ASC
 // (oldest first). HasMore means older rows exist beyond the page; HasMoreAfter
@@ -68,9 +82,12 @@ type MessagePage struct {
 // CreateMessageRequest — E2EE: when encryption_version=1, ciphertext is
 // required and content may be empty. HasFiles is set by the service layer.
 type CreateMessageRequest struct {
-	Content   string  `json:"content"`
-	ReplyToID *string `json:"reply_to_id,omitempty"`
-	HasFiles  bool    `json:"-"`
+	ClientMessageID string   `json:"client_message_id,omitempty"`
+	RequestHash     string   `json:"-"`
+	FileNames       []string `json:"-"`
+	Content         string   `json:"content"`
+	ReplyToID       *string  `json:"reply_to_id,omitempty"`
+	HasFiles        bool     `json:"-"`
 
 	EncryptionVersion int     `json:"encryption_version"`
 	Ciphertext        *string `json:"ciphertext,omitempty"`
@@ -79,6 +96,9 @@ type CreateMessageRequest struct {
 }
 
 func (r *CreateMessageRequest) Validate() error {
+	if len(r.ClientMessageID) > 128 || strings.ContainsAny(r.ClientMessageID, "\r\n\x00") {
+		return fmt.Errorf("invalid client_message_id")
+	}
 	r.Content = strings.TrimSpace(r.Content)
 	contentLen := utf8.RuneCountInString(r.Content)
 

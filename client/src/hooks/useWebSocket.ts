@@ -32,6 +32,9 @@ import {
 } from "../utils/constants";
 import type { WSMessage, UserStatus } from "../types";
 import { handleChannelEvent } from "./ws/channelEventHandlers";
+import { setDurableChannelSends } from "../stores/shared/channelSendIntent";
+import { dispatchChannelDelivery, resyncChannelDelivery } from "./ws/channelDelivery";
+import { useMessageStore } from "../stores/messageStore";
 import { handleDMEvent } from "./ws/dmEventHandlers";
 import { handleVoiceEvent } from "./ws/voiceEventHandlers";
 import { handleSystemEvent } from "./ws/systemEventHandlers";
@@ -230,6 +233,10 @@ export function useWebSocket() {
    * accessed-before-declared.
    */
   async function routeEvent(msg: WSMessage, isCurrent: () => boolean = () => true) {
+    return dispatchChannelDelivery(msg, () => routePlainEvent(msg, isCurrent), isCurrent);
+  }
+
+  async function routePlainEvent(msg: WSMessage, isCurrent: () => boolean = () => true) {
     if (!isCurrent()) return;
     // Heartbeat ack is handled inline (no store interaction)
     if (msg.op === "heartbeat_ack") {
@@ -253,6 +260,20 @@ export function useWebSocket() {
     if (!isCurrent()) return;
     await handleSystemEvent(msg, ctx, setConnectionStatus);
     if (!isCurrent()) return;
+    if (msg.op === "ready") {
+      resyncLoadedChannels(isCurrent);
+    }
+  }
+
+  function resyncLoadedChannels(isCurrent: () => boolean) {
+      const messages = useMessageStore.getState().messagesByChannel;
+      for (const [channel, rows] of Object.entries(messages)) {
+        const server = rows.find((row) => row.server_id)?.server_id;
+        if (!server) continue;
+        void resyncChannelDelivery(server, channel,
+          (event) => routeEvent(event, isCurrent),
+          () => useMessageStore.getState().fetchMessages(channel, server), isCurrent);
+      }
   }
 
   // Latest-ref mirror — updated after every commit so onmessage in
@@ -445,6 +466,7 @@ export function useWebSocket() {
 
       if (!isCurrentConnection(connectionId, ownerId, generation)) return;
 
+      setDurableChannelSends(false);
       const socket = new WebSocket(connectURL);
       const connectionSession = getAccessSessionID(token);
       const connectionOwner = ownerId;

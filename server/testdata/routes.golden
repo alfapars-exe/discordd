@@ -204,6 +204,7 @@ DELETE /api/admin/users/{id}
 PATCH /api/admin/users/{id}/platform-admin
 GET /api/admin/logs
 GET /api/admin/logs/health
+GET /api/admin/channel-delivery/health
 DELETE /api/admin/logs
 POST /api/livekit/webhook
 GET /api/stats
@@ -245,6 +246,7 @@ PATCH /api/servers/{serverId}/categories/{id}
 DELETE /api/servers/{serverId}/categories/{id}
 PATCH /api/servers/{serverId}/categories/reorder
 GET /api/servers/{serverId}/channels/{id}/messages
+GET /api/servers/{serverId}/channels/{id}/message-events
 POST /api/servers/{serverId}/channels/{id}/messages
 PATCH /api/servers/{serverId}/messages/{id}
 DELETE /api/servers/{serverId}/messages/{id}

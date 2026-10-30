@@ -14,7 +14,7 @@ class PostgreSQLRunnerTests(unittest.TestCase):
     def execute(self, events, code=0):
         process = Mock(stdout=io.StringIO("\n".join(json.dumps(event) for event in events)))
         process.wait.return_value = code
-        with patch.dict(runner.os.environ, {"HICHAT_TEST_POSTGRES_DSN": "postgres://postgres@127.0.0.1/test"}), patch.object(runner.subprocess, "Popen", return_value=process), patch("sys.stdout", io.StringIO()), patch("sys.stderr", io.StringIO()):
+        with patch.dict(runner.os.environ, {"HICHAT_TEST_POSTGRES_DSN": "postgres://postgres@127.0.0.1/test"}), patch.object(runner.subprocess, "Popen", return_value=process), patch.object(runner.subprocess, "run", return_value=Mock(stdout="--- PASS: TestChannelDelivery\n", returncode=0)), patch("sys.stdout", io.StringIO()), patch("sys.stderr", io.StringIO()):
             return runner.main()
 
     def completed(self):

@@ -74,7 +74,7 @@ func (r *sqliteDMRepo) ListChannels(ctx context.Context, userID string) ([]model
 		SELECT dc.id, dc.e2ee_enabled, dc.status, dc.initiated_by, dc.created_at, dc.last_message_at,
 			u.id, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, u.created_at,
 			COALESCE(ds.is_pinned, 0),
-			CASE WHEN ds.muted_until IS NOT NULL AND ds.muted_until > datetime('now') THEN 1 ELSE 0 END,
+			CASE WHEN ds.muted_until IS NOT NULL AND ds.muted_until > CURRENT_TIMESTAMP THEN 1 ELSE 0 END,
 			COALESCE(dr.unread_count, 0),
 			(SELECT unread.id FROM dm_messages unread
 			 WHERE unread.dm_channel_id=dc.id AND unread.user_id != ? AND COALESCE(dr.unread_count,0)>0

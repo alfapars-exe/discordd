@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -226,17 +225,6 @@ func bindPostgres(query string) (string, error) {
 	return out.String(), nil
 }
 
-var (
-	pgIgnore      = regexp.MustCompile(`(?i)\bINSERT\s+OR\s+IGNORE\s+INTO\b`)
-	pgReplace     = regexp.MustCompile(`(?i)\bINSERT\s+OR\s+REPLACE\s+INTO\s+(\w+)`)
-	pgNow         = regexp.MustCompile(`(?i)datetime\(\s*'now'\s*\)`)
-	pgRelativeNow = regexp.MustCompile(`(?i)datetime\(\s*'now'\s*,\s*'([-+0-9 ]+(?:days?|hours?|minutes?|seconds?))'\s*\)`)
-	pgEpoch       = regexp.MustCompile(`(?i)CAST\(strftime\('%s',\s*('now'|[\w.]+)\)\s+AS INTEGER\)`)
-	pgFormatNow   = regexp.MustCompile(`(?i)strftime\('[^']+',\s*'now'\)`)
-	pgGroupConcat = regexp.MustCompile(`(?i)GROUP_CONCAT\(([\w.]+)\)`)
-	pgNoCase      = regexp.MustCompile(`(?i)([\w.]+)\s*=\s*(\$\d+)\s+COLLATE NOCASE`)
-)
-
 func postgresQuery(query string) (string, error) {
 	// Native migrations may start with documentation comments and contain
 	// dollar-quoted function bodies. They are not repository SQL to translate.
@@ -252,51 +240,5 @@ func postgresQuery(query string) (string, error) {
 	if strings.HasPrefix(native, "CREATE ") || strings.HasPrefix(native, "ALTER ") || strings.HasPrefix(native, "DO $") {
 		return query, nil
 	}
-	q, err := bindPostgres(query)
-	if err != nil {
-		return "", err
-	}
-	// Native migration files contain no '?' placeholders. Avoid rewriting DDL.
-	upper := strings.ToUpper(strings.TrimSpace(q))
-	if strings.HasPrefix(upper, "CREATE ") || strings.HasPrefix(upper, "ALTER ") {
-		return q, nil
-	}
-	q = pgRelativeNow.ReplaceAllString(q, "(CURRENT_TIMESTAMP + INTERVAL '$1')")
-	q = pgNow.ReplaceAllString(q, "CURRENT_TIMESTAMP")
-	q = pgEpoch.ReplaceAllStringFunc(q, func(s string) string {
-		v := pgEpoch.FindStringSubmatch(s)[1]
-		if v == "'now'" {
-			v = "CURRENT_TIMESTAMP"
-		}
-		return "CAST(EXTRACT(EPOCH FROM " + v + ") AS BIGINT)"
-	})
-	q = pgFormatNow.ReplaceAllString(q, "CURRENT_TIMESTAMP")
-	q = pgGroupConcat.ReplaceAllString(q, "string_agg($1, ',')")
-	q = strings.ReplaceAll(q, "json_object(", "hichat_json_object(")
-	q = strings.ReplaceAll(q, "lower(hex(randomblob(8)))", "encode(gen_random_bytes(8), 'hex')")
-	q = strings.ReplaceAll(q, "lower(hex(randomblob(16)))", "encode(gen_random_bytes(16), 'hex')")
-	q = pgNoCase.ReplaceAllString(q, "hichat_ascii_lower($1) = hichat_ascii_lower($2)")
-	q = strings.ReplaceAll(q, "CASE WHEN u.is_platform_banned THEN", "CASE WHEN u.is_platform_banned <> 0 THEN")
-	q = strings.ReplaceAll(q, "MAX(server_count - 1, 0)", "GREATEST(server_count - 1, 0)")
-	if strings.Contains(q, "channel_group_sessions") {
-		q = regexp.MustCompile(`\browid\b`).ReplaceAllString(q, "insertion_order")
-	}
-	if pgIgnore.MatchString(q) {
-		q = pgIgnore.ReplaceAllString(q, "INSERT INTO")
-		q = strings.TrimSuffix(strings.TrimSpace(q), ";") + " ON CONFLICT DO NOTHING"
-	}
-	if m := pgReplace.FindStringSubmatch(q); m != nil {
-		clauses := map[string]string{
-			"bans":              "(server_id,user_id) DO UPDATE SET username=excluded.username,reason=excluded.reason,banned_by=excluded.banned_by,expires_at=excluded.expires_at,created_at=excluded.created_at",
-			"member_timeouts":   "(server_id,user_id) DO UPDATE SET expires_at=excluded.expires_at,applied_by=excluded.applied_by,reason=excluded.reason,created_at=excluded.created_at",
-			"runtime_telemetry": "(bucket_at) DO UPDATE SET goroutines=excluded.goroutines,heap_alloc_bytes=excluded.heap_alloc_bytes,online_users=excluded.online_users,db_open_conns=excluded.db_open_conns,db_in_use=excluded.db_in_use,db_idle=excluded.db_idle,db_wait_count=excluded.db_wait_count,ws_dispatch_total=excluded.ws_dispatch_total,ws_rate_limit_drops_total=excluded.ws_rate_limit_drops_total,http_requests=excluded.http_requests,http_5xx=excluded.http_5xx,http_max_latency_ms=excluded.http_max_latency_ms,http_avg_latency_ms=excluded.http_avg_latency_ms,diagnostics=excluded.diagnostics",
-		}
-		clause, ok := clauses[strings.ToLower(m[1])]
-		if !ok {
-			return "", fmt.Errorf("PostgreSQL upsert has no conflict policy for %s", m[1])
-		}
-		q = pgReplace.ReplaceAllString(q, "INSERT INTO $1")
-		q = strings.TrimSuffix(strings.TrimSpace(q), ";") + " ON CONFLICT " + clause
-	}
-	return q, nil
+	return bindPostgres(query)
 }

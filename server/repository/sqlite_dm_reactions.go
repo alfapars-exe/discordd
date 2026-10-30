@@ -43,11 +43,14 @@ func (r *sqliteDMRepo) toggleReactionAuthorized(ctx context.Context, messageID, 
 }
 
 func (r *sqliteDMRepo) toggleReaction(ctx context.Context, messageID, userID, emoji string) (bool, error) {
-	insertQuery := `
-		INSERT OR IGNORE INTO dm_reactions (id, dm_message_id, user_id, emoji)
-		VALUES (lower(hex(randomblob(8))), ?, ?, ?)`
+	id, err := generateID()
+	if err != nil {
+		return false, err
+	}
+	insertQuery := `INSERT INTO dm_reactions (id, dm_message_id, user_id, emoji)
+		VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING`
 
-	result, err := r.db.ExecContext(ctx, insertQuery, messageID, userID, emoji)
+	result, err := r.db.ExecContext(ctx, insertQuery, id, messageID, userID, emoji)
 	if err != nil {
 		return false, fmt.Errorf("toggle DM reaction insert: %w", err)
 	}
@@ -88,7 +91,7 @@ func (r *sqliteDMRepo) RemoveReaction(ctx context.Context, messageID, userID, em
 
 func (r *sqliteDMRepo) GetReactionsByMessageID(ctx context.Context, messageID string) ([]models.ReactionGroup, error) {
 	query := `
-		SELECT emoji, COUNT(*) as count, GROUP_CONCAT(user_id) as users
+		SELECT emoji, COUNT(*) as count, ` + reactionUsersSQL(r.db) + ` as users
 		FROM dm_reactions
 		WHERE dm_message_id = ?
 		GROUP BY emoji
@@ -117,7 +120,7 @@ func (r *sqliteDMRepo) GetReactionsByMessageIDs(ctx context.Context, messageIDs 
 	}
 
 	query := fmt.Sprintf(`
-		SELECT dm_message_id, emoji, COUNT(*) as count, GROUP_CONCAT(user_id) as users
+		SELECT dm_message_id, emoji, COUNT(*) as count, `+reactionUsersSQL(r.db)+` as users
 		FROM dm_reactions
 		WHERE dm_message_id IN (%s)
 		GROUP BY dm_message_id, emoji

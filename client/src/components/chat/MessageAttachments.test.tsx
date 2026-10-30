@@ -60,6 +60,12 @@ describe("MessageAttachments", () => {
     usePreferencesStore.setState({ data: { privacy: { sensitiveMedia: { channels: "show" }, disturbingMedia: { channels: "show" } } } });
     vi.mocked(ensureFreshToken).mockClear();
   });
+  it("shows interrupted attachment preparation even without a successful file", () => {
+    render(<MessageAttachments message={makeMessage({attachment_states:[{index:0,filename:"lost.txt",status:"failed"}]})} />);
+    expect(screen.getByRole("status")).toHaveTextContent("lost.txt");
+    expect(screen.getByRole("status")).toHaveTextContent("attachmentFailed");
+  });
+
 
   it("renders nothing when there are no attachments", () => {
     const { container } = render(<MessageAttachments message={makeMessage()} />);

@@ -29,7 +29,7 @@ func (r *sqliteRoleMentionRepo) SaveRoleMentions(ctx context.Context, messageID 
 	}
 
 	query := fmt.Sprintf(
-		"INSERT OR IGNORE INTO message_role_mentions (message_id, role_id) VALUES %s",
+		"INSERT INTO message_role_mentions (message_id, role_id) VALUES %s ON CONFLICT DO NOTHING",
 		strings.Join(placeholders, ", "),
 	)
 

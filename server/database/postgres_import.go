@@ -136,10 +136,23 @@ func ImportSQLiteSnapshot(ctx context.Context, source, target *sql.DB) ([]Import
 	}
 	var report []ImportTableReport
 	for _, table := range tables {
+		if table == "channel_send_operations" || table == "channel_delivery_outbox" || table == "channel_attachment_jobs" {
+			continue
+		}
 		columns, err := importColumns(ctx, tx, table)
 		if err != nil {
 			return nil, err
 		}
+		// These fields are derived from legacy row order after content hashes
+		// have been verified. They did not exist in SQLite snapshots.
+		filtered := columns[:0]
+		for _, col := range columns {
+			if (table == "messages" && col.name == "source_sequence") || (table == "channels" && (col.name == "last_source_sequence" || col.name == "last_event_sequence")) || (table == "channel_reads" && col.name == "last_read_source_sequence") || (table == "attachments" && col.name == "channel_file_index") {
+				continue
+			}
+			filtered = append(filtered, col)
+		}
+		columns = filtered
 		if err = importCheckColumns(ctx, snapshot, table, columns); err != nil {
 			return nil, err
 		}
@@ -150,7 +163,7 @@ func ImportSQLiteSnapshot(ctx context.Context, source, target *sql.DB) ([]Import
 			names[i] = importQuote(col.name)
 			sourceNames[i] = names[i]
 			binds[i] = fmt.Sprintf("$%d", i+1)
-			if table == "channel_group_sessions" && col.name == "insertion_order" {
+			if (table == "channel_group_sessions" || table == "channel_sender_key_envelopes") && col.name == "insertion_order" {
 				sourceNames[i] = "rowid"
 			}
 		}
@@ -228,11 +241,19 @@ func ImportSQLiteSnapshot(ctx context.Context, source, target *sql.DB) ([]Import
 	if _, err = tx.ExecContext(ctx, `SELECT setval(pg_get_serial_sequence('channel_group_sessions','insertion_order'), COALESCE((SELECT MAX(insertion_order) FROM channel_group_sessions),1), EXISTS(SELECT FROM channel_group_sessions))`); err != nil {
 		return nil, err
 	}
+	if _, err = tx.ExecContext(ctx, `SELECT setval(pg_get_serial_sequence('channel_sender_key_envelopes','insertion_order'),COALESCE((SELECT MAX(insertion_order) FROM channel_sender_key_envelopes),1),EXISTS(SELECT FROM channel_sender_key_envelopes))`); err != nil {
+		return nil, err
+	}
 	var metricSequence int64
 	if err = snapshot.QueryRowContext(ctx, `SELECT COALESCE(MAX(seq),0) FROM sqlite_sequence WHERE name='livekit_metrics_history'`).Scan(&metricSequence); err != nil {
 		return nil, err
 	}
 	if _, err = tx.ExecContext(ctx, `SELECT setval(pg_get_serial_sequence('livekit_metrics_history','id'), GREATEST($1,COALESCE((SELECT MAX(id) FROM livekit_metrics_history),1)), $1>0 OR EXISTS(SELECT FROM livekit_metrics_history))`, metricSequence); err != nil {
+		return nil, err
+	}
+	if _, err = tx.ExecContext(ctx, `WITH ranked AS(SELECT id,row_number() OVER(PARTITION BY channel_id ORDER BY created_at,id) seq FROM messages) UPDATE messages SET source_sequence=ranked.seq FROM ranked WHERE ranked.id=messages.id;
+ UPDATE channels SET last_source_sequence=COALESCE((SELECT MAX(source_sequence) FROM messages WHERE channel_id=channels.id),0);
+ UPDATE channel_reads SET last_read_source_sequence=COALESCE((SELECT source_sequence FROM messages WHERE id=last_read_message_id AND channel_id=channel_reads.channel_id),0);`); err != nil {
 		return nil, err
 	}
 	// Force foreign-key validation before re-enabling writes and committing.

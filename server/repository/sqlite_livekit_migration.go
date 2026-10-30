@@ -101,7 +101,7 @@ func (r *sqliteLiveKitRepo) MigrateOneServer(ctx context.Context, serverID, newI
 	// Decrement old instance count if it changed
 	if oldInstanceID.Valid && oldInstanceID.String != "" && oldInstanceID.String != newInstanceID {
 		_, err = tx.ExecContext(ctx,
-			`UPDATE livekit_instances SET server_count = MAX(server_count - 1, 0) WHERE id = ?`,
+			`UPDATE livekit_instances SET server_count = CASE WHEN server_count>0 THEN server_count-1 ELSE 0 END WHERE id = ?`,
 			oldInstanceID.String,
 		)
 		if err != nil {
