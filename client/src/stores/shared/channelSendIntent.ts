@@ -24,4 +24,5 @@ export function channelSendIntent(key: string, content: string, files: File[] = 
 export function completeChannelSendIntent(key: string, intent: ChannelSendIntent) {
   if (pending.get(key) === intent) pending.delete(key);
 }
-export function clearChannelSendIntents() { pending.clear(); durableChannelSends = false; }
+// Message-cache/session invalidation must not erase the current server handshake.
+export function clearChannelSendIntents() { pending.clear(); }

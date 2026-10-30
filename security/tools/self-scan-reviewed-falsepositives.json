@@ -68,7 +68,7 @@
     {
       "rule": "go.sql-concat",
       "path": "server/repository/sqlite_auth_session.go",
-      "file_sha256": "4ce8804cbe5204c87625618d83cad025d7b3a4a235bcab01f5ddd7c428de1492",
+      "file_sha256": "36017acf484514b5cd81bfb839f34cf43f70759cd5efb73863b6283e1b3fa1c7",
       "line_sha256": "084f89fcb73671f90d708ed0d7dfac820a648e55f33f02f5cac24ca3bed24cb7",
       "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
       "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
@@ -76,7 +76,7 @@
     {
       "rule": "go.sql-concat",
       "path": "server/repository/sqlite_auth_session.go",
-      "file_sha256": "4ce8804cbe5204c87625618d83cad025d7b3a4a235bcab01f5ddd7c428de1492",
+      "file_sha256": "36017acf484514b5cd81bfb839f34cf43f70759cd5efb73863b6283e1b3fa1c7",
       "line_sha256": "560d984e1e155ada2babc6ee5f1ea805062d3b692747ce6061c63879272aeb83",
       "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
       "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
@@ -84,7 +84,7 @@
     {
       "rule": "go.sql-concat",
       "path": "server/repository/sqlite_auth_session.go",
-      "file_sha256": "4ce8804cbe5204c87625618d83cad025d7b3a4a235bcab01f5ddd7c428de1492",
+      "file_sha256": "36017acf484514b5cd81bfb839f34cf43f70759cd5efb73863b6283e1b3fa1c7",
       "line_sha256": "5986cc9cc02107f8e6f1b1b11c481bdf2ca88558a717ffadd1c1c42fc877a655",
       "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
       "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"

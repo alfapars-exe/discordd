@@ -69,6 +69,8 @@ not distributed presence, voice ownership or cross-instance WebSocket fan-out.
    on a copy. Compare message, attachment, mention and read-watermark results.
 2. Stop the previous backend before starting the new one. Do not use overlapping
    rolling replicas; older binaries do not participate in the singleton lock.
+   The reviewed HF publisher pauses the Space and confirms PAUSED before committing
+   sources, then explicitly restarts it. Preview and invalid plans never pause it.
 3. Deploy the backend first, inspect readiness and channel-delivery health, then
    publish the client/Windows updater. Older clients remain accepted.
 4. Verify lost HTTP responses, reconnect, partial attachments, edits/deletions and

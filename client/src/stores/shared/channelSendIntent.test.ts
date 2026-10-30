@@ -1,8 +1,8 @@
 import { beforeEach, expect, it } from "vitest";
 import { channelSendIntent, clearChannelSendIntents, completeChannelSendIntent, setDurableChannelSends, supportsDurableChannelSends } from "./channelSendIntent";
-beforeEach(clearChannelSendIntents);
-it("enables automatic replay only after the server advertises durable sends", () => {
- expect(supportsDurableChannelSends()).toBe(false);setDurableChannelSends(true);expect(supportsDurableChannelSends()).toBe(true);clearChannelSendIntents();expect(supportsDurableChannelSends()).toBe(false);
+beforeEach(() => { clearChannelSendIntents(); setDurableChannelSends(false); });
+it("keeps the server handshake across message-cache resets and disables replay for a new connection", () => {
+ expect(supportsDurableChannelSends()).toBe(false);setDurableChannelSends(true);expect(supportsDurableChannelSends()).toBe(true);clearChannelSendIntents();expect(supportsDurableChannelSends()).toBe(true);setDurableChannelSends(false);expect(supportsDurableChannelSends()).toBe(false);
 });
 it("retains the identity and prepared ciphertext across a manual retry", () => {
  const file=new File(["data"],"one");const first=channelSendIntent("session/channel","hello",[file]);

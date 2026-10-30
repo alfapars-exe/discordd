@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import time
 
 from huggingface_hub import HfApi, CommitOperationAdd, CommitOperationDelete
 
@@ -23,6 +24,18 @@ def record_deployed_commit(commit):
     if output:
         with open(output, "a", encoding="utf-8") as destination:
             destination.write(f"deployed_commit={commit}\n")
+
+
+def stop_previous_backend(api, repo):
+    # Older binaries do not hold the singleton lock. A rolling build could
+    # otherwise serve both versions against the same PostgreSQL database.
+    runtime = api.pause_space(repo)
+    for _ in range(60):
+        if runtime.stage == "PAUSED":
+            return
+        time.sleep(2)
+        runtime = api.get_space_runtime(repo)
+    raise SystemExit("Previous backend did not stop; no sources published")
 
 
 def main():
@@ -72,7 +85,9 @@ def main():
         print(json.dumps({"status": "already_current", "commit": current}))
         record_deployed_commit(current)
         return
+    stop_previous_backend(api, repo)
     result = api.create_commit(repo, repo_type="space", parent_commit=current, operations=operations, commit_message=f"Deploy HiChat {source[:12]}")
+    api.restart_space(repo)
     print(json.dumps({"status": "published", "commit": result.oid, "url": result.commit_url}))
     record_deployed_commit(result.oid)
 

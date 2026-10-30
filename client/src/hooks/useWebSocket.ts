@@ -32,6 +32,7 @@ import {
 } from "../utils/constants";
 import type { WSMessage, UserStatus } from "../types";
 import { handleChannelEvent } from "./ws/channelEventHandlers";
+import { setDurableChannelSends } from "../stores/shared/channelSendIntent";
 import { dispatchChannelDelivery, resyncChannelDelivery } from "./ws/channelDelivery";
 import { useMessageStore } from "../stores/messageStore";
 import { handleDMEvent } from "./ws/dmEventHandlers";
@@ -465,6 +466,7 @@ export function useWebSocket() {
 
       if (!isCurrentConnection(connectionId, ownerId, generation)) return;
 
+      setDurableChannelSends(false);
       const socket = new WebSocket(connectURL);
       const connectionSession = getAccessSessionID(token);
       const connectionOwner = ownerId;
