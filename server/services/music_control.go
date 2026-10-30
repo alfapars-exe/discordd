@@ -63,7 +63,41 @@ type musicPendingCommand struct {
 
 // Striped request locks join concurrent identical retries without serializing
 // unrelated commands for an entire channel across slow network extraction.
-var musicRequestLocks [256]sync.Mutex
+type musicRequestLock struct {
+	mu   sync.Mutex
+	refs int
+}
+
+var musicRequestLocks struct {
+	mu      sync.Mutex
+	entries map[[32]byte]*musicRequestLock
+}
+
+// Only identical request identities wait for one another. A short hash stripe
+// held across extraction would also block an unrelated stop on a collision.
+func lockMusicRequest(key [32]byte) func() {
+	musicRequestLocks.mu.Lock()
+	if musicRequestLocks.entries == nil {
+		musicRequestLocks.entries = make(map[[32]byte]*musicRequestLock)
+	}
+	entry := musicRequestLocks.entries[key]
+	if entry == nil {
+		entry = &musicRequestLock{}
+		musicRequestLocks.entries[key] = entry
+	}
+	entry.refs++
+	musicRequestLocks.mu.Unlock()
+	entry.mu.Lock()
+	return func() {
+		entry.mu.Unlock()
+		musicRequestLocks.mu.Lock()
+		entry.refs--
+		if entry.refs == 0 {
+			delete(musicRequestLocks.entries, key)
+		}
+		musicRequestLocks.mu.Unlock()
+	}
+}
 
 func (s *musicBotService) controlStore() (musicControlStore, error) {
 	store, ok := s.sessions.(musicControlStore)
@@ -163,9 +197,8 @@ func (s *musicBotService) ApplyMusicCommand(ctx context.Context, actorID, channe
 	digest := sha256.Sum256(canonical)
 	op := models.MusicOperation{ActorID: actorID, ChannelID: channelID, SessionID: command.SessionID, RequestID: command.RequestID, ExpectedRevision: *command.ExpectedRevision, RequestHash: hex.EncodeToString(digest[:])}
 	key := sha256.Sum256([]byte(actorID + "\x00" + channelID + "\x00" + command.RequestID))
-	lock := &musicRequestLocks[key[0]]
-	lock.Lock()
-	defer lock.Unlock()
+	unlock := lockMusicRequest(key)
+	defer unlock()
 	if receipt, err := store.FindMusicReceipt(ctx, op); err != nil {
 		return nil, err
 	} else if receipt != nil {
