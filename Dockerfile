@@ -34,7 +34,10 @@ ENV VITE_SENTRY_DSN=${VITE_SENTRY_DSN}
 # already compiled bundle. Use the single-destination UI by default; false is rollback.
 ARG VITE_UI_SHELL_V2=true
 ENV VITE_UI_SHELL_V2=${VITE_UI_SHELL_V2}
-RUN npm run build
+RUN --mount=type=secret,id=SENTRY_AUTH_TOKEN \
+    --mount=type=secret,id=SENTRY_ORG \
+    --mount=type=secret,id=SENTRY_PROJECT \
+    npm run build
 # Output: /app/client/dist/
 
 # ─── Stage 2: Go backend (embeds Stage 1 output) ───
