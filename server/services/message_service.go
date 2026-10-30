@@ -328,7 +328,9 @@ func (s *messageService) Create(ctx context.Context, serverID, channelID, userID
 	if txErr != nil {
 		return nil, txErr
 	}
-	s.wakeChannelDelivery()
+	if !req.HasFiles {
+		s.wakeChannelDelivery()
+	}
 	if replayID != "" {
 		existing, err := s.messageRepo.GetByID(ctx, replayID)
 		if err != nil {

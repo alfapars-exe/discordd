@@ -54,3 +54,21 @@ func TestChannelDeliveryCommitWake(t *testing.T) {
 		t.Fatalf("poll must drain without hint: %+v", health)
 	}
 }
+
+func TestChannelDeliveryAttachmentWakeAfterPreparation(t *testing.T) {
+	s, _, _, _ := channelDeliveryFixture(t)
+	ctx := context.Background()
+	message, err := s.Create(ctx, "default", "channel", "sender", &models.CreateMessageRequest{Content: "attachment", HasFiles: true, FileNames: []string{"file"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(s.deliveryWake) != 0 {
+		t.Fatal("attachment send woke before preparation completed")
+	}
+	if err := s.CompleteChannelSend(ctx, message); err != nil {
+		t.Fatal(err)
+	}
+	if len(s.deliveryWake) != 1 {
+		t.Fatal("completed attachment preparation did not wake delivery")
+	}
+}
