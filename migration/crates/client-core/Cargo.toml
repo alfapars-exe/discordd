@@ -1,0 +1,12 @@
+[package]
+name = "hichat-client-core"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+hichat-protocol = { path = "../protocol" }
+serde_json.workspace = true
