@@ -101,7 +101,7 @@ function MessageAttachments({ message }: Readonly<MessageAttachmentsProps>) {
     </div>
   );
   const mediaInputs = attachments.flatMap((attachment, index) => {
-    const fileMeta = message.encryption_version === 1 ? message.e2ee_file_keys?.[index] : undefined;
+    const fileMeta = message.encryption_version === 1 ? message.e2ee_file_keys?.[attachment.file_key_index ?? index] : undefined;
     const mimeType = !attachment.mime_type || attachment.mime_type === "application/octet-stream"
       ? mimeTypeFromExtension(attachment.filename) ?? "application/octet-stream" : attachment.mime_type;
     const visual = isImageAttachment(attachment) || /^(image|video)\//.test(fileMeta?.mimeType ?? mimeType);
