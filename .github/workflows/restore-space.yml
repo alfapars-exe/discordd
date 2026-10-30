@@ -22,6 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Restore only the reviewed last application-source commit
         env:
           HF_TOKEN: ${{ secrets.HF_RELEASE_TOKEN }}
@@ -50,15 +51,10 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
           test "$(git rev-parse HEAD^)" = "$RESTORE_REVISION"
           python3 - <<'PY'
-          import os, subprocess
-          # Hub adds LFS tracking metadata while committing large source assets.
-          roots = {'Dockerfile','.dockerignore','.gitattributes','README.md','package.json','package-lock.json','electron/voice-overlay-contract.ts'}
-          names = subprocess.check_output(['git','diff','--name-only','-z',os.environ['RESTORE_REVISION'],os.environ['EXPECTED_HEAD']]).decode().split('\0')
-          changed = [name for name in names if name]
-          unexpected = [name for name in changed if name not in roots and not name.startswith(('client/','server/'))]
-          if not changed or unexpected:
-              print('Unexpected rollback paths:',unexpected)
-              raise SystemExit('Refusing rollback: last change is not application-source-only')
+          import os, sys
+          sys.path.insert(0, os.path.join(os.environ['GITHUB_WORKSPACE'], 'scripts'))
+          from hf_source_manifest import validate_rollback
+          changed = validate_rollback('.', os.environ['EXPECTED_HEAD'], os.environ['RESTORE_REVISION'])
           print('Reviewed application-source rollback paths:',len(changed))
           PY
           git checkout --detach HEAD
