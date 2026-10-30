@@ -418,7 +418,7 @@ jobs:
         working-directory: e2e
 
       - name: Install Playwright Chromium and WebKit
-        run: npx playwright install --with-deps chromium webkit
+        run: node node_modules/@playwright/test/cli.js install --with-deps chromium webkit
         working-directory: e2e
 
       - name: Start isolated PostgreSQL with mutual TLS

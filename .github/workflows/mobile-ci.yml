@@ -20,7 +20,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: 22
-      - run: npm ci --prefix client
+      - run: npm ci --prefix client --ignore-scripts
       - run: node --test scripts/mobile-version.test.mjs
       - run: node scripts/mobile-version.mjs --check
       - run: npm run cap:build --prefix client
