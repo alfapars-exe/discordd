@@ -1,0 +1,10 @@
+{
+  "environment": "Ego Chromium, Vite development, isolated synthetic 2000-message store, no live account/backend",
+  "initial_mounted_articles": 18,
+  "prepend": {"added":40,"anchor":"qa-360","anchor_delta_px":0,"mounted_articles":31},
+  "jump": {"target":"qa-1500","target_bounds":[256,375.5],"viewport_bounds":[22,579],"reply_preview":"qa-1 resolved outside rendered window"},
+  "resize_above_viewport": {"changed_row":"qa-1486","target_delta_px":0},
+  "keyboard_focus": {"target":"qa-1500","retained_after_scroll_to_top":true},
+  "search": {"query":"Message 1999","mounted_articles":1,"store_messages":2000},
+  "limitations": ["synthetic height change models late media layout; no real attachment download","screen reader semantics inspected; no assistive-technology device session","browser development timing is not a production paint benchmark"]
+}

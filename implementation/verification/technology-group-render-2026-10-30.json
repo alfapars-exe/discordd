@@ -1,0 +1,37 @@
+{
+  "method": "Vitest/jsdom React mount, 2000 identical messages, 800x600 viewport, measured 140px rows, three same-host runs. Includes React/DOM construction, not browser layout or paint.",
+  "baseline": [
+    {
+      "milliseconds": 1072.9480999999996,
+      "articles": 2000,
+      "nodes": 30020
+    },
+    {
+      "milliseconds": 988.2434999999987,
+      "articles": 2000,
+      "nodes": 30020
+    },
+    {
+      "milliseconds": 946.721599999999,
+      "articles": 2000,
+      "nodes": 30020
+    }
+  ],
+  "virtualized": [
+    {
+      "milliseconds": 76.48279999999977,
+      "articles": 17,
+      "nodes": 276
+    },
+    {
+      "milliseconds": 32.68149999999969,
+      "articles": 17,
+      "nodes": 276
+    },
+    {
+      "milliseconds": 20.048999999999978,
+      "articles": 17,
+      "nodes": 276
+    }
+  ]
+}
