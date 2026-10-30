@@ -190,6 +190,7 @@ func TestChannelDeliveryAttachmentRecoveryAndWatermark(t *testing.T) {
 	}
 	db.Exec(`UPDATE channel_attachment_jobs SET updated_at=CURRENT_TIMESTAMP-INTERVAL '31 minutes' WHERE status='preparing'`)
 	db.Exec(`UPDATE channel_delivery_outbox SET created_at=CURRENT_TIMESTAMP-INTERVAL '31 minutes'`)
+	s.recoverChannelPreparations(ctx)
 	s.deliveryTick(ctx)
 	if err = s.loadAttachmentStates(ctx, m); err != nil {
 		t.Fatal(err)
