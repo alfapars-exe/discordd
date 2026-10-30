@@ -364,6 +364,12 @@ jobs:
           file: Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
+          build-args: |
+            VITE_SENTRY_DSN=${{ vars.VITE_SENTRY_DSN }}
+          secrets: |
+            SENTRY_AUTH_TOKEN=${{ secrets.SENTRY_AUTH_TOKEN }}
+            SENTRY_ORG=${{ vars.SENTRY_ORG }}
+            SENTRY_PROJECT=${{ vars.SENTRY_PROJECT }}
           tags: |
             ${{ steps.image.outputs.image }}:${{ github.ref_name }}
             ${{ steps.image.outputs.image }}:latest
