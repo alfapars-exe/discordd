@@ -1,0 +1,41 @@
+name: Mobile native builds
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          lfs: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 22
+      - run: npm ci --prefix client --ignore-scripts
+      - run: node --test scripts/mobile-version.test.mjs
+      - run: node scripts/mobile-version.mjs --check
+      - run: npm run cap:build --prefix client
+      - name: Verify sync preserved portable native dependencies
+        run: git diff --exit-code -- client/android/capacitor.settings.gradle client/android/app/capacitor.build.gradle client/ios/App/CapApp-SPM/Package.swift
+      - name: Build Android app and tests
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          export JAVA_HOME="$JAVA_HOME_21_X64"
+          export PATH="$JAVA_HOME/bin:$PATH"
+          cd client/android
+          bash gradlew --no-daemon assembleDebug testDebugUnitTest assembleDebugAndroidTest
+      - name: Build iOS Simulator without signing
+        if: runner.os == 'macOS'
+        run: |
+          xcodebuild -version
+          xcodebuild -project client/ios/App/App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/hichat-ios" CODE_SIGNING_ALLOWED=NO build

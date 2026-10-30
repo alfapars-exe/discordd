@@ -417,10 +417,8 @@ jobs:
         run: npm run test:isolation
         working-directory: e2e
 
-      # Chromium only — the suite pins one project, and downloading the other
-      # engines would dominate the job's runtime.
-      - name: Install Playwright chromium
-        run: npx playwright install --with-deps chromium
+      - name: Install Playwright Chromium and WebKit
+        run: node node_modules/@playwright/test/cli.js install --with-deps chromium webkit
         working-directory: e2e
 
       - name: Start isolated PostgreSQL with mutual TLS
