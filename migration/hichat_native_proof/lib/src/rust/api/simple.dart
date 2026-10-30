@@ -9,3 +9,13 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 String greet({required String name}) =>
     RustLib.instance.api.crateApiSimpleGreet(name: name);
+
+Future<String> restoreHistory({
+  required String backupJson,
+  required String password,
+  required String owner,
+}) => RustLib.instance.api.crateApiSimpleRestoreHistory(
+  backupJson: backupJson,
+  password: password,
+  owner: owner,
+);

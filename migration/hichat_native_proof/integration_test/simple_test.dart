@@ -9,7 +9,8 @@ void main() {
   setUpAll(() async => await RustLib.init());
   testWidgets('Can call rust function', (WidgetTester tester) async {
     await tester.pumpWidget(const HiChatProof());
-    expect(find.text('OK: []'), findsOneWidget);
+    expect(find.text('HiChat’e giriş'), findsOneWidget);
+    expect(greet(name: '{"success":true,"data":[]}'), 'OK: []');
   });
   testWidgets('Rust preserves API failure codes', (tester) async {
     expect(

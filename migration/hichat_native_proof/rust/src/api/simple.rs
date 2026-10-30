@@ -9,3 +9,8 @@ pub fn greet(name: String) -> String {
 pub fn init_app() {
     flutter_rust_bridge::setup_default_user_utils();
 }
+
+// Runs on the bridge worker pool; PBKDF2 must never block Flutter's UI thread.
+pub fn restore_history(backup_json: String, password: String, owner: String) -> Result<String, String> {
+    hichat_client_core::history::restore_history(backup_json, password, owner)
+}

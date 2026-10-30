@@ -1,5 +1,6 @@
 //! Small, platform-independent contract boundary for the Flutter proof slice.
-//! Decryption and persistent ratchet ownership are intentionally not implemented yet.
+//! Backup history is read-only: importing a backup never activates its ratchet keys.
+pub mod history;
 pub fn inspect_response(json: String) -> Result<String, String> {
     let response: hichat_protocol::ApiResponse =
         serde_json::from_str(&json).map_err(|_| "invalid_api_response".to_owned())?;

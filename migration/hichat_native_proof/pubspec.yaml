@@ -36,6 +36,11 @@ dependencies:
   cupertino_icons: ^1.0.8
   flutter_rust_bridge: 2.13.0
   flutter_rust_bridge_hooks: 2.13.0
+  http: ^1.6.0
+  livekit_client: ^2.13.2
+  flutter_webrtc: 1.6.3
+  web: ^1.1.2
+  web_socket_channel: ^3.0.3
 
 dev_dependencies:
   flutter_test:

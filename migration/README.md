@@ -1,71 +1,80 @@
-# Rust + Flutter migration — stage 1
+# Rust + Flutter migration — Windows/web proof
 
-This is an isolated proof workspace, not a replacement production server or client.
-Reference: committed source `8f443aac23649e8468a320850498e823826a0c5f`.
-The shared checkout's uncommitted work is deliberately excluded. This commit is
-not asserted to be the currently deployed or fully accepted release.
+This isolated branch implements a functional proof client against the existing Go
+server. It is not the complete HiChat replacement and has not been published.
+Reference source: `8f443aac23649e8468a320850498e823826a0c5f`; shared checkout
+changes are excluded, and this reference is not asserted to be the deployed release.
 
-## Reproduce
+## Implemented
 
-```sh
+- HTTPS/loopback origin validation, Go login and MFA, CSRF client hint, cookie-only
+  refresh and logout; access tokens in memory, single-flight refresh and late-result
+  fencing. Native refresh cookies stay in an origin-bound memory jar; browser
+  cookies remain HttpOnly. Credentials are never written to localStorage.
+- Rust reads existing AES-GCM/PBKDF2 recovery backups (legacy 1M, current 2M,
+  allowed legacy range), validates account ownership and exposes only cached
+  historical messages. Original encrypted archives can be downloaded/pasted and
+  retained separately by origin/account. Passwords and decrypted device keys are
+  not persisted. This does not activate an old device identity/ratchet or decrypt
+  ciphertext absent from the backup's message cache.
+- Grouped channel discovery; ticket-authenticated WS presence; encrypted LiveKit
+  room admission, microphone, camera, screen publishing, track rendering and device
+  selection. Media uses authoritative key indices, closes on rekey/moderation or
+  auth invalidation, and releases owned tracks and key provider on leave.
+- Windows screen/window picker. Browser capture uses the browser chooser; mobile
+  browser capture is subject to browser support. Native process-exclusive system
+  audio, seamless rekey/reconnect, P2P calls, game overlay, DSP parity and background
+  mobile calling are still separate implementation/acceptance work.
+
+## Build and test
+
+Use Flutter 3.47.9, bridge/codegen 2.13.0 and locked Dart/Cargo dependencies.
+Rust/native hook toolchain is pinned in `hichat_native_proof/rust/rust-toolchain.toml`.
+Put Flutter and Cargo binaries on PATH. Install `wasm-pack` and nightly `rust-src`
+for the bridge's shared-memory WASM build.
+
+```powershell
 node migration/scripts/baseline.mjs --check
-cargo test --manifest-path migration/Cargo.toml --workspace --locked
+cargo test --manifest-path migration/Cargo.toml --workspace --release --locked
 cargo clippy --manifest-path migration/Cargo.toml --workspace --locked -- -D warnings
-```
-
-`protocol` models the existing Go response envelope and WS event header.
-`client-core` exposes response inspection for the first bridge proof. It does not
-implement authentication, E2EE, durable state, or media. Unknown event operations
-remain strings so a new server operation does not break deserialization.
-
-`hichat_native_proof` is generated for all six platforms using bridge 2.13.0
-and Flutter 3.47.9. Its native-assets build hook avoids the Windows symlink
-requirement of the initial Cargokit scaffold. The ignored `hichat_proof` folder
-is that abandoned scaffold, not a second supported application.
-
-```sh
 cd migration/hichat_native_proof
-flutter pub get --enforce-lockfile
-flutter analyze
-flutter test integration_test/simple_test.dart -d windows
-flutter build windows --release
+flutter pub get
+# Only if Windows symlink support prevents pub get:
+../scripts/prepare-windows-plugins.ps1
+flutter pub get
+flutter analyze --no-pub
+flutter test --no-pub test
+flutter build windows --release --no-pub
+../scripts/build-web.ps1
 ```
 
-The UI invokes the real Rust protocol inspector and displays `OK: []`.
-The integration test checks that exact result through the native bridge.
-The generated API retains the template method name `greet`; its input is a JSON
-response envelope, not a user's name. Rename with regenerated bindings in the
-next bridge API change. This proof never accepts credentials or contacts production.
+`build-web.ps1` compiles the SDK E2EE worker and Rust WASM before Flutter. It
+checks the original dart_webrtc 1.8.2 source SHA-256, applies the documented
+256-slot bounds correction to a local copy, and bundles its MIT notice. It never
+patches the shared Pub cache. See `third_party/dart-webrtc-keyring.patch`.
+A web deployment must serve COOP `same-origin`, COEP `require-corp`, WASM with the
+correct MIME type, the Rust pkg files and `e2ee.worker.dart.js`. Current builds use
+Flutter's JavaScript renderer plus Rust WASM; Flutter's optional all-Dart WASM
+renderer has an upstream bridge dry-run compatibility warning.
 
-## Stop gates
+## Local end-to-end fixtures
 
-Do not port the full server or replace existing clients until every platform has
-real proof of login, encrypted historical messages, calls, camera, capture, bridge,
-and packaging. A missing credential/device is pending acceptance, never a pass.
-No production DB access, migrations, update-feed changes, or deployments are part
-of this workspace's initial proof. The existing Go server remains authoritative.
+The QA scripts are hardcoded to a disposable API at `127.0.0.1:19090`. Never point
+them at production. Synthetic credentials and receipts stay under ignored `.local`.
+`prepare-local-qa.mjs` creates a test account/server and WebCrypto-encrypted backup;
+`prepare-media-peer.mjs` adds a second test user. The loopback-only `proof-server.mjs`
+serves `build/web` at port 18080 and proxies only to that disposable API.
+`browser-qa.cjs` checks desktop plus Android/iPhone user-agent emulation in Chromium.
+`media-browser-qa.cjs` publishes fake camera/audio and, with `HICHAT_TEST_SCREEN=1`,
+a synthetic tab (not the user's desktop). Run the Windows receiver integration
+while that peer is ready. Tests require an installed Playwright package via NODE_PATH.
 
-| Platform | Build | Real media/E2EE | Install/upgrade |
-|---|---|---|---|
-| Windows | pending | pending | pending |
-| Linux X11/Wayland | pending | pending | pending |
-| macOS | pending | pending | pending signing/notarization |
-| Web Chrome/Edge/Firefox/Safari | pending | pending | pending storage migration |
-| Android | pending | pending foreground/capture lifecycle | pending signing |
-| iOS | pending | pending ReplayKit/background lifecycle | pending provisioning |
+```powershell
+flutter test --no-pub integration_test/windows_flow_test.dart -d windows --dart-define=HICHAT_QA_FILE=ABSOLUTE_PATH_TO_LOCAL_QA_JSON
+flutter test --no-pub integration_test/media_peer_test.dart -d windows --dart-define=HICHAT_QA_FILE=ABSOLUTE_PATH_TO_LOCAL_QA_JSON
+```
 
-Windows requires own-process audio exclusion, PTT and game-only overlay;
-web requires keyboard/screen-reader/IME checks. SDK platform support is not
-evidence that these HiChat behaviors work. Capture-to-display latency, CPU and RAM
-must be measured against the same reference hardware and scenario.
-
-## Compatibility obligations
-
-Preserve REST methods/status/envelopes, null/empty collections, WS ordering and
-voice epochs; bcrypt/JWT/refresh/session revocation; PostgreSQL transaction and
-migration semantics; encrypted history and pending-send idempotency. Local device
-identity/ratchet migration requires exclusive ownership and recovery at the latest
-state. Never roll back to an old ratchet snapshot after sending new messages.
-
-Go/Rust servers must not randomly share live traffic: tickets and Hub state are
-process-local. Cutover requires a single active writer, scheduler and media owner.
+See `VERIFICATION.md` and `DEVICE_ACCEPTANCE.md` for evidence and open gates.
+No database schema, existing client store, production service or update feed has
+been changed. No automatic device-identity takeover or downgrade to an old ratchet
+snapshot is allowed. A backend cutover still requires one active Hub/writer/scheduler.

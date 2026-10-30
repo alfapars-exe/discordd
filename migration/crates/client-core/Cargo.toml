@@ -10,3 +10,9 @@ crate-type = ["cdylib", "staticlib", "rlib"]
 [dependencies]
 hichat-protocol = { path = "../protocol" }
 serde_json.workspace = true
+serde.workspace = true
+aes-gcm = { version = "0.10", default-features = false, features = ["aes", "alloc"] }
+pbkdf2 = "0.12"
+sha2 = "0.10"
+base64 = "0.22"
+zeroize = "1"
