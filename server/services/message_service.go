@@ -31,6 +31,7 @@ type MessageService interface {
 
 type messageService struct {
 	deliveryDB      *sql.DB
+	deliveryWake    chan struct{}
 	messageRepo     repository.MessageRepository
 	attachmentRepo  repository.AttachmentRepository
 	channelRepo     repository.ChannelRepository
@@ -327,6 +328,7 @@ func (s *messageService) Create(ctx context.Context, serverID, channelID, userID
 	if txErr != nil {
 		return nil, txErr
 	}
+	s.wakeChannelDelivery()
 	if replayID != "" {
 		existing, err := s.messageRepo.GetByID(ctx, replayID)
 		if err != nil {
@@ -552,6 +554,7 @@ func (s *messageService) Update(ctx context.Context, serverID, id, userID string
 		return nil, err
 	}
 	message.Mentions = mentions
+	s.wakeChannelDelivery()
 	message.RoleMentions = roles
 
 	// Fail-closed on resolve failure (ok ignored): an undelivered edit is
@@ -615,6 +618,8 @@ func (s *messageService) Delete(ctx context.Context, serverID, id, userID string
 	}); err != nil {
 		return err
 	}
+
+	s.wakeChannelDelivery()
 
 	// Only remove files once the DB delete has actually committed — see
 	// upload_cleanup.go for why the ordering matters.

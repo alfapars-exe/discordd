@@ -19,6 +19,15 @@ import (
 func ConfigureChannelDelivery(service MessageService, db *sql.DB) {
 	if s, ok := service.(*messageService); ok {
 		s.deliveryDB = db
+		s.deliveryWake = make(chan struct{}, 1)
+	}
+}
+
+// Coalesced hints only: the committed outbox and periodic poll own delivery.
+func (s *messageService) wakeChannelDelivery() {
+	select {
+	case s.deliveryWake <- struct{}{}:
+	default:
 	}
 }
 
@@ -88,6 +97,7 @@ func (s *messageService) CompleteChannelSend(ctx context.Context, m *models.Mess
 	if err := tx.Commit(); err != nil {
 		return err
 	}
+	s.wakeChannelDelivery()
 	return s.loadAttachmentStates(ctx, m)
 }
 
@@ -142,6 +152,10 @@ func StartChannelDelivery(parent context.Context, service MessageService) func()
 		defer close(done)
 		ticker := time.NewTicker(500 * time.Millisecond)
 		defer ticker.Stop()
+		preparations := time.NewTicker(10 * time.Second)
+		defer preparations.Stop()
+		retention := time.NewTicker(5 * time.Minute)
+		defer retention.Stop()
 		for {
 			if ctx.Err() != nil {
 				return
@@ -151,6 +165,11 @@ func StartChannelDelivery(parent context.Context, service MessageService) func()
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
+			case <-s.deliveryWake:
+			case <-preparations.C:
+				s.recoverChannelPreparations(ctx)
+			case <-retention.C:
+				s.cleanChannelDelivery(ctx)
 			}
 		}
 	}()
@@ -187,6 +206,17 @@ func (s *messageService) KeepChannelSendAlive(parent context.Context, id string)
 func (s *messageService) deliveryTick(parent context.Context) {
 	ctx, cancel := context.WithTimeout(parent, 10*time.Second)
 	defer cancel()
+	for i := 0; i < 32; i++ {
+		if !s.deliverNext(ctx) {
+			return
+		}
+	}
+	s.wakeChannelDelivery()
+}
+
+func (s *messageService) recoverChannelPreparations(parent context.Context) {
+	ctx, cancel := context.WithTimeout(parent, 10*time.Second)
+	defer cancel()
 	// A crashed multipart handler cannot leave an invisible message forever.
 	// Active uploads refresh their slots every ten seconds; a minute without
 	// progress marks an abandoned preparation explicitly failed.
@@ -198,13 +228,13 @@ func (s *messageService) deliveryTick(parent context.Context) {
 	if err != nil {
 		return
 	}
-	for i := 0; i < 32; i++ {
-		if !s.deliverNext(ctx) {
-			break
-		}
-	}
+}
+
+func (s *messageService) cleanChannelDelivery(parent context.Context) {
+	ctx, cancel := context.WithTimeout(parent, 10*time.Second)
+	defer cancel()
 	// Retention only removes successfully published events. Failed work persists.
-	_, err = s.deliveryDB.ExecContext(ctx, `DELETE FROM channel_delivery_outbox WHERE event_id IN (SELECT event_id FROM channel_delivery_outbox WHERE published_at IS NOT NULL AND created_at<CURRENT_TIMESTAMP-INTERVAL '7 days' LIMIT 500)`)
+	_, err := s.deliveryDB.ExecContext(ctx, `DELETE FROM channel_delivery_outbox WHERE event_id IN (SELECT event_id FROM channel_delivery_outbox WHERE published_at IS NOT NULL AND created_at<CURRENT_TIMESTAMP-INTERVAL '7 days' LIMIT 500)`)
 	if err != nil {
 		messageLogger.Warn("channel outbox retention failed")
 	}
