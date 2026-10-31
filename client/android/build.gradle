@@ -19,6 +19,16 @@ buildscript {
 apply from: "variables.gradle"
 
 allprojects {
+    // Capacitor's generated Cordova test project also resolves Kotlin transitives.
+    // Keep the legacy jdk7/jdk8 modules aligned with the merged standard library.
+    configurations.configureEach {
+        resolutionStrategy.eachDependency { details ->
+            if (details.requested.group == 'org.jetbrains.kotlin' &&
+                details.requested.name.startsWith('kotlin-stdlib')) {
+                details.useVersion '1.9.25'
+            }
+        }
+    }
     repositories {
         google()
         mavenCentral()
