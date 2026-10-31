@@ -10,6 +10,16 @@ const server=http.createServer(async(req,res)=>{
   res.setHeader('Cross-Origin-Opener-Policy','same-origin');
   res.setHeader('Cross-Origin-Embedder-Policy','require-corp');
   res.setHeader('Cache-Control','no-store');
+  if(new URL(req.url,'http://127.0.0.1').pathname==='/__qa/synthetic-window'){
+    res.setHeader('Content-Type','text/html; charset=utf-8');
+    res.end('<!doctype html><title>HiChat Synthetic P2P QA</title><body style="background:#224;color:white;font:30px sans-serif">Owned synthetic video capture source <span id="tick"></span><script>setInterval(()=>document.querySelector("#tick").textContent=Date.now(),100)</script>');return;
+  }
+  if(req.url==='/__qa/handoff-source.html'){
+    res.setHeader('Content-Type','text/html');res.end('<title>HiChat handoff QA</title><script type="module" src="/__qa/handoff-source.js"></script>');return;
+  }
+  if(req.url==='/__qa/handoff-source.js'){
+    res.setHeader('Content-Type','text/javascript');res.end(await readFile(new URL('../.local/source-bundle/handoff-source.js',import.meta.url)));return;
+  }
   if(req.url.startsWith('/api/')){
     const upstream=http.request({host:'127.0.0.1',port:19090,path:req.url,method:req.method,headers:{...req.headers,host:'127.0.0.1:19090',origin:'http://localhost'}},incoming=>{res.writeHead(incoming.statusCode,incoming.headers);incoming.pipe(res);});
     upstream.on('error',()=>{res.writeHead(502);res.end('Local API unavailable');});req.pipe(upstream);return;

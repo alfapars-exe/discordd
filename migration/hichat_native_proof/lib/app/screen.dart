@@ -12,6 +12,8 @@ import 'archive_store.dart';
 import 'p2p.dart';
 import 'p2p_view.dart';
 import 'game_overlay.dart';
+import 'device_vault.dart';
+import 'device_handoff_view.dart';
 
 typedef HistoryReader = Future<String> Function({
   required String backupJson,
@@ -39,6 +41,8 @@ class _HiChatScreenState extends State<HiChatScreen> {
   VoiceController? voice;
   P2PController? p2p;
   GameOverlay? overlay;
+  Future<DeviceVault>? _vault;
+  Future<DeviceVault> _openVault() => _vault ??= DeviceVault.open(api!);
   String? error, serverId, channelId;
   bool busy = false, restoring = false;
   bool shareAudio = false;
@@ -46,6 +50,7 @@ class _HiChatScreenState extends State<HiChatScreen> {
   List<dynamic> servers = [], channels = [], history = [];
   @override
   void dispose() {
+    _vault?.then((v) => v.close(), onError: (Object _) {});
     overlay?.removeListener(_changed);
     voice?.removeListener(_changed);
     voice?.leave();
@@ -129,6 +134,9 @@ class _HiChatScreenState extends State<HiChatScreen> {
   }
 
   Future<void> _logout() async {
+    final oldVault = _vault;
+    _vault = null;
+    oldVault?.then((v) => v.close(), onError: (Object _) {});
     final old = api;
     final oldVoice = voice;
     final oldP2P = p2p;
@@ -662,10 +670,12 @@ class _HiChatScreenState extends State<HiChatScreen> {
                         ? _voiceView()
                         : selection == 1
                         ? _historyView()
-                        : P2PView(
+                        : selection == 2
+                        ? P2PView(
                             controller: p2p!,
                             beforeConnect: () => voice!.leave(),
-                          ))
+                          )
+                        : DeviceHandoffView(open: _openVault))
                   : _loginView(),
             ),
           ],
@@ -687,6 +697,10 @@ class _HiChatScreenState extends State<HiChatScreen> {
                 NavigationDestination(
                   icon: Icon(Icons.call),
                   label: 'Doğrudan ara',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.devices),
+                  label: 'Cihaz devri',
                 ),
               ],
             )

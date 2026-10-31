@@ -86,3 +86,5 @@ mod crypto_reference_tests {
         }
     }
 }
+pub mod handoff;
+pub mod local_protection;

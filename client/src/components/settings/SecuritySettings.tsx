@@ -8,6 +8,7 @@ import * as authApi from "../../api/auth";
 import { useSettingsDraft } from "./settingsWorkspaceContext";
 import { newPasswordError } from "../../utils/passwordPolicy";
 import type { User } from "../../types";
+import DeviceHandoffSettings from "./DeviceHandoffSettings";
 import MFASettings from "./MFASettings";
 import SessionSettings from "./SessionSettings";
 import AccountStatusSettings from "./AccountStatusSettings";
@@ -294,6 +295,7 @@ function SecurityForm({ user }: { user: User }) {
       <div className="settings-divider" />
       <LinkedGameSettings />
       <DataExportSettings key={`export:${user.id}`} userID={user.id} />
+      <DeviceHandoffSettings key={`handoff:${user.id}`} ownerId={user.id} />
       <AccountDeletionSettings key={`delete:${user.id}`} userID={user.id} />
     </div>
   );

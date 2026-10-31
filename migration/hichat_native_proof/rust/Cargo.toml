@@ -8,6 +8,7 @@ crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
 flutter_rust_bridge = "=2.13.0"
+zeroize = "1"
 hichat-client-core = { path = "../../crates/client-core" }
 
 [lints.rust]

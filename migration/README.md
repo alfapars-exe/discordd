@@ -75,9 +75,10 @@ flutter test --no-pub integration_test/media_peer_test.dart -d windows --dart-de
 ```
 
 See `VERIFICATION.md` and `DEVICE_ACCEPTANCE.md` for evidence and open gates.
-No database schema, existing client store, production service or update feed has
-been changed. No automatic device-identity takeover or downgrade to an old ratchet
-snapshot is allowed. A backend cutover still requires one active Hub/writer/scheduler.
+Production services and update feeds are unchanged. Explicit handoff now upgrades
+only the selected source account store to a retirement schema; see HANDOFF.md.
+No automatic identity takeover or old-ratchet downgrade is allowed. A backend
+cutover still requires one active Hub/writer/scheduler.
 
 ## Incremental Windows media slice
 
@@ -86,12 +87,13 @@ the existing Go WS contract. Windows also has an opt-in native loopback audio pa
 and a Rust HUD for a selected external game's foreground window. These additions
 are locally exercised proof features, not complete product parity. See the dated
 2026-10-31 entries in VERIFICATION.md and DEVICE_ACCEPTANCE.md, and HANDOFF.md for
-the still-unimplemented live encryption-device transfer.
+the protected persistent live encryption-device transfer and remaining gates.
 
 ## Rust message kernels — 2026-10-31
 
 The client core now contains pure X3DH, Double Ratchet and signed Sender Key
 transitions, checked against the current TypeScript implementation. See
 CRYPTO_VERIFICATION.md for the 25 synthetic reference cases, error paths and
-explicit storage/ownership integration limits. These kernels do not activate an
-old device or replace the source-freeze/retirement work in HANDOFF.md.
+explicit integration limits. DeviceVault commits peer preparation under exclusive
+ownership after source retirement; see HANDOFF.md. Complete chat dispatch and
+receive orchestration remain additional work.

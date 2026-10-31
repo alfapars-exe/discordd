@@ -69,7 +69,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 1118677446;
+  int get rustContentHash => -542392340;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -81,9 +81,37 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 }
 
 abstract class RustLibApi extends BaseApi {
+  Future<void> crateApiSimpleCommitDeviceStore({
+    required String path,
+    required List<int> data,
+  });
+
+  Future<String> crateApiSimpleDeviceScopeId({required String scope});
+
   String crateApiSimpleGreet({required String name});
 
   Future<void> crateApiSimpleInitApp();
+
+  Future<String> crateApiSimpleOpenDeviceCapsule({
+    required String capsule,
+    required List<int> private,
+    required String intent,
+  });
+
+  Future<String> crateApiSimplePrepareTransferredPeer({
+    required String snapshot,
+    required String user,
+    required String device,
+    required String id,
+    required String plaintext,
+    required List<int> nonce,
+  });
+
+  Future<Uint8List> crateApiSimpleProtectDeviceStore({
+    required List<int> data,
+    required String scope,
+    required bool decode,
+  });
 
   Future<String> crateApiSimpleRestoreHistory({
     required String backupJson,
@@ -91,10 +119,17 @@ abstract class RustLibApi extends BaseApi {
     required String owner,
   });
 
+  Future<String> crateApiSimpleTransferPublicKey({required List<int> private});
+
   Future<void> crateApiSimpleUpdateOverlay({
     required String target,
     required String text,
     required bool enabled,
+  });
+
+  Future<void> crateApiSimpleVerifyTransferredRoster({
+    required String snapshot,
+    required String roster,
   });
 }
 
@@ -107,13 +142,76 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   });
 
   @override
+  Future<void> crateApiSimpleCommitDeviceStore({
+    required String path,
+    required List<int> data,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(path, serializer);
+          sse_encode_list_prim_u_8_loose(data, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 1,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiSimpleCommitDeviceStoreConstMeta,
+        argValues: [path, data],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleCommitDeviceStoreConstMeta =>
+      const TaskConstMeta(
+        debugName: "commit_device_store",
+        argNames: ["path", "data"],
+      );
+
+  @override
+  Future<String> crateApiSimpleDeviceScopeId({required String scope}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(scope, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 2,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleDeviceScopeIdConstMeta,
+        argValues: [scope],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleDeviceScopeIdConstMeta =>
+      const TaskConstMeta(debugName: "device_scope_id", argNames: ["scope"]);
+
+  @override
   String crateApiSimpleGreet({required String name}) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(name, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 1)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 3)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -138,7 +236,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 2,
+            funcId: 4,
             port: port_,
           );
         },
@@ -157,6 +255,123 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "init_app", argNames: []);
 
   @override
+  Future<String> crateApiSimpleOpenDeviceCapsule({
+    required String capsule,
+    required List<int> private,
+    required String intent,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(capsule, serializer);
+          sse_encode_list_prim_u_8_loose(private, serializer);
+          sse_encode_String(intent, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 5,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiSimpleOpenDeviceCapsuleConstMeta,
+        argValues: [capsule, private, intent],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleOpenDeviceCapsuleConstMeta =>
+      const TaskConstMeta(
+        debugName: "open_device_capsule",
+        argNames: ["capsule", "private", "intent"],
+      );
+
+  @override
+  Future<String> crateApiSimplePrepareTransferredPeer({
+    required String snapshot,
+    required String user,
+    required String device,
+    required String id,
+    required String plaintext,
+    required List<int> nonce,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(snapshot, serializer);
+          sse_encode_String(user, serializer);
+          sse_encode_String(device, serializer);
+          sse_encode_String(id, serializer);
+          sse_encode_String(plaintext, serializer);
+          sse_encode_list_prim_u_8_loose(nonce, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 6,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiSimplePrepareTransferredPeerConstMeta,
+        argValues: [snapshot, user, device, id, plaintext, nonce],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimplePrepareTransferredPeerConstMeta =>
+      const TaskConstMeta(
+        debugName: "prepare_transferred_peer",
+        argNames: ["snapshot", "user", "device", "id", "plaintext", "nonce"],
+      );
+
+  @override
+  Future<Uint8List> crateApiSimpleProtectDeviceStore({
+    required List<int> data,
+    required String scope,
+    required bool decode,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_prim_u_8_loose(data, serializer);
+          sse_encode_String(scope, serializer);
+          sse_encode_bool(decode, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 7,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_prim_u_8_strict,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiSimpleProtectDeviceStoreConstMeta,
+        argValues: [data, scope, decode],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleProtectDeviceStoreConstMeta =>
+      const TaskConstMeta(
+        debugName: "protect_device_store",
+        argNames: ["data", "scope", "decode"],
+      );
+
+  @override
   Future<String> crateApiSimpleRestoreHistory({
     required String backupJson,
     required String password,
@@ -172,7 +387,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 3,
+            funcId: 8,
             port: port_,
           );
         },
@@ -194,6 +409,37 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<String> crateApiSimpleTransferPublicKey({required List<int> private}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_prim_u_8_loose(private, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 9,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiSimpleTransferPublicKeyConstMeta,
+        argValues: [private],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleTransferPublicKeyConstMeta =>
+      const TaskConstMeta(
+        debugName: "transfer_public_key",
+        argNames: ["private"],
+      );
+
+  @override
   Future<void> crateApiSimpleUpdateOverlay({
     required String target,
     required String text,
@@ -209,7 +455,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 4,
+            funcId: 10,
             port: port_,
           );
         },
@@ -230,6 +476,41 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         argNames: ["target", "text", "enabled"],
       );
 
+  @override
+  Future<void> crateApiSimpleVerifyTransferredRoster({
+    required String snapshot,
+    required String roster,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(snapshot, serializer);
+          sse_encode_String(roster, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 11,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiSimpleVerifyTransferredRosterConstMeta,
+        argValues: [snapshot, roster],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleVerifyTransferredRosterConstMeta =>
+      const TaskConstMeta(
+        debugName: "verify_transferred_roster",
+        argNames: ["snapshot", "roster"],
+      );
+
   @protected
   String dco_decode_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -240,6 +521,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   bool dco_decode_bool(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as bool;
+  }
+
+  @protected
+  List<int> dco_decode_list_prim_u_8_loose(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as List<int>;
   }
 
   @protected
@@ -271,6 +558,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   bool sse_decode_bool(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getUint8() != 0;
+  }
+
+  @protected
+  List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var len_ = sse_decode_i_32(deserializer);
+    return deserializer.buffer.getUint8List(len_);
   }
 
   @protected
@@ -307,6 +601,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_bool(bool self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putUint8(self ? 1 : 0);
+  }
+
+  @protected
+  void sse_encode_list_prim_u_8_loose(
+    List<int> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    serializer.buffer.putUint8List(
+      self is Uint8List ? self : Uint8List.fromList(self),
+    );
   }
 
   @protected

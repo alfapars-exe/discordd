@@ -29,3 +29,61 @@ Future<void> updateOverlay({
   text: text,
   enabled: enabled,
 );
+
+Future<String> transferPublicKey({required List<int> private}) =>
+    RustLib.instance.api.crateApiSimpleTransferPublicKey(private: private);
+
+Future<String> openDeviceCapsule({
+  required String capsule,
+  required List<int> private,
+  required String intent,
+}) => RustLib.instance.api.crateApiSimpleOpenDeviceCapsule(
+  capsule: capsule,
+  private: private,
+  intent: intent,
+);
+
+Future<String> prepareTransferredPeer({
+  required String snapshot,
+  required String user,
+  required String device,
+  required String id,
+  required String plaintext,
+  required List<int> nonce,
+}) => RustLib.instance.api.crateApiSimplePrepareTransferredPeer(
+  snapshot: snapshot,
+  user: user,
+  device: device,
+  id: id,
+  plaintext: plaintext,
+  nonce: nonce,
+);
+
+Future<void> verifyTransferredRoster({
+  required String snapshot,
+  required String roster,
+}) => RustLib.instance.api.crateApiSimpleVerifyTransferredRoster(
+  snapshot: snapshot,
+  roster: roster,
+);
+
+Future<Uint8List> protectDeviceStore({
+  required List<int> data,
+  required String scope,
+  required bool decode,
+}) => RustLib.instance.api.crateApiSimpleProtectDeviceStore(
+  data: data,
+  scope: scope,
+  decode: decode,
+);
+
+Future<String> deviceScopeId({required String scope}) =>
+    RustLib.instance.api.crateApiSimpleDeviceScopeId(scope: scope);
+
+Future<void> commitDeviceStore({
+  required String path,
+  required List<int> data,
+}) => RustLib.instance.api.crateApiSimpleCommitDeviceStore(
+  path: path,
+  data: data,
+);

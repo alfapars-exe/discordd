@@ -16,9 +16,9 @@ acceptance is tracked separately; lack of hardware/signing is never counted as p
 
 ## Additional product gates
 
-- History reader is deliberately read-only. Active device identity/ratchet handoff,
-  pending-send transfer, encrypted attachment opening and future E2EE sends are not
-  implemented by displaying the backup's cached messages.
+- History recovery stays read-only. The separate device-handoff path now retires
+  the source and persists protected state/peer preparation; see HANDOFF.md for
+  storage evidence and remaining chat/network/attachment acceptance.
 - Full P2P/media/HUD parity and acceptance, original noise-engine parity,
   global PTT, system-audio exclusion acceptance and gapless rekey remain open.
 - No latency/quality/memory improvement or all-platform feature parity is claimed.
@@ -30,7 +30,7 @@ acceptance is tracked separately; lack of hardware/signing is never counted as p
 
 | Item | Local implementation/evidence | Outstanding acceptance |
 |---|---|---|
-| Active device/ratchet handoff | not implemented; history reader stays read-only; see HANDOFF.md | Rust send/receive engines, source freeze/tombstone, pending-send rewrap, atomic ownership and crash/replay tests before any real-device test |
+| Active device/ratchet handoff | source v2 retirement, target-bound capsule, pending-group rewrap, Windows DPAPI/file lock and web encrypted IDB/Web Lock; restart/idempotent peer preparation tested | complete chat dispatch/receive/fanout, abrupt crash points and physical multi-device migration; see HANDOFF.md |
 | P2P | Flutter microphone/camera call adapter; two Chromium peers exchange decoded video and nonzero synthetic-tone audio through direct DTLS-SRTP | exact legacy-client interop, screen-source renegotiation, NAT/TURN, physical capture/long calls/network changes |
 | Windows HUD | Rust external-window HUD; hidden Win32 runtime validates creation/styles/background hiding | visible real game, DPI/multiple monitors, fullscreen/anti-cheat, global PTT |
 | Windows audio | opt-in SDK WASAPI path; owned synthetic application tone arrives in encrypted browser receiver; stop unpublishes audio | full-system own-process exclusion/feedback, device changes, actual game/output devices and sustained capture |
@@ -40,7 +40,8 @@ Native Android/iOS/macOS/Linux device acceptance remains separate. No row above
 counts an emulated browser, hidden HWND or synthetic tone as physical acceptance.
 
 
-Known local failure: in the Windows/native P2P fixture, the browser receives audio
-but decodes **zero native window-video frames**. Browser-to-Windows video works.
-This is tracked as an open software/capture-path issue, not deferred solely as a
-physical-device test. The final scoped native test does not assert this direction.
+The previous 0x0 native-window capture failure is repaired by the pinned SDK
+capture-options/start-result patch. The strict native/browser fixture now asserts
+decoded video and positive synthetic audio in both directions. Physical camera,
+screen picker, sustained capture and real games remain unaccepted. Latest receipt:
+evidence/device-handoff-capture.json; windows-media.json is historical.

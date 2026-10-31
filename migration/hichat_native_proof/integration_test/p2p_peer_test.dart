@@ -11,7 +11,7 @@ import 'package:hichat_native_proof/app/p2p.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   testWidgets(
-    'Windows receives direct video and exchanges synthetic audio with Chromium',
+    'Windows and Chromium exchange direct video and synthetic audio',
     (tester) async {
       final file = File(const String.fromEnvironment('HICHAT_QA_FILE'));
       final qa = jsonDecode(await file.readAsString()) as Map;
@@ -94,6 +94,7 @@ void main() {
           await Future<void>.delayed(const Duration(milliseconds: 250));
         }
         expect(await browser.exists(), isTrue);
+        expect((jsonDecode(await browser.readAsString()) as Map)['frames'] as num, greaterThan(10));
         await File('${file.parent.path}/native-p2p-receipt.json').writeAsString(
           jsonEncode({
             'windowsFrames': frames,

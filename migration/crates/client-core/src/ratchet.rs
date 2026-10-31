@@ -153,7 +153,7 @@ pub(crate) fn validate_pair(pair: &KeyPair) -> Result<(), &'static str> {
     }
     Ok(())
 }
-fn validate(s: &Session) -> Result<(), &'static str> {
+pub(crate) fn validate_state(s: &Session) -> Result<(), &'static str> {
     if s.skipped_message_keys.len() > 1000 {
         return Err("skipped_key_limit");
     }
@@ -203,7 +203,7 @@ pub fn encrypt(
     plaintext: &[u8],
     nonce: [u8; 12],
 ) -> Result<(Session, Wire), &'static str> {
-    validate(session)?;
+    validate_state(session)?;
     if plaintext.len() > 8 * 1024 * 1024 {
         return Err("message_too_large");
     }
@@ -252,7 +252,7 @@ pub fn decrypt(
     wire: &Wire,
     new_private: [u8; 32],
 ) -> Result<(Session, Zeroizing<Vec<u8>>), &'static str> {
-    validate(session)?;
+    validate_state(session)?;
     if wire.r#type != 2 {
         return Err("prekey_establishment_required");
     }

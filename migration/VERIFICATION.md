@@ -1,4 +1,32 @@
-# Windows/web verification — 2026-10-30
+# Windows/web verification
+
+## Latest storage/capture increment — 2026-10-31
+
+The active-device proof now has durable source v2 retirement, target-bound encrypted
+capsules, pending-group key rewrap, protected Windows/web storage and exclusive
+ownership. The native integration verifies dormant restart, original pending request
+and cached history/preferences, same-ID ciphertext reuse, conflicting retry rejection
+and ratchet counter continuation. See HANDOFF.md for scope and remaining software
+gates; this is not full old/new chat delivery acceptance.
+
+The Windows 0x0 capture defect is fixed using the pinned libwebrtc options API:
+focus_window=false and WGC support, while retaining OS capture borders/permissions.
+The plugin's previously ignored Start result is checked and failed capture cleans
+up rather than reporting success. CMake patches a SHA-verified build copy and bundles
+the SDK license; the shared Pub cache stays unchanged. The strict P2P test now
+requires decoded native-to-browser video, positive audio and connected DTLS as well
+as the reverse direction. Latest sanitized evidence and source/build hashes are in
+evidence/device-handoff-capture.json. Older receipts below retain their historical
+failures and must not be used as current acceptance.
+
+Current checks include 19 ordinary Rust tests, seven source-handoff tests, 64 existing
+storage regressions, ten Flutter tests, TypeScript/analyzer/Clippy, Windows release and JS-rendered web with
+Rust WASM. Actual Flutter web activation/second-tab/reload and injected storage
+faults are checked separately from physical devices. Native Android/iOS/macOS/Linux,
+real Safari, camera/microphone, long calls and real-game acceptance remain open in
+DEVICE_ACCEPTANCE.md. No production deployment/update is implied.
+
+## Historical Windows/web receipt — 2026-10-30
 
 This is a local proof receipt, not a completed rewrite, hosted CI, release,
 installer upgrade or physical-device acceptance.

@@ -52,7 +52,7 @@ fn message_key(key: &Key) -> Key {
 fn aad(distribution: &str, iteration: u32) -> Vec<u8> {
     format!("{distribution}:{iteration}").into_bytes()
 }
-fn valid(s: &SenderKey) -> Result<(), &'static str> {
+pub(crate) fn valid(s: &SenderKey) -> Result<(), &'static str> {
     if [
         &s.channel_id,
         &s.sender_user_id,
