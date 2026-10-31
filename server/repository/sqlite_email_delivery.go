@@ -166,6 +166,15 @@ func (r *sqliteEmailDeliveryRepo) CanDeliver(ctx context.Context, job *models.Em
 		}
 	}
 	var address, verified, raw sql.NullString
+	if job.ClaimToken != "" {
+		var owns int
+		if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM email_delivery_jobs WHERE id=? AND status='delivering' AND claim_token=? AND lease_expires_at>?`, job.ID, job.ClaimToken, emailTime(now.Add(10*time.Second))).Scan(&owns); err != nil {
+			return false, err
+		}
+		if owns != 1 {
+			return false, nil
+		}
+	}
 	err := r.db.QueryRowContext(ctx, `SELECT u.email,u.email_verified_at,p.data FROM users u LEFT JOIN user_preferences p ON p.user_id=u.id WHERE u.id=? AND u.deleted_at IS NULL AND u.is_bot=0 AND NOT EXISTS(SELECT 1 FROM account_lifecycle l WHERE l.user_id=u.id AND l.disabled_at IS NOT NULL)`, job.UserID).Scan(&address, &verified, &raw)
 	if err == sql.ErrNoRows {
 		return false, nil
@@ -282,6 +291,9 @@ func (r *sqliteEmailDeliveryRepo) ClaimDue(ctx context.Context, now time.Time, l
 	// Recover expired and pre-lease rows. A crashed worker's attempt counts
 	// against the same hard retry ceiling as an explicit send failure.
 	if _, err = tx.ExecContext(ctx, `UPDATE email_delivery_jobs SET status=CASE WHEN attempts>=? THEN 'cancelled' ELSE 'pending' END,claim_token=NULL,lease_expires_at=NULL,last_error=CASE WHEN attempts>=? THEN 'delivery lease expired; retry limit reached' ELSE 'delivery lease expired' END WHERE status='delivering' AND (lease_expires_at IS NULL OR lease_expires_at<=?)`, emailDeliveryMaxAttempts, emailDeliveryMaxAttempts, emailTime(now)); err != nil {
+		return nil, err
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE email_delivery_attempts SET outcome='review' WHERE outcome='prepared' AND job_id IN (SELECT id FROM email_delivery_jobs WHERE status='cancelled')`); err != nil {
 		return nil, err
 	}
 	rows, err := tx.QueryContext(ctx, `SELECT j.id,j.user_id,j.category,j.subject,j.body_html,j.attempts,u.email,j.server_event_id,CAST(j.server_event_starts_at AS TEXT),CAST(j.expires_at AS TEXT),j.dm_message_id,j.friendship_id,j.friendship_event FROM email_delivery_jobs j JOIN users u ON u.id=j.user_id WHERE j.status='pending' AND j.attempts<? AND j.next_attempt_at<=? AND u.email_verified_at IS NOT NULL AND (j.expires_at IS NULL OR j.expires_at>?) ORDER BY j.next_attempt_at,j.id LIMIT ?`, emailDeliveryMaxAttempts, emailTime(now), emailCampaignTimeDB(now), limit)

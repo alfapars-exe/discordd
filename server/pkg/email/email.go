@@ -3,9 +3,17 @@
 package email
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/argeinfina/hichat/models"
 	"html"
+	"io"
+	"net/http"
+	"strings"
+	"time"
 
 	"github.com/resend/resend-go/v3"
 )
@@ -20,6 +28,22 @@ type EmailSender interface {
 
 type CategorySender interface {
 	SendCategoryEmail(context.Context, string, string, string) error
+	CategoryFrom() string
+	SendPreparedCategoryEmail(context.Context, string, models.EmailDeliveryPayload) (string, error)
+}
+
+var ErrImmutableEmailPayload = errors.New("provider rejected immutable email payload")
+
+func (s *resendSender) CategoryFrom() string { return fmt.Sprintf("HiChat <%s>", s.fromEmail) }
+func (s *resendSender) SendPreparedCategoryEmail(ctx context.Context, key string, p models.EmailDeliveryPayload) (string, error) {
+	response, err := s.client.Emails.SendWithOptions(ctx, &resend.SendEmailRequest{From: p.From, To: []string{p.To}, Subject: p.Subject, Html: p.HTML}, &resend.SendEmailOptions{IdempotencyKey: key})
+	if err != nil {
+		return "", err
+	}
+	if response == nil || response.Id == "" {
+		return "", errors.New("category delivery unconfirmed")
+	}
+	return response.Id, nil
 }
 
 type resendSender struct {
@@ -30,7 +54,7 @@ type resendSender struct {
 
 func NewResendSender(apiKey, fromEmail, appURL string) EmailSender {
 	return &resendSender{
-		client:    resend.NewClient(apiKey),
+		client:    resend.NewCustomClient(&http.Client{Transport: idempotencyTransport{http.DefaultTransport}, Timeout: time.Minute}, strings.Trim(strings.TrimSpace(apiKey), "'")),
 		fromEmail: fromEmail,
 		appURL:    appURL,
 	}
@@ -316,4 +340,34 @@ func (s *resendSender) SendDiagnosticsReport(ctx context.Context, toEmail, repor
 	}
 
 	return nil
+}
+
+// Resend v3 discards the structured error name. Preserve only the safe sentinel
+// before the SDK decodes it; never include provider response contents in errors.
+type idempotencyTransport struct{ base http.RoundTripper }
+
+func (t idempotencyTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	r, err := t.base.RoundTrip(req)
+	if err != nil || r.StatusCode != http.StatusConflict {
+		return r, err
+	}
+	data, readErr := io.ReadAll(io.LimitReader(r.Body, 65537))
+	if readErr != nil {
+		r.Body.Close()
+		return nil, errors.New("provider response unavailable")
+	}
+	var body struct {
+		Name string `json:"name"`
+	}
+	if len(data) <= 65536 && json.Unmarshal(data, &body) == nil && body.Name == "invalid_idempotent_request" {
+		r.Body.Close()
+		return nil, ErrImmutableEmailPayload
+	}
+	r.Body = &replayResponseBody{Reader: io.MultiReader(bytes.NewReader(data), r.Body), Closer: r.Body}
+	return r, nil
+}
+
+type replayResponseBody struct {
+	io.Reader
+	io.Closer
 }
