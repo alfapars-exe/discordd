@@ -310,6 +310,10 @@ jobs:
           govulncheck ./...
         working-directory: server
 
+      - name: govulncheck welcome-bot
+        run: govulncheck ./...
+        working-directory: bots/welcome-bot
+
       # gosec — static security analysis. Advisory for now (continue-on-error),
       # matching the golangci-lint policy above: triage the baseline before
       # flipping it to a hard gate.
@@ -371,13 +375,22 @@ jobs:
         run: node scripts/test-nginx-csp.mjs
         working-directory: client
 
-      # npm audit — dependency advisories. Advisory (continue-on-error):
-      # transitive devDependency advisories are common and shouldn't block a
-      # PR. Dependabot (.github/dependabot.yml) opens the actual bump PRs.
-      - name: npm audit (advisory)
-        continue-on-error: true
-        run: npm audit --audit-level=high
-        working-directory: client
+  dependency-audit:
+    name: npm audit (${{ matrix.directory }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        directory: ['.', client, e2e]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 22
+      # Lockfile-only includes development dependencies without running install
+      # scripts. Advisory and registry/tool failures both fail this gate.
+      - run: npm audit --package-lock-only --audit-level=high
+        working-directory: ${{ matrix.directory }}
 
   # ─── Playwright E2E: real Go binary + Vite dev client ───
   # Uses the real Go binary and a unique verified-mTLS PostgreSQL database per run.
