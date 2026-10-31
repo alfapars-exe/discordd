@@ -6,11 +6,11 @@ import {registerCaptureAdmission}from "../../audio/microphoneAdmission";
 import {publishAuthOwnerChange,publishAuthGenerationChange}from "../../api/authSessionEvents";
 import {useVoiceStore}from "../../stores/voiceStore";
 import {useGroupCallStore}from "../../stores/groupCallStore";
-import i18n from "../../i18n";
+import i18n, { changeLanguage, ensureNamespaces } from "../../i18n";
 let capture:ReturnType<typeof vi.fn>;
 function raw(){let state="live";const source=Object.assign(new EventTarget(),{id:crypto.randomUUID(),kind:"video",enabled:true,muted:false,getSettings:()=>({width:640,height:360}),getConstraints:()=>({}),stop:vi.fn(()=>{state="ended";}),applyConstraints:vi.fn(async()=>{})});Object.defineProperty(source,"readyState",{get:()=>state});return source as unknown as MediaStreamTrack;}
 function stream(track:MediaStreamTrack){return{getTracks:()=>[track],getVideoTracks:()=>[track]}as MediaStream;}
-beforeEach(async()=>{await i18n.changeLanguage("en");publishAuthOwnerChange("owner");publishAuthGenerationChange(1);useVoiceStore.setState({cameraDevice:"usb",cameraQuality:"720p",cameraFps:30});capture=vi.fn();Object.defineProperty(navigator,"mediaDevices",{configurable:true,value:{getUserMedia:capture}});vi.stubGlobal("MediaStream",class extends EventTarget{tracks:MediaStreamTrack[];constructor(tracks:MediaStreamTrack[]=[]){super();this.tracks=tracks;}getTracks(){return this.tracks;}getVideoTracks(){return this.tracks;}getAudioTracks(){return[];}});});
+beforeEach(async()=>{await ensureNamespaces(["voice"]); await changeLanguage("en");publishAuthOwnerChange("owner");publishAuthGenerationChange(1);useVoiceStore.setState({cameraDevice:"usb",cameraQuality:"720p",cameraFps:30});capture=vi.fn();Object.defineProperty(navigator,"mediaDevices",{configurable:true,value:{getUserMedia:capture}});vi.stubGlobal("MediaStream",class extends EventTarget{tracks:MediaStreamTrack[];constructor(tracks:MediaStreamTrack[]=[]){super();this.tracks=tracks;}getTracks(){return this.tracks;}getVideoTracks(){return this.tracks;}getAudioTracks(){return[];}});});
 afterEach(()=>vi.unstubAllGlobals());
 function fixture(){const room={localParticipant:{publishTrack:vi.fn(async()=>({})),unpublishTrack:vi.fn(async()=>{})}}as unknown as Room;registerCaptureAdmission(room.localParticipant,()=>true).open();return room;}
 it("waits for admitted explicit camera intent, uses live saved settings and retires raw capture on logical call loss",async()=>{

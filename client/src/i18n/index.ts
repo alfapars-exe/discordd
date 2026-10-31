@@ -1,61 +1,8 @@
-/**
- * i18n configuration — i18next + react-i18next setup.
- *
- * Namespaces: common, auth, channels, chat, settings, voice, landing, privacy,
- *             servers, dm, e2ee, soundboard, music, terms, audit, errors, inbox,
- *             saved, expressions, entrance, cosmetics.
- * Supported languages: EN (fallback), TR.
- */
-
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
-import LanguageDetector from "i18next-browser-languagedetector";
-
-// ─── EN Translation Files ───
-import enCommon from "./locales/en/common.json";
-import enAuth from "./locales/en/auth.json";
-import enChannels from "./locales/en/channels.json";
-import enChat from "./locales/en/chat.json";
-import enSettings from "./locales/en/settings.json";
-import enVoice from "./locales/en/voice.json";
-import enLanding from "./locales/en/landing.json";
-import enServers from "./locales/en/servers.json";
-import enDM from "./locales/en/dm.json";
-import enE2EE from "./locales/en/e2ee.json";
-import enSoundboard from "./locales/en/soundboard.json";
-import enMusic from "./locales/en/music.json";
-import enPrivacy from "./locales/en/privacy.json";
-import enTerms from "./locales/en/terms.json";
-import enAudit from "./locales/en/audit.json";
-import enErrors from "./locales/en/errors.json";
-import enInbox from "./locales/en/inbox.json";
-import enSaved from "./locales/en/saved.json";
-import enExpressions from "./locales/en/expressions.json";
-import enEntrance from "./locales/en/entrance.json";
-import enCosmetics from "./locales/en/cosmetics.json";
-
-// ─── TR Translation Files ───
 import trCommon from "./locales/tr/common.json";
 import trAuth from "./locales/tr/auth.json";
-import trChannels from "./locales/tr/channels.json";
-import trChat from "./locales/tr/chat.json";
-import trSettings from "./locales/tr/settings.json";
-import trVoice from "./locales/tr/voice.json";
-import trLanding from "./locales/tr/landing.json";
-import trServers from "./locales/tr/servers.json";
-import trDM from "./locales/tr/dm.json";
-import trE2EE from "./locales/tr/e2ee.json";
-import trSoundboard from "./locales/tr/soundboard.json";
-import trMusic from "./locales/tr/music.json";
-import trPrivacy from "./locales/tr/privacy.json";
-import trTerms from "./locales/tr/terms.json";
-import trAudit from "./locales/tr/audit.json";
 import trErrors from "./locales/tr/errors.json";
-import trInbox from "./locales/tr/inbox.json";
-import trSaved from "./locales/tr/saved.json";
-import trExpressions from "./locales/tr/expressions.json";
-import trEntrance from "./locales/tr/entrance.json";
-import trCosmetics from "./locales/tr/cosmetics.json";
 
 export const SUPPORTED_LANGUAGES = {
   en: "English",
@@ -71,85 +18,60 @@ export type Language = keyof typeof SUPPORTED_LANGUAGES;
  */
 export const DEFAULT_LANGUAGE: Language = "tr";
 
-i18n
-  .use(LanguageDetector)
-  .use(initReactI18next)
-  .init({
-    resources: {
-      en: {
-        common: enCommon,
-        auth: enAuth,
-        channels: enChannels,
-        chat: enChat,
-        settings: enSettings,
-        voice: enVoice,
-        landing: enLanding,
-        servers: enServers,
-        dm: enDM,
-        e2ee: enE2EE,
-        soundboard: enSoundboard,
-        music: enMusic,
-        privacy: enPrivacy,
-        terms: enTerms,
-        audit: enAudit,
-        errors: enErrors,
-        inbox: enInbox,
-        saved: enSaved,
-        expressions: enExpressions,
-        entrance: enEntrance,
-        cosmetics: enCosmetics,
-      },
-      tr: {
-        common: trCommon,
-        auth: trAuth,
-        channels: trChannels,
-        chat: trChat,
-        settings: trSettings,
-        voice: trVoice,
-        landing: trLanding,
-        servers: trServers,
-        dm: trDM,
-        e2ee: trE2EE,
-        soundboard: trSoundboard,
-        music: trMusic,
-        privacy: trPrivacy,
-        terms: trTerms,
-        audit: trAudit,
-        errors: trErrors,
-        inbox: trInbox,
-        saved: trSaved,
-        expressions: trExpressions,
-        entrance: trEntrance,
-        cosmetics: trCosmetics,
-      },
-    },
+export const ALL_NAMESPACES = ["common", "auth", "channels", "chat", "settings", "voice", "landing", "privacy", "terms", "servers", "dm", "e2ee", "soundboard", "music", "audit", "errors", "inbox", "saved", "expressions", "entrance", "cosmetics"] as const;
+type Namespace = typeof ALL_NAMESPACES[number];
+const modules = import.meta.glob<{ default: Record<string, unknown> }>("./locales/*/*.json");
+const pending = new Map<string, Promise<Record<string, unknown>>>();
+const active = new Set<Namespace>(["common", "auth", "errors", "settings"]);
+let languageRequest = 0;
 
-    fallbackLng: DEFAULT_LANGUAGE,
-    supportedLngs: Object.keys(SUPPORTED_LANGUAGES),
+void i18n.use(initReactI18next).init({
+  lng: DEFAULT_LANGUAGE,
+  fallbackLng: DEFAULT_LANGUAGE,
+  supportedLngs: Object.keys(SUPPORTED_LANGUAGES),
+  resources: { tr: { common: trCommon, auth: trAuth, errors: trErrors } },
+  defaultNS: "common", ns: ["common", "auth", "errors"],
+  interpolation: { escapeValue: false },
+  initAsync: false,
+});
 
-    defaultNS: "common",
-    ns: ["common", "auth", "channels", "chat", "settings", "voice", "landing", "privacy", "terms", "servers", "dm", "e2ee", "soundboard", "music", "audit", "errors", "inbox", "saved", "expressions", "entrance", "cosmetics"],
-
-    interpolation: {
-      // React already handles XSS protection
-      escapeValue: false,
-    },
-
-    detection: {
-      // Only localStorage — we deliberately do NOT fall through to the
-      // browser's navigator language. A fresh install always lands on
-      // DEFAULT_LANGUAGE (Türkçe) regardless of OS/browser locale; users
-      // can switch via Settings → Language and that choice is persisted.
-      order: ["localStorage"],
-      lookupLocalStorage: "language",
-      caches: ["localStorage"],
-    },
-  });
-
-/** Changes language and persists to localStorage. */
-export function changeLanguage(lng: Language): void {
-  i18n.changeLanguage(lng);
-  localStorage.setItem("language", lng);
+async function load(lng: Language, namespaces: readonly Namespace[]): Promise<void> {
+  const requests = [...new Set([DEFAULT_LANGUAGE, lng])].flatMap(language => namespaces.map(async ns => {
+    if (i18n.hasResourceBundle(language, ns)) return;
+    const key = `${language}/${ns}`;
+    let request = pending.get(key);
+    if (!request) {
+      const importer = modules[`./locales/${key}.json`];
+      if (!importer) throw new Error("Translation resource unavailable");
+      request = importer().then(result => result.default).catch(error => { pending.delete(key); throw error; });
+      pending.set(key, request);
+    }
+    return { language, ns, data: await request };
+  }));
+  // Only expose bundles after the entire requested set is available.
+  for (const bundle of await Promise.all(requests)) if (bundle) i18n.addResourceBundle(bundle.language, bundle.ns, bundle.data, true, true);
 }
 
+export async function ensureNamespaces(namespaces: readonly Namespace[]): Promise<void> {
+  namespaces.forEach(ns => active.add(ns));
+  await load(i18n.language === "en" ? "en" : "tr", namespaces);
+}
+
+/** Keep the previous language and persisted preference if loading fails. */
+export async function changeLanguage(lng: string): Promise<boolean> {
+  if (!(lng in SUPPORTED_LANGUAGES)) return false;
+  const request = ++languageRequest;
+  try {
+    let requested: Namespace[];
+    do { requested = [...active]; await load(lng as Language, requested); } while (requested.length !== active.size);
+    if (request !== languageRequest) return false;
+    await i18n.changeLanguage(lng);
+    try { localStorage.setItem("language", lng); } catch { /* storage is optional */ }
+    return true;
+  } catch { return false; }
+}
+
+let saved: string | null = null;
+try { saved = localStorage.getItem("language"); } catch { /* use Turkish */ }
+export const i18nReady = changeLanguage(saved === "en" ? "en" : DEFAULT_LANGUAGE);
 export default i18n;

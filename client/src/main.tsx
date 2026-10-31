@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, HashRouter } from "react-router-dom";
-import "./i18n"; // Must be imported before App for i18n initialization
+import { i18nReady } from "./i18n";
 import "./styles/globals.css";
 import "./styles/product-navigation.css";
 import "./styles/ui-shell-v2.css";
@@ -43,7 +43,12 @@ installScreenPickerDiagnosticForwarder();
 // Called before the render so early render-time errors are also captured.
 initSentry();
 
-createRoot(document.getElementById("root")!).render(
+void i18nReady.then((ready) => {
+  if (!ready) {
+    document.getElementById("root")!.textContent = "Dil dosyaları yüklenemedi. Lütfen uygulamayı yeniden açın. / Unable to load language files. Please reopen the app.";
+    return;
+  }
+  createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ErrorBoundary>
       <Router>
@@ -52,3 +57,4 @@ createRoot(document.getElementById("root")!).render(
     </ErrorBoundary>
   </StrictMode>
 );
+});

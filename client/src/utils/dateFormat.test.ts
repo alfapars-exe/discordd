@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import i18n from "../i18n";
+import i18n, { changeLanguage, ensureNamespaces } from "../i18n";
 import { formatDate, formatDateTime, formatTime, lastSeenLabel } from "./dateFormat";
 import { useTimeFormatStore } from "../stores/timeFormatStore";
 
@@ -19,12 +19,12 @@ const originalLanguage = i18n.language;
 
 afterAll(async () => {
   useTimeFormatStore.setState({ timeFormat: "auto" });
-  await i18n.changeLanguage(originalLanguage);
+  await ensureNamespaces(["common"]); await changeLanguage(originalLanguage);
 });
 
 describe("with Turkish active", () => {
   beforeAll(async () => {
-    await i18n.changeLanguage("tr");
+    await ensureNamespaces(["common"]); await changeLanguage("tr");
   });
 
   it("formatDate renders day.month.year ordering", () => {
@@ -51,7 +51,7 @@ describe("with Turkish active", () => {
 
 describe("with English active", () => {
   beforeAll(async () => {
-    await i18n.changeLanguage("en");
+    await ensureNamespaces(["common"]); await changeLanguage("en");
   });
 
   it("formatDate renders month/day/year ordering", () => {
