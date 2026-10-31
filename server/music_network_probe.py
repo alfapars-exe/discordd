@@ -26,26 +26,26 @@ def inventory():
         except Exception:
             result["packages"][name] = "unavailable"
     # Import the installed zipimport artifact, with import warnings discarded.
-    with open(os.devnull, "w") as sink:
-        with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
-            try:
-                sys.path.insert(0, "/usr/local/bin/yt-dlp")
-                import yt_dlp.networking
-                from yt_dlp.networking.common import _REQUEST_HANDLERS
-                from yt_dlp.version import __version__
+    with (open(os.devnull, "w") as sink,
+          contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink)):
+        try:
+            sys.path.insert(0, "/usr/local/bin/yt-dlp")
+            import yt_dlp.networking
+            from yt_dlp.networking.common import _REQUEST_HANDLERS
+            from yt_dlp.version import __version__
 
-                result["yt_dlp"] = __version__
-                result["handlers"] = sorted(_REQUEST_HANDLERS)
-            except Exception:
-                pass
+            result["yt_dlp"] = __version__
+            result["handlers"] = sorted(_REQUEST_HANDLERS)
+        except Exception:
+            pass
     return result
 
 
 def probe(item):
     target, url, family = item
-    result = dict(target=target, family=family, outcome="unavailable", exit_code=0,
-                  http_code=0, dns_ms=0, tcp_ms=0, tls_ms=0, total_ms=0)
-    args = ["curl", "-q", "--silent", "--http1.1", "--connect-timeout", "5",
+    result = {"target": target, "family": family, "outcome": "unavailable", "exit_code": 0,
+              "http_code": 0, "dns_ms": 0, "tcp_ms": 0, "tls_ms": 0, "total_ms": 0}
+    args = ["/usr/bin/curl", "-q", "--silent", "--http1.1", "--connect-timeout", "5",
             "--max-time", "7", "--max-redirs", "0", "--output", os.devnull,
             "--write-out", "%{http_code} %{time_namelookup} %{time_connect} %{time_appconnect} %{time_total}"]
     if family == "ipv4":

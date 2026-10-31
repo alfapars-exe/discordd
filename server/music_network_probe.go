@@ -3,7 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
-	_ "embed"
+	_ "embed" // Embeds the fixed diagnostic script into the server binary.
 	"encoding/json"
 	"io"
 	"math"
@@ -73,7 +73,7 @@ func startMusicNetworkProbe() {
 func runMusicNetworkProbe() {
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "python3", "-") // #nosec G204 -- fixed executable/arguments and trusted embedded script; no shell or request input
+	cmd := exec.CommandContext(ctx, "/usr/bin/python3", "-") // #nosec G204 -- fixed executable/arguments and trusted embedded script; no shell or request input
 	cmd.Stdin = strings.NewReader(musicNetworkProbeScript)
 	output := &musicProbeOutput{}
 	cmd.Stdout, cmd.Stderr = output, io.Discard
