@@ -1,0 +1,82 @@
+{
+  "environment": "isolated loopback PostgreSQL 18, Windows, 6 concurrent senders, one reserved connection, background outbox",
+  "measurements": [
+    {
+      "pool": 4.0,
+      "samples": 120.0,
+      "p95_ms": 47.543,
+      "p99_ms": 59.65,
+      "waits": 409.0,
+      "wait_ms": 745.275
+    },
+    {
+      "pool": 6.0,
+      "samples": 120.0,
+      "p95_ms": 46.959,
+      "p99_ms": 116.9,
+      "waits": 468.0,
+      "wait_ms": 542.108
+    },
+    {
+      "pool": 8.0,
+      "samples": 120.0,
+      "p95_ms": 88.029,
+      "p99_ms": 179.083,
+      "waits": 0.0,
+      "wait_ms": 0.0
+    },
+    {
+      "pool": 4.0,
+      "samples": 120.0,
+      "p95_ms": 41.772,
+      "p99_ms": 47.442,
+      "waits": 421.0,
+      "wait_ms": 759.635
+    },
+    {
+      "pool": 6.0,
+      "samples": 120.0,
+      "p95_ms": 37.692,
+      "p99_ms": 101.06,
+      "waits": 374.0,
+      "wait_ms": 451.743
+    },
+    {
+      "pool": 8.0,
+      "samples": 120.0,
+      "p95_ms": 59.853,
+      "p99_ms": 159.775,
+      "waits": 0.0,
+      "wait_ms": 0.0
+    },
+    {
+      "pool": 4.0,
+      "samples": 120.0,
+      "p95_ms": 43.421,
+      "p99_ms": 49.059,
+      "waits": 419.0,
+      "wait_ms": 778.988
+    },
+    {
+      "pool": 6.0,
+      "samples": 120.0,
+      "p95_ms": 49.231,
+      "p99_ms": 102.287,
+      "waits": 450.0,
+      "wait_ms": 544.091
+    },
+    {
+      "pool": 8.0,
+      "samples": 120.0,
+      "p95_ms": 68.334,
+      "p99_ms": 133.66,
+      "waits": 0.0,
+      "wait_ms": 0.0
+    }
+  ],
+  "decision": "Keep default 4; larger pools do not consistently improve p95 and regress p99",
+  "limits": [
+    "local synthetic send/outbox load; not production or email load",
+    "race execution requires CI C toolchain"
+  ]
+}
