@@ -41,3 +41,48 @@ mod tests {
     }
 }
 pub mod overlay;
+pub mod ratchet;
+pub mod sender_key;
+pub mod x3dh;
+
+#[cfg(test)]
+mod crypto_reference_tests {
+    use sha2::Digest;
+    #[test]
+    fn fixtures_are_bound_to_the_current_reference_implementation() {
+        for (source, fixture) in [
+            (
+                include_str!("../../../../client/src/crypto/signalProtocol.ts"),
+                include_str!("../../protocol/fixtures/ratchet.json"),
+            ),
+            (
+                include_str!("../../../../client/src/crypto/signalProtocol.ts"),
+                include_str!("../../protocol/fixtures/x3dh.json"),
+            ),
+            (
+                include_str!("../../../../client/src/crypto/senderKeyProtocol.ts"),
+                include_str!("../../protocol/fixtures/sender-key.json"),
+            ),
+        ] {
+            let json: serde_json::Value = serde_json::from_str(fixture).unwrap();
+            assert_eq!(
+                json["sourceSha256"],
+                format!(
+                    "{:x}",
+                    sha2::Sha256::digest(source.replace("\r\n", "\n").as_bytes())
+                )
+            );
+            assert_eq!(
+                json["typesSha256"],
+                format!(
+                    "{:x}",
+                    sha2::Sha256::digest(
+                        include_str!("../../../../client/src/crypto/types.ts")
+                            .replace("\r\n", "\n")
+                            .as_bytes()
+                    )
+                )
+            );
+        }
+    }
+}

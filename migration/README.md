@@ -87,3 +87,11 @@ and a Rust HUD for a selected external game's foreground window. These additions
 are locally exercised proof features, not complete product parity. See the dated
 2026-10-31 entries in VERIFICATION.md and DEVICE_ACCEPTANCE.md, and HANDOFF.md for
 the still-unimplemented live encryption-device transfer.
+
+## Rust message kernels — 2026-10-31
+
+The client core now contains pure X3DH, Double Ratchet and signed Sender Key
+transitions, checked against the current TypeScript implementation. See
+CRYPTO_VERIFICATION.md for the 25 synthetic reference cases, error paths and
+explicit storage/ownership integration limits. These kernels do not activate an
+old device or replace the source-freeze/retirement work in HANDOFF.md.

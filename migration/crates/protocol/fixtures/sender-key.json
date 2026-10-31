@@ -1,0 +1,335 @@
+{
+  "typesSha256": "1ab52290addb65e0225a988e9afd2a91ab91b5bf65d2513e3acb00e16f863154",
+  "sourceSha256": "b8ac65158b9cd19f446277ec1ef07b3bf6c5ebe05b71d1f9ceca65c19b1eb424",
+  "cases": [
+    {
+      "operation": "encrypt",
+      "state": {
+        "channelId": "channel",
+        "senderUserId": "owner",
+        "senderDeviceId": "device",
+        "distributionId": "11111111111111111111111111111111",
+        "chainKey": {
+          "__b64": "FhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhY="
+        },
+        "initialChainKey": {
+          "__b64": "FhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhY="
+        },
+        "publicSigningKey": {
+          "__b64": "1UIH2hlJd9z0atv+wrwudbUtWopCGE/t/cAAJPDj6No="
+        },
+        "iteration": 0,
+        "createdAt": 1793466605925,
+        "protocolVersion": 2,
+        "recipientFingerprint": "1111111111111111111111111111111111111111111111111111111111111111",
+        "seenIterations": [],
+        "replayFloor": 0
+      },
+      "next": {
+        "channelId": "channel",
+        "senderUserId": "owner",
+        "senderDeviceId": "device",
+        "distributionId": "11111111111111111111111111111111",
+        "chainKey": {
+          "__b64": "CQTfbp4otO+eLE3z7cu8AHy7LQAuBMRHavJ6c/vJHRM="
+        },
+        "initialChainKey": {
+          "__b64": "FhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhY="
+        },
+        "publicSigningKey": {
+          "__b64": "1UIH2hlJd9z0atv+wrwudbUtWopCGE/t/cAAJPDj6No="
+        },
+        "iteration": 1,
+        "createdAt": 1793466605925,
+        "protocolVersion": 2,
+        "recipientFingerprint": "1111111111111111111111111111111111111111111111111111111111111111",
+        "seenIterations": [],
+        "replayFloor": 0
+      },
+      "plaintext": "Kanal mesajı 👋",
+      "seed": {
+        "__b64": "FRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRU="
+      },
+      "wire": {
+        "distributionId": "11111111111111111111111111111111",
+        "iteration": 0,
+        "ciphertext": "dCozUBUX6vfQgqhhZvmmL844eJDebzHyM1U9B+3k0FU1mMwMQwJw+TP08A7aBJwdHc9La2PSmBAeiV40kjAMBR3Ym9phI6xOVDrijFO8lhFy+TuFWkn/jwM2HSpQTWZbNiPeoQqvWyoS2pCoeYU="
+      }
+    },
+    {
+      "operation": "encrypt",
+      "state": {
+        "channelId": "channel",
+        "senderUserId": "owner",
+        "senderDeviceId": "device",
+        "distributionId": "11111111111111111111111111111111",
+        "chainKey": {
+          "__b64": "CQTfbp4otO+eLE3z7cu8AHy7LQAuBMRHavJ6c/vJHRM="
+        },
+        "initialChainKey": {
+          "__b64": "FhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhY="
+        },
+        "publicSigningKey": {
+          "__b64": "1UIH2hlJd9z0atv+wrwudbUtWopCGE/t/cAAJPDj6No="
+        },
+        "iteration": 1,
+        "createdAt": 1793466605925,
+        "protocolVersion": 2,
+        "recipientFingerprint": "1111111111111111111111111111111111111111111111111111111111111111",
+        "seenIterations": [],
+        "replayFloor": 0
+      },
+      "next": {
+        "channelId": "channel",
+        "senderUserId": "owner",
+        "senderDeviceId": "device",
+        "distributionId": "11111111111111111111111111111111",
+        "chainKey": {
+          "__b64": "kcf6KIj9h/3Y3+qNgDIbm5S30eAWnNkQGNbyIJp3VB8="
+        },
+        "initialChainKey": {
+          "__b64": "FhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhY="
+        },
+        "publicSigningKey": {
+          "__b64": "1UIH2hlJd9z0atv+wrwudbUtWopCGE/t/cAAJPDj6No="
+        },
+        "iteration": 2,
+        "createdAt": 1793466605925,
+        "protocolVersion": 2,
+        "recipientFingerprint": "1111111111111111111111111111111111111111111111111111111111111111",
+        "seenIterations": [],
+        "replayFloor": 0
+      },
+      "plaintext": "İkinci grup mesajı",
+      "seed": {
+        "__b64": "FRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRU="
+      },
+      "wire": {
+        "distributionId": "11111111111111111111111111111111",
+        "iteration": 1,
+        "ciphertext": "I0lj15wm/c2/WmrIoUwsXvIMesCaLzuC0XkE3H6Y2EA83rl+dehP/0W8lYlgEXvmNDtsoxxIZiuqTtDrSV/MBNauaJXq08fD0nPwRFgIuCzKDVK7gYY8ZL59eaApf2kXsDtO+fAdiATrioi6iHNOsg=="
+      }
+    },
+    {
+      "operation": "encrypt",
+      "state": {
+        "channelId": "channel",
+        "senderUserId": "owner",
+        "senderDeviceId": "device",
+        "distributionId": "11111111111111111111111111111111",
+        "chainKey": {
+          "__b64": "kcf6KIj9h/3Y3+qNgDIbm5S30eAWnNkQGNbyIJp3VB8="
+        },
+        "initialChainKey": {
+          "__b64": "FhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhY="
+        },
+        "publicSigningKey": {
+          "__b64": "1UIH2hlJd9z0atv+wrwudbUtWopCGE/t/cAAJPDj6No="
+        },
+        "iteration": 2,
+        "createdAt": 1793466605925,
+        "protocolVersion": 2,
+        "recipientFingerprint": "1111111111111111111111111111111111111111111111111111111111111111",
+        "seenIterations": [],
+        "replayFloor": 0
+      },
+      "next": {
+        "channelId": "channel",
+        "senderUserId": "owner",
+        "senderDeviceId": "device",
+        "distributionId": "11111111111111111111111111111111",
+        "chainKey": {
+          "__b64": "Spt/2taIbe2Lwo6yQfRRhhNs+sZtzjlV2H7PQfTYsDA="
+        },
+        "initialChainKey": {
+          "__b64": "FhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhY="
+        },
+        "publicSigningKey": {
+          "__b64": "1UIH2hlJd9z0atv+wrwudbUtWopCGE/t/cAAJPDj6No="
+        },
+        "iteration": 3,
+        "createdAt": 1793466605925,
+        "protocolVersion": 2,
+        "recipientFingerprint": "1111111111111111111111111111111111111111111111111111111111111111",
+        "seenIterations": [],
+        "replayFloor": 0
+      },
+      "plaintext": "Üçüncü sırasız mesaj",
+      "seed": {
+        "__b64": "FRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRU="
+      },
+      "wire": {
+        "distributionId": "11111111111111111111111111111111",
+        "iteration": 2,
+        "ciphertext": "9yznnhFE5TNcM2v8rOyiY7GgU2zUY12VmDEOyqXe3FIViv75ydgfoRFEPVakXm752Ehh5YCvRnAcn/sGczPsBvmYVGmDq0cs6ryKvicBY9wFlkHzPyQmyg6e9VAfXzIx/7y8n0lvJnPDcNBecs1OQDca8m1+ZQ=="
+      }
+    },
+    {
+      "operation": "decrypt",
+      "state": {
+        "channelId": "channel",
+        "senderUserId": "owner",
+        "senderDeviceId": "device",
+        "distributionId": "11111111111111111111111111111111",
+        "chainKey": {
+          "__b64": "FhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhY="
+        },
+        "initialChainKey": {
+          "__b64": "FhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhY="
+        },
+        "publicSigningKey": {
+          "__b64": "1UIH2hlJd9z0atv+wrwudbUtWopCGE/t/cAAJPDj6No="
+        },
+        "iteration": 0,
+        "createdAt": 1793466605925,
+        "protocolVersion": 1,
+        "recipientFingerprint": "1111111111111111111111111111111111111111111111111111111111111111",
+        "seenIterations": [],
+        "replayFloor": 0
+      },
+      "next": {
+        "channelId": "channel",
+        "senderUserId": "owner",
+        "senderDeviceId": "device",
+        "distributionId": "11111111111111111111111111111111",
+        "chainKey": {
+          "__b64": "Spt/2taIbe2Lwo6yQfRRhhNs+sZtzjlV2H7PQfTYsDA="
+        },
+        "initialChainKey": {
+          "__b64": "FhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhY="
+        },
+        "publicSigningKey": {
+          "__b64": "1UIH2hlJd9z0atv+wrwudbUtWopCGE/t/cAAJPDj6No="
+        },
+        "iteration": 3,
+        "createdAt": 1793466605925,
+        "protocolVersion": 1,
+        "recipientFingerprint": "1111111111111111111111111111111111111111111111111111111111111111",
+        "seenIterations": [
+          2
+        ],
+        "replayFloor": 0
+      },
+      "plaintext": "Üçüncü sırasız mesaj",
+      "wire": {
+        "distributionId": "11111111111111111111111111111111",
+        "iteration": 2,
+        "ciphertext": "9yznnhFE5TNcM2v8rOyiY7GgU2zUY12VmDEOyqXe3FIViv75ydgfoRFEPVakXm752Ehh5YCvRnAcn/sGczPsBvmYVGmDq0cs6ryKvicBY9wFlkHzPyQmyg6e9VAfXzIx/7y8n0lvJnPDcNBecs1OQDca8m1+ZQ=="
+      }
+    },
+    {
+      "operation": "decrypt",
+      "state": {
+        "channelId": "channel",
+        "senderUserId": "owner",
+        "senderDeviceId": "device",
+        "distributionId": "11111111111111111111111111111111",
+        "chainKey": {
+          "__b64": "Spt/2taIbe2Lwo6yQfRRhhNs+sZtzjlV2H7PQfTYsDA="
+        },
+        "initialChainKey": {
+          "__b64": "FhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhY="
+        },
+        "publicSigningKey": {
+          "__b64": "1UIH2hlJd9z0atv+wrwudbUtWopCGE/t/cAAJPDj6No="
+        },
+        "iteration": 3,
+        "createdAt": 1793466605925,
+        "protocolVersion": 1,
+        "recipientFingerprint": "1111111111111111111111111111111111111111111111111111111111111111",
+        "seenIterations": [
+          2
+        ],
+        "replayFloor": 0
+      },
+      "next": {
+        "channelId": "channel",
+        "senderUserId": "owner",
+        "senderDeviceId": "device",
+        "distributionId": "11111111111111111111111111111111",
+        "chainKey": {
+          "__b64": "Spt/2taIbe2Lwo6yQfRRhhNs+sZtzjlV2H7PQfTYsDA="
+        },
+        "initialChainKey": {
+          "__b64": "FhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhY="
+        },
+        "publicSigningKey": {
+          "__b64": "1UIH2hlJd9z0atv+wrwudbUtWopCGE/t/cAAJPDj6No="
+        },
+        "iteration": 3,
+        "createdAt": 1793466605925,
+        "protocolVersion": 1,
+        "recipientFingerprint": "1111111111111111111111111111111111111111111111111111111111111111",
+        "seenIterations": [
+          0,
+          2
+        ],
+        "replayFloor": 0
+      },
+      "plaintext": "Kanal mesajı 👋",
+      "wire": {
+        "distributionId": "11111111111111111111111111111111",
+        "iteration": 0,
+        "ciphertext": "dCozUBUX6vfQgqhhZvmmL844eJDebzHyM1U9B+3k0FU1mMwMQwJw+TP08A7aBJwdHc9La2PSmBAeiV40kjAMBR3Ym9phI6xOVDrijFO8lhFy+TuFWkn/jwM2HSpQTWZbNiPeoQqvWyoS2pCoeYU="
+      }
+    },
+    {
+      "operation": "decrypt",
+      "state": {
+        "channelId": "channel",
+        "senderUserId": "owner",
+        "senderDeviceId": "device",
+        "distributionId": "11111111111111111111111111111111",
+        "chainKey": {
+          "__b64": "Spt/2taIbe2Lwo6yQfRRhhNs+sZtzjlV2H7PQfTYsDA="
+        },
+        "initialChainKey": {
+          "__b64": "FhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhY="
+        },
+        "publicSigningKey": {
+          "__b64": "1UIH2hlJd9z0atv+wrwudbUtWopCGE/t/cAAJPDj6No="
+        },
+        "iteration": 3,
+        "createdAt": 1793466605925,
+        "protocolVersion": 1,
+        "recipientFingerprint": "1111111111111111111111111111111111111111111111111111111111111111",
+        "seenIterations": [
+          0,
+          2
+        ],
+        "replayFloor": 0
+      },
+      "next": {
+        "channelId": "channel",
+        "senderUserId": "owner",
+        "senderDeviceId": "device",
+        "distributionId": "11111111111111111111111111111111",
+        "chainKey": {
+          "__b64": "Spt/2taIbe2Lwo6yQfRRhhNs+sZtzjlV2H7PQfTYsDA="
+        },
+        "initialChainKey": {
+          "__b64": "FhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhY="
+        },
+        "publicSigningKey": {
+          "__b64": "1UIH2hlJd9z0atv+wrwudbUtWopCGE/t/cAAJPDj6No="
+        },
+        "iteration": 3,
+        "createdAt": 1793466605925,
+        "protocolVersion": 1,
+        "recipientFingerprint": "1111111111111111111111111111111111111111111111111111111111111111",
+        "seenIterations": [
+          0,
+          1,
+          2
+        ],
+        "replayFloor": 0
+      },
+      "plaintext": "İkinci grup mesajı",
+      "wire": {
+        "distributionId": "11111111111111111111111111111111",
+        "iteration": 1,
+        "ciphertext": "I0lj15wm/c2/WmrIoUwsXvIMesCaLzuC0XkE3H6Y2EA83rl+dehP/0W8lYlgEXvmNDtsoxxIZiuqTtDrSV/MBNauaJXq08fD0nPwRFgIuCzKDVK7gYY8ZL59eaApf2kXsDtO+fAdiATrioi6iHNOsg=="
+      }
+    }
+  ]
+}

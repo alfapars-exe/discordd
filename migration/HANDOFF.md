@@ -22,10 +22,13 @@ already-prepared encrypted payloads, and protect them in the target store.
 
 ## Required implementation sequence
 
-1. Port and cross-check the existing Signal/X3DH/Double Ratchet and Sender Key
-   send/receive engines, replay windows, skipped keys, anchors, trusted identities,
-   device registration and authenticated headers. Rust currently implements the
-   recovery-history reader, not these engines.
+1. Cryptographic transition kernels are now ported and cross-checked: X3DH
+   3-DH/4-DH and first-message envelopes, DM chain/DH ratchets, skipped keys,
+   canonical/legacy header authentication, signed Sender Key frames, historical
+   anchors and replay checks. Twenty-five synthetic reference cases match the
+   existing TypeScript implementation. These pure kernels are not yet wired to
+   atomic storage, account/device orchestration, TOFU UI or Flutter sends. Their
+   presence does not grant permission to activate an imported sending identity.
 2. Add a durable source freeze barrier shared by every old-client crypto writer
    and every send/retry path; drain transactions and in-flight sends. Closing a
    window or observing a disconnected socket is not proof of this barrier.

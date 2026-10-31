@@ -17,6 +17,7 @@ void main() {
       final qa = jsonDecode(await file.readAsString()) as Map;
       final api = HiChatApi('http://127.0.0.1:19090');
       final renderer = rtc.RTCVideoRenderer();
+      final preview = rtc.RTCVideoRenderer();
       final call = P2PController(
         api,
         diagnostics: (e) => debugPrint('P2P_QA: $e'),
@@ -27,12 +28,15 @@ void main() {
           final source = sources.singleWhere(
             (s) => s.name.contains('HiChat Synthetic P2P QA'),
           );
-          return rtc.navigator.mediaDevices.getDisplayMedia({
+          final stream = await rtc.navigator.mediaDevices.getDisplayMedia({
             'video': {
               'deviceId': {'exact': source.id},
+              'mandatory': {'frameRate': 15.0},
             },
             'audio': true,
           });
+          preview.srcObject = stream;
+          return stream;
         },
       );
       try {
@@ -41,8 +45,18 @@ void main() {
           isTrue,
         );
         await renderer.initialize();
+        await preview.initialize();
         await tester.pumpWidget(
-          MaterialApp(home: Scaffold(body: rtc.RTCVideoView(renderer))),
+          MaterialApp(
+            home: Scaffold(
+              body: Column(
+                children: [
+                  Expanded(child: rtc.RTCVideoView(renderer)),
+                  Expanded(child: rtc.RTCVideoView(preview)),
+                ],
+              ),
+            ),
+          ),
         );
         await api.login(qa['username'] as String, qa['password'] as String);
         await call.connect();
@@ -57,6 +71,13 @@ void main() {
           final pc = call.peer;
           if (pc == null) continue;
           for (final report in await pc.getStats()) {
+            if (i == 10 && report.type == 'outbound-rtp') {
+              debugPrint(
+                'P2P_SEND_PROBE: ${jsonEncode({
+                  for (final key in ['kind', 'mediaType', 'framesEncoded', 'framesSent', 'bytesSent', 'packetsSent', 'frameWidth', 'frameHeight']) key: report.values[key],
+                })} preview=${preview.videoWidth}x${preview.videoHeight}',
+              );
+            }
             if (report.type == 'inbound-rtp') {
               final decoded = (report.values['framesDecoded'] as num?) ?? 0;
               if (decoded > frames) frames = decoded;
@@ -64,7 +85,7 @@ void main() {
               if (received > energy) energy = received;
             }
           }
-          if (frames > 10 && energy > 0) break;
+          if (i > 10 && frames > 10 && energy > 0) break;
         }
         expect(frames > 10, isTrue, reason: call.failure);
         expect(energy > 0, isTrue);
@@ -87,7 +108,9 @@ void main() {
         expect(call.peer, isNull);
       } finally {
         renderer.srcObject = null;
+        preview.srcObject = null;
         await renderer.dispose();
+        await preview.dispose();
         await call.shutdown();
         await api.logout();
         api.close();
