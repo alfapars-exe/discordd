@@ -122,6 +122,11 @@ jobs:
       - name: Build client
         run: npx vite build --outDir dist
         working-directory: client
+        env:
+          VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
 
       # ─── Windows: compile native audio-capture.exe ───
       # Flags mirror native/build.bat (P0-EN-01 hardening, audit 2026-05-27):
@@ -359,6 +364,12 @@ jobs:
           file: Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
+          build-args: |
+            VITE_SENTRY_DSN=${{ vars.VITE_SENTRY_DSN }}
+          secrets: |
+            SENTRY_AUTH_TOKEN=${{ secrets.SENTRY_AUTH_TOKEN }}
+            SENTRY_ORG=${{ vars.SENTRY_ORG }}
+            SENTRY_PROJECT=${{ vars.SENTRY_PROJECT }}
           tags: |
             ${{ steps.image.outputs.image }}:${{ github.ref_name }}
             ${{ steps.image.outputs.image }}:latest
