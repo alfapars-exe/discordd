@@ -192,5 +192,3 @@ it. Headless Chrome test loading timed out and is not counted as a pass.
 Source fingerprints and sanitized results: `evidence/dm-outbox.json`. These local
 checks do not establish physical-device, mobile Safari, long-call or installer
 acceptance. Earlier sections retain their original scope and source dates.
-
-
