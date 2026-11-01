@@ -188,7 +188,9 @@ class DeviceVault implements ChatCrypto {
   Future<dynamic> chat(Map<String, dynamic> command) => _serial(() async {
     final d = (await store.load())!;
     if (d['phase'] != 'active') throw const ApiFailure('DEVICE_NOT_ACTIVE');
-    if (command['op'] == 'prepare' || command['op'] == 'attempt') {
+    if (command['op'] == 'prepare' ||
+        command['op'] == 'attempt' ||
+        command['op'] == 'confirm_session') {
       await _verify(d);
       current();
     }

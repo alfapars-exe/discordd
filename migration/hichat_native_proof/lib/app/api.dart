@@ -99,14 +99,35 @@ class HiChatApi {
     if (!path.startsWith('/api/') || path.startsWith('//')) {
       throw const ApiFailure('INVALID_PATH');
     }
-    final request = http.Request(
-      method,
-      origin.replace(path: path, queryParameters: query),
-    )..followRedirects = false;
-    request.headers['Content-Type'] = 'application/json';
+    final uri = origin.replace(path: path, queryParameters: query);
+    late final http.BaseRequest request;
+    if (body is Map && body['__encrypted_files'] is List) {
+      final upload = http.MultipartRequest(method, uri);
+      for (final entry in body.entries) {
+        if (entry.key == '__encrypted_files') continue;
+        if (entry.value != null) {
+          upload.fields[entry.key as String] = entry.value.toString();
+        }
+      }
+      for (final file in body['__encrypted_files'] as List) {
+        upload.files.add(
+          http.MultipartFile.fromBytes(
+            'files',
+            base64Decode(file['data'] as String),
+            filename: file['name'] as String,
+          ),
+        );
+      }
+      request = upload;
+    } else {
+      final jsonRequest = http.Request(method, uri);
+      jsonRequest.headers['Content-Type'] = 'application/json';
+      if (body != null) jsonRequest.body = jsonEncode(body);
+      request = jsonRequest;
+    }
+    request.followRedirects = false;
     request.headers['X-HiChat-Client'] = 'web';
     if (token != null) request.headers['Authorization'] = 'Bearer $token';
-    if (body != null) request.body = jsonEncode(body);
     try {
       final response = await transport
           .send(request)

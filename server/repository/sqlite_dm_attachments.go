@@ -39,9 +39,9 @@ func (r *sqliteDMRepo) createAttachment(ctx context.Context, attachment *models.
 	attachment.ID = id
 
 	if _, err := r.db.ExecContext(ctx,
-		`INSERT INTO dm_attachments (id, dm_message_id, filename, file_url, file_size, mime_type)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
-		attachment.ID, attachment.DMMessageID, attachment.Filename, attachment.FileURL, attachment.FileSize, attachment.MimeType,
+		`INSERT INTO dm_attachments (id, dm_message_id, filename, file_url, file_size, mime_type, upload_index)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		attachment.ID, attachment.DMMessageID, attachment.Filename, attachment.FileURL, attachment.FileSize, attachment.MimeType, attachment.UploadIndex,
 	); err != nil {
 		return fmt.Errorf("failed to create DM attachment: %w", err)
 	}
@@ -61,10 +61,10 @@ func (r *sqliteDMRepo) GetAttachmentsByMessageIDs(ctx context.Context, messageID
 	placeholders = placeholders[:len(placeholders)-1]
 
 	query := fmt.Sprintf(`
-		SELECT id, dm_message_id, filename, file_url, file_size, mime_type, created_at
+		SELECT id, dm_message_id, filename, file_url, file_size, mime_type, created_at, upload_index
 		FROM dm_attachments
 		WHERE dm_message_id IN (%s)
-		ORDER BY created_at ASC`, placeholders)
+		ORDER BY upload_index ASC NULLS LAST, created_at ASC, id ASC`, placeholders)
 
 	args := make([]any, len(messageIDs))
 	for i, id := range messageIDs {
@@ -81,7 +81,7 @@ func (r *sqliteDMRepo) GetAttachmentsByMessageIDs(ctx context.Context, messageID
 	for rows.Next() {
 		var a models.DMAttachment
 		if err := rows.Scan(
-			&a.ID, &a.DMMessageID, &a.Filename, &a.FileURL, &a.FileSize, &a.MimeType, &a.CreatedAt,
+			&a.ID, &a.DMMessageID, &a.Filename, &a.FileURL, &a.FileSize, &a.MimeType, &a.CreatedAt, &a.UploadIndex,
 		); err != nil {
 			return nil, fmt.Errorf("scan DM attachment row: %w", err)
 		}
@@ -129,11 +129,11 @@ func (r *sqliteDMRepo) GetAttachmentFileURLsByChannelID(ctx context.Context, cha
 // returned dm_message_id to look up the parent DM channel and verify
 // participant access.
 func (r *sqliteDMRepo) GetAttachmentByFileURL(ctx context.Context, fileURL string) (*models.DMAttachment, error) {
-	query := `SELECT id, dm_message_id, filename, file_url, file_size, mime_type, created_at
+	query := `SELECT id, dm_message_id, filename, file_url, file_size, mime_type, created_at, upload_index
 		FROM dm_attachments WHERE file_url = ? LIMIT 1`
 	var a models.DMAttachment
 	err := r.db.QueryRowContext(ctx, query, fileURL).Scan(
-		&a.ID, &a.DMMessageID, &a.Filename, &a.FileURL, &a.FileSize, &a.MimeType, &a.CreatedAt,
+		&a.ID, &a.DMMessageID, &a.Filename, &a.FileURL, &a.FileSize, &a.MimeType, &a.CreatedAt, &a.UploadIndex,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

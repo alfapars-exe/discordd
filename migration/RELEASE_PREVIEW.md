@@ -1,4 +1,4 @@
-# HiChat Rust/Flutter Windows/web preview 1.0.4
+# HiChat Rust/Flutter Windows/web preview 1.0.5
 
 This portable preview is separate from the installed HiChat desktop application.
 Extract the entire ZIP and run hichat_native_proof.exe; keep its DLL/data files.
@@ -10,9 +10,13 @@ storage with single-owner ratchet preparation. Text DMs now connect fresh device
 peer/sibling fanout and imported history to Rust and the existing Go API. Actual
 legacy protocol code transferred live conversations to both Windows and web.
 
-Version 1.0.4 automatically schedules durable text-DM retries, including after
+Version 1.0.5 automatically schedules durable text-DM retries, including after
 protected-store reopening, with persisted backoff and Retry-After. Permanent
-rejection pauses automatic sends. The Go server adds a transactional, ordered DM
+rejection pauses automatic sends. Multipart attachments now share the durable
+idempotent path, including restart and lost-ACK recovery. This preview accepts up
+to ten files, 1 MiB each / 2 MiB total. File keys retain the legacy encrypted format.
+Conflicting initial sessions require an explicit identity-verification checkbox;
+old receive states and pending bytes are preserved. The Go server adds a transactional, ordered DM
 WebSocket outbox and authorized catch-up with stable event IDs. Hub dispatch is
 not a device acknowledgment. Old-server sends retain the single-attempt/history-reconciliation policy;
 already uncertain legacy sends are never upgraded into replayable requests.

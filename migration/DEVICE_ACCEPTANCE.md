@@ -13,6 +13,12 @@ catch-up. Two real Chromium origins exchanged encrypted DMs through Rust WASM
 with an injected lost response and automatic retry. These are local software
 checks, not two physical clients or mobile-device acceptance.
 
+The 2026-11-02 increment adds local ordered multipart idempotency, independent
+WebCrypto file validation on Windows, protected-store recovery, state-bound
+session confirmation/cancellation, and real two-origin Chromium checkbox/identity
+verification with encrypted post-confirmation chat. These are software checks;
+no physical-device gate is marked complete.
+
 Priority: Windows, desktop web and mobile-browser login. Native mobile/Linux/macOS
 acceptance is tracked separately; lack of hardware/signing is never counted as pass.
 
@@ -36,8 +42,9 @@ acceptance is tracked separately; lack of hardware/signing is never counted as p
   global PTT, system-audio exclusion acceptance and gapless rekey remain open.
 - No latency/quality/memory improvement or all-platform feature parity is claimed.
 - Chromium user-agent emulation is not Android hardware or iOS Safari evidence.
-- Production credentials, release signing, hosted CI and auto-update acceptance
-  have not been exercised. The Go production runtime remains authoritative.
+- Release signing and automatic-upgrade acceptance remain open. Hosted CI and
+  deployment receipts apply only to their recorded source/build scope; they do
+  not replace physical-device acceptance. Go remains authoritative.
 
 ## 2026-10-31 incremental status
 

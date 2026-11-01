@@ -9,10 +9,11 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 const files = ['server/testdata/routes.golden', 'server/pkg/response.go', 'server/ws/event.go', 'client/src/crypto/types.ts', 'client/src/audio/README.md', 'package.json'];
 const hashes = {};
 for (const file of files) {
-  hashes[file] = createHash('sha256').update(await readFile(path.join(root, file))).digest('hex');
+  hashes[file] = createHash('sha256').update((await readFile(path.join(root, file), 'utf8')).replaceAll('\r\n', '\n')).digest('hex');
 }
 const baseline = {
   sourceCommit: execFileSync(gitBinary, ['rev-parse', 'HEAD'], {cwd: root, encoding: 'utf8'}).trim(),
+  sourceHashNormalization: 'LF',
   sourceStatus: 'committed reference only; shared checkout changes excluded; release acceptance unverified',
   routes: (await readFile(path.join(root, files[0]), 'utf8')).trim().split(/\r?\n/).filter(Boolean),
   sha256: hashes,

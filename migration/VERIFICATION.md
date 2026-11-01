@@ -1,5 +1,23 @@
 # Windows/web verification
 
+## Attachments and session confirmation — 2026-11-02
+
+See DM_DELIVERY.md and evidence/dm-attachments-session.json. Local acceptance
+covers ordered concurrent/replayed attachments, rollback/cleanup/deletion, staged
+file maintenance, old-server refusal, authenticated/expiring/stale/cancelled
+session reviews and explicit UI verification. Windows integration exercises real
+Go/PostgreSQL mutual TLS, Rust FFI, DPAPI reopen after lost multipart ACK, two
+simultaneous initial sends, explicit cancellation/approval, WebSocket/REST IDs
+and independent Node WebCrypto decryption of both downloaded files.
+
+Real Chromium users on two origins verify the checkbox, cross-peer identity
+fingerprints, retained review after cancellation/reload, post-confirmation
+encrypted attachments and reply, lost-ACK automatic retry, no duplicate rows and
+logout clearing. The receipt records the staged browser build/reload scope.
+The portable preview does not establish physical mobile/Windows devices, Safari,
+full file-size/thumbnail parity or installers/automatic upgrades.
+
+
 ## Durable text retry increment — 2026-11-01
 
 See DM_DELIVERY.md. Twenty-nine Rust tests and 23 Flutter tests pass locally;

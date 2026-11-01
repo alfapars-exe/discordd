@@ -30,11 +30,13 @@ class ChatController extends ChangeNotifier {
   bool busy = false, active = false, hasMore = false;
   String? error;
   String? lastPreparedId;
+  String ownIdentityFingerprint = "";
   Map<String, dynamic>? selected;
   List<Map<String, dynamic>> channels = [],
       messages = [],
       pending = [],
-      trustAlerts = [];
+      trustAlerts = [],
+      sessionReviews = [];
   ChatController(
     this.api,
     this.open, {
@@ -91,8 +93,17 @@ class ChatController extends ChangeNotifier {
     if (code.contains('SESSION_CHANGED')) {
       return 'Oturum değişti. Tekrar giriş yapın.';
     }
+    if (code.contains('file_too_large')) {
+      return 'Önizleme sınırı: dosya başına 1 MiB, toplam 2 MiB.';
+    }
+    if (code.contains('session_review_identity_mismatch')) {
+      return 'Karşı cihaz kayıtlı değil veya kimliği değişti. Onay uygulanmadı.';
+    }
+    if (code.contains('session_review')) {
+      return 'Oturum onayı eskidi. Mesajı yenileyip karşı cihazı yeniden doğrulayın.';
+    }
     if (code.contains('DELIVERY_UNCERTAIN')) {
-      return 'Gönderim sonucu doğrulanamadı. Mesaj korunuyor; geçmiş eşitlendiğinde yeniden kontrol edilecek. Yinelenmeyi önlemek için otomatik tekrar gönderilmez.';
+      return 'Gönderim sonucu henüz doğrulanmadı. Mesaj güvenli kuyrukta korunuyor; durumunu aşağıdan izleyebilirsiniz.';
     }
     if (code.contains('DELIVERY_PAUSED')) {
       return 'Otomatik gönderim durduruldu. Mesaj korunuyor; hesap, cihaz ve izinleri kontrol edin.';
@@ -169,6 +180,8 @@ class ChatController extends ChangeNotifier {
         .where((p) => p['state'] != 'acknowledged')
         .toList();
     trustAlerts = _maps(state['trustAlerts']);
+    ownIdentityFingerprint = state['ownIdentityFingerprint'] as String? ?? '';
+    sessionReviews = _maps(state['sessionReviews']);
   }
 
   Future<void> create(String user) => _run(() async {
@@ -193,6 +206,20 @@ class ChatController extends ChangeNotifier {
     hasMore = false;
     _changed();
     await refresh();
+  }
+
+  static List<Map<String, dynamic>> _fileKeys(dynamic value) {
+    if (value is! List) return [];
+    return value
+        .whereType<Map>()
+        .where(
+          (row) =>
+              row['filename'] is String &&
+              (row['filename'] as String).length <= 512,
+        )
+        .take(10)
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
   }
 
   Future<void> refresh({bool older = false}) {
@@ -224,6 +251,7 @@ class ChatController extends ChangeNotifier {
           throw const ApiFailure('MESSAGE_SCOPE_MISMATCH');
         }
         String? content;
+        List<dynamic>? fileKeys;
         if (m['encryption_version'] == 0) {
           content = m['content'] as String?;
         } else if (active) {
@@ -234,24 +262,37 @@ class ChatController extends ChangeNotifier {
             if (epoch != _selection) return;
             final payload = jsonDecode(decoded['plaintext'] as String) as Map;
             content = payload['content'] as String;
+            fileKeys = _fileKeys(payload['file_keys']);
           } catch (e) {
-            const unreadable = [
-              'session_missing',
-              'recipient_envelope_missing_or_ambiguous',
-              'sent_plaintext_unavailable',
-              'prekey_missing',
-              'authentication_failed',
-              'message_replay',
-              'invalid_payload',
-            ];
-            if (!unreadable.any(e.toString().contains)) rethrow;
+            if (e.toString().contains(
+              'session_reestablishment_requires_confirmation',
+            )) {
+              await v.chat({
+                'op': 'review_session',
+                'message': m,
+                'now': now().millisecondsSinceEpoch,
+              });
+              _check();
+              await _outbox(v);
+            } else {
+              const unreadable = [
+                'session_missing',
+                'recipient_envelope_missing_or_ambiguous',
+                'sent_plaintext_unavailable',
+                'prekey_missing',
+                'authentication_failed',
+                'message_replay',
+                'invalid_payload',
+              ];
+              if (!unreadable.any(e.toString().contains)) rethrow;
+            }
           }
         }
         _check();
         if (epoch != _selection) return;
         messages = [
           ...messages.where((old) => old['id'] != m['id']),
-          {...m, 'displayContent': content},
+          {...m, 'displayContent': content, 'fileKeys': fileKeys},
         ];
       }
       messages.sort((a, b) {
@@ -286,11 +327,16 @@ class ChatController extends ChangeNotifier {
     16,
     (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0'),
   ).join();
-  Future<void> send(String content) {
+  Future<void> send(
+    String content, {
+    List<Map<String, dynamic>> files = const [],
+  }) {
     final channel = selected, epoch = _selection;
     return _run(() async {
       lastPreparedId = null;
-      if (channel == null || epoch != _selection || content.trim().isEmpty) {
+      if (channel == null ||
+          epoch != _selection ||
+          (content.trim().isEmpty && files.isEmpty)) {
         return;
       }
       if (content.runes.length > 4000) {
@@ -327,6 +373,7 @@ class ChatController extends ChangeNotifier {
         'user': user,
         'plaintext': jsonEncode({'content': content, 'file_keys': []}),
         'bundles': bundles,
+        if (files.isNotEmpty) 'files': files,
       });
       _check();
       lastPreparedId = id;
@@ -393,7 +440,7 @@ class ChatController extends ChangeNotifier {
     var attempted = false;
     try {
       // Load the canonical request from the durable store, never from a UI copy.
-      var reliable = false;
+      var reliable = false, multipartReliable = false;
       try {
         final capabilities = await api.request(
           'GET',
@@ -402,10 +449,21 @@ class ChatController extends ChangeNotifier {
         reliable =
             capabilities is Map &&
             capabilities['text_idempotency_version'] == 1;
+        multipartReliable =
+            capabilities is Map &&
+            capabilities['multipart_idempotency_version'] == 1;
       } on ApiFailure catch (e) {
         if (e.status != 404 && e.status != 405) rethrow;
       }
       _check();
+      final state = await v.chat({'op': 'inspect'}) as Map;
+      final candidate = _maps(state['pending'])
+          .firstWhere((p) => p['id'] == id);
+      final hasFiles =
+          candidate['files'] is List && (candidate['files'] as List).isNotEmpty;
+      if (hasFiles && !multipartReliable) {
+        throw const ApiFailure('ATTACHMENT_IDEMPOTENCY_UNAVAILABLE', 409);
+      }
       final prepared = await v.chat({
         'op': 'attempt',
         'id': id,
@@ -418,7 +476,10 @@ class ChatController extends ChangeNotifier {
       final result = await api.request(
         'POST',
         '/api/dms/${Uri.encodeComponent(prepared['channel'] as String)}/messages${prepared['delivery'] == 'idempotent-v1' ? '/idempotent' : ''}',
-        body: prepared['payload'],
+        body: {
+          ...Map<String, dynamic>.from(prepared['payload'] as Map),
+          if (hasFiles) '__encrypted_files': prepared['files'],
+        },
       ) as Map;
       _check();
       if (result['user_id'] != api.session!.userId ||
@@ -457,6 +518,70 @@ class ChatController extends ChangeNotifier {
     }
   }
 
+  Future<Map<String, dynamic>?> reviewSession(String token) async {
+    Map<String, dynamic>? result;
+    await _run(() async {
+      final v = await _vault();
+      result = Map<String, dynamic>.from(
+        await v.chat({
+          'op': 'renew_session_review',
+          'token': token,
+          'now': now().millisecondsSinceEpoch,
+        }) as Map,
+      );
+      _check();
+      await _outbox(v);
+    });
+    return result;
+  }
+
+  Future<void> confirmSession(String token, bool approved) => _run(() async {
+    final v = await _vault();
+    final review = sessionReviews.firstWhere((r) => r['token'] == token);
+    String? peerIdentity;
+    if (approved) {
+      final roster = _maps(
+        await api.request(
+          'GET',
+          '/api/users/${Uri.encodeComponent(review['user'] as String)}/devices',
+        ),
+      );
+      _check();
+      final peer = roster.where(
+        (r) =>
+            r['device_id'] == review['device'] &&
+            r['identity_key'] == review['identityKey'],
+      );
+      if (peer.length != 1) {
+        throw const ApiFailure('session_review_identity_mismatch');
+      }
+      peerIdentity = peer.single['identity_key'] as String;
+    }
+    final result = await v.chat({
+      'op': 'confirm_session',
+      'peerIdentity': peerIdentity,
+      'token': token,
+      'approved': approved,
+      'now': now().millisecondsSinceEpoch,
+    }) as Map;
+    _check();
+    if (approved) {
+      final payload = jsonDecode(result['plaintext'] as String) as Map;
+      messages = [
+        for (final m in messages)
+          if (m['id'] == review['messageId'])
+            {
+              ...m,
+              'displayContent': payload['content'],
+              'fileKeys': _fileKeys(payload['file_keys']),
+            }
+          else
+            m,
+      ];
+    }
+    await _outbox(v);
+  });
+
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
@@ -468,6 +593,8 @@ class ChatController extends ChangeNotifier {
     messages = [];
     pending = [];
     trustAlerts = [];
+    sessionReviews = [];
+    ownIdentityFingerprint = "";
     lastPreparedId = null;
     selected = null;
     // The owning screen releases the vault after queued crypto is drained.

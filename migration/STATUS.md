@@ -1,4 +1,4 @@
-# Migration status — 2026-11-01
+# Migration status — 2026-11-02
 
 This is the current inventory. Older dated verification sections describe earlier
 proofs. The Rust/Flutter client is **not a complete replacement product**.
@@ -34,13 +34,22 @@ Windows/web implementation and physical-device acceptance are tracked separately
 - The earlier encrypted LiveKit, direct microphone/camera, Windows 0x0 capture
   repair, opt-in loopback audio and external-window HUD proofs remain available.
 
+- Multipart sends stage encrypted bytes first, then commit message, ordered
+  attachments, receipt/unread/notification in one transaction. Lost acknowledgments
+  resume from the protected outbox without regenerating file keys/ciphertext.
+- Session re-establishment requires an authenticated candidate, matching current
+  public-device identity and an explicit verification checkbox. Review expires or
+  becomes stale when its ratchet advances. Cancellation retains the blocked
+  candidate. Archives preserve late old-chain messages and pending outbound bytes;
+  simultaneous starts converge deterministically. See DM_DELIVERY.md.
+
 ## Remaining software work
 
 | ID | Work still required |
 |---|---|
-| W1 | Multipart idempotency and simultaneous session re-establishment confirmation remain. Automatic text retry scheduling and the transactional DM WebSocket outbox are implemented. Legacy uncertain sends cannot safely auto-resend; live imported sessions never silently rewind. |
+| W1 | Implemented: automatic text/multipart retry, transactional DM outbox and explicit, state-bound simultaneous-session confirmation. Legacy uncertain sends remain reconciliation-only. The preview bounds files to 1 MiB each / 2 MiB total; full attachment/product parity remains W3. |
 | W2 | Channel/group orchestration: sender-key distribution, membership/epoch changes, receive/fanout and imported pending-group delivery. Pure crypto kernels are not the complete dispatcher. |
-| W3 | Attachments, secure file opening/upload/download recovery, uncached historical ciphertext, editing/deletion/reactions/search and complete unread/read flows. |
+| W3 | Full attachment size/thumbnail parity, secure file opening/download recovery, uncached historical ciphertext, editing/deletion/reactions/search and complete unread/read flows. |
 | W4 | Existing design/feature and Turkish/English parity, server/channel/group/friend/settings UI, full keyboard/IME/screen-reader acceptance and session restoration across application starts. |
 | W5 | P2P screen/source renegotiation and TURN/NAT, seamless SFU rekey/reconnect, original DSP/noise parity, global PTT and complete platform integration. |
 | W6 | Flutter installers with original identity/data continuity and real automatic upgrades; production web hosting with COOP/COEP/WASM MIME. Portable preview is separate from stable Go/Electron 2.11.125. |

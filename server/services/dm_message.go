@@ -330,6 +330,14 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 		if err := r.DM.CreateMessage(ctx, msg); err != nil {
 			return fmt.Errorf("failed to create DM message: %w", err)
 		}
+		for _, staged := range req.StagedAttachments {
+			attachment := staged
+			attachment.DMMessageID = msg.ID
+			if err := r.DM.CreateAttachment(ctx, &attachment); err != nil {
+				return err
+			}
+			msg.Attachments = append(msg.Attachments, attachment)
+		}
 		if !isSelf {
 			if err := r.DMRead.IncrementUnread(ctx, otherUserID, channelID); err != nil {
 				return fmt.Errorf("failed to increment DM unread count: %w", err)
@@ -420,7 +428,9 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 		}
 	}
 
-	msg.Attachments = []models.DMAttachment{}
+	if msg.Attachments == nil {
+		msg.Attachments = []models.DMAttachment{}
+	}
 	msg.Reactions = []models.ReactionGroup{}
 
 	// Auto-unhide: if either user hid this DM, show it again on new message (best-effort)
