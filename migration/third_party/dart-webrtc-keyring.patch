@@ -1,0 +1,14 @@
+Source: dart_webrtc 1.8.2, MIT, https://github.com/flutter-webrtc/dart-webrtc
+Original e2ee.keyhandler.dart SHA256:
+86472d6ee9d7b7c0fec595ef870877209521d9ef28baa3f0f3a24f0cb029ee4e
+
+The HiChat SFrame wire protocol uses all 8-bit indices (0..255), hence 256 slots.
+The worker allocates a Dart list, so rejecting length 256 is an off-by-one.
+Only the validation bound is extended. Key derivation and cryptography are unchanged.
+The build script patches a project-local copy and checks the upstream source hash.
+
+--- a/lib/src/e2ee.worker/e2ee.keyhandler.dart
++++ b/lib/src/e2ee.worker/e2ee.keyhandler.dart
+@@
+-    if (keyOptions.keyRingSze <= 0 || keyOptions.keyRingSze > 255) {
++    if (keyOptions.keyRingSze <= 0 || keyOptions.keyRingSze > 256) {

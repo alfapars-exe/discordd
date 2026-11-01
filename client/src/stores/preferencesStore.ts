@@ -487,3 +487,10 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     set({ data: {}, isLoaded: false, accountId: null, syncStatus: "idle", syncError: null, hasPendingChanges: false, legacyImportAvailable: false });
   },
 }));
+
+/** Includes queued preference edits without copying auth storage or store methods. */
+export function preferencesForDeviceHandoff(ownerId:string):Record<string,unknown>{
+ const state=usePreferencesStore.getState();
+ if(state.accountId!==ownerId)throw new Error('handoff_preferences_account_mismatch');
+ return cacheable(merge(merge(state.data,inFlight),pending));
+}

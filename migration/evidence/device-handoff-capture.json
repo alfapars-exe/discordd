@@ -1,0 +1,127 @@
+{
+  "date": "2026-10-31T18:34:21.968Z",
+  "scope": "local migration proof; production and physical acceptance not claimed",
+  "baseBeforeIncrement": "b8832b21",
+  "checks": {
+    "ordinaryRustTests": 19,
+    "ignoredWin32Helpers": 2,
+    "legacyHandoffTests": 7,
+    "legacyStorageRegressionTests": 64,
+    "flutterTests": 10,
+    "typescript": "passed",
+    "flutterAnalyzer": "passed",
+    "clippyWarningsDenied": "passed",
+    "portableWasmCore": "passed",
+    "referenceRoutes": 338,
+    "referenceSourceHashes": 6,
+    "windowsReleaseBuild": "passed",
+    "webDartJsAndRustWasmBuild": "passed",
+    "optionalDartWasmRenderer": "upstream FRB runtime-check dry-run warning"
+  },
+  "nativeHandoff": {
+    "dpapiProtected": true,
+    "singleOwner": true,
+    "restartRestoresActiveState": true,
+    "retryPreservesCiphertext": true,
+    "counterAfterRestart": 1,
+    "pendingPreserved": 1,
+    "physicalDevices": false
+  },
+  "webHandoff": {
+    "uiActivation": true,
+    "accessiblePublicIntent": true,
+    "secondTabOwnerBlocked": true,
+    "reloadRestoresActive": true,
+    "nonExportableKeys": true,
+    "encryptedRecords": true,
+    "failedEncryptionPreservesPreviousRecord": true,
+    "staleRevisionRejected": true,
+    "source": {
+      "sourceFenced": true,
+      "sourceRetired": true,
+      "sourcePreserved": true
+    },
+    "physicalDevices": false
+  },
+  "nativeP2P": {
+    "runtime": "Windows Debug Flutter integration + isolated Chrome synthetic source/peer",
+    "windowsFrames": 26,
+    "windowsAudioEnergy": 0.008263290333311994,
+    "browser": {
+      "state": "connected",
+      "frames": 13,
+      "audioEnergy": 0.0016117587281467842,
+      "dtlsConnected": true
+    },
+    "physicalDevices": false,
+    "syntheticSourcesOnly": true
+  },
+  "browserProfiles": [
+    {
+      "name": "desktop",
+      "engine": "Chromium",
+      "login": true,
+      "historyWebCryptoRust": true,
+      "logoutClearsHistory": true,
+      "physicalDevice": false
+    },
+    {
+      "name": "android-chrome-emulated",
+      "engine": "Chromium",
+      "login": true,
+      "historyWebCryptoRust": true,
+      "logoutClearsHistory": true,
+      "physicalDevice": false
+    },
+    {
+      "name": "ios-ua-chromium-emulated",
+      "engine": "Chromium",
+      "login": true,
+      "historyWebCryptoRust": true,
+      "logoutClearsHistory": true,
+      "physicalDevice": false
+    }
+  ],
+  "capturePatch": {
+    "sdk": "flutter_webrtc 1.6.3",
+    "upstreamCaptureSha256": "5fd92ad57ea1b0464b8adcc2585b7b5fa044140bac4b905217b425c023b015d2",
+    "sharedPubCacheUnchanged": true,
+    "focusWindow": false,
+    "wgcWindowCapturer": true,
+    "startResultChecked": true,
+    "localPreview": "320x200",
+    "licenseBundled": true
+  },
+  "remaining": [
+    "complete old/new chat dispatch, fanout, receive and TOFU orchestration",
+    "network delivery/acknowledgment of transferred pending sends",
+    "abrupt process/power loss at every durable boundary",
+    "real multi-device ownership transfer",
+    "physical media, long calls, actual games/PTT and system-audio exclusion",
+    "real Android Chrome, iOS Safari and native non-Windows platforms",
+    "hosted CI, production deployment, signing, installer and update acceptance"
+  ],
+  "fixtureNote": "Existing disposable history backup was reseeded after local Go master-key restart; no production data accessed",
+  "physicalDeviceAcceptance": false,
+  "hashes": {
+    "client/src/crypto/deviceHandoff.ts": "422c1a37973bc42dff2aa3e4cef5e0dd6c6fc0b270cda906d5a0d3960913b9e6",
+    "client/src/crypto/keyStorage.ts": "3399b11ff45f92e97c63ef3ed9665f12ad5b76f2ba9cad77ebbe3cc03f3e2d2d",
+    "migration/crates/client-core/src/handoff.rs": "23b1fcaf154b8f33af4b9f15fd9331e08ef51f0d0aba9d49bd9dd63496a379ad",
+    "migration/crates/client-core/src/local_protection.rs": "7cf71bbef96310f18589f9b85bd79c6397caf4d472a7bf5aaadacd88afa45083",
+    "migration/hichat_native_proof/lib/app/device_vault.dart": "7709fac42f147a1c23d0ac0853e7c37d988bf6733feb9d7f8d7c6bf96707d1f6",
+    "migration/hichat_native_proof/web/device_vault.js": "238694d6e27d8f16c09f13a4a029aacf5f43bf10877d90523faac96c741a2501",
+    "migration/hichat_native_proof/windows/patches/capture.cmake": "907700ad0f6c53f459548fabe16b804e746b889f7829c7971066ed25b73c7016",
+    "migration/hichat_native_proof/pubspec.lock": "89d7b8cde3987d317f8b6d3ab874223ac5f8912f648dedec0e8e1133fef8deec",
+    "migration/hichat_native_proof/rust/Cargo.lock": "66e65c6f7467b05a016addadd5b273e1748a8cebd688317d84566f7a62b2a065",
+    "migration/Cargo.lock": "000e79864d0b2d474ab1d156eed22c3872c630ae9042c22eb04e633065af33c0",
+    "migration/hichat_native_proof/build/windows/x64/runner/Debug/flutter_webrtc_plugin.dll": "b54d42e3eb36eea56c189d0028cf544e4cb8cc3a70005b4a63bbaf82cc973b4c",
+    "migration/hichat_native_proof/build/windows/x64/runner/Release/hichat_native_proof.exe": "d6f34cb455d32ffe70660af648e06a1942d618500e31abd281858ea01494aefa",
+    "migration/hichat_native_proof/build/windows/x64/runner/Release/data/app.so": "d19b4a790f52320d45589088b0943ef19e334a87a62f9e1c2d7c98297322cf80",
+    "migration/hichat_native_proof/build/windows/x64/runner/Release/rust_lib_hichat_native_proof.dll": "bf901356b58d010e42c190a9603606ecd0ef0ba12be7399e260b40990ac05536",
+    "migration/hichat_native_proof/build/windows/x64/runner/Release/flutter_webrtc_plugin.dll": "d430ba53e114ab9b2d2ac6c7ae359bce9cb780956623b9386964227d0a3f63ad",
+    "migration/hichat_native_proof/build/windows/x64/runner/Release/libwebrtc.dll": "5c9c21dd84091f6d2ca826201bc8e9226e17c0b336f08be634331745584fbb44",
+    "migration/hichat_native_proof/build/web/pkg/rust_lib_hichat_native_proof_bg.wasm": "f0baa771e033fe0bfbb6d5c67536ff546105782c983acf1fda804652f107277f",
+    "migration/hichat_native_proof/build/web/main.dart.js": "7996ff30263828845daf2c9ee98838c2913b603183e25e6518a06bd0d195bb63",
+    "migration/hichat_native_proof/build/web/device_vault.js": "238694d6e27d8f16c09f13a4a029aacf5f43bf10877d90523faac96c741a2501"
+  }
+}

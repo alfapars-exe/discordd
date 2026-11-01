@@ -1,0 +1,767 @@
+{
+  "typesSha256": "1ab52290addb65e0225a988e9afd2a91ab91b5bf65d2513e3acb00e16f863154",
+  "sourceSha256": "e705bb291f63968a8ee78dffe1de3589b66f6d65750a225875d3d90ee0fd1d6e",
+  "cases": [
+    {
+      "operation": "encrypt",
+      "state": {
+        "rootKey": {
+          "__b64": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM="
+        },
+        "sendingChainKey": {
+          "__b64": "BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ="
+        },
+        "receivingChainKey": {
+          "__b64": "BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU="
+        },
+        "sendingRatchetKeyPair": {
+          "privateKey": {
+            "__b64": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
+          },
+          "publicKey": {
+            "__b64": "pOCSkrZRwni5dyxWn1+puxPZBrRqtoyd+dwrRAn4ogk="
+          }
+        },
+        "receivingRatchetKey": {
+          "__b64": "zo060cy2M+x7cMF4FKXHbs0CloUFDTRHRboFhw5YfVk="
+        },
+        "sendMessageNumber": 0,
+        "receiveMessageNumber": 0,
+        "previousSendChainLength": 0,
+        "skippedMessageKeys": []
+      },
+      "next": {
+        "rootKey": {
+          "__b64": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM="
+        },
+        "sendingChainKey": {
+          "__b64": "KyBvfzJyQN5veU7+Es5Xu61A9tW/sQpBTyp2vNJQIj8="
+        },
+        "receivingChainKey": {
+          "__b64": "BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU="
+        },
+        "sendingRatchetKeyPair": {
+          "privateKey": {
+            "__b64": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
+          },
+          "publicKey": {
+            "__b64": "pOCSkrZRwni5dyxWn1+puxPZBrRqtoyd+dwrRAn4ogk="
+          }
+        },
+        "receivingRatchetKey": {
+          "__b64": "zo060cy2M+x7cMF4FKXHbs0CloUFDTRHRboFhw5YfVk="
+        },
+        "sendMessageNumber": 1,
+        "receiveMessageNumber": 0,
+        "previousSendChainLength": 0,
+        "skippedMessageKeys": []
+      },
+      "plaintext": "İlk mesaj 👋",
+      "wire": {
+        "type": 2,
+        "header": {
+          "ratchetKey": "pOCSkrZRwni5dyxWn1+puxPZBrRqtoyd+dwrRAn4ogk=",
+          "previousChainLength": 0,
+          "messageNumber": 0
+        },
+        "ciphertext": "N+YdLqtdBlKvNmz/eoCsFLgpilSLu0vtCFaQgCMEw0S+pbjNdZ4X7ROqbg=="
+      }
+    },
+    {
+      "operation": "encrypt",
+      "state": {
+        "rootKey": {
+          "__b64": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM="
+        },
+        "sendingChainKey": {
+          "__b64": "KyBvfzJyQN5veU7+Es5Xu61A9tW/sQpBTyp2vNJQIj8="
+        },
+        "receivingChainKey": {
+          "__b64": "BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU="
+        },
+        "sendingRatchetKeyPair": {
+          "privateKey": {
+            "__b64": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
+          },
+          "publicKey": {
+            "__b64": "pOCSkrZRwni5dyxWn1+puxPZBrRqtoyd+dwrRAn4ogk="
+          }
+        },
+        "receivingRatchetKey": {
+          "__b64": "zo060cy2M+x7cMF4FKXHbs0CloUFDTRHRboFhw5YfVk="
+        },
+        "sendMessageNumber": 1,
+        "receiveMessageNumber": 0,
+        "previousSendChainLength": 0,
+        "skippedMessageKeys": []
+      },
+      "next": {
+        "rootKey": {
+          "__b64": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM="
+        },
+        "sendingChainKey": {
+          "__b64": "MZ4hAfXH5nNeZY59EzbfyDX0sQeRIzl5sLBPkVrR5vo="
+        },
+        "receivingChainKey": {
+          "__b64": "BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU="
+        },
+        "sendingRatchetKeyPair": {
+          "privateKey": {
+            "__b64": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
+          },
+          "publicKey": {
+            "__b64": "pOCSkrZRwni5dyxWn1+puxPZBrRqtoyd+dwrRAn4ogk="
+          }
+        },
+        "receivingRatchetKey": {
+          "__b64": "zo060cy2M+x7cMF4FKXHbs0CloUFDTRHRboFhw5YfVk="
+        },
+        "sendMessageNumber": 2,
+        "receiveMessageNumber": 0,
+        "previousSendChainLength": 0,
+        "skippedMessageKeys": []
+      },
+      "plaintext": "İkinci: şğıöçü",
+      "wire": {
+        "type": 2,
+        "header": {
+          "ratchetKey": "pOCSkrZRwni5dyxWn1+puxPZBrRqtoyd+dwrRAn4ogk=",
+          "previousChainLength": 0,
+          "messageNumber": 1
+        },
+        "ciphertext": "Sex0ppPvywve7hBud+ayTqZTN04mSm18Tp66tBNHPiRr6PadIaeT4irK2an+jopZLg=="
+      }
+    },
+    {
+      "operation": "encrypt",
+      "state": {
+        "rootKey": {
+          "__b64": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM="
+        },
+        "sendingChainKey": {
+          "__b64": "MZ4hAfXH5nNeZY59EzbfyDX0sQeRIzl5sLBPkVrR5vo="
+        },
+        "receivingChainKey": {
+          "__b64": "BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU="
+        },
+        "sendingRatchetKeyPair": {
+          "privateKey": {
+            "__b64": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
+          },
+          "publicKey": {
+            "__b64": "pOCSkrZRwni5dyxWn1+puxPZBrRqtoyd+dwrRAn4ogk="
+          }
+        },
+        "receivingRatchetKey": {
+          "__b64": "zo060cy2M+x7cMF4FKXHbs0CloUFDTRHRboFhw5YfVk="
+        },
+        "sendMessageNumber": 2,
+        "receiveMessageNumber": 0,
+        "previousSendChainLength": 0,
+        "skippedMessageKeys": []
+      },
+      "next": {
+        "rootKey": {
+          "__b64": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM="
+        },
+        "sendingChainKey": {
+          "__b64": "ZhojZ8hi3XKgOao7+uUZs9e0wEuL26VDIbDh6SaDYCM="
+        },
+        "receivingChainKey": {
+          "__b64": "BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU="
+        },
+        "sendingRatchetKeyPair": {
+          "privateKey": {
+            "__b64": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
+          },
+          "publicKey": {
+            "__b64": "pOCSkrZRwni5dyxWn1+puxPZBrRqtoyd+dwrRAn4ogk="
+          }
+        },
+        "receivingRatchetKey": {
+          "__b64": "zo060cy2M+x7cMF4FKXHbs0CloUFDTRHRboFhw5YfVk="
+        },
+        "sendMessageNumber": 3,
+        "receiveMessageNumber": 0,
+        "previousSendChainLength": 0,
+        "skippedMessageKeys": []
+      },
+      "plaintext": "Üçüncü — out of order",
+      "wire": {
+        "type": 2,
+        "header": {
+          "ratchetKey": "pOCSkrZRwni5dyxWn1+puxPZBrRqtoyd+dwrRAn4ogk=",
+          "previousChainLength": 0,
+          "messageNumber": 2
+        },
+        "ciphertext": "NWabNfhJo0A8UsRj939lZvH0sb2PamMIP/GGn29wEKC1wTZqsQ+BpvvDaOjc0rGiDnlPTf/y3g=="
+      }
+    },
+    {
+      "operation": "decrypt",
+      "state": {
+        "rootKey": {
+          "__b64": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM="
+        },
+        "sendingChainKey": {
+          "__b64": "BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU="
+        },
+        "receivingChainKey": {
+          "__b64": "BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ="
+        },
+        "sendingRatchetKeyPair": {
+          "privateKey": {
+            "__b64": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI="
+          },
+          "publicKey": {
+            "__b64": "zo060cy2M+x7cMF4FKXHbs0CloUFDTRHRboFhw5YfVk="
+          }
+        },
+        "receivingRatchetKey": {
+          "__b64": "pOCSkrZRwni5dyxWn1+puxPZBrRqtoyd+dwrRAn4ogk="
+        },
+        "sendMessageNumber": 0,
+        "receiveMessageNumber": 0,
+        "previousSendChainLength": 0,
+        "skippedMessageKeys": []
+      },
+      "next": {
+        "rootKey": {
+          "__b64": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM="
+        },
+        "sendingChainKey": {
+          "__b64": "BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU="
+        },
+        "receivingChainKey": {
+          "__b64": "ZhojZ8hi3XKgOao7+uUZs9e0wEuL26VDIbDh6SaDYCM="
+        },
+        "sendingRatchetKeyPair": {
+          "privateKey": {
+            "__b64": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI="
+          },
+          "publicKey": {
+            "__b64": "zo060cy2M+x7cMF4FKXHbs0CloUFDTRHRboFhw5YfVk="
+          }
+        },
+        "receivingRatchetKey": {
+          "__b64": "pOCSkrZRwni5dyxWn1+puxPZBrRqtoyd+dwrRAn4ogk="
+        },
+        "sendMessageNumber": 0,
+        "receiveMessageNumber": 3,
+        "previousSendChainLength": 0,
+        "skippedMessageKeys": [
+          {
+            "ratchetKey": "pOCSkrZRwni5dyxWn1+puxPZBrRqtoyd+dwrRAn4ogk=",
+            "messageNumber": 0,
+            "messageKey": {
+              "__b64": "nMz+X7saDF/+vOUiaMAhkEHhFox2/qOwR0smGYHgm2o="
+            }
+          },
+          {
+            "ratchetKey": "pOCSkrZRwni5dyxWn1+puxPZBrRqtoyd+dwrRAn4ogk=",
+            "messageNumber": 1,
+            "messageKey": {
+              "__b64": "hg9EnoLXS+6jN1pLwLBcAdz2GHSzB6HSaBhyRxgttkk="
+            }
+          }
+        ]
+      },
+      "plaintext": "Üçüncü — out of order",
+      "wire": {
+        "type": 2,
+        "header": {
+          "ratchetKey": "pOCSkrZRwni5dyxWn1+puxPZBrRqtoyd+dwrRAn4ogk=",
+          "previousChainLength": 0,
+          "messageNumber": 2
+        },
+        "ciphertext": "NWabNfhJo0A8UsRj939lZvH0sb2PamMIP/GGn29wEKC1wTZqsQ+BpvvDaOjc0rGiDnlPTf/y3g=="
+      }
+    },
+    {
+      "operation": "decrypt",
+      "state": {
+        "rootKey": {
+          "__b64": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM="
+        },
+        "sendingChainKey": {
+          "__b64": "BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU="
+        },
+        "receivingChainKey": {
+          "__b64": "ZhojZ8hi3XKgOao7+uUZs9e0wEuL26VDIbDh6SaDYCM="
+        },
+        "sendingRatchetKeyPair": {
+          "privateKey": {
+            "__b64": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI="
+          },
+          "publicKey": {
+            "__b64": "zo060cy2M+x7cMF4FKXHbs0CloUFDTRHRboFhw5YfVk="
+          }
+        },
+        "receivingRatchetKey": {
+          "__b64": "pOCSkrZRwni5dyxWn1+puxPZBrRqtoyd+dwrRAn4ogk="
+        },
+        "sendMessageNumber": 0,
+        "receiveMessageNumber": 3,
+        "previousSendChainLength": 0,
+        "skippedMessageKeys": [
+          {
+            "ratchetKey": "pOCSkrZRwni5dyxWn1+puxPZBrRqtoyd+dwrRAn4ogk=",
+            "messageNumber": 0,
+            "messageKey": {
+              "__b64": "nMz+X7saDF/+vOUiaMAhkEHhFox2/qOwR0smGYHgm2o="
+            }
+          },
+          {
+            "ratchetKey": "pOCSkrZRwni5dyxWn1+puxPZBrRqtoyd+dwrRAn4ogk=",
+            "messageNumber": 1,
+            "messageKey": {
+              "__b64": "hg9EnoLXS+6jN1pLwLBcAdz2GHSzB6HSaBhyRxgttkk="
+            }
+          }
+        ]
+      },
+      "next": {
+        "rootKey": {
+          "__b64": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM="
+        },
+        "sendingChainKey": {
+          "__b64": "BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU="
+        },
+        "receivingChainKey": {
+          "__b64": "ZhojZ8hi3XKgOao7+uUZs9e0wEuL26VDIbDh6SaDYCM="
+        },
+        "sendingRatchetKeyPair": {
+          "privateKey": {
+            "__b64": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI="
+          },
+          "publicKey": {
+            "__b64": "zo060cy2M+x7cMF4FKXHbs0CloUFDTRHRboFhw5YfVk="
+          }
+        },
+        "receivingRatchetKey": {
+          "__b64": "pOCSkrZRwni5dyxWn1+puxPZBrRqtoyd+dwrRAn4ogk="
+        },
+        "sendMessageNumber": 0,
+        "receiveMessageNumber": 3,
+        "previousSendChainLength": 0,
+        "skippedMessageKeys": [
+          {
+            "ratchetKey": "pOCSkrZRwni5dyxWn1+puxPZBrRqtoyd+dwrRAn4ogk=",
+            "messageNumber": 1,
+            "messageKey": {
+              "__b64": "hg9EnoLXS+6jN1pLwLBcAdz2GHSzB6HSaBhyRxgttkk="
+            }
+          }
+        ]
+      },
+      "plaintext": "İlk mesaj 👋",
+      "wire": {
+        "type": 2,
+        "header": {
+          "ratchetKey": "pOCSkrZRwni5dyxWn1+puxPZBrRqtoyd+dwrRAn4ogk=",
+          "previousChainLength": 0,
+          "messageNumber": 0
+        },
+        "ciphertext": "N+YdLqtdBlKvNmz/eoCsFLgpilSLu0vtCFaQgCMEw0S+pbjNdZ4X7ROqbg=="
+      }
+    },
+    {
+      "operation": "decrypt",
+      "state": {
+        "rootKey": {
+          "__b64": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM="
+        },
+        "sendingChainKey": {
+          "__b64": "BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU="
+        },
+        "receivingChainKey": {
+          "__b64": "ZhojZ8hi3XKgOao7+uUZs9e0wEuL26VDIbDh6SaDYCM="
+        },
+        "sendingRatchetKeyPair": {
+          "privateKey": {
+            "__b64": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI="
+          },
+          "publicKey": {
+            "__b64": "zo060cy2M+x7cMF4FKXHbs0CloUFDTRHRboFhw5YfVk="
+          }
+        },
+        "receivingRatchetKey": {
+          "__b64": "pOCSkrZRwni5dyxWn1+puxPZBrRqtoyd+dwrRAn4ogk="
+        },
+        "sendMessageNumber": 0,
+        "receiveMessageNumber": 3,
+        "previousSendChainLength": 0,
+        "skippedMessageKeys": [
+          {
+            "ratchetKey": "pOCSkrZRwni5dyxWn1+puxPZBrRqtoyd+dwrRAn4ogk=",
+            "messageNumber": 1,
+            "messageKey": {
+              "__b64": "hg9EnoLXS+6jN1pLwLBcAdz2GHSzB6HSaBhyRxgttkk="
+            }
+          }
+        ]
+      },
+      "next": {
+        "rootKey": {
+          "__b64": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM="
+        },
+        "sendingChainKey": {
+          "__b64": "BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU="
+        },
+        "receivingChainKey": {
+          "__b64": "ZhojZ8hi3XKgOao7+uUZs9e0wEuL26VDIbDh6SaDYCM="
+        },
+        "sendingRatchetKeyPair": {
+          "privateKey": {
+            "__b64": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI="
+          },
+          "publicKey": {
+            "__b64": "zo060cy2M+x7cMF4FKXHbs0CloUFDTRHRboFhw5YfVk="
+          }
+        },
+        "receivingRatchetKey": {
+          "__b64": "pOCSkrZRwni5dyxWn1+puxPZBrRqtoyd+dwrRAn4ogk="
+        },
+        "sendMessageNumber": 0,
+        "receiveMessageNumber": 3,
+        "previousSendChainLength": 0,
+        "skippedMessageKeys": []
+      },
+      "plaintext": "İkinci: şğıöçü",
+      "wire": {
+        "type": 2,
+        "header": {
+          "ratchetKey": "pOCSkrZRwni5dyxWn1+puxPZBrRqtoyd+dwrRAn4ogk=",
+          "previousChainLength": 0,
+          "messageNumber": 1
+        },
+        "ciphertext": "Sex0ppPvywve7hBud+ayTqZTN04mSm18Tp66tBNHPiRr6PadIaeT4irK2an+jopZLg=="
+      }
+    },
+    {
+      "operation": "encrypt",
+      "state": {
+        "rootKey": {
+          "__b64": "/h8n4Eq0biQ/oFwrdr2d5nPAqjgZwidz2MxubKyQE9U="
+        },
+        "sendingChainKey": {
+          "__b64": "Okbvnjk7TSStpa+o5XcWihh24w0sBOcNcokdwEuwT9o="
+        },
+        "receivingChainKey": {
+          "__b64": "ZhojZ8hi3XKgOao7+uUZs9e0wEuL26VDIbDh6SaDYCM="
+        },
+        "sendingRatchetKeyPair": {
+          "privateKey": {
+            "__b64": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="
+          },
+          "publicKey": {
+            "__b64": "E75P6uryBMf9M1j8nAByGIHRdCeBKCJ+xnTzf3/pe20="
+          }
+        },
+        "receivingRatchetKey": {
+          "__b64": "pOCSkrZRwni5dyxWn1+puxPZBrRqtoyd+dwrRAn4ogk="
+        },
+        "sendMessageNumber": 0,
+        "receiveMessageNumber": 3,
+        "previousSendChainLength": 0,
+        "skippedMessageKeys": []
+      },
+      "next": {
+        "rootKey": {
+          "__b64": "/h8n4Eq0biQ/oFwrdr2d5nPAqjgZwidz2MxubKyQE9U="
+        },
+        "sendingChainKey": {
+          "__b64": "nqMmUfWWzPGqWG931ZRhpp/unpybKbPt9860PM9E3Lk="
+        },
+        "receivingChainKey": {
+          "__b64": "ZhojZ8hi3XKgOao7+uUZs9e0wEuL26VDIbDh6SaDYCM="
+        },
+        "sendingRatchetKeyPair": {
+          "privateKey": {
+            "__b64": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="
+          },
+          "publicKey": {
+            "__b64": "E75P6uryBMf9M1j8nAByGIHRdCeBKCJ+xnTzf3/pe20="
+          }
+        },
+        "receivingRatchetKey": {
+          "__b64": "pOCSkrZRwni5dyxWn1+puxPZBrRqtoyd+dwrRAn4ogk="
+        },
+        "sendMessageNumber": 1,
+        "receiveMessageNumber": 3,
+        "previousSendChainLength": 0,
+        "skippedMessageKeys": []
+      },
+      "plaintext": "DH turn from Bob",
+      "wire": {
+        "type": 2,
+        "header": {
+          "ratchetKey": "E75P6uryBMf9M1j8nAByGIHRdCeBKCJ+xnTzf3/pe20=",
+          "previousChainLength": 0,
+          "messageNumber": 0
+        },
+        "ciphertext": "Oo7/I9Gz0X5o/buOakfUWu7xSDkdSJrfFJt/OR1/apQ2UJmEz98cKbCaSfQ="
+      }
+    },
+    {
+      "operation": "decrypt",
+      "state": {
+        "rootKey": {
+          "__b64": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM="
+        },
+        "sendingChainKey": {
+          "__b64": "ZhojZ8hi3XKgOao7+uUZs9e0wEuL26VDIbDh6SaDYCM="
+        },
+        "receivingChainKey": {
+          "__b64": "BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU="
+        },
+        "sendingRatchetKeyPair": {
+          "privateKey": {
+            "__b64": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
+          },
+          "publicKey": {
+            "__b64": "pOCSkrZRwni5dyxWn1+puxPZBrRqtoyd+dwrRAn4ogk="
+          }
+        },
+        "receivingRatchetKey": {
+          "__b64": "zo060cy2M+x7cMF4FKXHbs0CloUFDTRHRboFhw5YfVk="
+        },
+        "sendMessageNumber": 3,
+        "receiveMessageNumber": 0,
+        "previousSendChainLength": 0,
+        "skippedMessageKeys": []
+      },
+      "next": {
+        "rootKey": {
+          "__b64": "aAM/kbgR/eQegL9/l8TZr4utBGeFx9YlDLzvE3tgjoQ="
+        },
+        "sendingChainKey": {
+          "__b64": "857fNiLBszsSvtFwpVi4tQs2lW/EKSfJSKWaM6FVI/E="
+        },
+        "receivingChainKey": {
+          "__b64": "nqMmUfWWzPGqWG931ZRhpp/unpybKbPt9860PM9E3Lk="
+        },
+        "sendingRatchetKeyPair": {
+          "publicKey": {
+            "__b64": "PabxGqcYixNI01mstzC++uw6Lgik3FduHFvkrnOLy1o="
+          },
+          "privateKey": {
+            "__b64": "5BuQrKgC4R6gTgc/aGYHb/cyYRCbKWEa/8E4EbWOhy8="
+          }
+        },
+        "receivingRatchetKey": {
+          "__b64": "E75P6uryBMf9M1j8nAByGIHRdCeBKCJ+xnTzf3/pe20="
+        },
+        "sendMessageNumber": 0,
+        "receiveMessageNumber": 1,
+        "previousSendChainLength": 3,
+        "skippedMessageKeys": []
+      },
+      "plaintext": "DH turn from Bob",
+      "wire": {
+        "type": 2,
+        "header": {
+          "ratchetKey": "E75P6uryBMf9M1j8nAByGIHRdCeBKCJ+xnTzf3/pe20=",
+          "previousChainLength": 0,
+          "messageNumber": 0
+        },
+        "ciphertext": "Oo7/I9Gz0X5o/buOakfUWu7xSDkdSJrfFJt/OR1/apQ2UJmEz98cKbCaSfQ="
+      }
+    },
+    {
+      "operation": "encrypt",
+      "state": {
+        "rootKey": {
+          "__b64": "aAM/kbgR/eQegL9/l8TZr4utBGeFx9YlDLzvE3tgjoQ="
+        },
+        "sendingChainKey": {
+          "__b64": "857fNiLBszsSvtFwpVi4tQs2lW/EKSfJSKWaM6FVI/E="
+        },
+        "receivingChainKey": {
+          "__b64": "nqMmUfWWzPGqWG931ZRhpp/unpybKbPt9860PM9E3Lk="
+        },
+        "sendingRatchetKeyPair": {
+          "publicKey": {
+            "__b64": "PabxGqcYixNI01mstzC++uw6Lgik3FduHFvkrnOLy1o="
+          },
+          "privateKey": {
+            "__b64": "5BuQrKgC4R6gTgc/aGYHb/cyYRCbKWEa/8E4EbWOhy8="
+          }
+        },
+        "receivingRatchetKey": {
+          "__b64": "E75P6uryBMf9M1j8nAByGIHRdCeBKCJ+xnTzf3/pe20="
+        },
+        "sendMessageNumber": 0,
+        "receiveMessageNumber": 1,
+        "previousSendChainLength": 3,
+        "skippedMessageKeys": []
+      },
+      "next": {
+        "rootKey": {
+          "__b64": "aAM/kbgR/eQegL9/l8TZr4utBGeFx9YlDLzvE3tgjoQ="
+        },
+        "sendingChainKey": {
+          "__b64": "3VgMn5GAZpHUTwXFAxCI5vlz9tXyRQ91Tllly82Wrxg="
+        },
+        "receivingChainKey": {
+          "__b64": "nqMmUfWWzPGqWG931ZRhpp/unpybKbPt9860PM9E3Lk="
+        },
+        "sendingRatchetKeyPair": {
+          "publicKey": {
+            "__b64": "PabxGqcYixNI01mstzC++uw6Lgik3FduHFvkrnOLy1o="
+          },
+          "privateKey": {
+            "__b64": "5BuQrKgC4R6gTgc/aGYHb/cyYRCbKWEa/8E4EbWOhy8="
+          }
+        },
+        "receivingRatchetKey": {
+          "__b64": "E75P6uryBMf9M1j8nAByGIHRdCeBKCJ+xnTzf3/pe20="
+        },
+        "sendMessageNumber": 1,
+        "receiveMessageNumber": 1,
+        "previousSendChainLength": 3,
+        "skippedMessageKeys": []
+      },
+      "plaintext": "DH turn reply from Alice",
+      "wire": {
+        "type": 2,
+        "header": {
+          "ratchetKey": "PabxGqcYixNI01mstzC++uw6Lgik3FduHFvkrnOLy1o=",
+          "previousChainLength": 3,
+          "messageNumber": 0
+        },
+        "ciphertext": "c1ttf4fc3Ex+XX+F4lwIQUpqq2NBFZqMjt/x4X/wsjIhhMp+GcgkM3YXwQYxfcU3KY50Ew=="
+      }
+    },
+    {
+      "operation": "decrypt",
+      "state": {
+        "rootKey": {
+          "__b64": "/h8n4Eq0biQ/oFwrdr2d5nPAqjgZwidz2MxubKyQE9U="
+        },
+        "sendingChainKey": {
+          "__b64": "nqMmUfWWzPGqWG931ZRhpp/unpybKbPt9860PM9E3Lk="
+        },
+        "receivingChainKey": {
+          "__b64": "ZhojZ8hi3XKgOao7+uUZs9e0wEuL26VDIbDh6SaDYCM="
+        },
+        "sendingRatchetKeyPair": {
+          "privateKey": {
+            "__b64": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="
+          },
+          "publicKey": {
+            "__b64": "E75P6uryBMf9M1j8nAByGIHRdCeBKCJ+xnTzf3/pe20="
+          }
+        },
+        "receivingRatchetKey": {
+          "__b64": "pOCSkrZRwni5dyxWn1+puxPZBrRqtoyd+dwrRAn4ogk="
+        },
+        "sendMessageNumber": 1,
+        "receiveMessageNumber": 3,
+        "previousSendChainLength": 0,
+        "skippedMessageKeys": []
+      },
+      "next": {
+        "rootKey": {
+          "__b64": "uVz8C3PgeRVbxfG9FsBYdOeC0Im8a9hTmgjj7nxvlX0="
+        },
+        "sendingChainKey": {
+          "__b64": "qct+FJDOZkp48I7rHucQznVS1OxuH4ZjpjnHjisKNhs="
+        },
+        "receivingChainKey": {
+          "__b64": "3VgMn5GAZpHUTwXFAxCI5vlz9tXyRQ91Tllly82Wrxg="
+        },
+        "sendingRatchetKeyPair": {
+          "publicKey": {
+            "__b64": "2rQ4ddR5+bAaL4FHg6L7dikCdeEnFglezz90UcADeRc="
+          },
+          "privateKey": {
+            "__b64": "/lqXzsLawLaOP8Sd59n7tI0c7O9ePgYjyCL+5BxXzLw="
+          }
+        },
+        "receivingRatchetKey": {
+          "__b64": "PabxGqcYixNI01mstzC++uw6Lgik3FduHFvkrnOLy1o="
+        },
+        "sendMessageNumber": 0,
+        "receiveMessageNumber": 1,
+        "previousSendChainLength": 1,
+        "skippedMessageKeys": []
+      },
+      "plaintext": "DH turn reply from Alice",
+      "wire": {
+        "type": 2,
+        "header": {
+          "ratchetKey": "PabxGqcYixNI01mstzC++uw6Lgik3FduHFvkrnOLy1o=",
+          "previousChainLength": 3,
+          "messageNumber": 0
+        },
+        "ciphertext": "c1ttf4fc3Ex+XX+F4lwIQUpqq2NBFZqMjt/x4X/wsjIhhMp+GcgkM3YXwQYxfcU3KY50Ew=="
+      }
+    },
+    {
+      "operation": "decrypt",
+      "state": {
+        "rootKey": {
+          "__b64": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM="
+        },
+        "sendingChainKey": {
+          "__b64": "BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU="
+        },
+        "receivingChainKey": {
+          "__b64": "BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ="
+        },
+        "sendingRatchetKeyPair": {
+          "privateKey": {
+            "__b64": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI="
+          },
+          "publicKey": {
+            "__b64": "zo060cy2M+x7cMF4FKXHbs0CloUFDTRHRboFhw5YfVk="
+          }
+        },
+        "receivingRatchetKey": {
+          "__b64": "pOCSkrZRwni5dyxWn1+puxPZBrRqtoyd+dwrRAn4ogk="
+        },
+        "sendMessageNumber": 0,
+        "receiveMessageNumber": 0,
+        "previousSendChainLength": 0,
+        "skippedMessageKeys": []
+      },
+      "next": {
+        "rootKey": {
+          "__b64": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM="
+        },
+        "sendingChainKey": {
+          "__b64": "BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU="
+        },
+        "receivingChainKey": {
+          "__b64": "KyBvfzJyQN5veU7+Es5Xu61A9tW/sQpBTyp2vNJQIj8="
+        },
+        "sendingRatchetKeyPair": {
+          "privateKey": {
+            "__b64": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI="
+          },
+          "publicKey": {
+            "__b64": "zo060cy2M+x7cMF4FKXHbs0CloUFDTRHRboFhw5YfVk="
+          }
+        },
+        "receivingRatchetKey": {
+          "__b64": "pOCSkrZRwni5dyxWn1+puxPZBrRqtoyd+dwrRAn4ogk="
+        },
+        "sendMessageNumber": 0,
+        "receiveMessageNumber": 1,
+        "previousSendChainLength": 0,
+        "skippedMessageKeys": []
+      },
+      "plaintext": "Eski JSON AAD mesajı",
+      "wire": {
+        "type": 2,
+        "header": {
+          "ratchetKey": "pOCSkrZRwni5dyxWn1+puxPZBrRqtoyd+dwrRAn4ogk=",
+          "previousChainLength": 0,
+          "messageNumber": 0
+        },
+        "ciphertext": "CQkJCQkJCQkJCQkJZKOT2oYDAMW3B9DB42IbxOF9kWWYLt7W1KxuaGmOI3mO+XqcZQ=="
+      }
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "date": "2026-10-30",
+  "scope": "local synthetic proof only",
+  "rustTests": 7,
+  "flutterUnitWidgetTests": 10,
+  "windowsAuthHistoryRoomLogout": true,
+  "physicalDevices": false,
+  "published": false,
+  "browser": [
+    {
+      "name": "desktop",
+      "engine": "Chromium",
+      "login": true,
+      "historyWebCryptoRust": true,
+      "logoutClearsHistory": true,
+      "physicalDevice": false
+    },
+    {
+      "name": "android-chrome-emulated",
+      "engine": "Chromium",
+      "login": true,
+      "historyWebCryptoRust": true,
+      "logoutClearsHistory": true,
+      "physicalDevice": false
+    },
+    {
+      "name": "ios-ua-chromium-emulated",
+      "engine": "Chromium",
+      "login": true,
+      "historyWebCryptoRust": true,
+      "logoutClearsHistory": true,
+      "physicalDevice": false
+    }
+  ],
+  "media": {
+    "windowsDecodedFrames": 12,
+    "windowsDecodedScreenFrames": 12,
+    "source": "Chrome fake camera",
+    "encryptedRoom": true,
+    "physicalDevices": false
+  },
+  "sourceSha256": {
+    "crates/client-core/src/history.rs": "514e8e67d20fa5380e083111c5e37ed6ec3dfd00c0bb5647ed87781ace4a85f3",
+    "hichat_native_proof/lib/app/api.dart": "c0157c025cbdeeb79857b0261f7a90e62a0bff104d5ac3ce313809215d9b654b",
+    "hichat_native_proof/lib/app/archive_store.dart": "a91da68394825121d1dbf3261ad1d1b0ee910afb740e84cfc57f473746e61191",
+    "hichat_native_proof/lib/app/archive_store_native.dart": "5033bf794caf0da4d2fa34dfe3e3b2f8a19f2361f71024422c13300201221510",
+    "hichat_native_proof/lib/app/archive_store_web.dart": "fcd4307ee0c3b2607bce71ecc1c3739203ac0422726e1ea10f591e755170a687",
+    "hichat_native_proof/lib/app/media.dart": "50e28e1f27dac3a1d8736a651fbbaa50a83286647d4c37330242b14774c1bc9a",
+    "hichat_native_proof/lib/app/screen.dart": "ad3d4132b5b9be201fa9ebd9c0fd599090ea3ecacc6df83a4344a0f996c95bef",
+    "hichat_native_proof/lib/app/transport.dart": "2e1090ec7f2a28c084e28a53dbfdf23dc9bb6da16a2fb26cab0b0e7182c76ec4",
+    "hichat_native_proof/lib/app/transport_native.dart": "30b607646757946eb3c72ef291c1a9b6a78d3f4b566e1925b3c0951aaf828c9f",
+    "hichat_native_proof/lib/app/transport_web.dart": "b1e471efc4ea2c0209f6596bf76bafa70b00e2517e0a1b786ba799110b0d163e",
+    "hichat_native_proof/lib/main.dart": "34160ca2f023a0e84b4c878151f5ac576eade26fb886510cc833582e07f24386",
+    "hichat_native_proof/pubspec.lock": "89d7b8cde3987d317f8b6d3ab874223ac5f8912f648dedec0e8e1133fef8deec",
+    "third_party/dart-webrtc-keyring.patch": "78f0f3dcf8c8940d5d1fb86323ee0974b4930dda4fba9f940b97551b221ca3bf"
+  },
+  "artifactSha256": {
+    "hichat_native_proof/build/windows/x64/runner/Release/hichat_native_proof.exe": "d6f34cb455d32ffe70660af648e06a1942d618500e31abd281858ea01494aefa",
+    "hichat_native_proof/build/web/main.dart.js": "92e773e14507e74c87c1ed061ee6e9c0d9ffa8d42fe38b800d7ef8818e6edbec",
+    "hichat_native_proof/build/web/pkg/rust_lib_hichat_native_proof_bg.wasm": "353d2593af5d73644ade14f380f2adad33d848ca97664a7edfcfe32f37fe834f",
+    "hichat_native_proof/build/web/e2ee.worker.dart.js": "ffac1133d519ef4c8b1e07f497f092d49ab6de6c2c52c9b50a5646a088f26ae6"
+  }
+}

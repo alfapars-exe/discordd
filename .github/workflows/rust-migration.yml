@@ -1,0 +1,27 @@
+name: Rust migration proof
+on:
+  pull_request:
+    paths: ['migration/**', '.github/workflows/rust-migration.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  contracts:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Install Rust target and components
+        run: |
+          rustup toolchain install 1.99.1 --profile minimal --component clippy,rustfmt
+          rustup default 1.99.1
+          rustup target add wasm32-unknown-unknown
+      - run: cargo fmt --manifest-path migration/Cargo.toml --all -- --check
+      - run: cargo test --manifest-path migration/Cargo.toml --workspace --locked
+      - run: cargo clippy --manifest-path migration/Cargo.toml --workspace --locked -- -D warnings
+      - run: cargo check --manifest-path migration/Cargo.toml -p hichat-client-core --target wasm32-unknown-unknown --locked
+# This verifies portable core code only. It is not media, device, packaging,
+# signing, upgrade, production readiness, or a successful hosted CI receipt.
