@@ -384,6 +384,14 @@
       "line_sha256": "b0c9f492f92a7d02eafb57e17a8d7db5f096e1f1c04dab7f625b21dea03e7220",
       "reason": "The plus signs are fixed PostgreSQL timestamp and attempt arithmetic inside a single SQL literal. No SQL string concatenation occurs; the retry event ID remains a bound argument.",
       "proof_ref": "server/services/dm_delivery.go:142,152;server/services/dm_delivery_test.go:TestDMOutboxRetryOrderingDeletionAndRetention"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/services/dm_delivery_test.go",
+      "file_sha256": "4cb74c53fe946a7c12ceef4f2bcf7f77534a0842670d874d132a3fe1c902328b",
+      "line_sha256": "9ccf4cafd9283abf6c22aa4b12916b651f3d76c2ba1133a8123575a34e010100",
+      "reason": "The exact fixture statement adds a fixed PostgreSQL interval inside one SQL literal to simulate an unexpired lease; message ID is a bound parameter, not concatenated SQL.",
+      "proof_ref": "server/services/dm_delivery_test.go:114"
     }
   ]
 }
