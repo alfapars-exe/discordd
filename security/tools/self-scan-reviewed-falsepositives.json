@@ -4,7 +4,7 @@
     {
       "rule": "go.sql-concat",
       "path": "server/database/postgres_import.go",
-      "file_sha256": "b2583ed2dc96f1f18ca44533f4612e9700552ab8380e04dfbe5f1527ee4260e7",
+      "file_sha256": "9590396870b1e41dbd1da52eb52db650670eb4dc866ae3dcf8e99c62918dda5b",
       "line_sha256": "cb03e402039c6d4ee5383d25d325e12adbc40d9d1b9aaee38d4ae6c9d5bd62d8",
       "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
       "proof_ref": "server/database/postgres_import.go:33-45,58-68,98-128,150-180,268;server/database/postgres_import_test.go:48-78,146-164"
@@ -12,7 +12,7 @@
     {
       "rule": "go.sql-concat",
       "path": "server/database/postgres_import_test.go",
-      "file_sha256": "94d28e0424b9f78ce62ccd5cfa0ebdf106e38ec9fe2f2c9b6231112cb07b277d",
+      "file_sha256": "02a1ad93236c44c0cb2c784443bdd9414cb0eaf932f4de6055a8e5253b541f86",
       "line_sha256": "fb9879437de4b36ace22b67076b4aba070f0d691abc561263c44310bda9993da",
       "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
       "proof_ref": "server/database/postgres_import.go:33-45,58-68,98-128,150-180,268;server/database/postgres_import_test.go:48-78,146-164"
@@ -212,7 +212,7 @@
     {
       "rule": "go.sql-sprintf",
       "path": "server/database/postgres_import.go",
-      "file_sha256": "b2583ed2dc96f1f18ca44533f4612e9700552ab8380e04dfbe5f1527ee4260e7",
+      "file_sha256": "9590396870b1e41dbd1da52eb52db650670eb4dc866ae3dcf8e99c62918dda5b",
       "line_sha256": "2c2e6ec94ef6a617bbb5c617d66f58fef056233b0af207b0cd077262fa8d74b0",
       "reason": "The matched formatting does not interpolate attacker-controlled SQL: repository snapshot identifiers are schema-derived, allowlisted/quoted, and row values stay bound; test timestamp formatting is passed only to a placeholder.",
       "proof_ref": "server/database/postgres_import.go:33-45,58-68,98-128,150-180,268;server/database/postgres_import_test.go:48-78,146-164"
@@ -220,7 +220,7 @@
     {
       "rule": "go.sql-sprintf",
       "path": "server/database/postgres_import.go",
-      "file_sha256": "b2583ed2dc96f1f18ca44533f4612e9700552ab8380e04dfbe5f1527ee4260e7",
+      "file_sha256": "9590396870b1e41dbd1da52eb52db650670eb4dc866ae3dcf8e99c62918dda5b",
       "line_sha256": "c51c6db83e52d23399cc118e3b7dd183b50a79b7e45683d8afd98927ea1c0900",
       "reason": "The matched formatting does not interpolate attacker-controlled SQL: repository snapshot identifiers are schema-derived, allowlisted/quoted, and row values stay bound; test timestamp formatting is passed only to a placeholder.",
       "proof_ref": "server/database/postgres_import.go:33-45,58-68,98-128,150-180,268;server/database/postgres_import_test.go:48-78,146-164"
@@ -228,7 +228,7 @@
     {
       "rule": "go.sql-sprintf",
       "path": "server/database/postgres_import.go",
-      "file_sha256": "b2583ed2dc96f1f18ca44533f4612e9700552ab8380e04dfbe5f1527ee4260e7",
+      "file_sha256": "9590396870b1e41dbd1da52eb52db650670eb4dc866ae3dcf8e99c62918dda5b",
       "line_sha256": "ed507a732f31e71d68131ccbd9280584b694766f6e0dd3715413f5a9562f9fb4",
       "reason": "The matched formatting does not interpolate attacker-controlled SQL: repository snapshot identifiers are schema-derived, allowlisted/quoted, and row values stay bound; test timestamp formatting is passed only to a placeholder.",
       "proof_ref": "server/database/postgres_import.go:33-45,58-68,98-128,150-180,268;server/database/postgres_import_test.go:48-78,146-164"
@@ -340,7 +340,7 @@
     {
       "rule": "go.sql-concat",
       "path": "server/services/channel_delivery.go",
-      "file_sha256": "7043a2014a1037ae5f3a543dce50123f7a66c62e9929292814c678338f9db791",
+      "file_sha256": "941cb91693c2fea13004e269604427b7d285291c2884d4369a90e7a6cba4999c",
       "line_sha256": "b9e0dcf41d9c6f4062cda62024095077af22625d7f722a3e1b4a89c426369e0a",
       "reason": "The exact match contains fixed SQL arithmetic for attempt counts and lease timestamps, with no SQL string interpolation.",
       "proof_ref": "server/services/channel_delivery.go:228"
@@ -348,7 +348,7 @@
     {
       "rule": "go.sql-concat",
       "path": "server/services/channel_delivery.go",
-      "file_sha256": "7043a2014a1037ae5f3a543dce50123f7a66c62e9929292814c678338f9db791",
+      "file_sha256": "941cb91693c2fea13004e269604427b7d285291c2884d4369a90e7a6cba4999c",
       "line_sha256": "11bc8e7a1de4aeca027449fff5f2c52dc0b81088401995e892fcac6344f7d84c",
       "reason": "The exact match contains fixed SQL arithmetic for attempt counts and lease timestamps, with no SQL string interpolation.",
       "proof_ref": "server/services/channel_delivery.go:239"
