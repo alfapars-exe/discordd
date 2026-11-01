@@ -9,7 +9,7 @@ const fixtureClient=`192.0.2.${1+randomBytes(1)[0]%250}`;
 async function api(path,body,token,method='POST') {
   const response=await fetch(base+apiPath('/api'+path),{method,headers:{'Content-Type':'application/json','X-Forwarded-For':fixtureClient,...(token?{Authorization:`Bearer ${token}`}:{})},...(body?{body:JSON.stringify(body)}:{})});
   const result=await response.json();
-  if(!response.ok||!result.success) throw Error(`CHAT_FIXTURE_API_${response.status}_${result.code??'FAILED'}`);
+  if(!response.ok||!result.success) throw new Error(`CHAT_FIXTURE_API_${response.status}_${result.code??'FAILED'}`);
   return result.data;
 }
 const users=[];
@@ -24,6 +24,7 @@ const channel=await api('/dms',{user_id:users[1].userId},users[0].token);
 await api(`/dms/channels/${channel.id}/e2ee`,{enabled:true},users[0].token,'PATCH');
 const dir=new URL('../.local/',import.meta.url);
 await mkdir(dir,{recursive:true});
-const output=process.argv.includes('--web-handoff')?'chat-web-handoff-qa.json':process.argv.includes('--web')?'chat-web-qa.json':process.argv.includes('--interop')?'chat-interop-qa.json':'chat-qa.json';
+const variants=[['--web-handoff','chat-web-handoff-qa.json'],['--web','chat-web-qa.json'],['--interop','chat-interop-qa.json']];
+const output=variants.find(([flag])=>process.argv.includes(flag))?.[1]??'chat-qa.json';
 await writeFile(new URL(output,dir),JSON.stringify({users:users.map(({token,...u})=>u),channelId:channel.id}),{mode:0o600});
 console.log('Two disposable friends and an encrypted DM prepared; credentials stay in ignored .local.');
