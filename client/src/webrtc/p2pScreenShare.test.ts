@@ -1,5 +1,5 @@
 import {beforeEach,expect,it,vi} from "vitest";
-import {startScreenShare} from "./p2pScreenShare";
+import {startScreenShare,stopScreenShare} from "./p2pScreenShare";
 const platform=vi.hoisted(()=>({native:false}));
 vi.mock("../utils/constants",()=>({isElectron:()=>platform.native}));
 const capture=vi.fn();
@@ -12,7 +12,7 @@ it("publishes the selected quality and updates the existing source without reope
  expect(capture).toHaveBeenCalledWith({audio:false,video:{width:{ideal:2560},height:{ideal:1440},frameRate:{ideal:120,max:120}}});
  expect(screen.enabled).toBe(true);await result!.update({screenShareQuality:"720p",screenShareFps:30});
  expect(screen.applyConstraints).toHaveBeenLastCalledWith({width:{ideal:1280},height:{ideal:720},frameRate:{ideal:30,max:30}});
- expect(sender.setParameters).toHaveBeenLastCalledWith({encodings:[{maxFramerate:30,maxBitrate:1500000}]});expect(capture).toHaveBeenCalledOnce();
+ expect(sender.setParameters).toHaveBeenLastCalledWith({degradationPreference:"maintain-framerate",encodings:[{maxFramerate:30,maxBitrate:1500000}]});expect(capture).toHaveBeenCalledOnce();
 });
 it("stops a late picker result and never replaces the sender after account/call retirement",async()=>{
  let resolve!:(value:unknown)=>void;capture.mockReturnValue(new Promise(done=>{resolve=done;}));let current=true;
@@ -27,7 +27,7 @@ it("keeps pending replacement disabled and retires it if the source lease change
 it("does not update a retired source after constraints resolve",async()=>{
  const screen=track(),{pc,sender}=fixture();let current=true;capture.mockResolvedValue({getVideoTracks:()=>[screen],getTracks:()=>[screen]});const result=await startScreenShare(pc,{isCurrent:()=>current,settings:{screenShareQuality:"720p",screenShareFps:30}});
  let finish!:()=>void;vi.mocked(screen.applyConstraints).mockImplementationOnce(()=>new Promise<void>(done=>{finish=done;}));const count=sender.setParameters.mock.calls.length;
- const update=result!.update({screenShareQuality:"1440p",screenShareFps:120});current=false;finish();expect(await update).toBe(false);expect(sender.setParameters.mock.calls.length).toBe(count);
+ const update=result!.update({screenShareQuality:"1440p",screenShareFps:120});await vi.waitFor(()=>expect(finish).toBeTypeOf("function"));current=false;finish();expect(await update).toBe(false);expect(sender.setParameters.mock.calls.length).toBe(count);
 });
 it("bounds missing renegotiation and releases its captured source",async()=>{
  vi.useFakeTimers();try{const raw=track(),sender={track:null,replaceTrack:vi.fn(),getParameters:()=>({encodings:[{}]}),setParameters:vi.fn()};const pc={signalingState:"stable",getSenders:()=>[],addTransceiver:()=>({sender})} as unknown as RTCPeerConnection;capture.mockResolvedValue({getVideoTracks:()=>[raw],getTracks:()=>[raw]});const result=startScreenShare(pc,{isCurrent:()=>true,settings:{screenShareQuality:"720p",screenShareFps:30}});const assertion=expect(result).rejects.toMatchObject({name:"AbortError"});await vi.advanceTimersByTimeAsync(10_100);await assertion;expect(raw.stop).toHaveBeenCalledOnce();expect(sender.replaceTrack).not.toHaveBeenCalled();}finally{vi.useRealTimers();}
@@ -63,3 +63,37 @@ it("new share lease denies old camera restore even when old replace resolves lat
 it("new call or closed peer cannot authorize old camera restoration",async()=>{const video=track(),{pc,sender}=fixture();let active=true,restore=true,retire!:()=>void,release!:()=>void;sender.replaceTrack.mockImplementationOnce(async next=>{await new Promise<void>(done=>{release=done});sender.track=next});capture.mockResolvedValue({getVideoTracks:()=>[video],getTracks:()=>[video]});const pending=startScreenShare(pc,{isCurrent:()=>active,restoreCurrent:()=>restore,subscribeScope:fn=>{retire=fn;return()=>{}},settings:{screenShareQuality:"720p",screenShareFps:30}});await vi.waitFor(()=>expect(sender.replaceTrack).toHaveBeenCalledOnce());active=false;restore=false;retire();release();expect(await pending).toBeNull();expect(sender.replaceTrack).toHaveBeenCalledOnce();});
 
 it("camera turning off during held restoration is reconciled without enabling a stopped screen",async()=>{const video=track(),{pc,sender}=fixture();let camera:MediaStreamTrack|null=sender.track,active=true,retire!:()=>void,releaseScreen!:()=>void,releaseRestore!:()=>void;sender.replaceTrack.mockImplementationOnce(async next=>{await new Promise<void>(done=>{releaseScreen=done});sender.track=next}).mockImplementationOnce(async next=>{await new Promise<void>(done=>{releaseRestore=done});sender.track=next});capture.mockResolvedValue({getVideoTracks:()=>[video],getTracks:()=>[video]});const pending=startScreenShare(pc,{isCurrent:()=>active,restoreCurrent:()=>true,subscribeScope:fn=>{retire=fn;return()=>{}},getCameraTrack:()=>camera,settings:{screenShareQuality:"720p",screenShareFps:30}});await vi.waitFor(()=>expect(sender.replaceTrack).toHaveBeenCalledOnce());active=false;retire();releaseScreen();await vi.waitFor(()=>expect(sender.replaceTrack).toHaveBeenCalledTimes(2));camera=null;releaseRestore();expect(await pending).toBeNull();expect(sender.track).toBeNull();expect(sender.replaceTrack).toHaveBeenCalledTimes(3);expect(video.enabled).toBe(false);});
+
+it("updates the active content profile and resolution preference without reacquiring capture",async()=>{
+ const raw=track(),{pc,sender}=fixture();capture.mockResolvedValue({getVideoTracks:()=>[raw],getTracks:()=>[raw]});
+ const result=await startScreenShare(pc,{isCurrent:()=>true,settings:{screenShareQuality:"1080p",screenShareFps:60,screenShareMode:"motion"}});
+ expect(raw.contentHint).toBe("motion");await result!.update({screenShareQuality:"1080p",screenShareFps:60,screenShareMode:"detail"});
+ expect(raw.contentHint).toBe("detail");expect(sender.setParameters).toHaveBeenLastCalledWith(expect.objectContaining({degradationPreference:"maintain-resolution"}));expect(capture).toHaveBeenCalledOnce();
+});
+
+it("unsupported explicit low latency fails initial capture safely and preserves a live source on update",async()=>{
+ const raw=track(),{pc,sender}=fixture(),camera=sender.track;capture.mockResolvedValue({getVideoTracks:()=>[raw],getTracks:()=>[raw]});
+ await expect(startScreenShare(pc,{isCurrent:()=>true,settings:{screenShareQuality:"720p",screenShareFps:30,screenShareLowLatency:true}})).rejects.toMatchObject({name:"NotSupportedError"});expect(sender.track).toBe(camera);expect(raw.stop).toHaveBeenCalledOnce();
+ const next=track();capture.mockResolvedValue({getVideoTracks:()=>[next],getTracks:()=>[next]});const result=await startScreenShare(pc,{isCurrent:()=>true,settings:{screenShareQuality:"1080p",screenShareFps:60,screenShareMode:"detail"}});
+ await expect(result!.update({screenShareQuality:"1080p",screenShareFps:60,screenShareLowLatency:true,screenShareMode:"motion"})).rejects.toMatchObject({name:"NotSupportedError"});expect(sender.track).toBe(next);expect(next.enabled).toBe(true);expect(next.stop).not.toHaveBeenCalled();expect(next.contentHint).toBe("detail");
+});
+
+it("coalesces rapid preference changes and never commits superseded constraints to the encoder",async()=>{
+ const raw=track(),{pc,sender}=fixture();capture.mockResolvedValue({getVideoTracks:()=>[raw],getTracks:()=>[raw]});const result=await startScreenShare(pc,{isCurrent:()=>true,settings:{screenShareQuality:"720p",screenShareFps:30}});
+ let release!:()=>void;vi.mocked(raw.applyConstraints).mockImplementationOnce(()=>new Promise<void>(resolve=>{release=resolve}));const first=result!.update({screenShareQuality:"1440p",screenShareFps:120});await vi.waitFor(()=>expect(release).toBeTypeOf("function"));
+ const second=result!.update({screenShareQuality:"720p",screenShareFps:60,screenShareMode:"motion"}),last=result!.update({screenShareQuality:"1080p",screenShareFps:30,screenShareMode:"detail"});release();expect(await first).toBe(false);expect(await second).toBe(false);expect(await last).toBe(true);
+ expect(sender.setParameters).toHaveBeenCalledTimes(2);expect(sender.setParameters).toHaveBeenLastCalledWith({degradationPreference:"maintain-resolution",encodings:[{maxBitrate:5000000,maxFramerate:30}]});expect(raw.contentHint).toBe("detail");
+});
+
+it("restores the working profile when a live encoder update fails",async()=>{
+ const raw=track(),{pc,sender}=fixture();capture.mockResolvedValue({getVideoTracks:()=>[raw],getTracks:()=>[raw]});const result=await startScreenShare(pc,{isCurrent:()=>true,settings:{screenShareQuality:"720p",screenShareFps:30,screenShareMode:"detail"}});
+ sender.setParameters.mockRejectedValueOnce(new Error("encoder rejected"));await expect(result!.update({screenShareQuality:"1440p",screenShareFps:120,screenShareMode:"motion"})).rejects.toThrow("encoder rejected");
+ expect(raw.contentHint).toBe("detail");expect(sender.setParameters).toHaveBeenLastCalledWith({degradationPreference:"maintain-resolution",encodings:[{maxBitrate:1500000,maxFramerate:30}]});expect(raw.enabled).toBe(true);expect(raw.stop).not.toHaveBeenCalled();
+});
+
+it("restores prior camera bitrate/fps/degradation and rejects updates from a disposed share",async()=>{
+ const raw=track(),{pc,sender}=fixture(),camera=sender.track;sender.getParameters=()=>({degradationPreference:"balanced",encodings:[{maxFramerate:24,maxBitrate:900000}]} as RTCRtpSendParameters);
+ capture.mockResolvedValue({getVideoTracks:()=>[raw],getTracks:()=>[raw]});const result=await startScreenShare(pc,{isCurrent:()=>true,settings:{screenShareQuality:"1080p",screenShareFps:60,screenShareMode:"detail"}});
+ result!.dispose();expect(await stopScreenShare(sender as unknown as RTCRtpSender,camera,()=>true)).toBe(true);const count=sender.setParameters.mock.calls.length;
+ expect(sender.setParameters).toHaveBeenLastCalledWith({degradationPreference:"balanced",encodings:[{maxFramerate:24,maxBitrate:900000}]});expect(await result!.update({screenShareQuality:"1440p",screenShareFps:120})).toBe(false);expect(sender.setParameters).toHaveBeenCalledTimes(count);
+});

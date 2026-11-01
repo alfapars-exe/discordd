@@ -48,3 +48,10 @@ describe("authoritative voice token replacement",()=>{
   expect(useVoiceStore.getState().e2eeKeyContext).toBe("fresh");
  });
 });
+
+it.each([[401,"session"],[403,"access"],[404,"access"],[503,"connection"]] as const)("reports HTTP %s to recovery without changing legacy callers",async(status,kind)=>{
+ vi.mocked(voiceApi.getVoiceToken).mockResolvedValue({success:false,status,error:"rejected"});
+ await expect(useVoiceStore.getState().refreshVoiceToken("channel",true)).rejects.toMatchObject({kind});
+ expect(voiceApi.getVoiceToken).toHaveBeenLastCalledWith("srv1","channel",{timeoutMs:15000});
+ await expect(useVoiceStore.getState().refreshVoiceToken("channel")).resolves.toBeNull();
+});

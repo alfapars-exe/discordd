@@ -82,3 +82,29 @@ it("a legacy answer to the initial v1 offer retains microphone and subsequent le
 it("projects exact SDP camera and screen-video separately while preserving aggregate video",async()=>{const h=fixture();h.tracks.forEach(track=>track.kind="video");const description={...offer(),sdp:sdp().replaceAll("m=audio","m=video"),sources:[{mid:"0",source:"camera"as const},{mid:"1",source:"screen-video"as const}]};expect(await h.controller.applyRemoteDescription(description)).toBe("accepted");const media=h.onMedia.mock.lastCall![0];expect(media.camera.getTracks()).toEqual([h.tracks[0]]);expect(media.screenVideo.getTracks()).toEqual([h.tracks[1]]);expect(media.video.getTracks()).toHaveLength(2);expect(media.video.getTracks()).toEqual(expect.arrayContaining(h.tracks));expect(media.microphone).toBeNull();expect(media.screenAudio).toBeNull();});
 
 it("legacy video remains aggregate main video without invented camera or screen authority",async()=>{const h=fixture();h.tracks.forEach(track=>track.kind="video");expect(await h.controller.applyRemoteDescription({call_id:"call",type:"offer",sdp:sdp().replaceAll("m=audio","m=video")})).toBe("accepted");const media=h.onMedia.mock.lastCall![0];expect(media.video.getTracks()).toHaveLength(2);expect(media.video.getTracks()).toEqual(expect.arrayContaining(h.tracks));expect(media.camera).toBeNull();expect(media.screenVideo).toBeNull();expect(media.screenAudioSupported).toBe(false)});
+
+it("codec changes wait for their own offer rather than an earlier outstanding answer",async()=>{
+ const h=fixture(true);h.controller.requestNegotiation();await tick();const first=h.send.mock.lastCall![1];
+ const mutation=vi.fn();let settled=false;const pending=h.controller.negotiateMutation(mutation,()=>true).then(value=>{settled=true;return value});await tick();expect(mutation).toHaveBeenCalledOnce();
+ await h.controller.applyRemoteDescription({...offer(2),type:"answer",reply_to_description_id:first.description_id});await tick();expect(settled).toBe(false);const second=h.send.mock.lastCall![1];expect(second.description_id).not.toBe(first.description_id);
+ await h.controller.applyRemoteDescription({...offer(3),type:"answer",reply_to_description_id:first.description_id});expect(settled).toBe(false);
+ await h.controller.applyRemoteDescription({...offer(4),type:"answer",reply_to_description_id:second.description_id});expect(await pending).toBe(true);
+});
+
+it("codec mutation participates in polite glare without changing source acknowledgement rules",async()=>{
+ const h=fixture();await h.controller.applyRemoteDescription(offer());const pending=h.controller.negotiateMutation(vi.fn(),()=>true);await tick();
+ await h.controller.applyRemoteDescription(offer(2));expect(await pending).toBe(true);expect(h.pc.setLocalDescription).toHaveBeenCalledWith({type:"rollback"});expect(h.onError).not.toHaveBeenCalled();
+});
+
+it("failed codec offer resolves without terminating the working peer",async()=>{
+ const h=fixture(true);h.pc.createOffer.mockRejectedValueOnce(new Error("codec offer failed"));const pending=h.controller.negotiateMutation(vi.fn(),()=>true);await tick();expect(await pending).toBe(false);expect(h.onError).not.toHaveBeenCalled();
+});
+
+it("a rejected codec mutation never creates an offer or terminates the peer",async()=>{
+ const h=fixture(true);await expect(h.controller.negotiateMutation(()=>{throw new DOMException("Unsupported codec","NotSupportedError")},()=>true)).rejects.toMatchObject({name:"NotSupportedError"});expect(h.send).not.toHaveBeenCalled();expect(h.onError).not.toHaveBeenCalled();
+});
+
+it.each(["timeout","retired","disposed"])("bounds codec negotiation on %s",async reason=>{
+ vi.useFakeTimers();const h=fixture(true);let active=true;const pending=h.controller.negotiateMutation(vi.fn(),()=>active,50);await tick();
+ if(reason==="retired")active=false;if(reason==="disposed")h.controller.dispose();await vi.advanceTimersByTimeAsync(51);expect(await pending).toBe(false);expect(h.onError).not.toHaveBeenCalled();
+});

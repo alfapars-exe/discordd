@@ -25,15 +25,9 @@ type Config struct {
 	EncryptionKey                string // AES-256 key (64 hex chars = 32 bytes) for LiveKit credential encryption
 	HetznerAPIToken              string // Hetzner Cloud API token (read-only) — optional
 	AllowLiveKitInstanceCreation bool
-	// AuditLogRetentionDays is how many days audit_logs rows are kept before
-	// the background purge deletes them (env AUDIT_LOG_RETENTION_DAYS,
-	// default 180). <= 0 disables the purge — audit history is kept forever,
-	// a deliberate choice some deployments may want for compliance, unlike
-	// BACKUP_DAILY_KEEP where <= 0 is treated as a typo and replaced.
-	AuditLogRetentionDays int
 	// TelemetryRetentionDays is how many days runtime_telemetry rows are
 	// kept before startRuntimeStatsLogger's periodic purge deletes them (env
-	// TELEMETRY_RETENTION_DAYS, default 30). Unlike AuditLogRetentionDays,
+	// TELEMETRY_RETENTION_DAYS, default 30). For telemetry,
 	// an invalid OR non-positive value falls back to the default — there is
 	// no "keep forever" use case for a per-minute operational rollup table,
 	// so silently disabling its purge would just let it grow unbounded.
@@ -130,11 +124,6 @@ type BackupConfig struct {
 // notices over a weekend, short enough that the retained copies stay cheap —
 // the DB is small and Xet dedups unchanged pages).
 const defaultBackupDailyKeep = 7
-
-// defaultAuditLogRetentionDays — 180 days (~6 months) balances keeping
-// enough moderation history for post-incident review against unbounded
-// growth of the audit_logs table on long-running self-hosted deployments.
-const defaultAuditLogRetentionDays = 180
 
 // defaultTelemetryRetentionDays — one minute-bucketed row per minute is
 // ~43k rows/month; 30 days (~43k rows) is enough trend history for
@@ -255,27 +244,8 @@ func Load() (*Config, error) {
 		}
 	}
 
-	// AUDIT_LOG_RETENTION_DAYS (optional) controls the audit_logs auto-purge
-	// window. A malformed value falls back to the default rather than
-	// failing boot — retention tuning is not a correctness input. Unlike
-	// BACKUP_DAILY_KEEP, an explicit non-positive value IS honoured (it
-	// disables the purge) rather than being replaced by the default; only a
-	// parse failure falls back.
-	auditLogRetentionDays := defaultAuditLogRetentionDays
-	if rStr := getEnv("AUDIT_LOG_RETENTION_DAYS", ""); rStr != "" {
-		if r, rErr := strconv.Atoi(rStr); rErr == nil {
-			auditLogRetentionDays = r
-		} else {
-			slog.Warn("ignoring invalid AUDIT_LOG_RETENTION_DAYS env value, using default",
-				"component", "config",
-				"value", rStr,
-				"default", auditLogRetentionDays,
-			)
-		}
-	}
-
 	// TELEMETRY_RETENTION_DAYS (optional) controls the runtime_telemetry
-	// auto-purge window. Unlike AUDIT_LOG_RETENTION_DAYS above, any
+	// auto-purge window. Any
 	// non-positive value ALSO falls back to the default (not just a parse
 	// failure) — there's no "keep forever" use case for a per-minute
 	// operational table, so a 0/negative value here is treated the same as
@@ -398,7 +368,6 @@ func Load() (*Config, error) {
 		HetznerAPIToken:              getEnv("HETZNER_API_TOKEN", ""),
 		AllowLiveKitInstanceCreation: getBoolEnv("ALLOW_LIVEKIT_INSTANCE_CREATION", false),
 		TrustedProxies:               trustedProxies,
-		AuditLogRetentionDays:        auditLogRetentionDays,
 		TelemetryRetentionDays:       telemetryRetentionDays,
 	}
 

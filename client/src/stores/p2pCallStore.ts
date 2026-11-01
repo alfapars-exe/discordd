@@ -359,12 +359,15 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
         screenSession = result;
         registerP2PLocalSource(peerConnection,result.sender,"screen-video");
         result.track.onended = () => { if (current() && screenSession === result) get().toggleScreenShare(); };
-        let chain = Promise.resolve().then(async () => { if (current() && screenSession === result) await result.update(useVoiceStore.getState()); }).catch(() => { if (current()) useToastStore.getState().addToast("error", i18n.t("voice:screenShareQualityFailed")); });
-        unsubscribeScreenQuality = useVoiceStore.subscribe((next, previous) => {
-          if (next.screenShareQuality === previous.screenShareQuality && next.screenShareFps === previous.screenShareFps) return;
-          chain = chain.then(async () => { if (current() && screenSession === result) await result.update(useVoiceStore.getState()); }).catch(() => {
+        const updateQuality = () => {
+          if (current() && screenSession === result) void result.update(useVoiceStore.getState()).catch(() => {
             if (current()) useToastStore.getState().addToast("error", i18n.t("voice:screenShareQualityFailed"));
           });
+        };
+        updateQuality();
+        unsubscribeScreenQuality = useVoiceStore.subscribe((next, previous) => {
+          if (next.screenShareQuality === previous.screenShareQuality && next.screenShareFps === previous.screenShareFps && next.screenShareLowLatency === previous.screenShareLowLatency && next.screenShareMode === previous.screenShareMode) return;
+          updateQuality();
         });
         set({ _screenSender: result.sender, isScreenSharing: true, isScreenSharePending:false });
         const controller=getP2PMediaController(peerConnection);

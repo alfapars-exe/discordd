@@ -9,7 +9,6 @@
 package handlers
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
@@ -73,6 +72,10 @@ func (h *AuditLogHandler) ListServerAudit(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	if entries == nil {
+		entries = []models.AuditLog{}
+	}
+
 	// Wrap in a struct so we can extend the response later (e.g. add
 	// has_more, next_cursor) without breaking clients that already parse
 	// just `entries`.
@@ -80,6 +83,5 @@ func (h *AuditLogHandler) ListServerAudit(w http.ResponseWriter, r *http.Request
 		Entries []models.AuditLog `json:"entries"`
 	}{Entries: entries}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(resp)
+	pkg.JSON(w, http.StatusOK, resp)
 }

@@ -209,3 +209,34 @@ describe("encrypted room admission", () => {
   });
 
 });
+
+it("classifies a slow transport separately from the encryption acknowledgement deadline", async () => {
+ const initial={...options(),keyReady:true};
+ vi.useFakeTimers();
+ const view=renderHook(()=>useEncryptedRoomAdmission(initial));
+ await act(async()=>{await vi.advanceTimersByTimeAsync(0);});
+ expect(view.result.current.connect).toBe(true);
+ try {
+  await act(async()=>{await vi.advanceTimersByTimeAsync(10_000);});
+  expect(view.result.current.error).toBeNull();
+  await act(async()=>{await vi.advanceTimersByTimeAsync(20_000);});
+  expect(view.result.current.error).toMatchObject({kind:"connection_timeout"});
+  expect(view.result.current.publishReady).toBe(false);
+ } finally {view.unmount();vi.useRealTimers();}
+});
+it("starts the encryption acknowledgement deadline only after transport connects", async () => {
+ const initial={...options(),keyReady:true,worker:fakeWorker(false)};
+ vi.useFakeTimers();
+ const view=renderHook(()=>useEncryptedRoomAdmission(initial));
+ await act(async()=>{await vi.advanceTimersByTimeAsync(0);});
+ expect(view.result.current.connect).toBe(true);
+ const room=view.result.current.room as unknown as TestRoom;
+ try {
+  await act(async()=>{await vi.advanceTimersByTimeAsync(20_000);});
+  await act(async()=>{room.state="connected";room.localParticipant.identity="owner";room.emit("connected");});
+  await act(async()=>{await vi.advanceTimersByTimeAsync(9999);});
+  expect(view.result.current.error).toBeNull();expect(view.result.current.publishReady).toBe(false);
+  await act(async()=>{await vi.advanceTimersByTimeAsync(1);});
+  expect(view.result.current.error).toMatchObject({kind:"encryption_timeout"});
+ } finally {view.unmount();vi.useRealTimers();}
+});
