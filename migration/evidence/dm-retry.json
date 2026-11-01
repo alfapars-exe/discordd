@@ -25,10 +25,11 @@
     "server/database/migrations/148_dm_send_receipts.sql": "4defd4ebb9de6f15a792fad82dba0926763364cc3ad6a9b8455ca281ad71ff6f",
     "server/database/postgres_migrations/051_dm_send_receipts.sql": "4defd4ebb9de6f15a792fad82dba0926763364cc3ad6a9b8455ca281ad71ff6f",
     "server/handlers/dm_idempotent_test.go": "389bf44a3cc8932c9d1564dce9842d07007a50606c53bbe52b0a5939f1fa3d7d",
-    "server/handlers/dm.go": "c9604aa400c9bb16a875225084783d19510e4e793b74d18036fcca75762becfb",
+    "server/handlers/dm_send_files.go": "082f09af15108f2fe853af09f74acc042701a542ea1239a5cde4afd394a03c03",
+    "server/handlers/dm.go": "c05e9fe5c03a96cd1d8705494a3cf68869875385ce35312780c1926565e45f6c",
     "server/models/dm.go": "c68d2babb43dc7c331677f98d65a4a1de80e0cd21676035fb43246108d481c97",
     "server/repository/dm_send_receipt.go": "67b991bc23300195be8fc6146598b0224a7a0cbc70aee4fc4e92193c46c727eb",
     "server/services/dm_message.go": "90721ff9d7551a3d98cc6eb0cd0fccf7e6bbdab9b0ff7f6dc7dac1446a8ac39a",
-    "server/services/dm_send_receipt_test.go": "843e642469242d159cecec952d3a176bd3c569413234d4287b0c3dcdd7fdd25b"
+    "server/services/dm_send_receipt_test.go": "2603a3321da94755e712b80350219cb278553740e9718901dd9bf329c5991f93"
   }
 }

@@ -82,19 +82,7 @@ func TestDMIdempotentSendConcurrentReplayConflictAndDeletion(t *testing.T) {
 	wg.Wait()
 	close(ids)
 	close(errs)
-	for err := range errs {
-		t.Fatal(err)
-	}
-	original := ""
-	for id := range ids {
-		if original != "" && original != id {
-			t.Fatal("retry created another message")
-		}
-		original = id
-	}
-	if original == "" {
-		t.Fatal("no committed message")
-	}
+	original := requireSingleDMSendID(t, ids, errs)
 	var count, unread int
 	if err := db.Conn.QueryRow(`SELECT COUNT(*) FROM dm_messages WHERE dm_channel_id=?`, ch.ID).Scan(&count); err != nil {
 		t.Fatal(err)
@@ -132,6 +120,24 @@ func TestDMIdempotentSendConcurrentReplayConflictAndDeletion(t *testing.T) {
 	if !errors.Is(err, pkg.ErrConflict) {
 		t.Fatalf("deleted message replay: %v", err)
 	}
+}
+
+func requireSingleDMSendID(t *testing.T, ids <-chan string, errs <-chan error) string {
+	t.Helper()
+	for err := range errs {
+		t.Fatal(err)
+	}
+	original := ""
+	for id := range ids {
+		if original != "" && original != id {
+			t.Fatal("retry created another message")
+		}
+		original = id
+	}
+	if original == "" {
+		t.Fatal("no committed message")
+	}
+	return original
 }
 
 func TestDMIdempotentSendRollsBackReceiptAndUnread(t *testing.T) {

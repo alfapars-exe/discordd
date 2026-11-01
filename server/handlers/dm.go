@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -289,106 +288,22 @@ func (h *DMHandler) sendMessage(w http.ResponseWriter, r *http.Request, requireR
 		return
 	}
 
-	var req models.CreateDMMessageRequest
-
-	if isMultipart(contentType) {
-		// Hard body cap before parsing — see message.go SendMessage for rationale.
-		if err := pkg.LimitedParseMultipartFormN(w, r, h.maxUploadSize, 10); err != nil {
-			pkg.ErrorWithMessage(w, http.StatusBadRequest, "failed to parse multipart form")
-			return
-		}
-
-		req.Content = r.FormValue("content")
-		if replyTo := r.FormValue("reply_to_id"); replyTo != "" {
-			req.ReplyToID = &replyTo
-		}
-
-		// E2EE fields from multipart
-		if ev := r.FormValue("encryption_version"); ev == "1" {
-			req.EncryptionVersion = 1
-			if ct := r.FormValue("ciphertext"); ct != "" {
-				req.Ciphertext = &ct
-			}
-			if sd := r.FormValue("sender_device_id"); sd != "" {
-				req.SenderDeviceID = &sd
-			}
-			if em := r.FormValue("e2ee_metadata"); em != "" {
-				req.E2EEMetadata = &em
-			}
-		}
-
-		if r.MultipartForm != nil && len(r.MultipartForm.File["files"]) > 0 {
-			req.HasFiles = true
-		}
-	} else {
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			pkg.ErrorWithMessage(w, http.StatusBadRequest, "invalid request body")
-			return
-		}
+	req, ok := h.parseDMSend(w, r)
+	if !ok {
+		return
 	}
 
 	if requireReceipt && req.ClientMessageID == "" {
 		pkg.ErrorWithMessage(w, http.StatusBadRequest, "client_message_id is required")
 		return
 	}
-	msg, err := h.dmService.SendMessage(r.Context(), user.ID, channelID, &req)
+	msg, err := h.dmService.SendMessage(r.Context(), user.ID, channelID, req)
 	if err != nil {
 		pkg.Error(w, err)
 		return
 	}
 
-	// Silent `continue` on upload errors used to hide "your file didn't
-	// make it" from users. Collect per-file failures and echo them back
-	// in a 207 Multi-Status response so the client can render "message
-	// posted but attachment X failed with reason Y" — matches the
-	// channel-message contract in handlers/message.go.
-	type uploadFailure struct {
-		Filename string `json:"filename"`
-		Error    string `json:"error"`
-	}
-	var uploadFailures []uploadFailure
-
-	if isMultipart(contentType) && r.MultipartForm != nil {
-		isEncrypted := req.EncryptionVersion == 1
-		files := r.MultipartForm.File["files"]
-		for _, fileHeader := range files {
-			file, err := fileHeader.Open()
-			if err != nil {
-				slog.WarnContext(r.Context(), "dm attachment open failed", "err", pkg.ErrText(err))
-				uploadFailures = append(uploadFailures, uploadFailure{
-					Filename: fileHeader.Filename,
-					Error:    "could not open file",
-				})
-				continue
-			}
-
-			attachment, err := h.dmUploadService.Upload(r.Context(), msg.ID, file, fileHeader, isEncrypted)
-			// Read-side handle — nothing buffered to flush, safe to ignore.
-			// Not deferred — this runs per file in the loop above; a defer
-			// here would pin every attachment's handle open until the whole
-			// handler returns instead of closing each one as its own
-			// upload finishes.
-			_ = file.Close()
-			if err != nil {
-				// Client-safe detail only for domain (4xx-shaped) errors —
-				// infrastructure failures carry paths/driver text and stay
-				// server-side (CWE-209).
-				failMsg := "upload failed"
-				if errors.Is(err, pkg.ErrBadRequest) {
-					failMsg = pkg.ErrText(err)
-				} else {
-					slog.WarnContext(r.Context(), "dm attachment upload failed", "err", pkg.ErrText(err))
-				}
-				uploadFailures = append(uploadFailures, uploadFailure{
-					Filename: fileHeader.Filename,
-					Error:    failMsg,
-				})
-				continue
-			}
-
-			msg.Attachments = append(msg.Attachments, *attachment)
-		}
-	}
+	uploadFailures := h.uploadDMSendFiles(r, msg, req.EncryptionVersion == 1)
 
 	// Broadcast after uploads so clients see attachments
 	h.dmService.BroadcastCreate(msg)

@@ -7,7 +7,7 @@ for(const flag of ['postgresMutualTLS','rustFFI','lostResponseAfterCommit','dura
 }
 const paths=[
  'server/models/dm.go','server/services/dm_message.go','server/repository/dm_send_receipt.go',
- 'server/handlers/dm.go','server/database/migrations/148_dm_send_receipts.sql',
+ 'server/handlers/dm.go','server/handlers/dm_send_files.go','server/database/migrations/148_dm_send_receipts.sql',
  'server/database/postgres_migrations/051_dm_send_receipts.sql',
  'server/services/dm_send_receipt_test.go','server/handlers/dm_idempotent_test.go',
  'migration/crates/client-core/src/chat.rs',
