@@ -4,6 +4,4 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
-    <!-- Disposable local API / Flutter tooling only; release disallows cleartext. -->
-    <application android:usesCleartextTraffic="true" />
 </manifest>
