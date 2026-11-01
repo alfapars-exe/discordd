@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "algorithm": "aes-256-gcm",
+  "salt": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=",
+  "nonce": "AwMDAwMDAwMDAwMD",
+  "encrypted_data": "uL+EQaxZgLmaWps3SzgXe8EcX0l1IJtQeUC/U/SlCXtn5k4D/junj8aTcsFodLxhmDDDp4byewB9dvHwGjBVAcfK3wm6y8ik5I0Smw+Y6uZ9ZC8VD9aMJfzFUIqWKPgIMAVmUlpKG5mk1ncrysKhU3dbLjNVkc+yR5Tbflq3DdlzShv3++F3DUMaVIT1OUc1iI7m/sFCaF106y2q+Rgp22f/RwCaCaZs+MjZQvhSo7wqBRQeo1sDFF4w6fSaNkbKbeFUCF22RHUxH6k75Kj/TGy7avLcwxGYGDPYxi9HNoBX0TQW/9l2BICIZkYcAClnv6AIbkjQ2rtWCQd40vne1fc1uOPNdKH6D6ANv3eapvnbsupzfQYMn9vFfRfxnbBuvCQ8Y12Qgn4KDY2Mwdli4ysIhcHMTs9WhoVJlk6LLTXrOCnx2xQ="
+}

@@ -1,0 +1,46 @@
+{
+  "localDate": "2026-10-31",
+  "scope": "pure crypto transition kernels; incomplete migration",
+  "requestComplete": false,
+  "activeDeviceHandoffEnabled": false,
+  "networkSendsEnabled": false,
+  "productionDataUsed": false,
+  "physicalDeviceAcceptance": false,
+  "ordinaryRustTests": 16,
+  "pinnedNativeCoreTests": 14,
+  "ignoredWin32Tests": 2,
+  "clippy": "passed",
+  "portableWasmCheck": "passed",
+  "fixtureCases": {
+    "ratchet": 11,
+    "x3dh": 8,
+    "senderKey": 6
+  },
+  "captureProbe": {
+    "localPreviewWidth": 0,
+    "localPreviewHeight": 0,
+    "videoFramesEncoded": 0,
+    "videoPacketsSent": 0,
+    "audioPacketsSent": 69,
+    "status": "capture produces no video; not fixed"
+  },
+  "remaining": [
+    "atomic target storage and pending-send commit",
+    "source freeze, retirement and ownership transfer",
+    "trust and device orchestration",
+    "native outbound video capture",
+    "actual game, system audio exclusion and physical devices"
+  ],
+  "sourceSha256": {
+    "crates/client-core/src/ratchet.rs": "4272cdda3c5e0cb0341814b1fd9601efbd257f355eb0c1d91148203e59a9e460",
+    "crates/client-core/src/x3dh.rs": "6d3b1495e66cc01c7fd94520bb489b0b473b66157734dacd0829f91ce8af338b",
+    "crates/client-core/src/sender_key.rs": "e4a44f06cdf6ad87f1e080b741a7cc7a8b4ead3cf32a9a5fab9637f5002500b3",
+    "crates/client-core/src/lib.rs": "abec7da2469c7cb03b7f26240ea256077a0e527c2cac819f7c563997addeabe0",
+    "Cargo.lock": "000e79864d0b2d474ab1d156eed22c3872c630ae9042c22eb04e633065af33c0",
+    "hichat_native_proof/rust/Cargo.lock": "6fa84e490fde8a43eada3049a3a2485359038f3b408e12250e6d547d93a07f6c",
+    "scripts/ratchet-fixture.mjs": "442354a9e1721dc57ca90a918cdf1bdc866b294716b24f3659f190abfc930c9d",
+    "crates/protocol/fixtures/ratchet.json": "fc83713d747a27da4b23250bcb8890082dbe4d233442cc14bee2d186aba0bd20",
+    "crates/protocol/fixtures/x3dh.json": "0b5e7112f8ecef95cb04471ec181b3281014e886d08a76299ff1514ac8fa706a",
+    "crates/protocol/fixtures/sender-key.json": "f8cbabbd1d90629b43597c679d2605818a2bf5b5621cab36ae63d3c6936d469c"
+  }
+}

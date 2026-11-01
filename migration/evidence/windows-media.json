@@ -1,0 +1,104 @@
+{
+  "localDate": "2026-10-31",
+  "scope": "incremental proof; incomplete requested scope",
+  "physicalDeviceAcceptance": false,
+  "activeDeviceRatchetHandoff": "not implemented",
+  "ordinaryRustTests": 8,
+  "separateHiddenWin32Runtime": "passed; visible gameplay not tested",
+  "flutterTests": 10,
+  "browserProfiles": [
+    {
+      "name": "desktop",
+      "engine": "Chromium",
+      "login": true,
+      "historyWebCryptoRust": true,
+      "logoutClearsHistory": true,
+      "physicalDevice": false
+    },
+    {
+      "name": "android-chrome-emulated",
+      "engine": "Chromium",
+      "login": true,
+      "historyWebCryptoRust": true,
+      "logoutClearsHistory": true,
+      "physicalDevice": false
+    },
+    {
+      "name": "ios-ua-chromium-emulated",
+      "engine": "Chromium",
+      "login": true,
+      "historyWebCryptoRust": true,
+      "logoutClearsHistory": true,
+      "physicalDevice": false
+    }
+  ],
+  "nativeAudio": {
+    "date": "2026-10-30T23:15:52.714Z",
+    "audioEnergy": 0.0006503693777668958,
+    "encryptedRoom": true,
+    "source": "owned synthetic Chrome window only",
+    "receiver": "isolated Chromium",
+    "physicalDevices": false
+  },
+  "browserP2P": {
+    "date": "2026-10-30T23:30:23.080Z",
+    "server": "isolated-existing-go",
+    "platform": "two Chromium contexts",
+    "physicalDevices": false,
+    "syntheticDevices": true,
+    "ringingDidNotCapture": true,
+    "peers": [
+      {
+        "state": "connected",
+        "videoFrames": 12,
+        "audioEnergy": 0.0035822095909207505,
+        "dtlsConnected": true
+      },
+      {
+        "state": "connected",
+        "videoFrames": 16,
+        "audioEnergy": 0.004887637180558061,
+        "dtlsConnected": true
+      }
+    ],
+    "hangupClosedBothPeers": true
+  },
+  "nativeP2P": {
+    "windowsFrames": 16,
+    "windowsAudioEnergy": 0.004955111810241352,
+    "browser": {
+      "state": "connected",
+      "frames": 0,
+      "audioEnergy": 0.00024549734654706525,
+      "dtlsConnected": true
+    },
+    "physicalDevices": false,
+    "syntheticSourcesOnly": true
+  },
+  "knownOpen": [
+    "native outbound window video decoded zero frames in browser",
+    "full-system own-process exclusion/feedback acceptance",
+    "legacy-client interop and P2P screen renegotiation",
+    "actual game/fullscreen/DPI/PTT acceptance",
+    "actual mobile browsers and other platforms"
+  ],
+  "hashes": {
+    "hichat_native_proof/pubspec.lock": "89d7b8cde3987d317f8b6d3ab874223ac5f8912f648dedec0e8e1133fef8deec",
+    "hichat_native_proof/rust/Cargo.lock": "c70b5b5c8b551a822d3da12c83dd9836dc2cd271bebb662da8de722fb88c19bc",
+    "Cargo.lock": "30a99bd08b3be6ac0f8d65825aa330af6d9420b71682359a6a28d7bdba753904",
+    "crates/client-core/src/overlay.rs": "fff3a05f7015e5ae1dce820237f04f1fa9690e52bea942d38c5ce06120aeea74",
+    "hichat_native_proof/lib/app/p2p.dart": "bc5827d658b47415f6bf8c79862bf014087eaab233dac190e41ed1df9540a802",
+    "hichat_native_proof/lib/app/p2p_view.dart": "8396de9391913074faf45d97d3beec9bbcec84dbb752d7da34cad44f9874c7c7",
+    "hichat_native_proof/lib/app/game_overlay.dart": "c1222363a78824022d2917406e30a8b5258309392f5087141f89dd6a11943c95",
+    "hichat_native_proof/lib/app/media.dart": "c6b437ae5c6f45f661867e73cc4392b3b2e257e712c05bdbf5f758aa05f71ee9",
+    "hichat_native_proof/lib/app/screen.dart": "c712ecbbb9bfce71e35ad018483fc2e672508c56e221df01c06a348ec91d1c01",
+    "hichat_native_proof/build/windows/x64/runner/Release/hichat_native_proof.exe": "d6f34cb455d32ffe70660af648e06a1942d618500e31abd281858ea01494aefa",
+    "hichat_native_proof/build/windows/x64/runner/Release/data/app.so": "5cd3afab92ea7e57fef23f035bc93f2f56a1a5046552413b7155663b71df6fd3",
+    "hichat_native_proof/build/windows/x64/runner/Release/rust_lib_hichat_native_proof.dll": "ab418400c9222bbab99b137da4045d0c63f1cdf3fd0a67850f0a13b239e9e5df",
+    "hichat_native_proof/build/windows/x64/runner/Release/flutter_webrtc_plugin.dll": "f5ae9246cfaf2e8a0076a493336d8ca65c5d382b16f58684cf2a39863ac1dfa8",
+    "hichat_native_proof/build/windows/x64/runner/Release/libwebrtc.dll": "5c9c21dd84091f6d2ca826201bc8e9226e17c0b336f08be634331745584fbb44",
+    "hichat_native_proof/build/web/pkg/rust_lib_hichat_native_proof_bg.wasm": "1b11c9adc8d211625d51fedb6d71fac42794dfdde848dd9d9e3d513ceab7c295",
+    "hichat_native_proof/build/web/e2ee.worker.dart.js": "ffac1133d519ef4c8b1e07f497f092d49ab6de6c2c52c9b50a5646a088f26ae6",
+    "hichat_native_proof/build/web/main.dart.js": "c84276a5f880737fcf0e9c734d5aabaa5bedc2522011e3d21a1d2ff5e6ed66bd"
+  }
+}

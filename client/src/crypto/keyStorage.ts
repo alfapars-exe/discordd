@@ -256,6 +256,7 @@ async function getDB(): Promise<IDBPDatabase> {
     const created: DbEntry = { scope, promise: Promise.resolve(null as unknown as IDBPDatabase) };
     created.promise = openDB(dbName, DB_VERSION, {
       upgrade: upgradeKeyDatabase,
+      blocking() { created.db?.close(); dbEntries.delete(dbName); },
     }).then((db) => {
       created.db = db;
       if (dbEntries.get(dbName) !== created || !scopeIsCurrent(scope)) {
