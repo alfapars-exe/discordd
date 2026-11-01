@@ -32,13 +32,16 @@ func newDMSendTestDB(t *testing.T) *database.DB {
 	}
 	admin := stdlib.OpenDB(*cfg)
 	schema := fmt.Sprintf("hichat_dm_send_%d", time.Now().UnixNano())
-	if _, err := admin.Exec("CREATE SCHEMA " + schema); err != nil {
+	quotedSchema := pgx.Identifier{schema}.Sanitize()
+	createSchema := "CREATE SCHEMA " + quotedSchema
+	dropSchema := "DROP SCHEMA " + quotedSchema + " CASCADE"
+	if _, err := admin.Exec(createSchema); err != nil {
 		admin.Close()
 		t.Fatal(err)
 	}
 	cfg.RuntimeParams["search_path"] = schema + ",public"
 	pool := database.PostgreSQLPool(cfg)
-	t.Cleanup(func() { pool.Close(); _, _ = admin.Exec("DROP SCHEMA " + schema + " CASCADE"); admin.Close() })
+	t.Cleanup(func() { pool.Close(); _, _ = admin.Exec(dropSchema); admin.Close() })
 	if err := database.MigratePostgres(context.Background(), pool); err != nil {
 		t.Fatal(err)
 	}

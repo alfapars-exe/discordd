@@ -29,6 +29,6 @@
     "server/models/dm.go": "c68d2babb43dc7c331677f98d65a4a1de80e0cd21676035fb43246108d481c97",
     "server/repository/dm_send_receipt.go": "67b991bc23300195be8fc6146598b0224a7a0cbc70aee4fc4e92193c46c727eb",
     "server/services/dm_message.go": "90721ff9d7551a3d98cc6eb0cd0fccf7e6bbdab9b0ff7f6dc7dac1446a8ac39a",
-    "server/services/dm_send_receipt_test.go": "3453e5c205bd0c23d56e134365526ec6e2c9d9c9b840b8daf1355cdde905c7cd"
+    "server/services/dm_send_receipt_test.go": "843e642469242d159cecec952d3a176bd3c569413234d4287b0c3dcdd7fdd25b"
   }
 }
