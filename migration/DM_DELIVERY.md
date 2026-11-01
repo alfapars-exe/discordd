@@ -18,14 +18,37 @@ IDs and hashes, survive message deletion, and cascade with channel/account delet
 
 Rust preserves the exact transport mode/request on retry without deriving keys or
 advancing ratchets. Already attempted legacy requests cannot be upgraded into safe
-retries. The UI offers explicit retry only for persisted idempotent attempts.
+retries. The scheduler resumes persisted idempotent attempts after restart without
+opening a conversation. Exponential backoff with jitter, persisted deadlines and
+bounded Retry-After prevent tight loops. Permanent rejection pauses automatic
+delivery; explicit retry remains available. Logout fences late responses. Transient
+initialization failures also back off and recover without opening Messages.
 
 Local checks cover SQLite and PostgreSQL concurrent duplicates, authorization,
 conflict/deletion and notification-failure rollback; PostgreSQL also runs the race
 detector. Rust tests cover persisted byte/state equality; Flutter tests cover a lost
 response and exact retry plus plain-text 404 old-server compatibility.
 
-This does not implement automatic retry scheduling, multipart idempotency,
-transactional WebSocket event delivery, simultaneous-session confirmation or
-physical-device acceptance. Earlier chat-handoff evidence describes its original
-source hashes and is not relabeled as a fresh end-to-end device run.
+PostgreSQL migration 052 queues DM message create/update/delete, pin/reaction,
+read/status/encryption-state and DM notification creation in their source
+transactions. Upload preparation fences create delivery until completion. Startup
+recovery must succeed before HTTP serving; interrupted preparation is recovered.
+The existing singleton backend owner runs the worker. Failed delivery backs off;
+an unpublished channel head prevents later events overtaking it.
+
+Events carry stable namespaced `event_id` and decimal-string `dm_sequence` values.
+Acknowledgment means dispatch to the existing WebSocket hub, not device receipt.
+At-least-once duplicates can retain the same ID. Authorized participants can use
+`GET /api/dms/{channelId}/events?after=0` for bounded catch-up. Published events are
+retained for seven days; an expired/future cursor requests a history reset.
+Original create/edit wire snapshots preserve prekey-envelope order even when an
+edit precedes dispatch. Deletion erases all stored message snapshots and suppresses
+stale create/update replay. Channel deletion cascades the queue. Historical SQLite
+imports do not create a delivery backlog.
+
+Typing/presence and channel lifecycle signals are outside this durable queue.
+The Flutter preview still polls message history; the real WebSocket integration
+test independently verifies delivery and REST replay IDs. Multipart idempotency,
+simultaneous-session confirmation and physical-device acceptance remain open.
+Earlier evidence retains its original source hashes. See `evidence/dm-outbox.json`
+for this increment's scoped Windows/web verification.

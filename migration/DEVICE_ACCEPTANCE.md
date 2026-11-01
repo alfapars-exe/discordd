@@ -7,6 +7,12 @@ tests used disposable accounts and synthetic text; every physical gate below
 remains open. Incomplete dispatch/UI/server implementations are software gaps,
 not missing physical-device tests.
 
+The automatic-retry/outbox increment adds a real local Windows FFI/DPAPI reopen,
+lost committed response, identical automatic retry, real WebSocket IDs and REST
+catch-up. Two real Chromium origins exchanged encrypted DMs through Rust WASM
+with an injected lost response and automatic retry. These are local software
+checks, not two physical clients or mobile-device acceptance.
+
 Priority: Windows, desktop web and mobile-browser login. Native mobile/Linux/macOS
 acceptance is tracked separately; lack of hardware/signing is never counted as pass.
 

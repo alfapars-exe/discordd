@@ -172,3 +172,25 @@ connected DTLS, with zero native window-video frames. Desktop/Android-UA/iPhone-
 Chromium login, Rust history and logout clearing were rerun successfully after the
 final web build. Sanitized results and source/runtime hashes are in
 `evidence/windows-media.json`; no physical-device or release claim is implied.
+# Automatic text retry and transactional DM outbox — 2026-11-01
+
+Rust: 31 passing tests, two explicitly ignored runtime helpers; Clippy clean.
+Flutter: 27 passing tests and clean analyzer. Windows and web release builds pass.
+Six PostgreSQL outbox tests cover recovery, stable IDs, ordering, authorization,
+rollback, deletion/retention, original prekey snapshots and fail-closed startup.
+Database/repository PostgreSQL suites pass; the outbox race suite runs in Linux.
+
+Windows FFI integration exercises fresh devices, refresh, bidirectional E2EE,
+DPAPI reopening after a lost committed response, identical automatic retry without
+selecting a conversation, three unique real WebSocket event IDs and matching REST
+catch-up. Two real Chromium origins exchange encrypted Unicode DMs through Rust
+WASM, recover an injected committed-response loss automatically and clear chat on
+logout. That browser flow preceded the final startup-initialization bookkeeping;
+unit tests and final Windows integration cover it and the final web build compiles
+it. Headless Chrome test loading timed out and is not counted as a pass.
+
+Source fingerprints and sanitized results: `evidence/dm-outbox.json`. These local
+checks do not establish physical-device, mobile Safari, long-call or installer
+acceptance. Earlier sections retain their original scope and source dates.
+
+

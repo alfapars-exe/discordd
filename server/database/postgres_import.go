@@ -136,7 +136,7 @@ func ImportSQLiteSnapshot(ctx context.Context, source, target *sql.DB) ([]Import
 	}
 	var report []ImportTableReport
 	for _, table := range tables {
-		if table == "channel_send_operations" || table == "channel_delivery_outbox" || table == "channel_attachment_jobs" {
+		if table == "channel_send_operations" || table == "channel_delivery_outbox" || table == "channel_attachment_jobs" || table == "dm_delivery_outbox" {
 			continue
 		}
 		columns, err := importColumns(ctx, tx, table)

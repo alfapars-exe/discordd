@@ -74,6 +74,7 @@ GET /api/uploads/
 GET /api/dms/settings
 GET /api/dms
 GET /api/dms/send-capabilities
+GET /api/dms/{channelId}/events
 POST /api/dms
 POST /api/dms/self
 POST /api/dms/channels/{channelId}/hide

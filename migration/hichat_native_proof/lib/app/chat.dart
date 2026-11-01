@@ -15,8 +15,14 @@ class ChatController extends ChangeNotifier {
   final Future<ChatCrypto> Function() open;
   final int authScope;
   final Duration pollInterval;
+  final Duration retryInterval;
+  final DateTime Function() now;
   late final StreamSubscription<void> _auth;
   Timer? _poll;
+  Timer? _retry;
+  bool _retryQueued = false;
+  bool _initialized = false, _initializationPaused = false;
+  int _initializationFailures = 0, _initializeAt = 0;
   Future<void> _tail = Future.value();
   bool _closed = false;
   int _selection = 0;
@@ -33,8 +39,14 @@ class ChatController extends ChangeNotifier {
     this.api,
     this.open, {
     this.pollInterval = const Duration(seconds: 5),
-  }) : authScope = api.generation {
+    this.retryInterval = const Duration(seconds: 1),
+    DateTime Function()? clock,
+  }) : authScope = api.generation,
+       now = clock ?? DateTime.now {
     _auth = api.invalidations.listen((_) => unawaited(close()));
+    _retry = Timer.periodic(retryInterval, (_) {
+      unawaited(retryPending());
+    });
   }
   bool get current => !_closed && api.isCurrent(authScope);
   void _check() {
@@ -82,7 +94,23 @@ class ChatController extends ChangeNotifier {
     if (code.contains('DELIVERY_UNCERTAIN')) {
       return 'Gönderim sonucu doğrulanamadı. Mesaj korunuyor; geçmiş eşitlendiğinde yeniden kontrol edilecek. Yinelenmeyi önlemek için otomatik tekrar gönderilmez.';
     }
+    if (code.contains('DELIVERY_PAUSED')) {
+      return 'Otomatik gönderim durduruldu. Mesaj korunuyor; hesap, cihaz ve izinleri kontrol edin.';
+    }
     return 'İşlem tamamlanamadı. Bağlantıyı ve cihaz durumunu kontrol edip tekrar deneyin.';
+  }
+
+  static bool _permanentFailure(Object e) {
+    if (e is! ApiFailure) return true;
+    if ([400, 401, 403, 404, 405, 409, 410, 422].contains(e.status)) {
+      return true;
+    }
+    return e.status == 0 &&
+        ![
+          'NETWORK_ERROR',
+          'REQUEST_TIMEOUT',
+          'INVALID_RESPONSE',
+        ].contains(e.code);
   }
 
   Future<ChatCrypto> _vault() async {
@@ -91,18 +119,39 @@ class ChatController extends ChangeNotifier {
     return v;
   }
 
-  Future<void> initialize() => _run(() async {
-    final v = await _vault();
-    active = (await v.status())['phase'] == 'active';
-    _check();
-    channels = _maps(await api.request('GET', '/api/dms'));
-    _check();
-    if (active) await _outbox(v);
-    _poll ??= Timer.periodic(pollInterval, (_) {
-      if (!current || busy || selected == null || !active) return;
-      unawaited(refresh());
-    });
-  });
+  Future<void> initialize() => _run(_initialize);
+  Future<void> _initialize() async {
+    if (_initialized) return;
+    try {
+      final v = await _vault();
+      active = (await v.status())['phase'] == 'active';
+      _check();
+      channels = _maps(await api.request('GET', '/api/dms'));
+      _check();
+      if (active) await _outbox(v);
+      _poll ??= Timer.periodic(pollInterval, (_) {
+        if (!current || busy || selected == null || !active) return;
+        unawaited(refresh());
+      });
+      _initialized = true;
+      _initializationFailures = 0;
+      _initializationPaused = false;
+    } catch (e) {
+      _initializationFailures++;
+      final backoff = min(
+        250000,
+        1000 * (1 << min(_initializationFailures, 8)),
+      );
+      final retryAfter = e is ApiFailure ? e.retryAfterSeconds * 1000 : 0;
+      _initializeAt =
+          now().millisecondsSinceEpoch +
+          max(backoff, retryAfter).toInt() +
+          Random.secure().nextInt(201);
+      _initializationPaused = _permanentFailure(e);
+      rethrow;
+    }
+  }
+
   Future<void> register() => _run(() async {
     final v = await _vault();
     await v.registerFreshDevice();
@@ -290,7 +339,57 @@ class ChatController extends ChangeNotifier {
     await _deliver(v, id, _selection);
   });
 
-  Future<void> _deliver(ChatCrypto v, String id, int epoch) async {
+  Future<void> retryPending() async {
+    if (!current || busy || _retryQueued) return;
+    if (!_initialized) {
+      if (_initializationPaused ||
+          now().millisecondsSinceEpoch < _initializeAt) {
+        return;
+      }
+      _retryQueued = true;
+      try {
+        await initialize();
+      } finally {
+        _retryQueued = false;
+      }
+      return;
+    }
+    if (!active) return;
+    if (!pending.any(_retryDue)) return;
+    _retryQueued = true;
+    try {
+      await _run(() async {
+        final v = await _vault();
+        await _outbox(v);
+        final channelsSeen = <String>{};
+        var sent = 0;
+        for (final p in List<Map<String, dynamic>>.from(pending)) {
+          if (!channelsSeen.add(p['channel'] as String)) continue;
+          if (!_retryDue(p)) continue;
+          try {
+            await _deliver(v, p['id'] as String, _selection, automatic: true);
+          } catch (_) {
+            _check();
+          }
+          if (++sent >= 4) break;
+        }
+      });
+    } finally {
+      _retryQueued = false;
+    }
+  }
+
+  bool _retryDue(Map<String, dynamic> p) =>
+      (p['state'] == 'prepared' || p['delivery'] == 'idempotent-v1') &&
+      p['retryBlocked'] != true &&
+      (p['retryAt'] as num? ?? 0) <= now().millisecondsSinceEpoch;
+
+  Future<void> _deliver(
+    ChatCrypto v,
+    String id,
+    int epoch, {
+    bool automatic = false,
+  }) async {
     var attempted = false;
     try {
       // Load the canonical request from the durable store, never from a UI copy.
@@ -310,6 +409,8 @@ class ChatController extends ChangeNotifier {
       final prepared = await v.chat({
         'op': 'attempt',
         'id': id,
+        'now': now().millisecondsSinceEpoch,
+        'automatic': automatic,
         if (reliable) 'delivery': 'idempotent-v1',
       }) as Map;
       _check();
@@ -336,10 +437,21 @@ class ChatController extends ChangeNotifier {
           {...Map<String, dynamic>.from(result), 'displayContent': content},
         ];
       }
-    } catch (_) {
+    } catch (e) {
       _check();
+      final blocked = _permanentFailure(e);
+      if (!e.toString().contains('retry_not_due')) {
+        await v.chat({
+          'op': 'retry_failure',
+          'id': id,
+          'now': now().millisecondsSinceEpoch,
+          'blocked': blocked,
+          'retryAfterSeconds': e is ApiFailure ? e.retryAfterSeconds : 0,
+        });
+        _check();
+      }
       if (!attempted) rethrow;
-      throw const ApiFailure('DELIVERY_UNCERTAIN');
+      throw ApiFailure(blocked ? 'DELIVERY_PAUSED' : 'DELIVERY_UNCERTAIN');
     } finally {
       if (current) await _outbox(v);
     }
@@ -350,6 +462,7 @@ class ChatController extends ChangeNotifier {
     _closed = true;
     _selection++;
     _poll?.cancel();
+    _retry?.cancel();
     await _auth.cancel();
     channels = [];
     messages = [];

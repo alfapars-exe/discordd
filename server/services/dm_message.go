@@ -396,11 +396,11 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 	}
 
 	// Post-commit only — see broadcastNotificationCreate.
-	if requestNotif != nil {
+	if requestNotif != nil && s.deliveryDB == nil {
 		requestNotif.Actor = msg.Author
 		broadcastNotificationCreate(s.hub, requestNotif)
 	}
-	if incomingNotif != nil {
+	if incomingNotif != nil && s.deliveryDB == nil {
 		incomingNotif.Actor = msg.Author
 		broadcastNotificationCreate(s.hub, incomingNotif)
 	}
@@ -436,6 +436,14 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 
 // BroadcastCreate sends the DM message to both users after file uploads complete.
 func (s *dmService) BroadcastCreate(message *models.DMMessage) {
+	if s.deliveryDB != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := s.FinalizeDMCreate(ctx, message); err != nil {
+			dmLogger.Error("DM outbox completion failed")
+		}
+		return
+	}
 	if message.SendReplayed {
 		return
 	}

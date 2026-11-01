@@ -306,6 +306,11 @@ func main() {
 	stopEmailDelivery := svcs.EmailDelivery.Start(context.Background())
 	stopChannelDelivery := services.StartChannelDelivery(context.Background(), svcs.Message)
 	defer stopChannelDelivery()
+	stopDMDelivery, dmDeliveryErr := services.StartDMDelivery(ownerCtx, svcs.DM)
+	if dmDeliveryErr != nil {
+		logx.Fatal("boot", "failed to initialize DM outbox", dmDeliveryErr)
+	}
+	defer stopDMDelivery()
 
 	// 10h. Readiness checker — polls the deep dependency checks every 30s and
 	// caches the verdict. /api/health reads that cache so monitors can see

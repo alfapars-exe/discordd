@@ -129,6 +129,7 @@ class _HiChatScreenState extends State<HiChatScreen> {
     voice = VoiceController(client)..addListener(_changed);
     p2p = P2PController(client);
     chat = ChatController(client, _openVault);
+    await chat!.initialize();
     overlay = GameOverlay(voice!, p2p!)..addListener(_changed);
     setState(() {});
     final scope = client.generation;

@@ -11,6 +11,10 @@ use sha2::{Digest, Sha256};
 use zeroize::Zeroizing;
 
 type Result<T> = std::result::Result<T, String>;
+fn retry_delay(attempts: u64, entropy: &[u8]) -> u64 {
+    let base = (1000_u64 << attempts.saturating_sub(1).min(9)).min(250000);
+    base + (base / 5) * u64::from(entropy.first().copied().unwrap_or(0)) / 255
+}
 fn text<'a>(v: &'a Value, field: &str) -> Result<&'a str> {
     v[field]
         .as_str()
@@ -512,11 +516,53 @@ pub fn transition(snapshot: &str, command: &str, entropy: &[u8]) -> Result<Strin
                 if p["state"] != "prepared" && !retry {
                     return Err("delivery_requires_reconciliation".into());
                 }
+                let now = c["now"].as_u64().unwrap_or(0).min(8_000_000_000_000_000);
+                if c["automatic"] == true
+                    && (p["retryBlocked"] == true || p["retryAt"].as_u64().unwrap_or(0) > now)
+                {
+                    return Err("retry_not_due".into());
+                }
                 if p["state"] == "prepared" && c["delivery"] == "idempotent-v1" {
                     p["delivery"] = json!("idempotent-v1");
                     p["payload"]["client_message_id"] = json!(id);
                 }
                 p["state"] = json!("attempted");
+                let attempts = p["attempts"]
+                    .as_u64()
+                    .unwrap_or(0)
+                    .saturating_add(1)
+                    .min(1000000);
+                p["attempts"] = json!(attempts);
+                p["retryBlocked"] = json!(false);
+                // Commit a retry fence before POST, covering process death before
+                // both the response and the failure scheduler can run.
+                p["retryAt"] = json!(now + retry_delay(attempts, entropy));
+                p.clone()
+            }
+            Some("retry_failure") => {
+                let id = text(&c, "id")?;
+                let p = v["chatPending"]
+                    .as_array_mut()
+                    .ok_or("pending_request_missing")?
+                    .iter_mut()
+                    .find(|r| r["id"] == id)
+                    .ok_or("pending_request_missing")?;
+                if p["state"] == "acknowledged" {
+                    return Err("pending_request_acknowledged".into());
+                }
+                let now = c["now"]
+                    .as_u64()
+                    .ok_or("invalid_retry_time")?
+                    .min(8_000_000_000_000_000);
+                let mut attempts = p["attempts"].as_u64().unwrap_or(0).max(1);
+                if p["state"] == "prepared" {
+                    attempts = attempts.saturating_add(1).min(1000000);
+                    p["attempts"] = json!(attempts);
+                }
+                let delay = retry_delay(attempts, entropy)
+                    .max(c["retryAfterSeconds"].as_u64().unwrap_or(0).min(86400) * 1000);
+                p["retryAt"] = json!(now + delay);
+                p["retryBlocked"] = json!(c["blocked"] == true);
                 p.clone()
             }
             Some("ack") => {
@@ -784,6 +830,63 @@ mod tests {
     }
 
     #[test]
+    fn retry_schedule_survives_reopen_honors_server_delay_and_blocks_permanent_errors() {
+        let a = fresh("alice", "a-device", 1);
+        let b = fresh("bob", "b-device", 2);
+        let prepared = prepare_for(&a, &b, "request-00000001", "hello", 3);
+        let attempted = run(
+            &prepared["snapshot"],
+            json!({"op":"attempt","id":"request-00000001","delivery":"idempotent-v1","now":10000}),
+            4,
+        );
+        let failed = run(
+            &attempted["snapshot"],
+            json!({"op":"retry_failure","id":"request-00000001","now":11000,"retryAfterSeconds":60}),
+            5,
+        );
+        assert_eq!(failed["output"]["retryAt"], 71000);
+        let early = json!({"op":"attempt","id":"request-00000001","now":70999,"automatic":true});
+        assert_eq!(
+            transition(
+                &failed["snapshot"].to_string(),
+                &early.to_string(),
+                &[8; 32]
+            )
+            .unwrap_err(),
+            "retry_not_due"
+        );
+        let retry = run(
+            &failed["snapshot"],
+            json!({"op":"attempt","id":"request-00000001","now":71000,"automatic":true}),
+            9,
+        );
+        assert_eq!(retry["output"]["payload"], attempted["output"]["payload"]);
+        assert_eq!(retry["snapshot"]["stores"], attempted["snapshot"]["stores"]);
+        let paused = run(
+            &retry["snapshot"],
+            json!({"op":"retry_failure","id":"request-00000001","now":72000,"blocked":true}),
+            10,
+        );
+        assert!(
+            transition(
+                &paused["snapshot"].to_string(),
+                &json!({"op":"attempt","id":"request-00000001","now":999999,"automatic":true})
+                    .to_string(),
+                &[11; 32]
+            )
+            .is_err()
+        );
+        let manual = run(
+            &paused["snapshot"],
+            json!({"op":"attempt","id":"request-00000001","now":999999}),
+            12,
+        );
+        assert_eq!(manual["output"]["retryBlocked"], false);
+        assert_eq!(manual["output"]["payload"], attempted["output"]["payload"]);
+        assert!(retry_delay(999999, &[255; 32]) <= 300000);
+    }
+
+    #[test]
     fn durable_idempotent_attempt_reuses_exact_bytes_after_reopen() {
         let alice = fresh("alice", "a-device", 1);
         let bob = fresh("bob", "b-device", 2);
@@ -802,7 +905,8 @@ mod tests {
             json!({"op":"attempt","id":"request-00000001"}),
             99,
         );
-        assert_eq!(retried, attempted);
+        assert_eq!(retried["output"]["payload"], attempted["output"]["payload"]);
+        assert_eq!(retried["output"]["attempts"], 2);
         assert_eq!(
             attempted["snapshot"]["stores"],
             prepared["snapshot"]["stores"]

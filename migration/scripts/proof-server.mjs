@@ -1,16 +1,20 @@
 // Local-only test host. Never deploy this fixture proxy as production infrastructure.
 import http from 'node:http';
 import net from 'node:net';
+import {createHash} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {apiPath,requestHeaders,responseHeaders} from './qa-http.mjs';
 const root=fileURLToPath(new URL('../hichat_native_proof/build/web/',import.meta.url));
+const dropDMAck=process.env.HICHAT_QA_DROP_DM_ACK==='1',dmHashes=[];
+let dmAttempts=0,dmDropped=false;
 const mime={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.json':'application/json','.css':'text/css','.png':'image/png','.ttf':'font/ttf','.otf':'font/otf'};
 const server=http.createServer(async(req,res)=>{
   res.setHeader('Cross-Origin-Opener-Policy','same-origin');
   res.setHeader('Cross-Origin-Embedder-Policy','require-corp');
   res.setHeader('Cache-Control','no-store');
+  if(req.url==='/__qa/dm-retry-receipt'&&dropDMAck){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({attempts:dmAttempts,dropped:dmDropped,identicalFirstRetry:dmHashes.length>1&&dmHashes[0]===dmHashes[1]}));return;}
   if(new URL(req.url,'http://127.0.0.1').pathname==='/__qa/synthetic-window'){
     res.setHeader('Content-Type','text/html; charset=utf-8');
     res.end('<!doctype html><title>HiChat Synthetic P2P QA</title><body style="background:#224;color:white;font:30px sans-serif">Owned synthetic video capture source <span id="tick"></span><script>setInterval(()=>document.querySelector("#tick").textContent=Date.now(),100)</script>');return;
@@ -29,7 +33,12 @@ const server=http.createServer(async(req,res)=>{
   }
   if(req.url.startsWith('/api/')){
     let route;try{route=apiPath(req.url)}catch{res.writeHead(400);res.end('Invalid fixture route');return}
-    const upstream=http.request('http://127.0.0.1:19090',{path:route,method:req.method,headers:requestHeaders(req.headers)},incoming=>{if(responseHeaders(incoming,res))incoming.pipe(res);else incoming.resume();});
+    const tracked=dropDMAck&&req.method==='POST'&&route.endsWith('/messages/idempotent');
+    if(tracked){dmAttempts++;const hash=createHash('sha256');req.on('data',chunk=>hash.update(chunk));req.on('end',()=>{if(dmHashes.length<100)dmHashes.push(hash.digest('hex'));});}
+    const upstream=http.request('http://127.0.0.1:19090',{path:route,method:req.method,headers:requestHeaders(req.headers)},incoming=>{
+      if(tracked&&!dmDropped&&incoming.statusCode===201){dmDropped=true;incoming.on('end',()=>res.destroy());incoming.resume();return;}
+      if(responseHeaders(incoming,res))incoming.pipe(res);else incoming.resume();
+    });
     upstream.on('error',()=>{res.writeHead(502);res.end('Local API unavailable');});req.pipe(upstream);return;
   }
   try{

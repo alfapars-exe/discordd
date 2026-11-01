@@ -15,6 +15,7 @@ package services
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 
 	"github.com/argeinfina/hichat/models"
@@ -83,6 +84,8 @@ type FriendshipChecker interface {
 }
 
 type dmService struct {
+	deliveryDB          *sql.DB
+	deliveryHub         ws.Broadcaster
 	dmRepo              repository.DMRepository
 	userRepo            repository.UserRepository
 	dmReadRepo          repository.DMReadRepository
@@ -154,6 +157,9 @@ func sortUserIDs(a, b string) (string, string) {
 }
 
 func (s *dmService) broadcastToBothUsers(channel *models.DMChannel, event ws.Event) {
+	if s.deliveryDB != nil && durableDMOperation(event.Op) {
+		return
+	}
 	s.hub.BroadcastToUser(channel.User1ID, event)
 	if channel.User1ID != channel.User2ID {
 		s.hub.BroadcastToUser(channel.User2ID, event)

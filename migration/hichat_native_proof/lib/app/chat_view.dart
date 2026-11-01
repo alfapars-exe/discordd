@@ -152,10 +152,12 @@ class _ChatViewState extends State<ChatView> {
                                 as String,
                           ),
                           subtitle: Text(
-                            p['state'] == 'prepared'
+                            p['retryBlocked'] == true
+                                ? 'Otomatik gönderim durduruldu. Hesap, cihaz veya izinleri kontrol edin.'
+                                : p['state'] == 'prepared'
                                 ? 'Gönderilmeye hazır.'
                                 : p['delivery'] == 'idempotent-v1'
-                                ? 'Sunucu onayı alınamadı; aynı istek güvenle yeniden denenebilir.'
+                                ? 'Sunucu onayı bekleniyor; aynı istek otomatik yeniden denenecek.'
                                 : 'Sonuç belirsiz; yinelenmeyi önlemek için otomatik tekrarlanmaz.',
                           ),
                           trailing:

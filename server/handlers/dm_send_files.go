@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"github.com/argeinfina/hichat/models"
@@ -15,6 +16,18 @@ func dmFormPointer(r *http.Request, key string) *string {
 		return nil
 	}
 	return &value
+}
+
+func (h *DMHandler) finishDMSend(r *http.Request, msg *models.DMMessage) error {
+	if finalizer, ok := h.dmService.(interface {
+		FinalizeDMCreate(context.Context, *models.DMMessage) error
+	}); ok {
+		if err := finalizer.FinalizeDMCreate(r.Context(), msg); err != nil {
+			return err
+		}
+	}
+	h.dmService.BroadcastCreate(msg)
+	return nil
 }
 func (h *DMHandler) parseDMSend(w http.ResponseWriter, r *http.Request) (*models.CreateDMMessageRequest, bool) {
 	var req models.CreateDMMessageRequest
