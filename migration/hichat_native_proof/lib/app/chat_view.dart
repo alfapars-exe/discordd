@@ -152,9 +152,15 @@ class _ChatViewState extends State<ChatView> {
                                 as String,
                           ),
                           subtitle: Text(
-                            p['state'] == 'prepared' ? 'Gönderilmeye hazır.' : 'Sonuç belirsiz; yinelenmeyi önlemek için otomatik tekrarlanmaz.',
+                            p['state'] == 'prepared'
+                                ? 'Gönderilmeye hazır.'
+                                : p['delivery'] == 'idempotent-v1'
+                                ? 'Sunucu onayı alınamadı; aynı istek güvenle yeniden denenebilir.'
+                                : 'Sonuç belirsiz; yinelenmeyi önlemek için otomatik tekrarlanmaz.',
                           ),
-                          trailing: p['state'] == 'prepared'
+                          trailing:
+                              p['state'] == 'prepared' ||
+                                  p['delivery'] == 'idempotent-v1'
                               ? TextButton(
                                   onPressed: c.busy
                                       ? null

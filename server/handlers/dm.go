@@ -243,6 +243,18 @@ func (h *DMHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 // SendMessage handles POST /api/dms/{channelId}/messages
 // Accepts JSON or multipart/form-data. Files uploaded after message creation, then WS broadcast.
 func (h *DMHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
+	h.sendMessage(w, r, false)
+}
+
+func (h *DMHandler) SendIdempotentMessage(w http.ResponseWriter, r *http.Request) {
+	h.sendMessage(w, r, true)
+}
+
+func (h *DMHandler) SendCapabilities(w http.ResponseWriter, r *http.Request) {
+	pkg.JSON(w, http.StatusOK, map[string]any{"text_idempotency_version": 1})
+}
+
+func (h *DMHandler) sendMessage(w http.ResponseWriter, r *http.Request, requireReceipt bool) {
 	channelID := r.PathValue("channelId")
 	user, ok := r.Context().Value(UserContextKey).(*models.User)
 	if !ok {
@@ -260,6 +272,10 @@ func (h *DMHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	contentType := r.Header.Get("Content-Type")
+	if requireReceipt && isMultipart(contentType) {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "idempotent text sends cannot include uploads")
+		return
+	}
 
 	// Upload-specific throttle (T3.5) — same rationale as message.go: message
 	// limiter stops text-burst spam, upload limiter stops sustained
@@ -311,6 +327,10 @@ func (h *DMHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if requireReceipt && req.ClientMessageID == "" {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "client_message_id is required")
+		return
+	}
 	msg, err := h.dmService.SendMessage(r.Context(), user.ID, channelID, &req)
 	if err != nil {
 		pkg.Error(w, err)

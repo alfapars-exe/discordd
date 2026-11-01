@@ -18,9 +18,10 @@ Windows/web implementation and physical-device acceptance are tracked separately
   with Rust. Both Windows and web targets then took over the retired source's
   live identity, opened old DM history and continued two-way DH-ratcheted messaging.
   The web target retained history after reload and cleared visible chat on logout.
-- A lost DM acknowledgment can reconcile against the exact historical ciphertext.
-  The existing Go DM endpoint is not idempotent: uncertain POSTs are retained and
-  never blindly repeated. Prepared/unattempted requests can be explicitly resumed.
+- A supporting Go server stores text-DM request IDs/hashes in the message/unread/
+  notification transaction. Uncertain sends can explicitly resume with identical
+  saved bytes, including after restart. A dedicated endpoint refuses downgrade to
+  a non-idempotent server. Legacy uncertain sends remain history-reconciliation-only.
 - History uses server append order and a fetched cursor; an own-message echo
   cannot skip incoming rows. Message text has explicit accessibility semantics;
   widget tests cover 320/390 px with keyboard insets.
@@ -31,7 +32,7 @@ Windows/web implementation and physical-device acceptance are tracked separately
 
 | ID | Work still required |
 |---|---|
-| W1 | Server-backed DM idempotency and complete retry/ack lifecycle. A crash between the attempt fence and POST cannot safely auto-resend against the old endpoint. Simultaneous session re-establishment needs explicit confirmation; live imported sessions never silently rewind. |
+| W1 | Complete automatic retry/ack scheduling and transactional DM WebSocket outbox. Current text retries are explicitly resumed; multipart delivery is not covered. Legacy uncertain sends cannot safely auto-resend. Simultaneous session re-establishment needs explicit confirmation; live imported sessions never silently rewind. |
 | W2 | Channel/group orchestration: sender-key distribution, membership/epoch changes, receive/fanout and imported pending-group delivery. Pure crypto kernels are not the complete dispatcher. |
 | W3 | Attachments, secure file opening/upload/download recovery, uncached historical ciphertext, editing/deletion/reactions/search and complete unread/read flows. |
 | W4 | Existing design/feature and Turkish/English parity, server/channel/group/friend/settings UI, full keyboard/IME/screen-reader acceptance and session restoration across application starts. |

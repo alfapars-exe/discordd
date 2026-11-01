@@ -64,6 +64,11 @@ class Crypto implements ChatCrypto {
         };
         return pending;
       case 'attempt':
+        if (pending!['state'] == 'prepared' &&
+            c['delivery'] == 'idempotent-v1') {
+          pending!['delivery'] = 'idempotent-v1';
+          pending!['payload']['client_message_id'] = pending!['id'];
+        }
         pending!['state'] = 'attempted';
         return pending;
       case 'ack':
@@ -78,9 +83,20 @@ class Crypto implements ChatCrypto {
   }
 }
 
-HiChatApi apiFor(Future<http.Response> Function(http.Request) handler) =>
-    HiChatApi('https://example.com', client: MockClient(handler))
-      ..session = const Session('access', 'refresh', 'owner', 'Kullanıcı');
+HiChatApi apiFor(
+  Future<http.Response> Function(http.Request) handler, {
+  bool reliable = false,
+}) => HiChatApi(
+  'https://example.com',
+  client: MockClient((r) async {
+    if (r.url.path == '/api/dms/send-capabilities') {
+      return reliable
+          ? ok({'text_idempotency_version': 1})
+          : http.Response('404 page not found', 404);
+    }
+    return handler(r);
+  }),
+)..session = const Session('access', 'refresh', 'owner', 'Kullanıcı');
 
 void main() {
   for (final width in [320.0, 390.0]) {
@@ -209,6 +225,39 @@ void main() {
     await c.close();
     api.close();
   });
+  test(
+    'idempotent endpoint retry reuses durable bytes after lost response',
+    () async {
+      final crypto = Crypto(), bodies = <String>[];
+      final api = apiFor((r) async {
+        if (r.url.path == '/api/dms') return ok([channel]);
+        if (r.url.path.endsWith('/prekey-bundles')) return ok([]);
+        if (r.method == 'POST') {
+          expect(r.url.path, '/api/dms/dm/messages/idempotent');
+          bodies.add(r.body);
+          if (bodies.length == 1) throw http.ClientException('response lost');
+          return ok(message('m1', payload: jsonDecode(r.body) as Map));
+        }
+        return ok({'messages': [], 'has_more': false});
+      }, reliable: true);
+      final c = ChatController(
+        api,
+        () async => crypto,
+        pollInterval: const Duration(hours: 1),
+      );
+      await c.initialize();
+      await c.select(channel);
+      await c.send('durable');
+      expect(c.pending.single['delivery'], 'idempotent-v1');
+      await c.resumePrepared(c.pending.single['id'] as String);
+      expect(bodies.length, 2);
+      expect(bodies[0], bodies[1]);
+      expect(c.pending, isEmpty);
+      expect(c.error, isNull);
+      await c.close();
+      api.close();
+    },
+  );
   test(
     'late history cannot expose previous account content after invalidation',
     () async {

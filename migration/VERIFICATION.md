@@ -1,5 +1,14 @@
 # Windows/web verification
 
+## Durable text retry increment — 2026-11-01
+
+See DM_DELIVERY.md. Twenty-nine Rust tests and 23 Flutter tests pass locally;
+two Rust window helpers remain ignored in the ordinary suite. SQLite and local
+PostgreSQL tests verify concurrent duplicates, payload conflict, current membership/
+block authorization, deletion tombstones and atomic notification-failure rollback.
+PostgreSQL also passes the Go race detector in a local Linux container. Windows
+and web release builds pass. Physical-device acceptance remains open.
+
 ## Current text-DM increment — 2026-11-01
 
 See STATUS.md and evidence/chat-handoff.json. Fresh Windows devices exchanged

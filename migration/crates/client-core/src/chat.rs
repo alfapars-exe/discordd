@@ -508,8 +508,13 @@ pub fn transition(snapshot: &str, command: &str, entropy: &[u8]) -> Result<Strin
                     .iter_mut()
                     .find(|r| r["id"] == id)
                     .ok_or("pending_request_missing")?;
-                if p["state"] != "prepared" {
+                let retry = p["state"] == "attempted" && p["delivery"] == "idempotent-v1";
+                if p["state"] != "prepared" && !retry {
                     return Err("delivery_requires_reconciliation".into());
+                }
+                if p["state"] == "prepared" && c["delivery"] == "idempotent-v1" {
+                    p["delivery"] = json!("idempotent-v1");
+                    p["payload"]["client_message_id"] = json!(id);
                 }
                 p["state"] = json!("attempted");
                 p.clone()
@@ -776,6 +781,32 @@ mod tests {
     fn no_peer_keys_never_downgrades_to_plaintext() {
         let a = fresh("alice", "a-device", 1);
         assert_eq!(transition(&a.to_string(),&json!({"op":"prepare","id":"request-00000001","channel":"channel","user":"bob","plaintext":"hello","bundles":[]}).to_string(),&[2;32]).unwrap_err(),"recipient_no_keys");
+    }
+
+    #[test]
+    fn durable_idempotent_attempt_reuses_exact_bytes_after_reopen() {
+        let alice = fresh("alice", "a-device", 1);
+        let bob = fresh("bob", "b-device", 2);
+        let prepared = prepare_for(&alice, &bob, "request-00000001", "hello", 3);
+        let attempted = run(
+            &prepared["snapshot"],
+            json!({"op":"attempt","id":"request-00000001","delivery":"idempotent-v1"}),
+            4,
+        );
+        assert_eq!(
+            attempted["output"]["payload"]["client_message_id"],
+            "request-00000001"
+        );
+        let retried = run(
+            &attempted["snapshot"],
+            json!({"op":"attempt","id":"request-00000001"}),
+            99,
+        );
+        assert_eq!(retried, attempted);
+        assert_eq!(
+            attempted["snapshot"]["stores"],
+            prepared["snapshot"]["stores"]
+        );
     }
 
     #[test]

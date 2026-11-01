@@ -294,12 +294,29 @@ class ChatController extends ChangeNotifier {
     var attempted = false;
     try {
       // Load the canonical request from the durable store, never from a UI copy.
-      final prepared = await v.chat({'op': 'attempt', 'id': id}) as Map;
+      var reliable = false;
+      try {
+        final capabilities = await api.request(
+          'GET',
+          '/api/dms/send-capabilities',
+        );
+        reliable =
+            capabilities is Map &&
+            capabilities['text_idempotency_version'] == 1;
+      } on ApiFailure catch (e) {
+        if (e.status != 404 && e.status != 405) rethrow;
+      }
+      _check();
+      final prepared = await v.chat({
+        'op': 'attempt',
+        'id': id,
+        if (reliable) 'delivery': 'idempotent-v1',
+      }) as Map;
       _check();
       attempted = true;
       final result = await api.request(
         'POST',
-        '/api/dms/${Uri.encodeComponent(prepared['channel'] as String)}/messages',
+        '/api/dms/${Uri.encodeComponent(prepared['channel'] as String)}/messages${prepared['delivery'] == 'idempotent-v1' ? '/idempotent' : ''}',
         body: prepared['payload'],
       ) as Map;
       _check();

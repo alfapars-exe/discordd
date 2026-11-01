@@ -78,7 +78,7 @@ def main():
     # Durable delivery must run on PostgreSQL too; the ordinary service lane
     # uses mocks/legacy fixtures and cannot validate these transactions.
     delivery = subprocess.run(["go", "test", "-v", "-count=1", "-timeout=2m", "./services",
-                               "-run", "^TestChannelDelivery"], cwd=root / "server",
+                               "-run", "^(TestChannelDelivery|TestDMIdempotent)"], cwd=root / "server",
                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     print(delivery.stdout.replace(dsn, REDACTED_DATABASE), end="", flush=True)
     return delivery.returncode or int("--- SKIP:" in delivery.stdout or "[no tests to run]" in delivery.stdout)

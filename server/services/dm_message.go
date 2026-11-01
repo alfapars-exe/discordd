@@ -6,6 +6,7 @@ package services
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -100,6 +101,22 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 	}
 
 	// DM privacy + request enforcement
+	requestHash := ""
+	if req.ClientMessageID != "" {
+		encoded, err := json.Marshal(req)
+		if err != nil {
+			return nil, err
+		}
+		requestHash = fmt.Sprintf("%x", sha256.Sum256(encoded))
+		receipts, ok := s.dmRepo.(repository.DMSendReceipts)
+		if !ok {
+			return nil, fmt.Errorf("%w: dm_send_receipts_unavailable", pkg.ErrBadRequest)
+		}
+		previous, err := receipts.FindDMSend(ctx, channelID, userID, req.ClientMessageID, requestHash)
+		if err != nil || previous != nil {
+			return previous, err
+		}
+	}
 
 	if !isPlatformAdmin && !isSelf {
 		if channel.Status == models.DMStatusPending {
@@ -246,6 +263,20 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 				return err
 			}
 		}
+		if req.ClientMessageID != "" {
+			receipts, ok := r.DM.(repository.DMSendReceipts)
+			if !ok || r.LockChannel == nil {
+				return fmt.Errorf("%w: dm_send_receipts_unavailable", pkg.ErrBadRequest)
+			}
+			previous, err := receipts.FindDMSend(ctx, channelID, userID, req.ClientMessageID, requestHash)
+			if err != nil {
+				return err
+			}
+			if previous != nil {
+				msg = previous
+				return nil
+			}
+		}
 		if r.LockChannel != nil && !isPlatformAdmin && !isSelf {
 			// A concurrent first send may have made our preflight snapshot pending.
 			current, err := r.DM.GetChannelByID(ctx, channelID)
@@ -304,6 +335,11 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 				return fmt.Errorf("failed to increment DM unread count: %w", err)
 			}
 		}
+		if req.ClientMessageID != "" {
+			if err := r.DM.(repository.DMSendReceipts).RecordDMSend(ctx, channelID, userID, req.ClientMessageID, requestHash, msg.ID); err != nil {
+				return err
+			}
+		}
 		if becamePending {
 			requestNotif = &models.Notification{
 				UserID:      otherUserID,
@@ -330,6 +366,9 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 	})
 	if txErr != nil {
 		return nil, txErr
+	}
+	if msg.SendReplayed {
+		return msg, nil
 	}
 
 	author, err := s.userRepo.GetByID(ctx, userID)
@@ -397,6 +436,9 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 
 // BroadcastCreate sends the DM message to both users after file uploads complete.
 func (s *dmService) BroadcastCreate(message *models.DMMessage) {
+	if message.SendReplayed {
+		return
+	}
 	channel, err := s.dmRepo.GetChannelByID(context.Background(), message.DMChannelID)
 	if err != nil {
 		return
