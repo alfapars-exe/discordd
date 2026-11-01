@@ -61,3 +61,7 @@ pub fn device_scope_id(scope: String) -> String {
 pub fn commit_device_store(path: String, data: Vec<u8>) -> Result<(), String> {
     hichat_client_core::local_protection::commit(path, data)
 }
+
+pub fn chat_transition(snapshot: String, command: String, entropy: Vec<u8>) -> Result<String, String> {
+    hichat_client_core::chat::execute(snapshot, command, entropy)
+}

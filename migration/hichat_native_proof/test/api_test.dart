@@ -17,6 +17,85 @@ Map<String, dynamic> tokens(String access) => {
   'user': {'id': 'u1', 'display_name': 'İstanbul'},
 };
 void main() {
+  String jwt(String sid) =>
+      'e30.${base64Url.encode(utf8.encode(jsonEncode({'sid': sid, 'user_id': 'u1'}))).replaceAll('=', '')}.test';
+  for (final scenario in [
+    'server-account',
+    'server-session',
+    'foreign-user-success',
+    'foreign-session-success',
+    'superseded',
+    'same-session',
+  ]) {
+    test('refresh account/session binding: $scenario', () async {
+      var resourceCalls = 0;
+      final original = jwt('original-session');
+      final api = HiChatApi(
+        'https://example.com',
+        client: MockClient((r) async {
+          if (r.url.path.endsWith('/login')) {
+            return ok({
+              'access_token': original,
+              'user': {'id': 'u1', 'display_name': 'User'},
+            });
+          }
+          if (r.url.path.endsWith('/refresh')) {
+            final body = jsonDecode(r.body) as Map;
+            expect(body['expected_user_id'], 'u1');
+            expect(body['expected_session_id'], 'original-session');
+            if (scenario == 'server-account' ||
+                scenario == 'server-session' ||
+                scenario == 'superseded') {
+              final code = scenario == 'server-account'
+                  ? 'ACCOUNT_MISMATCH'
+                  : scenario == 'server-session'
+                  ? 'SESSION_MISMATCH'
+                  : 'REFRESH_SUPERSEDED';
+              return http.Response(
+                jsonEncode({'success': false, 'code': code}),
+                409,
+              );
+            }
+            return ok({
+              'access_token': jwt(
+                scenario == 'foreign-session-success'
+                    ? 'other-session'
+                    : 'original-session',
+              ),
+              'user': {'id': scenario == 'foreign-user-success' ? 'u2' : 'u1'},
+            });
+          }
+          resourceCalls++;
+          if (resourceCalls == 1) {
+            return http.Response('{"success":false}', 401);
+          }
+          return ok([]);
+        }),
+      );
+      await api.login('u', 'p');
+      final scope = api.generation;
+      if (scenario == 'same-session') {
+        await api.request('GET', '/api/servers');
+        expect(resourceCalls, 2);
+        expect(api.session!.userId, 'u1');
+        expect(api.generation, scope);
+      } else {
+        await expectLater(
+          api.request('GET', '/api/servers'),
+          throwsA(isA<ApiFailure>()),
+        );
+        expect(resourceCalls, 1);
+        if (scenario == 'superseded') {
+          expect(api.session, isNotNull);
+          expect(api.generation, scope);
+        } else {
+          expect(api.session, isNull);
+          expect(api.generation, greaterThan(scope));
+        }
+      }
+      api.close();
+    });
+  }
   test('requires secure origins and accepts local development', () {
     for (final input in [
       'http://example.com',
@@ -60,7 +139,11 @@ void main() {
         if (r.url.path.endsWith('/refresh')) {
           refreshes++;
           await gate.future;
-          return ok({'access_token': 'fresh', 'refresh_token': 'rotated'});
+          return ok({
+            'access_token': 'fresh',
+            'refresh_token': 'rotated',
+            'user': {'id': 'u1'},
+          });
         }
         if (r.headers['Authorization'] == 'Bearer expired') {
           return http.Response('{"success":false}', 401);

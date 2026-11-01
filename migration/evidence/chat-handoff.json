@@ -1,0 +1,74 @@
+{
+  "date": "2026-11-01",
+  "scope": "disposable local accounts, real Go/PostgreSQL API, Rust native/WASM; no physical-device acceptance",
+  "baseCommit": "afec2d37eadbc46b00aa761c4c3d9585186be571",
+  "tests": {
+    "rustPassed": 28,
+    "rustOrdinaryIgnored": 2,
+    "flutterPassed": 22,
+    "nativeIntegrationPassed": 3,
+    "clippyWarningsDenied": true,
+    "flutterAnalyzeClean": true,
+    "windowsReleaseBuild": true,
+    "webReleaseBuild": true,
+    "liveGoRefreshAccountSessionBinding": true
+  },
+  "windows": {
+    "realGoAPI": true,
+    "postgresMutualTLS": true,
+    "rustFFI": true,
+    "freshDeviceRegistration": true,
+    "bidirectionalEncryptedDM": true,
+    "dhTurn": true,
+    "dpapiReopen": true,
+    "secondOwnerExcluded": true,
+    "serverMessages": 3,
+    "physicalDevices": false
+  },
+  "handoff": {
+    "realLegacyTypeScriptInterop": true,
+    "goPostgresAPI": true,
+    "rustFFI": true,
+    "sourceRetiredAndFenced": true,
+    "sameDeviceAfterTransfer": true,
+    "boundLegacyHistoryReadableInChat": true,
+    "bidirectionalMessagesAfterHandoff": true,
+    "dhTurnAcrossHandoff": true,
+    "serverMessages": 4,
+    "physicalDevices": false
+  },
+  "webPeer": {
+    "goPostgresAPI": true,
+    "rustNativePeer": true,
+    "legacySourceMessageDecrypted": true,
+    "browserHandoffMessageDecrypted": true,
+    "replyToBrowserSent": true,
+    "peerRestartedForContinuation": true,
+    "physicalDevices": false
+  },
+  "web": {
+    "legacyHistoryVisibleInChat": true,
+    "bidirectionalMessagesAfterHandoff": true,
+    "sourceRetirementRequired": true,
+    "physicalDevices": false,
+    "reloadRetainsDeviceAndChatHistory": true,
+    "logoutClearsChat": true
+  },
+  "sourceFilesSHA256NormalizedLF": {
+    "migration/crates/client-core/src/chat.rs": "e3972c40239ab26c015163329abefea2ebfd86edd6de1543c64a12ee95bc0a1a",
+    "migration/crates/client-core/src/handoff.rs": "23b1fcaf154b8f33af4b9f15fd9331e08ef51f0d0aba9d49bd9dd63496a379ad",
+    "migration/hichat_native_proof/lib/app/api.dart": "a148a466c6c2b624a17eef78b309ef40e09a06b3eab8f3dc76953f07ef18b647",
+    "migration/hichat_native_proof/lib/app/chat_crypto.dart": "7cbe73031af359dda14a2be9adfcb2f6c94d401db79b49e3186b864896fccc6c",
+    "migration/hichat_native_proof/lib/app/chat_view.dart": "a6c222fc2c00bef1bdc0ff4be90e391fa29c84ab3c1a8c9b0e93a242dacc3704",
+    "migration/hichat_native_proof/lib/app/chat.dart": "ba9ef729a2ea0ffaf8e0cb4a63d8b293868c3f00e2ae2575c11d53a24bbfb386",
+    "migration/hichat_native_proof/lib/app/device_vault.dart": "8f02a4e87f423fcc8ac50de9a4b831697e1d26cbba1c27f425056d3d25a127c3",
+    "migration/hichat_native_proof/lib/app/screen.dart": "eccbfa4741ef176b39c44f8eebcc1f20b9fef1f664b360eb10c6951a183d20ba",
+    "migration/hichat_native_proof/lib/src/rust/frb_generated.dart": "90d4d49b01e08add8beb0eaeb5c02cd9f4844b777e05156fba3c9a67785b1a87",
+    "migration/hichat_native_proof/rust/src/api/simple.rs": "db43a3ca79ae43d897a949f315af6e4b9b58ef9eaf12839298057fd01e2fb846",
+    "migration/hichat_native_proof/rust/src/frb_generated.rs": "d15c8154f0c68dac63c6d734ed702f83306a8e6b23beddf1d2503242161f3477",
+    "migration/scripts/legacy-chat-entry.ts": "1166dbe9fe07b1625dd8a3eaeca867c914a3cb7d97a7f0a714051f0b400f4a45",
+    "migration/scripts/prepare-chat-qa.mjs": "ef5128759665f3db23e7d353e29ed71f79e4a8d98cbe4a860c945e380374c299"
+  },
+  "remainingSoftwareInventory": "migration/STATUS.md",
+  "physicalDevicesAccepted": false
+}

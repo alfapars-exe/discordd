@@ -1,0 +1,270 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:hichat_native_proof/app/api.dart';
+import 'package:hichat_native_proof/app/chat.dart';
+import 'package:hichat_native_proof/app/chat_crypto.dart';
+import 'package:hichat_native_proof/app/chat_view.dart';
+
+http.Response ok(Object? data) => http.Response(
+  jsonEncode({'success': true, 'data': data}),
+  200,
+  headers: {'content-type': 'application/json; charset=utf-8'},
+);
+final channel = <String, dynamic>{
+  'e2ee_enabled': true,
+  'id': 'dm',
+  'other_user': {'id': 'peer', 'display_name': 'Eş'},
+};
+Map<String, dynamic> message(String id, {Map? payload}) => {
+  'id': id,
+  'dm_channel_id': 'dm',
+  'user_id': 'owner',
+  'sender_device_id': 'device',
+  'encryption_version': 1,
+  'ciphertext': 'cipher',
+  'e2ee_metadata': 'meta',
+  'source_sequence': id.substring(1),
+  'created_at': id,
+  ...?payload,
+};
+
+class Crypto implements ChatCrypto {
+  final log = <String>[];
+  Map<String, dynamic>? pending;
+  @override
+  Future<Map<String, dynamic>> status() async => {'phase': 'active'};
+  @override
+  Future<void> registerFreshDevice() async {}
+  @override
+  Future<dynamic> chat(Map<String, dynamic> c) async {
+    log.add(c['op'] as String);
+    switch (c['op']) {
+      case 'inspect':
+        return {
+          'pending': [?pending],
+          'trustAlerts': [],
+        };
+      case 'prepare':
+        pending = {
+          'id': c['id'],
+          'channel': c['channel'],
+          'state': 'prepared',
+          'plaintext': c['plaintext'],
+          'payload': {
+            'encryption_version': 1,
+            'ciphertext': 'cipher',
+            'sender_device_id': 'device',
+            'e2ee_metadata': 'meta',
+          },
+        };
+        return pending;
+      case 'attempt':
+        pending!['state'] = 'attempted';
+        return pending;
+      case 'ack':
+        pending = null;
+        return {'plaintext': '{"content":"sent"}'};
+      case 'receive':
+        return {
+          'plaintext': jsonEncode({'content': 'message ${c['message']['id']}'}),
+        };
+    }
+    throw StateError('Unexpected crypto command');
+  }
+}
+
+HiChatApi apiFor(Future<http.Response> Function(http.Request) handler) =>
+    HiChatApi('https://example.com', client: MockClient(handler))
+      ..session = const Session('access', 'refresh', 'owner', 'Kullanıcı');
+
+void main() {
+  for (final width in [320.0, 390.0]) {
+    testWidgets(
+      'chat content is accessible and fits keyboard viewport at $width',
+      (tester) async {
+        tester.view.physicalSize = Size(width, 640);
+        tester.view.devicePixelRatio = 1;
+        tester.view.viewInsets = const FakeViewPadding(bottom: 260);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetViewInsets);
+        final semantics = tester.ensureSemantics();
+        final api = apiFor((_) async => ok([channel]));
+        final crypto = Crypto();
+        final c = ChatController(
+          api,
+          () async => crypto,
+          pollInterval: const Duration(hours: 1),
+        );
+        c.selected = channel;
+        c.messages = [
+          {...message('m1'), 'displayContent': 'Mesaj: şğıöçü 👋'},
+        ];
+        c.pending = [
+          {
+            'id': 'pending-00000001',
+            'state': 'prepared',
+            'plaintext': '{"content":"Bekleyen mesaj"}',
+          },
+        ];
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(body: ChatView(controller: c)),
+          ),
+        );
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)),
+        );
+        await tester.pumpAndSettle(
+          const Duration(milliseconds: 100),
+          EnginePhase.sendSemanticsUpdate,
+          const Duration(seconds: 3),
+        );
+        expect(find.bySemanticsLabel(RegExp('Mesaj: şğıöçü 👋')), findsWidgets);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+        await tester.runAsync(() async {
+          await c.close();
+          api.close();
+        });
+        semantics.dispose();
+      },
+    );
+  }
+  test('persist attempt before POST; sent echo cannot skip unfetched incoming rows', () async {
+    final crypto = Crypto();
+    var reads = 0, posts = 0;
+    final api = apiFor((r) async {
+      if (r.url.path == '/api/dms') return ok([channel]);
+      if (r.url.path.endsWith('/prekey-bundles')) return ok([]);
+      if (r.method == 'POST') {
+        posts++;
+        expect(crypto.log.last, 'attempt');
+        return ok(message('m3', payload: jsonDecode(r.body) as Map));
+      }
+      reads++;
+      if (reads == 1) {
+        return ok({
+          'messages': [message('m1')],
+          'has_more': false,
+        });
+      }
+      expect(r.url.queryParameters['after'], 'm1');
+      return ok({
+        'messages': [message('m2'), message('m3')],
+        'has_more_after': false,
+      });
+    });
+    final c = ChatController(
+      api,
+      () async => crypto,
+      pollInterval: const Duration(hours: 1),
+    );
+    await c.initialize();
+    await c.select(channel);
+    await c.send('Türkçe 👋');
+    await c.refresh();
+    expect(c.error, isNull);
+    expect(posts, 1);
+    expect(c.messages.map((m) => m['id']), ['m1', 'm2', 'm3']);
+    await c.close();
+    api.close();
+  });
+  test('ambiguous network result is retained and reconciled without duplicate POST', () async {
+    final crypto = Crypto();
+    var posts = 0, delivered = false;
+    final api = apiFor((r) async {
+      if (r.url.path == '/api/dms') return ok([channel]);
+      if (r.url.path.endsWith('/prekey-bundles')) return ok([]);
+      if (r.method == 'POST') {
+        posts++;
+        delivered = true;
+        throw http.ClientException('connection lost after commit');
+      }
+      return ok({
+        'messages': delivered ? [message('m1')] : [],
+        'has_more': false,
+      });
+    });
+    final c = ChatController(
+      api,
+      () async => crypto,
+      pollInterval: const Duration(hours: 1),
+    );
+    await c.initialize();
+    await c.select(channel);
+    await c.send('keep me');
+    expect(c.pending.single['state'], 'attempted');
+    expect(c.error, contains('doğrulanamadı'));
+    await c.refresh();
+    await c.refresh();
+    expect(posts, 1);
+    expect(c.pending, isEmpty);
+    expect(c.messages.length, 1);
+    await c.close();
+    api.close();
+  });
+  test(
+    'late history cannot expose previous account content after invalidation',
+    () async {
+      final crypto = Crypto(), response = Completer<http.Response>();
+      final api = apiFor((r) async {
+        if (r.url.path == '/api/dms') return ok([channel]);
+        if (r.url.path == '/api/auth/logout') return ok(null);
+        return response.future;
+      });
+      final c = ChatController(
+        api,
+        () async => crypto,
+        pollInterval: const Duration(hours: 1),
+      );
+      await c.initialize();
+      final load = c.select(channel);
+      await Future<void>.delayed(Duration.zero);
+      await api.logout();
+      response.complete(
+        ok({
+          'messages': [message('m1')],
+        }),
+      );
+      await load;
+      expect(c.messages, isEmpty);
+      expect(c.channels, isEmpty);
+      expect(crypto.log, isNot(contains('receive')));
+      await c.close();
+      api.close();
+    },
+  );
+  test(
+    'query parameters survive token refresh without being encoded into path',
+    () async {
+      var reads = 0;
+      final api = apiFor((r) async {
+        if (r.url.path == '/api/auth/refresh') {
+          return ok({
+            'access_token': 'new',
+            'refresh_token': 'rotated',
+            'user': {'id': 'owner'},
+          });
+        }
+        expect(r.url.path, '/api/dms/dm/messages');
+        expect(r.url.queryParameters['after'], 'message /? ü');
+        reads++;
+        if (reads == 1) return http.Response('{"success":false}', 401);
+        return ok({'messages': []});
+      });
+      await api.request(
+        'GET',
+        '/api/dms/dm/messages',
+        query: {'after': 'message /? ü', 'limit': '50'},
+      );
+      expect(reads, 2);
+      api.close();
+    },
+  );
+}

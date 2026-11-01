@@ -21,6 +21,22 @@ class Session {
     this.userId,
     this.displayName,
   );
+  // Routing hint only; the server validates the signed token and refresh cookie.
+  String get sessionId {
+    try {
+      final parts = accessToken.split('.');
+      if (parts.length != 3 || parts[1].length > 16384) return '';
+      final claims = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+      );
+      return claims is Map && claims['sid'] is String
+          ? claims['sid'] as String
+          : '';
+    } on FormatException {
+      return '';
+    }
+  }
+
   factory Session.fromJson(Map<String, dynamic> data) {
     final user = data['user'] as Map<String, dynamic>;
     final value = Session(
@@ -77,12 +93,15 @@ class HiChatApi {
     String path, {
     Object? body,
     String? token,
+    Map<String, String>? query,
   }) async {
     if (!path.startsWith('/api/') || path.startsWith('//')) {
       throw const ApiFailure('INVALID_PATH');
     }
-    final request = http.Request(method, origin.replace(path: path))
-      ..followRedirects = false;
+    final request = http.Request(
+      method,
+      origin.replace(path: path, queryParameters: query),
+    )..followRedirects = false;
     request.headers['Content-Type'] = 'application/json';
     request.headers['X-HiChat-Client'] = 'web';
     if (token != null) request.headers['Authorization'] = 'Bearer $token';
@@ -153,24 +172,45 @@ class HiChatApi {
       final data = await _send(
         'POST',
         '/api/auth/refresh',
-        body: {'refresh_token': old.refreshToken},
+        body: {
+          'refresh_token': old.refreshToken,
+          'expected_user_id': old.userId,
+          if (old.sessionId.isNotEmpty) 'expected_session_id': old.sessionId,
+        },
       ) as Map<String, dynamic>;
       if (!isCurrent(scope)) throw const ApiFailure('SESSION_CHANGED');
-      session = Session(
+      if (data['user'] is! Map || data['user']['id'] != old.userId) {
+        _invalidate();
+        throw const ApiFailure('ACCOUNT_MISMATCH', 409);
+      }
+      final next = Session(
         data['access_token'] as String,
         data['refresh_token'] as String? ?? '',
         old.userId,
         old.displayName,
       );
+      if (old.sessionId.isNotEmpty && next.sessionId != old.sessionId) {
+        _invalidate();
+        throw const ApiFailure('SESSION_MISMATCH', 409);
+      }
+      session = next;
     } on ApiFailure catch (error) {
-      if (isCurrent(scope) && error.status == 401) {
+      if (isCurrent(scope) &&
+          (error.status == 401 ||
+              error.status == 403 ||
+              ['ACCOUNT_MISMATCH', 'SESSION_MISMATCH'].contains(error.code))) {
         _invalidate();
       }
       rethrow;
     }
   }
 
-  Future<dynamic> request(String method, String path, {Object? body}) async {
+  Future<dynamic> request(
+    String method,
+    String path, {
+    Object? body,
+    Map<String, String>? query,
+  }) async {
     final scope = generation;
     final current = session;
     if (current == null) throw const ApiFailure('LOGIN_REQUIRED');
@@ -180,6 +220,7 @@ class HiChatApi {
         path,
         body: body,
         token: current.accessToken,
+        query: query,
       );
       if (!isCurrent(scope)) throw const ApiFailure('SESSION_CHANGED');
       return data;
@@ -199,6 +240,7 @@ class HiChatApi {
         path,
         body: body,
         token: session!.accessToken,
+        query: query,
       );
       if (!isCurrent(scope)) throw const ApiFailure('SESSION_CHANGED');
       return data;

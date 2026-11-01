@@ -15,7 +15,7 @@ class HiChatProof extends StatelessWidget {
   const HiChatProof({super.key});
   @override
   Widget build(BuildContext context) => MaterialApp(
-    title: 'HiChat Rust/Flutter Önizleme 1.0.1',
+    title: 'HiChat Rust/Flutter Önizleme 1.0.2',
     theme: ThemeData.dark(useMaterial3: true),
     home: const HiChatScreen(),
   );
