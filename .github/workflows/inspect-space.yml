@@ -24,7 +24,7 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
         with:
           python-version: '3.12'
-      - run: python -m pip install --only-binary :all: --disable-pip-version-check --no-input huggingface_hub==1.26.0
+      - run: 'python -m pip install --only-binary=:all: --disable-pip-version-check --no-input huggingface_hub==1.26.0'
       - name: Configure private Sentry build inputs without logging values
         env:
           HF_TOKEN: ${{ secrets.HF_RELEASE_TOKEN }}
@@ -101,7 +101,7 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
         with:
           python-version: '3.12'
-      - run: python -m pip install --only-binary :all: --disable-pip-version-check --no-input huggingface_hub==1.26.0
+      - run: 'python -m pip install --only-binary=:all: --disable-pip-version-check --no-input huggingface_hub==1.26.0'
       - name: Read deployment status and bounded sanitized error lines
         env:
           HF_TOKEN: ${{ secrets.HF_RELEASE_TOKEN }}
