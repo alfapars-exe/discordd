@@ -22,7 +22,11 @@ void main() {
           cookie = 'hichat_refresh=original; Path=/api/auth; Secure; HttpOnly; SameSite=Strict';
         } else if (r.url.path.endsWith('/refresh')) {
           expect(r.headers['cookie'], 'hichat_refresh=original');
-          data = {'access_token': 'fresh'};
+          expect(jsonDecode(r.body)['expected_user_id'], 'u1');
+          data = {
+            'access_token': 'fresh',
+            'user': {'id': 'u1'},
+          };
           cookie = 'hichat_refresh=rotated; Path=/api/auth; Secure; HttpOnly';
           refreshed = true;
         } else if (r.url.path.endsWith('/logout')) {

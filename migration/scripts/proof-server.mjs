@@ -18,6 +18,12 @@ const server=http.createServer(async(req,res)=>{
   if(req.url==='/__qa/handoff-source.html'){
     res.setHeader('Content-Type','text/html');res.end('<title>HiChat handoff QA</title><script type="module" src="/__qa/handoff-source.js"></script>');return;
   }
+  if(req.url==='/__qa/legacy-chat.html'){
+    res.setHeader('Content-Type','text/html');res.end('<title>Disposable legacy chat interop</title><script type="module" src="/__qa/legacy-chat.js"></script>');return;
+  }
+  if(req.url==='/__qa/legacy-chat.js'){
+    res.setHeader('Content-Type','text/javascript');res.end(await readFile(new URL('../.local/source-bundle/legacy-chat.js',import.meta.url)));return;
+  }
   if(req.url==='/__qa/handoff-source.js'){
     res.setHeader('Content-Type','text/javascript');res.end(await readFile(new URL('../.local/source-bundle/handoff-source.js',import.meta.url)));return;
   }

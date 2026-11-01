@@ -14,6 +14,8 @@ import 'p2p_view.dart';
 import 'game_overlay.dart';
 import 'device_vault.dart';
 import 'device_handoff_view.dart';
+import 'chat.dart';
+import 'chat_view.dart';
 
 typedef HistoryReader = Future<String> Function({
   required String backupJson,
@@ -41,8 +43,18 @@ class _HiChatScreenState extends State<HiChatScreen> {
   VoiceController? voice;
   P2PController? p2p;
   GameOverlay? overlay;
+  ChatController? chat;
   Future<DeviceVault>? _vault;
-  Future<DeviceVault> _openVault() => _vault ??= DeviceVault.open(api!);
+  Future<DeviceVault> _openVault() {
+    if (_vault != null) return _vault!;
+    late final Future<DeviceVault> opening;
+    opening = DeviceVault.open(api!).catchError((Object error) {
+      if (identical(_vault, opening)) _vault = null;
+      throw error;
+    });
+    return _vault = opening;
+  }
+
   String? error, serverId, channelId;
   bool busy = false, restoring = false;
   bool shareAudio = false;
@@ -50,6 +62,7 @@ class _HiChatScreenState extends State<HiChatScreen> {
   List<dynamic> servers = [], channels = [], history = [];
   @override
   void dispose() {
+    chat?.close();
     _vault?.then((v) => v.close(), onError: (Object _) {});
     overlay?.removeListener(_changed);
     voice?.removeListener(_changed);
@@ -115,6 +128,7 @@ class _HiChatScreenState extends State<HiChatScreen> {
     if (!mounted || api != client) return;
     voice = VoiceController(client)..addListener(_changed);
     p2p = P2PController(client);
+    chat = ChatController(client, _openVault);
     overlay = GameOverlay(voice!, p2p!)..addListener(_changed);
     setState(() {});
     final scope = client.generation;
@@ -134,6 +148,8 @@ class _HiChatScreenState extends State<HiChatScreen> {
   }
 
   Future<void> _logout() async {
+    await chat?.close();
+    chat = null;
     final oldVault = _vault;
     _vault = null;
     oldVault?.then((v) => v.close(), onError: (Object _) {});
@@ -675,7 +691,9 @@ class _HiChatScreenState extends State<HiChatScreen> {
                             controller: p2p!,
                             beforeConnect: () => voice!.leave(),
                           )
-                        : DeviceHandoffView(open: _openVault))
+                        : selection == 3
+                        ? DeviceHandoffView(open: _openVault)
+                        : ChatView(controller: chat!))
                   : _loginView(),
             ),
           ],
@@ -701,6 +719,10 @@ class _HiChatScreenState extends State<HiChatScreen> {
                 NavigationDestination(
                   icon: Icon(Icons.devices),
                   label: 'Cihaz devri',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.chat),
+                  label: 'Mesajlar',
                 ),
               ],
             )

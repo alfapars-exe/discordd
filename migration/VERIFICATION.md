@@ -1,5 +1,21 @@
 # Windows/web verification
 
+## Current text-DM increment — 2026-11-01
+
+See STATUS.md and evidence/chat-handoff.json. Fresh Windows devices exchanged
+encrypted DMs through the real Go/PostgreSQL API and reopened their DPAPI stores.
+The actual legacy TypeScript implementation then exchanged messages with Rust,
+retired its source, and transferred live state to Windows and web targets. Both
+continued the same ratchet/device, including old source-tagged history and new
+two-way DH turns. The web target also passed reload/history and logout clearing.
+The web fixture's native peer resumed after an automation timeout; this is recorded
+as a restart, not hidden as an uninterrupted run. Physical devices remain separate.
+
+28 Rust tests and 22 Flutter tests passed locally; two hidden-window Rust helpers
+remain explicitly ignored in the ordinary suite. Native integration tests and the
+ego-browser flow are additional evidence, not replacements for physical acceptance.
+The older dated sections below describe historical proof boundaries.
+
 ## Latest storage/capture increment — 2026-10-31
 
 The active-device proof now has durable source v2 retirement, target-bound encrypted

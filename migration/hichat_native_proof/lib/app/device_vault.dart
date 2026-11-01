@@ -6,8 +6,9 @@ import 'dart:typed_data';
 import '../src/rust/api/simple.dart' as rust;
 import 'api.dart';
 import 'device_store.dart';
+import 'chat_crypto.dart';
 
-class DeviceVault {
+class DeviceVault implements ChatCrypto {
   final HiChatApi api;
   final DeviceStore store;
   final int authScope;
@@ -75,11 +76,19 @@ class DeviceVault {
       if (saved?['version'] != 1 ||
           saved?['intent']?['owner'] != owner ||
           saved?['intent']?['backend'] != api.origin.toString() ||
-          !['intent', 'dormant', 'active'].contains(saved?['phase'])) {
+          ![
+            'intent',
+            'registering',
+            'dormant',
+            'active',
+          ].contains(saved?['phase'])) {
         throw const ApiFailure('INVALID_DEVICE_STORE');
       }
       if (saved?['phase'] == 'active') {
         await vault._verify(saved!);
+      }
+      if (saved?['phase'] == 'registering') {
+        await vault._finishRegistration(saved!);
       }
       if (saved?['phase'] == 'dormant') {
         await vault._verify(saved!);
@@ -97,6 +106,7 @@ class DeviceVault {
     }
   }
 
+  @override
   Future<Map<String, dynamic>> status() => _serial(() async {
     final d = (await store.load())!;
     current();
@@ -124,6 +134,81 @@ class DeviceVault {
     );
     current();
   }
+
+  Future<void> _finishRegistration(Map<String, dynamic> d) async {
+    final registration = _registration(jsonDecode(d['snapshot'] as String));
+    final devices = await api.request('GET', '/api/devices') as List? ?? [];
+    current();
+    if (!devices.any((r) => r['device_id'] == registration['deviceId'])) {
+      await api.request('POST', '/api/devices', body: d['registrationBody']);
+      current();
+    }
+    await _verify(d);
+    current();
+    d['phase'] = 'active';
+    d.remove('private');
+    d.remove('registrationBody');
+    d['revision'] = (d['revision'] as int) + 1;
+    await store.save(d);
+    current();
+  }
+
+  /// New identity, independent of the old client's ratchets and history.
+  @override
+  Future<void> registerFreshDevice() => _serial(() async {
+    final d = (await store.load())!;
+    if (d['phase'] == 'registering') return _finishRegistration(d);
+    if (d['phase'] != 'intent') throw const ApiFailure('DEVICE_ALREADY_ACTIVE');
+    final device = randomBytes(16)
+        .map((b) => b.toRadixString(16).padLeft(2, '0'))
+        .join();
+    final result = jsonDecode(
+      await rust.chatTransition(
+        snapshot: '{}',
+        command: jsonEncode({
+          'op': 'initialize',
+          'owner': api.session!.userId,
+          'device': device,
+        }),
+        entropy: randomBytes(32),
+      ),
+    ) as Map<String, dynamic>;
+    current();
+    d['snapshot'] = jsonEncode(result['snapshot']);
+    d['registrationBody'] = result['registration'];
+    d['phase'] = 'registering';
+    d['revision'] = (d['revision'] as int) + 1;
+    // Save keys before any registration request. Restart reuses this identity.
+    await store.save(d);
+    current();
+    await _finishRegistration(d);
+  });
+
+  @override
+  Future<dynamic> chat(Map<String, dynamic> command) => _serial(() async {
+    final d = (await store.load())!;
+    if (d['phase'] != 'active') throw const ApiFailure('DEVICE_NOT_ACTIVE');
+    if (command['op'] == 'prepare' || command['op'] == 'attempt') {
+      await _verify(d);
+      current();
+    }
+    final result = jsonDecode(
+      await rust.chatTransition(
+        snapshot: d['snapshot'] as String,
+        command: jsonEncode(command),
+        entropy: randomBytes(32),
+      ),
+    ) as Map<String, dynamic>;
+    current();
+    final next = jsonEncode(result['snapshot']);
+    if (d['snapshot'] != next) {
+      d['snapshot'] = next;
+      d['revision'] = (d['revision'] as int) + 1;
+      await store.save(d);
+    }
+    current();
+    return result['output'];
+  });
 
   Future<Map<String, dynamic>> importCapsule(String capsule) =>
       _serial(() async {

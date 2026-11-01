@@ -1,5 +1,12 @@
 # Device acceptance ledger
 
+Current software inventory: [STATUS.md](STATUS.md). Local 2026-11-01 text-DM tests
+added fresh registration, live legacy-to-Windows/web handoff, imported DM history,
+post-handoff two-way DH turns, Windows DPAPI reopen and web reload/logout. These
+tests used disposable accounts and synthetic text; every physical gate below
+remains open. Incomplete dispatch/UI/server implementations are software gaps,
+not missing physical-device tests.
+
 Priority: Windows, desktop web and mobile-browser login. Native mobile/Linux/macOS
 acceptance is tracked separately; lack of hardware/signing is never counted as pass.
 

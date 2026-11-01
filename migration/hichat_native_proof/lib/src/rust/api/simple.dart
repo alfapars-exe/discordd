@@ -87,3 +87,13 @@ Future<void> commitDeviceStore({
   path: path,
   data: data,
 );
+
+Future<String> chatTransition({
+  required String snapshot,
+  required String command,
+  required List<int> entropy,
+}) => RustLib.instance.api.crateApiSimpleChatTransition(
+  snapshot: snapshot,
+  command: command,
+  entropy: entropy,
+);

@@ -40,6 +40,7 @@ mod tests {
         );
     }
 }
+pub mod chat;
 pub mod overlay;
 pub mod ratchet;
 pub mod sender_key;

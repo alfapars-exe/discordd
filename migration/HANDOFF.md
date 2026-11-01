@@ -1,5 +1,11 @@
 # Active-device handoff — Windows/web storage implementation
 
+See [STATUS.md](STATUS.md) for the current inventory. The 2026-11-01 text-DM slice
+connects this vault to fresh registration, Rust X3DH/ratchets, fanout, source-bound
+imported history and the Go API. Legacy-to-Windows and legacy-to-web transfers both
+continued live two-way conversations locally. Group/channel dispatch, attachments
+and complete delivery/crash/device acceptance remain open.
+
 The proof now connects source retirement, protected persistent target storage,
 exclusive ownership and durable peer-ratchet preparation. Ordinary recovery
 backups remain read-only. No production device, store, service or update feed was
@@ -71,8 +77,9 @@ injection and stale-revision CAS. Finish the space after remaining browser check
 Private fixtures remain in ignored .local; latest sanitized evidence is in
 evidence/device-handoff-capture.json.
 
-Still outstanding: full old/new chat send/receive/fanout and DH-turn orchestration,
-pending network delivery/acknowledgment, abrupt process/power loss at every boundary,
+Text-DM old/new send/receive/fanout and DH turns now have local evidence. Still
+outstanding: full channel/group orchestration, server-backed idempotent pending
+delivery/acknowledgment, abrupt process/power loss at every boundary,
 actual multi-device migration, attachment-opening UI, Safari storage behavior and
 physical device/media acceptance. Local storage and synthetic tests do not close
 those gates.
