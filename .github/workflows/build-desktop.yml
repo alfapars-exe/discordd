@@ -237,7 +237,7 @@ jobs:
       - name: Verify Windows install and upgrade
         if: matrix.platform == 'windows-latest'
         shell: pwsh
-        run: ./scripts/verify-windows-upgrade.ps1 -CurrentInstaller "${{ github.workspace }}/release/hichat-setup.exe" -PreviousVersion "2.11.123"
+        run: ./scripts/verify-windows-upgrade.ps1 -CurrentInstaller "${{ github.workspace }}/release/hichat-setup.exe" -PreviousVersion "2.11.124"
 
       # macOS: DMG with code signing + notarization
       # electron-builder reads CSC_LINK/CSC_KEY_PASSWORD for signing.
@@ -300,7 +300,7 @@ jobs:
           if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release create "$GITHUB_REF_NAME" --draft --verify-tag \
               --title "HiChat! ${GITHUB_REF_NAME}" \
-              --notes "HiChat 2.11.124: faster group chats, smaller startup translation bundles, dependency updates and private source-map build support. Backend queue changes require a separate server deployment." \
+              --notes "HiChat 2.11.125: current dependency fixes and versioned Rust/Flutter migration sources. The experimental handoff UI stays disabled in stable builds; the Rust/Flutter client is distributed separately as a preview." \
               || gh release view "$GITHUB_REF_NAME" >/dev/null
           fi
           test "$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft)" = true \

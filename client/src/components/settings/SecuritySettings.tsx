@@ -295,7 +295,9 @@ function SecurityForm({ user }: { user: User }) {
       <div className="settings-divider" />
       <LinkedGameSettings />
       <DataExportSettings key={`export:${user.id}`} userID={user.id} />
-      <DeviceHandoffSettings key={`handoff:${user.id}`} ownerId={user.id} />
+      {import.meta.env.VITE_ENABLE_DEVICE_HANDOFF_PREVIEW === "true" && (
+        <DeviceHandoffSettings key={`handoff:${user.id}`} ownerId={user.id} />
+      )}
       <AccountDeletionSettings key={`delete:${user.id}`} userID={user.id} />
     </div>
   );
