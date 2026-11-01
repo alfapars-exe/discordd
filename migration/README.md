@@ -2,8 +2,10 @@
 
 This isolated branch implements a functional proof client against the existing Go
 server. It is not the complete HiChat replacement and has not been published.
-Reference source: `8f443aac23649e8468a320850498e823826a0c5f`; shared checkout
-changes are excluded, and this reference is not asserted to be the deployed release.
+Initial reference: `8f443aac23649e8468a320850498e823826a0c5f`. The release baseline
+now records current main's 341 routes and additive event ID/channel-sequence fields;
+the original 338 routes remain included. Shared checkout changes stay excluded;
+provider and device acceptance remain separate from this source inventory.
 
 ## Implemented
 

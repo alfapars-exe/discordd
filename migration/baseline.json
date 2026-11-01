@@ -1,5 +1,5 @@
 {
-  "sourceCommit": "8f443aac23649e8468a320850498e823826a0c5f",
+  "sourceCommit": "62fe3982b862bda012b991906d51a838a4850826",
   "sourceStatus": "committed reference only; shared checkout changes excluded; release acceptance unverified",
   "routes": [
     "POST /api/auth/register",
@@ -41,6 +41,7 @@
     "POST /api/users/me/data-exports",
     "GET /api/users/me/data-exports/{id}",
     "GET /api/users/me/data-exports/{id}/download",
+    "GET /api/users/me/data-exports/{id}/attachments",
     "GET /api/users/me/recommendations",
     "GET /api/users/me/notifications",
     "GET /api/users/me/notifications/count",
@@ -207,6 +208,7 @@
     "PATCH /api/admin/users/{id}/platform-admin",
     "GET /api/admin/logs",
     "GET /api/admin/logs/health",
+    "GET /api/admin/channel-delivery/health",
     "DELETE /api/admin/logs",
     "POST /api/livekit/webhook",
     "GET /api/stats",
@@ -248,6 +250,7 @@
     "DELETE /api/servers/{serverId}/categories/{id}",
     "PATCH /api/servers/{serverId}/categories/reorder",
     "GET /api/servers/{serverId}/channels/{id}/messages",
+    "GET /api/servers/{serverId}/channels/{id}/message-events",
     "POST /api/servers/{serverId}/channels/{id}/messages",
     "PATCH /api/servers/{serverId}/messages/{id}",
     "DELETE /api/servers/{serverId}/messages/{id}",
@@ -342,11 +345,11 @@
     "GET /api/bot/gateway"
   ],
   "sha256": {
-    "server/testdata/routes.golden": "66082a911d522c42795ce331204028c873bf989d7ebd0041f5e531386f688cce",
+    "server/testdata/routes.golden": "d21fb8cd917e172f9fdc847ff99e1c5b07901adb08cbd38c3195eb5afb12df36",
     "server/pkg/response.go": "8c47d5e715b06fbe62522faf7b93f42723da2b1cb8d67d0ce2f660a743d12675",
-    "server/ws/event.go": "4fb1db0031f37a488c31c4da2cdc28baacaf17e9b11e365801ed61cc13f80d57",
+    "server/ws/event.go": "3d41fd2e89b0d641930fd337cf0ab593309c4a9b1fed4880331d3d25cbf23a2c",
     "client/src/crypto/types.ts": "38f2f47cdc856c85f1a245d637028ac7f15a387d8f835c07e1b4d6f6880d22e8",
     "client/src/audio/README.md": "5323e097fa1c6a62787e7966e95d3af6c88b7396b311579463122ec0be3ea8b6",
-    "package.json": "e81446c4662fbaca7072b48e3ec3e373f4d4330e9d4e40d64ea9543fd5550522"
+    "package.json": "ee6e94a37922331d8f3afd98c79b7421b07d7a2c6fad1f26fa747285a35ece8f"
   }
 }

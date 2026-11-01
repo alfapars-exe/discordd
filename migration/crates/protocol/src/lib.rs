@@ -21,6 +21,10 @@ pub struct ApiResponse {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Event {
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub event_id: String,
+    #[serde(default, skip_serializing_if = "is_zero_i64")]
+    pub channel_sequence: i64,
     pub op: String,
     #[serde(
         default,
@@ -54,6 +58,14 @@ fn is_zero_u64(v: &u64) -> bool {
 mod tests {
     use super::*;
     use serde_json::json;
+    #[test]
+    fn current_delivery_metadata_is_retained_and_legacy_events_still_omit_it() {
+        let current = json!({"op":"message_create","event_id":"event-1","channel_sequence":42});
+        let event: Event = serde_json::from_value(current.clone()).unwrap();
+        assert_eq!(serde_json::to_value(event).unwrap(), current);
+        let legacy: Event = serde_json::from_value(json!({"op":"ready"})).unwrap();
+        assert_eq!(serde_json::to_value(legacy).unwrap(), json!({"op":"ready"}));
+    }
 
     #[test]
     fn go_omission_and_empty_collection_contracts() {

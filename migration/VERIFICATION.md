@@ -19,7 +19,7 @@ as the reverse direction. Latest sanitized evidence and source/build hashes are 
 evidence/device-handoff-capture.json. Older receipts below retain their historical
 failures and must not be used as current acceptance.
 
-Current checks include 19 ordinary Rust tests, seven source-handoff tests, 64 existing
+Current checks include 20 ordinary Rust tests, seven source-handoff tests, 64 existing
 storage regressions, ten Flutter tests, TypeScript/analyzer/Clippy, Windows release and JS-rendered web with
 Rust WASM. Actual Flutter web activation/second-tab/reload and injected storage
 faults are checked separately from physical devices. Native Android/iOS/macOS/Linux,
