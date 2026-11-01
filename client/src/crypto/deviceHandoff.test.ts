@@ -220,7 +220,7 @@ it("rewraps non-exportable pending keys while preserving request bytes and files
   expect(atob(pending.files[0])).toBe("private attachment");
   expect(Array.from(decode(pending.encryptedFiles[0]))).toEqual([7, 8, 9]);
   expect(
-    value.stores.metadata.some((r: any) =>
+    value.stores.metadata.some((r: {key:IDBValidKey}) =>
       String(r.key).startsWith("group_pending_key:"),
     ),
   ).toBe(false);

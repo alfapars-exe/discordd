@@ -10,6 +10,10 @@ import { getAccountDatabaseName, KEY_DATABASE_STORES } from "./keyStorage";
 import { getAuthSessionSnapshot } from "../api/authSessionEvents";
 import { SERVER_URL } from "../utils/constants";
 import { listMyDevices } from "../api/e2ee";
+import type {StoredIdentityKeyPair, StoredSigningKeyPair, RegistrationData, StoredSignedPreKey, StoredPreKey, StoredSession, StoredSenderKey, TrustedIdentity} from './types';
+import type {PendingGroupSendEnvelope} from './pendingGroupSendStorage';
+type StoreValues = {identity:StoredIdentityKeyPair;signing:StoredSigningKeyPair;registration:RegistrationData;signedPreKeys:StoredSignedPreKey;preKeys:StoredPreKey;sessions:StoredSession;senderKeys:StoredSenderKey;trustedIdentities:TrustedIdentity;messageCache:unknown;metadata:unknown};
+type SourceRows = {[K in keyof StoreValues]:Array<{key:IDBValidKey;value:StoreValues[K]}>};
 
 export type HandoffIntent = {
   version: 1;
@@ -91,17 +95,16 @@ async function encode(value: unknown, depth = 0): Promise<unknown> {
 }
 async function snapshot(db: IDBPDatabase, owner: string) {
   const tx = db.transaction([...KEY_DATABASE_STORES], "readonly");
-  const rows: Record<string, Array<{ key: IDBValidKey; value: any }>> = {};
-  await Promise.all(
+  const rows = Object.fromEntries(await Promise.all(
     KEY_DATABASE_STORES.map(async (name) => {
       const store = tx.objectStore(name),
         [keys, values] = await Promise.all([
           store.getAllKeys(),
           store.getAll(),
         ]);
-      rows[name] = keys.map((key, index) => ({ key, value: values[index] }));
+      return [name, keys.map((key, index) => ({ key, value: values[index] }))];
     }),
-  );
+  )) as SourceRows;
   await tx.done;
   const registration = rows.registration.find(
     (r) => r.key === "primary",
@@ -118,8 +121,8 @@ async function snapshot(db: IDBPDatabase, owner: string) {
   )
     throw Error("invalid_device_identity");
   const key32 = (v: unknown) => v instanceof Uint8Array && v.length === 32;
-  const pair = (v: any) =>
-    key32(v?.privateKey) &&
+  const pair = (v: StoredIdentityKeyPair | undefined) =>
+    v !== undefined && key32(v.privateKey) &&
     key32(v?.publicKey) &&
     b64(x25519.getPublicKey(v.privateKey)) === b64(v.publicKey);
   const counter = (v: unknown) =>
@@ -154,13 +157,13 @@ async function snapshot(db: IDBPDatabase, owner: string) {
       !Array.isArray(s.skippedMessageKeys) ||
       s.skippedMessageKeys.length > 1000 ||
       s.skippedMessageKeys.some(
-        (k: any) =>
+        (k) =>
           unb64(k.ratchetKey).length !== 32 ||
           !counter(k.messageNumber) ||
           !key32(k.messageKey),
       ) ||
       new Set(
-        s.skippedMessageKeys.map((k: any) =>
+        s.skippedMessageKeys.map((k) =>
           JSON.stringify([k.ratchetKey, k.messageNumber]),
         ),
       ).size !== s.skippedMessageKeys.length
@@ -184,7 +187,7 @@ async function snapshot(db: IDBPDatabase, owner: string) {
         (!Array.isArray(s.seenIterations) ||
           s.seenIterations.length > 1024 ||
           s.seenIterations.some(
-            (v: any, n: number, a: any[]) =>
+            (v, n, a) =>
               !counter(v) || (n > 0 && a[n - 1] >= v),
           )))
     )
@@ -208,8 +211,8 @@ async function snapshot(db: IDBPDatabase, owner: string) {
     ) as CryptoKey;
     if (!key || key.extractable || key.algorithm.name !== "AES-GCM")
       throw Error("pending_key_missing");
-    const env = row.value;
-    const open = async (part: any, tag: string) => {
+    const env = row.value as PendingGroupSendEnvelope;
+    const open = async (part: PendingGroupSendEnvelope['manifest'], tag: string) => {
       const ad = new TextEncoder().encode(
         JSON.stringify([
           "hichat-group-pending-v1",
@@ -243,7 +246,7 @@ async function snapshot(db: IDBPDatabase, owner: string) {
     )
       throw Error("pending_scope_mismatch");
     const parts: Record<string, string[]> = { files: [], encryptedFiles: [] };
-    for (const kind of ["files", "encryptedFiles"]) {
+    for (const kind of ["files", "encryptedFiles"] as const) {
       if (env[kind].length !== manifest[kind].length)
         throw Error("pending_file_mismatch");
       for (let n = 0; n < env[kind].length; n++) {
