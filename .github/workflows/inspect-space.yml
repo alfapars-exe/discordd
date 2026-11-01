@@ -17,6 +17,9 @@ jobs:
   configure-sentry:
     if: inputs.configure_sentry
     runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-hichat-hf-production
+      cancel-in-progress: false
     steps:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
         with:
@@ -28,6 +31,7 @@ jobs:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN || secrets.SENTRY }}
           SENTRY_ORG: ${{ secrets.SENTRY_ORG || vars.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT || vars.SENTRY_PROJECT }}
+          REQUESTED_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
           EXPECTED_HEAD: ${{ inputs.expected_head }}
         run: |
           python - <<'PY'
@@ -66,11 +70,29 @@ jobs:
                       raise SystemExit('Sentry project metadata not found; add SENTRY_ORG and SENTRY_PROJECT in GitHub Variables')
                   org, project = matches[0]['organization']['slug'], matches[0]['slug']
               response = client.get('https://sentry.io/api/0/projects/'+quote(org,safe='')+'/'+quote(project,safe='')+'/')
-              if response.status_code != 200 or str(response.json().get('id')) != project_id:
-                  raise SystemExit('Sentry authentication/project does not match the deployed DSN')
+              if response.status_code != 200:
+                  raise SystemExit('Sentry token cannot access the explicitly configured project')
+              selected_id = str(response.json().get('id'))
+              configured_dsn = variables['VITE_SENTRY_DSN'].value
+              selected_dsn = configured_dsn
+              if selected_id != project_id:
+                  selected_dsn = os.environ.get('REQUESTED_SENTRY_DSN','').strip()
+                  if not selected_dsn:
+                      keys = client.get('https://sentry.io/api/0/projects/'+quote(org,safe='')+'/'+quote(project,safe='')+'/keys/')
+                      if keys.status_code != 200:
+                          raise SystemExit('Set VITE_SENTRY_DSN in GitHub Variables for the explicitly selected project')
+                      candidates = [k['dsn']['public'] for k in keys.json() if k.get('isActive') and k.get('dsn',{}).get('public')]
+                      if not candidates:
+                          raise SystemExit('Selected Sentry project has no active client DSN')
+                      selected_dsn = candidates[0]
+                  chosen = urlsplit(selected_dsn)
+                  if chosen.scheme != 'https' or not chosen.hostname or not chosen.hostname.endswith('.sentry.io') or chosen.path.strip('/') != selected_id:
+                      raise SystemExit('Selected Sentry DSN does not match the explicitly configured project')
           for name, value in [('SENTRY_AUTH_TOKEN',token),('SENTRY_ORG',org),('SENTRY_PROJECT',project)]:
               api.add_space_secret(repo_id=repo,key=name,value=value)
-          print(json.dumps({'sentry_project_verified':True,'private_build_inputs_configured':True}))
+          if selected_dsn != configured_dsn:
+              api.add_space_variable(repo_id=repo,key='VITE_SENTRY_DSN',value=selected_dsn)
+          print(json.dumps({'sentry_project_verified':True,'private_build_inputs_configured':True,'dsn_matched_to_explicit_project':selected_dsn != configured_dsn}))
           PY
   inspect:
     runs-on: ubuntu-latest
