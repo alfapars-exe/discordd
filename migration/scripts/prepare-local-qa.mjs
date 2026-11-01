@@ -1,10 +1,11 @@
+import {apiPath} from './qa-http.mjs';
 import {randomBytes,webcrypto} from 'node:crypto';
 import {mkdir,writeFile} from 'node:fs/promises';
 const base='http://127.0.0.1:19090';
 const username=`rustproof${Date.now()}`;
 const password=`Aa1!${randomBytes(18).toString('hex')}`;
 async function api(path,body,token,method='POST'){
-  const response=await fetch(base+'/api'+path,{method,headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},...(body?{body:JSON.stringify(body)}:{})});
+  const response=await fetch(base+apiPath('/api'+path),{method,headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},...(body?{body:JSON.stringify(body)}:{})});
   const result=await response.json();
   if(!response.ok||!result.success)throw Error(`${path}: ${response.status} ${result.code??result.error}`);
   return result.data;

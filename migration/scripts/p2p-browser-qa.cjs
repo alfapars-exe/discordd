@@ -21,7 +21,7 @@ const assert=require('node:assert/strict');
       for(const track of stream.getAudioTracks()){stream.removeTrack(track);track.stop();}
       const audio=new AudioContext();const tone=audio.createOscillator();const gain=audio.createGain();const output=audio.createMediaStreamDestination();
       tone.frequency.value=523.25;gain.gain.value=0.08;tone.connect(gain).connect(output);tone.start();await audio.resume();
-      const track=output.stream.getAudioTracks()[0],stop=track.stop.bind(track);track.stop=()=>{stop();tone.stop();audio.close();};stream.addTrack(track);
+      const track=output.stream.getAudioTracks()[0],stop=track.stop.bind(track);track.stop=()=>{stop();tone.stop();void audio.close();};stream.addTrack(track);
      }return stream;
     };
     const Original=window.RTCPeerConnection;

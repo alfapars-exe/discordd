@@ -1,8 +1,9 @@
+import {apiPath} from './qa-http.mjs';
 import {readFile,writeFile} from 'node:fs/promises';
 import {randomBytes} from 'node:crypto';
 const file=new URL('../.local/qa.json',import.meta.url);
 const qa=JSON.parse(await readFile(file,'utf8'));
-async function api(path,body,token){const r=await fetch('http://127.0.0.1:19090/api'+path,{method:'POST',headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},body:JSON.stringify(body)});const j=await r.json();if(!r.ok||!j.success)throw Error(`${path}: ${r.status}`);return j.data;}
+async function api(path,body,token){const r=await fetch('http://127.0.0.1:19090'+apiPath('/api'+path),{method:'POST',headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},body:JSON.stringify(body)});const j=await r.json();if(!r.ok||!j.success)throw Error(`${path}: ${r.status}`);return j.data;}
 const owner=await api('/auth/login',{username:qa.username,password:qa.password});
 const invite=await api(`/servers/${qa.serverId}/invites`,{channel_id:qa.voiceChannelId,max_uses:1,expires_in:60},owner.access_token);
 const username=`rustpeer${Date.now()}`,password=`Aa1!${randomBytes(18).toString('hex')}`;

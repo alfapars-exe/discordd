@@ -6,6 +6,8 @@
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <application
+        android:allowBackup="false"
+        android:usesCleartextTraffic="false"
         android:label="hichat_native_proof"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">

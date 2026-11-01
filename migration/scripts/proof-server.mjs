@@ -4,6 +4,7 @@ import net from 'node:net';
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {apiPath,requestHeaders,responseHeaders} from './qa-http.mjs';
 const root=fileURLToPath(new URL('../hichat_native_proof/build/web/',import.meta.url));
 const mime={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.json':'application/json','.css':'text/css','.png':'image/png','.ttf':'font/ttf','.otf':'font/otf'};
 const server=http.createServer(async(req,res)=>{
@@ -21,7 +22,8 @@ const server=http.createServer(async(req,res)=>{
     res.setHeader('Content-Type','text/javascript');res.end(await readFile(new URL('../.local/source-bundle/handoff-source.js',import.meta.url)));return;
   }
   if(req.url.startsWith('/api/')){
-    const upstream=http.request({host:'127.0.0.1',port:19090,path:req.url,method:req.method,headers:{...req.headers,host:'127.0.0.1:19090',origin:'http://localhost'}},incoming=>{res.writeHead(incoming.statusCode,incoming.headers);incoming.pipe(res);});
+    let route;try{route=apiPath(req.url)}catch{res.writeHead(400);res.end('Invalid fixture route');return}
+    const upstream=http.request('http://127.0.0.1:19090',{path:route,method:req.method,headers:requestHeaders(req.headers)},incoming=>{if(responseHeaders(incoming,res))incoming.pipe(res);else incoming.resume();});
     upstream.on('error',()=>{res.writeHead(502);res.end('Local API unavailable');});req.pipe(upstream);return;
   }
   try{
