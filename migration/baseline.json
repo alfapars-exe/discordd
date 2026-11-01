@@ -1,5 +1,5 @@
 {
-  "sourceCommit": "62fe3982b862bda012b991906d51a838a4850826",
+  "sourceCommit": "9119fffaf11e84695680de8a3bbb064751a2b18f",
   "sourceStatus": "committed reference only; shared checkout changes excluded; release acceptance unverified",
   "routes": [
     "POST /api/auth/register",
@@ -77,6 +77,7 @@
     "GET /api/uploads/",
     "GET /api/dms/settings",
     "GET /api/dms",
+    "GET /api/dms/send-capabilities",
     "POST /api/dms",
     "POST /api/dms/self",
     "POST /api/dms/channels/{channelId}/hide",
@@ -89,6 +90,7 @@
     "POST /api/dms/channels/{channelId}/decline",
     "GET /api/dms/{channelId}/messages",
     "POST /api/dms/{channelId}/messages",
+    "POST /api/dms/{channelId}/messages/idempotent",
     "PATCH /api/dms/messages/{id}",
     "DELETE /api/dms/messages/{id}",
     "POST /api/dms/messages/{id}/reactions",
@@ -345,7 +347,7 @@
     "GET /api/bot/gateway"
   ],
   "sha256": {
-    "server/testdata/routes.golden": "d21fb8cd917e172f9fdc847ff99e1c5b07901adb08cbd38c3195eb5afb12df36",
+    "server/testdata/routes.golden": "e0f61053f1b0c221f0ec434eabfcc452a859c6449767e5ecb1ce8da1cf5f276b",
     "server/pkg/response.go": "8c47d5e715b06fbe62522faf7b93f42723da2b1cb8d67d0ce2f660a743d12675",
     "server/ws/event.go": "3d41fd2e89b0d641930fd337cf0ab593309c4a9b1fed4880331d3d25cbf23a2c",
     "client/src/crypto/types.ts": "38f2f47cdc856c85f1a245d637028ac7f15a387d8f835c07e1b4d6f6880d22e8",
