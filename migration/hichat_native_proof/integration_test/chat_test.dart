@@ -14,6 +14,8 @@ class ExpiredAccessFixture extends http.BaseClient {
   final inner = http.Client();
   bool armed = false, injected = false;
   int refreshes = 0;
+  bool dropNextSend = false;
+  final sendBodies = <String>[];
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     if (armed &&
@@ -28,6 +30,18 @@ class ExpiredAccessFixture extends http.BaseClient {
     }
     if (request.url.path == '/api/auth/refresh') {
       refreshes++;
+    }
+    if (request.method == 'POST' &&
+        request.url.path.endsWith('/messages/idempotent')) {
+      sendBodies.add((request as http.Request).body);
+      final response = await inner.send(request);
+      if (dropNextSend) {
+        dropNextSend = false;
+        expect(response.statusCode, 201);
+        await response.stream.drain<void>();
+        throw http.ClientException('fixture discards committed response');
+      }
+      return response;
     }
     return inner.send(request);
   }
@@ -50,9 +64,11 @@ void main() {
       final apis = <HiChatApi>[],
           vaults = <DeviceVault>[],
           chats = <ChatController>[];
+      final transports = <ExpiredAccessFixture>[];
       try {
         for (final u in users) {
           final transport = ExpiredAccessFixture();
+          transports.add(transport);
           final api = HiChatApi('http://127.0.0.1:19090', client: transport);
           apis.add(api);
           await api.login(u['username'] as String, u['password'] as String);
@@ -81,7 +97,28 @@ void main() {
           await chat.select(channel);
           expect(chat.error, isNull);
         }
+        transports[0].dropNextSend = true;
         await chats[0].send('Rust Windows → eş: şğıöçü 👋');
+        expect(chats[0].error, isNotNull);
+        final pendingId = chats[0].pending.single['id'] as String;
+        expect(chats[0].pending.single['delivery'], 'idempotent-v1');
+        await chats[0].close();
+        await vaults[0].close();
+        vaults[0] = await DeviceVault.open(apis[0]);
+        final resumed = ChatController(
+          apis[0],
+          () async => vaults[0],
+          pollInterval: const Duration(hours: 1),
+        );
+        chats[0] = resumed;
+        await resumed.initialize();
+        await resumed.resumePrepared(pendingId);
+        expect(resumed.error, isNull);
+        expect(transports[0].sendBodies.length, 2);
+        expect(transports[0].sendBodies[0], transports[0].sendBodies[1]);
+        await resumed.select(
+          resumed.channels.singleWhere((r) => r['id'] == fixture['channelId']),
+        );
         expect(chats[0].error, isNull);
         await chats[1].refresh();
         expect(chats[1].error, isNull);
@@ -144,6 +181,9 @@ void main() {
                 'dhTurn': true,
                 'dpapiReopen': true,
                 'secondOwnerExcluded': true,
+                'lostResponseAfterCommit': true,
+                'durableIdempotentRetryAfterReopen': true,
+                'identicalRetryPOSTBytes': true,
                 'serverMessages': 3,
                 'physicalDevices': false,
               }),

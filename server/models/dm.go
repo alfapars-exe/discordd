@@ -73,6 +73,7 @@ type MarkDMReadRequest struct {
 }
 
 type DMMessage struct {
+	SendReplayed bool `json:"-"`
 	// Server-assigned append order; decimal string avoids client integer precision loss.
 	SourceSequence int64      `json:"source_sequence,omitempty,string"`
 	ID             string     `json:"id"`
@@ -113,9 +114,10 @@ type DMAttachment struct {
 // CreateDMMessageRequest — E2EE: when encryption_version=1, ciphertext is
 // required and content may be empty. HasFiles is set by the service layer.
 type CreateDMMessageRequest struct {
-	Content   string  `json:"content"`
-	ReplyToID *string `json:"reply_to_id,omitempty"`
-	HasFiles  bool    `json:"-"`
+	ClientMessageID string  `json:"client_message_id,omitempty"`
+	Content         string  `json:"content"`
+	ReplyToID       *string `json:"reply_to_id,omitempty"`
+	HasFiles        bool    `json:"-"`
 
 	EncryptionVersion int     `json:"encryption_version"`
 	Ciphertext        *string `json:"ciphertext,omitempty"`
@@ -124,6 +126,9 @@ type CreateDMMessageRequest struct {
 }
 
 func (r *CreateDMMessageRequest) Validate() error {
+	if r.ClientMessageID != "" && (!ValidGroupSendRequestID(r.ClientMessageID) || r.HasFiles) {
+		return fmt.Errorf("client_message_id requires a valid text-only send key")
+	}
 	r.Content = strings.TrimSpace(r.Content)
 	contentLen := utf8.RuneCountInString(r.Content)
 

@@ -122,7 +122,15 @@ class HiChatApi {
       if (response.statusCode >= 300 && response.statusCode < 400) {
         throw const ApiFailure('REDIRECT_REFUSED');
       }
-      final envelope = jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
+      late final Map<String, dynamic> envelope;
+      try {
+        envelope = jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
+      } on FormatException {
+        if (response.statusCode >= 400) {
+          throw ApiFailure('HTTP_${response.statusCode}', response.statusCode);
+        }
+        rethrow;
+      }
       if (response.statusCode < 200 ||
           response.statusCode >= 300 ||
           envelope['success'] != true) {

@@ -73,6 +73,7 @@ GET /api/servers/mutes
 GET /api/uploads/
 GET /api/dms/settings
 GET /api/dms
+GET /api/dms/send-capabilities
 POST /api/dms
 POST /api/dms/self
 POST /api/dms/channels/{channelId}/hide
@@ -85,6 +86,7 @@ POST /api/dms/channels/{channelId}/accept
 POST /api/dms/channels/{channelId}/decline
 GET /api/dms/{channelId}/messages
 POST /api/dms/{channelId}/messages
+POST /api/dms/{channelId}/messages/idempotent
 PATCH /api/dms/messages/{id}
 DELETE /api/dms/messages/{id}
 POST /api/dms/messages/{id}/reactions

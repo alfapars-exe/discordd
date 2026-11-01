@@ -141,6 +141,7 @@ func (d *routeDeps) registerDMRoutes() {
 	// DMs — literal paths before parametric
 	d.mux.Handle("GET /api/dms/settings", d.auth(d.h.DMSettings.GetSettings))
 	d.mux.Handle("GET /api/dms", d.auth(d.h.DM.ListChannels))
+	d.mux.Handle("GET /api/dms/send-capabilities", d.auth(d.h.DM.SendCapabilities))
 	d.mux.Handle("POST /api/dms", d.auth(d.h.DM.CreateOrGetChannel))
 	// Self-DM ("notes to self") — literal "self" before {channelId}.
 	d.mux.Handle("POST /api/dms/self", d.auth(d.h.DM.GetOrCreateSelfChannel))
@@ -160,6 +161,7 @@ func (d *routeDeps) registerDMRoutes() {
 	// DM Messages
 	d.mux.Handle("GET /api/dms/{channelId}/messages", d.auth(d.h.DM.GetMessages))
 	d.mux.Handle("POST /api/dms/{channelId}/messages", d.auth(d.h.DM.SendMessage))
+	d.mux.Handle("POST /api/dms/{channelId}/messages/idempotent", d.auth(d.h.DM.SendIdempotentMessage))
 	d.mux.Handle("PATCH /api/dms/messages/{id}", d.auth(d.h.DM.EditMessage))
 	d.mux.Handle("DELETE /api/dms/messages/{id}", d.auth(d.h.DM.DeleteMessage))
 	d.mux.Handle("POST /api/dms/messages/{id}/reactions", d.auth(d.h.DM.ToggleReaction))
