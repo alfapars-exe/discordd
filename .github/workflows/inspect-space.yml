@@ -2,11 +2,76 @@ name: Inspect HF deployment status
 
 on:
   workflow_dispatch:
+    inputs:
+      configure_sentry:
+        type: boolean
+        default: false
+      expected_head:
+        type: string
+        default: ''
 
 permissions:
   contents: read
 
 jobs:
+  configure-sentry:
+    if: inputs.configure_sentry
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --disable-pip-version-check --no-input huggingface_hub==1.26.0
+      - name: Configure private Sentry build inputs without logging values
+        env:
+          HF_TOKEN: ${{ secrets.HF_RELEASE_TOKEN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN || secrets.SENTRY }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG || vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT || vars.SENTRY_PROJECT }}
+          EXPECTED_HEAD: ${{ inputs.expected_head }}
+        run: |
+          python - <<'PY'
+          import json, os, re
+          from urllib.parse import urlsplit, quote
+          import httpx
+          from huggingface_hub import HfApi
+          repo = 'infinayazilim/discord'
+          api = HfApi()
+          expected = os.environ['EXPECTED_HEAD']
+          if not re.fullmatch('[a-f0-9]{40}', expected) or api.space_info(repo).sha != expected:
+              raise SystemExit('Space HEAD changed; review configuration target again')
+          token = os.environ.get('SENTRY_AUTH_TOKEN','').strip()
+          org, project = os.environ.get('SENTRY_ORG','').strip(), os.environ.get('SENTRY_PROJECT','').strip()
+          if token.startswith('{'):
+              bundle = json.loads(token)
+              token = bundle.get('authToken') or bundle.get('auth_token') or bundle.get('token') or ''
+              org = org or bundle.get('org','')
+              project = project or bundle.get('project','')
+          if not token:
+              raise SystemExit('Sentry authentication token is missing')
+          if token.startswith(('https://','http://')):
+              raise SystemExit('SENTRY contains a DSN, not an authentication token; private source-map upload needs SENTRY_AUTH_TOKEN')
+          variables = api.get_space_variables(repo)
+          dsn = urlsplit(variables['VITE_SENTRY_DSN'].value)
+          project_id = dsn.path.strip('/')
+          if dsn.scheme != 'https' or not dsn.hostname or not dsn.hostname.endswith('.sentry.io') or not project_id.isdecimal():
+              raise SystemExit('Expected a hosted Sentry DSN; configure explicit project metadata for this deployment')
+          with httpx.Client(headers={'Authorization':'Bearer '+token}, timeout=20, follow_redirects=False) as client:
+              if not (org and project):
+                  response = client.get('https://sentry.io/api/0/projects/')
+                  if response.status_code != 200:
+                      raise SystemExit('Sentry token cannot discover project metadata; add SENTRY_ORG and SENTRY_PROJECT in GitHub Variables')
+                  matches = [p for p in response.json() if str(p.get('id')) == project_id]
+                  if len(matches) != 1:
+                      raise SystemExit('Sentry project metadata not found; add SENTRY_ORG and SENTRY_PROJECT in GitHub Variables')
+                  org, project = matches[0]['organization']['slug'], matches[0]['slug']
+              response = client.get('https://sentry.io/api/0/projects/'+quote(org,safe='')+'/'+quote(project,safe='')+'/')
+              if response.status_code != 200 or str(response.json().get('id')) != project_id:
+                  raise SystemExit('Sentry authentication/project does not match the deployed DSN')
+          for name, value in [('SENTRY_AUTH_TOKEN',token),('SENTRY_ORG',org),('SENTRY_PROJECT',project)]:
+              api.add_space_secret(repo_id=repo,key=name,value=value)
+          print(json.dumps({'sentry_project_verified':True,'private_build_inputs_configured':True}))
+          PY
   inspect:
     runs-on: ubuntu-latest
     timeout-minutes: 4
