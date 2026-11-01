@@ -30,6 +30,12 @@ jobs:
               text = re.sub(r'(?i)(password|secret|token|authorization|api_key)([\s"\x27:=]+)\S+', r'\1=[redacted]', text)
               return text[:1500]
           info = HfApi().space_info('infinayazilim/discord')
+          variables = HfApi().get_space_variables('infinayazilim/discord')
+          metadata = getattr(info, 'secrets', {}) or {}
+          secret_names = sorted(metadata) if isinstance(metadata, dict) else sorted(item.get('key','') if isinstance(item,dict) else str(item) for item in metadata)
+          print(json.dumps({'build_variable_names':sorted(variables), 'secret_metadata_names':secret_names}), flush=True)
+          env_files = [entry.path for entry in HfApi().list_repo_tree('infinayazilim/discord',repo_type='space',path_in_repo='client') if hasattr(entry,'path') and Path(entry.path).name.startswith('.env')]
+          print(json.dumps({'client_env_files':env_files}), flush=True)
           raw = info.runtime.raw if info.runtime else {}
           print(json.dumps({'head':info.sha, 'stage':raw.get('stage'), 'runtime_commit':raw.get('sha'), 'error':clean(raw.get('errorMessage','')), 'runtime_fields':sorted(raw)}), flush=True)
           old = 'b8a626fb9d1a0e1c3531494b46f1c3be8cc4e8ab'
