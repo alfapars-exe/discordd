@@ -368,6 +368,22 @@
       "line_sha256": "55e1564aa635586019b987571e673133701e754b8ae5c9d29dc72d9c4d73e489",
       "reason": "The schema name consists only of a compile-time prefix and locally generated Unix nanoseconds. Other matches are fixed SQL timestamp arithmetic without interpolation.",
       "proof_ref": "server/services/channel_delivery_test.go:233"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/services/dm_delivery.go",
+      "file_sha256": "eab239a9ef8082f67ee03ef4050d19a942336399d695dc90da00a189db431bd4",
+      "line_sha256": "35d61981a49cecfec2795904654d63c4055fc0a7131ce795cd098299b16dd681",
+      "reason": "The plus signs are fixed PostgreSQL timestamp and attempt arithmetic inside a single SQL literal. No SQL string concatenation occurs; the retry event ID remains a bound argument.",
+      "proof_ref": "server/services/dm_delivery.go:142,152;server/services/dm_delivery_test.go:TestDMOutboxRetryOrderingDeletionAndRetention"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/services/dm_delivery.go",
+      "file_sha256": "eab239a9ef8082f67ee03ef4050d19a942336399d695dc90da00a189db431bd4",
+      "line_sha256": "b0c9f492f92a7d02eafb57e17a8d7db5f096e1f1c04dab7f625b21dea03e7220",
+      "reason": "The plus signs are fixed PostgreSQL timestamp and attempt arithmetic inside a single SQL literal. No SQL string concatenation occurs; the retry event ID remains a bound argument.",
+      "proof_ref": "server/services/dm_delivery.go:142,152;server/services/dm_delivery_test.go:TestDMOutboxRetryOrderingDeletionAndRetention"
     }
   ]
 }
