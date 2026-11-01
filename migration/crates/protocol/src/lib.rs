@@ -22,6 +22,8 @@ pub struct ApiResponse {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Event {
     #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub dm_sequence: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub event_id: String,
     #[serde(default, skip_serializing_if = "is_zero_i64")]
     pub channel_sequence: i64,
@@ -65,6 +67,14 @@ mod tests {
         assert_eq!(serde_json::to_value(event).unwrap(), current);
         let legacy: Event = serde_json::from_value(json!({"op":"ready"})).unwrap();
         assert_eq!(serde_json::to_value(legacy).unwrap(), json!({"op":"ready"}));
+    }
+
+    #[test]
+    fn dm_sequence_preserves_decimal_precision_and_namespaced_identity() {
+        let wire =
+            json!({"op":"dm_message_create","event_id":"dm:42","dm_sequence":"9007199254740993"});
+        let event: Event = serde_json::from_value(wire.clone()).unwrap();
+        assert_eq!(serde_json::to_value(event).unwrap(), wire);
     }
 
     #[test]

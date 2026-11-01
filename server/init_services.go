@@ -338,6 +338,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		repos.DM, repos.User, hub, blockService, friendshipService, dmSettingsService,
 		repos.DMRead, repos.Notification, repository.NewDMMessageTxRunner(db),
 	)
+	services.ConfigureDMDelivery(dmService, db)
 	if communication, ok := dmService.(services.DMCommunicationEmailConfigurer); ok {
 		communication.SetCommunicationEmailEnqueuer(emailDeliveryService)
 	}

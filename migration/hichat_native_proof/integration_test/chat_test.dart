@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -65,6 +66,9 @@ void main() {
           vaults = <DeviceVault>[],
           chats = <ChatController>[];
       final transports = <ExpiredAccessFixture>[];
+      WebSocket? socket;
+      StreamSubscription<dynamic>? socketSubscription;
+      final websocketMessages = <Map<String, dynamic>>[];
       try {
         for (final u in users) {
           final transport = ExpiredAccessFixture();
@@ -97,10 +101,22 @@ void main() {
           await chat.select(channel);
           expect(chat.error, isNull);
         }
+        final ticket =
+            await apis[1].request('POST', '/api/auth/ws-ticket') as Map;
+        socket = await WebSocket.connect(
+          'ws://127.0.0.1:19090/ws?ticket=${Uri.encodeQueryComponent(ticket['ticket'] as String)}',
+        );
+        final ready = Completer<void>();
+        socketSubscription = socket.listen((raw) {
+          final event = jsonDecode(raw as String) as Map<String, dynamic>;
+          if (event['op'] == 'ready' && !ready.isCompleted) ready.complete();
+          if (event['op'] == 'dm_message_create') websocketMessages.add(event);
+        });
+        await ready.future.timeout(const Duration(seconds: 5));
         transports[0].dropNextSend = true;
         await chats[0].send('Rust Windows → eş: şğıöçü 👋');
         expect(chats[0].error, isNotNull);
-        final pendingId = chats[0].pending.single['id'] as String;
+        expect(chats[0].pending.single['id'], isNotEmpty);
         expect(chats[0].pending.single['delivery'], 'idempotent-v1');
         await chats[0].close();
         await vaults[0].close();
@@ -112,7 +128,12 @@ void main() {
         );
         chats[0] = resumed;
         await resumed.initialize();
-        await resumed.resumePrepared(pendingId);
+        final retryDeadline = DateTime.now().add(const Duration(seconds: 10));
+        while (resumed.pending.isNotEmpty &&
+            DateTime.now().isBefore(retryDeadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+        }
+        expect(resumed.pending, isEmpty);
         expect(resumed.error, isNull);
         expect(transports[0].sendBodies.length, 2);
         expect(transports[0].sendBodies[0], transports[0].sendBodies[1]);
@@ -170,6 +191,30 @@ void main() {
           expect(m['content'], isNull);
           expect(m['encryption_version'], 1);
         }
+        final deliveryDeadline = DateTime.now().add(const Duration(seconds: 5));
+        while (websocketMessages.length < 3 &&
+            DateTime.now().isBefore(deliveryDeadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+        }
+        expect(websocketMessages.length, 3);
+        expect(websocketMessages.map((e) => e['event_id']).toSet().length, 3);
+        for (final e in websocketMessages) {
+          expect((e['event_id'] as String).startsWith('dm:'), true);
+          expect(e['dm_sequence'], isA<String>());
+          expect((e['d'] as Map)['content'], isNull);
+        }
+        final replay = await apis[1].request(
+          'GET',
+          '/api/dms/${fixture['channelId']}/events',
+          query: {'after': '0'},
+        ) as Map;
+        final replayIds = (replay['events'] as List)
+            .map((e) => e['event_id'])
+            .toSet();
+        expect(
+          websocketMessages.every((e) => replayIds.contains(e['event_id'])),
+          true,
+        );
         await File('${file.parent.path}/chat-windows-receipt.json')
             .writeAsString(
               jsonEncode({
@@ -184,11 +229,16 @@ void main() {
                 'lostResponseAfterCommit': true,
                 'durableIdempotentRetryAfterReopen': true,
                 'identicalRetryPOSTBytes': true,
+                'automaticRetryAfterReopen': true,
+                'realWebSocketDurableEvents': true,
+                'replayMatchesWebSocketIDs': true,
                 'serverMessages': 3,
                 'physicalDevices': false,
               }),
             );
       } finally {
+        await socketSubscription?.cancel();
+        await socket?.close();
         for (final c in chats) {
           await c.close();
         }

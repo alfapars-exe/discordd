@@ -11,6 +11,7 @@ import (
 	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
 )
 
@@ -362,13 +363,17 @@ func (s *messageService) deliveryPayload(ctx context.Context, e channelDeliveryE
 }
 
 func (s *messageService) deliveryNotificationPayload(ctx context.Context, e channelDeliveryEvent) ([]byte, error) {
+	return hydrateDeliveryNotification(ctx, s.deliveryDB, s.userRepo, e.Data)
+}
+
+func hydrateDeliveryNotification(ctx context.Context, db *sql.DB, users repository.UserRepository, payload json.RawMessage) ([]byte, error) {
 	// Deleted notification rows (e.g. message deletion) must not be resurrected.
 	var readAt sql.NullTime
 	var n models.Notification
-	if err := json.Unmarshal(e.Data, &n); err != nil {
+	if err := json.Unmarshal(payload, &n); err != nil {
 		return nil, err
 	}
-	err := s.deliveryDB.QueryRowContext(ctx, `SELECT read_at FROM notifications WHERE id=?`, n.ID).Scan(&readAt)
+	err := db.QueryRowContext(ctx, `SELECT read_at FROM notifications WHERE id=?`, n.ID).Scan(&readAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -380,7 +385,7 @@ func (s *messageService) deliveryNotificationPayload(ctx context.Context, e chan
 		n.ReadAt = &value
 	}
 	if n.ActorID != nil {
-		u, err := s.userRepo.GetByID(ctx, *n.ActorID)
+		u, err := users.GetByID(ctx, *n.ActorID)
 		if err != nil && !errors.Is(err, pkg.ErrNotFound) {
 			return nil, err
 		}

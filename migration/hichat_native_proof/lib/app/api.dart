@@ -8,7 +8,8 @@ import 'transport.dart';
 class ApiFailure implements Exception {
   final String code;
   final int status;
-  const ApiFailure(this.code, [this.status = 0]);
+  final int retryAfterSeconds;
+  const ApiFailure(this.code, [this.status = 0, this.retryAfterSeconds = 0]);
   @override
   String toString() => code;
 }
@@ -127,7 +128,14 @@ class HiChatApi {
         envelope = jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
       } on FormatException {
         if (response.statusCode >= 400) {
-          throw ApiFailure('HTTP_${response.statusCode}', response.statusCode);
+          throw ApiFailure(
+            'HTTP_${response.statusCode}',
+            response.statusCode,
+            (int.tryParse(response.headers['retry-after'] ?? '') ?? 0).clamp(
+              0,
+              86400,
+            ),
+          );
         }
         rethrow;
       }
@@ -137,6 +145,10 @@ class HiChatApi {
         throw ApiFailure(
           envelope['code'] as String? ?? 'HTTP_${response.statusCode}',
           response.statusCode,
+          (int.tryParse(response.headers['retry-after'] ?? '') ?? 0).clamp(
+            0,
+            86400,
+          ),
         );
       }
       return envelope['data'];

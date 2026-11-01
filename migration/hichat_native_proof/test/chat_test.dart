@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
@@ -64,12 +65,26 @@ class Crypto implements ChatCrypto {
         };
         return pending;
       case 'attempt':
+        if (c['automatic'] == true &&
+            (pending!['retryBlocked'] == true ||
+                (pending!['retryAt'] as int? ?? 0) > (c['now'] as int))) {
+          throw StateError('retry_not_due');
+        }
         if (pending!['state'] == 'prepared' &&
             c['delivery'] == 'idempotent-v1') {
           pending!['delivery'] = 'idempotent-v1';
           pending!['payload']['client_message_id'] = pending!['id'];
         }
         pending!['state'] = 'attempted';
+        pending!['retryBlocked'] = false;
+        pending!['attempts'] = (pending!['attempts'] as int? ?? 0) + 1;
+        pending!['retryAt'] = (c['now'] as int? ?? 0) + 1000;
+        return pending;
+      case 'retry_failure':
+        pending!['retryAt'] =
+            (c['now'] as int) +
+            max(1000, (c['retryAfterSeconds'] as int? ?? 0) * 1000);
+        pending!['retryBlocked'] = c['blocked'];
         return pending;
       case 'ack':
         pending = null;
@@ -217,6 +232,8 @@ void main() {
     await c.send('keep me');
     expect(c.pending.single['state'], 'attempted');
     expect(c.error, contains('doğrulanamadı'));
+    await c.retryPending();
+    expect(posts, 1);
     await c.refresh();
     await c.refresh();
     expect(posts, 1);
@@ -258,6 +275,160 @@ void main() {
       api.close();
     },
   );
+  test(
+    'automatic retry honors durable deadline without a selected conversation',
+    () async {
+      final crypto = Crypto(), bodies = <String>[];
+      var time = DateTime.utc(2030);
+      final api = apiFor((r) async {
+        if (r.url.path == '/api/dms') return ok([channel]);
+        if (r.url.path.endsWith('/prekey-bundles')) return ok([]);
+        if (r.method == 'POST') {
+          bodies.add(r.body);
+          if (bodies.length == 1) throw http.ClientException('response lost');
+          return ok(message('m1', payload: jsonDecode(r.body) as Map));
+        }
+        return ok({'messages': [], 'has_more': false});
+      }, reliable: true);
+      final c = ChatController(
+        api,
+        () async => crypto,
+        clock: () => time,
+        retryInterval: const Duration(hours: 1),
+        pollInterval: const Duration(hours: 1),
+      );
+      await c.initialize();
+      await c.select(channel);
+      await c.send('durable');
+      c.selected = null;
+      await c.retryPending();
+      expect(bodies.length, 1);
+      time = time.add(const Duration(seconds: 2));
+      await c.retryPending();
+      expect(bodies.length, 2);
+      expect(bodies[0], bodies[1]);
+      expect(c.pending, isEmpty);
+      await c.close();
+      api.close();
+    },
+  );
+  test('Retry-After survives scheduler restart and permanent rejection stops automatic POSTs', () async {
+    final crypto = Crypto();
+    var time = DateTime.utc(2030), posts = 0;
+    final api = apiFor((r) async {
+      if (r.url.path == '/api/dms') return ok([channel]);
+      if (r.url.path.endsWith('/prekey-bundles')) return ok([]);
+      if (r.method == 'POST') {
+        posts++;
+        return http.Response(
+          '{"success":false,"code":"THROTTLED"}',
+          posts == 1 ? 429 : 409,
+          headers: {'retry-after': '20'},
+        );
+      }
+      return ok({'messages': [], 'has_more': false});
+    }, reliable: true);
+    ChatController make() => ChatController(
+      api,
+      () async => crypto,
+      clock: () => time,
+      retryInterval: const Duration(hours: 1),
+      pollInterval: const Duration(hours: 1),
+    );
+    var c = make();
+    await c.initialize();
+    await c.select(channel);
+    await c.send('persist');
+    await c.close();
+    c = make();
+    await c.initialize();
+    time = time.add(const Duration(seconds: 19));
+    await c.retryPending();
+    expect(posts, 1);
+    time = time.add(const Duration(seconds: 2));
+    await c.retryPending();
+    expect(posts, 2);
+    expect(c.pending.single['retryBlocked'], true);
+    time = time.add(const Duration(days: 1));
+    await c.retryPending();
+    expect(posts, 2);
+    await c.close();
+    api.close();
+  });
+  test(
+    'logout fences an in-flight automatic retry and its late acknowledgment',
+    () async {
+      final crypto = Crypto(),
+          late = Completer<http.Response>(),
+          started = Completer<void>();
+      var time = DateTime.utc(2030), posts = 0;
+      final api = apiFor((r) async {
+        if (r.url.path == '/api/auth/logout') return ok(null);
+        if (r.url.path == '/api/dms') return ok([channel]);
+        if (r.url.path.endsWith('/prekey-bundles')) return ok([]);
+        if (r.method == 'POST') {
+          posts++;
+          if (posts == 1) throw http.ClientException('response lost');
+          started.complete();
+          return late.future;
+        }
+        return ok({'messages': [], 'has_more': false});
+      }, reliable: true);
+      final c = ChatController(
+        api,
+        () async => crypto,
+        clock: () => time,
+        retryInterval: const Duration(hours: 1),
+        pollInterval: const Duration(hours: 1),
+      );
+      await c.initialize();
+      await c.select(channel);
+      await c.send('protected');
+      time = time.add(const Duration(seconds: 2));
+      final retry = c.retryPending();
+      await started.future;
+      await api.logout();
+      late.complete(ok(message('m1')));
+      await retry;
+      expect(crypto.log, isNot(contains('ack')));
+      expect(c.messages, isEmpty);
+      expect(c.pending, isEmpty);
+      expect(posts, 2);
+      await c.retryPending();
+      expect(posts, 2);
+      await c.close();
+      api.close();
+    },
+  );
+  test('initial offline protected-store lookup recovers without opening messages UI', () async {
+    final crypto = Crypto();
+    var opens = 0, time = DateTime.utc(2030);
+    final api = apiFor((_) async => ok([channel]));
+    final c = ChatController(
+      api,
+      () async {
+        opens++;
+        if (opens == 1) throw const ApiFailure('NETWORK_ERROR');
+        return crypto;
+      },
+      clock: () => time,
+      retryInterval: const Duration(hours: 1),
+      pollInterval: const Duration(hours: 1),
+    );
+    await c.initialize();
+    expect(opens, 1);
+    await c.retryPending();
+    expect(opens, 1);
+    time = time.add(const Duration(seconds: 5));
+    await c.retryPending();
+    expect(opens, 2);
+    expect(c.active, true);
+    expect(c.selected, isNull);
+    await c.initialize();
+    expect(opens, 2);
+    await c.close();
+    api.close();
+  });
   test(
     'late history cannot expose previous account content after invalidation',
     () async {

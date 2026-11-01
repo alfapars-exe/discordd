@@ -253,6 +253,30 @@ func (h *DMHandler) SendCapabilities(w http.ResponseWriter, r *http.Request) {
 	pkg.JSON(w, http.StatusOK, map[string]any{"text_idempotency_version": 1})
 }
 
+func (h *DMHandler) GetEvents(w http.ResponseWriter, r *http.Request) {
+	user, ok := r.Context().Value(UserContextKey).(*models.User)
+	if !ok {
+		pkg.ErrorWithMessage(w, 401, "user not found in context")
+		return
+	}
+	after, err := strconv.ParseInt(r.URL.Query().Get("after"), 10, 64)
+	if err != nil || after < 0 {
+		pkg.ErrorWithMessage(w, 400, "valid after cursor required")
+		return
+	}
+	service, ok := h.dmService.(services.DMEventReplayService)
+	if !ok {
+		pkg.ErrorWithMessage(w, 404, "DM events unavailable")
+		return
+	}
+	page, err := service.GetDMEvents(r.Context(), user.ID, r.PathValue("channelId"), after)
+	if err != nil {
+		pkg.Error(w, err)
+		return
+	}
+	pkg.JSON(w, 200, page)
+}
+
 func (h *DMHandler) sendMessage(w http.ResponseWriter, r *http.Request, requireReceipt bool) {
 	channelID := r.PathValue("channelId")
 	user, ok := r.Context().Value(UserContextKey).(*models.User)
@@ -306,7 +330,10 @@ func (h *DMHandler) sendMessage(w http.ResponseWriter, r *http.Request, requireR
 	uploadFailures := h.uploadDMSendFiles(r, msg, req.EncryptionVersion == 1)
 
 	// Broadcast after uploads so clients see attachments
-	h.dmService.BroadcastCreate(msg)
+	if err := h.finishDMSend(r, msg); err != nil {
+		pkg.Error(w, err)
+		return
+	}
 
 	if len(uploadFailures) > 0 {
 		pkg.JSON(w, http.StatusMultiStatus, map[string]any{

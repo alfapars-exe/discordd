@@ -19,12 +19,18 @@ Windows/web implementation and physical-device acceptance are tracked separately
   live identity, opened old DM history and continued two-way DH-ratcheted messaging.
   The web target retained history after reload and cleared visible chat on logout.
 - A supporting Go server stores text-DM request IDs/hashes in the message/unread/
-  notification transaction. Uncertain sends can explicitly resume with identical
+  notification transaction. Uncertain sends automatically resume with identical
   saved bytes, including after restart. A dedicated endpoint refuses downgrade to
   a non-idempotent server. Legacy uncertain sends remain history-reconciliation-only.
 - History uses server append order and a fetched cursor; an own-message echo
   cannot skip incoming rows. Message text has explicit accessibility semantics;
   widget tests cover 320/390 px with keyboard insets.
+- Persisted retry deadlines/backoff/Retry-After survive reopening. Initialization
+  retries transient failures without requiring the Messages screen. Permanent
+  rejection pauses automatic sends; logout fences late acknowledgments.
+- PostgreSQL transactional DM WebSocket outbox provides ordered, stable event IDs,
+  restart recovery and authorized seven-day REST catch-up. Hub dispatch is not
+  physical-device acknowledgment. See DM_DELIVERY.md for operation coverage.
 - The earlier encrypted LiveKit, direct microphone/camera, Windows 0x0 capture
   repair, opt-in loopback audio and external-window HUD proofs remain available.
 
@@ -32,7 +38,7 @@ Windows/web implementation and physical-device acceptance are tracked separately
 
 | ID | Work still required |
 |---|---|
-| W1 | Complete automatic retry/ack scheduling and transactional DM WebSocket outbox. Current text retries are explicitly resumed; multipart delivery is not covered. Legacy uncertain sends cannot safely auto-resend. Simultaneous session re-establishment needs explicit confirmation; live imported sessions never silently rewind. |
+| W1 | Multipart idempotency and simultaneous session re-establishment confirmation remain. Automatic text retry scheduling and the transactional DM WebSocket outbox are implemented. Legacy uncertain sends cannot safely auto-resend; live imported sessions never silently rewind. |
 | W2 | Channel/group orchestration: sender-key distribution, membership/epoch changes, receive/fanout and imported pending-group delivery. Pure crypto kernels are not the complete dispatcher. |
 | W3 | Attachments, secure file opening/upload/download recovery, uncached historical ciphertext, editing/deletion/reactions/search and complete unread/read flows. |
 | W4 | Existing design/feature and Turkish/English parity, server/channel/group/friend/settings UI, full keyboard/IME/screen-reader acceptance and session restoration across application starts. |

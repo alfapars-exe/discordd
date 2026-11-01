@@ -142,6 +142,7 @@ func (d *routeDeps) registerDMRoutes() {
 	d.mux.Handle("GET /api/dms/settings", d.auth(d.h.DMSettings.GetSettings))
 	d.mux.Handle("GET /api/dms", d.auth(d.h.DM.ListChannels))
 	d.mux.Handle("GET /api/dms/send-capabilities", d.auth(d.h.DM.SendCapabilities))
+	d.mux.Handle("GET /api/dms/{channelId}/events", d.auth(d.h.DM.GetEvents))
 	d.mux.Handle("POST /api/dms", d.auth(d.h.DM.CreateOrGetChannel))
 	// Self-DM ("notes to self") — literal "self" before {channelId}.
 	d.mux.Handle("POST /api/dms/self", d.auth(d.h.DM.GetOrCreateSelfChannel))

@@ -73,7 +73,8 @@ type MarkDMReadRequest struct {
 }
 
 type DMMessage struct {
-	SendReplayed bool `json:"-"`
+	SendReplayed  bool `json:"-"`
+	DeliveryReady bool `json:"-"`
 	// Server-assigned append order; decimal string avoids client integer precision loss.
 	SourceSequence int64      `json:"source_sequence,omitempty,string"`
 	ID             string     `json:"id"`

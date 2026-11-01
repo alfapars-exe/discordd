@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"io/fs"
 	"os"
@@ -118,6 +119,7 @@ func TestPostgresImportPreservesDataAndRejectsReuse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	assertImportedDMOutboxEmpty(t, target)
 	// Assert coverage against the actual source schema, not an obsolete count
 	// that stops the acceptance test whenever an additive migration is added.
 	expectedRows, err := source.Conn.Query(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'messages_fts%' AND name NOT LIKE 'dm_messages_fts%'`)
@@ -191,5 +193,16 @@ func TestPostgresImportPreservesDataAndRejectsReuse(t *testing.T) {
 	}
 	if _, err = ImportSQLiteSnapshot(ctx, source.Conn, target); err == nil {
 		t.Fatal("existing target reused")
+	}
+}
+
+func assertImportedDMOutboxEmpty(t *testing.T, db *sql.DB) {
+	t.Helper()
+	var queued int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM dm_delivery_outbox`).Scan(&queued); err != nil {
+		t.Fatal(err)
+	}
+	if queued != 0 {
+		t.Fatal("offline import queued historical DM events")
 	}
 }
