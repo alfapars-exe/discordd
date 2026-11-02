@@ -13,7 +13,9 @@ and independent Node WebCrypto decryption of both downloaded files.
 Real Chromium users on two origins verify the checkbox, cross-peer identity
 fingerprints, retained review after cancellation/reload, post-confirmation
 encrypted attachments and reply, lost-ACK automatic retry, no duplicate rows and
-logout clearing. The receipt records the staged browser build/reload scope.
+logout clearing. The receipt records the staged browser build/reload scope and the later
+unit-verified defensive metadata parsing. The separate deprecated CLI Chrome
+runner stalled at loading and was stopped; it is not a passing test.
 The portable preview does not establish physical mobile/Windows devices, Safari,
 full file-size/thumbnail parity or installers/automatic upgrades.
 
