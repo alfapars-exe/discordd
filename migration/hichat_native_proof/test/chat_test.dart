@@ -37,6 +37,9 @@ Map<String, dynamic> message(String id, {Map? payload}) => {
 class Crypto implements ChatCrypto {
   final log = <String>[];
   Map<String, dynamic>? pending;
+  List<Map<String, dynamic>> reviews = [];
+  bool? confirmed;
+  Object? receivedFileKeys;
   @override
   Future<Map<String, dynamic>> status() async => {'phase': 'active'};
   @override
@@ -49,13 +52,27 @@ class Crypto implements ChatCrypto {
         return {
           'pending': [?pending],
           'trustAlerts': [],
+          'sessionReviews': reviews,
         };
+      case 'renew_session_review':
+        return reviews.single;
+      case 'confirm_session':
+        confirmed = c['approved'] as bool;
+        if (confirmed!) reviews = [];
+        return {'plaintext': '{"content":"restored","file_keys":[]}'};
       case 'prepare':
         pending = {
           'id': c['id'],
           'channel': c['channel'],
           'state': 'prepared',
           'plaintext': c['plaintext'],
+          if (c['files'] != null)
+            'files': [
+              {
+                'name': 'encrypted_0.bin',
+                'data': base64Encode([0, 1, 255, 42]),
+              },
+            ],
           'payload': {
             'encryption_version': 1,
             'ciphertext': 'cipher',
@@ -91,7 +108,10 @@ class Crypto implements ChatCrypto {
         return {'plaintext': '{"content":"sent"}'};
       case 'receive':
         return {
-          'plaintext': jsonEncode({'content': 'message ${c['message']['id']}'}),
+          'plaintext': jsonEncode({
+            'content': 'message ${c['message']['id']}',
+            'file_keys': receivedFileKeys,
+          }),
         };
     }
     throw StateError('Unexpected crypto command');
@@ -114,6 +134,236 @@ HiChatApi apiFor(
 )..session = const Session('access', 'refresh', 'owner', 'Kullanıcı');
 
 void main() {
+  test(
+    'malformed attachment metadata cannot block authenticated message history',
+    () async {
+      for (final metadata in [
+        42,
+        'bad',
+        [
+          null,
+          'bad',
+          {'filename': 42},
+          {'filename': 'safe.txt'},
+        ],
+      ]) {
+        final crypto = Crypto()..receivedFileKeys = metadata;
+        final api = apiFor(
+          (r) async => r.url.path == '/api/dms'
+              ? ok([channel])
+              : ok({
+                  'messages': [message('m1')],
+                  'has_more': false,
+                }),
+        );
+        final c = ChatController(
+          api,
+          () async => crypto,
+          pollInterval: const Duration(hours: 1),
+          retryInterval: const Duration(hours: 1),
+        );
+        await c.initialize();
+        await c.select(channel);
+        expect(c.error, isNull);
+        expect(c.messages.single['displayContent'], 'message m1');
+        expect(
+          c.messages.single['fileKeys'],
+          metadata is List
+              ? [
+                  {'filename': 'safe.txt'},
+                ]
+              : isEmpty,
+        );
+        await c.close();
+        api.close();
+      }
+    },
+  );
+
+  test('multipart retry keeps encrypted file bytes and refuses old-server downgrade', () async {
+    for (final supported in [false, true]) {
+      var posts = 0;
+      final crypto = Crypto();
+      final api = HiChatApi(
+        'https://example.com',
+        client: MockClient((r) async {
+          if (r.url.path.endsWith('send-capabilities')) {
+            return ok({
+              'text_idempotency_version': 1,
+              if (supported) 'multipart_idempotency_version': 1,
+            });
+          }
+          if (r.url.path == '/api/dms') return ok([channel]);
+          if (r.url.path.endsWith('/prekey-bundles')) return ok([]);
+          if (r.method == 'POST') {
+            posts++;
+            expect(r.url.path.endsWith('/idempotent'), true);
+            expect(
+              r.headers['content-type'],
+              startsWith('multipart/form-data;'),
+            );
+            expect(r.bodyBytes, containsAllInOrder([0, 1, 255, 42]));
+            expect(latin1.decode(r.bodyBytes), contains('encrypted_0.bin'));
+            if (posts == 1) throw http.ClientException('lost acknowledgment');
+            return ok(
+              message('m1', payload: crypto.pending!['payload'] as Map),
+            );
+          }
+          return ok({'messages': []});
+        }),
+      )..session = const Session('access', 'refresh', 'owner', 'Owner');
+      final c = ChatController(
+        api,
+        () async => crypto,
+        retryInterval: const Duration(hours: 1),
+        pollInterval: const Duration(hours: 1),
+      );
+      await c.initialize();
+      c.selected = channel;
+      await c.send(
+        'attachment',
+        files: [
+          {
+            'name': 'source.txt',
+            'mime': 'text/plain',
+            'data': base64Encode([42]),
+          },
+        ],
+      );
+      if (supported) {
+        await c.resumePrepared(crypto.pending!['id'] as String);
+        expect(posts, 2);
+        expect(c.error, isNull);
+      } else {
+        expect(posts, 0);
+        expect(crypto.pending!['retryBlocked'], true);
+        expect(crypto.log, isNot(contains('attempt')));
+      }
+      await c.close();
+      api.close();
+    }
+  });
+  test('session approval requires a matching current public device; cancellation does not', () async {
+    for (final registered in [false, true]) {
+      final crypto = Crypto()
+        ..reviews = [
+          {
+            'token': 'review',
+            'user': 'peer',
+            'device': 'device',
+            'identityKey': 'identity',
+            'messageId': 'm1',
+            'channel': 'dm',
+          },
+        ];
+      var rosterReads = 0;
+      final api = apiFor((r) async {
+        if (r.url.path == '/api/users/peer/devices') {
+          rosterReads++;
+          return ok(
+            registered
+                ? [
+                    {'device_id': 'device', 'identity_key': 'identity'},
+                  ]
+                : [],
+          );
+        }
+        return ok([channel]);
+      });
+      final c = ChatController(
+        api,
+        () async => crypto,
+        retryInterval: const Duration(hours: 1),
+        pollInterval: const Duration(hours: 1),
+      );
+      await c.initialize();
+      c.messages = [message('m1')];
+      await c.confirmSession('review', true);
+      expect(rosterReads, 1);
+      if (registered) {
+        expect(crypto.confirmed, true);
+        expect(c.messages.single['displayContent'], 'restored');
+      } else {
+        expect(crypto.confirmed, isNull);
+        await c.confirmSession('review', false);
+        expect(crypto.confirmed, false);
+        expect(rosterReads, 1);
+      }
+      await c.close();
+      api.close();
+    }
+  });
+  testWidgets(
+    'session confirmation requires the explicit verification checkbox',
+    (tester) async {
+      final crypto = Crypto()
+        ..reviews = [
+          {
+            'token': 'review',
+            'user': 'peer',
+            'device': 'device',
+            'identityFingerprint': 'fingerprint',
+            'fingerprint': 'message',
+            'messageId': 'm1',
+            'channel': 'dm',
+          },
+        ];
+      final api = apiFor((_) async => ok([channel]));
+      final c = ChatController(
+        api,
+        () async => crypto,
+        retryInterval: const Duration(hours: 1),
+        pollInterval: const Duration(hours: 1),
+      );
+      await tester.runAsync(() => c.initialize());
+      c.selected = channel;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: ChatView(controller: c)),
+        ),
+      );
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('İncele'));
+      await tester.tap(find.text('İncele'));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<FilledButton>(find.widgetWithText(FilledButton, 'Onayla'))
+            .onPressed,
+        isNull,
+      );
+      await tester.tap(find.byType(CheckboxListTile));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<FilledButton>(find.widgetWithText(FilledButton, 'Onayla'))
+            .onPressed,
+        isNotNull,
+      );
+      expect(crypto.confirmed, isNull);
+      await tester.tap(find.text('Vazgeç'));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pumpAndSettle();
+      expect(crypto.confirmed, false);
+      await tester.pumpWidget(const SizedBox());
+      await tester.runAsync(() async {
+        await c.close();
+        api.close();
+      });
+    },
+  );
+
   for (final width in [320.0, 390.0]) {
     testWidgets(
       'chat content is accessible and fits keyboard viewport at $width',
@@ -231,7 +481,7 @@ void main() {
     await c.select(channel);
     await c.send('keep me');
     expect(c.pending.single['state'], 'attempted');
-    expect(c.error, contains('doğrulanamadı'));
+    expect(c.error, contains('doğrulanmadı'));
     await c.retryPending();
     expect(posts, 1);
     await c.refresh();

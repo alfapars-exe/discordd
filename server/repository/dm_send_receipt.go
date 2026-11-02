@@ -41,6 +41,14 @@ func (r *sqliteDMRepo) FindDMSend(ctx context.Context, channel, user, key, hash 
 	if msg.DMChannelID != channel || msg.UserID != user {
 		return nil, fmt.Errorf("%w: dm_send_scope_mismatch", pkg.ErrConflict)
 	}
+	attachments, err := r.GetAttachmentsByMessageIDs(ctx, []string{id})
+	if err != nil {
+		return nil, err
+	}
+	msg.Attachments = attachments[id]
+	if msg.Attachments == nil {
+		msg.Attachments = []models.DMAttachment{}
+	}
 	msg.SendReplayed = true
 	return msg, nil
 }

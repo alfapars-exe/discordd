@@ -103,6 +103,7 @@ type DMMessage struct {
 }
 
 type DMAttachment struct {
+	UploadIndex *int      `json:"upload_index,omitempty"`
 	ID          string    `json:"id"`
 	DMMessageID string    `json:"dm_message_id"`
 	Filename    string    `json:"filename"`
@@ -114,11 +115,20 @@ type DMAttachment struct {
 
 // CreateDMMessageRequest — E2EE: when encryption_version=1, ciphertext is
 // required and content may be empty. HasFiles is set by the service layer.
+type DMUploadDigest struct {
+	Filename string `json:"filename"`
+	Size     int64  `json:"size"`
+	MIME     string `json:"mime"`
+	SHA256   string `json:"sha256"`
+}
+
 type CreateDMMessageRequest struct {
-	ClientMessageID string  `json:"client_message_id,omitempty"`
-	Content         string  `json:"content"`
-	ReplyToID       *string `json:"reply_to_id,omitempty"`
-	HasFiles        bool    `json:"-"`
+	UploadManifest    []DMUploadDigest `json:"upload_manifest,omitempty"`
+	StagedAttachments []DMAttachment   `json:"-"`
+	ClientMessageID   string           `json:"client_message_id,omitempty"`
+	Content           string           `json:"content"`
+	ReplyToID         *string          `json:"reply_to_id,omitempty"`
+	HasFiles          bool             `json:"-"`
 
 	EncryptionVersion int     `json:"encryption_version"`
 	Ciphertext        *string `json:"ciphertext,omitempty"`
@@ -127,8 +137,8 @@ type CreateDMMessageRequest struct {
 }
 
 func (r *CreateDMMessageRequest) Validate() error {
-	if r.ClientMessageID != "" && (!ValidGroupSendRequestID(r.ClientMessageID) || r.HasFiles) {
-		return fmt.Errorf("client_message_id requires a valid text-only send key")
+	if r.ClientMessageID != "" && (!ValidGroupSendRequestID(r.ClientMessageID) || (r.HasFiles != (len(r.UploadManifest) > 0) || len(r.UploadManifest) != len(r.StagedAttachments))) {
+		return fmt.Errorf("client_message_id requires a valid send key and prepared uploads")
 	}
 	r.Content = strings.TrimSpace(r.Content)
 	contentLen := utf8.RuneCountInString(r.Content)

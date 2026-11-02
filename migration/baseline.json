@@ -1,5 +1,6 @@
 {
-  "sourceCommit": "0754ecf9d5f9cec753689bc60af34a91d0bca427",
+  "sourceCommit": "0177c0d6a66438d6668aef6e092cc708674686ab",
+  "sourceHashNormalization": "LF",
   "sourceStatus": "committed reference only; shared checkout changes excluded; release acceptance unverified",
   "routes": [
     "POST /api/auth/register",
@@ -349,10 +350,10 @@
   ],
   "sha256": {
     "server/testdata/routes.golden": "19d9568e4378ea59c8c7e295f08a350780d570940d120d15a9ec1ea63895cdf1",
-    "server/pkg/response.go": "8c47d5e715b06fbe62522faf7b93f42723da2b1cb8d67d0ce2f660a743d12675",
+    "server/pkg/response.go": "5ec65fbf6e504c6c7c7f17dd9a2f7c0196645df407e9ca0d7c88f7a2d6a00261",
     "server/ws/event.go": "7d8327a76db6b38b9a530d5e373115ffb274e0fc78035ee257d52a4fc9596869",
-    "client/src/crypto/types.ts": "38f2f47cdc856c85f1a245d637028ac7f15a387d8f835c07e1b4d6f6880d22e8",
-    "client/src/audio/README.md": "5323e097fa1c6a62787e7966e95d3af6c88b7396b311579463122ec0be3ea8b6",
-    "package.json": "ee6e94a37922331d8f3afd98c79b7421b07d7a2c6fad1f26fa747285a35ece8f"
+    "client/src/crypto/types.ts": "1ab52290addb65e0225a988e9afd2a91ab91b5bf65d2513e3acb00e16f863154",
+    "client/src/audio/README.md": "e1e5756b387f26a2a2ea7839918651fde688024653cb7f81c657e383ffdad462",
+    "package.json": "edf939ba07316a9ea03d505600e1755806701128fd153a858d91a0a2cea94111"
   }
 }

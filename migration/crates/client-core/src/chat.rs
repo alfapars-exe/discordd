@@ -180,6 +180,13 @@ fn bundle(b: &Value) -> Result<x3dh::Bundle> {
     serde_json::from_value(json!({"identityKey":b["identity_key"],"signingKey":b["signing_key"],"signedPrekeyId":b["signed_prekey_id"],"signedPrekey":b["signed_prekey"],"signedPrekeySignature":b["signed_prekey_signature"],"registrationId":b["registration_id"],"oneTimePrekeyId":b["one_time_prekey_id"],"oneTimePrekey":b["one_time_prekey"]}))
         .map_err(|_| "incompatible_device".into())
 }
+fn pending_hash(channel: &str, user: &str, plaintext: &str, files: &Value) -> String {
+    if files.is_null() {
+        hash(&json!([channel, user, plaintext]))
+    } else {
+        hash(&json!([channel, user, plaintext, files]))
+    }
+}
 fn prepare(v: &mut Value, c: &Value, seed: &[u8]) -> Result<Value> {
     let id = text(c, "id")?;
     if id.len() < 16 {
@@ -192,7 +199,7 @@ fn prepare(v: &mut Value, c: &Value, seed: &[u8]) -> Result<Value> {
         .filter(|s| !s.is_empty() && s.len() <= 65536)
         .ok_or("invalid_plaintext")?;
     // The channel and recipient are part of the idempotency binding.
-    let request_hash = hash(&json!([channel, user, plaintext]));
+    let request_hash = pending_hash(channel, user, plaintext, &c["files"]);
     if let Some(old) = v["chatPending"]
         .as_array()
         .and_then(|a| a.iter().find(|r| r["id"] == id))
@@ -202,6 +209,7 @@ fn prepare(v: &mut Value, c: &Value, seed: &[u8]) -> Result<Value> {
         }
         return Ok(old.clone());
     }
+    let (files, plaintext) = crate::attachments::prepare_message(&c["files"], plaintext, seed)?;
     let reg = primary(v, "registration")?;
     let owner = text(&reg, "userId")?;
     let local = text(&reg, "deviceId")?;
@@ -274,7 +282,7 @@ fn prepare(v: &mut Value, c: &Value, seed: &[u8]) -> Result<Value> {
     if ciphertext.len() > 2_000_000 {
         return Err("fanout_message_too_large".into());
     }
-    let request = json!({"id":id,"hash":request_hash,"channel":channel,"user":user,"plaintext":plaintext,"state":"prepared", "payload":{"encryption_version":1,"ciphertext":ciphertext,"sender_device_id":local,"e2ee_metadata":json!({"client_send_id":id}).to_string()}});
+    let request = json!({"id":id,"hash":request_hash,"channel":channel,"user":user,"plaintext":plaintext,"files":files,"state":"prepared", "payload":{"encryption_version":1,"ciphertext":ciphertext,"sender_device_id":local,"e2ee_metadata":json!({"client_send_id":id}).to_string()}});
     if v["chatPending"].is_null() {
         v["chatPending"] = json!([]);
     }
@@ -367,6 +375,9 @@ fn cache(v: &mut Value, m: &Value, plaintext: &str) -> Result<Value> {
     Ok(json!({"plaintext":plaintext}))
 }
 fn receive(v: &mut Value, m: &Value, seed: &[u8]) -> Result<Value> {
+    receive_confirmed(v, m, seed, false)
+}
+fn receive_confirmed(v: &mut Value, m: &Value, seed: &[u8], confirmed: bool) -> Result<Value> {
     let _ = text(m, "id")?;
     let channel = text(m, "dm_channel_id")?;
     let sender = text(m, "user_id")?;
@@ -426,54 +437,16 @@ fn receive(v: &mut Value, m: &Value, seed: &[u8]) -> Result<Value> {
     if e["message_type"] != wire.r#type {
         return Err("message_type_mismatch".into());
     }
+    let mut archived_index = None;
+    let mut keep_current = false;
     let (next, plain) = if wire.r#type == 3 {
-        let info = wire.pre_key_info.as_ref().ok_or("prekey_info_missing")?;
-        let handshake = hash(&json!([sender, sender_device, info.ephemeral_key]));
-        if v["chatHandshakes"]
-            .as_array()
-            .is_some_and(|a| a.contains(&json!(handshake)))
-        {
-            return Err("prekey_message_replay".into());
-        }
-        // In particular, an imported live session must not be rewound by an
-        // old initial envelope missing from the new runtime's replay ledger.
-        if session(v, sender, sender_device)?.is_some() {
-            return Err("session_reestablishment_requires_confirmation".into());
-        }
-        // Pinning is committed only if authentication and the whole receive succeed.
-        pin(v, sender, sender_device, &info.identity_key)?;
-        let pair = |store: &str, id: u32| -> Result<KeyPair> {
-            let row = rows(v, store)?
-                .iter()
-                .find(|r| prekey_id(&r["value"]) == id)
-                .ok_or("prekey_missing")?;
-            serde_json::from_value(json!({"publicKey":row["value"]["publicKey"],"privateKey":row["value"]["privateKey"]})).map_err(|_| "invalid_prekey".into())
-        };
-        let signed = pair("signedPreKeys", info.signed_prekey_id)?;
-        let otp = info
-            .one_time_prekey_id
-            .map(|id| pair("preKeys", id))
-            .transpose()?;
-        let opened = x3dh::open_initial(
-            &identity(v)?,
-            &signed,
-            otp.as_ref(),
-            &wire,
-            derive(seed, "receive-ratchet")?,
-        )
-        .map_err(str::to_owned)?;
-        if v["chatHandshakes"].is_null() {
-            v["chatHandshakes"] = json!([]);
-        }
-        v["chatHandshakes"]
-            .as_array_mut()
-            .ok_or("invalid_snapshot")?
-            .push(json!(handshake));
-        opened
+        let (opened, keep) = open_initial_session(v, m, &wire, seed, confirmed)?;
+        keep_current = keep;
+        (opened.state, opened.plaintext)
     } else if wire.r#type == 2 {
-        let state = session(v, sender, sender_device)?.ok_or("session_missing")?;
-        crate::ratchet::decrypt(&state, &wire, derive(seed, "receive-ratchet")?)
-            .map_err(str::to_owned)?
+        let opened = open_session(v, sender, sender_device, &wire, seed)?;
+        archived_index = opened.archive;
+        (opened.state, opened.plaintext)
     } else {
         return Err("unsupported_message_type".into());
     };
@@ -482,8 +455,220 @@ fn receive(v: &mut Value, m: &Value, seed: &[u8]) -> Result<Value> {
     if !payload["content"].is_string() {
         return Err("invalid_payload".into());
     }
-    save_session(v, sender, sender_device, next)?;
+    if let Some(i) = archived_index {
+        v["chatSessionArchives"][i]["state"] =
+            serde_json::to_value(next).map_err(|_| "invalid_session")?;
+    } else if keep_current {
+        archive_session(v, sender, sender_device, next)?;
+    } else {
+        save_session(v, sender, sender_device, next)?;
+    }
     cache(v, m, &plaintext)
+}
+
+struct OpenedSession {
+    state: Session,
+    plaintext: Zeroizing<Vec<u8>>,
+    archive: Option<usize>,
+}
+fn open_session(
+    v: &Value,
+    user: &str,
+    device: &str,
+    wire: &Wire,
+    seed: &[u8],
+) -> Result<OpenedSession> {
+    let current = session(v, user, device)?.ok_or("session_missing")?;
+    let entropy = derive(seed, "receive-ratchet")?;
+    let original = match crate::ratchet::decrypt(&current, wire, entropy) {
+        Ok((state, plaintext)) => {
+            return Ok(OpenedSession {
+                state,
+                plaintext,
+                archive: None,
+            });
+        }
+        Err(error) => error,
+    };
+    for (i, row) in v["chatSessionArchives"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .enumerate()
+    {
+        if row["user"] != user || row["device"] != device {
+            continue;
+        }
+        let archived: Session =
+            serde_json::from_value(row["state"].clone()).map_err(|_| "invalid_session")?;
+        if let Ok((state, plaintext)) = crate::ratchet::decrypt(&archived, wire, entropy) {
+            return Ok(OpenedSession {
+                state,
+                plaintext,
+                archive: Some(i),
+            });
+        }
+    }
+    Err(original.into())
+}
+fn open_initial_session(
+    v: &mut Value,
+    m: &Value,
+    wire: &Wire,
+    seed: &[u8],
+    confirmed: bool,
+) -> Result<(OpenedSession, bool)> {
+    let sender = text(m, "user_id")?;
+    let sender_device = text(m, "sender_device_id")?;
+    let reg = primary(v, "registration")?;
+    let local = text(&reg, "deviceId")?;
+    let mut keep_current = false;
+    let info = wire.pre_key_info.as_ref().ok_or("prekey_info_missing")?;
+    let handshake = hash(&json!([sender, sender_device, info.ephemeral_key]));
+    if v["chatHandshakes"]
+        .as_array()
+        .is_some_and(|a| a.contains(&json!(handshake)))
+    {
+        return Err("prekey_message_replay".into());
+    }
+    // In particular, an imported live session must not be rewound by an
+    // old initial envelope missing from the new runtime's replay ledger.
+    if let Some(old) = session(v, sender, sender_device)? {
+        if !confirmed {
+            return Err("session_reestablishment_requires_confirmation".into());
+        }
+        // Simultaneous first sends converge on the same initiator. Keep both
+        // receive states for already persisted outbound bytes and late replies.
+        keep_current = old.receiving_chain_key.is_none() && local < sender_device;
+        if !keep_current {
+            archive_session(v, sender, sender_device, old)?;
+        }
+    }
+    // Pinning is committed only if authentication and the whole receive succeed.
+    pin(v, sender, sender_device, &info.identity_key)?;
+    let pair = |store: &str, id: u32| -> Result<KeyPair> {
+        let row = rows(v, store)?
+            .iter()
+            .find(|r| prekey_id(&r["value"]) == id)
+            .ok_or("prekey_missing")?;
+        serde_json::from_value(
+            json!({"publicKey":row["value"]["publicKey"],"privateKey":row["value"]["privateKey"]}),
+        )
+        .map_err(|_| "invalid_prekey".into())
+    };
+    let signed = pair("signedPreKeys", info.signed_prekey_id)?;
+    let otp = info
+        .one_time_prekey_id
+        .map(|id| pair("preKeys", id))
+        .transpose()?;
+    let opened = x3dh::open_initial(
+        &identity(v)?,
+        &signed,
+        otp.as_ref(),
+        wire,
+        derive(seed, "receive-ratchet")?,
+    )
+    .map_err(str::to_owned)?;
+    if v["chatHandshakes"].is_null() {
+        v["chatHandshakes"] = json!([]);
+    }
+    v["chatHandshakes"]
+        .as_array_mut()
+        .ok_or("invalid_snapshot")?
+        .push(json!(handshake));
+    let (state, plaintext) = opened;
+    Ok((
+        OpenedSession {
+            state,
+            plaintext,
+            archive: None,
+        },
+        keep_current,
+    ))
+}
+fn archive_session(v: &mut Value, user: &str, device: &str, state: Session) -> Result<()> {
+    if v["chatSessionArchives"].is_null() {
+        v["chatSessionArchives"] = json!([])
+    }
+    let rows = v["chatSessionArchives"]
+        .as_array_mut()
+        .ok_or("invalid_snapshot")?;
+    if rows.len() >= 32 {
+        return Err("session_archive_full".into());
+    }
+    rows.push(json!({"user":user,"device":device,"state":state}));
+    Ok(())
+}
+fn review_session(v: &mut Value, c: &Value, seed: &[u8]) -> Result<Value> {
+    let m = &c["message"];
+    let sender = text(m, "user_id")?;
+    let device = text(m, "sender_device_id")?;
+    let state = session(v, sender, device)?.ok_or("session_missing")?;
+    let current = hash(&serde_json::to_value(state).map_err(|_| "invalid_session")?);
+    let mut trial = v.clone();
+    receive_confirmed(&mut trial, m, seed, true)?;
+    let now = c["now"]
+        .as_u64()
+        .filter(|t| *t < 8_000_000_000_000_000)
+        .ok_or("invalid_review_time")?;
+    let trusted = rows(&trial, "trustedIdentities")?
+        .iter()
+        .find(|r| r["value"]["userId"] == sender && r["value"]["deviceId"] == device)
+        .ok_or("identity_missing")?;
+    let identity_key = trusted["value"]["identityKey"]["__b64"]
+        .as_str()
+        .ok_or("invalid_identity")?
+        .to_owned();
+    let identity_bytes = B64.decode(&identity_key).map_err(|_| "invalid_identity")?;
+    let identity_fingerprint = format!("{:x}", Sha256::digest(identity_bytes));
+    let token = hash(&json!([source(m), current, primary(v, "registration")?]));
+    if v["chatSessionReviews"].is_null() {
+        v["chatSessionReviews"] = json!([])
+    }
+    let reviews = v["chatSessionReviews"]
+        .as_array_mut()
+        .ok_or("invalid_snapshot")?;
+    reviews.retain(|r| r["expires"].as_u64().unwrap_or(0) > now && r["token"] != token);
+    if reviews.len() >= 32 {
+        return Err("session_review_full".into());
+    }
+    let summary = json!({"token":token,"user":sender,"device":device,"channel":m["dm_channel_id"],"messageId":m["id"],"fingerprint":hash(&source(m)),"identityKey":identity_key,"identityFingerprint":identity_fingerprint,"expires":now+300000});
+    reviews.push(
+        json!({"summary":summary,"token":token,"expires":now+300000,"current":current,"message":m}),
+    );
+    Ok(summary)
+}
+fn confirm_session(v: &mut Value, c: &Value, seed: &[u8]) -> Result<Value> {
+    let token = text(c, "token")?;
+    let review = v["chatSessionReviews"]
+        .as_array()
+        .and_then(|a| a.iter().find(|r| r["token"] == token))
+        .cloned()
+        .ok_or("session_review_missing")?;
+    if c["approved"] != true {
+        // Dismissal does not grant permission or discard the blocked candidate.
+        // A later explicit review renews its deadline and state binding.
+        return Ok(json!({"cancelled":true}));
+    }
+    let now = c["now"].as_u64().ok_or("invalid_review_time")?;
+    if now >= review["expires"].as_u64().ok_or("invalid_snapshot")? {
+        return Err("session_review_expired".into());
+    }
+    if c["peerIdentity"] != review["summary"]["identityKey"] {
+        return Err("session_review_identity_mismatch".into());
+    }
+    let m = &review["message"];
+    let state =
+        session(v, text(m, "user_id")?, text(m, "sender_device_id")?)?.ok_or("session_missing")?;
+    if hash(&serde_json::to_value(state).map_err(|_| "invalid_session")?) != review["current"] {
+        return Err("session_review_stale".into());
+    }
+    let output = receive_confirmed(v, m, seed, true)?;
+    v["chatSessionReviews"]
+        .as_array_mut()
+        .ok_or("invalid_snapshot")?
+        .retain(|r| r["token"] != token);
+    Ok(output)
 }
 
 /// Commands accept entropy from the platform CSPRNG; private state is never logged.
@@ -498,9 +683,24 @@ pub fn transition(snapshot: &str, command: &str, entropy: &[u8]) -> Result<Strin
         let mut v: Value = serde_json::from_str(snapshot).map_err(|_| "invalid_snapshot")?;
         let output = match c["op"].as_str() {
             Some("inspect") => {
-                json!({"pending":v["chatPending"],"trustAlerts":v["chatTrustAlerts"]})
+                json!({"ownIdentityFingerprint":format!("{:x}",Sha256::digest(identity(&v)?.public_key.0)),"pending":v["chatPending"],"trustAlerts":v["chatTrustAlerts"],"sessionReviews":v["chatSessionReviews"].as_array().map(|a|a.iter().map(|r|r["summary"].clone()).collect::<Vec<_>>())})
             }
             Some("registration") => registration_body(&v)?,
+            Some("review_session") => review_session(&mut v, &c, entropy)?,
+            Some("renew_session_review") => {
+                let token = text(&c, "token")?;
+                let message = v["chatSessionReviews"]
+                    .as_array()
+                    .and_then(|a| a.iter().find(|r| r["token"] == token))
+                    .map(|r| r["message"].clone())
+                    .ok_or("session_review_missing")?;
+                v["chatSessionReviews"]
+                    .as_array_mut()
+                    .ok_or("invalid_snapshot")?
+                    .retain(|r| r["token"] != token);
+                review_session(&mut v, &json!({"message":message,"now":c["now"]}), entropy)?
+            }
+            Some("confirm_session") => confirm_session(&mut v, &c, entropy)?,
             Some("prepare") => prepare(&mut v, &c, entropy)?,
             Some("receive") => receive(&mut v, &c["message"], entropy)?,
             Some("attempt") => {
@@ -521,6 +721,12 @@ pub fn transition(snapshot: &str, command: &str, entropy: &[u8]) -> Result<Strin
                     && (p["retryBlocked"] == true || p["retryAt"].as_u64().unwrap_or(0) > now)
                 {
                     return Err("retry_not_due".into());
+                }
+                if p["files"].as_array().is_some_and(|a| !a.is_empty())
+                    && p["delivery"] != "idempotent-v1"
+                    && c["delivery"] != "idempotent-v1"
+                {
+                    return Err("attachment_idempotency_required".into());
                 }
                 if p["state"] == "prepared" && c["delivery"] == "idempotent-v1" {
                     p["delivery"] = json!("idempotent-v1");
@@ -582,6 +788,7 @@ pub fn transition(snapshot: &str, command: &str, entropy: &[u8]) -> Result<Strin
                     return Err("acknowledgment_mismatch".into());
                 }
                 p["state"] = json!("acknowledged");
+                p["files"] = Value::Null;
                 p["messageId"] = c["message"]["id"].clone();
                 plain
             }
@@ -640,6 +847,220 @@ mod tests {
         m["dm_channel_id"] = json!("channel");
         m["user_id"] = json!(owner);
         m
+    }
+    #[test]
+    fn simultaneous_session_confirmation_preserves_queued_bytes_and_converges() {
+        let alice = fresh("alice", "a-device", 1);
+        let bob = fresh("bob", "b-device", 2);
+        let a = prepare_for(&alice, &bob, "simultaneous-0001", "from a", 3);
+        let b = prepare_for(&bob, &alice, "simultaneous-0002", "from b", 4);
+        let late = prepare_for(
+            &b["snapshot"],
+            &alice,
+            "simultaneous-0003",
+            "late old chain",
+            5,
+        );
+        let ma = message(&a, "alice", "a-first");
+        let mb = message(&b, "bob", "b-first");
+        assert!(
+            transition(
+                &a["snapshot"].to_string(),
+                &json!({"op":"receive","message":mb}).to_string(),
+                &[6; 32]
+            )
+            .unwrap_err()
+            .contains("requires_confirmation")
+        );
+        let ra = run(
+            &a["snapshot"],
+            json!({"op":"review_session","message":mb,"now":1000}),
+            6,
+        );
+        let rb = run(
+            &late["snapshot"],
+            json!({"op":"review_session","message":ma,"now":1000}),
+            7,
+        );
+        assert_eq!(ra["snapshot"]["stores"], a["snapshot"]["stores"]);
+        let ca = run(
+            &ra["snapshot"],
+            json!({"op":"confirm_session","token":ra["output"]["token"],"peerIdentity":ra["output"]["identityKey"],"approved":true,"now":2000}),
+            8,
+        );
+        let cb = run(
+            &rb["snapshot"],
+            json!({"op":"confirm_session","token":rb["output"]["token"],"peerIdentity":rb["output"]["identityKey"],"approved":true,"now":2000}),
+            9,
+        );
+        assert_eq!(ca["snapshot"]["chatPending"], a["snapshot"]["chatPending"]);
+        assert_eq!(
+            cb["snapshot"]["chatPending"],
+            late["snapshot"]["chatPending"]
+        );
+        let old = run(
+            &ca["snapshot"],
+            json!({"op":"receive","message":message(&late,"bob","b-late")}),
+            10,
+        );
+        assert!(
+            old["output"]["plaintext"]
+                .as_str()
+                .unwrap()
+                .contains("late old chain")
+        );
+        let next = prepare_for(
+            &old["snapshot"],
+            &bob,
+            "simultaneous-0004",
+            "canonical a",
+            11,
+        );
+        let read = run(
+            &cb["snapshot"],
+            json!({"op":"receive","message":message(&next,"alice","a-next")}),
+            12,
+        );
+        let reply = prepare_for(
+            &read["snapshot"],
+            &alice,
+            "simultaneous-0005",
+            "canonical b",
+            13,
+        );
+        let read = run(
+            &next["snapshot"],
+            json!({"op":"receive","message":message(&reply,"bob","b-next")}),
+            14,
+        );
+        assert!(
+            read["output"]["plaintext"]
+                .as_str()
+                .unwrap()
+                .contains("canonical b")
+        );
+        let mut replay = mb;
+        replay["id"] = json!("forged");
+        assert_eq!(
+            transition(
+                &read["snapshot"].to_string(),
+                &json!({"op":"review_session","message":replay,"now":3000}).to_string(),
+                &[15; 32]
+            )
+            .unwrap_err(),
+            "prekey_message_replay"
+        );
+    }
+    #[test]
+    fn session_review_is_authenticated_cancellable_expiring_and_state_bound() {
+        let alice = fresh("alice", "a-device", 1);
+        let bob = fresh("bob", "b-device", 2);
+        let a = prepare_for(&alice, &bob, "confirm-bound-0001", "a", 3);
+        let b = prepare_for(&bob, &alice, "confirm-bound-0002", "b", 4);
+        let m = message(&b, "bob", "first");
+        let review = run(
+            &a["snapshot"],
+            json!({"op":"review_session","message":m,"now":1000}),
+            5,
+        );
+        let token = &review["output"]["token"];
+        assert!(
+            review["output"]["identityFingerprint"]
+                .as_str()
+                .unwrap()
+                .len()
+                == 64
+        );
+        assert_eq!(transition(&review["snapshot"].to_string(),&json!({"op":"confirm_session","token":token,"peerIdentity":"wrong","approved":true,"now":2000}).to_string(),&[6;32]).unwrap_err(),"session_review_identity_mismatch");
+        let cancel = run(
+            &review["snapshot"],
+            json!({"op":"confirm_session","token":token,"approved":false,"now":2000}),
+            6,
+        );
+        assert_eq!(cancel["snapshot"]["stores"], a["snapshot"]["stores"]);
+        assert_eq!(cancel["snapshot"], review["snapshot"]);
+        assert_eq!(
+            transition(
+                &review["snapshot"].to_string(),
+                &json!({"op":"confirm_session","token":token,"peerIdentity":review["output"]["identityKey"],"approved":true,"now":301000})
+                    .to_string(),
+                &[7; 32]
+            )
+            .unwrap_err(),
+            "session_review_expired"
+        );
+        let changed = prepare_for(
+            &review["snapshot"],
+            &bob,
+            "confirm-bound-0003",
+            "advance",
+            8,
+        );
+        assert_eq!(
+            transition(
+                &changed["snapshot"].to_string(),
+                &json!({"op":"confirm_session","token":token,"peerIdentity":review["output"]["identityKey"],"approved":true,"now":2000})
+                    .to_string(),
+                &[9; 32]
+            )
+            .unwrap_err(),
+            "session_review_stale"
+        );
+        let mut forged = m;
+        forged["ciphertext"] = json!("[]");
+        assert!(
+            transition(
+                &a["snapshot"].to_string(),
+                &json!({"op":"review_session","message":forged,"now":1000}).to_string(),
+                &[10; 32]
+            )
+            .is_err()
+        );
+    }
+    #[test]
+    fn encrypted_attachments_are_durable_and_use_legacy_file_metadata() {
+        use aes_gcm::{Aes256Gcm, KeyInit, Nonce, aead::Aead};
+        let alice = fresh("alice", "a-device", 1);
+        let bob = fresh("bob", "b-device", 2);
+        let command = json!({"op":"prepare","id":"file-request-0001","channel":"channel","user":"bob","plaintext":json!({"content":"attachment","file_keys":[]}).to_string(),"bundles":[recipient(&bob)],"files":[{"name":"test.txt","mime":"text/plain","data":B64.encode(b"file bytes")} ]});
+        let p = run(&alice, command.clone(), 3);
+        assert_eq!(
+            transition(
+                &p["snapshot"].to_string(),
+                &json!({"op":"attempt","id":"file-request-0001"}).to_string(),
+                &[4; 32]
+            )
+            .unwrap_err(),
+            "attachment_idempotency_required"
+        );
+        let duplicate = run(&p["snapshot"], command.clone(), 4);
+        assert_eq!(p, duplicate);
+        let received = run(
+            &bob,
+            json!({"op":"receive","message":message(&p,"alice","file-message")}),
+            5,
+        );
+        let plain: Value =
+            serde_json::from_str(received["output"]["plaintext"].as_str().unwrap()).unwrap();
+        let meta = &plain["file_keys"][0];
+        let key = B64.decode(meta["key"].as_str().unwrap()).unwrap();
+        let iv = B64.decode(meta["iv"].as_str().unwrap()).unwrap();
+        let encrypted = B64
+            .decode(p["output"]["files"][0]["data"].as_str().unwrap())
+            .unwrap();
+        let bytes = Aes256Gcm::new_from_slice(&key)
+            .unwrap()
+            .decrypt(Nonce::from_slice(&iv), encrypted.as_slice())
+            .unwrap();
+        assert_eq!(bytes, b"file bytes");
+        assert_eq!(meta["filename"], "test.txt");
+        assert_eq!(meta["digest"], format!("{:x}", Sha256::digest(&bytes)));
+        let mut changed = command;
+        changed["files"][0]["data"] = json!(B64.encode(b"different"));
+        assert_eq!(
+            transition(&p["snapshot"].to_string(), &changed.to_string(), &[6; 32]).unwrap_err(),
+            "pending_request_conflict"
+        );
     }
     #[test]
     fn new_devices_exchange_initial_messages_dh_turns_and_out_of_order_after_restart() {

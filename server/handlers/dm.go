@@ -250,7 +250,7 @@ func (h *DMHandler) SendIdempotentMessage(w http.ResponseWriter, r *http.Request
 }
 
 func (h *DMHandler) SendCapabilities(w http.ResponseWriter, r *http.Request) {
-	pkg.JSON(w, http.StatusOK, map[string]any{"text_idempotency_version": 1})
+	pkg.JSON(w, http.StatusOK, map[string]any{"text_idempotency_version": 1, "multipart_idempotency_version": 1})
 }
 
 func (h *DMHandler) GetEvents(w http.ResponseWriter, r *http.Request) {
@@ -295,10 +295,6 @@ func (h *DMHandler) sendMessage(w http.ResponseWriter, r *http.Request, requireR
 	}
 
 	contentType := r.Header.Get("Content-Type")
-	if requireReceipt && isMultipart(contentType) {
-		pkg.ErrorWithMessage(w, http.StatusBadRequest, "idempotent text sends cannot include uploads")
-		return
-	}
 
 	// Upload-specific throttle (T3.5) — same rationale as message.go: message
 	// limiter stops text-burst spam, upload limiter stops sustained
@@ -316,18 +312,40 @@ func (h *DMHandler) sendMessage(w http.ResponseWriter, r *http.Request, requireR
 	if !ok {
 		return
 	}
+	// The legacy multipart endpoint ignored this form field. Keep that contract;
+	// only the advertised dedicated endpoint stages atomic idempotent uploads.
+	if !requireReceipt && isMultipart(contentType) {
+		req.ClientMessageID = ""
+	}
 
-	if requireReceipt && req.ClientMessageID == "" {
+	if requireReceipt && !models.ValidGroupSendRequestID(req.ClientMessageID) {
 		pkg.ErrorWithMessage(w, http.StatusBadRequest, "client_message_id is required")
 		return
+	}
+	var stagedCleanup func()
+	if requireReceipt && isMultipart(contentType) {
+		var err error
+		stagedCleanup, err = h.stageDMSendFiles(r, user.ID, channelID, req)
+		if err != nil {
+			pkg.Error(w, err)
+			return
+		}
 	}
 	msg, err := h.dmService.SendMessage(r.Context(), user.ID, channelID, req)
 	if err != nil {
 		pkg.Error(w, err)
 		return
 	}
+	// An error can mean COMMIT's acknowledgment was lost. Do not delete prepared
+	// bytes until the transaction outcome is known; aged cleanup reconciles them.
+	if stagedCleanup != nil {
+		defer stagedCleanup()
+	}
 
-	uploadFailures := h.uploadDMSendFiles(r, msg, req.EncryptionVersion == 1)
+	var uploadFailures []dmUploadFailure
+	if !requireReceipt {
+		uploadFailures = h.uploadDMSendFiles(r, msg, req.EncryptionVersion == 1)
+	}
 
 	// Broadcast after uploads so clients see attachments
 	if err := h.finishDMSend(r, msg); err != nil {

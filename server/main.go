@@ -311,6 +311,8 @@ func main() {
 		logx.Fatal("boot", "failed to initialize DM outbox", dmDeliveryErr)
 	}
 	defer stopDMDelivery()
+	stopDMUploadCleanup := services.StartDMUploadCleanup(ownerCtx, svcs.DMUpload)
+	defer stopDMUploadCleanup()
 
 	// 10h. Readiness checker — polls the deep dependency checks every 30s and
 	// caches the verdict. /api/health reads that cache so monitors can see

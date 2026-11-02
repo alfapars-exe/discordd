@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 	"log/slog"
+	"mime/multipart"
 	"net/http"
 )
 
@@ -42,6 +44,7 @@ func (h *DMHandler) parseDMSend(w http.ResponseWriter, r *http.Request) (*models
 		pkg.ErrorWithMessage(w, http.StatusBadRequest, "failed to parse multipart form")
 		return nil, false
 	}
+	req.ClientMessageID = r.FormValue("client_message_id")
 	req.Content = r.FormValue("content")
 	req.ReplyToID = dmFormPointer(r, "reply_to_id")
 	if r.FormValue("encryption_version") == "1" {
@@ -104,4 +107,47 @@ func (h *DMHandler) uploadDMSendFiles(r *http.Request, msg *models.DMMessage, is
 	}
 
 	return dmUploadFailures
+}
+
+func (h *DMHandler) stageDMSendFiles(r *http.Request, user, channel string, req *models.CreateDMMessageRequest) (func(), error) {
+	if r.MultipartForm == nil {
+		return nil, fmt.Errorf("%w: multipart form required", pkg.ErrBadRequest)
+	}
+	for field, files := range r.MultipartForm.File {
+		if field != "files" && len(files) > 0 {
+			return nil, fmt.Errorf("%w: unsupported upload field", pkg.ErrBadRequest)
+		}
+	}
+	if _, err := h.dmService.GetMessages(r.Context(), user, channel, "", 1); err != nil {
+		return nil, err
+	}
+	stager, ok := h.dmUploadService.(interface {
+		Stage(context.Context, multipart.File, *multipart.FileHeader, bool) (*models.DMAttachment, *models.DMUploadDigest, error)
+		Discard(*models.DMAttachment)
+	})
+	if !ok {
+		return nil, fmt.Errorf("%w: upload staging unavailable", pkg.ErrBadRequest)
+	}
+	cleanup := func() {
+		for i := range req.StagedAttachments {
+			stager.Discard(&req.StagedAttachments[i])
+		}
+	}
+	for index, header := range r.MultipartForm.File["files"] {
+		file, err := header.Open()
+		if err != nil {
+			cleanup()
+			return nil, err
+		}
+		a, digest, err := stager.Stage(r.Context(), file, header, req.EncryptionVersion == 1)
+		_ = file.Close()
+		if err != nil {
+			cleanup()
+			return nil, err
+		}
+		a.UploadIndex = &index
+		req.StagedAttachments = append(req.StagedAttachments, *a)
+		req.UploadManifest = append(req.UploadManifest, *digest)
+	}
+	return cleanup, nil
 }

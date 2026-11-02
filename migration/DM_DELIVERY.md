@@ -1,9 +1,9 @@
-# Durable text DM retries
+# Durable DM retries and explicit session confirmation
 
 `GET /api/dms/send-capabilities` advertises `text_idempotency_version: 1`.
 Flutter persists the chosen mode with the pending request before network I/O.
 `POST /api/dms/{channelId}/messages/idempotent` requires `client_message_id` and
-rejects multipart requests. An old server returns 404; a previously fenced reliable
+also accepts multipart requests when `multipart_idempotency_version: 1` is advertised. An old server returns 404; a previously fenced reliable
 request never falls back to the ordinary endpoint, including after server rollback.
 Old-server 404 responses can be plain text. They are detected before the first
 attempt, and new sends retain the old single-attempt/reconciliation path.
@@ -48,7 +48,55 @@ imports do not create a delivery backlog.
 
 Typing/presence and channel lifecycle signals are outside this durable queue.
 The Flutter preview still polls message history; the real WebSocket integration
-test independently verifies delivery and REST replay IDs. Multipart idempotency,
-simultaneous-session confirmation and physical-device acceptance remain open.
+test independently verifies delivery and REST replay IDs. Physical-device acceptance remains open.
 Earlier evidence retains its original source hashes. See `evidence/dm-outbox.json`
 for this increment's scoped Windows/web verification.
+
+## Multipart delivery — 2026-11-02
+
+`multipart_idempotency_version: 1` extends the dedicated idempotent endpoint.
+The server computes an ordered manifest of actual uploaded bytes (SHA-256),
+normalized filename, size and recorded MIME. It never trusts a client-supplied
+manifest. Files are fully copied/synced before the message transaction; message,
+attachment rows/order, receipt, unread and notifications commit together. A failed
+stage cannot create a partial message. Same key with different bytes/order or an
+edited/deleted original fails closed. A duplicate returns the original attachment
+IDs without another upload row, unread increment or create event.
+
+Concurrent requests may stage independent temporary files. An unknown message or
+attachment commit result retains staged bytes for the maintenance grace; a missing
+reference immediately after a DB error is not proof of rollback. Cleanup checks committed
+references before removing its own files, including post-commit HTTP failures.
+The singleton backend owner also reclaims only `dmstage_` files older than 24 hours
+without a committed reference. Fresh files, directories/symlinks, unrelated names
+and committed files are retained. Abrupt power/storage failures remain separate
+acceptance gates; a successful synthetic run is not a filesystem durability proof.
+
+Flutter/Rust encrypt each file once using the legacy AES-256-GCM/file_keys format.
+The protected pending record retains encrypted file bytes and metadata until ACK;
+retries rebuild multipart framing around the same payload/parts. HTTP boundary
+strings may differ, so retry evidence compares fields and exact file bytes, not
+raw multipart framing. No file key is sent outside the encrypted message. Old
+servers cannot receive these sends through an unsafe fallback. The preview's
+picker is limited to ten files, 1 MiB each and 2 MiB total; existing server upload
+limits remain configurable. Secure file opening, larger-file/thumbnail parity and
+uncached historical recovery remain W3, not physical-device test excuses.
+
+## Explicit session confirmation
+
+An authenticated initial envelope conflicting with a live session stays blocked.
+The review is stored in the protected vault and bound to owner/device, exact
+message and current ratchet fingerprint. Before the dialog, renewal authenticates
+it again; the dialog shows both identity fingerprints. Approval requires the
+verification checkbox, a matching current public-device record, local device
+ownership and a fresh five-minute state binding. Identity changes cannot be
+accepted through this operation. Logout fences pending UI/network completions.
+Cancellation leaves ratchets and the blocked review unchanged.
+
+Approval archives the superseded receive state instead of discarding it. For
+simultaneous first sends, both sides choose the same initiating device by device-ID
+order. Delayed old-chain packets advance only their archived state; persisted
+outbound ciphertext is unchanged. A bounded archive refuses further replacement
+at capacity; it never evicts or restores an older ratchet silently. Existing replay
+and trusted-identity checks remain in force. See `evidence/dm-attachments-session.json`
+for scoped Windows/web results.

@@ -34,8 +34,24 @@ class ExpiredAccessFixture extends http.BaseClient {
     }
     if (request.method == 'POST' &&
         request.url.path.endsWith('/messages/idempotent')) {
-      sendBodies.add((request as http.Request).body);
-      final response = await inner.send(request);
+      final http.BaseRequest forward;
+      if (request is http.MultipartRequest) {
+        final bytes = await request.finalize().toBytes();
+        final boundary = request.headers['content-type']!
+            .split('boundary=')
+            .last;
+        sendBodies.add(
+          latin1.decode(bytes).replaceAll(boundary, 'FIXTURE_BOUNDARY'),
+        );
+        forward = http.Request(request.method, request.url)
+          ..headers.addAll(request.headers)
+          ..bodyBytes = bytes
+          ..followRedirects = false;
+      } else {
+        sendBodies.add((request as http.Request).body);
+        forward = request;
+      }
+      final response = await inner.send(forward);
       if (dropNextSend) {
         dropNextSend = false;
         expect(response.statusCode, 201);
@@ -113,11 +129,71 @@ void main() {
           if (event['op'] == 'dm_message_create') websocketMessages.add(event);
         });
         await ready.future.timeout(const Duration(seconds: 5));
+        // Both peers commit independent initial sends before either receives.
+        for (var i = 0; i < 2; i++) {
+          final peer = users[1 - i]['userId'] as String;
+          final bundles = await apis[i].request(
+            'GET',
+            '/api/users/$peer/prekey-bundles',
+          ) as List;
+          await vaults[i].chat({
+            'op': 'prepare',
+            'id': 'native-simultaneous-000$i',
+            'channel': fixture['channelId'],
+            'user': peer,
+            'plaintext': jsonEncode({
+              'content': 'simultaneous $i',
+              'file_keys': [],
+            }),
+            'bundles': [
+              for (final b in bundles) {...b as Map, 'user_id': peer},
+            ],
+          });
+        }
+        for (var i = 0; i < 2; i++) {
+          await chats[i].resumePrepared('native-simultaneous-000$i');
+          expect(chats[i].error, isNull);
+        }
+        for (final chat in chats) {
+          await chat.refresh();
+          expect(chat.sessionReviews.length, 1);
+        }
+        await chats[0].confirmSession(
+          chats[0].sessionReviews.single['token'] as String,
+          false,
+        );
+        await chats[0].select(chats[0].selected!);
+        for (final chat in chats) {
+          await chat.confirmSession(
+            chat.sessionReviews.single['token'] as String,
+            true,
+          );
+          expect(chat.error, isNull);
+          expect(chat.sessionReviews, isEmpty);
+        }
+        transports[0].sendBodies.clear();
         transports[0].dropNextSend = true;
-        await chats[0].send('Rust Windows → eş: şğıöçü 👋');
+        await chats[0].send(
+          'Rust Windows → eş: şğıöçü 👋',
+          files: [
+            {
+              'name': 'aynı.txt',
+              'mime': 'text/plain',
+              'data': base64Encode(utf8.encode('ilk dosya şğı')),
+            },
+            {
+              'name': 'aynı.txt',
+              'mime': 'text/plain',
+              'data': base64Encode(utf8.encode('ikinci dosya 👋')),
+            },
+          ],
+        );
         expect(chats[0].error, isNotNull);
         expect(chats[0].pending.single['id'], isNotEmpty);
         expect(chats[0].pending.single['delivery'], 'idempotent-v1');
+        final savedFiles = List<Map>.from(
+          chats[0].pending.single['files'] as List,
+        );
         await chats[0].close();
         await vaults[0].close();
         vaults[0] = await DeviceVault.open(apis[0]);
@@ -147,6 +223,45 @@ void main() {
           chats[1].messages.last['displayContent'],
           'Rust Windows → eş: şğıöçü 👋',
         );
+        final receivedFileMessage = chats[1].messages.last;
+        final attachments = receivedFileMessage['attachments'] as List;
+        final metadata = receivedFileMessage['fileKeys'] as List;
+        expect(attachments.length, 2);
+        expect(metadata.length, 2);
+        final encrypted = <String>[];
+        for (var i = 0; i < attachments.length; i++) {
+          expect(attachments[i]['upload_index'], i);
+          final response = await http.get(
+            Uri.parse('http://127.0.0.1:19090${attachments[i]['file_url']}'),
+            headers: {
+              'Authorization': 'Bearer ${apis[1].session!.accessToken}',
+            },
+          );
+          expect(response.statusCode, 200);
+          encrypted.add(base64Encode(response.bodyBytes));
+          expect(encrypted.last, savedFiles[i]['data']);
+        }
+        final cryptoFile = File('${file.parent.path}/file-verify-private.json');
+        await cryptoFile.writeAsString(
+          jsonEncode({
+            'metadata': metadata,
+            'encrypted': encrypted,
+            'expected': ['ilk dosya şğı', 'ikinci dosya 👋'],
+          }),
+        );
+        try {
+          final verified = await Process.run('node', [
+            File.fromUri(file.uri.resolve('../scripts/verify-file-qa.mjs'))
+                .path,
+          ]);
+          expect(
+            verified.exitCode,
+            0,
+            reason: 'Independent WebCrypto file validation failed',
+          );
+        } finally {
+          await cryptoFile.delete();
+        }
         await chats[1].send('DH yanıtı 🔐');
         expect(chats[1].error, isNull);
         await chats[0].refresh();
@@ -169,7 +284,9 @@ void main() {
           next.channels.singleWhere((r) => r['id'] == fixture['channelId']),
         );
         expect(
-          next.messages.first['displayContent'],
+          next.messages.firstWhere(
+            (m) => m['displayContent'] == 'Rust Windows → eş: şğıöçü 👋',
+          )['displayContent'],
           'Rust Windows → eş: şğıöçü 👋',
         );
         expect(next.messages.last['displayContent'], 'DH yanıtı 🔐');
@@ -186,18 +303,18 @@ void main() {
           'GET',
           '/api/dms/${fixture['channelId']}/messages',
         ) as Map;
-        expect((remote['messages'] as List).length, 3);
+        expect((remote['messages'] as List).length, 5);
         for (final m in remote['messages'] as List) {
           expect(m['content'], isNull);
           expect(m['encryption_version'], 1);
         }
         final deliveryDeadline = DateTime.now().add(const Duration(seconds: 5));
-        while (websocketMessages.length < 3 &&
+        while (websocketMessages.length < 5 &&
             DateTime.now().isBefore(deliveryDeadline)) {
           await Future<void>.delayed(const Duration(milliseconds: 100));
         }
-        expect(websocketMessages.length, 3);
-        expect(websocketMessages.map((e) => e['event_id']).toSet().length, 3);
+        expect(websocketMessages.length, 5);
+        expect(websocketMessages.map((e) => e['event_id']).toSet().length, 5);
         for (final e in websocketMessages) {
           expect((e['event_id'] as String).startsWith('dm:'), true);
           expect(e['dm_sequence'], isA<String>());
@@ -228,11 +345,16 @@ void main() {
                 'secondOwnerExcluded': true,
                 'lostResponseAfterCommit': true,
                 'durableIdempotentRetryAfterReopen': true,
-                'identicalRetryPOSTBytes': true,
+                'identicalRetryPayloadAndFileBytes': true,
                 'automaticRetryAfterReopen': true,
                 'realWebSocketDurableEvents': true,
                 'replayMatchesWebSocketIDs': true,
-                'serverMessages': 3,
+                'serverMessages': 5,
+                'multipartIdempotencyAfterReopen': true,
+                'orderedEncryptedAttachments': true,
+                'independentWebCryptoFileValidation': true,
+                'simultaneousSessionConfirmation': true,
+                'cancellationBeforeConfirmation': true,
                 'physicalDevices': false,
               }),
             );
