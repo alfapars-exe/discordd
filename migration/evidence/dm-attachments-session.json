@@ -90,7 +90,7 @@
     "server/repository/sqlite_dm_attachments.go": "5bd6384b25bcd4eb1df44a4e3ad27640cfadf7755ed1ec02ccaec59e71c9ed47",
     "server/services/dm_attachment_receipt_test.go": "7aaa1eb65ba8a4a94c9ad5fb4d41994a20ae3e40838f34285568b7596349dcc9",
     "server/services/dm_message.go": "6c3200ab8e3f04b140750d5d0b4f751e9ca744e812b77099c43c4759f4aa654d",
-    "server/services/dm_upload_cleanup.go": "20dc0291e6a28dfef87ac6dda0ab3319aa5173597d39938b1eac10e5306fc9dc",
+    "server/services/dm_upload_cleanup.go": "1c3bee1a6d68ca0eceeb214cb19c53d7c9cc1d77ef9b2aa8d18ce62b0965397a",
     "server/services/dm_upload_service.go": "cb68c18f44ff754d70278c8a6a298544ab8ad3aae4b91684112f973e5d835108"
   }
 }

@@ -21,7 +21,7 @@ func StartDMUploadCleanup(parent context.Context, service DMUploadService) func(
 	if !ok {
 		return func() { /* Optional upload adapters own no maintenance resources. */ }
 	}
-	ctx, cancel := context.WithCancel(parent)
+	ctx, cancel := context.WithCancel(parent) // NOSONAR: ownership transfers to worker defer and returned stop; deferring here would stop the worker immediately.
 	done := make(chan struct{})
 	go func() {
 		defer cancel() // The worker also releases its derived context on exit.
