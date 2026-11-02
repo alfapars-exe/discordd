@@ -41,19 +41,7 @@ func TestDMIdempotentMultipartRetainsBytesWhenCommitOutcomeIsUnknown(t *testing.
 	service := &dmMultipartService{failSend: true}
 	upload := &dmMultipartStager{}
 	handler := NewDMHandler(service, upload, 1024, nil, nil)
-	body := new(bytes.Buffer)
-	form := multipart.NewWriter(body)
-	_ = form.WriteField("client_message_id", "multipart-request-0001")
-	_ = form.WriteField("content", "hello")
-	part, err := form.CreateFormFile("files", "file.txt")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, _ = part.Write([]byte("abc"))
-	_ = form.Close()
-	request := withUser(httptest.NewRequest(http.MethodPost, "/", body), &models.User{ID: "alice"})
-	request.SetPathValue("channelId", "dm")
-	request.Header.Set("Content-Type", form.FormDataContentType())
+	request := dmMultipartRequest(t, "multipart-request-0001", 1)
 	out := httptest.NewRecorder()
 	handler.SendIdempotentMessage(out, request)
 	if out.Code != 500 || upload.stages != 1 || upload.discarded != 0 || service.broadcasts != 0 {
@@ -78,19 +66,7 @@ func TestDMIdempotentMultipartKeepsLegacyIgnoredFormKeyContract(t *testing.T) {
 	service := &dmMultipartService{}
 	upload := &dmMultipartStager{}
 	handler := NewDMHandler(service, upload, 1024, nil, nil)
-	body := new(bytes.Buffer)
-	form := multipart.NewWriter(body)
-	_ = form.WriteField("client_message_id", "legacy-field")
-	_ = form.WriteField("content", "hello")
-	part, err := form.CreateFormFile("files", "file.txt")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, _ = part.Write([]byte("abc"))
-	_ = form.Close()
-	request := withUser(httptest.NewRequest(http.MethodPost, "/", body), &models.User{ID: "alice"})
-	request.SetPathValue("channelId", "dm")
-	request.Header.Set("Content-Type", form.FormDataContentType())
+	request := dmMultipartRequest(t, "legacy-field", 1)
 	out := httptest.NewRecorder()
 	handler.SendMessage(out, request)
 	if out.Code != 201 || upload.uploads != 1 || upload.stages != 0 || service.sends != 1 {
@@ -116,21 +92,7 @@ func TestDMIdempotentMultipartStagesBeforeSendAndRefusesPartialCommit(t *testing
 			service := &dmMultipartService{forbidden: tc.forbidden}
 			upload := &dmMultipartStager{fail: tc.fail}
 			handler := NewDMHandler(service, upload, 1024, nil, nil)
-			body := new(bytes.Buffer)
-			form := multipart.NewWriter(body)
-			_ = form.WriteField("client_message_id", "multipart-request-0001")
-			_ = form.WriteField("content", "hello")
-			for range 2 {
-				part, err := form.CreateFormFile("files", "file.txt")
-				if err != nil {
-					t.Fatal(err)
-				}
-				_, _ = part.Write([]byte("abc"))
-			}
-			_ = form.Close()
-			request := withUser(httptest.NewRequest(http.MethodPost, "/", body), &models.User{ID: "alice"})
-			request.SetPathValue("channelId", "dm")
-			request.Header.Set("Content-Type", form.FormDataContentType())
+			request := dmMultipartRequest(t, "multipart-request-0001", 2)
 			out := httptest.NewRecorder()
 			handler.SendIdempotentMessage(out, request)
 			if out.Code != tc.status || service.sends != tc.sends || upload.stages != tc.stages || upload.discarded != tc.discarded || service.broadcasts != tc.sends {
@@ -138,4 +100,32 @@ func TestDMIdempotentMultipartStagesBeforeSendAndRefusesPartialCommit(t *testing
 			}
 		})
 	}
+}
+
+func dmMultipartRequest(t *testing.T, clientID string, files int) *http.Request {
+	t.Helper()
+	body := new(bytes.Buffer)
+	form := multipart.NewWriter(body)
+	if err := form.WriteField("client_message_id", clientID); err != nil {
+		t.Fatal(err)
+	}
+	if err := form.WriteField("content", "hello"); err != nil {
+		t.Fatal(err)
+	}
+	for range files {
+		part, err := form.CreateFormFile("files", "file.txt")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = part.Write([]byte("abc")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := form.Close(); err != nil {
+		t.Fatal(err)
+	}
+	request := withUser(httptest.NewRequest(http.MethodPost, "/", body), &models.User{ID: "alice"})
+	request.SetPathValue("channelId", "dm")
+	request.Header.Set("Content-Type", form.FormDataContentType())
+	return request
 }

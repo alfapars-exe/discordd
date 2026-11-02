@@ -81,7 +81,7 @@
     "migration/scripts/verify-file-qa.mjs": "9388d9494549aac841aa891014d4ab958272a4ce28b3ae4a2239a4c5faa2cdc7",
     "server/database/migrations/150_dm_attachment_order.sql": "118ca610b02cc641772f4fcdebb97e4a317b3992bef87497791f1eaf52d3bf9c",
     "server/database/postgres_migrations/053_dm_attachment_order.sql": "118ca610b02cc641772f4fcdebb97e4a317b3992bef87497791f1eaf52d3bf9c",
-    "server/handlers/dm_attachment_idempotent_test.go": "c0fbf5eb2574115767150c5b44f3bbd7876cdd5c656824c9ed679937bac3f4ca",
+    "server/handlers/dm_attachment_idempotent_test.go": "85f5b573043fd5eeea426fa0268a0d32d841f1e4bed0be77249d77cbfcaf5405",
     "server/handlers/dm_send_files.go": "e6b8e66ff48ac977ee69fb580bd9c287eee272b552228838f7a865b4b756b06c",
     "server/handlers/dm.go": "c0ea025005b5e76853d64547272ffe96cc3b49814e9ec1bd5d78440d1ab1e7f0",
     "server/main.go": "783cb5cec5ebfbc84c074cf52266d661af9b1e898e1782fc5564a8610a2c9a28",
