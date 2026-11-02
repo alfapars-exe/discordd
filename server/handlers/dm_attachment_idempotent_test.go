@@ -17,6 +17,7 @@ type dmMultipartService struct {
 	services.DMService
 	sends, broadcasts int
 	forbidden         bool
+	failSend          bool
 }
 
 func (s *dmMultipartService) GetMessages(context.Context, string, string, string, int) (*models.DMMessagePage, error) {
@@ -27,10 +28,37 @@ func (s *dmMultipartService) GetMessages(context.Context, string, string, string
 }
 func (s *dmMultipartService) SendMessage(_ context.Context, _, _ string, req *models.CreateDMMessageRequest) (*models.DMMessage, error) {
 	s.sends++
+	if s.failSend {
+		return nil, pkg.ErrInternal
+	}
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
 	return &models.DMMessage{Attachments: req.StagedAttachments}, nil
+}
+
+func TestDMIdempotentMultipartRetainsBytesWhenCommitOutcomeIsUnknown(t *testing.T) {
+	service := &dmMultipartService{failSend: true}
+	upload := &dmMultipartStager{}
+	handler := NewDMHandler(service, upload, 1024, nil, nil)
+	body := new(bytes.Buffer)
+	form := multipart.NewWriter(body)
+	_ = form.WriteField("client_message_id", "multipart-request-0001")
+	_ = form.WriteField("content", "hello")
+	part, err := form.CreateFormFile("files", "file.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = part.Write([]byte("abc"))
+	_ = form.Close()
+	request := withUser(httptest.NewRequest(http.MethodPost, "/", body), &models.User{ID: "alice"})
+	request.SetPathValue("channelId", "dm")
+	request.Header.Set("Content-Type", form.FormDataContentType())
+	out := httptest.NewRecorder()
+	handler.SendIdempotentMessage(out, request)
+	if out.Code != 500 || upload.stages != 1 || upload.discarded != 0 || service.broadcasts != 0 {
+		t.Fatalf("ambiguous outcome: status=%d stages=%d discarded=%d broadcasts=%d", out.Code, upload.stages, upload.discarded, service.broadcasts)
+	}
 }
 func (s *dmMultipartService) BroadcastCreate(*models.DMMessage) { s.broadcasts++ }
 

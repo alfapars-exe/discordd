@@ -171,6 +171,48 @@ func TestDMIdempotentAttachmentsConflictDeletionAndFailedStage(t *testing.T) {
 }
 
 type attachmentFaultTx struct{ repository.DMMessageTxRunner }
+type attachmentUnknownOutcomeRepo struct{ repository.DMRepository }
+
+func (r attachmentUnknownOutcomeRepo) CreateAttachment(context.Context, *models.DMAttachment) error {
+	return pkg.ErrInternal
+}
+
+func TestDMIdempotentAttachmentsUploadRetainsUnknownAutocommitBytes(t *testing.T) {
+	_, upload, _, repo := attachmentReceiptFixture(t)
+	upload.dmRepo = attachmentUnknownOutcomeRepo{repo}
+	file, err := os.CreateTemp(t.TempDir(), "source")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	if _, err = file.WriteString("pending"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = file.Seek(0, 0); err != nil {
+		t.Fatal(err)
+	}
+	_, err = upload.Upload(context.Background(), "message", file, &multipart.FileHeader{Filename: "pending.txt", Size: 7}, false)
+	if err == nil {
+		t.Fatal("expected ambiguous autocommit error")
+	}
+	files, err := os.ReadDir(upload.uploadDir)
+	if err != nil || len(files) != 1 {
+		t.Fatal("unknown commit bytes were deleted")
+	}
+	path := filepath.Join(upload.uploadDir, files[0].Name())
+	old := time.Now().Add(-48 * time.Hour)
+	if err = os.Chtimes(path, old, old); err != nil {
+		t.Fatal(err)
+	}
+	if err = upload.cleanupStagedUploads(context.Background(), time.Now().Add(-24*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	files, err = os.ReadDir(upload.uploadDir)
+	if err != nil || len(files) != 0 {
+		t.Fatal("unreferenced bytes were not reclaimed after grace")
+	}
+}
+
 type attachmentFaultNotification struct {
 	repository.NotificationRepository
 }

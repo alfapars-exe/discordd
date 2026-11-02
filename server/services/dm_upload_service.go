@@ -48,7 +48,8 @@ func (s *dmUploadService) Upload(ctx context.Context, dmMessageID string, file m
 	}
 	a.DMMessageID = dmMessageID
 	if err = s.dmRepo.CreateAttachment(ctx, a); err != nil {
-		s.Discard(a)
+		// Autocommit may have succeeded despite a lost DB acknowledgment.
+		// The staged-file maintenance grace protects an in-flight commit.
 		return nil, err
 	}
 	return a, nil

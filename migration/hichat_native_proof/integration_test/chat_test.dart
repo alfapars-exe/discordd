@@ -253,7 +253,6 @@ void main() {
           final verified = await Process.run('node', [
             File.fromUri(file.uri.resolve('../scripts/verify-file-qa.mjs'))
                 .path,
-            cryptoFile.path,
           ]);
           expect(
             verified.exitCode,

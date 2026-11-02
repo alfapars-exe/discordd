@@ -330,12 +330,16 @@ func (h *DMHandler) sendMessage(w http.ResponseWriter, r *http.Request, requireR
 			pkg.Error(w, err)
 			return
 		}
-		defer stagedCleanup()
 	}
 	msg, err := h.dmService.SendMessage(r.Context(), user.ID, channelID, req)
 	if err != nil {
 		pkg.Error(w, err)
 		return
+	}
+	// An error can mean COMMIT's acknowledgment was lost. Do not delete prepared
+	// bytes until the transaction outcome is known; aged cleanup reconciles them.
+	if stagedCleanup != nil {
+		defer stagedCleanup()
 	}
 
 	var uploadFailures []dmUploadFailure

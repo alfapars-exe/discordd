@@ -19,11 +19,12 @@ var dmStageName = regexp.MustCompile(`^dmstage_[a-f0-9]{16}_`)
 func StartDMUploadCleanup(parent context.Context, service DMUploadService) func() {
 	s, ok := service.(*dmUploadService)
 	if !ok {
-		return func() {}
+		return func() { /* Optional upload adapters own no maintenance resources. */ }
 	}
 	ctx, cancel := context.WithCancel(parent)
 	done := make(chan struct{})
 	go func() {
+		defer cancel() // The worker also releases its derived context on exit.
 		defer close(done)
 		ticker := time.NewTicker(time.Hour)
 		defer ticker.Stop()

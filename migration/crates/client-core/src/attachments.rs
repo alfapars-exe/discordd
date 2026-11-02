@@ -52,3 +52,20 @@ pub fn prepare(files: &Value, seed: &[u8]) -> Result<(Vec<Value>, Vec<Value>), S
     }
     Ok((encrypted, metadata))
 }
+
+pub fn prepare_message(
+    files: &Value,
+    plaintext: &str,
+    seed: &[u8],
+) -> Result<(Vec<Value>, String), String> {
+    let (encrypted, metadata) = prepare(files, seed)?;
+    if encrypted.is_empty() {
+        return Ok((encrypted, plaintext.to_owned()));
+    }
+    let mut payload: Value = serde_json::from_str(plaintext).map_err(|_| "invalid_payload")?;
+    if !payload["content"].is_string() {
+        return Err("invalid_payload".into());
+    }
+    payload["file_keys"] = json!(metadata);
+    Ok((encrypted, payload.to_string()))
+}

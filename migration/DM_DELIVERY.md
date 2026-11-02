@@ -63,7 +63,9 @@ stage cannot create a partial message. Same key with different bytes/order or an
 edited/deleted original fails closed. A duplicate returns the original attachment
 IDs without another upload row, unread increment or create event.
 
-Concurrent requests may stage independent temporary files. Cleanup checks committed
+Concurrent requests may stage independent temporary files. An unknown message or
+attachment commit result retains staged bytes for the maintenance grace; a missing
+reference immediately after a DB error is not proof of rollback. Cleanup checks committed
 references before removing its own files, including post-commit HTTP failures.
 The singleton backend owner also reclaims only `dmstage_` files older than 24 hours
 without a committed reference. Fresh files, directories/symlinks, unrelated names

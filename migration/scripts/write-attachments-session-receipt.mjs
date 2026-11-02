@@ -27,7 +27,7 @@ const sourceFilesSHA256NormalizedLF=Object.fromEntries(await Promise.all(paths.t
 const webArtifactScope=JSON.parse(await readFile(new URL('../.local/web-artifact-scope.json',import.meta.url),'utf8'));
 const receipt={date:'2026-11-02',rustPassed:34,rustOrdinaryIgnored:2,flutterPassed:31,
  flutterAnalyzeClean:true,clippyWarningsDenied:true,windowsReleaseBuild:true,webReleaseBuild:true,
- postgresAttachmentTests:4,postgresAndSQLiteReceiptTests:true,postgresRaceDetectorLinuxContainer:true,
+ postgresAttachmentTests:5,postgresAndSQLiteReceiptTests:true,postgresRaceDetectorLinuxContainer:true,
  postgresDatabaseRepositoryHandlerServiceSuites:true,windows,web,webArtifactScope,
  previewFileLimits:{perFileBytes:1048576,totalBytes:2097152,count:10},
  physicalDevicesAccepted:false,sourceFilesSHA256NormalizedLF};
