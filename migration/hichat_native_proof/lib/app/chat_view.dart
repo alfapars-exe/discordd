@@ -1,9 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:file_selector/file_selector.dart';
 
+import 'attachment_download.dart';
+import 'attachment_save.dart';
 import 'chat.dart';
 
 class ChatView extends StatefulWidget {
@@ -16,6 +19,9 @@ class ChatView extends StatefulWidget {
 class _ChatViewState extends State<ChatView> {
   final composer = TextEditingController(), recipient = TextEditingController();
   List<Map<String, dynamic>> files = [];
+  AttachmentDownload? _download;
+  Object? _downloadId;
+  bool _downloading = false;
   ChatController get c => widget.controller;
   @override
   void initState() {
@@ -50,35 +56,167 @@ class _ChatViewState extends State<ChatView> {
     final selected = await openFiles();
     if (selected.isEmpty) return;
     if (!mounted || !c.current) return;
+    late final int limit;
+    try {
+      limit = await owner.attachmentLimit();
+    } catch (_) {
+      _attachmentNotice('Dosya gönderme sınırı alınamadı.');
+      return;
+    }
     var size = 0;
     final next = <Map<String, dynamic>>[];
     for (final file in selected) {
       final length = await file.length();
       size += length;
-      if (length > 1024 * 1024 ||
-          size > 2 * 1024 * 1024 ||
-          selected.length > 10) {
+      if (length > limit || size > limit || selected.length > 10) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
+            SnackBar(
               content: Text(
-                'Dosya başına 1 MiB, toplam 2 MiB ve en çok 10 dosya.',
+                'Toplam sınır: ${limit ~/ 1024} KiB ve en çok 10 dosya.',
               ),
             ),
           );
         }
         return;
       }
-      final data = await file.readAsBytes();
+      final data = BytesBuilder(copy: false);
+      await for (final chunk in file.openRead(0, length)) {
+        if (!mounted || !owner.current || data.length + chunk.length > length) {
+          return;
+        }
+        data.add(chunk);
+      }
       if (data.length != length) return;
       next.add({
         'name': file.name,
         'mime': file.mimeType ?? 'application/octet-stream',
-        'data': base64Encode(data),
+        'data': base64Encode(data.takeBytes()),
       });
     }
     if (mounted && identical(owner, c) && owner.current) {
       setState(() => files = next);
+    }
+  }
+
+  void _attachmentNotice(String text) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    }
+  }
+
+  Iterable<Widget> _attachments(Map<String, dynamic> message) sync* {
+    final keys = message['fileKeys'];
+    final attachments = message['attachments'];
+    if (keys is! List || attachments is! List) return;
+    for (final row in attachments.whereType<Map>()) {
+      final name = row['filename'];
+      final match = name is String
+          ? RegExp(r'^encrypted_(\d+)\.bin$').firstMatch(name)
+          : null;
+      final index = int.tryParse(match?.group(1) ?? '');
+      if (index == null ||
+          (row['upload_index'] != null && row['upload_index'] != index) ||
+          row['dm_message_id'] != message['id']) {
+        continue;
+      }
+      for (final meta in keys.whereType<Map<String, dynamic>>()) {
+        if (meta['index'] != index) continue;
+        final size = meta['originalSize'];
+        if (size is! int ||
+            size < 0 ||
+            size > maxAttachmentBytes ||
+            row['file_size'] != size + 16 ||
+            row['file_url'] is! String) {
+          continue;
+        }
+        final text = meta['filename'] as String;
+        yield Wrap(
+          children: [
+            if (meta['mimeType'] == 'text/plain' && size <= 64 * 1024)
+              TextButton(
+                onPressed: _downloading
+                    ? null
+                    : () => _readFile(row, meta, preview: true),
+                child: Text('$text · Aç'),
+              ),
+            TextButton(
+              onPressed: _downloading ? null : () => _readFile(row, meta),
+              child: Text('$text · İndir'),
+            ),
+          ],
+        );
+      }
+    }
+  }
+
+  Future<void> _readFile(
+    Map row,
+    Map<String, dynamic> meta, {
+    bool preview = false,
+  }) async {
+    if (_downloading) return;
+    final owner = c;
+    final channel = owner.selected?['id'];
+    bool current() =>
+        mounted &&
+        identical(c, owner) &&
+        owner.current &&
+        owner.selected?['id'] == channel;
+    final path = row['file_url'] as String;
+    final size = row['file_size'] as int;
+    final identity = (owner, channel, row['id'], path, size, meta['digest']);
+    if (_downloadId != identity) {
+      _download = AttachmentDownload(path, size);
+      _downloadId = identity;
+    }
+    setState(() => _downloading = true);
+    try {
+      final bytes = await owner.readAttachment(_download!, meta);
+      if (!mounted || !current()) return;
+      if (preview) {
+        final text = utf8.decode(bytes);
+        await showDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(meta['filename'] as String),
+            content: StreamBuilder<void>(
+              stream: owner.api.invalidations,
+              builder: (context, _) => current()
+                  ? SingleChildScrollView(
+                      child: Semantics(
+                        label: text,
+                        excludeSemantics: true,
+                        child: SelectableText(text),
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Kapat'),
+              ),
+            ],
+          ),
+        );
+      } else {
+        await saveAttachment(
+          bytes,
+          attachmentSaveName(meta['filename'] as String),
+          current,
+        );
+      }
+    } catch (_) {
+      if (current()) {
+        _attachmentNotice('Ek açılamadı. İndirmeyi yeniden deneyebilirsiniz.');
+      }
+    } finally {
+      if (!current()) {
+        _download = null;
+        _downloadId = null;
+      }
+      if (mounted) setState(() => _downloading = false);
     }
   }
 
@@ -299,13 +437,20 @@ class _ChatViewState extends State<ChatView> {
                         'Bu cihazda mesaj açılamadı.',
                   ),
                 ),
-                subtitle: Text(
-                  '${m['author']?['display_name'] ?? m['user_id']} • ${m['created_at']}\n${(m['fileKeys'] as List? ?? []).map((f) => f['filename']).join(', ')}',
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${m['author']?['display_name'] ?? m['user_id']} • ${m['created_at']}',
+                    ),
+                    ..._attachments(m),
+                  ],
                 ),
               );
             },
           ),
         ),
+        if (_downloading) const LinearProgressIndicator(),
         if (files.isNotEmpty)
           SizedBox(
             height: 48,

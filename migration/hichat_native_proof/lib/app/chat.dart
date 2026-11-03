@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 
 import 'api.dart';
+import 'attachment_download.dart';
 import 'chat_crypto.dart';
 
 /// Uses the existing Go REST contract; crypto and durable outbox live in Rust.
@@ -93,8 +94,8 @@ class ChatController extends ChangeNotifier {
     if (code.contains('SESSION_CHANGED')) {
       return 'Oturum değişti. Tekrar giriş yapın.';
     }
-    if (code.contains('file_too_large')) {
-      return 'Önizleme sınırı: dosya başına 1 MiB, toplam 2 MiB.';
+    if (code.toLowerCase().contains('file_too_large')) {
+      return 'Ekler dosya boyutu veya toplam gönderim sınırını aşıyor.';
     }
     if (code.contains('session_review_identity_mismatch')) {
       return 'Karşı cihaz kayıtlı değil veya kimliği değişti. Onay uygulanmadı.';
@@ -210,16 +211,55 @@ class ChatController extends ChangeNotifier {
 
   static List<Map<String, dynamic>> _fileKeys(dynamic value) {
     if (value is! List) return [];
-    return value
-        .whereType<Map>()
-        .where(
-          (row) =>
-              row['filename'] is String &&
-              (row['filename'] as String).length <= 512,
-        )
-        .take(10)
-        .map((row) => Map<String, dynamic>.from(row))
-        .toList();
+    return [
+      for (var i = 0; i < min(value.length, 10); i++)
+        if (value[i] case final Map row)
+          if (row['filename'] is String &&
+              (row['filename'] as String).length <= 512)
+            {...Map<String, dynamic>.from(row), 'index': i},
+    ];
+  }
+
+  Future<int> attachmentLimit() async {
+    _check();
+    final dynamic capabilities;
+    try {
+      capabilities = await api.request('GET', '/api/dms/send-capabilities');
+    } on ApiFailure catch (error) {
+      if (error.status == 404 && current) return maxAttachmentBytes;
+      rethrow;
+    }
+    _check();
+    final bytes = capabilities is Map
+        ? capabilities['max_upload_file_bytes']
+        : null;
+    if (bytes is! int) return maxAttachmentBytes;
+    if (bytes < 16) throw const ApiFailure('FILE_TOO_LARGE');
+    return min(maxAttachmentBytes, bytes - 16);
+  }
+
+  Future<Uint8List> readAttachment(
+    AttachmentDownload download,
+    Map<String, dynamic> metadata,
+  ) async {
+    _check();
+    final epoch = _selection;
+    final digest = metadata['digest'];
+    final encrypted = await download.read(
+      api,
+      digest: digest is String ? digest : null,
+    );
+    _check();
+    if (epoch != _selection) throw const ApiFailure('MESSAGE_SCOPE_MISMATCH');
+    final vault = await _vault();
+    final result = await vault.chat({
+      'op': 'decrypt_attachment',
+      'metadata': metadata,
+      'data': base64Encode(encrypted),
+    });
+    _check();
+    if (epoch != _selection) throw const ApiFailure('MESSAGE_SCOPE_MISMATCH');
+    return base64Decode(result as String);
   }
 
   Future<void> refresh({bool older = false}) {
@@ -341,6 +381,26 @@ class ChatController extends ChangeNotifier {
       }
       if (content.runes.length > 4000) {
         throw const ApiFailure('MESSAGE_TOO_LONG');
+      }
+      if (files.isNotEmpty) {
+        final limit = await attachmentLimit();
+        var total = 0;
+        for (final file in files) {
+          final data = file['data'] as String;
+          if (data.length > ((limit + 2) ~/ 3) * 4) {
+            throw const ApiFailure('FILE_TOO_LARGE');
+          }
+          total +=
+              (data.length ~/ 4) * 3 -
+              (data.endsWith('==')
+                  ? 2
+                  : data.endsWith('=')
+                  ? 1
+                  : 0);
+        }
+        if (files.length > 10 || total > limit) {
+          throw const ApiFailure('FILE_TOO_LARGE');
+        }
       }
       final v = await _vault();
       if (channel['e2ee_enabled'] != true) {

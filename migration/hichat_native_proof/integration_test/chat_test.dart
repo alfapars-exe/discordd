@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:hichat_native_proof/src/rust/frb_generated.dart';
 import 'package:hichat_native_proof/app/api.dart';
+import 'package:hichat_native_proof/app/attachment_download.dart';
 import 'package:hichat_native_proof/app/chat.dart';
 import 'package:hichat_native_proof/app/device_vault.dart';
 
@@ -16,6 +17,8 @@ class ExpiredAccessFixture extends http.BaseClient {
   bool armed = false, injected = false;
   int refreshes = 0;
   bool dropNextSend = false;
+  bool truncateNextRange = false;
+  final ranges = <String>[];
   final sendBodies = <String>[];
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
@@ -57,6 +60,23 @@ class ExpiredAccessFixture extends http.BaseClient {
         expect(response.statusCode, 201);
         await response.stream.drain<void>();
         throw http.ClientException('fixture discards committed response');
+      }
+      return response;
+    }
+    final range = request.headers['Range'];
+    if (range != null) {
+      ranges.add(range);
+      final response = await inner.send(request);
+      if (truncateNextRange) {
+        truncateNextRange = false;
+        expect(response.statusCode, 206);
+        final bytes = await response.stream.toBytes();
+        return http.StreamedResponse(
+          Stream.value(bytes.sublist(0, 7)),
+          206,
+          contentLength: response.contentLength,
+          headers: response.headers,
+        );
       }
       return response;
     }
@@ -228,6 +248,27 @@ void main() {
         final metadata = receivedFileMessage['fileKeys'] as List;
         expect(attachments.length, 2);
         expect(metadata.length, 2);
+        final first = attachments.first as Map;
+        final download = AttachmentDownload(
+          first['file_url'] as String,
+          first['file_size'] as int,
+        );
+        final firstMeta = Map<String, dynamic>.from(metadata.first as Map);
+        transports[1].truncateNextRange = true;
+        await expectLater(
+          chats[1].readAttachment(download, firstMeta),
+          throwsA(isA<ApiFailure>()),
+        );
+        expect(
+          utf8.decode(
+            await chats[1].readAttachment(
+              AttachmentDownload(download.path, download.size),
+              firstMeta,
+            ),
+          ),
+          'ilk dosya şğı',
+        );
+        expect(transports[1].ranges.last, startsWith('bytes=7-'));
         final encrypted = <String>[];
         for (var i = 0; i < attachments.length; i++) {
           expect(attachments[i]['upload_index'], i);
@@ -337,6 +378,7 @@ void main() {
               jsonEncode({
                 'realGoAPI': true,
                 'postgresMutualTLS': true,
+                'attachmentRangeResumeAndRustDecrypt': true,
                 'rustFFI': true,
                 'freshDeviceRegistration': true,
                 'bidirectionalEncryptedDM': true,

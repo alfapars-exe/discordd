@@ -12,7 +12,7 @@ export function apiPath(input) {
 }
 export function requestHeaders(headers) {
   const result = {host:'127.0.0.1:19090', origin:'http://localhost'};
-  for (const name of ['authorization','content-type','content-length','cookie','x-requested-with','x-csrf-token','x-client-type','x-hichat-client']) {
+  for (const name of ['authorization','content-type','content-length','cookie','range','x-requested-with','x-csrf-token','x-client-type','x-hichat-client']) {
     if (headers[name] !== undefined) result[name] = headers[name];
   }
   return result;
@@ -23,7 +23,12 @@ export function responseHeaders(incoming, response) {
   if (!Number.isInteger(status) || status < 200 || status > 599 || (status >= 300 && status < 400)) {
     response.writeHead(502);response.end('Unexpected fixture response');return false;
   }
-  response.setHeader('Content-Type','application/json');
+  response.setHeader('Content-Type',status === 206 ? 'application/octet-stream' : 'application/json');
+  if (status === 206) {
+    for (const name of ['content-range', 'content-length']) {
+      if (incoming.headers[name]) response.setHeader(name, incoming.headers[name]);
+    }
+  }
   if (incoming.headers['set-cookie']) response.setHeader('Set-Cookie',incoming.headers['set-cookie']);
   response.writeHead(status);return true;
 }

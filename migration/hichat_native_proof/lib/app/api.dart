@@ -246,6 +246,54 @@ class HiChatApi {
     }
   }
 
+  Future<http.StreamedResponse> attachmentRange(
+    String path,
+    int start,
+    int end,
+  ) async {
+    final scope = generation;
+    final current = session;
+    if (current == null) throw const ApiFailure('LOGIN_REQUIRED');
+    if (!RegExp(r'^/api/uploads/[A-Za-z0-9._%~-]+$').hasMatch(path) ||
+        RegExp(r'%2f|%5c|%00|%2e|%25', caseSensitive: false).hasMatch(path) ||
+        path.endsWith('/.') ||
+        path.endsWith('/..')) {
+      throw const ApiFailure('INVALID_ATTACHMENT_PATH');
+    }
+    Future<http.StreamedResponse> send(String token) {
+      final request = http.Request('GET', origin.resolve(path))
+        ..followRedirects = false
+        ..headers['Authorization'] = 'Bearer $token'
+        ..headers['X-HiChat-Client'] = 'web'
+        ..headers['Range'] = 'bytes=$start-$end';
+      return transport.send(request).timeout(const Duration(seconds: 20));
+    }
+
+    var response = await send(current.accessToken);
+    if (response.statusCode == 401 && isCurrent(scope)) {
+      await response.stream.listen(null).cancel();
+      await _refreshIfCurrent(scope, current);
+      response = await send(session!.accessToken);
+    }
+    if (!isCurrent(scope)) {
+      await response.stream.listen(null).cancel();
+      throw const ApiFailure('SESSION_CHANGED');
+    }
+    return response;
+  }
+
+  Future<void> _refreshIfCurrent(int scope, Session original) async {
+    if (session?.accessToken == original.accessToken) {
+      final pending = _refreshing ??= _refresh(scope);
+      try {
+        await pending;
+      } finally {
+        if (identical(_refreshing, pending)) _refreshing = null;
+      }
+    }
+    if (!isCurrent(scope)) throw const ApiFailure('SESSION_CHANGED');
+  }
+
   Future<dynamic> request(
     String method,
     String path, {
@@ -267,15 +315,7 @@ class HiChatApi {
       return data;
     } on ApiFailure catch (error) {
       if (error.status != 401 || !isCurrent(scope)) rethrow;
-      if (session?.accessToken == current.accessToken) {
-        final pending = _refreshing ??= _refresh(scope);
-        try {
-          await pending;
-        } finally {
-          if (identical(_refreshing, pending)) _refreshing = null;
-        }
-      }
-      if (!isCurrent(scope)) throw const ApiFailure('SESSION_CHANGED');
+      await _refreshIfCurrent(scope, current);
       final data = await _send(
         method,
         path,

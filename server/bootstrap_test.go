@@ -27,6 +27,28 @@ func newCORSHandlerForTest(t *testing.T) http.Handler {
 	return corsHandler.Handler(inner)
 }
 
+func TestCORSAttachmentRanges(t *testing.T) {
+	handler := newCORSHandlerForTest(t)
+	req := httptest.NewRequest(http.MethodOptions, "/api/uploads/encrypted.bin", nil)
+	req.Header.Set("Origin", "http://localhost:3030")
+	req.Header.Set("Access-Control-Request-Method", http.MethodGet)
+	req.Header.Set("Access-Control-Request-Headers", "authorization,range")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Header().Get("Access-Control-Allow-Origin") != "http://localhost:3030" ||
+		rec.Header().Get("Access-Control-Allow-Headers") == "" {
+		t.Fatalf("attachment preflight rejected: %v", rec.Header())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/uploads/encrypted.bin", nil)
+	req.Header.Set("Origin", "http://localhost:3030")
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Header().Get("Access-Control-Expose-Headers") != "Content-Range" {
+		t.Fatalf("attachment range header not exposed: %v", rec.Header())
+	}
+}
+
 func preflight(t *testing.T, h http.Handler, origin string) *http.Response {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodOptions, "/api/auth/register", nil)

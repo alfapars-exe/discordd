@@ -47,9 +47,9 @@ Windows/web implementation and physical-device acceptance are tracked separately
 
 | ID | Work still required |
 |---|---|
-| W1 | Implemented: automatic text/multipart retry, transactional DM outbox and explicit, state-bound simultaneous-session confirmation. Legacy uncertain sends remain reconciliation-only. The preview bounds files to 1 MiB each / 2 MiB total; full attachment/product parity remains W3. |
+| W1 | Implemented: automatic text/multipart retry, transactional DM outbox and explicit, state-bound simultaneous-session confirmation. Legacy uncertain sends remain reconciliation-only. |
 | W2 | Channel/group orchestration: sender-key distribution, membership/epoch changes, receive/fanout and imported pending-group delivery. Pure crypto kernels are not the complete dispatcher. |
-| W3 | Full attachment size/thumbnail parity, secure file opening/download recovery, uncached historical ciphertext, editing/deletion/reactions/search and complete unread/read flows. |
+| W3 | Encrypted DM attachments support verified download, UTF-8 text preview, protected byte-range resume across reopening, and an advertised upload limit capped at 25 MiB minus the GCM tag for the whole selection. Thumbnail previews, other inline formats, uncached historical ciphertext, editing/deletion/reactions/search and complete unread/read flows remain open. |
 | W4 | Existing design/feature and Turkish/English parity, server/channel/group/friend/settings UI, full keyboard/IME/screen-reader acceptance and session restoration across application starts. |
 | W5 | P2P screen/source renegotiation and TURN/NAT, seamless SFU rekey/reconnect, original DSP/noise parity, global PTT and complete platform integration. |
 | W6 | Flutter installers with original identity/data continuity and real automatic upgrades; production web hosting with COOP/COEP/WASM MIME. Portable preview is separate from stable Go/Electron 2.11.125. |
