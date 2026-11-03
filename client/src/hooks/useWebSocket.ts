@@ -34,6 +34,7 @@ import type { WSMessage, UserStatus } from "../types";
 import { handleChannelEvent } from "./ws/channelEventHandlers";
 import { setDurableChannelSends } from "../stores/shared/channelSendIntent";
 import { dispatchChannelDelivery, resyncChannelDelivery } from "./ws/channelDelivery";
+import { dispatchDMDelivery } from "./ws/dmDelivery";
 import { useMessageStore } from "../stores/messageStore";
 import { handleDMEvent } from "./ws/dmEventHandlers";
 import { handleVoiceEvent } from "./ws/voiceEventHandlers";
@@ -233,7 +234,8 @@ export function useWebSocket() {
    * accessed-before-declared.
    */
   async function routeEvent(msg: WSMessage, isCurrent: () => boolean = () => true) {
-    return dispatchChannelDelivery(msg, () => routePlainEvent(msg, isCurrent), isCurrent);
+    return dispatchDMDelivery(msg, (current) =>
+      dispatchChannelDelivery(msg, () => routePlainEvent(msg, current), current), isCurrent);
   }
 
   async function routePlainEvent(msg: WSMessage, isCurrent: () => boolean = () => true) {

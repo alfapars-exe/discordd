@@ -255,8 +255,9 @@ export async function handleDMEvent(msg: WSMessage, isCurrent: () => boolean = (
       let dmUpdateMsg = msg.d;
       const dmEditCurrentUserId = useAuthStore.getState().user?.id;
       const generation=useComposerDraftStore.getState().generation,device=useE2EEStore.getState().localDeviceId;
+      const authGeneration=getAuthGeneration();
       const versionCurrent=observeDMMessage(dmUpdateMsg.dm_channel_id,dmUpdateMsg.id,false,dmUpdateMsg);
-      const current=()=>versionCurrent()&&Boolean(dmEditCurrentUserId)&&useAuthStore.getState().user?.id===dmEditCurrentUserId&&useComposerDraftStore.getState().generation===generation&&useE2EEStore.getState().localDeviceId===device;
+      const current=()=>isCurrent()&&getAuthGeneration()===authGeneration&&versionCurrent()&&Boolean(dmEditCurrentUserId)&&useAuthStore.getState().user?.id===dmEditCurrentUserId&&useComposerDraftStore.getState().generation===generation&&useE2EEStore.getState().localDeviceId===device;
       if(!current())return true;
 
       if (dmUpdateMsg.encryption_version === 1 && dmUpdateMsg.ciphertext && dmUpdateMsg.sender_device_id) {
