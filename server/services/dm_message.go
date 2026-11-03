@@ -623,8 +623,19 @@ func (s *dmService) MarkUnreadFrom(ctx context.Context, userID, channelID, messa
 	if _, err := s.verifyChannelMembership(ctx, userID, channelID); err != nil {
 		return 0, err
 	}
-	count, err := s.dmReadRepo.MarkUnreadFrom(ctx, userID, channelID, messageID)
-	if err != nil {
+	var count int
+	if err := s.txRunner.InTx(ctx, func(r *repository.DMTxRepos) error {
+		// Match sends and MarkRead: lock the channel before dm_reads. Its
+		// PostgreSQL trigger also locks the channel to capture source order.
+		if r.LockChannel != nil {
+			if err := r.LockChannel(ctx, channelID); err != nil {
+				return err
+			}
+		}
+		var err error
+		count, err = r.DMRead.MarkUnreadFrom(ctx, userID, channelID, messageID)
+		return err
+	}); err != nil {
 		return 0, err
 	}
 	s.hub.BroadcastToUser(userID, ws.Event{Op: ws.OpDMRead, Data: map[string]any{

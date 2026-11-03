@@ -247,6 +247,24 @@ describe("useWebSocket offline/online handling", () => {
     expect(liveHandlersFor("online")).toHaveLength(1);
   });
 
+  it("deduplicates durable DM frames before handlers, including after reconnect", async () => {
+    await mountHook();
+    const frame = JSON.stringify({
+      op: "dm_message_update", event_id: "dm:reconnect-edit", dm_sequence: "3",
+      d: { dm_channel_id: "reconnect-dm", id: "message" },
+    });
+    await act(async () => {
+      lastSocket().onmessage?.({data: frame} as MessageEvent);
+      lastSocket().onmessage?.({data: frame} as MessageEvent);
+    });
+    expect(handleDMEvent).toHaveBeenCalledOnce();
+    await act(async () => { window.dispatchEvent(new Event("offline")); });
+    await act(async () => { window.dispatchEvent(new Event("online")); });
+    await act(async () => { lastSocket().onmessage?.({data: frame} as MessageEvent); });
+    expect(FakeWebSocket.instances).toHaveLength(2);
+    expect(handleDMEvent).toHaveBeenCalledOnce();
+  });
+
   it("signs out only the revoked socket's current session", async () => {
     await mountHook();
     await act(async () => lastSocket().onclose?.({ code: 4001, reason: "session_revoked", wasClean: true } as CloseEvent));

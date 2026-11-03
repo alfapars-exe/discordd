@@ -252,6 +252,8 @@ export interface WSPayloadMap {
 export interface WSEnvelope {
   event_id?: string;
   channel_sequence?: number;
+  /** Decimal string preserves the PostgreSQL BIGINT event sequence. */
+  dm_sequence?: string;
   seq?: number;
   server_id?: string;
   /** Voice-domain mutation fence, separate from the transport sequence. */

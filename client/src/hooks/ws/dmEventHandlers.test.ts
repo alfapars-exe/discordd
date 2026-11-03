@@ -61,6 +61,7 @@ vi.mock("../../utils/notifications", () => ({ showNotification: vi.fn() }));
 vi.mock("../../utils/textToSpeech", () => ({ speakIncomingMessage: vi.fn() }));
 
 import { handleDMEvent } from "./dmEventHandlers";
+import { dispatchDMDelivery } from "./dmDelivery";
 import { playNotificationSound } from "../../utils/sounds";
 import { showNotification } from "../../utils/notifications";
 import { markDMRead } from "../../api/dm";
@@ -123,6 +124,54 @@ beforeEach(() => {
 });
 
 describe("handleDMEvent — dm_message_create cue gating", () => {
+  it("decrypts a durable encrypted edit once across concurrent and later redelivery", async () => {
+    let finish!: (payload: {content: string}) => void;
+    vi.mocked(decryptDMMessage).mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+    const event: WSMessage = {
+      op: "dm_message_update", event_id: "dm:durable-edit", dm_sequence: "42",
+      d: makeDMMessage({encryption_version: 1, ciphertext: "single-use-envelope", sender_device_id: "remote"}),
+    };
+    const deliver = () => dispatchDMDelivery(event, async current => { await handleDMEvent(event, current); }, () => true);
+    const first = deliver();
+    const duplicate = deliver();
+    await vi.waitFor(() => expect(decryptDMMessage).toHaveBeenCalledOnce());
+    finish({content: "readable edited message"});
+    await Promise.all([first, duplicate]);
+    await deliver();
+    expect(decryptDMMessage).toHaveBeenCalledOnce();
+    expect(dmStoreState.handleDMMessageUpdate).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({content: "readable edited message"}));
+  });
+
+  it("does not publish an encrypted edit after its connection becomes stale", async () => {
+    let finish!: (payload: {content: string}) => void;
+    let current = true;
+    vi.mocked(decryptDMMessage).mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+    const edit = handleDMEvent({op: "dm_message_update", d: makeDMMessage({encryption_version: 1, ciphertext: "cipher", sender_device_id: "remote"})}, () => current);
+    current = false;
+    finish({content: "stale edit"});
+    await edit;
+    expect(dmStoreState.handleDMMessageUpdate).not.toHaveBeenCalled();
+  });
+
+  it("finishes an accepted durable edit through reconnect without consuming its envelope again", async () => {
+    let finish!: (payload: {content: string}) => void;
+    let oldConnectionCurrent = true;
+    vi.mocked(decryptDMMessage).mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+    const event: WSMessage = {
+      op: "dm_message_update", event_id: "dm:reconnecting-edit", dm_sequence: "43",
+      d: makeDMMessage({encryption_version: 1, ciphertext: "reconnect-envelope", sender_device_id: "remote"}),
+    };
+    const apply = async (current: () => boolean) => { await handleDMEvent(event, current); };
+    const first = dispatchDMDelivery(event, apply, () => oldConnectionCurrent);
+    await vi.waitFor(() => expect(decryptDMMessage).toHaveBeenCalledOnce());
+    oldConnectionCurrent = false;
+    const replay = dispatchDMDelivery(event, apply, () => true);
+    finish({content: "still readable after reconnect"});
+    await Promise.all([first, replay]);
+    expect(decryptDMMessage).toHaveBeenCalledOnce();
+    expect(dmStoreState.handleDMMessageUpdate).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({content: "still readable after reconnect"}));
+  });
+
   it("scopes deleted-message cache cleanup to its captured session",async()=>{
     await handleDMEvent({op:"dm_message_delete",d:{dm_channel_id:"dm-1",id:"msg-1"}});
     expect(deleteCachedDMMessage).toHaveBeenCalledWith("msg-1","dm-1",expect.any(Function));
