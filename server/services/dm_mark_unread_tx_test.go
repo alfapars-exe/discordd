@@ -81,15 +81,16 @@ func TestDMMarkUnreadFrom_ChannelFirstTransaction(t *testing.T) {
 				userID = "outsider"
 			}
 			count, err := f.svc.MarkUnreadFrom(context.Background(), userID, "ch-1", "m-2")
-			if failure == "membership" {
+			switch {
+			case failure == "membership":
 				if !errors.Is(err, pkg.ErrForbidden) || count != 0 || len(steps) != 0 {
 					t.Fatalf("unauthorized mutation: count=%d err=%v steps=%v", count, err, steps)
 				}
-			} else if failure != "" {
+			case failure != "":
 				if !errors.Is(err, injected) || count != 0 {
 					t.Fatalf("failed transaction: count=%d err=%v", count, err)
 				}
-			} else if err != nil || count != 3 || !reflect.DeepEqual(steps, []string{"begin", "lock", "write", "commit", "broadcast"}) {
+			case err != nil || count != 3 || !reflect.DeepEqual(steps, []string{"begin", "lock", "write", "commit", "broadcast"}):
 				t.Fatalf("count=%d err=%v steps=%v", count, err, steps)
 			}
 		})
