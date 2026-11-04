@@ -673,7 +673,7 @@ fn confirm_session(v: &mut Value, c: &Value, seed: &[u8]) -> Result<Value> {
 
 /// Commands accept entropy from the platform CSPRNG; private state is never logged.
 pub fn transition(snapshot: &str, command: &str, entropy: &[u8]) -> Result<String> {
-    if snapshot.len() > 96 * 1024 * 1024 || command.len() > 4 * 1024 * 1024 {
+    if snapshot.len() > 96 * 1024 * 1024 || command.len() > 36 * 1024 * 1024 {
         return Err("chat_input_too_large".into());
     }
     let c: Value = serde_json::from_str(command).map_err(|_| "invalid_command")?;
@@ -682,6 +682,7 @@ pub fn transition(snapshot: &str, command: &str, entropy: &[u8]) -> Result<Strin
     } else {
         let mut v: Value = serde_json::from_str(snapshot).map_err(|_| "invalid_snapshot")?;
         let output = match c["op"].as_str() {
+            Some("decrypt_attachment") => crate::attachments::decrypt(&c["metadata"], &c["data"])?,
             Some("inspect") => {
                 json!({"ownIdentityFingerprint":format!("{:x}",Sha256::digest(identity(&v)?.public_key.0)),"pending":v["chatPending"],"trustAlerts":v["chatTrustAlerts"],"sessionReviews":v["chatSessionReviews"].as_array().map(|a|a.iter().map(|r|r["summary"].clone()).collect::<Vec<_>>())})
             }

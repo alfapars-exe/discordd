@@ -78,9 +78,16 @@ retries rebuild multipart framing around the same payload/parts. HTTP boundary
 strings may differ, so retry evidence compares fields and exact file bytes, not
 raw multipart framing. No file key is sent outside the encrypted message. Old
 servers cannot receive these sends through an unsafe fallback. The preview's
-picker is limited to ten files, 1 MiB each and 2 MiB total; existing server upload
-limits remain configurable. Secure file opening, larger-file/thumbnail parity and
-uncached historical recovery remain W3, not physical-device test excuses.
+picker accepts up to ten files and caps the plaintext selection at the smaller
+of the server's configured per-file upload limit and 25 MiB, minus the GCM tag.
+Authenticated download ranges are checked against the encrypted message's
+declared size and server attachment row. The last partial transfer is stored
+under a separate protected backend/account scope. Its path, size and authenticated
+digest bind the checkpoint to the file. A checkpoint is saved after each 4 MiB
+of progress and on a caught interruption. When the store is unavailable the
+current view can still retry from memory. Rust verifies the AES-GCM tag
+and SHA-256 digest before any bytes are shown or saved. The preview displays
+UTF-8 text up to 64 KiB in-app and offers other types as sanitized downloads.
 
 ## Explicit session confirmation
 

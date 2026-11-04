@@ -133,7 +133,8 @@ func initCORS(cfg *config.Config) (*cors.Cors, []string) {
 		// all. It MUST be allow-listed here — a header the preflight
 		// rejects is a header the browser refuses to send, which would
 		// break login for every client rather than just the desktop one.
-		AllowedHeaders:   []string{"Authorization", "Content-Type", "X-HiChat-Client"},
+		AllowedHeaders:   []string{"Authorization", "Content-Type", "X-HiChat-Client", "Range"},
+		ExposedHeaders:   []string{"Content-Range"},
 		AllowCredentials: true,
 	}), corsOrigins
 }

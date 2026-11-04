@@ -1,4 +1,4 @@
-# HiChat Rust/Flutter Windows/web preview 1.0.5
+# HiChat Rust/Flutter Windows/web preview 1.0.6
 
 This portable preview is separate from the installed HiChat desktop application.
 Extract the entire ZIP and run hichat_native_proof.exe; keep its DLL/data files.
@@ -14,7 +14,14 @@ Version 1.0.5 automatically schedules durable text-DM retries, including after
 protected-store reopening, with persisted backoff and Retry-After. Permanent
 rejection pauses automatic sends. Multipart attachments now share the durable
 idempotent path, including restart and lost-ACK recovery. This preview accepts up
-to ten files, 1 MiB each / 2 MiB total. File keys retain the legacy encrypted format.
+to ten files. In 1.0.6 the per-file and combined plaintext limit is the
+smaller of 25 MiB and the server upload limit, minus the 16-byte encryption tag.
+File keys retain the legacy encrypted format. Downloads fetch authorized byte
+ranges and resume from the retained ciphertext offset on retry, including after
+reopening the app. The last partial download is scoped to the backend and
+account and stored in the protected device store. Rust verifies the complete ciphertext and plaintext digest before
+the app offers a save or an in-app UTF-8 text preview (up to 64 KiB).
+Other types are saved with a sanitized filename and without automatic execution.
 Conflicting initial sessions require an explicit identity-verification checkbox;
 old receive states and pending bytes are preserved. The Go server adds a transactional, ordered DM
 WebSocket outbox and authorized catch-up with stable event IDs. Hub dispatch is

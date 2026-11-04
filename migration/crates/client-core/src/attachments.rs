@@ -5,6 +5,42 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use zeroize::Zeroizing;
 
+const MAX_FILE_BYTES: usize = 25 * 1024 * 1024 - 16;
+
+pub fn decrypt(meta: &Value, data: &Value) -> Result<Value, String> {
+    let size = meta["originalSize"]
+        .as_u64()
+        .filter(|&n| n <= MAX_FILE_BYTES as u64)
+        .ok_or("invalid_file_size")? as usize;
+    let decode = |value: &Value, expected: usize| {
+        let encoded = value
+            .as_str()
+            .filter(|s| s.len() == expected.div_ceil(3) * 4)
+            .ok_or("invalid_attachment_encoding")?;
+        let bytes = Zeroizing::new(
+            B64.decode(encoded)
+                .map_err(|_| "invalid_attachment_encoding")?,
+        );
+        if bytes.len() != expected {
+            return Err("invalid_attachment_size");
+        }
+        Ok(bytes)
+    };
+    let key = decode(&meta["key"], 32)?;
+    let iv = decode(&meta["iv"], 12)?;
+    let ciphertext = decode(data, size + 16)?;
+    let cipher = Aes256Gcm::new_from_slice(&key).map_err(|_| "invalid_key")?;
+    let plain = Zeroizing::new(
+        cipher
+            .decrypt(Nonce::from_slice(&iv), ciphertext.as_slice())
+            .map_err(|_| "file_authentication_failed")?,
+    );
+    if meta["digest"].as_str() != Some(&format!("{:x}", Sha256::digest(plain.as_slice()))) {
+        return Err("file_integrity_failed".into());
+    }
+    Ok(json!(B64.encode(plain.as_slice())))
+}
+
 pub fn prepare(files: &Value, seed: &[u8]) -> Result<(Vec<Value>, Vec<Value>), String> {
     let Some(files) = files.as_array() else {
         if files.is_null() {
@@ -21,11 +57,11 @@ pub fn prepare(files: &Value, seed: &[u8]) -> Result<(Vec<Value>, Vec<Value>), S
     for (i, file) in files.iter().enumerate() {
         let data = file["data"]
             .as_str()
-            .filter(|s| s.len() <= 1400000)
+            .filter(|s| s.len() <= MAX_FILE_BYTES.div_ceil(3) * 4)
             .ok_or("file_too_large")?;
         let bytes = Zeroizing::new(B64.decode(data).map_err(|_| "invalid_file")?);
         total += bytes.len();
-        if bytes.len() > 1024 * 1024 || total > 2 * 1024 * 1024 {
+        if bytes.len() > MAX_FILE_BYTES || total > MAX_FILE_BYTES {
             return Err("file_too_large".into());
         }
         let name = file["name"]
@@ -68,4 +104,36 @@ pub fn prepare_message(
     }
     payload["file_keys"] = json!(metadata);
     Ok((encrypted, payload.to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn verifies_ciphertext_and_metadata_before_returning_plaintext() {
+        let data = B64.encode(b"attachment");
+        let (files, metadata) = prepare(
+            &json!([{"name":"report.txt","mime":"text/plain","data":data}]),
+            &[7; 32],
+        )
+        .unwrap();
+        let mut meta = metadata[0].clone();
+        assert_eq!(decrypt(&meta, &files[0]["data"]).unwrap(), json!(data));
+        let invalid = json!(B64.encode([0; 26]));
+        assert_eq!(
+            decrypt(&meta, &invalid).unwrap_err(),
+            "file_authentication_failed"
+        );
+        meta["digest"] = json!("wrong");
+        assert_eq!(
+            decrypt(&meta, &files[0]["data"]).unwrap_err(),
+            "file_integrity_failed"
+        );
+        meta["originalSize"] = json!(MAX_FILE_BYTES + 1);
+        assert_eq!(
+            decrypt(&meta, &files[0]["data"]).unwrap_err(),
+            "invalid_file_size"
+        );
+    }
 }

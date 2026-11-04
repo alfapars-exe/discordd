@@ -170,7 +170,7 @@ void main() {
           c.messages.single['fileKeys'],
           metadata is List
               ? [
-                  {'filename': 'safe.txt'},
+                  {'filename': 'safe.txt', 'index': 3},
                 ]
               : isEmpty,
         );
