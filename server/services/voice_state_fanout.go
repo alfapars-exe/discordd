@@ -23,6 +23,7 @@ type voiceStateFanoutMembership interface {
 }
 
 type voiceStateFanoutEvent struct {
+	queuedAt  time.Time
 	serverID  string
 	channelID string
 	event     ws.Event
@@ -91,7 +92,7 @@ func (f *voiceStateFanout) submit(serverID string, event ws.Event) {
 		return
 	}
 	snapshot.ServerID = serverID
-	item := voiceStateFanoutEvent{serverID: serverID, channelID: channelID, event: snapshot}
+	item := voiceStateFanoutEvent{queuedAt: time.Now(), serverID: serverID, channelID: channelID, event: snapshot}
 	f.mu.Lock()
 	if f.stopping {
 		f.dropCount.Add(1)
@@ -142,14 +143,27 @@ func (f *voiceStateFanout) run(workerID uint64) {
 			stopping := f.stopping
 			if stopping {
 				f.dropCount.Add(1)
-			}
-			f.mu.Unlock()
-			if stopping {
+				f.mu.Unlock()
 				return
 			}
+			// Drain only items already queued. Every item in the batch must
+			// precede the mutation barrier and retain its FIFO position.
+			batch := []voiceStateFanoutEvent{item}
+			for n := min(len(f.queue), 15); n > 0; n-- {
+				batch = append(batch, <-f.queue)
+			}
+			f.mu.Unlock()
 			f.service.mu.RLock()
 			f.service.mu.RUnlock()
-			f.deliver(item)
+			members := make(map[string][]string)
+			for len(batch) > 0 {
+				end := 1
+				for end < len(batch) && batch[end].serverID == batch[0].serverID && batch[end].channelID == batch[0].channelID {
+					end++
+				}
+				f.deliver(batch[:end], members)
+				batch = batch[end:]
+			}
 			if !timer.Stop() {
 				select {
 				case <-timer.C:
@@ -170,22 +184,24 @@ func (f *voiceStateFanout) run(workerID uint64) {
 	}
 }
 
-func (f *voiceStateFanout) deliver(item voiceStateFanoutEvent) {
+func (f *voiceStateFanout) deliver(batch []voiceStateFanoutEvent, membersByServer map[string][]string) {
+	item := batch[0]
+	resolutionStart := time.Now()
 	s := f.service
 	provider, ok := s.hub.(ws.UserStateProvider)
 	if !ok || provider == nil || s.permResolver == nil {
-		f.dropCount.Add(1)
+		f.dropCount.Add(uint64(len(batch)))
 		voiceLogger.Warn("voice state fanout unavailable; event dropped", "server_id", item.serverID, "channel_id", item.channelID)
 		return
 	}
 	if s.channelGetter == nil {
-		f.dropCount.Add(1)
+		f.dropCount.Add(uint64(len(batch)))
 		voiceLogger.Warn("voice state fanout channel resolver unavailable; event dropped", "server_id", item.serverID, "channel_id", item.channelID)
 		return
 	}
 	members, ok := s.afkTimeoutGetter.(voiceStateFanoutMembership)
 	if !ok || members == nil {
-		f.dropCount.Add(1)
+		f.dropCount.Add(uint64(len(batch)))
 		voiceLogger.Warn("voice state fanout membership resolver unavailable; event dropped", "server_id", item.serverID)
 		return
 	}
@@ -193,22 +209,28 @@ func (f *voiceStateFanout) deliver(item voiceStateFanoutEvent) {
 	defer cancel()
 	channel, err := s.channelGetter.GetByID(ctx, item.channelID)
 	if err != nil || channel == nil || channel.ServerID != item.serverID || channel.Type != models.ChannelTypeVoice {
-		f.dropCount.Add(1)
+		f.dropCount.Add(uint64(len(batch)))
 		voiceLogger.Warn("voice state fanout channel scope verification failed; event dropped", "server_id", item.serverID, "channel_id", item.channelID)
 		return
 	}
 	onlineIDs := provider.GetOnlineUserIDsForServer(item.serverID)
 	if len(onlineIDs) > voiceStateFanoutMaxOnline {
-		f.dropCount.Add(1)
+		f.dropCount.Add(uint64(len(batch)))
 		voiceLogger.Warn("voice state fanout online recipient limit exceeded; event dropped", "server_id", item.serverID, "count", len(onlineIDs))
 		return
 	}
 	if len(onlineIDs) == 0 {
 		return
 	}
-	memberIDs, err := members.ListMemberIDs(ctx, item.serverID)
+	memberIDs, known := membersByServer[item.serverID]
+	if !known {
+		memberIDs, err = members.ListMemberIDs(ctx, item.serverID)
+		if err == nil && len(memberIDs) <= voiceStateFanoutMaxMembers {
+			membersByServer[item.serverID] = memberIDs
+		}
+	}
 	if err != nil || len(memberIDs) > voiceStateFanoutMaxMembers {
-		f.dropCount.Add(1)
+		f.dropCount.Add(uint64(len(batch)))
 		voiceLogger.Warn("voice state fanout membership resolution failed; event dropped", "server_id", item.serverID)
 		return
 	}
@@ -237,7 +259,7 @@ func (f *voiceStateFanout) deliver(item voiceStateFanoutEvent) {
 	}
 	permissions, err := resolveFreshVoiceFanoutPermissions(ctx, s.permResolver, item.channelID, recipients)
 	if err != nil {
-		f.dropCount.Add(1)
+		f.dropCount.Add(uint64(len(batch)))
 		voiceLogger.Warn("voice state fanout permission resolution failed; event dropped", "server_id", item.serverID, "channel_id", item.channelID)
 		return
 	}
@@ -251,8 +273,13 @@ func (f *voiceStateFanout) deliver(item voiceStateFanoutEvent) {
 	if len(visible) == 0 {
 		return
 	}
-	item.event.ServerID = item.serverID
-	s.hub.BroadcastToUsers(visible, item.event)
+	voiceLogger.Debug("voice fanout timing", "queue_wait", resolutionStart.Sub(item.queuedAt), "visibility_resolution", time.Since(resolutionStart), "event_count", len(batch))
+	for _, entry := range batch {
+		if f.ctx.Err() != nil {
+			return
+		}
+		s.hub.BroadcastToUsers(visible, entry.event)
+	}
 }
 
 // Voice presence is private channel metadata. A revocation committed by a

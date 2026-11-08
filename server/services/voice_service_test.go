@@ -3328,3 +3328,53 @@ func TestEnforceModerationOnJoin_NotMuted_NoGrantReapply(t *testing.T) {
 	svc.EnforceModerationOnJoin(context.Background(), "srv1", "ch1", "u1")
 	expectNoEvictionDispatch(t, calls)
 }
+
+func TestMoveUserPermissionLookupAllowsLeaveAndRejectsStaleMove(t *testing.T) {
+	service, _ := newTestVoiceService()
+	s := service.(*voiceService)
+	entered, release := make(chan struct{}), make(chan struct{})
+	defer close(release)
+	s.permResolver = &testutil.MockChannelPermResolver{ResolveChannelPermissionsFn: func(_ context.Context, user, channel string) (models.Permission, error) {
+		if user == "moderator" && channel == "source" {
+			close(entered)
+			<-release
+		}
+		return models.PermAll, nil
+	}}
+	for _, user := range []string{"target", "peer"} {
+		if err := s.JoinChannel(user, user, user, "", "source", false, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	moved := make(chan error, 1)
+	go func() { moved <- s.MoveUser(context.Background(), "moderator", "target", "destination") }()
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("permission check did not start")
+	}
+	left := make(chan error, 1)
+	go func() {
+		if err := s.LeaveChannel("peer"); err != nil {
+			left <- err
+			return
+		}
+		if err := s.LeaveChannel("target"); err != nil {
+			left <- err
+			return
+		}
+		left <- s.JoinChannel("target", "target", "target", "", "source", false, false)
+	}()
+	select {
+	case err := <-left:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("permission check blocked unrelated leave")
+	}
+	release <- struct{}{}
+	if err := <-moved; !errors.Is(err, pkg.ErrBadRequest) {
+		t.Fatalf("expected stale session rejection, got %v", err)
+	}
+}

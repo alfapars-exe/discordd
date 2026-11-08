@@ -197,18 +197,20 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 		return fmt.Errorf("%w: target is not a voice channel", pkg.ErrBadRequest)
 	}
 
-	s.mu.Lock()
+	lockStart := time.Now()
+	s.mu.RLock()
+	readStart := time.Now()
 
 	state, ok := s.states[targetUserID]
 	if !ok {
-		s.mu.Unlock()
+		s.mu.RUnlock()
 		return fmt.Errorf("%w: target user is not in a voice channel", pkg.ErrBadRequest)
 	}
 
 	sourceChannelID := state.ChannelID
 
 	if sourceChannelID == targetChannelID {
-		s.mu.Unlock()
+		s.mu.RUnlock()
 		return fmt.Errorf("%w: user is already in that channel", pkg.ErrBadRequest)
 	}
 
@@ -234,9 +236,13 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 	// error surfaced) — the exact same shape as every other permission
 	// rejection this function already returns.
 	if channel.ServerID != state.ServerID {
-		s.mu.Unlock()
+		s.mu.RUnlock()
 		return fmt.Errorf("%w: cannot move a user to a voice channel on a different server", pkg.ErrBadRequest)
 	}
+
+	generation := state.ChannelGeneration
+	s.mu.RUnlock()
+	readHeld := time.Since(readStart)
 
 	isSelfMove := moverUserID == targetUserID
 
@@ -244,44 +250,45 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 		// Self-move: only need ConnectVoice in target channel (no MoveMembers required)
 		targetPerms, err := s.permResolver.ResolveChannelPermissions(ctx, moverUserID, targetChannelID)
 		if err != nil {
-			s.mu.Unlock()
 			return fmt.Errorf("failed to resolve target channel permissions: %w", err)
 		}
 		if !targetPerms.Has(models.PermConnectVoice) {
-			s.mu.Unlock()
 			return fmt.Errorf("%w: connect voice permission required in target channel", pkg.ErrForbidden)
 		}
 	} else {
 		// Moving another user: require PermMoveMembers in both channels
 		sourcePerms, err := s.permResolver.ResolveChannelPermissions(ctx, moverUserID, sourceChannelID)
 		if err != nil {
-			s.mu.Unlock()
 			s.logError(models.LogCategoryVoice, &moverUserID, "MoveUser: source channel permission resolve failed", map[string]string{
 				"target_user": targetUserID, "source_channel": sourceChannelID, "error": pkg.ErrText(err),
 			})
 			return fmt.Errorf("failed to resolve source channel permissions: %w", err)
 		}
 		if !sourcePerms.Has(models.PermMoveMembers) {
-			s.mu.Unlock()
 			return fmt.Errorf("%w: move members permission required in source channel", pkg.ErrForbidden)
 		}
 
 		targetPerms, err := s.permResolver.ResolveChannelPermissions(ctx, moverUserID, targetChannelID)
 		if err != nil {
-			s.mu.Unlock()
 			s.logError(models.LogCategoryVoice, &moverUserID, "MoveUser: target channel permission resolve failed", map[string]string{
 				"target_user": targetUserID, "target_channel": targetChannelID, "error": pkg.ErrText(err),
 			})
 			return fmt.Errorf("failed to resolve target channel permissions: %w", err)
 		}
 		if !targetPerms.Has(models.PermMoveMembers) {
-			s.mu.Unlock()
 			return fmt.Errorf("%w: move members permission required in target channel", pkg.ErrForbidden)
 		}
 		if !targetPerms.Has(models.PermConnectVoice) {
-			s.mu.Unlock()
 			return fmt.Errorf("%w: connect voice permission required in target channel", pkg.ErrForbidden)
 		}
+	}
+
+	writeWait := time.Now()
+	s.mu.Lock()
+	writeStart := time.Now()
+	if current := s.states[targetUserID]; current != state || current.ChannelID != sourceChannelID || current.ChannelGeneration != generation {
+		s.mu.Unlock()
+		return fmt.Errorf("%w: voice session changed during move", pkg.ErrBadRequest)
 	}
 
 	sourceServerID := state.ServerID
@@ -354,7 +361,20 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 		expiresAt: time.Now().Add(30 * time.Second),
 	}
 
+	rotations := make([]ws.VoicePassphraseRotatedData, 0, len(movedSourceRotated))
+	for roomName, newPassphrase := range movedSourceRotated {
+		rotations = append(rotations, ws.VoicePassphraseRotatedData{
+			ChannelID:  sourceChannelID,
+			Passphrase: newPassphrase,
+			KeyIndex:   s.roomKeyVersions[roomName] % 256,
+			KeyEpoch:   uint64(s.roomKeyVersions[roomName]),
+			KeyContext: s.roomKeyContexts[roomName],
+		})
+	}
+
 	s.mu.Unlock()
+
+	voiceLogger.Debug("voice move lock timing", "lock_wait", readStart.Sub(lockStart)+writeStart.Sub(writeWait), "lock_held", readHeld+time.Since(writeStart))
 
 	// Tell client to switch LiveKit rooms
 	s.hub.BroadcastToUser(targetUserID, ws.Event{
@@ -364,17 +384,8 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 
 	// Tell remaining members of the source channel to re-key (excludes the
 	// moved user — they get a fresh passphrase on join via voice/token).
-	for roomName, newPassphrase := range movedSourceRotated {
-		s.hub.BroadcastToUsers(sourceRemaining, ws.Event{
-			Op: ws.OpVoicePassphraseRotated,
-			Data: ws.VoicePassphraseRotatedData{
-				ChannelID:  sourceChannelID,
-				Passphrase: newPassphrase,
-				KeyIndex:   s.roomKeyVersions[roomName] % 256,
-				KeyEpoch:   uint64(s.roomKeyVersions[roomName]),
-				KeyContext: s.roomKeyContexts[roomName],
-			},
-		})
+	for _, rotation := range rotations {
+		s.hub.BroadcastToUsers(sourceRemaining, ws.Event{Op: ws.OpVoicePassphraseRotated, Data: rotation})
 	}
 
 	// F7 review LOW fix: sourceChannelID emptied by this move (sourceRemaining

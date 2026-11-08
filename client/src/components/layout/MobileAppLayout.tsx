@@ -100,7 +100,7 @@ function MobileAppLayout({ sidebarProps, sendTyping, sendDMTyping }: MobileAppLa
       <div className="app-body">
         {/* <main> landmark — mirrors AppLayout.tsx desktop. */}
         <main className="main-area">
-          {UI_SHELL_V2 ? <DestinationView sendTyping={sendTyping} sendDMTyping={sendDMTyping} onJoinVoice={sidebarProps.onJoinVoice} /> : <SplitPaneContainer node={layout} sendTyping={sendTyping} sendDMTyping={sendDMTyping} />}
+          {UI_SHELL_V2 ? <DestinationView sendTyping={sendTyping} sendDMTyping={sendDMTyping} onJoinVoice={sidebarProps.onJoinVoice} onDisconnect={sidebarProps.onDisconnect} /> : <SplitPaneContainer node={layout} sendTyping={sendTyping} sendDMTyping={sendDMTyping} />}
         </main>
       </div>
     </div>

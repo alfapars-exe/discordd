@@ -121,6 +121,7 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
 
   const openTab = useUIStore((s) => s.openTab);
   const voiceStates = useVoiceStore((s) => s.voiceStates);
+  const pendingVoiceChannelId = useVoiceStore((s) => s.pendingVoiceChannelId);
   const currentVoiceChannelId = useVoiceStore((s) => s.currentVoiceChannelId);
   const unreadCounts = useReadStateStore((s) => s.unreadCounts);
 
@@ -399,6 +400,7 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
                         key={ch.id}
                         channel={ch}
                         isActive={chActive}
+                        isConnecting={isVoice && ch.id === pendingVoiceChannelId}
                         unread={unread}
                         isEffectivelyMuted={isEffectivelyMuted}
                         isVoiceLocked={isVoiceLocked}

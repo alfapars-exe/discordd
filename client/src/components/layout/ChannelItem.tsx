@@ -6,6 +6,7 @@ import type { Channel } from "../../types";
 type ChannelItemProps = {
   channel: Channel;
   isActive: boolean;
+  isConnecting?: boolean;
   unread: number;
   isEffectivelyMuted: boolean;
   isVoiceLocked: boolean;
@@ -38,6 +39,7 @@ type ChannelItemProps = {
 function ChannelItem({
   channel,
   isActive,
+  isConnecting,
   unread,
   isEffectivelyMuted,
   isVoiceLocked,
@@ -148,6 +150,7 @@ function ChannelItem({
         ) : (
           <span className="ch-tree-label">{channel.name}</span>
         )}
+        {isConnecting && <span role="status">{tVoice("connectingToVoice")}</span>}
         {unread > 0 && !isEffectivelyMuted && (
           <span className="ch-tree-unread-dot" title={`${unread}`} />
         )}

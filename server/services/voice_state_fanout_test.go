@@ -330,3 +330,57 @@ func TestVoiceStateFanoutShutdownCancelsAndRejectsFurtherEvents(t *testing.T) {
 	default:
 	}
 }
+
+func TestVoiceFanoutReadyBurstSharesLookupAndKeepsOrder(t *testing.T) {
+	entered, resume := make(chan struct{}), make(chan struct{})
+	published := make(chan string, 5)
+	hub := &fanoutTestHub{online: []string{"viewer", "hidden"}}
+	hub.BroadcastToUsersFn = func(ids []string, e ws.Event) {
+		if !reflect.DeepEqual(ids, []string{"viewer"}) {
+			t.Errorf("unexpected recipients %v", ids)
+		}
+		published <- e.Data.(ws.VoiceStateUpdateBroadcast).UserID
+	}
+	lookups := 0
+	service := newFanoutTestService(hub, fanoutTestMembers{ids: hub.online}, func(ctx context.Context, _ string, _ []string) (map[string]models.Permission, error) {
+		lookups++
+		if lookups == 1 {
+			close(entered)
+			select {
+			case <-resume:
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		}
+		return map[string]models.Permission{"viewer": models.PermViewChannel}, nil
+	})
+	f := newVoiceStateFanout(service)
+	defer f.shutdown()
+	submit := func(id string) {
+		f.submit("server-1", ws.Event{Op: ws.OpVoiceStateUpdate, Data: ws.VoiceStateUpdateBroadcast{UserID: id, ChannelID: "channel-1"}})
+	}
+	submit("first")
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("first event waited for a batch")
+	}
+	for _, id := range []string{"a", "b", "c", "d"} {
+		submit(id)
+	}
+	close(resume)
+	for _, want := range []string{"first", "a", "b", "c", "d"} {
+		select {
+		case got := <-published:
+			if got != want {
+				t.Fatalf("got %s want %s", got, want)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("missing event")
+		}
+	}
+	f.shutdown()
+	if lookups != 2 {
+		t.Fatalf("expected 2 permission lookups, got %d", lookups)
+	}
+}
