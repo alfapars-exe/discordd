@@ -1,5 +1,9 @@
 # CHANGELOG — SECURE-CODING.md
 
+## 2.11.128 - 2026-11-08
+
+- Correct Windows executable copyright encoding; supersedes the incomplete 2.11.127 desktop release.
+
 ## 2.11.127 - 2026-11-08
 
 - Open the Windows main window without waiting for update checks or downloads.

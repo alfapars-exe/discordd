@@ -1,7 +1,7 @@
 {
   "private": true,
   "name": "hichat-desktop",
-  "version": "2.11.127",
+  "version": "2.11.128",
   "description": "HiChat! desktop application",
   "author": "akinalpfdn",
   "main": "dist-electron/main.js",
@@ -72,7 +72,7 @@
         }
       ]
     },
-    "copyright": "\u00c2\u00a9 2026 HiChat!",
+    "copyright": "© 2026 HiChat!",
     "nsis": {
       "oneClick": true,
       "perMachine": false,
