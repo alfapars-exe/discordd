@@ -659,8 +659,8 @@ describe("cold session restore", () => {
     expect(initOf(fetchMock.mock.calls[0])?.credentials).toBe("include");
     expect((initOf(fetchMock.mock.calls[1])?.headers as Record<string,string>).Authorization).toMatch(/^Bearer e30\./);
   });
-  it("stops after a rejected cookie without retrying it", async () => {
-    const { apiClient } = await loadClient(); fetchMock.mockResolvedValueOnce(jsonResponse({ success: false }, 401));
+  it.each([400, 401, 403])("stops after a rejected or missing cookie (%s) without retrying it", async status => {
+    const { apiClient } = await loadClient(); fetchMock.mockResolvedValueOnce(jsonResponse({ success: false }, status));
     expect((await apiClient("/users/me", { refreshIfMissing: true })).error).toBe("unauthorized"); expect(fetchMock).toHaveBeenCalledTimes(1);
   });
   it("preserves the session on a transient refresh failure", async () => {

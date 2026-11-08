@@ -252,7 +252,7 @@
     {
       "rule": "js.webstorage-sensitive-key",
       "path": "client/src/stores/authStore.ts",
-      "file_sha256": "6b196f27fd5138fa5094dca2227a3f5d64986c3ac1626c52c6141b8f78c53e8f",
+      "file_sha256": "ff35ed62eac6e97d81a8eabd5d420f740f519aa22cd374134f59d9b1abea81cb",
       "line_sha256": "ef4b375aa03bc2946ff120d1dfaeaf1ad16a23916ef4990be4e95214a72213d7",
       "reason": "This exact call persists only a validated UserStatus enum as a UI preference under a per-user key; no session, token, credential, or user object is stored.",
       "proof_ref": "client/src/stores/authStore.test.ts:132-138;client/src/stores/authStore.ts:31-50"

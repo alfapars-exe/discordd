@@ -192,6 +192,7 @@ function clearTokens(): void {
  * tokens and causing unexpected logouts.
  */
 let refreshPromise: Promise<boolean> | null = null;
+let refreshFailureStatus = 0;
 // Refresh is shared by HTTP and WebSocket consumers, so it must release its
 // promise lock even when the transport or response body stops making progress.
 const REFRESH_TIMEOUT_MS = 15_000;
@@ -199,6 +200,7 @@ const REFRESH_TIMEOUT_MS = 15_000;
 async function refreshAccessToken(): Promise<boolean> {
   if (refreshPromise) return refreshPromise;
 
+  refreshFailureStatus = 0;
   const pending = doRefresh(authGeneration);
   refreshPromise = pending;
   try {
@@ -233,6 +235,7 @@ async function doRefresh(generation: number): Promise<boolean> {
 
     if (generation !== authGeneration) return false;
     if (!res.ok) {
+      refreshFailureStatus = res.status;
       // Only clear tokens on explicit auth rejection — 5xx/429/network errors
       // don't mean the token is invalid, just that the server/network failed.
       if (res.status === 401 || res.status === 403) {
@@ -398,7 +401,7 @@ export async function apiClient<T>(
       const generation = authGeneration;
       const restored = await lifetime.wait(refreshAccessToken);
       if (cancelled()) return cancellation();
-      if (!restored) return { success: false, error: authGeneration !== generation ? "unauthorized" : "service_unavailable: session refresh failed" };
+      if (!restored) return { success: false, error: authGeneration !== generation || (refreshFailureStatus >= 400 && refreshFailureStatus < 500 && ![408, 429].includes(refreshFailureStatus)) ? "unauthorized" : "service_unavailable: session refresh failed" };
       token = getAccessToken();
     }
     if (!options.skipAuthRefresh && token && isTokenAboutToExpire(token)) {
