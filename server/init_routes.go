@@ -6,6 +6,7 @@ import (
 	"github.com/argeinfina/hichat/handlers"
 	"github.com/argeinfina/hichat/middleware"
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/services"
 )
@@ -98,6 +99,12 @@ func (d *routeDeps) authServer(handler http.HandlerFunc) http.Handler {
 		Handler: d.authMw.Require(d.serverMw.Require(http.HandlerFunc(handler))),
 		gate:    routeGate{kind: "authServer"},
 	}
+}
+
+func (d *routeDeps) timedVoiceToken(handler http.HandlerFunc) http.Handler {
+	gated := d.authServer(handler).(gatedHandler)
+	gated.Handler = pkg.TimeVoiceToken(gated.Handler)
+	return gated
 }
 
 func (d *routeDeps) authServerPerm(perm models.Permission, handler http.HandlerFunc) http.Handler {

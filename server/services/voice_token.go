@@ -30,6 +30,7 @@ const voiceTokenTTL = 15 * time.Minute
 
 func (s *voiceService) GenerateToken(ctx context.Context, userID, username, displayName, channelID string) (*models.VoiceTokenResponse, error) {
 	channel, admission, err := s.loadVoiceChannel(ctx, userID, channelID)
+	pkg.MarkVoiceTime(ctx, "admission")
 	if err != nil {
 		return nil, err
 	}
@@ -177,6 +178,7 @@ func (s *voiceService) GenerateToken(ctx context.Context, userID, username, disp
 		return nil, fmt.Errorf("failed to create E2EE passphrase: %w", err)
 	}
 
+	pkg.MarkVoiceTime(ctx, "issue")
 	return &models.VoiceTokenResponse{
 		Token:          token,
 		URL:            lkInstance.URL,
@@ -205,6 +207,7 @@ func (s *voiceService) GenerateToken(ctx context.Context, userID, username, disp
 // budget.
 func (s *voiceService) ensureLiveKitInstance(ctx context.Context, userID, serverID string) (*models.LiveKitInstance, error) {
 	lkInstance, err := s.livekitGetter.GetByServerID(ctx, serverID)
+	pkg.MarkVoiceTime(ctx, "instance")
 	if err != nil {
 		s.logError(models.LogCategoryVoice, &userID, "LiveKit instance lookup failed", map[string]string{
 			"server_id": serverID, "error": pkg.ErrText(err),
@@ -216,6 +219,7 @@ func (s *voiceService) ensureLiveKitInstance(ctx context.Context, userID, server
 		now := time.Now()
 		year, month, _ := now.Date()
 		used, usageErr := s.livekitGetter.GetMonthlyUsage(ctx, lkInstance.ID, year, int(month))
+		pkg.MarkVoiceTime(ctx, "quota")
 		if usageErr == nil {
 			thresholdSec := int64(lkInstance.SwitchThresholdMinutes) * 60
 			quotaSec := int64(lkInstance.MonthlyQuotaMinutes) * 60

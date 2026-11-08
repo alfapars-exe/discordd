@@ -158,7 +158,7 @@ func (d *routeDeps) registerServerMiscRoutes() {
 
 func (d *routeDeps) registerVoiceMusicRoutes() {
 	// Voice
-	d.mux.Handle("POST /api/servers/{serverId}/voice/token", d.authServer(d.h.Voice.Token))
+	d.mux.Handle("POST /api/servers/{serverId}/voice/token", d.timedVoiceToken(d.h.Voice.Token))
 	d.mux.Handle("POST /api/servers/{serverId}/voice/screen-token", d.authServer(d.h.Voice.ScreenShareToken))
 	d.mux.Handle("GET /api/servers/{serverId}/voice/states", d.authServer(d.h.Voice.VoiceStates))
 	d.mux.Handle("GET /api/servers/{serverId}/voice/clips/consent", d.authServer(d.h.ClipRecording.Consent))
