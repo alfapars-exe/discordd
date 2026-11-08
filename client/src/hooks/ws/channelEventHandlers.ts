@@ -53,7 +53,9 @@ export async function handleChannelEvent(msg: WSMessage, isCurrent: () => boolea
     case "channel_create":
       if (!isCurrent()) return true;
       rememberThreadEvent(msg, typeof msg.server_id === "string" ? msg.server_id : undefined, isCurrent);
-      useVoiceStore.getState().markVoiceChannelCreated(msg.d.id);
+      if (typeof msg.d?.id === "string" && msg.d.id.length > 0) {
+        useVoiceStore.getState().markVoiceChannelCreated(msg.d.id);
+      }
       useChannelStore.getState().fetchChannels(originServerId);
       return true;
     case "channel_update": {
