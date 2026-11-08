@@ -39,6 +39,12 @@ import { handleChannelEvent } from "./channelEventHandlers";
 beforeEach(() => { vi.clearAllMocks(); state.destination = { type: "text", channelId: "visible" }; state.e2eeReady = false; state.ownerId = "me"; state.authGeneration = 0; });
 
 describe("channel deletion cleanup", () => {
+  it("refreshes the origin server when channel_create omits its payload", async () => {
+    await expect(handleChannelEvent({ op: "channel_create", server_id: "origin-server" } as WSMessage)).resolves.toBe(true);
+    expect(state.markVoiceChannelCreated).not.toHaveBeenCalled();
+    expect(state.fetchChannels).toHaveBeenCalledExactlyOnceWith("origin-server");
+  });
+
   it("clears the voice-channel tombstone on an explicit create event", async () => {
     await handleChannelEvent({ op: "channel_create", server_id: "origin-server", d: { id: "reused-channel" } } as WSMessage);
     expect(state.markVoiceChannelCreated).toHaveBeenCalledExactlyOnceWith("reused-channel");
