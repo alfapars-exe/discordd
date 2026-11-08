@@ -4,6 +4,11 @@
 port: 7880
 
 rtc:
+  # Public SFU: let clients nominate the pair without a second full-ICE agent.
+  # Verified on the Oracle host; retain TURN/TCP for restricted networks.
+  use_ice_lite: true
+  interfaces:
+    excludes: [docker0]
   # UDP port range — these ports must be opened on the firewall
   port_range_start: 50000
   port_range_end: 50200
