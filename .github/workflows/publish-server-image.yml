@@ -1,0 +1,79 @@
+name: Publish verified server image
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_tag:
+        description: Existing desktop release tag whose application sources must be preserved
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-server-image
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.source_tag }}
+          fetch-depth: 0
+          lfs: true
+      - name: Bind application release and build recipe
+        id: release
+        env:
+          SOURCE_TAG: ${{ inputs.source_tag }}
+          RECIPE_REF: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Invalid release tag'; exit 1; }
+          [[ "$RECIPE_REF" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          VERSION=$(python3 -c 'import json; print(json.load(open("package.json"))["version"])')
+          test "$SOURCE_TAG" = "v$VERSION"
+          SOURCE_REF=$(git rev-parse HEAD)
+          # The application remains the immutable release. Only the reviewed
+          # Docker recipe comes from this workflow's pinned dispatch commit.
+          git show "$RECIPE_REF:Dockerfile" > Dockerfile
+          echo "source=$SOURCE_REF" >> "$GITHUB_OUTPUT"
+          echo "recipe=$RECIPE_REF" >> "$GITHUB_OUTPUT"
+          echo "version=$SOURCE_TAG" >> "$GITHUB_OUTPUT"
+          OWNER=$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')
+          echo "image=ghcr.io/$OWNER/hichat-server" >> "$GITHUB_OUTPUT"
+          sha256sum Dockerfile
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and publish both architectures
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            VITE_SENTRY_DSN=${{ vars.VITE_SENTRY_DSN }}
+          secrets: |
+            SENTRY_AUTH_TOKEN=${{ secrets.SENTRY_AUTH_TOKEN }}
+            SENTRY_ORG=${{ vars.SENTRY_ORG }}
+            SENTRY_PROJECT=${{ vars.SENTRY_PROJECT }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ steps.release.outputs.source }}
+            org.opencontainers.image.version=${{ steps.release.outputs.version }}
+            net.hichat.build-recipe-revision=${{ steps.release.outputs.recipe }}
+          tags: |
+            ${{ steps.release.outputs.image }}:${{ steps.release.outputs.version }}
+            ${{ steps.release.outputs.image }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

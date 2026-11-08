@@ -9,7 +9,8 @@
 # Stage 3: Debian runtime with the binary and music/backup dependencies.
 
 # ─── Stage 1: React (Vite) ───
-FROM node:26-alpine AS frontend
+# Static JS/WASM is target-independent. Avoid running npm/Vite under ARM emulation.
+FROM --platform=$BUILDPLATFORM node:26-alpine AS frontend
 WORKDIR /app/client
 COPY client/package.json client/package-lock.json ./
 RUN npm ci --no-audit --no-fund
