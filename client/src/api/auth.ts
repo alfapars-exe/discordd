@@ -39,7 +39,7 @@ export async function logout(refresh_token: string, expectedUserId?: string) {
 }
 
 export async function getMe() {
-  return apiClient<User>("/users/me");
+  return apiClient<User>("/users/me", { refreshIfMissing: true });
 }
 
 /** Change password — requires current password (server: POST /api/users/me/password 400s without it). */

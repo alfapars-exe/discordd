@@ -1,3 +1,4 @@
+import { clearStartupCache } from "../utils/startupCache";
 /**
  * HTTP API client — all backend requests go through this module.
  *
@@ -166,6 +167,7 @@ function setTokens(access: string, _refresh: string, accountId?: string): void {
 }
 
 function clearTokens(): void {
+  clearStartupCache();
   accessTokenMemory = null;
   authAccountMemory = null;
   authGeneration++;
@@ -271,6 +273,8 @@ async function doRefresh(generation: number): Promise<boolean> {
 }
 
 type RequestOptions = {
+  /** Cold session restore can refresh the HttpOnly cookie before a predictable 401. */
+  refreshIfMissing?: boolean;
   /** Credential login must not use a prior session to retry a factor challenge. */
   skipAuthRefresh?: boolean;
   /** Do not replay a one-time-code operation on a credential-error 401. */
@@ -390,6 +394,13 @@ export async function apiClient<T>(
     // call. If refresh fails we still send with the stale token; the 401
     // handler below will try once more and then propagate the failure.
     let token = getAccessToken();
+    if (!options.skipAuthRefresh && !token && options.refreshIfMissing) {
+      const generation = authGeneration;
+      const restored = await lifetime.wait(refreshAccessToken);
+      if (cancelled()) return cancellation();
+      if (!restored) return { success: false, error: authGeneration !== generation ? "unauthorized" : "service_unavailable: session refresh failed" };
+      token = getAccessToken();
+    }
     if (!options.skipAuthRefresh && token && isTokenAboutToExpire(token)) {
       await lifetime.wait(refreshAccessToken);
       if (cancelled()) return cancellation();

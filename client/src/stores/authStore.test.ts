@@ -319,3 +319,22 @@ describe("authStore.logout — per-account private data", () => {
     expect(useAuthStore.getState().user).toBeNull();
   });
 });
+
+describe("startup restore concurrency", () => {
+  it("shares the same initialization while session validation is pending", async () => {
+    let finish!: (value: Awaited<ReturnType<typeof authApi.getMe>>) => void;
+    getMe.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const first = useAuthStore.getState().initialize(); const second = useAuthStore.getState().initialize();
+    expect(first).toBe(second); expect(getMe).toHaveBeenCalledTimes(1);
+    finish({ success: true, data: fakeUser }); await first;
+    expect(useAuthStore.getState().user?.id).toBe(fakeUser.id);
+  });
+  it("never installs an old restore response over a newly signed-in account", async () => {
+    let finish!: (value: Awaited<ReturnType<typeof authApi.getMe>>) => void;
+    getMe.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const pending = useAuthStore.getState().initialize();
+    useAuthStore.getState().applyLoginResponse({ success: true, data: { access_token: "b", refresh_token: "", user: { ...fakeUser, id: "account-b" } } });
+    finish({ success: true, data: fakeUser }); await pending;
+    expect(useAuthStore.getState().user?.id).toBe("account-b");
+  });
+});

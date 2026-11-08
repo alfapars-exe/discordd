@@ -1,7 +1,7 @@
 import {act,renderHook}from "@testing-library/react";
 import {afterEach,beforeEach,expect,it,vi}from "vitest";
 import {useSystemAudioCapture}from "./useSystemAudioCapture";
-vi.mock("../utils/constants",()=>({isElectron:()=>true,isNativeApp:()=>true}));
+vi.mock("../utils/constants",()=>({ SERVER_URL: "https://api.test.local",isElectron:()=>true,isNativeApp:()=>true}));
 const h=vi.hoisted(()=>({toast:vi.fn(),syncRetire:false}));vi.mock("../stores/toastStore",()=>({useToastStore:{getState:()=>({addToast:h.toast})}}));
 vi.mock("../audio/microphoneAdmission",()=>({captureAdmissionCurrent:()=>false,subscribeCaptureAdmission:(_participant:unknown,retire:()=>void)=>{if(h.syncRetire)retire();return()=>{};}}));
 type Event={leaseId:string;type:"header"|"data"|"stopped"|"error";value?:unknown};

@@ -648,3 +648,23 @@ describe("apiDownload session isolation", () => {
     expect(createObjectURL).not.toHaveBeenCalled();
   });
 });
+
+describe("cold session restore", () => {
+  it("refreshes the HttpOnly cookie before /users/me without an initial unauthorized request", async () => {
+    const { apiClient } = await loadClient();
+    fetchMock.mockResolvedValueOnce(jsonResponse({ success: true, data: { access_token: "e30." + btoa(JSON.stringify({ exp: Math.floor(Date.now()/1000) + 3600 })) + ".sig", user: { id: "a" } } }))
+      .mockResolvedValueOnce(jsonResponse({ success: true, data: { id: "a" } }));
+    const res = await apiClient("/users/me", { refreshIfMissing: true });
+    expect(res.success).toBe(true); expect(fetchMock.mock.calls.map(c => c[0])).toEqual([API_BASE_URL + "/auth/refresh", API_BASE_URL + "/users/me"]);
+    expect(initOf(fetchMock.mock.calls[0])?.credentials).toBe("include");
+    expect((initOf(fetchMock.mock.calls[1])?.headers as Record<string,string>).Authorization).toMatch(/^Bearer e30\./);
+  });
+  it("stops after a rejected cookie without retrying it", async () => {
+    const { apiClient } = await loadClient(); fetchMock.mockResolvedValueOnce(jsonResponse({ success: false }, 401));
+    expect((await apiClient("/users/me", { refreshIfMissing: true })).error).toBe("unauthorized"); expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+  it("preserves the session on a transient refresh failure", async () => {
+    const { apiClient } = await loadClient(); fetchMock.mockRejectedValueOnce(new Error("offline"));
+    expect((await apiClient("/users/me", { refreshIfMissing: true })).error).toContain("service_unavailable:"); expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});

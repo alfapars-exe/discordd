@@ -1,0 +1,350 @@
+{
+  "date": "2026-11-08",
+  "baselineCommit": "831b9a8f44f5084f4340f8830500c9129348681c",
+  "versions": {
+    "before": "2.11.126",
+    "after": "2.11.127"
+  },
+  "method": {
+    "platform": "Windows x64, packaged Electron45.1.0",
+    "roundsEach": 5,
+    "network": "Controlled fixture, 250ms per API request, 250ms WS ready delay; no real authenticated production latency claim",
+    "windowMs": "Process launch to native main window visible, actual release update feed. No application user profile touched.",
+    "interactiveMs": "Renderer reload with fixture installed to .server-rail visible, independent of windowMs",
+    "channelMs": "Renderer reload to visible freshly loaded startup-general after clicking server",
+    "previewMs": "Renderer navigation start to cached read-only preview effect",
+    "warm": "Rounds1-4, following initial empty-profile round0. Timings are not additive.",
+    "cold": "New isolated application profile, not an OS-cold boot/disk cache flush.",
+    "p95": "Nearest rank. With four warm samples p95 equals max; small sample."
+  },
+  "before": {
+    "coldProfile": {
+      "round": 0,
+      "windowMs": 1573,
+      "interactiveMs": 933,
+      "channelMs": 1807,
+      "previewMs": null,
+      "errors": [],
+      "authRequests": [
+        {
+          "path": "/users/me",
+          "t": 34.29999999701977
+        },
+        {
+          "path": "/auth/refresh",
+          "t": 287.5999999977648
+        },
+        {
+          "path": "/users/me",
+          "t": 541.6999999992549
+        }
+      ]
+    },
+    "warmSummary": {
+      "windowMs": {
+        "median": 609.0,
+        "p95": 631
+      },
+      "interactiveMs": {
+        "median": 1379.0,
+        "p95": 1389
+      },
+      "channelMs": {
+        "median": 1510.0,
+        "p95": 1808
+      },
+      "previewMs": null
+    },
+    "allSummary": {
+      "windowMs": {
+        "median": 611,
+        "p95": 1573
+      },
+      "interactiveMs": {
+        "median": 1376,
+        "p95": 1389
+      },
+      "channelMs": {
+        "median": 1514,
+        "p95": 1808
+      },
+      "previewMs": null
+    }
+  },
+  "after": {
+    "coldProfile": {
+      "round": 0,
+      "windowMs": 1513,
+      "interactiveMs": 896,
+      "channelMs": 1430,
+      "previewMs": null,
+      "errors": [],
+      "authRequests": [
+        {
+          "path": "/auth/refresh",
+          "t": 49.79999999701977
+        },
+        {
+          "path": "/users/me",
+          "t": 301.3999999985099
+        }
+      ]
+    },
+    "warmSummary": {
+      "windowMs": {
+        "median": 585.5,
+        "p95": 613
+      },
+      "interactiveMs": {
+        "median": 887.5,
+        "p95": 896
+      },
+      "channelMs": {
+        "median": 926.0,
+        "p95": 933
+      },
+      "previewMs": {
+        "median": 44.55000000074506,
+        "p95": 49.30000000074506
+      }
+    },
+    "allSummary": {
+      "windowMs": {
+        "median": 588,
+        "p95": 1513
+      },
+      "interactiveMs": {
+        "median": 892,
+        "p95": 896
+      },
+      "channelMs": {
+        "median": 930,
+        "p95": 1430
+      },
+      "previewMs": {
+        "median": 44.55000000074506,
+        "p95": 49.30000000074506
+      }
+    }
+  },
+  "rounds": {
+    "before": [
+      {
+        "round": 0,
+        "windowMs": 1573,
+        "interactiveMs": 933,
+        "channelMs": 1807,
+        "previewMs": null,
+        "errors": [],
+        "authRequests": [
+          {
+            "path": "/users/me",
+            "t": 34.29999999701977
+          },
+          {
+            "path": "/auth/refresh",
+            "t": 287.5999999977648
+          },
+          {
+            "path": "/users/me",
+            "t": 541.6999999992549
+          }
+        ]
+      },
+      {
+        "round": 1,
+        "windowMs": 631,
+        "interactiveMs": 924,
+        "channelMs": 1808,
+        "previewMs": null,
+        "errors": [],
+        "authRequests": [
+          {
+            "path": "/users/me",
+            "t": 36.69999999925494
+          },
+          {
+            "path": "/auth/refresh",
+            "t": 287.8999999985099
+          },
+          {
+            "path": "/users/me",
+            "t": 540.1999999992549
+          }
+        ]
+      },
+      {
+        "round": 2,
+        "windowMs": 611,
+        "interactiveMs": 1389,
+        "channelMs": 1514,
+        "previewMs": null,
+        "errors": [],
+        "authRequests": [
+          {
+            "path": "/users/me",
+            "t": 48.100000001490116
+          },
+          {
+            "path": "/auth/refresh",
+            "t": 302.19999999925494
+          },
+          {
+            "path": "/users/me",
+            "t": 556
+          }
+        ]
+      },
+      {
+        "round": 3,
+        "windowMs": 586,
+        "interactiveMs": 1376,
+        "channelMs": 1506,
+        "previewMs": null,
+        "errors": [],
+        "authRequests": [
+          {
+            "path": "/users/me",
+            "t": 40.19999999925494
+          },
+          {
+            "path": "/auth/refresh",
+            "t": 293.8999999985099
+          },
+          {
+            "path": "/users/me",
+            "t": 548.0999999977648
+          }
+        ]
+      },
+      {
+        "round": 4,
+        "windowMs": 607,
+        "interactiveMs": 1382,
+        "channelMs": 1451,
+        "previewMs": null,
+        "errors": [],
+        "authRequests": [
+          {
+            "path": "/users/me",
+            "t": 43.600000001490116
+          },
+          {
+            "path": "/auth/refresh",
+            "t": 297.70000000298023
+          },
+          {
+            "path": "/users/me",
+            "t": 552
+          }
+        ]
+      }
+    ],
+    "after": [
+      {
+        "round": 0,
+        "windowMs": 1513,
+        "interactiveMs": 896,
+        "channelMs": 1430,
+        "previewMs": null,
+        "errors": [],
+        "authRequests": [
+          {
+            "path": "/auth/refresh",
+            "t": 49.79999999701977
+          },
+          {
+            "path": "/users/me",
+            "t": 301.3999999985099
+          }
+        ]
+      },
+      {
+        "round": 1,
+        "windowMs": 613,
+        "interactiveMs": 892,
+        "channelMs": 930,
+        "previewMs": 49.30000000074506,
+        "errors": [],
+        "authRequests": [
+          {
+            "path": "/auth/refresh",
+            "t": 51.30000000074506
+          },
+          {
+            "path": "/users/me",
+            "t": 303.5
+          }
+        ]
+      },
+      {
+        "round": 2,
+        "windowMs": 583,
+        "interactiveMs": 896,
+        "channelMs": 933,
+        "previewMs": 47.80000000074506,
+        "errors": [],
+        "authRequests": [
+          {
+            "path": "/auth/refresh",
+            "t": 49.899999998509884
+          },
+          {
+            "path": "/users/me",
+            "t": 302
+          }
+        ]
+      },
+      {
+        "round": 3,
+        "windowMs": 588,
+        "interactiveMs": 883,
+        "channelMs": 918,
+        "previewMs": 38.80000000074506,
+        "errors": [],
+        "authRequests": [
+          {
+            "path": "/auth/refresh",
+            "t": 40.80000000074506
+          },
+          {
+            "path": "/users/me",
+            "t": 293.8999999985099
+          }
+        ]
+      },
+      {
+        "round": 4,
+        "windowMs": 575,
+        "interactiveMs": 882,
+        "channelMs": 922,
+        "previewMs": 41.30000000074506,
+        "errors": [],
+        "authRequests": [
+          {
+            "path": "/auth/refresh",
+            "t": 42.899999998509884
+          },
+          {
+            "path": "/users/me",
+            "t": 297
+          }
+        ]
+      }
+    ]
+  },
+  "acceptance": {
+    "sameAccountWarmCache": true,
+    "noRendererErrors": true,
+    "rejectedCookieClearsCacheWindows": true,
+    "transientFailureKeepsReadOnlyPreviewWindows": true,
+    "accountSwitchLateResponseUnitTests": true,
+    "noPasswordTokenPermissionMessagesVoiceInSnapshot": true
+  },
+  "limits": [
+    "No physical cold-boot benchmark or production logged-in network comparison.",
+    "Native window appearance changed little; main gains are restored renderer UI and cached preview.",
+    "First empty-profile channel render gains less than later launches.",
+    "Local Windows benchmark packages omit native helper resources; official release CI builds and includes them."
+  ]
+}

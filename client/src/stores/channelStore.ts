@@ -1,3 +1,4 @@
+import { rememberStartupChannels } from "../utils/startupCache";
 /**
  * Channel Store — Channel and category state management.
  */
@@ -77,6 +78,8 @@ export const useChannelStore = create<ChannelState>((set, get) => ({
   fetchChannels: async (explicitServerId) => {
     const serverId = explicitServerId ?? useServerStore.getState().activeServerId;
     if (!serverId) return;
+    const owner = useAuthStore.getState().user?.id ?? null;
+    const generation = getAuthGeneration();
     const token = Symbol();
     channelFetchTokens.set(serverId, token);
 
@@ -87,8 +90,9 @@ export const useChannelStore = create<ChannelState>((set, get) => ({
     if (!cached && useServerStore.getState().activeServerId === serverId) set({ isLoading: true });
 
     const res = await channelApi.getChannels(serverId);
-    if (channelFetchTokens.get(serverId) !== token) return;
+    if (channelFetchTokens.get(serverId) !== token || (useAuthStore.getState().user?.id ?? null) !== owner || getAuthGeneration() !== generation) return;
     if (res.success && res.data) {
+      rememberStartupChannels(owner, serverId, res.data);
       // Always update the cache — even if the user has already switched to
       // another server by the time the response arrives. Next time they come
       // back the freshest tree paints instantly.
