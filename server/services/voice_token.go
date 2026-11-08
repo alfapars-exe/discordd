@@ -29,7 +29,7 @@ import (
 const voiceTokenTTL = 15 * time.Minute
 
 func (s *voiceService) GenerateToken(ctx context.Context, userID, username, displayName, channelID string) (*models.VoiceTokenResponse, error) {
-	channel, err := s.channelGetter.GetByID(ctx, channelID)
+	channel, admission, err := s.loadVoiceChannel(ctx, userID, channelID)
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +42,11 @@ func (s *voiceService) GenerateToken(ctx context.Context, userID, username, disp
 	// SDK can't connect, so timed-out users physically can't talk even
 	// if their UI somehow leaks past the client-side gate. Nil checker
 	// is fine (tests + bootstrap paths that haven't wired it yet).
-	if s.timeoutChecker != nil && channel.ServerID != "" {
+	if admission != nil {
+		if err := validateVoiceAdmission(admission); err != nil {
+			return nil, err
+		}
+	} else if s.timeoutChecker != nil && channel.ServerID != "" {
 		active, tErr := s.timeoutChecker.IsActive(ctx, channel.ServerID, userID)
 		if tErr != nil {
 			return nil, fmt.Errorf("check timeout: %w", tErr)
@@ -75,7 +79,12 @@ func (s *voiceService) GenerateToken(ctx context.Context, userID, username, disp
 	}
 
 	// Resolve effective permissions (role base + channel overrides)
-	effectivePerms, err := s.permResolver.ResolveChannelPermissions(ctx, userID, channelID)
+	var effectivePerms models.Permission
+	if admission != nil {
+		effectivePerms = admission.Permissions
+	} else {
+		effectivePerms, err = s.permResolver.ResolveChannelPermissions(ctx, userID, channelID)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve channel permissions: %w", err)
 	}
@@ -331,4 +340,31 @@ func (s *voiceService) GenerateScreenShareToken(ctx context.Context, userID, use
 		E2EEKeyEpoch:   uint64(epoch),
 		E2EEKeyContext: keyContext,
 	}, nil
+}
+
+func (s *voiceService) loadVoiceChannel(ctx context.Context, userID, channelID string) (*models.Channel, *models.VoiceAdmission, error) {
+	if repo, ok := s.channelGetter.(interface {
+		VoiceAdmission(context.Context, string, string) (*models.VoiceAdmission, error)
+	}); ok {
+		a, err := repo.VoiceAdmission(ctx, userID, channelID)
+		if err != nil {
+			return nil, nil, err
+		}
+		return &a.Channel, a, nil
+	}
+	ch, err := s.channelGetter.GetByID(ctx, channelID)
+	return ch, nil, err
+}
+
+func validateVoiceAdmission(a *models.VoiceAdmission) error {
+	if a.Channel.Type != models.ChannelTypeVoice {
+		return fmt.Errorf("%w: not a voice channel", pkg.ErrBadRequest)
+	}
+	if !a.Member {
+		return fmt.Errorf("%w: not a member of this server", pkg.ErrForbidden)
+	}
+	if a.TimedOut {
+		return fmt.Errorf("%w: you are timed out on this server", pkg.ErrForbidden)
+	}
+	return nil
 }

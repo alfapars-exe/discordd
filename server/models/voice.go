@@ -43,3 +43,11 @@ type VoiceTokenResponse struct {
 	E2EEKeyEpoch   uint64 `json:"e2ee_key_epoch"`
 	E2EEKeyContext string `json:"e2ee_key_context"`
 }
+
+// VoiceAdmission is a fresh database snapshot for one channel and user.
+type VoiceAdmission struct {
+	Channel     Channel
+	Member      bool
+	TimedOut    bool
+	Permissions Permission
+}

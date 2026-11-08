@@ -80,6 +80,10 @@ func (s *voiceService) authorizeJoin(ctx context.Context, userID, serverID, chan
 	if err != nil {
 		return fmt.Errorf("failed to resolve channel permissions: %w", err)
 	}
+	return s.checkConnectPermission(userID, channelID, effectivePerms)
+}
+
+func (s *voiceService) checkConnectPermission(userID, channelID string, effectivePerms models.Permission) error {
 	if effectivePerms.Has(models.PermConnectVoice) {
 		return nil
 	}
@@ -162,7 +166,7 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 
 	// Resolve channel's parent server before locking — all voice broadcasts are server-scoped.
 	ctx := context.Background()
-	channel, err := s.channelGetter.GetByID(ctx, channelID)
+	channel, admission, err := s.loadVoiceChannel(ctx, userID, channelID)
 	if err != nil {
 		// F1 review HIGH fix (our own A-38 regression): the client no
 		// longer sends voice_leave on a channel switch — JoinChannel's own
@@ -221,7 +225,15 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 	// to enter — the resulting ghost state is counted by
 	// remainingChannelMembers/UserLimit and, worse, receives the plaintext
 	// SFrame E2EE passphrase on the channel's next rotation (voice_e2ee.go).
-	if err := s.authorizeJoin(ctx, userID, serverID, channelID); err != nil {
+	if admission != nil {
+		err = validateVoiceAdmission(admission)
+		if err == nil {
+			err = s.checkConnectPermission(userID, channelID, admission.Permissions)
+		}
+	} else {
+		err = s.authorizeJoin(ctx, userID, serverID, channelID)
+	}
+	if err != nil {
 		// F1 review HIGH fix — same rationale as the channel-lookup failure
 		// above: a legitimate rejection here (e.g. a moderator applied a
 		// timeout in the window between the client requesting its LiveKit

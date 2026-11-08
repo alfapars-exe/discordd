@@ -207,12 +207,6 @@ func (f *voiceStateFanout) deliver(batch []voiceStateFanoutEvent, membersByServe
 	}
 	ctx, cancel := context.WithTimeout(f.ctx, broadcastResolveTimeout)
 	defer cancel()
-	channel, err := s.channelGetter.GetByID(ctx, item.channelID)
-	if err != nil || channel == nil || channel.ServerID != item.serverID || channel.Type != models.ChannelTypeVoice {
-		f.dropCount.Add(uint64(len(batch)))
-		voiceLogger.Warn("voice state fanout channel scope verification failed; event dropped", "server_id", item.serverID, "channel_id", item.channelID)
-		return
-	}
 	onlineIDs := provider.GetOnlineUserIDsForServer(item.serverID)
 	if len(onlineIDs) > voiceStateFanoutMaxOnline {
 		f.dropCount.Add(uint64(len(batch)))
@@ -220,6 +214,24 @@ func (f *voiceStateFanout) deliver(batch []voiceStateFanoutEvent, membersByServe
 		return
 	}
 	if len(onlineIDs) == 0 {
+		return
+	}
+	if repo, ok := s.channelGetter.(interface {
+		VoiceVisibleUsers(context.Context, string, string, []string) ([]string, error)
+	}); ok {
+		visible, err := repo.VoiceVisibleUsers(ctx, item.serverID, item.channelID, onlineIDs)
+		if err != nil {
+			f.dropCount.Add(uint64(len(batch)))
+			voiceLogger.Warn("voice visibility query failed", "err", err)
+			return
+		}
+		f.publishVisible(batch, visible, resolutionStart)
+		return
+	}
+	channel, err := s.channelGetter.GetByID(ctx, item.channelID)
+	if err != nil || channel == nil || channel.ServerID != item.serverID || channel.Type != models.ChannelTypeVoice {
+		f.dropCount.Add(uint64(len(batch)))
+		voiceLogger.Warn("voice state fanout channel scope verification failed; event dropped", "server_id", item.serverID, "channel_id", item.channelID)
 		return
 	}
 	memberIDs, known := membersByServer[item.serverID]
@@ -270,6 +282,12 @@ func (f *voiceStateFanout) deliver(batch []voiceStateFanoutEvent, membersByServe
 			visible = append(visible, id)
 		}
 	}
+	f.publishVisible(batch, visible, resolutionStart)
+}
+
+func (f *voiceStateFanout) publishVisible(batch []voiceStateFanoutEvent, visible []string, resolutionStart time.Time) {
+	s := f.service
+	item := batch[0]
 	if len(visible) == 0 {
 		return
 	}
