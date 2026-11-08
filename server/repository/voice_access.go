@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
@@ -12,21 +13,47 @@ import (
 
 type postgresVoiceChannelRepo struct{ *sqliteChannelRepo }
 
-// Read the channel and its authorization facts in the same statement. Both
-// token issuance and WS admission take a fresh snapshot (including revocations).
-func (r *postgresVoiceChannelRepo) VoiceAdmission(ctx context.Context, userID, channelID string) (*models.VoiceAdmission, error) {
-	const query = `SELECT c.id, c.server_id, c.type, c.user_limit,
-		EXISTS (SELECT 1 FROM server_members m WHERE m.server_id=c.server_id AND m.user_id=?),
-		EXISTS (SELECT 1 FROM member_timeouts t WHERE t.server_id=c.server_id AND t.user_id=? AND t.expires_at>CURRENT_TIMESTAMP),
-		COALESCE(bit_or(r.permissions),0), COALESCE(bit_or(o.allow),0), COALESCE(bit_or(o.deny),0)
+const voiceAdmissionQuery = `SELECT c.id, c.server_id, c.type, c.user_limit,
+		EXISTS (SELECT 1 FROM server_members m WHERE m.server_id=c.server_id AND m.user_id=?) AS member,
+		EXISTS (SELECT 1 FROM member_timeouts t WHERE t.server_id=c.server_id AND t.user_id=? AND t.expires_at>CURRENT_TIMESTAMP) AS timed_out,
+		COALESCE(bit_or(r.permissions),0) AS base_bits, COALESCE(bit_or(o.allow),0) AS allow_bits, COALESCE(bit_or(o.deny),0) AS deny_bits
 		FROM channels c
 		LEFT JOIN user_roles ur ON ur.server_id=c.server_id AND ur.user_id=?
 		LEFT JOIN roles r ON r.id=ur.role_id AND r.server_id=c.server_id
 		LEFT JOIN channel_permissions o ON o.channel_id=c.id AND o.role_id=r.id
 		WHERE c.id=? GROUP BY c.id, c.server_id, c.type, c.user_limit`
+
+// Read the channel and its authorization facts in the same statement. Both
+// token issuance and WS admission take a fresh snapshot (including revocations).
+func (r *postgresVoiceChannelRepo) VoiceAdmission(ctx context.Context, userID, channelID string) (*models.VoiceAdmission, error) {
+	row := r.db.QueryRowContext(ctx, voiceAdmissionQuery, userID, userID, userID, channelID)
+	return scanVoiceAdmission(row)
+}
+
+// Token issuance needs the selected SFU and this month's usage in addition
+// to authorization. Read them at the same snapshot, only for token requests.
+func (r *postgresVoiceChannelRepo) VoiceTokenAccess(ctx context.Context, userID, channelID string, now time.Time) (*models.VoiceAdmission, *models.LiveKitInstance, int64, error) {
+	const query = `WITH a AS (` + voiceAdmissionQuery + `)
+	SELECT a.*, i.id,i.url,i.api_key,i.api_secret,i.is_platform_managed,i.auto_switch_enabled,
+	i.monthly_quota_minutes,i.switch_threshold_minutes,COALESCE(u.used_seconds,0)
+	FROM a JOIN servers s ON s.id=a.server_id
+	JOIN livekit_instances i ON i.id=s.livekit_instance_id
+	LEFT JOIN livekit_monthly_usage u ON u.instance_id=i.id AND u.year=? AND u.month=?`
+	row := r.db.QueryRowContext(ctx, query, userID, userID, userID, channelID, now.Year(), int(now.Month()))
+	var instance models.LiveKitInstance
+	var used int64
+	a, err := scanVoiceAdmission(row, &instance.ID, &instance.URL, &instance.APIKey, &instance.APISecret, &instance.IsPlatformManaged, &instance.AutoSwitchEnabled, &instance.MonthlyQuotaMinutes, &instance.SwitchThresholdMinutes, &used)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	return a, &instance, used, nil
+}
+
+func scanVoiceAdmission(row *sql.Row, extra ...any) (*models.VoiceAdmission, error) {
 	var a models.VoiceAdmission
 	var base, allow, deny models.Permission
-	err := r.db.QueryRowContext(ctx, query, userID, userID, userID, channelID).Scan(&a.Channel.ID, &a.Channel.ServerID, &a.Channel.Type, &a.Channel.UserLimit, &a.Member, &a.TimedOut, &base, &allow, &deny)
+	dest := []any{&a.Channel.ID, &a.Channel.ServerID, &a.Channel.Type, &a.Channel.UserLimit, &a.Member, &a.TimedOut, &base, &allow, &deny}
+	err := row.Scan(append(dest, extra...)...)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, pkg.ErrNotFound
 	}

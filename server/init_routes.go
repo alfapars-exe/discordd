@@ -102,9 +102,9 @@ func (d *routeDeps) authServer(handler http.HandlerFunc) http.Handler {
 }
 
 func (d *routeDeps) timedVoiceToken(handler http.HandlerFunc) http.Handler {
-	gated := d.authServer(handler).(gatedHandler)
-	gated.Handler = pkg.TimeVoiceToken(gated.Handler)
-	return gated
+	// GenerateToken requires the path server, live membership and channel
+	// permission in the same snapshot that supplies the room credentials.
+	return gatedHandler{Handler: pkg.TimeVoiceToken(d.authMw.Require(handler)), gate: routeGate{kind: "auth"}}
 }
 
 func (d *routeDeps) authServerPerm(perm models.Permission, handler http.HandlerFunc) http.Handler {

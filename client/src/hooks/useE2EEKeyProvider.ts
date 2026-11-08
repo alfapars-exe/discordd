@@ -26,7 +26,7 @@ export function useE2EEKeyProvider(passphrase: string | null | undefined, option
     let error: unknown = null;
     try {
       if (!isE2EESupported()) throw new VoiceFailure("unsupported");
-      worker = new Worker(new URL("livekit-client/e2ee-worker", import.meta.url));
+      worker = new Worker(new URL("livekit-client/e2ee-worker", import.meta.url), { type: "module" });
     } catch (failure) { error = failure; }
     const failedWorker = worker;
     const failWorker = () => {

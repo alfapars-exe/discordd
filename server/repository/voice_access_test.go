@@ -5,6 +5,7 @@ import (
 	"github.com/argeinfina/hichat/models"
 	"os"
 	"testing"
+	"time"
 )
 
 func TestPostgresVoiceAdmissionAndAudience(t *testing.T) {
@@ -31,6 +32,21 @@ func TestPostgresVoiceAdmissionAndAudience(t *testing.T) {
 		ids, err := repo.VoiceVisibleUsers(ctx, "guild", "room", []string{"viewer", "other", "viewer"})
 		if err != nil || (visible && (len(ids) != 1 || ids[0] != "viewer")) || (!visible && len(ids) != 0) {
 			t.Fatalf("audience %v err %v", ids, err)
+		}
+	}
+	// The token path reads routing and quota from the same fresh snapshot.
+	execSeed(t, d, []seedStmt{
+		{q: "INSERT INTO livekit_instances(id,url,api_key,api_secret,is_platform_managed,auto_switch_enabled) VALUES('sfu','wss://test.invalid','fixture-key','fixture-secret',1,1)"},
+		{q: "UPDATE servers SET livekit_instance_id='sfu' WHERE id='guild'"},
+		{q: "INSERT INTO livekit_monthly_usage(instance_id,year,month,used_seconds) VALUES('sfu',2026,11,987)"},
+	})
+	for _, month := range []time.Month{time.November, time.December} {
+		a, instance, used, err := repo.VoiceTokenAccess(ctx, "viewer", "room", time.Date(2026, month, 1, 0, 0, 0, 0, time.UTC))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !a.Member || !a.Permissions.Has(models.PermConnectVoice) || instance.ID != "sfu" || !instance.IsPlatformManaged || !instance.AutoSwitchEnabled || (month == time.November && used != 987) || (month == time.December && used != 0) {
+			t.Fatal("incorrect token admission, routing or usage")
 		}
 	}
 	check(true)

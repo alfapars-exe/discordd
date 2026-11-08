@@ -14,7 +14,7 @@ import (
 
 type voiceStatesServiceStub struct{ states []models.VoiceState }
 
-func (*voiceStatesServiceStub) GenerateToken(context.Context, string, string, string, string) (*models.VoiceTokenResponse, error) {
+func (*voiceStatesServiceStub) GenerateToken(context.Context, string, string, string, string, string) (*models.VoiceTokenResponse, error) {
 	return nil, nil
 }
 func (*voiceStatesServiceStub) GenerateScreenShareToken(context.Context, string, string, string, string) (*models.VoiceTokenResponse, error) {

@@ -152,7 +152,7 @@ var handlerInternalGates = map[string]string{
 	"GET /api/servers/{serverId}/search": "results scoped per-channel via channelPermService inside searchService (H-05) — can't be one server-wide authServerPerm bit",
 
 	// ── Voice — per-channel connect permission ──
-	"POST /api/servers/{serverId}/voice/token":        "per-channel PermConnectVoice enforced inside voiceService.GenerateToken",
+	"POST /api/servers/{serverId}/voice/token":        "path server, fresh membership and per-channel voice access checked together by GenerateToken",
 	"POST /api/servers/{serverId}/voice/screen-token": "per-channel permission enforced inside voiceService.GenerateScreenShareToken",
 	"GET /api/servers/{serverId}/voice/states":        "read-only — membership is the intended view gate",
 

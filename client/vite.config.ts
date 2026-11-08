@@ -71,6 +71,8 @@ export default defineConfig(({ command, mode }) => {
       else if (maps.length) throw new Error("Source maps remain in release output");
     } },
   }],
+  // AudioWorkletGlobalScope provides import.meta.url but no self.location.
+  worker: { format: "es" },
   clearScreen: false,
   define: {
     // Inlined into the bundle at build time. Survives even when the

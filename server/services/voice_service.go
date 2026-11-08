@@ -73,7 +73,7 @@ type BanChecker interface {
 // ─── VoiceService Interface ───
 
 type VoiceService interface {
-	GenerateToken(ctx context.Context, userID, username, displayName, channelID string) (*models.VoiceTokenResponse, error)
+	GenerateToken(ctx context.Context, userID, username, displayName, serverID, channelID string) (*models.VoiceTokenResponse, error)
 	GenerateScreenShareToken(ctx context.Context, userID, username, displayName, channelID string) (*models.VoiceTokenResponse, error)
 	JoinChannel(userID, username, displayName, avatarURL, channelID string, isMuted, isDeafened bool) error
 	LeaveChannel(userID string) error

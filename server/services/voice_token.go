@@ -28,11 +28,39 @@ import (
 // fail-safe floor.
 const voiceTokenTTL = 15 * time.Minute
 
-func (s *voiceService) GenerateToken(ctx context.Context, userID, username, displayName, channelID string) (*models.VoiceTokenResponse, error) {
-	channel, admission, err := s.loadVoiceChannel(ctx, userID, channelID)
-	pkg.MarkVoiceTime(ctx, "admission")
+func (s *voiceService) GenerateToken(ctx context.Context, userID, username, displayName, serverID, channelID string) (*models.VoiceTokenResponse, error) {
+	var channel *models.Channel
+	var admission *models.VoiceAdmission
+	var lkInstance *models.LiveKitInstance
+	var used int64
+	var err error
+	now := time.Now()
+	if reader, ok := s.channelGetter.(interface {
+		VoiceTokenAccess(context.Context, string, string, time.Time) (*models.VoiceAdmission, *models.LiveKitInstance, int64, error)
+	}); ok {
+		admission, lkInstance, used, err = reader.VoiceTokenAccess(ctx, userID, channelID, now)
+		if err == nil {
+			channel = &admission.Channel
+		}
+		pkg.MarkVoiceTime(ctx, "token_lookup")
+	} else {
+		channel, admission, err = s.loadVoiceChannel(ctx, userID, channelID)
+		pkg.MarkVoiceTime(ctx, "admission")
+	}
 	if err != nil {
 		return nil, err
+	}
+	if channel.ServerID != serverID || serverID == "" {
+		return nil, fmt.Errorf("%w: channel outside requested server", pkg.ErrForbidden)
+	}
+	if admission == nil {
+		member, lookupErr := s.afkTimeoutGetter.IsMember(ctx, serverID, userID)
+		if lookupErr != nil {
+			return nil, lookupErr
+		}
+		if !member {
+			return nil, fmt.Errorf("%w: not a member of this server", pkg.ErrForbidden)
+		}
 	}
 	if channel.Type != models.ChannelTypeVoice {
 		return nil, fmt.Errorf("%w: not a voice channel", pkg.ErrBadRequest)
@@ -59,9 +87,13 @@ func (s *voiceService) GenerateToken(ctx context.Context, userID, username, disp
 
 	// channel -> server -> livekit_instance lookup, migrating to a fresh
 	// instance first if this one is nearing its monthly quota.
-	lkInstance, err := s.ensureLiveKitInstance(ctx, userID, channel.ServerID)
-	if err != nil {
-		return nil, err
+	if lkInstance == nil {
+		lkInstance, err = s.ensureLiveKitInstance(ctx, userID, channel.ServerID)
+		if err != nil {
+			return nil, err
+		}
+	} else if lkInstance.IsPlatformManaged && lkInstance.AutoSwitchEnabled {
+		lkInstance = s.selectVoiceInstance(ctx, channel.ServerID, lkInstance, now, used)
 	}
 
 	apiKey, err := crypto.Decrypt(lkInstance.APIKey, s.encryptionKey)
@@ -221,26 +253,32 @@ func (s *voiceService) ensureLiveKitInstance(ctx context.Context, userID, server
 		used, usageErr := s.livekitGetter.GetMonthlyUsage(ctx, lkInstance.ID, year, int(month))
 		pkg.MarkVoiceTime(ctx, "quota")
 		if usageErr == nil {
-			thresholdSec := int64(lkInstance.SwitchThresholdMinutes) * 60
-			quotaSec := int64(lkInstance.MonthlyQuotaMinutes) * 60
-			if used+thresholdSec >= quotaSec {
-				next, nextErr := s.livekitGetter.GetNextAutoSwitchInstance(ctx, lkInstance.ID, year, int(month))
-				if nextErr == nil && next != nil {
-					if migErr := s.livekitGetter.MigrateOneServer(ctx, serverID, next.ID); migErr == nil {
-						voiceLogger.Info("auto-switch LiveKit instance",
-							"server_id", serverID, "from_instance", lkInstance.ID, "to_instance", next.ID,
-							"used_seconds", used, "quota_seconds", quotaSec, "threshold_seconds", thresholdSec)
-						lkInstance = next
-					} else {
-						voiceLogger.Error("auto-switch migrate failed", "server_id", serverID, "err", pkg.ErrText(migErr))
-					}
-				}
-				// nextErr or next==nil: no eligible target — stay put.
-			}
+			lkInstance = s.selectVoiceInstance(ctx, serverID, lkInstance, now, used)
 		}
 	}
 
 	return lkInstance, nil
+}
+
+func (s *voiceService) selectVoiceInstance(ctx context.Context, serverID string, lkInstance *models.LiveKitInstance, now time.Time, used int64) *models.LiveKitInstance {
+	year, month := now.Year(), now.Month()
+	thresholdSec := int64(lkInstance.SwitchThresholdMinutes) * 60
+	quotaSec := int64(lkInstance.MonthlyQuotaMinutes) * 60
+	if used+thresholdSec >= quotaSec {
+		next, nextErr := s.livekitGetter.GetNextAutoSwitchInstance(ctx, lkInstance.ID, year, int(month))
+		if nextErr == nil && next != nil {
+			if migErr := s.livekitGetter.MigrateOneServer(ctx, serverID, next.ID); migErr == nil {
+				voiceLogger.Info("auto-switch LiveKit instance",
+					"server_id", serverID, "from_instance", lkInstance.ID, "to_instance", next.ID,
+					"used_seconds", used, "quota_seconds", quotaSec, "threshold_seconds", thresholdSec)
+				lkInstance = next
+			} else {
+				voiceLogger.Error("auto-switch migrate failed", "server_id", serverID, "err", pkg.ErrText(migErr))
+			}
+		}
+		// nextErr or next==nil: no eligible target — stay put.
+	}
+	return lkInstance
 }
 
 // GenerateScreenShareToken generates a LiveKit token for the iOS native screen share connection.

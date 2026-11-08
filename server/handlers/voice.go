@@ -15,7 +15,7 @@ type VoiceHandler struct {
 }
 
 type VoiceHandlerService interface {
-	GenerateToken(ctx context.Context, userID, username, displayName, channelID string) (*models.VoiceTokenResponse, error)
+	GenerateToken(ctx context.Context, userID, username, displayName, serverID, channelID string) (*models.VoiceTokenResponse, error)
 	GenerateScreenShareToken(ctx context.Context, userID, username, displayName, channelID string) (*models.VoiceTokenResponse, error)
 	GetAllVoiceStates() []models.VoiceState
 }
@@ -41,6 +41,7 @@ func (h *VoiceHandler) Token(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	pkg.MarkVoiceTime(r.Context(), "auth")
 	var req models.VoiceTokenRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		pkg.ErrorWithMessage(w, http.StatusBadRequest, "invalid request body")
@@ -56,7 +57,7 @@ func (h *VoiceHandler) Token(w http.ResponseWriter, r *http.Request) {
 	if user.DisplayName != nil {
 		displayName = *user.DisplayName
 	}
-	resp, err := h.voiceService.GenerateToken(r.Context(), user.ID, user.Username, displayName, req.ChannelID)
+	resp, err := h.voiceService.GenerateToken(r.Context(), user.ID, user.Username, displayName, r.PathValue("serverId"), req.ChannelID)
 	if err != nil {
 		pkg.Error(w, err)
 		return

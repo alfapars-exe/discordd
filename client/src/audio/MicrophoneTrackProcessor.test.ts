@@ -18,7 +18,7 @@ class FakeContext {
   constructor() { FakeContext.instances.push(this); }
 }
 function setup() {
-  const source = { applyConstraints: vi.fn(async () => {}), stop: vi.fn() };
+  const source = { readyState: "live", applyConstraints: vi.fn(async () => {}), stop: vi.fn() };
   const local = { isMuted: false, setAudioContext: vi.fn(), applyConstraints: vi.fn(async () => {}) };
   let status = { activeEngine: "rnnoise", phase: "ready" } as MicrophoneStatus;
   const listeners = new Set<(status: MicrophoneStatus) => void>();
@@ -26,7 +26,7 @@ function setup() {
   const pipelines: ReturnType<typeof makePipeline>[] = [];
   function makePipeline() {
     return {
-      processedTrack: { enabled: true }, update: vi.fn(async () => {}),
+      processedTrack: { enabled: true, readyState: "live" }, update: vi.fn(async () => {}),
       getStatus: () => status,
       subscribe: vi.fn((callback: (status: MicrophoneStatus) => void) => {
         listeners.add(callback); return () => { listeners.delete(callback); };
@@ -67,7 +67,7 @@ describe("LiveKit microphone processor adapter", () => {
     expect(unlock).toHaveBeenCalledOnce();
     expect(sdkTrack.observeProcessedTrack).toHaveBeenCalledWith(h.processor.processedTrack);
     expect(h.local.setAudioContext).toHaveBeenCalledOnce();
-    expect(h.pipelines).toHaveLength(2);
+    expect(h.pipelines).toHaveLength(1);
     await h.processor.destroy();
   });
   it("sets its context before SDK setProcessor and applies raw constraints without the SDK lock", async () => {

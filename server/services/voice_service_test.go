@@ -2355,7 +2355,7 @@ func TestGenerateToken_TimedOutRejected(t *testing.T) {
 	// mockLiveKitGetter (wired by newTestVoiceService) always errors — if the
 	// timeout gate didn't fire before the LiveKit lookup, GenerateToken would
 	// return that unrelated lookup error instead of ErrForbidden.
-	resp, err := svc.GenerateToken(context.Background(), "u1", "alice", "Alice", "ch1")
+	resp, err := svc.GenerateToken(context.Background(), "u1", "alice", "Alice", "srv1", "ch1")
 	if !errors.Is(err, pkg.ErrForbidden) {
 		t.Fatalf("expected pkg.ErrForbidden, got %v", err)
 	}
@@ -2372,7 +2372,7 @@ func TestGenerateToken_TimeoutCheckerError_FailsClosed(t *testing.T) {
 		},
 	})
 
-	resp, err := svc.GenerateToken(context.Background(), "u1", "alice", "Alice", "ch1")
+	resp, err := svc.GenerateToken(context.Background(), "u1", "alice", "Alice", "srv1", "ch1")
 	if err == nil {
 		t.Fatal("expected error when the timeout checker itself fails (fail-closed), got nil")
 	}
@@ -2639,6 +2639,20 @@ func newTokenTestVoiceService(t *testing.T) VoiceService {
 	return svc
 }
 
+func TestGenerateTokenRequiresRequestedServerMembership(t *testing.T) {
+	s := newTokenTestVoiceService(t).(*voiceService)
+	for _, serverID := range []string{"", "other-server"} {
+		if token, err := s.GenerateToken(context.Background(), "victim", "victim", "Victim", serverID, "ch1"); token != nil || !errors.Is(err, pkg.ErrForbidden) {
+			t.Fatal("wrong server issued token")
+		}
+	}
+	s.afkTimeoutGetter = &testutil.MockServerRepo{IsMemberFn: func(context.Context, string, string) (bool, error) { return false, nil }}
+	s.forceMoveGrants["victim"] = forceMoveGrant{channelID: "ch1", expiresAt: time.Now().Add(time.Minute)}
+	if token, err := s.GenerateToken(context.Background(), "victim", "victim", "Victim", "srv1", "ch1"); token != nil || !errors.Is(err, pkg.ErrForbidden) {
+		t.Fatal("move grant bypassed revoked membership")
+	}
+}
+
 // decodeVideoGrant parses tokenString (as issued by GenerateToken) and
 // returns its verified video grant.
 func decodeVideoGrant(t *testing.T, tokenString, apiSecret string) *auth.VideoGrant {
@@ -2675,7 +2689,7 @@ func TestGenerateToken_ServerMuted_CanPublishFalse(t *testing.T) {
 	vs.states["u1"].IsServerMuted = true
 	vs.mu.Unlock()
 
-	resp, err := svc.GenerateToken(context.Background(), "u1", "alice", "Alice", "ch1")
+	resp, err := svc.GenerateToken(context.Background(), "u1", "alice", "Alice", "srv1", "ch1")
 	if err != nil {
 		t.Fatalf("GenerateToken: %v", err)
 	}
@@ -2692,7 +2706,7 @@ func TestGenerateToken_NotServerMuted_CanPublishTrue(t *testing.T) {
 		t.Fatalf("initial join failed: %v", err)
 	}
 
-	resp, err := svc.GenerateToken(context.Background(), "u1", "alice", "Alice", "ch1")
+	resp, err := svc.GenerateToken(context.Background(), "u1", "alice", "Alice", "srv1", "ch1")
 	if err != nil {
 		t.Fatalf("GenerateToken: %v", err)
 	}
@@ -2710,7 +2724,7 @@ func TestGenerateToken_NotServerMuted_CanPublishTrue(t *testing.T) {
 func TestGenerateToken_NoExistingState_CanPublishTrue(t *testing.T) {
 	svc := newTokenTestVoiceService(t)
 
-	resp, err := svc.GenerateToken(context.Background(), "u1", "alice", "Alice", "ch1")
+	resp, err := svc.GenerateToken(context.Background(), "u1", "alice", "Alice", "srv1", "ch1")
 	if err != nil {
 		t.Fatalf("GenerateToken: %v", err)
 	}
@@ -2737,7 +2751,7 @@ func TestGenerateToken_ServerDeafened_DoesNotAffectCanSubscribe(t *testing.T) {
 	vs.states["u1"].IsServerDeafened = true
 	vs.mu.Unlock()
 
-	resp, err := svc.GenerateToken(context.Background(), "u1", "alice", "Alice", "ch1")
+	resp, err := svc.GenerateToken(context.Background(), "u1", "alice", "Alice", "srv1", "ch1")
 	if err != nil {
 		t.Fatalf("GenerateToken: %v", err)
 	}

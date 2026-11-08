@@ -37,7 +37,6 @@ func (m *ServerMembershipMiddleware) Require(next http.Handler) http.Handler {
 			return
 		}
 
-		pkg.MarkVoiceTime(r.Context(), "auth")
 		isMember, err := m.serverRepo.IsMember(r.Context(), serverID, user.ID)
 		if err != nil {
 			pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "failed to check server membership", err)
@@ -49,7 +48,6 @@ func (m *ServerMembershipMiddleware) Require(next http.Handler) http.Handler {
 			return
 		}
 
-		pkg.MarkVoiceTime(r.Context(), "membership")
 		ctx := context.WithValue(r.Context(), handlers.ServerIDContextKey, serverID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
