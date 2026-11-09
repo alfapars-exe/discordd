@@ -10,7 +10,6 @@ export default function StartupPreview({ snapshot, status }: { snapshot: Startup
       <p>{snapshot.user.name}</p>
       {snapshot.servers.map(server => <section key={server.id}>
         <h2>{server.name}</h2>
-        <ul>{snapshot.channels[server.id]?.map(channel => <li key={channel.id}>{channel.type === "voice" ? "◖" : "#"} {channel.name}</li>)}</ul>
       </section>)}
     </aside>
     <main className="startup-preview-main"><div className="app-loading-spinner" /><p role="status">{status}</p></main>

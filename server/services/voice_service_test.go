@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -3390,5 +3391,59 @@ func TestMoveUserPermissionLookupAllowsLeaveAndRejectsStaleMove(t *testing.T) {
 	release <- struct{}{}
 	if err := <-moved; !errors.Is(err, pkg.ErrBadRequest) {
 		t.Fatalf("expected stale session rejection, got %v", err)
+	}
+}
+
+func TestVoiceRejoinAfterConnectRevocation(t *testing.T) {
+	perms := models.PermConnectVoice
+	svc, _ := newAuthVoiceService(true, func(context.Context, string, string) (models.Permission, error) { return perms, nil })
+	if err := svc.JoinChannel("member", "user", "User", "", "ch1", false, false); err != nil {
+		t.Fatal(err)
+	}
+	perms = 0
+	if err := svc.JoinChannel("member", "user", "User", "", "ch1", false, false); !errors.Is(err, pkg.ErrForbidden) {
+		t.Fatalf("revoked rejoin: %v", err)
+	}
+	if svc.GetUserVoiceState("member") != nil {
+		t.Fatal("revoked session survived reconnect")
+	}
+}
+
+func TestScreenShareRequiresStreamPermission(t *testing.T) {
+	svc, _ := newAuthVoiceService(true, func(context.Context, string, string) (models.Permission, error) {
+		return models.PermConnectVoice | models.PermSpeak, nil
+	})
+	if err := svc.JoinChannel("u", "u", "U", "", "ch1", false, false); err != nil {
+		t.Fatal(err)
+	}
+	streaming := true
+	if err := svc.UpdateState("u", nil, nil, &streaming); !errors.Is(err, pkg.ErrForbidden) {
+		t.Fatalf("stream state: %v", err)
+	}
+	if _, err := svc.GenerateScreenShareToken(context.Background(), "u", "u", "U", "ch1"); !errors.Is(err, pkg.ErrForbidden) {
+		t.Fatalf("screen token: %v", err)
+	}
+	for _, perms := range []models.Permission{0, models.PermSpeak, models.PermStream, models.PermAll} {
+		sources := voicePublishSources(perms, false)
+		if slices.Contains(sources, livekit.TrackSource_SCREEN_SHARE) != perms.Has(models.PermStream) || slices.Contains(sources, livekit.TrackSource_MICROPHONE) != perms.Has(models.PermSpeak) {
+			t.Fatalf("unexpected sources for %d: %v", perms, sources)
+		}
+	}
+}
+
+func TestActiveVoiceAccessInvalidation(t *testing.T) {
+	svc, _ := newTestVoiceService()
+	s := svc.(*voiceService)
+	for _, id := range []string{"revoked", "allowed"} {
+		if err := svc.JoinChannel(id, id, id, "", "ch1", false, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.permResolver = &testutil.MockChannelPermResolver{ResolveChannelPermissionsBulkFn: func(context.Context, string, []string) (map[string]models.Permission, error) {
+		return map[string]models.Permission{"allowed": models.PermConnectVoice}, nil
+	}}
+	s.recheckVoiceAccess("", "ch1")
+	if svc.GetUserVoiceState("revoked") != nil || svc.GetUserVoiceState("allowed") == nil {
+		t.Fatal("incorrect voice sessions after revocation")
 	}
 }

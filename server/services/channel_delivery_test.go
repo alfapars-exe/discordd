@@ -106,7 +106,7 @@ func TestChannelDeliveryConcurrentRetryAndDeletion(t *testing.T) {
 	if _, err := s.Create(ctx, "default", "channel", "sender", &models.CreateMessageRequest{Content: "changed", ClientMessageID: "same-send"}); !errors.Is(err, pkg.ErrConflict) {
 		t.Fatalf("changed retry: %v", err)
 	}
-	if err := s.Delete(ctx, "default", id, "sender", 0); err != nil {
+	if err := s.Delete(ctx, "default", id, "sender"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Create(ctx, "default", "channel", "sender", &models.CreateMessageRequest{Content: "hello <@reader>", ClientMessageID: "same-send"}); !errors.Is(err, pkg.ErrNotFound) {
@@ -210,7 +210,7 @@ func TestChannelDeliveryAttachmentRecoveryAndWatermark(t *testing.T) {
 	if err != nil || len(counts) != 1 || counts[0].UnreadCount != 1 {
 		t.Fatalf("unreads: %+v %v", counts, err)
 	}
-	if err = s.Delete(ctx, "default", m.ID, "sender", 0); err != nil {
+	if err = s.Delete(ctx, "default", m.ID, "sender"); err != nil {
 		t.Fatal(err)
 	}
 	counts, err = reads.GetUnreadCounts(ctx, "reader", "default")

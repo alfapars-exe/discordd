@@ -230,7 +230,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	// path (security review 2026-08-01, finding 3). voiceService already
 	// exists at this point (constructed above), so no ordering hazard.
 	authService.SetVoiceDisconnecter(voiceService)
-	channelService := services.NewChannelService(repos.Channel, repos.Category, hub, channelPermService, voiceService, auditLogService, repos.Notification)
+	channelService := services.NewChannelService(repos.Channel, repos.Category, hub, channelPermService, auditLogService, repos.Notification)
 	channelDeletionSetter, setterOK := channelService.(interface {
 		SetVoiceChannelDeletionHandler(services.VoiceChannelDeletionHandler)
 	})

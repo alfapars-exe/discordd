@@ -22,6 +22,8 @@ const PERMISSION_DEFS = [
   { bit: Permissions.ManageChannels, label: "permManageChannels", desc: "permManageChannelsDesc" },
   { bit: Permissions.ManageRoles, label: "permManageRoles", desc: "permManageRolesDesc" },
   { bit: Permissions.KickMembers, label: "permKickMembers", desc: "permKickMembersDesc" },
+  { bit: Permissions.TimeoutMembers, label: "permTimeoutMembers", desc: "permTimeoutMembersDesc" },
+  { bit: Permissions.ManageNicknames, label: "permManageNicknames", desc: "permManageNicknamesDesc" },
   { bit: Permissions.BanMembers, label: "permBanMembers", desc: "permBanMembersDesc" },
   { bit: Permissions.ManageMessages, label: "permManageMessages", desc: "permManageMessagesDesc" },
   { bit: Permissions.SendMessages, label: "permSendMessages", desc: "permSendMessagesDesc" },
@@ -68,6 +70,7 @@ function RoleSettings() {
   const actorMaxPos = useMemo(() => {
     const me = members.find((m) => m.id === currentUser?.id);
     if (!me || me.roles.length === 0) return 0;
+    if (me.roles.some(role => role.is_owner)) return Infinity;
     return Math.max(...me.roles.map((r) => r.position));
   }, [members, currentUser]);
 
@@ -446,10 +449,8 @@ function RoleSettings() {
               <label className="settings-label">{t("permissions")}</label>
               <div style={{ background: "var(--input-bg)", border: "1px solid var(--input-border)", borderRadius: 8, overflow: "hidden" }}>
                 {PERMISSION_DEFS.map((perm) => {
-                  // Prevent privilege escalation: only admins can grant Admin
-                  const isAdminPerm = perm.bit === Permissions.Admin;
-                  const actorHasAdmin = hasPermission(myPerms, Permissions.Admin);
-                  const permDisabled = !canEditSelected || (isAdminPerm && !actorHasAdmin);
+                  const addingBit = (editPerms & perm.bit) === 0;
+                  const permDisabled = !canEditSelected || (addingBit && !hasPermission(myPerms, perm.bit));
 
                   return (
                   <PermissionToggle

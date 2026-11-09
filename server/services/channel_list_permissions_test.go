@@ -16,11 +16,11 @@ func (listPermissionCategories) GetAllByServer(context.Context, string) ([]model
 	return nil, nil
 }
 
-type listPermissionResolver struct{ fail bool }
-
-func (listPermissionResolver) BuildVisibilityFilter(context.Context, string, string) (*ChannelVisibilityFilter, error) {
-	return &ChannelVisibilityFilter{HasBaseView: true}, nil
+type listPermissionResolver struct {
+	ChannelPermResolver
+	fail bool
 }
+
 func (r listPermissionResolver) ResolveUserChannelPermissions(_ context.Context, userID, serverID string) (*UserChannelPermissions, error) {
 	if r.fail {
 		return nil, errors.New("permission lookup unavailable")
@@ -28,14 +28,14 @@ func (r listPermissionResolver) ResolveUserChannelPermissions(_ context.Context,
 	if userID == "writer" {
 		return &UserChannelPermissions{Base: models.PermViewChannel | models.PermReadMessages | models.PermSendMessages, Overrides: map[string]models.Permission{"denied": models.PermViewChannel | models.PermReadMessages}}, nil
 	}
-	return &UserChannelPermissions{Base: models.PermViewChannel | models.PermReadMessages}, nil
+	return &UserChannelPermissions{Base: models.PermViewChannel | models.PermReadMessages, Overrides: map[string]models.Permission{"voice": 0}}, nil
 }
 func TestChannelListPermissionsAreRecipientScoped(t *testing.T) {
 	ctx := context.Background()
 	stale := models.PermAll
 	source := []models.Channel{{ID: "write", Type: models.ChannelTypeText, EffectivePermissions: &stale}, {ID: "denied", Type: models.ChannelTypeText}, {ID: "voice", Type: models.ChannelTypeVoice}}
 	repo := &testutil.MockChannelRepo{GetAllByServerFn: func(context.Context, string) ([]models.Channel, error) { return source, nil }}
-	svc := NewChannelService(repo, listPermissionCategories{}, nil, listPermissionResolver{}, nil, nil, nil)
+	svc := NewChannelService(repo, listPermissionCategories{}, nil, listPermissionResolver{}, nil, nil)
 	writer, err := svc.GetAllGrouped(ctx, "server", "writer")
 	if err != nil {
 		t.Fatal(err)
@@ -43,6 +43,9 @@ func TestChannelListPermissionsAreRecipientScoped(t *testing.T) {
 	reader, err := svc.GetAllGrouped(ctx, "server", "reader")
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(reader) != 1 || len(reader[0].Channels) != 2 {
+		t.Fatalf("reader saw hidden voice channel: %+v", reader)
 	}
 	if !writer[0].Channels[0].EffectivePermissions.Has(models.PermSendMessages) {
 		t.Fatal("writer lost send permission")
@@ -61,7 +64,7 @@ func TestChannelListPermissionsAreRecipientScoped(t *testing.T) {
 	}
 }
 func TestChannelListPermissionResolutionFailureIsClosed(t *testing.T) {
-	svc := NewChannelService(&testutil.MockChannelRepo{}, listPermissionCategories{}, nil, listPermissionResolver{fail: true}, nil, nil, nil)
+	svc := NewChannelService(&testutil.MockChannelRepo{}, listPermissionCategories{}, nil, listPermissionResolver{fail: true}, nil, nil)
 	if _, err := svc.GetAllGrouped(context.Background(), "server", "writer"); err == nil {
 		t.Fatal("missing permission map must not be treated as sendable")
 	}

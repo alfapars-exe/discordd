@@ -245,6 +245,7 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 	readHeld := time.Since(readStart)
 
 	isSelfMove := moverUserID == targetUserID
+	needsPlacementGrant := false
 
 	if isSelfMove {
 		// Self-move: only need ConnectVoice in target channel (no MoveMembers required)
@@ -281,6 +282,12 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 		if !targetPerms.Has(models.PermConnectVoice) {
 			return fmt.Errorf("%w: connect voice permission required in target channel", pkg.ErrForbidden)
 		}
+		memberPerms, err := s.currentVoicePermissions(ctx, targetUserID, targetChannelID)
+		if err != nil {
+			return fmt.Errorf("resolve moved member permissions: %w", err)
+		}
+		needsPlacementGrant = !memberPerms.Has(models.PermConnectVoice)
+
 	}
 
 	writeWait := time.Now()
@@ -309,6 +316,7 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 
 	state.ChannelGeneration++
 	state.ChannelID = targetChannelID
+	state.ForceMoved = needsPlacementGrant
 	state.ServerID = targetServerID
 
 	// Involuntary move: the moved user knew the source channel's SFrame
@@ -356,9 +364,12 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 
 	// Grant one-time permission bypass so the moved user can generate a token
 	// for the target channel even without ConnectVoice permission.
-	s.forceMoveGrants[targetUserID] = forceMoveGrant{
-		channelID: targetChannelID,
-		expiresAt: time.Now().Add(30 * time.Second),
+	delete(s.forceMoveGrants, targetUserID)
+	if needsPlacementGrant {
+		s.forceMoveGrants[targetUserID] = forceMoveGrant{
+			channelID: targetChannelID,
+			expiresAt: time.Now().Add(30 * time.Second),
+		}
 	}
 
 	rotations := make([]ws.VoicePassphraseRotatedData, 0, len(movedSourceRotated))
@@ -456,6 +467,28 @@ func (s *voiceService) AdminDisconnectUser(ctx context.Context, disconnecterUser
 		return fmt.Errorf("%w: move members permission required", pkg.ErrForbidden)
 	}
 
+	channelID, serverID := state.ChannelID, state.ServerID
+	s.disconnectVoiceLocked(targetUserID, state)
+
+	// Audit: voice kick
+	disconnecter := disconnecterUserID
+	target := targetUserID
+	metadata := fmt.Sprintf(`{"channel_id":%q}`, channelID)
+	s.audit(models.AuditLog{
+		ServerID:     serverID,
+		ActorUserID:  &disconnecter,
+		TargetUserID: &target,
+		EventType:    models.AuditEventVoiceKick,
+		Metadata:     metadata,
+	})
+
+	voiceLogger.Info("admin disconnected user from voice channel",
+		"admin_id", disconnecterUserID, "target_id", targetUserID, "channel_id", channelID)
+	return nil
+}
+
+// disconnectVoiceLocked releases s.mu after removing the session and rotating room keys.
+func (s *voiceService) disconnectVoiceLocked(targetUserID string, state *models.VoiceState) {
 	channelID := state.ChannelID
 	serverID := state.ServerID
 	username := state.Username
@@ -476,6 +509,7 @@ func (s *voiceService) AdminDisconnectUser(ctx context.Context, disconnecterUser
 	disconnectInstanceID := state.LiveKitInstanceID
 	disconnectIsCloud := state.LiveKitIsCloud
 	delete(s.states, targetUserID)
+	delete(s.forceMoveGrants, targetUserID)
 
 	s.broadcastToServerLocked(serverID, ws.Event{
 		Op: ws.OpVoiceStateUpdate,
@@ -558,19 +592,4 @@ func (s *voiceService) AdminDisconnectUser(ctx context.Context, disconnecterUser
 		go s.musicBotHook.StopAllForChannel(channelID)
 	}
 
-	// Audit: voice kick
-	disconnecter := disconnecterUserID
-	target := targetUserID
-	metadata := fmt.Sprintf(`{"channel_id":%q}`, channelID)
-	s.audit(models.AuditLog{
-		ServerID:     serverID,
-		ActorUserID:  &disconnecter,
-		TargetUserID: &target,
-		EventType:    models.AuditEventVoiceKick,
-		Metadata:     metadata,
-	})
-
-	voiceLogger.Info("admin disconnected user from voice channel",
-		"admin_id", disconnecterUserID, "target_id", targetUserID, "channel_id", channelID)
-	return nil
 }

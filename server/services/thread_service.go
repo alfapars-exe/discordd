@@ -21,10 +21,10 @@ type threadService struct {
 	channels    repository.ChannelRepository
 	messages    repository.MessageRepository
 	permissions ChannelPermResolver
-	hub         ws.Broadcaster
+	hub         ws.BroadcastAndOnline
 }
 
-func NewThreadService(channels repository.ChannelRepository, messages repository.MessageRepository, permissions ChannelPermResolver, hub ws.Broadcaster) ThreadService {
+func NewThreadService(channels repository.ChannelRepository, messages repository.MessageRepository, permissions ChannelPermResolver, hub ws.BroadcastAndOnline) ThreadService {
 	return &threadService{channels: channels, messages: messages, permissions: permissions, hub: hub}
 }
 
@@ -58,7 +58,7 @@ func (s *threadService) Create(ctx context.Context, serverID, parentID, actorID 
 	if err := s.channels.Create(ctx, ch); err != nil {
 		return nil, err
 	}
-	s.hub.BroadcastToServer(serverID, ws.Event{Op: ws.OpChannelCreate, Data: ch})
+	broadcastVisibleChannel(ctx, s.hub, s.permissions, ch, ws.OpChannelCreate)
 	return ch, nil
 }
 
@@ -113,7 +113,7 @@ func (s *threadService) SetArchived(ctx context.Context, serverID, threadID, act
 	}
 	thread, err = s.channels.GetByID(ctx, threadID)
 	if err == nil {
-		s.hub.BroadcastToServer(serverID, ws.Event{Op: ws.OpChannelUpdate, Data: thread})
+		broadcastVisibleChannel(ctx, s.hub, s.permissions, thread, ws.OpChannelUpdate)
 	}
 	return thread, err
 }

@@ -39,7 +39,8 @@ const (
 // InvalidateUser/InvalidateAll only make sense with a cache, so they live
 // here and nowhere else; every other method is a pure pass-through to inner.
 type cachingPermResolver struct {
-	inner *channelPermService
+	inner             *channelPermService
+	afterInvalidation func(userID, channelID string)
 
 	// permCache holds ResolveChannelPermissions results. Key: "userID:channelID"
 	// (permCacheKey), built the same way on every read and write path here so
@@ -235,12 +236,15 @@ func (c *cachingPermResolver) resolveBulkAttempt(ctx context.Context, channelID 
 // users are affected.
 func (c *cachingPermResolver) invalidateChannelCache(channelID string) {
 	c.cacheMu.Lock()
-	defer c.cacheMu.Unlock()
 	c.cacheRevision++
 	suffix := ":" + channelID
 	c.permCache.DeleteFunc(func(key string) bool {
 		return strings.HasSuffix(key, suffix)
 	})
+	c.cacheMu.Unlock()
+	if c.afterInvalidation != nil {
+		c.afterInvalidation("", channelID)
+	}
 }
 
 // InvalidateUser clears every cached entry for one user.
@@ -253,12 +257,15 @@ func (c *cachingPermResolver) invalidateChannelCache(channelID string) {
 // request).
 func (c *cachingPermResolver) InvalidateUser(userID string) {
 	c.cacheMu.Lock()
-	defer c.cacheMu.Unlock()
 	c.cacheRevision++
 	prefix := userID + ":"
 	c.permCache.DeleteFunc(func(key string) bool {
 		return strings.HasPrefix(key, prefix)
 	})
+	c.cacheMu.Unlock()
+	if c.afterInvalidation != nil {
+		c.afterInvalidation(userID, "")
+	}
 }
 
 // InvalidateAll drops the entire cache.
@@ -270,9 +277,12 @@ func (c *cachingPermResolver) InvalidateUser(userID string) {
 // the system returns to steady state within permCacheTTL (30s).
 func (c *cachingPermResolver) InvalidateAll() {
 	c.cacheMu.Lock()
-	defer c.cacheMu.Unlock()
 	c.cacheRevision++
 	c.permCache.DeleteFunc(func(string) bool { return true })
+	c.cacheMu.Unlock()
+	if c.afterInvalidation != nil {
+		c.afterInvalidation("", "")
+	}
 }
 
 // Compile-time assertion: cachingPermResolver must satisfy the full

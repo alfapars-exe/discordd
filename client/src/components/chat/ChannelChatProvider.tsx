@@ -9,7 +9,7 @@ import { useServerStore } from "../../stores/serverStore";
 import { useAuthStore } from "../../stores/authStore";
 import { composerKey, useComposerDraftStore } from "../../stores/composerDraftStore";
 import { useChannelPermissions } from "../../hooks/useChannelPermissions";
-import { hasPermission, Permissions } from "../../utils/permissions";
+import { Permissions } from "../../utils/permissions";
 import type { MemberWithRoles } from "../../types";
 
 const EMPTY_MESSAGES: ChatMessage[] = [];
@@ -93,10 +93,7 @@ function ChannelChatProvider({
   // by the initial member fetch and kept current via WS events), not
   // something still in flight.
   const canSend = (!permsResolved || hasChannelPerm(Permissions.SendMessages)) && !selfTimeout && !archived;
-  const currentMember = members.find((m) => m.id === currentUser?.id);
-  const canManageMessages = currentMember
-    ? hasPermission(currentMember.effective_permissions, Permissions.ManageMessages)
-    : false;
+  const canManageMessages = permsResolved && hasChannelPerm(Permissions.ManageMessages);
 
   // ─── Actions (stable refs) ───
   const sendMessage = useCallback(

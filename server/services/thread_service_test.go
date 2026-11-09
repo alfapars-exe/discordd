@@ -36,7 +36,7 @@ func TestThreadServiceCreateUsesParentAndStarter(t *testing.T) {
 	messages := &testutil.MockMessageRepo{GetByIDFn: func(context.Context, string) (*models.Message, error) {
 		return &models.Message{ID: "m", ChannelID: "parent"}, nil
 	}}
-	svc := NewThreadService(channels, messages, threadPermStub{models.PermViewChannel | models.PermReadMessages | models.PermSendMessages}, &testutil.MockBroadcaster{})
+	svc := NewThreadService(channels, messages, threadPermStub{models.PermViewChannel | models.PermReadMessages | models.PermSendMessages}, &testutil.MockBroadcastAndOnline{})
 	got, err := svc.Create(context.Background(), "s", "parent", "u", &models.CreateThreadRequest{Name: " topic ", MessageID: "m"})
 	if err != nil {
 		t.Fatal(err)
@@ -53,7 +53,7 @@ func TestThreadServiceRejectsCrossChannelStarter(t *testing.T) {
 	messages := &testutil.MockMessageRepo{GetByIDFn: func(context.Context, string) (*models.Message, error) {
 		return &models.Message{ID: "m", ChannelID: "other"}, nil
 	}}
-	svc := NewThreadService(channels, messages, threadPermStub{models.PermAll}, &testutil.MockBroadcaster{})
+	svc := NewThreadService(channels, messages, threadPermStub{models.PermAll}, &testutil.MockBroadcastAndOnline{})
 	_, err := svc.Create(context.Background(), "s", "parent", "u", &models.CreateThreadRequest{Name: "topic", MessageID: "m"})
 	if !errors.Is(err, pkg.ErrNotFound) {
 		t.Fatalf("expected not found, got %v", err)
@@ -73,7 +73,7 @@ func TestThreadLifecycleStarterOrModeratorOnly(t *testing.T) {
 		SetThreadArchivedFn: func(_ context.Context, _ string, value bool) error { archived = value; return nil },
 	}
 	messages := &testutil.MockMessageRepo{GetByIDFn: func(context.Context, string) (*models.Message, error) { return &models.Message{UserID: "owner"}, nil }}
-	svc := NewThreadService(channels, messages, threadPermStub{models.PermViewChannel | models.PermReadMessages}, &testutil.MockBroadcaster{})
+	svc := NewThreadService(channels, messages, threadPermStub{models.PermViewChannel | models.PermReadMessages}, &testutil.MockBroadcastAndOnline{})
 	if _, err := svc.SetArchived(context.Background(), "s", "thread", "other", true); !errors.Is(err, pkg.ErrForbidden) {
 		t.Fatalf("expected forbidden, got %v", err)
 	}
@@ -83,7 +83,7 @@ func TestThreadLifecycleStarterOrModeratorOnly(t *testing.T) {
 	if _, err := svc.SetArchived(context.Background(), "s", "thread", "owner", false); err != nil || archived {
 		t.Fatalf("starter should reopen: %v", err)
 	}
-	moderator := NewThreadService(channels, messages, threadPermStub{models.PermViewChannel | models.PermReadMessages | models.PermManageMessages}, &testutil.MockBroadcaster{})
+	moderator := NewThreadService(channels, messages, threadPermStub{models.PermViewChannel | models.PermReadMessages | models.PermManageMessages}, &testutil.MockBroadcastAndOnline{})
 	if _, err := moderator.SetArchived(context.Background(), "s", "thread", "moderator", true); err != nil || !archived {
 		t.Fatalf("moderator should archive: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestThreadGetRequiresValidSameServerTextParentAndReadPermission(t *testing.
 			return parent, nil
 		}}
 		perms := &threadPermRecorder{p: models.PermViewChannel | models.PermReadMessages}
-		svc := NewThreadService(channels, &testutil.MockMessageRepo{}, perms, &testutil.MockBroadcaster{})
+		svc := NewThreadService(channels, &testutil.MockMessageRepo{}, perms, &testutil.MockBroadcastAndOnline{})
 		got, err := svc.Get(context.Background(), "s", "thread", "member")
 		if err != nil || got != thread {
 			t.Fatalf("Get() = %#v, %v; want archived thread", got, err)
@@ -136,7 +136,7 @@ func TestThreadGetRequiresValidSameServerTextParentAndReadPermission(t *testing.
 				}
 				return tc.parent, nil
 			}}
-			svc := NewThreadService(channels, &testutil.MockMessageRepo{}, threadPermStub{models.PermAll}, &testutil.MockBroadcaster{})
+			svc := NewThreadService(channels, &testutil.MockMessageRepo{}, threadPermStub{models.PermAll}, &testutil.MockBroadcastAndOnline{})
 			if _, err := svc.Get(context.Background(), "s", "thread", "member"); !errors.Is(err, tc.wantErr) {
 				t.Fatalf("Get() error = %v, want %v", err, tc.wantErr)
 			}
@@ -150,7 +150,7 @@ func TestThreadGetRequiresValidSameServerTextParentAndReadPermission(t *testing.
 			}
 			return parent, nil
 		}}
-		svc := NewThreadService(channels, &testutil.MockMessageRepo{}, threadPermStub{0}, &testutil.MockBroadcaster{})
+		svc := NewThreadService(channels, &testutil.MockMessageRepo{}, threadPermStub{0}, &testutil.MockBroadcastAndOnline{})
 		if _, err := svc.Get(context.Background(), "s", "thread", "outsider"); !errors.Is(err, pkg.ErrForbidden) {
 			t.Fatalf("Get() error = %v, want forbidden", err)
 		}
@@ -197,7 +197,7 @@ func TestThreadLifecycleRequiresReadableValidParent(t *testing.T) {
 				SetThreadArchivedFn: func(context.Context, string, bool) error { writes++; return nil },
 			}
 			messages := &testutil.MockMessageRepo{GetByIDFn: func(context.Context, string) (*models.Message, error) { return &models.Message{UserID: "owner"}, nil }}
-			hub := &testutil.MockBroadcaster{BroadcastToServerFn: func(string, ws.Event) { broadcasts++ }}
+			hub := &testutil.MockBroadcastAndOnline{MockBroadcaster: testutil.MockBroadcaster{BroadcastToUsersFn: func([]string, ws.Event) { broadcasts++ }}}
 			svc := NewThreadService(channels, messages, threadPermStub{tc.perms}, hub)
 			for _, archived := range []bool{true, false} {
 				if _, err := svc.SetArchived(context.Background(), "s", "thread", "owner", archived); !errors.Is(err, tc.want) {

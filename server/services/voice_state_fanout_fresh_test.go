@@ -25,7 +25,7 @@ func TestVoiceStateFanoutIgnoresStaleCachedPermissionGrant(t *testing.T) {
 	if err != nil || !stale["viewer"].Has(models.PermViewChannel) {
 		t.Fatal("fixture did not retain the cached grant")
 	}
-	fresh, err := resolveFreshVoiceFanoutPermissions(ctx, resolver, "channel", users)
+	fresh, err := resolveFreshFanoutPermissions(ctx, resolver, "channel", users)
 	if err != nil || fresh["viewer"].Has(models.PermViewChannel) {
 		t.Fatalf("voice fanout retained revoked grant: permissions=%v err=%v", fresh, err)
 	}

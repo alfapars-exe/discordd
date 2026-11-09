@@ -74,7 +74,7 @@ func (d *routeDeps) registerMessageRoutes() {
 	d.mux.Handle("GET /api/servers/{serverId}/channels/{id}/message-events", d.authServer(d.h.Message.Events))
 	d.mux.Handle("POST /api/servers/{serverId}/channels/{id}/messages", d.authServer(d.h.Message.Create))
 	d.mux.Handle("PATCH /api/servers/{serverId}/messages/{id}", d.authServer(d.h.Message.Update))
-	d.mux.Handle("DELETE /api/servers/{serverId}/messages/{id}", d.authServerPermLoad(d.h.Message.Delete))
+	d.mux.Handle("DELETE /api/servers/{serverId}/messages/{id}", d.authServer(d.h.Message.Delete))
 
 	// Reactions
 	d.mux.Handle("POST /api/servers/{serverId}/messages/{messageId}/reactions", d.authServer(d.h.Reaction.Toggle))
@@ -82,8 +82,8 @@ func (d *routeDeps) registerMessageRoutes() {
 
 	// Pins
 	d.mux.Handle("GET /api/servers/{serverId}/channels/{id}/pins", d.authServer(d.h.Pin.ListPins))
-	d.mux.Handle("POST /api/servers/{serverId}/channels/{channelId}/messages/{messageId}/pin", d.authServerPerm(models.PermManageMessages, d.h.Pin.Pin))
-	d.mux.Handle("DELETE /api/servers/{serverId}/channels/{channelId}/messages/{messageId}/pin", d.authServerPerm(models.PermManageMessages, d.h.Pin.Unpin))
+	d.mux.Handle("POST /api/servers/{serverId}/channels/{channelId}/messages/{messageId}/pin", d.authServer(d.h.Pin.Pin))
+	d.mux.Handle("DELETE /api/servers/{serverId}/channels/{channelId}/messages/{messageId}/pin", d.authServer(d.h.Pin.Unpin))
 
 	// Read State — literal "read-all" and "unread" before {id} wildcard
 	d.mux.Handle("POST /api/servers/{serverId}/channels/read-all", d.authServer(d.h.ReadState.MarkAllRead))

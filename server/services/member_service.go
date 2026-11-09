@@ -498,19 +498,26 @@ func (s *memberService) ModifyRoles(ctx context.Context, serverID, actorID, targ
 		rolesByID[allServerRoles[i].ID] = &allServerRoles[i]
 	}
 
+	currentSet := make(map[string]bool, len(targetRoles))
+	for _, r := range targetRoles {
+		currentSet[r.ID] = true
+	}
+
+	var actorPermissions models.Permission
+	for _, r := range actorRoles {
+		actorPermissions |= r.Permissions
+	}
 	for _, roleID := range roleIDs {
 		role, ok := rolesByID[roleID]
 		if !ok {
 			return nil, fmt.Errorf("%w: role %s does not belong to this server", pkg.ErrForbidden, roleID)
 		}
-		if role.Position >= actorMaxPos {
+		if role.IsOwner || role.Position >= actorMaxPos {
 			return nil, fmt.Errorf("%w: cannot assign role '%s' with equal or higher position", pkg.ErrForbidden, role.Name)
 		}
-	}
-
-	currentSet := make(map[string]bool, len(targetRoles))
-	for _, r := range targetRoles {
-		currentSet[r.ID] = true
+		if !currentSet[roleID] && !actorPermissions.Has(models.PermAdmin) && role.Permissions&^actorPermissions != 0 {
+			return nil, fmt.Errorf("%w: cannot assign permissions you do not have", pkg.ErrForbidden)
+		}
 	}
 
 	targetSet := make(map[string]bool, len(roleIDs))

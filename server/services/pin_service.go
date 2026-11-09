@@ -77,26 +77,13 @@ func (s *pinService) allowedViewers(channelID string) []string {
 	return allowed
 }
 
-// requireManageMessages honours a channel-level ManageMessages override on the
-// pin write paths. The route middleware already verified server-wide
-// ManageMessages; this additionally resolves the user's EFFECTIVE permission in
-// this channel, so a per-channel deny-override is respected — matching how
-// GetPinnedMessages already gates reads. Admin bypasses via Permission.Has.
-//
-// A-29c audit note: Pin/Unpin deliberately do NOT add a member-timeout
-// gate (unlike message_service.Create/Update). Both already require
-// PermManageMessages here, so the only user who could exploit a missing
-// gate is a moderator who is themselves timed out — a self-contradictory,
-// low-probability edge case, and Pin/Unpin don't post attacker-controlled
-// content (they only reference an existing message id). Not worth the
-// extra IsActive round trip on every pin/unpin; revisit if timeout ever
-// starts stripping permissions instead of being an independent gate.
+// Pin responses contain message content and require channel read and moderation access.
 func (s *pinService) requireManageMessages(ctx context.Context, userID, channelID string) error {
 	perms, err := s.permResolver.ResolveChannelPermissions(ctx, userID, channelID)
 	if err != nil {
 		return fmt.Errorf("failed to resolve channel permissions: %w", err)
 	}
-	if !perms.Has(models.PermManageMessages) {
+	if !models.PermCanReadChannel(perms) || !perms.Has(models.PermManageMessages) {
 		return fmt.Errorf("%w: manage messages permission required for this channel", pkg.ErrForbidden)
 	}
 	return nil

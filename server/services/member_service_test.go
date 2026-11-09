@@ -760,3 +760,19 @@ func TestModifyRoles_InvalidatesTargetPermissions(t *testing.T) {
 		t.Errorf("InvalidateUser calls = %v, want [%q]", inv.userCalls, target)
 	}
 }
+
+func TestRoleManagerCannotDelegateAdministratorBit(t *testing.T) {
+	h := newMemberHarness()
+	h.roleRepo.GetByUserIDAndServerFn = func(_ context.Context, user, _ string) ([]models.Role, error) {
+		if user == "manager" {
+			return []models.Role{{Position: 100, Permissions: models.PermManageRoles}}, nil
+		}
+		return nil, nil
+	}
+	h.roleRepo.GetAllByServerFn = func(context.Context, string) ([]models.Role, error) {
+		return []models.Role{{ID: "lower", Position: 2, Permissions: models.PermAdmin}}, nil
+	}
+	if _, err := h.svc.ModifyRoles(context.Background(), "server", "manager", "member", []string{"lower"}); !errors.Is(err, pkg.ErrForbidden) {
+		t.Fatalf("delegating admin: %v", err)
+	}
+}

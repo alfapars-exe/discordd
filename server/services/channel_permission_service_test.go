@@ -1414,3 +1414,13 @@ func TestDeleteOverride_AllowsLowerPositionTarget(t *testing.T) {
 		t.Error("permRepo.Delete must be called once the hierarchy check passes")
 	}
 }
+
+func TestOverrideResetPropagatesStorageFailure(t *testing.T) {
+	svc := (n03Fixture{actorPosition: 5, actorPermissions: models.PermAll, targetPosition: 1}).build(nil, nil).(*cachingPermResolver)
+	repo := svc.inner.permRepo.(*testutil.MockChannelPermRepo)
+	failure := errors.New("write failed")
+	repo.DeleteFn = func(context.Context, string, string) error { return failure }
+	if err := svc.SetOverride(context.Background(), n03ServerID, n03ChannelID, n03TargetID, n03ActorID, &models.SetOverrideRequest{}); !errors.Is(err, failure) {
+		t.Fatalf("reset error: %v", err)
+	}
+}

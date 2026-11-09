@@ -4411,8 +4411,8 @@ body.high-contrast :where(button,a,input,select,[tabindex]):focus-visible { outl
   gap: 4px;
 }
 
+.sb-sound-tile { position: relative; display: grid; }
 .sb-sound-btn {
-  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -4458,7 +4458,7 @@ body.high-contrast :where(button,a,input,select,[tabindex]):focus-visible { outl
   opacity: 0;
   transition: opacity 0.15s;
 }
-.sb-sound-btn:hover .sb-sound-delete { opacity: 1; }
+.sb-sound-tile:hover .sb-sound-delete, .sb-sound-tile:focus-within .sb-sound-delete { opacity: 1; }
 .sb-sound-delete:hover { color: var(--danger); background: var(--b1); }
 
 .sb-loading {

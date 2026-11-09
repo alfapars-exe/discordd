@@ -15,13 +15,8 @@ var channelLogger = logx.Component("service.channel")
 
 // ChannelVisibilityChecker resolves per-user channel visibility using role overrides.
 type ChannelVisibilityChecker interface {
-	BuildVisibilityFilter(ctx context.Context, userID, serverID string) (*ChannelVisibilityFilter, error)
-}
-
-// UserVoiceChannelProvider returns the user's active voice channel ID.
-// Used to force-include voice-connected channels in sidebar even without ViewChannel.
-type UserVoiceChannelProvider interface {
-	GetUserVoiceChannelID(userID string) string
+	ChannelPermResolver
+	ResolveUserChannelPermissions(ctx context.Context, userID, serverID string) (*UserChannelPermissions, error)
 }
 
 type ChannelVisibilityFilter struct {
@@ -55,12 +50,11 @@ type ChannelService interface {
 }
 
 type channelService struct {
-	channelRepo   repository.ChannelRepository
-	categoryRepo  repository.CategoryRepository
-	hub           ws.Broadcaster
-	visChecker    ChannelVisibilityChecker
-	voiceProvider UserVoiceChannelProvider
-	auditLogger   AuditWriter
+	channelRepo  repository.ChannelRepository
+	categoryRepo repository.CategoryRepository
+	hub          ws.BroadcastAndOnline
+	visChecker   ChannelVisibilityChecker
+	auditLogger  AuditWriter
 	// notificationRepo is only used for the best-effort inbox cleanup in
 	// Delete (notifications.channel_id has no enforced FK on Turso).
 	notificationRepo repository.NotificationRepository
@@ -98,9 +92,8 @@ func (s *channelService) audit(entry models.AuditLog) {
 func NewChannelService(
 	channelRepo repository.ChannelRepository,
 	categoryRepo repository.CategoryRepository,
-	hub ws.Broadcaster,
+	hub ws.BroadcastAndOnline,
 	visChecker ChannelVisibilityChecker,
-	voiceProvider UserVoiceChannelProvider,
 	auditLogger AuditWriter,
 	notificationRepo repository.NotificationRepository,
 ) ChannelService {
@@ -109,7 +102,6 @@ func NewChannelService(
 		categoryRepo:     categoryRepo,
 		hub:              hub,
 		visChecker:       visChecker,
-		voiceProvider:    voiceProvider,
 		auditLogger:      auditLogger,
 		notificationRepo: notificationRepo,
 	}
@@ -126,24 +118,9 @@ func (s *channelService) GetAllGrouped(ctx context.Context, serverID, userID str
 		return nil, fmt.Errorf("failed to get channels: %w", err)
 	}
 
-	filter, err := s.visChecker.BuildVisibilityFilter(ctx, userID, serverID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build visibility filter: %w", err)
-	}
-	var permissions *UserChannelPermissions
-	if resolver, ok := s.visChecker.(interface {
-		ResolveUserChannelPermissions(context.Context, string, string) (*UserChannelPermissions, error)
-	}); ok {
-		permissions, err = resolver.ResolveUserChannelPermissions(ctx, userID, serverID)
-		if err != nil || permissions == nil {
-			return nil, fmt.Errorf("failed to resolve listed channel permissions: %v", err)
-		}
-	}
-
-	// Force-include the user's active voice channel even without ViewChannel
-	voiceChannelID := ""
-	if s.voiceProvider != nil {
-		voiceChannelID = s.voiceProvider.GetUserVoiceChannelID(userID)
+	permissions, err := s.visChecker.ResolveUserChannelPermissions(ctx, userID, serverID)
+	if err != nil || permissions == nil {
+		return nil, fmt.Errorf("failed to resolve listed channel permissions: %v", err)
 	}
 
 	channelsByCategory := make(map[string][]models.Channel)
@@ -151,12 +128,12 @@ func (s *channelService) GetAllGrouped(ctx context.Context, serverID, userID str
 		// Copy per-recipient permissions onto this response value only. Clear any
 		// inherited metadata so a repository/cache value cannot leak another user.
 		ch.EffectivePermissions = nil
-		if permissions != nil && ch.Type == models.ChannelTypeText {
-			effective := permissions.Effective(ch.ID)
-			ch.EffectivePermissions = &effective
-		}
-		if !filter.CanSee(ch.ID) && ch.ID != voiceChannelID {
+		effective := permissions.Effective(ch.ID)
+		if !effective.Has(models.PermViewChannel) {
 			continue
+		}
+		if ch.Type == models.ChannelTypeText {
+			ch.EffectivePermissions = &effective
 		}
 		catID := ""
 		if ch.CategoryID != nil {
@@ -182,7 +159,7 @@ func (s *channelService) GetAllGrouped(ctx context.Context, serverID, userID str
 
 	for _, cat := range categories {
 		chs := channelsByCategory[cat.ID]
-		if len(chs) == 0 && !filter.IsAdmin {
+		if len(chs) == 0 && !permissions.IsAdmin {
 			continue
 		}
 		if chs == nil {
@@ -339,10 +316,7 @@ func (s *channelService) Update(ctx context.Context, serverID, actorID, id strin
 		return nil, err
 	}
 
-	s.hub.BroadcastToServer(serverID, ws.Event{
-		Op:   ws.OpChannelUpdate,
-		Data: channel,
-	})
+	broadcastVisibleChannel(ctx, s.hub, s.visChecker, channel, ws.OpChannelUpdate)
 
 	// Only the rename branch is auditable here. Topic and category-move
 	// edits are too noisy (every drag-drop reorder would log) and there's
@@ -463,4 +437,26 @@ func (s *channelService) ReorderChannels(ctx context.Context, serverID string, r
 	}
 
 	return grouped, nil
+}
+
+func broadcastVisibleChannel(ctx context.Context, hub ws.BroadcastAndOnline, resolver ChannelPermResolver, channel *models.Channel, op string) {
+	online := hub.GetOnlineUserIDsForServer(channel.ServerID)
+	if len(online) == 0 {
+		return
+	}
+	perms, err := resolveFreshFanoutPermissions(ctx, resolver, channel.ID, online)
+	if err != nil {
+		channelLogger.Error("channel event permission lookup failed", "channel_id", channel.ID, "error", pkg.ErrText(err))
+		return
+	}
+	var visible []string
+	for _, id := range online {
+		p := perms[id]
+		if p.Has(models.PermViewChannel) && (channel.Type != models.ChannelTypeThread || p.Has(models.PermReadMessages)) {
+			visible = append(visible, id)
+		}
+	}
+	if len(visible) > 0 {
+		hub.BroadcastToUsers(visible, ws.Event{Op: op, ServerID: channel.ServerID, Data: channel})
+	}
 }

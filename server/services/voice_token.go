@@ -12,6 +12,7 @@ import (
 	"github.com/argeinfina/hichat/pkg/crypto"
 
 	"github.com/livekit/protocol/auth"
+	"github.com/livekit/protocol/livekit"
 )
 
 // voiceTokenTTL caps how long a single LiveKit JWT remains valid.
@@ -167,7 +168,8 @@ func (s *voiceService) GenerateToken(ctx context.Context, userID, username, disp
 	// preference the user themselves controls, not something a moderator
 	// enforces — blocking subscription would silently break the user's own
 	// ability to un-deafen and hear again.
-	canPublish := effectivePerms.Has(models.PermSpeak) && !s.currentServerMute(userID, channel.ServerID)
+	sources := voicePublishSources(effectivePerms, s.currentServerMute(userID, channel.ServerID))
+	canPublish := len(sources) > 0
 	canSubscribe := true
 	canPublishData := true
 
@@ -184,6 +186,7 @@ func (s *voiceService) GenerateToken(ctx context.Context, userID, username, disp
 		CanPublishData: &canPublishData,
 	}
 
+	grant.SetCanPublishSources(sources)
 	participantName := username
 	if displayName != "" {
 		participantName = displayName
@@ -317,6 +320,13 @@ func (s *voiceService) GenerateScreenShareToken(ctx context.Context, userID, use
 	if !inChannel {
 		return nil, fmt.Errorf("%w: must be in the voice channel to screen share", pkg.ErrBadRequest)
 	}
+	perms, err := s.currentVoicePermissions(ctx, userID, channelID)
+	if err != nil {
+		return nil, err
+	}
+	if !perms.Has(models.PermStream) {
+		return nil, fmt.Errorf("%w: stream permission required", pkg.ErrForbidden)
+	}
 
 	lkInstance, err := s.livekitGetter.GetByServerID(ctx, channel.ServerID)
 	if err != nil {
@@ -347,6 +357,7 @@ func (s *voiceService) GenerateScreenShareToken(ctx context.Context, userID, use
 		CanSubscribe:   &canSubscribe,
 		CanPublishData: &canPublishData,
 	}
+	grant.SetCanPublishSources([]livekit.TrackSource{livekit.TrackSource_SCREEN_SHARE, livekit.TrackSource_SCREEN_SHARE_AUDIO})
 
 	// Identity suffix "_ss" marks this as a screen share sub-participant
 	ssIdentity := userID + "_ss"
@@ -409,4 +420,27 @@ func validateVoiceAdmission(a *models.VoiceAdmission) error {
 		return fmt.Errorf("%w: you are timed out on this server", pkg.ErrForbidden)
 	}
 	return nil
+}
+
+func voicePublishSources(perms models.Permission, muted bool) []livekit.TrackSource {
+	if muted {
+		return nil
+	}
+	var sources []livekit.TrackSource
+	if perms.Has(models.PermSpeak) {
+		sources = append(sources, livekit.TrackSource_MICROPHONE, livekit.TrackSource_CAMERA)
+	}
+	if perms.Has(models.PermStream) {
+		sources = append(sources, livekit.TrackSource_SCREEN_SHARE, livekit.TrackSource_SCREEN_SHARE_AUDIO)
+	}
+	return sources
+}
+
+func (s *voiceService) currentVoicePermissions(ctx context.Context, userID, channelID string) (models.Permission, error) {
+	if fresh, ok := s.permResolver.(interface {
+		ResolveChannelPermissionsFresh(context.Context, string, string) (models.Permission, error)
+	}); ok {
+		return fresh.ResolveChannelPermissionsFresh(ctx, userID, channelID)
+	}
+	return s.permResolver.ResolveChannelPermissions(ctx, userID, channelID)
 }

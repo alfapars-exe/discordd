@@ -269,7 +269,7 @@ func (f *voiceStateFanout) deliver(batch []voiceStateFanoutEvent, membersByServe
 	if len(recipients) == 0 {
 		return
 	}
-	permissions, err := resolveFreshVoiceFanoutPermissions(ctx, s.permResolver, item.channelID, recipients)
+	permissions, err := resolveFreshFanoutPermissions(ctx, s.permResolver, item.channelID, recipients)
 	if err != nil {
 		f.dropCount.Add(uint64(len(batch)))
 		voiceLogger.Warn("voice state fanout permission resolution failed; event dropped", "server_id", item.serverID, "channel_id", item.channelID)
@@ -304,7 +304,7 @@ func (f *voiceStateFanout) publishVisible(batch []voiceStateFanoutEvent, visible
 // different app instance cannot invalidate this process's permission cache,
 // so this publication boundary must read current role/override rows instead
 // of accepting a cached grant for up to permCacheTTL.
-func resolveFreshVoiceFanoutPermissions(ctx context.Context, resolver ChannelPermResolver, channelID string, recipients []string) (map[string]models.Permission, error) {
+func resolveFreshFanoutPermissions(ctx context.Context, resolver ChannelPermResolver, channelID string, recipients []string) (map[string]models.Permission, error) {
 	if cached, ok := resolver.(*cachingPermResolver); ok {
 		return cached.inner.ResolveChannelPermissionsBulk(ctx, channelID, recipients)
 	}

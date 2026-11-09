@@ -14,17 +14,15 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
-	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
 )
-
-var channelPermLogger = logx.Component("service.channel_permission")
 
 const (
 	// broadcastResolveTimeout bounds permission resolution that runs after the
@@ -197,8 +195,8 @@ func (s *channelPermService) SetOverride(ctx context.Context, serverID, channelI
 
 	// allow=0, deny=0 -> no effect (same as inherit), delete
 	if req.Allow == 0 && req.Deny == 0 {
-		if err := s.permRepo.Delete(ctx, channelID, roleID); err != nil {
-			channelPermLogger.Error("failed to delete override (idempotent, non-fatal)", "channel_id", channelID, "role_id", roleID, "err", pkg.ErrText(err))
+		if err := s.permRepo.Delete(ctx, channelID, roleID); err != nil && !errors.Is(err, pkg.ErrNotFound) {
+			return fmt.Errorf("failed to reset channel override: %w", err)
 		}
 
 		s.hub.BroadcastToServer(serverID, ws.Event{

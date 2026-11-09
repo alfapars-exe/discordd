@@ -8,6 +8,7 @@ import (
 
 	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
 )
 
 type sqliteChannelPermRepo struct {
@@ -118,7 +119,7 @@ func (r *sqliteChannelPermRepo) Delete(ctx context.Context, channelID, roleID st
 		return fmt.Errorf("failed to check rows affected: %w", err)
 	}
 	if affected == 0 {
-		return fmt.Errorf("channel permission override not found")
+		return fmt.Errorf("%w: channel permission override", pkg.ErrNotFound)
 	}
 
 	return nil

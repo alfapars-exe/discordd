@@ -87,21 +87,12 @@ func (s *voiceService) checkConnectPermission(userID, channelID string, effectiv
 	if effectivePerms.Has(models.PermConnectVoice) {
 		return nil
 	}
-	// Already placed in this exact channel — accept without PermConnectVoice.
-	//
-	// This is what actually carries the force-move case. The client requests
-	// the LiveKit token BEFORE it sends voice_join (voiceEventHandlers.ts), and
-	// GenerateToken *consumes* the one-time grant, so by the time we get here
-	// hasForceMoveGrant is already false and the grant check below never fires
-	// for a real client. MoveUser has meanwhile written the new ChannelID into
-	// the user's state, so "state already says this channel" is the durable
-	// signal that an admin authorized the placement.
-	//
-	// Not a bypass: states[userID].ChannelID is only ever written by a
-	// JoinChannel that passed this same gate, or by MoveUser, which checks the
-	// mover's permissions. Server membership is still required above — a user
-	// removed from the server after being moved does not get back in.
-	if s.alreadyInChannel(userID, channelID) {
+	// Token issuance consumes the grant before the moved client syncs its state.
+	s.mu.RLock()
+	state := s.states[userID]
+	placed := state != nil && state.ChannelID == channelID && state.ForceMoved
+	s.mu.RUnlock()
+	if placed {
 		return nil
 	}
 	// Kept for the non-client callers (and the token-first ordering is not
@@ -360,6 +351,7 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 			return nil
 		}
 
+		delete(s.forceMoveGrants, userID)
 		delete(s.states, userID)
 
 		s.broadcastToServerLocked(oldServerID, ws.Event{
@@ -573,6 +565,7 @@ func (s *voiceService) LeaveChannel(userID string) error {
 	leaveJoinedAt := state.JoinedAt
 	leaveInstanceID := state.LiveKitInstanceID
 	leaveIsCloud := state.LiveKitIsCloud
+	delete(s.forceMoveGrants, userID)
 	delete(s.states, userID)
 
 	s.broadcastToServerLocked(serverID, ws.Event{
@@ -637,6 +630,21 @@ func (s *voiceService) UpdateState(userID string, isMuted, isDeafened, isStreami
 		return nil
 	}
 
+	if isStreaming != nil && *isStreaming && !state.IsStreaming {
+		channel, generation := state.ChannelID, state.ChannelGeneration
+		s.mu.Unlock()
+		p, err := s.permResolver.ResolveChannelPermissions(context.Background(), userID, channel)
+		s.mu.Lock()
+		if err != nil {
+			return err
+		}
+		if s.states[userID] != state || state.ChannelID != channel || state.ChannelGeneration != generation {
+			return fmt.Errorf("%w: voice session changed", pkg.ErrBadRequest)
+		}
+		if !p.Has(models.PermStream) {
+			return fmt.Errorf("%w: stream permission required", pkg.ErrForbidden)
+		}
+	}
 	wasStreaming := state.IsStreaming
 
 	if maxScreenShares > 0 && isStreaming != nil && *isStreaming {
@@ -791,4 +799,45 @@ func (s *voiceService) GetUserVoiceChannelID(userID string) string {
 		return state.ChannelID
 	}
 	return ""
+}
+
+func (s *voiceService) recheckVoiceAccess(userID, channelID string) {
+	type session struct {
+		id         string
+		state      *models.VoiceState
+		generation uint64
+	}
+	byChannel := make(map[string][]session)
+	s.mu.RLock()
+	for id, state := range s.states {
+		if (userID == "" || userID == id) && (channelID == "" || channelID == state.ChannelID) && !state.ForceMoved {
+			byChannel[state.ChannelID] = append(byChannel[state.ChannelID], session{id, state, state.ChannelGeneration})
+		}
+	}
+	s.mu.RUnlock()
+	for channel, sessions := range byChannel {
+		ids := make([]string, 0, len(sessions))
+		for _, item := range sessions {
+			ids = append(ids, item.id)
+		}
+		ctx, cancel := BroadcastContext()
+		perms, err := resolveFreshFanoutPermissions(ctx, s.permResolver, channel, ids)
+		cancel()
+		if err != nil {
+			voiceLogger.Error("voice permission recheck failed", "channel_id", channel, "err", pkg.ErrText(err))
+			continue
+		}
+		for _, item := range sessions {
+			if perms[item.id].Has(models.PermConnectVoice) {
+				continue
+			}
+			s.mu.Lock()
+			current := s.states[item.id]
+			if current != item.state || current.ChannelGeneration != item.generation || current.ChannelID != channel || current.ForceMoved {
+				s.mu.Unlock()
+				continue
+			}
+			s.disconnectVoiceLocked(item.id, current)
+		}
+	}
 }
