@@ -1,5 +1,10 @@
 # CHANGELOG — SECURE-CODING.md
 
+## 2.11.129 - 2026-11-10
+
+- Enforce channel visibility in channel lists, realtime updates and startup previews.
+- Apply effective role permissions to voice, moderation and role assignment.
+
 ## 2.11.128 - 2026-11-08
 
 - Correct Windows executable copyright encoding; supersedes the incomplete 2.11.127 desktop release.
