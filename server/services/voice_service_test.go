@@ -3434,14 +3434,14 @@ func TestScreenShareRequiresStreamPermission(t *testing.T) {
 func TestActiveVoiceAccessInvalidation(t *testing.T) {
 	svc, _ := newTestVoiceService()
 	s := svc.(*voiceService)
+	s.permResolver.(*testutil.MockChannelPermResolver).ResolveChannelPermissionsBulkFn = func(context.Context, string, []string) (map[string]models.Permission, error) {
+		return map[string]models.Permission{"allowed": models.PermConnectVoice}, nil
+	}
 	for _, id := range []string{"revoked", "allowed"} {
 		if err := svc.JoinChannel(id, id, id, "", "ch1", false, false); err != nil {
 			t.Fatal(err)
 		}
 	}
-	s.permResolver = &testutil.MockChannelPermResolver{ResolveChannelPermissionsBulkFn: func(context.Context, string, []string) (map[string]models.Permission, error) {
-		return map[string]models.Permission{"allowed": models.PermConnectVoice}, nil
-	}}
 	s.recheckVoiceAccess("", "ch1")
 	if svc.GetUserVoiceState("revoked") != nil || svc.GetUserVoiceState("allowed") == nil {
 		t.Fatal("incorrect voice sessions after revocation")
