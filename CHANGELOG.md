@@ -1,5 +1,9 @@
 # CHANGELOG — SECURE-CODING.md
 
+## 2.11.130 - 2026-11-10
+
+- Wait for channel permissions to load before editing and verify saved changes before enabling the next edit.
+
 ## 2.11.129 - 2026-11-10
 
 - Enforce channel visibility in channel lists, realtime updates and startup previews.

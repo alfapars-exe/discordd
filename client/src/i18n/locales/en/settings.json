@@ -757,6 +757,7 @@
   "selectRoleToEdit": "Select a role to edit overrides",
   "textPermissions": "Text Permissions",
   "voicePermissions": "Voice Permissions",
+  "channelPermRetry": "Retry loading channel permissions",
   "channelPermDesc": "Override role permissions for this channel. Inherit uses the role's default setting.",
   "channelPermSaved": "Channel permission saved",
   "channelPermSaveError": "Failed to save channel permission",

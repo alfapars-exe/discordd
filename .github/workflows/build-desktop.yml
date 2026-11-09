@@ -311,7 +311,7 @@ jobs:
           if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release create "$GITHUB_REF_NAME" --draft --verify-tag \
               --title "HiChat! ${GITHUB_REF_NAME}" \
-              --notes "Speeds up Windows startup with background updates, parallel loading, and an account-scoped local preview while the saved session is validated." \
+              --notes "See the [release changelog](https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_REF_NAME/CHANGELOG.md) for this version." \
               || gh release view "$GITHUB_REF_NAME" >/dev/null
           fi
           test "$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft)" = true \

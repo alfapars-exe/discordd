@@ -9,6 +9,7 @@ type PermissionTriToggleProps = {
   labelKey: string;
   descKey: string;
   state: TriState;
+  disabled?: boolean;
   onChange: (permBit: number, newState: TriState) => void;
 };
 
@@ -17,6 +18,7 @@ function PermissionTriToggle({
   labelKey,
   descKey,
   state,
+  disabled = false,
   onChange,
 }: PermissionTriToggleProps) {
   const { t } = useTranslation("settings");
@@ -30,6 +32,7 @@ function PermissionTriToggle({
 
       <div className="perm-tri-controls">
         <button
+          disabled={disabled}
           className={`perm-tri-btn deny${state === "deny" ? " active" : ""}`}
           onClick={() => onChange(permBit, state === "deny" ? "inherit" : "deny")}
           title={t("permOverrideDeny")}
@@ -40,6 +43,7 @@ function PermissionTriToggle({
         </button>
 
         <button
+          disabled={disabled}
           className={`perm-tri-btn inherit${state === "inherit" ? " active" : ""}`}
           onClick={() => onChange(permBit, "inherit")}
           title={t("permOverrideInherit")}
@@ -50,6 +54,7 @@ function PermissionTriToggle({
         </button>
 
         <button
+          disabled={disabled}
           className={`perm-tri-btn allow${state === "allow" ? " active" : ""}`}
           onClick={() => onChange(permBit, state === "allow" ? "inherit" : "allow")}
           title={t("permOverrideAllow")}

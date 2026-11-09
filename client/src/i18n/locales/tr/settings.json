@@ -757,6 +757,7 @@
   "selectRoleToEdit": "Override düzenlemek için bir rol seçin",
   "textPermissions": "Metin İzinleri",
   "voicePermissions": "Ses İzinleri",
+  "channelPermRetry": "Kanal izinlerini yüklemeyi yeniden dene",
   "channelPermDesc": "Bu kanal için rol izinlerini geçersiz kılın. Devral, rolün varsayılan ayarını kullanır.",
   "channelPermSaved": "Kanal izni kaydedildi",
   "channelPermSaveError": "Kanal izni kaydedilemedi",
