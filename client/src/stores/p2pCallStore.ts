@@ -623,7 +623,7 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
           if (!peerConnection || !peerConnection.remoteDescription) {
             set((state) => ({ _pendingCandidates: [...state._pendingCandidates.slice(-127), candidate] }));
           } else {
-            await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+            await addRemoteCandidate(peerConnection, candidate);
           }
           break;
         }
@@ -650,6 +650,17 @@ async function flushPendingCandidates(
   if (pending.length === 0) return;
   set({ _pendingCandidates: [] });
   for (const c of pending) {
-    await pc.addIceCandidate(new RTCIceCandidate(c));
+    if (get().peerConnection !== pc) return;
+    await addRemoteCandidate(pc, c);
+  }
+}
+
+async function addRemoteCandidate(pc: RTCPeerConnection, candidate: RTCIceCandidateInit): Promise<void> {
+  try {
+    await pc.addIceCandidate(candidate);
+  } catch (error) {
+    // ICE restarts can leave an old username fragment or media section in flight.
+    if (error instanceof DOMException && error.name === "OperationError") return;
+    throw error;
   }
 }
