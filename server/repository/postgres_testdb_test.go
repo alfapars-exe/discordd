@@ -33,7 +33,17 @@ func newPostgresTestDB(t testing.TB, dsn string) (*database.DB, string) {
 	cfg.RuntimeParams["search_path"] = name + ",public"
 	db := database.PostgreSQLPool(cfg)
 	db.SetMaxOpenConns(4)
-	t.Cleanup(func() { db.Close(); _, _ = admin.Exec("DROP SCHEMA " + name + " CASCADE"); admin.Close() })
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close PostgreSQL test pool: %v", err)
+		}
+		if _, err := admin.Exec("DROP SCHEMA " + name + " CASCADE"); err != nil {
+			t.Errorf("drop PostgreSQL test schema %s: %v", name, err)
+		}
+		if err := admin.Close(); err != nil {
+			t.Errorf("close PostgreSQL fixture connection: %v", err)
+		}
+	})
 	if err = database.MigratePostgres(context.Background(), db); err != nil {
 		t.Fatal(err)
 	}
