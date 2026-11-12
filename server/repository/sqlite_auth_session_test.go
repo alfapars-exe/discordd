@@ -158,7 +158,13 @@ func TestAuthSessionConcurrentResetProof(t *testing.T) {
 			deadline := time.Now().Add(10 * time.Second)
 			for {
 				var waiting int
-				err := tx.QueryRowContext(ctx, `SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%users%' AND cardinality(pg_blocking_pids(pid))>0 AND pid<>?`, pid).Scan(&waiting)
+				// PostgreSQL may queue the second writer behind the first.
+				err := tx.QueryRowContext(ctx, `WITH RECURSIVE blocked(pid) AS (
+					SELECT CAST(? AS integer)
+					UNION
+					SELECT a.pid FROM pg_stat_activity a
+					JOIN blocked b ON b.pid = ANY(pg_blocking_pids(a.pid))
+				) SELECT count(*) - 1 FROM blocked`, pid).Scan(&waiting)
 				if err != nil {
 					t.Fatal(err)
 				}
