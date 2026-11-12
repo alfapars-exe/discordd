@@ -8,7 +8,8 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
-const root = fileURLToPath(new URL('../public/audio-engines/v1/', import.meta.url));
+const assetsDirectory = process.argv.includes('--dist') ? 'dist' : 'public';
+const root = fileURLToPath(new URL(`../${assetsDirectory}/audio-engines/v1/`, import.meta.url));
 const manifest = JSON.parse(await fs.readFile(path.join(root, 'manifest.json'), 'utf8'));
 const asset = async name => {
   const bytes = await fs.readFile(path.resolve(root, name));
