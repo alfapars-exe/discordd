@@ -1,3 +1,4 @@
+import { mfaErrorKey } from "./mfaErrorKey";
 import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getAuthGeneration } from "../../api/client";
@@ -55,7 +56,7 @@ export default function ServerOwnershipTransfer({ userID, serverID, onTransferre
       const response = await transferServerOwnership(userID, serverID, recipient.id, password, code, text, current);
       if (!current()) return;
       if (!response.success || !response.data || response.data.id !== serverID || response.data.owner_id !== recipient.id) {
-        const key = response.code === "MFA_REQUIRED" ? "sessions.factorRequired" : response.code === "MFA_INVALID" ? "mfa.invalid" : response.code === "MFA_RATE_LIMITED" ? "mfa.rateLimited" : "ownership.error";
+        const key = mfaErrorKey(response.code) ?? "ownership.error";
         setError(t(key)); setServer(null); return;
       }
       setPassword(""); setCode(""); setText(""); setTarget(""); setConsent(false); setDone(true);

@@ -1,3 +1,4 @@
+import { mfaErrorKey } from "./mfaErrorKey";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { disableAccount } from "../../api/accountLifecycle";
@@ -24,7 +25,7 @@ export default function AccountLifecycleSettings({ userID }: { userID: string })
       const result = await disableAccount(userID, password, code, current);
       if (!current()) return;
       if (!result.success || !result.data?.disabled) {
-        setError(t(result.code === "MFA_REQUIRED" ? "sessions.factorRequired" : result.code === "MFA_INVALID" ? "mfa.invalid" : result.code === "MFA_RATE_LIMITED" ? "mfa.rateLimited" : "lifecycle.error"));
+        setError(t(mfaErrorKey(result.code) ?? "lifecycle.error"));
         return;
       }
       setPassword(""); setCode("");
