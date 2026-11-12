@@ -453,7 +453,7 @@ jobs:
         env:
           HICHAT_E2E_RECOVERY_MAIL: "1"
           CGO_ENABLED: "0"
-        run: npx playwright test --project=chromium tests/recovery-mail.spec.ts
+        run: node node_modules/@playwright/test/cli.js test --project=chromium tests/recovery-mail.spec.ts
 
       - name: Stop isolated PostgreSQL
         if: always()
