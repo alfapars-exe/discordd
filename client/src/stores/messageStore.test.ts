@@ -852,15 +852,40 @@ if (process.env.HICHAT_BENCH_CHANNEL_HISTORY === "1") {
       const samples = [];
       for (let run = 0; run <= 9; run++) {
         resetStore();
+        markAsRead.mockClear();
         await jumpIntoPast();
+        const earlier = rows();
         const create = state().handleMessageCreate;
         const start = performance.now();
         for (const message of live) create(message);
         const duration = performance.now() - start;
         if (run > 0) samples.push(duration);
-        getMessagesAfter.mockResolvedValueOnce(aroundPage([], false, false));
+        // Everything below is outside the timed create loop, including validation.
+        const edited = { ...live[count - 2], content: "edited while paging", edited_at: "2026-01-02T00:00:00Z" };
+        const deleted = live[count - 1];
+        state().handleReactionUpdate({ channel_id: "ch-1", message_id: edited.id, reactions: reaction });
+        state().handleMessageUpdate(edited);
+        state().handleMessageDelete({ channel_id: "ch-1", id: deleted.id });
+        getMessagesAfter.mockResolvedValueOnce(aroundPage(live.slice(-2), false, false));
         await state().fetchNewerMessages("ch-1", "srv-1");
-        expect(ids(rows()).slice(-count)).toEqual(ids(live));
+
+        const expected = [...earlier, ...live.slice(0, -2), { ...edited, reactions: reaction }];
+        expect(ids(rows())).toEqual(ids(expected));
+        expect(rows().map((row) => row.content)).toEqual(expected.map((row) => row.content));
+        expect(rows().at(-1)?.reactions).toEqual(reaction);
+        expect(markAsRead).not.toHaveBeenCalled();
+
+        const response = deferred<APIResponse<MessagePage>>();
+        state().invalidateFetchedFlags();
+        getMessages.mockReturnValueOnce(response.promise);
+        const reconnect = state().fetchMessages("ch-1", "srv-1");
+        const latest = numberedMessage(count + 10);
+        state().handleMessageCreate(latest);
+        response.resolve(ok(expected.slice(-50), true));
+        await reconnect;
+        expect(ids(rows())).toEqual([...ids(expected), latest.id]);
+        expect(rows().at(-1)?.content).toBe(latest.content);
+        expect(markAsRead).toHaveBeenCalledExactlyOnceWith("ch-1", latest.id);
       }
       samples.sort((a, b) => a - b);
       console.info(`Detached creates ${count}: median ${samples[4].toFixed(2)} ms (${samples[0].toFixed(2)}–${samples[8].toFixed(2)})`);
