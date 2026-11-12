@@ -73,13 +73,16 @@ func TestPostgresLeaveWaitsForOwnershipChange(t *testing.T) {
 		t.Skip("requires PostgreSQL")
 	}
 	db := newTestDB(t)
-	_, server, _ := seedMemberWithRole(t, db, "handoff")
+	_, server, role := seedMemberWithRole(t, db, "handoff")
 	target := newTestUser("next-owner")
 	if err := NewSQLiteUserRepo(db.Conn).Create(context.Background(), target); err != nil {
 		t.Fatal(err)
 	}
 	user := target.ID
 	if err := NewSQLiteServerRepo(db.Conn).AddMember(context.Background(), server, user); err != nil {
+		t.Fatal(err)
+	}
+	if err := NewSQLiteRoleRepo(db.Conn).AssignToUser(context.Background(), user, role, server); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -104,5 +107,11 @@ func TestPostgresLeaveWaitsForOwnershipChange(t *testing.T) {
 	}
 	if err := <-done; !errors.Is(err, pkg.ErrForbidden) {
 		t.Fatalf("new owner's departure: %v", err)
+	}
+	if n := countRows(t, db, "SELECT COUNT(*) FROM servers s JOIN server_members m ON m.server_id=s.id AND m.user_id=s.owner_id WHERE s.id=? AND s.owner_id=?", server, user); n != 1 {
+		t.Fatal("new owner lost membership after rejected departure")
+	}
+	if n := countRows(t, db, "SELECT COUNT(*) FROM user_roles WHERE server_id=? AND user_id=? AND role_id=?", server, user, role); n != 1 {
+		t.Fatal("new owner lost existing role after rejected departure")
 	}
 }
