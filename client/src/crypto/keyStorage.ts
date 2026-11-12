@@ -866,37 +866,31 @@ export async function cacheDecryptedMessages(
   }
 }
 
-/**
- * Client-side message search.
- *
- * Since E2EE messages are encrypted on the server, search is performed client-side.
- * String matching over the decrypted message cache in IndexedDB.
- *
- * @param channelId - Channel ID to search in
- * @param query - Search term
- * @returns Message IDs of matches
- */
-export async function searchCachedMessages(
+async function searchMessageIndex(
+  indexName: "byChannel" | "byDMChannel",
   channelId: string,
-  query: string
+  query: string,
+  signal?: AbortSignal
 ): Promise<CachedDecryptedMessage[]> {
+  signal?.throwIfAborted();
   const db = await getDB();
-  const tx = db.transaction("messageCache", "readonly");
-  const index = tx.store.index("byChannel");
+  signal?.throwIfAborted();
+  const index = db.transaction("messageCache", "readonly").store.index(indexName);
   const results: CachedDecryptedMessage[] = [];
-
   const lowerQuery = query.toLowerCase();
-
   let cursor = await index.openCursor(channelId);
   while (cursor) {
-    const msg = cursor.value as CachedDecryptedMessage;
-    if (msg.content.toLowerCase().includes(lowerQuery)) {
-      results.push(msg);
-    }
+    signal?.throwIfAborted();
+    const message = cursor.value as CachedDecryptedMessage;
+    if (message.content.toLowerCase().includes(lowerQuery)) results.push(message);
     cursor = await cursor.continue();
   }
-
+  signal?.throwIfAborted();
   return results;
+}
+
+export function searchCachedMessages(channelId: string, query: string, signal?: AbortSignal) {
+  return searchMessageIndex("byChannel", channelId, query, signal);
 }
 
 /**
@@ -911,27 +905,8 @@ export async function getAllCachedMessages(): Promise<CachedDecryptedMessage[]> 
 /**
  * Client-side message search for a DM channel.
  */
-export async function searchCachedDMMessages(
-  dmChannelId: string,
-  query: string
-): Promise<CachedDecryptedMessage[]> {
-  const db = await getDB();
-  const tx = db.transaction("messageCache", "readonly");
-  const index = tx.store.index("byDMChannel");
-  const results: CachedDecryptedMessage[] = [];
-
-  const lowerQuery = query.toLowerCase();
-
-  let cursor = await index.openCursor(dmChannelId);
-  while (cursor) {
-    const msg = cursor.value as CachedDecryptedMessage;
-    if (msg.content.toLowerCase().includes(lowerQuery)) {
-      results.push(msg);
-    }
-    cursor = await cursor.continue();
-  }
-
-  return results;
+export function searchCachedDMMessages(dmChannelId: string, query: string, signal?: AbortSignal) {
+  return searchMessageIndex("byDMChannel", dmChannelId, query, signal);
 }
 
 // ──────────────────────────────────

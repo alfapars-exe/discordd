@@ -483,6 +483,26 @@ describe("keyStorage — deleteAllSenderKeysForChannel prefix scoping", () => {
 // ──────────────────────────────────
 
 describe("keyStorage — searchCachedMessages (byChannel index + cursor)", () => {
+  it.each([keyStorage.searchCachedMessages, keyStorage.searchCachedDMMessages])(
+    "stops advancing an abandoned search cursor",
+    async (search) => {
+      await keyStorage.cacheDecryptedMessages(["a", "b", "c"].map(messageId =>
+        makeCachedMessage({ messageId, channelId: "target", dmChannelId: "target", content: "private" })
+      ));
+      const controller = new AbortController();
+      const advance = IDBCursor.prototype.continue;
+      const spy = vi.spyOn(IDBCursor.prototype, "continue").mockImplementation(function (this: IDBCursor, key) {
+        controller.abort();
+        advance.call(this, key);
+      });
+      try {
+        await expect(search("target", "private", controller.signal)).rejects.toMatchObject({ name: "AbortError" });
+        expect(spy).toHaveBeenCalledTimes(1);
+      } finally {
+        spy.mockRestore();
+      }
+    }
+  );
   it("aborts the bulk plaintext write when its owning session becomes stale", async () => {
     let checks = 0;
     let current = true;
