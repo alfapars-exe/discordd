@@ -13,7 +13,32 @@ import (
 )
 
 type sqliteRoleRepo struct {
-	db database.TxQuerier
+	db           database.TxQuerier
+	avoidRowWait bool // PostgreSQL role transaction already owns the server ACL lock
+}
+
+type roleRowBusy struct {
+	query string
+	args  []any
+	err   error
+}
+
+func (b *roleRowBusy) Error() string { return b.err.Error() }
+func (b *roleRowBusy) Unwrap() error { return b.err }
+
+// A role writer holding the ACL fence must never wait for a row held by a
+// legacy writer whose BEFORE trigger still needs the fence. The transaction
+// runner releases the fence before waiting for the conflicting row.
+func (r *sqliteRoleRepo) lockWriteRow(ctx context.Context, query string, args ...any) error {
+	if !r.avoidRowWait {
+		return nil
+	}
+	_, err := r.db.ExecContext(ctx, query+" NOWAIT", args...)
+	var state interface{ SQLState() string }
+	if errors.As(err, &state) && state.SQLState() == "55P03" {
+		return &roleRowBusy{query: query, args: args, err: err}
+	}
+	return err
 }
 
 func NewSQLiteRoleRepo(db database.TxQuerier) RoleRepository {
@@ -203,6 +228,9 @@ func (r *sqliteRoleRepo) Create(ctx context.Context, role *models.Role) error {
 }
 
 func (r *sqliteRoleRepo) Patch(ctx context.Context, serverID, roleID string, patch models.UpdateRoleRequest) (*models.Role, error) {
+	if err := r.lockWriteRow(ctx, "SELECT id FROM roles WHERE server_id=? AND id=? FOR NO KEY UPDATE", serverID, roleID); err != nil {
+		return nil, err
+	}
 	const query = `UPDATE roles SET name = COALESCE(?, name), color = COALESCE(?, color),
 		permissions = COALESCE(?, permissions), mentionable = COALESCE(?, mentionable)
 		WHERE server_id = ? AND id = ?
@@ -272,6 +300,14 @@ func (r *sqliteRoleRepo) UpdatePositions(ctx context.Context, items []models.Pos
 // ─── User-Role mapping ───
 
 func (r *sqliteRoleRepo) AssignToUser(ctx context.Context, userID, roleID, serverID string) error {
+	// INSERT checks both parents at statement end. A concurrent deletion may
+	// already hold either key and be waiting for this server's ACL fence.
+	if err := r.lockWriteRow(ctx, "SELECT id FROM users WHERE id=? FOR KEY SHARE", userID); err != nil {
+		return err
+	}
+	if err := r.lockWriteRow(ctx, "SELECT id FROM roles WHERE id=? FOR KEY SHARE", roleID); err != nil {
+		return err
+	}
 	query := `INSERT INTO user_roles (user_id, role_id, server_id) VALUES (?, ?, ?) ON CONFLICT DO NOTHING`
 	_, err := r.db.ExecContext(ctx, query, userID, roleID, serverID)
 	if err != nil {
@@ -281,6 +317,9 @@ func (r *sqliteRoleRepo) AssignToUser(ctx context.Context, userID, roleID, serve
 }
 
 func (r *sqliteRoleRepo) RemoveFromUser(ctx context.Context, userID, roleID string) error {
+	if err := r.lockWriteRow(ctx, "SELECT role_id FROM user_roles WHERE user_id=? AND role_id=? FOR UPDATE", userID, roleID); err != nil {
+		return err
+	}
 	query := `DELETE FROM user_roles WHERE user_id = ? AND role_id = ?`
 	_, err := r.db.ExecContext(ctx, query, userID, roleID)
 	if err != nil {
