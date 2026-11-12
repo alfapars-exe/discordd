@@ -1,3 +1,4 @@
+import { mfaErrorKey } from "./mfaErrorKey";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import * as api from "../../api/sessions";
@@ -57,7 +58,7 @@ export default function SessionSettings({ userID }: { userID: string }) {
       const res = await api.revokeSession(userID, target, password, code, current);
       if (!current()) return;
       if (!res.success || !res.data) {
-        setError(t(res.code === "MFA_REQUIRED" ? "sessions.factorRequired" : res.code === "MFA_INVALID" ? "mfa.invalid" : res.code === "MFA_RATE_LIMITED" ? "mfa.rateLimited" : "sessions.revokeError"));
+        setError(t(mfaErrorKey(res.code) ?? "sessions.revokeError"));
         return;
       }
       setPassword(""); setCode("");
