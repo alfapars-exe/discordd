@@ -11,66 +11,31 @@ import { type ThemeId, DEFAULT_THEME, THEMES, applyTheme } from "../styles/theme
 import { usePreferencesStore } from "./preferencesStore";
 import { useServerStore } from "./serverStore";
 
+import {
+  LIGHTNING_BLUR_DEFAULT,
+  LIGHTNING_BLUR_MIN,
+  LIGHTNING_BLUR_MAX,
+  NEON_INTENSITY_DEFAULT,
+  NEON_INTENSITY_MIN,
+  NEON_INTENSITY_MAX,
+  BLUR_STRENGTH_DEFAULT,
+  BLUR_STRENGTH_MIN,
+  BLUR_STRENGTH_MAX,
+  UI_SCALE_DEFAULT,
+  UI_SCALE_MIN,
+  UI_SCALE_MAX,
+  UI_SCALE_STEP,
+  APPEARANCE_DEFAULTS,
+  APPEARANCE_STORAGE_KEYS,
+  type AvatarAnimationMode,
+  type AppearancePreferences
+} from "./appearancePreferences";
+export { UI_SCALE_MIN, UI_SCALE_MAX, UI_SCALE_STEP, type AvatarAnimationMode, type AppearancePreferences } from "./appearancePreferences";
+
 const THEME_STORAGE_KEY = "mqvi_theme";
-const BLUR_STORAGE_KEY = "mqvi_blur_enabled";
 /** One-time default-flip marker — see loadPersistedBlur() below. */
 const BLUR_MIGRATION_KEY = "mqvi_blur_default_migrated_v1";
-const BLUR_STRENGTH_KEY = "mqvi_blur_strength";
-const WALLPAPER_ENABLED_KEY = "mqvi_wallpaper_enabled";
 const TRANSPARENT_KEY = "mqvi_transparent_bg";
-const LIGHTNING_ENABLED_KEY = "mqvi_lightning_enabled";
-const LIGHTNING_BLUR_KEY = "mqvi_lightning_blur";
-const NEON_ENABLED_KEY = "mqvi_neon_enabled";
-const NEON_INTENSITY_KEY = "mqvi_neon_intensity";
-const UI_SCALE_KEY = "mqvi_ui_scale";
-const AVATAR_ANIMATION_KEY = "hichat-avatar-animation";
-
-/**
- * When animated (GIF) avatars play: "hover" = only while the pointer is over
- * them (default), "always" = autoplay. Reduce Motion overrides "always" back
- * to hover-only — see components/shared/Avatar.tsx.
- */
-export type AvatarAnimationMode = "hover" | "always";
-
-/** Default blur for the lightning bolts (px) — matches the original hard-coded value. */
-const LIGHTNING_BLUR_DEFAULT = 4;
-const LIGHTNING_BLUR_MIN = 0;
-const LIGHTNING_BLUR_MAX = 20;
-
-/** Default neon intensity (%) — softened from the previous always-on 100. */
-const NEON_INTENSITY_DEFAULT = 60;
-const NEON_INTENSITY_MIN = 0;
-const NEON_INTENSITY_MAX = 100;
-
-/** Blur strength (px) — how strong the frosted-panel backdrop blur is when enabled. */
-const BLUR_STRENGTH_DEFAULT = 20;
-const BLUR_STRENGTH_MIN = 8;
-const BLUR_STRENGTH_MAX = 40;
-
-/** Whole-app UI scale (%). 100 = native size; whole interface zooms uniformly. */
-const UI_SCALE_DEFAULT = 100;
-export const UI_SCALE_MIN = 50;
-export const UI_SCALE_MAX = 200;
-export const UI_SCALE_STEP = 10;
-
-export type AppearancePreferences = {
-  blurEnabled: boolean;
-  blurStrength: number;
-  wallpaperEnabled: boolean;
-  lightningEnabled: boolean;
-  lightningBlur: number;
-  neonEnabled: boolean;
-  neonIntensity: number;
-  uiScale: number;
-  avatarAnimation: AvatarAnimationMode;
-};
-
-const APPEARANCE_DEFAULTS: AppearancePreferences = {
-  blurEnabled: false, blurStrength: BLUR_STRENGTH_DEFAULT, wallpaperEnabled: true,
-  lightningEnabled: false, lightningBlur: LIGHTNING_BLUR_DEFAULT,
-  neonEnabled: false, neonIntensity: NEON_INTENSITY_DEFAULT,
-  uiScale: UI_SCALE_DEFAULT, avatarAnimation: "hover",
-};
 
 function syncAppearance(partial: Partial<AppearancePreferences>): void {
   usePreferencesStore.getState().set({ appearance: partial });
@@ -126,11 +91,11 @@ function loadPersistedTheme(): ThemeId {
 function loadPersistedBlur(): boolean {
   try {
     if (!localStorage.getItem(BLUR_MIGRATION_KEY)) {
-      localStorage.setItem(BLUR_STORAGE_KEY, "0");
+      localStorage.setItem(APPEARANCE_STORAGE_KEYS.blurEnabled, "0");
       localStorage.setItem(BLUR_MIGRATION_KEY, "1");
       return false;
     }
-    const stored = localStorage.getItem(BLUR_STORAGE_KEY);
+    const stored = localStorage.getItem(APPEARANCE_STORAGE_KEYS.blurEnabled);
     if (stored === "1") return true;
   } catch {
     /* localStorage access error */
@@ -140,7 +105,7 @@ function loadPersistedBlur(): boolean {
 
 function loadPersistedBlurStrength(): number {
   try {
-    const stored = localStorage.getItem(BLUR_STRENGTH_KEY);
+    const stored = localStorage.getItem(APPEARANCE_STORAGE_KEYS.blurStrength);
     if (stored !== null) {
       const px = parseInt(stored, 10);
       if (Number.isFinite(px) && px >= BLUR_STRENGTH_MIN && px <= BLUR_STRENGTH_MAX) return px;
@@ -153,7 +118,7 @@ function loadPersistedBlurStrength(): number {
 
 function loadPersistedWallpaperEnabled(): boolean {
   try {
-    const stored = localStorage.getItem(WALLPAPER_ENABLED_KEY);
+    const stored = localStorage.getItem(APPEARANCE_STORAGE_KEYS.wallpaperEnabled);
     if (stored === "0") return false;
   } catch {
     /* localStorage access error */
@@ -178,7 +143,7 @@ function loadPersistedTransparent(): boolean {
  */
 function loadPersistedLightningEnabled(): boolean {
   try {
-    const stored = localStorage.getItem(LIGHTNING_ENABLED_KEY);
+    const stored = localStorage.getItem(APPEARANCE_STORAGE_KEYS.lightningEnabled);
     if (stored === "1") return true;
     if (stored === "0") return false;
   } catch {
@@ -189,7 +154,7 @@ function loadPersistedLightningEnabled(): boolean {
 
 function loadPersistedLightningBlur(): number {
   try {
-    const stored = localStorage.getItem(LIGHTNING_BLUR_KEY);
+    const stored = localStorage.getItem(APPEARANCE_STORAGE_KEYS.lightningBlur);
     if (stored !== null) {
       const px = parseInt(stored, 10);
       if (Number.isFinite(px) && px >= LIGHTNING_BLUR_MIN && px <= LIGHTNING_BLUR_MAX) return px;
@@ -212,7 +177,7 @@ function applyLightningBlur(px: number): void {
 
 function loadPersistedNeonEnabled(): boolean {
   try {
-    const stored = localStorage.getItem(NEON_ENABLED_KEY);
+    const stored = localStorage.getItem(APPEARANCE_STORAGE_KEYS.neonEnabled);
     if (stored === "1") return true;
     if (stored === "0") return false;
   } catch {
@@ -227,7 +192,7 @@ function loadPersistedNeonEnabled(): boolean {
 
 function loadPersistedNeonIntensity(): number {
   try {
-    const stored = localStorage.getItem(NEON_INTENSITY_KEY);
+    const stored = localStorage.getItem(APPEARANCE_STORAGE_KEYS.neonIntensity);
     if (stored !== null) {
       const pct = parseInt(stored, 10);
       if (Number.isFinite(pct) && pct >= NEON_INTENSITY_MIN && pct <= NEON_INTENSITY_MAX) return pct;
@@ -256,7 +221,7 @@ function applyNeonStyles(enabled: boolean, intensityPct: number): void {
 
 function loadPersistedUiScale(): number {
   try {
-    const stored = localStorage.getItem(UI_SCALE_KEY);
+    const stored = localStorage.getItem(APPEARANCE_STORAGE_KEYS.uiScale);
     if (stored !== null) {
       const pct = parseInt(stored, 10);
       if (Number.isFinite(pct) && pct >= UI_SCALE_MIN && pct <= UI_SCALE_MAX) return pct;
@@ -269,7 +234,7 @@ function loadPersistedUiScale(): number {
 
 function loadPersistedAvatarAnimation(): AvatarAnimationMode {
   try {
-    const stored = localStorage.getItem(AVATAR_ANIMATION_KEY);
+    const stored = localStorage.getItem(APPEARANCE_STORAGE_KEYS.avatarAnimation);
     if (stored === "always") return "always";
   } catch {
     /* localStorage access error */
@@ -445,7 +410,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
 
   setBlurEnabled: (enabled) => {
     try {
-      localStorage.setItem(BLUR_STORAGE_KEY, enabled ? "1" : "0");
+      localStorage.setItem(APPEARANCE_STORAGE_KEYS.blurEnabled, enabled ? "1" : "0");
     } catch {
       /* localStorage full or inaccessible */
     }
@@ -456,7 +421,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   setBlurStrength: (px) => {
     const clamped = Math.max(BLUR_STRENGTH_MIN, Math.min(BLUR_STRENGTH_MAX, Math.round(px)));
     try {
-      localStorage.setItem(BLUR_STRENGTH_KEY, String(clamped));
+      localStorage.setItem(APPEARANCE_STORAGE_KEYS.blurStrength, String(clamped));
     } catch {
       /* localStorage full or inaccessible */
     }
@@ -466,7 +431,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
 
   setWallpaperEnabled: (enabled) => {
     try {
-      localStorage.setItem(WALLPAPER_ENABLED_KEY, enabled ? "1" : "0");
+      localStorage.setItem(APPEARANCE_STORAGE_KEYS.wallpaperEnabled, enabled ? "1" : "0");
     } catch {
       /* localStorage full or inaccessible */
     }
@@ -491,7 +456,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
 
   setLightningEnabled: (enabled) => {
     try {
-      localStorage.setItem(LIGHTNING_ENABLED_KEY, enabled ? "1" : "0");
+      localStorage.setItem(APPEARANCE_STORAGE_KEYS.lightningEnabled, enabled ? "1" : "0");
     } catch {
       /* localStorage full or inaccessible */
     }
@@ -502,7 +467,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   setLightningBlur: (px) => {
     const clamped = Math.max(LIGHTNING_BLUR_MIN, Math.min(LIGHTNING_BLUR_MAX, Math.round(px)));
     try {
-      localStorage.setItem(LIGHTNING_BLUR_KEY, String(clamped));
+      localStorage.setItem(APPEARANCE_STORAGE_KEYS.lightningBlur, String(clamped));
     } catch {
       /* localStorage full or inaccessible */
     }
@@ -513,7 +478,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
 
   setNeonEnabled: (enabled) => {
     try {
-      localStorage.setItem(NEON_ENABLED_KEY, enabled ? "1" : "0");
+      localStorage.setItem(APPEARANCE_STORAGE_KEYS.neonEnabled, enabled ? "1" : "0");
     } catch {
       /* localStorage full or inaccessible */
     }
@@ -528,7 +493,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   setNeonIntensity: (pct) => {
     const clamped = Math.max(NEON_INTENSITY_MIN, Math.min(NEON_INTENSITY_MAX, Math.round(pct)));
     try {
-      localStorage.setItem(NEON_INTENSITY_KEY, String(clamped));
+      localStorage.setItem(APPEARANCE_STORAGE_KEYS.neonIntensity, String(clamped));
     } catch {
       /* localStorage full or inaccessible */
     }
@@ -540,7 +505,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   setUiScale: (pct) => {
     const clamped = Math.max(UI_SCALE_MIN, Math.min(UI_SCALE_MAX, Math.round(pct)));
     try {
-      localStorage.setItem(UI_SCALE_KEY, String(clamped));
+      localStorage.setItem(APPEARANCE_STORAGE_KEYS.uiScale, String(clamped));
     } catch {
       /* localStorage full or inaccessible */
     }
@@ -551,7 +516,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
 
   setAvatarAnimation: (mode) => {
     try {
-      localStorage.setItem(AVATAR_ANIMATION_KEY, mode);
+      localStorage.setItem(APPEARANCE_STORAGE_KEYS.avatarAnimation, mode);
     } catch {
       /* localStorage full or inaccessible */
     }
@@ -594,10 +559,10 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     applyNeonStyles(merged.neonEnabled, merged.neonIntensity);
     applyUiScale(merged.uiScale);
     const storageKeys = {
-      blurEnabled: BLUR_STORAGE_KEY, blurStrength: BLUR_STRENGTH_KEY,
-      wallpaperEnabled: WALLPAPER_ENABLED_KEY, lightningEnabled: LIGHTNING_ENABLED_KEY,
-      lightningBlur: LIGHTNING_BLUR_KEY, neonEnabled: NEON_ENABLED_KEY,
-      neonIntensity: NEON_INTENSITY_KEY, uiScale: UI_SCALE_KEY, avatarAnimation: AVATAR_ANIMATION_KEY,
+      blurEnabled: APPEARANCE_STORAGE_KEYS.blurEnabled, blurStrength: APPEARANCE_STORAGE_KEYS.blurStrength,
+      wallpaperEnabled: APPEARANCE_STORAGE_KEYS.wallpaperEnabled, lightningEnabled: APPEARANCE_STORAGE_KEYS.lightningEnabled,
+      lightningBlur: APPEARANCE_STORAGE_KEYS.lightningBlur, neonEnabled: APPEARANCE_STORAGE_KEYS.neonEnabled,
+      neonIntensity: APPEARANCE_STORAGE_KEYS.neonIntensity, uiScale: APPEARANCE_STORAGE_KEYS.uiScale, avatarAnimation: APPEARANCE_STORAGE_KEYS.avatarAnimation,
     };
     try {
       for (const key of Object.keys(next) as (keyof AppearancePreferences)[]) {
