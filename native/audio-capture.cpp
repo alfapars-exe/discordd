@@ -205,6 +205,65 @@ struct AudioHeader {
 // Main
 // ═══════════════════════════════════════════════════════════════════════
 
+static HRESULT CapturePackets(IAudioCaptureClient* captureClient, HANDLE captureEvent, UINT32 frameSize) {
+    // Event fires when audio buffer has data. 100ms timeout for checking
+    // shutdown flag. On broken pipe (_write returns <= 0), exit cleanly.
+    const HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
+    const bool hasInputPipe = GetFileType(input) == FILE_TYPE_PIPE;
+    while (g_running) {
+        if (hasInputPipe && !PeekNamedPipe(input, nullptr, 0, nullptr, nullptr, nullptr)) {
+            const DWORD error = GetLastError();
+            if (error == ERROR_BROKEN_PIPE || error == ERROR_PIPE_NOT_CONNECTED) break;
+        }
+        DWORD waitResult = WaitForSingleObject(captureEvent, 100);
+
+        if (waitResult == WAIT_FAILED) return HRESULT_FROM_WIN32(GetLastError());
+        if (waitResult == WAIT_OBJECT_0) {
+            // Drain all available packets in this event cycle
+            while (g_running) {
+                BYTE*  data      = nullptr;
+                UINT32 numFrames = 0;
+                DWORD  flags     = 0;
+
+                HRESULT hr = captureClient->GetBuffer(&data, &numFrames, &flags, nullptr, nullptr);
+                if (hr == AUDCLNT_S_BUFFER_EMPTY) break;
+                if (FAILED(hr)) return hr;
+                if (numFrames == 0) {
+                    hr = captureClient->ReleaseBuffer(numFrames);
+                    if (FAILED(hr)) return hr;
+                    break;
+                }
+
+                UINT32 byteCount = numFrames * frameSize;
+
+                if (flags & AUDCLNT_BUFFERFLAGS_SILENT) {
+                    // Silent buffer — write zeros instead of garbage data
+                    static BYTE zeros[8192];
+                    UINT32 remaining = byteCount;
+                    while (remaining > 0 && g_running) {
+                        UINT32 chunk = remaining > sizeof(zeros) ? sizeof(zeros) : remaining;
+                        int w = _write(1, zeros, chunk);
+                        if (w <= 0) { g_running = FALSE; break; }
+                        remaining -= chunk;
+                    }
+                } else {
+                    // Write actual PCM data
+                    int w = _write(1, data, byteCount);
+                    if (w <= 0) {
+                        // Pipe broken — parent process closed connection
+                        g_running = FALSE;
+                    }
+                }
+
+                hr = captureClient->ReleaseBuffer(numFrames);
+                if (FAILED(hr)) return hr;
+            }
+        }
+        // WAIT_TIMEOUT: just loop back and check g_running
+    }
+    return S_OK;
+}
+
 int wmain(int argc, wchar_t* argv[]) {
     DWORD excludePid = 0;
     if (argc != 2 || !ParseProcessId(argv[1], &excludePid)) {
@@ -402,57 +461,8 @@ int wmain(int argc, wchar_t* argv[]) {
     fprintf(stderr, "[audio-capture] Capture started (excluding PID %u)\n", excludePid);
 
     // ─── Capture loop ───
-    // Event fires when audio buffer has data. 100ms timeout for checking
-    // shutdown flag. On broken pipe (_write returns <= 0), exit cleanly.
-    const HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
-    const bool hasInputPipe = GetFileType(input) == FILE_TYPE_PIPE;
-    while (g_running) {
-        if (hasInputPipe && !PeekNamedPipe(input, nullptr, 0, nullptr, nullptr, nullptr)) {
-            const DWORD error = GetLastError();
-            if (error == ERROR_BROKEN_PIPE || error == ERROR_PIPE_NOT_CONNECTED) break;
-        }
-        DWORD waitResult = WaitForSingleObject(captureEvent, 100);
-
-        if (waitResult == WAIT_OBJECT_0) {
-            // Drain all available packets in this event cycle
-            while (g_running) {
-                BYTE*  data      = nullptr;
-                UINT32 numFrames = 0;
-                DWORD  flags     = 0;
-
-                hr = captureClient->GetBuffer(&data, &numFrames, &flags, nullptr, nullptr);
-                if (hr == AUDCLNT_S_BUFFER_EMPTY || FAILED(hr)) break;
-                if (numFrames == 0) {
-                    captureClient->ReleaseBuffer(numFrames);
-                    break;
-                }
-
-                UINT32 byteCount = numFrames * frameSize;
-
-                if (flags & AUDCLNT_BUFFERFLAGS_SILENT) {
-                    // Silent buffer — write zeros instead of garbage data
-                    static BYTE zeros[8192];
-                    UINT32 remaining = byteCount;
-                    while (remaining > 0 && g_running) {
-                        UINT32 chunk = remaining > sizeof(zeros) ? sizeof(zeros) : remaining;
-                        int w = _write(1, zeros, chunk);
-                        if (w <= 0) { g_running = FALSE; break; }
-                        remaining -= chunk;
-                    }
-                } else {
-                    // Write actual PCM data
-                    int w = _write(1, data, byteCount);
-                    if (w <= 0) {
-                        // Pipe broken — parent process closed connection
-                        g_running = FALSE;
-                    }
-                }
-
-                captureClient->ReleaseBuffer(numFrames);
-            }
-        }
-        // WAIT_TIMEOUT: just loop back and check g_running
-    }
+    hr = CapturePackets(captureClient, captureEvent, frameSize);
+    if (FAILED(hr)) fprintf(stderr, "[audio-capture] Capture failed: 0x%08lx\n", hr);
 
     // ─── Cleanup ───
     fprintf(stderr, "[audio-capture] Stopping capture\n");
@@ -462,5 +472,5 @@ int wmain(int argc, wchar_t* argv[]) {
     CloseHandle(captureEvent);
     CoUninitialize();
 
-    return 0;
+    return FAILED(hr) ? 1 : 0;
 }
