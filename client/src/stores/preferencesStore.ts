@@ -143,37 +143,14 @@ function requestContext(version: number) {
   };
 }
 
-async function dependentStores() {
-  const [settings, sidebar, voice, accessibility, timeFormat] = await Promise.all([
-    import("./settingsStore"), import("./sidebarStore"), import("./voiceStore"), import("./accessibilityStore"), import("./timeFormatStore"),
-  ]);
-  return [settings.useSettingsStore.getState(), sidebar.useSidebarStore.getState(), voice.useVoiceStore.getState(), accessibility.useAccessibilityStore.getState(), timeFormat.useTimeFormatStore.getState()] as const;
-}
 async function applyData(version: number, reset = false, preserveSessionState = false): Promise<void> {
-  const stores = await dependentStores();
+  const { applyAccountPreferences } = await import("./applyAccountPreferences");
   if (!current(version)) return;
-  if (reset) {
-    if (preserveSessionState) {
-      stores[0].resetAccountPreferences(true);
-      stores[1].resetAccountPreferences();
-      stores[2].resetAccountPreferences(true);
-      stores[3].resetAccountPreferences();
-      stores[4].resetAccountPreferences();
-    } else for (const store of stores) store.resetAccountPreferences();
-  }
-  if (!current(version)) return;
-  // Read after imports: edits made while modules were loading must win.
-  // Legacy backend JSON and local caches are not allowed to replace store methods.
-  const data = cacheable(usePreferencesStore.getState().data);
-  const [settings, sidebar, voice, accessibility, timeFormat] = stores;
-  if (typeof data.theme === "string") settings.applyFromServer(data.theme);
-  if (object(data.appearance)) settings.applyAppearanceFromServer(data.appearance);
-  if (object(data.sidebar_sections) || typeof data.sidebar_expanded === "boolean") {
-    sidebar.applyFromServer(object(data.sidebar_sections) ? data.sidebar_sections as Record<string, boolean> : {}, typeof data.sidebar_expanded === "boolean" ? data.sidebar_expanded : undefined);
-  }
-  if (object(data.voice_settings)) voice.applyFromServer(data.voice_settings);
-  if (object(data.accessibility)) accessibility.applyFromServer(data.accessibility);
-  if (object(data.locale)) timeFormat.applyFromServer(data.locale);
+  applyAccountPreferences(
+    () => current(version) ? cacheable(usePreferencesStore.getState().data) : null,
+    reset,
+    preserveSessionState,
+  );
 }
 function schedule(): void {
   clearTimer();
