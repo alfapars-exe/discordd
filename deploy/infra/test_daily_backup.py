@@ -42,8 +42,15 @@ cp() {
             self.assertFalse((root / "uploaded").exists())
             self.assertFalse((backups / "last-success").exists())
 
+            # Retention must count only scheduled archives, including on retry.
+            manual = backups / "daily" / "000-manual.dump.age"
+            manual.write_bytes(b"manual backup")
+            for day in range(1, 8):
+                (backups / "daily" / f"200001{day:02d}.dump.age").touch()
             subprocess.run(["bash", runner], env={**env, "FAIL_COPY": "0"}, check=True)
-            daily, = (backups / "daily").glob("*.dump.age")
+            self.assertEqual(manual.read_bytes(), b"manual backup")
+            self.assertFalse((backups / "daily/20000101.dump.age").exists())
+            daily = max((backups / "daily").glob("[0-9]" * 8 + ".dump.age"))
             self.assertEqual(daily.read_bytes(), b"archive-content\n")
             self.assertTrue((root / "uploaded").exists())
             self.assertGreater(int((backups / "last-success").read_text()), 0)

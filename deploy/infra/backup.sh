@@ -31,10 +31,23 @@ fi
 date -u +%s > /srv/hichat/backups/last-success
 # Prune only this host's completed files AFTER successful remote delivery.
 python3 - <<'PY'
+from datetime import datetime
 from pathlib import Path
+
+
+def scheduled(path, fmt):
+    stamp = path.name.removesuffix(".dump.age")
+    try:
+        return datetime.strptime(stamp, fmt).strftime(fmt) == stamp
+    except ValueError:
+        return False
+
+
 for directory, count in [('hourly', 24), ('daily', 7)]:
     root = Path('/srv/hichat/backups') / directory
-    for archive in sorted(root.glob('*.dump.age'), reverse=True)[count:]:
+    fmt = '%Y%m%dT%H%M%SZ' if directory == 'hourly' else '%Y%m%d'
+    archives = (p for p in root.glob('*.dump.age') if p.is_file() and scheduled(p, fmt))
+    for archive in sorted(archives, reverse=True)[count:]:
         archive.unlink()
         archive.with_suffix(archive.suffix + '.sha256').unlink(missing_ok=True)
 PY
