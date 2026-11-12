@@ -122,7 +122,8 @@ func (c *pgConn) QueryContext(ctx context.Context, query string, args []driver.N
 }
 func (c *pgConn) CheckNamedValue(v *driver.NamedValue) error {
 	if valuer, ok := v.Value.(driver.Valuer); ok {
-		value, err := valuer.Value()
+		// Match database/sql's nil-pointer handling for value-receiver Valuers.
+		value, err := driver.DefaultParameterConverter.ConvertValue(valuer)
 		if err != nil {
 			return err
 		}
@@ -228,9 +229,13 @@ func bindPostgres(query string) (string, error) {
 		if start < i {
 			var err error
 			n, err = strconv.Atoi(query[start:i])
-			if err != nil || n < 1 {
+			if err != nil {
 				return "", fmt.Errorf("invalid bind position")
 			}
+		}
+		// PostgreSQL's extended protocol encodes the bind count in 16 bits.
+		if n < 1 || n > 65535 {
+			return "", fmt.Errorf("invalid bind position")
 		}
 		if n > next {
 			next = n

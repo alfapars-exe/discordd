@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"os"
 	"testing"
 
@@ -75,6 +76,11 @@ func checkRepositoryDialect(t *testing.T, db *sql.DB) {
 		t.Fatal(err)
 	}
 	defer tx.Rollback()
+	var missing *sql.NullString
+	var isNull bool
+	if err := tx.QueryRowContext(ctx, "SELECT CAST(? AS TEXT) IS NULL", missing).Scan(&isNull); err != nil || !isNull {
+		t.Fatalf("typed nil parameter: %t, %v", isNull, err)
+	}
 	const insert = `INSERT INTO dialect_grant(owner,target,note,updated_at)
 		VALUES(?,?,?,?) ON CONFLICT(owner,target) DO NOTHING`
 	const update = `INSERT INTO dialect_grant(owner,target,note,updated_at)
@@ -163,5 +169,32 @@ func TestBindPostgresNestedComments(t *testing.T) {
 	}
 	if _, err := bindPostgres("SELECT ? /* outer /* nested */"); err == nil {
 		t.Fatal("accepted unterminated outer comment")
+	}
+}
+
+func TestPostgresBindPositionBoundaries(t *testing.T) {
+	for _, query := range []string{"SELECT ?0", "SELECT ?65536", "SELECT ?65535, ?", "SELECT ?999999999999999999999"} {
+		if _, err := bindPostgres(query); err == nil {
+			t.Errorf("accepted unbindable query %q", query)
+		}
+	}
+	got, err := bindPostgres("SELECT ?65535, ?1, ?65535")
+	if err != nil || got != "SELECT $65535, $1, $65535" {
+		t.Fatalf("valid repeated boundary parameter: %q, %v", got, err)
+	}
+}
+
+func TestPostgresNullableArgument(t *testing.T) {
+	conn := &pgConn{}
+	var absent *sql.NullString
+	for _, tc := range []struct{ input, want any }{
+		{absent, nil},
+		{sql.NullBool{Valid: true, Bool: true}, int64(1)},
+		{sql.NullBool{}, nil},
+	} {
+		arg := driver.NamedValue{Ordinal: 1, Value: tc.input}
+		if err := conn.CheckNamedValue(&arg); err != nil || arg.Value != tc.want {
+			t.Fatalf("argument %T: %v, %v", tc.input, arg.Value, err)
+		}
 	}
 }
