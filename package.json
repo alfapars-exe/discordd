@@ -42,6 +42,8 @@
     },
     "files": [
       "dist-electron",
+      "!dist-electron/**/*.test.js",
+      "!dist-electron/**/*-test-fixture.js",
       "client/dist",
       "icons",
       "!**/*.map"
