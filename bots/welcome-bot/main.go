@@ -37,6 +37,17 @@ func (m memberJoin) name() string {
 	return m.Username
 }
 
+func (e event) welcomeText(serverID string) (string, bool) {
+	if e.Op != "member_join" || e.ServerID != serverID {
+		return "", false
+	}
+	var member memberJoin
+	if json.Unmarshal(e.Data, &member) != nil || member.ID == "" || member.name() == "" {
+		return "", false
+	}
+	return "Aramiza hos geldin, @" + member.name() + "!", true
+}
+
 type botConfig struct {
 	base    string
 	gateway string
@@ -120,14 +131,11 @@ func runGateway(ctx context.Context, config botConfig, dialer *websocket.Dialer,
 		if err := connection.ReadJSON(&incoming); err != nil {
 			return err
 		}
-		if incoming.Op != "member_join" || incoming.ServerID != config.server {
+		text, ok := incoming.welcomeText(config.server)
+		if !ok {
 			continue
 		}
-		var member memberJoin
-		if json.Unmarshal(incoming.Data, &member) != nil || member.ID == "" || member.name() == "" {
-			continue
-		}
-		if err := postMessage(ctx, client, config, "Aramiza hos geldin, @"+member.name()+"!"); err != nil {
+		if err := postMessage(ctx, client, config, text); err != nil {
 			log.Printf("welcome could not be posted: %v", err)
 		} else {
 			log.Print("welcome posted")
