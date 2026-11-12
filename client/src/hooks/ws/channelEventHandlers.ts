@@ -266,7 +266,10 @@ export async function handleChannelEvent(msg: WSMessage, isCurrent: () => boolea
     }
 
     case "message_delete": {
+      if (!isCurrent()) return true;
       const delData = msg.d;
+      const owner = getAuthSessionOwner();
+      const generation = getAuthGeneration();
 
       const unreadCount = useReadStateStore.getState().unreadCounts[delData.channel_id] ?? 0;
       if (unreadCount > 0) {
@@ -280,6 +283,14 @@ export async function handleChannelEvent(msg: WSMessage, isCurrent: () => boolea
       }
 
       useMessageStore.getState().handleMessageDelete(delData);
+      if (owner) {
+        const current = () => isCurrent() && getAuthSessionOwner() === owner && getAuthGeneration() === generation;
+        try {
+          await keyStorage.deleteCachedChannelMessage(delData.id, delData.channel_id, current);
+        } catch {
+          if (current()) console.warn("[ws] Channel deleted-message cache cleanup failed");
+        }
+      }
       return true;
     }
 
