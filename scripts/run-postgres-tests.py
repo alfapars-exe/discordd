@@ -17,6 +17,11 @@ REDACTED_DATABASE = "[test-database]"
 REQUIRED_SERVER_POSTGRES_TEST = "TestPurgeExpiredNotificationsPostgres"
 
 
+def redact_database_urls(output, dsn):
+    output = output.replace(dsn, REDACTED_DATABASE)
+    return re.sub(r"\bpostgres(?:ql)?://\S+", REDACTED_DATABASE, output, flags=re.IGNORECASE)
+
+
 def main():
     dsn = os.environ.get("HICHAT_TEST_POSTGRES_DSN", "")
     parsed = urlparse(dsn)
@@ -61,8 +66,7 @@ def main():
         elif event.get("Action") == "output":
             # Repository fixtures use synthetic records, but database driver
             # errors may contain a DSN; never echo it in CI.
-            output = event.get("Output", "").replace(dsn, REDACTED_DATABASE)
-            output = re.sub(r"\bpostgres(?:ql)?://\S+", REDACTED_DATABASE, output)
+            output = redact_database_urls(event.get("Output", ""), dsn)
             if not output.startswith(("=== ", "--- PASS", "--- SKIP")):
                 print(output, end="", flush=True)
     code = process.wait()
@@ -80,7 +84,7 @@ def main():
     selection = "^(TestChannelDelivery|TestDMIdempotent|TestDMOutbox|TestDMMarkUnreadFrom|" + "|".join(role_tests) + ")"
     services = subprocess.run(["go", "test", "-v", "-count=1", "-timeout=2m", "./services", "-run", selection],
                               cwd=root / "server", stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-    print(services.stdout.replace(dsn, REDACTED_DATABASE), end="", flush=True)
+    print(redact_database_urls(services.stdout, dsn), end="", flush=True)
     missing = [name for name in role_tests if f"--- PASS: {name} (" not in services.stdout]
     if missing:
         print("Required PostgreSQL role tests did not pass: " + ", ".join(missing), file=sys.stderr)
