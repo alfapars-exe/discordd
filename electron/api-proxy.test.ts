@@ -203,3 +203,25 @@ test("rethrows upstream network failures so the renderer sees a fetch error", as
     /ERR_CONNECTION_REFUSED/
   );
 });
+
+test("a proxied API read cannot follow an upstream redirect into a second server", async t => {
+  const { createServer } = await import("node:http");
+  const listen = async (server: ReturnType<typeof createServer>) => {
+    await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+    t.after(() => { server.closeAllConnections(); server.close(); });
+    const address = server.address();
+    assert.ok(address && typeof address === "object");
+    return "http://127.0.0.1:" + address.port;
+  };
+  let reached = false;
+  const target = await listen(createServer((_req, res) => {
+    reached = true;
+    res.end("private local response");
+  }));
+  const origin = await listen(createServer((_req, res) => {
+    res.writeHead(307, { location: target }).end();
+  }));
+  const request = new Request("app://hichat/api/health", {headers: {[UPSTREAM_HEADER]: origin}});
+  await assert.rejects(() => proxyApiRequest(request, fetch, {allowLoopback: true}));
+  assert.equal(reached, false);
+});
