@@ -324,6 +324,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	friendshipService := services.NewFriendshipService(repos.Friendship, repos.User, repos.Notification, hub, friendRequestPolicy)
 	friendshipService.SetEmailEnqueuer(emailDeliveryService)
 	dmService := services.NewDMService(
+		services.NewServerDMPolicy(repos.Preferences, repos.Server),
 		repos.DM, repos.User, hub, blockService, friendshipService, dmSettingsService,
 		repos.DMRead, repos.Notification, repository.NewDMMessageTxRunner(db),
 	)
@@ -331,9 +332,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	if communication, ok := dmService.(services.DMCommunicationEmailConfigurer); ok {
 		communication.SetCommunicationEmailEnqueuer(emailDeliveryService)
 	}
-	if concreteDMService, ok := dmService.(interface{ SetServerDMPolicy(services.ServerDMPolicy) }); ok {
-		concreteDMService.SetServerDMPolicy(services.NewServerDMPolicy(repos.Preferences, repos.Server))
-	}
+
 	if reactionDM, ok := dmService.(interface {
 		SetReactionPreferences(repository.PreferencesRepository)
 	}); ok {

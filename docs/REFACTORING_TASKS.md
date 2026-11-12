@@ -275,6 +275,8 @@ Paralel çalışma hatları: backend veri/lifecycle (RF04–RF11), client state/
 
 ## RF11 — Zorunlu servis wiring sözleşmeleri
 
+**12 Kasım.** DM servisinin constructor’ı sunucu DM politikasını açıkça alır. Hesap anonimleştirme yapılandırması, kalıcı repository ile birlikte etkin müzik isteklerindeki kullanıcı bilgisini temizleyen gözlemciyi alır. P2P cevapsız çağrı e-postası, servis oluşturulurken bağlanır. Bu üç bağlantı için başlangıçtaki çalışma zamanı tür denetimleri kaldırıldı. Testler sunucu gizlilik ayarıyla ilk DM gönderimini, kanal kilidinden sonra politikanın yeniden denetlenmesini, başarısız anonimleştirme sonrasında kimlik bilgilerinin korunmasını ve cevapsız çağrı e-postasının tetiklendiği durumları kapsar. Diğer servislerin başlangıç ve kapanış sözleşmeleri açık.
+
 | Alan | Tanım |
 |---|---|
 | Task ID | RF11 |

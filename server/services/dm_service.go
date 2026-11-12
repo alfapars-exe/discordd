@@ -113,6 +113,7 @@ func (s *dmService) SetCommunicationEmailEnqueuer(enqueuer ScheduledEmailEnqueue
 }
 
 func NewDMService(
+	serverDMPolicy ServerDMPolicy,
 	dmRepo repository.DMRepository,
 	userRepo repository.UserRepository,
 	hub ws.Broadcaster,
@@ -124,6 +125,7 @@ func NewDMService(
 	txRunner repository.DMMessageTxRunner,
 ) DMService {
 	return &dmService{
+		serverDMPolicy:   serverDMPolicy,
 		dmRepo:           dmRepo,
 		userRepo:         userRepo,
 		dmReadRepo:       dmReadRepo,
@@ -139,8 +141,6 @@ func NewDMService(
 func (s *dmService) SetUploadDir(dir string) {
 	s.uploadDir = dir
 }
-
-func (s *dmService) SetServerDMPolicy(policy ServerDMPolicy) { s.serverDMPolicy = policy }
 
 func (s *dmService) SetReactionPreferences(prefs repository.PreferencesRepository) {
 	s.reactionPreferences = prefs

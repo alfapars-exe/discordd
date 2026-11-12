@@ -35,7 +35,9 @@ func TestSendMessageServerDMPolicyForEmptyChannel(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			f := newDMFixture()
+			f := newDMFixtureWithPolicy(NewServerDMPolicy(friendRequestPrefsStub{tc.preferences}, serverListStub{
+				"alice": {"shared", "second"}, "bob": {"shared", "second"},
+			}))
 			recipient := "bob"
 			if tc.self {
 				recipient = "alice"
@@ -53,9 +55,6 @@ func TestSendMessageServerDMPolicyForEmptyChannel(t *testing.T) {
 				}
 				return tc.senderHistory > 0 || tc.recipientHistory > 0, nil
 			}
-			f.svc.(*dmService).SetServerDMPolicy(NewServerDMPolicy(friendRequestPrefsStub{tc.preferences}, serverListStub{
-				"alice": {"shared", "second"}, "bob": {"shared", "second"},
-			}))
 			writes := 0
 			broadcasts := 0
 			otherWrites := 0
@@ -98,7 +97,7 @@ func TestSendMessageRechecksPolicyAndPendingAfterChannelLock(t *testing.T) {
 			name = "another first message made channel pending"
 		}
 		t.Run(name, func(t *testing.T) {
-			f := newDMFixture()
+			f := newDMFixtureWithPolicy(NewServerDMPolicy(friendRequestPrefsStub{`{}`}, serverListStub{"alice": {"shared"}, "bob": {"shared"}}))
 			locked := false
 			f.repo.GetChannelByIDFn = func(_ context.Context, id string) (*models.DMChannel, error) {
 				ch := &models.DMChannel{ID: id, User1ID: "alice", User2ID: "bob", Status: models.DMStatusAccepted}
@@ -110,7 +109,6 @@ func TestSendMessageRechecksPolicyAndPendingAfterChannelLock(t *testing.T) {
 			}
 			f.users.GetByIDFn = func(_ context.Context, id string) (*models.User, error) { return &models.User{ID: id}, nil }
 			s := f.svc.(*dmService)
-			s.SetServerDMPolicy(NewServerDMPolicy(friendRequestPrefsStub{`{}`}, serverListStub{"alice": {"shared"}, "bob": {"shared"}}))
 			writes := 0
 			f.repo.CreateMessageFn = func(context.Context, *models.DMMessage) error { writes++; return nil }
 			prefLocked := false
@@ -133,7 +131,7 @@ func TestSendMessageRechecksPolicyAndPendingAfterChannelLock(t *testing.T) {
 }
 
 func TestSendMessageHistoryCheckAfterLockUsesSingleExistenceQuery(t *testing.T) {
-	f := newDMFixture()
+	f := newDMFixtureWithPolicy(NewServerDMPolicy(friendRequestPrefsStub{`{}`}, serverListStub{"alice": {"shared"}, "bob": {"shared"}}))
 	f.repo.GetChannelByIDFn = func(_ context.Context, id string) (*models.DMChannel, error) {
 		return &models.DMChannel{ID: id, User1ID: "alice", User2ID: "bob", Status: models.DMStatusAccepted}, nil
 	}
@@ -145,7 +143,6 @@ func TestSendMessageHistoryCheckAfterLockUsesSingleExistenceQuery(t *testing.T) 
 		return 0, nil
 	}
 	s := f.svc.(*dmService)
-	s.SetServerDMPolicy(NewServerDMPolicy(friendRequestPrefsStub{`{}`}, serverListStub{"alice": {"shared"}, "bob": {"shared"}}))
 	s.txRunner = passthroughDMTxRunner{repos: repository.DMTxRepos{
 		DM: f.repo, DMRead: f.dmRead, Notification: f.notif,
 		LockChannel: func(context.Context, string) error { locked = true; return nil },
