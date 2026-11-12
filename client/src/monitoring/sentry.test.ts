@@ -32,6 +32,12 @@ function assertNoSecretSubstring(haystack: string, secret: string): void {
 }
 
 describe("redactSecrets", () => {
+  it("masks escaped JSON credential values and bearer tokens in free text", () => {
+    const json = JSON.stringify({ password: 'prefix"private-tail', detail: "visible" });
+    expect(redactSecrets(json)).toBe(JSON.stringify({ password: "***", detail: "visible" }));
+    expect(redactSecrets("Bearer\tprivate-token")).toBe("Bearer ***");
+  });
+
   it("redacts a simple ASCII key=value pair", () => {
     expect(redactSecrets("token=SECRET&next=/x")).toBe("token=***&next=/x");
   });

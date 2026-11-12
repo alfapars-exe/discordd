@@ -40,7 +40,9 @@ const VALUE_TERMINATORS = /[&"' \t\r\n]/;
  * server/pkg/redact.go — keep the two in sync if either list changes.
  */
 export function redactSecrets(s: string): string {
-  let result = s;
+  let result = s
+    .replace(/("(?:password|password_hash|authorization|cookie|token|access_token|refresh_token|api_key|apikey|secret|ticket)"\s*:\s*")(?:[^"\\\r\n]|\\[^\r\n])*"/gi, '$1***"')
+    .replace(/bearer\s+[a-z0-9._~+/=-]+/gi, "Bearer ***");
   for (const key of SECRET_PARAMS) {
     // Guard against a future empty entry in SECRET_PARAMS: an empty key
     // matches at index 0 of every value.slice() call in redactParam and
