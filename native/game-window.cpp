@@ -3,8 +3,6 @@
 #include <windows.h>
 
 #include <cstdint>
-#include <cstdlib>
-#include <cwchar>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -136,10 +134,15 @@ void WriteSample(const Sample& sample) {
 
 bool ParseParentPid(const wchar_t* text, DWORD* parentPid) {
   if (!text || !*text) return false;
-  wchar_t* end = nullptr;
-  const unsigned long value = std::wcstoul(text, &end, 10);
-  if (!end || *end != L'\0' || value == 0 || value > MAXDWORD) return false;
-  *parentPid = static_cast<DWORD>(value);
+  DWORD value = 0;
+  for (const wchar_t* digit = text; *digit; ++digit) {
+    if (*digit < L'0' || *digit > L'9') return false;
+    const DWORD part = static_cast<DWORD>(*digit - L'0');
+    if (value > (MAXDWORD - part) / 10) return false;
+    value = value * 10 + part;
+  }
+  if (value == 0) return false;
+  *parentPid = value;
   return true;
 }
 
