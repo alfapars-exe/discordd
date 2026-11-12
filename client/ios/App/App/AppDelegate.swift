@@ -43,11 +43,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     /// Reactivate audio session after interruption (e.g., phone call ends).
     /// Without this, WebRTC audio stays muted after an interruption.
     @objc private func handleAudioInterruption(_ notification: Notification) {
-        guard let info = notification.userInfo,
-              let typeValue = info[AVAudioSessionInterruptionTypeKey] as? UInt,
-              AVAudioSession.InterruptionType(rawValue: typeValue) == .ended,
-              let options = info[AVAudioSessionInterruptionOptionKey] as? UInt,
-              AVAudioSession.InterruptionOptions(rawValue: options).contains(.shouldResume) else { return }
+        guard AudioInterruption.shouldResume(notification.userInfo) else { return }
 
         do {
             try AVAudioSession.sharedInstance().setActive(true)
