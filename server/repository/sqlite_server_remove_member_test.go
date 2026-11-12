@@ -123,3 +123,29 @@ func TestRemoveMember_TxBoundRepoUsesCallerTransaction(t *testing.T) {
 		t.Errorf("user_roles rows still present after tx-bound RemoveMember, count=%d", n)
 	}
 }
+
+func TestRemoveMember_RoleCleanupFailureRollsBackMembership(t *testing.T) {
+	db := newTestDB(t)
+	userID, serverID, _ := seedMemberWithRole(t, db, "rollback")
+	// Keep the assignments intact but make the final cleanup statement fail.
+	if _, err := db.Conn.Exec("ALTER TABLE user_roles RENAME TO unavailable_user_roles"); err != nil {
+		t.Fatal(err)
+	}
+	repo := NewSQLiteServerRepo(db.Conn)
+	ctx := context.Background()
+	if err := repo.RemoveMember(ctx, serverID, userID); err == nil {
+		t.Fatal("removal succeeded without cleaning up role assignments")
+	}
+	if member, err := repo.IsMember(ctx, serverID, userID); err != nil || !member {
+		t.Fatalf("membership after rollback = %v, err = %v", member, err)
+	}
+	if _, err := db.Conn.Exec("ALTER TABLE unavailable_user_roles RENAME TO user_roles"); err != nil {
+		t.Fatal(err)
+	}
+	if n := countRows(t, db, "SELECT COUNT(*) FROM user_roles WHERE server_id=? AND user_id=?", serverID, userID); n != 1 {
+		t.Fatalf("role assignments after rollback = %d", n)
+	}
+	if err := repo.RemoveMember(ctx, serverID, userID); err != nil {
+		t.Fatalf("retry after restoring role storage: %v", err)
+	}
+}
