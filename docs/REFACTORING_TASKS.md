@@ -112,6 +112,8 @@ Birleşik dalda 60505fb2 üzerinde Node 26.13.0 ile tekrar ölçülen medyanlar 
 
 İlk Windows PostgreSQL koşusunda repository paketi 15 dakikada tamamlanmadı. Ayrıca ara revizyonda Linux üzerinde parçalanmamış `go test -race` çalıştırıldığında hem repository hem services 15 dakikalık paket sınırına ulaştı. Yukarıdaki genel yarış koşusu CI’ın paket bölme düzenini kullanır. PostgreSQL’deki 271,38 saniye ayrı sözleşme koşusunun süresidir.
 
+Windows üzerinde `ee21edc5` revizyonunda sunucunun `go build ./...` ve `go vet ./...` kontrolleri geçti. Önbelleksiz `go test -count=1 -json ./...` koşusu çıkış kodu 0 ile tamamlandı. Alt testler dahil 4.013 test geçti ve 57 test atlandı.
+
 Birleşik dalda `f8b79322` revizyonunun Windows mTLS PostgreSQL koşusu tamamlandı. Repository paketi 316,80 saniyede geçti. Sahiplik devri ve ayrılma yarışında önce ayrılan üyeye sahiplik verilemedi. Önce devir tamamlandığında yeni sahibin üyeliği ve rol ataması korundu. İkinci sıra `3fe8a08d` üzerinde beş tekrarda doğrulandı. [PR #253](https://github.com/alfapars-exe/discordd/pull/253)
 
 Yetki ve hiyerarşi denetimleri servis katmanında, transaction ve satır kilidi tekrarları repository katmanında kalır. İstemcide `channelMessageHistory.ts` sıralama ve olay birleştirmesini üstlenir. Zustand store REST isteğini, hesap ve erişim durumunu, ardından okundu imlecini yönetir. HTTP gövdesi, WebSocket olay şeması ve veritabanı şeması için geçiş gerekmiyor.
