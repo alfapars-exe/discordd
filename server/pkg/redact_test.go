@@ -3,6 +3,7 @@ package pkg
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -184,6 +185,18 @@ func TestRedactEscapedJSONCredentialAndTabBearer(t *testing.T) {
 	} {
 		if got := RedactSecrets(input); got != want {
 			t.Errorf("RedactSecrets(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
+
+func TestRedactPostgresKeywordPasswords(t *testing.T) {
+	for _, input := range []string{
+		`connect: host=db password='private word' port=5432`,
+		`connect: host=db password = 'private\' word' port=5432`,
+		`connect: host=db password=private\ word port=5432`,
+	} {
+		if got := ErrText(errors.New(input)); !strings.HasSuffix(got, " port=5432") || strings.Contains(got, "private") || strings.Contains(got, " word") {
+			t.Errorf("credential masking failed: %q", got)
 		}
 	}
 }
