@@ -17,7 +17,11 @@ type sqliteChannelRepo struct {
 }
 
 func NewSQLiteChannelRepo(db database.TxQuerier) ChannelRepository {
-	return &sqliteChannelRepo{db: db}
+	repo := &sqliteChannelRepo{db: db}
+	if database.IsPostgres(db) {
+		return &postgresVoiceChannelRepo{repo}
+	}
+	return repo
 }
 
 // scanChannel scans one channels row in the column order shared by the channel

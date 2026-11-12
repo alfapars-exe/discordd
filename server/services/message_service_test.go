@@ -418,7 +418,7 @@ func TestMessageDelete(t *testing.T) {
 			name:      "admin can delete others message",
 			msgUserID: "u1",
 			delUserID: "u2",
-			delPerms:  models.PermManageMessages,
+			delPerms:  models.PermManageMessages | models.PermViewChannel | models.PermReadMessages,
 		},
 		{
 			name:      "non-owner without permission cannot delete",
@@ -454,10 +454,10 @@ func TestMessageDelete(t *testing.T) {
 						BroadcastToUsersFn: func(_ []string, _ ws.Event) { broadcastCalled = true },
 					},
 				},
-				&testutil.MockChannelPermResolver{},
+				&testutil.MockChannelPermResolver{ResolveChannelPermissionsFn: func(context.Context, string, string) (models.Permission, error) { return tt.delPerms, nil }},
 			)
 
-			err := svc.Delete(context.Background(), "srv1", "m1", tt.delUserID, tt.delPerms)
+			err := svc.Delete(context.Background(), "srv1", "m1", tt.delUserID)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -518,7 +518,7 @@ func TestMessageDelete_RemovesAttachmentFileFromDisk(t *testing.T) {
 	)
 	svc.SetUploadDir(dir)
 
-	if err := svc.Delete(context.Background(), "srv1", "m1", "u1", 0); err != nil {
+	if err := svc.Delete(context.Background(), "srv1", "m1", "u1"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !broadcastCalled {
@@ -567,7 +567,7 @@ func TestMessageDelete_AttachmentFetchFailureStillDeletesMessage(t *testing.T) {
 	)
 	svc.SetUploadDir(dir)
 
-	if err := svc.Delete(context.Background(), "srv1", "m1", "u1", 0); err != nil {
+	if err := svc.Delete(context.Background(), "srv1", "m1", "u1"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !deleteCalled {
@@ -615,7 +615,7 @@ func TestMessageDelete_DBFailureLeavesFileOnDisk(t *testing.T) {
 	)
 	svc.SetUploadDir(dir)
 
-	if err := svc.Delete(context.Background(), "srv1", "m1", "u1", 0); err == nil {
+	if err := svc.Delete(context.Background(), "srv1", "m1", "u1"); err == nil {
 		t.Fatal("expected the failed DB delete to propagate")
 	}
 	if _, err := os.Stat(filePath); err != nil {

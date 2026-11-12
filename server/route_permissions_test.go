@@ -125,6 +125,9 @@ var handlerInternalGates = map[string]string{
 	"POST /api/servers/{serverId}/channels/{id}/messages":                                                   "per-channel PermSendMessages enforced inside messageService",
 	"PATCH /api/servers/{serverId}/messages/{id}":                                                           "author-ownership (or moderator override) enforced inside messageService.Update, evaluated per-message",
 	"POST /api/servers/{serverId}/messages/{messageId}/reactions":                                           "per-channel permission enforced inside reactionService",
+	"DELETE /api/servers/{serverId}/messages/{id}":                                                          "message owner or effective channel moderator",
+	"POST /api/servers/{serverId}/channels/{channelId}/messages/{messageId}/pin":                            "channel read and manage checked by pin service",
+	"DELETE /api/servers/{serverId}/channels/{channelId}/messages/{messageId}/pin":                          "channel read and manage checked by pin service",
 	"GET /api/servers/{serverId}/channels/{id}/pins":                                                        "per-channel read permission enforced inside pinService",
 	"GET /api/servers/{serverId}/application-actions":                                                       "read-only application action declarations; server membership is the intended discovery gate and revoked grants are filtered in the repository",
 	"POST /api/servers/{serverId}/channels/{channelId}/messages/{messageId}/application-actions/{actionId}": "per-channel PermViewChannel+PermReadMessages and active scoped grant enforced inside BotService.InvokeApplicationAction",
@@ -152,7 +155,7 @@ var handlerInternalGates = map[string]string{
 	"GET /api/servers/{serverId}/search": "results scoped per-channel via channelPermService inside searchService (H-05) — can't be one server-wide authServerPerm bit",
 
 	// ── Voice — per-channel connect permission ──
-	"POST /api/servers/{serverId}/voice/token":        "per-channel PermConnectVoice enforced inside voiceService.GenerateToken",
+	"POST /api/servers/{serverId}/voice/token":        "path server, fresh membership and per-channel voice access checked together by GenerateToken",
 	"POST /api/servers/{serverId}/voice/screen-token": "per-channel permission enforced inside voiceService.GenerateScreenShareToken",
 	"GET /api/servers/{serverId}/voice/states":        "read-only — membership is the intended view gate",
 

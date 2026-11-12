@@ -42,8 +42,8 @@ it("keeps actual SDK publish-time valid context adoption bounded and the process
   await controller.setEnabled(true);
   for(let i=0;i<20;i++)await Promise.resolve();
   expect(controller.getStatus().phase).toBe("ready");
-  expect(contexts).toBe(3); // room, initial graph, one SDK-driven graph restart
-  expect(h.createPipeline).toHaveBeenCalledTimes(2);
+  expect(contexts).toBe(2); // room playback and the original capture graph
+  expect(h.createPipeline).toHaveBeenCalledTimes(1);
   expect(getActiveCallPipeline()).not.toBeNull();
  }finally{await releaseLiveMicrophone(participant);lease.retire();await roomContext.close()}
 });

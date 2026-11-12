@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/testutil"
 )
 
@@ -29,10 +30,18 @@ type countingInvalidator struct {
 	invalidatedUser []string
 }
 
-func (c *countingInvalidator) InvalidateAll()             { c.allCount++ }
-func (c *countingInvalidator) InvalidateUser(uid string)  {
+func (c *countingInvalidator) InvalidateAll() { c.allCount++ }
+func (c *countingInvalidator) InvalidateUser(uid string) {
 	c.userCount++
 	c.invalidatedUser = append(c.invalidatedUser, uid)
+}
+
+type roleTestTransaction struct {
+	repos *repository.ServerMembershipTxRepos
+}
+
+func (tx roleTestTransaction) WithServerRoles(_ context.Context, _ string, fn func(*repository.ServerMembershipTxRepos) error) error {
+	return fn(tx.repos)
 }
 
 // newRoleSvcWithInvalidator wires roleService + countingInvalidator.
@@ -43,7 +52,9 @@ func newRoleSvcWithInvalidator(t *testing.T) (
 ) {
 	t.Helper()
 	roleRepo := &testutil.MockRoleRepo{}
-	svc := NewRoleService(roleRepo, &testutil.MockUserRepo{}, &testutil.MockBroadcaster{}, nil) // auditLogger — not under test here
+	serverRepo := &testutil.MockServerRepo{IsMemberFn: func(context.Context, string, string) (bool, error) { return true, nil }}
+	tx := roleTestTransaction{&repository.ServerMembershipTxRepos{Server: serverRepo, Role: roleRepo}}
+	svc := NewRoleService(roleRepo, tx, &testutil.MockBroadcaster{}, nil) // auditLogger — not under test here
 	inv := &countingInvalidator{}
 	svc.SetPermInvalidator(inv)
 

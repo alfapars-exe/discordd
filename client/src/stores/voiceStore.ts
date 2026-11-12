@@ -105,6 +105,7 @@ const initialMuteState = loadMuteState();
 type VoiceCoreState = {
   /** channelId -> VoiceState[] mapping */
   voiceStates: Record<string, VoiceState[]>;
+  pendingVoiceChannelId: string | null;
   currentVoiceChannelId: string | null;
   /** Server owning the current voice channel — used to disconnect on server leave/delete. */
   currentVoiceServerId: string | null;
@@ -202,6 +203,7 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
 
   // ─── Core State ───
   voiceStates: {},
+  pendingVoiceChannelId: null,
   currentVoiceChannelId: null,
   currentVoiceServerId: null,
   isMuted: initialMuteState.isMuted,
@@ -231,41 +233,18 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
   registerWsSend: (fn) => set({ _wsSend: fn }),
 
   joinVoiceChannel: async (channelId: string) => {
+    const serverId = useServerStore.getState().activeServerId;
+    if (!serverId) return null;
+    const gen = get()._joinGeneration + 1;
+    const startedAt = performance.now();
+    set({ _joinGeneration: gen, pendingVoiceChannelId: channelId });
     try {
-      const serverId = useServerStore.getState().activeServerId;
-      if (!serverId) return null;
-
-      // On mobile, ensure microphone permission before proceeding
-      const micGranted = await ensureMicPermission();
-      if (!micGranted) {
-        console.warn("[voiceStore] Microphone permission denied");
-        return null;
-      }
-
-      const gen = get()._joinGeneration + 1;
-      set({ _joinGeneration: gen });
-
-      // [DEBUG] Token state before fetch
-      const preAccessToken = localStorage.getItem("access_token");
-      const preRefreshToken = localStorage.getItem("refresh_token");
-      console.warn("[voiceStore] joinVoiceChannel START", {
-        timestamp: new Date().toISOString(),
-        channelId,
-        serverId,
-        gen,
-        hasAccessToken: !!preAccessToken,
-        hasRefreshToken: !!preRefreshToken,
-        accessTokenLen: preAccessToken?.length ?? 0,
+      const permission = ensureMicPermission().then(granted => {
+        console.debug("[voice] microphone permission resolved", { channelId, gen, elapsedMs: performance.now() - startedAt });
+        return granted;
       });
-
-      // Ensure fresh JWT before requesting LiveKit token
-      const freshResult = await ensureFreshToken();
-      const postAccessToken = localStorage.getItem("access_token");
-      console.warn("[voiceStore] ensureFreshToken returned", {
-        result: freshResult,
-        hasAccessTokenAfter: !!postAccessToken,
-        tokenChanged: preAccessToken !== postAccessToken,
-      });
+      const [micGranted] = await Promise.all([permission, ensureFreshToken()]);
+      if (!micGranted || get()._joinGeneration !== gen) return null;
 
       let response = await voiceApi.getVoiceToken(serverId, channelId);
       console.warn("[voiceStore] getVoiceToken response", {
@@ -278,7 +257,7 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
       if (!response.success && response.error?.includes("401")) {
         console.warn("[voiceStore] 401 retry path entered");
         const refreshed = await ensureFreshToken();
-        if (refreshed) {
+        if (refreshed && get()._joinGeneration === gen) {
           response = await voiceApi.getVoiceToken(serverId, channelId);
           console.warn("[voiceStore] retry response", { success: response.success, error: response.error });
         } else {
@@ -308,6 +287,8 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
         return null;
       }
 
+      console.debug("[voice] join token ready", { channelId, gen, elapsedMs: performance.now() - startedAt });
+
       // PTT mode forces muted (unmuted on key press), otherwise keep current state
       const isPTT = get().inputMode === "push_to_talk";
       const initialMuted = isPTT ? true : get().isMuted;
@@ -336,14 +317,19 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
         await nativeVoiceConnect(response.data.url, response.data.token, initialMuted, initialDeafened);
       }
 
+      if (get()._joinGeneration !== gen) return null;
+
       // Start native foreground service for background audio (mobile only)
       startVoiceCallService();
 
       return response.data;
     } catch (err) {
+      if (get()._joinGeneration !== gen) return null;
       console.error("[voiceStore] Voice join error:", err);
       useToastStore.getState().addToast("error", i18n.t("voice:voiceJoinFailed"));
       return null;
+    } finally {
+      if (get()._joinGeneration === gen) set({ pendingVoiceChannelId: null });
     }
   },
 
@@ -471,6 +457,7 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
       screenShareViewers: {},
       rtt: 0,
       connectionQuality: {},
+      pendingVoiceChannelId: null,
       _joinGeneration: get()._joinGeneration + 1,
     });
 

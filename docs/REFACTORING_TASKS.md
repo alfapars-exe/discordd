@@ -4,6 +4,50 @@ Tarih: 25 Ekim 2026. İlk inceleme revizyonu `313acf8e`; çalışma sırasında 
 
 Bu belge uygulama önerisidir. Görev kartının varlığı, kodun değiştirildiği veya kabul edildiği anlamına gelmez. İlk teslimat 25 Ekim’de plan belgeleriydi. 26 Ekim’de kullanıcı uygulamayı başlattı; güncel ilerleme aşağıdaki tabloda izlenir. Görev kartlarındaki Problem alanları ilk incelemenin tarihsel kanıtıdır. Mevcut değişiklikler korunur; uygulama aşamasında her PR yalnız seçilen görevin dosyalarını kapsar.
 
+## Kararlı sürümde rol yetkileri ve mesaj geçmişi — 12 Kasım 2026
+
+Başlangıç revizyonu `bb32bbba`. Bu tur Go/PostgreSQL sunucusunu ve React istemcisini kapsar. İzin denetimlerinin sahibi sunucudur. İstemci görünür listeyi sunucunun yetkili REST sayfası ve istek sırasında alınan WebSocket olaylarıyla günceller.
+
+| Bileşen | Başlangıçta gözlenen sorun | Değişiklik ve kabul senaryosu |
+|---|---|---|
+| Kanal izinleri ve mesaj dağıtımı | Üst kanal izni kaldırıldıktan sonra alt konuşmayı önceden açmış üye okumaya ve dağıtım alıcıları arasına girmeye devam edebiliyordu. | İzin önbelleği kararın alındığı kanalı saklar. İlgili üst kanal değiştiğinde tekli ve toplu girişler temizlenir. İki oturumla üyenin HTTP 403 alması, özel WebSocket mesajının yalnız yetkili oturuma ulaşması ve üyenin açık kanaldaki sonraki mesajı alması sınanır. |
+| Rol PATCH | Eşzamanlı ad ve izin düzenlemesinde son yazan istek diğer alanı eski değerine döndürebiliyordu. | Sunucu yetki kilidi altında güncel aktör ve hiyerarşi denetlenir. Sorgu yalnız iletilen alanları değiştirir. PostgreSQL testleri iki yazım sırasındaki son satırı, servis yanıtını ve olay içeriğini denetler. |
+| Üyenin rollerini değiştirme | Üye olmayan hesaba atama, geçersiz kısmi yazma ve yinelenen audit kaydı gerçek PostgreSQL üzerinde tekrarlandı. | Üyelik, hiyerarşi, rol farkı ve yanıt aynı transaction içinde okunur. Atama ve kaldırma birlikte tamamlanır. Önbellek, audit ve WebSocket yan etkileri commit sonrasında gerçekleşir. |
+| Kanal geçmişi | Yeniden bağlantıda sunucu 54–103. mesajları döndürdüğünde eski pencere sona ekleniyor ve 50. mesaj okundu işaretleniyordu. Eski mesajlar görüntülenirken gelen düzenleme ve tepkiler de kaybolabiliyordu. | Sayfalar sunucunun `(created_at, id)` sırasını izler. Mesaj kimliğine göre tutulan değişiklikler geç REST yanıtlarıyla birleştirilir. Testler okundu imlecini, sayfalama sınırlarını, silmeyi, reaksiyonu ve oturum/izin kaybını denetler. |
+| PostgreSQL yükseltme testi | 049 öncesi şemayı hazırlayan test, başka bir paketin kurulumu sırasında eklenti oluştururken `23505` verdi. | Yükseltme testi eski migration listesini başlangıçla aynı kilitli transaction içinde uygular. Dolu şemayı yükseltme ve ikinci kez çalıştırma kontrolleri korunur. |
+
+**Eşzamanlılık.** Rol işlemi, ACL kilidini bekledikten sonra yetkiyi PostgreSQL `READ COMMITTED` ile yeniden okur. Sıralama veya silme işlemi gereken satırı zaten kilitlediyse transaction geri alınır. Çakışan satır serbest kalınca yetki yeniden denetlenir. Testlerde iki yazarın da tamamlanması, iptal edilen isteğin kilidi bırakması ve commit hatasında audit/olay üretilmemesi doğrulandı. Değişiklik yapmayan üye rolü isteğinde iki düzenleyici de PATCH yanıtındaki rolleri kullanır. Daha yeni WebSocket veya oturum bilgisi bu yanıtla ezilmez.
+
+**İstemci ölçümü.** Node 26.13.0 üzerinde aynı Vitest senaryosu, tek kanal, geçmiş penceresi açık, bir ısınma ve dokuz tekrar kullanıldı. Aşağıdaki medyanlar `handleMessageCreate` döngüsünü ölçer. Birleştirilen listenin bütün kimlikleri süre ölçümü bittikten sonra her tekrarda doğrulandı. Genişletilmiş kabul koşusunda üç yükte toplam 30 kez sıra, son içerik, düzenleme, tepki ve silme denetlendi. İleri sayfalamada okundu isteği gönderilmediği, yeniden bağlantıda ise gerçek son mesaj kimliğiyle tek istek gönderildiği görüldü. Ters sırada yinelenen düzenleme için ayrı iki store testi, hem geçmişte hem de son sayfa yüklenirken en yeni `edited_at` değerinin korunduğunu doğrular.
+
+| Benzersiz olay | Önce | Sonra |
+|---:|---:|---:|
+| 1.000 | 4,46 ms | 0,15 ms |
+| 5.000 | 104,91 ms | 0,73 ms |
+| 10.000 | 367,99 ms | 1,63 ms |
+
+Ölçümü yinelemek için `client` dizininde `HICHAT_BENCH_CHANNEL_HISTORY=1` ortam değişkeniyle `npx vitest run src/stores/messageStore.test.ts -t "measures detached create processing and checks the complete merged window"` çalıştırılır. İlk keşif ölçümü farklı bir çalıştırıcı kullanıyordu. Tablodaki her iki sütun aynı testten alındı. Süreler ağ, React çizimi ve medya gecikmesini kapsamaz. Geçmiş penceresi açık kaldığı sürece tampon değişen her benzersiz kimlik için bir kayıt tutar. Son sayfaya ulaşıldığında, pencere bırakıldığında, yetki kaldırıldığında veya oturum değiştiğinde ilgili kayıtlar bırakılır. Uzun süre açık pencerelerde bellek için sabit bir üst sınır yoktur.
+
+### Birleşik doğrulama
+
+| Kontrol | Yerel sonuç |
+|---|---|
+| Go yarış denetimi ve kapsamı | Linux, Go 1.26.10 ve GCC ile CI’daki 17 parçanın tümü geçti. Alt testler dahil 3.964 geçti, 49 koşullu test atlandı. Aynı sunucu kaynağına bağlı profiller `scripts/merge-go-coverage.py --expected-profiles 17` ile birleştirildi. Genel ifade kapsamı önce ve sonra %58,7. Tekli kanal izni çözümü %95,2, toplu izin kararını hesaplayan `resolveBulkAttempt` %96,6. |
+| Gerçek PostgreSQL | PostgreSQL 18.6 üzerinde `python scripts/run-postgres-tests.py` ile 922 ana paket, veritabanı ve repository test/alt testi, ayrıca 44 teslimat ve rol test/alt testi geçti. Bu koşuda atlama yok. Repository paketi 271,38 saniyede tamamlandı. Ayrı ve temiz bir veritabanında CI’ın seçtiği 106 yarış testi/alt testi de geçti. Bu profilde `Patch` %100, `WithServerRoles` %93,3 ve servis `ModifyRoles` %91,8 ifade kapsamına ulaştı. |
+| Go derleme ve statik denetim | `go build`, `go vet ./...`, `go mod tidy -diff`, welcome-bot testleri ve vet geçti. `golangci-lint` sıfır bulgu verdi. Değişen Go dosyalarında yalnız `handlers/member_test.go` içindeki önceden var olan biçim farkı kaldı. |
+| React ve store kapsamı | `npm run test:coverage` ile 458 dosyada 4.603 test geçti, biri atlandı. Genel satır kapsamı %65,59 → %65,88, dal kapsamı %62,87 → %63,07. `messageStore.ts` satır %82,25 → %88,00, dal %63,43 → %68,71. Yeni `channelMessageHistory.ts` satır %100, dal %90,27. `channelHistoryAccess.ts` her ikisinde %100. |
+| İstemci derleme ve paket | `npm run build` ile TypeScript ve Vite geçti. `npm run lint` sıfır hata ve başlangıçta da bulunan yedi uyarı verdi. `npm run electron:test` ile 269 test geçti, biri atlandı. |
+| Tarayıcı ve ağ | `e2e` dizininde `npm test` ile Chromium ve WebKit toplam 12/12 geçti. İki oturumlu rol testi gerçek Go sunucusu ve mTLS PostgreSQL kullandı. Yetkisi kaldırılan üyenin önceden açtığı alt konuşmadan HTTP 403 alması, özel WebSocket mesajının yetkili oturuma teslimi ve üyenin açık kanal oturumunun işlemeye devam etmesi doğrulandı. |
+| Ortak sözleşme ve depo kontrolleri | `cargo test --manifest-path migration/Cargo.toml --locked -p hichat-protocol` ile dört Rust protokol testi geçti. Go yanıt ve olay alanları korundu. Kalite çalıştırıcısının sekiz, kabul defteri aracının 32 ve Python yardımcılarının 31 testi geçti. Güvenlik öz-taramasında engelleyici eşleşme kalmadı. Birleşik rol kilidi sorgusunun dört çağrısında da SQL sabit, kimlikler bağlı parametre. |
+
+İlk Windows PostgreSQL koşusunda repository paketi 15 dakikada tamamlanmadı. Ayrıca ara revizyonda Linux üzerinde parçalanmamış `go test -race` çalıştırıldığında hem repository hem services 15 dakikalık paket sınırına ulaştı. Yukarıdaki genel yarış koşusu CI’ın paket bölme düzenini kullanır. PostgreSQL’deki 271,38 saniye ayrı sözleşme koşusunun süresidir.
+
+Yetki ve hiyerarşi denetimleri servis katmanında, transaction ve satır kilidi tekrarları repository katmanında kalır. İstemcide `channelMessageHistory.ts` sıralama ve olay birleştirmesini üstlenir. Zustand store REST isteğini, hesap ve erişim durumunu, ardından okundu imlecini yönetir. HTTP gövdesi, WebSocket olay şeması ve veritabanı şeması için geçiş gerekmiyor.
+
+**Takip.** Gönüllü sunucu ayrılışı ve hızlı yeniden katılmada sunucu izin önbelleğinin ve etkin ses oturumunun yaşam döngüsü ayrı bir kabul senaryosudur. Rol ve üye WebSocket olayları transaction sürüm numarası taşımaz. İki eşzamanlı commit için istemcide küresel teslim sırası garanti edilmez. Fiziksel cihazda ses ve video kabulü açıktır. Ürün kabul defterindeki 261 davranışın yapısal denetimi geçti. `npm run check:acceptance` başlangıçtaki 248 açık davranışı raporlamaya devam ediyor.
+
+Arşiv E2E senaryosundaki test sunucusu silinirken PostgreSQL, hâlâ sunucudan referans alan self-hosted LiveKit kaydının silinmesini `23503` ile reddetti. Aynı hata başlangıç revizyonunda yeniden üretildi. Arşiv E2E senaryosu iki revizyonda da geçti. Sunucu silinirken LiveKit kaydının temizlenme sırası açık takiptir.
+
 ## Uygulama izleme — 26 Ekim 2026
 
 İlk uygulama grubu, kapsamlı modül ayırmalarından önce test ve kaynak sahipliği sınırlarını kurar. **Planın 30 görevinin tamamı bitmedi.** Bu tablo yerel uygulamayı, CI yürütmesini ve gerçek cihaz kabulünü birbirine karıştırmaz. Aktif kaynak ağacında başka çalışmalar bulunduğundan bütün doğrulamalar kaynak manifestiyle kaydedilir.

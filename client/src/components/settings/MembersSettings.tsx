@@ -65,6 +65,7 @@ function MembersSettings() {
   const actorMaxPos = useMemo(() => {
     const me = members.find((m) => m.id === currentUser?.id);
     if (!me || me.roles.length === 0) return 0;
+    if (me.roles.some(role => role.is_owner)) return Infinity;
     return Math.max(...me.roles.map((r) => r.position));
   }, [members, currentUser]);
 
@@ -163,7 +164,7 @@ function MembersSettings() {
 
     const serverId = useServerStore.getState().activeServerId;
     if (!serverId) return;
-    const res = await memberApi.modifyMemberRoles(serverId, selectedMemberId, editRoleIds);
+    const res = await useMemberStore.getState().modifyMemberRoles(serverId, selectedMemberId, editRoleIds);
     if (res.data) {
       setHasChanges(false);
       addToast("success", t("memberRolesSaved"));
@@ -458,12 +459,14 @@ function MembersSettings() {
                     <label className="settings-label">{t("memberAssignRoles")}</label>
                     <div className="member-settings-role-checkboxes">
                       {roles
-                        .filter((role) => role.id !== "owner" && !role.is_default && role.position < actorMaxPos)
+                        .filter((role) => !role.is_owner && !role.is_default && role.position < actorMaxPos)
                         .map((role) => (
                         <label key={role.id} className="member-settings-role-checkbox">
                           <input
                             type="checkbox"
                             checked={editRoleIds.includes(role.id)}
+                            disabled={!selectedMember?.roles.some(existing => existing.id === role.id)
+                              && !hasPermission(myPerms, Permissions.Admin) && (role.permissions & ~myPerms) !== 0}
                             onChange={() => handleRoleToggle(role.id)}
                           />
                           <span

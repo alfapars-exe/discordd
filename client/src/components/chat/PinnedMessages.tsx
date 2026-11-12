@@ -3,9 +3,8 @@
 import { useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { usePinStore } from "../../stores/pinStore";
-import { useActiveMembers } from "../../stores/memberStore";
-import { hasPermission, Permissions } from "../../utils/permissions";
-import { useAuthStore } from "../../stores/authStore";
+import { useChannelPermissions } from "../../hooks/useChannelPermissions";
+import { Permissions } from "../../utils/permissions";
 import Avatar from "../shared/Avatar";
 
 type PinnedMessagesProps = {
@@ -19,16 +18,11 @@ function PinnedMessages({ channelId, onClose }: PinnedMessagesProps) {
   const getPinsForChannel = usePinStore((s) => s.getPinsForChannel);
   const unpinAction = usePinStore((s) => s.unpin);
   const isLoading = usePinStore((s) => s.isLoading);
-  const members = useActiveMembers();
-  const currentUser = useAuthStore((s) => s.user);
+  const { hasChannelPerm, authorizationResolved } = useChannelPermissions(channelId);
 
   const pins = getPinsForChannel(channelId);
 
-  // Check ManageMessages permission for current user
-  const currentMember = members.find((m) => m.id === currentUser?.id);
-  const canManageMessages = currentMember
-    ? hasPermission(currentMember.effective_permissions, Permissions.ManageMessages)
-    : false;
+  const canManageMessages = authorizationResolved && hasChannelPerm(Permissions.ManageMessages);
 
   useEffect(() => {
     fetchPins(channelId);

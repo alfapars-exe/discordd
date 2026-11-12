@@ -461,9 +461,7 @@ func (h *MessageHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	perms, _ := r.Context().Value(PermissionsContextKey).(models.Permission)
-
-	if err := h.messageService.Delete(r.Context(), serverID, id, user.ID, perms); err != nil {
+	if err := h.messageService.Delete(r.Context(), serverID, id, user.ID); err != nil {
 		pkg.Error(w, err)
 		return
 	}

@@ -1,25 +1,11 @@
-// Package services — cachingPermResolver: the caching decorator around the
-// uncached channelPermService core.
-//
-// Why a decorator instead of a cache field on channelPermService itself
-// (the previous shape): every code path that reads or writes the cache had
-// to remember to build the key via permCacheKey and to call
-// invalidateChannelCache after every mutation. That's a convention, not a
-// guarantee — nothing stopped a future write path (or a second
-// ChannelPermissionService implementation) from mutating overrides without
-// invalidating, which leaves a revoked permission live in the cache for up
-// to permCacheTTL (30s). Splitting the cache into its own type that owns
-// 100% of the caching/invalidation logic, and making it the ONLY exported
-// constructor's return value (NewChannelPermissionService in
-// channel_permission_service.go), makes "some caller holds the uncached
-// core and can silently skip invalidation" a compile-time impossibility:
-// there is no exported way to obtain a *channelPermService that isn't
-// wrapped in this type.
+// Package services keeps permission cache reads and invalidation together.
+// NewChannelPermissionService always wraps the database-backed resolver so
+// changes to overrides invalidate the same entries that requests and WebSocket
+// broadcasts consume.
 package services
 
 import (
 	"context"
-	"strings"
 	"sync"
 	"time"
 
@@ -33,19 +19,25 @@ const (
 	permCacheCleanup = 5 * time.Minute
 )
 
+type permissionCacheKey struct {
+	userID, channelID string
+}
+
+type cachedPermission struct {
+	permissions     models.Permission
+	policyChannelID string // Parent ID for threads, requested ID for other channels.
+}
+
 // cachingPermResolver implements the full ChannelPermissionService
 // interface. Resolve/ResolveBulk are cached; SetOverride/DeleteOverride
 // delegate to inner and then invalidate the affected channel;
 // InvalidateUser/InvalidateAll only make sense with a cache, so they live
 // here and nowhere else; every other method is a pure pass-through to inner.
 type cachingPermResolver struct {
-	inner *channelPermService
+	inner             *channelPermService
+	afterInvalidation func(userID, channelID string)
 
-	// permCache holds ResolveChannelPermissions results. Key: "userID:channelID"
-	// (permCacheKey), built the same way on every read and write path here so
-	// invalidateChannelCache/InvalidateUser's prefix/suffix matches can never
-	// silently diverge from what Resolve/ResolveBulk wrote.
-	permCache *cache.TTLCache[string, models.Permission]
+	permCache *cache.TTLCache[permissionCacheKey, cachedPermission]
 	// Invalidations supersede DB reads already in flight. Never hold over IO.
 	cacheMu       sync.Mutex
 	cacheRevision uint64
@@ -56,17 +48,8 @@ type cachingPermResolver struct {
 func newCachingPermResolver(inner *channelPermService) *cachingPermResolver {
 	return &cachingPermResolver{
 		inner:     inner,
-		permCache: cache.New[string, models.Permission](permCacheTTL, permCacheCleanup),
+		permCache: cache.New[permissionCacheKey, cachedPermission](permCacheTTL, permCacheCleanup),
 	}
-}
-
-// permCacheKey is the single source of truth for the permission cache key
-// format. invalidateChannelCache and InvalidateUser match on the two halves
-// of this string, so every code path that writes the cache MUST build its
-// key here — a divergent key would be invisible to invalidation and let a
-// revoked permission survive.
-func permCacheKey(userID, channelID string) string {
-	return userID + ":" + channelID
 }
 
 // ─── Pure pass-throughs — no caching involved ───
@@ -107,7 +90,7 @@ func (c *cachingPermResolver) DeleteOverride(ctx context.Context, serverID, chan
 // database-backed resolution. See channelPermService.ResolveChannelPermissions
 // for the actual resolution logic.
 func (c *cachingPermResolver) ResolveChannelPermissions(ctx context.Context, userID, channelID string) (models.Permission, error) {
-	cacheKey := permCacheKey(userID, channelID)
+	cacheKey := permissionCacheKey{userID, channelID}
 	for attempt := 0; attempt < 3; attempt++ {
 		if err := ctx.Err(); err != nil {
 			return 0, err
@@ -116,11 +99,11 @@ func (c *cachingPermResolver) ResolveChannelPermissions(ctx context.Context, use
 		revision := c.cacheRevision
 		if cached, ok := c.permCache.Get(cacheKey); ok {
 			c.cacheMu.Unlock()
-			return cached, nil
+			return cached.permissions, nil
 		}
 		c.cacheMu.Unlock()
 
-		perm, err := c.inner.ResolveChannelPermissions(ctx, userID, channelID)
+		perm, policyChannelID, err := c.inner.resolveUserPermissions(ctx, userID, channelID)
 		if err != nil {
 			return 0, err
 		}
@@ -130,7 +113,7 @@ func (c *cachingPermResolver) ResolveChannelPermissions(ctx context.Context, use
 			c.cacheMu.Unlock()
 			continue
 		}
-		c.permCache.Set(cacheKey, perm)
+		c.permCache.Set(cacheKey, cachedPermission{perm, policyChannelID})
 		c.cacheMu.Unlock()
 		return perm, nil
 	}
@@ -200,8 +183,8 @@ func (c *cachingPermResolver) resolveBulkAttempt(ctx context.Context, channelID 
 		}
 		seen[userID] = struct{}{}
 
-		if cached, ok := c.permCache.Get(permCacheKey(userID, channelID)); ok {
-			resolved[userID] = cached
+		if cached, ok := c.permCache.Get(permissionCacheKey{userID, channelID}); ok {
+			resolved[userID] = cached.permissions
 			continue
 		}
 		misses = append(misses, userID)
@@ -211,7 +194,7 @@ func (c *cachingPermResolver) resolveBulkAttempt(ctx context.Context, channelID 
 		return resolved, false, nil
 	}
 
-	fresh, err := c.inner.ResolveChannelPermissionsBulk(ctx, channelID, misses)
+	fresh, policyChannelID, err := c.inner.resolveUsersPermissions(ctx, channelID, misses)
 	if err != nil {
 		return nil, false, err
 	}
@@ -221,7 +204,7 @@ func (c *cachingPermResolver) resolveBulkAttempt(ctx context.Context, channelID 
 		return nil, true, nil
 	}
 	for userID, perm := range fresh {
-		c.permCache.Set(permCacheKey(userID, channelID), perm)
+		c.permCache.Set(permissionCacheKey{userID, channelID}, cachedPermission{perm, policyChannelID})
 		resolved[userID] = perm
 	}
 
@@ -230,35 +213,37 @@ func (c *cachingPermResolver) resolveBulkAttempt(ctx context.Context, channelID 
 
 // ─── Invalidation — decorator-only; the uncached core has no cache to invalidate ───
 
-// invalidateChannelCache clears all cached permissions for a given channel.
-// Uses suffix match on "userID:channelID" keys since we can't know which
-// users are affected.
+// A parent override also governs its threads. Each decision retains its
+// policy channel so invalidation finds those entries without a database read.
 func (c *cachingPermResolver) invalidateChannelCache(channelID string) {
 	c.cacheMu.Lock()
-	defer c.cacheMu.Unlock()
 	c.cacheRevision++
-	suffix := ":" + channelID
-	c.permCache.DeleteFunc(func(key string) bool {
-		return strings.HasSuffix(key, suffix)
+	c.permCache.DeleteEntriesFunc(func(key permissionCacheKey, value cachedPermission) bool {
+		return key.channelID == channelID || value.policyChannelID == channelID
 	})
+	c.cacheMu.Unlock()
+	if c.afterInvalidation != nil {
+		c.afterInvalidation("", channelID)
+	}
 }
 
 // InvalidateUser clears every cached entry for one user.
 //
-// Mirrors invalidateChannelCache, just by the other half of the
-// "userID:channelID" composite key. Called when a single user's role
+// Called when a single user's role
 // membership changes (assign/remove) or when they are kicked/banned
 // from a server (defence — they should already be unable to call the
 // API, but the cache entry would still leak through any half-finished
 // request).
 func (c *cachingPermResolver) InvalidateUser(userID string) {
 	c.cacheMu.Lock()
-	defer c.cacheMu.Unlock()
 	c.cacheRevision++
-	prefix := userID + ":"
-	c.permCache.DeleteFunc(func(key string) bool {
-		return strings.HasPrefix(key, prefix)
+	c.permCache.DeleteFunc(func(key permissionCacheKey) bool {
+		return key.userID == userID
 	})
+	c.cacheMu.Unlock()
+	if c.afterInvalidation != nil {
+		c.afterInvalidation(userID, "")
+	}
 }
 
 // InvalidateAll drops the entire cache.
@@ -270,9 +255,12 @@ func (c *cachingPermResolver) InvalidateUser(userID string) {
 // the system returns to steady state within permCacheTTL (30s).
 func (c *cachingPermResolver) InvalidateAll() {
 	c.cacheMu.Lock()
-	defer c.cacheMu.Unlock()
 	c.cacheRevision++
-	c.permCache.DeleteFunc(func(string) bool { return true })
+	c.permCache.Clear()
+	c.cacheMu.Unlock()
+	if c.afterInvalidation != nil {
+		c.afterInvalidation("", "")
+	}
 }
 
 // Compile-time assertion: cachingPermResolver must satisfy the full

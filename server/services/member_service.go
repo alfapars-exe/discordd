@@ -59,12 +59,19 @@ type VoiceDisconnecter interface {
 	DisconnectUser(userID string)
 }
 
+// The same member view is read on the normal connection and after a role
+// replacement within its transaction.
+type memberReader struct {
+	userRepo    repository.UserRepository
+	roleRepo    repository.RoleRepository
+	serverRepo  repository.ServerRepository
+	timeoutRepo repository.MemberTimeoutRepository
+}
+
 type memberService struct {
-	userRepo                   repository.UserRepository
-	roleRepo                   repository.RoleRepository
+	memberReader
+	roleTransactions           repository.ServerRoleTxRunner
 	banRepo                    repository.BanRepository
-	timeoutRepo                repository.MemberTimeoutRepository
-	serverRepo                 repository.ServerRepository
 	hub                        ws.BroadcastAndManage
 	voiceKick                  VoiceDisconnecter
 	auditLogger                AuditWriter
@@ -124,20 +131,19 @@ func NewMemberService(
 	banRepo repository.BanRepository,
 	timeoutRepo repository.MemberTimeoutRepository,
 	serverRepo repository.ServerRepository,
+	roleTransactions repository.ServerRoleTxRunner,
 	hub ws.BroadcastAndManage,
 	voiceKick VoiceDisconnecter,
 	auditLogger AuditWriter,
 	profileUpdates ...ProfileUpdateNotifier,
 ) MemberService {
 	s := &memberService{
-		userRepo:    userRepo,
-		roleRepo:    roleRepo,
-		banRepo:     banRepo,
-		timeoutRepo: timeoutRepo,
-		serverRepo:  serverRepo,
-		hub:         hub,
-		voiceKick:   voiceKick,
-		auditLogger: auditLogger,
+		memberReader:     memberReader{userRepo: userRepo, roleRepo: roleRepo, serverRepo: serverRepo, timeoutRepo: timeoutRepo},
+		roleTransactions: roleTransactions,
+		banRepo:          banRepo,
+		hub:              hub,
+		voiceKick:        voiceKick,
+		auditLogger:      auditLogger,
 	}
 	if len(profileUpdates) > 0 {
 		s.profileUpdates = profileUpdates[0]
@@ -213,7 +219,7 @@ func (s *memberService) GetAll(ctx context.Context, serverID string) ([]models.M
 	return members, nil
 }
 
-func (s *memberService) GetByID(ctx context.Context, serverID, userID string) (*models.MemberWithRoles, error) {
+func (s *memberReader) GetByID(ctx context.Context, serverID, userID string) (*models.MemberWithRoles, error) {
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -461,124 +467,4 @@ func (s *memberService) UpdatePresence(ctx context.Context, userID string, statu
 	})
 
 	return nil
-}
-
-func (s *memberService) ModifyRoles(ctx context.Context, serverID, actorID, targetID string, roleIDs []string) (*models.MemberWithRoles, error) {
-	actorRoles, err := s.roleRepo.GetByUserIDAndServer(ctx, actorID, serverID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get actor roles: %w", err)
-	}
-	actorMaxPos := models.HighestPosition(actorRoles)
-
-	targetRoles, err := s.roleRepo.GetByUserIDAndServer(ctx, targetID, serverID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get target roles: %w", err)
-	}
-	targetMaxPos := models.HighestPosition(targetRoles)
-
-	if models.HasOwnerRole(targetRoles) {
-		return nil, fmt.Errorf("%w: cannot modify the server owner's roles", pkg.ErrForbidden)
-	}
-
-	if targetMaxPos >= actorMaxPos {
-		return nil, fmt.Errorf("%w: cannot modify roles of a user with equal or higher role", pkg.ErrForbidden)
-	}
-
-	// One list-scan per ModifyRoles call (bounded by server role count,
-	// typically <50) replaces two N+1 loops: the validation walk below
-	// and the audit-metadata lookup further down. Fetching every role in
-	// the request via GetByID meant 2*N sequential DB round-trips per
-	// role-modification request.
-	allServerRoles, err := s.roleRepo.GetAllByServer(ctx, serverID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load server roles: %w", err)
-	}
-	rolesByID := make(map[string]*models.Role, len(allServerRoles))
-	for i := range allServerRoles {
-		rolesByID[allServerRoles[i].ID] = &allServerRoles[i]
-	}
-
-	for _, roleID := range roleIDs {
-		role, ok := rolesByID[roleID]
-		if !ok {
-			return nil, fmt.Errorf("%w: role %s does not belong to this server", pkg.ErrForbidden, roleID)
-		}
-		if role.Position >= actorMaxPos {
-			return nil, fmt.Errorf("%w: cannot assign role '%s' with equal or higher position", pkg.ErrForbidden, role.Name)
-		}
-	}
-
-	currentSet := make(map[string]bool, len(targetRoles))
-	for _, r := range targetRoles {
-		currentSet[r.ID] = true
-	}
-
-	targetSet := make(map[string]bool, len(roleIDs))
-	for _, id := range roleIDs {
-		targetSet[id] = true
-	}
-
-	// Track assignments + removals so we can emit one audit event per role
-	// transition. Doing this in a single pass keeps the audit channel
-	// readable instead of dumping a wall of "X modified roles" entries.
-	actor := actorID
-	target := targetID
-	for _, id := range roleIDs {
-		if !currentSet[id] {
-			if err := s.roleRepo.AssignToUser(ctx, targetID, id, serverID); err != nil {
-				return nil, fmt.Errorf("failed to assign role: %w", err)
-			}
-			// Reuse the map from the validation pass — the same role was
-			// already loaded above; a second GetByID here was pure N+1.
-			if role := rolesByID[id]; role != nil {
-				s.audit(models.AuditLog{
-					ServerID:     serverID,
-					ActorUserID:  &actor,
-					TargetUserID: &target,
-					EventType:    models.AuditEventRoleAssign,
-					Metadata:     fmt.Sprintf(`{"role_name":%q}`, role.Name),
-				})
-			}
-		}
-	}
-
-	for _, r := range targetRoles {
-		if !targetSet[r.ID] {
-			if r.IsDefault {
-				continue
-			}
-			if r.Position >= actorMaxPos {
-				continue
-			}
-			if err := s.roleRepo.RemoveFromUser(ctx, targetID, r.ID); err != nil {
-				return nil, fmt.Errorf("failed to remove role: %w", err)
-			}
-			s.audit(models.AuditLog{
-				ServerID:     serverID,
-				ActorUserID:  &actor,
-				TargetUserID: &target,
-				EventType:    models.AuditEventRoleRemove,
-				Metadata:     fmt.Sprintf(`{"role_name":%q}`, r.Name),
-			})
-		}
-	}
-
-	member, err := s.GetByID(ctx, serverID, targetID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Drop the target's cached per-channel permissions — their role
-	// set just changed, so any previous resolution is stale.
-	s.invalidateUserPerms(targetID)
-
-	// Role changes are server-scoped — only broadcast to that server
-	safeMember := *member
-	safeMember.RedactProfileFields()
-	s.hub.BroadcastToServer(serverID, ws.Event{
-		Op:   ws.OpMemberUpdate,
-		Data: &safeMember,
-	})
-
-	return member, nil
 }

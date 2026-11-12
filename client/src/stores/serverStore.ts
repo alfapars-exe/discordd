@@ -1,3 +1,5 @@
+import { subscribeAuthOwnerChanges } from "../api/authSessionEvents";
+import { readStartupCache, rememberStartupServers } from "../utils/startupCache";
 /**
  * Server Store — Multi-server state management.
  */
@@ -340,3 +342,19 @@ export const useServerStore = create<ServerState>((set, get) => ({
     return res.success;
   },
 }));
+
+// Only list metadata is hydrated after identity validation. Channel permissions
+// and memberships are fetched afresh; disk data never grants application access.
+subscribeAuthOwnerChanges((owner) => {
+  const snapshot = readStartupCache();
+  if (owner && snapshot?.user.id === owner) {
+    const savedId = useServerStore.getState().activeServerId;
+    const activeServerId = snapshot.servers.some(server => server.id === savedId) ? savedId : snapshot.servers[0]?.id ?? null;
+    useServerStore.setState({ servers: snapshot.servers, activeServerId });
+  } else {
+    useServerStore.setState({ servers: [], activeServerId: null, activeServer: null });
+  }
+});
+useServerStore.subscribe((next, previous) => {
+  if (next.servers !== previous.servers) rememberStartupServers(useAuthStore.getState().user?.id ?? null, next.servers);
+});

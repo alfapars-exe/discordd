@@ -2,6 +2,8 @@ package middleware
 
 import (
 	"context"
+	"fmt"
+	"github.com/argeinfina/hichat/handlers"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -95,5 +97,29 @@ func mustResolve(t *testing.T, mw *PermissionMiddleware, r *http.Request, userID
 	t.Helper()
 	if _, err := mw.resolveEffectivePerms(r, userID, serverID); err != nil {
 		t.Fatalf("resolve(%s,%s): %v", userID, serverID, err)
+	}
+}
+
+func TestRolePermissionHTTPAllowAndDeny(t *testing.T) {
+	for bit := models.Permission(1); bit <= models.PermAll; bit <<= 1 {
+		t.Run(fmt.Sprint(bit), func(t *testing.T) {
+			repo := &testutil.MockRoleRepo{GetByUserIDAndServerFn: func(_ context.Context, userID, _ string) ([]models.Role, error) {
+				if userID == "allowed" {
+					return []models.Role{{Permissions: bit}}, nil
+				}
+				return nil, nil
+			}}
+			gate := NewPermissionMiddleware(repo).Require(bit, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+			for user, want := range map[string]int{"allowed": 204, "denied": 403} {
+				req := httptest.NewRequest("POST", "/", nil)
+				ctx := context.WithValue(req.Context(), handlers.UserContextKey, &models.User{ID: user})
+				ctx = context.WithValue(ctx, handlers.ServerIDContextKey, "server")
+				w := httptest.NewRecorder()
+				gate.ServeHTTP(w, req.WithContext(ctx))
+				if w.Code != want {
+					t.Fatalf("%s: got %d want %d", user, w.Code, want)
+				}
+			}
+		})
 	}
 }

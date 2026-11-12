@@ -57,8 +57,9 @@ vi.mock("./e2eeStore", () => ({
     getState: () => ({ initStatus: "uninitialized", localDeviceId: null }),
   },
 }));
+const markAsRead = vi.hoisted(() => vi.fn());
 vi.mock("./readStateStore", () => ({
-  useReadStateStore: { getState: () => ({ markAsRead: vi.fn() }) },
+  useReadStateStore: { getState: () => ({ markAsRead }) },
 }));
 vi.mock("./toastStore", () => ({
   useToastStore: { getState: () => ({ addToast: vi.fn() }) },
@@ -595,7 +596,7 @@ describe("messageStore — leaving a jumped-to window", () => {
 
     const tail = deferred<APIResponse<MessagePage>>();
     getMessages.mockReturnValueOnce(tail.promise);
-    const created = makeMessage("mine");
+    const created = { ...makeMessage("mine"), created_at: "2026-01-02T00:00:00Z" };
     sendMessage.mockResolvedValueOnce({ success: true, data: created });
 
     const okSend = await useMessageStore.getState().sendMessage("ch-1", "hello", undefined, undefined, "srv-1");
@@ -617,23 +618,277 @@ describe("messageStore — leaving a jumped-to window", () => {
     await jumpIntoPast();
 
     // Two live messages while looking at the past: not appended to the window.
-    useMessageStore.getState().handleMessageCreate(makeMessage("live-1"));
-    useMessageStore.getState().handleMessageCreate(makeMessage("live-2"));
+    const live1 = { ...makeMessage("live-1"), created_at: "2026-01-02T00:00:01Z" };
+    useMessageStore.getState().handleMessageCreate(live1);
+    useMessageStore.getState().handleMessageCreate({ ...makeMessage("live-2"), created_at: "2026-01-02T00:00:02Z" });
     expect(useMessageStore.getState().messagesByChannel["ch-1"].map((m) => m.id)).toEqual([
       "old-1", "target", "old-3",
     ]);
 
     // Last forward page: includes live-1 (already persisted) but not live-2.
     getMessagesAfter.mockResolvedValueOnce(
-      aroundPage([makeMessage("new-1"), makeMessage("live-1")], false, false)
+      aroundPage([makeMessage("new-1"), live1], false, false)
     );
     await useMessageStore.getState().fetchNewerMessages("ch-1", "srv-1");
 
     const s = useMessageStore.getState();
-    expect(getMessagesAfter).toHaveBeenCalledWith("srv-1", "ch-1", "old-3", expect.any(Number));
+    expect(getMessagesAfter).toHaveBeenCalledWith("srv-1", "ch-1", "old-3", expect.any(Number), expect.objectContaining({ signal: expect.any(AbortSignal) }));
     expect(s.hasMoreAfterByChannel["ch-1"]).toBe(false);
     expect(s.messagesByChannel["ch-1"].map((m) => m.id)).toEqual([
       "old-1", "target", "old-3", "new-1", "live-1", "live-2",
     ]);
   });
 });
+
+function numberedMessage(index: number): Message {
+  // Identifiers are opaque and deliberately run against time order.
+  const id = (10_000_000 - index).toString(16).padStart(16, "0");
+  return { ...makeMessage(id), created_at: new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString() };
+}
+const reaction = [{ emoji: "👍", count: 1, users: ["reader"] }];
+const state = () => useMessageStore.getState();
+const rows = () => state().messagesByChannel["ch-1"];
+const ids = (messages: Message[]) => messages.map((row) => row.id);
+
+describe("channel history reconciliation", () => {
+  it("reloads a disjoint 50-row tail, marks its newest row read and pages from its oldest", async () => {
+    const all = Array.from({ length: 104 }, (_, index) => numberedMessage(index));
+    getMessages.mockResolvedValueOnce(ok(all.slice(1, 51), true));
+    await state().fetchMessages("ch-1", "srv-1");
+    state().invalidateFetchedFlags();
+    getMessages.mockResolvedValueOnce(ok(all.slice(54), true));
+    await state().fetchMessages("ch-1", "srv-1");
+    expect(ids(rows())).toEqual(ids(all.slice(54)));
+    expect(markAsRead).toHaveBeenLastCalledWith("ch-1", all[103].id);
+    getMessages.mockResolvedValueOnce(ok(all.slice(4, 54), true));
+    await state().fetchOlderMessages("ch-1", "srv-1");
+    expect(getMessages).toHaveBeenLastCalledWith("srv-1", "ch-1", all[54].id, 50, expect.anything());
+    expect(ids(rows())).toEqual(ids(all.slice(4)));
+  });
+
+  it("preserves an overlapping older prefix and its has_more flag, removes missing rows inside the fresh page", async () => {
+    const all = Array.from({ length: 54 }, (_, index) => numberedMessage(index));
+    getMessages.mockResolvedValueOnce(ok(all.slice(0, 50)));
+    await state().fetchMessages("ch-1", "srv-1");
+    state().invalidateFetchedFlags();
+    getMessages.mockResolvedValueOnce(ok(all.slice(3).filter((m) => m.id !== all[21].id), true));
+    await state().fetchMessages("ch-1", "srv-1");
+    expect(ids(rows())).toEqual(ids(all.filter((m) => m.id !== all[21].id)));
+    expect(state().hasMoreByChannel["ch-1"]).toBe(false);
+  });
+
+  it("keeps edits, reactions and deletes received while a tail snapshot is pending", async () => {
+    const [a, b, c, d] = [1, 2, 3, 4].map(numberedMessage);
+    const response = deferred<APIResponse<MessagePage>>();
+    getMessages.mockReturnValueOnce(response.promise);
+    const pending = state().fetchMessages("ch-1", "srv-1");
+    state().handleMessageCreate(d);
+    state().handleMessageUpdate({ ...a, content: "latest" });
+    state().handleMessageDelete({ channel_id: "ch-1", id: b.id });
+    state().handleReactionUpdate({ channel_id: "ch-1", message_id: c.id, reactions: reaction });
+    response.resolve(ok([a, b, { ...c, reply_to_id: b.id, referenced_message: {id:b.id, author:b.author, content:b.content} }]));
+    await pending;
+    expect(ids(rows())).toEqual(ids([a, c, d]));
+    expect(rows()[0].content).toBe("latest");
+    expect(rows()[1].reactions).toEqual(reaction);
+    expect(rows()[1].referenced_message?.content).toBeNull();
+  });
+
+  it("folds detached edits, reactions, duplicate creates and deletes into the last page", async () => {
+    await jumpIntoPast();
+    const [edited, reacted, deleted] = [1, 2, 3].map(numberedMessage);
+    for (const m of [edited, reacted, deleted]) state().handleMessageCreate(m);
+    state().handleMessageUpdate({ ...edited, content: "latest" });
+    state().handleMessageCreate(edited);
+    state().handleReactionUpdate({ channel_id:"ch-1", message_id:reacted.id, reactions:reaction });
+    const page = deferred<APIResponse<MessagePage>>();
+    getMessagesAfter.mockReturnValueOnce(page.promise);
+    const fetching = state().fetchNewerMessages("ch-1", "srv-1");
+    state().handleMessageDelete({ channel_id:"ch-1", id:deleted.id });
+    page.resolve(aroundPage([reacted, deleted], false, false));
+    await fetching;
+    expect(ids(rows()).slice(-2)).toEqual(ids([edited, reacted]));
+    expect(rows().at(-2)?.content).toBe("latest");
+    expect(rows().at(-1)?.reactions).toEqual(reaction);
+  });
+
+  it("ignores an old forward page after jump to present selects a new window", async () => {
+    await jumpIntoPast();
+    const oldPage = deferred<APIResponse<MessagePage>>();
+    getMessagesAfter.mockReturnValueOnce(oldPage.promise);
+    const paging = state().fetchNewerMessages("ch-1", "srv-1");
+    getMessages.mockResolvedValueOnce(ok([numberedMessage(8)]));
+    state().jumpToPresent("ch-1", "srv-1");
+    await vi.waitFor(() => expect(ids(rows())).toEqual(ids([numberedMessage(8)])));
+    oldPage.resolve(aroundPage([numberedMessage(2)], false, true));
+    await paging;
+    expect(ids(rows())).toEqual(ids([numberedMessage(8)]));
+    expect(state().hasMoreAfterByChannel["ch-1"]).toBe(false);
+  });
+
+  it("drops denied history and late pages while keeping a different channel", async () => {
+    await jumpIntoPast();
+    state().handleMessageCreate(numberedMessage(2));
+    state().handleMessageCreate(makeMessage("unrelated", "ch-2"));
+    const old = deferred<APIResponse<MessagePage>>();
+    getMessages.mockReturnValueOnce(old.promise);
+    const older = state().fetchOlderMessages("ch-1", "srv-1");
+    getMessagesAfter.mockResolvedValueOnce({success:false, status:403});
+    await state().fetchNewerMessages("ch-1", "srv-1");
+    old.resolve(ok([numberedMessage(1)]));
+    await older;
+    expect(rows()).toBeUndefined();
+    expect(ids(state().messagesByChannel["ch-2"])).toEqual(["unrelated"]);
+    getMessages.mockResolvedValueOnce(ok([numberedMessage(8)]));
+    await state().fetchMessages("ch-1", "srv-1");
+    expect(ids(rows())).toEqual(ids([numberedMessage(8)]));
+  });
+
+  it("an edit preserves explicit reactions even when the edit payload carries an empty list", async () => {
+    const [visible, held] = [4, 5].map(numberedMessage);
+    getMessagesAround.mockResolvedValueOnce(aroundPage([visible], true, true));
+    await state().fetchAroundMessage("srv-1", "ch-1", visible.id);
+    state().handleMessageCreate(held);
+    for (const row of [visible, held]) {
+      state().handleReactionUpdate({ channel_id:"ch-1", message_id:row.id, reactions:reaction });
+      state().handleMessageUpdate({ ...row, content:"edited", reactions:[] });
+    }
+    expect(rows()[0].reactions).toEqual(reaction);
+    getMessagesAfter.mockResolvedValueOnce(aroundPage([held], false, false));
+    await state().fetchNewerMessages("ch-1", "srv-1");
+    expect(rows().map((m) => m.reactions)).toEqual([reaction, reaction]);
+    state().handleReactionUpdate({ channel_id:"ch-1", message_id:held.id, reactions:[] });
+    expect(rows().at(-1)?.reactions).toEqual([]);
+  });
+
+  it("sorts live rows by database timestamp precision then opaque id across duplicate delivery", async () => {
+    const a = { ...numberedMessage(2), created_at:"2026-01-01T00:00:00.123400Z" };
+    const b = { ...numberedMessage(1), created_at:"2026-01-01T00:00:00.123400Z" };
+    const c = { ...numberedMessage(3), created_at:"2026-01-01T00:00:00.123600Z" };
+    getMessages.mockResolvedValueOnce(ok([c]));
+    await state().fetchMessages("ch-1", "srv-1");
+    for (const row of [b, a, b]) state().handleMessageCreate(row);
+    expect(ids(rows())).toEqual(ids([a,b,c]));
+  });
+
+  it("revocation retires an in-flight decrypt and an authoritative regrant permits fresh history", async () => {
+    const old = deferred<Message[]>();
+    const stale = numberedMessage(2);
+    getMessages.mockResolvedValueOnce(ok([stale]));
+    decryptMock.mockReturnValueOnce(old.promise);
+    const request = state().fetchMessages("ch-1", "srv-1");
+    await vi.waitFor(() => expect(decryptMock).toHaveBeenCalledOnce());
+    state().evictChannelHistory("ch-1");
+    state().handleMessageCreate(stale);
+    expect(rows()).toBeUndefined();
+    getMessages.mockResolvedValueOnce(ok([numberedMessage(9)]));
+    await state().fetchMessages("ch-1", "srv-1");
+    old.resolve([stale]);
+    await request;
+    expect(ids(rows())).toEqual(ids([numberedMessage(9)]));
+    expect(markAsRead).toHaveBeenLastCalledWith("ch-1", numberedMessage(9).id);
+  });
+
+  it.each(["tail fetch", "detached window"] as const)("keeps the newest edited_at when an older edit is replayed during a %s", async (mode) => {
+    const row = numberedMessage(4);
+    const response = deferred<APIResponse<MessagePage>>();
+    let pending: Promise<void>;
+    if (mode === "detached window") {
+      await jumpIntoPast();
+      state().handleMessageCreate(row);
+      getMessagesAfter.mockReturnValueOnce(response.promise);
+      pending = state().fetchNewerMessages("ch-1", "srv-1");
+    } else {
+      getMessages.mockReturnValueOnce(response.promise);
+      pending = state().fetchMessages("ch-1", "srv-1");
+    }
+    state().handleMessageUpdate({ ...row, content: "latest", edited_at: "2026-01-02T00:00:00.123002Z" });
+    state().handleMessageUpdate({ ...row, content: "replayed", edited_at: "2026-01-02T00:00:00.123001Z" });
+    response.resolve(ok(mode === "tail fetch" ? [row] : []));
+    await pending;
+
+    expect(rows().find((message) => message.id === row.id)).toMatchObject({
+      content: "latest", edited_at: "2026-01-02T00:00:00.123002Z",
+    });
+  });
+
+  it("keeps the newer REST edit and source reactions when an older edit is replayed", async () => {
+    const row = numberedMessage(4);
+    const response = deferred<APIResponse<MessagePage>>();
+    getMessages.mockReturnValueOnce(response.promise);
+    const pending = state().fetchMessages("ch-1", "srv-1");
+    state().handleMessageUpdate({ ...row, content: "older", edited_at: "2026-01-02T00:00:00.123001Z" });
+    response.resolve(ok([{ ...row, content: "latest", edited_at: "2026-01-02T00:00:00.123002Z", reactions: reaction }]));
+    await pending;
+    expect(rows()[0]).toMatchObject({ content: "latest", reactions: reaction });
+  });
+
+  it("an out-of-window replay cannot move the before cursor across a history gap", async () => {
+    const [oldRow, start, end] = [1, 54, 103].map(numberedMessage);
+    const response = deferred<APIResponse<MessagePage>>();
+    getMessages.mockReturnValueOnce(response.promise);
+    const pending = state().fetchMessages("ch-1", "srv-1");
+    state().handleMessageCreate(oldRow);
+    response.resolve(ok([start, end], true));
+    await pending;
+    state().handleMessageCreate(oldRow);
+    expect(ids(rows())).toEqual(ids([start, end]));
+  });
+
+  it("preserves cached rows across a transient refresh failure", async () => {
+    await jumpIntoPast();
+    state().invalidateFetchedFlags();
+    getMessages.mockResolvedValueOnce({success:false, status:503});
+    await state().fetchMessages("ch-1", "srv-1");
+    expect(ids(rows())).toEqual(["old-1", "target", "old-3"]);
+  });
+});
+
+// HICHAT_BENCH_CHANNEL_HISTORY=1 enables the reproducible hot-path measurement.
+if (process.env.HICHAT_BENCH_CHANNEL_HISTORY === "1") {
+  it("measures detached create processing and checks the complete merged window", async () => {
+    for (const count of [1000, 5000, 10000]) {
+      const live = Array.from({length: count}, (_, i) => numberedMessage(i + 10));
+      const samples = [];
+      for (let run = 0; run <= 9; run++) {
+        resetStore();
+        markAsRead.mockClear();
+        await jumpIntoPast();
+        const earlier = rows();
+        const create = state().handleMessageCreate;
+        const start = performance.now();
+        for (const message of live) create(message);
+        const duration = performance.now() - start;
+        if (run > 0) samples.push(duration);
+        // Everything below is outside the timed create loop, including validation.
+        const edited = { ...live[count - 2], content: "edited while paging", edited_at: "2026-01-02T00:00:00Z" };
+        const deleted = live[count - 1];
+        state().handleReactionUpdate({ channel_id: "ch-1", message_id: edited.id, reactions: reaction });
+        state().handleMessageUpdate(edited);
+        state().handleMessageDelete({ channel_id: "ch-1", id: deleted.id });
+        getMessagesAfter.mockResolvedValueOnce(aroundPage(live.slice(-2), false, false));
+        await state().fetchNewerMessages("ch-1", "srv-1");
+
+        const expected = [...earlier, ...live.slice(0, -2), { ...edited, reactions: reaction }];
+        expect(ids(rows())).toEqual(ids(expected));
+        expect(rows().map((row) => row.content)).toEqual(expected.map((row) => row.content));
+        expect(rows().at(-1)?.reactions).toEqual(reaction);
+        expect(markAsRead).not.toHaveBeenCalled();
+
+        const response = deferred<APIResponse<MessagePage>>();
+        state().invalidateFetchedFlags();
+        getMessages.mockReturnValueOnce(response.promise);
+        const reconnect = state().fetchMessages("ch-1", "srv-1");
+        const latest = numberedMessage(count + 10);
+        state().handleMessageCreate(latest);
+        response.resolve(ok(expected.slice(-50), true));
+        await reconnect;
+        expect(ids(rows())).toEqual([...ids(expected), latest.id]);
+        expect(rows().at(-1)?.content).toBe(latest.content);
+        expect(markAsRead).toHaveBeenCalledExactlyOnceWith("ch-1", latest.id);
+      }
+      samples.sort((a, b) => a - b);
+      console.info(`Detached creates ${count}: median ${samples[4].toFixed(2)} ms (${samples[0].toFixed(2)}–${samples[8].toFixed(2)})`);
+    }
+  }, 60000);
+}

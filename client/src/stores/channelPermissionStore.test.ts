@@ -99,3 +99,14 @@ describe("channel permission override freshness", () => {
     expect(useChannelPermissionStore.getState().getOverrideStatus("channel-1", "server-2")).toBe("unavailable");
   });
 });
+
+it("reads committed masks after saving without a WebSocket event", async () => {
+  const row = { channel_id: "channel-1", role_id: "role-1", deny: 4096, allow: 0 };
+  vi.mocked(api.getOverrides).mockResolvedValueOnce({ success: true, data: [] })
+    .mockResolvedValueOnce({ success: true, data: [row] });
+  vi.mocked(api.setOverride).mockResolvedValue({ success: true, data: { message: "override updated" } });
+  const store = useChannelPermissionStore.getState();
+  await store.fetchOverrides("channel-1");
+  expect(await store.setOverride("channel-1", "role-1", 0, 4096)).toBe(true);
+  expect(store.getOverrides("channel-1")).toEqual([row]);
+});

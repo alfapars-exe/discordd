@@ -1,3 +1,4 @@
+import { grantHistoryAccess, revokeHistoryAccess } from "../../stores/shared/channelHistoryAccess";
 import { beforeEach, expect, it, vi } from "vitest";
 import type { WSMessage } from "../../types";
 const api=vi.hoisted(()=>vi.fn());
@@ -22,4 +23,26 @@ it("falls back to a snapshot and pages forward with the returned cursor",async()
  await resyncChannelDelivery("server","replay",apply,snapshot,()=>true);expect(snapshot).toHaveBeenCalledOnce();
  api.mockResolvedValueOnce({success:true,data:{events:[],cursor:110,has_more:true,reset:false}}).mockResolvedValueOnce({success:true,data:{events:[],cursor:111,has_more:false,reset:false}});
  await resyncChannelDelivery("server","replay",apply,snapshot,()=>true);expect(api.mock.calls[1][0]).toContain("after_sequence=10");expect(api.mock.calls[2][0]).toContain("after_sequence=110");
+});
+
+it("drops a queued message edit across a revoke and regrant", async () => {
+  const channel = "regrant";
+  const current = () => true;
+  let start!: () => void;
+  let finish!: () => void;
+  const started = new Promise<void>((resolve) => { start = resolve; });
+  const blocked = new Promise<void>((resolve) => { finish = resolve; });
+  const created = { op: "message_create", event_id: "a", channel_sequence: 1, d: { channel_id: channel, id: "row" } } as WSMessage;
+  const first = dispatchChannelDelivery(created, async () => { start(); await blocked; }, current);
+  await started;
+  const edit = { ...created, op: "message_update", event_id: "b", channel_sequence: 2 } as WSMessage;
+  const apply = vi.fn().mockResolvedValue(undefined);
+  const stale = dispatchChannelDelivery(edit, apply, current);
+  revokeHistoryAccess(channel);
+  grantHistoryAccess(channel);
+  finish();
+  await Promise.all([first, stale]);
+  expect(apply).not.toHaveBeenCalled();
+  await dispatchChannelDelivery({ ...edit, event_id: "c", channel_sequence: 3 }, apply, current);
+  expect(apply).toHaveBeenCalledOnce();
 });

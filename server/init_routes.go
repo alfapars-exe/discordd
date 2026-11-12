@@ -6,6 +6,7 @@ import (
 	"github.com/argeinfina/hichat/handlers"
 	"github.com/argeinfina/hichat/middleware"
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/services"
 )
@@ -25,7 +26,7 @@ type routeRegistrar interface {
 // routeDeps bundles everything the per-domain route registrars need: the mux,
 // the handler set, the constructed middlewares and the once-constructed bot
 // handler. The middleware-chain helpers (auth / authServer / authServerPerm /
-// authServerPermLoad / authAdmin / deviceEnum) are methods on *routeDeps so
+// authAdmin / deviceEnum) are methods on *routeDeps so
 // every domain group can call d.auth(…) etc. against the same middleware
 // instances without re-plumbing them.
 type routeDeps struct {
@@ -56,7 +57,7 @@ type routeDeps struct {
 // re-reading source — the two can't drift apart.
 type routeGate struct {
 	// kind is one of "auth", "authServer", "authServerPerm",
-	// "authServerPermLoad", "authAdmin", or "refresh". "refresh" means
+	// "authAdmin", or "refresh". "refresh" means
 	// deliberately unauthenticated (see the refresh method's doc comment
 	// below) — POST /api/auth/refresh hands out the auth token in the
 	// first place, so it can't require one.
@@ -100,17 +101,16 @@ func (d *routeDeps) authServer(handler http.HandlerFunc) http.Handler {
 	}
 }
 
+func (d *routeDeps) timedVoiceToken(handler http.HandlerFunc) http.Handler {
+	// GenerateToken requires the path server, live membership and channel
+	// permission in the same snapshot that supplies the room credentials.
+	return gatedHandler{Handler: pkg.TimeVoiceToken(d.authMw.Require(handler)), gate: routeGate{kind: "auth"}}
+}
+
 func (d *routeDeps) authServerPerm(perm models.Permission, handler http.HandlerFunc) http.Handler {
 	return gatedHandler{
 		Handler: d.authMw.Require(d.serverMw.Require(d.permMw.Require(perm, http.HandlerFunc(handler)))),
 		gate:    routeGate{kind: "authServerPerm", perm: perm},
-	}
-}
-
-func (d *routeDeps) authServerPermLoad(handler http.HandlerFunc) http.Handler {
-	return gatedHandler{
-		Handler: d.authMw.Require(d.serverMw.Require(d.permMw.Load(http.HandlerFunc(handler)))),
-		gate:    routeGate{kind: "authServerPermLoad"},
 	}
 }
 

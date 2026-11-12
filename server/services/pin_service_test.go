@@ -25,7 +25,7 @@ func newTestPinService(
 func manageResolver() *testutil.MockChannelPermResolver {
 	return &testutil.MockChannelPermResolver{
 		ResolveChannelPermissionsFn: func(_ context.Context, _, _ string) (models.Permission, error) {
-			return models.PermManageMessages, nil
+			return models.PermManageMessages | models.PermViewChannel | models.PermReadMessages, nil
 		},
 	}
 }
@@ -385,5 +385,16 @@ func TestPinAdminBypassesChannelOverride(t *testing.T) {
 	}
 	if !pinCalled {
 		t.Error("admin must be able to pin regardless of a channel override")
+	}
+}
+
+func TestHiddenMessageCannotBeReadByPinning(t *testing.T) {
+	p := manageResolver()
+	p.ResolveChannelPermissionsFn = func(context.Context, string, string) (models.Permission, error) {
+		return models.PermManageMessages, nil
+	}
+	svc := newTestPinService(&testutil.MockPinRepo{}, msgInChannel(), sameServerRepo(), &testutil.MockBroadcastAndOnline{}, p)
+	if result, err := svc.Pin(context.Background(), "srv1", "m1", "ch1", "u1"); result != nil || !errors.Is(err, pkg.ErrForbidden) {
+		t.Fatalf("hidden pin: %v %v", result, err)
 	}
 }

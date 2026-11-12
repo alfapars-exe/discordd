@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Channel, WSMessage } from "../../types";
 const state = vi.hoisted(() => ({
   destination: { type: "text", channelId: "visible" },
+  detached: false, newest: "m",
   ownerId: "me", authGeneration: 0,
   markAsRead: vi.fn(), incrementUnread: vi.fn(), sound: vi.fn(),
   e2eeReady: false, decrypt: vi.fn(),
@@ -21,7 +22,7 @@ vi.mock("../../api/authSessionEvents", () => ({
 }));
 vi.mock("../../stores/uiStore", () => ({ useUIStore: { getState: () => ({ destination: state.destination, panels: {}, activePanelId: "legacy", updateTabLabel: state.updateTabLabel }) } }));
 vi.mock("../../stores/authStore", () => ({ useAuthStore: { getState: () => ({ user: state.ownerId ? { id: state.ownerId } : null }) } }));
-vi.mock("../../stores/messageStore", () => ({ useMessageStore: { getState: () => ({ messagesByChannel: {}, handleMessageCreate: state.handleMessageCreate, handleMessageUpdate: state.handleMessageUpdate }) } }));
+vi.mock("../../stores/messageStore", () => ({ useMessageStore: { getState: () => ({ messagesByChannel: { visible: [{ id: state.newest }] }, hasMoreAfterByChannel: { visible: state.detached }, handleMessageCreate: state.handleMessageCreate, handleMessageUpdate: state.handleMessageUpdate }) } }));
 vi.mock("../../stores/readStateStore", () => ({ useReadStateStore: { getState: () => ({ registerChannel: vi.fn(), markAsRead: state.markAsRead, incrementUnread: state.incrementUnread }) } }));
 vi.mock("../../stores/serverStore", () => ({ useServerStore: { getState: () => ({ isServerMuted: () => false }) } }));
 vi.mock("../../stores/channelStore", () => ({ useChannelStore: { getState: () => ({ mutedChannelIds: new Set(), categories: [], fetchChannels: state.fetchChannels, handleChannelDelete: state.handleChannelDelete, handleChannelUpdate: state.handleChannelUpdate }) } }));
@@ -36,9 +37,17 @@ vi.mock("../../utils/sounds", () => ({ playNotificationSound: state.sound }));
 vi.mock("../../utils/notifications", () => ({ showNotification: vi.fn() }));
 import { handleChannelEvent } from "./channelEventHandlers";
 
-beforeEach(() => { vi.clearAllMocks(); state.destination = { type: "text", channelId: "visible" }; state.e2eeReady = false; state.ownerId = "me"; state.authGeneration = 0; });
+beforeEach(() => {
+  state.detached = false;
+  state.newest = "m"; vi.clearAllMocks(); state.destination = { type: "text", channelId: "visible" }; state.e2eeReady = false; state.ownerId = "me"; state.authGeneration = 0; });
 
 describe("channel deletion cleanup", () => {
+  it("refreshes the origin server when channel_create omits its payload", async () => {
+    await expect(handleChannelEvent({ op: "channel_create", server_id: "origin-server" } as WSMessage)).resolves.toBe(true);
+    expect(state.markVoiceChannelCreated).not.toHaveBeenCalled();
+    expect(state.fetchChannels).toHaveBeenCalledExactlyOnceWith("origin-server");
+  });
+
   it("clears the voice-channel tombstone on an explicit create event", async () => {
     await handleChannelEvent({ op: "channel_create", server_id: "origin-server", d: { id: "reused-channel" } } as WSMessage);
     expect(state.markVoiceChannelCreated).toHaveBeenCalledExactlyOnceWith("reused-channel");
@@ -49,7 +58,7 @@ describe("channel deletion cleanup", () => {
     await handleChannelEvent({ op: "channel_delete", server_id: "origin-server", d: { id: "deleted-voice" } } as WSMessage);
     expect(state.markVoiceChannelDeleted).toHaveBeenCalledExactlyOnceWith("deleted-voice");
     expect(state.handleDeletedChannel).toHaveBeenCalledExactlyOnceWith("deleted-voice");
-    expect(state.handleChannelDelete).toHaveBeenCalledExactlyOnceWith("deleted-voice");
+    expect(state.handleChannelDelete).toHaveBeenCalledExactlyOnceWith("deleted-voice", "origin-server");
     expect(state.fetchChannels).toHaveBeenCalledExactlyOnceWith("origin-server");
   });
 });
@@ -98,6 +107,17 @@ describe("single-view unread routing", () => {
     expect(state.markAsRead).toHaveBeenCalledWith("visible", "m");
     expect(state.incrementUnread).not.toHaveBeenCalled();
     expect(state.sound).not.toHaveBeenCalled();
+  });
+
+  it("does not move the read cursor for an older replay or an open historical window", async () => {
+    state.newest = "later";
+    const event = { op: "message_create", d: { id: "m", channel_id: "visible", user_id: "other", author: { id: "other" } } } as WSMessage;
+    await handleChannelEvent(event);
+    expect(state.markAsRead).not.toHaveBeenCalled();
+    state.detached = true;
+    await handleChannelEvent(event);
+    expect(state.markAsRead).not.toHaveBeenCalled();
+    expect(state.incrementUnread).toHaveBeenCalledOnce();
   });
 
   it("counts another conversation as unread", async () => {

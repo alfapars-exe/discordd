@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -2355,7 +2356,7 @@ func TestGenerateToken_TimedOutRejected(t *testing.T) {
 	// mockLiveKitGetter (wired by newTestVoiceService) always errors — if the
 	// timeout gate didn't fire before the LiveKit lookup, GenerateToken would
 	// return that unrelated lookup error instead of ErrForbidden.
-	resp, err := svc.GenerateToken(context.Background(), "u1", "alice", "Alice", "ch1")
+	resp, err := svc.GenerateToken(context.Background(), "u1", "alice", "Alice", "srv1", "ch1")
 	if !errors.Is(err, pkg.ErrForbidden) {
 		t.Fatalf("expected pkg.ErrForbidden, got %v", err)
 	}
@@ -2372,7 +2373,7 @@ func TestGenerateToken_TimeoutCheckerError_FailsClosed(t *testing.T) {
 		},
 	})
 
-	resp, err := svc.GenerateToken(context.Background(), "u1", "alice", "Alice", "ch1")
+	resp, err := svc.GenerateToken(context.Background(), "u1", "alice", "Alice", "srv1", "ch1")
 	if err == nil {
 		t.Fatal("expected error when the timeout checker itself fails (fail-closed), got nil")
 	}
@@ -2639,6 +2640,20 @@ func newTokenTestVoiceService(t *testing.T) VoiceService {
 	return svc
 }
 
+func TestGenerateTokenRequiresRequestedServerMembership(t *testing.T) {
+	s := newTokenTestVoiceService(t).(*voiceService)
+	for _, serverID := range []string{"", "other-server"} {
+		if token, err := s.GenerateToken(context.Background(), "victim", "victim", "Victim", serverID, "ch1"); token != nil || !errors.Is(err, pkg.ErrForbidden) {
+			t.Fatal("wrong server issued token")
+		}
+	}
+	s.afkTimeoutGetter = &testutil.MockServerRepo{IsMemberFn: func(context.Context, string, string) (bool, error) { return false, nil }}
+	s.forceMoveGrants["victim"] = forceMoveGrant{channelID: "ch1", expiresAt: time.Now().Add(time.Minute)}
+	if token, err := s.GenerateToken(context.Background(), "victim", "victim", "Victim", "srv1", "ch1"); token != nil || !errors.Is(err, pkg.ErrForbidden) {
+		t.Fatal("move grant bypassed revoked membership")
+	}
+}
+
 // decodeVideoGrant parses tokenString (as issued by GenerateToken) and
 // returns its verified video grant.
 func decodeVideoGrant(t *testing.T, tokenString, apiSecret string) *auth.VideoGrant {
@@ -2675,7 +2690,7 @@ func TestGenerateToken_ServerMuted_CanPublishFalse(t *testing.T) {
 	vs.states["u1"].IsServerMuted = true
 	vs.mu.Unlock()
 
-	resp, err := svc.GenerateToken(context.Background(), "u1", "alice", "Alice", "ch1")
+	resp, err := svc.GenerateToken(context.Background(), "u1", "alice", "Alice", "srv1", "ch1")
 	if err != nil {
 		t.Fatalf("GenerateToken: %v", err)
 	}
@@ -2692,7 +2707,7 @@ func TestGenerateToken_NotServerMuted_CanPublishTrue(t *testing.T) {
 		t.Fatalf("initial join failed: %v", err)
 	}
 
-	resp, err := svc.GenerateToken(context.Background(), "u1", "alice", "Alice", "ch1")
+	resp, err := svc.GenerateToken(context.Background(), "u1", "alice", "Alice", "srv1", "ch1")
 	if err != nil {
 		t.Fatalf("GenerateToken: %v", err)
 	}
@@ -2710,7 +2725,7 @@ func TestGenerateToken_NotServerMuted_CanPublishTrue(t *testing.T) {
 func TestGenerateToken_NoExistingState_CanPublishTrue(t *testing.T) {
 	svc := newTokenTestVoiceService(t)
 
-	resp, err := svc.GenerateToken(context.Background(), "u1", "alice", "Alice", "ch1")
+	resp, err := svc.GenerateToken(context.Background(), "u1", "alice", "Alice", "srv1", "ch1")
 	if err != nil {
 		t.Fatalf("GenerateToken: %v", err)
 	}
@@ -2737,7 +2752,7 @@ func TestGenerateToken_ServerDeafened_DoesNotAffectCanSubscribe(t *testing.T) {
 	vs.states["u1"].IsServerDeafened = true
 	vs.mu.Unlock()
 
-	resp, err := svc.GenerateToken(context.Background(), "u1", "alice", "Alice", "ch1")
+	resp, err := svc.GenerateToken(context.Background(), "u1", "alice", "Alice", "srv1", "ch1")
 	if err != nil {
 		t.Fatalf("GenerateToken: %v", err)
 	}
@@ -3327,4 +3342,108 @@ func TestEnforceModerationOnJoin_NotMuted_NoGrantReapply(t *testing.T) {
 	)
 	svc.EnforceModerationOnJoin(context.Background(), "srv1", "ch1", "u1")
 	expectNoEvictionDispatch(t, calls)
+}
+
+func TestMoveUserPermissionLookupAllowsLeaveAndRejectsStaleMove(t *testing.T) {
+	service, _ := newTestVoiceService()
+	s := service.(*voiceService)
+	entered, release := make(chan struct{}), make(chan struct{})
+	defer close(release)
+	s.permResolver = &testutil.MockChannelPermResolver{ResolveChannelPermissionsFn: func(_ context.Context, user, channel string) (models.Permission, error) {
+		if user == "moderator" && channel == "source" {
+			close(entered)
+			<-release
+		}
+		return models.PermAll, nil
+	}}
+	for _, user := range []string{"target", "peer"} {
+		if err := s.JoinChannel(user, user, user, "", "source", false, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	moved := make(chan error, 1)
+	go func() { moved <- s.MoveUser(context.Background(), "moderator", "target", "destination") }()
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("permission check did not start")
+	}
+	left := make(chan error, 1)
+	go func() {
+		if err := s.LeaveChannel("peer"); err != nil {
+			left <- err
+			return
+		}
+		if err := s.LeaveChannel("target"); err != nil {
+			left <- err
+			return
+		}
+		left <- s.JoinChannel("target", "target", "target", "", "source", false, false)
+	}()
+	select {
+	case err := <-left:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("permission check blocked unrelated leave")
+	}
+	release <- struct{}{}
+	if err := <-moved; !errors.Is(err, pkg.ErrBadRequest) {
+		t.Fatalf("expected stale session rejection, got %v", err)
+	}
+}
+
+func TestVoiceRejoinAfterConnectRevocation(t *testing.T) {
+	perms := models.PermConnectVoice
+	svc, _ := newAuthVoiceService(true, func(context.Context, string, string) (models.Permission, error) { return perms, nil })
+	if err := svc.JoinChannel("member", "user", "User", "", "ch1", false, false); err != nil {
+		t.Fatal(err)
+	}
+	perms = 0
+	if err := svc.JoinChannel("member", "user", "User", "", "ch1", false, false); !errors.Is(err, pkg.ErrForbidden) {
+		t.Fatalf("revoked rejoin: %v", err)
+	}
+	if svc.GetUserVoiceState("member") != nil {
+		t.Fatal("revoked session survived reconnect")
+	}
+}
+
+func TestScreenShareRequiresStreamPermission(t *testing.T) {
+	svc, _ := newAuthVoiceService(true, func(context.Context, string, string) (models.Permission, error) {
+		return models.PermConnectVoice | models.PermSpeak, nil
+	})
+	if err := svc.JoinChannel("u", "u", "U", "", "ch1", false, false); err != nil {
+		t.Fatal(err)
+	}
+	streaming := true
+	if err := svc.UpdateState("u", nil, nil, &streaming); !errors.Is(err, pkg.ErrForbidden) {
+		t.Fatalf("stream state: %v", err)
+	}
+	if _, err := svc.GenerateScreenShareToken(context.Background(), "u", "u", "U", "ch1"); !errors.Is(err, pkg.ErrForbidden) {
+		t.Fatalf("screen token: %v", err)
+	}
+	for _, perms := range []models.Permission{0, models.PermSpeak, models.PermStream, models.PermAll} {
+		sources := voicePublishSources(perms, false)
+		if slices.Contains(sources, livekit.TrackSource_SCREEN_SHARE) != perms.Has(models.PermStream) || slices.Contains(sources, livekit.TrackSource_MICROPHONE) != perms.Has(models.PermSpeak) {
+			t.Fatalf("unexpected sources for %d: %v", perms, sources)
+		}
+	}
+}
+
+func TestActiveVoiceAccessInvalidation(t *testing.T) {
+	svc, _ := newTestVoiceService()
+	s := svc.(*voiceService)
+	s.permResolver.(*testutil.MockChannelPermResolver).ResolveChannelPermissionsBulkFn = func(context.Context, string, []string) (map[string]models.Permission, error) {
+		return map[string]models.Permission{"allowed": models.PermConnectVoice}, nil
+	}
+	for _, id := range []string{"revoked", "allowed"} {
+		if err := svc.JoinChannel(id, id, id, "", "ch1", false, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.recheckVoiceAccess("", "ch1")
+	if svc.GetUserVoiceState("revoked") != nil || svc.GetUserVoiceState("allowed") == nil {
+		t.Fatal("incorrect voice sessions after revocation")
+	}
 }

@@ -5,6 +5,7 @@ import "time"
 // VoiceState is ephemeral — stored in-memory only, not in DB.
 // Resets on server restart (all WS connections drop anyway).
 type VoiceState struct {
+	ForceMoved       bool      `json:"-"` // Moderator placement authorizes state sync for this session only.
 	UserID           string    `json:"user_id"`
 	ChannelID        string    `json:"channel_id"`
 	ServerID         string    `json:"server_id"` // parent server — used to scope WS broadcasts
@@ -42,4 +43,12 @@ type VoiceTokenResponse struct {
 	E2EEKeyIndex   uint32 `json:"e2ee_key_index"`
 	E2EEKeyEpoch   uint64 `json:"e2ee_key_epoch"`
 	E2EEKeyContext string `json:"e2ee_key_context"`
+}
+
+// VoiceAdmission is a fresh database snapshot for one channel and user.
+type VoiceAdmission struct {
+	Channel     Channel
+	Member      bool
+	TimedOut    bool
+	Permissions Permission
 }

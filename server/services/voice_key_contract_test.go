@@ -8,7 +8,7 @@ import (
 func TestVoiceMediaKeyContractWrapAndRecreation(t *testing.T) {
 	svc := newTokenTestVoiceService(t).(*voiceService)
 	ctx := context.Background()
-	initial, err := svc.GenerateToken(ctx, "u1", "alice", "Alice", "ch1")
+	initial, err := svc.GenerateToken(ctx, "u1", "alice", "Alice", "srv1", "ch1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -20,7 +20,7 @@ func TestVoiceMediaKeyContractWrapAndRecreation(t *testing.T) {
 		svc.rotateRoomPassphraseForChannel("ch1")
 	}
 	svc.mu.Unlock()
-	rotated, err := svc.GenerateToken(ctx, "u2", "bob", "Bob", "ch1")
+	rotated, err := svc.GenerateToken(ctx, "u2", "bob", "Bob", "srv1", "ch1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,7 +30,7 @@ func TestVoiceMediaKeyContractWrapAndRecreation(t *testing.T) {
 	svc.mu.Lock()
 	svc.cleanupRoomPassphraseIfEmpty("ch1")
 	svc.mu.Unlock()
-	recreated, err := svc.GenerateToken(ctx, "u3", "carol", "Carol", "ch1")
+	recreated, err := svc.GenerateToken(ctx, "u3", "carol", "Carol", "srv1", "ch1")
 	if err != nil {
 		t.Fatal(err)
 	}

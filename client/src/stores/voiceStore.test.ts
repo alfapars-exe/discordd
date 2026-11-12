@@ -809,6 +809,38 @@ describe("voiceStore", () => {
   // distinct "you can't join while timed out" toast instead of the generic
   // connection-failure one, so the user knows why the join was refused.
 
+  it("cancels a pending join immediately during permission checks", async () => {
+    const tokens = vi.mocked(voiceApi.getVoiceToken);
+    tokens.mockClear();
+    const pending = useVoiceStore.getState().joinVoiceChannel("old");
+    expect(useVoiceStore.getState().pendingVoiceChannelId).toBe("old");
+    useVoiceStore.getState().leaveVoiceChannel();
+    expect(useVoiceStore.getState().pendingVoiceChannelId).toBeNull();
+    expect(await pending).toBeNull();
+    expect(tokens).not.toHaveBeenCalled();
+  });
+
+  it("ignores an in-flight join token after disconnect", async () => {
+    let finish!: (response: Awaited<ReturnType<typeof voiceApi.getVoiceToken>>) => void;
+    const tokens = vi.mocked(voiceApi.getVoiceToken);
+    tokens.mockClear().mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+    const pending = useVoiceStore.getState().joinVoiceChannel("old");
+    await vi.waitFor(() => expect(tokens).toHaveBeenCalledOnce());
+    useVoiceStore.getState().leaveVoiceChannel();
+    finish({ success: true, data: { channel_id: "old", token: "obsolete", url: "wss://example.test" } });
+    await expect(pending).resolves.toBeNull();
+    expect(useVoiceStore.getState().livekitToken).toBeNull();
+  });
+
+  it("only requests a token for the latest of two immediate joins", async () => {
+    const tokens = vi.mocked(voiceApi.getVoiceToken);
+    tokens.mockClear().mockResolvedValueOnce({ success: false, error: "denied" });
+    const first = useVoiceStore.getState().joinVoiceChannel("old");
+    const latest = useVoiceStore.getState().joinVoiceChannel("new");
+    await Promise.all([first, latest]);
+    expect(tokens.mock.calls.map(call => call[1])).toEqual(["new"]);
+  });
+
   describe("joinVoiceChannel — failure toasts", () => {
     beforeEach(() => {
       addToast.mockReset();

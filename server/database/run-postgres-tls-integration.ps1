@@ -1,6 +1,6 @@
 param(
     [string]$GoBinary = "C:\Program Files\Go\bin\go.exe",
-    [string[]]$Toolchains = @("go1.26.10", "go1.27.3")
+    [string[]]$Toolchains = @("go1.26.11", "go1.27.4")
 )
 
 $ErrorActionPreference = "Stop"

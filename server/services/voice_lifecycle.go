@@ -126,6 +126,7 @@ func (s *voiceService) sweepOrphanStates() {
 		// call below.
 		wasStreaming := state.IsStreaming
 		delete(s.states, userID)
+		delete(s.forceMoveGrants, userID)
 		delete(s.offlineSince, userID)
 
 		s.broadcastToServerLocked(serverID, ws.Event{
@@ -586,6 +587,14 @@ func (s *voiceService) attemptServerMuteUpdate(ctx context.Context, roomClient *
 	}
 
 	perm := buildServerMutePermission(participant.Permission, muted)
+	if !muted {
+		roles, err := s.currentVoicePermissions(ctx, userID, channelID)
+		if err != nil {
+			return err
+		}
+		perm.CanPublishSources = voicePublishSources(roles, false)
+		perm.CanPublish = len(perm.CanPublishSources) > 0
+	}
 
 	if _, err := roomClient.UpdateParticipant(ctx, &livekit.UpdateParticipantRequest{
 		Room:       roomName,
@@ -683,6 +692,10 @@ func (s *voiceService) EnforceModerationOnJoin(ctx context.Context, serverID, ch
 	}
 
 	moderated := false
+	if userID != models.MusicBotUserID+":"+channelID {
+		p, err := s.currentVoicePermissions(ctx, userID, channelID)
+		moderated = err != nil || s.checkConnectPermission(userID, channelID, p) != nil
+	}
 
 	if s.timeoutChecker != nil {
 		active, err := s.timeoutChecker.IsActive(ctx, serverID, userID)

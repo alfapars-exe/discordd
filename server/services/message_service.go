@@ -25,7 +25,7 @@ type MessageService interface {
 	Create(ctx context.Context, serverID, channelID, userID string, req *models.CreateMessageRequest) (*models.Message, error)
 	BroadcastCreate(message *models.Message)
 	Update(ctx context.Context, serverID, id, userID string, req *models.UpdateMessageRequest) (*models.Message, error)
-	Delete(ctx context.Context, serverID, id, userID string, userPermissions models.Permission) error
+	Delete(ctx context.Context, serverID, id, userID string) error
 	SetUploadDir(dir string)
 }
 
@@ -573,7 +573,7 @@ func (s *messageService) Update(ctx context.Context, serverID, id, userID string
 }
 
 // Delete deletes a message. Owner or MANAGE_MESSAGES permission required.
-func (s *messageService) Delete(ctx context.Context, serverID, id, userID string, userPermissions models.Permission) error {
+func (s *messageService) Delete(ctx context.Context, serverID, id, userID string) error {
 	message, err := s.messageRepo.GetByID(ctx, id)
 	if err != nil {
 		return err
@@ -583,8 +583,14 @@ func (s *messageService) Delete(ctx context.Context, serverID, id, userID string
 		return err
 	}
 
-	if message.UserID != userID && !userPermissions.Has(models.PermManageMessages) {
-		return fmt.Errorf("%w: you can only delete your own messages", pkg.ErrForbidden)
+	if message.UserID != userID {
+		p, err := s.permResolver.ResolveChannelPermissions(ctx, userID, message.ChannelID)
+		if err != nil {
+			return err
+		}
+		if !models.PermCanReadChannel(p) || !p.Has(models.PermManageMessages) {
+			return fmt.Errorf("%w: you can only delete your own messages", pkg.ErrForbidden)
+		}
 	}
 
 	// Snapshot what we need for the audit BEFORE the row is deleted; the

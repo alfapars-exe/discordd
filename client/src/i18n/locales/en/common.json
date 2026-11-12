@@ -458,7 +458,6 @@
   "groupUnavailable": "This group is no longer available",
   "memberCount_one": "{{count}} member",
   "memberCount_other": "{{count}} members",
-  "members": "Members",
   "unknownUser": "Unknown user",
   "encryptedMessageUnavailable": "Encrypted message unavailable on this device",
   "encryptedMessageVersionUnavailable": "This encrypted message version cannot be opened on this device. An older cached version is not shown as current.",
@@ -478,5 +477,6 @@
   },
   "overlayCompatibilityActive": "Read-only compatibility mode",
   "overlayGameActivityNotice": "{{name}} started sharing {{game}} activity",
-  "overlayNowPlayingNotice": "{{name}} started sharing activity for the same CS2 association"
+  "overlayNowPlayingNotice": "{{name}} started sharing activity for the same CS2 association",
+  "restoringSession": "Restoring your session…"
 }

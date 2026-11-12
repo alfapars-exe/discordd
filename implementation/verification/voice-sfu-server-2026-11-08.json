@@ -1,0 +1,474 @@
+{
+  "date": "2026-11-08",
+  "environment": "production, two Chromium contexts, same disposable accounts and network, continuous 440 Hz WAV, E2EE enabled",
+  "change": {
+    "livekitVersion": "1.11.0",
+    "rtc.use_ice_lite": true,
+    "rtc.interfaces.excludes": [
+      "docker0"
+    ],
+    "server": "Oracle Frankfurt VM.Standard.E2.1.Micro",
+    "restart": "No participants at restart; no image update"
+  },
+  "referenceFirstAudioMs": 2060,
+  "before": {
+    "count": 5,
+    "timings": {
+      "joinList": {
+        "medianMs": 1775,
+        "p95Ms": 2126
+      },
+      "joinAudio": {
+        "medianMs": 1511,
+        "p95Ms": 2600
+      },
+      "moveList": {
+        "medianMs": 899,
+        "p95Ms": 2525
+      },
+      "moveAudio": {
+        "medianMs": 2031,
+        "p95Ms": 2757
+      },
+      "leaveList": {
+        "medianMs": 498,
+        "p95Ms": 1173
+      }
+    },
+    "moveStages": {
+      "move": {
+        "medianMs": 2031,
+        "p95Ms": 2757
+      },
+      "token": {
+        "medianMs": 934,
+        "p95Ms": 1410
+      },
+      "rtc": {
+        "medianMs": 465,
+        "p95Ms": 517
+      },
+      "app": {
+        "medianMs": 43,
+        "p95Ms": 45
+      },
+      "offer": {
+        "medianMs": 5,
+        "p95Ms": 6
+      },
+      "socketMarker": {
+        "medianMs": 132,
+        "p95Ms": 149
+      },
+      "upgrade": {
+        "medianMs": 139,
+        "p95Ms": 160
+      },
+      "ice": {
+        "medianMs": 156,
+        "p95Ms": 170
+      },
+      "dtls": {
+        "medianMs": 72,
+        "p95Ms": 89
+      },
+      "beforeICE": {
+        "medianMs": 53,
+        "p95Ms": 79
+      },
+      "command": {
+        "medianMs": 227,
+        "p95Ms": 942
+      },
+      "postRTC": {
+        "medianMs": 366,
+        "p95Ms": 414
+      }
+    }
+  },
+  "after": {
+    "count": 10,
+    "timings": {
+      "joinList": {
+        "medianMs": 1668.5,
+        "p95Ms": 2397
+      },
+      "joinAudio": {
+        "medianMs": 1662.5,
+        "p95Ms": 2262
+      },
+      "moveList": {
+        "medianMs": 1174.0,
+        "p95Ms": 2008
+      },
+      "moveAudio": {
+        "medianMs": 1961.5,
+        "p95Ms": 2475
+      },
+      "leaveList": {
+        "medianMs": 456.5,
+        "p95Ms": 824
+      }
+    },
+    "moveStages": {
+      "move": {
+        "medianMs": 1961.5,
+        "p95Ms": 2475
+      },
+      "token": {
+        "medianMs": 684.5,
+        "p95Ms": 832
+      },
+      "rtc": {
+        "medianMs": 440.0,
+        "p95Ms": 825
+      },
+      "app": {
+        "medianMs": 39.5,
+        "p95Ms": 53
+      },
+      "offer": {
+        "medianMs": 5.0,
+        "p95Ms": 11
+      },
+      "socketMarker": {
+        "medianMs": 133.0,
+        "p95Ms": 196
+      },
+      "upgrade": {
+        "medianMs": 141.5,
+        "p95Ms": 298
+      },
+      "ice": {
+        "medianMs": 97.5,
+        "p95Ms": 169
+      },
+      "dtls": {
+        "medianMs": 106.5,
+        "p95Ms": 201
+      },
+      "beforeICE": {
+        "medianMs": 51.5,
+        "p95Ms": 131
+      },
+      "command": {
+        "medianMs": 399.5,
+        "p95Ms": 882
+      },
+      "postRTC": {
+        "medianMs": 343.0,
+        "p95Ms": 514
+      }
+    }
+  },
+  "websocketServerProbe": {
+    "direct": [
+      {
+        "status": "HTTP/1.1 101 Switching Protocols",
+        "connectMs": 1.72,
+        "upgradeMs": 2.9,
+        "totalMs": 4.62,
+        "serverTiming": null
+      },
+      {
+        "status": "HTTP/1.1 101 Switching Protocols",
+        "connectMs": 0.15,
+        "upgradeMs": 2.97,
+        "totalMs": 3.12,
+        "serverTiming": null
+      },
+      {
+        "status": "HTTP/1.1 101 Switching Protocols",
+        "connectMs": 0.28,
+        "upgradeMs": 2.64,
+        "totalMs": 2.92,
+        "serverTiming": null
+      },
+      {
+        "status": "HTTP/1.1 101 Switching Protocols",
+        "connectMs": 0.2,
+        "upgradeMs": 2.21,
+        "totalMs": 2.4,
+        "serverTiming": null
+      },
+      {
+        "status": "HTTP/1.1 101 Switching Protocols",
+        "connectMs": 0.15,
+        "upgradeMs": 70.37,
+        "totalMs": 70.52,
+        "serverTiming": null
+      },
+      {
+        "status": "HTTP/1.1 101 Switching Protocols",
+        "connectMs": 0.22,
+        "upgradeMs": 2.81,
+        "totalMs": 3.03,
+        "serverTiming": null
+      },
+      {
+        "status": "HTTP/1.1 101 Switching Protocols",
+        "connectMs": 0.16,
+        "upgradeMs": 2.97,
+        "totalMs": 3.12,
+        "serverTiming": null
+      },
+      {
+        "status": "HTTP/1.1 101 Switching Protocols",
+        "connectMs": 0.19,
+        "upgradeMs": 2.66,
+        "totalMs": 2.85,
+        "serverTiming": null
+      },
+      {
+        "status": "HTTP/1.1 101 Switching Protocols",
+        "connectMs": 0.18,
+        "upgradeMs": 2.5,
+        "totalMs": 2.68,
+        "serverTiming": null
+      },
+      {
+        "status": "HTTP/1.1 101 Switching Protocols",
+        "connectMs": 0.18,
+        "upgradeMs": 2.39,
+        "totalMs": 2.57,
+        "serverTiming": null
+      }
+    ],
+    "proxy": [
+      {
+        "status": "HTTP/1.1 101 Switching Protocols",
+        "connectMs": 11.92,
+        "upgradeMs": 72.99,
+        "totalMs": 84.9,
+        "serverTiming": null
+      },
+      {
+        "status": "HTTP/1.1 101 Switching Protocols",
+        "connectMs": 10.22,
+        "upgradeMs": 13.55,
+        "totalMs": 23.78,
+        "serverTiming": null
+      },
+      {
+        "status": "HTTP/1.1 101 Switching Protocols",
+        "connectMs": 9.05,
+        "upgradeMs": 3.09,
+        "totalMs": 12.14,
+        "serverTiming": null
+      },
+      {
+        "status": "HTTP/1.1 101 Switching Protocols",
+        "connectMs": 70.7,
+        "upgradeMs": 3.7,
+        "totalMs": 74.4,
+        "serverTiming": null
+      },
+      {
+        "status": "HTTP/1.1 101 Switching Protocols",
+        "connectMs": 10.15,
+        "upgradeMs": 4.13,
+        "totalMs": 14.28,
+        "serverTiming": null
+      },
+      {
+        "status": "HTTP/1.1 101 Switching Protocols",
+        "connectMs": 77.79,
+        "upgradeMs": 3.83,
+        "totalMs": 81.62,
+        "serverTiming": null
+      },
+      {
+        "status": "HTTP/1.1 101 Switching Protocols",
+        "connectMs": 9.65,
+        "upgradeMs": 3.41,
+        "totalMs": 13.06,
+        "serverTiming": null
+      },
+      {
+        "status": "HTTP/1.1 101 Switching Protocols",
+        "connectMs": 9.77,
+        "upgradeMs": 70.63,
+        "totalMs": 80.4,
+        "serverTiming": null
+      },
+      {
+        "status": "HTTP/1.1 101 Switching Protocols",
+        "connectMs": 9.41,
+        "upgradeMs": 3.57,
+        "totalMs": 12.98,
+        "serverTiming": null
+      },
+      {
+        "status": "HTTP/1.1 101 Switching Protocols",
+        "connectMs": 9.43,
+        "upgradeMs": 4.12,
+        "totalMs": 13.55,
+        "serverTiming": null
+      }
+    ]
+  },
+  "limitations": [
+    "Small samples; nearest-rank p95 is the maximum at these counts.",
+    "Continuous synthetic tone measures received decoded PCM, not physical speaker playback.",
+    "First five after rounds median1796ms; independent next five2105ms. Report combined1961.5ms, not fastest subset.",
+    "Token and command timing vary independently; full-path improvement cannot all be attributed to ICE configuration.",
+    "No additional restricted-network TCP/TURN or physical-device regression run in this session.",
+    "No local two-client rerun in this server-focused session."
+  ],
+  "rounds": {
+    "before": [
+      {
+        "start": 1794162149221,
+        "drop": 1794162157840,
+        "quit": 1794162159688,
+        "joinList": 1775,
+        "joinAudio": 2600,
+        "moveList": 1325,
+        "moveAudio": 1797,
+        "leaveList": 1173
+      },
+      {
+        "start": 1794162164404,
+        "drop": 1794162170039,
+        "quit": 1794162171820,
+        "joinList": 2126,
+        "joinAudio": 1864,
+        "moveList": 615,
+        "moveAudio": 1734,
+        "leaveList": 631
+      },
+      {
+        "start": 1794162175986,
+        "drop": 1794162181421,
+        "quit": 1794162184219,
+        "joinList": 1926,
+        "joinAudio": 1242,
+        "moveList": 2525,
+        "moveAudio": 2757,
+        "leaveList": 252
+      },
+      {
+        "start": 1794162188535,
+        "drop": 1794162194038,
+        "quit": 1794162196552,
+        "joinList": 1201,
+        "joinAudio": 1511,
+        "moveList": 709,
+        "moveAudio": 2461,
+        "leaveList": 498
+      },
+      {
+        "start": 1794162200568,
+        "drop": 1794162205787,
+        "quit": 1794162207870,
+        "joinList": 947,
+        "joinAudio": 1210,
+        "moveList": 899,
+        "moveAudio": 2031,
+        "leaveList": 321
+      }
+    ],
+    "after": [
+      {
+        "start": 1794162508640,
+        "drop": 1794162515425,
+        "quit": 1794162517207,
+        "joinList": 1915,
+        "joinAudio": 2262,
+        "moveList": 1163,
+        "moveAudio": 1732,
+        "leaveList": 269
+      },
+      {
+        "start": 1794162521540,
+        "drop": 1794162527423,
+        "quit": 1794162529473,
+        "joinList": 2397,
+        "joinAudio": 1123,
+        "moveList": 2008,
+        "moveAudio": 1796,
+        "leaveList": 541
+      },
+      {
+        "start": 1794162534572,
+        "drop": 1794162540207,
+        "quit": 1794162542456,
+        "joinList": 1472,
+        "joinAudio": 1637,
+        "moveList": 1185,
+        "moveAudio": 2212,
+        "leaveList": 824
+      },
+      {
+        "start": 1794162547821,
+        "drop": 1794162554571,
+        "quit": 1794162556671,
+        "joinList": 1800,
+        "joinAudio": 2243,
+        "moveList": 984,
+        "moveAudio": 2050,
+        "leaveList": 376
+      },
+      {
+        "start": 1794162561089,
+        "drop": 1794162566122,
+        "quit": 1794162567787,
+        "joinList": 1537,
+        "joinAudio": 2038,
+        "moveList": 627,
+        "moveAudio": 1628,
+        "leaveList": 451
+      },
+      {
+        "start": 1794162682883,
+        "drop": 1794162689652,
+        "quit": 1794162691801,
+        "joinList": 1470,
+        "joinAudio": 2253,
+        "moveList": 1231,
+        "moveAudio": 2105,
+        "leaveList": 462
+      },
+      {
+        "start": 1794162697316,
+        "drop": 1794162702618,
+        "quit": 1794162704502,
+        "joinList": 1086,
+        "joinAudio": 1289,
+        "moveList": 655,
+        "moveAudio": 1827,
+        "leaveList": 261
+      },
+      {
+        "start": 1794162708319,
+        "drop": 1794162714350,
+        "quit": 1794162716865,
+        "joinList": 2026,
+        "joinAudio": 1208,
+        "moveList": 1283,
+        "moveAudio": 2475,
+        "leaveList": 541
+      },
+      {
+        "start": 1794162720949,
+        "drop": 1794162727333,
+        "quit": 1794162729833,
+        "joinList": 1880,
+        "joinAudio": 1688,
+        "moveList": 1201,
+        "moveAudio": 2445,
+        "leaveList": 288
+      },
+      {
+        "start": 1794162734183,
+        "drop": 1794162738983,
+        "quit": 1794162740898,
+        "joinList": 1311,
+        "joinAudio": 1193,
+        "moveList": 1014,
+        "moveAudio": 1873,
+        "leaveList": 786
+      }
+    ]
+  }
+}

@@ -67,7 +67,7 @@ export function useVoice({
       // and broadcasts is_server_muted:false for the new channel's join —
       // silently lifting the mute. See the ghost-state guard below for the
       // one case a leave frame is still needed: the switch failing outright.
-      const wasSwitching = !!currentChannel;
+      const wasSwitching = !!currentChannel || !!useVoiceStore.getState().pendingVoiceChannelId;
       if (currentChannel) {
         // Preserve server-mute/deafen across the switch. This is now pure
         // belt-and-suspenders: the server's join broadcast (see
@@ -86,7 +86,10 @@ export function useVoice({
         });
       }
 
-      const tokenData = await joinVoiceChannel(channelId);
+      const request = joinVoiceChannel(channelId);
+      const generation = useVoiceStore.getState()._joinGeneration;
+      const tokenData = await request;
+      if (useVoiceStore.getState()._joinGeneration !== generation) return;
       if (!tokenData) {
         // Ghost-state guard: we already left the old channel locally above
         // (LiveKit disconnected, store cleared) but — since we deliberately

@@ -26,7 +26,7 @@ vi.mock("../../stores/memberStore", () => ({ useActiveMembers: () => state.membe
 vi.mock("../../hooks/useConfirm", () => ({ useConfirm: () => vi.fn() }));
 vi.mock("../../hooks/useContextMenu", () => ({ useContextMenu: () => ({ menuState: null, openMenu: state.openMenu, closeMenu: vi.fn() }) }));
 vi.mock("../shared/ContextMenu", () => ({ default: () => null }));
-vi.mock("../../utils/constants", () => ({ resolveAssetUrl: (value: string) => value }));
+vi.mock("../../utils/constants", () => ({ SERVER_URL: "https://api.test.local", resolveAssetUrl: (value: string) => value }));
 vi.mock("../../utils/uiShell", () => ({ get UI_SHELL_V2() { return state.uiShellV2; } }));
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }), initReactI18next: { type: "3rdParty", init: () => {} } }));
 

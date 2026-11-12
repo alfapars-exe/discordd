@@ -21,6 +21,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 vi.mock("../api/members", () => ({
   getMembers: vi.fn(async () => ({ success: true, data: [] })),
+  modifyMemberRoles: vi.fn(),
 }));
 
 import { invalidateMemberRosterFetch, useMemberStore } from "./memberStore";
@@ -68,7 +69,68 @@ describe("memberStore — role payload contract", () => {
   const custom: Role = { ...everyone, id: "custom", name: "custom", position: 2, permissions: 8, is_default: false };
   beforeEach(() => {
     resetStore();
+    vi.mocked(memberApi.modifyMemberRoles).mockReset();
     useMemberStore.setState({ membersByServer: { "srv-1": [makeMember({ roles: [everyone, custom], effective_permissions: 8 })] } });
+  });
+
+  function pendingSave() {
+    let finish!: (value: Awaited<ReturnType<typeof memberApi.modifyMemberRoles>>) => void;
+    vi.mocked(memberApi.modifyMemberRoles).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const pending = useMemberStore.getState().modifyMemberRoles("srv-1", "u-1", ["everyone"]);
+    return { pending, finish };
+  }
+
+  it("uses the successful PATCH when the desired roles already exist on the server and no event arrives", async () => {
+    const { pending, finish } = pendingSave();
+    useMemberStore.getState().handleMemberUpdate("srv-1", makeMember({ bio: "current bio" }));
+    useMemberStore.getState().handlePresenceUpdate("u-1", "offline");
+    finish({ success: true, data: makeMember({ roles: [everyone], bio: null, profile_fields_redacted: true }) });
+    await pending;
+    expect(memberApi.modifyMemberRoles).toHaveBeenCalledWith("srv-1", "u-1", ["everyone"]);
+    expect(useMemberStore.getState().getMembersForServer("srv-1")[0]).toMatchObject({
+      roles: [everyone], effective_permissions: 0, status: "offline", bio: "current bio", profile_fields_redacted: false,
+    });
+  });
+
+  it.each(["member_update", "role_update"])("keeps newer %s role data when a PATCH arrives late", async event => {
+    const { pending, finish } = pendingSave();
+    const revised = { ...custom, name: "updated", permissions: 16 };
+    if (event === "member_update") {
+      useMemberStore.getState().handleMemberUpdate("srv-1", makeMember({ roles: [everyone, revised], effective_permissions: 16 }));
+    } else {
+      useMemberStore.getState().handleRoleUpdate("srv-1", revised);
+    }
+    finish({ success: true, data: makeMember({ roles: [everyone] }) });
+    await pending;
+    expect(useMemberStore.getState().getMembersForServer("srv-1")[0]).toMatchObject({
+      roles: [everyone, revised], effective_permissions: 16,
+    });
+  });
+
+  it.each(["owner", "token generation"])("discards a PATCH response after the %s changes", async change => {
+    const initialMembers = useMemberStore.getState().membersByServer;
+    const { pending, finish } = pendingSave();
+    if (change === "owner") publishAuthOwnerChange("next-owner");
+    else setTokens("renewed-access", "renewed-refresh", "member-test-owner");
+    useMemberStore.setState({ membersByServer: initialMembers });
+    finish({ success: true, data: makeMember({ roles: [everyone] }) });
+    await pending;
+    expect(useMemberStore.getState().membersByServer).toBe(initialMembers);
+  });
+
+  it("supersedes a roster fetch that started before the acknowledged PATCH", async () => {
+    let finishRoster!: (value: Awaited<ReturnType<typeof memberApi.getMembers>>) => void;
+    const current = makeMember({ roles: [everyone] });
+    vi.mocked(memberApi.getMembers)
+      .mockImplementationOnce(() => new Promise(resolve => { finishRoster = resolve; }))
+      .mockResolvedValueOnce({ success: true, data: [current] });
+    const staleRoster = useMemberStore.getState().fetchMembers("srv-1");
+    const { pending, finish } = pendingSave();
+    finish({ success: true, data: current });
+    await pending;
+    finishRoster({ success: true, data: [makeMember({ roles: [everyone, custom], effective_permissions: 8 })] });
+    await staleRoster;
+    expect(useMemberStore.getState().getMembersForServer("srv-1")[0]).toMatchObject({ roles: [everyone], effective_permissions: 0 });
   });
 
   it("applies last custom-role revocation when the protected default role remains", () => {

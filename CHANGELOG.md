@@ -1,5 +1,26 @@
 # CHANGELOG — SECURE-CODING.md
 
+## 2.11.130 - 2026-11-10
+
+- Wait for channel permissions to load before editing and verify saved changes before enabling the next edit.
+
+## 2.11.129 - 2026-11-10
+
+- Enforce channel visibility in channel lists, realtime updates and startup previews.
+- Apply effective role permissions to voice, moderation and role assignment.
+
+## 2.11.128 - 2026-11-08
+
+- Correct Windows executable copyright encoding; supersedes the incomplete 2.11.127 desktop release.
+
+## 2.11.127 - 2026-11-08
+
+- Open the Windows main window without waiting for update checks or downloads.
+- Prepare the application module and translations while restoring the saved session.
+- Restore the HttpOnly session cookie before the user request, avoiding an expected 401.
+- Show account-scoped cached display names during session validation; never restore authority, messages or voice presence from disk. Expire after seven days and clear on logout/rejection.
+
+
 Bu dosya, İnfina Ar-Ge Evrensel Güvenli Yazılım Geliştirme Standardı'nın sürümleri arasındaki
 değişiklikleri kaydeder. Biçim [Keep a Changelog](https://keepachangelog.com/tr/1.1.0/) yaklaşımına,
 sürümleme [Semantic Versioning](https://semver.org/lang/tr/) mantığına dayanır:

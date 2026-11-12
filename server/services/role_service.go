@@ -29,11 +29,11 @@ type RoleService interface {
 }
 
 type roleService struct {
-	roleRepo        repository.RoleRepository
-	userRepo        repository.UserRepository
-	hub             ws.Broadcaster
-	auditLogger     AuditWriter
-	permInvalidator PermissionInvalidator
+	roleRepo         repository.RoleRepository
+	roleTransactions repository.ServerRoleTxRunner
+	hub              ws.Broadcaster
+	auditLogger      AuditWriter
+	permInvalidator  PermissionInvalidator
 }
 
 func (s *roleService) SetPermInvalidator(inv PermissionInvalidator) {
@@ -64,15 +64,15 @@ func (s *roleService) audit(entry models.AuditLog) {
 
 func NewRoleService(
 	roleRepo repository.RoleRepository,
-	userRepo repository.UserRepository,
+	roleTransactions repository.ServerRoleTxRunner,
 	hub ws.Broadcaster,
 	auditLogger AuditWriter,
 ) RoleService {
 	return &roleService{
-		roleRepo:    roleRepo,
-		userRepo:    userRepo,
-		hub:         hub,
-		auditLogger: auditLogger,
+		roleRepo:         roleRepo,
+		roleTransactions: roleTransactions,
+		hub:              hub,
+		auditLogger:      auditLogger,
 	}
 }
 
@@ -157,95 +157,70 @@ func (s *roleService) Update(ctx context.Context, serverID, actorID, roleID stri
 		return nil, fmt.Errorf("%w: %v", pkg.ErrBadRequest, err)
 	}
 
-	role, err := s.roleRepo.GetByID(ctx, roleID)
-	if err != nil {
-		return nil, err
-	}
-	if role.ServerID != serverID {
-		return nil, fmt.Errorf("%w: role not found", pkg.ErrNotFound)
-	}
-
-	// Owner role: only server owner can edit name/color; permissions are immutable
-	if role.IsOwner {
-		actorRoles, roleErr := s.roleRepo.GetByUserIDAndServer(ctx, actorID, serverID)
-		if roleErr != nil {
-			return nil, fmt.Errorf("failed to get actor roles: %w", roleErr)
+	var updated *models.Role
+	err := s.roleTransactions.WithServerRoles(ctx, serverID, func(repos *repository.ServerMembershipTxRepos) error {
+		actorRoles, actorPerms, err := roleManagerPermissions(ctx, repos, serverID, actorID)
+		if err != nil {
+			return err
 		}
-		if !models.HasOwnerRole(actorRoles) {
-			return nil, fmt.Errorf("%w: only the server owner can modify the Owner role", pkg.ErrForbidden)
+		role, err := repos.Role.GetByID(ctx, roleID)
+		if err != nil {
+			return err
 		}
-		if req.Permissions != nil {
-			return nil, fmt.Errorf("%w: Owner role permissions cannot be changed", pkg.ErrForbidden)
+		if role.ServerID != serverID {
+			return pkg.ErrNotFound
 		}
-		if req.Name != nil {
-			role.Name = *req.Name
-		}
-		if req.Color != nil {
-			role.Color = *req.Color
-		}
-		if err := s.roleRepo.Update(ctx, role); err != nil {
-			return nil, fmt.Errorf("failed to update role: %w", err)
-		}
-		s.hub.BroadcastToServer(serverID, ws.Event{
-			Op:   ws.OpRoleUpdate,
-			Data: role,
-		})
-		return role, nil
-	}
-
-	actorMaxPos, err := s.getActorMaxPosition(ctx, actorID, serverID)
-	if err != nil {
-		return nil, err
-	}
-
-	if role.Position >= actorMaxPos {
-		return nil, fmt.Errorf("%w: cannot modify a role with equal or higher position", pkg.ErrForbidden)
-	}
-
-	if req.Permissions != nil {
-		actorPerms, permErr := s.getActorEffectivePermissions(ctx, actorID, serverID)
-		if permErr != nil {
-			return nil, permErr
-		}
-		newPerms := models.Permission(*req.Permissions)
-		if !actorPerms.Has(models.PermAdmin) {
-			escalated := newPerms &^ actorPerms
-			if escalated != 0 {
-				return nil, fmt.Errorf("%w: cannot grant permissions you do not have", pkg.ErrForbidden)
+		patch := *req
+		if role.IsOwner {
+			if !models.HasOwnerRole(actorRoles) {
+				return fmt.Errorf("%w: only the server owner can modify the Owner role", pkg.ErrForbidden)
+			}
+			if patch.Permissions != nil {
+				return fmt.Errorf("%w: Owner role permissions cannot be changed", pkg.ErrForbidden)
+			}
+			// Only the owner's name and color are editable.
+			patch.Mentionable = nil
+		} else {
+			if role.Position >= models.HighestPosition(actorRoles) {
+				return fmt.Errorf("%w: cannot modify a role with equal or higher position", pkg.ErrForbidden)
+			}
+			if patch.Permissions != nil && !actorPerms.Has(models.PermAdmin) && *patch.Permissions&^actorPerms != 0 {
+				return fmt.Errorf("%w: cannot grant permissions you do not have", pkg.ErrForbidden)
 			}
 		}
+		updated, err = repos.Role.Patch(ctx, serverID, roleID, patch)
+		return err
+	})
+	if err != nil {
+		return nil, err
 	}
-
-	if req.Name != nil {
-		role.Name = *req.Name
-	}
-	if req.Color != nil {
-		role.Color = *req.Color
-	}
-	if req.Permissions != nil {
-		role.Permissions = *req.Permissions
-	}
-	if req.Mentionable != nil {
-		role.Mentionable = *req.Mentionable
-	}
-
-	if err := s.roleRepo.Update(ctx, role); err != nil {
-		return nil, fmt.Errorf("failed to update role: %w", err)
-	}
-
-	// Only invalidate when permission bits changed — name/color/mentionable
-	// edits don't affect any resolved permission and shouldn't blow the
-	// per-channel cache during routine cosmetic edits.
 	if req.Permissions != nil {
 		s.invalidatePerms()
 	}
+	s.hub.BroadcastToServer(serverID, ws.Event{Op: ws.OpRoleUpdate, Data: updated})
+	return updated, nil
+}
 
-	s.hub.BroadcastToServer(serverID, ws.Event{
-		Op:   ws.OpRoleUpdate,
-		Data: role,
-	})
-
-	return role, nil
+func roleManagerPermissions(ctx context.Context, repos *repository.ServerMembershipTxRepos, serverID, actorID string) ([]models.Role, models.Permission, error) {
+	member, err := repos.Server.IsMember(ctx, serverID, actorID)
+	if err != nil {
+		return nil, 0, err
+	}
+	if !member {
+		return nil, 0, pkg.ErrForbidden
+	}
+	roles, err := repos.Role.GetByUserIDAndServer(ctx, actorID, serverID)
+	if err != nil {
+		return nil, 0, err
+	}
+	var perms models.Permission
+	for _, role := range roles {
+		perms |= role.Permissions
+	}
+	if !perms.Has(models.PermManageRoles) {
+		return nil, 0, pkg.ErrForbidden
+	}
+	return roles, perms, nil
 }
 
 func (s *roleService) Delete(ctx context.Context, serverID, actorID, roleID string) error {

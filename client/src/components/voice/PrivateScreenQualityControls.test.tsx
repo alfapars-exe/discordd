@@ -9,7 +9,7 @@ import trSettings from "../../i18n/locales/tr/settings.json";
 import {useVoiceStore} from "../../stores/voiceStore";
 import PrivateScreenQualityControls from "./PrivateScreenQualityControls";
 const platform=vi.hoisted(()=>({desktop:false}));
-vi.mock("../../utils/constants",()=>({isElectron:()=>platform.desktop}));
+vi.mock("../../utils/constants",()=>({ SERVER_URL: "https://api.test.local",isElectron:()=>platform.desktop}));
 beforeEach(()=>{platform.desktop=false;useVoiceStore.setState({screenShareQuality:"720p",screenShareFps:30,screenShareMode:"motion",screenShareLowLatency:true});});
 afterEach(cleanup);
 async function mount(language:"en"|"tr",audio?:{enabled:boolean;disabled?:boolean;onChange:(value:boolean)=>void}){const i18n=createInstance();await i18n.init({lng:language,resources:{en:{voice:en,settings:enSettings},tr:{voice:tr,settings:trSettings}},defaultNS:"voice",interpolation:{escapeValue:false}});return render(<I18nextProvider i18n={i18n}><PrivateScreenQualityControls audio={audio}/></I18nextProvider>);}

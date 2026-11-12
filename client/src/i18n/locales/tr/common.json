@@ -456,7 +456,6 @@
   "createGroup": "Grup oluştur",
   "groupUnavailable": "Bu grup artık kullanılamıyor",
   "memberCount": "{{count}} üye",
-  "members": "Üyeler",
   "unknownUser": "Bilinmeyen kullanıcı",
   "encryptedMessageUnavailable": "Şifreli mesaj bu cihazda kullanılamıyor",
   "encryptedMessageVersionUnavailable": "Şifreli mesajın bu sürümü bu cihazda açılamıyor. Eski önbellek sürümü güncelmiş gibi gösterilmiyor.",
@@ -476,5 +475,6 @@
   },
   "overlayCompatibilityActive": "Salt okunur uyumluluk modu",
   "overlayGameActivityNotice": "{{name}}, {{game}} etkinliğini paylaşmaya başladı",
-  "overlayNowPlayingNotice": "{{name}}, aynı CS2 eşleştirmesi için etkinlik paylaşmaya başladı"
+  "overlayNowPlayingNotice": "{{name}}, aynı CS2 eşleştirmesi için etkinlik paylaşmaya başladı",
+  "restoringSession": "Oturumunuz doğrulanıyor…"
 }

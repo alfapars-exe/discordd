@@ -1,6 +1,6 @@
 # Build from the repository root: docker build -f deploy/music-worker/Dockerfile .
 # This image contains the outbound worker without the desktop/web application.
-FROM golang:1.27.3-bookworm AS build
+FROM golang:1.27.4-bookworm AS build
 WORKDIR /src/server
 COPY server/go.mod server/go.sum ./
 RUN go mod download

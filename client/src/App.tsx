@@ -1,4 +1,4 @@
-import { useEffect, lazy, Suspense } from "react";
+import { useEffect, useState, lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "./stores/authStore";
@@ -8,6 +8,8 @@ import UpdateBanner from "./components/shared/UpdateBanner";
 import { isElectron, isNativeApp } from "./utils/constants";
 import { logToServer } from "./api/clientLog";
 import { ALL_NAMESPACES, ensureNamespaces } from "./i18n";
+import StartupPreview from "./components/shared/StartupPreview";
+import { readStartupCache } from "./utils/startupCache";
 import { usePreferencesSync } from "./hooks/usePreferencesSync";
 
 // Lazy-load route components so each path bundles separately. The
@@ -25,7 +27,12 @@ const ForgotPasswordPage = lazy(async () => { await ensureNamespaces(["auth"]); 
 const ResetPasswordPage = lazy(async () => { await ensureNamespaces(["auth"]); return import("./components/auth/ResetPasswordPage"); });
 const VerifyEmailPage = lazy(async () => { await ensureNamespaces(["auth"]); return import("./components/auth/VerifyEmailPage"); });
 const InviteJoinPage = lazy(async () => { await ensureNamespaces(["servers", "auth"]); return import("./components/servers/InviteJoinPage"); });
-const AppLayout = lazy(async () => { await ensureNamespaces(ALL_NAMESPACES); return import("./components/layout/AppLayout"); });
+let layoutRequest: Promise<typeof import("./components/layout/AppLayout")> | undefined;
+function loadAppLayout() {
+  return layoutRequest ??= Promise.all([ensureNamespaces(ALL_NAMESPACES), import("./components/layout/AppLayout")])
+    .then(([, module]) => module).catch(error => { layoutRequest = undefined; throw error; });
+}
+const AppLayout = lazy(loadAppLayout);
 
 /**
  * App — Root component. Handles routing and auth initialization.
@@ -34,6 +41,7 @@ const AppLayout = lazy(async () => { await ensureNamespaces(ALL_NAMESPACES); ret
  */
 function App() {
   const location = useLocation();
+  const [startupSnapshot] = useState(readStartupCache);
   usePreferencesSync();
   const { t } = useTranslation("common");
   const initialize = useAuthStore((s) => s.initialize);
@@ -45,8 +53,9 @@ function App() {
   const transparentBackground = useSettingsStore((s) => s.transparentBackground);
 
   useEffect(() => {
-    initialize();
-  }, [initialize]);
+    if (startupSnapshot || isNativeApp()) void loadAppLayout().catch(() => { /* lazy route offers the normal error boundary */ });
+    void initialize();
+  }, [initialize, startupSnapshot]);
 
   // Drain any persisted crash record from the previous Electron launch and
   // ship it to /api/client-log. Fires on every transition to authenticated
@@ -104,7 +113,8 @@ function App() {
   }, [transparentBackground]);
 
   if (!isInitialized && location.pathname !== "/verify-email") {
-    const spinner = (
+    const status = initPhase === "waking" ? t("serverWaking", { defaultValue: t("loading") }) : t("restoringSession");
+    const spinner = startupSnapshot ? <StartupPreview snapshot={startupSnapshot} status={status} /> : (
       <div className="app-loading">
         <div className="app-loading-inner">
           <div className="app-loading-spinner" />

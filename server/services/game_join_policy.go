@@ -144,7 +144,7 @@ func (p *gameJoinPolicy) Authorize(ctx context.Context, viewer string, c GameJoi
 			return deny()
 		}
 	}
-	permissions, e := resolveFreshVoiceFanoutPermissions(ctx, p.permissions, c.ChannelID, []string{viewer, c.TargetUserID})
+	permissions, e := resolveFreshFanoutPermissions(ctx, p.permissions, c.ChannelID, []string{viewer, c.TargetUserID})
 	if e != nil {
 		return nil, e
 	}

@@ -58,7 +58,20 @@ func TestThreadSQLiteHTTPArchiveAccessAndReopen(t *testing.T) {
 	channels := repository.NewSQLiteChannelRepo(q)
 	permissions := services.NewChannelPermissionService(repository.NewSQLiteChannelPermRepo(q), repository.NewSQLiteRoleRepo(q), channels, &testutil.MockBroadcaster{})
 	broadcasts := 0
-	hub := &testutil.MockBroadcaster{BroadcastToServerFn: func(string, ws.Event) { broadcasts++ }}
+	hub := &testutil.MockBroadcastAndOnline{
+		GetOnlineUserIDsForServerFn: func(string) []string { return []string{"starter", "moderator", "reader", "outsider"} },
+		MockBroadcaster: testutil.MockBroadcaster{BroadcastToServerFn: func(string, ws.Event) { t.Error("thread metadata sent to entire server") }, BroadcastToUsersFn: func(ids []string, e ws.Event) {
+			if e.ServerID != "s" || len(ids) != 3 {
+				t.Errorf("unexpected recipients for %s: %v", e.Op, ids)
+			}
+			for _, id := range ids {
+				if id == "outsider" {
+					t.Error("thread exposed to outsider")
+				}
+			}
+			broadcasts++
+		}},
+	}
 	handler := NewThreadHandler(services.NewThreadService(channels, repository.NewSQLiteMessageRepo(q), permissions, hub))
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /channels/{channelId}/threads", handler.Create)
@@ -99,6 +112,9 @@ func TestThreadSQLiteHTTPArchiveAccessAndReopen(t *testing.T) {
 		return envelope.Data
 	}
 	thread := request("POST", "/channels/parent/threads", "starter", `{"name":"topic","message_id":"message"}`, 201)
+	if broadcasts != 1 {
+		t.Fatalf("thread create broadcasts = %d", broadcasts)
+	}
 	path := "/threads/" + thread.ID
 	archive := func(user string, value bool, status int) {
 		t.Helper()

@@ -1,3 +1,4 @@
+import { captureHistoryAccess } from "../../stores/shared/channelHistoryAccess";
 import { apiClient, getAuthGeneration } from "../../api/client";
 import { getAuthSessionOwner, subscribeAuthOwnerChanges, subscribeAuthGenerationChanges } from "../../api/authSessionEvents";
 import type { WSMessage } from "../../types";
@@ -15,13 +16,16 @@ export async function dispatchChannelDelivery(msg: WSMessage, apply: () => Promi
   const d = msg.d as {channel_id?: string; id?: string};
   if (!d.channel_id) { await apply(); return; }
   const key = `${getAuthSessionOwner()}:${getAuthGeneration()}:${d.channel_id}`;
+  // The next event can wait behind a decrypt. Recheck the permission generation
+  // captured at receipt before applying an event after a revoke/regrant cycle.
+  const historyCurrent = msg.op === "notification_create" ? isCurrent : captureHistoryAccess(d.channel_id);
   const eventId = `${key}:${msg.event_id}`;
   const versionKey = `${key}:${msg.op === "notification_create" ? "notification:" : "message:"}${d.id}`;
   const previous = queues.get(key) ?? Promise.resolve();
   const next = previous.catch(() => {}).then(async () => {
-    if (!isCurrent() || seen.has(eventId) || (versions.get(versionKey) ?? 0) >= msg.channel_sequence!) return;
+    if (!isCurrent() || !historyCurrent() || seen.has(eventId) || (versions.get(versionKey) ?? 0) >= msg.channel_sequence!) return;
     await apply();
-    if (!isCurrent()) return;
+    if (!isCurrent() || !historyCurrent()) return;
     seen.add(eventId); versions.set(versionKey, msg.channel_sequence!);
     if (versions.size > 50_000) versions.delete(versions.keys().next().value!);
     // Event dedupe is bounded; per-message version fences survive old ID eviction.

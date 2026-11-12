@@ -5,6 +5,7 @@
 import { create } from "zustand";
 import { publishAuthOwnerChange } from "../api/authSessionEvents";
 import * as authApi from "../api/auth";
+import { rememberStartupUser, clearStartupCache } from "../utils/startupCache";
 import { setTokens, clearTokens } from "../api/client";
 import { logToServer } from "../api/clientLog";
 import { pingServer } from "../utils/serverProbe";
@@ -26,6 +27,7 @@ import type { APIResponse, AuthTokens, User, UserStatus } from "../types";
 const MANUAL_STATUS_KEY = "mqvi_manual_status";
 const USER_STATUSES: readonly UserStatus[] = ["online", "idle", "dnd", "offline"];
 let authSessionEpoch = 0;
+let initializationPromise: Promise<void> | null = null;
 
 function isUserStatus(value: unknown): value is UserStatus {
   return typeof value === "string" && USER_STATUSES.includes(value as UserStatus);
@@ -196,8 +198,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: async (options) => {
     const owner = get().user;
-    const epoch = authSessionEpoch;
+    const epoch = authSessionEpoch + 1;
     if (options?.expectedUserId && owner?.id !== options.expectedUserId) return;
+    authSessionEpoch = epoch;
+    clearStartupCache();
     // Invalidate queued writes before any awaited cleanup or token change.
     usePreferencesStore.getState().reset();
     useUIStore.getState().resetNavigation();
@@ -244,70 +248,74 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   /** Restore session from stored token on app start. */
-  initialize: async () => {
-    // Access token lives in module memory only (see api/client.ts). On cold
-    // reload the in-memory token starts null, getMe() returns 401, apiClient
-    // transparently calls /auth/refresh via the HttpOnly cookie and retries.
-    // If the refresh cookie is invalid or missing, the retry fails too and
-    // only THEN do we clear tokens and bounce to /login. Transient failures
-    // (HF cold start, network blip) wait the server out with exponential
-    // backoff instead — the refresh cookie is still valid, destroying the
-    // session over an infra hiccup was QA bug #1.
-    const applySession = (user: User) => {
-      authSessionEpoch++;
-      if (get().user?.id !== user.id) {
-        useUIStore.getState().resetNavigation();
-        useComposerDraftStore.getState().reset();
-      }
-      usePreferencesStore.getState().bindAccount(user.id);
-      syncLanguageFromUser(user);
-      set({ user, manualStatus: manualStatusForUser(user), isInitialized: true, initPhase: "idle" });
-      usePreferencesStore.getState().fetchAndApply();
-    };
-
-    const res = await authApi.getMe();
-    if (res.success && res.data) {
-      applySession(res.data);
-      return;
-    }
-
-    if (isTransientAuthError(res.error)) {
-      set({ initPhase: "waking" });
-      for (let attempt = 0; attempt < INIT_WAKE_MAX_ATTEMPTS; attempt++) {
-        const delay = Math.min(
-          INIT_WAKE_BASE_DELAY_MS * 2 ** attempt,
-          INIT_WAKE_MAX_DELAY_MS,
-        );
-        await new Promise((resolve) => setTimeout(resolve, delay));
-
-        // Cheap unauthenticated probe first — don't fire the auth+refresh
-        // machinery against a server that is still booting.
-        if (!(await pingServer())) continue;
-
-        const retry = await authApi.getMe();
-        if (retry.success && retry.data) {
-          applySession(retry.data);
-          return;
+  initialize: () => {
+    if (initializationPromise) return initializationPromise;
+    const epoch = authSessionEpoch;
+    const current = () => authSessionEpoch === epoch;
+    initializationPromise = (async () => {
+      // Restore the HttpOnly cookie before /users/me; avoid an expected 401.
+      // A cached name is only a preview. This response alone authenticates the UI.
+      const applySession = (user: User) => {
+        if (!current()) return;
+        authSessionEpoch++;
+        if (get().user?.id !== user.id) {
+          useUIStore.getState().resetNavigation();
+          useComposerDraftStore.getState().reset();
         }
-        if (!isTransientAuthError(retry.error)) {
-          // Server is back and definitively rejected us — real logout.
-          usePreferencesStore.getState().reset();
-          clearTokens();
-          set({ user: null, manualStatus: "online", isInitialized: true, initPhase: "idle" });
-          return;
-        }
-        // Server answered the probe but the API is still flaky — keep backing off.
-      }
-      // Budget exhausted (~2.5 min): give up WITHOUT clearing tokens so the
-      // next reload retries against a (hopefully) awake server.
-      logToServer("warn", "auth_init_wake_exhausted", {});
-      set({ isInitialized: true, initPhase: "failed" });
-      return;
-    }
+        usePreferencesStore.getState().bindAccount(user.id);
+        syncLanguageFromUser(user);
+        set({ user, manualStatus: manualStatusForUser(user), isInitialized: true, initPhase: "idle" });
+        usePreferencesStore.getState().fetchAndApply();
+      };
 
-    usePreferencesStore.getState().reset();
-    clearTokens();
-    set({ user: null, manualStatus: "online", isInitialized: true, initPhase: "idle" });
+      const res = await authApi.getMe();
+      if (!current()) return;
+      if (res.success && res.data) {
+        applySession(res.data);
+        return;
+      }
+
+      if (isTransientAuthError(res.error)) {
+        set({ initPhase: "waking" });
+        for (let attempt = 0; attempt < INIT_WAKE_MAX_ATTEMPTS; attempt++) {
+          const delay = Math.min(
+            INIT_WAKE_BASE_DELAY_MS * 2 ** attempt,
+            INIT_WAKE_MAX_DELAY_MS,
+          );
+          await new Promise((resolve) => setTimeout(resolve, delay));
+
+          // Cheap unauthenticated probe first — don't fire the auth+refresh
+          // machinery against a server that is still booting.
+          if (!(await pingServer())) continue;
+
+          if (!current()) return;
+          const retry = await authApi.getMe();
+          if (!current()) return;
+          if (retry.success && retry.data) {
+            applySession(retry.data);
+            return;
+          }
+          if (!isTransientAuthError(retry.error)) {
+            // Server is back and definitively rejected us — real logout.
+            usePreferencesStore.getState().reset();
+            clearTokens();
+            set({ user: null, manualStatus: "online", isInitialized: true, initPhase: "idle" });
+            return;
+          }
+          // Server answered the probe but the API is still flaky — keep backing off.
+        }
+        // Budget exhausted (~2.5 min): give up WITHOUT clearing tokens so the
+        // next reload retries against a (hopefully) awake server.
+        logToServer("warn", "auth_init_wake_exhausted", {});
+        set({ isInitialized: true, initPhase: "failed" });
+        return;
+      }
+
+      usePreferencesStore.getState().reset();
+      clearTokens();
+      set({ user: null, manualStatus: "online", isInitialized: true, initPhase: "idle" });
+    })().finally(() => { initializationPromise = null; });
+    return initializationPromise;
   },
 
   clearError: () => set({ error: null, mfaRequired: false, accountDisabled: false }),
@@ -333,4 +341,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 publishAuthOwnerChange(useAuthStore.getState().user?.id ?? null);
 useAuthStore.subscribe((next, previous) => {
   if (next.user?.id !== previous.user?.id) publishAuthOwnerChange(next.user?.id ?? null);
+});
+
+useAuthStore.subscribe((next, previous) => {
+  if (next.user && next.user !== previous.user) rememberStartupUser(next.user);
+  if (!next.user && previous.user) clearStartupCache();
 });

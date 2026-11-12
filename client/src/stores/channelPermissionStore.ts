@@ -76,7 +76,7 @@ type ChannelPermissionState = {
   statusByChannel: Record<string, ChannelOverrideLoad>;
 
   // ─── Actions ───
-  fetchOverrides: (channelID: string, serverId?: string) => Promise<void>;
+  fetchOverrides: (channelID: string, serverId?: string, force?: boolean) => Promise<void>;
   setOverride: (channelID: string, roleID: string, allow: number, deny: number, serverId?: string) => Promise<boolean>;
   deleteOverride: (channelID: string, roleID: string, serverId?: string) => Promise<boolean>;
   getOverrides: (channelID: string) => ChannelPermissionOverride[];
@@ -96,7 +96,7 @@ export const useChannelPermissionStore = create<ChannelPermissionState>(
     fetchedChannels: new Set(),
     statusByChannel: {},
 
-    fetchOverrides: async (channelID, explicitServerId?) => {
+    fetchOverrides: async (channelID, explicitServerId?, force = false) => {
       const serverId = explicitServerId ?? useServerStore.getState().activeServerId;
       const { ownerId, authGeneration } = identity();
       if (!serverId || !ownerId) {
@@ -111,9 +111,9 @@ export const useChannelPermissionStore = create<ChannelPermissionState>(
       }
 
       const currentStatus = get().statusByChannel[channelID];
-      if (sameScope(currentStatus, serverId, ownerId, authGeneration) && currentStatus.status === "ready") return;
+      if (!force && sameScope(currentStatus, serverId, ownerId, authGeneration) && currentStatus.status === "ready") return;
       const existing = inflight.get(channelID);
-      if (existing && existing.serverId === serverId && existing.ownerId === ownerId && existing.authGeneration === authGeneration) {
+      if (!force && existing && existing.serverId === serverId && existing.ownerId === ownerId && existing.authGeneration === authGeneration) {
         return existing.promise;
       }
 
@@ -171,6 +171,7 @@ export const useChannelPermissionStore = create<ChannelPermissionState>(
     setOverride: async (channelID, roleID, allow, deny, explicitServerId?) => {
       const serverId = explicitServerId ?? useServerStore.getState().activeServerId;
       if (!serverId) return false;
+      const session = identity();
       const res = await channelPermApi.setOverride(
         serverId,
         channelID,
@@ -178,8 +179,12 @@ export const useChannelPermissionStore = create<ChannelPermissionState>(
         allow,
         deny
       );
-      // State updated via WS broadcast (handleOverrideUpdate)
-      return !!res.data;
+      const current = identity();
+      if (current.ownerId !== session.ownerId || current.authGeneration !== session.authGeneration) return false;
+      // Even a timed-out write may have committed. Read back the complete
+      // masks before the editor permits the next change.
+      await get().fetchOverrides(channelID, serverId, true);
+      return res.success && get().getOverrideStatus(channelID, serverId) === "ready";
     },
 
     deleteOverride: async (channelID, roleID, explicitServerId?) => {

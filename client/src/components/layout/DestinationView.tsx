@@ -25,9 +25,10 @@ import VoiceRoom from "../voice/VoiceRoom";
 import AuditChannel from "../audit/AuditChannel";
 import SectionErrorBoundary from "../shared/SectionErrorBoundary";
 
-function VoiceDestination({ channel, serverId, onJoinVoice, sendTyping }: {
+function VoiceDestination({ channel, serverId, onJoinVoice, onDisconnect, sendTyping }: {
   channel: Channel;
   serverId?: string;
+  onDisconnect?: () => void;
   onJoinVoice?: (channelId: string) => void | Promise<void>;
   sendTyping: (channelId: string) => void;
 }) {
@@ -35,6 +36,7 @@ function VoiceDestination({ channel, serverId, onJoinVoice, sendTyping }: {
   const ownerId = useAuthStore((s) => s.user?.id ?? null);
   const [boundSession] = useState(() => ({ ownerId, authGeneration: getAuthGeneration() }));
   const currentChannel = useVoiceStore((s) => s.currentVoiceChannelId);
+  const joiningHere = useVoiceStore((s) => s.pendingVoiceChannelId === channel.id);
   const currentServer = useVoiceStore((s) => s.currentVoiceServerId);
   const { hasChannelPerm, permsResolved } = useChannelPermissions(channel.id, serverId);
   const overridesReady = useChannelPermissionStore((s) => s.fetchedChannels.has(channel.id));
@@ -90,9 +92,10 @@ function VoiceDestination({ channel, serverId, onJoinVoice, sendTyping }: {
       connectedHere ? <VoiceRoom /> : <div className="shell-empty">
         <h2>{channel.name}</h2><p>{t(denied ? "voiceChannelLocked" : "joinVoicePrompt")}</p>
         {joinFailed && <p role="alert">{t("voiceJoinFailed")}</p>}
-        <button className="btn-primary" disabled={joining || denied || !onJoinVoice} onClick={() => { void join(); }}>
-          {t(joining ? "connectingToVoice" : "joinVoice")}
+        <button className="btn-primary" disabled={joiningHere || joining || denied || !onJoinVoice} onClick={() => { void join(); }}>
+          {t(joiningHere || joining ? "connectingToVoice" : "joinVoice")}
         </button>
+        {joiningHere && onDisconnect && <button className="btn-secondary" onClick={onDisconnect}>{t("leaveVoice")}</button>}
       </div>}
   </div>;
 }
@@ -108,9 +111,10 @@ function CallDestination({ callId }: { callId: string }) {
 }
 
 /** A destination owns presentation only. Call/WS lifetimes belong to AppLayout. */
-export default function DestinationView({ sendTyping, sendDMTyping, onJoinVoice }: {
+export default function DestinationView({ sendTyping, sendDMTyping, onJoinVoice, onDisconnect }: {
   sendTyping: (id: string) => void;
   sendDMTyping: (id: string) => void;
+  onDisconnect?: () => void;
   onJoinVoice?: (id: string) => void | Promise<void>;
 }) {
   const { t } = useTranslation("common");
@@ -208,7 +212,7 @@ export default function DestinationView({ sendTyping, sendDMTyping, onJoinVoice 
       } else if (destination.type === "audit") {
         content = <AuditChannel channelId={channel.id} serverId={destination.serverInfo?.serverId} />;
       } else {
-        content = <VoiceDestination channel={channel} serverId={destination.serverInfo?.serverId} onJoinVoice={onJoinVoice} sendTyping={sendTyping} />;
+        content = <VoiceDestination channel={channel} serverId={destination.serverInfo?.serverId} onJoinVoice={onJoinVoice} onDisconnect={onDisconnect} sendTyping={sendTyping} />;
       }
       break;
     }

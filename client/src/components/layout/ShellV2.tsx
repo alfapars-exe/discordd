@@ -25,7 +25,7 @@ export default function ShellV2({ sidebarProps, sendTyping, sendDMTyping }: {
   return <div className="mqvi-app ui-shell-v2">
     <Sidebar {...sidebarProps} />
     <main className="shell-workspace">
-      <DestinationView sendTyping={sendTyping} sendDMTyping={sendDMTyping} onJoinVoice={sidebarProps.onJoinVoice} />
+      <DestinationView sendTyping={sendTyping} sendDMTyping={sendDMTyping} onJoinVoice={sidebarProps.onJoinVoice} onDisconnect={sidebarProps.onDisconnect} />
       {hasMembers && <>
         {tablet && membersOpen && <button className="shell-members-backdrop" aria-label={t("close")} onClick={() => useUIStore.getState().toggleMembers()} />}
         <MemberList />

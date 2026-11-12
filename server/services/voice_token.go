@@ -12,6 +12,7 @@ import (
 	"github.com/argeinfina/hichat/pkg/crypto"
 
 	"github.com/livekit/protocol/auth"
+	"github.com/livekit/protocol/livekit"
 )
 
 // voiceTokenTTL caps how long a single LiveKit JWT remains valid.
@@ -28,10 +29,39 @@ import (
 // fail-safe floor.
 const voiceTokenTTL = 15 * time.Minute
 
-func (s *voiceService) GenerateToken(ctx context.Context, userID, username, displayName, channelID string) (*models.VoiceTokenResponse, error) {
-	channel, err := s.channelGetter.GetByID(ctx, channelID)
+func (s *voiceService) GenerateToken(ctx context.Context, userID, username, displayName, serverID, channelID string) (*models.VoiceTokenResponse, error) {
+	var channel *models.Channel
+	var admission *models.VoiceAdmission
+	var lkInstance *models.LiveKitInstance
+	var used int64
+	var err error
+	now := time.Now()
+	if reader, ok := s.channelGetter.(interface {
+		VoiceTokenAccess(context.Context, string, string, time.Time) (*models.VoiceAdmission, *models.LiveKitInstance, int64, error)
+	}); ok {
+		admission, lkInstance, used, err = reader.VoiceTokenAccess(ctx, userID, channelID, now)
+		if err == nil {
+			channel = &admission.Channel
+		}
+		pkg.MarkVoiceTime(ctx, "token_lookup")
+	} else {
+		channel, admission, err = s.loadVoiceChannel(ctx, userID, channelID)
+		pkg.MarkVoiceTime(ctx, "admission")
+	}
 	if err != nil {
 		return nil, err
+	}
+	if channel.ServerID != serverID || serverID == "" {
+		return nil, fmt.Errorf("%w: channel outside requested server", pkg.ErrForbidden)
+	}
+	if admission == nil {
+		member, lookupErr := s.afkTimeoutGetter.IsMember(ctx, serverID, userID)
+		if lookupErr != nil {
+			return nil, lookupErr
+		}
+		if !member {
+			return nil, fmt.Errorf("%w: not a member of this server", pkg.ErrForbidden)
+		}
 	}
 	if channel.Type != models.ChannelTypeVoice {
 		return nil, fmt.Errorf("%w: not a voice channel", pkg.ErrBadRequest)
@@ -42,7 +72,11 @@ func (s *voiceService) GenerateToken(ctx context.Context, userID, username, disp
 	// SDK can't connect, so timed-out users physically can't talk even
 	// if their UI somehow leaks past the client-side gate. Nil checker
 	// is fine (tests + bootstrap paths that haven't wired it yet).
-	if s.timeoutChecker != nil && channel.ServerID != "" {
+	if admission != nil {
+		if err := validateVoiceAdmission(admission); err != nil {
+			return nil, err
+		}
+	} else if s.timeoutChecker != nil && channel.ServerID != "" {
 		active, tErr := s.timeoutChecker.IsActive(ctx, channel.ServerID, userID)
 		if tErr != nil {
 			return nil, fmt.Errorf("check timeout: %w", tErr)
@@ -54,9 +88,13 @@ func (s *voiceService) GenerateToken(ctx context.Context, userID, username, disp
 
 	// channel -> server -> livekit_instance lookup, migrating to a fresh
 	// instance first if this one is nearing its monthly quota.
-	lkInstance, err := s.ensureLiveKitInstance(ctx, userID, channel.ServerID)
-	if err != nil {
-		return nil, err
+	if lkInstance == nil {
+		lkInstance, err = s.ensureLiveKitInstance(ctx, userID, channel.ServerID)
+		if err != nil {
+			return nil, err
+		}
+	} else if lkInstance.IsPlatformManaged && lkInstance.AutoSwitchEnabled {
+		lkInstance = s.selectVoiceInstance(ctx, channel.ServerID, lkInstance, now, used)
 	}
 
 	apiKey, err := crypto.Decrypt(lkInstance.APIKey, s.encryptionKey)
@@ -75,7 +113,12 @@ func (s *voiceService) GenerateToken(ctx context.Context, userID, username, disp
 	}
 
 	// Resolve effective permissions (role base + channel overrides)
-	effectivePerms, err := s.permResolver.ResolveChannelPermissions(ctx, userID, channelID)
+	var effectivePerms models.Permission
+	if admission != nil {
+		effectivePerms = admission.Permissions
+	} else {
+		effectivePerms, err = s.permResolver.ResolveChannelPermissions(ctx, userID, channelID)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve channel permissions: %w", err)
 	}
@@ -125,7 +168,8 @@ func (s *voiceService) GenerateToken(ctx context.Context, userID, username, disp
 	// preference the user themselves controls, not something a moderator
 	// enforces — blocking subscription would silently break the user's own
 	// ability to un-deafen and hear again.
-	canPublish := effectivePerms.Has(models.PermSpeak) && !s.currentServerMute(userID, channel.ServerID)
+	sources := voicePublishSources(effectivePerms, s.currentServerMute(userID, channel.ServerID))
+	canPublish := len(sources) > 0
 	canSubscribe := true
 	canPublishData := true
 
@@ -142,6 +186,7 @@ func (s *voiceService) GenerateToken(ctx context.Context, userID, username, disp
 		CanPublishData: &canPublishData,
 	}
 
+	grant.SetCanPublishSources(sources)
 	participantName := username
 	if displayName != "" {
 		participantName = displayName
@@ -168,6 +213,7 @@ func (s *voiceService) GenerateToken(ctx context.Context, userID, username, disp
 		return nil, fmt.Errorf("failed to create E2EE passphrase: %w", err)
 	}
 
+	pkg.MarkVoiceTime(ctx, "issue")
 	return &models.VoiceTokenResponse{
 		Token:          token,
 		URL:            lkInstance.URL,
@@ -196,6 +242,7 @@ func (s *voiceService) GenerateToken(ctx context.Context, userID, username, disp
 // budget.
 func (s *voiceService) ensureLiveKitInstance(ctx context.Context, userID, serverID string) (*models.LiveKitInstance, error) {
 	lkInstance, err := s.livekitGetter.GetByServerID(ctx, serverID)
+	pkg.MarkVoiceTime(ctx, "instance")
 	if err != nil {
 		s.logError(models.LogCategoryVoice, &userID, "LiveKit instance lookup failed", map[string]string{
 			"server_id": serverID, "error": pkg.ErrText(err),
@@ -207,27 +254,34 @@ func (s *voiceService) ensureLiveKitInstance(ctx context.Context, userID, server
 		now := time.Now()
 		year, month, _ := now.Date()
 		used, usageErr := s.livekitGetter.GetMonthlyUsage(ctx, lkInstance.ID, year, int(month))
+		pkg.MarkVoiceTime(ctx, "quota")
 		if usageErr == nil {
-			thresholdSec := int64(lkInstance.SwitchThresholdMinutes) * 60
-			quotaSec := int64(lkInstance.MonthlyQuotaMinutes) * 60
-			if used+thresholdSec >= quotaSec {
-				next, nextErr := s.livekitGetter.GetNextAutoSwitchInstance(ctx, lkInstance.ID, year, int(month))
-				if nextErr == nil && next != nil {
-					if migErr := s.livekitGetter.MigrateOneServer(ctx, serverID, next.ID); migErr == nil {
-						voiceLogger.Info("auto-switch LiveKit instance",
-							"server_id", serverID, "from_instance", lkInstance.ID, "to_instance", next.ID,
-							"used_seconds", used, "quota_seconds", quotaSec, "threshold_seconds", thresholdSec)
-						lkInstance = next
-					} else {
-						voiceLogger.Error("auto-switch migrate failed", "server_id", serverID, "err", pkg.ErrText(migErr))
-					}
-				}
-				// nextErr or next==nil: no eligible target — stay put.
-			}
+			lkInstance = s.selectVoiceInstance(ctx, serverID, lkInstance, now, used)
 		}
 	}
 
 	return lkInstance, nil
+}
+
+func (s *voiceService) selectVoiceInstance(ctx context.Context, serverID string, lkInstance *models.LiveKitInstance, now time.Time, used int64) *models.LiveKitInstance {
+	year, month := now.Year(), now.Month()
+	thresholdSec := int64(lkInstance.SwitchThresholdMinutes) * 60
+	quotaSec := int64(lkInstance.MonthlyQuotaMinutes) * 60
+	if used+thresholdSec >= quotaSec {
+		next, nextErr := s.livekitGetter.GetNextAutoSwitchInstance(ctx, lkInstance.ID, year, int(month))
+		if nextErr == nil && next != nil {
+			if migErr := s.livekitGetter.MigrateOneServer(ctx, serverID, next.ID); migErr == nil {
+				voiceLogger.Info("auto-switch LiveKit instance",
+					"server_id", serverID, "from_instance", lkInstance.ID, "to_instance", next.ID,
+					"used_seconds", used, "quota_seconds", quotaSec, "threshold_seconds", thresholdSec)
+				lkInstance = next
+			} else {
+				voiceLogger.Error("auto-switch migrate failed", "server_id", serverID, "err", pkg.ErrText(migErr))
+			}
+		}
+		// nextErr or next==nil: no eligible target — stay put.
+	}
+	return lkInstance
 }
 
 // GenerateScreenShareToken generates a LiveKit token for the iOS native screen share connection.
@@ -266,6 +320,13 @@ func (s *voiceService) GenerateScreenShareToken(ctx context.Context, userID, use
 	if !inChannel {
 		return nil, fmt.Errorf("%w: must be in the voice channel to screen share", pkg.ErrBadRequest)
 	}
+	perms, err := s.currentVoicePermissions(ctx, userID, channelID)
+	if err != nil {
+		return nil, err
+	}
+	if !perms.Has(models.PermStream) {
+		return nil, fmt.Errorf("%w: stream permission required", pkg.ErrForbidden)
+	}
 
 	lkInstance, err := s.livekitGetter.GetByServerID(ctx, channel.ServerID)
 	if err != nil {
@@ -296,6 +357,7 @@ func (s *voiceService) GenerateScreenShareToken(ctx context.Context, userID, use
 		CanSubscribe:   &canSubscribe,
 		CanPublishData: &canPublishData,
 	}
+	grant.SetCanPublishSources([]livekit.TrackSource{livekit.TrackSource_SCREEN_SHARE, livekit.TrackSource_SCREEN_SHARE_AUDIO})
 
 	// Identity suffix "_ss" marks this as a screen share sub-participant
 	ssIdentity := userID + "_ss"
@@ -331,4 +393,54 @@ func (s *voiceService) GenerateScreenShareToken(ctx context.Context, userID, use
 		E2EEKeyEpoch:   uint64(epoch),
 		E2EEKeyContext: keyContext,
 	}, nil
+}
+
+func (s *voiceService) loadVoiceChannel(ctx context.Context, userID, channelID string) (*models.Channel, *models.VoiceAdmission, error) {
+	if repo, ok := s.channelGetter.(interface {
+		VoiceAdmission(context.Context, string, string) (*models.VoiceAdmission, error)
+	}); ok {
+		a, err := repo.VoiceAdmission(ctx, userID, channelID)
+		if err != nil {
+			return nil, nil, err
+		}
+		return &a.Channel, a, nil
+	}
+	ch, err := s.channelGetter.GetByID(ctx, channelID)
+	return ch, nil, err
+}
+
+func validateVoiceAdmission(a *models.VoiceAdmission) error {
+	if a.Channel.Type != models.ChannelTypeVoice {
+		return fmt.Errorf("%w: not a voice channel", pkg.ErrBadRequest)
+	}
+	if !a.Member {
+		return fmt.Errorf("%w: not a member of this server", pkg.ErrForbidden)
+	}
+	if a.TimedOut {
+		return fmt.Errorf("%w: you are timed out on this server", pkg.ErrForbidden)
+	}
+	return nil
+}
+
+func voicePublishSources(perms models.Permission, muted bool) []livekit.TrackSource {
+	if muted {
+		return nil
+	}
+	var sources []livekit.TrackSource
+	if perms.Has(models.PermSpeak) {
+		sources = append(sources, livekit.TrackSource_MICROPHONE, livekit.TrackSource_CAMERA)
+	}
+	if perms.Has(models.PermStream) {
+		sources = append(sources, livekit.TrackSource_SCREEN_SHARE, livekit.TrackSource_SCREEN_SHARE_AUDIO)
+	}
+	return sources
+}
+
+func (s *voiceService) currentVoicePermissions(ctx context.Context, userID, channelID string) (models.Permission, error) {
+	if fresh, ok := s.permResolver.(interface {
+		ResolveChannelPermissionsFresh(context.Context, string, string) (models.Permission, error)
+	}); ok {
+		return fresh.ResolveChannelPermissionsFresh(ctx, userID, channelID)
+	}
+	return s.permResolver.ResolveChannelPermissions(ctx, userID, channelID)
 }

@@ -24,7 +24,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { APP_HOST, APP_SCHEME, resolveAppPath } from "./resolve-path";
 import { isProxyableUrl, proxyApiRequest } from "./api-proxy";
-import { checkForUpdateBeforeLaunch, setupAutoUpdater } from "./auto-updater";
+import { setupAutoUpdater } from "./auto-updater";
 import { shutdownCapture } from "./audio-capture";
 import { setupCrashReporter } from "./crash-reporter";
 import { registerIpcHandlers } from "./ipc-handlers";
@@ -317,13 +317,9 @@ app.whenReady().then(async () => {
   setupCSP();
   installScreenPicker();
 
-  // Pre-launch splash → check for updates → maybe download + restart
-  const updating = await checkForUpdateBeforeLaunch();
-  if (updating) return; // quitAndInstall will fire — skip window creation
-
   registerIpcHandlers();
-  setupAutoUpdater();
   createMainWindow();
+  setupAutoUpdater();
   createTray();
 });
 

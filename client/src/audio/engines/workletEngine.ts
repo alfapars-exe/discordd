@@ -1,3 +1,4 @@
+import engineWorkletUrl from "../../../public/audio-engines/v1/engine-worklet.js?worker&url";
 import manifest from "../../../public/audio-engines/v1/manifest.json";
 import { resolvePublicAssetBase } from "../publicAssetBase";
 import { strengthToAttenLimDb } from "../deepfilterSuppression";
@@ -60,7 +61,7 @@ function register(context: AudioContext, base: string, deepfilter: boolean): Pro
   const cache = deepfilter ? deepfilterModuleCache : moduleCache;
   let pending = cache.get(context);
   if (!pending) {
-    pending = context.audioWorklet.addModule(new URL(deepfilter ? "deepfilter-bridge-worklet.js" : "engine-worklet.js", base).href)
+    pending = context.audioWorklet.addModule(deepfilter ? new URL("deepfilter-bridge-worklet.js", base).href : engineWorkletUrl)
       .catch(error => { cache.delete(context); throw error; });
     cache.set(context, pending);
   }

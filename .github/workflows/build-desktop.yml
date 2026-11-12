@@ -311,7 +311,7 @@ jobs:
           if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release create "$GITHUB_REF_NAME" --draft --verify-tag \
               --title "HiChat! ${GITHUB_REF_NAME}" \
-              --notes "HiChat 2.11.125: current dependency fixes and versioned Rust/Flutter migration sources. The experimental handoff UI stays disabled in stable builds; the Rust/Flutter client is distributed separately as a preview." \
+              --notes "See the [release changelog](https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_REF_NAME/CHANGELOG.md) for this version." \
               || gh release view "$GITHUB_REF_NAME" >/dev/null
           fi
           test "$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft)" = true \

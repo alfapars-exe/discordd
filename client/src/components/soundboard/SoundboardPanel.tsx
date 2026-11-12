@@ -41,6 +41,7 @@ function SoundboardPanel() {
 
   const currentMember = members.find((m) => m.id === userId);
   const perms = currentMember?.effective_permissions ?? 0;
+  const canPlay = !!currentVoiceChannelId && hasPermission(perms, Permissions.UseSoundboard);
   const canManage = !!serverId && !!currentVoiceChannelId && hasPermission(perms, Permissions.ManageSoundboard);
 
   const filtered = useMemo(() => {
@@ -55,7 +56,7 @@ function SoundboardPanel() {
   }, [fetchSounds, serverId, currentVoiceChannelId, joinGeneration]);
 
   const handlePlay = (soundId: string) => {
-    if (!currentVoiceChannelId) return;
+    if (!canPlay) return;
     void playSound(soundId);
   };
 
@@ -78,7 +79,7 @@ function SoundboardPanel() {
     }
   };
 
-  if (showUpload) {
+  if (showUpload && canManage) {
     return (
       <div className="sb-panel">
         <SoundUploadForm key={`${serverId}:${currentVoiceChannelId}:${joinGeneration}`} onClose={() => setShowUpload(false)} />
@@ -157,15 +158,16 @@ function SoundboardPanel() {
           {filtered.map((sound) => {
             const isPlaying = playingSound?.soundId === sound.id;
             return (
-              <button
-                key={sound.id}
-                className={`sb-sound-btn${isPlaying ? " playing" : ""}${!currentVoiceChannelId ? " disabled" : ""}`}
-                onClick={() => handlePlay(sound.id)}
-                disabled={!currentVoiceChannelId}
-                title={!currentVoiceChannelId ? t("mustBeInVoice") : sound.name}
-              >
-                <span className="sb-sound-emoji">{sound.emoji ?? "🔊"}</span>
-                <span className="sb-sound-name">{sound.name}</span>
+              <div className="sb-sound-tile" key={sound.id}>
+                <button
+                  className={`sb-sound-btn${isPlaying ? " playing" : ""}${!canPlay ? " disabled" : ""}`}
+                  onClick={() => handlePlay(sound.id)}
+                  disabled={!canPlay}
+                  title={!currentVoiceChannelId ? t("mustBeInVoice") : sound.name}
+                >
+                  <span className="sb-sound-emoji">{sound.emoji ?? "🔊"}</span>
+                  <span className="sb-sound-name">{sound.name}</span>
+                </button>
                 {canManage && (
                   <button
                     className="sb-sound-delete"
@@ -180,7 +182,7 @@ function SoundboardPanel() {
                     </svg>
                   </button>
                 )}
-              </button>
+              </div>
             );
           })}
         </div>

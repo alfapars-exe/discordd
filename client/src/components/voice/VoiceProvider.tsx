@@ -233,8 +233,9 @@ function VoiceProvider({ children }: VoiceProviderProps) {
       video={false}
       screen={false}
       options={isNativeVoice ? roomOptions : undefined}
-      // Subscriptions are managed explicitly in VoiceStateManager.
-      connectOptions={{ autoSubscribe: false }}
+      // Gather one candidate pool for the shared media transport while signaling.
+      // LiveKit still supplies ICE servers and enforces the SFU relay policy.
+      connectOptions={{ autoSubscribe: false, rtcConfig: { bundlePolicy: "max-bundle", iceCandidatePoolSize: 1 } }}
       onDisconnected={handleDisconnected}
       onError={handleError}
       // E2EE errors are owned by the participant-aware admission listener.

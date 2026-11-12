@@ -73,7 +73,7 @@ type BanChecker interface {
 // ─── VoiceService Interface ───
 
 type VoiceService interface {
-	GenerateToken(ctx context.Context, userID, username, displayName, channelID string) (*models.VoiceTokenResponse, error)
+	GenerateToken(ctx context.Context, userID, username, displayName, serverID, channelID string) (*models.VoiceTokenResponse, error)
 	GenerateScreenShareToken(ctx context.Context, userID, username, displayName, channelID string) (*models.VoiceTokenResponse, error)
 	JoinChannel(userID, username, displayName, avatarURL, channelID string, isMuted, isDeafened bool) error
 	LeaveChannel(userID string) error
@@ -87,7 +87,6 @@ type VoiceService interface {
 	MoveUser(ctx context.Context, moverUserID, targetUserID, targetChannelID string) error
 	AdminDisconnectUser(ctx context.Context, disconnecterUserID, targetUserID string) error
 	// GetUserVoiceChannelID returns the user's active voice channel ID (empty if not in voice).
-	// Satisfies UserVoiceChannelProvider for ChannelService sidebar visibility.
 	GetUserVoiceChannelID(userID string) string
 	WatchScreenShare(viewerUserID, streamerUserID string, watching bool)
 	GetScreenShareViewerCount(streamerUserID string) int
@@ -237,6 +236,9 @@ func NewVoiceService(
 		auditLogger:        auditLogger,
 	}
 	service.voiceFanout = newVoiceStateFanout(service)
+	if cache, ok := permResolver.(*cachingPermResolver); ok {
+		cache.afterInvalidation = service.recheckVoiceAccess
+	}
 	return service
 }
 

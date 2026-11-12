@@ -26,6 +26,8 @@ function PermissionToggle({
   return (
     <div className="permission-toggle">
       <button
+        aria-label={t(labelKey)}
+        aria-pressed={isChecked}
         onClick={() => !disabled && onChange(permBit, !isChecked)}
         className={`permission-toggle-checkbox${isChecked ? " checked" : ""}${disabled ? " disabled" : ""}`}
         disabled={disabled}

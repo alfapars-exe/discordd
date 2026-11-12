@@ -6,6 +6,7 @@ import i18n from "../../i18n";
 
 import { useChannelStore } from "../../stores/channelStore";
 import { useBlockStore } from "../../stores/blockStore";
+import { captureHistoryAccess } from "../../stores/shared/channelHistoryAccess";
 import { useMessageStore } from "../../stores/messageStore";
 import { useServerStore } from "../../stores/serverStore";
 import { useReadStateStore } from "../../stores/readStateStore";
@@ -53,7 +54,9 @@ export async function handleChannelEvent(msg: WSMessage, isCurrent: () => boolea
     case "channel_create":
       if (!isCurrent()) return true;
       rememberThreadEvent(msg, typeof msg.server_id === "string" ? msg.server_id : undefined, isCurrent);
-      useVoiceStore.getState().markVoiceChannelCreated(msg.d.id);
+      if (typeof msg.d?.id === "string" && msg.d.id.length > 0) {
+        useVoiceStore.getState().markVoiceChannelCreated(msg.d.id);
+      }
       useChannelStore.getState().fetchChannels(originServerId);
       return true;
     case "channel_update": {
@@ -67,6 +70,7 @@ export async function handleChannelEvent(msg: WSMessage, isCurrent: () => boolea
     }
     case "channel_delete":
       if (!isCurrent()) return true;
+      useChannelStore.getState().handleChannelDelete(msg.d.id, originServerId);
       if (typeof msg.server_id === "string" && msg.server_id.length > 0) {
         // A deleted parent invalidates every cached child thread, even when
         // the user is currently browsing a different destination.
@@ -75,7 +79,6 @@ export async function handleChannelEvent(msg: WSMessage, isCurrent: () => boolea
       }
       useVoiceStore.getState().markVoiceChannelDeleted(msg.d.id);
       useVoiceStore.getState().handleChannelDeleted(msg.d.id);
-      useChannelStore.getState().handleChannelDelete(msg.d.id);
       useChannelStore.getState().fetchChannels(originServerId);
       return true;
     case "channel_reorder":
@@ -102,9 +105,12 @@ export async function handleChannelEvent(msg: WSMessage, isCurrent: () => boolea
       let message = msg.d;
       const eventOwnerId = getAuthSessionOwner();
       const eventAuthGeneration = getAuthGeneration();
+      const canReadHistory = captureHistoryAccess(message.channel_id);
       const eventSessionCurrent = () =>
+        isCurrent() && canReadHistory() &&
         getAuthSessionOwner() === eventOwnerId
         && getAuthGeneration() === eventAuthGeneration;
+      if (!eventSessionCurrent()) return true;
 
       const e2eeReady = useE2EEStore.getState().initStatus === "ready";
       if (e2eeReady && message.encryption_version === 1 && message.ciphertext && message.sender_device_id) {
@@ -164,7 +170,12 @@ export async function handleChannelEvent(msg: WSMessage, isCurrent: () => boolea
         activeTab?.type === "text" && activeTab?.channelId === message.channel_id;
 
       if (isViewingThisChannel&&disposition==="allow") {
-        useReadStateStore.getState().markAsRead(message.channel_id, message.id);
+        const history = useMessageStore.getState();
+        if (history.hasMoreAfterByChannel[message.channel_id]) {
+          useReadStateStore.getState().incrementUnread(message.channel_id);
+        } else if (history.messagesByChannel[message.channel_id]?.at(-1)?.id === message.id) {
+          useReadStateStore.getState().markAsRead(message.channel_id, message.id);
+        }
         if (getNotificationPreferences().currentChannelSound) playNotificationSound();
       } else if(isViewingThisChannel){
         useReadStateStore.getState().incrementUnread(message.channel_id);
@@ -218,9 +229,12 @@ export async function handleChannelEvent(msg: WSMessage, isCurrent: () => boolea
       let updatedMsg = msg.d;
       const eventOwnerId = getAuthSessionOwner();
       const eventAuthGeneration = getAuthGeneration();
+      const canReadHistory = captureHistoryAccess(updatedMsg.channel_id);
       const eventSessionCurrent = () =>
+        isCurrent() && canReadHistory() &&
         getAuthSessionOwner() === eventOwnerId
         && getAuthGeneration() === eventAuthGeneration;
+      if (!eventSessionCurrent()) return true;
 
       const e2eeReadyForUpdate = useE2EEStore.getState().initStatus === "ready";
       if (e2eeReadyForUpdate && updatedMsg.encryption_version === 1 && updatedMsg.ciphertext && updatedMsg.sender_device_id) {

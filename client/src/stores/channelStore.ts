@@ -1,3 +1,4 @@
+import { rememberStartupChannels } from "../utils/startupCache";
 /**
  * Channel Store — Channel and category state management.
  */
@@ -7,6 +8,11 @@ import * as channelApi from "../api/channels";
 import { getAuthGeneration } from "../api/client";
 import { useAuthStore } from "./authStore";
 import { useServerStore } from "./serverStore";
+import { getAuthSessionSnapshot } from "../api/authSessionEvents";
+import { useThreadStore } from "./threadStore";
+import { useMessageStore } from "./messageStore";
+import { grantHistoryAccess, historyAccessDenied } from "./shared/channelHistoryAccess";
+import { Permissions, hasPermission } from "../utils/permissions";
 import { useUIStore } from "./uiStore";
 import { UI_SHELL_V2 } from "../utils/uiShell";
 import type {
@@ -49,7 +55,7 @@ type ChannelState = {
   // ─── WS Event Handlers ───
   handleChannelCreate: (channel: Channel) => void;
   handleChannelUpdate: (channel: Channel) => void;
-  handleChannelDelete: (channelId: string) => void;
+  handleChannelDelete: (channelId: string, serverId?: string) => void;
   handleCategoryCreate: (category: Category) => void;
   handleCategoryUpdate: (category: Category) => void;
   handleCategoryDelete: (categoryId: string) => void;
@@ -67,6 +73,41 @@ type ChannelState = {
 // refresh, even if both requests concern the same currently visible server.
 const channelFetchTokens = new Map<string, symbol>();
 
+function knownServerThreads(serverId: string): Channel[] {
+  const threads = useThreadStore.getState();
+  const session = getAuthSessionSnapshot();
+  if (!session.ownerId || threads.ownerId !== session.ownerId || threads.authGeneration !== session.generation) return [];
+  return Object.values(threads.byID).filter((thread) => threads.serverIdByThread[thread.id] === serverId);
+}
+
+function reconcileHistoryAccess(serverId: string, previous: CategoryWithChannels[] | undefined, channels: Channel[]): void {
+  const byId = new Map(channels.map((channel) => [channel.id, channel]));
+  const reconcile = (id: string, permissionChannel: Channel | undefined) => {
+    if (!permissionChannel) {
+      useMessageStore.getState().evictChannelHistory(id);
+      return;
+    }
+    const permissions = permissionChannel.effective_permissions;
+    if (permissionChannel.type !== "text" || typeof permissions !== "number") return;
+    if (hasPermission(permissions, Permissions.ViewChannel) && hasPermission(permissions, Permissions.ReadMessages)) {
+      grantHistoryAccess(id);
+    } else if (!historyAccessDenied(id)) {
+      useMessageStore.getState().evictChannelHistory(id);
+    }
+  };
+  for (const group of previous ?? []) {
+    for (const channel of group.channels) {
+      if (!byId.has(channel.id)) reconcile(channel.id, undefined);
+    }
+  }
+  for (const channel of channels) reconcile(channel.id, channel);
+  // The authoritative tree omits threads. Only known threads in this account
+  // and server inherit an identified parent's current history permission.
+  for (const thread of knownServerThreads(serverId)) {
+    if (thread.parent_channel_id) reconcile(thread.id, byId.get(thread.parent_channel_id));
+  }
+}
+
 export const useChannelStore = create<ChannelState>((set, get) => ({
   categories: [],
   categoriesByServer: {},
@@ -77,6 +118,8 @@ export const useChannelStore = create<ChannelState>((set, get) => ({
   fetchChannels: async (explicitServerId) => {
     const serverId = explicitServerId ?? useServerStore.getState().activeServerId;
     if (!serverId) return;
+    const owner = useAuthStore.getState().user?.id ?? null;
+    const generation = getAuthGeneration();
     const token = Symbol();
     channelFetchTokens.set(serverId, token);
 
@@ -87,8 +130,11 @@ export const useChannelStore = create<ChannelState>((set, get) => ({
     if (!cached && useServerStore.getState().activeServerId === serverId) set({ isLoading: true });
 
     const res = await channelApi.getChannels(serverId);
-    if (channelFetchTokens.get(serverId) !== token) return;
+    if (channelFetchTokens.get(serverId) !== token || (useAuthStore.getState().user?.id ?? null) !== owner || getAuthGeneration() !== generation) return;
     if (res.success && res.data) {
+      const allVisible = res.data.flatMap((group) => group.channels);
+      reconcileHistoryAccess(serverId, cached, allVisible);
+      rememberStartupChannels(owner, serverId, res.data);
       // Always update the cache — even if the user has already switched to
       // another server by the time the response arrives. Next time they come
       // back the freshest tree paints instantly.
@@ -99,7 +145,7 @@ export const useChannelStore = create<ChannelState>((set, get) => ({
         },
       }));
 
-      const allVisible = res.data.flatMap((cg) => cg.channels);
+
       if (UI_SHELL_V2) {
         const ui = useUIStore.getState();
         const remembered = ui.lastChannelByServer[serverId];
@@ -176,6 +222,10 @@ export const useChannelStore = create<ChannelState>((set, get) => ({
   evictServerCache: (serverId) => {
     // Invalidate responses already in flight when a server is left/deleted.
     channelFetchTokens.delete(serverId);
+    for (const child of knownServerThreads(serverId)) useMessageStore.getState().evictChannelHistory(child.id);
+    for (const group of get().categoriesByServer[serverId] ?? []) {
+      for (const channel of group.channels) useMessageStore.getState().evictChannelHistory(channel.id);
+    }
     set((state) => {
       if (!(serverId in state.categoriesByServer)) return state;
       const next = { ...state.categoriesByServer };
@@ -231,7 +281,13 @@ export const useChannelStore = create<ChannelState>((set, get) => ({
     }));
   },
 
-  handleChannelDelete: (channelId) => {
+  handleChannelDelete: (channelId, serverId) => {
+    useMessageStore.getState().evictChannelHistory(channelId);
+    if (serverId) {
+      for (const child of knownServerThreads(serverId)) {
+        if (child.parent_channel_id === channelId) useMessageStore.getState().evictChannelHistory(child.id);
+      }
+    }
     set((state) => {
       const categories = state.categories.map((cg) => ({
         ...cg,

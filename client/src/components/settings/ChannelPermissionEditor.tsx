@@ -23,6 +23,7 @@ const TEXT_PERM_DEFS = [
 
 /** Voice channel overridable permissions */
 const VOICE_PERM_DEFS = [
+  { bit: Permissions.ManageMessages, label: "permManageMessages", desc: "permManageMessagesDesc" },
   { bit: Permissions.SendMessages, label: "permSendMessages", desc: "permSendMessagesDesc" },
   { bit: Permissions.ReadMessages, label: "permReadMessages", desc: "permReadMessagesDesc" },
   { bit: Permissions.ConnectVoice, label: "permConnect", desc: "permConnectDesc" },
@@ -41,10 +42,13 @@ function ChannelPermissionEditor({ channel }: Props) {
   const { t } = useTranslation("settings");
   const roles = useActiveRoles();
   const fetchRoles = useRoleStore((s) => s.fetchRoles);
-  const { fetchOverrides, getOverrides, setOverride } = useChannelPermissionStore();
+  const { fetchOverrides, getOverrides, getOverrideStatus, setOverride } = useChannelPermissionStore();
   const addToast = useToastStore((s) => s.addToast);
 
   const [selectedRoleId, setSelectedRoleId] = useState<string>("");
+
+  const [saving, setSaving] = useState(false);
+  const status = getOverrideStatus(channel.id);
 
   useEffect(() => {
     fetchRoles();
@@ -79,7 +83,7 @@ function ChannelPermissionEditor({ channel }: Props) {
   );
 
   async function handleTriChange(bit: number, newState: TriState) {
-    if (!selectedRoleId) return;
+    if (!selectedRoleId || saving || status !== "ready") return;
 
     let allow = currentOverride?.allow ?? 0;
     let deny = currentOverride?.deny ?? 0;
@@ -91,11 +95,14 @@ function ChannelPermissionEditor({ channel }: Props) {
     if (newState === "allow") allow |= bit;
     if (newState === "deny") deny |= bit;
 
-    const success = await setOverride(channel.id, selectedRoleId, allow, deny);
-    if (success) {
-      addToast("success", t("channelPermSaved"));
-    } else {
+    setSaving(true);
+    try {
+      const success = await setOverride(channel.id, selectedRoleId, allow, deny);
+      addToast(success ? "success" : "error", t(success ? "channelPermSaved" : "channelPermSaveError"));
+    } catch {
       addToast("error", t("channelPermSaveError"));
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -132,6 +139,8 @@ function ChannelPermissionEditor({ channel }: Props) {
         <label className="settings-label">
           {channel.type === "voice" ? t("voicePermissions") : t("textPermissions")}
         </label>
+        {status === "loading" && <p role="status">{t("loading")}</p>}
+        {status === "error" && <button onClick={() => void fetchOverrides(channel.id)}>{t("channelPermRetry")}</button>}
         <div className="perm-tri-container">
           {permDefs.map((perm) => (
             <PermissionTriToggle
@@ -140,6 +149,7 @@ function ChannelPermissionEditor({ channel }: Props) {
               labelKey={perm.label}
               descKey={perm.desc}
               state={getTriState(perm.bit)}
+              disabled={!selectedRole || status !== "ready" || saving}
               onChange={handleTriChange}
             />
           ))}

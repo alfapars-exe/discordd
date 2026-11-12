@@ -108,7 +108,7 @@ func (s *stubMessageService) BroadcastCreate(message *models.Message) {
 func (s *stubMessageService) Update(_ context.Context, _, _, _ string, _ *models.UpdateMessageRequest) (*models.Message, error) {
 	return nil, nil
 }
-func (s *stubMessageService) Delete(_ context.Context, _, _, _ string, _ models.Permission) error {
+func (s *stubMessageService) Delete(_ context.Context, _, _, _ string) error {
 	return nil
 }
 func (s *stubMessageService) SetUploadDir(_ string) {}

@@ -252,7 +252,7 @@
     {
       "rule": "js.webstorage-sensitive-key",
       "path": "client/src/stores/authStore.ts",
-      "file_sha256": "6b196f27fd5138fa5094dca2227a3f5d64986c3ac1626c52c6141b8f78c53e8f",
+      "file_sha256": "ff35ed62eac6e97d81a8eabd5d420f740f519aa22cd374134f59d9b1abea81cb",
       "line_sha256": "ef4b375aa03bc2946ff120d1dfaeaf1ad16a23916ef4990be4e95214a72213d7",
       "reason": "This exact call persists only a validated UserStatus enum as a UI preference under a per-user key; no session, token, credential, or user object is stored.",
       "proof_ref": "client/src/stores/authStore.test.ts:132-138;client/src/stores/authStore.ts:31-50"
@@ -308,7 +308,7 @@
     {
       "rule": "go.sql-concat",
       "path": "server/repository/postgres_group_dm_edit_race_test.go",
-      "file_sha256": "fd82c9f6a84f1c4322e265d10ad6c0d276afbb5ecc2d0bdd62f43dfd8448cf38",
+      "file_sha256": "ab0a82b06de9c7e5bbcf1a70593b3f5219d232007a6b64a189def66607e1a6c1",
       "line_sha256": "fe1c4e231bfee0e3754cf19cea05ba9bae5e4b5cdc11a496e7c013bb649dedb2",
       "reason": "Fixed SQL arithmetic in the isolated PostgreSQL group-edit concurrency fixture. The group ID remains a bound parameter; no request-derived SQL fragment.",
       "proof_ref": "server/repository/postgres_group_dm_edit_race_test.go:62-94"
@@ -316,10 +316,10 @@
     {
       "rule": "go.sql-concat",
       "path": "server/database/migration_049_channel_delivery_test.go",
-      "file_sha256": "a97e26a67878f739ac83e3a726a4dfca81fd9dfcf87d8b894ee41ea8ee763aef",
+      "file_sha256": "a3bd7e99ce01526342c1227831d642f3737b38cc80a491c722ef4f8239b51374",
       "line_sha256": "6949d373514f31eda57eaa757a9cb796401bfebb5a5240ae2ec5c5ae9ffd3306",
       "reason": "The schema name consists only of a compile-time prefix and locally generated Unix nanoseconds; no external identifier is accepted.",
-      "proof_ref": "server/database/migration_049_channel_delivery_test.go:32"
+      "proof_ref": "server/database/migration_049_channel_delivery_test.go:36"
     },
     {
       "rule": "go.sql-concat",
@@ -356,18 +356,18 @@
     {
       "rule": "go.sql-concat",
       "path": "server/services/channel_delivery_test.go",
-      "file_sha256": "87ca8e4a861666a7d3392e7216c70298d3313172e442931b8c4847a17ceeebca",
+      "file_sha256": "070183bf69ad97c13fa1f3152e0b69c1afbcf84b33277c4f619967c74f4e1a3d",
       "line_sha256": "84d8756516bb6cfbe7e03f96c86374a4ef2a132cc82930355a342be08459a27d",
       "reason": "The schema name consists only of a compile-time prefix and locally generated Unix nanoseconds. Other matches are fixed SQL timestamp arithmetic without interpolation.",
-      "proof_ref": "server/services/channel_delivery_test.go:45"
+      "proof_ref": "server/services/channel_delivery_test.go:46"
     },
     {
       "rule": "go.sql-concat",
       "path": "server/services/channel_delivery_test.go",
-      "file_sha256": "87ca8e4a861666a7d3392e7216c70298d3313172e442931b8c4847a17ceeebca",
+      "file_sha256": "070183bf69ad97c13fa1f3152e0b69c1afbcf84b33277c4f619967c74f4e1a3d",
       "line_sha256": "55e1564aa635586019b987571e673133701e754b8ae5c9d29dc72d9c4d73e489",
       "reason": "The schema name consists only of a compile-time prefix and locally generated Unix nanoseconds. Other matches are fixed SQL timestamp arithmetic without interpolation.",
-      "proof_ref": "server/services/channel_delivery_test.go:233"
+      "proof_ref": "server/services/channel_delivery_test.go:241"
     },
     {
       "rule": "go.sql-concat",
@@ -392,6 +392,14 @@
       "line_sha256": "9ccf4cafd9283abf6c22aa4b12916b651f3d76c2ba1133a8123575a34e010100",
       "reason": "The exact fixture statement adds a fixed PostgreSQL interval inside one SQL literal to simulate an unexpired lease; message ID is a bound parameter, not concatenated SQL.",
       "proof_ref": "server/services/dm_delivery_test.go:114"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/repository/sqlite_role.go",
+      "file_sha256": "daed54f83b026e10395c1792d680082c861c8b3bda776b021c7490fae5633bcf",
+      "line_sha256": "ef4236201d83d38461fe8ebef9c181a3c3813f0526d007a9924729378239aafe",
+      "reason": "All four callers supply a literal row-lock query. The only suffix is the constant NOWAIT clause. Server, user and role IDs are bound arguments in both the immediate attempt and its retry.",
+      "proof_ref": "server/repository/sqlite_role.go:32-39,231,305-308,320;server/repository/server_membership_tx.go:63-70"
     }
   ]
 }

@@ -199,28 +199,33 @@ export async function handleVoiceEvent(
 
       voiceStore.leaveVoiceChannel();
       useVoiceStore.setState({
+        isMuted: prevMuted,
+        isDeafened: prevDeafened,
         isServerMuted: prevServerMuted,
         isServerDeafened: prevServerDeafened,
       });
-      voiceStore.joinVoiceChannel(forceMoveData.channel_id).then((tokenResp) => {
-        if (tokenResp) {
-          // Restore mute/deafen state that was cleared by leave+join cycle
-          useVoiceStore.setState({ isMuted: prevMuted, isDeafened: prevDeafened });
-          ctx.sendVoiceJoin(forceMoveData.channel_id);
-
-          const channelName = forceMoveData.channel_name
-            ?? useChannelStore.getState().categories
-              .flatMap((cg) => cg.channels)
-              .find((ch) => ch.id === forceMoveData.channel_id)?.name
-            ?? "";
-          const srvState = useServerStore.getState();
-          const activeSrv = srvState.activeServer
-            ?? srvState.servers.find((s) => s.id === srvState.activeServerId);
-          const serverInfo = activeSrv
-            ? { serverId: activeSrv.id, serverName: activeSrv.name, serverIconUrl: activeSrv.icon_url }
-            : undefined;
-          useUIStore.getState().openTab(forceMoveData.channel_id, "voice", channelName, serverInfo);
+      const request = voiceStore.joinVoiceChannel(forceMoveData.channel_id);
+      const generation = useVoiceStore.getState()._joinGeneration;
+      void request.then((tokenResp) => {
+        if (useVoiceStore.getState()._joinGeneration !== generation) return;
+        if (!tokenResp) {
+          useVoiceStore.getState()._wsSend?.("voice_leave", {});
+          return;
         }
+        ctx.sendVoiceJoin(forceMoveData.channel_id);
+
+        const channelName = forceMoveData.channel_name
+          ?? useChannelStore.getState().categories
+            .flatMap((cg) => cg.channels)
+            .find((ch) => ch.id === forceMoveData.channel_id)?.name
+          ?? "";
+        const srvState = useServerStore.getState();
+        const activeSrv = srvState.activeServer
+          ?? srvState.servers.find((s) => s.id === srvState.activeServerId);
+        const serverInfo = activeSrv
+          ? { serverId: activeSrv.id, serverName: activeSrv.name, serverIconUrl: activeSrv.icon_url }
+          : undefined;
+        useUIStore.getState().openTab(forceMoveData.channel_id, "voice", channelName, serverInfo);
       });
       return true;
     }

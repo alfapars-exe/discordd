@@ -12,8 +12,8 @@
  * the tests exercise App's own guard logic, not the page internals.
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { render, screen, act } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 // t() returns the key — assertions query by i18n key, independent of
@@ -84,6 +84,7 @@ vi.mock("./components/layout/AppLayout", () => ({
 }));
 
 import App from "./App";
+import { rememberStartupUser, rememberStartupServers, rememberStartupChannels } from "./utils/startupCache";
 import { useAuthStore } from "./stores/authStore";
 import * as authApi from "./api/auth";
 import type { User } from "./types";
@@ -91,6 +92,13 @@ import type { User } from "./types";
 const getMe = vi.mocked(authApi.getMe);
 const fakeUser = { id: "u1", username: "alice", language: "en" } as User;
 
+let finishRestore: ((value: Awaited<ReturnType<typeof authApi.getMe>>) => void) | null = null;
+function pendingRestore() { return new Promise<Awaited<ReturnType<typeof authApi.getMe>>>(resolve => { finishRestore = resolve; }); }
+afterEach(async () => {
+  if (finishRestore) {
+    await act(async () => { const pending = useAuthStore.getState().initialize(); finishRestore!({ success: false, error: "unauthorized" }); finishRestore = null; await pending; });
+  }
+});
 function renderApp() {
   return render(
     <MemoryRouter initialEntries={["/channels"]}>
@@ -101,6 +109,7 @@ function renderApp() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
   useAuthStore.setState({
     user: null,
     isLoading: false,
@@ -112,13 +121,13 @@ beforeEach(() => {
 
 describe("App — route guards", () => {
   it("allows public email confirmation while an unrelated session restore is pending", async () => {
-    getMe.mockReturnValue(new Promise<never>(() => {}));
+    getMe.mockReturnValue(pendingRestore());
     render(<MemoryRouter initialEntries={["/verify-email#token=fixture"]}><App /></MemoryRouter>);
     expect(await screen.findByText("verify-email-page")).toBeInTheDocument();
     expect(screen.queryByText("login-page")).not.toBeInTheDocument();
   });
   it("shows the boot spinner while getMe is pending, without a /login bounce", () => {
-    getMe.mockReturnValue(new Promise<never>(() => {})); // never resolves
+    getMe.mockReturnValue(pendingRestore()); // never resolves
     renderApp();
 
     expect(screen.getByText("loading")).toBeInTheDocument();
@@ -139,6 +148,19 @@ describe("App — route guards", () => {
 
     expect(await screen.findByText("login-page")).toBeInTheDocument();
     expect(screen.queryByText("app-layout")).not.toBeInTheDocument();
+  });
+
+  it("shows remembered names without authenticating or exposing actions while validation is pending", () => {
+    rememberStartupUser(fakeUser);
+    rememberStartupServers(fakeUser.id, [{ id: "team", name: "Cached Team", icon_url: null }]);
+    rememberStartupChannels(fakeUser.id, "team", [{ channels: [{ id: "hidden", name: "Revoked channel", type: "voice" }] }] as Parameters<typeof rememberStartupChannels>[2]);
+    getMe.mockReturnValue(pendingRestore());
+    renderApp();
+    expect(screen.getByTestId("startup-preview")).toHaveTextContent("Cached Team");
+    expect(screen.queryByText(/Revoked channel/)).not.toBeInTheDocument();
+    expect(screen.getByTestId("startup-preview").querySelectorAll("button,a,input")).toHaveLength(0);
+    expect(screen.queryByText("app-layout")).not.toBeInTheDocument();
+    expect(useAuthStore.getState().user).toBeNull();
   });
 
   // Kept last: initialize()'s wake-up backoff holds a real 2s timer past

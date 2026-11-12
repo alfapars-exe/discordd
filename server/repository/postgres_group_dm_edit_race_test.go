@@ -13,7 +13,7 @@ import (
 )
 
 // The blocker is observed in PostgreSQL rather than inferred from a sleep.
-func waitGroupEditBlocked(t *testing.T, ctx context.Context, query interface {
+func waitForPostgresBlocker(t *testing.T, ctx context.Context, query interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }, blocker int) {
 	t.Helper()
@@ -80,7 +80,7 @@ func TestGroupDMPostgresEditMembershipRace(t *testing.T) {
 			go func() {
 				done <- repo.UpdateMessage(ctx, group.ID, "edit-message", author, &models.UpdateGroupDMMessageRequest{Ciphertext: &edited, SenderDeviceID: &device, KeyEpoch: 1})
 			}()
-			waitGroupEditBlocked(t, ctx, db.Conn, pid)
+			waitForPostgresBlocker(t, ctx, db.Conn, pid)
 			if _, err := change.ExecContext(ctx, `DELETE FROM group_dm_members WHERE group_id=? AND user_id=?`, group.ID, "edit-member"); err != nil {
 				t.Fatal(err)
 			}
@@ -123,14 +123,14 @@ func TestGroupDMPostgresEditMembershipRace(t *testing.T) {
 				go func() {
 					done <- repo.UpdateMessage(ctx, group.ID, "edit-message", author, &models.UpdateGroupDMMessageRequest{Ciphertext: &edited, SenderDeviceID: &device, KeyEpoch: 2})
 				}()
-				waitGroupEditBlocked(t, ctx, db.Conn, rowPID)
+				waitForPostgresBlocker(t, ctx, db.Conn, rowPID)
 				var editPID int
 				if err := db.Conn.QueryRowContext(ctx, `SELECT pid FROM pg_stat_activity WHERE datname=current_database() AND ? = ANY(pg_blocking_pids(pid))`, rowPID).Scan(&editPID); err != nil {
 					t.Fatal(err)
 				}
 				membershipDone := make(chan error, 1)
 				go func() { _, err := repo.RemoveMember(ctx, group.ID, author); membershipDone <- err }()
-				waitGroupEditBlocked(t, ctx, db.Conn, editPID)
+				waitForPostgresBlocker(t, ctx, db.Conn, editPID)
 				if err := rowLock.Commit(); err != nil {
 					t.Fatal(err)
 				}

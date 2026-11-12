@@ -14,6 +14,7 @@ export class MicrophoneTrackProcessor implements TrackProcessor<Track.Kind.Audio
   private context: AudioContext;
   private unobserve?: () => void;
   private settings: MicrophoneSettings;
+  private source?: MediaStreamTrack;
   private localTrack: LocalAudioTrack;
   constructor(settings: MicrophoneSettings, localTrack: LocalAudioTrack) {
     this.settings = settings;
@@ -34,6 +35,7 @@ export class MicrophoneTrackProcessor implements TrackProcessor<Track.Kind.Audio
         // never wait for that lock; persist capture policy separately below.
         applyCapture: (constraints) => opts.track.applyConstraints(constraints),
       });
+      this.source = opts.track;
       this.pipeline = pipeline;
       this.processedTrack = pipeline.processedTrack;
       this.processedTrack.enabled = !this.localTrack.isMuted;
@@ -57,6 +59,12 @@ export class MicrophoneTrackProcessor implements TrackProcessor<Track.Kind.Audio
     if (this.pipeline && this.settings === settings) await this.localTrack.applyConstraints(captureConstraints(settings, this.pipeline.getStatus().activeEngine ?? "none"));
   }
   async restart(opts: AudioProcessorOptions) {
+    // LiveKit adopts the room's playback context during publish. Our capture
+    // graph owns a separate context and is already processing this source.
+    if (opts.audioContext && opts.track === this.source && opts.track.readyState === "live" &&
+        this.pipeline && this.processedTrack?.readyState === "live" && this.context.state === "running" &&
+        !this.abort.signal.aborted) return;
+
     this.unregister?.(); this.unregister = undefined;
     this.unobserve?.(); this.unobserve = undefined;
     await this.pipeline?.dispose();
@@ -75,6 +83,7 @@ export class MicrophoneTrackProcessor implements TrackProcessor<Track.Kind.Audio
   }
   cancel() { this.abort.abort(); }
   async destroy() {
+    this.source = undefined;
     this.abort.abort();
     this.unregister?.(); this.unregister = undefined;
     this.unobserve?.(); this.unobserve = undefined;
