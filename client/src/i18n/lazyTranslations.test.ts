@@ -38,4 +38,12 @@ describe("bundled lazy translations", () => {
     expect(i18n.language).toBe("tr");
     expect(localStorage.getItem("language")).toBe("tr");
   });
+  it("does not supersede a language change for an inherited object key", async () => {
+    await i18nReady;
+    const english = changeLanguage("en");
+    expect(await changeLanguage("constructor")).toBe(false);
+    expect(await english).toBe(true);
+    expect(i18n.language).toBe("en");
+    await changeLanguage("tr");
+  });
 });

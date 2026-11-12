@@ -66,7 +66,7 @@ export async function ensureNamespaces(namespaces: readonly Namespace[]): Promis
 
 /** Keep the previous language and persisted preference if loading fails. */
 export async function changeLanguage(lng: string): Promise<boolean> {
-  if (!(lng in SUPPORTED_LANGUAGES)) return false;
+  if (!Object.hasOwn(SUPPORTED_LANGUAGES, lng)) return false;
   const request = ++languageRequest;
   try {
     let requested: Namespace[];
