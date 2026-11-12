@@ -447,7 +447,7 @@ export const useGroupDMStore = create<GroupDMState>((set, get) => ({
         const resolved=next;mutateMessage(groupId,sent.id);
         const created=messageCreateVersions.get(groupId)??new Map<string,number>();created.set(sent.id,messageVersions.get(groupId)?.get(sent.id)??messageClock);messageCreateVersions.set(groupId,created);
         if(get().hasMoreAfterByGroup[groupId])detachedWsMessages.set(groupId,mergeUniqueGroupMessages(detachedWsMessages.get(groupId)??[],[resolved]));
-        else set(state=>{const current=state.messages[groupId]??[];return {messages:{...state.messages,[groupId]:mergeUniqueGroupMessages(current.filter(item=>item.id!==resolved.id),[resolved])}}});
+        else set(state=>{const current=state.messages[groupId]??[];return {messages:{...state.messages,[groupId]:mergeUniqueGroupMessages(current,[resolved])}}});
       }
       let outstandingPartial=Boolean(wrapped||res.status===207);
       if(outstandingPartial){
@@ -740,7 +740,7 @@ export const useGroupDMStore = create<GroupDMState>((set, get) => ({
     if(get().hasMoreAfterByGroup[message.group_id]&&!get().messages[message.group_id]?.some(item=>item.id===message.id)){
       detachedWsMessages.set(message.group_id,mergeUniqueGroupMessages(detachedWsMessages.get(message.group_id)??[],[decrypted]));return;
     }
-    set((state) => ({ messages: { ...state.messages, [message.group_id]: mergeUniqueGroupMessages((state.messages[message.group_id]??[]).filter(item=>item.id!==message.id),[decrypted]) } }));
+    set((state) => ({ messages: { ...state.messages, [message.group_id]: mergeUniqueGroupMessages(state.messages[message.group_id]??[],[decrypted]) } }));
   },
   handleMessageDelete:(groupId,messageId)=>{mutateMessage(groupId,messageId);detachedWsMessages.set(groupId,(detachedWsMessages.get(groupId)??[]).filter(message=>message.id!==messageId));set((s)=>({messages:{...s.messages,[groupId]:(s.messages[groupId]??[]).filter((m)=>m.id!==messageId)},scrollTarget:s.scrollTarget?.groupId===groupId&&s.scrollTarget.messageId===messageId?null:s.scrollTarget}))},
   handleReactionUpdate:(groupId,messageId,reactions)=>{const held=detachedWsMessages.get(groupId);if(held)detachedWsMessages.set(groupId,held.map(message=>message.id===messageId?{...message,reactions}:message));set((s)=>({messages:{...s.messages,[groupId]:(s.messages[groupId]??[]).map((m)=>m.id===messageId?{...m,reactions}:m)}}))},

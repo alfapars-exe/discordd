@@ -702,3 +702,14 @@ it("preserves an existing group source sequence when refreshed history omits it"
     [known.id, "1"], [second.id, "2"],
   ]);
 });
+
+it("retains group append order on a WebSocket edit without sequence metadata", async () => {
+  const edit = { ...groupMessage("zz-first", "2026-01-01T00:00:00Z"), content: "edited" };
+  const first = { ...edit, content: "original", source_sequence: "1" };
+  const second = { ...groupMessage("aa-second", edit.created_at), source_sequence: "2" };
+  useGroupDMStore.setState({ groups: [group("g1")], messages: { g1: [first, second] } });
+  await useGroupDMStore.getState().handleMessageUpdate(edit);
+  const rows = useGroupDMStore.getState().messages.g1;
+  expect(rows.map(row => row.id)).toEqual([first.id, second.id]);
+  expect(rows[0]).toMatchObject({ content: "edited", source_sequence: "1" });
+});
