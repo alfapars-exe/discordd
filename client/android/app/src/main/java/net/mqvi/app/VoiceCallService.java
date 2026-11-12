@@ -1,15 +1,19 @@
 package net.mqvi.app;
 
+import android.Manifest;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
 import android.os.Build;
 import android.os.IBinder;
+import android.util.Log;
 import androidx.core.app.NotificationCompat;
+import androidx.core.app.ServiceCompat;
 
 /**
  * Foreground service that keeps voice/video calls alive when the app is backgrounded.
@@ -33,13 +37,18 @@ public class VoiceCallService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         Notification notification = buildNotification();
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            // Android 14+ requires explicit foreground service type
-            startForeground(NOTIFICATION_ID, notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
-                    | ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
-        } else {
-            startForeground(NOTIFICATION_ID, notification);
+        int types = ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+                && checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            types |= ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE;
+        }
+        try {
+            ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, types);
+        } catch (SecurityException | IllegalStateException denied) {
+            // The app may have lost its permission or foreground eligibility since the plugin call.
+            Log.w("VoiceCallService", "Foreground promotion denied", denied);
+            stopSelf(startId);
+            return START_NOT_STICKY;
         }
 
         // If the system kills this service, restart it to keep the call alive
