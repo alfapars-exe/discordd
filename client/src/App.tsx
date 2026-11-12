@@ -53,7 +53,7 @@ function App() {
   const transparentBackground = useSettingsStore((s) => s.transparentBackground);
 
   useEffect(() => {
-    if (startupSnapshot || isNativeApp()) void loadAppLayout().catch(() => { /* lazy route offers the normal error boundary */ });
+    if (startupSnapshot) void loadAppLayout().catch(() => { /* lazy route offers the normal error boundary */ });
     void initialize();
   }, [initialize, startupSnapshot]);
 
