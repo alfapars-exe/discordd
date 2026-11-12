@@ -65,8 +65,28 @@
     ],
     "limits": [
       "NSIS installation was not exercised",
-      "Selected device IDs were not asserted in this packaged run",
       "No physical microphones or speakers were used"
-    ]
+    ],
+    "deviceSelectionRepeat": {
+      "method": "Selected enumerated synthetic input and output in Voice & Video in both packaged clients. Reopened the settings after the outage and checked each selection against its original value.",
+      "pauseSeconds": 24,
+      "matchingInputAndOutputOnBothClients": true,
+      "beforePacketDeltas": [
+        25,
+        23
+      ],
+      "afterPacketDeltas": [
+        26,
+        26
+      ],
+      "beforeToneMagnitudes": [
+        0.013305,
+        0.0133
+      ],
+      "afterToneMagnitudes": [
+        0.01329,
+        0.013286
+      ]
+    }
   }
 }
