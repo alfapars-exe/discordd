@@ -126,7 +126,7 @@ func (s *serverService) JoinServer(ctx context.Context, userID, inviteCode strin
 	// to a rare failure is far cheaper than losing an otherwise-successful
 	// join over it.
 	if err := s.inviteService.MarkUsed(ctx, inviteCode); err != nil {
-		serverLogger.Error("failed to mark invite used", "invite_code", inviteCode, "err", pkg.ErrText(err))
+		serverLogger.Error("failed to mark invite used", "server_id", serverID, "err", pkg.ErrText(err))
 	}
 
 	server, err := s.serverRepo.GetByID(ctx, serverID)

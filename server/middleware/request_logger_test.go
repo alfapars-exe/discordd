@@ -346,3 +346,21 @@ func TestRequestLoggerCorrelatesSerializationFailure(t *testing.T) {
 		t.Errorf("request ID %q, response ID %q, observed status %d", requestID, body.CorrelationID, sink.status)
 	}
 }
+
+func TestInviteRequestLogsExcludeCodes(t *testing.T) {
+	for _, path := range []string{"/api/invites/private-invite/preview", "/api/servers/server/invites/private-invite", "/invite/private-invite"} {
+		var logs bytes.Buffer
+		logger := slog.New(slog.NewJSONHandler(&logs, nil))
+		handler := RequestLogger(logger, nil)(Recover(logger)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+			_, loggedPath := pkg.RequestInfoFrom(r.Context())
+			if strings.Contains(loggedPath, "private-invite") {
+				t.Error("diagnostic context exposed invite")
+			}
+			panic("fixture failure")
+		})))
+		handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, path+"?q=private-query", nil))
+		if strings.Contains(logs.String(), "private-invite") || strings.Contains(logs.String(), "private-query") {
+			t.Error("access or panic log exposed request data")
+		}
+	}
+}
