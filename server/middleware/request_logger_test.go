@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"bytes"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -322,5 +323,26 @@ func TestRequestLogger_ClientLogTelemetryLogsAtDebug(t *testing.T) {
 				t.Fatalf("sink calls = %d, want 1 — the level must not affect telemetry", sink.calls)
 			}
 		})
+	}
+}
+
+func TestRequestLoggerCorrelatesSerializationFailure(t *testing.T) {
+	var requestID string
+	sink := &stubHTTPStatsSink{}
+	handler := RequestLogger(discardLogger(), sink)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestID = pkg.RequestIDFrom(r.Context())
+		pkg.JSON(w, http.StatusCreated, make(chan int))
+		if !pkg.RequestErrorReported(r.Context()) {
+			t.Error("encoding failure was not recorded on the request")
+		}
+	}))
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/encode", nil))
+	var body pkg.APIResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if requestID == "" || body.CorrelationID != requestID || sink.status != http.StatusInternalServerError {
+		t.Errorf("request ID %q, response ID %q, observed status %d", requestID, body.CorrelationID, sink.status)
 	}
 }
