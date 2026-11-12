@@ -348,7 +348,7 @@ func TestRequestLoggerCorrelatesSerializationFailure(t *testing.T) {
 }
 
 func TestInviteRequestLogsExcludeCodes(t *testing.T) {
-	for _, path := range []string{"/api/invites/private-invite/preview", "/api/servers/server/invites/private-invite", "/invite/private-invite"} {
+	for _, path := range []string{"/api/invites/private-invite/preview", "/api/servers/server/invites/private-invite", "/invite/private-invite", "/invite/private-invite/invites/preview"} {
 		var logs bytes.Buffer
 		logger := slog.New(slog.NewJSONHandler(&logs, nil))
 		handler := RequestLogger(logger, nil)(Recover(logger)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
