@@ -268,7 +268,8 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	profileUpdateNotifier := services.NewProfileUpdateNotifier(repos.Preferences, repos.Friendship, repos.Notification, hub)
 	onlineFriendNotifier := services.NewOnlineFriendNotifier(repos.User, repos.Preferences, repos.Friendship, repos.Notification, hub, hub)
 	memberService := services.NewMemberService(repos.User, repos.Role, repos.Ban, repos.MemberTimeout, repos.Server, hub, voiceService, auditLogService, profileUpdateNotifier)
-	roleService := services.NewRoleService(repos.Role, repos.User, hub, auditLogService)
+	roleTransactions := repository.NewServerMembershipTxRunner(db)
+	roleService := services.NewRoleService(repos.Role, roleTransactions, hub, auditLogService)
 	// SetPermInvalidator for both is wired in main.go (after initRoutes),
 	// not here: it needs to fan out to middleware.PermissionMiddleware too,
 	// which is only constructed inside initRoutes. See main.go's comment
@@ -276,7 +277,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	serverService := services.NewServerService(
 		db, repos.Server, repos.LiveKit, repos.Role, repos.Channel,
 		repos.Category, repos.User, repos.Ban, inviteService, hub, encryptionKey, auditLogService,
-		repository.NewServerMembershipTxRunner(db),
+		roleTransactions,
 	)
 	serverService.SetUploadDir(cfg.Upload.Dir)
 	if setter, ok := serverService.(interface {

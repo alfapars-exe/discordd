@@ -38,19 +38,19 @@ func (r *sqliteRoleRepo) GetByID(ctx context.Context, id string) (*models.Role, 
 		SELECT id, server_id, name, color, position, permissions, is_default, is_owner, mentionable, created_at
 		FROM roles WHERE id = ?`
 
-	role := &models.Role{}
-	err := r.db.QueryRowContext(ctx, query, id).Scan(
-		&role.ID, &role.ServerID, &role.Name, &role.Color, &role.Position,
-		&role.Permissions, &role.IsDefault, &role.IsOwner, &role.Mentionable, &role.CreatedAt,
-	)
+	return readRole(r.db.QueryRowContext(ctx, query, id))
+}
 
+func readRole(row *sql.Row) (*models.Role, error) {
+	role := &models.Role{}
+	err := row.Scan(&role.ID, &role.ServerID, &role.Name, &role.Color, &role.Position,
+		&role.Permissions, &role.IsDefault, &role.IsOwner, &role.Mentionable, &role.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, pkg.ErrNotFound
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to get role by id: %w", err)
+		return nil, fmt.Errorf("read role: %w", err)
 	}
-
 	return role, nil
 }
 
@@ -202,25 +202,12 @@ func (r *sqliteRoleRepo) Create(ctx context.Context, role *models.Role) error {
 	return nil
 }
 
-func (r *sqliteRoleRepo) Update(ctx context.Context, role *models.Role) error {
-	query := `UPDATE roles SET name = ?, color = ?, permissions = ?, mentionable = ? WHERE id = ?`
-
-	result, err := r.db.ExecContext(ctx, query,
-		role.Name, role.Color, role.Permissions, role.Mentionable, role.ID,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to update role: %w", err)
-	}
-
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to check rows affected: %w", err)
-	}
-	if affected == 0 {
-		return pkg.ErrNotFound
-	}
-
-	return nil
+func (r *sqliteRoleRepo) Patch(ctx context.Context, serverID, roleID string, patch models.UpdateRoleRequest) (*models.Role, error) {
+	const query = `UPDATE roles SET name = COALESCE(?, name), color = COALESCE(?, color),
+		permissions = COALESCE(?, permissions), mentionable = COALESCE(?, mentionable)
+		WHERE server_id = ? AND id = ?
+		RETURNING id, server_id, name, color, position, permissions, is_default, is_owner, mentionable, created_at`
+	return readRole(r.db.QueryRowContext(ctx, query, patch.Name, patch.Color, patch.Permissions, patch.Mentionable, serverID, roleID))
 }
 
 func (r *sqliteRoleRepo) Delete(ctx context.Context, id string) error {

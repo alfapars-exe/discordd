@@ -16,7 +16,7 @@ type MockRoleRepo struct {
 	GetRolesForUsersFn     func(ctx context.Context, serverID string, userIDs []string) (map[string][]models.Role, error)
 	GetMaxPositionFn       func(ctx context.Context, serverID string) (int, error)
 	CreateFn               func(ctx context.Context, role *models.Role) error
-	UpdateFn               func(ctx context.Context, role *models.Role) error
+	PatchFn                func(ctx context.Context, serverID, roleID string, patch models.UpdateRoleRequest) (*models.Role, error)
 	DeleteFn               func(ctx context.Context, id string) error
 	UpdatePositionsFn      func(ctx context.Context, items []models.PositionUpdate) error
 	AssignToUserFn         func(ctx context.Context, userID, roleID, serverID string) error
@@ -65,11 +65,11 @@ func (m *MockRoleRepo) Create(ctx context.Context, role *models.Role) error {
 	}
 	return nil
 }
-func (m *MockRoleRepo) Update(ctx context.Context, role *models.Role) error {
-	if m.UpdateFn != nil {
-		return m.UpdateFn(ctx, role)
+func (m *MockRoleRepo) Patch(ctx context.Context, serverID, roleID string, patch models.UpdateRoleRequest) (*models.Role, error) {
+	if m.PatchFn != nil {
+		return m.PatchFn(ctx, serverID, roleID, patch)
 	}
-	return nil
+	return &models.Role{ID: roleID, ServerID: serverID}, nil
 }
 func (m *MockRoleRepo) Delete(ctx context.Context, id string) error {
 	if m.DeleteFn != nil {

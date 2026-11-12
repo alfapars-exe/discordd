@@ -23,7 +23,7 @@ type RoleRepository interface {
 
 	// ─── Write ───
 	Create(ctx context.Context, role *models.Role) error
-	Update(ctx context.Context, role *models.Role) error
+	Patch(ctx context.Context, serverID, roleID string, patch models.UpdateRoleRequest) (*models.Role, error)
 	Delete(ctx context.Context, id string) error
 
 	// UpdatePositions atomically updates position values for multiple roles.

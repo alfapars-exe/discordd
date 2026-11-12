@@ -25,19 +25,38 @@ type ServerMembershipTxRunner interface {
 	InTx(ctx context.Context, fn func(r *ServerMembershipTxRepos) error) error
 }
 
-type serverMembershipTxRunner struct {
+// ServerMembershipTransactions binds membership and role writes to the same database.
+type ServerMembershipTransactions struct {
 	db *sql.DB
 }
 
-func NewServerMembershipTxRunner(db *sql.DB) ServerMembershipTxRunner {
-	return &serverMembershipTxRunner{db: db}
+// ServerRoleTxRunner takes the per-server ACL fence before reading membership
+// or permissions. The same fence is used by ACL writers and notification fanout.
+type ServerRoleTxRunner interface {
+	WithServerRoles(ctx context.Context, serverID string, fn func(*ServerMembershipTxRepos) error) error
 }
 
-func (r *serverMembershipTxRunner) InTx(ctx context.Context, fn func(*ServerMembershipTxRepos) error) error {
+func NewServerMembershipTxRunner(db *sql.DB) *ServerMembershipTransactions {
+	return &ServerMembershipTransactions{db: db}
+}
+
+func (r *ServerMembershipTransactions) WithServerRoles(ctx context.Context, serverID string, fn func(*ServerMembershipTxRepos) error) error {
 	return database.WithTx(ctx, r.db, func(tx *sql.Tx) error {
-		return fn(&ServerMembershipTxRepos{
-			Server: NewSQLiteServerRepo(tx),
-			Role:   NewSQLiteRoleRepo(tx),
-		})
+		if database.IsPostgres(r.db) {
+			if _, err := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(?,0))", serverID); err != nil {
+				return err
+			}
+		}
+		return fn(serverMembershipRepos(tx))
+	})
+}
+
+func serverMembershipRepos(tx *sql.Tx) *ServerMembershipTxRepos {
+	return &ServerMembershipTxRepos{Server: NewSQLiteServerRepo(tx), Role: NewSQLiteRoleRepo(tx)}
+}
+
+func (r *ServerMembershipTransactions) InTx(ctx context.Context, fn func(*ServerMembershipTxRepos) error) error {
+	return database.WithTx(ctx, r.db, func(tx *sql.Tx) error {
+		return fn(serverMembershipRepos(tx))
 	})
 }
