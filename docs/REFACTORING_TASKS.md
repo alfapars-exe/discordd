@@ -4,6 +4,13 @@ Tarih: 25 Ekim 2026. İlk inceleme revizyonu `313acf8e`; çalışma sırasında 
 
 Bu belge uygulama önerisidir. Görev kartının varlığı, kodun değiştirildiği veya kabul edildiği anlamına gelmez. İlk teslimat 25 Ekim’de plan belgeleriydi. 26 Ekim’de kullanıcı uygulamayı başlattı; güncel ilerleme aşağıdaki tabloda izlenir. Görev kartlarındaki Problem alanları ilk incelemenin tarihsel kanıtıdır. Mevcut değişiklikler korunur; uygulama aşamasında her PR yalnız seçilen görevin dosyalarını kapsar.
 
+## PostgreSQL parametre bağlama ve CI günlükleri · 12 Kasım 2026
+
+| Revizyon | Doğrulanan davranış | Kanıt |
+|---|---|---|
+| `e8cdc669` | PostgreSQL 18 üzerinde Go sürücüsü, kaçışlı metindeki ve dolar işaretleriyle sınırlanmış metindeki soru işaretlerini korudu. Aynı sorgulardaki bağlı değerler doğru sütunlara döndü. | Yerel PostgreSQL bağlantısıyla `go test -count=1 -v ./database -run 'DollarStrings\|EscapeString'` koşusunda iki dönüştürücü testi ve iki gerçek sorgu geçti. [PR #221](https://github.com/alfapars-exe/discordd/pull/221) |
+| `60d93449` | Sentetik kullanıcı bilgileri içeren alternatif bir PostgreSQL bağlantı adresi hem paket hem servis testi çıktısında maskelendi. | PR dalında `python -m unittest discover -s scripts -p test_run_postgres_tests.py` ile yedi test geçti. [PR #247](https://github.com/alfapars-exe/discordd/pull/247) |
+
 ## Birleşik istemci doğrulaması — 12 Kasım 2026
 
 `23fc80b8` revizyonunda tam Vitest kapsam koşusunda 461 dosyada 4.634 test geçti, 1 test atlandı. Satır kapsamı genel olarak %66,38, dal kapsamı %63,27 oldu.
