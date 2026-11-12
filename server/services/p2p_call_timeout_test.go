@@ -37,7 +37,11 @@ func (t *manualP2PTimer) Fire() {
 	}
 }
 
-func newManualP2PService(email EmailEnqueuer) (*p2pCallService, *testutil.MockEventPublisher, **manualP2PTimer) {
+func newManualP2PService() (*p2pCallService, *testutil.MockEventPublisher, **manualP2PTimer) {
+	return newManualP2PServiceWithEmail(nil)
+}
+
+func newManualP2PServiceWithEmail(email EmailEnqueuer) (*p2pCallService, *testutil.MockEventPublisher, **manualP2PTimer) {
 	hub := &testutil.MockEventPublisher{}
 	svc := NewP2PCallService(p2pFriendLookup{}, p2pUserLookup{}, hub, email).(*p2pCallService)
 	var timer *manualP2PTimer
@@ -53,7 +57,7 @@ func newManualP2PService(email EmailEnqueuer) (*p2pCallService, *testutil.MockEv
 
 func TestP2PCallRingTimeoutEndsBothPartiesAndEnqueuesGenericMissedCall(t *testing.T) {
 	enqueuer := &stubEmailEnqueuer{}
-	svc, hub, timerPtr := newManualP2PService(enqueuer)
+	svc, hub, timerPtr := newManualP2PServiceWithEmail(enqueuer)
 	var delivered []struct {
 		user  string
 		event ws.Event
@@ -119,7 +123,7 @@ func TestP2PCallTerminalActionsCancelRingTimer(t *testing.T) {
 	for _, action := range []string{"accept", "decline", "end", "disconnect"} {
 		t.Run(action, func(t *testing.T) {
 			enqueuer := &stubEmailEnqueuer{}
-			svc, _, timerPtr := newManualP2PService(enqueuer)
+			svc, _, timerPtr := newManualP2PServiceWithEmail(enqueuer)
 			if err := svc.InitiateCall("caller", "receiver", models.P2PCallTypeVideo); err != nil {
 				t.Fatal(err)
 			}
@@ -159,7 +163,7 @@ func TestP2PCallTerminalActionsCancelRingTimer(t *testing.T) {
 }
 
 func TestP2PCallSnapshotDoesNotExposeMutableState(t *testing.T) {
-	svc, _, _ := newManualP2PService(nil)
+	svc, _, _ := newManualP2PService()
 	if err := svc.InitiateCall("caller", "receiver", models.P2PCallTypeVoice); err != nil {
 		t.Fatal(err)
 	}
