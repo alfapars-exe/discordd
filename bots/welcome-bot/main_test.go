@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -54,6 +55,31 @@ func TestMessageCancellation(t *testing.T) {
 	config, _ := parseConfig("http://127.0.0.1", "fixture-token", "server", "channel")
 	if err := postMessage(ctx, &http.Client{Timeout: time.Second}, config, "welcome"); err == nil {
 		t.Fatal("canceled request succeeded")
+	}
+}
+
+func TestWelcomeUsesUsernameWhenDisplayNameIsAbsent(t *testing.T) {
+	join := event{Op: "member_join", ServerID: "server", Data: json.RawMessage(`{"id":"id","username":"handle"}`)}
+	if text, ok := join.welcomeText("server"); !ok || text != "Aramiza hos geldin, @handle!" {
+		t.Fatalf("unexpected welcome %q, accepted=%t", text, ok)
+	}
+}
+
+func TestMessageTimesOutWaitingForResponse(t *testing.T) {
+	release := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		<-release
+	}))
+	defer server.Close()
+	defer close(release)
+	client := server.Client()
+	client.Timeout = 100 * time.Millisecond
+	config, err := parseConfig(server.URL, "fixture-token", "server", "channel")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := postMessage(context.Background(), client, config, "welcome"); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected message timeout, got %v", err)
 	}
 }
 
