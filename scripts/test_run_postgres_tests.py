@@ -20,7 +20,8 @@ class PostgreSQLRunnerTests(unittest.TestCase):
     def execute(self, events, code=0, service_output=service_passes):
         process = Mock(stdout=io.StringIO("\n".join(json.dumps(event) for event in events)))
         process.wait.return_value = code
-        with patch.dict(runner.os.environ, {"HICHAT_TEST_POSTGRES_DSN": "postgres://postgres@127.0.0.1/test"}), patch.object(runner.subprocess, "Popen", return_value=process), patch.object(runner.subprocess, "run", return_value=Mock(stdout=service_output, returncode=0)), patch("sys.stdout", io.StringIO()), patch("sys.stderr", io.StringIO()):
+        self.output = io.StringIO()
+        with patch.dict(runner.os.environ, {"HICHAT_TEST_POSTGRES_DSN": "postgres://postgres@127.0.0.1/test"}), patch.object(runner.subprocess, "Popen", return_value=process), patch.object(runner.subprocess, "run", return_value=Mock(stdout=service_output, returncode=0)), patch("sys.stdout", self.output), patch("sys.stderr", io.StringIO()):
             return runner.main()
 
     def test_both_role_transactions_must_run_on_postgres(self):
@@ -28,6 +29,13 @@ class PostgreSQLRunnerTests(unittest.TestCase):
             with self.subTest(name=name):
                 remaining = "\n".join(line for line in self.service_passes.splitlines() if name not in line)
                 self.assertEqual(self.execute(self.completed(), service_output=remaining), 1)
+
+    def test_driver_urls_are_redacted_in_both_test_phases(self):
+        url = "PostgreSQL://fixture:secret@localhost/alternate"
+        events = self.completed() + [{"Action": "output", "Output": f"driver: {url}\n"}]
+        self.assertEqual(self.execute(events, service_output=self.service_passes + url), 0)
+        self.assertNotIn("fixture:secret", self.output.getvalue())
+        self.assertEqual(self.output.getvalue().count(runner.REDACTED_DATABASE), 2)
 
     def completed(self):
         return [
