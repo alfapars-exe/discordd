@@ -682,6 +682,17 @@ describe("cold session restore", () => {
     const { apiClient } = await loadClient(); fetchMock.mockResolvedValueOnce(jsonResponse({ success: false }, status));
     expect((await apiClient("/users/me", { refreshIfMissing: true })).error).toBe("unauthorized"); expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+  it.each([
+    ["REFRESH_SUPERSEDED", "service_unavailable:"],
+    ["ACCOUNT_MISMATCH", "unauthorized"],
+    ["SESSION_MISMATCH", "unauthorized"],
+  ])("handles refresh conflict %s during startup", async (code, expected) => {
+    const { apiClient } = await loadClient();
+    fetchMock.mockResolvedValueOnce(jsonResponse({ success: false, code }, 409));
+    const result = await apiClient("/users/me", { refreshIfMissing: true });
+    expect(result.error).toContain(expected);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
   it("preserves the session on a transient refresh failure", async () => {
     const { apiClient } = await loadClient(); fetchMock.mockRejectedValueOnce(new Error("offline"));
     expect((await apiClient("/users/me", { refreshIfMissing: true })).error).toContain("service_unavailable:"); expect(fetchMock).toHaveBeenCalledTimes(1);
