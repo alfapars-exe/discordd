@@ -506,6 +506,7 @@ jobs:
         run: |
           python3 scripts/check-text-encoding.py
           python3 -m unittest discover -s scripts -p 'test_*.py'
+          python3 -m unittest discover -s deploy/infra -p 'test_*.py'
 
   # ─── Prod image build (HF Space Dockerfile) ───
   # The root Dockerfile is what HF Space actually builds on `git push origin`.
