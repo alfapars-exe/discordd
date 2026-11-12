@@ -69,23 +69,15 @@ func RedactDSN(dsn string) string {
 			u.User = url.UserPassword(u.User.Username(), "***")
 		}
 		q := u.Query()
-		for _, key := range []string{"password", "sslpassword", "authToken"} {
-			if q.Has(key) {
+		for key := range q {
+			if pkg.IsSecretLogKey(key) || strings.EqualFold(key, "sslpassword") {
 				q.Set(key, "***")
 			}
 		}
 		u.RawQuery = q.Encode()
 		return u.String()
 	}
-	i := strings.Index(dsn, "authToken=")
-	if i < 0 {
-		return dsn
-	}
-	rest := dsn[i+len("authToken="):]
-	if amp := strings.IndexByte(rest, '&'); amp >= 0 {
-		return dsn[:i] + "authToken=***" + rest[amp:]
-	}
-	return dsn[:i] + "authToken=***"
+	return pkg.RedactSecrets(dsn)
 }
 
 // New is the product entrypoint. Legacy file opening is available only through
