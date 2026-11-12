@@ -26,6 +26,10 @@ Klavye kısayolu yardımı ve lo-fi oynatıcı isteğe bağlı yüklendiğinde (
 
 Bu tarayıcı koşularında fiziksel ses veya kamera aygıtı kullanılmadı.
 
+Sonraki tam istemci koşusu `303165c4` revizyonunda 461 dosyada 4.636 geçen ve 1 atlanan test verdi. İfade kapsamı %65,59, dal kapsamı %63,31, fonksiyon kapsamı %59,94 ve satır kapsamı %66,42 oldu. Kanal arama panelinde satır/dal kapsamı %89,84/%81,11, DM arama panelinde %82,17/%72,72 olarak ölçüldü. Bu revizyon arama sayacı yarış testlerini içerir. Sonraki DM zaman sıralaması değişikliği ayrı dalda 235 hedefli testle sınandı.
+
+Üretim WebKit smoke testi ve Chromium uygulama paketi, PR #238'in `2cf916e4` revizyonunda Linux CI üzerinde de geçti. [Playwright E2E koşusu](https://github.com/alfapars-exe/discordd/actions/runs/43276168619/job/131385259090)
+
 ## Kararlı sürümde rol yetkileri ve mesaj geçmişi — 12 Kasım 2026
 
 Başlangıç revizyonu `bb32bbba`. Bu tur Go/PostgreSQL sunucusunu ve React istemcisini kapsar. İzin denetimlerinin sahibi sunucudur. İstemci görünür listeyi sunucunun yetkili REST sayfası ve istek sırasında alınan WebSocket olaylarıyla günceller.
