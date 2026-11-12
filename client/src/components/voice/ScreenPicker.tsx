@@ -145,8 +145,8 @@ function ScreenPicker() {
 
   return (
     <dialog ref={dialogRef} className="sp-overlay" aria-labelledby="screen-picker-title"
-      onCancel={(event) => { event.preventDefault(); handleCancel(); }}
-      onClick={(event) => { if (event.target === event.currentTarget) handleCancel(); }}>
+      onCancel={(event) => { event.preventDefault(); handleCancel(); }}>
+      <button type="button" className="sp-backdrop" tabIndex={-1} aria-label={t("common:close")} onClick={handleCancel} />
       <div className="sp-card">
         <div className="sp-header">
           <h2 id="screen-picker-title" className="sp-title">{t("screenPickerTitle")}</h2>
