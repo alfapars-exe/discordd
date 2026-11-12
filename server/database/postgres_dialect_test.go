@@ -207,3 +207,12 @@ func TestBindPostgresEscapeString(t *testing.T) {
 		t.Fatalf("got %q, err %v, want %q", got, err, want)
 	}
 }
+
+func TestPostgresEscapeStringWithBoundValues(t *testing.T) {
+	db := localDialectPostgres(t)
+	var literal, first, backslash, second string
+	err := db.QueryRow(`SELECT E'it\'s ? here', ?::text, e'\\', ?::text`, "one", "two").Scan(&literal, &first, &backslash, &second)
+	if err != nil || literal != "it's ? here" || first != "one" || backslash != "\\" || second != "two" {
+		t.Fatalf("unexpected columns: %q %q %q %q, err %v", literal, first, backslash, second, err)
+	}
+}
