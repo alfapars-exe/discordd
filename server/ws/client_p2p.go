@@ -76,16 +76,15 @@ func (c *Client) handleP2PCallDecline(event Event) {
 func (c *Client) handleP2PCallEnd(event Event) {
 	var callID string
 	if event.Data != nil {
-		raw, err := json.Marshal(event.Data)
-		if err != nil {
+		fields, ok := event.Data.(map[string]any)
+		if !ok {
 			return
 		}
-		var fields map[string]json.RawMessage
-		if json.Unmarshal(raw, &fields) != nil {
-			return
-		}
-		if len(fields) > 0 && (json.Unmarshal(fields["call_id"], &callID) != nil || callID == "") {
-			return
+		if len(fields) > 0 {
+			callID, ok = fields["call_id"].(string)
+			if !ok || callID == "" {
+				return
+			}
 		}
 	}
 	if c.hub.onP2PCallEnd != nil {
