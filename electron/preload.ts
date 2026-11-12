@@ -155,8 +155,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
         appIcon: string | null;
       }>,
     ) => void,
-  ): void => {
-    ipcRenderer.on("show-screen-picker", (_e, sources) => cb(sources));
+  ): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, sources: Parameters<typeof cb>[0]) => cb(sources);
+    ipcRenderer.on("show-screen-picker", listener);
+    return () => { ipcRenderer.off("show-screen-picker", listener); };
   },
 
   /**
@@ -178,8 +180,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
         appIcon: string | null;
       }>,
     ) => void,
-  ): void => {
-    ipcRenderer.on("screen-picker-refresh-result", (_e, sources) => cb(sources));
+  ): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, sources: Parameters<typeof cb>[0]) => cb(sources);
+    ipcRenderer.on("screen-picker-refresh-result", listener);
+    return () => { ipcRenderer.off("screen-picker-refresh-result", listener); };
   },
 
   /** Remove the refresh-result listener (on picker close). */

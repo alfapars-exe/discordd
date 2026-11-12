@@ -180,7 +180,7 @@ interface ElectronAPI {
   /** Local foreground-window voice-overlay opt-in; unrelated to activity sharing. */
   setRegisteredGameOverlay?: (id: string, allowed: boolean) => Promise<boolean>;
   /** Main process requests screen picker — delivers sources */
-  onShowScreenPicker: (cb: (sources: ElectronDesktopSource[]) => void) => void;
+  onShowScreenPicker: (cb: (sources: ElectronDesktopSource[]) => void) => void | (() => void);
   /**
    * Re-query desktop sources while the picker is open. Useful when the
    * target window appeared after the picker first opened.
@@ -189,7 +189,7 @@ interface ElectronAPI {
   /** Result delivered after refreshScreenPickerSources(). */
   onScreenPickerRefreshResult?: (
     cb: (sources: ElectronDesktopSource[]) => void,
-  ) => void;
+  ) => void | (() => void);
   /** Detach the refresh-result listener (on picker close). */
   removeScreenPickerRefreshListener?: () => void;
   /** Send user's selection back to main process (null = cancelled) */
