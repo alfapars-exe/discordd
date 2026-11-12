@@ -18,6 +18,7 @@ import (
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/testutil"
 	"github.com/argeinfina/hichat/ws"
 )
@@ -61,9 +62,11 @@ func newMemberHarness() *memberServiceHarness {
 	h.hub.BroadcastToServerFn = func(_ string, e ws.Event) {
 		h.broadcasts = append(h.broadcasts, e)
 	}
+	h.serverRepo.IsMemberFn = func(context.Context, string, string) (bool, error) { return true, nil }
+	tx := roleTestTransaction{&repository.ServerMembershipTxRepos{Server: h.serverRepo, Role: h.roleRepo, User: h.userRepo, Timeout: h.timeoutRepo}}
 	h.svc = NewMemberService(
 		h.userRepo, h.roleRepo, h.banRepo, h.timeoutRepo,
-		h.serverRepo, h.hub, h.voiceKick, nil, h.profileUpdates, // auditLogger — not under test here
+		h.serverRepo, tx, h.hub, h.voiceKick, nil, h.profileUpdates, // auditLogger — not under test here
 	)
 	return h
 }
@@ -607,7 +610,7 @@ func TestModifyRoles_AvoidsN_Plus_1_UsesSingleGetAllByServer(t *testing.T) {
 	// assignment branch (the second former N+1 point).
 	h.roleRepo.GetByUserIDAndServerFn = func(_ context.Context, uid, _ string) ([]models.Role, error) {
 		if uid == actor {
-			return []models.Role{{ID: "actor-top", ServerID: srv, Position: 100}}, nil
+			return []models.Role{{ID: "actor-top", ServerID: srv, Position: 100, Permissions: models.PermManageRoles}}, nil
 		}
 		return nil, nil
 	}
@@ -738,7 +741,7 @@ func TestModifyRoles_InvalidatesTargetPermissions(t *testing.T) {
 
 	h.roleRepo.GetByUserIDAndServerFn = func(_ context.Context, uid, _ string) ([]models.Role, error) {
 		if uid == actor {
-			return []models.Role{{ID: "top", ServerID: srv, Position: 100}}, nil
+			return []models.Role{{ID: "top", ServerID: srv, Position: 100, Permissions: models.PermManageRoles}}, nil
 		}
 		return nil, nil
 	}

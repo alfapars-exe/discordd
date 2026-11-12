@@ -7,15 +7,13 @@ import (
 	"github.com/argeinfina/hichat/database"
 )
 
-// ServerMembershipTxRepos bundles tx-scoped repositories for the
-// JoinServer write set (AddMember + default-role AssignToUser). Both
-// repositories already accept database.TxQuerier, so binding them to a
-// *sql.Tx requires no changes to the repositories themselves. Mirrors
-// MessageTxRepos/MessageTxRunner (message_tx.go) and
-// DeviceTxRepos/DeviceTxRunner (device_tx.go).
+// ServerMembershipTxRepos binds membership and role writes to one transaction.
+// Role mutations also use User and Timeout to read the resulting member view.
 type ServerMembershipTxRepos struct {
-	Server ServerRepository
-	Role   RoleRepository
+	Server  ServerRepository
+	Role    RoleRepository
+	User    UserRepository
+	Timeout MemberTimeoutRepository
 }
 
 // ServerMembershipTxRunner runs fn with Server/Role repositories bound to a
@@ -47,7 +45,10 @@ func (r *ServerMembershipTransactions) WithServerRoles(ctx context.Context, serv
 				return err
 			}
 		}
-		return fn(serverMembershipRepos(tx))
+		repos := serverMembershipRepos(tx)
+		repos.User = NewSQLiteUserRepo(tx)
+		repos.Timeout = NewSQLiteMemberTimeoutRepo(tx)
+		return fn(repos)
 	})
 }
 
