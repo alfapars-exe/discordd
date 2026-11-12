@@ -12,6 +12,8 @@ Birleşik istemcinin `9aaecadb` revizyonunda tam Vitest koşusu 124,37 saniyede 
 
 `d5fb4f1b` üzerinde Electron TypeScript derlemesi geçti. 276 Electron testi geçti ve 1 test atlandı. Windows'ta gerçek Electron ana süreci ile gizli bir test penceresi üzerinden `getDisplayMedia` çağrıldı. Üretim seçici işleyicisi küçük resimleri kapalı tutarak masaüstü kaynaklarını listeledi, yenileme isteğinde tekrar listeledi ve iptal edildiğinde tarayıcıya `AbortError` döndü. Test pencereyi ana pencere olarak atadı. Ardından sentetik pencere seçildi ve iki yerel WebRTC ucu arasında aktarılan görüntü alıcıda doğrulandı (RF18). İki fiziksel cihaz arasındaki çağrı açık. [PR #257](https://github.com/alfapars-exe/discordd/pull/257)
 
+Kaynak seçicisinin `52881530` ve paketlenmiş ses motoru testlerinin `fb3f904c` revizyonlarında 36 CI kontrolünün tamamı geçti. İkinci koşuda Vite üretim çıktısı üzerinde ses motorlarının bütünlük ve çıkarım testleri çalıştı. [Seçici PR #257](https://github.com/alfapars-exe/discordd/pull/257) · [Ses motoru CI işi](https://github.com/alfapars-exe/discordd/actions/runs/43325386759/job/131556431027)
+
 ## Masaüstü başlangıcı ve paketleme · 13 Kasım 2026
 
 Temiz profille çevrimdışı açılan Windows paketinde ilk üç saniyede kanal arayüzü modülü işlenmedi. Önceki pakette aynı koşullarda Chromium bu modülü işledi. Yeni pakete geçerli sentetik önbellek kaydı verilip yeniden yüklendiğinde kanal modülü işlendi, kullanıcı ve sunucu adı salt okunur önizlemede göründü ve oturum geri yükleme durumu sürdü. Oturum zamanlaması için PR dalında 30 test geçti. [PR #256](https://github.com/alfapars-exe/discordd/pull/256)
