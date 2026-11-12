@@ -6,7 +6,7 @@
  * cancel sends null -> main callback(null) cancels the stream.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useVoiceStore } from "../../stores/voiceStore";
 
@@ -44,7 +44,7 @@ function SourceThumbnail({ source }: { source: PickerSource }) {
     return (
       <img
         src={source.thumbnail}
-        alt={source.name}
+        alt=""
         className="sp-thumbnail"
         draggable={false}
       />
@@ -111,18 +111,14 @@ function ScreenPicker() {
     window.electronAPI?.refreshScreenPickerSources?.();
   }, []);
 
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const isOpen = sources !== null;
   useEffect(() => {
-    if (!sources) return;
-
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        handleCancel();
-      }
-    }
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [sources, handleCancel]);
+    const dialog = dialogRef.current;
+    if (!isOpen || !dialog) return;
+    dialog.showModal();
+    return () => dialog.close();
+  }, [isOpen]);
 
   if (!sources) return null;
 
@@ -133,10 +129,12 @@ function ScreenPicker() {
   const activeSources = activeTab === "screens" ? screens : windows;
 
   return (
-    <div className="sp-overlay" onClick={handleCancel}>
-      <div className="sp-card" onClick={(e) => e.stopPropagation()}>
+    <dialog ref={dialogRef} className="sp-overlay" aria-labelledby="screen-picker-title"
+      onCancel={(event) => { event.preventDefault(); handleCancel(); }}
+      onClick={(event) => { if (event.target === event.currentTarget) handleCancel(); }}>
+      <div className="sp-card">
         <div className="sp-header">
-          <h2 className="sp-title">{t("screenPickerTitle")}</h2>
+          <h2 id="screen-picker-title" className="sp-title">{t("screenPickerTitle")}</h2>
           <div className="sp-header-actions">
             <button
               className="sp-icon-btn"
@@ -161,7 +159,7 @@ function ScreenPicker() {
                 <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
               </svg>
             </button>
-            <button className="sp-close" onClick={handleCancel}>
+            <button className="sp-close" aria-label={t("common:close")} onClick={handleCancel}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18" />
                 <line x1="6" y1="6" x2="18" y2="18" />
@@ -239,15 +237,12 @@ function ScreenPicker() {
               </svg>
               {t("screenPickerShareAudio")}
             </span>
-            <div className={`sp-switch${screenShareAudio ? " sp-switch-on" : ""}`}
-              onClick={() => setScreenShareAudio(!screenShareAudio)}
-            >
-              <div className="sp-switch-thumb" />
-            </div>
+            <input type="checkbox" role="switch" className="sp-switch"
+              checked={screenShareAudio} onChange={event => setScreenShareAudio(event.target.checked)} />
           </label>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }
 
