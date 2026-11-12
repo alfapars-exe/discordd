@@ -89,9 +89,10 @@ test("channel tree follows role grants and revocations in two authenticated sess
   const roles = await api<{ id: string; is_default: boolean }[]>(owner, root + "/roles");
   const everyone = roles.find(role => role.is_default)!;
   const extra = await api<{ id: string }>(owner, root + "/roles", "POST", { name: "Visibility test", color: "#888888", permissions: 0 });
-  const voice = await api<{ id: string }>(owner, root + "/channels", "POST", { name: "fixture-voice-private", type: "voice" });
+  const voiceName = "fixture-voice-private-" + Date.now();
+  const voice = await api<{ id: string }>(owner, root + "/channels", "POST", { name: voiceName, type: "voice" });
   const ids = [fixture.privateChannelId, voice.id];
-  const names = ["fixture-private", "fixture-voice-private"];
+  const names = ["fixture-private", voiceName];
   const view = 4096;
   await api(owner, root + "/channels/" + voice.id + "/permissions/" + everyone.id, "PUT", { deny: view, allow: 0 });
   for (const id of ids) {
@@ -131,6 +132,10 @@ test("channel tree follows role grants and revocations in two authenticated sess
   const privateHistory = root + "/channels/" + fixture.privateChannelId + "/messages";
   const invite = await api<{ code: string }>(owner, root + "/invites", "POST", { max_uses: 1, expires_in: 30, channel_id: fixture.channelId });
   await api(owner, assignments, "PATCH", { role_ids: [everyone.id, extra.id] });
+  const readMessages = 2048;
+  await api(owner, root + "/channels/" + fixture.privateChannelId + "/permissions/" + extra.id, "PUT", {
+    allow: view | readMessages, deny: 0,
+  });
   const warm = await api<{ id: string }>(owner, privateHistory, "POST", { content: "Before leaving" });
   await expect.poll(() => memberMessages.has(warm.id)).toBe(true);
   const history = await api<{ messages: { id: string }[] }>(member, privateHistory);
