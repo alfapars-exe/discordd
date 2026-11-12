@@ -20,7 +20,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
                 mode: .voiceChat,
                 options: [.allowBluetooth, .allowBluetoothA2DP, .defaultToSpeaker, .mixWithOthers]
             )
-            // Minimize audio latency — 0.005s (5ms) buffer duration.
+            // Minimize audio latency â€” 0.005s (5ms) buffer duration.
             // Default is ~0.023s (23ms). Lower = less delay, especially in background.
             try audioSession.setPreferredIOBufferDuration(0.005)
             try audioSession.setActive(true)
@@ -45,14 +45,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     @objc private func handleAudioInterruption(_ notification: Notification) {
         guard let info = notification.userInfo,
               let typeValue = info[AVAudioSessionInterruptionTypeKey] as? UInt,
-              let type = AVAudioSession.InterruptionType(rawValue: typeValue) else { return }
+              AVAudioSession.InterruptionType(rawValue: typeValue) == .ended,
+              let options = info[AVAudioSessionInterruptionOptionKey] as? UInt,
+              AVAudioSession.InterruptionOptions(rawValue: options).contains(.shouldResume) else { return }
 
-        if type == .ended {
-            do {
-                try AVAudioSession.sharedInstance().setActive(true, options: .notifyOthersOnDeactivation)
-            } catch {
-                print("Failed to reactivate audio session after interruption: \(error)")
-            }
+        do {
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            print("Failed to reactivate audio session after interruption: \(error)")
         }
     }
 
