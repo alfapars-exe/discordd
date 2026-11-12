@@ -13,7 +13,7 @@ import (
 
 func activeSignalService(t *testing.T) (*p2pCallService, string) {
 	t.Helper()
-	s, _, _ := newManualP2PService()
+	s, _, _ := newManualP2PService(nil)
 	if err := s.InitiateCall("a", "b", models.P2PCallTypeVoice); err != nil {
 		t.Fatal(err)
 	}

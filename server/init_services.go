@@ -199,7 +199,6 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	voiceService := services.NewVoiceService(
 		repos.Channel, repos.LiveKit, channelPermService, hub, hub, repos.Server, encryptionKey, repos.MemberTimeout, repos.Ban, auditLogService,
 	)
-	p2pCallService := services.NewP2PCallService(repos.Friendship, repos.User, hub)
 
 	// Email service (optional)
 	var emailSender email.EmailSender
@@ -217,9 +216,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	categorySender, _ := emailSender.(email.CategorySender)
 	emailDeliveryService := services.NewEmailDeliveryService(repos.EmailDelivery, categorySender,
 		services.WithEmailUnsubscribe(repos.EmailUnsubscribe, cfg.Email.AppURL))
-	if communication, ok := p2pCallService.(interface{ SetEmailEnqueuer(services.EmailEnqueuer) }); ok {
-		communication.SetEmailEnqueuer(emailDeliveryService)
-	}
+	p2pCallService := services.NewP2PCallService(repos.Friendship, repos.User, hub, emailDeliveryService)
 	emailVerificationService := services.NewEmailVerificationService(repos.EmailVerification, verificationSender)
 	channelService := services.NewChannelService(repos.Channel, repos.Category, hub, channelPermService, auditLogService, repos.Notification)
 	channelDeletionSetter, setterOK := channelService.(interface {
