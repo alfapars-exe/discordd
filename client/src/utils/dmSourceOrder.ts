@@ -1,3 +1,4 @@
+import { compareMessageTimestamps } from "./messageTimestamp";
 import type { DMMessage } from "../types";
 
 /** Server metadata only. Decimal strings preserve the full signed BIGINT range. */
@@ -10,7 +11,7 @@ export function dmSourceSequence(value: unknown): bigint | null {
  * authoritative sequenced slots by append order. This avoids a nontransitive
  * mixed timestamp/sequence comparator while preserving old-server behavior. */
 export function sortDMBySource<T extends Pick<DMMessage,"id"|"created_at"|"source_sequence">>(messages: readonly T[], positions?: ReadonlyMap<string,number>): T[] {
-  const baseline = [...messages].sort((a,b) => a.created_at.localeCompare(b.created_at) || (positions?.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (positions?.get(b.id) ?? Number.MAX_SAFE_INTEGER));
+  const baseline = [...messages].sort((a,b) => compareMessageTimestamps(a.created_at, b.created_at) || (positions?.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (positions?.get(b.id) ?? Number.MAX_SAFE_INTEGER));
   const known = baseline.filter(message => dmSourceSequence(message.source_sequence) !== null).sort((a,b) => {
     const left = dmSourceSequence(a.source_sequence)!, right = dmSourceSequence(b.source_sequence)!;
     return left < right ? -1 : left > right ? 1 : 0;
@@ -21,5 +22,5 @@ export function sortDMBySource<T extends Pick<DMMessage,"id"|"created_at"|"sourc
 export function newerDMSource(next: Pick<DMMessage,"source_sequence"|"created_at">, current?: Pick<DMMessage,"source_sequence"|"created_at"> | null): boolean {
   if (!current) return true;
   const left = dmSourceSequence(next.source_sequence), right = dmSourceSequence(current.source_sequence);
-  return left !== null && right !== null ? left >= right : next.created_at >= current.created_at;
+  return left !== null && right !== null ? left >= right : compareMessageTimestamps(next.created_at, current.created_at) >= 0;
 }
