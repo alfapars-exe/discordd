@@ -114,3 +114,28 @@ func TestGroupDMListIncludesReaderSpecificOldestUnreadAnchor(t *testing.T) {
 }
 
 func groupAroundIntPtr(value int) *int { return &value }
+
+func TestGroupHistoryBulkAuthorLookup(t *testing.T) {
+	items := make([]models.GroupDMMessage, 100)
+	for i := range items {
+		items[i].UserID = "reader"
+	}
+	calls := 0
+	users := &testutil.MockUserRepo{PublicUsersByIDFn: func(_ context.Context, ids []string) (map[string]*models.PublicUser, error) {
+		calls++
+		return map[string]*models.PublicUser{"reader": {ID: "reader"}}, nil
+	}}
+	svc := &groupDMService{groups: &groupAroundFixture{}, users: users}
+	if err := svc.enrichMessageHistory(context.Background(), items); err != nil || calls != 1 {
+		t.Fatalf("history lookup calls=%d, err=%v", calls, err)
+	}
+	for i := range items {
+		if items[i].User == nil || items[i].User.ID != "reader" {
+			t.Fatalf("missing author at %d", i)
+		}
+	}
+	items[0].UserID = "missing"
+	if err := svc.enrichMessageHistory(context.Background(), items); !errors.Is(err, pkg.ErrNotFound) {
+		t.Fatalf("missing author error: %v", err)
+	}
+}

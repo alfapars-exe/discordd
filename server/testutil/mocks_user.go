@@ -10,6 +10,8 @@ import (
 // ─── UserRepository mock ───
 
 type MockUserRepo struct {
+	PublicUsersByIDFn func(context.Context, []string) (map[string]*models.PublicUser, error)
+
 	ListServerMemberProfilesFn func(context.Context, string) ([]models.User, error)
 	CreateFn                   func(ctx context.Context, user *models.User) error
 	CreateWithSessionFn        func(ctx context.Context, user *models.User, session *models.Session) error
@@ -62,6 +64,21 @@ func (m *MockUserRepo) GetAll(ctx context.Context) ([]models.User, error) {
 		return m.GetAllFn(ctx)
 	}
 	return nil, nil
+}
+
+func (m *MockUserRepo) PublicUsersByID(ctx context.Context, ids []string) (map[string]*models.PublicUser, error) {
+	if m.PublicUsersByIDFn != nil {
+		return m.PublicUsersByIDFn(ctx, ids)
+	}
+	found := make(map[string]*models.PublicUser)
+	for _, id := range ids {
+		u, err := m.GetByID(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		found[id] = models.ToPublicUser(u)
+	}
+	return found, nil
 }
 
 func (m *MockUserRepo) ListServerMemberProfiles(ctx context.Context, serverID string) ([]models.User, error) {

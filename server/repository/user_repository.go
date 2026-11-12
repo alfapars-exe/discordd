@@ -19,6 +19,7 @@ type UserRepository interface {
 	GetByUsername(ctx context.Context, username string) (*models.User, error)
 	GetAll(ctx context.Context) ([]models.User, error)
 	ListServerMemberProfiles(ctx context.Context, serverID string) ([]models.User, error)
+	PublicUsersByID(ctx context.Context, ids []string) (map[string]*models.PublicUser, error)
 	Update(ctx context.Context, user *models.User) error
 	UpdateStatus(ctx context.Context, userID string, status models.UserStatus) error
 	UpdatePrefStatus(ctx context.Context, userID string, prefStatus models.UserStatus) error

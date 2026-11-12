@@ -137,13 +137,20 @@ func (s *groupDMService) hydrate(ctx context.Context, group *models.GroupDM) err
 	if err != nil {
 		return err
 	}
+	profiles, err := s.users.PublicUsersByID(ctx, ids)
+	if err != nil {
+		return err
+	}
+	return setGroupMembers(group, ids, profiles)
+}
+
+func setGroupMembers(group *models.GroupDM, ids []string, profiles map[string]*models.PublicUser) error {
 	group.Members = make([]models.PublicUser, 0, len(ids))
 	for _, id := range ids {
-		u, err := s.users.GetByID(ctx, id)
-		if err != nil {
-			return err
+		if profiles[id] == nil {
+			return pkg.ErrNotFound
 		}
-		group.Members = append(group.Members, *models.ToPublicUser(u))
+		group.Members = append(group.Members, *profiles[id])
 	}
 	return nil
 }
@@ -224,8 +231,21 @@ func (s *groupDMService) List(ctx context.Context, userID string) ([]models.Grou
 	if err != nil {
 		return nil, err
 	}
+	members := make([][]string, len(groups))
+	var allIDs []string
 	for i := range groups {
-		if err := s.hydrate(ctx, &groups[i]); err != nil {
+		members[i], err = s.groups.ListMemberIDs(ctx, groups[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		allIDs = append(allIDs, members[i]...)
+	}
+	profiles, err := s.users.PublicUsersByID(ctx, allIDs)
+	if err != nil {
+		return nil, err
+	}
+	for i := range groups {
+		if err := setGroupMembers(&groups[i], members[i], profiles); err != nil {
 			return nil, err
 		}
 		readState, readErr := s.groups.GetReadState(ctx, groups[i].ID, userID)
@@ -465,12 +485,19 @@ func (s *groupDMService) GetMessagesAround(ctx context.Context, groupID, userID,
 }
 
 func (s *groupDMService) enrichMessageHistory(ctx context.Context, items []models.GroupDMMessage) error {
+	authors := make([]string, len(items))
 	for i := range items {
-		u, err := s.users.GetByID(ctx, items[i].UserID)
-		if err != nil {
-			return err
+		authors[i] = items[i].UserID
+	}
+	profiles, err := s.users.PublicUsersByID(ctx, authors)
+	if err != nil {
+		return err
+	}
+	for i := range items {
+		items[i].User = profiles[items[i].UserID]
+		if items[i].User == nil {
+			return pkg.ErrNotFound
 		}
-		items[i].User = models.ToPublicUser(u)
 	}
 	ids := make([]string, len(items))
 	for i := range items {
