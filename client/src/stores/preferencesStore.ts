@@ -1,6 +1,7 @@
 /** Account-scoped preferences sync; queued edits survive failed requests. */
 import { create } from "zustand";
 import * as preferencesApi from "../api/preferences";
+import { loadPreferencePresenter } from "./preferencePresenter";
 import { SERVER_URL } from "../utils/constants";
 
 import { decodeLegacyAppearance, object, sanitize, merge, nonempty, cacheable, type PreferencesData } from "./preferencesCodec";
@@ -144,7 +145,7 @@ function requestContext(version: number) {
 }
 
 async function applyData(version: number, reset = false, preserveSessionState = false): Promise<void> {
-  const { applyAccountPreferences } = await import("./applyAccountPreferences");
+  const applyAccountPreferences = await loadPreferencePresenter();
   if (!current(version)) return;
   applyAccountPreferences(
     () => current(version) ? cacheable(usePreferencesStore.getState().data) : null,
