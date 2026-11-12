@@ -320,7 +320,9 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
       if (get()._joinGeneration !== gen) return null;
 
       // Start native foreground service for background audio (mobile only)
-      startVoiceCallService();
+      void startVoiceCallService().catch(() => {
+        console.warn("[voiceStore] Background voice service could not start");
+      });
 
       return response.data;
     } catch (err) {
@@ -409,7 +411,9 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
     }
 
     // Stop native foreground service (mobile only)
-    stopVoiceCallService();
+    void stopVoiceCallService().catch(() => {
+      console.warn("[voiceStore] Background voice service could not stop");
+    });
 
     // Send unwatch WS events for all active screen share watches before clearing
     const { watchingScreenShares, _wsSend, currentVoiceChannelId, voiceStates } = get();

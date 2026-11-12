@@ -9,6 +9,7 @@ import android.content.Intent;
 import android.content.pm.ServiceInfo;
 import android.os.Build;
 import android.os.IBinder;
+import androidx.core.app.NotificationCompat;
 
 /**
  * Foreground service that keeps voice/video calls alive when the app is backgrounded.
@@ -25,7 +26,7 @@ public class VoiceCallService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
-        createNotificationChannel();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) createNotificationChannel();
     }
 
     @Override
@@ -78,7 +79,7 @@ public class VoiceCallService extends Service {
             this, 0, launchIntent, PendingIntent.FLAG_IMMUTABLE
         );
 
-        return new Notification.Builder(this, CHANNEL_ID)
+        return new NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("mqvi")
             .setContentText("Voice call in progress")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)

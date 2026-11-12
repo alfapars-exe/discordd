@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { useVoiceStore } from "./voiceStore";
 import { DEFAULT_SETTINGS } from "./slices/voiceSettingsSlice";
+import * as nativePlugins from "../utils/nativePlugins";
 import * as voiceApi from "../api/voice";
 import { isVoiceRecoveryAllowed, markVoiceActive } from "./shared/voiceRecovery";
 
@@ -839,6 +840,25 @@ describe("voiceStore", () => {
     const latest = useVoiceStore.getState().joinVoiceChannel("new");
     await Promise.all([first, latest]);
     expect(tokens.mock.calls.map(call => call[1])).toEqual(["new"]);
+  });
+
+  it("keeps foreground join and leave usable when the background service rejects", async () => {
+    const start = vi.spyOn(nativePlugins, "startVoiceCallService").mockRejectedValue(new Error("denied"));
+    const stop = vi.spyOn(nativePlugins, "stopVoiceCallService").mockRejectedValue(new Error("denied"));
+    try {
+      vi.mocked(voiceApi.getVoiceToken).mockResolvedValueOnce({
+        success: true, data: { channel_id: "voice", token: "test", url: "wss://example.test" },
+      });
+      expect(await useVoiceStore.getState().joinVoiceChannel("voice")).toBeTruthy();
+      expect(useVoiceStore.getState().currentVoiceChannelId).toBe("voice");
+      expect(start).toHaveBeenCalledOnce();
+      useVoiceStore.getState().leaveVoiceChannel();
+      expect(stop).toHaveBeenCalledOnce();
+      expect(useVoiceStore.getState().currentVoiceChannelId).toBeNull();
+    } finally {
+      start.mockRestore();
+      stop.mockRestore();
+    }
   });
 
   describe("joinVoiceChannel — failure toasts", () => {
