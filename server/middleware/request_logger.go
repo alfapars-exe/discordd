@@ -26,7 +26,7 @@ type HTTPStatsSink interface {
 func diagnosticPath(path string) string {
 	for _, marker := range []string{"/invites/", "/invite/"} {
 		if prefix, _, found := strings.Cut(path, marker); found {
-			return prefix + marker + "{code}"
+			path = prefix + marker + "{code}"
 		}
 	}
 	return path
