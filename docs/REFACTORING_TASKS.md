@@ -4,6 +4,12 @@ Tarih: 25 Ekim 2026. İlk inceleme revizyonu `313acf8e`; çalışma sırasında 
 
 Bu belge uygulama önerisidir. Görev kartının varlığı, kodun değiştirildiği veya kabul edildiği anlamına gelmez. İlk teslimat 25 Ekim’de plan belgeleriydi. 26 Ekim’de kullanıcı uygulamayı başlattı; güncel ilerleme aşağıdaki tabloda izlenir. Görev kartlarındaki Problem alanları ilk incelemenin tarihsel kanıtıdır. Mevcut değişiklikler korunur; uygulama aşamasında her PR yalnız seçilen görevin dosyalarını kapsar.
 
+## Masaüstü parola deposu ve CI · 13 Kasım 2026
+
+Electron ana süreci, elle girişte parolayla birlikte kaydedilen sunucu adresini denetliyor. Başka bir HTTPS sunucusuna veya yönlendirme hedefine kayıtlı parola gönderilmiyor. Sunucu adresi içermeyen eski kayıtla bir kez elle giriş gerekiyor. Linux'ta parola depolamak ve okumak için işletim sisteminin parola yöneticisi gerekiyor. Entegrasyon dalında 275 Electron testi geçti ve 1 test atlandı. Giriş formu testlerinde kaydetme ve silme hatalarında kullanıcı uyarıldı ve kanallara geçiş tamamlandı. Gerçek Linux anahtarlığıyla uçtan uca test açık. [PR #254](https://github.com/alfapars-exe/discordd/pull/254)
+
+Capacitor güncellemesinin `b1664dae` ve günlük maskelemesinin `e08470d9` revizyonlarında GitHub'daki 36 kontrolün tamamı geçti. [PR #217](https://github.com/alfapars-exe/discordd/pull/217) · [PR #247](https://github.com/alfapars-exe/discordd/pull/247)
+
 ## PostgreSQL parametre bağlama ve CI günlükleri · 12 Kasım 2026
 
 | Revizyon | Doğrulanan davranış | Kanıt |
