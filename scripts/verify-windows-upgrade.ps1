@@ -166,9 +166,19 @@ if (Test-Path -LiteralPath $installRoot) {
 Invoke-SilentInstaller -InstallerPath $oldInstaller -InstallPath $installRoot -Label 'Legacy clean install'
 Assert-InstalledVersion -InstallPath $installRoot -ExpectedVersion $PreviousVersion
 
+$testProfile = Assert-UnderRunnerTemp -Path (Join-Path $workRoot 'renderer-profile')
+$profileMarker = [guid]::NewGuid().ToString('N')
+$probe = Join-Path $PSScriptRoot '../e2e/scripts/verify-installed-profile.mjs'
+$installedExe = Join-Path $installRoot 'HiChat.exe'
+node $probe $installedExe $testProfile before $profileMarker
+if ($LASTEXITCODE -ne 0) { throw 'Legacy installed renderer probe failed.' }
+
 $resolvedCurrentInstaller = [IO.Path]::GetFullPath($CurrentInstaller)
 Invoke-SilentInstaller -InstallerPath $resolvedCurrentInstaller -InstallPath $installRoot -Label 'Current in-place upgrade'
 Assert-InstalledVersion -InstallPath $installRoot -ExpectedVersion $currentVersion
 Assert-CurrentPackage -InstallPath $installRoot
+
+node $probe $installedExe $testProfile after $profileMarker
+if ($LASTEXITCODE -ne 0) { throw 'Upgraded renderer or profile continuity probe failed.' }
 
 Write-Host 'Windows clean install and in-place upgrade smoke test passed.'
