@@ -385,6 +385,14 @@ Parametre sınır testi, sürücünün PostgreSQL protokolünde bağlanamayacak 
 
 ## RF17 — Decrypted cache arama maliyeti
 
+12 Kasım 2026 ölçümünde `3fb26986` üzerindeki kanal araması Chromium 156.0.8078.4 ve gerçek IndexedDB ile sınandı. `client` ve `e2e` bağımlılıkları kurulduktan sonra depo kökünde `node e2e/scripts/benchmark-encrypted-search.mjs` çalıştırılır. Her veri kümesinin %80’i hedef kanaldadır. Bir ısınma ve üç ölçümde aksanlı sorgunun sonuç sayısı, mesaj kimliklerinin sırası ve içerikleri doğrulandı. Süre, depolama çağrısından eşleşmelerin dönüşüne kadar ölçüldü.
+
+| Kayıt | Eşleşme | Medyan | En kısa–en uzun |
+|---:|---:|---:|---:|
+| 1.000 | 267 | 22,5 ms | 22,1–23,0 ms |
+| 10.000 | 2.667 | 206,5 ms | 201,3–208,5 ms |
+| 50.000 | 13.333 | 993,0 ms | 946,8–1.049,8 ms |
+
 | Alan | Tanım |
 |---|---|
 | Task ID | RF17 |
