@@ -300,6 +300,10 @@ Parametre sınır testi, sürücünün PostgreSQL protokolünde bağlanamayacak 
 
 ## RF10 — Music bot concurrency ve cleanup
 
+12 Kasım 2026 tarihinde kapanan oturuma yöneltilen dört kuyruk komutunun başarı döndürdüğü regresyon testiyle tekrarlandı. Kuyruk ve oynatma komutları artık oturum kilidini aldıktan sonra kanalın güncel botunu doğruluyor. Dinleyicinin yetkisi denetlenirken bot değişirse eski oynatma hatası, durum bildirimi veya kapanış bildirimi alıcının WebSocket kuyruğuna girmiyor. Yerine bot gelmediğinde kapanış bildirimi teslim edilebiliyor.
+
+Birleşik dalda komut düzeltmesini kapsayan müzik servisi yarış koşusu 483,6 saniyede geçti. Sonraki `3d82a34b` revizyonunda yayıncı değişimi, dinleyici yetkilendirmesi, bot durdurma, istek sahibi ve geri yüklenen kuyruk için seçili testler `-race -count=2` ile 130,2 saniyede geçti. Aynı revizyonda sunucu modülünde `go vet ./...` ve `go build ./...` geçti. Gerçek sağlayıcıdan ses oynatma kabulü açık. [PR #239](https://github.com/alfapars-exe/discordd/pull/239)
+
 | Alan | Tanım |
 |---|---|
 | Task ID | RF10 |
