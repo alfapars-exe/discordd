@@ -20,7 +20,11 @@ export const DEFAULT_LANGUAGE: Language = "tr";
 
 export const ALL_NAMESPACES = ["common", "auth", "channels", "chat", "settings", "voice", "landing", "privacy", "terms", "servers", "dm", "e2ee", "soundboard", "music", "audit", "errors", "inbox", "saved", "expressions", "entrance", "cosmetics"] as const;
 type Namespace = typeof ALL_NAMESPACES[number];
-const modules = import.meta.glob<{ default: Record<string, unknown> }>("./locales/*/*.json");
+const turkishCore = { common: trCommon, auth: trAuth, errors: trErrors };
+const modules = import.meta.glob<{ default: Record<string, unknown> }>([
+  "./locales/*/*.json",
+  "!./locales/tr/{common,auth,errors}.json",
+]);
 const pending = new Map<string, Promise<Record<string, unknown>>>();
 const active = new Set<Namespace>(["common", "auth", "errors", "settings"]);
 let languageRequest = 0;
@@ -29,7 +33,7 @@ void i18n.use(initReactI18next).init({
   lng: DEFAULT_LANGUAGE,
   fallbackLng: DEFAULT_LANGUAGE,
   supportedLngs: Object.keys(SUPPORTED_LANGUAGES),
-  resources: { tr: { common: trCommon, auth: trAuth, errors: trErrors } },
+  resources: { tr: { ...turkishCore } },
   defaultNS: "common", ns: ["common", "auth", "errors"],
   interpolation: { escapeValue: false },
   initAsync: false,
@@ -38,6 +42,9 @@ void i18n.use(initReactI18next).init({
 async function load(lng: Language, namespaces: readonly Namespace[]): Promise<void> {
   const requests = [...new Set([DEFAULT_LANGUAGE, lng])].flatMap(language => namespaces.map(async ns => {
     if (i18n.hasResourceBundle(language, ns)) return;
+    if (language === "tr" && Object.hasOwn(turkishCore, ns)) {
+      return { language, ns, data: turkishCore[ns as keyof typeof turkishCore] };
+    }
     const key = `${language}/${ns}`;
     let request = pending.get(key);
     if (!request) {

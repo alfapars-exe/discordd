@@ -20,6 +20,13 @@ describe("bundled lazy translations", () => {
     expect(i18n.t("common:loading")).not.toBe("loading");
     await changeLanguage("tr");
   });
+  it("restores an unloaded Turkish core bundle from the embedded translations", async () => {
+    await i18nReady;
+    const original = i18n.getResourceBundle("tr", "errors");
+    i18n.removeResourceBundle("tr", "errors");
+    await ensureNamespaces(["errors"]);
+    expect(i18n.getResourceBundle("tr", "errors")).toEqual(original);
+  });
   it("does not change language or persistence on an invalid request", async () => {
     const before = i18n.language, saved = localStorage.getItem("language");
     expect(await changeLanguage("invalid" as "tr")).toBe(false);
