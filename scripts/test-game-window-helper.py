@@ -1,4 +1,5 @@
 """Exercise the shipped Windows foreground-window helper without requiring a visible window."""
+from concurrent.futures import ThreadPoolExecutor
 import json
 import subprocess
 import sys
@@ -14,7 +15,6 @@ for _ in range(5):
         child = subprocess.Popen([helper, "--watch", "--parent-pid", str(parent.pid)], stdout=subprocess.PIPE)
         try:
             # A bounded read prevents a stalled helper from hanging the packaging job.
-            from concurrent.futures import ThreadPoolExecutor
             with ThreadPoolExecutor(max_workers=1) as reader:
                 try:
                     line = reader.submit(child.stdout.readline).result(timeout=5)
@@ -31,3 +31,8 @@ for _ in range(5):
         finally:
             child.kill()
             child.communicate(timeout=5)
+
+for args in ([], ["0"], ["-1"], ["42suffix"], ["4294967296"], ["1", "2"]):
+    result = subprocess.run([sys.argv[2], *args], capture_output=True, timeout=5)
+    if result.returncode != 1 or result.stdout or not result.stderr.startswith(b"Usage:"):
+        raise RuntimeError(f"Audio helper did not reject arguments {args!r}")
