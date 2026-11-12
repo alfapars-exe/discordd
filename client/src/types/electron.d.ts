@@ -260,7 +260,7 @@ interface ElectronAPI {
   removeMuteHotkeyListeners?: () => void;
 
   /** Save credentials encrypted with safeStorage */
-  saveCredentials: (username: string, password: string) => Promise<void>;
+  saveCredentials: (username: string, password: string, origin: string) => Promise<void>;
   /**
    * Username only — the stored password never crosses the bridge
    * (pentest 2026-07-26, H-09). Use loginWithSavedCredentials to sign in.

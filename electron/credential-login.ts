@@ -16,7 +16,7 @@
  * renderer shares — exactly as if the renderer had made the call.
  */
 import { loadCredentials, type Credentials } from "./credentials";
-import { DEFAULT_UPSTREAM, sanitizeUpstreamOrigin } from "./api-proxy";
+import { sanitizeUpstreamOrigin } from "./api-proxy";
 
 type FetchLike = (input: string, init: RequestInit) => Promise<Response>;
 
@@ -38,11 +38,9 @@ export const NO_SAVED_CREDENTIALS = "no-saved-credentials";
 /**
  * Performs a login using the credentials in OS-encrypted storage.
  *
- * `upstreamOrigin` comes from the renderer, which is why it goes through the
- * same sanitizer the proxy applies to the X-HiChat-Upstream header rather than
- * being trusted: a compromised renderer must not be able to aim a login — and
- * therefore the stored password — at a host of its choosing. An unusable value
- * falls back to DEFAULT_UPSTREAM instead of failing, matching proxyApiRequest.
+ * The renderer selects a server. Only the origin stored with the password
+ * during manual login is eligible for a saved login. Older records require
+ * one manual login to establish that binding.
  */
 export async function loginWithSavedCredentials(
   upstreamOrigin: unknown,
@@ -61,7 +59,8 @@ export async function loginWithSavedCredentials(
     sanitizeUpstreamOrigin(
       typeof upstreamOrigin === "string" ? upstreamOrigin : null,
       { allowLoopback }
-    ) ?? DEFAULT_UPSTREAM;
+    );
+  if (!origin || origin !== creds.origin) throw new Error(NO_SAVED_CREDENTIALS);
 
   const response = await fetchImpl(`${origin}/api/auth/login`, {
     method: "POST",
