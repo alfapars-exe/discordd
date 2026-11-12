@@ -155,9 +155,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
         appIcon: string | null;
       }>,
     ) => void,
-  ): void => {
-    ipcRenderer.on("show-screen-picker", (_e, sources) => cb(sources));
-  },
+  ): (() => void) => subscribeIPC("show-screen-picker", cb),
 
   /**
    * Re-query desktop sources while the picker is open. Lets the user pick up
@@ -178,14 +176,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
         appIcon: string | null;
       }>,
     ) => void,
-  ): void => {
-    ipcRenderer.on("screen-picker-refresh-result", (_e, sources) => cb(sources));
-  },
+  ): (() => void) => subscribeIPC("screen-picker-refresh-result", cb),
 
   /** Remove the refresh-result listener (on picker close). */
   removeScreenPickerRefreshListener: (): void => {
     ipcRenderer.removeAllListeners("screen-picker-refresh-result");
   },
+
+  onScreenPickerDismissed: (cb: () => void) => subscribeIPC("screen-picker-dismissed", cb),
 
   /** Send user's selection to main process (null = cancelled) */
   sendScreenPickerResult: (sourceId: string | null): void => {
