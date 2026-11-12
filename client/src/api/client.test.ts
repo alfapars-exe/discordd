@@ -668,3 +668,18 @@ describe("cold session restore", () => {
     expect((await apiClient("/users/me", { refreshIfMissing: true })).error).toContain("service_unavailable:"); expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
+
+it("keeps invitation codes and search terms out of transport diagnostics", async () => {
+  const { apiClient } = await loadClient();
+  const endpoint = "/invites/private-invite/preview?q=private-search";
+  const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+  try {
+    fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch " + endpoint));
+    const result = await apiClient(endpoint);
+    expect(result.isNetworkError).toBe(true);
+    expect(errorLog).toHaveBeenCalled();
+    expect(JSON.stringify(errorLog.mock.calls)).not.toMatch(/private-invite|private-search/);
+  } finally {
+    errorLog.mockRestore();
+  }
+});
