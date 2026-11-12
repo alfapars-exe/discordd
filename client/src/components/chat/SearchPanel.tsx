@@ -28,11 +28,8 @@ type SearchPanelProps = {
 function SearchPanel({ channelId, onClose, onSelectResult }: SearchPanelProps) {
   const { t, i18n } = useTranslation("chat");
   const { t: tE2ee } = useTranslation("e2ee");
-  const isE2EEReady = useE2EEStore((s) => s.initStatus === "ready");
-  // E2EE is per-server. Plaintext servers can use backend FTS5; only route
-  // through the IndexedDB cache when the active server is actually encrypted.
+  const activeServerId = useServerStore((s) => s.activeServerId);
   const serverE2eeEnabled = useServerStore((s) => s.activeServer?.e2ee_enabled ?? false);
-  const useLocalSearch = serverE2eeEnabled && isE2EEReady;
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult | null>(null);
   const [isSearching, setIsSearching] = useState(false);
@@ -69,8 +66,19 @@ function SearchPanel({ channelId, onClose, onSelectResult }: SearchPanelProps) {
 
       setIsSearching(true);
 
-      // E2EE active — client-side IndexedDB search (server has NULL content)
-      if (useLocalSearch && channelId) {
+      const current = useServerStore.getState();
+      if (!activeServerId || current.activeServerId !== activeServerId || current.activeServer?.id !== activeServerId ||
+          (current.activeServer.e2ee_enabled ?? false) !== serverE2eeEnabled) {
+        setResults(null);
+        setIsSearching(false);
+        return;
+      }
+      if (serverE2eeEnabled) {
+        if (!channelId || useE2EEStore.getState().initStatus !== "ready") {
+          setResults(null);
+          setIsSearching(false);
+          return;
+        }
         try {
           const cached = await searchCachedMessages(channelId, searchQuery.trim());
           // A newer search started while this one was awaiting — its results
@@ -110,9 +118,7 @@ function SearchPanel({ channelId, onClose, onSelectResult }: SearchPanelProps) {
       }
 
       // Plaintext — server-side FTS5 search
-      const serverId = useServerStore.getState().activeServerId;
-      if (!serverId) return;
-      const res = await searchMessages(serverId, searchQuery.trim(), channelId, limit, searchOffset);
+      const res = await searchMessages(activeServerId, searchQuery.trim(), channelId, limit, searchOffset);
       // Out-of-order guard — see the local-search path above.
       if (seq !== searchSeqRef.current) return;
       if (res.success && res.data) {
@@ -122,7 +128,7 @@ function SearchPanel({ channelId, onClose, onSelectResult }: SearchPanelProps) {
       }
       setIsSearching(false);
     },
-    [channelId, useLocalSearch]
+    [activeServerId, channelId, serverE2eeEnabled]
   );
 
   /** Debounced search on input change */
@@ -244,7 +250,7 @@ function SearchPanel({ channelId, onClose, onSelectResult }: SearchPanelProps) {
       </div>
 
       {/* E2EE client-side search note — only when server is actually encrypted */}
-      {useLocalSearch && (
+      {serverE2eeEnabled && (
         <p className="search-e2ee-note">{tE2ee("clientSearchNote")}</p>
       )}
 

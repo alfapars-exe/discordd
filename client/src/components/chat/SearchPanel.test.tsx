@@ -38,7 +38,7 @@ vi.mock("../../stores/serverStore", async () => {
   return {
     useServerStore: create(() => ({
       activeServerId: "srv-1",
-      activeServer: { e2ee_enabled: false },
+      activeServer: { id: "srv-1", e2ee_enabled: false },
     })),
   };
 });
@@ -74,6 +74,8 @@ vi.mock("../shared/Avatar", () => ({
 import SearchPanel from "./SearchPanel";
 import { searchMessages } from "../../api/search";
 import { useMessageStore } from "../../stores/messageStore";
+import { useServerStore } from "../../stores/serverStore";
+import { useE2EEStore } from "../../stores/e2eeStore";
 import { useToastStore } from "../../stores/toastStore";
 import type { SearchResult } from "../../api/search";
 import type { APIResponse, Message } from "../../types";
@@ -128,7 +130,22 @@ describe("SearchPanel — result races", () => {
   });
 
   afterEach(() => {
+    useServerStore.setState({ activeServer: { ...useServerStore.getState().activeServer!, e2ee_enabled: false } });
+    useE2EEStore.setState({ initStatus: "uninitialized" });
     vi.useRealTimers();
+  });
+
+  it.each([
+    ["uninitialized", "ch-1"],
+    ["ready", undefined],
+  ] as const)("keeps an encrypted search local when status is %s and channel is %s", async (initStatus, channelId) => {
+    useServerStore.setState({ activeServer: { ...useServerStore.getState().activeServer!, e2ee_enabled: true } });
+    useE2EEStore.setState({ initStatus });
+    vi.mocked(searchMessages).mockResolvedValue(ok([]));
+    render(<SearchPanel channelId={channelId} onClose={() => {}} />);
+    typeQuery("private search");
+    await act(async () => {});
+    expect(searchMessages).not.toHaveBeenCalled();
   });
 
   it("ignores an older response that resolves after a newer one", async () => {
