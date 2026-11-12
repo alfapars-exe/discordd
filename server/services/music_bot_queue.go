@@ -17,13 +17,8 @@ func (s *musicBotService) RemoveQueueItem(channelID, queueItemID string, expecte
 	if _, err := uuid.Parse(queueItemID); err != nil {
 		return fmt.Errorf("%w: invalid queue item id", pkg.ErrBadRequest)
 	}
-	bot := s.lookupBot(channelID)
-	if bot == nil {
-		return pkg.ErrNotFound
-	}
-	bot.sessionMu.Lock()
-	if err := s.CheckLegacyControl(context.Background(), channelID); err != nil {
-		bot.sessionMu.Unlock()
+	bot, err := s.lockControlSession(channelID)
+	if err != nil {
 		return err
 	}
 	bot.mu.Lock()
@@ -70,13 +65,8 @@ func (s *musicBotService) ReorderQueue(channelID string, queueItemIDs []string, 
 			return fmt.Errorf("%w: invalid queue item id", pkg.ErrBadRequest)
 		}
 	}
-	bot := s.lookupBot(channelID)
-	if bot == nil {
-		return pkg.ErrNotFound
-	}
-	bot.sessionMu.Lock()
-	if err := s.CheckLegacyControl(context.Background(), channelID); err != nil {
-		bot.sessionMu.Unlock()
+	bot, err := s.lockControlSession(channelID)
+	if err != nil {
 		return err
 	}
 	bot.mu.Lock()
@@ -109,13 +99,8 @@ func (s *musicBotService) ShuffleQueue(channelID string, expectedRevision uint64
 	if err := s.CheckLegacyControl(context.Background(), channelID); err != nil {
 		return err
 	}
-	bot := s.lookupBot(channelID)
-	if bot == nil {
-		return pkg.ErrNotFound
-	}
-	bot.sessionMu.Lock()
-	if err := s.CheckLegacyControl(context.Background(), channelID); err != nil {
-		bot.sessionMu.Unlock()
+	bot, err := s.lockControlSession(channelID)
+	if err != nil {
 		return err
 	}
 	bot.mu.Lock()
@@ -145,13 +130,8 @@ func (s *musicBotService) SetRepeatMode(channelID, mode string) error {
 	if mode != "off" && mode != "one" && mode != "all" {
 		return fmt.Errorf("%w: invalid repeat mode", pkg.ErrBadRequest)
 	}
-	bot := s.lookupBot(channelID)
-	if bot == nil {
-		return pkg.ErrNotFound
-	}
-	bot.sessionMu.Lock()
-	if err := s.CheckLegacyControl(context.Background(), channelID); err != nil {
-		bot.sessionMu.Unlock()
+	bot, err := s.lockControlSession(channelID)
+	if err != nil {
 		return err
 	}
 	bot.mu.Lock()

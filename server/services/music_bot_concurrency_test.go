@@ -865,3 +865,30 @@ func TestEnqueueSaveFailureRearmsIdleLeave(t *testing.T) {
 		t.Fatalf("failed enqueue left idle state inconsistent: timer=%v empty=%v", rearmed, queueEmpty)
 	}
 }
+
+func TestMusicCommandsRejectStoppingSession(t *testing.T) {
+	const id = "00000000-0000-4000-8000-000000000001"
+	for name, command := range map[string]func(*musicBotService) error{
+		"skip":    func(s *musicBotService) error { return s.Skip("ch") },
+		"pause":   func(s *musicBotService) error { return s.Pause("ch") },
+		"resume":  func(s *musicBotService) error { return s.Resume("ch") },
+		"seek":    func(s *musicBotService) error { return s.Seek("ch", 10) },
+		"remove":  func(s *musicBotService) error { return s.RemoveQueueItem("ch", id, 0) },
+		"reorder": func(s *musicBotService) error { return s.ReorderQueue("ch", []string{id}, 0) },
+		"shuffle": func(s *musicBotService) error { return s.ShuffleQueue("ch", 0) },
+		"repeat":  func(s *musicBotService) error { return s.SetRepeatMode("ch", "all") },
+	} {
+		t.Run(name, func(t *testing.T) {
+			s := newTestMusicBotService("ch", "server")
+			bot := s.bots["ch"]
+			bot.queue = []models.MusicTrack{{QueueItemID: id}}
+			bot.stopping.Store(true)
+			if err := command(s); !errors.Is(err, pkg.ErrNotFound) {
+				t.Fatalf("command against stopping session returned %v", err)
+			}
+			if bot.revision != 0 || len(bot.queue) != 1 {
+				t.Fatal("stopping session was mutated")
+			}
+		})
+	}
+}

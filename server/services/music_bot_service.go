@@ -200,7 +200,7 @@ type requesterMeta struct {
 }
 
 type musicBotService struct {
-	shuttingDown bool // guarded by mu
+	shuttingDown       bool // guarded by mu
 	musicPublicationMu sync.RWMutex
 	mu                 sync.RWMutex
 	bots               map[string]*botInstance // channelID → bot
@@ -594,15 +594,11 @@ func (s *musicBotService) Skip(channelID string) error {
 	if err := s.CheckLegacyControl(context.Background(), channelID); err != nil {
 		return err
 	}
-	bot := s.lookupBot(channelID)
-	if bot == nil {
-		return pkg.ErrNotFound
-	}
-	bot.sessionMu.Lock()
-	defer bot.sessionMu.Unlock()
-	if err := s.CheckLegacyControl(context.Background(), channelID); err != nil {
+	bot, err := s.lockControlSession(channelID)
+	if err != nil {
 		return err
 	}
+	defer bot.sessionMu.Unlock()
 	bot.mu.Lock()
 	defer bot.mu.Unlock()
 	bot.skipFlag = true
@@ -622,15 +618,11 @@ func (s *musicBotService) Pause(channelID string) error {
 	if err := s.CheckLegacyControl(context.Background(), channelID); err != nil {
 		return err
 	}
-	bot := s.lookupBot(channelID)
-	if bot == nil {
-		return pkg.ErrNotFound
-	}
-	bot.sessionMu.Lock()
-	defer bot.sessionMu.Unlock()
-	if err := s.CheckLegacyControl(context.Background(), channelID); err != nil {
+	bot, err := s.lockControlSession(channelID)
+	if err != nil {
 		return err
 	}
+	defer bot.sessionMu.Unlock()
 	bot.mu.Lock()
 	defer bot.mu.Unlock()
 
@@ -646,15 +638,11 @@ func (s *musicBotService) Resume(channelID string) error {
 	if err := s.CheckLegacyControl(context.Background(), channelID); err != nil {
 		return err
 	}
-	bot := s.lookupBot(channelID)
-	if bot == nil {
-		return pkg.ErrNotFound
-	}
-	bot.sessionMu.Lock()
-	defer bot.sessionMu.Unlock()
-	if err := s.CheckLegacyControl(context.Background(), channelID); err != nil {
+	bot, err := s.lockControlSession(channelID)
+	if err != nil {
 		return err
 	}
+	defer bot.sessionMu.Unlock()
 	bot.mu.Lock()
 	defer bot.mu.Unlock()
 
@@ -672,13 +660,8 @@ func (s *musicBotService) Seek(channelID string, seconds int) error {
 	if err := s.CheckLegacyControl(context.Background(), channelID); err != nil {
 		return err
 	}
-	bot := s.lookupBot(channelID)
-	if bot == nil {
-		return pkg.ErrNotFound
-	}
-	bot.sessionMu.Lock()
-	if err := s.CheckLegacyControl(context.Background(), channelID); err != nil {
-		bot.sessionMu.Unlock()
+	bot, err := s.lockControlSession(channelID)
+	if err != nil {
 		return err
 	}
 	bot.mu.Lock()
@@ -1058,6 +1041,25 @@ func (s *musicBotService) lookupBot(channelID string) *botInstance {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.bots[channelID]
+}
+
+// lockControlSession returns the current bot with sessionMu held. Stop can
+// retire a bot between the initial lookup and acquisition of that lock.
+func (s *musicBotService) lockControlSession(channelID string) (*botInstance, error) {
+	bot := s.lookupBot(channelID)
+	if bot == nil {
+		return nil, pkg.ErrNotFound
+	}
+	bot.sessionMu.Lock()
+	if bot.stopping.Load() || s.lookupBot(channelID) != bot {
+		bot.sessionMu.Unlock()
+		return nil, pkg.ErrNotFound
+	}
+	if err := s.CheckLegacyControl(context.Background(), channelID); err != nil {
+		bot.sessionMu.Unlock()
+		return nil, err
+	}
+	return bot, nil
 }
 
 func (s *musicBotService) channelLifecycleLock(channelID string) *sync.Mutex {
