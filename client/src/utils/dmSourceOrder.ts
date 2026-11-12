@@ -17,14 +17,28 @@ export function preserveDMSourceSequence<T extends Pick<DMMessage, "source_seque
 /** Keep legacy/optimistic slots in their existing fallback order, and sort all
  * authoritative sequenced slots by append order. This avoids a nontransitive
  * mixed timestamp/sequence comparator while preserving old-server behavior. */
-export function sortDMBySource<T extends Pick<DMMessage,"id"|"created_at"|"source_sequence">>(messages: readonly T[], positions?: ReadonlyMap<string,number>): T[] {
-  const baseline = [...messages].sort((a,b) => compareMessageTimestamps(a.created_at, b.created_at) || (positions?.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (positions?.get(b.id) ?? Number.MAX_SAFE_INTEGER));
-  const known = baseline.filter(message => dmSourceSequence(message.source_sequence) !== null).sort((a,b) => {
-    const left = dmSourceSequence(a.source_sequence)!, right = dmSourceSequence(b.source_sequence)!;
-    return left < right ? -1 : left > right ? 1 : 0;
+export function sortDMBySource<T extends Pick<DMMessage, "id" | "created_at" | "source_sequence">>(
+  messages: readonly T[],
+  tieBreak?: ReadonlyMap<string, number> | "id",
+): T[] {
+  const baseline = [...messages].sort((a, b) => {
+    const timeOrder = compareMessageTimestamps(a.created_at, b.created_at);
+    if (timeOrder || !tieBreak) return timeOrder;
+    if (tieBreak === "id") return a.id.localeCompare(b.id);
+    return (tieBreak.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (tieBreak.get(b.id) ?? Number.MAX_SAFE_INTEGER);
   });
-  let index = 0;
-  return baseline.map(message => dmSourceSequence(message.source_sequence) === null ? message : known[index++]);
+  const slots: number[] = [];
+  const known: { message: T; sequence: bigint }[] = [];
+  baseline.forEach((message, index) => {
+    const sequence = dmSourceSequence(message.source_sequence);
+    if (sequence !== null) {
+      slots.push(index);
+      known.push({ message, sequence });
+    }
+  });
+  known.sort((a, b) => a.sequence < b.sequence ? -1 : a.sequence > b.sequence ? 1 : 0);
+  slots.forEach((slot, index) => { baseline[slot] = known[index].message; });
+  return baseline;
 }
 export function newerDMSource(next: Pick<DMMessage,"source_sequence"|"created_at">, current?: Pick<DMMessage,"source_sequence"|"created_at"> | null): boolean {
   if (!current) return true;

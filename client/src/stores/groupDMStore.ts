@@ -143,8 +143,7 @@ function mergeHistory(groupId:string,fresh:GroupDMMessage[],current:GroupDMMessa
   return mergeUniqueGroupMessages(current, safe);
 }
 function sortGroupMessages(messages:GroupDMMessage[]):GroupDMMessage[]{
-  const legacy=[...messages].sort((a,b)=>new Date(a.created_at).getTime()-new Date(b.created_at).getTime()||a.id.localeCompare(b.id));
-  return sortDMBySource(legacy,new Map(legacy.map((m,index)=>[m.id,index])));
+  return sortDMBySource(messages, "id");
 }
 function mergeUniqueGroupMessages(...lists:GroupDMMessage[][]):GroupDMMessage[]{
   const merged=new Map<string,GroupDMMessage>();
