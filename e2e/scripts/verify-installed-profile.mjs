@@ -4,7 +4,7 @@ import { _electron as electron } from "@playwright/test";
 
 const [executablePath, profile, phase, marker] = process.argv.slice(2);
 assert.ok(path.isAbsolute(executablePath) && path.isAbsolute(profile));
-assert.ok(["before", "after"].includes(phase) && marker);
+assert.ok(["before", "after", "rollback"].includes(phase) && marker);
 const app = await electron.launch({ executablePath, args: [
   `--user-data-dir=${profile}`,
   // The installer under test owns the upgrade. Prevent the old application's
@@ -30,7 +30,7 @@ try {
   } else {
     assert.equal(await window.evaluate(key => localStorage.getItem(key), key), marker);
   }
-  console.log(`Verified installed renderer and profile (${phase} upgrade)`);
+  console.log(`Verified installed renderer and profile (phase: ${phase})`);
 } finally {
   await app.close();
 }
