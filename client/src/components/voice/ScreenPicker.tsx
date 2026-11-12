@@ -81,18 +81,20 @@ function ScreenPicker() {
     const api = window.electronAPI;
     if (!api) return;
 
-    api.onShowScreenPicker((incoming) => {
+    const stopShow = api.onShowScreenPicker((incoming) => {
       setSources(normalizeSources(incoming));
       setIsRefreshing(false);
     });
 
-    api.onScreenPickerRefreshResult?.((incoming) => {
-      setSources(normalizeSources(incoming));
+    const stopRefresh = api.onScreenPickerRefreshResult?.((incoming) => {
+      setSources(current => current === null ? null : normalizeSources(incoming));
       setIsRefreshing(false);
     });
 
     return () => {
-      api.removeScreenPickerRefreshListener?.();
+      stopShow?.();
+      if (stopRefresh) stopRefresh();
+      else api.removeScreenPickerRefreshListener?.();
     };
   }, []);
 
@@ -116,8 +118,12 @@ function ScreenPicker() {
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!isOpen || !dialog) return;
+    const opener = document.activeElement;
     dialog.showModal();
-    return () => dialog.close();
+    return () => {
+      dialog.close();
+      if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
+    };
   }, [isOpen]);
 
   if (!sources) return null;
