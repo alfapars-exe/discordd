@@ -84,6 +84,19 @@ jobs:
           python3 ../scripts/coverage-meta.py "$RUNNER_TEMP/go-coverage/base.out"
         working-directory: server
 
+      - name: Verify voluntary leave evicts LiveKit participants
+        shell: bash
+        working-directory: server
+        env:
+          HICHAT_TEST_LIVEKIT_URL: ws://127.0.0.1:7880
+          HICHAT_TEST_LIVEKIT_KEY: devkey
+          HICHAT_TEST_LIVEKIT_SECRET: secret
+        run: |
+          cid=$(docker run -d --network host livekit/livekit-server:v1.9.12@sha256:2c13cbf2edcbf13ea7b20d05c10b394d04d8fb3fe358269cff845a90b4de9576 --dev --bind 127.0.0.1 --node-ip 127.0.0.1)
+          trap 'docker rm -f "$cid" >/dev/null' EXIT
+          curl --fail --silent --show-error --retry 20 --retry-connrefused --retry-delay 1 http://127.0.0.1:7880/ >/dev/null
+          go test -race -tags livekit_integration ./services -run '^TestVoluntaryLeaveEvictsLiveKitParticipants$' -count=1 -timeout=2m
+
       - name: Upload base coverage
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:

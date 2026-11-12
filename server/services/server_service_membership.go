@@ -111,6 +111,9 @@ func (s *serverService) JoinServer(ctx context.Context, userID, inviteCode strin
 	if err := s.joinServerTx(ctx, serverID, userID, defaultRoleID, audience); err != nil {
 		return nil, err
 	}
+	if s.permInvalidator != nil {
+		s.permInvalidator.InvalidateUser(userID)
+	}
 	if s.gameActivity != nil {
 		s.gameActivity.MembershipAdded(ctx, serverID, userID)
 	}
@@ -194,8 +197,14 @@ func (s *serverService) LeaveServer(ctx context.Context, serverID, userID string
 		return fmt.Errorf("%w: server owner cannot leave; transfer ownership first", pkg.ErrForbidden)
 	}
 
-	if err := s.serverRepo.RemoveMember(ctx, serverID, userID); err != nil {
+	if err := s.serverRepo.LeaveMember(ctx, serverID, userID); err != nil {
 		return fmt.Errorf("failed to remove member: %w", err)
+	}
+	if s.permInvalidator != nil {
+		s.permInvalidator.InvalidateUser(userID)
+	}
+	if s.membershipVoiceCleanup != nil {
+		s.membershipVoiceCleanup(serverID, userID)
 	}
 	if s.gameActivity != nil {
 		s.gameActivity.MembershipRemoved(ctx, serverID, userID)

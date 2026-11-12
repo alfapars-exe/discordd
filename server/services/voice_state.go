@@ -150,10 +150,26 @@ func (s *voiceService) hasForceMoveGrant(userID, channelID string) bool {
 	return ok && grant.channelID == channelID && time.Now().Before(grant.expiresAt)
 }
 
+// Admission may return a membership snapshot taken before a concurrent leave.
+type pendingVoiceJoin struct {
+	userID          string
+	departedServers map[string]bool
+}
+
 func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, channelID string, isMuted, isDeafened bool) error {
-	s.mu.RLock()
+	pending := &pendingVoiceJoin{userID: userID}
+	s.mu.Lock()
+	if s.pendingJoins == nil {
+		s.pendingJoins = make(map[*pendingVoiceJoin]struct{})
+	}
+	s.pendingJoins[pending] = struct{}{}
 	deleteEpoch := s.channelDeleteEpoch
-	s.mu.RUnlock()
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		delete(s.pendingJoins, pending)
+		s.mu.Unlock()
+	}()
 
 	// Resolve channel's parent server before locking — all voice broadcasts are server-scoped.
 	ctx := context.Background()
@@ -297,6 +313,9 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if pending.departedServers[serverID] {
+		return fmt.Errorf("%w: membership changed during voice join", pkg.ErrForbidden)
+	}
 	if s.channelDeleteEpoch != deleteEpoch {
 		return fmt.Errorf("%w: channel changed during voice join", pkg.ErrNotFound)
 	}
@@ -770,6 +789,24 @@ func (s *voiceService) GetVoiceEpoch() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.voiceEpoch
+}
+
+func (s *voiceService) DisconnectServerMember(serverID, userID string) {
+	s.mu.Lock()
+	for join := range s.pendingJoins {
+		if join.userID == userID {
+			if join.departedServers == nil {
+				join.departedServers = make(map[string]bool)
+			}
+			join.departedServers[serverID] = true
+		}
+	}
+	state := s.states[userID]
+	if state == nil || state.ServerID != serverID {
+		s.mu.Unlock()
+		return
+	}
+	s.disconnectVoiceLocked(userID, state)
 }
 
 func (s *voiceService) DisconnectUser(userID string) {

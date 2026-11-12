@@ -26,21 +26,24 @@ type ServerService interface {
 	// ReorderServers updates the user's personal server list order. No WS broadcast.
 	ReorderServers(ctx context.Context, userID string, req *models.ReorderServersRequest) ([]models.ServerListItem, error)
 	SetUploadDir(dir string)
+	SetPermInvalidator(inv PermissionInvalidator)
+	SetMembershipVoiceCleanup(cleanup func(serverID, userID string))
 }
 
 type serverService struct {
-	db            *sql.DB // for WithTx in CreateServer/DeleteServer
-	serverRepo    repository.ServerRepository
-	livekitRepo   repository.LiveKitRepository
-	roleRepo      repository.RoleRepository
-	channelRepo   repository.ChannelRepository
-	categoryRepo  repository.CategoryRepository
-	userRepo      repository.UserRepository
-	banRepo       repository.BanRepository // N-02: JoinServer's ban gate
-	inviteService InviteService
-	hub           ws.BroadcastAndManage
-	encryptionKey []byte // AES-256-GCM for LiveKit credentials
-	auditLogger   AuditWriter
+	membershipVoiceCleanup func(serverID, userID string)
+	db                     *sql.DB // for WithTx in CreateServer/DeleteServer
+	serverRepo             repository.ServerRepository
+	livekitRepo            repository.LiveKitRepository
+	roleRepo               repository.RoleRepository
+	channelRepo            repository.ChannelRepository
+	categoryRepo           repository.CategoryRepository
+	userRepo               repository.UserRepository
+	banRepo                repository.BanRepository // N-02: JoinServer's ban gate
+	inviteService          InviteService
+	hub                    ws.BroadcastAndManage
+	encryptionKey          []byte // AES-256-GCM for LiveKit credentials
+	auditLogger            AuditWriter
 	// membershipTxRunner backs JoinServer's atomic AddMember+AssignToUser
 	// (server_service_membership.go). A separate mockable seam from the raw
 	// `db` field above (rather than another database.WithTx(s.db, ...) call
@@ -49,11 +52,20 @@ type serverService struct {
 	membershipTxRunner repository.ServerMembershipTxRunner
 	preferencesRepo    repository.PreferencesRepository
 	gameActivity       GameActivityPrivacyInvalidator
+	permInvalidator    PermissionInvalidator
 	// uploadDir enables best-effort disk cleanup on server delete (see
 	// upload_cleanup.go). Blank disables cleanup — set via SetUploadDir,
 	// wired in init_services.go so the constructor signature below stays
 	// unchanged.
 	uploadDir string
+}
+
+func (s *serverService) SetMembershipVoiceCleanup(cleanup func(serverID, userID string)) {
+	s.membershipVoiceCleanup = cleanup
+}
+
+func (s *serverService) SetPermInvalidator(inv PermissionInvalidator) {
+	s.permInvalidator = inv
 }
 
 func (s *serverService) SetUploadDir(dir string) {
