@@ -102,6 +102,9 @@ func TestP2PCallLateDeclinePreservesAcceptedCall(t *testing.T) {
 		t.Fatal(err)
 	}
 	id := svc.GetUserCall("caller").ID
+	if err := svc.EndCall("caller", "previous-call"); !errors.Is(err, pkg.ErrNotFound) {
+		t.Fatalf("stale hangup returned %v", err)
+	}
 	if err := svc.AcceptCall("receiver", id); err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +140,7 @@ func TestP2PCallTerminalActionsCancelRingTimer(t *testing.T) {
 			case "decline":
 				err = svc.DeclineCall("receiver", svc.GetUserCall("caller").ID)
 			case "end":
-				err = svc.EndCall("caller")
+				err = svc.EndCall("caller", "")
 			case "disconnect":
 				svc.HandleDisconnect("receiver")
 			}
