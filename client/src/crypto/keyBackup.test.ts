@@ -56,8 +56,9 @@ vi.mock("./keyStorage", () => {
 
     // ── write-side (importBackupContents) ──
     // clearAllE2EEData wipes metadata as well — the whole point of N-22.
-    clearAllE2EEData: vi.fn(async () => {
+    clearAllE2EEData: vi.fn(async (options?: { resetSelfFanout: true }) => {
       metadataStore.clear();
+      if (options?.resetSelfFanout) metadataStore.set("self_fanout_reset", true);
     }),
     saveIdentityKeyPair: vi.fn(async () => {}),
     saveSigningKeyPair: vi.fn(async () => {}),
@@ -80,7 +81,7 @@ vi.mock("./keyStorage", () => {
 
 // Mock the circular import inside restoreFromBackup
 vi.mock("./dmEncryption", () => ({
-  markSelfFanoutNeedsReset: vi.fn(async () => {}),
+  markSelfFanoutNeedsReset: vi.fn(async () => { metadataStore.set("self_fanout_reset", true); }),
 }));
 
 import { createBackup, restoreFromBackup } from "./keyBackup";
@@ -246,6 +247,7 @@ describe("keyBackup — self-fanout reset on restore (audit P0-FE-03)", () => {
     const ok = await restoreFromBackup(backup, "pw");
     expect(ok).toBe(true);
     expect(dmEncryptionMock.markSelfFanoutNeedsReset).toHaveBeenCalledTimes(1);
+    expect(await keyStorageMock.getMetadata("self_fanout_reset")).toBe(true);
   });
 
   it("arms the reset BEFORE importing keys (no window where a restored session is usable but unflagged)", async () => {

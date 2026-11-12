@@ -494,7 +494,7 @@ async function importBackupContents(contents: BackupContents, scope: AuthScope):
 
   try {
     // Clear crypto keys (including messageCache — will be re-written below)
-    await awaitScoped(scope, () => keyStorage.clearAllE2EEData());
+    await awaitScoped(scope, () => keyStorage.clearAllE2EEData({ resetSelfFanout: true }));
 
     // Identity key pair
     await awaitScoped(scope, () => keyStorage.saveIdentityKeyPair({

@@ -1075,7 +1075,7 @@ export async function getAllMetadata(): Promise<Array<[string, unknown]>> {
  * This operation is irreversible. If the user has a recovery password,
  * they can restore from backup on a new device.
  */
-export async function clearAllE2EEData(): Promise<void> {
+export async function clearAllE2EEData(options?: { resetSelfFanout: true }): Promise<void> {
   const db = await getDB();
 
   const storeNames = [
@@ -1091,12 +1091,12 @@ export async function clearAllE2EEData(): Promise<void> {
     "metadata",
   ] as const;
 
-  // Clear each store in its own transaction
+  const tx = db.transaction(storeNames, "readwrite");
   for (const storeName of storeNames) {
-    const tx = db.transaction(storeName, "readwrite");
-    await tx.store.clear();
-    await tx.done;
+    await tx.objectStore(storeName).clear();
   }
+  if (options?.resetSelfFanout) await tx.objectStore("metadata").put(true, "self_fanout_reset");
+  await tx.done;
 }
 
 /**

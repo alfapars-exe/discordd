@@ -719,6 +719,14 @@ describe("keyStorage — lifecycle", () => {
     expect(await keyStorage.hasLocalKeys()).toBe(true);
   });
 
+  it("arms a fresh self-device handshake only when clearing for restore", async () => {
+    await keyStorage.setMetadata("deviceId", "old-device");
+    await keyStorage.clearAllE2EEData({ resetSelfFanout: true });
+    expect(await keyStorage.getAllMetadata()).toEqual([["self_fanout_reset", true]]);
+    await keyStorage.clearAllE2EEData();
+    expect(await keyStorage.getAllMetadata()).toEqual([]);
+  });
+
   it("clearAllE2EEData wipes every store and drops hasLocalKeys back to false", async () => {
     // Populate every store.
     await keyStorage.saveIdentityKeyPair(makeIdentity());
