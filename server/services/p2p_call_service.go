@@ -37,7 +37,7 @@ type P2PCallService interface {
 	InitiateCall(callerID, receiverID string, callType models.P2PCallType) error
 	AcceptCall(userID, callID string) error
 	DeclineCall(userID, callID string) error
-	EndCall(userID string) error
+	EndCall(userID, expectedCallID string) error
 	RelaySignal(senderID, callID string, signal ws.P2PSignalData) error
 	HandleDisconnect(userID string)
 	GetUserCall(userID string) *models.P2PCall
@@ -260,6 +260,10 @@ func (s *p2pCallService) DeclineCall(userID, callID string) error {
 		s.mu.Unlock()
 		return fmt.Errorf("%w: not part of this call", pkg.ErrForbidden)
 	}
+	if call.Status != models.P2PCallStatusRinging {
+		s.mu.Unlock()
+		return fmt.Errorf("%w: call is not ringing", pkg.ErrBadRequest)
+	}
 
 	delete(s.activeCalls, callID)
 	delete(s.signals, callID)
@@ -283,16 +287,17 @@ func (s *p2pCallService) DeclineCall(userID, callID string) error {
 	return nil
 }
 
-func (s *p2pCallService) EndCall(userID string) error {
-	s.mu.RLock()
+func (s *p2pCallService) EndCall(userID, expectedCallID string) error {
+	s.mu.Lock()
 	callID, exists := s.userCalls[userID]
-	s.mu.RUnlock()
-
 	if !exists {
+		s.mu.Unlock()
 		return fmt.Errorf("%w: not in a call", pkg.ErrBadRequest)
 	}
-
-	s.mu.Lock()
+	if expectedCallID != "" && callID != expectedCallID {
+		s.mu.Unlock()
+		return fmt.Errorf("%w: call not found", pkg.ErrNotFound)
+	}
 	call, exists := s.activeCalls[callID]
 	if !exists {
 		s.mu.Unlock()

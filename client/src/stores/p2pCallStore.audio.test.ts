@@ -97,6 +97,21 @@ afterEach(() => {
 });
 
 describe("processed P2P microphones", () => {
+  it("continues draining queued ICE candidates after one is rejected", async () => {
+    vi.stubGlobal("RTCIceCandidate", class {
+      constructor(value: RTCIceCandidateInit) { Object.assign(this, value); }
+    });
+    const pc = peer();
+    mocks.capture.mockResolvedValue(new Stream([track("mic")]));
+    mocks.createPipeline.mockResolvedValue(pipeline(track("output")));
+    pc.addIceCandidate.mockRejectedValueOnce(new DOMException("stale candidate", "OperationError"));
+    const { handleSignal } = useP2PCallStore.getState();
+    for (const candidate of ["old", "current"]) {
+      await handleSignal({ call_id: "call", type: "ice-candidate", candidate: { candidate, sdpMid: "0" } });
+    }
+    await handleSignal({ call_id: "call", type: "offer", sdp: "offer" });
+    expect(pc.addIceCandidate.mock.calls.map(([ice]) => ice.candidate)).toEqual(["old", "current"]);
+  });
   it.each(["caller", "receiver"])("publishes only ready processed audio for the %s while leaving video intact", async (role) => {
     setCall(true);
     const raw = track("raw");

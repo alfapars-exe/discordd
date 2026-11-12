@@ -1,10 +1,40 @@
 package ws
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestP2PCallEndWireCompatibility(t *testing.T) {
+	for _, tc := range []struct {
+		frame string
+		want  string
+	}{
+		{`{"op":"p2p_call_end"}`, ""},
+		{`{"op":"p2p_call_end","d":{}}`, ""},
+		{`{"op":"p2p_call_end","d":{"call_id":"selected","user_id":"spoofed"}}`, "selected"},
+	} {
+		var event Event
+		if err := json.Unmarshal([]byte(tc.frame), &event); err != nil {
+			t.Fatal(err)
+		}
+		delivered := make(chan [2]string, 1)
+		client := &Client{userID: "owner", hub: &Hub{onP2PCallEnd: func(actor, id string) {
+			delivered <- [2]string{actor, id}
+		}}}
+		client.handleP2PCallEnd(event)
+		select {
+		case got := <-delivered:
+			if got != [2]string{"owner", tc.want} {
+				t.Fatalf("frame %s delivered %v", tc.frame, got)
+			}
+		case <-time.After(time.Second):
+			t.Fatalf("frame %s was dropped", tc.frame)
+		}
+	}
+}
 
 func validP2PDescription() P2PSignalData {
 	return P2PSignalData{CallID: "call", Type: "offer", SDP: "v=0", MediaProtocol: 1, DescriptionID: "00000000-0000-4000-8000-000000000001", DescriptionRevision: 1, Capabilities: []string{"screen-audio-v1"}, Sources: []P2PMediaSource{{MID: "0", Source: "microphone"}, {MID: "1", Source: "screen-audio"}}}
