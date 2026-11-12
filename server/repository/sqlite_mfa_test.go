@@ -56,9 +56,15 @@ func TestSQLiteMFASetupCASAndExpiry(t *testing.T) {
 func TestSQLiteMFARecoveryAtomicSingleUseAndReplace(t *testing.T) {
 	r := mfaRepoFixture(t)
 	ctx := context.Background()
-	_, _ = r.ReserveAttempt(ctx, "mfa-user", 1000)
-	_, _ = r.Prepare(ctx, "mfa-user", "encrypted", "setup", 2000)
-	_, _ = r.Enable(ctx, "mfa-user", "setup", 1000, 33, []string{"once", "old"})
+	if ok, err := r.ReserveAttempt(ctx, "mfa-user", 1000); err != nil || !ok {
+		t.Fatalf("reserve enrollment attempt: ok=%v err=%v", ok, err)
+	}
+	if ok, err := r.Prepare(ctx, "mfa-user", "encrypted", "setup", 2000); err != nil || !ok {
+		t.Fatalf("prepare enrollment: ok=%v err=%v", ok, err)
+	}
+	if ok, err := r.Enable(ctx, "mfa-user", "setup", 1000, 33, []string{"once", "old"}); err != nil || !ok {
+		t.Fatalf("enable MFA: ok=%v err=%v", ok, err)
+	}
 	var winners atomic.Int32
 	var wg sync.WaitGroup
 	for range 12 {
@@ -78,22 +84,26 @@ func TestSQLiteMFARecoveryAtomicSingleUseAndReplace(t *testing.T) {
 	if winners.Load() != 1 {
 		t.Fatalf("recovery winners=%d", winners.Load())
 	}
+	record, err := r.Get(ctx, "mfa-user")
+	if err != nil || record.RecoveryRemaining != 1 {
+		t.Fatalf("concurrent consumption must leave the other code available: err=%v", err)
+	}
 	if ok, err := r.ReplaceRecovery(ctx, "mfa-user", "encrypted", 1, []string{"new"}); err != nil || !ok {
 		t.Fatal(err)
 	}
 	if ok, err := r.ReplaceRecovery(ctx, "mfa-user", "encrypted", 1, []string{"stale-concurrent-generation"}); err != nil || ok {
 		t.Fatal("two old-version requests both replaced current codes")
 	}
-	if ok, _ := r.ConsumeRecovery(ctx, "mfa-user", "encrypted", "old"); ok {
-		t.Fatal("old generation remained valid")
+	if ok, err := r.ConsumeRecovery(ctx, "mfa-user", "encrypted", "old"); err != nil || ok {
+		t.Fatalf("consume code from retired generation: ok=%v err=%v", ok, err)
 	}
-	if ok, _ := r.Disable(ctx, "mfa-user", "encrypted"); !ok {
-		t.Fatal("disable failed")
+	if ok, err := r.Disable(ctx, "mfa-user", "encrypted"); err != nil || !ok {
+		t.Fatalf("disable MFA: ok=%v err=%v", ok, err)
 	}
-	if ok, _ := r.ConsumeRecovery(ctx, "mfa-user", "encrypted", "new"); ok {
-		t.Fatal("disabled recovery remained valid")
+	if ok, err := r.ConsumeRecovery(ctx, "mfa-user", "encrypted", "new"); err != nil || ok {
+		t.Fatalf("consume code after disable: ok=%v err=%v", ok, err)
 	}
-	record, err := r.Get(ctx, "mfa-user")
+	record, err = r.Get(ctx, "mfa-user")
 	if err != nil || record.Secret != "" || record.RecoveryRemaining != 0 {
 		t.Fatal("disable retained secrets")
 	}
