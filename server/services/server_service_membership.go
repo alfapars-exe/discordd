@@ -111,6 +111,9 @@ func (s *serverService) JoinServer(ctx context.Context, userID, inviteCode strin
 	if err := s.joinServerTx(ctx, serverID, userID, defaultRoleID, audience); err != nil {
 		return nil, err
 	}
+	if s.permInvalidator != nil {
+		s.permInvalidator.InvalidateUser(userID)
+	}
 	if s.gameActivity != nil {
 		s.gameActivity.MembershipAdded(ctx, serverID, userID)
 	}
@@ -196,6 +199,9 @@ func (s *serverService) LeaveServer(ctx context.Context, serverID, userID string
 
 	if err := s.serverRepo.RemoveMember(ctx, serverID, userID); err != nil {
 		return fmt.Errorf("failed to remove member: %w", err)
+	}
+	if s.permInvalidator != nil {
+		s.permInvalidator.InvalidateUser(userID)
 	}
 	if s.gameActivity != nil {
 		s.gameActivity.MembershipRemoved(ctx, serverID, userID)
