@@ -121,7 +121,9 @@ export default defineConfig({
       stderr: "pipe",
     },
     {
-      command: "npm run dev",
+      command: process.env.HICHAT_E2E_PRODUCTION_CLIENT === "1"
+        ? `npm run build && npm run preview -- --host localhost --port ${CLIENT_PORT} --strictPort`
+        : "npm run dev",
       cwd: join(__dirname, "..", "client"),
       url: BASE_URL,
       // Vite's first cold dep-optimize pass on this client is slow.

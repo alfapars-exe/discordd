@@ -24,7 +24,10 @@ npx playwright test --project=chromium
 ```
 
 For the full suite, also install WebKit with `npx playwright install webkit`
-and run `npx playwright test`.
+and run `npx playwright test`. To reproduce the production WebKit check, set
+`HICHAT_E2E_PRODUCTION_CLIENT=1` in the environment and run
+`npx playwright test --project=webkit-smoke`. Playwright builds the client
+and serves its output on port 3030 with the isolated API proxy.
 
 The setup project first registers and logs in the regular E2E account through
 the UI, then provisions a separate channel-notification fixture in the same
