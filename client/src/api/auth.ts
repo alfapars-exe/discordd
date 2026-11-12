@@ -52,7 +52,7 @@ export async function changePassword(currentPassword: string, newPassword: strin
 
 /** Sends a password reset email. Returns cooldown seconds if rate-limited. */
 export async function forgotPassword(identifier: string) {
-  return apiClient<{ message: string; cooldown?: number }>(
+  return apiClient<{ message: string }>(
     "/auth/forgot-password",
     {
       method: "POST",
