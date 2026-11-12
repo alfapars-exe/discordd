@@ -216,3 +216,12 @@ func TestPostgresEscapeStringWithBoundValues(t *testing.T) {
 		t.Fatalf("unexpected columns: %q %q %q %q, err %v", literal, first, backslash, second, err)
 	}
 }
+
+func TestBindPostgresDollarStrings(t *testing.T) {
+	const query = `SELECT $$?$$, $body_2$' ? /* $$ $body_2$, ?, col$tag$, ?2`
+	const want = `SELECT $$?$$, $body_2$' ? /* $$ $body_2$, $1, col$tag$, $2`
+	got, err := bindPostgres(query)
+	if got != want || err != nil {
+		t.Fatalf("got %q, err %v, want %q", got, err, want)
+	}
+}

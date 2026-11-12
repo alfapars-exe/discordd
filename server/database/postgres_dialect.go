@@ -165,9 +165,31 @@ func startsEscapeString(query string, quote int) bool {
 		return true
 	}
 	// E must start a token rather than end an unquoted SQL identifier.
-	c := query[quote-2]
-	return !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' ||
-		c == '_' || c == '$' || c >= 0x80)
+	return !postgresIdentifierByte(query[quote-2])
+}
+
+func postgresIdentifierStart(c byte) bool {
+	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c == '_' || c >= 0x80
+}
+
+func postgresIdentifierByte(c byte) bool {
+	return postgresIdentifierStart(c) || c >= '0' && c <= '9' || c == '$'
+}
+
+func dollarDelimiter(query string, start int) string {
+	if start > 0 && postgresIdentifierByte(query[start-1]) {
+		return ""
+	}
+	end := start + 1
+	if end < len(query) && postgresIdentifierStart(query[end]) {
+		for end < len(query) && query[end] != '$' && postgresIdentifierByte(query[end]) {
+			end++
+		}
+	}
+	if end < len(query) && query[end] == '$' {
+		return query[start : end+1]
+	}
+	return ""
 }
 
 // bindPostgres understands SQL strings, quoted identifiers and comments. It
@@ -233,6 +255,19 @@ func bindPostgres(query string) (string, error) {
 			}
 			out.WriteString(query[start:i])
 			continue
+		}
+		if c == '$' {
+			if delimiter := dollarDelimiter(query, i); delimiter != "" {
+				body := i + len(delimiter)
+				offset := strings.Index(query[body:], delimiter)
+				if offset < 0 {
+					return "", fmt.Errorf("unterminated SQL dollar string")
+				}
+				end := body + offset + len(delimiter)
+				out.WriteString(query[i:end])
+				i = end
+				continue
+			}
 		}
 		if c != '?' {
 			out.WriteByte(c)
