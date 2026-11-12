@@ -389,6 +389,10 @@ Bire bir DM ve kanal geçmişi, zaman damgalarını UTC ofseti ve milisaniye alt
 
 Grup geçmişi yenilemesi, grup gönderim onayı ve WebSocket düzenlemeleri, gelen kayıtta sıra numarası eksikse bilinen sıra numarasını koruyor. Bire bir DM için görünür liste, bekleyen geçmiş olayları ve geçmiş penceresinin dışında tutulan canlı mesajlar aynı kuralı kullanıyor. Birleşik `2a46beda` revizyonunda ilgili dört Vitest dosyasında 184 test ve TypeScript derlemesi geçti. [PR #240](https://github.com/alfapars-exe/discordd/pull/240)
 
+Tam istemci koşusu aynı `2a46beda` revizyonunda 461 dosyada 4.640 geçen ve 1 atlanan test verdi. Satır kapsamı %66,43, dal kapsamı %63,32 oldu.
+
+`a70a4f49` sıralama değişikliğinde sunucu sıra numarası her mesaj için bir kez ayrıştırılıyor. Node 26.13.0 ile 5.000 mesajın 1.000 tanesi sıra numarasız, zaman damgaları eşit ve kalan sıra numaraları karışık olacak şekilde ölçüldü. Üç ısınmadan sonraki dokuz tekrarın medyanı 7,31 ms'den 1,35 ms'ye indi. Kimlik dizisinin SHA-256 özeti her iki sürümde aynıydı. Ayrı bir karşılaştırmada 1.000 sabit tohumlu veri kümesi için varsayılan sıra, API konumu ve grup kimliği eşitlik kurallarının üçünde de önceki sürümle aynı çıktı alındı. Ölçüm yalnız sıralama işlevini kapsıyor.
+
 | Alan | Tanım |
 |---|---|
 | Task ID | RF15 |
