@@ -12,6 +12,7 @@
  * passed in. A real safeStorage round trip is out of scope anyway — it needs a
  * running Electron app, and the encryption is not what this file is about.
  */
+import { redirectFixture } from "./redirect-test-fixture";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { loginWithSavedCredentials, NO_SAVED_CREDENTIALS } from "./credential-login";
@@ -137,26 +138,11 @@ test("reports a non-JSON upstream response as a null body rather than throwing",
 });
 
 test("a 307 cannot relay a saved password to another origin", async t => {
-  const { createServer } = await import("node:http");
-  const listen = async (server: ReturnType<typeof createServer>) => {
-    await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
-    t.after(() => { server.closeAllConnections(); server.close(); });
-    const address = server.address();
-    assert.ok(address && typeof address === "object");
-    return "http://127.0.0.1:" + address.port;
-  };
-  let received = false;
-  const destination = await listen(createServer((_req, res) => {
-    received = true;
-    res.end("{}");
-  }));
-  const upstream = await listen(createServer((_req, res) => {
-    res.writeHead(307, { location: destination }).end();
-  }));
-  const result = await loginWithSavedCredentials(upstream, fetch, {
-    allowLoopback: true, loadCreds: () => ({ username: "fixture", password: "fixture-only", origin: upstream }),
+  const { origin, targetRequests } = await redirectFixture(t);
+  const result = await loginWithSavedCredentials(origin, fetch, {
+    allowLoopback: true, loadCreds: () => ({ username: "fixture", password: "fixture-only", origin }),
   });
-  assert.equal(received, false);
+  assert.equal(targetRequests(), 0);
   assert.equal(result.status, 307);
 });
 
