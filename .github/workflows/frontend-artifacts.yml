@@ -34,6 +34,10 @@ jobs:
           cl.exe /EHsc /O2 native\audio-capture.cpp /Fe:native\audio-capture.exe ole32.lib mmdevapi.lib
           if errorlevel 1 exit /b 1
           call native\build-game-window.bat
+      - name: Test Windows capture formats and device failure handling
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: cl.exe /nologo /EHsc /W3 /WX /UNDEBUG native\audio-capture-contract.test.cpp /Fe:audio-capture-contract-test.exe ole32.lib mmdevapi.lib && audio-capture-contract-test.exe
       - run: node node_modules/electron-builder/cli.js --dir --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
