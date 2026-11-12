@@ -8,7 +8,7 @@ Birleşik dalın `a0d23642` revizyonunda 462 dosyada 4.667 Vitest testi geçti v
 
 ## Ekran paylaşımı seçicisi · 13 Kasım 2026
 
-`d5fb4f1b` üzerinde Electron TypeScript derlemesi geçti. 276 Electron testi geçti ve 1 test atlandı. Windows'ta gerçek Electron ana süreci ile gizli bir test penceresi üzerinden `getDisplayMedia` çağrıldı. Üretim seçici işleyicisi küçük resimleri kapalı tutarak masaüstü kaynaklarını listeledi, yenileme isteğinde tekrar listeledi ve iptal edildiğinde tarayıcıya `AbortError` döndü. Test pencereyi ana pencere olarak atadı. Görüntü akışı seçimi ve karşı cihazda teslim açık. [PR #257](https://github.com/alfapars-exe/discordd/pull/257)
+`d5fb4f1b` üzerinde Electron TypeScript derlemesi geçti. 276 Electron testi geçti ve 1 test atlandı. Windows'ta gerçek Electron ana süreci ile gizli bir test penceresi üzerinden `getDisplayMedia` çağrıldı. Üretim seçici işleyicisi küçük resimleri kapalı tutarak masaüstü kaynaklarını listeledi, yenileme isteğinde tekrar listeledi ve iptal edildiğinde tarayıcıya `AbortError` döndü. Test pencereyi ana pencere olarak atadı. Ardından sentetik pencere seçildi ve iki yerel WebRTC ucu arasında aktarılan görüntü alıcıda doğrulandı (RF18). İki fiziksel cihaz arasındaki çağrı açık. [PR #257](https://github.com/alfapars-exe/discordd/pull/257)
 
 ## Masaüstü başlangıcı ve paketleme · 13 Kasım 2026
 
