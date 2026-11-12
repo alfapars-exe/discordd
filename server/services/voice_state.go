@@ -772,6 +772,16 @@ func (s *voiceService) GetVoiceEpoch() string {
 	return s.voiceEpoch
 }
 
+func (s *voiceService) DisconnectServerMember(serverID, userID string) {
+	s.mu.Lock()
+	state := s.states[userID]
+	if state == nil || state.ServerID != serverID {
+		s.mu.Unlock()
+		return
+	}
+	s.disconnectVoiceLocked(userID, state)
+}
+
 func (s *voiceService) DisconnectUser(userID string) {
 	if err := s.LeaveChannel(userID); err != nil {
 		voiceLogger.Error("disconnect cleanup failed", "user_id", userID, "err", pkg.ErrText(err))

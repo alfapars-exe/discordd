@@ -203,6 +203,9 @@ func (s *serverService) LeaveServer(ctx context.Context, serverID, userID string
 	if s.permInvalidator != nil {
 		s.permInvalidator.InvalidateUser(userID)
 	}
+	if s.membershipVoiceCleanup != nil {
+		s.membershipVoiceCleanup(serverID, userID)
+	}
 	if s.gameActivity != nil {
 		s.gameActivity.MembershipRemoved(ctx, serverID, userID)
 	}
