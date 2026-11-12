@@ -273,6 +273,12 @@ type MusicSessionStore interface {
 	Delete(context.Context, string) error
 }
 
+// MusicBotRuntime also receives account retirement notifications at startup.
+type MusicBotRuntime interface {
+	MusicBotService
+	MusicRequesterRetirementObserver
+}
+
 // NewMusicBotService — constructor. Pipeline subprocesses (yt-dlp, ffmpeg)
 // are launched lazily on first Enqueue per channel.
 func NewMusicBotService(
@@ -286,7 +292,7 @@ func NewMusicBotService(
 	sessions MusicSessionStore,
 	roomKeys MusicRoomKeySource,
 	audience ...MusicAudienceDependencies,
-) MusicBotService {
+) MusicBotRuntime {
 	service := &musicBotService{
 		bots:          make(map[string]*botInstance),
 		restored:      make(map[string]models.MusicSession),

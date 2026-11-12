@@ -221,15 +221,6 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		communication.SetEmailEnqueuer(emailDeliveryService)
 	}
 	emailVerificationService := services.NewEmailVerificationService(repos.EmailVerification, verificationSender)
-	authService := services.NewAuthService(
-		repos.User, repos.Session, repos.ResetToken, hub, emailSender,
-		cfg.JWT.Secret, cfg.JWT.AccessTokenExpiry, cfg.JWT.RefreshTokenExpiry, services.WithMFA(mfaService), services.WithAuthSessions(repos.AuthSession), services.WithAccountLifecycle(repos.AccountLifecycle), services.WithAccountAnonymization(repos.AccountAnonymization), services.WithApplicationRemoval(repos.ApplicationRemoval), services.WithServerOwnership(repos.ServerOwnership),
-	)
-	// "Log out from all devices" / password change must also kick any live
-	// voice or screen-share session, mirroring adminUserService's ban/delete
-	// path (security review 2026-08-01, finding 3). voiceService already
-	// exists at this point (constructed above), so no ordering hazard.
-	authService.SetVoiceDisconnecter(voiceService)
 	channelService := services.NewChannelService(repos.Channel, repos.Category, hub, channelPermService, auditLogService, repos.Notification)
 	channelDeletionSetter, setterOK := channelService.(interface {
 		SetVoiceChannelDeletionHandler(services.VoiceChannelDeletionHandler)
@@ -485,13 +476,15 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		repos.Channel, repos.LiveKit, channelPermService, hub, repos.User, encryptionKey, appLogService, repos.MusicSession, voiceService,
 		services.MusicAudienceDependencies{Voice: voiceService, Members: repos.Server},
 	)
-	if observer, ok := musicBotService.(services.MusicRequesterRetirementObserver); ok {
-		if setter, yes := authService.(interface {
-			SetMusicRequesterRetirementObserver(services.MusicRequesterRetirementObserver)
-		}); yes {
-			setter.SetMusicRequesterRetirementObserver(observer)
-		}
-	}
+	authService := services.NewAuthService(
+		repos.User, repos.Session, repos.ResetToken, hub, emailSender,
+		cfg.JWT.Secret, cfg.JWT.AccessTokenExpiry, cfg.JWT.RefreshTokenExpiry, services.WithMFA(mfaService), services.WithAuthSessions(repos.AuthSession), services.WithAccountLifecycle(repos.AccountLifecycle), services.WithAccountAnonymization(repos.AccountAnonymization, musicBotService), services.WithApplicationRemoval(repos.ApplicationRemoval), services.WithServerOwnership(repos.ServerOwnership),
+	)
+	// "Log out from all devices" / password change must also kick any live
+	// voice or screen-share session, mirroring adminUserService's ban/delete
+	// path (security review 2026-08-01, finding 3). voiceService already
+	// exists at this point (constructed above), so no ordering hazard.
+	authService.SetVoiceDisconnecter(voiceService)
 	// Wire the channel-empty hook — when the last human leaves, voice service
 	// asks music bot to stop so it doesn't keep playing to nobody.
 	voiceService.SetMusicBotHook(musicBotService)
