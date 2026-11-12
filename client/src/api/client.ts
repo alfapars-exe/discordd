@@ -447,7 +447,7 @@ export async function apiClient<T>(
       // matters. The old `getRefreshToken()` gate guarded against a
       // pre-cookie storage scheme that no longer exists.
       if (isDev) {
-        console.warn(`[apiClient] 401 on ${method} ${endpoint} — attempting refresh`);
+        console.warn(`[apiClient] 401 on ${method} request — attempting refresh`);
       }
       const refreshed = await lifetime.wait(refreshAccessToken);
       if (cancelled()) return cancellation();
@@ -455,10 +455,10 @@ export async function apiClient<T>(
         headers["Authorization"] = `Bearer ${getAccessToken()}`;
         res = await lifetime.wait(() => fetch(apiUrl(endpoint), { ...fetchOptions, headers }));
         if (isDev) {
-          console.warn(`[apiClient] retry after refresh: ${method} ${endpoint} status=${res.status}`);
+          console.warn(`[apiClient] retry after refresh: ${method} request status=${res.status}`);
         }
       } else if (isDev) {
-        console.warn(`[apiClient] refresh FAILED on ${method} ${endpoint} — returning original 401`);
+        console.warn(`[apiClient] refresh FAILED on ${method} request — returning original 401`);
       }
     }
 
@@ -493,14 +493,14 @@ export async function apiClient<T>(
       // sentinel'e düş ki UI ham HTML değil dostça mesaj göstersin.
       const contentType = res.headers.get("content-type") ?? "";
       if (isGatewayError || contentType.includes("text/html")) {
-        console.error(`[apiClient] ${method} ${endpoint}: HTML response (HTTP ${res.status})`);
+        console.error(`[apiClient] ${method} request: HTML response (HTTP ${res.status})`);
         return {
           success: false,
           error: `service_unavailable: HTTP ${res.status}`,
           status: res.status,
         } as APIResponse<T>;
       }
-      console.error(`[apiClient] ${method} ${endpoint}: invalid JSON (HTTP ${res.status})`);
+      console.error(`[apiClient] ${method} request: invalid JSON (HTTP ${res.status})`);
       return {
         success: false,
         error: `HTTP ${res.status}: ${res.statusText}`,
@@ -510,11 +510,11 @@ export async function apiClient<T>(
   } catch (err) {
     if (cancelled()) return cancellation();
     if (lifetime.timedOut() || isAbortError(err)) {
-      console.error(`[apiClient] ${method} ${endpoint}: timed out after ${timeoutMs}ms`);
+      console.error(`[apiClient] ${method} request: timed out after ${timeoutMs}ms`);
       return timeoutResponse<T>();
     }
     const message = err instanceof Error ? err.message : "Network request failed";
-    console.error(`[apiClient] ${method} ${endpoint}:`, message);
+    console.error(`[apiClient] ${method} request: network failure`);
     // Never label a timeout as a network error: automatic retries of a write
     // that may have reached the server could otherwise duplicate it.
     return { success: false, error: message, isNetworkError: true } as APIResponse<T>;
