@@ -192,6 +192,7 @@ interface ElectronAPI {
   ) => void | (() => void);
   /** Detach the refresh-result listener (on picker close). */
   removeScreenPickerRefreshListener?: () => void;
+  onScreenPickerDismissed?: (cb: () => void) => () => void;
   /** Send user's selection back to main process (null = cancelled) */
   sendScreenPickerResult: (sourceId: string | null) => void;
 

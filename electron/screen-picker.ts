@@ -157,7 +157,15 @@ export function installScreenPicker(): void {
       && !contents.isDestroyed() && contents.mainFrame === frame;
     const trusted = (event: Electron.IpcMainEvent) => current()
       && event.sender === contents && event.senderFrame === frame;
-    const timeout = setTimeout(() => finish(null), PICKER_TIMEOUT_MS);
+    const timeout = setTimeout(() => {
+      try {
+        if (current()) contents.send("screen-picker-dismissed");
+      } catch {
+        // The renderer may already be tearing down.
+      } finally {
+        finish(null);
+      }
+    }, PICKER_TIMEOUT_MS);
 
     function finish(streams: Parameters<typeof callback>[0]) {
       if (finished) return;

@@ -183,6 +183,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.removeAllListeners("screen-picker-refresh-result");
   },
 
+  onScreenPickerDismissed: (cb: () => void) => subscribeIPC("screen-picker-dismissed", cb),
+
   /** Send user's selection to main process (null = cancelled) */
   sendScreenPickerResult: (sourceId: string | null): void => {
     ipcRenderer.send("screen-picker-result", sourceId);
