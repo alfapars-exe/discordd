@@ -112,6 +112,8 @@ Birleşik dalda 60505fb2 üzerinde Node 26.13.0 ile tekrar ölçülen medyanlar 
 
 İlk Windows PostgreSQL koşusunda repository paketi 15 dakikada tamamlanmadı. Ayrıca ara revizyonda Linux üzerinde parçalanmamış `go test -race` çalıştırıldığında hem repository hem services 15 dakikalık paket sınırına ulaştı. Yukarıdaki genel yarış koşusu CI’ın paket bölme düzenini kullanır. PostgreSQL’deki 271,38 saniye ayrı sözleşme koşusunun süresidir.
 
+Birleşik dalın `9631d5c1` revizyonunda gerçek Go sunucusu ve mTLS PostgreSQL ile varsayılan Chromium koşusu 12/12 geçti (kurulum dahil, 1,6 dakika). Ayrı masaüstü WebKit koşusunda giriş ve parola kurtarma arasında klavyeyle geçiş 18,9 saniyede doğrulandı. Kurtarma PR’ının `54b0d251` revizyonunda yerel posta kutusuna teslim edilen bağlantı ilk parola değişikliğini tamamladı. Aynı bağlantının ikinci kullanımı reddedildi ve ilk belirlenen parolayla oturum açıldı. Kurulum ve senaryo 39,8 saniyede geçti. [PR #225](https://github.com/alfapars-exe/discordd/pull/225)
+
 Windows üzerinde `ee21edc5` revizyonunda sunucunun `go build ./...` ve `go vet ./...` kontrolleri geçti. Önbelleksiz `go test -count=1 -json ./...` koşusu çıkış kodu 0 ile tamamlandı. Alt testler dahil 4.013 test geçti ve 57 test atlandı.
 
 Birleşik dalda `f8b79322` revizyonunun Windows mTLS PostgreSQL koşusu tamamlandı. Repository paketi 316,80 saniyede geçti. Sahiplik devri ve ayrılma yarışında önce ayrılan üyeye sahiplik verilemedi. Önce devir tamamlandığında yeni sahibin üyeliği ve rol ataması korundu. İkinci sıra `3fe8a08d` üzerinde beş tekrarda doğrulandı. [PR #253](https://github.com/alfapars-exe/discordd/pull/253)
