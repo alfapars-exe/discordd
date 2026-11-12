@@ -146,20 +146,9 @@ func (s *authService) ForgotPassword(ctx context.Context, identifier string) (in
 	}
 	emailAddr := strings.TrimSpace(*user.Email)
 
-	// Cooldown check
-	lastToken, err := s.resetRepo.GetLatestByUserID(ctx, user.ID)
-	if err != nil && !errors.Is(err, pkg.ErrNotFound) {
-		return 0, fmt.Errorf("failed to check password reset cooldown: %w", err)
-	}
-	if err == nil && lastToken != nil {
-		elapsed := time.Since(lastToken.CreatedAt)
-		if elapsed < resetCooldown {
-			remaining := int((resetCooldown - elapsed).Seconds())
-			if remaining < 1 {
-				remaining = 1
-			}
-			return remaining, nil
-		}
+	remaining, err := s.passwordResetCooldown(ctx, user.ID)
+	if err != nil || remaining > 0 {
+		return remaining, err
 	}
 
 	// Clean up old tokens for this user
@@ -199,6 +188,24 @@ func (s *authService) ForgotPassword(ctx context.Context, identifier string) (in
 
 	authLogger.Info("password reset email sent", "user_id", user.ID)
 	return 0, nil
+}
+
+func (s *authService) passwordResetCooldown(ctx context.Context, userID string) (int, error) {
+	token, err := s.resetRepo.GetLatestByUserID(ctx, userID)
+	if errors.Is(err, pkg.ErrNotFound) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("failed to check password reset cooldown: %w", err)
+	}
+	if token == nil {
+		return 0, nil
+	}
+	remaining := resetCooldown - time.Since(token.CreatedAt)
+	if remaining <= 0 {
+		return 0, nil
+	}
+	return max(1, int(remaining.Seconds())), nil
 }
 
 // ResetPassword validates the token, updates the password, and deletes all tokens for the user.
