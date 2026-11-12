@@ -48,6 +48,11 @@ static void CheckDecoderFormats() {
 }
 
 int main() {
+    Microsoft::WRL::ComPtr<CompletionHandler> pending;
+    pending.Attach(new CompletionHandler());
+    Microsoft::WRL::ComPtr<IAudioClient> client;
+    assert(pending->Wait(client.GetAddressOf(), 0) == HRESULT_FROM_WIN32(ERROR_TIMEOUT));
+    assert(!client);
     CheckDecoderFormats();
     CheckCaptureFailures();
 }

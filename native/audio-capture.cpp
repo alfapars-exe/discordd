@@ -157,14 +157,18 @@ public:
     HRESULT STDMETHODCALLTYPE ActivateCompleted(
         IActivateAudioInterfaceAsyncOperation* op
     ) override {
-        op->GetActivateResult(&m_hrActivate, &m_pActivated);
+        const HRESULT result = op->GetActivateResult(&m_hrActivate, &m_pActivated);
+        if (FAILED(result)) m_hrActivate = result;
         SetEvent(m_event);
         return S_OK;
     }
 
     // Block until activation completes, then extract IAudioClient.
-    HRESULT Wait(IAudioClient** ppClient) {
-        WaitForSingleObject(m_event, INFINITE);
+    HRESULT Wait(IAudioClient** ppClient, DWORD timeoutMs) {
+        *ppClient = nullptr;
+        const DWORD result = WaitForSingleObject(m_event, timeoutMs);
+        if (result == WAIT_TIMEOUT) return HRESULT_FROM_WIN32(ERROR_TIMEOUT);
+        if (result == WAIT_FAILED) return HRESULT_FROM_WIN32(GetLastError());
         fprintf(stderr, "[audio-capture] ActivateResult: hr=0x%08lx pUnk=%p\n",
             m_hrActivate, m_pActivated);
         if (FAILED(m_hrActivate) || !m_pActivated) {
@@ -323,8 +327,9 @@ static int RunCapture(DWORD excludePid) {
         }
 
         // Wait for async activation to complete
-        hr = handler->Wait(audioClient.GetAddressOf());
-
+        // Bound activation even when the helper is launched without Electron.
+        constexpr DWORD activationTimeoutMs = 5000;
+        hr = handler->Wait(audioClient.GetAddressOf(), activationTimeoutMs);
     }
     if (FAILED(hr) || !audioClient) {
         fprintf(stderr, "[audio-capture] Failed to get IAudioClient: 0x%08lx\n", hr);
