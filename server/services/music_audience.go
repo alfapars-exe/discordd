@@ -27,6 +27,7 @@ type musicAudienceFreshPermissions interface {
 type musicPublisher struct {
 	bot   *botInstance
 	final bool
+	fatal bool
 }
 
 // Called under the service read lock immediately before enqueue.
@@ -34,7 +35,7 @@ func (p musicPublisher) ownsDelivery(current *botInstance) bool {
 	if p.final {
 		return current == nil || current == p.bot
 	}
-	return current == p.bot && !p.bot.stopping.Load()
+	return current == p.bot && (p.fatal || !p.bot.stopping.Load())
 }
 
 func (s *musicBotService) broadcastMusicAudience(serverID, channelID string, event ws.Event, publisher *musicPublisher) bool {
