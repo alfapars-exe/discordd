@@ -190,13 +190,25 @@ func bindPostgres(query string) (string, error) {
 			continue
 		}
 		if i+1 < len(query) && query[i:i+2] == "/*" {
-			end := strings.Index(query[i+2:], "*/")
-			if end < 0 {
+			start := i
+			i += 2
+			depth := 1
+			for depth > 0 && i+1 < len(query) {
+				switch query[i : i+2] {
+				case "/*":
+					depth++
+					i += 2
+				case "*/":
+					depth--
+					i += 2
+				default:
+					i++
+				}
+			}
+			if depth != 0 {
 				return "", fmt.Errorf("unterminated SQL comment")
 			}
-			end += i + 4
-			out.WriteString(query[i:end])
-			i = end
+			out.WriteString(query[start:i])
 			continue
 		}
 		if c != '?' {

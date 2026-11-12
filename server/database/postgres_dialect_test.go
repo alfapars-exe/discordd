@@ -21,3 +21,13 @@ LANGUAGE sql IMMUTABLE AS $$ SELECT '?' || json_build_object(VARIADIC fields)::t
 		t.Fatalf("native SQL modified: %v", err)
 	}
 }
+
+func TestBindPostgresNestedComments(t *testing.T) {
+	got, err := bindPostgres("SELECT ? /* outer /* nested */ ? */ , ?")
+	if err != nil || got != "SELECT $1 /* outer /* nested */ ? */ , $2" {
+		t.Fatalf("unexpected translation %q, %v", got, err)
+	}
+	if _, err := bindPostgres("SELECT ? /* outer /* nested */"); err == nil {
+		t.Fatal("accepted unterminated outer comment")
+	}
+}
