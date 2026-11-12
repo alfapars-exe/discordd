@@ -182,10 +182,14 @@ func (h *Hub) Run() {
 // the read-pump will hit its error and unregister itself on its own
 // goroutine soon enough.
 func (h *Hub) queueUnregister(c *Client) {
+	if !c.unregisterQueued.CompareAndSwap(false, true) {
+		return
+	}
 	select {
 	case h.unregister <- c:
 	default:
-		// Buffer full; client will be unregistered via its read-pump exit.
+		// A later delivery can retry once the hub has drained the queue.
+		c.unregisterQueued.Store(false)
 		h.queueDrops.Add(1)
 	}
 }
