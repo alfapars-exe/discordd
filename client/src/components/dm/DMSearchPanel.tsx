@@ -28,18 +28,18 @@ type SearchState = {
   totalCount: number;
 } | null;
 
-function DMSearchPanel({ channelId, onClose }: DMSearchPanelProps) {
+function DMSearchPanel(props: DMSearchPanelProps) {
+  const encrypted = useDMStore((s) => s.channels.find((c) => c.id === props.channelId)?.e2ee_enabled);
+  const keysReady = useE2EEStore((s) => s.initStatus === "ready");
+  const scope = JSON.stringify([props.channelId, encrypted, encrypted && keysReady]);
+  return <ScopedDMSearchPanel key={scope} {...props} encrypted={encrypted} />;
+}
+
+function ScopedDMSearchPanel({ channelId, onClose, encrypted }: DMSearchPanelProps & { encrypted?: boolean }) {
   const { t, i18n } = useTranslation("chat");
   const { t: tE2ee } = useTranslation("e2ee");
-  const isE2EEReady = useE2EEStore((s) => s.initStatus === "ready");
   const searchMessages = useDMStore((s) => s.searchMessages);
   const setScrollToMessageId = useDMStore((s) => s.setScrollToMessageId);
-  // E2EE is per-channel (toggleable). Only route through the IndexedDB cache
-  // when THIS channel is encrypted — plaintext channels can use server FTS5.
-  const channelE2eeEnabled = useDMStore((s) =>
-    s.channels.find((c) => c.id === channelId)?.e2ee_enabled ?? false
-  );
-  const useLocalSearch = channelE2eeEnabled && isE2EEReady;
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchState>(null);
@@ -81,7 +81,14 @@ function DMSearchPanel({ channelId, onClose }: DMSearchPanelProps) {
       setIsSearching(true);
 
       // E2EE active — client-side IndexedDB search
-      if (useLocalSearch) {
+      const current = useDMStore.getState().channels.find((c) => c.id === channelId);
+      if (encrypted === undefined || current?.e2ee_enabled !== encrypted ||
+          (encrypted && useE2EEStore.getState().initStatus !== "ready")) {
+        setResults(null);
+        setIsSearching(false);
+        return;
+      }
+      if (encrypted) {
         try {
           const controller = new AbortController();
           localSearch.current = controller;
@@ -131,7 +138,7 @@ function DMSearchPanel({ channelId, onClose }: DMSearchPanelProps) {
       });
       setIsSearching(false);
     },
-    [channelId, searchMessages, useLocalSearch]
+    [channelId, encrypted, searchMessages]
   );
 
   /** Debounced search on input change */
@@ -262,7 +269,7 @@ function DMSearchPanel({ channelId, onClose }: DMSearchPanelProps) {
       </div>
 
       {/* E2EE client-side search note — only when THIS channel is encrypted */}
-      {useLocalSearch && (
+      {encrypted && (
         <p className="search-e2ee-note">{tE2ee("clientSearchNote")}</p>
       )}
 
