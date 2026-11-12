@@ -211,61 +211,52 @@ struct AudioHeader {
 // Main
 // ═══════════════════════════════════════════════════════════════════════
 
+template<typename Writer>
+static bool WritePacket(const BYTE* data, size_t length, bool silent, Writer writeBytes) {
+    static const BYTE zeros[8192] = {};
+    while (length && g_running) {
+        const unsigned chunk = static_cast<unsigned>(length > sizeof(zeros) ? sizeof(zeros) : length);
+        const int written = writeBytes(silent ? zeros : data, chunk);
+        if (written <= 0) return false;
+        if (!silent) data += written;
+        length -= written;
+    }
+    return true;
+}
+
+static HRESULT DrainPackets(IAudioCaptureClient* client, UINT32 frameSize) {
+    while (g_running) {
+        BYTE* data = nullptr;
+        UINT32 frames = 0;
+        DWORD flags = 0;
+        const HRESULT read = client->GetBuffer(&data, &frames, &flags, nullptr, nullptr);
+        if (read == AUDCLNT_S_BUFFER_EMPTY || FAILED(read)) return read;
+        const bool delivered = WritePacket(data, static_cast<size_t>(frames) * frameSize,
+            (flags & AUDCLNT_BUFFERFLAGS_SILENT) != 0,
+            [](const BYTE* bytes, unsigned count) { return _write(1, bytes, count); });
+        const HRESULT released = client->ReleaseBuffer(frames);
+        if (FAILED(released)) return released;
+        if (!delivered) g_running = FALSE;
+        if (!frames) return S_OK;
+    }
+    return S_OK;
+}
+
+static bool InputClosed(HANDLE input) {
+    if (PeekNamedPipe(input, nullptr, 0, nullptr, nullptr, nullptr)) return false;
+    const DWORD error = GetLastError();
+    return error == ERROR_BROKEN_PIPE || error == ERROR_PIPE_NOT_CONNECTED;
+}
+
 static HRESULT CapturePackets(IAudioCaptureClient* captureClient, HANDLE captureEvent, UINT32 frameSize) {
-    // Event fires when audio buffer has data. 100ms timeout for checking
-    // shutdown flag. On broken pipe (_write returns <= 0), exit cleanly.
     const HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
     const bool hasInputPipe = GetFileType(input) == FILE_TYPE_PIPE;
-    while (g_running) {
-        if (hasInputPipe && !PeekNamedPipe(input, nullptr, 0, nullptr, nullptr, nullptr)) {
-            const DWORD error = GetLastError();
-            if (error == ERROR_BROKEN_PIPE || error == ERROR_PIPE_NOT_CONNECTED) break;
-        }
-        DWORD waitResult = WaitForSingleObject(captureEvent, 100);
-
-        if (waitResult == WAIT_FAILED) return HRESULT_FROM_WIN32(GetLastError());
-        if (waitResult == WAIT_OBJECT_0) {
-            // Drain all available packets in this event cycle
-            while (g_running) {
-                BYTE*  data      = nullptr;
-                UINT32 numFrames = 0;
-                DWORD  flags     = 0;
-
-                HRESULT hr = captureClient->GetBuffer(&data, &numFrames, &flags, nullptr, nullptr);
-                if (hr == AUDCLNT_S_BUFFER_EMPTY) break;
-                if (FAILED(hr)) return hr;
-                if (numFrames == 0) {
-                    hr = captureClient->ReleaseBuffer(numFrames);
-                    if (FAILED(hr)) return hr;
-                    break;
-                }
-
-                UINT32 byteCount = numFrames * frameSize;
-
-                if (flags & AUDCLNT_BUFFERFLAGS_SILENT) {
-                    // Silent buffer — write zeros instead of garbage data
-                    static BYTE zeros[8192];
-                    UINT32 remaining = byteCount;
-                    while (remaining > 0 && g_running) {
-                        UINT32 chunk = remaining > sizeof(zeros) ? sizeof(zeros) : remaining;
-                        int w = _write(1, zeros, chunk);
-                        if (w <= 0) { g_running = FALSE; break; }
-                        remaining -= chunk;
-                    }
-                } else {
-                    // Write actual PCM data
-                    int w = _write(1, data, byteCount);
-                    if (w <= 0) {
-                        // Pipe broken — parent process closed connection
-                        g_running = FALSE;
-                    }
-                }
-
-                hr = captureClient->ReleaseBuffer(numFrames);
-                if (FAILED(hr)) return hr;
-            }
-        }
-        // WAIT_TIMEOUT: just loop back and check g_running
+    while (g_running && !(hasInputPipe && InputClosed(input))) {
+        const DWORD result = WaitForSingleObject(captureEvent, 100);
+        if (result == WAIT_FAILED) return HRESULT_FROM_WIN32(GetLastError());
+        if (result != WAIT_OBJECT_0) continue;
+        const HRESULT hr = DrainPackets(captureClient, frameSize);
+        if (FAILED(hr)) return hr;
     }
     return S_OK;
 }
