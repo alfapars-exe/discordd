@@ -6,6 +6,8 @@ Bu belge uygulama önerisidir. Görev kartının varlığı, kodun değiştirild
 
 Birleşik dalın `a0d23642` revizyonunda 462 dosyada 4.667 Vitest testi geçti ve 1 test atlandı. Satır kapsamı %66,56, dal kapsamı %63,44, fonksiyon kapsamı %60,02 ve ifade kapsamı %65,70 ölçüldü. `bd069157` üzerinde varsayılan 13 Playwright testi gerçek Go sunucusu ve mTLS PostgreSQL ile geçti. Eşzamanlı yenileme isteklerinden biri 200, diğeri 409 aldı ve kazanan çerezle aynı hesap yeniden doğrulandı.
 
+Birleşik istemcinin `9aaecadb` revizyonunda tam Vitest koşusu 124,37 saniyede tamamlandı. 464 dosyada 4.671 test geçti ve 1 test atlandı. V8 kapsamı satırlarda %66,73, dallarda %63,52, fonksiyonlarda %60,21 ve ifadelerde %65,84 oldu. `messageStore.ts` için satır ve dal kapsamı sırasıyla %88,00 ve %68,71, `ScreenPicker.tsx` için %86,88 ve %77,50 ölçüldü.
+
 ## Ekran paylaşımı seçicisi · 13 Kasım 2026
 
 `d5fb4f1b` üzerinde Electron TypeScript derlemesi geçti. 276 Electron testi geçti ve 1 test atlandı. Windows'ta gerçek Electron ana süreci ile gizli bir test penceresi üzerinden `getDisplayMedia` çağrıldı. Üretim seçici işleyicisi küçük resimleri kapalı tutarak masaüstü kaynaklarını listeledi, yenileme isteğinde tekrar listeledi ve iptal edildiğinde tarayıcıya `AbortError` döndü. Test pencereyi ana pencere olarak atadı. Ardından sentetik pencere seçildi ve iki yerel WebRTC ucu arasında aktarılan görüntü alıcıda doğrulandı (RF18). İki fiziksel cihaz arasındaki çağrı açık. [PR #257](https://github.com/alfapars-exe/discordd/pull/257)
