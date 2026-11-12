@@ -204,3 +204,31 @@ func TestWelcomeRejectsRedirectToAnotherPort(t *testing.T) {
 		t.Fatal("cross-origin redirect reported success")
 	}
 }
+
+func TestWelcomeRedirectPreservesPost(t *testing.T) {
+	for _, status := range []int{301, 302, 303, 307, 308} {
+		t.Run(fmt.Sprint(status), func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("/inbox", func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || r.Header.Get("Authorization") != "Bearer fixture-token" {
+					t.Error("received redirected request without authenticated POST")
+				}
+				var body map[string]string
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body["content"] != "welcome" {
+					t.Error("redirected request lost welcome message")
+				}
+				w.WriteHeader(http.StatusCreated)
+			})
+			mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+				http.Redirect(w, r, "/inbox", status)
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+			config, _ := parseConfig(server.URL, "fixture-token", "server", "channel")
+			err := postMessage(context.Background(), newMessageClient(), config, "welcome")
+			if (err == nil) != (status == 307 || status == 308) {
+				t.Fatalf("unexpected redirect result: %v", err)
+			}
+		})
+	}
+}
