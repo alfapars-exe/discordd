@@ -192,6 +192,22 @@ describe("initialize", () => {
     expect(useAuthStore.getState().isInitialized).toBe(true);
   });
 
+  it("stops an offline restore when login succeeds during backoff", async () => {
+    getMe.mockResolvedValueOnce({ success: false, error: "Failed to fetch" });
+    mockedPing.mockResolvedValue(false);
+    const restore = useAuthStore.getState().initialize();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(useAuthStore.getState().initPhase).toBe("waking");
+    useAuthStore.getState().applyLoginResponse({
+      success: true,
+      data: { user: fakeUser, access_token: "access", refresh_token: "refresh" },
+    });
+    await vi.runAllTimersAsync();
+    await restore;
+    expect(mockedPing).not.toHaveBeenCalled();
+    expect(useAuthStore.getState()).toMatchObject({ user: fakeUser, isInitialized: true, initPhase: "idle" });
+  });
+
   it("exhausts the wake budget without destroying tokens", async () => {
     getMe.mockResolvedValue({ success: false, error: "service_unavailable: HTTP 503" });
     mockedPing.mockResolvedValue(false); // server never wakes
