@@ -39,6 +39,8 @@ Sonraki tam istemci koşusu `303165c4` revizyonunda 461 dosyada 4.636 geçen ve 
 
 `728c38ab` istemci kaynaklarıyla tam Vitest koşusunda 461 dosyada 4.651 test geçti, 1 test atlandı. Kapsam satırlarda %66,48, dallarda %63,35, fonksiyonlarda %59,95 ve ifadelerde %65,63 oldu.
 
+Birleşik dalın `7cfbcb9e` revizyonunda 461 dosyada 4.654 istemci testi geçti ve 1 test atlandı. Satır kapsamı %66,49, dal kapsamı %63,39, fonksiyon kapsamı %59,97 ve ifade kapsamı %65,64 oldu. Aynı revizyonda Go vet ve build, TypeScript ve Vite üretim derlemesi geçti. WebKit üretim paketi testinde giriş ve parola kurtarma ekranları açıldı ve tarayıcıda JavaScript hatası gözlenmedi.
+
 | Modül | Satır | Dal |
 |---|---:|---:|
 | `VoiceSettings.tsx` | %87,59 | %84,26 |
