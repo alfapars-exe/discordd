@@ -268,6 +268,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		roleTransactions,
 	)
 	serverService.SetUploadDir(cfg.Upload.Dir)
+	serverService.SetMembershipVoiceCleanup(voiceService.DisconnectServerMember)
 	if setter, ok := serverService.(interface {
 		SetGameActivityPreferencesRepository(repository.PreferencesRepository)
 	}); ok {

@@ -56,3 +56,24 @@ func TestPrivateChannelPermissionsAcrossLeaveAndRejoin(t *testing.T) {
 	}
 	check(models.PermViewChannel)
 }
+
+func TestLeaveServerDisconnectsVoiceOnlyInDepartedServer(t *testing.T) {
+	for _, activeServer := range []string{joinTestServerID, "other-server"} {
+		t.Run(activeServer, func(t *testing.T) {
+			h := newJoinServerHarness()
+			voice, _ := newTestVoiceServiceWithChannelRepo(&testutil.MockChannelRepo{GetByIDFn: func(_ context.Context, id string) (*models.Channel, error) {
+				return &models.Channel{ID: id, ServerID: activeServer, Type: models.ChannelTypeVoice}, nil
+			}})
+			h.svc.SetMembershipVoiceCleanup(voice.DisconnectServerMember)
+			if err := voice.JoinChannel(joinTestUserID, "reader", "Reader", "", "voice", false, false); err != nil {
+				t.Fatal(err)
+			}
+			if err := h.svc.LeaveServer(context.Background(), joinTestServerID, joinTestUserID); err != nil {
+				t.Fatal(err)
+			}
+			if active := voice.GetUserVoiceState(joinTestUserID) != nil; active != (activeServer != joinTestServerID) {
+				t.Fatalf("voice active after leaving %s = %v", joinTestServerID, active)
+			}
+		})
+	}
+}
