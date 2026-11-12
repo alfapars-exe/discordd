@@ -74,6 +74,7 @@ func TestGatewayFiltersServerAndStopsOnCancellation(t *testing.T) {
 		}
 		defer connection.Close()
 		for _, payload := range []string{
+			`{"op":"member_join","d":{"id":"id","username":"unscoped"}}`,
 			`{"op":"member_join","server_id":"other","d":{"id":"id","username":"ignored"}}`,
 			`{"op":"member_join","server_id":"server","d":"invalid"}`,
 			`{"op":"member_join","server_id":"server","d":{"id":"id","username":"handle","display_name":"Display"}}`,
