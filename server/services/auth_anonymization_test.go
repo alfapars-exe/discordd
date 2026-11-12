@@ -60,8 +60,7 @@ func TestAccountAnonymizationFailureDoesNotRevoke(t *testing.T) {
 	s.SetUserCacheInvalidator(invalidation)
 	s.SetVoiceDisconnecter(voice)
 	hub.DisconnectUserFn = func(string) { disconnects++ }
-	s.SetMusicRequesterRetirementObserver(musicRequesterObserverFunc(func(string) { observers++ }))
-	s.accountAnonymization = repository.NewSQLiteAccountAnonymizationRepo(h.db.Conn)
+	WithAccountAnonymization(repository.NewSQLiteAccountAnonymizationRepo(h.db.Conn), musicRequesterObserverFunc(func(string) { observers++ }))(s)
 	ctx := context.Background()
 	login := sessionLogin(t, s, h.user.Username)
 	if _, err := h.db.Conn.Exec(`CREATE TRIGGER deny_delete BEFORE UPDATE OF deleted_at ON users BEGIN SELECT RAISE(ABORT,'fixture failure'); END`); err != nil {
@@ -104,13 +103,13 @@ func TestMusicRequesterPrivacyObserverCannotDelaySecurityRevocation(t *testing.T
 			started, release := make(chan struct{}), make(chan struct{})
 			var releaseOnce sync.Once
 			defer releaseOnce.Do(func() { close(release) })
-			auth.SetMusicRequesterRetirementObserver(musicRequesterObserverFunc(func(id string) {
+			auth.musicRequesterRetirement = musicRequesterObserverFunc(func(id string) {
 				if id != target {
 					t.Errorf("wrong observer target %s", id)
 				}
 				close(started)
 				<-release
-			}))
+			})
 			done := make(chan error, 1)
 			go func() {
 				if application {

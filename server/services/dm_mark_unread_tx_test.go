@@ -113,7 +113,7 @@ func TestDMMarkUnreadFrom_ConcurrentSend(t *testing.T) {
 	if err := repo.CreateChannel(ctx, ch); err != nil {
 		t.Fatal(err)
 	}
-	svc := NewDMService(repo, repository.NewSQLiteUserRepo(db.Conn), &testutil.MockBroadcaster{}, &testutil.MockBlockChecker{}, nil, nil,
+	svc := NewDMService(nil, repo, repository.NewSQLiteUserRepo(db.Conn), &testutil.MockBroadcaster{}, &testutil.MockBlockChecker{}, nil, nil,
 		repository.NewSQLiteDMReadRepo(db.Conn), repository.NewSQLiteNotificationRepo(db.Conn), repository.NewDMMessageTxRunner(db.Conn))
 	anchor, err := svc.SendMessage(ctx, "alice", ch.ID, &models.CreateDMMessageRequest{Content: "anchor"})
 	if err != nil {

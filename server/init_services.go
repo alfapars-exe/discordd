@@ -199,7 +199,6 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	voiceService := services.NewVoiceService(
 		repos.Channel, repos.LiveKit, channelPermService, hub, hub, repos.Server, encryptionKey, repos.MemberTimeout, repos.Ban, auditLogService,
 	)
-	p2pCallService := services.NewP2PCallService(repos.Friendship, repos.User, hub)
 
 	// Email service (optional)
 	var emailSender email.EmailSender
@@ -217,19 +216,8 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	categorySender, _ := emailSender.(email.CategorySender)
 	emailDeliveryService := services.NewEmailDeliveryService(repos.EmailDelivery, categorySender,
 		services.WithEmailUnsubscribe(repos.EmailUnsubscribe, cfg.Email.AppURL))
-	if communication, ok := p2pCallService.(interface{ SetEmailEnqueuer(services.EmailEnqueuer) }); ok {
-		communication.SetEmailEnqueuer(emailDeliveryService)
-	}
+	p2pCallService := services.NewP2PCallService(repos.Friendship, repos.User, hub, emailDeliveryService)
 	emailVerificationService := services.NewEmailVerificationService(repos.EmailVerification, verificationSender)
-	authService := services.NewAuthService(
-		repos.User, repos.Session, repos.ResetToken, hub, emailSender,
-		cfg.JWT.Secret, cfg.JWT.AccessTokenExpiry, cfg.JWT.RefreshTokenExpiry, services.WithMFA(mfaService), services.WithAuthSessions(repos.AuthSession), services.WithAccountLifecycle(repos.AccountLifecycle), services.WithAccountAnonymization(repos.AccountAnonymization), services.WithApplicationRemoval(repos.ApplicationRemoval), services.WithServerOwnership(repos.ServerOwnership),
-	)
-	// "Log out from all devices" / password change must also kick any live
-	// voice or screen-share session, mirroring adminUserService's ban/delete
-	// path (security review 2026-08-01, finding 3). voiceService already
-	// exists at this point (constructed above), so no ordering hazard.
-	authService.SetVoiceDisconnecter(voiceService)
 	channelService := services.NewChannelService(repos.Channel, repos.Category, hub, channelPermService, auditLogService, repos.Notification)
 	channelDeletionSetter, setterOK := channelService.(interface {
 		SetVoiceChannelDeletionHandler(services.VoiceChannelDeletionHandler)
@@ -336,6 +324,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	friendshipService := services.NewFriendshipService(repos.Friendship, repos.User, repos.Notification, hub, friendRequestPolicy)
 	friendshipService.SetEmailEnqueuer(emailDeliveryService)
 	dmService := services.NewDMService(
+		services.NewServerDMPolicy(repos.Preferences, repos.Server),
 		repos.DM, repos.User, hub, blockService, friendshipService, dmSettingsService,
 		repos.DMRead, repos.Notification, repository.NewDMMessageTxRunner(db),
 	)
@@ -343,9 +332,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	if communication, ok := dmService.(services.DMCommunicationEmailConfigurer); ok {
 		communication.SetCommunicationEmailEnqueuer(emailDeliveryService)
 	}
-	if concreteDMService, ok := dmService.(interface{ SetServerDMPolicy(services.ServerDMPolicy) }); ok {
-		concreteDMService.SetServerDMPolicy(services.NewServerDMPolicy(repos.Preferences, repos.Server))
-	}
+
 	if reactionDM, ok := dmService.(interface {
 		SetReactionPreferences(repository.PreferencesRepository)
 	}); ok {
@@ -485,13 +472,15 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		repos.Channel, repos.LiveKit, channelPermService, hub, repos.User, encryptionKey, appLogService, repos.MusicSession, voiceService,
 		services.MusicAudienceDependencies{Voice: voiceService, Members: repos.Server},
 	)
-	if observer, ok := musicBotService.(services.MusicRequesterRetirementObserver); ok {
-		if setter, yes := authService.(interface {
-			SetMusicRequesterRetirementObserver(services.MusicRequesterRetirementObserver)
-		}); yes {
-			setter.SetMusicRequesterRetirementObserver(observer)
-		}
-	}
+	authService := services.NewAuthService(
+		repos.User, repos.Session, repos.ResetToken, hub, emailSender,
+		cfg.JWT.Secret, cfg.JWT.AccessTokenExpiry, cfg.JWT.RefreshTokenExpiry, services.WithMFA(mfaService), services.WithAuthSessions(repos.AuthSession), services.WithAccountLifecycle(repos.AccountLifecycle), services.WithAccountAnonymization(repos.AccountAnonymization, musicBotService), services.WithApplicationRemoval(repos.ApplicationRemoval), services.WithServerOwnership(repos.ServerOwnership),
+	)
+	// "Log out from all devices" / password change must also kick any live
+	// voice or screen-share session, mirroring adminUserService's ban/delete
+	// path (security review 2026-08-01, finding 3). voiceService already
+	// exists at this point (constructed above), so no ordering hazard.
+	authService.SetVoiceDisconnecter(voiceService)
 	// Wire the channel-empty hook — when the last human leaves, voice service
 	// asks music bot to stop so it doesn't keep playing to nobody.
 	voiceService.SetMusicBotHook(musicBotService)

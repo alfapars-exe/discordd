@@ -50,7 +50,7 @@ func musicPrivacyFixture(t *testing.T, protocol2 ...bool) (*mfaHarness, *authSer
 			t.Fatal(err)
 		}
 	}
-	auth.SetMusicRequesterRetirementObserver(svc)
+	WithAccountAnonymization(auth.accountAnonymization, svc)(auth)
 	return h, auth, login, svc
 }
 
@@ -145,7 +145,7 @@ func TestMusicRequesterPrivacyDeletionFailureRollsBackWithoutRuntimeObserver(t *
 	}
 	beforeQueue := rows[0]
 	var calls atomic.Int32
-	auth.SetMusicRequesterRetirementObserver(musicRequesterObserverFunc(func(id string) { calls.Add(1); svc.AnonymizeMusicRequester(id) }))
+	auth.musicRequesterRetirement = musicRequesterObserverFunc(func(id string) { calls.Add(1); svc.AnonymizeMusicRequester(id) })
 	if _, err := h.db.Conn.Exec(`CREATE TRIGGER deny_music_retirement BEFORE UPDATE OF deleted_at ON users BEGIN SELECT RAISE(ABORT,'injected retirement failure'); END`); err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +190,7 @@ func TestMusicRequesterPrivacyPublicationFenceOrdersEqualRevisionReplacement(t *
 		getDone <- svc.WithPublicMusicState(context.Background(), "ch", func(state *models.MusicBotChannelState) { close(captured); <-release; consume(state) })
 	}()
 	<-captured
-	auth.SetMusicRequesterRetirementObserver(musicRequesterObserverFunc(func(id string) { close(observerStarted); svc.AnonymizeMusicRequester(id) }))
+	auth.musicRequesterRetirement = musicRequesterObserverFunc(func(id string) { close(observerStarted); svc.AnonymizeMusicRequester(id) })
 	deleteDone := make(chan error, 1)
 	go func() {
 		deleteDone <- auth.DeleteAccount(context.Background(), h.user.ID, login.SessionID, "current-password", "")

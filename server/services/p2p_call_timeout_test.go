@@ -37,9 +37,9 @@ func (t *manualP2PTimer) Fire() {
 	}
 }
 
-func newManualP2PService() (*p2pCallService, *testutil.MockEventPublisher, **manualP2PTimer) {
+func newManualP2PService(email EmailEnqueuer) (*p2pCallService, *testutil.MockEventPublisher, **manualP2PTimer) {
 	hub := &testutil.MockEventPublisher{}
-	svc := NewP2PCallService(p2pFriendLookup{}, p2pUserLookup{}, hub).(*p2pCallService)
+	svc := NewP2PCallService(p2pFriendLookup{}, p2pUserLookup{}, hub, email).(*p2pCallService)
 	var timer *manualP2PTimer
 	svc.afterFunc = func(d time.Duration, fn func()) p2pCallTimer {
 		if d != p2pRingTimeout {
@@ -52,7 +52,8 @@ func newManualP2PService() (*p2pCallService, *testutil.MockEventPublisher, **man
 }
 
 func TestP2PCallRingTimeoutEndsBothPartiesAndEnqueuesGenericMissedCall(t *testing.T) {
-	svc, hub, timerPtr := newManualP2PService()
+	enqueuer := &stubEmailEnqueuer{}
+	svc, hub, timerPtr := newManualP2PService(enqueuer)
 	var delivered []struct {
 		user  string
 		event ws.Event
@@ -63,8 +64,6 @@ func TestP2PCallRingTimeoutEndsBothPartiesAndEnqueuesGenericMissedCall(t *testin
 			event ws.Event
 		}{user, event})
 	}
-	enqueuer := &stubEmailEnqueuer{}
-	svc.SetEmailEnqueuer(enqueuer)
 	if err := svc.InitiateCall("caller", "receiver", models.P2PCallTypeVoice); err != nil {
 		t.Fatal(err)
 	}
@@ -99,9 +98,8 @@ func TestP2PCallRingTimeoutEndsBothPartiesAndEnqueuesGenericMissedCall(t *testin
 func TestP2PCallTerminalActionsCancelRingTimer(t *testing.T) {
 	for _, action := range []string{"accept", "decline", "end", "disconnect"} {
 		t.Run(action, func(t *testing.T) {
-			svc, _, timerPtr := newManualP2PService()
 			enqueuer := &stubEmailEnqueuer{}
-			svc.SetEmailEnqueuer(enqueuer)
+			svc, _, timerPtr := newManualP2PService(enqueuer)
 			if err := svc.InitiateCall("caller", "receiver", models.P2PCallTypeVideo); err != nil {
 				t.Fatal(err)
 			}
@@ -141,7 +139,7 @@ func TestP2PCallTerminalActionsCancelRingTimer(t *testing.T) {
 }
 
 func TestP2PCallSnapshotDoesNotExposeMutableState(t *testing.T) {
-	svc, _, _ := newManualP2PService()
+	svc, _, _ := newManualP2PService(nil)
 	if err := svc.InitiateCall("caller", "receiver", models.P2PCallTypeVoice); err != nil {
 		t.Fatal(err)
 	}

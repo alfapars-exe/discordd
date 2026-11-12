@@ -11,12 +11,11 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-func WithAccountAnonymization(repo repository.AccountAnonymizationRepository) AuthOption {
-	return func(s *authService) { s.accountAnonymization = repo }
-}
-
-func (s *authService) SetMusicRequesterRetirementObserver(observer MusicRequesterRetirementObserver) {
-	s.musicRequesterRetirement = observer
+func WithAccountAnonymization(repo repository.AccountAnonymizationRepository, observer MusicRequesterRetirementObserver) AuthOption {
+	return func(s *authService) {
+		s.accountAnonymization = repo
+		s.musicRequesterRetirement = observer
+	}
 }
 
 // DeleteAccount is only the credential/runtime part of deletion. The handler

@@ -32,7 +32,7 @@ func attachmentReceiptFixture(t *testing.T) (DMService, *dmUploadService, string
 	if err := repo.CreateChannel(ctx, ch); err != nil {
 		t.Fatal(err)
 	}
-	svc := NewDMService(repo, repository.NewSQLiteUserRepo(db.Conn), &testutil.MockBroadcaster{}, nil, nil, nil, repository.NewSQLiteDMReadRepo(db.Conn), repository.NewSQLiteNotificationRepo(db.Conn), repository.NewDMMessageTxRunner(db.Conn))
+	svc := NewDMService(nil, repo, repository.NewSQLiteUserRepo(db.Conn), &testutil.MockBroadcaster{}, nil, nil, nil, repository.NewSQLiteDMReadRepo(db.Conn), repository.NewSQLiteNotificationRepo(db.Conn), repository.NewDMMessageTxRunner(db.Conn))
 	upload := NewDMUploadService(repo, t.TempDir(), 1024).(*dmUploadService)
 	svc.SetUploadDir(upload.uploadDir)
 	return svc, upload, ch.ID, repo
