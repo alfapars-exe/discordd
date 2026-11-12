@@ -213,3 +213,18 @@ test("a callback invalidated by native frame teardown cannot escape the main pro
   assert.equal(f.timers.size, 0);
   assert.ok(f.diagnostics.some(event => event.phase === "handler_error"));
 });
+test("failed refresh releases the renderer retry and the next refresh updates selectable sources", async () => {
+  const f = fixture();
+  let picked: string | undefined;
+  await f.request(streams => { picked = streams?.video?.id; });
+  f.setQuery(async () => { throw new Error("capture unavailable"); });
+  f.ipc.emit("screen-picker-refresh", f.event);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.messages.filter(channel => channel === "screen-picker-refresh-result").length, 1);
+  const replacement = { ...f.source, id: "window:2" };
+  f.setQuery(async () => [replacement]);
+  f.ipc.emit("screen-picker-refresh", f.event);
+  await new Promise(resolve => setImmediate(resolve));
+  f.ipc.emit("screen-picker-result", f.event, replacement.id);
+  assert.equal(picked, replacement.id);
+});
