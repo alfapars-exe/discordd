@@ -25,11 +25,19 @@ type SearchPanelProps = {
   onSelectResult?: (message: Message) => Promise<boolean>;
 };
 
-function SearchPanel({ channelId, onClose, onSelectResult }: SearchPanelProps) {
-  const { t, i18n } = useTranslation("chat");
-  const { t: tE2ee } = useTranslation("e2ee");
+function SearchPanel(props: SearchPanelProps) {
   const activeServerId = useServerStore((s) => s.activeServerId);
   const serverE2eeEnabled = useServerStore((s) => s.activeServer?.e2ee_enabled ?? false);
+  const scope = JSON.stringify([activeServerId, props.channelId, serverE2eeEnabled]);
+  return <ScopedSearchPanel key={scope} {...props} activeServerId={activeServerId} serverE2eeEnabled={serverE2eeEnabled} />;
+}
+
+function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId, serverE2eeEnabled }: SearchPanelProps & {
+  activeServerId: string | null;
+  serverE2eeEnabled: boolean;
+}) {
+  const { t, i18n } = useTranslation("chat");
+  const { t: tE2ee } = useTranslation("e2ee");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult | null>(null);
   const [isSearching, setIsSearching] = useState(false);
@@ -50,6 +58,7 @@ function SearchPanel({ channelId, onClose, onSelectResult }: SearchPanelProps) {
   // Clear any pending debounce on unmount — the timer would otherwise fire
   // after close and call setState on an unmounted panel.
   useEffect(() => () => {
+    searchSeqRef.current++;
     if (debounceRef.current) clearTimeout(debounceRef.current);
   }, []);
 

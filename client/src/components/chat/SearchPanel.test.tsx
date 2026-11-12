@@ -175,6 +175,22 @@ describe("SearchPanel — result races", () => {
     expect(screen.getByText("newer result")).toBeInTheDocument();
   });
 
+  it("clears the previous channel's results and ignores its pending response", async () => {
+    const pending = deferred<APIResponse<SearchResult>>();
+    vi.mocked(searchMessages)
+      .mockResolvedValueOnce(ok([makeMessage("old", "previous channel")]))
+      .mockReturnValueOnce(pending.promise);
+    const view = render(<SearchPanel channelId="ch-1" onClose={() => {}} />);
+    typeQuery("first");
+    await act(async () => {});
+    expect(screen.getByText("previous channel")).toBeInTheDocument();
+    typeQuery("second");
+    view.rerender(<SearchPanel channelId="ch-2" onClose={() => {}} />);
+    expect(screen.queryByText("previous channel")).not.toBeInTheDocument();
+    await act(async () => pending.resolve(ok([makeMessage("late", "previous response")])));
+    expect(screen.queryByText("previous response")).not.toBeInTheDocument();
+  });
+
   it("drops a result row when messageStore reports its live deletion", async () => {
     vi.mocked(searchMessages).mockResolvedValueOnce(
       ok([makeMessage("m-x", "doomed row"), makeMessage("m-y", "surviving row")])
