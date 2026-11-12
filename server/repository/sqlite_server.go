@@ -108,7 +108,15 @@ func (r *sqliteServerRepo) Update(ctx context.Context, server *models.Server) er
 // (NewSQLiteServerRepo(tx)), matching the database.WithTx pattern
 // CreateServer already uses.
 func (r *sqliteServerRepo) Delete(ctx context.Context, serverID string) error {
-	if err := deleteServerCascadeWithDialect(ctx, r.db, serverID, r.postgres); err != nil {
+	var err error
+	if db := database.RawDB(r.db); db != nil {
+		err = database.WithTx(ctx, db, func(tx *sql.Tx) error {
+			return deleteServerCascadeWithDialect(ctx, tx, serverID, r.postgres)
+		})
+	} else {
+		err = deleteServerCascadeWithDialect(ctx, r.db, serverID, r.postgres)
+	}
+	if err != nil {
 		return fmt.Errorf("failed to delete server: %w", err)
 	}
 	return nil

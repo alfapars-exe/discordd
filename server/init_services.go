@@ -388,7 +388,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 
 	adminUserService := services.NewAdminUserService(repos.User, hub, voiceService, emailSender)
 	adminUserService.SetUploadDir(cfg.Upload.Dir)
-	adminServerService := services.NewAdminServerService(db, repos.Server, repos.User, repos.LiveKit, hub, emailSender)
+	adminServerService := services.NewAdminServerService(db, repos.Server, repos.User, hub, emailSender)
 	adminServerService.SetUploadDir(cfg.Upload.Dir)
 
 	linkPreviewService := services.NewLinkPreviewService(repos.LinkPreview)
