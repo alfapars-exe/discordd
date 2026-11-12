@@ -14,6 +14,12 @@ root. It prints the control URL file path and container name. Export the DSN
 from that file in the shell that will run Playwright. For GitHub Actions the
 script writes the environment variables to `GITHUB_ENV`.
 
+For a voice test, start a disposable LiveKit development server and set
+`HICHAT_E2E_LIVEKIT_PORT` to its published loopback signaling port before
+starting Playwright. The API then issues tokens for `ws://127.0.0.1:<port>`
+using LiveKit's development credentials. Publish the RTC ports on loopback
+as well. Ordinary browser runs leave this variable unset.
+
 Install dependencies in both `client/` and `e2e/` with `npm ci`. From `e2e/`
 run the isolation checks and the Chromium suite:
 
