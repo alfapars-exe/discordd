@@ -178,7 +178,6 @@ function AdminUserList() {
       setIsLoading(false);
     }
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ─── Context Menu ───

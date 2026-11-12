@@ -52,7 +52,7 @@ function AdminFeedbackList() {
       showApiError(res, { fallbackKey: "settings:feedbackLoadError" });
     }
     setIsLoading(false);
-  }, [statusFilter, typeFilter, addToast, t]);
+  }, [statusFilter, typeFilter]);
 
   useEffect(() => {
     queueMicrotask(() => fetchTickets());
