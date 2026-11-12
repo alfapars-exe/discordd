@@ -3,7 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 import os
 import struct
 import subprocess
-import sys
+from pathlib import Path
 
 
 def read_stream(stream, started):
@@ -15,7 +15,8 @@ def read_stream(stream, started):
         pass
 
 
-def check_shutdown(helper):
+def check_shutdown():
+    helper = Path(__file__).resolve().parents[1] / "native/audio-capture.exe"
     from concurrent.futures import Future
     started = Future()
     with subprocess.Popen([helper, str(os.getpid())], stdin=subprocess.PIPE,
@@ -37,4 +38,4 @@ def check_shutdown(helper):
 
 if __name__ == "__main__":
     for _ in range(5):
-        check_shutdown(sys.argv[1])
+        check_shutdown()
