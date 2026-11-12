@@ -176,3 +176,14 @@ func indexOf(haystack, needle string) int {
 	}
 	return -1
 }
+
+func TestRedactEscapedJSONCredentialAndTabBearer(t *testing.T) {
+	for input, want := range map[string]string{
+		`{"password":"prefix\"sensitive-tail","ok":"visible"}`: `{"password":"***","ok":"visible"}`,
+		"Bearer\tsensitive-token":                              "Bearer ***",
+	} {
+		if got := RedactSecrets(input); got != want {
+			t.Errorf("RedactSecrets(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
