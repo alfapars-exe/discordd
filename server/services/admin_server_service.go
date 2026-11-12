@@ -2,18 +2,7 @@
 //
 // Allows platform admin to delete any server (unlike owner-only ServerService.DeleteServer).
 //
-// Deletion order:
-// 1. LiveKit instance cleanup (platform -> decrement, self-hosted -> delete)
-// 2. server_delete broadcast (BEFORE DB delete — member list is needed for broadcast)
-// 3. Pre-fetch attachment file_urls (best-effort; a fetch failure just means
-//    step 5 below has nothing to clean up, it never blocks the delete)
-// 4. Transactional cascade delete: channels, categories, roles, invites,
-//    user_roles, bans, and everything under channels/roles have no enforced
-//    foreign key to servers (see repository.deleteServerCascade) and are
-//    deleted explicitly here, then the servers row itself.
-// 5. Best-effort on-disk cleanup of the attachment files fetched in step 3
-//    (see services/upload_cleanup.go) — only after step 4 commits.
-// 6. Optional email notification to server owner
+// The database transaction releases the assigned LiveKit instance after deleting the server.
 package services
 
 import (
@@ -41,7 +30,6 @@ type adminServerService struct {
 	db          *sql.DB // for WithTx around the cascade delete, mirrors ServerService
 	serverRepo  repository.ServerRepository
 	userRepo    repository.UserRepository
-	livekitRepo repository.LiveKitRepository
 	hub         ws.EventPublisher
 	emailSender email.EmailSender // optional, nil = no emails
 	// uploadDir enables best-effort disk cleanup on server delete (see
@@ -59,7 +47,6 @@ func NewAdminServerService(
 	db *sql.DB,
 	serverRepo repository.ServerRepository,
 	userRepo repository.UserRepository,
-	livekitRepo repository.LiveKitRepository,
 	hub ws.EventPublisher,
 	emailSender email.EmailSender,
 ) AdminServerService {
@@ -67,7 +54,6 @@ func NewAdminServerService(
 		db:          db,
 		serverRepo:  serverRepo,
 		userRepo:    userRepo,
-		livekitRepo: livekitRepo,
 		hub:         hub,
 		emailSender: emailSender,
 	}
@@ -78,28 +64,6 @@ func (s *adminServerService) DeleteServer(ctx context.Context, adminUserID, serv
 	if err != nil {
 		return fmt.Errorf("server not found: %w", err)
 	}
-
-	// LiveKit instance cleanup
-	if server.LiveKitInstanceID != nil {
-		instance, lkErr := s.livekitRepo.GetByID(ctx, *server.LiveKitInstanceID)
-		if lkErr == nil {
-			if instance.IsPlatformManaged {
-				if decErr := s.livekitRepo.DecrementServerCount(ctx, instance.ID); decErr != nil {
-					adminServerLogger.Error("failed to decrement livekit server count", "instance_id", instance.ID, "err", pkg.ErrText(decErr))
-				}
-			} else {
-				if delErr := s.livekitRepo.Delete(ctx, instance.ID); delErr != nil {
-					adminServerLogger.Error("failed to delete self-hosted livekit instance", "instance_id", instance.ID, "err", pkg.ErrText(delErr))
-				}
-			}
-		}
-	}
-
-	// Broadcast BEFORE delete (member list is lost after)
-	s.hub.BroadcastToServer(serverID, ws.Event{
-		Op:   ws.OpServerDelete,
-		Data: map[string]string{"id": serverID},
-	})
 
 	// Pre-fetch attachment file_urls for the post-delete disk cleanup below.
 	// A fetch failure here is logged and non-fatal — the delete still
@@ -116,6 +80,12 @@ func (s *adminServerService) DeleteServer(ctx context.Context, adminUserID, serv
 	}); err != nil {
 		return fmt.Errorf("failed to delete server: %w", err)
 	}
+	// The hub tracks connected server members independently of the database rows.
+	s.hub.BroadcastToServer(serverID, ws.Event{
+		Op:   ws.OpServerDelete,
+		Data: map[string]string{"id": serverID},
+	})
+
 
 	// Only remove files once the DB delete has actually committed — see
 	// upload_cleanup.go for why the ordering matters.

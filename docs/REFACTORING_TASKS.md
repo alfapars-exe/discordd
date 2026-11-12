@@ -46,7 +46,7 @@ Yetki ve hiyerarşi denetimleri servis katmanında, transaction ve satır kilidi
 
 **Takip.** Gönüllü sunucu ayrılışı ve hızlı yeniden katılmada sunucu izin önbelleğinin ve etkin ses oturumunun yaşam döngüsü ayrı bir kabul senaryosudur. Rol ve üye WebSocket olayları transaction sürüm numarası taşımaz. İki eşzamanlı commit için istemcide küresel teslim sırası garanti edilmez. Fiziksel cihazda ses ve video kabulü açıktır. Ürün kabul defterindeki 261 davranışın yapısal denetimi geçti. `npm run check:acceptance` başlangıçtaki 248 açık davranışı raporlamaya devam ediyor.
 
-Arşiv E2E senaryosundaki test sunucusu silinirken PostgreSQL, hâlâ sunucudan referans alan self-hosted LiveKit kaydının silinmesini `23503` ile reddetti. Aynı hata başlangıç revizyonunda yeniden üretildi. Arşiv E2E senaryosu iki revizyonda da geçti. Sunucu silinirken LiveKit kaydının temizlenme sırası açık takiptir.
+Arşiv E2E senaryosunda PostgreSQL, silinen sunucunun hâlâ referans verdiği self-hosted LiveKit kaydını `23503` ile reddetmişti. Düzeltmede, sunucuyu silen transaction son atamayı döndürür. Aynı transaction, yönetilen örneğin sayacını düşürür veya son referansı kaldırılan özel örneği siler. SQLite ve PostgreSQL 18.6 testlerinde medya temizleme hatasının sunucu silmeyi geri alması ve eşzamanlı iki silmenin son özel örneği kaldırması doğrulandı. Sahip ve platform yöneticisi yollarında `server_delete` olayının yalnız commit sonrasında gönderildiği servis testiyle doğrulandı.
 
 ## Uygulama izleme — 26 Ekim 2026
 
