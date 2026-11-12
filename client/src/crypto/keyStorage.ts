@@ -1092,11 +1092,17 @@ export async function clearAllE2EEData(options?: { resetSelfFanout: true }): Pro
   ] as const;
 
   const tx = db.transaction(storeNames, "readwrite");
-  for (const storeName of storeNames) {
-    await tx.objectStore(storeName).clear();
+  try {
+    for (const storeName of storeNames) {
+      await tx.objectStore(storeName).clear();
+    }
+    if (options?.resetSelfFanout) await tx.objectStore("metadata").put(true, "self_fanout_reset");
+    await tx.done;
+  } catch (error) {
+    try { tx.abort(); } catch { /* An IndexedDB request may already have aborted it. */ }
+    await tx.done.catch(() => {});
+    throw error;
   }
-  if (options?.resetSelfFanout) await tx.objectStore("metadata").put(true, "self_fanout_reset");
-  await tx.done;
 }
 
 /**
