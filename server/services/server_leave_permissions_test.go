@@ -81,31 +81,43 @@ func TestLeaveServerDisconnectsVoiceOnlyInDepartedServer(t *testing.T) {
 }
 
 func TestLeaveServerFencesVoiceJoinAfterAdmission(t *testing.T) {
-	voice, _ := newTestVoiceServiceWithChannelRepo(&testutil.MockChannelRepo{GetByIDFn: func(context.Context, string) (*models.Channel, error) {
-		return &models.Channel{ID: "voice", ServerID: joinTestServerID, Type: models.ChannelTypeVoice}, nil
-	}})
-	h := newJoinServerHarness()
-	h.svc.SetMembershipVoiceCleanup(voice.DisconnectServerMember)
-	admitted, resume := make(chan struct{}), make(chan struct{})
-	voice.(*voiceService).livekitGetter = &mockConfigurableLiveKitGetter{GetByServerIDFn: func(context.Context, string) (*models.LiveKitInstance, error) {
-		close(admitted)
-		<-resume
-		return nil, nil
-	}}
-	result := make(chan error, 1)
-	go func() { result <- voice.JoinChannel(joinTestUserID, "reader", "Reader", "", "voice", false, false) }()
-	select {
-	case <-admitted:
-	case err := <-result:
-		t.Fatalf("join ended before admission: %v", err)
-	}
-	err := h.svc.LeaveServer(context.Background(), joinTestServerID, joinTestUserID)
-	close(resume)
-	joinErr := <-result
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !errors.Is(joinErr, pkg.ErrForbidden) || voice.GetUserVoiceState(joinTestUserID) != nil {
-		t.Fatalf("stale join returned %v, state = %+v", joinErr, voice.GetUserVoiceState(joinTestUserID))
+	for _, activeServer := range []string{joinTestServerID, "other-server"} {
+		t.Run(activeServer, func(t *testing.T) {
+			voice, _ := newTestVoiceServiceWithChannelRepo(&testutil.MockChannelRepo{GetByIDFn: func(context.Context, string) (*models.Channel, error) {
+				return &models.Channel{ID: "voice", ServerID: activeServer, Type: models.ChannelTypeVoice}, nil
+			}})
+			h := newJoinServerHarness()
+			h.svc.SetMembershipVoiceCleanup(voice.DisconnectServerMember)
+			admitted, resume := make(chan struct{}), make(chan struct{})
+			voice.(*voiceService).livekitGetter = &mockConfigurableLiveKitGetter{GetByServerIDFn: func(context.Context, string) (*models.LiveKitInstance, error) {
+				close(admitted)
+				<-resume
+				return nil, nil
+			}}
+			result := make(chan error, 1)
+			go func() { result <- voice.JoinChannel(joinTestUserID, "reader", "Reader", "", "voice", false, false) }()
+			select {
+			case <-admitted:
+			case err := <-result:
+				t.Fatalf("join ended before admission: %v", err)
+			}
+			err := h.svc.LeaveServer(context.Background(), joinTestServerID, joinTestUserID)
+			close(resume)
+			joinErr := <-result
+			if err != nil {
+				t.Fatal(err)
+			}
+			state := voice.GetUserVoiceState(joinTestUserID)
+			if activeServer != joinTestServerID {
+				if joinErr != nil || state == nil || state.ServerID != activeServer {
+					t.Fatalf("unrelated join returned %v, state = %+v", joinErr, state)
+				}
+				return
+			}
+			if !errors.Is(joinErr, pkg.ErrForbidden) || state != nil {
+				t.Fatalf("stale join returned %v, state = %+v", joinErr, state)
+			}
+
+		})
 	}
 }
