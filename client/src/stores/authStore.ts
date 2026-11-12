@@ -128,6 +128,22 @@ type AuthState = {
   setManualStatus: (status: UserStatus) => void;
 };
 
+function establishSession(tokens: AuthTokens, previous: User | null, set: (state: Partial<AuthState>) => void) {
+  const { user } = tokens;
+  authSessionEpoch++;
+  if (previous?.id !== user.id) {
+    useUIStore.getState().resetNavigation();
+    useComposerDraftStore.getState().reset();
+  }
+  usePreferencesStore.getState().bindAccount(user.id);
+  setTokens(tokens.access_token, tokens.refresh_token, user.id);
+  syncLanguageFromUser(user);
+  set({
+    user, manualStatus: manualStatusForUser(user), isInitialized: true, initPhase: "idle",
+    isLoading: false, mfaRequired: false, accountDisabled: false,
+  });
+}
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   isLoading: false,
@@ -151,15 +167,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     });
 
     if (res.success && res.data) {
-      authSessionEpoch++;
-      if (get().user?.id !== res.data.user.id) {
-        useUIStore.getState().resetNavigation();
-        useComposerDraftStore.getState().reset();
-      }
-      usePreferencesStore.getState().bindAccount(res.data.user.id);
-      setTokens(res.data.access_token, res.data.refresh_token, res.data.user.id);
-      syncLanguageFromUser(res.data.user);
-      set({ user: res.data.user, manualStatus: manualStatusForUser(res.data.user), isLoading: false, mfaRequired: false, accountDisabled: false });
+      establishSession(res.data, get().user, set);
       usePreferencesStore.getState().fetchAndApply();
       return true;
     }
@@ -175,15 +183,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   applyLoginResponse: (res) => {
     if (res.success && res.data) {
-      authSessionEpoch++;
-      if (get().user?.id !== res.data.user.id) {
-        useUIStore.getState().resetNavigation();
-        useComposerDraftStore.getState().reset();
-      }
-      usePreferencesStore.getState().bindAccount(res.data.user.id);
-      setTokens(res.data.access_token, res.data.refresh_token, res.data.user.id);
-      syncLanguageFromUser(res.data.user);
-      set({ user: res.data.user, manualStatus: manualStatusForUser(res.data.user), isLoading: false, mfaRequired: false, accountDisabled: false });
+      establishSession(res.data, get().user, set);
       logToServer("info", "auth_login", { userId: res.data.user.id });
       // Fetch server-side preferences and apply to stores
       usePreferencesStore.getState().fetchAndApply();
@@ -244,7 +244,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     logToServer("info", "auth_logout", {});
     // Close settings modal if open (SPA doesn't reload between logout → login)
     useSettingsStore.getState().closeSettings();
-    set({ user: null, manualStatus: "online", mfaRequired: false, accountDisabled: false });
+    set({ user: null, isInitialized: true, initPhase: "idle", manualStatus: "online", mfaRequired: false, accountDisabled: false });
   },
 
   /** Restore session from stored token on app start. */
@@ -286,9 +286,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
           // Cheap unauthenticated probe first — don't fire the auth+refresh
           // machinery against a server that is still booting.
-          if (!(await pingServer())) continue;
-
           if (!current()) return;
+          const reachable = await pingServer();
+          if (!current()) return;
+          if (!reachable) continue;
           const retry = await authApi.getMe();
           if (!current()) return;
           if (retry.success && retry.data) {

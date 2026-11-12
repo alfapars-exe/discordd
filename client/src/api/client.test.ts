@@ -606,6 +606,25 @@ describe("bounded request and shared-refresh lifetimes", () => {
     expect(getAccessToken()).toBe("expired-token");
   });
 
+  it.each([401, 403])("preserves the replacement account preview on late refresh rejection %s", async (status) => {
+    const { ensureFreshToken, setTokens, getAccessToken } = await loadClient();
+    const { rememberStartupUser, readStartupCache, clearStartupCache } = await import("../utils/startupCache");
+    setTokens("expired-token", "", "old");
+    const pending = deferred<Response>();
+    fetchMock.mockReturnValueOnce(pending.promise);
+    const refresh = ensureFreshToken();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledOnce();
+
+    setTokens("new-token", "", "new");
+    rememberStartupUser({ id: "new", username: "replacement", display_name: "Replacement" });
+    pending.resolve(jsonResponse({ success: false }, status));
+    expect(await refresh).toBeNull();
+    expect(getAccessToken()).toBe("new-token");
+    expect(readStartupCache()?.user.id).toBe("new");
+    clearStartupCache();
+  });
+
   it.each(["logout", "replacement"] as const)("does not apply stale credentials if %s happens during refresh JSON decoding", async (change) => {
     const { ensureFreshToken, setTokens, clearTokens, getAccessToken } = await loadClient();
     setTokens("expired-token", "");
@@ -662,6 +681,17 @@ describe("cold session restore", () => {
   it.each([400, 401, 403])("stops after a rejected or missing cookie (%s) without retrying it", async status => {
     const { apiClient } = await loadClient(); fetchMock.mockResolvedValueOnce(jsonResponse({ success: false }, status));
     expect((await apiClient("/users/me", { refreshIfMissing: true })).error).toBe("unauthorized"); expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+  it.each([
+    ["REFRESH_SUPERSEDED", "service_unavailable:"],
+    ["ACCOUNT_MISMATCH", "unauthorized"],
+    ["SESSION_MISMATCH", "unauthorized"],
+  ])("handles refresh conflict %s during startup", async (code, expected) => {
+    const { apiClient } = await loadClient();
+    fetchMock.mockResolvedValueOnce(jsonResponse({ success: false, code }, 409));
+    const result = await apiClient("/users/me", { refreshIfMissing: true });
+    expect(result.error).toContain(expected);
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
   it("preserves the session on a transient refresh failure", async () => {
     const { apiClient } = await loadClient(); fetchMock.mockRejectedValueOnce(new Error("offline"));
