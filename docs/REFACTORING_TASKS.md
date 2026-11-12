@@ -208,6 +208,8 @@ Parametre sınır testi, sürücünün PostgreSQL protokolünde bağlanamayacak 
 
 ## RF06 — Eski şema migration kabulü
 
+**SQLite içe aktarma.** Boş migration defterinde 144–150 sürümlerinin her biri gerçek migration dosyalarından üretilmiş şema ve dosya dizisi SHA-256 özetleriyle tanınır. Yalnız eşleşen sürüme kadar olan kayıtlar aynı transaction içinde eklenir. Sonraki migration dosyaları olağan sırada çalışır. Testler yedi sürümü, eksik şemayı, sonradan eklenmiş indeksi, değiştirilmiş migration dosyasını, kayıt yazılırken geri almayı ve veri içeren 144 kopyasının güncel sürüme iki kez açılmasını denetler. Operatör adımları `deploy/infra/README.md` içindedir. Gerçek kullanıcı yedeğiyle geri yükleme kabulü açıktır.
+
 | Alan | Tanım |
 |---|---|
 | Task ID | RF06 |
