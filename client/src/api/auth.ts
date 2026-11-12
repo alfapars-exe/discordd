@@ -8,6 +8,7 @@ import type { AuthTokens, LoginRequest, RegisterRequest, User } from "../types";
 /** Register a new user. First user automatically becomes Owner. */
 export async function register(data: RegisterRequest) {
   return apiClient<AuthTokens>("/auth/register", {
+    skipAuthRefresh: true,
     method: "POST",
     body: data,
   });

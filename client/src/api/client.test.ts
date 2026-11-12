@@ -583,6 +583,17 @@ describe("bounded request and shared-refresh lifetimes", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("does not refresh or discard an existing session when public signup is rejected", async () => {
+    const { setTokens, getAccessToken } = await loadClient();
+    const { register } = await import("./auth");
+    setTokens("expired-token", "", "existing");
+    fetchMock.mockImplementation(async () => jsonResponse({ success: false, error: "signup rejected" }, 401));
+    const response = await register({ username: "fixture", password: "fixture-only" });
+    expect(response.success).toBe(false);
+    expect(fetchMock.mock.calls.map(call => call[0])).toEqual([API_BASE_URL + "/auth/register"]);
+    expect(getAccessToken()).toBe("expired-token");
+  });
+
   it("handles public recovery requests without refreshing an unrelated session", async () => {
     const { setTokens, getAccessToken } = await loadClient();
     const { forgotPassword, resetPassword } = await import("./auth");
