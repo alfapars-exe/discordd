@@ -86,7 +86,6 @@ func (s *adminServerService) DeleteServer(ctx context.Context, adminUserID, serv
 		Data: map[string]string{"id": serverID},
 	})
 
-
 	// Only remove files once the DB delete has actually committed — see
 	// upload_cleanup.go for why the ordering matters.
 	removeUploadFilesByURL(s.uploadDir, fileURLs)

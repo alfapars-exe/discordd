@@ -44,7 +44,9 @@ func TestChangeEmail(t *testing.T) {
 	t.Run("valid change persists the new email", func(t *testing.T) {
 		var saved *string
 		ur := &testutil.MockUserRepo{
-			GetByIDFn:    func(context.Context, string) (*models.User, error) { return &models.User{ID: "u1", PasswordHash: hash}, nil },
+			GetByIDFn: func(context.Context, string) (*models.User, error) {
+				return &models.User{ID: "u1", PasswordHash: hash}, nil
+			},
 			UpdateEmailFn: func(_ context.Context, _ string, email *string) error { saved = email; return nil },
 		}
 		svc := newAuthServiceForReset(ur, &testutil.MockResetRepo{}, &testutil.MockEmailSender{})
