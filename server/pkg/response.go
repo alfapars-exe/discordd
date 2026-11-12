@@ -31,7 +31,11 @@ type APIResponse struct {
 func JSON(w http.ResponseWriter, status int, data any) {
 	body, err := json.Marshal(APIResponse{Success: true, Data: data})
 	if err != nil {
-		Error(w, err)
+		ctx := ResponseLogContext(w)
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		ErrorCtx(ctx, w, http.StatusInternalServerError, "internal server error", err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
