@@ -57,7 +57,7 @@ function ForgotPasswordPage() {
         <h1 className="auth-title">{t("forgotPasswordTitle")}</h1>
         <p className="auth-subtitle">{t("forgotPasswordSubtitle")}</p>
 
-        {error && <div className="auth-error">{localizeAuthError(error, t)}</div>}
+        {error && <div className="auth-error" role="alert">{localizeAuthError(error, t)}</div>}
 
         <form onSubmit={handleSubmit}>
           <div className="auth-field">

@@ -24,7 +24,7 @@ it("keeps the submitted identity visible until the request settles and allows re
   expect(screen.getByRole("button")).toBeDisabled();
   expect(authApi.forgotPassword).toHaveBeenCalledWith("first-user");
   rejectRequest();
-  await screen.findByText("unavailable");
+  expect(await screen.findByRole("alert")).toHaveTextContent("unavailable");
   expect(input).not.toHaveAttribute("readonly");
   fireEvent.change(input, { target: { value: "second-user" } });
   expect(screen.queryByText("unavailable")).toBeNull();

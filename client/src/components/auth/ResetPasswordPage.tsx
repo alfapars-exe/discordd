@@ -66,7 +66,7 @@ function ResetPasswordForm({ token }: { readonly token: string }) {
       <main className="auth-page">
         <div className="auth-card">
           <h1 className="auth-title">{t("resetPasswordTitle")}</h1>
-          <div className="auth-error">{t("invalidOrExpiredToken")}</div>
+          <div className="auth-error" role="alert">{t("invalidOrExpiredToken")}</div>
           <p className="auth-link">
             <Link to="/login">{t("goToLogin")}</Link>
           </p>
@@ -97,7 +97,7 @@ function ResetPasswordForm({ token }: { readonly token: string }) {
         <h1 className="auth-title">{t("resetPasswordTitle")}</h1>
         <p className="auth-subtitle">{t("resetPasswordSubtitle")}</p>
 
-        {error && <div className="auth-error">{localizeAuthError(error, t)}</div>}
+        {error && <div className="auth-error" role="alert">{localizeAuthError(error, t)}</div>}
 
         <form onSubmit={handleSubmit}>
           <div className="auth-field">
