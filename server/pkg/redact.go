@@ -50,7 +50,7 @@ const valueTerminators = "&\"' \t\r\n"
 func RedactSecrets(s string) string {
 	// Most log fields are IDs, fixed messages or route templates. Skip regex
 	// work when none of the supported credential forms can occur.
-	if !strings.ContainsAny(s, ":=?\"") && !strings.Contains(strings.ToLower(s), "bearer ") {
+	if !strings.ContainsAny(s, ":=?\"") && !strings.Contains(strings.ToLower(s), "bearer") {
 		return s
 	}
 	s = logURLCredentials.ReplaceAllString(s, "${1}***@")
@@ -73,7 +73,7 @@ func RedactSecrets(s string) string {
 var logURLCredentials = regexp.MustCompile(`(?i)([a-z][a-z0-9+.-]*://)[^\s/@]+@`)
 var logAuthorization = regexp.MustCompile(`(?im)((?:authorization|cookie|set-cookie)\s*[:=]\s*)[^\r\n]+`)
 var logBearer = regexp.MustCompile(`(?i)bearer\s+[a-z0-9._~+/=-]+`)
-var logJSONSecret = regexp.MustCompile(`(?i)("(?:password|password_hash|authorization|cookie|token|access_token|refresh_token|api_key|apikey|secret|ticket)"\s*:\s*")[^"\r\n]*"`)
+var logJSONSecret = regexp.MustCompile(`(?i)("(?:password|password_hash|authorization|cookie|token|access_token|refresh_token|api_key|apikey|secret|ticket)"\s*:\s*")(?:[^"\\\r\n]|\\[^\r\n])*"`)
 var logKeyNormalizer = strings.NewReplacer("-", "", "_", "", ".", "")
 
 // IsSecretLogKey also covers structured values that have no "token=" prefix.
