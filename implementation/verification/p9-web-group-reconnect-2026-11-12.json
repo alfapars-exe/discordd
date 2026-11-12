@@ -34,5 +34,39 @@
   "remaining": [
     "Installed Windows client reconnect with navigation and selected devices",
     "Physical capture and playback acceptance tracked separately"
-  ]
+  ],
+  "windowsPackagedRun": {
+    "sourceCommit": "329ca8fd",
+    "version": "2.11.130",
+    "entryPoint": "win-unpacked/HiChat.exe",
+    "installerSha256": "eb1b999556933472b811115bee76c971c6ec560600009f0549e9637cc434e3c4",
+    "fixture": "Two packaged Electron processes, independently verified temporary profiles, packaged app:// renderer, test API through local TLS, synthetic 440 Hz input",
+    "outageSeconds": 24,
+    "bothDestinationURLsUnchanged": true,
+    "before": [
+      {
+        "receivedPacketDelta": 23,
+        "toneMagnitude": 0.013287
+      },
+      {
+        "receivedPacketDelta": 25,
+        "toneMagnitude": 0.013287
+      }
+    ],
+    "after": [
+      {
+        "receivedPacketDelta": 21,
+        "toneMagnitude": 0.013315
+      },
+      {
+        "receivedPacketDelta": 24,
+        "toneMagnitude": 0.013295
+      }
+    ],
+    "limits": [
+      "NSIS installation was not exercised",
+      "Selected device IDs were not asserted in this packaged run",
+      "No physical microphones or speakers were used"
+    ]
+  }
 }
