@@ -506,6 +506,8 @@ Tam istemci koşusu aynı `2a46beda` revizyonunda 461 dosyada 4.640 geçen ve 1 
 | Acceptance Criteria | Orphan helper yok; test döngülerinde handle/child sayısı kalıcı artmıyor; protokol byte uyumu geçiyor; fiziksel duyulurluk ve kendi uygulama sesinin dışlanması artifact'li cihaz testinde doğrulanıyor. |
 | Effort | 3–5 mühendis-gün + Windows cihaz erişimi |
 
+**Windows doğrulaması (12 Kasım 2026).** [PR #242](https://github.com/alfapars-exe/discordd/pull/242) için `974fa6ad` kaynaklarından MSVC ile derlenen ses yardımcısı gerçek WASAPI üzerinde çalıştırıldı. Bir ısınma çevriminden sonra 50 ayrı süreç başlatıldı. Her süreçte test 12 baytlık format başlığını doğruladı, stdin kanalını kapattı ve yardımcının başarı koduyla çıkmasını bekledi. Testi yöneten Python sürecinin Windows tanıtıcı sayısı ısınmadan sonra ve her çevrim sonunda 166 idi. Başlatmadan kapanışa medyan süre 63 ms idi. Ölçüm tek Windows makinesinde yapıldı. Uzun süre açık tutulan tek yakalama oturumu, Electron ana sürecinin tanıtıcıları, fiziksel duyulurluk, aygıt değişimi ve uygulama sesinin dışlanması için ayrı kabul kanıtı gerekiyor.
+
 ## RF22 — Android/iOS native kabul sınırları
 
 | Alan | Tanım |
