@@ -712,3 +712,13 @@ it("prepends each older DM once and preserves the loaded copy on overlap", async
   expect(useDMStore.getState().messagesByChannel[CH][1].content).toBe("current edit");
   expect(useDMStore.getState().hasMoreByChannel[CH]).toBe(false);
 });
+
+it("keeps the inbox sequence on a replay that omits it", () => {
+  const latest = { ...makeDM("latest"), source_sequence: "3" };
+  useDMStore.setState({channels: [listedDM(CH)]});
+  const receive = useDMStore.getState().handleDMMessageCreate;
+  receive(latest);
+  receive(makeDM("latest"));
+  receive({ ...makeDM("earlier"), created_at: "2027-01-01T00:00:00Z", source_sequence: "2" });
+  expect(useDMStore.getState().channels[0].last_message).toMatchObject({id: "latest", source_sequence: "3"});
+});
