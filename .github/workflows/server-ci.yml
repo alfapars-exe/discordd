@@ -55,7 +55,7 @@ jobs:
       - name: Welcome bot tests and vet (independent Go module)
         working-directory: bots/welcome-bot
         run: |
-          go test ./... -count=1 -timeout=60s
+          go test -race ./... -count=1 -timeout=60s
           go vet ./...
 
       - name: Pinned JS solver Linux process and real Deno contracts
