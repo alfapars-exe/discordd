@@ -3,7 +3,8 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { searchMessages } from "../../api/search";
-import { searchCachedMessages } from "../../crypto/keyStorage";
+import { getCachedDecryptedMessage, searchCachedMessages } from "../../crypto/keyStorage";
+import type { CachedDecryptedMessage } from "../../crypto/types";
 import { useServerStore } from "../../stores/serverStore";
 import { useE2EEStore } from "../../stores/e2eeStore";
 import { useMessageStore } from "../../stores/messageStore";
@@ -48,6 +49,8 @@ function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId,
   // must not overwrite the results of the search started after it.
   const searchSeqRef = useRef(0);
   const localSearch = useRef<AbortController | null>(null);
+  const localMatches = useRef<string[] | null>(null);
+  const deletedIds = useRef(new Set<string>());
   const inputRef = useRef<HTMLInputElement>(null);
 
   const limit = 25;
@@ -96,15 +99,23 @@ function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId,
         try {
           const controller = new AbortController();
           localSearch.current = controller;
-          const cached = await searchCachedMessages(channelId, searchQuery.trim(), controller.signal);
-          // A newer search started while this one was awaiting — its results
-          // (and spinner state) own the panel now.
+          const term = searchQuery.trim();
+          let paged: CachedDecryptedMessage[];
+          if (localMatches.current) {
+            const ids = localMatches.current.slice(searchOffset, searchOffset + limit);
+            const rows = await Promise.all(ids.map(getCachedDecryptedMessage));
+            const lowerTerm = term.toLowerCase();
+            paged = rows.filter((row): row is CachedDecryptedMessage => row !== null && row.channelId === channelId &&
+              row.content.toLowerCase().includes(lowerTerm) && !deletedIds.current.has(row.messageId));
+          } else {
+            const cached = await searchCachedMessages(channelId, term, controller.signal);
+            if (seq !== searchSeqRef.current) return;
+            const sorted = cached.filter(row => !deletedIds.current.has(row.messageId)).sort((a, b) => b.timestamp - a.timestamp);
+            localMatches.current = sorted.map(row => row.messageId);
+            paged = sorted.slice(searchOffset, searchOffset + limit);
+          }
           if (seq !== searchSeqRef.current) return;
-          // Simulate pagination (IndexedDB returns all results)
-          const total = cached.length;
-          const paged = cached
-            .sort((a, b) => b.timestamp - a.timestamp) // newest first
-            .slice(searchOffset, searchOffset + limit);
+          const total = localMatches.current.length;
 
           // CachedDecryptedMessage -> Message minimal format for rendering
           const messages: Message[] = paged.map((c) => ({
@@ -149,6 +160,7 @@ function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId,
 
   /** Debounced search on input change */
   function handleInputChange(value: string) {
+    localMatches.current = null;
     searchSeqRef.current++;
     localSearch.current?.abort();
     setQuery(value);
@@ -186,6 +198,15 @@ function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId,
     const unsubscribe = useMessageStore.subscribe((state, prev) => {
       const deleted = state.lastDeleted;
       if (!deleted || deleted === prev.lastDeleted) return;
+      if (serverE2eeEnabled && deleted.channel_id === channelId) {
+        deletedIds.current.add(deleted.id);
+        if (localMatches.current?.includes(deleted.id)) {
+          localMatches.current = localMatches.current.filter(id => id !== deleted.id);
+          const total = localMatches.current.length;
+          setResults(prev => prev && ({ messages: prev.messages.filter(m => m.id !== deleted.id), total_count: total }));
+          return;
+        }
+      }
       setResults((prevResults) => {
         if (!prevResults || !prevResults.messages.some((m) => m.id === deleted.id)) {
           return prevResults;
@@ -199,7 +220,7 @@ function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId,
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [channelId, serverE2eeEnabled]);
 
   /** Clicking a result navigates to the original message. The result
    *  list is a snapshot — if the message was deleted meanwhile, the
@@ -211,6 +232,10 @@ function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId,
       if (!onSelectResult) return;
       const found = await onSelectResult(msg);
       if (found) return;
+      if (serverE2eeEnabled) {
+        deletedIds.current.add(msg.id);
+        if (localMatches.current) localMatches.current = localMatches.current.filter(id => id !== msg.id);
+      }
       setResults((prev) =>
         prev
           ? {
@@ -221,7 +246,7 @@ function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId,
           : null,
       );
     },
-    [onSelectResult],
+    [onSelectResult, serverE2eeEnabled],
   );
 
   function formatDate(dateStr: string): string {
