@@ -3,11 +3,12 @@ package services
 import (
 	"context"
 	"errors"
-	"github.com/argeinfina/hichat/pkg"
 	"testing"
 
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/testutil"
+	"github.com/argeinfina/hichat/ws"
 )
 
 func TestLeaveServerInvalidatesDepartingUserPermissions(t *testing.T) {
@@ -26,6 +27,24 @@ func TestLeaveServerInvalidatesDepartingUserPermissions(t *testing.T) {
 		t.Fatalf("invalidated users = %v", inv.userCalls)
 	}
 }
+
+func TestLeaveServerRemovalFailurePreservesSession(t *testing.T) {
+	h := newJoinServerHarness()
+	writeErr := errors.New("membership write failed")
+	h.serverRepo.RemoveMemberFn = func(context.Context, string, string) error { return writeErr }
+	inv := &memberInvalidator{}
+	h.svc.SetPermInvalidator(inv)
+	h.svc.SetMembershipVoiceCleanup(func(string, string) { t.Error("disconnected voice after failed removal") })
+	h.hub.RemoveClientServerIDFn = func(string, string) { t.Error("removed live subscription after failed removal") }
+	h.hub.BroadcastToServerFn = func(string, ws.Event) { t.Error("announced departure after failed removal") }
+	if err := h.svc.LeaveServer(context.Background(), joinTestServerID, joinTestUserID); !errors.Is(err, writeErr) {
+		t.Fatalf("leave error = %v, want membership write error", err)
+	}
+	if len(inv.userCalls) != 0 {
+		t.Fatalf("invalidated permissions after failed removal: %v", inv.userCalls)
+	}
+}
+
 func TestPrivateChannelPermissionsAcrossLeaveAndRejoin(t *testing.T) {
 	ctx := context.Background()
 	h := newJoinServerHarness()
