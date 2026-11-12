@@ -385,6 +385,10 @@ Birleşik dalda komut düzeltmesini kapsayan müzik servisi yarış koşusu 483,
 
 ## RF15 — Mesaj geçmişinde saf ortak işlemler
 
+Bire bir DM ve kanal geçmişi, zaman damgalarını UTC ofseti ve milisaniye altı kesirleri hesaba katarak karşılaştırıyor. Sunucu sıra numarası bulunan DM'lerde bu numara öncelikli. Eski DM sayfası, zaten yüklü bir mesajla çakıştığında ekrandaki düzenlenmiş kopya korunuyor. Tekrarlanan kimlikler hem eski hem yeni sayfalarda eleniyor.
+
+Grup geçmişi yenilemesi, grup gönderim onayı ve WebSocket düzenlemeleri, gelen kayıtta sıra numarası eksikse bilinen sıra numarasını koruyor. Bire bir DM için görünür liste, bekleyen geçmiş olayları ve geçmiş penceresinin dışında tutulan canlı mesajlar aynı kuralı kullanıyor. Birleşik `2a46beda` revizyonunda ilgili dört Vitest dosyasında 184 test ve TypeScript derlemesi geçti. [PR #240](https://github.com/alfapars-exe/discordd/pull/240)
+
 | Alan | Tanım |
 |---|---|
 | Task ID | RF15 |
