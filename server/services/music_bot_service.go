@@ -200,6 +200,7 @@ type requesterMeta struct {
 }
 
 type musicBotService struct {
+	shuttingDown bool // guarded by mu
 	musicPublicationMu sync.RWMutex
 	mu                 sync.RWMutex
 	bots               map[string]*botInstance // channelID → bot
@@ -1061,12 +1062,13 @@ func (s *musicBotService) StopAllForChannel(channelID string) {
 // The channel IDs are snapshotted under the read lock first: Stop takes the
 // write lock itself, so iterating the map while calling it would deadlock.
 func (s *musicBotService) StopAll() {
-	s.mu.RLock()
+	s.mu.Lock()
+	s.shuttingDown = true
 	channelIDs := make([]string, 0, len(s.bots))
 	for channelID := range s.bots {
 		channelIDs = append(channelIDs, channelID)
 	}
-	s.mu.RUnlock()
+	s.mu.Unlock()
 
 	if len(channelIDs) == 0 {
 		return
@@ -1353,6 +1355,11 @@ func (s *musicBotService) getOrCreateBot(ctx context.Context, serverID, channelI
 			return nil, err
 		}
 		s.mu.Lock()
+		if s.shuttingDown {
+			s.mu.Unlock()
+			lifecycleLock.Unlock()
+			return nil, errBotStoppedExplicitly
+		}
 		if existing, ok := s.bots[channelID]; ok && !existing.stopping.Load() {
 			s.mu.Unlock()
 			lifecycleLock.Unlock()
