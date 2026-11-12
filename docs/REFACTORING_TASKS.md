@@ -37,6 +37,15 @@ Sonraki tam istemci koşusu `303165c4` revizyonunda 461 dosyada 4.636 geçen ve 
 
 Üretim WebKit smoke testi ve Chromium uygulama paketi, PR #238'in `2cf916e4` revizyonunda Linux CI üzerinde de geçti. [Playwright E2E koşusu](https://github.com/alfapars-exe/discordd/actions/runs/43276168619/job/131385259090)
 
+`728c38ab` istemci kaynaklarıyla tam Vitest koşusunda 461 dosyada 4.651 test geçti, 1 test atlandı. Kapsam satırlarda %66,48, dallarda %63,35, fonksiyonlarda %59,95 ve ifadelerde %65,63 oldu.
+
+| Modül | Satır | Dal |
+|---|---:|---:|
+| `VoiceSettings.tsx` | %87,59 | %84,26 |
+| `useEncryptedRoomAdmission.ts` | %92,81 | %86,36 |
+| `messageStore.ts` | %88,00 | %68,71 |
+| `channelMessageHistory.ts` | %100,00 | %91,93 |
+
 ## Kararlı sürümde rol yetkileri ve mesaj geçmişi — 12 Kasım 2026
 
 Başlangıç revizyonu `bb32bbba`. Bu tur Go/PostgreSQL sunucusunu ve React istemcisini kapsar. İzin denetimlerinin sahibi sunucudur. İstemci görünür listeyi sunucunun yetkili REST sayfası ve istek sırasında alınan WebSocket olaylarıyla günceller.
