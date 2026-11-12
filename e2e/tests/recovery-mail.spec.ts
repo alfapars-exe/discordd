@@ -30,6 +30,12 @@ test("recover the disposable account using the delivered reset link", async ({ p
     await page.locator("#confirm-password").fill(password);
     await page.locator('button[type="submit"]').click();
     await expect(page.getByRole("heading", { name: "Password reset successfully!" })).toBeVisible();
+    const replayPassword = randomBytes(24).toString("hex");
+    await page.goto(resetLink!.href);
+    await page.locator("#new-password").fill(replayPassword);
+    await page.locator("#confirm-password").fill(replayPassword);
+    await page.locator('button[type="submit"]').click();
+    await expect(page.getByRole("alert")).toBeVisible();
     await loginAsCredentials(page, { username: account.username, password });
   } finally {
     mailbox.closeAllConnections();
