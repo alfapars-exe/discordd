@@ -246,24 +246,7 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
       const [micGranted] = await Promise.all([permission, ensureFreshToken()]);
       if (!micGranted || get()._joinGeneration !== gen) return null;
 
-      let response = await voiceApi.getVoiceToken(serverId, channelId);
-      console.warn("[voiceStore] getVoiceToken response", {
-        success: response.success,
-        error: response.error,
-        hasData: !!response.data,
-      });
-
-      // Retry once on auth failure — token may have expired mid-request
-      if (!response.success && response.error?.includes("401")) {
-        console.warn("[voiceStore] 401 retry path entered");
-        const refreshed = await ensureFreshToken();
-        if (refreshed && get()._joinGeneration === gen) {
-          response = await voiceApi.getVoiceToken(serverId, channelId);
-          console.warn("[voiceStore] retry response", { success: response.success, error: response.error });
-        } else {
-          console.warn("[voiceStore] ensureFreshToken returned null on retry — tokens likely cleared");
-        }
-      }
+      const response = await voiceApi.getVoiceToken(serverId, channelId);
 
       // Discard stale response if generation changed (leave/join interleaved)
       if (get()._joinGeneration !== gen) {
