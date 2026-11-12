@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { useVoiceStore } from "./voiceStore";
 import { DEFAULT_SETTINGS } from "./slices/voiceSettingsSlice";
 import * as nativePlugins from "../utils/nativePlugins";
+import { ensureFreshToken } from "../api/client";
 import * as voiceApi from "../api/voice";
 import { isVoiceRecoveryAllowed, markVoiceActive } from "./shared/voiceRecovery";
 
@@ -864,6 +865,15 @@ describe("voiceStore", () => {
   describe("joinVoiceChannel — failure toasts", () => {
     beforeEach(() => {
       addToast.mockReset();
+    });
+
+    it("does not repeat token recovery based on digits in an API error message", async () => {
+      vi.mocked(ensureFreshToken).mockClear();
+      vi.mocked(voiceApi.getVoiceToken).mockResolvedValueOnce({
+        success: false, status: 503, error: "upstream unavailable (reference 4012)",
+      });
+      expect(await useVoiceStore.getState().joinVoiceChannel("voice")).toBeNull();
+      expect(ensureFreshToken).toHaveBeenCalledTimes(1);
     });
 
     it("returns null and toasts the timed-out-specific message when the server reports an active timeout", async () => {
