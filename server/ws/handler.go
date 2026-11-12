@@ -321,17 +321,18 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) {
 		_ = conn.Close()
 		return
 	}
+	// READY promises that this connection is visible to presence and event delivery.
+	select {
+	case <-client.registered:
+	case <-h.hub.stopped:
+		_ = conn.Close()
+		return
+	case <-r.Context().Done():
+		_ = conn.Close()
+		h.hub.unregisterClient(client)
+		return
+	}
 	if sessionBound {
-		select {
-		case <-client.registered:
-		case <-h.hub.stopped:
-			_ = conn.Close()
-			return
-		case <-r.Context().Done():
-			_ = conn.Close()
-			h.hub.unregisterClient(client)
-			return
-		}
 		// Close the authorization/registration race: if revoke ran before
 		// the client became visible to the hub, this second check catches it.
 		if err := validator.ValidateSession(r.Context(), claims.UserID, claims.SessionID); err != nil {
