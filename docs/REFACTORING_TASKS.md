@@ -4,6 +4,19 @@ Tarih: 25 Ekim 2026. İlk inceleme revizyonu `313acf8e`; çalışma sırasında 
 
 Bu belge uygulama önerisidir. Görev kartının varlığı, kodun değiştirildiği veya kabul edildiği anlamına gelmez. İlk teslimat 25 Ekim’de plan belgeleriydi. 26 Ekim’de kullanıcı uygulamayı başlattı; güncel ilerleme aşağıdaki tabloda izlenir. Görev kartlarındaki Problem alanları ilk incelemenin tarihsel kanıtıdır. Mevcut değişiklikler korunur; uygulama aşamasında her PR yalnız seçilen görevin dosyalarını kapsar.
 
+## Birleşik istemci doğrulaması — 12 Kasım 2026
+
+`23fc80b8` revizyonunda tam Vitest kapsam koşusunda 461 dosyada 4.634 test geçti, 1 test atlandı. Satır kapsamı genel olarak %66,38, dal kapsamı %63,27 oldu.
+
+| Modül | Satır | Dal |
+|---|---:|---:|
+| Kanal arama paneli | %89,84 | %80,00 |
+| DM arama paneli | %64,35 | %41,81 |
+| `messageStore.ts` | %88,00 | %68,71 |
+| `channelMessageHistory.ts` | %100,00 | %90,27 |
+
+Sonraki `b9d0a8da` revizyonunda kanal ve DM panelleri, gezinme isteği sürerken WebSocket üzerinden silinen sonucu sayaçtan bir kez düşürüyor. İki panelin PR dalında toplam 14 testi geçti. Birleşik revizyonda `npm run build` ile TypeScript ve Vite derlemesi geçti. Vite, `AppLayout` parçası için 976,08 kB (gzip ile 272,25 kB) ve 500 kB sınır uyarısı bildirdi.
+
 ## Kararlı sürümde rol yetkileri ve mesaj geçmişi — 12 Kasım 2026
 
 Başlangıç revizyonu `bb32bbba`. Bu tur Go/PostgreSQL sunucusunu ve React istemcisini kapsar. İzin denetimlerinin sahibi sunucudur. İstemci görünür listeyi sunucunun yetkili REST sayfası ve istek sırasında alınan WebSocket olaylarıyla günceller.
