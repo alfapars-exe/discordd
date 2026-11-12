@@ -606,6 +606,25 @@ describe("bounded request and shared-refresh lifetimes", () => {
     expect(getAccessToken()).toBe("expired-token");
   });
 
+  it.each([401, 403])("preserves the replacement account preview on late refresh rejection %s", async (status) => {
+    const { ensureFreshToken, setTokens, getAccessToken } = await loadClient();
+    const { rememberStartupUser, readStartupCache, clearStartupCache } = await import("../utils/startupCache");
+    setTokens("expired-token", "", "old");
+    const pending = deferred<Response>();
+    fetchMock.mockReturnValueOnce(pending.promise);
+    const refresh = ensureFreshToken();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledOnce();
+
+    setTokens("new-token", "", "new");
+    rememberStartupUser({ id: "new", username: "replacement", display_name: "Replacement" });
+    pending.resolve(jsonResponse({ success: false }, status));
+    expect(await refresh).toBeNull();
+    expect(getAccessToken()).toBe("new-token");
+    expect(readStartupCache()?.user.id).toBe("new");
+    clearStartupCache();
+  });
+
   it.each(["logout", "replacement"] as const)("does not apply stale credentials if %s happens during refresh JSON decoding", async (change) => {
     const { ensureFreshToken, setTokens, clearTokens, getAccessToken } = await loadClient();
     setTokens("expired-token", "");
