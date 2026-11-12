@@ -62,8 +62,9 @@ type Client struct {
 	// panic that kills the whole process. Closing a separate done channel
 	// instead lets every sender select on <-c.done and lets WritePump exit,
 	// making send-on-closed structurally impossible.
-	done      chan struct{}
-	closeOnce sync.Once
+	done             chan struct{}
+	closeOnce        sync.Once
+	unregisterQueued atomic.Bool
 
 	// serverIDs: servers this user belongs to. Populated from DB at connect,
 	// updated on join/leave. Used by BroadcastToServer for filtering.
