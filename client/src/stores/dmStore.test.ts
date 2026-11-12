@@ -580,12 +580,12 @@ describe("dmStore — leaving a jumped-to window", () => {
   });
   it("uses the latest edit of a live message held outside a jumped-to window", async () => {
     await jumpIntoPast();
-    useDMStore.getState().handleDMMessageCreate(makeDM("live"));
+    useDMStore.getState().handleDMMessageCreate({...makeDM("live"), source_sequence:"42"});
     useDMStore.getState().handleDMMessageUpdate({...makeDM("live"),content:"edited while held"});
     getAfter.mockResolvedValueOnce(page([],false,false));
     await useDMStore.getState().fetchNewerMessages(CH);
     expect(ids()).toEqual(["old-1","target","live"]);
-    expect(useDMStore.getState().messagesByChannel[CH][2].content).toBe("edited while held");
+    expect(useDMStore.getState().messagesByChannel[CH][2]).toMatchObject({content:"edited while held", source_sequence:"42"});
   });
   it("retains held-message reaction and pin events while the forward response is pending",async()=>{
     await jumpIntoPast();useDMStore.getState().handleDMMessageCreate(makeDM("live"));
@@ -696,6 +696,29 @@ it("keeps authoritative DM append order in history merges and out-of-order WS pr
  useDMStore.setState({channels:[listedDM(CH)],messagesByChannel:{[CH]:[]}});
  useDMStore.getState().handleDMMessageCreate(third);useDMStore.getState().handleDMMessageCreate(first);useDMStore.getState().handleDMMessageCreate(second);
  expect(ids()).toEqual([first.id,second.id,third.id]);expect(useDMStore.getState().channels[0].last_message?.id).toBe(third.id);
+ useDMStore.setState({messagesByChannel:{}});
  vi.mocked(dmApi.getDMMessages).mockResolvedValueOnce(page([second,first,third],false));await useDMStore.getState().fetchMessages(CH);
+ expect(dmApi.getDMMessages).toHaveBeenCalledOnce();
  expect(ids()).toEqual([first.id,second.id,third.id]);
+});
+
+it("prepends each older DM once and preserves the loaded copy on overlap", async () => {
+  const anchor = { ...makeDM("anchor"), content: "current edit" };
+  useDMStore.setState({ messagesByChannel: { [CH]: [anchor] }, hasMoreByChannel: { [CH]: true } });
+  const older = makeDM("older");
+  vi.mocked(dmApi.getDMMessages).mockResolvedValueOnce(page([older, older, makeDM("anchor")], false));
+  await useDMStore.getState().fetchOlderMessages(CH);
+  expect(ids()).toEqual(["older", "anchor"]);
+  expect(useDMStore.getState().messagesByChannel[CH][1].content).toBe("current edit");
+  expect(useDMStore.getState().hasMoreByChannel[CH]).toBe(false);
+});
+
+it("keeps the inbox sequence on a replay that omits it", () => {
+  const latest = { ...makeDM("latest"), source_sequence: "3" };
+  useDMStore.setState({channels: [listedDM(CH)]});
+  const receive = useDMStore.getState().handleDMMessageCreate;
+  receive(latest);
+  receive(makeDM("latest"));
+  receive({ ...makeDM("earlier"), created_at: "2027-01-01T00:00:00Z", source_sequence: "2" });
+  expect(useDMStore.getState().channels[0].last_message).toMatchObject({id: "latest", source_sequence: "3"});
 });
