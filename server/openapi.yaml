@@ -1078,6 +1078,72 @@ paths:
         '401': { $ref: '#/components/responses/UnauthorizedError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
 
+  /api/users/me/mfa:
+    get:
+      operationId: mfaStatus
+      summary: Read the account's MFA status and remaining recovery code count.
+      tags: [Auth]
+      parameters:
+        - { name: expected_user_id, in: query, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Current account security status.
+          headers:
+            Cache-Control: { schema: { type: string, enum: [no-store] } }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    required: [enabled, recovery_remaining]
+                    properties:
+                      enabled: { type: boolean }
+                      recovery_remaining: { type: integer }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '409': { description: ACCOUNT_MISMATCH when the requested owner differs from the authenticated account. }
+        '503': { description: MFA_UNAVAILABLE }
+  /api/users/me/mfa/{action}:
+    post:
+      operationId: mfaManage
+      summary: Manage the authenticated user's second factor.
+      tags: [Auth]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: action, in: path, required: true, schema: { type: string, enum: [setup, cancel, confirm, recovery, disable] } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expected_user_id]
+              properties:
+                expected_user_id: { type: string }
+                password: { type: string, format: password, description: 'Required for setup, recovery code regeneration and disable.' }
+                setup_id: { type: string, description: Pending setup identifier for confirm or cancel. }
+                code: { type: string, writeOnly: true, description: TOTP for confirm. Verification code for recovery or disable. }
+      responses:
+        '200':
+          description: >-
+            The data envelope contains setup_id, secret, uri and expires_at for setup,
+            cancelled for cancel, recovery_codes for confirm or recovery, and enabled for disable.
+          headers:
+            Cache-Control: { schema: { type: string, enum: [no-store] } }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { description: Account mismatch or conflicting MFA state. }
+        '429':
+          description: MFA_RATE_LIMITED
+          headers:
+            Retry-After: { schema: { type: integer, example: 300 } }
+        '503': { description: MFA_UNAVAILABLE }
+
   /api/users/me/media-label:
     get:
       operationId: privateMediaLabelGet
@@ -5995,6 +6061,8 @@ components:
       properties:
         username: { type: string }
         password: { type: string, format: password }
+        mfa_code: { type: string, writeOnly: true, description: TOTP or unused recovery code when MFA is enabled. }
+        reactivate: { type: boolean, description: Request account reactivation at login. }
       required: [username, password]
       example:
         username: hb_wanderer
