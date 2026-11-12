@@ -6,6 +6,10 @@ Bu belge uygulama önerisidir. Görev kartının varlığı, kodun değiştirild
 
 Birleşik dalın `a0d23642` revizyonunda 462 dosyada 4.667 Vitest testi geçti ve 1 test atlandı. Satır kapsamı %66,56, dal kapsamı %63,44, fonksiyon kapsamı %60,02 ve ifade kapsamı %65,70 ölçüldü. `bd069157` üzerinde varsayılan 13 Playwright testi gerçek Go sunucusu ve mTLS PostgreSQL ile geçti. Eşzamanlı yenileme isteklerinden biri 200, diğeri 409 aldı ve kazanan çerezle aynı hesap yeniden doğrulandı.
 
+## Ekran paylaşımı seçicisi · 13 Kasım 2026
+
+`d5fb4f1b` üzerinde Electron TypeScript derlemesi geçti. 276 Electron testi geçti ve 1 test atlandı. Windows'ta gerçek Electron ana süreci ile gizli bir test penceresi üzerinden `getDisplayMedia` çağrıldı. Üretim seçici işleyicisi küçük resimleri kapalı tutarak masaüstü kaynaklarını listeledi, yenileme isteğinde tekrar listeledi ve iptal edildiğinde tarayıcıya `AbortError` döndü. Test pencereyi ana pencere olarak atadı. Görüntü akışı seçimi ve karşı cihazda teslim açık. [PR #257](https://github.com/alfapars-exe/discordd/pull/257)
+
 ## Masaüstü başlangıcı ve paketleme · 13 Kasım 2026
 
 Temiz profille çevrimdışı açılan Windows paketinde ilk üç saniyede kanal arayüzü modülü işlenmedi. Önceki pakette aynı koşullarda Chromium bu modülü işledi. Yeni pakete geçerli sentetik önbellek kaydı verilip yeniden yüklendiğinde kanal modülü işlendi, kullanıcı ve sunucu adı salt okunur önizlemede göründü ve oturum geri yükleme durumu sürdü. Oturum zamanlaması için PR dalında 30 test geçti. [PR #256](https://github.com/alfapars-exe/discordd/pull/256)
