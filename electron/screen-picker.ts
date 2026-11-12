@@ -193,12 +193,22 @@ export function installScreenPicker(): void {
       if (!trusted(event) || refreshing) return;
       refreshing = true;
       try {
-        const updated = await querySources();
+        let updated = sources;
+        try {
+          updated = await querySources();
+        } catch (error) {
+          if (current()) console.error("[screen-picker] refresh error:", error);
+        }
         if (!current()) return;
+        const previews = updated.map(serialize);
+        contents.send("screen-picker-refresh-result", previews);
         sources = updated;
-        contents.send("screen-picker-refresh-result", sources.map(serialize));
       } catch (error) {
-        if (current()) console.error("[screen-picker] refresh error:", error);
+        // A renderer that cannot receive the list cannot finish this request.
+        if (current()) {
+          console.error("[screen-picker] refresh delivery error:", error);
+          finish(null);
+        }
       } finally {
         refreshing = false;
       }
