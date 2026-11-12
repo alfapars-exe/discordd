@@ -601,7 +601,9 @@ func TestMemberProfileAudienceFiltersRosterAndSingleMember(t *testing.T) {
 
 func TestMemberMutationResponsesRespectProfileAudience(t *testing.T) {
 	bio := "sensitive bio"
-	newMember := func() *models.MemberWithRoles { return &models.MemberWithRoles{ID: "target", Username: "user", Bio: &bio} }
+	newMember := func() *models.MemberWithRoles {
+		return &models.MemberWithRoles{ID: "target", Username: "user", Bio: &bio}
+	}
 	for _, tt := range []struct {
 		name string
 		run  func(http.ResponseWriter, *http.Request, *MemberHandler)

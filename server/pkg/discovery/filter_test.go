@@ -205,8 +205,8 @@ func TestFilterAndRank_endToEndCombinesPrivacyFilterAndOrder(t *testing.T) {
 	private := srv("private", 500)
 	private.IsPublic = false
 	pool := []Server{
-		private,                // dropped by privacy floor
-		srv("tiny", 3),         // dropped by MinMembers
+		private,        // dropped by privacy floor
+		srv("tiny", 3), // dropped by MinMembers
 		srv("mid", 25, "coding"),
 		srv("big", 100, "coding"),
 		srv("off-topic", 200, "cooking"),

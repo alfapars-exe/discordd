@@ -232,4 +232,3 @@ func TestDeclinePendingRemovesDependentsOnConfiguredBackend(t *testing.T) {
 		}
 	}
 }
-

@@ -312,7 +312,7 @@ func rfc5987Encode(s string) string {
 
 // contentDisposition builds an RFC 6266 dual-form header value: an ASCII
 // fallback (filename="...", quotes/backslashes escaped, non-ASCII replaced)
-// plus the RFC 5987 extended form (filename*=UTF-8''...) for the real
+// plus the RFC 5987 extended form (filename*=UTF-8”...) for the real
 // unicode name. Control characters are stripped first — the filename is
 // user-supplied, and a raw CR/LF here would be header injection.
 func contentDisposition(disp, filename string) string {
