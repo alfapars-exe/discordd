@@ -190,6 +190,7 @@ export function useScreenShareReceiverStats(room: Room): void {
   useEffect(() => {
     // Delta samples belong to one room and persist across its timer ticks.
     const baselines = new Map<TrackKey, Baseline>();
+    const sampling = new Map<TrackKey, symbol>();
     let cancelled = false;
 
     async function sampleOne(
@@ -205,19 +206,24 @@ export function useScreenShareReceiverStats(room: Room): void {
 
       const receiver = getReceiver(track);
       if (!receiver) return;
+      const key = keyFor(participant, publication);
+      if (sampling.has(key)) return;
+      const sample = Symbol();
+      sampling.set(key, sample);
 
       let report: RTCStatsReport;
       try {
         report = await receiver.getStats();
+        if (cancelled || sampling.get(key) !== sample || publication.track !== track || !publication.isSubscribed) return;
       } catch (err) {
-        console.warn("[screen-share-receiver-stats] getStats failed:", err);
+        if (!cancelled && sampling.get(key) === sample) console.warn("[screen-share-receiver-stats] getStats failed:", err);
         return;
+      } finally {
+        if (sampling.get(key) === sample) sampling.delete(key);
       }
-      if (cancelled) return;
 
       const now = Date.now();
       const snap = summariseInbound(report);
-      const key = keyFor(participant, publication);
       const prev = baselines.get(key);
 
       // First sample for this (publisher, track) → baseline only. Same
@@ -354,7 +360,9 @@ export function useScreenShareReceiverStats(room: Room): void {
       // delta spike when the user re-opens a tab that triggered a layer
       // unsubscribe). Also drop the cached quality grade so the panel
       // badge fades back to neutral instead of showing a stale red dot.
-      baselines.delete(keyFor(participant, publication));
+      const key = keyFor(participant, publication);
+      sampling.delete(key);
+      baselines.delete(key);
       if (publication.source === Track.Source.ScreenShare) {
         useVoiceStore.getState().clearScreenShareQualityGrade(
           resolveUserId(participant.identity),
@@ -366,6 +374,9 @@ export function useScreenShareReceiverStats(room: Room): void {
       // Walk our baselines and drop any for this participant. A bit O(N)
       // but the map size is bounded by active share count, which is small.
       const prefix = `${participant.identity}::`;
+      for (const key of sampling.keys()) {
+        if (key.startsWith(prefix)) sampling.delete(key);
+      }
       for (const key of baselines.keys()) {
         if (key.startsWith(prefix)) baselines.delete(key);
       }
