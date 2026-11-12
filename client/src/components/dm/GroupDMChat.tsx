@@ -224,6 +224,10 @@ export default function GroupDMChat({ groupId }: { groupId: string }) {
   },[currentForward,group?.members]);
   const availableFriends = useMemo(() => friends.filter((friend) => !group?.members.some((member) => member.id === friend.user_id)), [friends, group]);
   const visibleMessages = useMemo(() => { const q=search.trim().toLocaleLowerCase(); return q ? messages.filter((m)=>(m.content??"").toLocaleLowerCase().includes(q)) : messages; }, [messages,search]);
+  const visibleIndexById = useMemo(
+    () => new Map(visibleMessages.map((message, index) => [message.id, index])),
+    [visibleMessages],
+  );
   const messageIndex = useMemo(() => new Map(messages.map(message => [message.id, message])), [messages]);
   const memberIndex = useMemo(() => new Map(group?.members.map(member => [member.id, member]) ?? []), [group?.members]);
   const [focusedMessage, setFocusedMessage] = useState<string | null>(null);
@@ -248,7 +252,7 @@ export default function GroupDMChat({ groupId }: { groupId: string }) {
     },
     rangeExtractor: range => {
       const indexes = defaultRangeExtractor(range);
-      const focused = visibleMessages.findIndex(message => message.id === focusedMessage);
+      const focused = focusedMessage === null ? -1 : (visibleIndexById.get(focusedMessage) ?? -1);
       if (focused >= 0 && !indexes.includes(focused)) indexes.push(focused);
       return indexes.sort((a, b) => a - b);
     },
@@ -265,13 +269,13 @@ export default function GroupDMChat({ groupId }: { groupId: string }) {
     previousFirst.current = visibleMessages[0]?.id;
     const anchor = scrollAnchor.current;
     if (!anchor && visibleMessages[0]) scrollAnchor.current = { id: visibleMessages[0].id, offset: 0 };
-    if (!virtualized || !before || !anchor || visibleMessages.findIndex(message => message.id === before) <= 0) return;
-    const index = visibleMessages.findIndex(message => message.id === anchor.id);
+    if (!virtualized || !before || !anchor || (visibleIndexById.get(before) ?? -1) <= 0) return;
+    const index = visibleIndexById.get(anchor.id) ?? -1;
     if (index >= 0) {
       const target = virtualizer.getOffsetForIndex(index, "start");
       if (target) virtualizer.scrollToOffset(target[0] + anchor.offset);
     }
-  }, [visibleMessages, virtualized, virtualizer]);
+  }, [visibleMessages, visibleIndexById, virtualized, virtualizer]);
   useEffect(()=>{if(editingId)composerInput.current?.focus()},[editingId,draftKey]);
 
   useEffect(() => {
@@ -293,15 +297,15 @@ export default function GroupDMChat({ groupId }: { groupId: string }) {
       destination.type!=="group-dm"||destination.channelId!==groupId||!useGroupDMStore.getState().groups.some(item=>item.id===groupId)){
       clear();return;
     }
-    if(!visibleMessages.some(message=>message.id===scrollTarget.messageId)){
-      if(messages.some(message=>message.id===scrollTarget.messageId)&&search){clear();return}
-      if(!messages.some(message=>message.id===scrollTarget.messageId))clear();
+    const targetIndex = visibleIndexById.get(scrollTarget.messageId);
+    if (targetIndex === undefined) {
+      clear();
       return;
     }
     const target=Array.from(messagesScrollRef.current?.querySelectorAll<HTMLElement>("[data-group-message-id]")??[])
       .find(element=>element.dataset.groupMessageId===scrollTarget.messageId);
     if(!target){
-      if(virtualized)virtualizer.scrollToIndex(visibleMessages.findIndex(message=>message.id===scrollTarget.messageId),{align:"center"});
+      if(virtualized)virtualizer.scrollToIndex(targetIndex,{align:"center"});
       return;
     }
     if(typeof target.scrollIntoView==="function")target.scrollIntoView({block:"center"});
@@ -309,7 +313,7 @@ export default function GroupDMChat({ groupId }: { groupId: string }) {
     target.classList.add("msg-highlight");
     window.setTimeout(()=>target.classList.remove("msg-highlight"),2000);
     clear();
-  },[scrollTarget,visibleMessages,messages,search,groupId,virtualized,virtualizer,virtualRows]);
+  },[scrollTarget,visibleIndexById,groupId,virtualized,virtualizer,virtualRows]);
   useVoiceShortcutAction("group-call-start", () => {
     const destination = useUIStore.getState().destination;
     const activeUserId = useAuthStore.getState().user?.id;
