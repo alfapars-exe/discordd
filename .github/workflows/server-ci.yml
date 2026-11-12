@@ -443,13 +443,13 @@ jobs:
         run: bash scripts/start-e2e-postgres.sh
 
       - name: Chromium application suite
-        run: npx playwright test --project=chromium
+        run: node node_modules/@playwright/test/cli.js test --project=chromium
         working-directory: e2e
         env:
           CGO_ENABLED: "0"
 
       - name: WebKit production client smoke
-        run: npx playwright test --project=webkit-smoke
+        run: node node_modules/@playwright/test/cli.js test --project=webkit-smoke
         working-directory: e2e
         env:
           HICHAT_E2E_PRODUCTION_CLIENT: "1"
