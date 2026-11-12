@@ -4,6 +4,12 @@ Tarih: 25 Ekim 2026. İlk inceleme revizyonu `313acf8e`; çalışma sırasında 
 
 Bu belge uygulama önerisidir. Görev kartının varlığı, kodun değiştirildiği veya kabul edildiği anlamına gelmez. İlk teslimat 25 Ekim’de plan belgeleriydi. 26 Ekim’de kullanıcı uygulamayı başlattı; güncel ilerleme aşağıdaki tabloda izlenir. Görev kartlarındaki Problem alanları ilk incelemenin tarihsel kanıtıdır. Mevcut değişiklikler korunur; uygulama aşamasında her PR yalnız seçilen görevin dosyalarını kapsar.
 
+## Masaüstü başlangıcı ve paketleme · 13 Kasım 2026
+
+Temiz profille çevrimdışı açılan Windows paketinde ilk üç saniyede kanal arayüzü modülü işlenmedi. Önceki pakette aynı koşullarda Chromium bu modülü işledi. Yeni pakete geçerli sentetik önbellek kaydı verilip yeniden yüklendiğinde kanal modülü işlendi, kullanıcı ve sunucu adı salt okunur önizlemede göründü ve oturum geri yükleme durumu sürdü. Oturum zamanlaması için PR dalında 30 test geçti. [PR #256](https://github.com/alfapars-exe/discordd/pull/256)
+
+Aynı girdilerle üretilen iki yerel Windows x64 paketinde filtre 38 derlenmiş testi ve bir test yardımcısını çıkardı. ASAR 336.201 bayt, imzasız NSIS yükleyicisi 44.003 bayt küçüldü. Paket denetimi eski arşivi reddetti ve yeni arşivi kabul etti. PR dalındaki 36 CI kontrolü geçti. [PR #255](https://github.com/alfapars-exe/discordd/pull/255)
+
 ## Masaüstü parola deposu ve CI · 13 Kasım 2026
 
 Electron ana süreci, elle girişte parolayla birlikte kaydedilen sunucu adresini denetliyor. Başka bir HTTPS sunucusuna veya yönlendirme hedefine kayıtlı parola gönderilmiyor. Sunucu adresi içermeyen eski kayıtla bir kez elle giriş gerekiyor. Linux'ta parola depolamak ve okumak için işletim sisteminin parola yöneticisi gerekiyor. Entegrasyon dalında 275 Electron testi geçti ve 1 test atlandı. Giriş formu testlerinde kaydetme ve silme hatalarında kullanıcı uyarıldı ve kanallara geçiş tamamlandı. Debian Bookworm konteynerinde Electron 45.1.0, D-Bus ve GNOME Keyring ile gerçek `gnome_libsecret` deposunda sentetik parola kaydedildi, şifreli dosya kontrol edildi, kayıt geri okundu ve silindi. Ayrı Electron sürecinde `basic_text` seçildiğinde parola dosyası oluşmadı. [PR #254](https://github.com/alfapars-exe/discordd/pull/254)
