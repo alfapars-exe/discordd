@@ -52,3 +52,21 @@ for (const [path, field] of [
     assert.throws(() => syncMobileVersion(root, true), /Missing mobile version field/);
   });
 }
+
+test('updates both platforms only after validating the native locks', t => {
+  const root = mobileFixture(t);
+  writeFileSync(join(root, 'package.json'), JSON.stringify({version: '3.2.1'}));
+  const gradle = join(root, 'client/android/app/build.gradle');
+  const project = join(root, 'client/ios/App/App.xcodeproj/project.pbxproj');
+  const before = [gradle, project].map(file => readFileSync(file, 'utf8'));
+  const lock = join(root, 'client/ios/App/CapApp-SPM/Package.resolved');
+  const valid = readFileSync(lock, 'utf8');
+  writeFileSync(lock, JSON.stringify({pins: []}));
+  assert.throws(() => syncMobileVersion(root), /Stale native lock/);
+  assert.deepEqual([gradle, project].map(file => readFileSync(file, 'utf8')), before);
+  writeFileSync(lock, valid);
+  syncMobileVersion(root);
+  assert.match(readFileSync(gradle, 'utf8'), /versionCode 3002001/);
+  assert.match(readFileSync(project, 'utf8'), /MARKETING_VERSION = 3\.2\.1;/);
+  assert.deepEqual(syncMobileVersion(root, true), {name: '3.2.1', code: 3002001});
+});
