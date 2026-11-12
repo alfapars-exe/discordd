@@ -1,3 +1,4 @@
+import { mfaErrorKey } from "./mfaErrorKey";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -126,7 +127,7 @@ export default function ApplicationSettings() {
       const result = await removeApplication(ownerID, application.id, removal.password, removal.code, removal.text, current);
       if (!current()) return;
       if (!result.success || result.data?.removed !== true || result.data.shared_history !== "retained" || result.data.personal_asset_cleanup !== "queued") {
-        const key = result.code === "MFA_REQUIRED" ? "sessions.factorRequired" : result.code === "MFA_INVALID" ? "mfa.invalid" : result.code === "MFA_RATE_LIMITED" ? "mfa.rateLimited" : result.code === "APPLICATION_OWNS_SERVERS" || result.code === "APPLICATION_OWNS_APPLICATIONS" ? "applications.handoffRequired" : "applications.removeError";
+        const key = mfaErrorKey(result.code) ?? (result.code === "APPLICATION_OWNS_SERVERS" || result.code === "APPLICATION_OWNS_APPLICATIONS" ? "applications.handoffRequired" : "applications.removeError");
         setError(t(key)); await load(++revision.current); return;
       }
       setApplications((items) => items.filter((item) => item.id !== application.id));

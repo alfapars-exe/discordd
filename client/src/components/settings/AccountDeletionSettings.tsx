@@ -1,3 +1,4 @@
+import { mfaErrorKey } from "./mfaErrorKey";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { deleteAccount, getDeletionStatus, type DeletionStatus } from "../../api/accountDeletion";
@@ -49,7 +50,7 @@ export default function AccountDeletionSettings({ userID }: { userID: string }) 
       const result = await deleteAccount(userID, password, code, text, current);
       if (!current()) return;
       if (!result.success || result.data?.deleted !== true || result.data.shared_history !== "retained" || result.data.personal_asset_cleanup !== "queued") {
-        const key = result.code === "MFA_REQUIRED" ? "sessions.factorRequired" : result.code === "MFA_INVALID" ? "mfa.invalid" : result.code === "MFA_RATE_LIMITED" ? "mfa.rateLimited" : result.code === "ACCOUNT_OWNS_SERVERS" || result.code === "ACCOUNT_OWNS_APPLICATIONS" || result.code === "ACCOUNT_IS_PLATFORM_ADMIN" ? "deletion.changed" : "deletion.error";
+        const key = mfaErrorKey(result.code) ?? (result.code === "ACCOUNT_OWNS_SERVERS" || result.code === "ACCOUNT_OWNS_APPLICATIONS" || result.code === "ACCOUNT_IS_PLATFORM_ADMIN" ? "deletion.changed" : "deletion.error");
         setError(t(key)); setState(null); return;
       }
       setPassword(""); setCode(""); setText(""); setConsent(false);
