@@ -198,3 +198,12 @@ func TestPostgresNullableArgument(t *testing.T) {
 		}
 	}
 }
+
+func TestBindPostgresEscapeString(t *testing.T) {
+	const query = `SELECT E'it\'s ? here', ?, e'\\', ?`
+	want := `SELECT E'it\'s ? here', $1, e'\\', $2`
+	got, err := bindPostgres(query)
+	if err != nil || got != want {
+		t.Fatalf("got %q, err %v, want %q", got, err, want)
+	}
+}
