@@ -94,7 +94,13 @@ function ScreenPicker() {
       setIsRefreshing(false);
     });
 
+    const stopDismiss = api.onScreenPickerDismissed?.(() => {
+      setSources(null);
+      setIsRefreshing(false);
+    });
+
     return () => {
+      stopDismiss?.();
       stopShow?.();
       if (stopRefresh) stopRefresh();
       else api.removeScreenPickerRefreshListener?.();

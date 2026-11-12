@@ -11,9 +11,12 @@ afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 it("opens on the populated source group and preserves a usable tab on reopen", () => {
   let show!: (sources: { id: string; name: string; thumbnail: string }[]) => void;
+  let dismiss!: () => void;
+  const result = vi.fn();
   vi.stubGlobal("electronAPI", {
     onShowScreenPicker: (callback: typeof show) => { show = callback; },
-    sendScreenPickerResult: vi.fn(),
+    onScreenPickerDismissed: (callback: () => void) => { dismiss = callback; },
+    sendScreenPickerResult: result,
   });
   const createElement = document.createElement.bind(document);
   vi.spyOn(document, "createElement").mockImplementation((tag, options) => {
@@ -33,4 +36,7 @@ it("opens on the populated source group and preserves a usable tab on reopen", (
   fireEvent.click(screen.getByRole("button", { name: "Editor" }));
   act(() => show([screenSource]));
   expect(screen.getByRole("button", { name: "Monitor" })).toBeVisible();
+  act(() => dismiss());
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(result).toHaveBeenCalledTimes(2);
 });

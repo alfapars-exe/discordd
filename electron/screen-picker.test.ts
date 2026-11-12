@@ -70,6 +70,7 @@ for (const termination of ["closed", "destroyed", "render-process-gone", "did-na
     f.ipc.emit("screen-picker-result", f.event, "screen:1");
     assert.equal(results.length, 1);
     assert.equal(results[0], null);
+    if (termination === "timeout") assert.ok(f.messages.includes("screen-picker-dismissed"));
     assert.equal(f.timers.size, 0);
     assert.equal(f.contents.listenerCount("destroyed"), 0);
     assert.equal(f.ipc.listenerCount("screen-picker-result"), 0);
