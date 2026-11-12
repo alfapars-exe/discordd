@@ -108,7 +108,7 @@ func (s *musicBotService) publishMusicState(serverID, channelID string, state *m
 	if final && state != nil {
 		payload = *state
 	}
-	return s.broadcastMusicAudience(serverID, channelID, ws.Event{Op: "music_bot_state", Data: map[string]any{"channel_id": channelID, "server_id": serverID, "state": payload}})
+	return s.broadcastMusicAudience(serverID, channelID, ws.Event{Op: "music_bot_state", Data: map[string]any{"channel_id": channelID, "server_id": serverID, "state": payload}}, nil)
 }
 
 func (s *musicBotService) broadcastPrivateMusicState(bot *botInstance, final bool) {
