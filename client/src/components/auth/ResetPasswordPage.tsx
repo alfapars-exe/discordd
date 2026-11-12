@@ -12,11 +12,14 @@ import { localizeAuthError } from "../../utils/authErrors";
 import { newPasswordError } from "../../utils/passwordPolicy";
 
 function ResetPasswordPage() {
-  // ─── Hooks ───
-  const { t } = useTranslation("auth");
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token") ?? "";
 
+  return <ResetPasswordForm key={token} token={token} />;
+}
+
+function ResetPasswordForm({ token }: { token: string }) {
+  const { t } = useTranslation("auth");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
