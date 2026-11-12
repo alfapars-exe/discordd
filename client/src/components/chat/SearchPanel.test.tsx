@@ -257,6 +257,25 @@ describe("SearchPanel — result races", () => {
     expect(screen.queryByText("hit number 23")).not.toBeInTheDocument();
     expect(searchCachedMessages).toHaveBeenCalledTimes(1);
   });
+
+  it("returns to the last available page when its only local result is deleted", async () => {
+    useServerStore.setState({ activeServer: { ...useServerStore.getState().activeServer!, e2ee_enabled: true } });
+    useE2EEStore.setState({ initStatus: "ready" });
+    const rows = Array.from({ length: 26 }, (_, i) => ({
+      messageId: String(i), channelId: "ch-1", dmChannelId: null, content: `match ${i}`, timestamp: i,
+    }));
+    vi.mocked(searchCachedMessages).mockResolvedValueOnce(rows);
+    vi.mocked(getCachedDecryptedMessage).mockImplementation(async id => rows.find(row => row.messageId === id) ?? null);
+    render(<SearchPanel channelId="ch-1" onClose={() => {}} />);
+    typeQuery("match");
+    await act(async () => {});
+    fireEvent.click(screen.getByRole("button", { name: "searchNext" }));
+    await act(async () => {});
+    expect(screen.getByText("match 0")).toBeInTheDocument();
+    await act(async () => useMessageStore.setState({ lastDeleted: { id: "0", channel_id: "ch-1" } }));
+    expect(screen.getByText("match 25")).toBeInTheDocument();
+    expect(screen.queryByText("match 0")).not.toBeInTheDocument();
+  });
 });
 
 describe("SearchPanel — result click", () => {
