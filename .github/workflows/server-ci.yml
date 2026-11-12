@@ -208,9 +208,19 @@ jobs:
           merge-multiple: true
       - name: Merge only profiles from identical source manifests
         run: python3 scripts/merge-go-coverage.py --expected-profiles 17 --output coverage/go.out 'coverage/inputs/**/*.out'
-      - name: Report statement coverage
+      - name: Enforce combined Go statement coverage baseline
         working-directory: server
-        run: go tool cover -func=../coverage/go.out
+        shell: bash
+        run: |
+          go tool cover -func=../coverage/go.out | tee ../coverage/go-summary.txt
+          awk -v floor=58.7 '
+            $1 == "total:" && $2 == "(statements)" && $3 ~ /^[0-9]+\.[0-9]+%$/ {
+              total = $3 + 0
+              found = 1
+              printf "Combined Go statement coverage %.1f%% (minimum %.1f%%)\n", total, floor
+            }
+            END { exit !(found && total >= floor) }
+          ' ../coverage/go-summary.txt
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: go-coverage-combined
