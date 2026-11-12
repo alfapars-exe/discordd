@@ -328,18 +328,6 @@ export async function restoreFromBackup(
     assertCurrent(scope);
     if (!contents.registration || contents.registration.userId !== scope.ownerId) return false;
 
-    // Arm self-fanout reset BEFORE importing keys (P0-FE-03). After a restore
-    // the per-self-device Double Ratchet sessions on our OTHER devices were
-    // established for the old device ID and won't work with the new one, so the
-    // next encryptDMMessage must force a fresh X3DH for every self device.
-    // Setting the flag first closes the window where the imported (restored)
-    // sessions are already usable but the reset flag isn't set yet — a send in
-    // that window would reuse a stale session and the other devices couldn't
-    // decrypt it. (Lazy import avoids a circular crypto/ import at module load.)
-    const { markSelfFanoutNeedsReset } = await import("./dmEncryption");
-    await awaitScoped(scope, () => markSelfFanoutNeedsReset());
-
-    // 4. Import to IndexedDB
     await awaitScoped(scope, () => importBackupContents(contents, scope));
     assertCurrent(scope);
 
@@ -494,7 +482,7 @@ async function importBackupContents(contents: BackupContents, scope: AuthScope):
 
   try {
     // Clear crypto keys (including messageCache — will be re-written below)
-    await awaitScoped(scope, () => keyStorage.clearAllE2EEData());
+    await awaitScoped(scope, () => keyStorage.clearAllE2EEData({ resetSelfFanout: true }));
 
     // Identity key pair
     await awaitScoped(scope, () => keyStorage.saveIdentityKeyPair({

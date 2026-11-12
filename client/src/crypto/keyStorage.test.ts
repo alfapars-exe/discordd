@@ -19,7 +19,7 @@
 
 import "fake-indexeddb/auto";
 import { IDBFactory as FakeIDBFactory } from "fake-indexeddb";
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import * as keyStorage from "./keyStorage";
 import { publishAuthGenerationChange, publishAuthOwnerChange } from "../api/authSessionEvents";
 import type {
@@ -717,6 +717,30 @@ describe("keyStorage — lifecycle", () => {
 
     await keyStorage.saveRegistrationData(makeRegistration());
     expect(await keyStorage.hasLocalKeys()).toBe(true);
+  });
+
+  it("arms a fresh self-device handshake only when clearing for restore", async () => {
+    await keyStorage.setMetadata("deviceId", "old-device");
+    await keyStorage.clearAllE2EEData({ resetSelfFanout: true });
+    expect(await keyStorage.getAllMetadata()).toEqual([["self_fanout_reset", true]]);
+    await keyStorage.clearAllE2EEData();
+    expect(await keyStorage.getAllMetadata()).toEqual([]);
+  });
+
+  it("preserves existing keys if the restore marker write throws", async () => {
+    await keyStorage.saveIdentityKeyPair(makeIdentity());
+    await keyStorage.setMetadata("deviceId", "original-device");
+    const originalIdentity = await keyStorage.getIdentityKeyPair();
+    expect(originalIdentity).not.toBeNull();
+    const failure = new Error("marker write failed");
+    const put = vi.spyOn(IDBObjectStore.prototype, "put").mockImplementationOnce(() => { throw failure; });
+    try {
+      await expect(keyStorage.clearAllE2EEData({ resetSelfFanout: true })).rejects.toBe(failure);
+    } finally {
+      put.mockRestore();
+    }
+    expect(await keyStorage.getIdentityKeyPair()).toEqual(originalIdentity);
+    expect(await keyStorage.getMetadata("deviceId")).toBe("original-device");
   });
 
   it("clearAllE2EEData wipes every store and drops hasLocalKeys back to false", async () => {
