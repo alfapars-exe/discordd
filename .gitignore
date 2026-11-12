@@ -165,6 +165,7 @@ server/server.exe
 # Locally linked Go test/server executables (Windows Application Control may
 # prevent both execution and cleanup during automated acceptance runs).
 /server/*.exe
+/implementation/test-runs/go/*.exe
 
 # Local binary backups (HF Space pre-receive rejects raw binaries; keep
 # them on disk but out of git).
