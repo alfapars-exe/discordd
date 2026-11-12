@@ -28,9 +28,13 @@ export function syncMobileVersion(root, check = false) {
   }
   const swift = readFileSync(resolve(root, 'client/ios/App/CapApp-SPM/Package.swift'), 'utf8');
   if (!swift.includes(`exact: "${capacitor}"`)) throw new Error('Run cap sync to align native Capacitor');
+  let capacitorRevision;
   for (const name of ['client/ios/App/CapApp-SPM/Package.resolved', 'client/ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved']) {
     const pins = JSON.parse(readFileSync(resolve(root, name), 'utf8')).pins;
-    if (pins.find(pin => pin.identity === 'capacitor-swift-pm')?.state.version !== capacitor) throw new Error(`Stale native lock: ${name}`);
+    const state = pins.find(pin => pin.identity === 'capacitor-swift-pm')?.state;
+    if (state?.version !== capacitor || !/^[0-9a-f]{40}$/.test(state.revision)) throw new Error(`Stale native lock: ${name}`);
+    if (capacitorRevision && state.revision !== capacitorRevision) throw new Error(`Capacitor revisions differ: ${name}`);
+    capacitorRevision = state.revision;
   }
   return version;
 }
