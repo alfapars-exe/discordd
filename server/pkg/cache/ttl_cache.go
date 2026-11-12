@@ -82,11 +82,16 @@ func (c *TTLCache[K, V]) Delete(key K) {
 // DeleteFunc removes all entries matching the predicate.
 // Useful for invalidating all cache entries for a user (e.g. on role change).
 func (c *TTLCache[K, V]) DeleteFunc(predicate func(key K) bool) {
+	c.DeleteEntriesFunc(func(key K, _ V) bool { return predicate(key) })
+}
+
+// DeleteEntriesFunc removes entries matching their key or stored value.
+func (c *TTLCache[K, V]) DeleteEntriesFunc(predicate func(K, V) bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	for key := range c.entries {
-		if predicate(key) {
+	for key, entry := range c.entries {
+		if predicate(key, entry.value) {
 			delete(c.entries, key)
 		}
 	}

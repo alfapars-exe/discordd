@@ -45,8 +45,13 @@ func RawDB(db TxQuerier) *sql.DB {
 
 // WithTx runs fn inside a transaction.
 // Commits on success, rolls back on error or panic.
-func WithTx(ctx context.Context, db *sql.DB, fn func(tx *sql.Tx) error) (err error) {
-	tx, err := db.BeginTx(ctx, nil)
+func WithTx(ctx context.Context, db *sql.DB, fn func(tx *sql.Tx) error) error {
+	return WithTxOptions(ctx, db, nil, fn)
+}
+
+// WithTxOptions applies the same commit/rollback rules with explicit isolation.
+func WithTxOptions(ctx context.Context, db *sql.DB, options *sql.TxOptions, fn func(*sql.Tx) error) (err error) {
+	tx, err := db.BeginTx(ctx, options)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}

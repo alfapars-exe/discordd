@@ -3,11 +3,15 @@ package database
 import (
 	"context"
 	"fmt"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/stdlib"
+	"io/fs"
 	"os"
+	"slices"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 )
 
 func TestChannelDeliveryMigrationPreservesPopulatedDatabase(t *testing.T) {
@@ -31,21 +35,18 @@ func TestChannelDeliveryMigrationPreservesPopulatedDatabase(t *testing.T) {
 	db := PostgreSQLPool(cfg)
 	defer func() { db.Close(); admin.Exec("DROP SCHEMA " + schema + " CASCADE"); admin.Close() }()
 	ctx := context.Background()
-	if _, err = db.Exec(`CREATE TABLE postgres_schema_migrations(filename TEXT PRIMARY KEY,applied_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP)`); err != nil {
+	entries, err := postgresMigrations.ReadDir("postgres_migrations")
+	if err != nil {
 		t.Fatal(err)
 	}
-	entries, _ := postgresMigrations.ReadDir("postgres_migrations")
-	for _, entry := range entries {
-		if entry.Name() >= "049" {
-			break
-		}
-		source, _ := postgresMigrations.ReadFile("postgres_migrations/" + entry.Name())
-		if _, err = db.Exec(string(source)); err != nil {
-			t.Fatal(entry.Name(), err)
-		}
-		if _, err = db.Exec(`INSERT INTO postgres_schema_migrations(filename) VALUES(?)`, entry.Name()); err != nil {
-			t.Fatal(err)
-		}
+	upgrade := slices.IndexFunc(entries, func(entry fs.DirEntry) bool {
+		return strings.HasPrefix(entry.Name(), "049_")
+	})
+	if upgrade < 1 {
+		t.Fatal("missing migration 049 or its predecessors")
+	}
+	if err := applyPostgresMigrations(ctx, db, entries[:upgrade]); err != nil {
+		t.Fatal(err)
 	}
 	for _, q := range []string{`INSERT INTO users(id,username,password_hash) VALUES('u','user','x'),('r','reader','x')`, `INSERT INTO servers(id,name,owner_id) VALUES('s','Server','u')`, `INSERT INTO channels(id,name,type,server_id) VALUES('c','Channel','text','s')`, `INSERT INTO messages(id,channel_id,user_id,content,created_at) VALUES('z','c','u','second','2026-01-01'),('a','c','u','first','2026-01-01')`, `INSERT INTO channel_reads(user_id,channel_id,last_read_message_id,unread_count) VALUES('r','c','a',1)`, `INSERT INTO attachments(id,message_id,filename,file_url) VALUES('file','z','file','/api/uploads/file')`, `INSERT INTO message_mentions(message_id,user_id) VALUES('z','r')`} {
 		if _, err = db.Exec(q); err != nil {

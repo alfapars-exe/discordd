@@ -48,9 +48,9 @@ RUN --mount=type=secret,id=SENTRY_AUTH_TOKEN \
 # with "undefined reference to readdir64" if we stay on Alpine.
 # server/go.mod declares `go 1.26` (dependabot 0067570); pinning the exact
 # builder tag avoids a moving GOTOOLCHAIN=auto download during the build.
-# 1.27.3 includes the crypto/x509 fix for GO-2026-6809/CVE-2026-111943;
-# CI also checks the supported Go 1.26 line at its patched 1.26.10 release.
-FROM golang:1.27.3-bookworm AS backend
+# 1.27.4 includes the crypto/x509 fix for GO-2026-6809/CVE-2026-111943;
+# CI also checks the supported Go 1.26 line at its patched 1.26.11 release.
+FROM golang:1.27.4-bookworm AS backend
 WORKDIR /app
 
 # Module cache layer: download what's already in go.sum. We don't run

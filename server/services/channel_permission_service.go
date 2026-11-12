@@ -531,14 +531,20 @@ func (s *channelPermService) permissionChannel(ctx context.Context, channelID st
 // SetOverride) always sees a fresh result for the actor's own permission,
 // not a cache entry that could be stale mid-mutation.
 func (s *channelPermService) ResolveChannelPermissions(ctx context.Context, userID, channelID string) (models.Permission, error) {
+	perm, _, err := s.resolveUserPermissions(ctx, userID, channelID)
+	return perm, err
+}
+
+// Return the actual policy channel with the decision so cache hits need no database lookup.
+func (s *channelPermService) resolveUserPermissions(ctx context.Context, userID, channelID string) (models.Permission, string, error) {
 	channel, permissionChannelID, err := s.permissionChannel(ctx, channelID)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get channel for permission resolution: %w", err)
+		return 0, "", fmt.Errorf("failed to get channel for permission resolution: %w", err)
 	}
 
 	roles, err := s.roleRepo.GetByUserIDAndServer(ctx, userID, channel.ServerID)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get user roles: %w", err)
+		return 0, "", fmt.Errorf("failed to get user roles: %w", err)
 	}
 
 	var base models.Permission
@@ -550,16 +556,16 @@ func (s *channelPermService) ResolveChannelPermissions(ctx context.Context, user
 
 	// Admin bypasses all overrides
 	if base.Has(models.PermAdmin) {
-		return models.PermAll, nil
+		return models.PermAll, permissionChannelID, nil
 	}
 
 	overrides, err := s.permRepo.GetByChannelAndRoles(ctx, permissionChannelID, roleIDs)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get channel overrides for roles: %w", err)
+		return 0, "", fmt.Errorf("failed to get channel overrides for roles: %w", err)
 	}
 
 	if len(overrides) == 0 {
-		return base, nil
+		return base, permissionChannelID, nil
 	}
 
 	// OR all override allow/deny bits across user's roles.
@@ -569,7 +575,7 @@ func (s *channelPermService) ResolveChannelPermissions(ctx context.Context, user
 		channelDeny |= o.Deny
 	}
 
-	return effectiveChannelPermission(base, channelAllow, channelDeny), nil
+	return effectiveChannelPermission(base, channelAllow, channelDeny), permissionChannelID, nil
 }
 
 // ResolveChannelPermissionsBulk resolves effective permissions for every
@@ -585,9 +591,14 @@ func (s *channelPermService) ResolveChannelPermissions(ctx context.Context, user
 //
 // regardless of len(userIDs). Users holding no roles resolve to 0.
 func (s *channelPermService) ResolveChannelPermissionsBulk(ctx context.Context, channelID string, userIDs []string) (map[string]models.Permission, error) {
+	perms, _, err := s.resolveUsersPermissions(ctx, channelID, userIDs)
+	return perms, err
+}
+
+func (s *channelPermService) resolveUsersPermissions(ctx context.Context, channelID string, userIDs []string) (map[string]models.Permission, string, error) {
 	resolved := make(map[string]models.Permission, len(userIDs))
 	if len(userIDs) == 0 {
-		return resolved, nil
+		return resolved, "", nil
 	}
 
 	// Dedup — the caller's list (built from live connections) shouldn't
@@ -605,12 +616,12 @@ func (s *channelPermService) ResolveChannelPermissionsBulk(ctx context.Context, 
 
 	channel, permissionChannelID, err := s.permissionChannel(ctx, channelID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get channel for bulk permission resolution: %w", err)
+		return nil, "", fmt.Errorf("failed to get channel for bulk permission resolution: %w", err)
 	}
 
 	rolesByUser, err := s.roleRepo.GetRolesForUsers(ctx, channel.ServerID, unique)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get roles for users: %w", err)
+		return nil, "", fmt.Errorf("failed to get roles for users: %w", err)
 	}
 
 	// Every override on the channel, fetched once. The single-user path asks
@@ -619,7 +630,7 @@ func (s *channelPermService) ResolveChannelPermissionsBulk(ctx context.Context, 
 	// which is what turns N queries into one.
 	overrides, err := s.permRepo.GetByChannel(ctx, permissionChannelID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get channel overrides for bulk resolution: %w", err)
+		return nil, "", fmt.Errorf("failed to get channel overrides for bulk resolution: %w", err)
 	}
 
 	type overrideBits struct{ allow, deny models.Permission }
@@ -654,5 +665,5 @@ func (s *channelPermService) ResolveChannelPermissionsBulk(ctx context.Context, 
 		resolved[userID] = effectiveChannelPermission(base, channelAllow, channelDeny)
 	}
 
-	return resolved, nil
+	return resolved, permissionChannelID, nil
 }

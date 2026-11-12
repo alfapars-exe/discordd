@@ -21,7 +21,8 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 )
 
-func channelDeliveryFixture(t *testing.T) (*messageService, *sql.DB, *testutil.MockBroadcastAndOnline, *testutil.MockChannelPermResolver) {
+// postgresServerFixture seeds two server members and a channel in an isolated schema.
+func postgresServerFixture(t *testing.T) *sql.DB {
 	t.Helper()
 	dsn := os.Getenv("HICHAT_TEST_POSTGRES_DSN")
 	if dsn == "" {
@@ -51,6 +52,12 @@ func channelDeliveryFixture(t *testing.T) (*messageService, *sql.DB, *testutil.M
 			t.Fatal(err)
 		}
 	}
+	return db
+}
+
+func channelDeliveryFixture(t *testing.T) (*messageService, *sql.DB, *testutil.MockBroadcastAndOnline, *testutil.MockChannelPermResolver) {
+	t.Helper()
+	db := postgresServerFixture(t)
 	perms := &testutil.MockChannelPermResolver{ResolveChannelPermissionsFn: func(context.Context, string, string) (models.Permission, error) {
 		return models.PermViewChannel | models.PermSendMessages | models.PermReadMessages, nil
 	}, ResolveChannelPermissionsBulkFn: func(_ context.Context, _ string, users []string) (map[string]models.Permission, error) {

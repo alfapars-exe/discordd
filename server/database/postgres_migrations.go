@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"embed"
 	"fmt"
+	"io/fs"
 )
 
 //go:embed postgres_migrations/*.sql
@@ -13,6 +14,16 @@ var postgresMigrations embed.FS
 // MigratePostgres applies only native PostgreSQL migrations, atomically and
 // under an advisory lock. Existing SQLite migration history is kept separate.
 func MigratePostgres(ctx context.Context, db *sql.DB) error {
+	entries, err := postgresMigrations.ReadDir("postgres_migrations")
+	if err != nil {
+		return err
+	}
+	return applyPostgresMigrations(ctx, db, entries)
+}
+
+// Historical upgrade fixtures use the same lock, transaction and migration
+// ledger as startup. Extensions installed by the baseline are database-wide.
+func applyPostgresMigrations(ctx context.Context, db *sql.DB, entries []fs.DirEntry) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -22,10 +33,6 @@ func MigratePostgres(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	if _, err = tx.ExecContext(ctx, "CREATE TABLE IF NOT EXISTS postgres_schema_migrations (filename TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)"); err != nil {
-		return err
-	}
-	entries, err := postgresMigrations.ReadDir("postgres_migrations")
-	if err != nil {
 		return err
 	}
 	for _, entry := range entries {

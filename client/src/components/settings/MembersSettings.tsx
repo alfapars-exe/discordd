@@ -164,7 +164,7 @@ function MembersSettings() {
 
     const serverId = useServerStore.getState().activeServerId;
     if (!serverId) return;
-    const res = await memberApi.modifyMemberRoles(serverId, selectedMemberId, editRoleIds);
+    const res = await useMemberStore.getState().modifyMemberRoles(serverId, selectedMemberId, editRoleIds);
     if (res.data) {
       setHasChanges(false);
       addToast("success", t("memberRolesSaved"));

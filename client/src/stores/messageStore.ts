@@ -36,6 +36,12 @@ import {
   updateReactionInRecord,
   updateAuthorInRecord,
 } from "./shared/messageUtils";
+import {
+  ChannelHistoryChanges, compareMessages, insertLiveMessage, mergeChannelEdit, reconnectTail, type HistoryWindow,
+} from "./shared/channelMessageHistory";
+import {
+  captureHistoryAccess, grantHistoryAccess, historyAccessDenied, resetHistoryAccess, revokeHistoryAccess,
+} from "./shared/channelHistoryAccess";
 import { sendWithRetryAndToast } from "./shared/sendWithRetry";
 import { channelSendIntent, completeChannelSendIntent, clearChannelSendIntents, supportsDurableChannelSends } from "./shared/channelSendIntent";
 
@@ -103,6 +109,7 @@ type MessageState = {
   jumpToPresent: (channelId: string, serverId?: string) => void;
   /** Clear fetch cache — forces re-fetch + re-decrypt (E2EE restore) */
   invalidateFetchCache: () => void;
+  evictChannelHistory: (channelId: string) => void;
   /**
    * Drop the fetched-guard only, keeping every loaded message on screen.
    * For WS reconnects, where the window may have missed echoes but is not
@@ -148,7 +155,7 @@ const fetchedChannels = new Set<string>();
 const inflightFetches = new Map<string, AbortController>();
 
 /** Channels with a forward (?after=) page in flight — one at a time each. */
-const inflightNewerFetches = new Map<string, symbol>();
+const inflightNewerFetches = new Map<string, AbortController>();
 const inflightOlderFetches = new Map<string, { token: symbol; controller: AbortController }>();
 
 /**
@@ -159,13 +166,44 @@ const inflightOlderFetches = new Map<string, { token: symbol; controller: AbortC
  */
 const aroundPending = new Map<string, AbortController>();
 
-/**
- * Live messages that arrived while the channel showed a jumped-to window
- * (hasMoreAfter). They can't be appended there — the window's end isn't the
- * tail — so they wait here and are merged once forward paging reaches the
- * end. jumpToPresent / invalidateFetchCache discard them (a refetch covers it).
- */
-const detachedWsMessages = new Map<string, Message[]>();
+// The pending changes belong to one channel and one authenticated session. They
+// survive pagination of a detached window, then are released on reaching its tail.
+const pendingChanges = new Map<string, ChannelHistoryChanges>();
+const reconnectWindows = new Map<string, HistoryWindow>();
+
+function channelChanges(channelId: string): ChannelHistoryChanges {
+  let changes = pendingChanges.get(channelId);
+  if (!changes) {
+    changes = new ChannelHistoryChanges();
+    pendingChanges.set(channelId, changes);
+  }
+  return changes;
+}
+
+function pendingMutations(channelId: string): ChannelHistoryChanges | undefined {
+  return pendingChanges.get(channelId) ?? (reconnectWindows.has(channelId) ? channelChanges(channelId) : undefined);
+}
+
+function cancelPages(channelId: string): void {
+  inflightOlderFetches.get(channelId)?.controller.abort();
+  inflightOlderFetches.delete(channelId);
+  inflightNewerFetches.get(channelId)?.abort();
+  inflightNewerFetches.delete(channelId);
+}
+
+function releaseIdleChanges(channelId: string): void {
+  if (inflightFetches.has(channelId) || inflightOlderFetches.has(channelId) || inflightNewerFetches.has(channelId)) return;
+  if (!reconnectWindows.has(channelId) && !useMessageStore.getState().hasMoreAfterByChannel[channelId]) {
+    pendingChanges.delete(channelId);
+  }
+}
+
+function omitChannel<T>(record: Record<string, T>, channelId: string): Record<string, T> {
+  if (!(channelId in record)) return record;
+  const next = { ...record };
+  delete next[channelId];
+  return next;
+}
 
 /** Abort an in-flight fetch for the given channel, if any. */
 function abortChannelFetch(channelId: string): void {
@@ -192,19 +230,26 @@ function sendSessionStillCurrent(session: MessageSession): boolean {
 }
 
 function clearMessageCaches(ownerId: string | null, authGeneration: number): void {
+  const current = useMessageStore.getState();
+  const loading = ownerId === current.ownerId && authGeneration === current.authGeneration
+    ? Object.fromEntries([...inflightFetches.keys()].map((id) => [id, false]))
+    : {};
   clearChannelSendIntents();
   for (const controller of inflightFetches.values()) controller.abort();
   for (const controller of aroundPending.values()) controller.abort();
   for (const request of inflightOlderFetches.values()) request.controller.abort();
+  for (const controller of inflightNewerFetches.values()) controller.abort();
   inflightFetches.clear();
   inflightOlderFetches.clear();
   inflightNewerFetches.clear();
   aroundPending.clear();
   fetchedChannels.clear();
-  detachedWsMessages.clear();
+  pendingChanges.clear();
+  reconnectWindows.clear();
+  if (ownerId !== current.ownerId || authGeneration !== current.authGeneration) resetHistoryAccess();
   useMessageStore.setState({
     messagesByChannel: {}, hasMoreByChannel: {}, hasMoreAfterByChannel: {},
-    isLoadingByChannel: {}, isLoadingMore: false, typingUsers: {},
+    isLoadingByChannel: loading, isLoadingMore: false, typingUsers: {},
     lastDeleted: null, replyingTo: null, scrollToMessageId: null,
     ownerId, authGeneration,
   });
@@ -261,6 +306,25 @@ export const useMessageStore = create<MessageState>((set, get) => {
     clearMessageCaches(get().ownerId, get().authGeneration);
   },
 
+  evictChannelHistory: (channelId) => {
+    revokeHistoryAccess(channelId);
+    abortChannelFetch(channelId);
+    cancelPages(channelId);
+    aroundPending.delete(channelId);
+    fetchedChannels.delete(channelId);
+    pendingChanges.delete(channelId);
+    reconnectWindows.delete(channelId);
+    set((state) => ({
+      messagesByChannel: omitChannel(state.messagesByChannel, channelId),
+      hasMoreByChannel: omitChannel(state.hasMoreByChannel, channelId),
+      hasMoreAfterByChannel: omitChannel(state.hasMoreAfterByChannel, channelId),
+      isLoadingByChannel: omitChannel(state.isLoadingByChannel, channelId),
+      isLoadingMore: inflightOlderFetches.size > 0,
+      typingUsers: omitChannel(state.typingUsers, channelId),
+      replyingTo: state.replyingTo?.channel_id === channelId ? null : state.replyingTo,
+    }));
+  },
+
   invalidateFetchedFlags: () => {
     // Reconnect variant of invalidateFetchCache. A dropped socket can lose
     // the message_create echo for a message we successfully POSTed — and
@@ -275,12 +339,21 @@ export const useMessageStore = create<MessageState>((set, get) => {
     for (const ctrl of inflightFetches.values()) ctrl.abort();
     for (const ctrl of aroundPending.values()) ctrl.abort();
     for (const request of inflightOlderFetches.values()) request.controller.abort();
+    for (const controller of inflightNewerFetches.values()) controller.abort();
     inflightFetches.clear();
     inflightOlderFetches.clear();
     inflightNewerFetches.clear();
     aroundPending.clear();
+    const state = get();
+    for (const id of fetchedChannels) {
+      if (!state.hasMoreAfterByChannel[id]) {
+        reconnectWindows.set(id, { rows: state.messagesByChannel[id] ?? [], hasMore: !!state.hasMoreByChannel[id] });
+      }
+    }
+    for (const id of pendingChanges.keys()) {
+      if (fetchedChannels.has(id) || !reconnectWindows.has(id)) pendingChanges.delete(id);
+    }
     fetchedChannels.clear();
-    detachedWsMessages.clear();
     set({ hasMoreAfterByChannel: {}, isLoadingByChannel: {}, isLoadingMore: false });
   },
 
@@ -291,97 +364,54 @@ export const useMessageStore = create<MessageState>((set, get) => {
     // A jump in flight owns the channel — see aroundPending.
     if (fetchedChannels.has(channelId) || aroundPending.has(channelId)) return;
 
-    // If a previous fetch for this channel is still in flight, cancel it.
-    // The two main triggers: user spam-clicking channels, and E2EE store
-    // refreshing then re-triggering a fetch. Either way we don't want the
-    // late response to clobber whatever the user is now looking at.
+    const serverId = explicitServerId ?? useServerStore.getState().activeServerId;
+    if (!serverId) return;
     abortChannelFetch(channelId);
+    cancelPages(channelId);
     const controller = new AbortController();
     inflightFetches.set(channelId, controller);
+    const ownsRequest = () => isCurrent() && !controller.signal.aborted;
+    const changes = channelChanges(channelId);
+    set((state) => ({
+      isLoadingByChannel: { ...state.isLoadingByChannel, [channelId]: true },
+      isLoadingMore: inflightOlderFetches.size > 0,
+    }));
 
-    const setLoading = (loading: boolean) =>
-      set((state) => ({
-        isLoadingByChannel: { ...state.isLoadingByChannel, [channelId]: loading },
-      }));
-    // Abort paths must clear the flag too — but only when no NEWER fetch
-    // owns this channel, or the replacement fetch's own flag would be
-    // clobbered by the aborted one resolving late (permanent skeleton bug).
-    const clearLoadingIfOwner = () => {
-      if (!isCurrent()) return;
-      const owner = inflightFetches.get(channelId);
-      if (!owner || owner === controller) setLoading(false);
-    };
-
-    setLoading(true);
-
-    const serverId = explicitServerId ?? useServerStore.getState().activeServerId;
-    if (!serverId) {
-      inflightFetches.delete(channelId);
-      setLoading(false);
-      return;
-    }
-
-    const res = await messageApi.getMessages(serverId, channelId, undefined, DEFAULT_MESSAGE_LIMIT, {
-      signal: controller.signal, isCurrent,
-    });
-
-    // Aborted while the request was in flight — drop the response. Cache
-    // invalidate also aborts, so this branch covers both user-switch and
-    // E2EE-rotation cases without polluting messagesByChannel.
-    if (controller.signal.aborted || !isCurrent()) {
-      clearLoadingIfOwner();
-      return;
-    }
-
-    if (res.success && res.data) {
-      // Go nil slice -> JSON null; fallback to empty array
-      const apiMessages = await decryptChannelMessages(res.data.messages ?? [], serverId, isCurrent);
-      if (!controller.signal.aborted && isCurrent()) void registerSpamBatch(apiMessages, "channel", channelId, isCurrent);
-
-      // Re-check abort after the async decrypt — a fast channel-switch
-      // during decryption would otherwise still write stale content. The
-      // controller stays registered in inflightFetches until AFTER this
-      // check so invalidateFetchCache during the decrypt still reaches it.
-      if (controller.signal.aborted || !isCurrent()) {
-        clearLoadingIfOwner();
+    try {
+      const res = await messageApi.getMessages(serverId, channelId, undefined, DEFAULT_MESSAGE_LIMIT, {
+        signal: controller.signal, isCurrent: ownsRequest,
+      });
+      if (!ownsRequest()) return;
+      if (!res.success || !res.data) {
+        if (res.status === 403) get().evictChannelHistory(channelId);
         return;
       }
-      inflightFetches.delete(channelId);
-
-      // Mark fetched only now that we're committed to writing the result.
-      // Marking earlier left an aborted channel flagged as fetched-but-empty,
-      // which the guard at the top then made permanently unfetchable.
+      const apiRows = await decryptChannelMessages(res.data.messages ?? [], serverId, ownsRequest);
+      if (!ownsRequest()) return;
+      grantHistoryAccess(channelId);
+      const accessCurrent = captureHistoryAccess(channelId);
+      const tail = reconnectTail(reconnectWindows.get(channelId), apiRows, res.data.has_more);
+      const rows = changes.apply(tail.rows, { includeCreates: true, oldest: tail.hasMore ? tail.rows[0] : undefined });
+      reconnectWindows.delete(channelId);
+      pendingChanges.delete(channelId);
       fetchedChannels.add(channelId);
-
-      set((state) => {
-        // Merge WS-buffered messages that arrived during fetch
-        const buffered = state.messagesByChannel[channelId] ?? [];
-        const apiIds = new Set(apiMessages.map((m) => m.id));
-        const newFromWS = buffered.filter((m) => !apiIds.has(m.id));
-
-        return {
-          messagesByChannel: {
-            ...state.messagesByChannel,
-            [channelId]: [...apiMessages, ...newFromWS],
-          },
-          hasMoreByChannel: {
-            ...state.hasMoreByChannel,
-            [channelId]: res.data!.has_more,
-          },
+      set((state) => ({
+        messagesByChannel: { ...state.messagesByChannel, [channelId]: rows },
+        hasMoreByChannel: { ...state.hasMoreByChannel, [channelId]: tail.hasMore },
+        hasMoreAfterByChannel: { ...state.hasMoreAfterByChannel, [channelId]: false },
+      }));
+      if (!ownsRequest() || !accessCurrent()) return;
+      void registerSpamBatch(changes.apply(apiRows), "channel", channelId, () => isCurrent() && accessCurrent());
+      const last = rows.at(-1);
+      if (last) useReadStateStore.getState().markAsRead(channelId, last.id);
+    } finally {
+      if (inflightFetches.get(channelId) === controller) {
+        inflightFetches.delete(channelId);
+        releaseIdleChanges(channelId);
+        if (isCurrent()) set((state) => ({
           isLoadingByChannel: { ...state.isLoadingByChannel, [channelId]: false },
-        };
-      });
-
-      // Auto-mark-read after messages load
-      const allMessages = get().messagesByChannel[channelId];
-      if (allMessages && allMessages.length > 0) {
-        if (!isCurrent()) return;
-        const lastMsg = allMessages[allMessages.length - 1];
-        useReadStateStore.getState().markAsRead(channelId, lastMsg.id);
+        }));
       }
-    } else {
-      inflightFetches.delete(channelId);
-      setLoading(false);
     }
   },
 
@@ -393,46 +423,42 @@ export const useMessageStore = create<MessageState>((set, get) => {
     if (!messages || messages.length === 0) return;
     if (!get().hasMoreByChannel[channelId]) return;
 
+    if (inflightFetches.has(channelId)) return;
+    const serverId = explicitServerId ?? useServerStore.getState().activeServerId;
+    if (!serverId) return;
     const token = Symbol("older-page");
     const controller = new AbortController();
     inflightOlderFetches.get(channelId)?.controller.abort();
     inflightOlderFetches.set(channelId, { token, controller });
+    const ownsRequest = () => !controller.signal.aborted && isCurrent() && inflightOlderFetches.get(channelId)?.token === token;
+    const changes = channelChanges(channelId);
     set({ isLoadingMore: true });
-
-    const serverId = explicitServerId ?? useServerStore.getState().activeServerId;
-    if (!serverId) { inflightOlderFetches.delete(channelId); set({ isLoadingMore: false }); return; }
-
-    const beforeId = messages[0].id;
     try {
-    const res = await messageApi.getMessages(serverId, channelId, beforeId, DEFAULT_MESSAGE_LIMIT, {
-      signal: controller.signal, isCurrent,
-    });
-    if (controller.signal.aborted || !isCurrent() || inflightOlderFetches.get(channelId)?.token !== token) return;
-
-    if (res.success && res.data) {
-      const decrypted = await decryptChannelMessages(res.data.messages ?? [], serverId, isCurrent);
-      if (controller.signal.aborted || !isCurrent() || inflightOlderFetches.get(channelId)?.token !== token) return;
-      void registerSpamBatch(decrypted, "channel", channelId, isCurrent);
-      if (!isCurrent()) return;
-
+      const res = await messageApi.getMessages(serverId, channelId, messages[0].id, DEFAULT_MESSAGE_LIMIT, {
+        signal: controller.signal, isCurrent: ownsRequest,
+      });
+      if (!ownsRequest()) return;
+      if (!res.success || !res.data) {
+        if (res.status === 403) get().evictChannelHistory(channelId);
+        return;
+      }
+      const page = res.data;
+      const decrypted = await decryptChannelMessages(page.messages ?? [], serverId, ownsRequest);
+      if (!ownsRequest()) return;
+      const accessCurrent = captureHistoryAccess(channelId);
+      void registerSpamBatch(changes.apply(decrypted), "channel", channelId, () => isCurrent() && accessCurrent());
       set((state) => ({
         messagesByChannel: {
           ...state.messagesByChannel,
-          [channelId]: [...decrypted, ...state.messagesByChannel[channelId]],
+          [channelId]: changes.apply([...decrypted, ...(state.messagesByChannel[channelId] ?? [])]),
         },
-        hasMoreByChannel: {
-          ...state.hasMoreByChannel,
-          [channelId]: res.data!.has_more,
-        },
-        isLoadingMore: false,
+        hasMoreByChannel: { ...state.hasMoreByChannel, [channelId]: page.has_more },
       }));
-    } else {
-      set({ isLoadingMore: false });
-    }
     } finally {
       if (inflightOlderFetches.get(channelId)?.token === token) {
         inflightOlderFetches.delete(channelId);
-        if (isCurrent()) set({ isLoadingMore: false });
+        releaseIdleChanges(channelId);
+        if (isCurrent()) set({ isLoadingMore: inflightOlderFetches.size > 0 });
       }
     }
   },
@@ -460,9 +486,12 @@ export const useMessageStore = create<MessageState>((set, get) => {
     abortChannelFetch(channelId);
     const controller = new AbortController();
     inflightFetches.set(channelId, controller);
+    cancelPages(channelId);
+    const changes = channelChanges(channelId);
     // Claim BEFORE the first await: MessageList mounts (tab just opened)
     // and calls fetchMessages while this request is in flight.
     aroundPending.set(channelId, controller);
+    const ownsRequest = () => !controller.signal.aborted && scopeCurrent();
     const release = () => {
       if (aroundPending.get(channelId) === controller) aroundPending.delete(channelId);
     };
@@ -482,12 +511,14 @@ export const useMessageStore = create<MessageState>((set, get) => {
       controller.abort();
       if (inflightFetches.get(channelId) === controller) inflightFetches.delete(channelId);
       release();
+      releaseIdleChanges(channelId);
       clearLoadingIfOwner();
       return false;
     };
 
     set((state) => ({
       isLoadingByChannel: { ...state.isLoadingByChannel, [channelId]: true },
+      isLoadingMore: inflightOlderFetches.size > 0,
     }));
 
     let res: Awaited<ReturnType<typeof messageApi.getMessagesAround>>;
@@ -497,7 +528,7 @@ export const useMessageStore = create<MessageState>((set, get) => {
         channelId,
         messageId,
         DEFAULT_MESSAGE_LIMIT,
-        { signal: controller.signal, timeoutMs: options?.timeoutMs, isCurrent: scopeCurrent }
+        { signal: controller.signal, timeoutMs: options?.timeoutMs, isCurrent: ownsRequest }
       );
     } catch (error) {
       abandon();
@@ -505,39 +536,44 @@ export const useMessageStore = create<MessageState>((set, get) => {
     }
     if (controller.signal.aborted || !scopeCurrent()) return abandon();
 
+    if (!res.success && res.status === 403) {
+      get().evictChannelHistory(channelId);
+      return false;
+    }
     const page = res.success ? res.data : undefined;
     const raw = page?.messages ?? [];
-    if (!page || !raw.some((m) => m.id === messageId)) {
-      // 404 (deleted) or a page that doesn't contain the target — keep
-      // whatever window the channel had; if it had none (the claim made
-      // MessageList skip its fetch), load the tail now.
+    const resumePreviousWindow = () => {
       inflightFetches.delete(channelId);
       release();
+      releaseIdleChanges(channelId);
       clearLoadingIfOwner();
       if (scopeCurrent()) void get().fetchMessages(channelId, serverId);
       return false;
-    }
+    };
+    if (!page || !raw.some((m) => m.id === messageId)) return resumePreviousWindow();
 
     if (!scopeCurrent()) return abandon();
     let decrypted: Message[];
     try {
-      decrypted = await decryptChannelMessages(raw, serverId, () => sameAuthSession() && scopeCurrent());
+      decrypted = await decryptChannelMessages(raw, serverId, ownsRequest);
     } catch (error) {
       abandon();
       throw error;
     }
-    if (controller.signal.aborted || !scopeCurrent()) return abandon();
-    void registerSpamBatch(decrypted, "channel", channelId, () => sameAuthSession() && scopeCurrent());
-    if (controller.signal.aborted || !scopeCurrent()) return abandon();
-    inflightFetches.delete(channelId);
+    if (!ownsRequest()) return abandon();
+    const rows = changes.apply(decrypted, { includeCreates: !page.has_more_after, oldest: page.has_more ? decrypted[0] : undefined });
+    if (!rows.some((row) => row.id === messageId)) return resumePreviousWindow();
 
-    // Mark fetched so a later fetchMessages() is a no-op and doesn't pull
-    // the tail over this window; the claim is no longer needed after that.
+    inflightFetches.delete(channelId);
     fetchedChannels.add(channelId);
     release();
-    detachedWsMessages.delete(channelId);
+    grantHistoryAccess(channelId);
+    reconnectWindows.delete(channelId);
+    const accessCurrent = captureHistoryAccess(channelId);
+    void registerSpamBatch(changes.apply(decrypted), "channel", channelId, () => scopeCurrent() && accessCurrent());
+    if (!page.has_more_after) pendingChanges.delete(channelId);
     set((state) => ({
-      messagesByChannel: { ...state.messagesByChannel, [channelId]: decrypted },
+      messagesByChannel: { ...state.messagesByChannel, [channelId]: rows },
       hasMoreByChannel: { ...state.hasMoreByChannel, [channelId]: page.has_more },
       hasMoreAfterByChannel: {
         ...state.hasMoreAfterByChannel,
@@ -555,48 +591,42 @@ export const useMessageStore = create<MessageState>((set, get) => {
     const messages = get().messagesByChannel[channelId];
     if (!messages || messages.length === 0) return;
     if (!get().hasMoreAfterByChannel[channelId]) return;
-    if (inflightNewerFetches.has(channelId)) return;
-
+    if (inflightNewerFetches.has(channelId) || inflightFetches.has(channelId)) return;
     const serverId = explicitServerId ?? useServerStore.getState().activeServerId;
     if (!serverId) return;
 
-    const token = Symbol("newer-page");
-    inflightNewerFetches.set(channelId, token);
-    const afterId = messages[messages.length - 1].id;
+    const controller = new AbortController();
+    inflightNewerFetches.set(channelId, controller);
+    const ownsRequest = () => isCurrent() && !controller.signal.aborted;
+    const changes = channelChanges(channelId);
     try {
-      const res = await messageApi.getMessagesAfter(
-        serverId, channelId, afterId, DEFAULT_MESSAGE_LIMIT
-      );
-      if (!isCurrent() || inflightNewerFetches.get(channelId) !== token || !res.success || !res.data) return;
-      const decrypted = await decryptChannelMessages(res.data.messages ?? [], serverId, isCurrent);
-      if (!isCurrent() || inflightNewerFetches.get(channelId) !== token) return;
-      void registerSpamBatch(decrypted, "channel", channelId, isCurrent);
-      if (!isCurrent()) return;
-      const hasMoreAfter = res.data.has_more_after ?? false;
-      // Reached the tail: live messages held back while detached belong
-      // after it now (dedup by id below — the page may already carry them).
-      const held = hasMoreAfter ? [] : detachedWsMessages.get(channelId) ?? [];
-      if (!hasMoreAfter) detachedWsMessages.delete(channelId);
-
-      set((state) => {
-        const current = state.messagesByChannel[channelId] ?? [];
-        const seen = new Set(current.map((m) => m.id));
-        const appended: Message[] = [];
-        for (const m of [...decrypted, ...held]) {
-          if (seen.has(m.id)) continue;
-          seen.add(m.id);
-          appended.push(m);
-        }
-        return {
-          messagesByChannel: {
-            ...state.messagesByChannel,
-            [channelId]: [...current, ...appended],
-          },
-          hasMoreAfterByChannel: { ...state.hasMoreAfterByChannel, [channelId]: hasMoreAfter },
-        };
+      const res = await messageApi.getMessagesAfter(serverId, channelId, messages[messages.length - 1].id, DEFAULT_MESSAGE_LIMIT, {
+        signal: controller.signal, isCurrent: ownsRequest,
       });
+      if (!ownsRequest()) return;
+      if (!res.success || !res.data) {
+        if (res.status === 403) get().evictChannelHistory(channelId);
+        return;
+      }
+      const hasMoreAfter = res.data.has_more_after ?? false;
+      const page = await decryptChannelMessages(res.data.messages ?? [], serverId, ownsRequest);
+      if (!ownsRequest()) return;
+      const accessCurrent = captureHistoryAccess(channelId);
+      void registerSpamBatch(changes.apply(page), "channel", channelId, () => isCurrent() && accessCurrent());
+      set((state) => ({
+        messagesByChannel: {
+          ...state.messagesByChannel,
+          [channelId]: changes.apply([...(state.messagesByChannel[channelId] ?? []), ...page], {
+            includeCreates: !hasMoreAfter, oldest: state.hasMoreByChannel[channelId] ? state.messagesByChannel[channelId]?.[0] : undefined,
+          }),
+        },
+        hasMoreAfterByChannel: { ...state.hasMoreAfterByChannel, [channelId]: hasMoreAfter },
+      }));
     } finally {
-      if (inflightNewerFetches.get(channelId) === token) inflightNewerFetches.delete(channelId);
+      if (inflightNewerFetches.get(channelId) === controller) {
+        inflightNewerFetches.delete(channelId);
+        releaseIdleChanges(channelId);
+      }
     }
   },
 
@@ -605,7 +635,9 @@ export const useMessageStore = create<MessageState>((set, get) => {
     abortChannelFetch(channelId);
     fetchedChannels.delete(channelId);
     aroundPending.delete(channelId);
-    detachedWsMessages.delete(channelId);
+    cancelPages(channelId);
+    pendingChanges.delete(channelId);
+    reconnectWindows.delete(channelId);
     set((state) => {
       const { [channelId]: _, ...messagesByChannel } = state.messagesByChannel;
       const { [channelId]: __, ...hasMoreByChannel } = state.hasMoreByChannel;
@@ -883,23 +915,22 @@ export const useMessageStore = create<MessageState>((set, get) => {
   handleMessageCreate: (message, expectedSession) => {
     const session = currentMessageSession();
     if (!session || (expectedSession && (expectedSession.ownerId !== session.ownerId || expectedSession.authGeneration !== session.authGeneration))) return;
-    // Jumped-to window: the tail isn't loaded, so a live insert would be
-    // appended after messages that are NOT the newest. Hold it until forward
-    // paging reaches the end (fetchNewerMessages merges it).
-    if (get().hasMoreAfterByChannel[message.channel_id]) {
-      const held = detachedWsMessages.get(message.channel_id) ?? [];
-      if (!held.some((m) => m.id === message.id)) {
-        detachedWsMessages.set(message.channel_id, [...held, message]);
-      }
+    const id = message.channel_id;
+    if (historyAccessDenied(id)) return;
+    if (get().hasMoreAfterByChannel[id]) {
+      channelChanges(id).create(message);
       return;
     }
+    if (pendingMutations(id)?.create(message) === false) return;
 
     set((state) => {
       // Buffer messages even if channel isn't fetched yet.
       // fetchMessages will merge buffered messages when it completes.
       const channelMessages = state.messagesByChannel[message.channel_id] ?? [];
 
-      // Duplicate guard
+      // A late replay before the oldest loaded row must not create a false
+      // pagination cursor that skips the as-yet unloaded interval.
+      if (state.hasMoreByChannel[id] && channelMessages.length && compareMessages(message, channelMessages[0]) < 0) return state;
       if (channelMessages.some((m) => m.id === message.id)) return state;
 
       // Clear typing indicator
@@ -913,7 +944,7 @@ export const useMessageStore = create<MessageState>((set, get) => {
       return {
         messagesByChannel: {
           ...state.messagesByChannel,
-          [message.channel_id]: [...channelMessages, message],
+          [message.channel_id]: insertLiveMessage(channelMessages, message),
         },
         typingUsers,
       };
@@ -923,17 +954,19 @@ export const useMessageStore = create<MessageState>((set, get) => {
   handleMessageUpdate: (message, expectedSession) => {
     const session = currentMessageSession();
     if (!session || (expectedSession && (expectedSession.ownerId !== session.ownerId || expectedSession.authGeneration !== session.authGeneration))) return;
+    if (historyAccessDenied(message.channel_id)) return;
+    pendingMutations(message.channel_id)?.edit(message);
     set((state) => ({
       messagesByChannel: updateMessageInRecord(
-        state.messagesByChannel, message.channel_id, message
+        state.messagesByChannel, message.channel_id, message, mergeChannelEdit
       ),
     }));
   },
 
   handleMessageDelete: (data) => {
     if (!currentMessageSession()) return;
-    const held = detachedWsMessages.get(data.channel_id);
-    if (held) detachedWsMessages.set(data.channel_id, held.filter((m) => m.id !== data.id));
+    if (historyAccessDenied(data.channel_id)) return;
+    pendingMutations(data.channel_id)?.remove(data.id);
     set((state) => ({
       messagesByChannel: deleteMessageFromRecord(
         state.messagesByChannel, data.channel_id, data.id
@@ -950,7 +983,8 @@ export const useMessageStore = create<MessageState>((set, get) => {
 
   /** Backend sends full reaction list after each toggle — direct replace, no client merge. */
   handleReactionUpdate: (data) => {
-    if (!currentMessageSession()) return;
+    if (!currentMessageSession() || historyAccessDenied(data.channel_id)) return;
+    pendingMutations(data.channel_id)?.react(data.message_id, data.reactions);
     set((state) => ({
       messagesByChannel: updateReactionInRecord(
         state.messagesByChannel, data.channel_id, data.message_id, data.reactions

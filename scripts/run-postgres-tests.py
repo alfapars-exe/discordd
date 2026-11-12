@@ -75,13 +75,16 @@ def main():
         print(f"Required PostgreSQL test did not pass: {REQUIRED_SERVER_POSTGRES_TEST}", file=sys.stderr)
     if code or skipped or missing_packages or not postgres_retention_passed or invalid_output:
         return code or 1
-    # Durable delivery must run on PostgreSQL too; the ordinary service lane
-    # uses mocks/legacy fixtures and cannot validate these transactions.
-    delivery = subprocess.run(["go", "test", "-v", "-count=1", "-timeout=2m", "./services",
-                               "-run", "^(TestChannelDelivery|TestDMIdempotent|TestDMOutbox|TestDMMarkUnreadFrom)"], cwd=root / "server",
-                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-    print(delivery.stdout.replace(dsn, REDACTED_DATABASE), end="", flush=True)
-    return delivery.returncode or int("--- SKIP:" in delivery.stdout or "[no tests to run]" in delivery.stdout)
+    # Both delivery and authorization transactions require real PostgreSQL locks.
+    role_tests = ("TestPostgresRolePatchConcurrentChanges", "TestPostgresMemberRoleReplacement")
+    selection = "^(TestChannelDelivery|TestDMIdempotent|TestDMOutbox|TestDMMarkUnreadFrom|" + "|".join(role_tests) + ")"
+    services = subprocess.run(["go", "test", "-v", "-count=1", "-timeout=2m", "./services", "-run", selection],
+                              cwd=root / "server", stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    print(services.stdout.replace(dsn, REDACTED_DATABASE), end="", flush=True)
+    missing = [name for name in role_tests if f"--- PASS: {name} (" not in services.stdout]
+    if missing:
+        print("Required PostgreSQL role tests did not pass: " + ", ".join(missing), file=sys.stderr)
+    return services.returncode or int(bool(missing) or "--- SKIP:" in services.stdout or "[no tests to run]" in services.stdout)
 
 
 if __name__ == "__main__":
