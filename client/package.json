@@ -14,6 +14,7 @@
     "test:audio": "vitest run src/audio src/hooks/useMicTest.test.tsx src/hooks/useInitialRoomSync.test.ts src/stores/p2pCallStore.audio.test.ts src/stores/p2pCallStore.camera.test.ts src/components/settings/VoiceSettings.audio.test.tsx src/stores/preferencesStore.test.ts",
     "test:audio:gate": "node --test scripts/audio-gate.test.mjs",
     "test:audio:wasm": "node --experimental-vm-modules --test scripts/audio-engines.verify.mjs",
+    "test:audio:wasm:dist": "node --experimental-vm-modules scripts/audio-engines.verify.mjs --dist",
     "cap:sync": "cap sync && node ../scripts/mobile-version.mjs",
     "cap:open:ios": "cap open ios",
     "cap:open:android": "cap open android",
