@@ -38,7 +38,13 @@ func (h *Hub) addClient(client *Client) {
 		}
 	}()
 	h.mu.Lock()
-	if h.shuttingDown {
+	reject := h.shuttingDown
+	select {
+	case <-client.done:
+		reject = true
+	default:
+	}
+	if reject {
 		h.mu.Unlock()
 		if client.done != nil {
 			client.closeDone()
@@ -153,6 +159,8 @@ func (h *Hub) QueueGameActivityUpdate(client *Client, sequence uint64, game *Gam
 // Otherwise recomputes and broadcasts aggregate status.
 func (h *Hub) removeClient(client *Client) {
 	h.mu.Lock()
+	// The hub can consume unregister before the queued register.
+	client.closeDone()
 
 	var fullyDisconnected bool
 	var partialDisconnect bool
@@ -167,7 +175,6 @@ func (h *Hub) removeClient(client *Client) {
 	if clients, ok := h.clients[client.userID]; ok {
 		if _, exists := clients[client]; exists {
 			delete(clients, client)
-			client.closeDone()
 			activityDisconnectCallback = h.onGameActivityDisconnect
 
 			// Remove this client from all server indexes it belonged to.
@@ -245,7 +252,7 @@ func (h *Hub) DisconnectUser(userID string) {
 			_ = client.conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(4001, "session_revoked"), time.Now().Add(writeWait))
 			_ = client.conn.Close()
 		}
-		h.unregister <- client
+		h.unregisterClient(client)
 	}
 }
 
@@ -265,7 +272,7 @@ func (h *Hub) DisconnectSession(userID, sessionID string) {
 			_ = client.conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(4001, "session_revoked"), time.Now().Add(writeWait))
 			_ = client.conn.Close()
 		}
-		h.unregister <- client
+		h.unregisterClient(client)
 	}
 }
 

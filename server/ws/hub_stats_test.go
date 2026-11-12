@@ -65,12 +65,33 @@ func TestQueueUnregister_BufferFullCountsDrop(t *testing.T) {
 		h.unregister <- &Client{}
 	}
 
-	h.queueUnregister(&Client{})
+	client := &Client{}
+	h.queueUnregister(client)
 
 	if got := h.Stats().QueueUnregisterDrops; got != 1 {
 		t.Errorf("QueueUnregisterDrops = %d, want 1", got)
 	}
 	if got := h.Stats().QueueUnregisterLen; got != cap(h.unregister) {
 		t.Errorf("QueueUnregisterLen = %d, want %d (unchanged by a dropped enqueue)", got, cap(h.unregister))
+	}
+	<-h.unregister
+	h.queueUnregister(client)
+	if len(h.unregister) != cap(h.unregister) {
+		t.Fatal("client could not retry after a dropped enqueue")
+	}
+}
+
+func TestRepeatedSlowDeliveryQueuesEachClientOnce(t *testing.T) {
+	h := NewHub()
+	for _, client := range []*Client{{}, {}} {
+		for i := 0; i < cap(h.unregister); i++ {
+			h.deliver(client, OpMessageCreate, nil)
+		}
+		if got := len(h.unregister); got != 1 {
+			t.Fatalf("repeated delivery queued %d removals, want 1", got)
+		}
+		if <-h.unregister != client {
+			t.Fatal("queued removal for the wrong client")
+		}
 	}
 }
