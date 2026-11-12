@@ -121,7 +121,7 @@ export const createDMWsSlice: StateCreator<
               // E2EE messages (the REST list carries null for those).
               last_message: {
                 id: message.id,
-                source_sequence: message.source_sequence,
+                source_sequence: message.source_sequence ?? (ch.last_message?.id === message.id ? ch.last_message.source_sequence : undefined),
                 user_id: message.user_id,
                 content: message.content,
                 encryption_version: message.encryption_version,
