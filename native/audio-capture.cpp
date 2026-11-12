@@ -404,12 +404,18 @@ int wmain(int argc, wchar_t* argv[]) {
     // ─── Capture loop ───
     // Event fires when audio buffer has data. 100ms timeout for checking
     // shutdown flag. On broken pipe (_write returns <= 0), exit cleanly.
+    const HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
+    const bool hasInputPipe = GetFileType(input) == FILE_TYPE_PIPE;
     while (g_running) {
+        if (hasInputPipe && !PeekNamedPipe(input, nullptr, 0, nullptr, nullptr, nullptr)) {
+            const DWORD error = GetLastError();
+            if (error == ERROR_BROKEN_PIPE || error == ERROR_PIPE_NOT_CONNECTED) break;
+        }
         DWORD waitResult = WaitForSingleObject(captureEvent, 100);
 
         if (waitResult == WAIT_OBJECT_0) {
             // Drain all available packets in this event cycle
-            while (true) {
+            while (g_running) {
                 BYTE*  data      = nullptr;
                 UINT32 numFrames = 0;
                 DWORD  flags     = 0;
