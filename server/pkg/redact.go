@@ -108,6 +108,9 @@ func redactParam(s, key string) string {
 	for {
 		i := indexFold(rest, key)
 		if i < 0 {
+			if b.Len() == 0 {
+				return s
+			}
 			b.WriteString(rest)
 			return b.String()
 		}
