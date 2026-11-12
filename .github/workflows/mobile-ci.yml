@@ -40,7 +40,7 @@ jobs:
         timeout-minutes: 15
         run: |
           export JAVA_HOME="$JAVA_HOME_21_X64"
-          export PATH="$JAVA_HOME/bin:$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH"
+          export PATH="$JAVA_HOME/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH"
           image='system-images;android-35;google_apis;x86_64'
           sdkmanager "$image"
           echo no | avdmanager create avd --name hichat-ci --package "$image" --force
