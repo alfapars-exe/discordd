@@ -583,6 +583,20 @@ describe("bounded request and shared-refresh lifetimes", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("handles public recovery requests without refreshing an unrelated session", async () => {
+    const { setTokens, getAccessToken } = await loadClient();
+    const { forgotPassword, resetPassword } = await import("./auth");
+    setTokens("expired-token", "", "other-account");
+    fetchMock.mockImplementation(async () => jsonResponse({ success: false, error: "request rejected" }, 401));
+    await forgotPassword("fixture");
+    await resetPassword("single-use-fixture", "replacement");
+    expect(fetchMock.mock.calls.map(call => call[0])).toEqual([
+      API_BASE_URL + "/auth/forgot-password",
+      API_BASE_URL + "/auth/reset-password",
+    ]);
+    expect(getAccessToken()).toBe("expired-token");
+  });
+
   it("binds refresh to the displayed account and rejects a different returned owner", async () => {
     const { ensureFreshToken, setTokens, getAccessToken } = await loadClient();
     setTokens("expired-token", "", "a");
