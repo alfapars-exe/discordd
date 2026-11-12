@@ -266,6 +266,23 @@ static HRESULT CapturePackets(IAudioCaptureClient* captureClient, HANDLE capture
     return S_OK;
 }
 
+// The Electron decoder accepts interleaved signed PCM16 or IEEE float32.
+static bool SupportsCaptureFormat(const WAVEFORMATEX& format) {
+    DWORD tag = format.wFormatTag;
+    if (tag == WAVE_FORMAT_EXTENSIBLE) {
+        if (format.cbSize < sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX)) return false;
+        const auto& extended = reinterpret_cast<const WAVEFORMATEXTENSIBLE&>(format);
+        if (IsEqualGUID(extended.SubFormat, KSDATAFORMAT_SUBTYPE_PCM)) tag = WAVE_FORMAT_PCM;
+        else if (IsEqualGUID(extended.SubFormat, KSDATAFORMAT_SUBTYPE_IEEE_FLOAT)) tag = WAVE_FORMAT_IEEE_FLOAT;
+        else return false;
+    }
+    return format.nChannels >= 1 && format.nChannels <= 8
+        && format.nSamplesPerSec >= 8000 && format.nSamplesPerSec <= 192000
+        && format.nBlockAlign == format.nChannels * (format.wBitsPerSample / 8)
+        && ((tag == WAVE_FORMAT_PCM && format.wBitsPerSample == 16)
+            || (tag == WAVE_FORMAT_IEEE_FLOAT && format.wBitsPerSample == 32));
+}
+
 static int RunCapture(DWORD excludePid) {
     using Microsoft::WRL::ComPtr;
     // WASAPI can signal the event until the audio client is released.
@@ -327,8 +344,9 @@ static int RunCapture(DWORD excludePid) {
     WAVEFORMATEXTENSIBLE fallbackFmt = {};
     bool usingFallback = false;
 
-    if (FAILED(hr)) {
-        fprintf(stderr, "[audio-capture] GetMixFormat returned 0x%08lx, using fallback 48kHz/stereo/float32\n", hr);
+    if (FAILED(hr) || !waveFormat || !SupportsCaptureFormat(*waveFormat)) {
+        if (waveFormat) CoTaskMemFree(waveFormat);
+        fprintf(stderr, "[audio-capture] Mix format unavailable or unsupported (hr= 0x%08lx), using fallback 48kHz/stereo/float32\n", hr);
 
         // KSDATAFORMAT_SUBTYPE_IEEE_FLOAT = {00000003-0000-0010-8000-00AA00389B71}
         static const GUID KSDATAFORMAT_SUBTYPE_IEEE_FLOAT_LOCAL =
@@ -358,10 +376,9 @@ static int RunCapture(DWORD excludePid) {
     if (formatTag == WAVE_FORMAT_EXTENSIBLE) {
         auto* ext = reinterpret_cast<WAVEFORMATEXTENSIBLE*>(waveFormat);
         formatTag     = ext->SubFormat.Data1;  // 1=PCM, 3=IEEE_FLOAT
-        bitsPerSample = ext->Samples.wValidBitsPerSample;
     }
 
-    UINT32 frameSize = channels * (bitsPerSample / 8);
+    UINT32 frameSize = waveFormat->nBlockAlign;
 
     fprintf(stderr, "[audio-capture] Format: %u Hz, %u ch, %u bit, tag=%u%s\n",
         sampleRate, channels, bitsPerSample, formatTag,
