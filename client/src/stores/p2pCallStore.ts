@@ -257,13 +257,14 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
 
     acceptCall: (callId) => {
       const { _sendWS, incomingCall } = get();
-      if (!_sendWS || !incomingCall) return;
+      if (!_sendWS || incomingCall?.id !== callId || incomingCall.status !== "ringing") return;
       _sendWS("p2p_call_accept", { call_id: callId });
     },
 
     declineCall: (callId) => {
       const { activeCall, incomingCall } = get();
-      if (incomingCall?.id !== callId || incomingCall.status !== "ringing") return;
+      const target = activeCall?.id === callId ? activeCall : incomingCall;
+      if (target?.id !== callId || target.status !== "ringing") return;
       get()._sendWS?.("p2p_call_decline", { call_id: callId });
       if (activeCall?.id === callId) get().cleanup();
       else set({ incomingCall: null });

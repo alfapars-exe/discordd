@@ -260,6 +260,10 @@ func (s *p2pCallService) DeclineCall(userID, callID string) error {
 		s.mu.Unlock()
 		return fmt.Errorf("%w: not part of this call", pkg.ErrForbidden)
 	}
+	if call.Status != models.P2PCallStatusRinging {
+		s.mu.Unlock()
+		return fmt.Errorf("%w: call is not ringing", pkg.ErrBadRequest)
+	}
 
 	delete(s.activeCalls, callID)
 	delete(s.signals, callID)

@@ -37,6 +37,22 @@ it("shows a busy reply to an idle caller", () => {
   expect(fixture.toast).toHaveBeenCalledExactlyOnceWith("warning", "common:userBusy");
 });
 
+it("accepts only the currently displayed ringing call", () => {
+  const send = vi.fn();
+  useP2PCallStore.setState({ incomingCall: call("current"), _sendWS: send });
+  useP2PCallStore.getState().acceptCall("stale");
+  useP2PCallStore.getState().acceptCall("current");
+  expect(send).toHaveBeenCalledExactlyOnceWith("p2p_call_accept", { call_id: "current" });
+});
+
+it("lets the caller cancel a ringing call without an incoming overlay", () => {
+  const send = vi.fn();
+  useP2PCallStore.setState({ _sendWS: send });
+  useP2PCallStore.getState().declineCall("call");
+  expect(send).toHaveBeenCalledExactlyOnceWith("p2p_call_decline", { call_id: "call" });
+  expect(useP2PCallStore.getState().activeCall).toBeNull();
+});
+
 it("declining an incoming overlay preserves the other call", () => {
   const active = { ...call(), status: "active" as const };
   const send = vi.fn();

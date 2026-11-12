@@ -96,6 +96,26 @@ func TestP2PCallRingTimeoutEndsBothPartiesAndEnqueuesGenericMissedCall(t *testin
 	}
 }
 
+func TestP2PCallLateDeclinePreservesAcceptedCall(t *testing.T) {
+	svc, hub, _ := newManualP2PService()
+	if err := svc.InitiateCall("caller", "receiver", models.P2PCallTypeVoice); err != nil {
+		t.Fatal(err)
+	}
+	id := svc.GetUserCall("caller").ID
+	if err := svc.AcceptCall("receiver", id); err != nil {
+		t.Fatal(err)
+	}
+	hub.BroadcastToUserFn = func(string, ws.Event) { t.Error("late decline published an event") }
+	if err := svc.DeclineCall("receiver", id); !errors.Is(err, pkg.ErrBadRequest) {
+		t.Fatalf("late decline returned %v", err)
+	}
+	for _, user := range []string{"caller", "receiver"} {
+		if call := svc.GetUserCall(user); call == nil || call.ID != id || call.Status != models.P2PCallStatusActive {
+			t.Errorf("accepted call missing for %s", user)
+		}
+	}
+}
+
 func TestP2PCallTerminalActionsCancelRingTimer(t *testing.T) {
 	for _, action := range []string{"accept", "decline", "end", "disconnect"} {
 		t.Run(action, func(t *testing.T) {
