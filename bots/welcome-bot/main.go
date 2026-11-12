@@ -79,7 +79,7 @@ func newMessageClient() *http.Client {
 		Timeout: 10 * time.Second,
 		CheckRedirect: func(next *http.Request, via []*http.Request) error {
 			origin := via[0].URL
-			if next.URL.Scheme != origin.Scheme || !strings.EqualFold(next.URL.Host, origin.Host) || len(via) >= 10 {
+			if next.Method != http.MethodPost || next.URL.Scheme != origin.Scheme || !strings.EqualFold(next.URL.Host, origin.Host) || len(via) >= 10 {
 				return http.ErrUseLastResponse
 			}
 			return nil
