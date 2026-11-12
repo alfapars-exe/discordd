@@ -100,6 +100,9 @@ func (c *pgConn) PrepareContext(ctx context.Context, query string) (driver.Stmt,
 	return pgStmt{stmt}, nil
 }
 func (c *pgConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+	if ctx.Value(nativeMigrationKey{}) == true {
+		return c.Conn.ExecContext(ctx, query, args)
+	}
 	query, err := postgresQuery(query)
 	if err != nil {
 		return nil, err

@@ -1,6 +1,38 @@
 package database
 
-import "testing"
+import (
+	"context"
+	"os"
+	"testing"
+
+	"github.com/jackc/pgx/v5"
+)
+
+func TestPostgresNativeMigrationAllowsJSONOperator(t *testing.T) {
+	dsn := os.Getenv("HICHAT_TEST_POSTGRES_DSN")
+	if dsn == "" {
+		t.Skip("requires local PostgreSQL")
+	}
+	cfg, err := pgx.ParseConfig(dsn)
+	if err != nil || (cfg.Host != "localhost" && cfg.Host != "127.0.0.1") {
+		t.Fatal("local PostgreSQL configuration required")
+	}
+	db := PostgreSQLPool(cfg)
+	defer db.Close()
+	ctx := context.Background()
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	if err := execNativeMigration(ctx, tx, `SELECT '{"key":true}'::jsonb ? 'key'`); err != nil {
+		t.Fatal(err)
+	}
+	var value string
+	if err := tx.QueryRowContext(ctx, "SELECT ?::text", "bound").Scan(&value); err != nil || value != "bound" {
+		t.Fatalf("repository binding after migration: %q, %v", value, err)
+	}
+}
 
 func TestPostgresBindPreservesQuotedQuestionMarks(t *testing.T) {
 	query := `SELECT '?1', "?", ?2, ?1, ?2 -- ?3
