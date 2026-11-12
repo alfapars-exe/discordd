@@ -525,6 +525,8 @@ Tam istemci koşusu aynı `2a46beda` revizyonunda 461 dosyada 4.640 geçen ve 1 
 | Acceptance Criteria | Paket kimliği testi gerçek app ile uyumlu; Android/iOS test hedefleri çalışıyor veya açık ortam blokajı kayıtlı; fiziksel cihaz gerektiren kabul simulator başarısıyla kapatılmıyor. |
 | Effort | 3–5 mühendis-gün + macOS/Android/iOS ortamı ve cihaz beklemesi |
 
+**iOS simülatör kabulü (12 Kasım 2026).** [macOS CI işinde](https://github.com/alfapars-exe/discordd/actions/runs/43286356543/job/131420689290) `df6bab38` uygulama hedefi derlendi. iPhone simülatöründe uygulamanın kullandığı Swift kesinti kararını çağıran `testOnlyEndedWithResumeHintReactivates` geçti. Tek XCTest, eksik veri, eksik seçenek, kesinti başlangıcı ve kesinti sonundaki iki devam seçeneğini doğruladı. Telefon araması, Siri kesintisi ve hoparlör veya Bluetooth üzerinden fiziksel sesin geri gelmesi açık.
+
 ## RF23 — İçeriğe bağlı yayın manifesti
 
 | Alan | Tanım |
