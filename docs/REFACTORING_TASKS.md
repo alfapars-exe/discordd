@@ -8,6 +8,8 @@ Bu belge uygulama önerisidir. Görev kartının varlığı, kodun değiştirild
 
 Temiz profille çevrimdışı açılan Windows paketinde ilk üç saniyede kanal arayüzü modülü işlenmedi. Önceki pakette aynı koşullarda Chromium bu modülü işledi. Yeni pakete geçerli sentetik önbellek kaydı verilip yeniden yüklendiğinde kanal modülü işlendi, kullanıcı ve sunucu adı salt okunur önizlemede göründü ve oturum geri yükleme durumu sürdü. Oturum zamanlaması için PR dalında 30 test geçti. [PR #256](https://github.com/alfapars-exe/discordd/pull/256)
 
+Paketlenmiş Windows uygulamasında eski biçimdeki kayıtla iki çevrimdışı açılış yapıldı. Özel kanal kimliği ve adı ilk okumada yerel depodan temizlendi. Kullanıcı, sunucu ve özgün zaman damgası iki açılışta da korundu. Ayrı bir geçici profilde yenileme isteğine test ağı üzerinden HTTP 401 döndürüldüğünde giriş formu açıldı ve başlangıç kaydı silindi. Uygulama çevrimdışı yeniden başlatıldığında eski hesap önizlemesi görünmedi. Bu senaryo üretim istemcisini ve benzetilmiş HTTP yanıtını kullandı.
+
 Aynı girdilerle üretilen iki yerel Windows x64 paketinde filtre 38 derlenmiş testi ve bir test yardımcısını çıkardı. ASAR 336.201 bayt, imzasız NSIS yükleyicisi 44.003 bayt küçüldü. Paket denetimi eski arşivi reddetti ve yeni arşivi kabul etti. PR dalındaki 36 CI kontrolü geçti. [PR #255](https://github.com/alfapars-exe/discordd/pull/255)
 
 ## Masaüstü parola deposu ve CI · 13 Kasım 2026
