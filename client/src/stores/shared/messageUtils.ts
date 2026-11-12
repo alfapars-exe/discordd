@@ -101,17 +101,15 @@ export function updateMessageInRecord<
 >(
   messagesByChannel: Record<string, T[]>,
   channelId: string,
-  updatedMessage: T
+  updatedMessage: T,
+  merge?: (current: T, update: T) => T
 ): Record<string, T[]> {
   const messages = messagesByChannel[channelId];
-  if (!messages) return messagesByChannel;
-
-  return {
-    ...messagesByChannel,
-    [channelId]: messages.map((m) =>
-      m.id === updatedMessage.id ? updatedMessage : m
-    ),
-  };
+  const index = messages?.findIndex((message) => message.id === updatedMessage.id) ?? -1;
+  if (index < 0) return messagesByChannel;
+  const next = messages.slice();
+  next[index] = merge ? merge(messages[index], updatedMessage) : updatedMessage;
+  return { ...messagesByChannel, [channelId]: next };
 }
 
 /**

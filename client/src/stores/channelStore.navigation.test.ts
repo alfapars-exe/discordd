@@ -1,9 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { APIResponse, Category, CategoryWithChannels, WSMessage } from "../types";
+import type { APIResponse, Category, CategoryWithChannels, Message, WSMessage } from "../types";
 const shell = vi.hoisted(() => ({ enabled: true }));
 vi.mock("../utils/uiShell", () => ({ get UI_SHELL_V2() { return shell.enabled; } }));
 vi.mock("../api/channels", () => ({ getChannels: vi.fn(), reorderChannels: vi.fn(), reorderCategories: vi.fn() }));
 import { getChannels, reorderChannels, reorderCategories } from "../api/channels";
+import * as messageApi from "../api/messages";
+import { getAuthSessionOwner, publishAuthOwnerChange } from "../api/authSessionEvents";
+import { useThreadStore } from "./threadStore";
+import { useMessageStore } from "./messageStore";
+import { captureHistoryAccess } from "./shared/channelHistoryAccess";
+import { Permissions } from "../utils/permissions";
 import { useChannelStore } from "./channelStore";
 import { useServerStore } from "./serverStore";
 import { useUIStore, type Destination } from "./uiStore";
@@ -36,6 +42,75 @@ beforeEach(() => {
 });
 
 describe("origin-scoped channel refresh", () => {
+  it("evicts only the text channel whose read permission was revoked and accepts new events after a grant", async () => {
+    const original = tree("one", "channel-one");
+    const [channel] = original[0].channels;
+    useMessageStore.setState({ messagesByChannel: { "channel-one": [], "standalone-thread": [], "channel-two": [] } });
+    const oldDecrypt = captureHistoryAccess(channel.id);
+    vi.mocked(getChannels).mockResolvedValueOnce({ success: true, data: [{
+      ...original[0], channels: [{ ...channel, effective_permissions: Permissions.ViewChannel }],
+    }] });
+    await useChannelStore.getState().fetchChannels("one");
+    expect(Object.keys(useMessageStore.getState().messagesByChannel).sort()).toEqual(["channel-two", "standalone-thread"]);
+    expect(oldDecrypt()).toBe(false);
+    const deniedEvent = captureHistoryAccess(channel.id);
+    vi.mocked(getChannels).mockResolvedValueOnce({ success: true, data: [{
+      ...original[0], channels: [{ ...channel, effective_permissions: Permissions.ViewChannel | Permissions.ReadMessages }],
+    }] });
+    await useChannelStore.getState().fetchChannels("one");
+    expect(oldDecrypt()).toBe(false);
+    expect(deniedEvent()).toBe(false);
+    expect(captureHistoryAccess(channel.id)()).toBe(true);
+  });
+
+  it("evicts a known child under the revoked parent, fences its late page and fetches afresh after a grant", async () => {
+    const previousOwner = getAuthSessionOwner();
+    publishAuthOwnerChange("thread-reader");
+    try {
+      const original = tree("one", "parent");
+      const [parent] = original[0].channels;
+      const child = { ...parent, type: "thread" as const, id: "known-child", parent_channel_id: parent.id };
+      useThreadStore.getState().remember(child, "one");
+      useThreadStore.getState().remember({ ...child, id: "other-server-child" }, "two");
+      const [publicSibling] = tree("one", "public-parent")[0].channels;
+      useThreadStore.getState().remember({ ...child, id: "sibling-thread", parent_channel_id: publicSibling.id }, "one");
+      const readable = Permissions.ViewChannel | Permissions.ReadMessages;
+      const list = (permissions: number) => [{ ...original[0], channels: [
+        { ...parent, effective_permissions: permissions }, { ...publicSibling, effective_permissions: readable },
+      ] }];
+      vi.mocked(getChannels).mockResolvedValueOnce({ success:true, data:list(readable) });
+      await useChannelStore.getState().fetchChannels("one");
+      const history = vi.spyOn(messageApi, "getMessages");
+      const initial = { id:"before", channel_id:child.id, content:"old", created_at:"2026-01-01T00:00:00Z", encryption_version:0 } as const;
+      type Page = Awaited<ReturnType<typeof messageApi.getMessages>>;
+      const makePage = (id: string): Page => ({ success:true, data:{ messages:[{...initial, id} as Message], has_more:true } });
+      history.mockResolvedValueOnce(makePage("before"));
+      await useMessageStore.getState().fetchMessages(child.id, "one");
+      const oldAccess = captureHistoryAccess(child.id);
+      let resolve!: (value: Page) => void;
+      history.mockReturnValueOnce(new Promise((done) => { resolve = done; }));
+      const pending = useMessageStore.getState().fetchOlderMessages(child.id, "one");
+      vi.mocked(getChannels).mockResolvedValueOnce({ success:true, data:list(Permissions.ViewChannel) });
+      await useChannelStore.getState().fetchChannels("one");
+      expect(useMessageStore.getState().messagesByChannel[child.id]).toBeUndefined();
+      expect(oldAccess()).toBe(false);
+      expect(captureHistoryAccess("other-server-child")()).toBe(true);
+      expect(captureHistoryAccess("sibling-thread")()).toBe(true);
+      vi.mocked(getChannels).mockResolvedValueOnce({ success:true, data:list(readable) });
+      await useChannelStore.getState().fetchChannels("one");
+      expect(captureHistoryAccess(child.id)()).toBe(true);
+      expect(oldAccess()).toBe(false);
+      resolve(makePage("late"));
+      await pending;
+      expect(useMessageStore.getState().messagesByChannel[child.id]).toBeUndefined();
+      history.mockResolvedValueOnce(makePage("after"));
+      await useMessageStore.getState().fetchMessages(child.id, "one");
+      expect(useMessageStore.getState().messagesByChannel[child.id].map((row) => row.id)).toEqual(["after"]);
+    } finally {
+      publishAuthOwnerChange(previousOwner);
+    }
+  });
+
   it("a background permission event refreshes only its server and preserves the current destination", async () => {
     vi.mocked(getChannels).mockResolvedValue({ success: true, data: [] });
     await handleChannelEvent({ op: "channel_permission_delete", server_id: "two", d: { channel_id: "channel-two", role_id: "role" } });

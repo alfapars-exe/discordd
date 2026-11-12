@@ -61,12 +61,13 @@ export function getMessagesAfter(
   serverId: string,
   channelId: string,
   afterId: string,
-  limit?: number
+  limit?: number,
+  options?: { signal?: AbortSignal; isCurrent?: () => boolean }
 ) {
   const params = new URLSearchParams({ after: afterId });
   if (limit) params.set("limit", limit.toString());
   return apiClient<MessagePage>(
-    `/servers/${serverId}/channels/${channelId}/messages?${params}`
+    `/servers/${serverId}/channels/${channelId}/messages?${params}`, options
   );
 }
 
