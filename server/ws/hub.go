@@ -27,6 +27,7 @@
 package ws
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 
@@ -62,6 +63,7 @@ type Hub struct {
 	mu           sync.RWMutex
 	shuttingDown bool // protected by mu; closes client/presence admission
 
+	stopped    chan struct{}
 	register   chan *Client
 	unregister chan *Client
 
@@ -140,14 +142,9 @@ func NewHub() *Hub {
 	return &Hub{
 		clients:       make(map[string]map[*Client]bool),
 		serverClients: make(map[string]map[*Client]bool),
-		register:      make(chan *Client, 64),
-		// Buffered unregister channel: broadcast paths that detect a slow
-		// client spawn a goroutine to push onto this channel. If the Run
-		// loop is momentarily busy processing other registers, the buffer
-		// lets those goroutines complete and exit instead of piling up
-		// blocked on a synchronous send. 256 is enough headroom for a
-		// thundering-herd disconnect (server restart, network blip) and
-		// still bounded so it can't grow without limit.
+		stopped:       make(chan struct{}),
+		register:      make(chan *Client),
+		// Keep slow-client cleanup bounded during bursts of failed sends.
 		unregister:        make(chan *Client, 256),
 		userInfos:         make(map[string]cachedUserInfo),
 		invisibleUsers:    make(map[string]bool),
@@ -162,12 +159,32 @@ func NewHub() *Hub {
 func (h *Hub) Run() {
 	for {
 		select {
+		case <-h.stopped:
+			return
 		case client := <-h.register:
 			h.addClient(client)
 
 		case client := <-h.unregister:
 			h.removeClient(client)
 		}
+	}
+}
+
+// The unbuffered handoff gives Run ownership of every accepted socket.
+func (h *Hub) registerClient(ctx context.Context, client *Client) bool {
+	select {
+	case <-ctx.Done():
+	case <-h.stopped:
+	case h.register <- client:
+		return true
+	}
+	return false
+}
+
+func (h *Hub) unregisterClient(client *Client) {
+	select {
+	case h.unregister <- client:
+	case <-h.stopped:
 	}
 }
 
@@ -237,7 +254,12 @@ func (h *Hub) Stats() HubStats {
 // doesn't panic), so this is safe even if a client just disconnected.
 func (h *Hub) Shutdown() {
 	h.mu.Lock()
-	h.shuttingDown = true
+	if !h.shuttingDown {
+		h.shuttingDown = true
+		if h.stopped != nil {
+			close(h.stopped)
+		}
+	}
 	h.mu.Unlock()
 	// Presence callback workers may use the database and other services.
 	// Stop and join them before the caller closes those dependencies.

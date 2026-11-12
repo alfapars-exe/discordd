@@ -252,7 +252,7 @@ func (h *Hub) DisconnectUser(userID string) {
 			_ = client.conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(4001, "session_revoked"), time.Now().Add(writeWait))
 			_ = client.conn.Close()
 		}
-		h.unregister <- client
+		h.unregisterClient(client)
 	}
 }
 
@@ -272,7 +272,7 @@ func (h *Hub) DisconnectSession(userID, sessionID string) {
 			_ = client.conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(4001, "session_revoked"), time.Now().Add(writeWait))
 			_ = client.conn.Close()
 		}
-		h.unregister <- client
+		h.unregisterClient(client)
 	}
 }
 

@@ -317,20 +317,26 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) {
 		mutedChannelIDs = []string{}
 	}
 
-	h.hub.register <- client
+	if !h.hub.registerClient(r.Context(), client) {
+		_ = conn.Close()
+		return
+	}
 	if sessionBound {
 		select {
 		case <-client.registered:
+		case <-h.hub.stopped:
+			_ = conn.Close()
+			return
 		case <-r.Context().Done():
 			_ = conn.Close()
-			h.hub.unregister <- client
+			h.hub.unregisterClient(client)
 			return
 		}
 		// Close the authorization/registration race: if revoke ran before
 		// the client became visible to the hub, this second check catches it.
 		if err := validator.ValidateSession(r.Context(), claims.UserID, claims.SessionID); err != nil {
 			_ = conn.Close()
-			h.hub.unregister <- client
+			h.hub.unregisterClient(client)
 			return
 		}
 	}
