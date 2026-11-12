@@ -74,7 +74,8 @@ export async function loginWithSavedCredentials(
       password: creds.password,
     }),
     credentials: "include",
-    redirect: "follow",
+    // A 307 or 308 would otherwise resend the password to the redirect target.
+    redirect: "manual",
   });
 
   let body: unknown = null;

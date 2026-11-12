@@ -130,3 +130,27 @@ test("reports a non-JSON upstream response as a null body rather than throwing",
   // unhandled rejection in the renderer's mount effect.
   assert.deepEqual(result, { status: 502, body: null });
 });
+
+test("a 307 cannot relay a saved password to another origin", async t => {
+  const { createServer } = await import("node:http");
+  const listen = async (server: ReturnType<typeof createServer>) => {
+    await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+    t.after(() => { server.closeAllConnections(); server.close(); });
+    const address = server.address();
+    assert.ok(address && typeof address === "object");
+    return "http://127.0.0.1:" + address.port;
+  };
+  let received = false;
+  const destination = await listen(createServer((_req, res) => {
+    received = true;
+    res.end("{}");
+  }));
+  const upstream = await listen(createServer((_req, res) => {
+    res.writeHead(307, { location: destination }).end();
+  }));
+  const result = await loginWithSavedCredentials(upstream, fetch, {
+    allowLoopback: true, loadCreds: () => ({ username: "fixture", password: "fixture-only" }),
+  });
+  assert.equal(received, false);
+  assert.equal(result.status, 307);
+});
