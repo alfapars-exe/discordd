@@ -8,6 +8,8 @@ Bu belge uygulama önerisidir. Görev kartının varlığı, kodun değiştirild
 
 Electron ana süreci, elle girişte parolayla birlikte kaydedilen sunucu adresini denetliyor. Başka bir HTTPS sunucusuna veya yönlendirme hedefine kayıtlı parola gönderilmiyor. Sunucu adresi içermeyen eski kayıtla bir kez elle giriş gerekiyor. Linux'ta parola depolamak ve okumak için işletim sisteminin parola yöneticisi gerekiyor. Entegrasyon dalında 275 Electron testi geçti ve 1 test atlandı. Giriş formu testlerinde kaydetme ve silme hatalarında kullanıcı uyarıldı ve kanallara geçiş tamamlandı. Debian Bookworm konteynerinde Electron 45.1.0, D-Bus ve GNOME Keyring ile gerçek `gnome_libsecret` deposunda sentetik parola kaydedildi, şifreli dosya kontrol edildi, kayıt geri okundu ve silindi. Ayrı Electron sürecinde `basic_text` seçildiğinde parola dosyası oluşmadı. [PR #254](https://github.com/alfapars-exe/discordd/pull/254)
 
+Windows üzerinde Electron 45.1.0 ve geçici profille iki gerçek BrowserWindow açıldı. Test ana pencereyi seçip üretim IPC işleyicilerini kaydetti. Ana pencere sentetik parolayı kaydetti, kullanıcı adını okudu ve kaydı sildi. İkinci pencereden kaydetme, okuma, kayıtlı parolayla giriş ve silme çağrılarının dördü de gönderici denetiminde reddedildi. Sonrasında ana pencere aynı kullanıcı adını okuyabildi. Deneme paketlenmiş uygulamanın pencere oluşturma akışını kapsamıyor.
+
 Capacitor güncellemesinin `b1664dae` ve günlük maskelemesinin `e08470d9` revizyonlarında GitHub'daki 36 kontrolün tamamı geçti. [PR #217](https://github.com/alfapars-exe/discordd/pull/217) · [PR #247](https://github.com/alfapars-exe/discordd/pull/247)
 
 ## PostgreSQL parametre bağlama ve CI günlükleri · 12 Kasım 2026
