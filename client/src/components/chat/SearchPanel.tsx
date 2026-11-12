@@ -243,13 +243,13 @@ function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId,
       if (found) return;
       if (serverE2eeEnabled && removeLocalMatch(msg.id)) return;
       setResults((prev) =>
-        prev
+        prev?.messages.some((m) => m.id === msg.id)
           ? {
               ...prev,
               messages: prev.messages.filter((m) => m.id !== msg.id),
               total_count: Math.max(0, prev.total_count - 1),
             }
-          : null,
+          : prev,
       );
     },
     [onSelectResult, removeLocalMatch, serverE2eeEnabled],

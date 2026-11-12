@@ -20,7 +20,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 
 vi.mock("react-i18next", () => ({ useTranslation: () => ({
-    t: (key: string) => key,
+    t: (key: string, options?: { count?: number }) => key === "searchResultCount" ? String(options?.count) : key,
     i18n: { language: "en" },
   }), initReactI18next: { type: "3rdParty", init: () => {} } }));
 
@@ -287,6 +287,18 @@ describe("SearchPanel — result click", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it("counts a deletion once when navigation and WebSocket report the same missing row", async () => {
+    vi.mocked(searchMessages).mockResolvedValueOnce(ok([makeMessage("a", "gone row"), makeMessage("b", "kept row")]));
+    const navigation = deferred<boolean>();
+    render(<SearchPanel channelId="ch-1" onClose={() => {}} onSelectResult={() => navigation.promise} />);
+    typeQuery("row");
+    await act(async () => {});
+    fireEvent.click(screen.getByText("gone row"));
+    act(() => useMessageStore.setState({ lastDeleted: { id: "a", channel_id: "ch-1" } }));
+    await act(async () => navigation.resolve(false));
+    expect(screen.getByText("1", { selector: ".search-count" })).toBeInTheDocument();
   });
 
   it("drops the row (no duplicate panel toast) when navigation reports the message gone", async () => {
