@@ -696,6 +696,19 @@ it("keeps authoritative DM append order in history merges and out-of-order WS pr
  useDMStore.setState({channels:[listedDM(CH)],messagesByChannel:{[CH]:[]}});
  useDMStore.getState().handleDMMessageCreate(third);useDMStore.getState().handleDMMessageCreate(first);useDMStore.getState().handleDMMessageCreate(second);
  expect(ids()).toEqual([first.id,second.id,third.id]);expect(useDMStore.getState().channels[0].last_message?.id).toBe(third.id);
+ useDMStore.setState({messagesByChannel:{}});
  vi.mocked(dmApi.getDMMessages).mockResolvedValueOnce(page([second,first,third],false));await useDMStore.getState().fetchMessages(CH);
+ expect(dmApi.getDMMessages).toHaveBeenCalledOnce();
  expect(ids()).toEqual([first.id,second.id,third.id]);
+});
+
+it("prepends each older DM once and preserves the loaded copy on overlap", async () => {
+  const anchor = { ...makeDM("anchor"), content: "current edit" };
+  useDMStore.setState({ messagesByChannel: { [CH]: [anchor] }, hasMoreByChannel: { [CH]: true } });
+  const older = makeDM("older");
+  vi.mocked(dmApi.getDMMessages).mockResolvedValueOnce(page([older, older, makeDM("anchor")], false));
+  await useDMStore.getState().fetchOlderMessages(CH);
+  expect(ids()).toEqual(["older", "anchor"]);
+  expect(useDMStore.getState().messagesByChannel[CH][1].content).toBe("current edit");
+  expect(useDMStore.getState().hasMoreByChannel[CH]).toBe(false);
 });
