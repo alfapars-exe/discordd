@@ -792,11 +792,19 @@ export async function getCachedDecryptedMessage(
   return (result as CachedDecryptedMessage) ?? null;
 }
 
-/** Remove only a matching 1:1 DM cache row in the caller's active session.
- * Scope read and deletion share one transaction, preventing TOCTOU replacement. */
-export async function deleteCachedDMMessage(
-  messageId:string,dmChannelId:string,isCurrent:()=>boolean
-):Promise<boolean> {
+export function deleteCachedDMMessage(messageId: string, dmChannelId: string, isCurrent: () => boolean) {
+  return deleteScopedCachedMessage(messageId, "", dmChannelId, isCurrent);
+}
+
+export function deleteCachedChannelMessage(messageId: string, channelId: string, isCurrent: () => boolean) {
+  return deleteScopedCachedMessage(messageId, channelId, null, isCurrent);
+}
+
+// Scope validation and deletion share a transaction so another writer cannot
+// replace the record between the two operations.
+async function deleteScopedCachedMessage(
+  messageId: string, channelId: string, dmChannelId: string | null, isCurrent: () => boolean
+): Promise<boolean> {
   if (!isCurrent()) return false;
   const db=await getDB();
   if (!isCurrent()) return false;
@@ -804,7 +812,7 @@ export async function deleteCachedDMMessage(
   try {
     const record=await tx.store.get(messageId) as CachedDecryptedMessage|undefined;
     if (!isCurrent()) {tx.abort();await tx.done.catch(()=>{});return false;}
-    if (!record || record.messageId!==messageId || record.channelId!=="" || record.dmChannelId!==dmChannelId) {
+    if (!record || record.messageId !== messageId || record.channelId !== channelId || record.dmChannelId !== dmChannelId) {
       await tx.done;return false;
     }
     await tx.store.delete(messageId);
@@ -866,37 +874,31 @@ export async function cacheDecryptedMessages(
   }
 }
 
-/**
- * Client-side message search.
- *
- * Since E2EE messages are encrypted on the server, search is performed client-side.
- * String matching over the decrypted message cache in IndexedDB.
- *
- * @param channelId - Channel ID to search in
- * @param query - Search term
- * @returns Message IDs of matches
- */
-export async function searchCachedMessages(
+async function searchMessageIndex(
+  indexName: "byChannel" | "byDMChannel",
   channelId: string,
-  query: string
+  query: string,
+  signal?: AbortSignal
 ): Promise<CachedDecryptedMessage[]> {
+  signal?.throwIfAborted();
   const db = await getDB();
-  const tx = db.transaction("messageCache", "readonly");
-  const index = tx.store.index("byChannel");
+  signal?.throwIfAborted();
+  const index = db.transaction("messageCache", "readonly").store.index(indexName);
   const results: CachedDecryptedMessage[] = [];
-
   const lowerQuery = query.toLowerCase();
-
   let cursor = await index.openCursor(channelId);
   while (cursor) {
-    const msg = cursor.value as CachedDecryptedMessage;
-    if (msg.content.toLowerCase().includes(lowerQuery)) {
-      results.push(msg);
-    }
+    signal?.throwIfAborted();
+    const message = cursor.value as CachedDecryptedMessage;
+    if (message.content.toLowerCase().includes(lowerQuery)) results.push(message);
     cursor = await cursor.continue();
   }
-
+  signal?.throwIfAborted();
   return results;
+}
+
+export function searchCachedMessages(channelId: string, query: string, signal?: AbortSignal) {
+  return searchMessageIndex("byChannel", channelId, query, signal);
 }
 
 /**
@@ -911,27 +913,8 @@ export async function getAllCachedMessages(): Promise<CachedDecryptedMessage[]> 
 /**
  * Client-side message search for a DM channel.
  */
-export async function searchCachedDMMessages(
-  dmChannelId: string,
-  query: string
-): Promise<CachedDecryptedMessage[]> {
-  const db = await getDB();
-  const tx = db.transaction("messageCache", "readonly");
-  const index = tx.store.index("byDMChannel");
-  const results: CachedDecryptedMessage[] = [];
-
-  const lowerQuery = query.toLowerCase();
-
-  let cursor = await index.openCursor(dmChannelId);
-  while (cursor) {
-    const msg = cursor.value as CachedDecryptedMessage;
-    if (msg.content.toLowerCase().includes(lowerQuery)) {
-      results.push(msg);
-    }
-    cursor = await cursor.continue();
-  }
-
-  return results;
+export function searchCachedDMMessages(dmChannelId: string, query: string, signal?: AbortSignal) {
+  return searchMessageIndex("byDMChannel", dmChannelId, query, signal);
 }
 
 // ──────────────────────────────────
