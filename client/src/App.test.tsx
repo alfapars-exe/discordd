@@ -84,7 +84,7 @@ vi.mock("./components/layout/AppLayout", () => ({
 }));
 
 import App from "./App";
-import { rememberStartupUser, rememberStartupServers, rememberStartupChannels } from "./utils/startupCache";
+import { rememberStartupUser, rememberStartupServers, STARTUP_CACHE_KEY } from "./utils/startupCache";
 import { useAuthStore } from "./stores/authStore";
 import * as authApi from "./api/auth";
 import type { User } from "./types";
@@ -153,7 +153,9 @@ describe("App — route guards", () => {
   it("shows remembered names without authenticating or exposing actions while validation is pending", () => {
     rememberStartupUser(fakeUser);
     rememberStartupServers(fakeUser.id, [{ id: "team", name: "Cached Team", icon_url: null }]);
-    rememberStartupChannels(fakeUser.id, "team", [{ channels: [{ id: "hidden", name: "Revoked channel", type: "voice" }] }] as Parameters<typeof rememberStartupChannels>[2]);
+    const legacy = JSON.parse(localStorage.getItem(STARTUP_CACHE_KEY)!);
+    legacy.channels = { team: [{ id: "hidden", name: "Revoked channel", type: "voice" }] };
+    localStorage.setItem(STARTUP_CACHE_KEY, JSON.stringify(legacy));
     getMe.mockReturnValue(pendingRestore());
     renderApp();
     expect(screen.getByTestId("startup-preview")).toHaveTextContent("Cached Team");
