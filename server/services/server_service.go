@@ -26,6 +26,7 @@ type ServerService interface {
 	// ReorderServers updates the user's personal server list order. No WS broadcast.
 	ReorderServers(ctx context.Context, userID string, req *models.ReorderServersRequest) ([]models.ServerListItem, error)
 	SetUploadDir(dir string)
+	SetPermInvalidator(inv PermissionInvalidator)
 }
 
 type serverService struct {
@@ -49,11 +50,16 @@ type serverService struct {
 	membershipTxRunner repository.ServerMembershipTxRunner
 	preferencesRepo    repository.PreferencesRepository
 	gameActivity       GameActivityPrivacyInvalidator
+	permInvalidator    PermissionInvalidator
 	// uploadDir enables best-effort disk cleanup on server delete (see
 	// upload_cleanup.go). Blank disables cleanup — set via SetUploadDir,
 	// wired in init_services.go so the constructor signature below stays
 	// unchanged.
 	uploadDir string
+}
+
+func (s *serverService) SetPermInvalidator(inv PermissionInvalidator) {
+	s.permInvalidator = inv
 }
 
 func (s *serverService) SetUploadDir(dir string) {

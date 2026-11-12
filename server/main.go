@@ -380,6 +380,7 @@ func main() {
 	}
 	svcs.Role.SetPermInvalidator(permInvalidator)
 	svcs.Member.SetPermInvalidator(permInvalidator)
+	svcs.Server.SetPermInvalidator(permInvalidator)
 
 	// 13. Static file serving
 	registerStaticAndUploads(mux, cfg)
