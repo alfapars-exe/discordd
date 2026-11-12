@@ -18,12 +18,17 @@ import (
 
 type batchAppLogRepo struct {
 	fakeAppLogRepo
-	batchCalls int
-	block      bool
+	batchCalls    int
+	block         bool
+	blocked       chan struct{}
+	signalBlocked sync.Once
 }
 
 func (r *batchAppLogRepo) InsertBatch(ctx context.Context, rows []models.AppLog) (int64, error) {
 	if r.block {
+		if r.blocked != nil {
+			r.signalBlocked.Do(func() { close(r.blocked) })
+		}
 		<-ctx.Done()
 		return 0, ctx.Err()
 	}
@@ -170,9 +175,22 @@ func TestAppLogRequestLatencyUnderStorageFailure(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			repo := &batchAppLogRepo{block: mode == "unavailable"}
 			svc := NewAppLogService(repo).(*appLogService)
+			if repo.block {
+				repo.blocked = make(chan struct{})
+			}
 			if mode != "disabled" {
 				svc.Start()
 				defer svc.Stop()
+			}
+			if repo.block {
+				for range appLogBatchSize {
+					svc.Log(context.Background(), models.LogLevelError, models.LogCategoryGeneral, nil, nil, "prime writer", nil)
+				}
+				select {
+				case <-repo.blocked:
+				case <-time.After(5 * time.Second):
+					t.Fatal("writer never reached blocked repository")
+				}
 			}
 			ctx := pkg.WithRequestID(context.Background(), "load-request")
 			req := httptest.NewRequest("POST", "/diagnostic", nil).WithContext(ctx)

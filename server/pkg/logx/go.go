@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"runtime/debug"
-
-	"github.com/argeinfina/hichat/pkg"
 )
 
 // Go runs fn in a new goroutine with panic recovery.
@@ -29,13 +27,9 @@ func Go(component string, fn func()) {
 			if r == nil {
 				return
 			}
-			panicMsg := fmt.Sprintf("%v", r)
-			if err, ok := r.(error); ok {
-				panicMsg = pkg.ErrText(err)
-			}
 			slog.LogAttrs(context.Background(), slog.LevelError, "goroutine panic recovered",
 				slog.String("component", component),
-				slog.String("panic", panicMsg),
+				slog.String("panic_type", fmt.Sprintf("%T", r)),
 				slog.String("stack", string(debug.Stack())),
 			)
 		}()
