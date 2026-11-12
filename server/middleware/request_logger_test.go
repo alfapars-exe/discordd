@@ -334,10 +334,10 @@ func TestInviteRequestLogsExcludeCodes(t *testing.T) {
 			if strings.Contains(loggedPath, "private-invite") {
 				t.Error("diagnostic context exposed invite")
 			}
-			panic("fixture failure")
+			panic("fixture failure: private-panic-data")
 		})))
 		handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, path+"?q=private-query", nil))
-		if strings.Contains(logs.String(), "private-invite") || strings.Contains(logs.String(), "private-query") {
+		if strings.Contains(logs.String(), "private-invite") || strings.Contains(logs.String(), "private-query") || strings.Contains(logs.String(), "private-panic-data") {
 			t.Error("access or panic log exposed request data")
 		}
 	}
