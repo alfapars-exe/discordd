@@ -14,7 +14,7 @@ test('reject invalid or overflowing platform versions', () => {
   for (const value of ['0.0.0','2.1000.0','2.0.1000','2100.0.1','2.11.123-beta','02.1.1','1.2','-1.0.0']) assert.throws(()=>mobileVersion(value));
 });
 
-test('rejects divergent Swift revisions for the same Capacitor version', t => {
+function mobileFixture(t) {
   const root = mkdtempSync(join(tmpdir(), 'hichat-mobile-version-'));
   t.after(() => rmSync(root, {recursive: true, force: true}));
   const repo = fileURLToPath(new URL('../', import.meta.url));
@@ -25,6 +25,12 @@ test('rejects divergent Swift revisions for the same Capacitor version', t => {
     mkdirSync(dirname(join(root, path)), {recursive: true});
     cpSync(join(repo, path), join(root, path));
   }
+  return root;
+}
+
+test('rejects divergent Swift revisions for the same Capacitor version', t => {
+  const root = mobileFixture(t);
+  const lock = 'client/ios/App/CapApp-SPM/Package.resolved';
   syncMobileVersion(root, true);
   const path = join(root, lock);
   const data = JSON.parse(readFileSync(path, 'utf8'));
@@ -32,3 +38,17 @@ test('rejects divergent Swift revisions for the same Capacitor version', t => {
   writeFileSync(path, JSON.stringify(data));
   assert.throws(() => syncMobileVersion(root, true), /Capacitor revisions differ/);
 });
+
+for (const [path, field] of [
+  ['client/android/app/build.gradle', 'versionCode'],
+  ['client/android/app/build.gradle', 'versionName'],
+  ['client/ios/App/App.xcodeproj/project.pbxproj', 'CURRENT_PROJECT_VERSION'],
+  ['client/ios/App/App.xcodeproj/project.pbxproj', 'MARKETING_VERSION'],
+]) {
+  test(`rejects missing ${field}`, t => {
+    const root = mobileFixture(t);
+    const file = join(root, path);
+    writeFileSync(file, readFileSync(file, 'utf8').replaceAll(field, 'removed'));
+    assert.throws(() => syncMobileVersion(root, true), /Missing mobile version field/);
+  });
+}
