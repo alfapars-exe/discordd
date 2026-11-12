@@ -38,7 +38,7 @@ func Recover(logger *slog.Logger) func(http.Handler) http.Handler {
 						slog.Int64("duration_ms", pkg.RequestElapsedMillis(r.Context())),
 						slog.Any("panic", rec),
 						slog.String("method", r.Method),
-						slog.String("path", r.URL.Path),
+						slog.String("path", diagnosticPath(r.URL.Path)),
 						slog.String("request_id", RequestID(r.Context())),
 						slog.String("stack", string(debug.Stack())),
 					)

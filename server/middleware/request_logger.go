@@ -22,6 +22,16 @@ type HTTPStatsSink interface {
 	Observe(status int, d time.Duration)
 }
 
+// Invite paths carry a bearer credential even when a request never matches a route.
+func diagnosticPath(path string) string {
+	for _, marker := range []string{"/invites/", "/invite/"} {
+		if prefix, _, found := strings.Cut(path, marker); found {
+			return prefix + marker + "{code}"
+		}
+	}
+	return path
+}
+
 type ctxKey string
 
 const requestIDKey ctxKey = "request_id"
@@ -171,7 +181,8 @@ func RequestLogger(logger *slog.Logger, sink HTTPStatsSink) func(http.Handler) h
 			ctx = pkg.WithRequestID(ctx, reqID)
 			// Method + path so pkg.ErrorCtx's 5xx log line can be correlated
 			// to an endpoint without pulling the whole *http.Request into ctx.
-			ctx = pkg.WithRequestInfo(ctx, r.Method, r.URL.Path)
+			path := diagnosticPath(r.URL.Path)
+			ctx = pkg.WithRequestInfo(ctx, r.Method, path)
 
 			ctx = pkg.WithRequestLogState(ctx)
 			rec := &statusRecorder{ResponseWriter: w, ctx: ctx}
@@ -210,7 +221,7 @@ func RequestLogger(logger *slog.Logger, sink HTTPStatsSink) func(http.Handler) h
 				slog.String("route", route),
 				slog.String("request_id", reqID),
 				slog.String("method", r.Method),
-				slog.String("path", r.URL.Path),
+				slog.String("path", path),
 				slog.Int("status", rec.status),
 				slog.Int("bytes", rec.bytes),
 				slog.Int64("duration_ms", duration.Milliseconds()),
