@@ -1,10 +1,12 @@
 """Exercise the shipped Windows foreground-window helper without requiring a visible window."""
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 import json
 import subprocess
 import sys
 
-helper = sys.argv[1]
+resources = Path(__file__).resolve().parents[1] / "release/win-unpacked/resources/native"
+helper = resources / "game-window.exe"
 for pid in ("-1", "4294967296", "+1", " 123", "0"):
     result = subprocess.run([helper, "--watch", "--parent-pid", pid], capture_output=True, timeout=5)
     if result.returncode != 2 or result.stdout:
@@ -33,6 +35,6 @@ for _ in range(5):
             child.communicate(timeout=5)
 
 for args in ([], ["0"], ["-1"], ["42suffix"], ["4294967296"], ["1", "2"]):
-    result = subprocess.run([sys.argv[2], *args], capture_output=True, timeout=5)
+    result = subprocess.run([resources / "audio-capture.exe", *args], capture_output=True, timeout=5)
     if result.returncode != 1 or result.stdout or not result.stderr.startswith(b"Usage:"):
         raise RuntimeError(f"Audio helper did not reject arguments {args!r}")
