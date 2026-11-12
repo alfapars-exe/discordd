@@ -104,9 +104,8 @@ export function toPublicCredentials(
 
 export function clearCredentials(): void {
   try {
-    const p = credPath();
-    if (existsSync(p)) unlinkSync(p);
-  } catch {
-    // Ignore deletion errors
+    unlinkSync(credPath());
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
 }
