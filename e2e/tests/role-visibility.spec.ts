@@ -67,6 +67,8 @@ test("a parent permission revocation blocks warm thread history and WebSocket de
 test("channel tree follows role grants and revocations in two authenticated sessions", async ({ browser }) => {
   const owner = await browser.newPage();
   const member = await browser.newPage();
+  const memberMessages = receivedMessageIDs(member);
+  const ownerMessages = receivedMessageIDs(owner);
   function channelUpdateTopics(page: Page) {
     const topics: string[] = [];
     page.on("websocket", socket => socket.on("framereceived", ({ payload }) => {
@@ -125,6 +127,24 @@ test("channel tree follows role grants and revocations in two authenticated sess
   await check(member, true);
   await api(owner, assignments, "PATCH", { role_ids: [everyone.id] });
   await check(member, false);
+
+  const privateHistory = root + "/channels/" + fixture.privateChannelId + "/messages";
+  const invite = await api<{ code: string }>(owner, root + "/invites", "POST", { max_uses: 1, expires_in: 30, channel_id: fixture.channelId });
+  await api(owner, assignments, "PATCH", { role_ids: [everyone.id, extra.id] });
+  const warm = await api<{ id: string }>(owner, privateHistory, "POST", { content: "Before leaving" });
+  await expect.poll(() => memberMessages.has(warm.id)).toBe(true);
+  const history = await api<{ messages: { id: string }[] }>(member, privateHistory);
+  expect(history.messages.map(message => message.id)).toContain(warm.id);
+  await api(member, root + "/leave", "POST");
+  await api(member, "/servers/join", "POST", { invite_code: invite.code });
+  await expect(api(member, privateHistory)).rejects.toThrow(/HTTP 403/);
+  const privateMessage = await api<{ id: string }>(owner, privateHistory, "POST", { content: "After rejoining" });
+  await expect.poll(() => ownerMessages.has(privateMessage.id)).toBe(true);
+  const publicMessage = await api<{ id: string }>(owner, root + "/channels/" + fixture.channelId + "/messages", "POST", {
+    content: "Rejoin delivery barrier",
+  });
+  await expect.poll(() => memberMessages.has(publicMessage.id)).toBe(true);
+  expect(memberMessages.has(privateMessage.id)).toBe(false);
   await member.reload();
   await dismissOnboardingOverlays(member);
   await open(member);
