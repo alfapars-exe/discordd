@@ -1,22 +1,30 @@
 # Browser E2E
 
-The Playwright suite owns an isolated local test stack. Its Go API binds only
-to `127.0.0.1:9090`, uses a newly created SQLite database and uploads folder
-under `e2e/.tmp/run-*`, and explicitly clears `DATABASE_URL` so an exported
-developer/Turso DSN cannot be used. Vite binds to `localhost:3030` and proxies
-the browser API calls to that loopback server. Playwright always starts both
-processes; it never reuses an existing server. The launcher pins the API port,
-Vite target, and removes hosted-space probe variables from the API child. Do
-not replace either server with a running development or P9 service.
+The Playwright suite starts its own Go API on `127.0.0.1:9090` and Vite on
+`localhost:3030`. Vite proxies browser API calls to that API. Each run
+creates a PostgreSQL database and an uploads directory. The launcher replaces
+the API child's `DATABASE_URL` with the run database URL and clears
+`DATABASE_PATH`. Playwright requires both ports to be free.
 
-Run from `e2e/`:
+Provide `HICHAT_E2E_POSTGRES_DSN` for a disposable PostgreSQL control database
+named `hichat_e2e_control` on `127.0.0.1`. The connection uses verified mTLS
+and the role must be able to create and drop databases. On Linux with Docker,
+Bash and OpenSSL, run `bash scripts/start-e2e-postgres.sh` from the repository
+root. It prints the control URL file path and container name. Export the DSN
+from that file in the shell that will run Playwright. For GitHub Actions the
+script writes the environment variables to `GITHUB_ENV`.
 
-```powershell
-npm ci
+Install dependencies in both `client/` and `e2e/` with `npm ci`. From `e2e/`
+run the isolation checks and the Chromium suite:
+
+```sh
 npm run test:isolation
 npx playwright install chromium
-npx playwright test
+npx playwright test --project=chromium
 ```
+
+For the full suite, also install WebKit with `npx playwright install webkit`
+and run `npx playwright test`.
 
 The setup project first registers and logs in the regular E2E account through
 the UI, then provisions a separate channel-notification fixture in the same
@@ -27,7 +35,7 @@ role. The recipient starts opted out; the acceptance spec logs both accounts
 in with `loginAsNotificationOwner` / `loginAsNotificationRecipient` from
 `tests/helpers.ts`, then changes opt-in through the real settings UI.
 After each message, an E2E-only read-only Go probe checks both the committed
-message marker and its queue row in the exact disposable SQLite file assigned
+message marker and its queue row in the disposable PostgreSQL database assigned
 to this Playwright process. The UI assertions run only after that job is
 gone, so a delayed retry cannot look like successful suppression. On a CI
 retry, the spec deletes only its synthetic server, whose cascade clears its
