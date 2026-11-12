@@ -120,7 +120,7 @@ func runGateway(ctx context.Context, config botConfig, dialer *websocket.Dialer,
 		if err := connection.ReadJSON(&incoming); err != nil {
 			return err
 		}
-		if incoming.Op != "member_join" || (incoming.ServerID != "" && incoming.ServerID != config.server) {
+		if incoming.Op != "member_join" || incoming.ServerID != config.server {
 			continue
 		}
 		var member memberJoin
