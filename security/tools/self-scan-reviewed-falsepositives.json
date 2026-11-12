@@ -92,7 +92,7 @@
     {
       "rule": "go.sql-concat",
       "path": "server/repository/sqlite_auth_session_test.go",
-      "file_sha256": "143dfd7e1564e14ea94ccc5feaa3157dac05970be08595dba7e06b559d0127fc",
+      "file_sha256": "17c4bd6370b553594dbf828888d430f31de206a011281d8de4f0e2e1bd5e6960",
       "line_sha256": "d9bba06d9634d9398f2f5c870b5f771b18266a4064efc704605a3faafc8febf0",
       "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
       "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
