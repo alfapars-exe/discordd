@@ -17,6 +17,15 @@ Bu belge uygulama önerisidir. Görev kartının varlığı, kodun değiştirild
 
 Sonraki `b9d0a8da` revizyonunda kanal ve DM panelleri, gezinme isteği sürerken WebSocket üzerinden silinen sonucu sayaçtan bir kez düşürüyor. İki panelin PR dalında toplam 14 testi geçti. Birleşik revizyonda `npm run build` ile TypeScript ve Vite derlemesi geçti. Vite, `AppLayout` parçası için 976,08 kB (gzip ile 272,25 kB) ve 500 kB sınır uyarısı bildirdi.
 
+Klavye kısayolu yardımı ve lo-fi oynatıcı isteğe bağlı yüklendiğinde (`725c7811`) aynı üretim derlemesindeki `AppLayout` parçası 964,98 kB (gzip ile 268,70 kB) oldu. İlgili üç test dosyasında 49 test geçti. Bu ölçüm dosya boyutunu kapsar.
+
+| Birleşik revizyon | Yerel kabul koşusu | Sonuç |
+|---|---|---|
+| `25abb127` | Chromium, gerçek Go API, mTLS PostgreSQL 18.6 ve Vite geliştirme sunucusu | Kurulum dahil 11/11 test 1,5 dakikada geçti. İki oturumla üst kanal izni kaldırılınca alt konuşmanın HTTP geçmişi ve WebSocket teslimi engellendi. |
+| `67f02e5f` | WebKit, üretim istemci paketi, gerçek Go API ve mTLS PostgreSQL 18.6 | Giriş ve parola kurtarma formlarının açılması ve sayfada JavaScript hatası oluşmaması doğrulandı. Derleme dahil 40,8 saniye. |
+
+Bu tarayıcı koşularında fiziksel ses veya kamera aygıtı kullanılmadı.
+
 ## Kararlı sürümde rol yetkileri ve mesaj geçmişi — 12 Kasım 2026
 
 Başlangıç revizyonu `bb32bbba`. Bu tur Go/PostgreSQL sunucusunu ve React istemcisini kapsar. İzin denetimlerinin sahibi sunucudur. İstemci görünür listeyi sunucunun yetkili REST sayfası ve istek sırasında alınan WebSocket olaylarıyla günceller.
