@@ -48,8 +48,15 @@ jobs:
           emulator -avd hichat-ci -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect > "$RUNNER_TEMP/emulator.log" 2>&1 &
           emulator_pid=$!
           trap 'kill "$emulator_pid" 2>/dev/null || true' EXIT
-          adb wait-for-device
-          until [[ "$(adb shell getprop sys.boot_completed | tr -d '\r')" == 1 ]]; do sleep 2; done
+          boot_deadline=$((SECONDS + 300))
+          until [[ "$(timeout 5 adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == 1 ]]; do
+            if ! kill -0 "$emulator_pid" 2>/dev/null || (( SECONDS >= boot_deadline )); then
+              adb devices -l
+              tail -100 "$RUNNER_TEMP/emulator.log"
+              exit 1
+            fi
+            sleep 2
+          done
           cd client/android
           bash gradlew --no-daemon connectedDebugAndroidTest
       - name: Build iOS Simulator without signing
