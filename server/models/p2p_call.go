@@ -36,7 +36,7 @@ type P2PCallBroadcast struct {
 	CallerDisplayName   *string       `json:"caller_display_name"`
 	CallerAvatarURL     *string       `json:"caller_avatar"`
 	ReceiverID          string        `json:"receiver_id"`
-	ReceiverUsername     string        `json:"receiver_username"`
+	ReceiverUsername    string        `json:"receiver_username"`
 	ReceiverDisplayName *string       `json:"receiver_display_name"`
 	ReceiverAvatarURL   *string       `json:"receiver_avatar"`
 	CallType            P2PCallType   `json:"call_type"`
@@ -47,7 +47,7 @@ type P2PCallBroadcast struct {
 // P2PSignalPayload — WebRTC signaling data (SDP offer/answer or ICE candidate).
 type P2PSignalPayload struct {
 	CallID    string `json:"call_id"`
-	Type      string `json:"type"`              // "offer", "answer", "ice-candidate"
+	Type      string `json:"type"` // "offer", "answer", "ice-candidate"
 	SDP       string `json:"sdp,omitempty"`
 	Candidate any    `json:"candidate,omitempty"` // RTCIceCandidateInit
 }

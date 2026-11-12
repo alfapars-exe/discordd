@@ -29,11 +29,11 @@ type UpdateSoundboardSoundRequest struct {
 }
 
 type SoundboardPlayEvent struct {
-	SoundID    string `json:"sound_id"`
-	SoundName  string `json:"sound_name"`
-	SoundURL   string `json:"sound_url"`
-	UserID     string `json:"user_id"`
-	Username   string `json:"username"`
-	ServerID   string `json:"server_id"`
-	ChannelID  string `json:"channel_id"`
+	SoundID   string `json:"sound_id"`
+	SoundName string `json:"sound_name"`
+	SoundURL  string `json:"sound_url"`
+	UserID    string `json:"user_id"`
+	Username  string `json:"username"`
+	ServerID  string `json:"server_id"`
+	ChannelID string `json:"channel_id"`
 }
