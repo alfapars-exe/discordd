@@ -19,7 +19,7 @@
 
 import "fake-indexeddb/auto";
 import { IDBFactory as FakeIDBFactory } from "fake-indexeddb";
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import * as keyStorage from "./keyStorage";
 import { publishAuthGenerationChange, publishAuthOwnerChange } from "../api/authSessionEvents";
 import type {
