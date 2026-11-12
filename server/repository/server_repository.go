@@ -25,6 +25,7 @@ type ServerRepository interface {
 
 	GetUserServers(ctx context.Context, userID string) ([]models.ServerListItem, error)
 	AddMember(ctx context.Context, serverID, userID string) error
+	LeaveMember(ctx context.Context, serverID, userID string) error
 	RemoveMember(ctx context.Context, serverID, userID string) error
 	IsMember(ctx context.Context, serverID, userID string) (bool, error)
 	GetMemberCount(ctx context.Context, serverID string) (int, error)

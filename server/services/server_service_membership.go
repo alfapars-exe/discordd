@@ -197,7 +197,7 @@ func (s *serverService) LeaveServer(ctx context.Context, serverID, userID string
 		return fmt.Errorf("%w: server owner cannot leave; transfer ownership first", pkg.ErrForbidden)
 	}
 
-	if err := s.serverRepo.RemoveMember(ctx, serverID, userID); err != nil {
+	if err := s.serverRepo.LeaveMember(ctx, serverID, userID); err != nil {
 		return fmt.Errorf("failed to remove member: %w", err)
 	}
 	if s.permInvalidator != nil {
