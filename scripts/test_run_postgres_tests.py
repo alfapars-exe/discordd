@@ -12,7 +12,10 @@ spec.loader.exec_module(runner)
 
 class PostgreSQLRunnerTests(unittest.TestCase):
     service_passes = (
-        "--- PASS: TestChannelDelivery (0.01s)\n"
+        "--- PASS: TestChannelDeliveryConcurrentRetryAndDeletion (0.01s)\n"
+        "--- PASS: TestDMIdempotentAttachmentsConcurrentReplayKeepsOneOrderedSet (0.01s)\n"
+        "--- PASS: TestDMOutboxCommitRecoveryReplayAndAuthorization (0.01s)\n"
+        "--- PASS: TestDMMarkUnreadFrom_ConcurrentSend (0.01s)\n"
         "--- PASS: TestPostgresRolePatchConcurrentChanges (0.01s)\n"
         "--- PASS: TestPostgresMemberRoleReplacement (0.01s)\n"
     )
@@ -26,6 +29,17 @@ class PostgreSQLRunnerTests(unittest.TestCase):
 
     def test_both_role_transactions_must_run_on_postgres(self):
         for name in ("TestPostgresRolePatchConcurrentChanges", "TestPostgresMemberRoleReplacement"):
+            with self.subTest(name=name):
+                remaining = "\n".join(line for line in self.service_passes.splitlines() if name not in line)
+                self.assertEqual(self.execute(self.completed(), service_output=remaining), 1)
+
+    def test_delivery_contracts_must_run_even_when_role_tests_pass(self):
+        for name in (
+            "TestChannelDeliveryConcurrentRetryAndDeletion",
+            "TestDMIdempotentAttachmentsConcurrentReplayKeepsOneOrderedSet",
+            "TestDMOutboxCommitRecoveryReplayAndAuthorization",
+            "TestDMMarkUnreadFrom_ConcurrentSend",
+        ):
             with self.subTest(name=name):
                 remaining = "\n".join(line for line in self.service_passes.splitlines() if name not in line)
                 self.assertEqual(self.execute(self.completed(), service_output=remaining), 1)

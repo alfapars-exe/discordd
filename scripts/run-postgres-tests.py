@@ -85,9 +85,13 @@ def main():
     services = subprocess.run(["go", "test", "-v", "-count=1", "-timeout=2m", "./services", "-run", selection],
                               cwd=root / "server", stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     print(redact_database_urls(services.stdout, dsn), end="", flush=True)
-    missing = [name for name in role_tests if f"--- PASS: {name} (" not in services.stdout]
+    required_tests = (*role_tests, "TestChannelDeliveryConcurrentRetryAndDeletion",
+                      "TestDMIdempotentAttachmentsConcurrentReplayKeepsOneOrderedSet",
+                      "TestDMOutboxCommitRecoveryReplayAndAuthorization", "TestDMMarkUnreadFrom_ConcurrentSend")
+    passed = set(re.findall(r"^--- PASS: (\w+) \(", services.stdout, re.MULTILINE))
+    missing = [name for name in required_tests if name not in passed]
     if missing:
-        print("Required PostgreSQL role tests did not pass: " + ", ".join(missing), file=sys.stderr)
+        print("Required PostgreSQL service tests did not pass: " + ", ".join(missing), file=sys.stderr)
     return services.returncode or int(bool(missing) or "--- SKIP:" in services.stdout or "[no tests to run]" in services.stdout)
 
 
