@@ -1445,6 +1445,7 @@ button.ch-tree-vu-stream.watching { box-shadow:0 0 0 1.5px #fff; }
 .voice-settings { max-width:660px;padding:16px 0; }
 .vs-section { margin-bottom:24px; }
 .vs-label { font-size:13px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px; }
+.vs-section > label.vs-label { display:block; }
 .vs-desc { font-size:13px;color:var(--t3);margin-top:4px; }
 .vs-desc.vs-warning { color:var(--warning);margin-top:6px; }
 
