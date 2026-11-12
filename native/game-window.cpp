@@ -1,6 +1,6 @@
 #define _WIN32_WINNT 0x0A00
 #define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+#include "process-id.h"
 
 #include <cstdint>
 #include <iostream>
@@ -132,20 +132,6 @@ void WriteSample(const Sample& sample) {
   std::cout.flush();
 }
 
-bool ParseParentPid(const wchar_t* text, DWORD* parentPid) {
-  if (!text || !*text) return false;
-  DWORD value = 0;
-  for (const wchar_t* digit = text; *digit; ++digit) {
-    if (*digit < L'0' || *digit > L'9') return false;
-    const DWORD part = static_cast<DWORD>(*digit - L'0');
-    if (value > (MAXDWORD - part) / 10) return false;
-    value = value * 10 + part;
-  }
-  if (value == 0) return false;
-  *parentPid = value;
-  return true;
-}
-
 }  // namespace
 
 int wmain(int argc, wchar_t* argv[]) {
@@ -154,7 +140,7 @@ int wmain(int argc, wchar_t* argv[]) {
   if (argc == 2 && std::wstring(argv[1]) == L"--once") {
     watch = false;
   } else if (argc == 4 && std::wstring(argv[1]) == L"--watch"
-      && std::wstring(argv[2]) == L"--parent-pid" && ParseParentPid(argv[3], &parentPid)) {
+      && std::wstring(argv[2]) == L"--parent-pid" && ParseProcessId(argv[3], &parentPid)) {
     watch = true;
   } else {
     return 2;

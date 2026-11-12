@@ -31,7 +31,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 
-#include <windows.h>
+#include "process-id.h"
 #include <initguid.h>
 #include <mmdeviceapi.h>
 #include <audioclient.h>
@@ -206,12 +206,12 @@ struct AudioHeader {
 // ═══════════════════════════════════════════════════════════════════════
 
 int wmain(int argc, wchar_t* argv[]) {
-    if (argc < 2) {
+    DWORD excludePid = 0;
+    if (argc != 2 || !ParseProcessId(argv[1], &excludePid)) {
         fprintf(stderr, "Usage: audio-capture.exe <PID-to-exclude>\n");
         return 1;
     }
 
-    DWORD excludePid = static_cast<DWORD>(_wtoi(argv[1]));
     fprintf(stderr, "[audio-capture] Excluding PID %u from loopback\n", excludePid);
 
     // Binary mode for stdout — no CR/LF translation

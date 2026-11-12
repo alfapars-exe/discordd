@@ -38,6 +38,6 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - run: node scripts/check-packaged-maps.cjs
-      - name: Exercise packaged foreground-window helper
+      - name: Exercise packaged Windows helpers
         if: runner.os == 'Windows'
-        run: python scripts/test-game-window-helper.py release/win-unpacked/resources/native/game-window.exe
+        run: python scripts/test-game-window-helper.py release/win-unpacked/resources/native/game-window.exe release/win-unpacked/resources/native/audio-capture.exe
