@@ -7,6 +7,13 @@ export function dmSourceSequence(value: unknown): bigint | null {
   if (typeof value !== "string" || !/^[1-9][0-9]{0,18}$/.test(value)) return null;
   const parsed = BigInt(value); return parsed <= 9223372036854775807n ? parsed : null;
 }
+export function preserveDMSourceSequence<T extends Pick<DMMessage, "source_sequence">>(
+  current: T | undefined, update: T,
+): T {
+  if (!current || update.source_sequence !== undefined || dmSourceSequence(current.source_sequence) === null) return update;
+  return { ...update, source_sequence: current.source_sequence };
+}
+
 /** Keep legacy/optimistic slots in their existing fallback order, and sort all
  * authoritative sequenced slots by append order. This avoids a nontransitive
  * mixed timestamp/sequence comparator while preserving old-server behavior. */

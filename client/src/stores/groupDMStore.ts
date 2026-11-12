@@ -1,4 +1,4 @@
-import {dmSourceSequence,sortDMBySource} from "../utils/dmSourceOrder";
+import {dmSourceSequence,preserveDMSourceSequence,sortDMBySource} from "../utils/dmSourceOrder";
 import { create } from "zustand";
 import * as api from "../api/groupDM";
 import { getAuthGeneration } from "../api/client";
@@ -148,7 +148,11 @@ function sortGroupMessages(messages:GroupDMMessage[]):GroupDMMessage[]{
 }
 function mergeUniqueGroupMessages(...lists:GroupDMMessage[][]):GroupDMMessage[]{
   const merged=new Map<string,GroupDMMessage>();
-  for(const message of lists.flat()){const previous=merged.get(message.id);merged.set(message.id,message.source_sequence===undefined&&dmSourceSequence(previous?.source_sequence)!==null?{...message,source_sequence:previous?.source_sequence}:message)}
+  for (const list of lists) {
+    for (const message of list) {
+      merged.set(message.id, preserveDMSourceSequence(merged.get(message.id), message));
+    }
+  }
   return sortGroupMessages([...merged.values()]);
 }
 function validReadState(read:GroupDMReadState):boolean {

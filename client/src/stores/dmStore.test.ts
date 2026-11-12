@@ -580,12 +580,12 @@ describe("dmStore — leaving a jumped-to window", () => {
   });
   it("uses the latest edit of a live message held outside a jumped-to window", async () => {
     await jumpIntoPast();
-    useDMStore.getState().handleDMMessageCreate(makeDM("live"));
+    useDMStore.getState().handleDMMessageCreate({...makeDM("live"), source_sequence:"42"});
     useDMStore.getState().handleDMMessageUpdate({...makeDM("live"),content:"edited while held"});
     getAfter.mockResolvedValueOnce(page([],false,false));
     await useDMStore.getState().fetchNewerMessages(CH);
     expect(ids()).toEqual(["old-1","target","live"]);
-    expect(useDMStore.getState().messagesByChannel[CH][2].content).toBe("edited while held");
+    expect(useDMStore.getState().messagesByChannel[CH][2]).toMatchObject({content:"edited while held", source_sequence:"42"});
   });
   it("retains held-message reaction and pin events while the forward response is pending",async()=>{
     await jumpIntoPast();useDMStore.getState().handleDMMessageCreate(makeDM("live"));
