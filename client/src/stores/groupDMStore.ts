@@ -140,7 +140,7 @@ function mutateMessage(groupId:string,messageId:string):number {
 }
 function mergeHistory(groupId:string,fresh:GroupDMMessage[],current:GroupDMMessage[],started:number):GroupDMMessage[]{
   const safe=fresh.filter(m=>m.group_id===groupId && (messageVersions.get(groupId)?.get(m.id)??0)<=started);
-  return sortGroupMessages([...new Map([...current,...safe].map(m=>[m.id,m])).values()]);
+  return mergeUniqueGroupMessages(current, safe);
 }
 function sortGroupMessages(messages:GroupDMMessage[]):GroupDMMessage[]{
   const legacy=[...messages].sort((a,b)=>new Date(a.created_at).getTime()-new Date(b.created_at).getTime()||a.id.localeCompare(b.id));
