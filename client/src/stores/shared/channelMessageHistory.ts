@@ -1,3 +1,4 @@
+import { compareMessageTimestamps } from "../../utils/messageTimestamp";
 import type { Message, ReactionGroup } from "../../types";
 
 type MessageChange = {
@@ -7,20 +8,8 @@ type MessageChange = {
   deleted?: boolean;
 };
 
-// PostgreSQL's cursor uses (created_at, id). Date.parse truncates sub-millisecond
-// precision; Go can serialize timestamps within the same millisecond.
-function compareTimestamps(left: string, right: string): number {
-  if (left === right) return 0;
-  const millis = Date.parse(left) - Date.parse(right);
-  if (millis) return millis;
-  const fraction = (value: string) => (value.match(/\.(\d+)/)?.[1] ?? "").padEnd(9, "0");
-  const a = fraction(left);
-  const b = fraction(right);
-  return a === b ? 0 : a < b ? -1 : 1;
-}
-
 export function compareMessages(a: Message, b: Message): number {
-  return compareTimestamps(a.created_at, b.created_at) || (a.id === b.id ? 0 : a.id < b.id ? -1 : 1);
+  return compareMessageTimestamps(a.created_at, b.created_at) || (a.id === b.id ? 0 : a.id < b.id ? -1 : 1);
 }
 
 /** Preserve the API's page order, inserting live-only rows by the same cursor. */
@@ -44,7 +33,7 @@ export function insertLiveMessage(rows: Message[], message: Message): Message[] 
 export function mergeChannelEdit(current: Message, edit: Message): Message {
   // The durable message_update publisher sets reactions to []. Reaction changes
   // arrive on their own event; history pages carry the hydrated reaction list.
-  if (current.edited_at && (!edit.edited_at || compareTimestamps(current.edited_at, edit.edited_at) > 0)) return current;
+  if (current.edited_at && (!edit.edited_at || compareMessageTimestamps(current.edited_at, edit.edited_at) > 0)) return current;
   return { ...edit, reactions: current.reactions ?? edit.reactions };
 }
 

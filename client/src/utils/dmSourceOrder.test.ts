@@ -14,3 +14,10 @@ it('keeps full BIGINT precision and rejects nonauthoritative or invalid values',
  for(const value of ['0','-1','1.5','01','9223372036854775808',9007199254740992,null,undefined])expect(dmSourceSequence(value)).toBeNull();
  expect(sortDMBySource([m('higher','9007199254740993'),m('lower','9007199254740992')]).map(x=>x.id)).toEqual(['lower','higher']);
 });
+
+it("orders legacy DM timestamps by instant across offsets and fractional precision", () => {
+ const earlier = m("earlier", undefined, "2026-11-12T12:00:00.000001+03:00");
+ const later = m("later", undefined, "2026-11-12T09:00:00.000002Z");
+ expect(sortDMBySource([later, earlier]).map(row => row.id)).toEqual(["earlier", "later"]);
+ expect(newerDMSource(earlier, later)).toBe(false);
+});
