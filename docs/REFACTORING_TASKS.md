@@ -393,6 +393,8 @@ Parametre sınır testi, sürücünün PostgreSQL protokolünde bağlanamayacak 
 | 10.000 | 2.667 | 206,5 ms | 201,3–208,5 ms |
 | 50.000 | 13.333 | 993,0 ms | 946,8–1.049,8 ms |
 
+İkinci sayfa için aynı betik, her boyutta yeniden tarama ve sıralama süresini ilk sorguda saklanan kimliklerle 25 kaydı okuma süresiyle karşılaştırır. Aynı çalıştırmada medyanlar 1.000 kayıtta 22,3 ve 2,6 ms, 10.000 kayıtta 192,9 ve 2,5 ms, 50.000 kayıtta 899,2 ve 3,5 ms oldu. Her iki yolda 25 mesajın kimlikleri, içeriği ve sırası eşleşti. Ölçüm depolama ve sayfa seçim süresini kapsar. İlk sorgu tüm kanal indeksini tarar ve panel her eşleşmenin kimliğini bellekte tutar.
+
 | Alan | Tanım |
 |---|---|
 | Task ID | RF17 |
