@@ -212,6 +212,16 @@ func (r *sqliteAuthSessionRepo) UpdatePasswordAndRevoke(ctx context.Context, use
 			args = append(args, expectedHash)
 		} else {
 			if database.IsPostgres(r.db) {
+				// Serialize account resets before taking the statement snapshot
+				// that checks the proof. A preceding reset deletes all its proofs.
+				var lockedID string
+				err := tx.QueryRowContext(ctx, `SELECT id FROM users WHERE id=? FOR UPDATE`, userID).Scan(&lockedID)
+				if errors.Is(err, sql.ErrNoRows) {
+					return pkg.ErrUnauthorized
+				}
+				if err != nil {
+					return err
+				}
 				query += ` AND EXISTS(SELECT 1 FROM password_reset_tokens WHERE user_id=? AND token_hash=? AND CAST(EXTRACT(EPOCH FROM expires_at) AS BIGINT)>?)`
 			} else {
 				query += ` AND EXISTS(SELECT 1 FROM password_reset_tokens WHERE user_id=? AND token_hash=? AND CAST(strftime('%s',expires_at) AS INTEGER)>?)`

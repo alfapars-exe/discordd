@@ -148,6 +148,9 @@ func (s *authService) ForgotPassword(ctx context.Context, identifier string) (in
 
 	// Cooldown check
 	lastToken, err := s.resetRepo.GetLatestByUserID(ctx, user.ID)
+	if err != nil && !errors.Is(err, pkg.ErrNotFound) {
+		return 0, fmt.Errorf("failed to check password reset cooldown: %w", err)
+	}
 	if err == nil && lastToken != nil {
 		elapsed := time.Since(lastToken.CreatedAt)
 		if elapsed < resetCooldown {
