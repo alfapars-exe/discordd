@@ -6780,6 +6780,9 @@
       "acceptance": [
         "Two clients reconnect after interruption while preserving active destination, device settings and current-call binding."
       ],
+      "remaining_acceptance": [
+        "Interrupt transport during an active encrypted group call in two full HiChat clients, navigate away and back, then verify both clients recover the same call and destination with their selected device settings."
+      ],
       "code": [
         "client/src/stores/groupCallStore.ts",
         "client/src/components/dm/GroupCallProvider.tsx",
