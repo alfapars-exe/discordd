@@ -94,7 +94,7 @@ Başlangıç revizyonu `bb32bbba`. Bu tur Go/PostgreSQL sunucusunu ve React iste
 | 5.000 | 104,91 ms | 0,73 ms |
 | 10.000 | 367,99 ms | 1,63 ms |
 
-Ölçümü yinelemek için `client` dizininde `HICHAT_BENCH_CHANNEL_HISTORY=1` ortam değişkeniyle `npx vitest run src/stores/messageStore.test.ts -t "measures detached create processing and checks the complete merged window"` çalıştırılır. İlk keşif ölçümü farklı bir çalıştırıcı kullanıyordu. Tablodaki her iki sütun aynı testten alındı. Süreler ağ, React çizimi ve medya gecikmesini kapsamaz. Geçmiş penceresi açık kaldığı sürece tampon değişen her benzersiz kimlik için bir kayıt tutar. Son sayfaya ulaşıldığında, pencere bırakıldığında, yetki kaldırıldığında veya oturum değiştiğinde ilgili kayıtlar bırakılır. Uzun süre açık pencerelerde bellek için sabit bir üst sınır yoktur.
+Birleşik dalda 60505fb2 üzerinde Node 26.13.0 ile tekrar ölçülen medyanlar sırasıyla 0,21 / 0,88 / 2,79 ms oldu. Aynı koşuda birleştirilmiş pencere ve okundu imleci kontrolleri geçti. Ölçümü yinelemek için `client` dizininde `HICHAT_BENCH_CHANNEL_HISTORY=1` ortam değişkeniyle `npx vitest run --silent=false src/stores/messageStore.test.ts -t "measures detached create processing and checks the complete merged window"` çalıştırılır. İlk keşif ölçümü farklı bir çalıştırıcı kullanıyordu. Tablodaki her iki sütun aynı testten alındı. Süreler ağ, React çizimi ve medya gecikmesini kapsamaz. Geçmiş penceresi açık kaldığı sürece tampon değişen her benzersiz kimlik için bir kayıt tutar. Son sayfaya ulaşıldığında, pencere bırakıldığında, yetki kaldırıldığında veya oturum değiştiğinde ilgili kayıtlar bırakılır. Uzun süre açık pencerelerde bellek için sabit bir üst sınır yoktur.
 
 ### Birleşik doğrulama
 
