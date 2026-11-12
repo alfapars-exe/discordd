@@ -600,8 +600,21 @@ paths:
       responses:
         '200': { $ref: '#/components/responses/AuthTokensResponse' }
         '400': { $ref: '#/components/responses/BadRequestError' }
-        '401': { $ref: '#/components/responses/UnauthorizedError' }
-        '429': { $ref: '#/components/responses/TooManyRequestsError' }
+        '401':
+          description: >-
+            Invalid credentials, MFA_REQUIRED when a second factor is needed, or
+            MFA_INVALID for an invalid or previously consumed code. MFA challenges
+            and rejections do not issue session cookies or an access token.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '429':
+          description: Login IP rate limit or account MFA attempt limit exceeded.
+          headers:
+            Retry-After: { schema: { type: integer }, description: Delay in seconds. MFA_RATE_LIMITED returns 300. }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
   /api/auth/refresh:
     post:
       operationId: authRefresh
