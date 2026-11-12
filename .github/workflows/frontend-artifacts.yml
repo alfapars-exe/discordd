@@ -32,8 +32,12 @@ jobs:
         shell: cmd
         run: |
           cl.exe /EHsc /O2 native\audio-capture.cpp /Fe:native\audio-capture.exe ole32.lib mmdevapi.lib
-          cl.exe /std:c++17 /EHsc /O2 /DUNICODE /D_UNICODE native\game-window.cpp /Fe:native\game-window.exe user32.lib
+          if errorlevel 1 exit /b 1
+          call native\build-game-window.bat
       - run: node node_modules/electron-builder/cli.js --dir --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - run: node scripts/check-packaged-maps.cjs
+      - name: Exercise packaged foreground-window helper
+        if: runner.os == 'Windows'
+        run: python scripts/test-game-window-helper.py release/win-unpacked/resources/native/game-window.exe
