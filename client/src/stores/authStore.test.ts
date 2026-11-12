@@ -208,6 +208,25 @@ describe("initialize", () => {
     expect(useAuthStore.getState()).toMatchObject({ user: fakeUser, isInitialized: true, initPhase: "idle" });
   });
 
+  it.each([false, true])("ignores a probe returning %s after a new login", async (reachable) => {
+    getMe.mockResolvedValueOnce({ success: false, error: "Failed to fetch" });
+    let finishProbe!: (reachable: boolean) => void;
+    mockedPing.mockImplementationOnce(() => new Promise<boolean>((resolve) => { finishProbe = resolve; }));
+    const restore = useAuthStore.getState().initialize();
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(mockedPing).toHaveBeenCalledOnce();
+    useAuthStore.getState().applyLoginResponse({
+      success: true,
+      data: { user: fakeUser, access_token: "access", refresh_token: "refresh" },
+    });
+    finishProbe(reachable);
+    await vi.runAllTimersAsync();
+    await restore;
+    expect(getMe).toHaveBeenCalledOnce();
+    expect(mockedPing).toHaveBeenCalledOnce();
+    expect(useAuthStore.getState()).toMatchObject({ user: fakeUser, isInitialized: true, initPhase: "idle" });
+  });
+
   it("exhausts the wake budget without destroying tokens", async () => {
     getMe.mockResolvedValue({ success: false, error: "service_unavailable: HTTP 503" });
     mockedPing.mockResolvedValue(false); // server never wakes
