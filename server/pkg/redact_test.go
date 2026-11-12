@@ -3,7 +3,6 @@ package pkg
 import (
 	"errors"
 	"fmt"
-	"strings"
 	"testing"
 )
 
@@ -190,13 +189,16 @@ func TestRedactEscapedJSONCredentialAndTabBearer(t *testing.T) {
 }
 
 func TestRedactPostgresKeywordPasswords(t *testing.T) {
-	for _, input := range []string{
-		`connect: host=db password='private word' port=5432`,
-		`connect: host=db password = 'private\' word' port=5432`,
-		`connect: host=db password=private\ word port=5432`,
+	for _, tc := range []struct{ input, want string }{
+		{`host=db password='private word' port=5432`, "host=db password=*** port=5432"},
+		{`host=db password = 'private\' word' port=5432`, "host=db password = *** port=5432"},
+		{`host=db password=private\ word port=5432`, "host=db password=*** port=5432"},
+		{`host=db password=first&private-tail port=5432`, "host=db password=*** port=5432"},
+		{`host=db password=first"private-tail port=5432`, "host=db password=*** port=5432"},
+		{`postgres://db/app?password=first&mode=verify-full`, "postgres://db/app?password=***&mode=verify-full"},
 	} {
-		if got := ErrText(errors.New(input)); !strings.HasSuffix(got, " port=5432") || strings.Contains(got, "private") || strings.Contains(got, " word") {
-			t.Errorf("credential masking failed: %q", got)
+		if got := ErrText(errors.New(tc.input)); got != tc.want {
+			t.Errorf("credential masking = %q, want %q", got, tc.want)
 		}
 	}
 }

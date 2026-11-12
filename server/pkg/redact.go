@@ -74,7 +74,7 @@ func RedactSecrets(s string) string {
 }
 
 // libpq keyword DSNs allow quoted values and backslash-escaped spaces.
-var logConninfoPassword = regexp.MustCompile(`(?i)((?:^|[ \t])(?:ssl)?password[ \t]*=[ \t]*)(?:'(?:[^'\\\r\n]|\\[^\r\n])*(?:'|$)|(?:[^\s\\&"']|\\[^\r\n])+)`)
+var logConninfoPassword = regexp.MustCompile(`(?i)((?:^|[ \t])(?:ssl)?password[ \t]*=[ \t]*)(?:'(?:[^'\\\r\n]|\\[^\r\n])*(?:'|$)|(?:[^\s\\]|\\[^\r\n])+)`)
 var logURLCredentials = regexp.MustCompile(`(?i)([a-z][a-z0-9+.-]*://)[^\s/@]+@`)
 var logAuthorization = regexp.MustCompile(`(?im)((?:authorization|cookie|set-cookie)\s*[:=]\s*)[^\r\n]+`)
 var logBearer = regexp.MustCompile(`(?i)bearer\s+[a-z0-9._~+/=-]+`)
