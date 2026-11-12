@@ -263,6 +263,14 @@ func (r *sqliteServerRepo) GetMemberGameActivityAudience(ctx context.Context, se
 // user_roles rows that let them keep passing permission checks after
 // "leaving" the server.
 func (r *sqliteServerRepo) RemoveMember(ctx context.Context, serverID, userID string) error {
+	return r.removeMembership(ctx, serverID, userID, false)
+}
+
+func (r *sqliteServerRepo) LeaveMember(ctx context.Context, serverID, userID string) error {
+	return r.removeMembership(ctx, serverID, userID, true)
+}
+
+func (r *sqliteServerRepo) removeMembership(ctx context.Context, serverID, userID string, voluntary bool) error {
 	sqlDB := database.RawDB(r.db)
 	if sqlDB == nil {
 		// r.db is already a *sql.Tx — this repo instance was bound to an
@@ -271,18 +279,37 @@ func (r *sqliteServerRepo) RemoveMember(ctx context.Context, serverID, userID st
 		// statements directly against r.db instead, and let the caller's own
 		// transaction provide the atomicity. Erroring here would break every
 		// tx-bound call site that constructs this repo from a *sql.Tx.
-		return r.removeMemberStmts(ctx, r.db, serverID, userID)
+		return r.removeMemberStmts(ctx, r.db, serverID, userID, voluntary)
 	}
 
 	return database.WithTx(ctx, sqlDB, func(tx *sql.Tx) error {
-		return r.removeMemberStmts(ctx, tx, serverID, userID)
+		return r.removeMemberStmts(ctx, tx, serverID, userID, voluntary)
 	})
 }
 
 // removeMemberStmts runs RemoveMember's DELETEs against q, which is
 // either the transaction WithTx opened or the caller-supplied *sql.Tx when
 // RawDB found none of its own to start.
-func (r *sqliteServerRepo) removeMemberStmts(ctx context.Context, q database.TxQuerier, serverID, userID string) error {
+func (r *sqliteServerRepo) removeMemberStmts(ctx context.Context, q database.TxQuerier, serverID, userID string, voluntary bool) error {
+	if voluntary {
+		// Take the membership lock before reading ownership, matching Transfer.
+		locked, err := q.ExecContext(ctx, "UPDATE server_members SET user_id=user_id WHERE server_id=? AND user_id=?", serverID, userID)
+		if err != nil {
+			return err
+		}
+		if n, err := locked.RowsAffected(); err != nil {
+			return err
+		} else if n == 0 {
+			return pkg.ErrNotFound
+		}
+		var owner string
+		if err := q.QueryRowContext(ctx, "SELECT owner_id FROM servers WHERE id=?", serverID).Scan(&owner); err != nil {
+			return err
+		}
+		if owner == userID {
+			return fmt.Errorf("%w: server owner cannot leave; transfer ownership first", pkg.ErrForbidden)
+		}
+	}
 	result, err := q.ExecContext(ctx,
 		`DELETE FROM server_members WHERE server_id = ? AND user_id = ?`,
 		serverID, userID)

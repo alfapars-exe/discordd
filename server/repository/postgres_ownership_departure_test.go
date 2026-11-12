@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"os"
 	"testing"
@@ -40,9 +41,20 @@ func TestPostgresOwnershipTransferWaitsForDepartingTarget(t *testing.T) {
 		_, err := NewSQLiteServerOwnershipRepo(db.Conn).Transfer(ctx, actor.UserID, actor.ID, "hash", "", "handoff", "session-other", time.Now().Unix())
 		done <- err
 	}()
+	waitForOwnershipLock(t, ctx, db.Conn, pid, done)
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; !errors.Is(err, pkg.ErrForbidden) {
+		t.Fatalf("transfer to departed target: %v", err)
+	}
+}
+
+func waitForOwnershipLock(t *testing.T, ctx context.Context, conn *sql.DB, pid int, done <-chan error) {
+	t.Helper()
 	for {
 		var waiting bool
-		if err := db.Conn.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE ? = ANY(pg_blocking_pids(pid)))", pid).Scan(&waiting); err != nil {
+		if err := conn.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE ? = ANY(pg_blocking_pids(pid)))", pid).Scan(&waiting); err != nil {
 			t.Fatal(err)
 		}
 		if waiting {
@@ -50,14 +62,47 @@ func TestPostgresOwnershipTransferWaitsForDepartingTarget(t *testing.T) {
 		}
 		select {
 		case err := <-done:
-			t.Fatalf("transfer completed before membership removal committed: %v", err)
+			t.Fatalf("operation completed before lock holder committed: %v", err)
 		case <-time.After(10 * time.Millisecond):
 		}
 	}
+}
+
+func TestPostgresLeaveWaitsForOwnershipChange(t *testing.T) {
+	if os.Getenv("HICHAT_TEST_POSTGRES_DSN") == "" {
+		t.Skip("requires PostgreSQL")
+	}
+	db := newTestDB(t)
+	_, server, _ := seedMemberWithRole(t, db, "handoff")
+	target := newTestUser("next-owner")
+	if err := NewSQLiteUserRepo(db.Conn).Create(context.Background(), target); err != nil {
+		t.Fatal(err)
+	}
+	user := target.ID
+	if err := NewSQLiteServerRepo(db.Conn).AddMember(context.Background(), server, user); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	tx, err := db.Conn.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	var pid, member int
+	if err := tx.QueryRowContext(ctx, "SELECT pg_backend_pid(),1 FROM server_members WHERE server_id=? AND user_id=? FOR KEY SHARE", server, user).Scan(&pid, &member); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.ExecContext(ctx, "UPDATE servers SET owner_id=? WHERE id=?", user, server); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- NewSQLiteServerRepo(db.Conn).LeaveMember(ctx, server, user) }()
+	waitForOwnershipLock(t, ctx, db.Conn, pid, done)
 	if err := tx.Commit(); err != nil {
 		t.Fatal(err)
 	}
 	if err := <-done; !errors.Is(err, pkg.ErrForbidden) {
-		t.Fatalf("transfer to departed target: %v", err)
+		t.Fatalf("new owner's departure: %v", err)
 	}
 }
