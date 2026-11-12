@@ -21,7 +21,7 @@ import { resolve } from "path";
 // chain. Never broken, possibly imprecise.
 function resolveAppVersion(): string {
   try {
-    const txt = readFileSync(resolve(__dirname, "../package.json"), "utf8");
+    const txt = readFileSync(resolve(import.meta.dirname, "../package.json"), "utf8");
     const parsed = JSON.parse(txt) as { version?: string };
     if (parsed.version) return parsed.version;
   } catch {
@@ -53,7 +53,7 @@ export default defineConfig(({ command, mode }) => {
   const org = enabled ? secret("SENTRY_ORG") : "";
   const project = enabled ? secret("SENTRY_PROJECT") : "";
   if (enabled && (!authToken || !org || !project)) throw new Error("Sentry production build requires SENTRY_AUTH_TOKEN, SENTRY_ORG and SENTRY_PROJECT");
-  let outputDirectory = resolve(__dirname, "dist");
+  let outputDirectory = resolve(import.meta.dirname, "dist");
   return {
   plugins: [react(), ...(enabled ? [sentryVitePlugin({
     authToken, org, project, telemetry: false,
@@ -153,7 +153,7 @@ export default defineConfig(({ command, mode }) => {
           return undefined;
         },
       },
-      input: { index: resolve(__dirname, "index.html"), overlay: resolve(__dirname, "overlay.html") },
+      input: { index: resolve(import.meta.dirname, "index.html"), overlay: resolve(import.meta.dirname, "overlay.html") },
     },
   },
 };
