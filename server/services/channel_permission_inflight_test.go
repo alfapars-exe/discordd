@@ -15,7 +15,7 @@ import (
 
 func TestChannelInvalidationSupersedesInflightGrant(t *testing.T) {
 	for _, bulk := range []bool{false, true} {
-		for _, mode := range []string{"all", "user", "channel"} {
+		for _, mode := range []string{"all", "user", "channel", "parent"} {
 			t.Run(map[bool]string{true: "bulk/", false: "single/"}[bulk]+mode, func(t *testing.T) {
 				started, release := make(chan struct{}), make(chan struct{})
 				var once sync.Once
@@ -40,8 +40,12 @@ func TestChannelInvalidationSupersedesInflightGrant(t *testing.T) {
 						return map[string][]models.Role{"u": r}, err
 					},
 				}
-				svc := newTestChannelPermService(&testutil.MockChannelPermRepo{}, rr, &testutil.MockChannelRepo{GetByIDFn: func(context.Context, string) (*models.Channel, error) {
-					return &models.Channel{ID: "c", ServerID: "s"}, nil
+				parentID := "parent"
+				svc := newTestChannelPermService(&testutil.MockChannelPermRepo{}, rr, &testutil.MockChannelRepo{GetByIDFn: func(_ context.Context, id string) (*models.Channel, error) {
+					if id == "c" && mode == "parent" {
+						return &models.Channel{ID: id, ServerID: "s", Type: models.ChannelTypeThread, ParentChannelID: &parentID}, nil
+					}
+					return &models.Channel{ID: id, ServerID: "s", Type: models.ChannelTypeText}, nil
 				}}, nil).(*cachingPermResolver)
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer cancel()
@@ -71,6 +75,8 @@ func TestChannelInvalidationSupersedesInflightGrant(t *testing.T) {
 					svc.InvalidateUser("u")
 				case "channel":
 					svc.invalidateChannelCache("c")
+				case "parent":
+					svc.invalidateChannelCache(parentID)
 				}
 				once.Do(func() { close(release) })
 				select {

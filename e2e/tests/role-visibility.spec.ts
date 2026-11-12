@@ -12,6 +12,58 @@ async function api<T>(page: Page, path: string, method = "GET", body?: unknown):
   }, { path, method, body });
 }
 
+function receivedMessageIDs(page: Page) {
+  const ids = new Set<string>();
+  page.on("websocket", socket => socket.on("framereceived", ({ payload }) => {
+    if (typeof payload !== "string" || !payload.startsWith("{")) return;
+    const event = JSON.parse(payload);
+    if (event.op === "message_create" && typeof event.d?.id === "string") ids.add(event.d.id);
+  }));
+  return ids;
+}
+
+test("a parent permission revocation blocks warm thread history and WebSocket delivery", async ({ browser }) => {
+  const owner = await browser.newPage();
+  const member = await browser.newPage();
+  const ownerMessages = receivedMessageIDs(owner);
+  const memberMessages = receivedMessageIDs(member);
+  const fixture = readChannelNotificationFixture();
+  const root = "/servers/" + fixture.serverId;
+  const send = (channelID: string, content: string) =>
+    api<{ id: string }>(owner, root + "/channels/" + channelID + "/messages", "POST", { content });
+
+  try {
+    await loginAsNotificationOwner(owner);
+    await loginAsNotificationRecipient(member);
+    const roles = await api<{ id: string; is_default: boolean }[]>(owner, root + "/roles");
+    const everyone = roles.find(role => role.is_default);
+    if (!everyone) throw new Error("fixture server is missing its default role");
+    const parent = await api<{ id: string }>(owner, root + "/channels", "POST", { name: "thread-permission", type: "text" });
+    const starter = await send(parent.id, "Start discussion");
+    const thread = await api<{ id: string }>(owner, root + "/channels/" + parent.id + "/threads", "POST", {
+      name: "Permission changes", message_id: starter.id,
+    });
+    const history = root + "/channels/" + thread.id + "/messages";
+    const before = await send(thread.id, "Before revocation");
+    await expect.poll(() => memberMessages.has(before.id)).toBe(true);
+    const warm = await api<{ messages: { id: string }[] }>(member, history);
+    expect(warm.messages.map(message => message.id)).toContain(before.id);
+
+    const readMessages = 2048;
+    await api(owner, root + "/channels/" + parent.id + "/permissions/" + everyone.id, "PUT", { allow: 0, deny: readMessages });
+    await expect(api(member, history)).rejects.toThrow(/HTTP 403/);
+    const after = await send(thread.id, "After revocation");
+    await expect.poll(() => ownerMessages.has(after.id)).toBe(true);
+    // This marker is published after the owner's socket received the private
+    // event. Seeing it on the member's socket establishes a delivery barrier.
+    const barrier = await send(fixture.channelId, "Thread permission delivery barrier");
+    await expect.poll(() => memberMessages.has(barrier.id)).toBe(true);
+    expect(memberMessages.has(after.id)).toBe(false);
+  } finally {
+    await Promise.all([member.close(), owner.close()]);
+  }
+});
+
 test("channel tree follows role grants and revocations in two authenticated sessions", async ({ browser }) => {
   const owner = await browser.newPage();
   const member = await browser.newPage();
