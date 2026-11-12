@@ -660,11 +660,11 @@ paths:
       operationId: authForgotPassword
       summary: Request a password-reset email.
       description: >-
-        IP rate limited, plus a 90s per-email server-side cooldown. Always
-        returns the same generic message regardless of whether the email
-        exists or is cooling down (enumeration protection) — response
-        message is literally "if the email exists, a reset link has been
-        sent".
+        Accepts a username or email address. The IP rate limit applies to
+        every request. A 90-second cooldown applies per account. Unknown
+        accounts, accounts without an email address, and requests during
+        cooldown receive the same success message as an accepted delivery
+        request: "if the account exists, a reset link has been sent".
       tags: [Auth]
       security: []
       requestBody: { $ref: '#/components/requestBodies/ForgotPasswordRequestBody' }
@@ -678,7 +678,7 @@ paths:
       summary: Complete a password reset using the emailed token.
       description: >-
         IP rate limited. Validates the token (SHA-256 hash lookup), updates
-        the password, deletes the token (one-time use), and invalidates
+        the password, deletes all outstanding reset tokens for the account, and invalidates
         every existing session for the account — deletes all
         refresh-session rows, bumps token_version, and disconnects any
         open WebSocket. Every client (including a possible attacker's)
@@ -5967,6 +5967,7 @@ components:
           type: string
           minLength: 8
           format: password
+          description: At least 8 Unicode code points and at most 72 UTF-8 bytes.
         display_name:
           type: string
           maxLength: 32
@@ -6066,6 +6067,7 @@ components:
           type: string
           minLength: 8
           format: password
+          description: At least 8 Unicode code points and at most 72 UTF-8 bytes.
       required: [token, new_password]
       example:
         token: "9f8e7d6c5b4a3210"
@@ -6092,13 +6094,9 @@ components:
         current_password: { type: string, format: password }
         new_password:
           type: string
-          minLength: 6
+          minLength: 8
           format: password
-          description: >-
-            AuthService.ChangePassword enforces a 6-character minimum here —
-            note this is LOWER than registration's 8-character minimum
-            (models.CreateUserRequest.Validate); documented as coded, not a
-            recommendation.
+          description: At least 8 Unicode code points and at most 72 UTF-8 bytes.
       required: [current_password, new_password]
       example:
         current_password: "correct-horse-battery-staple"
