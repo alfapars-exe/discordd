@@ -508,6 +508,8 @@ Tam istemci koşusu aynı `2a46beda` revizyonunda 461 dosyada 4.640 geçen ve 1 
 
 **Windows doğrulaması (12 Kasım 2026).** [PR #242](https://github.com/alfapars-exe/discordd/pull/242) için `974fa6ad` kaynaklarından MSVC ile derlenen ses yardımcısı gerçek WASAPI üzerinde çalıştırıldı. Bir ısınma çevriminden sonra 50 ayrı süreç başlatıldı. Her süreçte test 12 baytlık format başlığını doğruladı, stdin kanalını kapattı ve yardımcının başarı koduyla çıkmasını bekledi. Testi yöneten Python sürecinin Windows tanıtıcı sayısı ısınmadan sonra ve her çevrim sonunda 166 idi. Başlatmadan kapanışa medyan süre 63 ms idi. Ölçüm tek Windows makinesinde yapıldı. Uzun süre açık tutulan tek yakalama oturumu, Electron ana sürecinin tanıtıcıları, fiziksel duyulurluk, aygıt değişimi ve uygulama sesinin dışlanması için ayrı kabul kanıtı gerekiyor.
 
+**Paketli Windows kabulü (12 Kasım 2026).** `9879e9d9` için [Windows paketleme işi](https://github.com/alfapars-exe/discordd/actions/runs/43285338113/job/131417284733) geçti. İş, Electron paketindeki iki yardımcıyı çalıştırdı. Pencere yardımcısında geçersiz PID ve beş üst süreç kapanışını, ses yardımcısında geçersiz dışlama PID’lerinin reddini sınadı. Aynı işte MSVC ile derlenen ayrı test, WASAPI tampon hatalarını, biçim kararlarını, etkinleştirme zaman aşımını ve kısmi PCM yazımını doğruladı. Paketli yardımcının fiziksel ses çıkışı bu koşunun kapsamı dışında.
+
 ## RF22 — Android/iOS native kabul sınırları
 
 | Alan | Tanım |
