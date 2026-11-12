@@ -74,6 +74,19 @@ func parseConfig(base, token, server, channel string) (botConfig, error) {
 	return botConfig{base: strings.TrimRight(parsed.String(), "/"), gateway: gateway.String(), token: token, server: server, channel: channel}, nil
 }
 
+func newMessageClient() *http.Client {
+	return &http.Client{
+		Timeout: 10 * time.Second,
+		CheckRedirect: func(next *http.Request, via []*http.Request) error {
+			origin := via[0].URL
+			if next.URL.Scheme != origin.Scheme || !strings.EqualFold(next.URL.Host, origin.Host) || len(via) >= 10 {
+				return http.ErrUseLastResponse
+			}
+			return nil
+		},
+	}
+}
+
 func main() {
 	config, err := parseConfig(os.Getenv("HICHAT_BASE"), os.Getenv("BOT_TOKEN"), os.Getenv("WELCOME_SERVER"), os.Getenv("WELCOME_CHANNEL"))
 	if err != nil {
@@ -81,7 +94,7 @@ func main() {
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := newMessageClient()
 	dialer := *websocket.DefaultDialer
 	dialer.HandshakeTimeout = 10 * time.Second
 	delay := time.Second
