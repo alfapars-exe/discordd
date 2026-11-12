@@ -24,7 +24,20 @@ type musicAudienceFreshPermissions interface {
 	ResolveChannelPermissionsFresh(context.Context, string, string) (models.Permission, error)
 }
 
-func (s *musicBotService) broadcastMusicAudience(serverID, channelID string, event ws.Event, publisher *botInstance) bool {
+type musicPublisher struct {
+	bot   *botInstance
+	final bool
+}
+
+// Called under the service read lock immediately before enqueue.
+func (p musicPublisher) ownsDelivery(current *botInstance) bool {
+	if p.final {
+		return current == nil || current == p.bot
+	}
+	return current == p.bot && !p.bot.stopping.Load()
+}
+
+func (s *musicBotService) broadcastMusicAudience(serverID, channelID string, event ws.Event, publisher *musicPublisher) bool {
 	voice, members := s.audience.Voice, s.audience.Members
 	fresh, ok := s.perms.(musicAudienceFreshPermissions)
 	if voice == nil || members == nil || !ok || s.channels == nil || s.hub == nil {
@@ -65,7 +78,7 @@ func (s *musicBotService) broadcastMusicAudience(serverID, channelID string, eve
 		// cannot retroactively recall an already authorized enqueued event.
 		if publisher != nil {
 			s.mu.RLock()
-			if s.bots[channelID] != publisher || publisher.stopping.Load() {
+			if !publisher.ownsDelivery(s.bots[channelID]) {
 				s.mu.RUnlock()
 				return sent
 			}

@@ -1388,7 +1388,7 @@ func (s *musicBotService) broadcastPlaybackError(bot *botInstance, track *models
 			Failures:   failures,
 			Fatal:      fatal,
 		},
-	}, bot)
+	}, &musicPublisher{bot: bot})
 }
 
 // context.Background(): logErr fires from the bot's own background playback

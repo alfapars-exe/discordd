@@ -493,3 +493,27 @@ func TestPlaybackErrorDropsReplacedPublisherDuringAuthorization(t *testing.T) {
 	}}
 	s.broadcastPlaybackError(old, &models.MusicTrack{Title: "old track"}, musicBotErrorReason("test"), 1, false)
 }
+
+func TestMusicStateDropsReplacedPublisherDuringAuthorization(t *testing.T) {
+	for _, final := range []bool{false, true} {
+		s := newTestMusicBotService("ch", "srv")
+		old := s.bots["ch"]
+		if final {
+			delete(s.bots, "ch")
+		}
+		checked := false
+		s.perms.(*musicAudienceFixturePerms).during = func(string) {
+			checked = true
+			s.mu.Lock()
+			s.bots["ch"] = &botInstance{channelID: "ch", serverID: "srv"}
+			s.mu.Unlock()
+		}
+		s.hub = &testutil.MockBroadcaster{BroadcastToUsersFn: func([]string, ws.Event) {
+			t.Errorf("retired publisher delivered state (final=%v)", final)
+		}}
+		s.broadcastPrivateMusicState(old, final)
+		if !checked {
+			t.Fatalf("authorization was not reached (final=%v)", final)
+		}
+	}
+}
