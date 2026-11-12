@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/argeinfina/hichat/database"
@@ -31,6 +32,17 @@ func (r *sqliteServerOwnershipRepo) Transfer(ctx context.Context, actor, sid, ha
 	}
 	var result *models.Server
 	err := database.WithTx(ctx, raw, func(tx *sql.Tx) error {
+		if database.IsPostgres(r.db) {
+			// Wait for an in-flight departure before checking transfer eligibility.
+			var member int
+			err := tx.QueryRowContext(ctx, "SELECT 1 FROM server_members WHERE server_id=? AND user_id=? FOR KEY SHARE", serverID, target).Scan(&member)
+			if errors.Is(err, sql.ErrNoRows) {
+				return pkg.ErrForbidden
+			}
+			if err != nil {
+				return err
+			}
+		}
 		// One conditional UPDATE acquires the write boundary and checks both
 		// identities, membership, bans, session generation, password and MFA.
 		updated, err := tx.ExecContext(ctx, `UPDATE servers SET owner_id=?1 WHERE id=?2 AND owner_id=?3
