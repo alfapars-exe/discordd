@@ -257,13 +257,17 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
 
     acceptCall: (callId) => {
       const { _sendWS, incomingCall } = get();
-      if (!_sendWS || !incomingCall) return;
+      if (!_sendWS || incomingCall?.id !== callId || incomingCall.status !== "ringing") return;
       _sendWS("p2p_call_accept", { call_id: callId });
     },
 
     declineCall: (callId) => {
+      const { activeCall, incomingCall } = get();
+      const target = activeCall?.id === callId ? activeCall : incomingCall;
+      if (target?.id !== callId || target.status !== "ringing") return;
       get()._sendWS?.("p2p_call_decline", { call_id: callId });
-      set({ incomingCall: null, activeCall: null });
+      if (activeCall?.id === callId) get().cleanup();
+      else set({ incomingCall: null });
     },
 
     endCall: () => {
@@ -531,9 +535,10 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
     },
 
     handleCallBusy: () => {
+      // The server rejects a busy initiation before allocating a call.
+      if (get().activeCall || get().incomingCall) return;
       const t = i18n.t.bind(i18n);
       useToastStore.getState().addToast("warning", t("common:userBusy"));
-      get().cleanup();
     },
 
     handleSignal: async (data) => {

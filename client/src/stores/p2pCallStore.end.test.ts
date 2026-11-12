@@ -22,6 +22,46 @@ it("ignores a late end event for an older call",()=>{
   expect(useP2PCallStore.getState().activeCall?.id).toBe("call");
   expect(fixture.toast).not.toHaveBeenCalled();
 });
+
+it("keeps an established call when a busy reply arrives for a failed attempt", () => {
+  const active = { ...call(), status: "active" as const };
+  useP2PCallStore.setState({ activeCall: active });
+  useP2PCallStore.getState().handleCallBusy({ receiver_id: active.receiver_id });
+  expect(useP2PCallStore.getState().activeCall).toBe(active);
+  expect(fixture.toast).not.toHaveBeenCalled();
+});
+
+it("shows a busy reply to an idle caller", () => {
+  useP2PCallStore.setState({ activeCall: null });
+  useP2PCallStore.getState().handleCallBusy({ receiver_id: "receiver" });
+  expect(fixture.toast).toHaveBeenCalledExactlyOnceWith("warning", "common:userBusy");
+});
+
+it("accepts only the currently displayed ringing call", () => {
+  const send = vi.fn();
+  useP2PCallStore.setState({ incomingCall: call("current"), _sendWS: send });
+  useP2PCallStore.getState().acceptCall("stale");
+  useP2PCallStore.getState().acceptCall("current");
+  expect(send).toHaveBeenCalledExactlyOnceWith("p2p_call_accept", { call_id: "current" });
+});
+
+it("lets the caller cancel a ringing call without an incoming overlay", () => {
+  const send = vi.fn();
+  useP2PCallStore.setState({ _sendWS: send });
+  useP2PCallStore.getState().declineCall("call");
+  expect(send).toHaveBeenCalledExactlyOnceWith("p2p_call_decline", { call_id: "call" });
+  expect(useP2PCallStore.getState().activeCall).toBeNull();
+});
+
+it("declining an incoming overlay preserves the other call", () => {
+  const active = { ...call(), status: "active" as const };
+  const send = vi.fn();
+  useP2PCallStore.setState({ activeCall: active, incomingCall: call("incoming"), _sendWS: send });
+  useP2PCallStore.getState().declineCall("incoming");
+  expect(send).toHaveBeenCalledExactlyOnceWith("p2p_call_decline", { call_id: "incoming" });
+  expect(useP2PCallStore.getState().incomingCall).toBeNull();
+  expect(useP2PCallStore.getState().activeCall).toBe(active);
+});
 it("clears only a matching incoming overlay when another call is active",()=>{
   useP2PCallStore.setState({incomingCall:call("incoming")});
   useP2PCallStore.getState().handleCallEnd({call_id:"incoming",reason:"no_answer"});
