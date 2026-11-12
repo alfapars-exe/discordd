@@ -18,7 +18,7 @@ function ResetPasswordPage() {
   return <ResetPasswordForm key={token} token={token} />;
 }
 
-function ResetPasswordForm({ token }: { token: string }) {
+function ResetPasswordForm({ token }: { readonly token: string }) {
   const { t } = useTranslation("auth");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
