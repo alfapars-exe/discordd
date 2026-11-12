@@ -99,6 +99,15 @@ function captureDMReadContext(): () => boolean {
     && useE2EEStore.getState().localDeviceId === deviceId;
 }
 
+function unseenDMMessages(loaded: DMMessage[], incoming: DMMessage[]): DMMessage[] {
+  const seen = new Set(loaded.map(message => message.id));
+  return incoming.filter(message => {
+    if (seen.has(message.id)) return false;
+    seen.add(message.id);
+    return true;
+  });
+}
+
 function reportDMHistoryFailure(): void {
   useToastStore.getState().addToast("error", i18n.t("dm:historyLoadFailed"));
 }
@@ -385,7 +394,7 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
       set((state) => ({
         messagesByChannel: {
           ...state.messagesByChannel,
-          [channelId]: sortDMBySource([...decrypted, ...state.messagesByChannel[channelId]].map(historyBuffer.apply)),
+          [channelId]: sortDMBySource([...unseenDMMessages(messages, decrypted), ...messages].map(historyBuffer.apply)),
         },
         hasMoreByChannel: {
           ...state.hasMoreByChannel,
@@ -505,13 +514,7 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
 
       set((state) => {
         const current = state.messagesByChannel[channelId] ?? [];
-        const seen = new Set(current.map((m) => m.id));
-        const appended: DMMessage[] = [];
-        for (const m of [...decrypted, ...held]) {
-          if (seen.has(m.id)) continue;
-          seen.add(m.id);
-          appended.push(m);
-        }
+        const appended = unseenDMMessages(current, [...decrypted, ...held]);
         return {
           messagesByChannel: {
             ...state.messagesByChannel,
