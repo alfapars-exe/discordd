@@ -525,7 +525,8 @@ export function registerIpcHandlers(): void {
   // ─── Credentials (Remember Me, DPAPI/Keychain encrypted) ─────────
   ipcMain.handle(
     "save-credentials",
-    (_e, username: unknown, password: unknown, upstream: unknown) => {
+    (event, username: unknown, password: unknown, upstream: unknown) => {
+      assertTrustedMainWindowSender(event);
       // Audit 2026-05-27: bound credential field lengths to prevent
       // disk-fill via huge string write.
       assertString(username, "username", 512);
@@ -539,13 +540,20 @@ export function registerIpcHandlers(): void {
   // 2026-07-26, H-09): handing it to the renderer meant any XSS in
   // app://hichat could read a long-lived account password, which is the one
   // secret the short-lived-token design is there to avoid holding.
-  ipcMain.handle("load-credentials", () => toPublicCredentials(loadCredentials()));
+  ipcMain.handle("load-credentials", (event) => {
+    assertTrustedMainWindowSender(event);
+    return toPublicCredentials(loadCredentials());
+  });
   // Logs in using the stored password without ever exposing it. Returns
   // exactly what a renderer-issued login returns: status + parsed body.
-  ipcMain.handle("login-with-saved-credentials", (_e, upstreamOrigin: unknown) =>
-    loginWithSavedCredentials(upstreamOrigin, (input, init) => net.fetch(input, init)),
-  );
-  ipcMain.handle("clear-credentials", () => clearCredentials());
+  ipcMain.handle("login-with-saved-credentials", (event, upstreamOrigin: unknown) => {
+    assertTrustedMainWindowSender(event);
+    return loginWithSavedCredentials(upstreamOrigin, (input, init) => net.fetch(input, init));
+  });
+  ipcMain.handle("clear-credentials", (event) => {
+    assertTrustedMainWindowSender(event);
+    return clearCredentials();
+  });
 
   registerPTTLeaseHandlers(ipcMain,assertTrustedMainWindowSender,{acquire:acquirePTTLease,release:releasePTTLease,retire:retirePTTSender});
   // ─── Push-to-Talk shortcuts (uIOhook global keyboard) ────────────
