@@ -73,6 +73,7 @@ vi.mock("../shared/Avatar", () => ({
 
 import SearchPanel from "./SearchPanel";
 import { searchMessages } from "../../api/search";
+import { searchCachedMessages } from "../../crypto/keyStorage";
 import { useMessageStore } from "../../stores/messageStore";
 import { useServerStore } from "../../stores/serverStore";
 import { useE2EEStore } from "../../stores/e2eeStore";
@@ -130,8 +131,10 @@ describe("SearchPanel — result races", () => {
   });
 
   afterEach(() => {
-    useServerStore.setState({ activeServer: { ...useServerStore.getState().activeServer!, e2ee_enabled: false } });
-    useE2EEStore.setState({ initStatus: "uninitialized" });
+    act(() => {
+      useServerStore.setState({ activeServer: { ...useServerStore.getState().activeServer!, e2ee_enabled: false } });
+      useE2EEStore.setState({ initStatus: "uninitialized" });
+    });
     vi.useRealTimers();
   });
 
@@ -173,6 +176,27 @@ describe("SearchPanel — result races", () => {
     });
     expect(screen.queryByText("older result")).not.toBeInTheDocument();
     expect(screen.getByText("newer result")).toBeInTheDocument();
+  });
+
+  it("removes decrypted results and abandons an ongoing scan when keys become unavailable", async () => {
+    useServerStore.setState({ activeServer: { ...useServerStore.getState().activeServer!, e2ee_enabled: true } });
+    useE2EEStore.setState({ initStatus: "ready" });
+    const row = { messageId: "id", channelId: "ch-1", dmChannelId: null, content: "private match", timestamp: 1 };
+    const delayed = deferred<typeof row[]>();
+    vi.mocked(searchCachedMessages).mockResolvedValueOnce([row]).mockReturnValueOnce(delayed.promise);
+    render(<SearchPanel channelId="ch-1" onClose={() => {}} />);
+    typeQuery("private");
+    await act(async () => {});
+    expect(screen.getByText(row.content)).toBeInTheDocument();
+    act(() => useE2EEStore.setState({ initStatus: "uninitialized" }));
+    expect(screen.queryByText(row.content)).not.toBeInTheDocument();
+    act(() => useE2EEStore.setState({ initStatus: "ready" }));
+    typeQuery("match");
+    const signal = vi.mocked(searchCachedMessages).mock.lastCall?.[2];
+    act(() => useE2EEStore.setState({ initStatus: "uninitialized" }));
+    expect(signal?.aborted).toBe(true);
+    await act(async () => delayed.resolve([row]));
+    expect(screen.queryByText(row.content)).not.toBeInTheDocument();
   });
 
   it("clears the previous channel's results and ignores its pending response", async () => {

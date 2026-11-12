@@ -28,7 +28,8 @@ type SearchPanelProps = {
 function SearchPanel(props: SearchPanelProps) {
   const activeServerId = useServerStore((s) => s.activeServerId);
   const serverE2eeEnabled = useServerStore((s) => s.activeServer?.e2ee_enabled ?? false);
-  const scope = JSON.stringify([activeServerId, props.channelId, serverE2eeEnabled]);
+  const keysReady = useE2EEStore((s) => s.initStatus === "ready");
+  const scope = JSON.stringify([activeServerId, props.channelId, serverE2eeEnabled, serverE2eeEnabled && keysReady]);
   return <ScopedSearchPanel key={scope} {...props} activeServerId={activeServerId} serverE2eeEnabled={serverE2eeEnabled} />;
 }
 
