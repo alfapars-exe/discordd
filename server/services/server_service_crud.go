@@ -350,12 +350,6 @@ func (s *serverService) DeleteServer(ctx context.Context, serverID, userID strin
 		return fmt.Errorf("%w: only the server owner can delete the server", pkg.ErrForbidden)
 	}
 
-	// Broadcast before delete (server_members are needed for BroadcastToServer)
-	s.hub.BroadcastToServer(serverID, ws.Event{
-		Op:   ws.OpServerDelete,
-		Data: map[string]string{"id": serverID},
-	})
-
 	// Pre-fetch attachment file_urls for the post-delete disk cleanup below.
 	// A fetch failure here is logged and non-fatal — the delete still
 	// proceeds, it just can't clean up files it couldn't enumerate.
@@ -370,6 +364,12 @@ func (s *serverService) DeleteServer(ctx context.Context, serverID, userID strin
 	}); err != nil {
 		return fmt.Errorf("failed to delete server: %w", err)
 	}
+	// The hub tracks connected server members independently of the database rows.
+	s.hub.BroadcastToServer(serverID, ws.Event{
+		Op:   ws.OpServerDelete,
+		Data: map[string]string{"id": serverID},
+	})
+
 	if s.gameActivity != nil {
 		s.gameActivity.ServerDeleted(ctx, serverID)
 	}

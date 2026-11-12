@@ -65,12 +65,6 @@ func (s *adminServerService) DeleteServer(ctx context.Context, adminUserID, serv
 		return fmt.Errorf("server not found: %w", err)
 	}
 
-	// Broadcast BEFORE delete (member list is lost after)
-	s.hub.BroadcastToServer(serverID, ws.Event{
-		Op:   ws.OpServerDelete,
-		Data: map[string]string{"id": serverID},
-	})
-
 	// Pre-fetch attachment file_urls for the post-delete disk cleanup below.
 	// A fetch failure here is logged and non-fatal — the delete still
 	// proceeds, it just can't clean up files it couldn't enumerate.
@@ -86,6 +80,12 @@ func (s *adminServerService) DeleteServer(ctx context.Context, adminUserID, serv
 	}); err != nil {
 		return fmt.Errorf("failed to delete server: %w", err)
 	}
+	// The hub tracks connected server members independently of the database rows.
+	s.hub.BroadcastToServer(serverID, ws.Event{
+		Op:   ws.OpServerDelete,
+		Data: map[string]string{"id": serverID},
+	})
+
 
 	// Only remove files once the DB delete has actually committed — see
 	// upload_cleanup.go for why the ordering matters.
