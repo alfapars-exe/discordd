@@ -329,8 +329,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // ─── Credential Storage (Remember Me) ───
 
   /** Save credentials encrypted via safeStorage */
-  saveCredentials: (username: string, password: string): Promise<void> =>
-    ipcRenderer.invoke("save-credentials", username, password),
+  saveCredentials: (username: string, password: string, origin: string): Promise<void> =>
+    ipcRenderer.invoke("save-credentials", username, password, origin),
 
   /**
    * Load the saved username (null if none). The password is deliberately not

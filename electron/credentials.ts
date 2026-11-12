@@ -16,13 +16,14 @@ import path from "path";
 export interface Credentials {
   username: string;
   password: string;
+  origin?: string; // Older encrypted records have no verified origin.
 }
 
 function credPath(): string {
   return path.join(app.getPath("userData"), "cred.enc");
 }
 
-export function saveCredentials(username: string, password: string): void {
+export function saveCredentials(username: string, password: string, origin: string): void {
   // On Linux without libsecret installed, Electron's safeStorage falls
   // back to a "plaintext" backend that encryptString hands back as
   // base64-of-plaintext. Writing that to disk is functionally worse than
@@ -37,7 +38,7 @@ export function saveCredentials(username: string, password: string): void {
         "Refusing to write plaintext-equivalent credentials to disk.",
     );
   }
-  const payload = JSON.stringify({ username, password });
+  const payload = JSON.stringify({ username, password, origin });
   const encrypted = safeStorage.encryptString(payload);
   writeFileSync(credPath(), encrypted);
 }

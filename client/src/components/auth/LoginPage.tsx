@@ -93,7 +93,7 @@ function LoginPage() {
       // Electron: save or clear credentials
       if (isElectron()) {
         if (rememberMe) {
-          window.electronAPI?.saveCredentials(u, p);
+          window.electronAPI?.saveCredentials(u, p, SERVER_URL);
         } else {
           window.electronAPI?.clearCredentials();
         }

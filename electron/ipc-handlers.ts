@@ -77,6 +77,7 @@ import {
   saveCredentials,
   toPublicCredentials,
 } from "./credentials";
+import { sanitizeUpstreamOrigin } from "./api-proxy";
 import { loginWithSavedCredentials } from "./credential-login";
 import { acquirePTTLease, releasePTTLease, retirePTTSender, registerMuteHotkey, registerPTT, unregisterMuteHotkey, unregisterPTT } from "./push-to-talk";
 import { getSerializedSources } from "./screen-picker";
@@ -524,12 +525,14 @@ export function registerIpcHandlers(): void {
   // ─── Credentials (Remember Me, DPAPI/Keychain encrypted) ─────────
   ipcMain.handle(
     "save-credentials",
-    (_e, username: unknown, password: unknown) => {
+    (_e, username: unknown, password: unknown, upstream: unknown) => {
       // Audit 2026-05-27: bound credential field lengths to prevent
       // disk-fill via huge string write.
       assertString(username, "username", 512);
       assertString(password, "password", 4096);
-      return saveCredentials(username, password);
+      const origin = sanitizeUpstreamOrigin(typeof upstream === "string" ? upstream : null);
+      if (!origin) throw new Error("Invalid credential origin");
+      return saveCredentials(username, password, origin);
     },
   );
   // Username only. The password stays in the main process (pentest
