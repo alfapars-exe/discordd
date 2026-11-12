@@ -92,14 +92,17 @@ func IsSecretLogKey(key string) bool {
 }
 
 func SafeLogString(s string, limit int) string {
-	s = RedactSecrets(s)
-	if len(s) > limit {
-		s = s[:limit]
-		for !utf8.ValidString(s) && s != "" {
-			s = s[:len(s)-1]
-		}
+	if limit <= 0 {
+		return ""
 	}
-	return s
+	s = strings.ToValidUTF8(RedactSecrets(s), "\uFFFD")
+	if len(s) <= limit {
+		return s
+	}
+	for !utf8.RuneStart(s[limit]) {
+		limit--
+	}
+	return s[:limit]
 }
 
 // redactParam replaces every `key<value>` occurrence with `key***`, ending the
