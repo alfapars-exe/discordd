@@ -39,3 +39,9 @@ jobs:
         run: |
           xcodebuild -version
           xcodebuild -project client/ios/App/App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/hichat-ios" CODE_SIGNING_ALLOWED=NO build
+      - name: Test voice interruption handling on iOS Simulator
+        if: runner.os == 'macOS'
+        working-directory: client/ios/App/VoiceSession
+        run: |
+          device=$(xcrun simctl list devices available -j | jq -er '[.devices[][] | select(.name | startswith("iPhone"))][0].udid')
+          xcodebuild -scheme VoiceSession -destination "platform=iOS Simulator,id=$device" -parallel-testing-enabled NO test
