@@ -1148,8 +1148,8 @@
         "Run client/backend/Electron checks plus Windows installer and Docker builds; archive exact outcomes and unresolved failures."
       ],
       "code": ["package.json", ".github/workflows/build-desktop.yml", "native/build.bat", "Dockerfile", "server/Dockerfile", ".dockerignore", "server/.dockerignore", "server/pkg/logx/fatal.go", "server/main.go", "server/bootstrap.go", "server/startup_repair.go"],
-      "evidence": ["implementation/verification/p0-windows-docker-build-2026-10-24.json", "implementation/verification/p0-fatal-startup-logging-2026-10-24.json"],
-      "remaining_acceptance": ["Signed installer and isolated installed-Windows startup/install/update/rollback", "Live external service acceptance and fresh artifact rebuild after remaining P0-P11 implementation"]
+      "evidence": ["implementation/verification/p0-windows-docker-build-2026-10-24.json", "implementation/verification/p0-fatal-startup-logging-2026-10-24.json", "implementation/verification/p0-windows-upgrade-profile-2026-11-12.json"],
+      "remaining_acceptance": ["Signed final installer and rollback verification", "Live external service acceptance and fresh artifact rebuild after remaining P0-P11 implementation"]
     },
     {
       "id": "p0.real-device-gate",

@@ -1,0 +1,20 @@
+{
+  "sourceCommit": "39182c52b896c6d79d780eb667acf2cef47d96a6",
+  "job": "https://github.com/alfapars-exe/discordd/actions/runs/43301572580/job/131473845195",
+  "platform": "GitHub-hosted Windows x64",
+  "legacy": "2.11.124",
+  "candidate": "2.11.130",
+  "verified": [
+    "Legacy installer size and SHA-512 matched its release manifest",
+    "NSIS clean install and in-place upgrade exited successfully",
+    "Installed file version matched at both stages",
+    "Installed packaged login form opened at both stages",
+    "Unique localStorage marker survived relaunch and upgrade",
+    "Current updater feed configuration and both native helper files were verified"
+  ],
+  "limits": [
+    "Rollback pending separate run",
+    "Code signing and update-feed discovery were not proven by this test",
+    "No release was published"
+  ]
+}
