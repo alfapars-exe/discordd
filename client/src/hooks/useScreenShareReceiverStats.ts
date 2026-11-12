@@ -37,7 +37,7 @@
  * remoteParticipants every cycle.
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import {
   RoomEvent,
   Track,
@@ -187,12 +187,10 @@ function getReceiver(track: RemoteVideoTrack): RTCRtpReceiver | undefined {
 }
 
 export function useScreenShareReceiverStats(room: Room): void {
-  // Per-track baselines outlive a single render so cumulative→delta
-  // math survives across the 10 s ticks. Keyed by participant + sid so
-  // re-subscribes and layer switches don't reset accidentally.
-  const baselinesRef = useRef<Map<TrackKey, Baseline>>(new Map());
-
   useEffect(() => {
+    // Delta samples belong to one room and persist across its timer ticks.
+    const baselines = new Map<TrackKey, Baseline>();
+    const sampling = new Map<TrackKey, symbol>();
     let cancelled = false;
 
     async function sampleOne(
@@ -208,26 +206,31 @@ export function useScreenShareReceiverStats(room: Room): void {
 
       const receiver = getReceiver(track);
       if (!receiver) return;
+      const key = keyFor(participant, publication);
+      if (sampling.has(key)) return;
+      const sample = Symbol();
+      sampling.set(key, sample);
 
       let report: RTCStatsReport;
       try {
         report = await receiver.getStats();
+        if (cancelled || sampling.get(key) !== sample || publication.track !== track || !publication.isSubscribed) return;
       } catch (err) {
-        console.warn("[screen-share-receiver-stats] getStats failed:", err);
+        if (!cancelled && sampling.get(key) === sample) console.warn("[screen-share-receiver-stats] getStats failed:", err);
         return;
+      } finally {
+        if (sampling.get(key) === sample) sampling.delete(key);
       }
-      if (cancelled) return;
 
       const now = Date.now();
       const snap = summariseInbound(report);
-      const key = keyFor(participant, publication);
-      const prev = baselinesRef.current.get(key);
+      const prev = baselines.get(key);
 
       // First sample for this (publisher, track) → baseline only. Same
       // reasoning as the publisher hook: cumulative-vs-delta confusion
       // would report the entire publish-lifetime bitrate as "current".
       if (!prev) {
-        baselinesRef.current.set(key, {
+        baselines.set(key, {
           timestamp: now,
           bytesReceived: snap.bytesReceived,
           framesDecoded: snap.framesDecoded,
@@ -281,7 +284,7 @@ export function useScreenShareReceiverStats(room: Room): void {
       const dPli = Math.max(0, snap.pliCount - prev.pliCount);
 
       // Update baseline BEFORE the (potentially slow) log call.
-      baselinesRef.current.set(key, {
+      baselines.set(key, {
         timestamp: now,
         bytesReceived: snap.bytesReceived,
         framesDecoded: snap.framesDecoded,
@@ -357,7 +360,9 @@ export function useScreenShareReceiverStats(room: Room): void {
       // delta spike when the user re-opens a tab that triggered a layer
       // unsubscribe). Also drop the cached quality grade so the panel
       // badge fades back to neutral instead of showing a stale red dot.
-      baselinesRef.current.delete(keyFor(participant, publication));
+      const key = keyFor(participant, publication);
+      sampling.delete(key);
+      baselines.delete(key);
       if (publication.source === Track.Source.ScreenShare) {
         useVoiceStore.getState().clearScreenShareQualityGrade(
           resolveUserId(participant.identity),
@@ -369,8 +374,11 @@ export function useScreenShareReceiverStats(room: Room): void {
       // Walk our baselines and drop any for this participant. A bit O(N)
       // but the map size is bounded by active share count, which is small.
       const prefix = `${participant.identity}::`;
-      for (const key of baselinesRef.current.keys()) {
-        if (key.startsWith(prefix)) baselinesRef.current.delete(key);
+      for (const key of sampling.keys()) {
+        if (key.startsWith(prefix)) sampling.delete(key);
+      }
+      for (const key of baselines.keys()) {
+        if (key.startsWith(prefix)) baselines.delete(key);
       }
       useVoiceStore.getState().clearScreenShareQualityGrade(
         resolveUserId(participant.identity),
@@ -388,7 +396,7 @@ export function useScreenShareReceiverStats(room: Room): void {
       clearInterval(handle);
       room.off(RoomEvent.TrackUnsubscribed, handleUnsubscribed);
       room.off(RoomEvent.ParticipantDisconnected, handleDisconnected);
-      baselinesRef.current.clear();
+      baselines.clear();
     };
   }, [room]);
 }
