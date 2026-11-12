@@ -34,6 +34,24 @@ jobs:
           export PATH="$JAVA_HOME/bin:$PATH"
           cd client/android
           bash gradlew --no-daemon assembleDebug testDebugUnitTest assembleDebugAndroidTest
+      - name: Run installed Android instrumentation tests
+        if: runner.os == 'Linux'
+        shell: bash
+        timeout-minutes: 15
+        run: |
+          export JAVA_HOME="$JAVA_HOME_21_X64"
+          export PATH="$JAVA_HOME/bin:$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH"
+          image='system-images;android-35;google_apis;x86_64'
+          sdkmanager "$image"
+          echo no | avdmanager create avd --name hichat-ci --package "$image" --force
+          sudo chmod a+rw /dev/kvm
+          emulator -avd hichat-ci -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          emulator_pid=$!
+          trap 'kill "$emulator_pid" 2>/dev/null || true' EXIT
+          adb wait-for-device
+          until [[ "$(adb shell getprop sys.boot_completed | tr -d '\r')" == 1 ]]; do sleep 2; done
+          cd client/android
+          bash gradlew --no-daemon connectedDebugAndroidTest
       - name: Build iOS Simulator without signing
         if: runner.os == 'macOS'
         run: |
