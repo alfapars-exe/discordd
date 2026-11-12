@@ -79,14 +79,8 @@ vi.mock("./keyStorage", () => {
   };
 });
 
-// Mock the circular import inside restoreFromBackup
-vi.mock("./dmEncryption", () => ({
-  markSelfFanoutNeedsReset: vi.fn(async () => { metadataStore.set("self_fanout_reset", true); }),
-}));
-
 import { createBackup, restoreFromBackup } from "./keyBackup";
 import * as keyStorageMock from "./keyStorage";
-import * as dmEncryptionMock from "./dmEncryption";
 
 // The metadata double is module state, so it outlives a single test the way a
 // real IndexedDB store would. Reset it before every test in the file.
@@ -246,7 +240,6 @@ describe("keyBackup — self-fanout reset on restore (audit P0-FE-03)", () => {
     vi.clearAllMocks(); // drop createBackup's mock calls; measure only restore
     const ok = await restoreFromBackup(backup, "pw");
     expect(ok).toBe(true);
-    expect(dmEncryptionMock.markSelfFanoutNeedsReset).toHaveBeenCalledTimes(1);
     expect(await keyStorageMock.getMetadata("self_fanout_reset")).toBe(true);
   });
 
@@ -255,15 +248,11 @@ describe("keyBackup — self-fanout reset on restore (audit P0-FE-03)", () => {
     vi.clearAllMocks();
     await restoreFromBackup(backup, "pw");
 
-    // clearAllE2EEData is the first mutation importBackupContents performs.
-    const flagOrder =
-      vi.mocked(dmEncryptionMock.markSelfFanoutNeedsReset).mock.invocationCallOrder[0];
-    const importOrder =
-      vi.mocked(keyStorageMock.clearAllE2EEData).mock.invocationCallOrder[0];
-
-    expect(flagOrder).toBeDefined();
-    expect(importOrder).toBeDefined();
-    expect(flagOrder).toBeLessThan(importOrder);
+    const clear = vi.mocked(keyStorageMock.clearAllE2EEData);
+    expect(clear).toHaveBeenCalledWith({ resetSelfFanout: true });
+    expect(clear.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(keyStorageMock.saveIdentityKeyPair).mock.invocationCallOrder[0],
+    );
   });
 });
 
@@ -467,9 +456,10 @@ describe("keyBackup account-scope fencing", () => {
   it("does not import a decrypted backup after auth changes during reset preparation", async () => {
     const backup = await createBackup("scope-test-password");
     vi.clearAllMocks();
-    vi.mocked(dmEncryptionMock.markSelfFanoutNeedsReset).mockImplementationOnce(async () => {
+    vi.mocked(keyStorageMock.getAllMetadata).mockImplementationOnce(async () => {
       publishAuthOwnerChange("other-account");
       publishAuthGenerationChange(++authGeneration);
+      return [];
     });
     expect(await restoreFromBackup(backup, "scope-test-password")).toBe(false);
     expect(keyStorageMock.clearAllE2EEData).not.toHaveBeenCalled();
@@ -553,8 +543,10 @@ describe("keyBackup — a failed restore rolls the metadata store back", () => {
 
   it("restores deviceId to its PRE-restore value after a mid-write failure", async () => {
     const backup = await seedDeviceThenFailRestore();
+    metadataStore.set("self_fanout_reset", false);
 
     expect(await restoreFromBackup(backup, "pw")).toBe(false);
+    expect(await keyStorageMock.getMetadata("self_fanout_reset")).toBe(false);
 
     // Three outcomes are distinguishable here and only one is correct:
     //   null              → the bug: metadata wiped, device permanently mute
