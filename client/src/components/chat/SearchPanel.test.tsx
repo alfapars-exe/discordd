@@ -30,6 +30,7 @@ vi.mock("../../api/search", () => ({
 
 vi.mock("../../crypto/keyStorage", () => ({
   searchCachedMessages: vi.fn(async () => []),
+  getCachedDecryptedMessage: vi.fn(),
 }));
 
 // e2ee disabled + not ready -> the panel takes the server-side FTS5 path.
@@ -73,7 +74,7 @@ vi.mock("../shared/Avatar", () => ({
 
 import SearchPanel from "./SearchPanel";
 import { searchMessages } from "../../api/search";
-import { searchCachedMessages } from "../../crypto/keyStorage";
+import { getCachedDecryptedMessage, searchCachedMessages } from "../../crypto/keyStorage";
 import { useMessageStore } from "../../stores/messageStore";
 import { useServerStore } from "../../stores/serverStore";
 import { useE2EEStore } from "../../stores/e2eeStore";
@@ -235,6 +236,26 @@ describe("SearchPanel — result races", () => {
 
     expect(screen.queryByText("doomed row")).not.toBeInTheDocument();
     expect(screen.getByText("surviving row")).toBeInTheDocument();
+  });
+
+  it("keeps a deleted result off subsequent local search pages", async () => {
+    useServerStore.setState({ activeServer: { ...useServerStore.getState().activeServer!, e2ee_enabled: true } });
+    useE2EEStore.setState({ initStatus: "ready" });
+    const rows = Array.from({ length: 52 }, (_, i) => ({
+      messageId: String(i), channelId: "ch-1", dmChannelId: null,
+      content: `hit number ${i}`, timestamp: i,
+    }));
+    vi.mocked(searchCachedMessages).mockClear().mockImplementation(async () => [...rows]);
+    vi.mocked(getCachedDecryptedMessage).mockImplementation(async id => rows.find(row => row.messageId === id) ?? null);
+    render(<SearchPanel channelId="ch-1" onClose={() => {}} />);
+    typeQuery("hit");
+    await act(async () => {});
+    act(() => useMessageStore.setState({ lastDeleted: { id: "23", channel_id: "ch-1" } }));
+    fireEvent.click(screen.getByRole("button", { name: "searchNext" }));
+    await act(async () => {});
+    expect(screen.getByText("hit number 24")).toBeInTheDocument();
+    expect(screen.queryByText("hit number 23")).not.toBeInTheDocument();
+    expect(searchCachedMessages).toHaveBeenCalledTimes(1);
   });
 });
 
