@@ -59,6 +59,7 @@ export function redactSecrets(s: string): string {
 // defensive cap against runaway or cyclic recursion, not a depth these
 // hooks are expected to reach in practice.
 const REDACT_MAX_DEPTH = 4;
+const SECRET_FIELD = /^(?:password|passwd|passwordhash|authorization|cookie|setcookie|token|authtoken|accesstoken|refreshtoken|apikey|secret|clientsecret|ticket|dsn|privatekey)$/i;
 
 /**
  * Recursively redacts secret query-params from every string value found in
@@ -85,6 +86,10 @@ function redactStringValues(value: unknown, depth: number = REDACT_MAX_DEPTH): v
 
   const record = value as Record<string, unknown>;
   for (const key of Object.keys(record)) {
+    if (SECRET_FIELD.test(key.replace(/[-_.]/g, ""))) {
+      record[key] = "***";
+      continue;
+    }
     const item = record[key];
     if (typeof item === "string") {
       record[key] = redactSecrets(item);
@@ -161,6 +166,9 @@ export function scrubErrorEvent(event: SentryErrorEvent): SentryErrorEvent {
   }
   // Belt-and-suspenders on top of sendDefaultPii: false — never let a
   // captured request object (headers, cookies) leave the browser.
+  redactStringValues(event.extra);
+  redactStringValues(event.tags);
+  redactStringValues(event.contexts);
   event.request = undefined;
   return event;
 }
@@ -212,9 +220,11 @@ export function scrubTransactionEvent<E extends Sentry.Event>(event: E): E {
       }
     }
   }
-  if (event.contexts?.trace?.data) {
-    redactStringValues(event.contexts.trace.data);
-  }
+  redactStringValues(event.extra);
+  redactStringValues(event.tags);
+  redactStringValues(event.contexts);
+  // Start trace data at its original traversal depth.
+  redactStringValues(event.contexts?.trace?.data);
   return event;
 }
 

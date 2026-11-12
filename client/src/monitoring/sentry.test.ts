@@ -97,6 +97,20 @@ describe("redactSecrets", () => {
   });
 });
 
+describe("structured Sentry credentials", () => {
+  it("scrubs credentials in extra fields, tags and contexts before sending an error", () => {
+    const event = scrubErrorEvent({
+      type: undefined,
+      extra: { authorization: "private-auth", nested: [{ refresh_token: "private-refresh" }] },
+      tags: { stage: "testing", apiKey: "private-key" },
+      contexts: { custom: { "client-secret": "private-secret", ok: true } },
+    });
+    expect(JSON.stringify(event)).not.toContain("private-");
+    expect(event.tags?.stage).toBe("testing");
+    expect(event.contexts?.custom?.ok).toBe(true);
+  });
+});
+
 describe("scrubBreadcrumb", () => {
   it("drops console breadcrumbs entirely", () => {
     const breadcrumb: Breadcrumb = {
