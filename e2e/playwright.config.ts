@@ -3,7 +3,7 @@
  *
  * Stack under test:
  *   1. The real Go backend, built with CGO_ENABLED=0 into e2e/.tmp/ and run
- *      against a fresh SQLite file per run (see scripts/start-server.mjs).
+ *      against a fresh PostgreSQL database per run (see scripts/start-server.mjs).
  *   2. The Vite dev server, which already proxies /api and /ws to :9090
  *      (client/vite.config.ts). No production client build is needed, which
  *      keeps both local runs and CI fast.
@@ -11,17 +11,15 @@
  * Both are declared as `webServer` entries so Playwright owns their lifecycle
  * and tears them down even when the run fails.
  *
- * Ports are fixed rather than random because client/vite.config.ts hardcodes
- * `strictPort: true` on 3030 and the dev proxy target `localhost:9090`.
- * Overriding either would mean editing production source.
+ * The suite pins the API port and passes its loopback URL to Vite through
+ * HICHAT_DEV_API_TARGET so the browser and fixtures use the same API.
  *
  * baseURL uses `localhost` deliberately: the hichat_media attachment cookie is
  * set with Secure + SameSite=None (server/handlers/auth.go), and Chromium only
  * accepts Secure cookies from a trustworthy origin. http://localhost qualifies;
  * a LAN IP would not, and every image assertion would fail as a 401.
  *
- * Local run (from repo root):
- *   cd e2e && npm ci && npx playwright install chromium && npm test
+ * Local setup and PostgreSQL prerequisites are documented in e2e/README.md.
  */
 
 import { defineConfig, devices } from "@playwright/test";
