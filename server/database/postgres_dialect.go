@@ -157,6 +157,19 @@ func IsPostgres(q TxQuerier) bool {
 	return false
 }
 
+func startsEscapeString(query string, quote int) bool {
+	if quote == 0 || (query[quote-1] != 'e' && query[quote-1] != 'E') {
+		return false
+	}
+	if quote == 1 {
+		return true
+	}
+	// E must start a token rather than end an unquoted SQL identifier.
+	c := query[quote-2]
+	return !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' ||
+		c == '_' || c == '$' || c >= 0x80)
+}
+
 // bindPostgres understands SQL strings, quoted identifiers and comments. It
 // never inserts argument values, and preserves SQLite's repeated ?N binding.
 func bindPostgres(query string) (string, error) {
@@ -166,12 +179,18 @@ func bindPostgres(query string) (string, error) {
 		c := query[i]
 		if c == '\'' || c == '"' || c == '`' {
 			quote := c
+			escapes := quote == '\'' && startsEscapeString(query, i)
 			out.WriteByte(c)
 			i++
 			for i < len(query) {
 				c = query[i]
 				out.WriteByte(c)
 				i++
+				if escapes && c == '\\' && i < len(query) {
+					out.WriteByte(query[i])
+					i++
+					continue
+				}
 				if c == quote {
 					if i < len(query) && query[i] == quote {
 						out.WriteByte(query[i])
