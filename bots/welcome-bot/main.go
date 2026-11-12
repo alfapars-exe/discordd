@@ -86,7 +86,7 @@ func main() {
 	dialer.HandshakeTimeout = 10 * time.Second
 	delay := time.Second
 	for ctx.Err() == nil {
-		err = runGateway(ctx, config, &dialer, client)
+		err = runGateway(ctx, config, &dialer, client, 90*time.Second)
 		if ctx.Err() != nil {
 			break
 		}
@@ -107,7 +107,7 @@ func main() {
 	}
 }
 
-func runGateway(ctx context.Context, config botConfig, dialer *websocket.Dialer, client *http.Client) error {
+func runGateway(ctx context.Context, config botConfig, dialer *websocket.Dialer, client *http.Client, idleTimeout time.Duration) error {
 	connection, response, err := dialer.DialContext(ctx, config.gateway, http.Header{"Authorization": {"Bearer " + config.token}})
 	if err != nil {
 		if response != nil {
@@ -117,6 +117,18 @@ func runGateway(ctx context.Context, config botConfig, dialer *websocket.Dialer,
 	}
 	defer connection.Close()
 	connection.SetReadLimit(64 * 1024)
+	// The gateway sends protocol pings even when no members join.
+	refreshDeadline := func() error { return connection.SetReadDeadline(time.Now().Add(idleTimeout)) }
+	if err := refreshDeadline(); err != nil {
+		return err
+	}
+	replyToPing := connection.PingHandler()
+	connection.SetPingHandler(func(payload string) error {
+		if err := refreshDeadline(); err != nil {
+			return err
+		}
+		return replyToPing(payload)
+	})
 	done := make(chan struct{})
 	defer close(done)
 	go func() {
@@ -129,6 +141,9 @@ func runGateway(ctx context.Context, config botConfig, dialer *websocket.Dialer,
 	for {
 		var incoming event
 		if err := connection.ReadJSON(&incoming); err != nil {
+			return err
+		}
+		if err := refreshDeadline(); err != nil {
 			return err
 		}
 		text, ok := incoming.welcomeText(config.server)
