@@ -273,8 +273,9 @@ type MusicSessionStore interface {
 	Delete(context.Context, string) error
 }
 
-// MusicBotRuntime also receives account retirement notifications at startup.
+// MusicBotRuntime is the application-owned service, including shutdown and account retirement.
 type MusicBotRuntime interface {
+	MusicBotStopper
 	MusicBotService
 	MusicRequesterRetirementObserver
 }
