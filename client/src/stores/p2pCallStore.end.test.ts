@@ -37,6 +37,14 @@ it("shows a busy reply to an idle caller", () => {
   expect(fixture.toast).toHaveBeenCalledExactlyOnceWith("warning", "common:userBusy");
 });
 
+it("includes the call being ended and sends nothing when already idle", () => {
+  const send = vi.fn();
+  useP2PCallStore.setState({ _sendWS: send });
+  useP2PCallStore.getState().endCall();
+  useP2PCallStore.getState().endCall();
+  expect(send).toHaveBeenCalledExactlyOnceWith("p2p_call_end", { call_id: "call" });
+});
+
 it("accepts only the currently displayed ringing call", () => {
   const send = vi.fn();
   useP2PCallStore.setState({ incomingCall: call("current"), _sendWS: send });

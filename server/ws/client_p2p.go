@@ -72,10 +72,24 @@ func (c *Client) handleP2PCallDecline(event Event) {
 	}
 }
 
-// handleP2PCallEnd — no payload needed, userID identifies the active call.
-func (c *Client) handleP2PCallEnd() {
+// Older clients omit the payload or send an empty object.
+func (c *Client) handleP2PCallEnd(event Event) {
+	var callID string
+	if event.Data != nil {
+		raw, err := json.Marshal(event.Data)
+		if err != nil {
+			return
+		}
+		var fields map[string]json.RawMessage
+		if json.Unmarshal(raw, &fields) != nil {
+			return
+		}
+		if len(fields) > 0 && (json.Unmarshal(fields["call_id"], &callID) != nil || callID == "") {
+			return
+		}
+	}
 	if c.hub.onP2PCallEnd != nil {
-		logx.Go("ws.p2p_call_end", func() { c.hub.onP2PCallEnd(c.userID) })
+		logx.Go("ws.p2p_call_end", func() { c.hub.onP2PCallEnd(c.userID, callID) })
 	}
 }
 

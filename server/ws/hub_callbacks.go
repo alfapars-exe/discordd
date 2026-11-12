@@ -65,7 +65,7 @@ type VoiceActivityCallback func(userID string)
 type P2PCallInitiateCallback func(callerID string, data P2PCallInitiateData)
 type P2PCallAcceptCallback func(userID string, data P2PCallAcceptData)
 type P2PCallDeclineCallback func(userID string, data P2PCallDeclineData)
-type P2PCallEndCallback func(userID string)
+type P2PCallEndCallback func(userID, callID string)
 
 // P2PSignalCallback — WebRTC signaling data relayed to the other peer.
 type P2PSignalCallback func(senderID string, data P2PSignalData)

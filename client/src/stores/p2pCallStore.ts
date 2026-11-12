@@ -271,7 +271,8 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
     },
 
     endCall: () => {
-      get()._sendWS?.("p2p_call_end");
+      const { activeCall, _sendWS } = get();
+      if (activeCall) _sendWS?.("p2p_call_end", { call_id: activeCall.id });
       get().cleanup();
     },
 
