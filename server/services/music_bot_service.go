@@ -9,6 +9,7 @@
 // Files in this group:
 //
 //	music_bot_service.go   — interface, struct, public commands (this file)
+//	music_bot_queue.go     — queue edits, revision checks and rollback
 //	music_bot_pipeline.go  — yt-dlp + ffmpeg + Ogg/Opus → LiveKit publish loop
 //	music_bot_metadata.go  — yt-dlp metadata + playlist extraction
 //	music_bot_errors.go    — playback failure reason codes, sentinel errors, stderr tails
@@ -18,7 +19,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
 	"os/exec"
 	"sync"
 	"sync/atomic"
@@ -586,15 +586,11 @@ func (s *musicBotService) Skip(channelID string) error {
 	if err := s.CheckLegacyControl(context.Background(), channelID); err != nil {
 		return err
 	}
-	bot := s.lookupBot(channelID)
-	if bot == nil {
-		return pkg.ErrNotFound
-	}
-	bot.sessionMu.Lock()
-	defer bot.sessionMu.Unlock()
-	if err := s.CheckLegacyControl(context.Background(), channelID); err != nil {
+	bot, err := s.lockControlSession(channelID)
+	if err != nil {
 		return err
 	}
+	defer bot.sessionMu.Unlock()
 	bot.mu.Lock()
 	defer bot.mu.Unlock()
 	bot.skipFlag = true
@@ -614,15 +610,11 @@ func (s *musicBotService) Pause(channelID string) error {
 	if err := s.CheckLegacyControl(context.Background(), channelID); err != nil {
 		return err
 	}
-	bot := s.lookupBot(channelID)
-	if bot == nil {
-		return pkg.ErrNotFound
-	}
-	bot.sessionMu.Lock()
-	defer bot.sessionMu.Unlock()
-	if err := s.CheckLegacyControl(context.Background(), channelID); err != nil {
+	bot, err := s.lockControlSession(channelID)
+	if err != nil {
 		return err
 	}
+	defer bot.sessionMu.Unlock()
 	bot.mu.Lock()
 	defer bot.mu.Unlock()
 
@@ -638,15 +630,11 @@ func (s *musicBotService) Resume(channelID string) error {
 	if err := s.CheckLegacyControl(context.Background(), channelID); err != nil {
 		return err
 	}
-	bot := s.lookupBot(channelID)
-	if bot == nil {
-		return pkg.ErrNotFound
-	}
-	bot.sessionMu.Lock()
-	defer bot.sessionMu.Unlock()
-	if err := s.CheckLegacyControl(context.Background(), channelID); err != nil {
+	bot, err := s.lockControlSession(channelID)
+	if err != nil {
 		return err
 	}
+	defer bot.sessionMu.Unlock()
 	bot.mu.Lock()
 	defer bot.mu.Unlock()
 
@@ -664,13 +652,8 @@ func (s *musicBotService) Seek(channelID string, seconds int) error {
 	if err := s.CheckLegacyControl(context.Background(), channelID); err != nil {
 		return err
 	}
-	bot := s.lookupBot(channelID)
-	if bot == nil {
-		return pkg.ErrNotFound
-	}
-	bot.sessionMu.Lock()
-	if err := s.CheckLegacyControl(context.Background(), channelID); err != nil {
-		bot.sessionMu.Unlock()
+	bot, err := s.lockControlSession(channelID)
+	if err != nil {
 		return err
 	}
 	bot.mu.Lock()
@@ -713,184 +696,6 @@ func (s *musicBotService) Seek(channelID string, seconds int) error {
 		_ = bot.cmd.Process.Kill()
 	}
 	bot.mu.Unlock()
-	bot.sessionMu.Unlock()
-	s.broadcastState(bot)
-	return nil
-}
-
-func (s *musicBotService) RemoveQueueItem(channelID, queueItemID string, expectedRevision uint64) error {
-	if err := s.CheckLegacyControl(context.Background(), channelID); err != nil {
-		return err
-	}
-	if _, err := uuid.Parse(queueItemID); err != nil {
-		return fmt.Errorf("%w: invalid queue item id", pkg.ErrBadRequest)
-	}
-	bot := s.lookupBot(channelID)
-	if bot == nil {
-		return pkg.ErrNotFound
-	}
-	bot.sessionMu.Lock()
-	if err := s.CheckLegacyControl(context.Background(), channelID); err != nil {
-		bot.sessionMu.Unlock()
-		return err
-	}
-	bot.mu.Lock()
-	if expectedRevision != bot.revision {
-		bot.mu.Unlock()
-		bot.sessionMu.Unlock()
-		return fmt.Errorf("%w: music queue changed", pkg.ErrConflict)
-	}
-	index := -1
-	for i := range bot.queue {
-		if bot.queue[i].QueueItemID == queueItemID {
-			index = i
-			break
-		}
-	}
-	if index < 0 {
-		bot.mu.Unlock()
-		bot.sessionMu.Unlock()
-		return pkg.ErrNotFound
-	}
-	previousQueue := cloneMusicTracks(bot.queue)
-	previousRevision := bot.revision
-	bot.queue = append(bot.queue[:index], bot.queue[index+1:]...)
-	bot.revision++
-	bot.mu.Unlock()
-	if err := s.persistMutation(bot, func() { bot.queue = previousQueue; bot.revision = previousRevision }); err != nil {
-		bot.sessionMu.Unlock()
-		return err
-	}
-	bot.sessionMu.Unlock()
-	s.broadcastState(bot)
-	return nil
-}
-
-func (s *musicBotService) ReorderQueue(channelID string, queueItemIDs []string, expectedRevision uint64) error {
-	if err := s.CheckLegacyControl(context.Background(), channelID); err != nil {
-		return err
-	}
-	if len(queueItemIDs) > maxQueueLen {
-		return fmt.Errorf("%w: queue too large", pkg.ErrBadRequest)
-	}
-	for _, id := range queueItemIDs {
-		if _, err := uuid.Parse(id); err != nil {
-			return fmt.Errorf("%w: invalid queue item id", pkg.ErrBadRequest)
-		}
-	}
-	bot := s.lookupBot(channelID)
-	if bot == nil {
-		return pkg.ErrNotFound
-	}
-	bot.sessionMu.Lock()
-	if err := s.CheckLegacyControl(context.Background(), channelID); err != nil {
-		bot.sessionMu.Unlock()
-		return err
-	}
-	bot.mu.Lock()
-	if expectedRevision != bot.revision {
-		bot.mu.Unlock()
-		bot.sessionMu.Unlock()
-		return fmt.Errorf("%w: music queue changed", pkg.ErrConflict)
-	}
-	if len(queueItemIDs) != len(bot.queue) {
-		bot.mu.Unlock()
-		bot.sessionMu.Unlock()
-		return fmt.Errorf("%w: queue item set mismatch", pkg.ErrBadRequest)
-	}
-	byID := make(map[string]models.MusicTrack, len(bot.queue))
-	for _, track := range bot.queue {
-		byID[track.QueueItemID] = track
-	}
-	reordered := make([]models.MusicTrack, 0, len(bot.queue))
-	for _, id := range queueItemIDs {
-		track, ok := byID[id]
-		if !ok {
-			bot.mu.Unlock()
-			bot.sessionMu.Unlock()
-			return fmt.Errorf("%w: queue item set mismatch", pkg.ErrBadRequest)
-		}
-		delete(byID, id)
-		reordered = append(reordered, track)
-	}
-	if len(byID) != 0 {
-		bot.mu.Unlock()
-		bot.sessionMu.Unlock()
-		return fmt.Errorf("%w: duplicate queue item", pkg.ErrBadRequest)
-	}
-	previousQueue := cloneMusicTracks(bot.queue)
-	previousRevision := bot.revision
-	bot.queue = reordered
-	bot.revision++
-	bot.mu.Unlock()
-	if err := s.persistMutation(bot, func() { bot.queue = previousQueue; bot.revision = previousRevision }); err != nil {
-		bot.sessionMu.Unlock()
-		return err
-	}
-	bot.sessionMu.Unlock()
-	s.broadcastState(bot)
-	return nil
-}
-
-func (s *musicBotService) ShuffleQueue(channelID string, expectedRevision uint64) error {
-	if err := s.CheckLegacyControl(context.Background(), channelID); err != nil {
-		return err
-	}
-	bot := s.lookupBot(channelID)
-	if bot == nil {
-		return pkg.ErrNotFound
-	}
-	bot.sessionMu.Lock()
-	if err := s.CheckLegacyControl(context.Background(), channelID); err != nil {
-		bot.sessionMu.Unlock()
-		return err
-	}
-	bot.mu.Lock()
-	if expectedRevision != bot.revision {
-		bot.mu.Unlock()
-		bot.sessionMu.Unlock()
-		return fmt.Errorf("%w: music queue changed", pkg.ErrConflict)
-	}
-	previousQueue := cloneMusicTracks(bot.queue)
-	previousRevision := bot.revision
-	rand.Shuffle(len(bot.queue), func(i, j int) { bot.queue[i], bot.queue[j] = bot.queue[j], bot.queue[i] }) // #nosec G404 -- playback order is not security-sensitive
-	bot.revision++
-	bot.mu.Unlock()
-	if err := s.persistMutation(bot, func() { bot.queue = previousQueue; bot.revision = previousRevision }); err != nil {
-		bot.sessionMu.Unlock()
-		return err
-	}
-	bot.sessionMu.Unlock()
-	s.broadcastState(bot)
-	return nil
-}
-
-func (s *musicBotService) SetRepeatMode(channelID, mode string) error {
-	if err := s.CheckLegacyControl(context.Background(), channelID); err != nil {
-		return err
-	}
-	if mode != "off" && mode != "one" && mode != "all" {
-		return fmt.Errorf("%w: invalid repeat mode", pkg.ErrBadRequest)
-	}
-	bot := s.lookupBot(channelID)
-	if bot == nil {
-		return pkg.ErrNotFound
-	}
-	bot.sessionMu.Lock()
-	if err := s.CheckLegacyControl(context.Background(), channelID); err != nil {
-		bot.sessionMu.Unlock()
-		return err
-	}
-	bot.mu.Lock()
-	previousMode := bot.repeatMode
-	previousRevision := bot.revision
-	bot.repeatMode = mode
-	bot.revision++
-	bot.mu.Unlock()
-	if err := s.persistMutation(bot, func() { bot.repeatMode = previousMode; bot.revision = previousRevision }); err != nil {
-		bot.sessionMu.Unlock()
-		return err
-	}
 	bot.sessionMu.Unlock()
 	s.broadcastState(bot)
 	return nil
@@ -1229,6 +1034,25 @@ func (s *musicBotService) lookupBot(channelID string) *botInstance {
 	return s.bots[channelID]
 }
 
+// lockControlSession returns the current bot with sessionMu held. Stop can
+// retire a bot between the initial lookup and acquisition of that lock.
+func (s *musicBotService) lockControlSession(channelID string) (*botInstance, error) {
+	bot := s.lookupBot(channelID)
+	if bot == nil {
+		return nil, pkg.ErrNotFound
+	}
+	bot.sessionMu.Lock()
+	if bot.stopping.Load() || s.lookupBot(channelID) != bot {
+		bot.sessionMu.Unlock()
+		return nil, pkg.ErrNotFound
+	}
+	if err := s.CheckLegacyControl(context.Background(), channelID); err != nil {
+		bot.sessionMu.Unlock()
+		return nil, err
+	}
+	return bot, nil
+}
+
 func (s *musicBotService) channelLifecycleLock(channelID string) *sync.Mutex {
 	// FNV-1a is sufficient here: collisions only serialize unrelated channel
 	// operations, never affect correctness.
@@ -1550,7 +1374,7 @@ func (s *musicBotService) broadcastPlaybackError(bot *botInstance, track *models
 			Failures:   failures,
 			Fatal:      fatal,
 		},
-	})
+	}, &musicPublisher{bot: bot, fatal: fatal})
 }
 
 // context.Background(): logErr fires from the bot's own background playback

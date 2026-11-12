@@ -103,12 +103,12 @@ func (s *musicBotService) refreshMusicRequesterCache(bot *botInstance) {
 	}
 }
 
-func (s *musicBotService) publishMusicState(serverID, channelID string, state *models.MusicBotChannelState, final bool) bool {
+func (s *musicBotService) publishMusicState(serverID, channelID string, state *models.MusicBotChannelState, publisher *musicPublisher) bool {
 	var payload any = state
-	if final && state != nil {
+	if publisher != nil && publisher.final && state != nil {
 		payload = *state
 	}
-	return s.broadcastMusicAudience(serverID, channelID, ws.Event{Op: "music_bot_state", Data: map[string]any{"channel_id": channelID, "server_id": serverID, "state": payload}})
+	return s.broadcastMusicAudience(serverID, channelID, ws.Event{Op: "music_bot_state", Data: map[string]any{"channel_id": channelID, "server_id": serverID, "state": payload}}, publisher)
 }
 
 func (s *musicBotService) broadcastPrivateMusicState(bot *botInstance, final bool) {
@@ -151,7 +151,7 @@ func (s *musicBotService) broadcastPrivateMusicStateConditional(bot *botInstance
 		musicBotLogger.Error("read music snapshot privacy", "err", pkg.ErrText(err))
 		return
 	}
-	if s.publishMusicState(bot.serverID, bot.channelID, state, final) && state != nil && state.IsActive {
+	if s.publishMusicState(bot.serverID, bot.channelID, state, &musicPublisher{bot: bot, final: final}) && state != nil && state.IsActive {
 		bot.publishedActive.Store(true)
 	}
 }
@@ -220,7 +220,7 @@ func (s *musicBotService) AnonymizeMusicRequester(id string) {
 			musicBotLogger.Error("sanitize retired music publication", "err", pkg.ErrText(err))
 			continue
 		}
-		if s.publishMusicState(server, channel, state, false) && state.IsActive {
+		if s.publishMusicState(server, channel, state, nil) && state.IsActive {
 			if bot := s.lookupBot(channel); bot != nil {
 				bot.publishedActive.Store(true)
 			}
