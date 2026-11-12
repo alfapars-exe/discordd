@@ -72,8 +72,8 @@ import GroupConversationLauncher from "../dm/GroupConversationLauncher";
 import ServerCreationLauncher from "../servers/ServerCreationLauncher";
 import P2PAudioSink from "../p2p/P2PAudioSink";
 import QuickSwitcher from "../shared/QuickSwitcher";
-import KeyboardShortcutHelp from "../shared/KeyboardShortcutHelp";
-import LofiPlayer from "../shared/LofiPlayer";
+const KeyboardShortcutHelp = lazy(() => import("../shared/KeyboardShortcutHelp"));
+const LofiPlayer = lazy(() => import("../shared/LofiPlayer"));
 import ScreenPicker from "../voice/ScreenPicker";
 import AFKKickPopup from "../voice/AFKKickPopup";
 import ConnectionBanner from "../shared/ConnectionBanner";
@@ -434,8 +434,16 @@ function AppLayout() {
       <QuickSwitcher />
       <GroupConversationLauncher />
       <ServerCreationLauncher />
-      {shortcutHelpOpen && <KeyboardShortcutHelp onClose={closeShortcutHelp} />}
-      {lofiOpen && <LofiPlayer onClose={closeLofi} />}
+      {shortcutHelpOpen && (
+        <SectionErrorBoundary section="KeyboardShortcutHelp">
+          <Suspense fallback={null}><KeyboardShortcutHelp onClose={closeShortcutHelp} /></Suspense>
+        </SectionErrorBoundary>
+      )}
+      {lofiOpen && (
+        <SectionErrorBoundary section="LofiPlayer">
+          <Suspense fallback={null}><LofiPlayer onClose={closeLofi} /></Suspense>
+        </SectionErrorBoundary>
+      )}
 
       {/* P2P incoming call overlay */}
       <IncomingCallOverlay />
