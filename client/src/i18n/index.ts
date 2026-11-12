@@ -23,7 +23,9 @@ type Namespace = typeof ALL_NAMESPACES[number];
 const turkishCore = { common: trCommon, auth: trAuth, errors: trErrors };
 const modules = import.meta.glob<{ default: Record<string, unknown> }>([
   "./locales/*/*.json",
-  "!./locales/tr/{common,auth,errors}.json",
+  "!./locales/tr/common.json",
+  "!./locales/tr/auth.json",
+  "!./locales/tr/errors.json",
 ]);
 const pending = new Map<string, Promise<Record<string, unknown>>>();
 const active = new Set<Namespace>(["common", "auth", "errors", "settings"]);
