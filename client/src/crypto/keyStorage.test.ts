@@ -570,6 +570,27 @@ describe("keyStorage — searchCachedDMMessages (byDMChannel index + cursor)", (
 });
 
 describe("keyStorage — single message cache read", () => {
+  it("removes a deleted channel message from subsequent searches only in its owning channel", async () => {
+    const row = makeCachedMessage({ messageId: "deleted", channelId: "c1", dmChannelId: null, content: "searchable" });
+    await keyStorage.cacheDecryptedMessage(row);
+    expect(await keyStorage.deleteCachedChannelMessage(row.messageId, "other", () => true)).toBe(false);
+    expect(await keyStorage.deleteCachedChannelMessage(row.messageId, "c1", () => false)).toBe(false);
+    expect(await keyStorage.searchCachedMessages("c1", "searchable")).toEqual([row]);
+    expect(await keyStorage.deleteCachedChannelMessage(row.messageId, "c1", () => true)).toBe(true);
+    expect(await keyStorage.searchCachedMessages("c1", "searchable")).toEqual([]);
+  });
+
+  it("evicts plaintext before a fresh search after a WebSocket channel deletion", async () => {
+    const { handleChannelEvent } = await import("../hooks/ws/channelEventHandlers");
+    publishAuthOwnerChange("key-storage-test-owner");
+    const row = makeCachedMessage({ messageId: "deleted", channelId: "c1", dmChannelId: null, content: "searchable" });
+    await keyStorage.cacheDecryptedMessage(row);
+    const deletion = { op: "message_delete", d: { id: row.messageId, channel_id: row.channelId } } as const;
+    await handleChannelEvent(deletion, () => false);
+    expect(await keyStorage.getCachedDecryptedMessage(row.messageId)).toEqual(row);
+    await handleChannelEvent(deletion);
+    expect(await keyStorage.searchCachedMessages("c1", "searchable")).toEqual([]);
+  });
   it("deletes a matching DM cache record from direct reads and indexed search",async()=>{
     const message=makeCachedMessage({messageId:"deleted",channelId:"",dmChannelId:"dm",content:"searchable"});
     await keyStorage.cacheDecryptedMessage(message);
