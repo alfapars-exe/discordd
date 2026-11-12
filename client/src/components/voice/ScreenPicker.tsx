@@ -82,6 +82,9 @@ function ScreenPicker() {
     if (!api) return;
 
     const stopShow = api.onShowScreenPicker((incoming) => {
+      const hasScreens = incoming.some(source => source.id.startsWith("screen:"));
+      const hasWindows = incoming.some(source => source.id.startsWith("window:"));
+      if (hasScreens !== hasWindows) setActiveTab(hasScreens ? "screens" : "windows");
       setSources(normalizeSources(incoming));
       setIsRefreshing(false);
     });
