@@ -5,6 +5,24 @@ import (
 	"time"
 )
 
+func TestUnregisterBeforeRegistrationDoesNotLeaveGhostClient(t *testing.T) {
+	h := NewHub()
+	defer h.Shutdown()
+	client := presenceClient(h, "owner", "online")
+	client.serverIDs = []string{"server"}
+	client.registered = make(chan struct{})
+	h.removeClient(client)
+	h.addClient(client)
+	select {
+	case <-client.registered:
+	default:
+		t.Fatal("registration waiter was not released")
+	}
+	if len(h.clients["owner"]) != 0 || len(h.serverClients["server"]) != 0 {
+		t.Fatal("canceled connection was indexed after unregister")
+	}
+}
+
 // A registration acknowledgement gates ready and both websocket pumps.
 // Every callback must be submitted in the same order its ticket was reserved.
 func TestRegistrationAcknowledgesWithPresenceAndGameActivityCallbacks(t *testing.T) {
