@@ -186,3 +186,18 @@ func TestErrorWithMessage_NoCode(t *testing.T) {
 		t.Errorf("expected no code field in message-only response, got: %s", body)
 	}
 }
+
+func TestJSONEncodingFailureReturnsErrorEnvelope(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	JSON(recorder, http.StatusCreated, make(chan int))
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", recorder.Code)
+	}
+	var response APIResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Success || response.Code != "INTERNAL" || response.Error != "internal server error" {
+		t.Fatalf("unexpected response: %+v", response)
+	}
+}
