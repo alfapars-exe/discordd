@@ -2,6 +2,7 @@
 import { create } from "zustand";
 import * as preferencesApi from "../api/preferences";
 import { loadPreferencePresenter } from "./preferencePresenter";
+import { APPEARANCE_STORAGE_KEYS } from "./appearancePreferences";
 import { SERVER_URL } from "../utils/constants";
 
 import { decodeLegacyAppearance, object, sanitize, merge, nonempty, cacheable, type PreferencesData } from "./preferencesCodec";
@@ -27,11 +28,6 @@ type PreferencesState = {
 
 const CACHE_LIMIT = 64 * 1024;
 const LEGACY_BACKUP_KEY = "hichat.preferences.legacy-presentation.v1";
-const LEGACY_APPEARANCE_KEYS: Record<string, string> = {
-  blurEnabled: "mqvi_blur_enabled", blurStrength: "mqvi_blur_strength", wallpaperEnabled: "mqvi_wallpaper_enabled",
-  lightningEnabled: "mqvi_lightning_enabled", lightningBlur: "mqvi_lightning_blur", neonEnabled: "mqvi_neon_enabled",
-  neonIntensity: "mqvi_neon_intensity", uiScale: "mqvi_ui_scale", avatarAnimation: "hichat-avatar-animation",
-};
 const DEBOUNCE_MS = 1000;
 let epoch = 0;
 let cacheKey: string | null = null;
@@ -99,7 +95,7 @@ function preserveLegacyPreferences(): void {
     const appearance: PreferencesData = {};
     let accessibility: unknown;
     if (!cacheKey) {
-      for (const [field, key] of Object.entries(LEGACY_APPEARANCE_KEYS)) {
+      for (const [field, key] of Object.entries(APPEARANCE_STORAGE_KEYS)) {
         const raw = localStorage.getItem(key);
         const value = decodeLegacyAppearance(field, raw);
         if (value !== undefined) appearance[field] = value;

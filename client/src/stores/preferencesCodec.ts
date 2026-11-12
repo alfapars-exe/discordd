@@ -1,3 +1,5 @@
+import { APPEARANCE_RANGES, APPEARANCE_STORAGE_KEYS } from "./appearancePreferences";
+
 export type PreferencesData = Record<string, unknown>;
 
 const MERGED_NAMESPACES = new Set(["voice_settings", "accessibility", "appearance", "sidebar_sections", "cosmetics_view", "entrance_sounds", "privacy", "notifications", "email_preferences", "locale"]);
@@ -18,7 +20,7 @@ const DEVICE_FIELDS = new Set([
 ]);
 const CACHE_FIELDS: Record<string, Set<string>> = {
   cosmetics_view: new Set(["plain"]),
-  appearance: new Set(["blurEnabled", "blurStrength", "wallpaperEnabled", "lightningEnabled", "lightningBlur", "neonEnabled", "neonIntensity", "uiScale", "avatarAnimation"]),
+  appearance: new Set(Object.keys(APPEARANCE_STORAGE_KEYS)),
   entrance_sounds: new Set(["enabled", "volume"]),
   accessibility: new Set(["chatFontSize", "alwaysUnderlineLinks", "showDisplayNameStyles", "density", "messageStyle", "messageGroupGapPx", "saturation", "saturateCustomColors", "highContrast", "syncHighContrast", "showSwitchIndicators", "roleColorMode", "officialMessageStyle", "reduceMotion", "syncReducedMotion", "disableAnimatedEmoji", "autoplayGifs", "stickerAnimation", "notificationSoundVolume", "ttsEnabled", "ttsRate", "notificationDuration", "showImageDescriptions", "legacyComposer"]),
   voice_settings: new Set(["inputMode", "pttKey", "micSensitivity", "userVolumes", "masterVolume", "inputVolume", "soundsEnabled", "localMutedUsers", "noiseReduction", "noiseReductionEngine", "noiseSuppressionLevel", "deepfilterSuppression", "screenShareVolumes", "screenShareAudio", "screenShareQuality", "screenShareFps", "screenShareShowCursor", "screenShareLowLatency", "screenShareMode", "cameraQuality", "cameraFps", "micProfile", "muteHotkeyEnabled", "muteHotkey"]),
@@ -30,7 +32,7 @@ const CACHE_FIELDS: Record<string, Set<string>> = {
 const UNSAFE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 const BOOLEAN_FIELDS = new Set(["plain", "enabled", "blurEnabled", "wallpaperEnabled", "lightningEnabled", "neonEnabled", "alwaysUnderlineLinks", "showDisplayNameStyles", "saturateCustomColors", "highContrast", "syncHighContrast", "showSwitchIndicators", "reduceMotion", "syncReducedMotion", "disableAnimatedEmoji", "autoplayGifs", "ttsEnabled", "showImageDescriptions", "legacyComposer", "soundsEnabled", "noiseReduction", "screenShareAudio", "screenShareShowCursor", "screenShareLowLatency", "muteHotkeyEnabled", "voiceOverlayEnabled", "voiceOverlaySpeakingOnly", "voiceOverlayChat", "voiceOverlayChatActions", "voiceOverlayChatCompose", "improvementTelemetry", "shareProfileUpdates", "shareOnlineUpdates", "shareStreamUpdates", "clipVoiceConsent", "experiencePersonalization", "personalizedFriendMessages", "serverDMDefault", "desktopEnabled", "taskbarFlash", "unreadBadge", "messageSound", "currentChannelSound", "incomingCallSound", "muteAllSounds", "voiceStreamStartSound", "voiceStreamStopSound", "voiceJoinSound", "voiceLeaveSound", "voiceWatchStartSound", "voiceWatchStopSound", "voiceMuteSound", "voiceUnmuteSound", "voiceDeafenSound", "voiceUndeafenSound", "notifyWhenFocused", "streamNotifications", "onlineFriendNotifications", "friendAnniversaryNotifications", "profileUpdateNotifications", "upcomingEventNotifications", "communication", "social", "announcements", "tips", "recommendations", "marketingUnsubscribed"]);
 const NUMBER_RANGES: Record<string, [number, number]> = {
-  blurStrength: [8, 40], lightningBlur: [0, 20], neonIntensity: [0, 100], uiScale: [50, 200],
+  ...APPEARANCE_RANGES,
   chatFontSize: [12, 24], messageGroupGapPx: [0, 24], saturation: [0, 100], notificationSoundVolume: [0, 100], ttsRate: [0.5, 2],
   micSensitivity: [0, 100], masterVolume: [0, 100], inputVolume: [0, 200], deepfilterSuppression: [0, 100], volume: [0, 100], voiceOverlaySpeakingOpacity: [20, 100], voiceOverlayIdleOpacity: [0, 100], voiceOverlayScale: [75, 150],
 };
