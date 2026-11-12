@@ -27,12 +27,32 @@ func TestGroupListMemberProjection(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	cipher, device, metadata := "cipher", "device", "{}"
+	msg := &models.GroupDMMessage{ID: "anchor", GroupID: "first", UserID: dmBob, KeyEpoch: 1,
+		EncryptionVersion: 1, Ciphertext: &cipher, SenderDeviceID: &device, E2EEMetadata: &metadata}
+	if err := repo.CreateMessage(ctx, msg); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.SetMuted(ctx, "first", dmAlice, true); err != nil {
+		t.Fatal(err)
+	}
 	groups, err := repo.ListForUser(ctx, dmAlice)
 	if err != nil || len(groups) != 2 {
 		t.Fatalf("group count %d, %v", len(groups), err)
 	}
 	seen := map[string]bool{}
 	for _, g := range groups {
+		state, err := repo.GetReadState(ctx, g.ID, dmAlice)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if state.IsMuted != g.IsMuted || state.KeyEpoch != g.ReadKeyEpoch || state.SettingsRevision != g.SettingsRevision ||
+			state.Revision != g.ReadRevision || state.LastReadSourceSequence != g.LastReadSourceSequence || state.UnreadCount != g.UnreadCount {
+			t.Fatalf("read-state mismatch for %s", g.ID)
+		}
+		if g.ID == "first" && (!g.IsMuted || g.OldestUnreadMessageID == nil || *g.OldestUnreadMessageID != "anchor") {
+			t.Fatalf("lost viewer state for first group")
+		}
 		seen[g.ID] = true
 		ids, err := repo.ListMemberIDs(ctx, g.ID)
 		if err != nil || len(g.Members) != len(ids) || len(ids) != 2 {
@@ -46,6 +66,21 @@ func TestGroupListMemberProjection(t *testing.T) {
 	}
 	if !seen["first"] || !seen["second"] {
 		t.Fatalf("unexpected groups %v", seen)
+	}
+	others, err := repo.ListForUser(ctx, dmBob)
+	if err != nil || len(others) != 2 {
+		t.Fatalf("other viewer: %d groups, %v", len(others), err)
+	}
+	for _, g := range others {
+		if g.IsMuted || g.OldestUnreadMessageID != nil {
+			t.Fatalf("other viewer inherited private state: %+v", g)
+		}
+	}
+	if _, err := db.Conn.Exec("DELETE FROM group_dm_reads WHERE group_id=? AND user_id=?", "first", dmAlice); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.ListForUser(ctx, dmAlice); !errors.Is(err, pkg.ErrNotFound) {
+		t.Fatalf("missing read row: %v", err)
 	}
 }
 

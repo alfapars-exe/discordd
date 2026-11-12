@@ -21,7 +21,8 @@ type groupAroundFixture struct {
 }
 
 func (f *groupAroundFixture) ListForUser(context.Context, string) ([]models.GroupDM, error) {
-	return []models.GroupDM{{ID: "group"}}, nil
+	anchor := "unread-anchor"
+	return []models.GroupDM{{ID: "group", UnreadCount: 2, ReadRevision: 3, OldestUnreadMessageID: &anchor}}, nil
 }
 
 func (f *groupAroundFixture) ListMemberIDs(context.Context, string) ([]string, error) {

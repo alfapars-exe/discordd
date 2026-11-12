@@ -253,7 +253,7 @@ Parametre sınır testi, sürücünün PostgreSQL protokolünde bağlanamayacak 
 
 ## RF09 — Üye/grup sorgularının veri kapsamı
 
-**Grup konuşmaları.** Mesaj geçmişi, bir gruptaki üyeler ve kullanıcının grup listesi istek başına tek bir toplu profil okuması kullanır. Sorgu yalnız `PublicUser` alanlarını seçer. Grup üyelerinin ve mesajların sırası korunur. Eksik yazar önceki gibi `ErrNotFound` üretir. Grup listesinde üyelik ve okundu durumu hâlen grup başına okunur.
+**Grup konuşmaları.** Mesaj geçmişi ve tek grup görünümü istek başına tek toplu profil okuması kullanır. Kullanıcının grup listesi ise görünür grupları, sıralı üye profillerini ve okuyucuya özel durumu tek SQL sorgusunda alır. İlk okunmamış mesaj her grup için bir kez hesaplanır. SQLite ve PostgreSQL 18.6 testleri üç grup ve iki okuyucuyla görünürlüğü, üye sırasını, özel sessize alma ayarını, ilk okunmamış mesajı ve eksik okundu kaydının reddedilmesini doğruladı. Eksik mesaj yazarı önceki gibi `ErrNotFound` üretir.
 
 **RF29 ölçümü.** `HICHAT_MEASURE_GROUP_PROFILES=1` ile `go test ./repository -run '^TestGroupPublicProfileParity$' -count=1 -v` iki yazardan gelen 100 mesajın profil okumasını karşılaştırır. Bir ısınma ve 30 örnekte yerel PostgreSQL 18.6 p95 süresi 100 tekil okumada 10,874 ms, toplu okumada 0,521 ms oldu. Her iki yolda bağlantı havuzu beklemesi 0 s ölçüldü. SQLite tekil okumada 3,284 ms verdi. Toplu SQLite ölçümünde p95 zamanlayıcının çözünürlüğünün altında kaldı. Bu süreler HTTP isteğinin tamamını ve eşzamanlı kullanıcı yükünü kapsamaz.
 

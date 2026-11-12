@@ -227,22 +227,7 @@ func (s *groupDMService) Create(ctx context.Context, creatorID string, req *mode
 }
 
 func (s *groupDMService) List(ctx context.Context, userID string) ([]models.GroupDM, error) {
-	groups, err := s.groups.ListForUser(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	for i := range groups {
-		readState, readErr := s.groups.GetReadState(ctx, groups[i].ID, userID)
-		err = readErr
-		if err != nil {
-			return nil, err
-		}
-		groups[i].UnreadCount, groups[i].ReadRevision = readState.UnreadCount, readState.Revision
-		groups[i].OldestUnreadMessageID = readState.OldestUnreadMessageID
-		groups[i].LastReadSourceSequence, groups[i].ReadKeyEpoch = readState.LastReadSourceSequence, readState.KeyEpoch
-		groups[i].IsMuted, groups[i].SettingsRevision = readState.IsMuted, readState.SettingsRevision
-	}
-	return groups, nil
+	return s.groups.ListForUser(ctx, userID)
 }
 
 func (s *groupDMService) Get(ctx context.Context, groupID, userID string) (*models.GroupDM, error) {
