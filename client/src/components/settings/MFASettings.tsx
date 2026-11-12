@@ -24,11 +24,11 @@ export default function MFASettings({ userID }: { userID: string }) {
     alive.current = true;
     const request = ++statusRequest.current;
     void mfa.getMFAStatus(userID).then(res => {
-      if (request !== statusRequest.current) return;
+      if (!alive.current || request !== statusRequest.current) return;
       if (res.success && res.data) setStatus(res.data);
       else setError(t("mfa.loadError"));
-    }).catch(() => { if (request === statusRequest.current) setError(t("mfa.loadError")); });
-    return () => { statusRequest.current++; alive.current = false; };
+    }).catch(() => { if (alive.current && request === statusRequest.current) setError(t("mfa.loadError")); });
+    return () => { alive.current = false; };
   }, [userID, t]);
 
   function failure(code?: string) {
