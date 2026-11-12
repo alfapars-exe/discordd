@@ -225,3 +225,11 @@ func TestBindPostgresDollarStrings(t *testing.T) {
 		t.Fatalf("got %q, err %v, want %q", got, err, want)
 	}
 }
+func TestPostgresDollarStringsWithBoundValues(t *testing.T) {
+	db := localDialectPostgres(t)
+	var plain, tagged, bound string
+	err := db.QueryRow(`SELECT $$?$$, $body_2$' ? /* $$ $body_2$, ?::text`, "bound").Scan(&plain, &tagged, &bound)
+	if err != nil || plain != "?" || tagged != "' ? /* $$ " || bound != "bound" {
+		t.Fatalf("unexpected columns: %q %q %q, err %v", plain, tagged, bound, err)
+	}
+}
