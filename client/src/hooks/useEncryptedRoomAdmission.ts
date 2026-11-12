@@ -30,6 +30,7 @@ export function useEncryptedRoomAdmission(options: Options) {
   const tokenOwner = mediaTokenSubject(options.token);
   const latest = useRef(options);
   useLayoutEffect(() => { latest.current = options; });
+  const activeBinding = useRef<Binding | null>(null);
   const [binding, setBinding] = useState<Binding | null>(null);
   const [, changed] = useState(0);
   const [reconnectRevision, reconnect] = useState(0);
@@ -130,7 +131,7 @@ export function useEncryptedRoomAdmission(options: Options) {
       record.active = false; record.ready = false; record.revision++; pauseAll();record.captureLease.retire(); void record.room.disconnect(); changed((value) => value + 1);
     };
     const ownerSubscription = subscribeAuthOwnerChanges(retireAuth), generationSubscription = subscribeAuthGenerationChanges(retireAuth);
-    queueMicrotask(() => { if (record.active && JSON.stringify(getAuthSessionSnapshot()) === authScope) { setRoomFailure(null); setBinding(record); } });
+    queueMicrotask(() => { if (record.active && JSON.stringify(getAuthSessionSnapshot()) === authScope) { activeBinding.current = record; setRoomFailure(null); setBinding(record); } });
     return () => {
       record.active = false; record.ready = false; record.revision++; pauseAll();record.captureLease.retire();
       ownerSubscription(); generationSubscription();
@@ -144,8 +145,8 @@ export function useEncryptedRoomAdmission(options: Options) {
   }, [enabled, scope, keyProvider, worker, tokenOwner]);
 
   useLayoutEffect(() => {
-    if (!binding || !binding.active || binding.scope !== scope || !enabled) return;
-    const record = binding;
+    const record = activeBinding.current;
+    if (!record || record !== binding || !record.active || record.scope !== scope || !enabled) return;
     const revision = ++record.revision;
     const authScope = JSON.stringify(getAuthSessionSnapshot());
     record.ready = false;record.captureLease.close();
