@@ -54,11 +54,6 @@ export function redactSecrets(s: string): string {
   return result;
 }
 
-// Bound on redactStringValues' recursion depth — Sentry's own breadcrumb/
-// span/context payloads are at most one or two levels deep, so this is a
-// defensive cap against runaway or cyclic recursion, not a depth these
-// hooks are expected to reach in practice.
-const REDACT_MAX_DEPTH = 4;
 const SECRET_FIELD = /^(?:password|passwd|passwordhash|authorization|cookie|setcookie|token|authtoken|accesstoken|refreshtoken|apikey|secret|clientsecret|ticket|dsn|privatekey)$/i;
 
 /**
@@ -69,32 +64,22 @@ const SECRET_FIELD = /^(?:password|passwd|passwordhash|authorization|cookie|setc
  * redacted by default instead of leaking until someone adds an explicit
  * per-field check for it.
  */
-function redactStringValues(value: unknown, depth: number = REDACT_MAX_DEPTH): void {
-  if (depth <= 0 || value === null || typeof value !== "object") return;
-
-  if (Array.isArray(value)) {
-    for (let i = 0; i < value.length; i++) {
-      const item: unknown = value[i];
-      if (typeof item === "string") {
-        value[i] = redactSecrets(item);
-      } else {
-        redactStringValues(item, depth - 1);
+function redactStringValues(value: unknown): void {
+  if (!value || typeof value !== "object") return;
+  const pending = [value];
+  const visited = new WeakSet<object>(pending);
+  while (pending.length) {
+    const record = pending.pop() as Record<string, unknown>;
+    for (const key of Object.keys(record)) {
+      const item = record[key];
+      if (SECRET_FIELD.test(key.replace(/[-_.]/g, ""))) {
+        record[key] = "***";
+      } else if (typeof item === "string") {
+        record[key] = redactSecrets(item);
+      } else if (item && typeof item === "object" && !visited.has(item)) {
+        visited.add(item);
+        pending.push(item);
       }
-    }
-    return;
-  }
-
-  const record = value as Record<string, unknown>;
-  for (const key of Object.keys(record)) {
-    if (SECRET_FIELD.test(key.replace(/[-_.]/g, ""))) {
-      record[key] = "***";
-      continue;
-    }
-    const item = record[key];
-    if (typeof item === "string") {
-      record[key] = redactSecrets(item);
-    } else {
-      redactStringValues(item, depth - 1);
     }
   }
 }
@@ -223,8 +208,6 @@ export function scrubTransactionEvent<E extends Sentry.Event>(event: E): E {
   redactStringValues(event.extra);
   redactStringValues(event.tags);
   redactStringValues(event.contexts);
-  // Start trace data at its original traversal depth.
-  redactStringValues(event.contexts?.trace?.data);
   return event;
 }
 

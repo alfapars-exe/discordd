@@ -98,6 +98,16 @@ describe("redactSecrets", () => {
 });
 
 describe("structured Sentry credentials", () => {
+  it("redacts deeply nested credentials even when metadata refers to itself", () => {
+    const leaf = { token: "nested-secret", state: "ready" };
+    let nested: unknown = leaf;
+    for (let i = 0; i < 50; i++) nested = [nested];
+    const extra: Record<string, unknown> = { nested };
+    extra.self = extra;
+    scrubErrorEvent({ type: undefined, extra });
+    expect(leaf).toEqual({ token: "***", state: "ready" });
+  });
+
   it("scrubs credentials in extra fields, tags and contexts before sending an error", () => {
     const event = scrubErrorEvent({
       type: undefined,
