@@ -231,23 +231,7 @@ func (s *groupDMService) List(ctx context.Context, userID string) ([]models.Grou
 	if err != nil {
 		return nil, err
 	}
-	members := make([][]string, len(groups))
-	var allIDs []string
 	for i := range groups {
-		members[i], err = s.groups.ListMemberIDs(ctx, groups[i].ID)
-		if err != nil {
-			return nil, err
-		}
-		allIDs = append(allIDs, members[i]...)
-	}
-	profiles, err := s.users.PublicUsersByID(ctx, allIDs)
-	if err != nil {
-		return nil, err
-	}
-	for i := range groups {
-		if err := setGroupMembers(&groups[i], members[i], profiles); err != nil {
-			return nil, err
-		}
 		readState, readErr := s.groups.GetReadState(ctx, groups[i].ID, userID)
 		err = readErr
 		if err != nil {

@@ -65,7 +65,14 @@ func (r *sqliteGroupDMRepo) GetByID(ctx context.Context, id string) (*models.Gro
 	return g, nil
 }
 func (r *sqliteGroupDMRepo) ListForUser(ctx context.Context, userID string) ([]models.GroupDM, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT g.id,g.owner_id,g.name,g.icon_url,g.key_epoch,g.call_room_key,g.created_at,g.updated_at FROM group_dm_channels g JOIN group_dm_members m ON m.group_id=g.id WHERE m.user_id=? ORDER BY g.updated_at DESC`, userID)
+	rows, err := r.db.QueryContext(ctx, `SELECT g.id,g.owner_id,g.name,g.icon_url,g.key_epoch,g.call_room_key,g.created_at,g.updated_at,
+		u.id,u.username,u.display_name,u.avatar_url,u.status,u.custom_status,u.created_at
+		FROM group_dm_members viewer
+		JOIN group_dm_channels g ON g.id=viewer.group_id
+		JOIN group_dm_members member ON member.group_id=g.id
+		JOIN users u ON u.id=member.user_id
+		WHERE viewer.user_id=?
+		ORDER BY g.updated_at DESC,g.id,member.joined_at,member.user_id`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -73,10 +80,16 @@ func (r *sqliteGroupDMRepo) ListForUser(ctx context.Context, userID string) ([]m
 	out := []models.GroupDM{}
 	for rows.Next() {
 		var g models.GroupDM
-		if err := rows.Scan(&g.ID, &g.OwnerID, &g.Name, &g.IconURL, &g.KeyEpoch, &g.CallRoomKey, &g.CreatedAt, &g.UpdatedAt); err != nil {
+		var member models.PublicUser
+		if err := rows.Scan(&g.ID, &g.OwnerID, &g.Name, &g.IconURL, &g.KeyEpoch, &g.CallRoomKey, &g.CreatedAt, &g.UpdatedAt,
+			&member.ID, &member.Username, &member.DisplayName, &member.AvatarURL, &member.Status, &member.CustomStatus, &member.CreatedAt); err != nil {
 			return nil, err
 		}
-		out = append(out, g)
+		if len(out) == 0 || out[len(out)-1].ID != g.ID {
+			out = append(out, g)
+		}
+		last := &out[len(out)-1]
+		last.Members = append(last.Members, member)
 	}
 	return out, rows.Err()
 }

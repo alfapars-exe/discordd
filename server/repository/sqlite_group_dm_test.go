@@ -9,6 +9,46 @@ import (
 	"github.com/argeinfina/hichat/pkg"
 )
 
+func TestGroupListMemberProjection(t *testing.T) {
+	db := newTestDB(t)
+	seedDMUsers(t, db)
+	ctx := context.Background()
+	repo := NewSQLiteGroupDMRepo(wrapForRepo(db))
+	for _, tc := range []struct {
+		id      string
+		members []string
+	}{
+		{"first", []string{dmAlice, dmBob}},
+		{"second", []string{dmAlice, dmCarol}},
+		{"hidden", []string{dmBob, dmCarol}},
+	} {
+		g := &models.GroupDM{ID: tc.id, OwnerID: tc.members[0], Name: tc.id, KeyEpoch: 1, CallRoomKey: tc.id}
+		if err := repo.Create(ctx, g, tc.members); err != nil {
+			t.Fatal(err)
+		}
+	}
+	groups, err := repo.ListForUser(ctx, dmAlice)
+	if err != nil || len(groups) != 2 {
+		t.Fatalf("group count %d, %v", len(groups), err)
+	}
+	seen := map[string]bool{}
+	for _, g := range groups {
+		seen[g.ID] = true
+		ids, err := repo.ListMemberIDs(ctx, g.ID)
+		if err != nil || len(g.Members) != len(ids) || len(ids) != 2 {
+			t.Fatalf("group %s roster size, %v", g.ID, err)
+		}
+		for i, id := range ids {
+			if g.Members[i].ID != id || g.Members[i].Username == "" {
+				t.Fatalf("unexpected member at %s[%d]", g.ID, i)
+			}
+		}
+	}
+	if !seen["first"] || !seen["second"] {
+		t.Fatalf("unexpected groups %v", seen)
+	}
+}
+
 func TestGroupDMRepositoryMembershipRotatesOnlyOnChange(t *testing.T) {
 	db := newTestDB(t)
 	for _, row := range []struct{ id, name string }{{"g-owner", "groupowner"}, {"g-one", "groupone"}, {"g-two", "grouptwo"}} {
