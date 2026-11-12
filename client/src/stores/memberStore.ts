@@ -52,6 +52,7 @@ type MemberState = {
 
   // ─── Actions ───
   fetchMembers: (serverId?: string, force?: boolean) => Promise<void>;
+  modifyMemberRoles: typeof memberApi.modifyMemberRoles;
 
   // ─── WS Event Handlers (all require serverId) ───
   handleReady: (onlineUserIds: string[]) => void;
@@ -288,6 +289,33 @@ export const useMemberStore = create<MemberState>((set, get) => ({
       });
       finishPrivacyRefresh(serverId);
     }
+  },
+
+  modifyMemberRoles: async (serverId, targetId, roleIds) => {
+    synchronizeAuthScope();
+    const { ownerId, authGeneration } = get();
+    const originalRoles = get().getMembersForServer(serverId).find(member => member.id === targetId)?.roles;
+    const response = await memberApi.modifyMemberRoles(serverId, targetId, roleIds);
+    const updated = response.data;
+    if (!response.success || updated?.id !== targetId || !ownerId
+      || getAuthSessionOwner() !== ownerId || getAuthGeneration() !== authGeneration) return response;
+
+    // A repeated PATCH can succeed without a member_update event. Presence and
+    // profile updates preserve the roles array, while a new role snapshot replaces it.
+    const members = get().getMembersForServer(serverId);
+    const target = members.find(member => member.id === targetId);
+    if (target && target.roles === originalRoles) {
+      set(state => ({
+        membersByServer: {
+          ...state.membersByServer,
+          [serverId]: members.map(member => member === target
+            ? { ...member, roles: updated.roles, effective_permissions: updated.effective_permissions }
+            : member),
+        },
+      }));
+    }
+    invalidateMemberRosterFetch(serverId);
+    return response;
   },
 
   // ─── WS Event Handlers ───
@@ -558,9 +586,7 @@ export const useMemberStore = create<MemberState>((set, get) => ({
   },
 }));
 
-/** Invalidate an in-flight roster read after a privacy-redacted WS update.
- * The sanitized event is already applied locally; a future normal fetch may
- * restore fields only after the server re-evaluates the current audience. */
+/** Retry an in-flight roster read that may predate a member or privacy change. */
 export function invalidateMemberRosterFetch(serverId: string): void {
   if (!serverId || !fetchingServers.has(serverId)) return;
   if (privacyRefreshServers.has(serverId)) {
