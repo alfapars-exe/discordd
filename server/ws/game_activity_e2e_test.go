@@ -287,3 +287,38 @@ func assertNoWebSocketEvent(t *testing.T, conn *websocket.Conn) {
 	}
 	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 }
+func TestLegacyTicketReadyWaitsForHubRegistration(t *testing.T) {
+	hub := ws.NewHub()
+	users := gameActivityE2EUsers{"viewer": {ID: "viewer", Username: "Viewer", PrefStatus: models.UserStatusOnline}}
+	handler := ws.NewHandler(hub, nil, gameActivityE2ETickets{users: map[string]string{"ticket": "viewer"}}, nil, nil, users, nil, nil, nil, nil)
+	server := httptest.NewServer(http.HandlerFunc(handler.HandleConnection))
+	defer server.Close()
+	conn := dialGameActivityClient(t, "ws"+strings.TrimPrefix(server.URL, "http"), "ticket")
+	defer conn.Close()
+	ready := make(chan error, 1)
+	go func() {
+		var event ws.Event
+		err := conn.ReadJSON(&event)
+		if err == nil && event.Op != ws.OpReady {
+			err = fmt.Errorf("first event = %q", event.Op)
+		}
+		ready <- err
+	}()
+	select {
+	case err := <-ready:
+		go hub.Run()
+		defer hub.Shutdown()
+		t.Fatalf("socket returned before hub registration: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	go hub.Run()
+	defer hub.Shutdown()
+	select {
+	case err := <-ready:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("missing ready after registration")
+	}
+}
