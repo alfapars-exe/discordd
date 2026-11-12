@@ -1,0 +1,38 @@
+{
+  "sourceCommit": "b9df71a3",
+  "platform": "Two isolated Chromium browser contexts on Windows",
+  "fixture": "Local HiChat Go API, PostgreSQL 18.6 with mTLS, LiveKit v1.9.12, two authenticated group members",
+  "outage": "Paused the isolated LiveKit process for 24 seconds after both clients navigated to Friends, then resumed it.",
+  "audio": "Chromium synthetic 440 Hz microphone file, music profile, noise reduction disabled. Both remote receiver tracks sampled with Web Audio FFT size 4096. Values are peak linear magnitudes within one bin of the tone.",
+  "before": [
+    {
+      "receivedPacketDelta": 26,
+      "toneMagnitude": 0.013266
+    },
+    {
+      "receivedPacketDelta": 25,
+      "toneMagnitude": 0.013311
+    }
+  ],
+  "after": [
+    {
+      "receivedPacketDelta": 21,
+      "toneMagnitude": 0.013301
+    },
+    {
+      "receivedPacketDelta": 24,
+      "toneMagnitude": 0.013308
+    }
+  ],
+  "bothClients": {
+    "sameCallNonce": true,
+    "sameGroup": true,
+    "sameDestinationURL": true,
+    "sameSelectedInputDevice": true,
+    "sameSelectedOutputDevice": true
+  },
+  "remaining": [
+    "Installed Windows client reconnect with navigation and selected devices",
+    "Physical capture and playback acceptance tracked separately"
+  ]
+}
