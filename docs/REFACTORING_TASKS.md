@@ -185,6 +185,10 @@ Paralel çalışma hatları: backend veri/lifecycle (RF04–RF11), client state/
 
 ## RF05 — SQL dialect dönüşüm güvenliği
 
+**12 Kasım doğrulaması.** Güncel PostgreSQL adaptörü repository sorgularındaki `?` ve `?N` parametrelerini sürücü sınırında çeviriyor. Aşağıdaki regex/upsert bulgusu ilk inceleme revizyonuna ait. Yerel düzeltme, iç içe SQL yorumlarındaki soru işaretlerini koruyor ve gömülü PostgreSQL migration dosyalarını bağlama dönüşümü dışında çalıştırıyor. Bir migration içindeki JSON anahtar operatörü ve aynı transaction içindeki sonraki parametreli sorgu PostgreSQL üzerinde doğrulandı.
+
+`server/database/postgres_dialect_test.go` içindeki `TestRepositoryDialectContracts` aynı veriyle SQLite ve PostgreSQL üzerinde çalışır. Birleşik anahtarlı upsert, çakışmada yazmayı atlama, NULL, tekrarlanan ve sırasız numaralı parametreler, tırnak ve yorum içindeki soru işaretleri, mikrosaniye farkıyla zaman süzme, hazırlanmış EXISTS sorgusunun 0/1 sonucu, eksik argüman reddi ve rollback sonrası satır sayısı denetlenir. PostgreSQL 18.6 ile yerel `go test ./database -skip '^TestOpenPostgresInlinePEMReconnect$' -count=1` geçti. Sertifikayla yeniden bağlantı ayrı test hattına ait. Bu senaryolar repository genelindeki sorgu ailelerinin tam envanterini kapsamıyor.
+
 | Alan | Tanım |
 |---|---|
 | Task ID | RF05 |
