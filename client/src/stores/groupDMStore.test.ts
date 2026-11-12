@@ -690,3 +690,15 @@ describe("group DM store", () => {
     vi.mocked(api.markGroupDMRead).mockResolvedValue({success:true});useGroupDMStore.setState({groups:[{...group("g1"),unread_count:4}]});await useGroupDMStore.getState().markRead("g1","m1");expect(useGroupDMStore.getState().groups[0].unread_count).toBe(0);
   });
 });
+
+it("preserves an existing group source sequence when refreshed history omits it", async () => {
+  const legacy = groupMessage("zz-first", "2026-01-01T00:00:00Z");
+  const known = { ...legacy, source_sequence: "1" };
+  const second = { ...groupMessage("aa-second", legacy.created_at), source_sequence: "2" };
+  useGroupDMStore.setState({ groups: [group("g1")], messages: { g1: [known, second] } });
+  vi.mocked(api.listGroupDMMessages).mockResolvedValueOnce({success: true, data: {messages: [legacy]}});
+  expect(await useGroupDMStore.getState().fetchMessages("g1")).toBe(true);
+  expect(useGroupDMStore.getState().messages.g1.map(m => [m.id, m.source_sequence])).toEqual([
+    [known.id, "1"], [second.id, "2"],
+  ]);
+});
