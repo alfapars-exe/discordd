@@ -195,6 +195,7 @@ type voiceService struct {
 	// channelDeleteEpoch rejects a JoinChannel operation that began before a
 	// channel deletion but reaches the state mutation after its cleanup pass.
 	channelDeleteEpoch uint64
+	pendingJoins       map[*pendingVoiceJoin]struct{}
 }
 
 // MemberTimeoutChecker — narrow ISP interface so voiceService doesn't
