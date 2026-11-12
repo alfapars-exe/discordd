@@ -190,3 +190,17 @@ func TestGatewayPingsKeepIdleBotConnected(t *testing.T) {
 		t.Fatalf("healthy idle connection ended before the gateway closed it: %v", err)
 	}
 }
+func TestWelcomeRejectsRedirectToAnotherPort(t *testing.T) {
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("redirect forwarded message, authorization present=%t", r.Header.Get("Authorization") != "")
+	}))
+	defer target.Close()
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL, http.StatusTemporaryRedirect)
+	}))
+	defer origin.Close()
+	config, _ := parseConfig(origin.URL, "fixture-token", "server", "channel")
+	if postMessage(context.Background(), newMessageClient(), config, "welcome") == nil {
+		t.Fatal("cross-origin redirect reported success")
+	}
+}
