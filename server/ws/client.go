@@ -101,7 +101,7 @@ func (c *Client) ReadPump() {
 	// that removeClient processes later on the Hub's own goroutine and
 	// never reads from c.conn, so which of the two happens first here
 	// doesn't matter.
-	defer func() { c.hub.unregister <- c }()
+	defer c.hub.unregisterClient(c)
 	defer c.conn.Close() // connection is already tearing down; nothing to act on
 
 	c.conn.SetReadLimit(maxMessageSize)

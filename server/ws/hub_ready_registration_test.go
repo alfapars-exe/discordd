@@ -1,9 +1,58 @@
 package ws
 
 import (
+	"context"
 	"testing"
 	"time"
 )
+
+func TestHubRunReturnsAfterShutdown(t *testing.T) {
+	h := NewHub()
+	stopped := make(chan struct{})
+	go func() {
+		h.Run()
+		close(stopped)
+	}()
+	client := presenceClient(h, "connected", "online")
+	client.registered = make(chan struct{})
+	h.register <- client
+	<-client.registered
+	h.Shutdown()
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("registration loop still running after hub shutdown")
+	}
+}
+
+func TestShutdownReleasesBlockedClientHandoffs(t *testing.T) {
+	h := NewHub()
+	client := presenceClient(h, "pending", "online")
+	for i := 0; i < cap(h.unregister); i++ {
+		h.unregister <- client
+	}
+	registered := make(chan bool, 1)
+	go func() { registered <- h.registerClient(context.Background(), client) }()
+	removed := make(chan struct{})
+	go func() {
+		h.unregisterClient(client)
+		close(removed)
+	}()
+	h.Shutdown()
+	select {
+	case accepted := <-registered:
+		if accepted {
+			t.Fatal("stopped hub accepted a pending socket")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("registration blocked after shutdown")
+	}
+	select {
+	case <-removed:
+	case <-time.After(time.Second):
+		t.Fatal("unregistration blocked after shutdown")
+	}
+}
 
 func TestUnregisterBeforeRegistrationDoesNotLeaveGhostClient(t *testing.T) {
 	h := NewHub()
