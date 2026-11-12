@@ -28,19 +28,33 @@ type APIResponse struct {
 	CorrelationID string `json:"correlation_id,omitempty"`
 }
 
+// jsonResponseWriter commits the status on the encoder's first write, after
+// serialization succeeds. A transport error after that point cannot change it.
+type jsonResponseWriter struct {
+	http.ResponseWriter
+	status    int
+	committed bool
+}
+
+func (w *jsonResponseWriter) Write(data []byte) (int, error) {
+	if !w.committed {
+		w.WriteHeader(w.status)
+		w.committed = true
+	}
+	return w.ResponseWriter.Write(data)
+}
+
 func JSON(w http.ResponseWriter, status int, data any) {
-	body, err := json.Marshal(APIResponse{Success: true, Data: data})
-	if err != nil {
+	w.Header().Set("Content-Type", "application/json")
+	output := &jsonResponseWriter{ResponseWriter: w, status: status}
+	err := json.NewEncoder(output).Encode(APIResponse{Success: true, Data: data})
+	if err != nil && !output.committed {
 		ctx := ResponseLogContext(w)
 		if ctx == nil {
 			ctx = context.Background()
 		}
 		ErrorCtx(ctx, w, http.StatusInternalServerError, "internal server error", err)
-		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_, _ = w.Write(append(body, '\n'))
 }
 
 // Error sends an error response, mapping domain errors to HTTP status codes.
