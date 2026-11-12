@@ -29,17 +29,14 @@ type APIResponse struct {
 }
 
 func JSON(w http.ResponseWriter, status int, data any) {
+	body, err := json.Marshal(APIResponse{Success: true, Data: data})
+	if err != nil {
+		Error(w, err)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-
-	resp := APIResponse{
-		Success: true,
-		Data:    data,
-	}
-
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		http.Error(w, "failed to encode response", http.StatusInternalServerError)
-	}
+	_, _ = w.Write(append(body, '\n'))
 }
 
 // Error sends an error response, mapping domain errors to HTTP status codes.
@@ -180,9 +177,9 @@ func writeError(w http.ResponseWriter, status int, message, code, correlationID 
 		CorrelationID: correlationID,
 	}
 
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		http.Error(w, "failed to encode error response", http.StatusInternalServerError)
-	}
+	// The envelope contains only strings and a bool. A write error means the
+	// transport failed after headers were committed.
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 func mapErrorToStatus(err error) int {
