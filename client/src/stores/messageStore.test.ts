@@ -789,6 +789,29 @@ describe("channel history reconciliation", () => {
     expect(markAsRead).toHaveBeenLastCalledWith("ch-1", numberedMessage(9).id);
   });
 
+  it.each(["tail fetch", "detached window"] as const)("keeps the newest edited_at when an older edit is replayed during a %s", async (mode) => {
+    const row = numberedMessage(4);
+    const response = deferred<APIResponse<MessagePage>>();
+    let pending: Promise<void>;
+    if (mode === "detached window") {
+      await jumpIntoPast();
+      state().handleMessageCreate(row);
+      getMessagesAfter.mockReturnValueOnce(response.promise);
+      pending = state().fetchNewerMessages("ch-1", "srv-1");
+    } else {
+      getMessages.mockReturnValueOnce(response.promise);
+      pending = state().fetchMessages("ch-1", "srv-1");
+    }
+    state().handleMessageUpdate({ ...row, content: "latest", edited_at: "2026-01-02T00:00:00.123002Z" });
+    state().handleMessageUpdate({ ...row, content: "replayed", edited_at: "2026-01-02T00:00:00.123001Z" });
+    response.resolve(ok(mode === "tail fetch" ? [row] : []));
+    await pending;
+
+    expect(rows().find((message) => message.id === row.id)).toMatchObject({
+      content: "latest", edited_at: "2026-01-02T00:00:00.123002Z",
+    });
+  });
+
   it("keeps the newer REST edit and source reactions when an older edit is replayed", async () => {
     const row = numberedMessage(4);
     const response = deferred<APIResponse<MessagePage>>();

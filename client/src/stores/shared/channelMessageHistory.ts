@@ -70,7 +70,8 @@ export class ChannelHistoryChanges {
 
   edit(message: Message): void {
     const entry = this.change(message.id);
-    if (!entry.deleted) entry.edited = message;
+    if (entry.deleted) return;
+    entry.edited = entry.edited ? mergeChannelEdit(entry.edited, message) : message;
   }
 
   react(id: string, reactions: ReactionGroup[]): void {
