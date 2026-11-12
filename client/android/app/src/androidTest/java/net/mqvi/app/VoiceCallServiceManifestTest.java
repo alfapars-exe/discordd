@@ -25,7 +25,7 @@ public class VoiceCallServiceManifestTest {
             int required = ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
                 | ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
                 | ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION;
-            assertEquals(required, service.foregroundServiceType & required);
+            assertEquals(required, service.getForegroundServiceType() & required);
         }
     }
 }
