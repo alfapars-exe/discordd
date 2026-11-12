@@ -202,3 +202,16 @@ func TestRedactPostgresKeywordPasswords(t *testing.T) {
 		}
 	}
 }
+
+func TestSafeLogStringPreservesContextAfterInvalidUTF8(t *testing.T) {
+	const input = "before\xffafter"
+	if got := SafeLogString(input, 64); got != "before�after" {
+		t.Errorf("unbounded diagnostic = %q", got)
+	}
+	if got := SafeLogString(input, 11); got != "before�af" {
+		t.Errorf("bounded diagnostic = %q", got)
+	}
+	if got := SafeLogString("a界b", 3); got != "a" {
+		t.Errorf("partial final rune retained: %q", got)
+	}
+}
