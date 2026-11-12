@@ -53,6 +53,17 @@ int main() {
     Microsoft::WRL::ComPtr<IAudioClient> client;
     assert(pending->Wait(client.GetAddressOf(), 0) == HRESULT_FROM_WIN32(ERROR_TIMEOUT));
     assert(!client);
+    const BYTE pcm[] = {1, 2, 3, 4};
+    for (bool silent : {false, true}) {
+        size_t offset = 0;
+        assert(WritePacket(pcm, sizeof(pcm), silent, [&](const BYTE* bytes, unsigned remaining) {
+            assert(remaining == sizeof(pcm) - offset);
+            assert(bytes[0] == (silent ? 0 : pcm[offset]));
+            ++offset;
+            return 1;
+        }));
+        assert(offset == sizeof(pcm));
+    }
     CheckDecoderFormats();
     CheckCaptureFailures();
 }
