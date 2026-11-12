@@ -505,6 +505,8 @@ Tam istemci koşusu aynı `2a46beda` revizyonunda 461 dosyada 4.640 geçen ve 1 
 | Acceptance Criteria | Bir sonuç iki isteği tamamlamıyor; her istek bir callback ile sonlanıyor; owner kaybında listener'lar temiz; güvenilmeyen sender seçimi tamamlayamıyor; mevcut UI payload'ı aynı. |
 | Effort | 2–3 mühendis-gün |
 
+Windows doğrulaması: Electron kaynak seçicisinde test penceresi kendi medya kimliğiyle seçildi. getDisplayMedia akışında 304 × 180 video karesinin merkezinde pencereye verilen yeşil renk doğrulandı. Bu koşu yerel görüntü yakalamayı kapsıyor.
+
 ## RF19 — Updater ve preload abonelik lifecycle
 
 | Alan | Tanım |
