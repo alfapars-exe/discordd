@@ -18,6 +18,7 @@ type UserRepository interface {
 	GetByID(ctx context.Context, id string) (*models.User, error)
 	GetByUsername(ctx context.Context, username string) (*models.User, error)
 	GetAll(ctx context.Context) ([]models.User, error)
+	ListServerMemberProfiles(ctx context.Context, serverID string) ([]models.User, error)
 	Update(ctx context.Context, user *models.User) error
 	UpdateStatus(ctx context.Context, userID string, status models.UserStatus) error
 	UpdatePrefStatus(ctx context.Context, userID string, prefStatus models.UserStatus) error

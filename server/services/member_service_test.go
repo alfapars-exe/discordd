@@ -330,14 +330,14 @@ func TestGetAll_BulkLoadsTimeoutsViaListActive(t *testing.T) {
 	const srv = "srv1"
 	mutedExpiry := time.Now().UTC().Add(10 * time.Minute)
 
-	h.userRepo.GetAllFn = func(_ context.Context) ([]models.User, error) {
+	h.userRepo.ListServerMemberProfilesFn = func(_ context.Context, id string) ([]models.User, error) {
+		if id != srv {
+			t.Fatalf("unexpected server %q", id)
+		}
 		return []models.User{
 			{ID: "a", Username: "a"},
 			{ID: "b", Username: "b"},
 		}, nil
-	}
-	h.serverRepo.ListMemberIDsFn = func(_ context.Context, _ string) ([]string, error) {
-		return []string{"a", "b"}, nil
 	}
 	h.roleRepo.GetRolesForUsersFn = func(_ context.Context, _ string, _ []string) (map[string][]models.Role, error) {
 		return map[string][]models.Role{}, nil

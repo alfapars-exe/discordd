@@ -10,29 +10,30 @@ import (
 // ─── UserRepository mock ───
 
 type MockUserRepo struct {
-	CreateFn                  func(ctx context.Context, user *models.User) error
-	CreateWithSessionFn       func(ctx context.Context, user *models.User, session *models.Session) error
-	GetByIDFn                 func(ctx context.Context, id string) (*models.User, error)
-	GetByUsernameFn           func(ctx context.Context, username string) (*models.User, error)
-	GetAllFn                  func(ctx context.Context) ([]models.User, error)
-	UpdateFn                  func(ctx context.Context, user *models.User) error
-	UpdateStatusFn            func(ctx context.Context, userID string, status models.UserStatus) error
-	UpdateManualPresenceFn    func(ctx context.Context, userID string, status models.UserStatus) error
-	UpdatePasswordFn          func(ctx context.Context, userID string, newPasswordHash string) error
-	UpdateEmailFn             func(ctx context.Context, userID string, email *string) error
-	GetByEmailFn              func(ctx context.Context, email string) (*models.User, error)
-	CountFn                   func(ctx context.Context) (int, error)
-	DeleteFn                  func(ctx context.Context, id string) error
-	ListAllUsersWithStatsFn   func(ctx context.Context) ([]models.AdminUserListItem, error)
-	UpdateLastVoiceActivityFn func(ctx context.Context, userID string) error
-	PlatformBanFn             func(ctx context.Context, userID, reason, bannedBy string) error
-	PlatformUnbanFn           func(ctx context.Context, userID string) error
-	IsEmailPlatformBannedFn   func(ctx context.Context, email string) (bool, error)
-	DeleteAllMessagesByUserFn func(ctx context.Context, userID string) error
-	HardDeleteUserFn          func(ctx context.Context, userID, reassignToUserID string) error
-	GetOwnedServerFileURLsFn  func(ctx context.Context, userID string) ([]string, error)
-	SetPlatformAdminFn        func(ctx context.Context, userID string, isAdmin bool) error
-	IncrementTokenVersionFn   func(ctx context.Context, userID string) error
+	ListServerMemberProfilesFn func(context.Context, string) ([]models.User, error)
+	CreateFn                   func(ctx context.Context, user *models.User) error
+	CreateWithSessionFn        func(ctx context.Context, user *models.User, session *models.Session) error
+	GetByIDFn                  func(ctx context.Context, id string) (*models.User, error)
+	GetByUsernameFn            func(ctx context.Context, username string) (*models.User, error)
+	GetAllFn                   func(ctx context.Context) ([]models.User, error)
+	UpdateFn                   func(ctx context.Context, user *models.User) error
+	UpdateStatusFn             func(ctx context.Context, userID string, status models.UserStatus) error
+	UpdateManualPresenceFn     func(ctx context.Context, userID string, status models.UserStatus) error
+	UpdatePasswordFn           func(ctx context.Context, userID string, newPasswordHash string) error
+	UpdateEmailFn              func(ctx context.Context, userID string, email *string) error
+	GetByEmailFn               func(ctx context.Context, email string) (*models.User, error)
+	CountFn                    func(ctx context.Context) (int, error)
+	DeleteFn                   func(ctx context.Context, id string) error
+	ListAllUsersWithStatsFn    func(ctx context.Context) ([]models.AdminUserListItem, error)
+	UpdateLastVoiceActivityFn  func(ctx context.Context, userID string) error
+	PlatformBanFn              func(ctx context.Context, userID, reason, bannedBy string) error
+	PlatformUnbanFn            func(ctx context.Context, userID string) error
+	IsEmailPlatformBannedFn    func(ctx context.Context, email string) (bool, error)
+	DeleteAllMessagesByUserFn  func(ctx context.Context, userID string) error
+	HardDeleteUserFn           func(ctx context.Context, userID, reassignToUserID string) error
+	GetOwnedServerFileURLsFn   func(ctx context.Context, userID string) ([]string, error)
+	SetPlatformAdminFn         func(ctx context.Context, userID string, isAdmin bool) error
+	IncrementTokenVersionFn    func(ctx context.Context, userID string) error
 }
 
 func (m *MockUserRepo) Create(ctx context.Context, user *models.User) error {
@@ -59,6 +60,13 @@ func (m *MockUserRepo) GetByUsername(ctx context.Context, username string) (*mod
 func (m *MockUserRepo) GetAll(ctx context.Context) ([]models.User, error) {
 	if m.GetAllFn != nil {
 		return m.GetAllFn(ctx)
+	}
+	return nil, nil
+}
+
+func (m *MockUserRepo) ListServerMemberProfiles(ctx context.Context, serverID string) ([]models.User, error) {
+	if m.ListServerMemberProfilesFn != nil {
+		return m.ListServerMemberProfilesFn(ctx, serverID)
 	}
 	return nil, nil
 }

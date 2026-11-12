@@ -77,6 +77,25 @@ func (r *sqliteUserRepo) GetByUsername(ctx context.Context, username string) (*m
 	return user, nil
 }
 
+// ListServerMemberProfiles reads the fields used by ToMemberWithRoles.
+func (r *sqliteUserRepo) ListServerMemberProfiles(ctx context.Context, serverID string) ([]models.User, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT u.id, u.username, u.display_name, u.avatar_url,
+		u.status, u.pref_status, u.custom_status, u.created_at, u.last_seen_at, u.avatar_animated_url,
+		u.banner_url, u.banner_animated_url, u.bio, u.pronouns, u.accent_color
+		FROM server_members m JOIN users u ON u.id = m.user_id
+		WHERE m.server_id = ? ORDER BY u.username`, serverID)
+	if err != nil {
+		return nil, fmt.Errorf("list member profiles: %w", err)
+	}
+	return scanRows(rows, "member profile", func(rows *sql.Rows) (models.User, error) {
+		var u models.User
+		err := rows.Scan(&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.Status, &u.PrefStatus,
+			&u.CustomStatus, &u.CreatedAt, &u.LastSeenAt, &u.AvatarAnimatedURL, &u.BannerURL,
+			&u.BannerAnimatedURL, &u.Bio, &u.Pronouns, &u.AccentColor)
+		return u, err
+	})
+}
+
 func (r *sqliteUserRepo) GetAll(ctx context.Context) ([]models.User, error) {
 	query := `
 		SELECT id, username, display_name, avatar_url, wallpaper_url, password_hash, status, pref_status, custom_status,

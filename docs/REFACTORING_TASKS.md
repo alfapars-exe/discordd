@@ -253,6 +253,8 @@ Parametre sınır testi, sürücünün PostgreSQL protokolünde bağlanamayacak 
 
 ## RF09 — Üye/grup sorgularının veri kapsamı
 
+**Sunucu üye listesi.** `memberService.GetAll` tüm platform kullanıcılarını okuyor, ayrı bir sorguyla üyelikleri çekiyor ve sonucu bellekte süzüyordu. Artık `ListServerMemberProfiles` üyelik tablosunu kullanıcı tablosuna sunucu kimliğiyle bağlar. Kullanıcı adı sıralaması korunur. Üye yanıtının kullandığı profil ve görünürlük alanları seçilir. Parola özeti ve e-posta sorgudan çıkarıldı. Rol, takma ad ve zaman aşımı okumaları toplu kalır. SQLite ve PostgreSQL 18.6 kabul testinde iki üye, bir dış kullanıcı, boş sonuç, sıra ve profil alanları denetlendi. Grup konuşması projeksiyonları ve p95 ölçümü ayrıca izleniyor.
+
 **Toplu rol okuması, 12 Kasım.** Kanal erişim denetimi, audit yayını ve üye listesinin kullandığı `GetRolesForUsers`, büyük bir alıcı listesinde her kimlik için bir SQL parametresi oluşturuyordu. 65.542 girdilik test SQLite üzerinde parametre sınırı hatasını yeniden üretti. 999 ve üzeri girdide sorgu artık kimlik kümesini bağlı bir JSON parametresinden okur. Sorgu tek bir veritabanı görünümünde çalışır. SQLite ve PostgreSQL 18.6 üzerinde rol sırası, yinelenen kullanıcı, başka sunucudaki rol, rolü olmayan kullanıcı ve listenin sonundaki üye doğrulandı. Bu kontrol gönderim gecikmesini veya bağlantı kapasitesini ölçmez.
 
 | Alan | Tanım |
