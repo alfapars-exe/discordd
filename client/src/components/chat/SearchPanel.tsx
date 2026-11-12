@@ -46,6 +46,7 @@ function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId,
   // Monotonic id per doSearch call — a slow response for an abandoned query
   // must not overwrite the results of the search started after it.
   const searchSeqRef = useRef(0);
+  const localSearch = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const limit = 25;
@@ -58,6 +59,7 @@ function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId,
   // Clear any pending debounce on unmount — the timer would otherwise fire
   // after close and call setState on an unmounted panel.
   useEffect(() => () => {
+    localSearch.current?.abort();
     searchSeqRef.current++;
     if (debounceRef.current) clearTimeout(debounceRef.current);
   }, []);
@@ -67,9 +69,11 @@ function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId,
       // Bumping before the empty-query early return also invalidates any
       // in-flight search when the user clears the input.
       const seq = ++searchSeqRef.current;
+      localSearch.current?.abort();
 
       if (searchQuery.trim().length < 1) {
         setResults(null);
+        setIsSearching(false);
         return;
       }
 
@@ -89,7 +93,9 @@ function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId,
           return;
         }
         try {
-          const cached = await searchCachedMessages(channelId, searchQuery.trim());
+          const controller = new AbortController();
+          localSearch.current = controller;
+          const cached = await searchCachedMessages(channelId, searchQuery.trim(), controller.signal);
           // A newer search started while this one was awaiting — its results
           // (and spinner state) own the panel now.
           if (seq !== searchSeqRef.current) return;
@@ -142,6 +148,8 @@ function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId,
 
   /** Debounced search on input change */
   function handleInputChange(value: string) {
+    searchSeqRef.current++;
+    localSearch.current?.abort();
     setQuery(value);
     setOffset(0);
 
