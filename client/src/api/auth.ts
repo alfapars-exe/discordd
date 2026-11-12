@@ -8,6 +8,7 @@ import type { AuthTokens, LoginRequest, RegisterRequest, User } from "../types";
 /** Register a new user. First user automatically becomes Owner. */
 export async function register(data: RegisterRequest) {
   return apiClient<AuthTokens>("/auth/register", {
+    skipAuthRefresh: true,
     method: "POST",
     body: data,
   });
@@ -50,13 +51,14 @@ export async function changePassword(currentPassword: string, newPassword: strin
   });
 }
 
-/** Sends a password reset email. Returns cooldown seconds if rate-limited. */
+/** Requests recovery using the same public response for every identifier. */
 export async function forgotPassword(identifier: string) {
-  return apiClient<{ message: string; cooldown?: number }>(
+  return apiClient<{ message: string }>(
     "/auth/forgot-password",
     {
       method: "POST",
       body: { identifier },
+      skipAuthRefresh: true,
     },
   );
 }
@@ -65,6 +67,7 @@ export async function resetPassword(token: string, newPassword: string) {
   return apiClient<{ message: string }>("/auth/reset-password", {
     method: "POST",
     body: { token, new_password: newPassword },
+    skipAuthRefresh: true,
   });
 }
 

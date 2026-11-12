@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
 )
 
 func authSessionRepoFixture(t *testing.T) (*database.DB, AuthSessionRepository, SessionRepository) {
@@ -127,6 +129,97 @@ func TestSQLiteAuthSessionPasswordCommitAndResetProof(t *testing.T) {
 				t.Fatal("stale password/reset proof replayed")
 			}
 		})
+	}
+}
+
+func TestAuthSessionConcurrentResetProof(t *testing.T) {
+	db, repo, _ := authSessionRepoFixture(t)
+	ctx := context.Background()
+	const userID = "session-user"
+	expiry := time.Now().UTC().Add(time.Hour).Format(time.DateTime)
+	if _, err := db.Conn.Exec(`INSERT INTO password_reset_tokens(user_id,token_hash,expires_at) VALUES(?,?,?)`, userID, "proof", expiry); err != nil {
+		t.Fatal(err)
+	}
+	start := make(chan struct{})
+	type resetResult struct {
+		hash string
+		err  error
+	}
+	results := make(chan resetResult, 2)
+	var release func()
+	if database.IsPostgres(wrapForRepo(db)) {
+		// Hold the account row until both reset transactions reach its lock.
+		tx, err := db.Conn.BeginTx(ctx, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer tx.Rollback()
+		var pid int
+		if err := tx.QueryRowContext(ctx, `SELECT pg_backend_pid() FROM users WHERE id=? FOR UPDATE`, userID).Scan(&pid); err != nil {
+			t.Fatal(err)
+		}
+		release = func() {
+			deadline := time.Now().Add(10 * time.Second)
+			for {
+				var waiting int
+				// PostgreSQL may queue the second writer behind the first.
+				err := tx.QueryRowContext(ctx, `WITH RECURSIVE blocked(pid) AS (
+					SELECT CAST(? AS integer)
+					UNION
+					SELECT a.pid FROM pg_stat_activity a
+					JOIN blocked b ON b.pid = ANY(pg_blocking_pids(a.pid))
+				) SELECT count(*) - 1 FROM blocked`, pid).Scan(&waiting)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if waiting >= 2 {
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatal("reset transactions did not overlap")
+				}
+				time.Sleep(10 * time.Millisecond)
+				if _, err := tx.ExecContext(ctx, `SELECT pg_stat_clear_snapshot()`); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := tx.Commit(); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	for _, hash := range []string{"first", "second"} {
+		go func() {
+			<-start
+			err := repo.UpdatePasswordAndRevoke(ctx, userID, "", "proof", hash, time.Now().Unix())
+			results <- resetResult{hash, err}
+		}()
+	}
+	close(start)
+	if release != nil {
+		release()
+	}
+	successes := 0
+	var winner string
+	for range 2 {
+		result := <-results
+		if err := result.err; err == nil {
+			winner = result.hash
+			successes++
+		} else if !errors.Is(err, pkg.ErrUnauthorized) {
+			t.Fatalf("unexpected reset error: %v", err)
+		}
+	}
+	var storedHash string
+	var version int
+	if err := db.Conn.QueryRow(`SELECT token_version, password_hash FROM users WHERE id=?`, userID).Scan(&version, &storedHash); err != nil {
+		t.Fatal(err)
+	}
+	if storedHash != winner {
+		t.Fatal("stored password does not match the successful reset")
+	}
+	if successes != 1 || version != 1 {
+		t.Fatalf("successful resets = %d, token version = %d", successes, version)
 	}
 }
 

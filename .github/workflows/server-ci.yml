@@ -448,6 +448,13 @@ jobs:
         env:
           CGO_ENABLED: "0"
 
+      - name: Recover account from delivered email in a fresh database
+        working-directory: e2e
+        env:
+          HICHAT_E2E_RECOVERY_MAIL: "1"
+          CGO_ENABLED: "0"
+        run: node node_modules/@playwright/test/cli.js test --project=chromium tests/recovery-mail.spec.ts
+
       - name: Stop isolated PostgreSQL
         if: always()
         run: |

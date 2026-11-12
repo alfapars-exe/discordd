@@ -221,7 +221,10 @@ function main() {
     LIVEKIT_API_SECRET: "",
     // Optional integrations off — each is disabled by an empty value.
     SENTRY_DSN: "",
-    RESEND_API_KEY: "",
+    RESEND_API_KEY: process.env.HICHAT_E2E_RECOVERY_MAIL === "1" ? "local-recovery-fixture" : "",
+    RESEND_BASE_URL: "http://127.0.0.1:19387/",
+    RESEND_FROM: "recovery@example.test",
+    APP_URL: "http://localhost:3030/",
     KLIPY_API_KEY: "",
     ENVIRONMENT: "development",
     // warn, not info: the access-log middleware writes a line per HTTP

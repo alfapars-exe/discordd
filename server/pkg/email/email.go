@@ -12,6 +12,7 @@ import (
 	"html"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -69,7 +70,7 @@ func (s *resendSender) SendCategoryEmail(ctx context.Context, toEmail, subject, 
 }
 
 func (s *resendSender) SendPasswordReset(ctx context.Context, toEmail, token string) error {
-	resetLink := fmt.Sprintf("%s/reset-password?token=%s", s.appURL, token)
+	resetLink := html.EscapeString(fmt.Sprintf("%s/reset-password?token=%s", strings.TrimRight(s.appURL, "/"), url.QueryEscape(token)))
 
 	body := fmt.Sprintf(`<!DOCTYPE html>
 <html>
@@ -121,9 +122,12 @@ func (s *resendSender) SendPasswordReset(ctx context.Context, toEmail, token str
 		Html:    body,
 	}
 
-	_, err := s.client.Emails.SendWithContext(ctx, params)
+	response, err := s.client.Emails.SendWithContext(ctx, params)
 	if err != nil {
 		return fmt.Errorf("failed to send password reset email: %w", err)
+	}
+	if response == nil || response.Id == "" {
+		return errors.New("password reset email delivery was not confirmed")
 	}
 
 	return nil
