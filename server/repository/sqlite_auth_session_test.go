@@ -141,7 +141,11 @@ func TestAuthSessionConcurrentResetProof(t *testing.T) {
 		t.Fatal(err)
 	}
 	start := make(chan struct{})
-	results := make(chan error, 2)
+	type resetResult struct {
+		hash string
+		err  error
+	}
+	results := make(chan resetResult, 2)
 	var release func()
 	if database.IsPostgres(wrapForRepo(db)) {
 		// Hold the account row until both reset transactions reach its lock.
@@ -187,7 +191,8 @@ func TestAuthSessionConcurrentResetProof(t *testing.T) {
 	for _, hash := range []string{"first", "second"} {
 		go func() {
 			<-start
-			results <- repo.UpdatePasswordAndRevoke(ctx, userID, "", "proof", hash, time.Now().Unix())
+			err := repo.UpdatePasswordAndRevoke(ctx, userID, "", "proof", hash, time.Now().Unix())
+			results <- resetResult{hash, err}
 		}()
 	}
 	close(start)
@@ -195,16 +200,23 @@ func TestAuthSessionConcurrentResetProof(t *testing.T) {
 		release()
 	}
 	successes := 0
+	var winner string
 	for range 2 {
-		if err := <-results; err == nil {
+		result := <-results
+		if err := result.err; err == nil {
+			winner = result.hash
 			successes++
 		} else if !errors.Is(err, pkg.ErrUnauthorized) {
 			t.Fatalf("unexpected reset error: %v", err)
 		}
 	}
+	var storedHash string
 	var version int
-	if err := db.Conn.QueryRow(`SELECT token_version FROM users WHERE id=?`, userID).Scan(&version); err != nil {
+	if err := db.Conn.QueryRow(`SELECT token_version, password_hash FROM users WHERE id=?`, userID).Scan(&version, &storedHash); err != nil {
 		t.Fatal(err)
+	}
+	if storedHash != winner {
+		t.Fatal("stored password does not match the successful reset")
 	}
 	if successes != 1 || version != 1 {
 		t.Fatalf("successful resets = %d, token version = %d", successes, version)
