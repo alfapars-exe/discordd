@@ -52,6 +52,16 @@ function publication(source = Track.Source.Microphone) {
 beforeEach(() => { sdk.rooms.length = 0; sdk.enable.mockReset().mockResolvedValue(undefined); sdk.constructError = null; sdk.capture=async()=>[]; sdk.publish=async(track)=>({track}); publishAuthOwnerChange("owner"); publishAuthGenerationChange(10); });
 
 describe("encrypted room admission", () => {
+  it.each(["owner", "constructor"])("drops a pending %s error after the call closes", async (failure) => {
+    const initial = options();
+    if (failure === "owner") initial.token = token("previous-owner");
+    else sdk.constructError = new Error("room unavailable");
+    const view = renderHook(() => useEncryptedRoomAdmission(initial));
+    view.unmount();
+    await act(async () => { await Promise.resolve(); });
+    expect(initial.onError).not.toHaveBeenCalled();
+  });
+
   it.each(["local", "worker"])("isolates remote decode errors while keeping %s encryption failures fatal", async (source) => {
     const initial = { ...options(), keyReady: true };
     const view = renderHook(() => useEncryptedRoomAdmission(initial));
