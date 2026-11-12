@@ -84,7 +84,7 @@ type Services struct {
 	Entrance                services.EntranceService
 	Cosmetic                services.CosmeticService
 	ExpressionClone         services.ExpressionCloneService
-	MusicBot                services.MusicBotService
+	MusicBot                services.MusicBotRuntime
 	WSTicket                services.WSTicketService
 	Backup                  *services.BackupService
 	Notification            services.NotificationService
