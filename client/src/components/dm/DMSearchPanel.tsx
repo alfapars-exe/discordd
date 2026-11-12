@@ -214,13 +214,13 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted }: DMSearchPanelPro
       return;
     }
     setResults((prev) =>
-      prev
+      prev?.messages.some((m) => m.id === msg.id)
         ? {
             ...prev,
             messages: prev.messages.filter((m) => m.id !== msg.id),
             totalCount: Math.max(0, prev.totalCount - 1),
           }
-        : null,
+        : prev,
     );
   }
 
