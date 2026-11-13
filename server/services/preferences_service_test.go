@@ -123,9 +123,10 @@ func TestPreferencesServiceInvalidatesProfileAudienceWithoutBroadcastingPreferen
 	hub := &testutil.MockBroadcaster{BroadcastToUsersFn: func(users []string, got ws.Event) {
 		recipients, event = users, got
 	}}
-	svc := NewPreferencesService(repo, nil).(*preferencesService)
+	svc := NewPreferencesService(repo, profileAudienceInvalidatorStub{
+		viewers: []string{"friend-viewer", "shared-server-viewer"},
+	}).(*preferencesService)
 	svc.SetGameActivitySync(nil, hub)
-	svc.profileAudienceInvalidator = profileAudienceInvalidatorStub{viewers: []string{"friend-viewer", "shared-server-viewer"}}
 
 	if _, err := svc.Update(context.Background(), "target-user", json.RawMessage(`{"privacy":{"profileAudience":"friends_only"}}`)); err != nil {
 		t.Fatal(err)
