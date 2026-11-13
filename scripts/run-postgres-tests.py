@@ -39,6 +39,7 @@ def main():
     completed = set()
     postgres_retention_passed = False
     invalid_output = False
+    reported_failure = False
     for line in process.stdout:
         # Persist ordinary go-test output without printing database credentials.
         try:
@@ -47,6 +48,8 @@ def main():
             print("Unexpected non-JSON output from go test", file=sys.stderr)
             invalid_output = True
             continue
+        if event.get("Action") == "fail":
+            reported_failure = True
         if event.get("Action") == "skip" and event.get("Test"):
             # The server package contains unrelated opt-in tests that may
             # legitimately skip (for example, a provider-specific lifecycle
@@ -77,7 +80,7 @@ def main():
         print("Required PostgreSQL packages did not complete: " + ", ".join(sorted(missing_packages)), file=sys.stderr)
     if not postgres_retention_passed:
         print(f"Required PostgreSQL test did not pass: {REQUIRED_SERVER_POSTGRES_TEST}", file=sys.stderr)
-    if code or skipped or missing_packages or not postgres_retention_passed or invalid_output:
+    if code or skipped or missing_packages or not postgres_retention_passed or invalid_output or reported_failure:
         return code or 1
     # Both delivery and authorization transactions require real PostgreSQL locks.
     role_tests = ("TestPostgresRolePatchConcurrentChanges", "TestPostgresMemberRoleReplacement")

@@ -51,6 +51,14 @@ class PostgreSQLRunnerTests(unittest.TestCase):
         self.assertNotIn("fixture:secret", self.output.getvalue())
         self.assertEqual(self.output.getvalue().count(runner.REDACTED_DATABASE), 2)
 
+    def test_reported_failure_cannot_pass_with_successful_process_exit(self):
+        events = self.completed() + [{
+            "Action": "fail",
+            "Package": "github.com/argeinfina/hichat/repository",
+            "Test": "TestPostgresLock",
+        }]
+        self.assertEqual(self.execute(events), 1)
+
     def completed(self):
         return [
             {"Action": "pass", "Package": "github.com/argeinfina/hichat", "Test": "TestPurgeExpiredNotificationsPostgres"},
