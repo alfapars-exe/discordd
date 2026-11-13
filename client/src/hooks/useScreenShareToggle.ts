@@ -336,6 +336,11 @@ export function useScreenShareToggle(
   const restartTimerRef = useRef<number | null>(null);
   const isRestartingRef = useRef(false);
 
+  function retireRestart() {
+    ++restartGenRef.current;
+    isRestartingRef.current = false;
+  }
+
   function updatePublishedShare(updater: LiveKitScreenShareUpdater) {
     const state = useVoiceStore.getState();
     const settings = isMobileBrowser()
@@ -741,7 +746,11 @@ export function useScreenShareToggle(
     if (!streaming) return;
 
     const branch = computeShareBranch();
-    const shouldCancel = () => myGen !== restartGenRef.current;
+    const channelId = useVoiceStore.getState().currentVoiceChannelId;
+    const shouldCancel = () => {
+      const current = useVoiceStore.getState();
+      return myGen !== restartGenRef.current || !current.isStreaming || current.currentVoiceChannelId !== channelId;
+    };
 
     isRestartingRef.current = true;
     try {
@@ -829,6 +838,7 @@ export function useScreenShareToggle(
     }, 350);
 
     return () => {
+      retireRestart();
       if (restartTimerRef.current !== null) {
         window.clearTimeout(restartTimerRef.current);
         restartTimerRef.current = null;
