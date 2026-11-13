@@ -171,6 +171,18 @@ func (h *Hub) Run() {
 	}
 }
 
+func (h *Hub) unregisterClient(client *Client) {
+	select {
+	case <-client.done:
+		return
+	default:
+	}
+	select {
+	case h.unregister <- client:
+	case <-client.done:
+	}
+}
+
 // queueUnregister enqueues a slow client for disconnection without
 // blocking the caller. Used by every broadcast path that detects a full
 // send buffer — we want broadcasts to make forward progress instead of
