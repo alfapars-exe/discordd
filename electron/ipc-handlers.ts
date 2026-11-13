@@ -1,3 +1,4 @@
+import { registerOverlayControlIPC } from "./overlay-control-ipc";
 import { observeOverlayRenderers } from "./overlay-renderer-lifecycle";
 import { registerAppCommandIPC } from "./app-command-ipc";
 import { registerCaptureCommandIPC } from "./capture-command-ipc";
@@ -59,7 +60,7 @@ import { wasPrelaunchChecked } from "./auto-updater";
 import { getMainWindow } from "./window";
 import { getVoiceOverlayMediaWindow, subscribeVoiceOverlayMediaLifecycle, updateVoiceOverlay, toggleVoiceOverlayLock, lockVoiceOverlay, configureVoiceOverlayLayout, resetVoiceOverlayLayout, takeVoiceOverlayAction, takeVoiceOverlayOpenInboxIntent, confirmVoiceOverlayOpenInbox, takeVoiceOverlayNotificationReplyIntent, confirmVoiceOverlayNotificationReply, takeVoiceOverlayOpenChatIntent, confirmVoiceOverlayOpenChat, takeVoiceOverlayOpenChatComposerIntent, sendOverlayChatMessage, closeOverlayChatComposer, resolveOverlayChatSend } from "./voice-overlay";
 import { createOverlayLayoutStore } from "./overlay-layout-store";
-import { createOverlayShortcutController, type OverlayShortcutBinding } from "./overlay-shortcut";
+import { createOverlayShortcutController } from "./overlay-shortcut";
 import { isTrustedVoiceOverlaySender, applyAcknowledgedVoiceOverlaySnapshot, type VoiceOverlaySnapshot } from "./voice-overlay-contract";
 import { clearVoiceOverlayGameNotices } from "./voice-overlay";
 import { registerOverlayGameNoticeClearIPC } from "./overlay-game-notice-ipc";
@@ -96,10 +97,6 @@ export function registerIpcHandlers(onCleanup?: (dispose: () => Promise<void>) =
   // drag offsets. New drag positions remain persistent in this generation.
   const overlayLayouts = createOverlayLayoutStore({ filePath: path.join(app.getPath("userData"), "overlay-layout-v2.json") });
   configureVoiceOverlayLayout(overlayLayouts);
-  ipcMain.handle("reset-overlay-layout", (event) => {
-    assertTrustedMainWindowSender(event);
-    return resetVoiceOverlayLayout();
-  });
   registerOverlayActionIPC(ipcMain, { takeVoiceOverlayAction, takeVoiceOverlayOpenInboxIntent, confirmVoiceOverlayOpenInbox, takeVoiceOverlayNotificationReplyIntent, confirmVoiceOverlayNotificationReply, takeVoiceOverlayOpenChatIntent, confirmVoiceOverlayOpenChat, takeVoiceOverlayOpenChatComposerIntent, sendOverlayChatMessage, closeOverlayChatComposer, resolveOverlayChatSend, getMainWindow });
   const overlayShortcut = createOverlayShortcutController({
     supported: process.platform === "win32",
@@ -107,21 +104,17 @@ export function registerIpcHandlers(onCleanup?: (dispose: () => Promise<void>) =
     unregister: (accelerator) => globalShortcut.unregister(accelerator),
   }, toggleVoiceOverlayLock);
   stops.push(() => overlayShortcut.dispose());
-  ipcMain.handle("set-overlay-shortcut", (event, binding: unknown) => {
-    assertTrustedMainWindowSender(event);
-    const accepted = overlayShortcut.setBinding(binding as OverlayShortcutBinding | null);
-    if (binding === null) lockVoiceOverlay();
-    return accepted;
-  });
   const overlayMedia = createOverlayMediaBroker({main:getMainWindow,overlay:getVoiceOverlayMediaWindow,policy:()=>overlayMediaPolicy});
   stops.push(() => overlayMedia.revoke());
   const stopOverlayMediaLifecycle = subscribeVoiceOverlayMediaLifecycle(revoke => { if(revoke)overlayMedia.revoke();else overlayMedia.refresh(); });
   stops.push(stopOverlayMediaLifecycle);
-  ipcMain.handle("open-overlay-media-lease", (event, raw:unknown) => overlayMedia.open(event,raw));
-  ipcMain.handle("send-overlay-media", (event, raw:unknown) => overlayMedia.send(event,raw));
-  ipcMain.handle("send-overlay-media-viewport", (event, raw:unknown) => overlayMedia.viewport(event,raw));
-  ipcMain.handle("set-overlay-media-receiver-ready", (event, ready:unknown) => overlayMedia.setReady(event,ready));
-  ipcMain.handle("get-overlay-media-availability", event => overlayMedia.getAvailability(event));
+  registerOverlayControlIPC(ipcMain, {
+    trusted: assertTrustedMainWindowSender,
+    resetLayout: resetVoiceOverlayLayout,
+    lock: lockVoiceOverlay,
+    shortcut: overlayShortcut,
+    media: overlayMedia,
+  });
   let gameOverlay: ReturnType<typeof createGameOverlayController> | undefined;
   const gameHelperPath = app.isPackaged
     ? path.join(process.resourcesPath, "native", "game-window.exe")
