@@ -73,11 +73,11 @@ func (s *voiceService) StartOrphanCleanup() {
 //
 // This guarantees orphanGracePeriod of grace regardless of ticker phase.
 func (s *voiceService) sweepOrphanStates() {
-	finishUsageOperation, admitted := s.usageOperations.begin()
+	finishOperation, admitted := s.operations.begin()
 	if !admitted {
 		return
 	}
-	defer finishUsageOperation()
+	defer finishOperation()
 
 	onlineIDs := s.onlineChecker.GetOnlineUserIDs()
 	onlineSet := make(map[string]bool, len(onlineIDs))
@@ -691,7 +691,7 @@ func (s *voiceService) EnforceModerationOnJoin(ctx context.Context, serverID, ch
 	// Keep accepted webhook checks and their media children inside the owner.
 	// Late webhooks still enforce revocation, with synchronous caller-owned
 	// cleanup through dispatchDisconnectCleanup once the terminal owner drains.
-	if finish, admitted := s.usageOperations.begin(); admitted {
+	if finish, admitted := s.operations.begin(); admitted {
 		defer finish()
 	}
 

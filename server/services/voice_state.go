@@ -158,11 +158,11 @@ type pendingVoiceJoin struct {
 }
 
 func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, channelID string, isMuted, isDeafened bool) error {
-	finishUsageOperation, admitted := s.usageOperations.begin()
+	finishOperation, admitted := s.operations.begin()
 	if !admitted {
 		return context.Canceled
 	}
-	defer finishUsageOperation()
+	defer finishOperation()
 
 	pending := &pendingVoiceJoin{userID: userID}
 	s.mu.Lock()
@@ -505,7 +505,7 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 	// sound. MoveUser does not go through JoinChannel, so admin moves don't
 	// trigger it either. Goroutine: the hook does DB work and s.mu is held.
 	if s.entranceHook != nil {
-		s.usageOperations.child(func() { s.entranceHook.OnVoiceJoined(userID, serverID, channelID) })
+		s.operations.child(func() { s.entranceHook.OnVoiceJoined(userID, serverID, channelID) })
 	}
 
 	// Note: unlike LeaveChannel below, this remaining section does NOT run
@@ -525,7 +525,7 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 	// independently reconnects/tears it down. Same orphaned-stream risk as
 	// MoveUser and AdminDisconnectUser, so it gets the same cleanup.
 	if oldChannelID != "" && oldChannelID != channelID {
-		s.usageOperations.child(func() { s.removeParticipantAndScreenShareFromLiveKit(oldChannelID, userID) })
+		s.operations.child(func() { s.removeParticipantAndScreenShareFromLiveKit(oldChannelID, userID) })
 		// Cross-channel switch — credit the old session's duration to the
 		// instance it ran on. Self-hosted instances are skipped.
 		s.dispatchUsageCredit(oldUsageSessionID, oldInstanceID, oldIsCloud, oldJoinedAt, time.Now())
@@ -536,7 +536,7 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 		// oldChannelEmpty's own comment (above, still under the lock) for
 		// why this exists as a second, hand-synced copy of that check.
 		if oldChannelEmpty && s.musicBotHook != nil {
-			s.usageOperations.child(func() { s.musicBotHook.StopAllForChannel(oldChannelID) })
+			s.operations.child(func() { s.musicBotHook.StopAllForChannel(oldChannelID) })
 		}
 
 		// F8 review LOW fix: same log line/format LeaveChannel emits (see
@@ -605,11 +605,11 @@ func (s *voiceService) creditUsageSession(sessionID, instanceID string, isCloud 
 }
 
 func (s *voiceService) LeaveChannel(userID string) error {
-	finishUsageOperation, admitted := s.usageOperations.begin()
+	finishOperation, admitted := s.operations.begin()
 	if !admitted {
 		return context.Canceled
 	}
-	defer finishUsageOperation()
+	defer finishOperation()
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -672,7 +672,7 @@ func (s *voiceService) LeaveChannel(userID string) error {
 	// sub-participant, if any, so a departing user's screen share doesn't
 	// keep streaming after their voice connection is gone (DisconnectUser
 	// routes through this same LeaveChannel, so it's covered too).
-	s.usageOperations.child(func() { s.removeParticipantAndScreenShareFromLiveKit(channelID, userID) })
+	s.operations.child(func() { s.removeParticipantAndScreenShareFromLiveKit(channelID, userID) })
 	// Credit the completed session's duration to the cloud instance bucket.
 	// Self-hosted, zero-duration, and unset cases are no-ops inside creditUsage.
 	s.dispatchUsageCredit(leaveUsageSessionID, leaveInstanceID, leaveIsCloud, leaveJoinedAt, time.Now())
@@ -680,7 +680,7 @@ func (s *voiceService) LeaveChannel(userID string) error {
 	// Channel emptied → kick the music bot (if any) so it doesn't keep
 	// playing to nobody and burning bandwidth/CPU.
 	if channelEmpty && s.musicBotHook != nil {
-		s.usageOperations.child(func() { s.musicBotHook.StopAllForChannel(channelID) })
+		s.operations.child(func() { s.musicBotHook.StopAllForChannel(channelID) })
 	}
 
 	voiceLogger.Info("user left voice channel", "user_id", userID, "channel_id", channelID)

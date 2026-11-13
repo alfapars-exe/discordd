@@ -6,17 +6,17 @@ import (
 	"time"
 )
 
-// voiceUsageOperations closes root admission while allowing already admitted
+// voiceOperations closes root admission while allowing already admitted
 // operations to register child credits and media cleanup before releasing their own slot.
 // The final slot closes done, so child Add never races a zero-count Wait.
-type voiceUsageOperations struct {
+type voiceOperations struct {
 	mu      sync.Mutex
 	closing bool
 	active  int
 	done    chan struct{}
 }
 
-func (g *voiceUsageOperations) begin() (func(), bool) {
+func (g *voiceOperations) begin() (func(), bool) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if g.closing {
@@ -28,7 +28,7 @@ func (g *voiceUsageOperations) begin() (func(), bool) {
 	g.active++
 	return g.finish, true
 }
-func (g *voiceUsageOperations) child(work func()) bool {
+func (g *voiceOperations) child(work func()) bool {
 	g.mu.Lock()
 	if g.closing && g.active == 0 {
 		g.mu.Unlock()
@@ -39,10 +39,10 @@ func (g *voiceUsageOperations) child(work func()) bool {
 	}
 	g.active++
 	g.mu.Unlock()
-	logx.Go("voice-usage-producer", func() { defer g.finish(); work() })
+	logx.Go("voice-operation-child", func() { defer g.finish(); work() })
 	return true
 }
-func (g *voiceUsageOperations) finish() {
+func (g *voiceOperations) finish() {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.active--
@@ -50,7 +50,7 @@ func (g *voiceUsageOperations) finish() {
 		close(g.done)
 	}
 }
-func (g *voiceUsageOperations) closeAndWait() {
+func (g *voiceOperations) closeAndWait() {
 	g.mu.Lock()
 	if g.done == nil {
 		g.done = make(chan struct{})
@@ -66,10 +66,10 @@ func (g *voiceUsageOperations) closeAndWait() {
 	<-done
 }
 
-func (s *voiceService) ShutdownUsageProducers() { s.usageOperations.closeAndWait() }
+func (s *voiceService) ShutdownUsageProducers() { s.operations.closeAndWait() }
 
 func (s *voiceService) dispatchUsageCredit(sessionID, instanceID string, isCloud bool, joinedAt, endedAt time.Time) {
-	if !s.usageOperations.child(func() { s.creditUsageSession(sessionID, instanceID, isCloud, joinedAt, endedAt) }) {
+	if !s.operations.child(func() { s.creditUsageSession(sessionID, instanceID, isCloud, joinedAt, endedAt) }) {
 		// A committed revocation can finish after the terminal owner drains.
 		// Preserve its bounded accounting handoff in caller ownership rather
 		// than dropping the credit or launching an untracked goroutine. Such
@@ -83,7 +83,7 @@ func (s *voiceService) dispatchUsageCredit(sessionID, instanceID string, isCloud
 // shutdown; their cleanup stays synchronous in that caller rather than escaping
 // the closed owner or being silently dropped. Call only after releasing s.mu.
 func (s *voiceService) dispatchDisconnectCleanup(work func()) {
-	if !s.usageOperations.child(work) {
+	if !s.operations.child(work) {
 		work()
 	}
 }

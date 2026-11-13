@@ -11,7 +11,7 @@ import (
 )
 
 func TestVoiceUsageOperationsDrainChildrenAfterAdmissionCloses(t *testing.T) {
-	var group voiceUsageOperations
+	var group voiceOperations
 	finish, ok := group.begin()
 	if !ok {
 		t.Fatal("first operation rejected")
@@ -58,7 +58,7 @@ func TestVoiceUsageOperationsDrainChildrenAfterAdmissionCloses(t *testing.T) {
 }
 
 func TestVoiceUsageOperationsConcurrentShutdown(t *testing.T) {
-	var group voiceUsageOperations
+	var group voiceOperations
 	finish, ok := group.begin()
 	if !ok {
 		t.Fatal("operation rejected")
@@ -116,9 +116,9 @@ func TestVoiceUsageShutdownWaitsForAcceptedLeaveCredit(t *testing.T) {
 	go func() { s.ShutdownUsageProducers(); close(stopped) }()
 	deadline := time.Now().Add(time.Second)
 	for {
-		s.usageOperations.mu.Lock()
-		closing := s.usageOperations.closing
-		s.usageOperations.mu.Unlock()
+		s.operations.mu.Lock()
+		closing := s.operations.closing
+		s.operations.mu.Unlock()
 		if closing {
 			break
 		}
@@ -169,7 +169,7 @@ func TestVoiceUsageClosedAdmissionStillCleansDeletedChannel(t *testing.T) {
 	}
 }
 
-func waitVoiceUsageAdmissionClosed(t *testing.T, group *voiceUsageOperations) {
+func waitVoiceUsageAdmissionClosed(t *testing.T, group *voiceOperations) {
 	t.Helper()
 	deadline := time.Now().Add(time.Second)
 	for {

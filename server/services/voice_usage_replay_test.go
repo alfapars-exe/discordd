@@ -317,7 +317,7 @@ func TestVoiceUsagePostgresShutdownJoinsAcceptedCredit(t *testing.T) {
 	}
 	stopped := make(chan struct{})
 	go func() { s.ShutdownUsageProducers(); close(stopped) }()
-	waitVoiceUsageAdmissionClosed(t, &s.usageOperations)
+	waitVoiceUsageAdmissionClosed(t, &s.operations)
 	select {
 	case <-stopped:
 		t.Fatal("shutdown returned while accepted PostgreSQL credit was blocked")

@@ -37,7 +37,7 @@ import (
 // unfairly leaving a legitimately-unmuted user unable to speak, and it
 // avoids adding LiveKit round-trip latency to every mute action.
 func (s *voiceService) AdminUpdateState(ctx context.Context, adminUserID, targetUserID string, isServerMuted, isServerDeafened *bool) error {
-	finishOperation, admitted := s.usageOperations.begin()
+	finishOperation, admitted := s.operations.begin()
 	if !admitted {
 		return context.Canceled
 	}
@@ -159,7 +159,7 @@ func (s *voiceService) AdminUpdateState(ctx context.Context, adminUserID, target
 		// MutePublishedTrack backstop, fail-open mute / retry-then-evict
 		// unmute, why deafen/_ss are untouched).
 		if newMuted {
-			s.usageOperations.child(func() { s.applyServerMuteToLiveKit(channelID, targetUserID) })
+			s.operations.child(func() { s.applyServerMuteToLiveKit(channelID, targetUserID) })
 		}
 	}
 	if deafenChanged {
@@ -195,7 +195,7 @@ func (s *voiceService) AdminUpdateState(ctx context.Context, adminUserID, target
 // cross-channel switch now deliberately replicates (voice_state.go). Safe
 // unconditionally now that cross-server moves are rejected outright.
 func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, targetChannelID string) error {
-	finishOperation, admitted := s.usageOperations.begin()
+	finishOperation, admitted := s.operations.begin()
 	if !admitted {
 		return context.Canceled
 	}
@@ -416,7 +416,7 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 	// mirroring LeaveChannel's "Channel emptied → kick the music bot"
 	// dispatch (same nil-guard, same StopAllForChannel call).
 	if len(sourceRemaining) == 0 && s.musicBotHook != nil {
-		s.usageOperations.child(func() { s.musicBotHook.StopAllForChannel(sourceChannelID) })
+		s.operations.child(func() { s.musicBotHook.StopAllForChannel(sourceChannelID) })
 	}
 
 	// Remove phantom from old LiveKit room (best-effort). Dual-identity
@@ -428,7 +428,7 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 	// "_ss" identity is left orphaned in sourceChannelID exactly like the
 	// main identity was before this fix existed, so it gets the same
 	// best-effort cleanup.
-	s.usageOperations.child(func() { s.removeParticipantAndScreenShareFromLiveKit(sourceChannelID, targetUserID) })
+	s.operations.child(func() { s.removeParticipantAndScreenShareFromLiveKit(sourceChannelID, targetUserID) })
 
 	// Audit: voice move (only when an admin moved someone else; self-moves
 	// are not moderation events and we don't log them).
@@ -458,11 +458,11 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 // is its own call to closeOutScreenShareLocked (voice_screenshare.go), not
 // inherited from anywhere. Same helper call as MoveUser.
 func (s *voiceService) AdminDisconnectUser(ctx context.Context, disconnecterUserID, targetUserID string) error {
-	finishUsageOperation, admitted := s.usageOperations.begin()
+	finishOperation, admitted := s.operations.begin()
 	if !admitted {
 		return context.Canceled
 	}
-	defer finishUsageOperation()
+	defer finishOperation()
 
 	s.mu.Lock()
 

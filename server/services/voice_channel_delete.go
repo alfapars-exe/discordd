@@ -28,9 +28,9 @@ type deletedVoiceSession struct {
 // cannot resurrect state after this cleanup. The epoch is global to keep the
 // guard bounded; a simultaneous join to another server may need a retry.
 func (s *voiceService) DeleteVoiceChannel(ctx context.Context, serverID, channelID string) {
-	finishUsageOperation, admitted := s.usageOperations.begin()
+	finishOperation, admitted := s.operations.begin()
 	if admitted {
-		defer finishUsageOperation()
+		defer finishOperation()
 	}
 
 	if serverID == "" || channelID == "" {
@@ -109,7 +109,7 @@ func (s *voiceService) DeleteVoiceChannel(ctx context.Context, serverID, channel
 	if len(removed) == 0 {
 		return
 	}
-	s.usageOperations.child(func() {
+	s.operations.child(func() {
 		// Keep cleanup bounded: a deleted channel can have many occupants, so
 		// use a small fixed worker pool rather than one goroutine per identity.
 		tasks := make(chan deletedVoiceSession)
