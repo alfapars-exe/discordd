@@ -1489,3 +1489,9 @@ Terminal current-head receipt: PR29814a965ea completed36/36 SUCCESS. Exact-head 
 - Credit and eviction panic regressions failed before fix: all4 deletion workers exited and stranded their queue. Guarded the credit attempt and each main/screen identity separately using synchronous logx.Run; reused guarded credit helper in active finalization. Late closed-owner music callback now has its own boundary. No failed operation is retried or labelled successful.
 - Final three deletion cases (credit/eviction/late-music), active credit-panic case, existing shutdown/deletion and Go logger tests passed10 repetitions: services0.963s, logx1.065s. They observe all8 credit and16 identity attempts. Full vet/build/lint passed. Receipt: `implementation/verification/refactor-channel-cleanup-panic-isolation-2026-11-14.json`.
 - Local integration only, new native/race pending Docker/CI. Publishedfbf10657 run43526056404 remains live with20 successful jobs/no failure at last poll. Other worker pools and full project/process/physical acceptance remain open.
+
+### 2026-11-14 — Archive terminal key CI and publish canonical panic isolation
+
+- Publishedfbf10657 completed36/36 checks and31/31 ServerCI jobs SUCCESS. Exact-head receipt: `implementation/verification/refactor-pr298-fbf-terminal-2026-11-14.json`.
+- Canonical transfer initially imported integration-specific panic_type log policy, failing existing completion-log tests. Corrected by extracting Run from canonical HEAD recovery body, preserving panic field and pkg.ErrText error redaction without weakening tests. Host services/logx tests10 passed0.998s/1.032s; full vet/build/lint passed.
+- Published3a16b910 only after previous terminal CI was archived. New-head CI/native/race pending; receipt: `implementation/verification/refactor-panic-isolation-canonical-2026-11-14.json`. No native/physical/process success inferred from host tests.
