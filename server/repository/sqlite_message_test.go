@@ -518,6 +518,7 @@ func TestMessageRepo_ReplyReferenceStaysInChannel(t *testing.T) {
 	}
 	check(&window[0])
 }
+
 // TestMessageRepo_ReplyReference: reply_to_id intentionally has no FK, so a
 // reply outlives the message it answers and degrades to an ID-only reference.
 func TestMessageRepo_ReplyReference(t *testing.T) {
