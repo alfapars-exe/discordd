@@ -1399,3 +1399,9 @@ Terminal current-head receipt: PR29814a965ea completed36/36 SUCCESS. Exact-head 
 - PR298 head527a3ad3 includes recheck root ownership and synchronous late-credit handoff, with existing permission revocation rather than integration-only membership API. Nine named host test events passed (5.057s); nine verified-mTLS Linux race events passed (6.376s). Nine canonical runner tests passed.
 - Evidence correction: postgresServerFixture already seeds channel; the blocked lookup test removes the session due to absent ConnectVoice permissions, not channel absence. Initial late-credit canonical fixture used nonexistent ch1 and failed; corrected to actual reader/channel/default identities before passing. Earlier recheck receipt interpretation corrected.
 - Receipt: `implementation/verification/refactor-permission-credit-canonical-2026-11-14.json`. Current-head CI pending; physical/runtime and final whole-project acceptance remain open.
+
+### 2026-11-14 — Own deleted-channel music stop
+
+- Active-shutdown cleanup inspection found admitted DeleteVoiceChannel still dispatched music stop directly through logx.Go. Its eviction pool was owned, but the music child could outlive terminal shutdown. New regression failed before fix, then music stop was registered with the accepted root.
+- Targeted usage/channel deletion tests passed ten repetitions (3.029s), Linux race ten (5.938s), services vet/lint passed. DSN-free PostgreSQL skips are not database acceptance.
+- This fixes a prerequisite in shared cleanup, not active-session shutdown finalization. Active sessions still need explicit main lifecycle finalization and durable final credit proof before that gate can close. PR298 published527a3ad3 CI43520591216 is live (last checked seven successful jobs, none failed); this fix remains local integration.

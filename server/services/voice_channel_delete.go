@@ -104,7 +104,7 @@ func (s *voiceService) DeleteVoiceChannel(ctx context.Context, serverID, channel
 	}
 
 	if s.musicBotHook != nil {
-		logx.Go("voice-channel-delete", func() { s.musicBotHook.StopAllForChannel(channelID) })
+		s.operations.child(func() { s.musicBotHook.StopAllForChannel(channelID) })
 	}
 	if len(removed) == 0 {
 		return
