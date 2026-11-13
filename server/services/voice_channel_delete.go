@@ -40,58 +40,7 @@ func (s *voiceService) deleteVoiceChannelAt(ctx context.Context, serverID, chann
 	if serverID == "" || channelID == "" {
 		return
 	}
-	var removed []deletedVoiceSession
-	removedUsers := make(map[string]struct{})
-	snapshotChanged := false
-	s.mu.Lock()
-	s.channelDeleteEpoch++
-	for userID, state := range s.states {
-		if state.ChannelID != channelID || state.ServerID != serverID {
-			continue
-		}
-		removed = append(removed, deletedVoiceSession{
-			userID:    userID,
-			state:     *state,
-			serverID:  state.ServerID,
-			channelID: state.ChannelID,
-		})
-		removedUsers[userID] = struct{}{}
-		snapshotChanged = true
-		delete(s.states, userID)
-		delete(s.offlineSince, userID)
-		s.closeOutScreenShareLocked(userID, channelID, serverID, state.IsStreaming)
-	}
-	for userID, grant := range s.forceMoveGrants {
-		if grant.channelID == channelID {
-			delete(s.forceMoveGrants, userID)
-		}
-	}
-	// Remove only viewer bookkeeping attached to the removed participants.
-	// There may be orphaned entries from other channels; without their channel
-	// identity, pruning them here would cross the deletion scope.
-	for streamerID, viewers := range s.screenShareViewers {
-		if _, removedStreamer := removedUsers[streamerID]; removedStreamer {
-			delete(s.screenShareViewers, streamerID)
-			snapshotChanged = true
-			continue
-		}
-		removedViewer := false
-		for removedUserID := range removedUsers {
-			if _, exists := viewers[removedUserID]; exists {
-				delete(viewers, removedUserID)
-				removedViewer = true
-				snapshotChanged = true
-			}
-		}
-		if removedViewer && len(viewers) == 0 {
-			delete(s.screenShareViewers, streamerID)
-		}
-	}
-	if snapshotChanged {
-		s.bumpVoiceRevisionLocked()
-	}
-	s.cleanupRoomPassphraseIfEmpty(channelID)
-	s.mu.Unlock()
+	removed := s.detachVoiceChannel(serverID, channelID)
 	// The channel row was already deleted: always fence pending joins and
 	// remove in-memory state, even after usage admission closes.
 	if !admitted {
@@ -147,4 +96,62 @@ func (s *voiceService) completeDeletedVoiceSession(ctx context.Context, session 
 	s.creditUsageSession(session.state.UsageSessionID, session.state.LiveKitInstanceID, session.state.LiveKitIsCloud, session.state.JoinedAt, endedAt)
 	s.removeDeletedChannelParticipant(ctx, session.serverID, session.channelID, session.userID)
 	s.removeDeletedChannelParticipant(ctx, session.serverID, session.channelID, session.userID+"_ss")
+}
+
+// detachVoiceChannel fences joins and returns exclusive ownership of removed sessions.
+// All state mutation remains under s.mu; repository/media work runs afterward.
+func (s *voiceService) detachVoiceChannel(serverID, channelID string) []deletedVoiceSession {
+	var removed []deletedVoiceSession
+	removedUsers := make(map[string]struct{})
+	snapshotChanged := false
+	s.mu.Lock()
+	s.channelDeleteEpoch++
+	for userID, state := range s.states {
+		if state.ChannelID != channelID || state.ServerID != serverID {
+			continue
+		}
+		removed = append(removed, deletedVoiceSession{
+			userID:    userID,
+			state:     *state,
+			serverID:  state.ServerID,
+			channelID: state.ChannelID,
+		})
+		removedUsers[userID] = struct{}{}
+		snapshotChanged = true
+		delete(s.states, userID)
+		delete(s.offlineSince, userID)
+		s.closeOutScreenShareLocked(userID, channelID, serverID, state.IsStreaming)
+	}
+	for userID, grant := range s.forceMoveGrants {
+		if grant.channelID == channelID {
+			delete(s.forceMoveGrants, userID)
+		}
+	}
+	// Remove only viewer bookkeeping attached to the removed participants.
+	// There may be orphaned entries from other channels; without their channel
+	// identity, pruning them here would cross the deletion scope.
+	for streamerID, viewers := range s.screenShareViewers {
+		if _, removedStreamer := removedUsers[streamerID]; removedStreamer {
+			delete(s.screenShareViewers, streamerID)
+			snapshotChanged = true
+			continue
+		}
+		removedViewer := false
+		for removedUserID := range removedUsers {
+			if _, exists := viewers[removedUserID]; exists {
+				delete(viewers, removedUserID)
+				removedViewer = true
+				snapshotChanged = true
+			}
+		}
+		if removedViewer && len(viewers) == 0 {
+			delete(s.screenShareViewers, streamerID)
+		}
+	}
+	if snapshotChanged {
+		s.bumpVoiceRevisionLocked()
+	}
+	s.cleanupRoomPassphraseIfEmpty(channelID)
+	s.mu.Unlock()
+	return removed
 }
