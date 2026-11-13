@@ -582,3 +582,9 @@ Paralel çalışma hatları: backend veri/lifecycle (RF04–RF11), client state/
 - İlgisiz dirty dosyalar staged edilmez; commit/PR/release artifact'i ile kanıt kaydı aynı kaynak anlık görüntüsünü gösterir.
 - Rollback küçük PR'ın revert'iyle mümkün tutulur. Veri migration'ı varsa backup/restore provası olmadan release kapısı kapanmaz.
 - [REFACTORING_PLAN.md](REFACTORING_PLAN.md), [TECHNICAL_DEBT.md](TECHNICAL_DEBT.md), [TEST_STRATEGY.md](TEST_STRATEGY.md), [CODE_QUALITY_STANDARDS.md](CODE_QUALITY_STANDARDS.md) ve [ARCHITECTURE_IMPROVEMENTS.md](ARCHITECTURE_IMPROVEMENTS.md) ilgili kararlarla eşleşir.
+
+### RF08 - normal shutdown ownership for all four TTL cache owners (2026-11-13)
+
+- Regressions reproduced repeated/concurrent TTLCache.Close panics and missing Stop ownership on channel-permission/ticket services and auth/permission middleware. Close now uses shared idempotent completion, waits for worker exit and ticker disposal, and retains cache access for draining requests. Each of the four production constructor families exposes Stop; main registers cleanup immediately after successful service/route acquisition. Public service interfaces and request/cache invalidation contracts are unchanged.
+- Source 82bfd758: targeted tests and race passed five repetitions; complete cache/middleware tests passed; full Go vet/build passed; golangci-lint v2.12.2 reported 0 issues. The isolated cache profile is 44.4% statements, with Close at 100%; these figures are not whole-server coverage. Receipt: implementation/verification/refactor-cache-owner-shutdown-2026-11-13.json.
+- Main cleanup registration is source-checked and actual owners are unit-tested. This does not prove a real server-process shutdown, forced-exit cleanup or initialization failure before the owner bundle returns. Those RF08 gates remain open. Existing frozen shard session 45007 uses the earlier source and must not be relabeled as validation of this patch.
