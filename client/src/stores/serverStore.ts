@@ -90,10 +90,10 @@ export const useServerStore = create<ServerState>((set, get) => ({
 
   fetchServers: async () => {
     const request = ++serverListRequest;
-    const owner = useAuthStore.getState().user;
+    const owner = useAuthStore.getState().user?.id;
     const generation = getAuthGeneration();
     const current = () => request === serverListRequest
-      && useAuthStore.getState().user === owner && getAuthGeneration() === generation;
+      && useAuthStore.getState().user?.id === owner && getAuthGeneration() === generation;
     set({ isLoading: true });
     try {
       const res = await serversApi.getMyServers();
