@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -34,10 +35,15 @@ func backendWatchTestPool(t *testing.T) *sql.DB {
 	}
 	name := "hichat_owner_watch_" + hex.EncodeToString(identity[:])
 	quoted := pgx.Identifier{name}.Sanitize()
+	// Database identifiers cannot be parameters. Follow the E2E fixture's
+	// statement templates with only the generated, pgx-quoted identifier.
+	createQuery := fmt.Sprintf("CREATE DATABASE %s", quoted)
+	dropQuery := fmt.Sprintf("DROP DATABASE %s WITH (FORCE)", quoted)
+
 	admin := stdlib.OpenDB(*cfg)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if _, err = admin.ExecContext(ctx, "CREATE DATABASE "+quoted); err != nil {
+	if _, err = admin.ExecContext(ctx, createQuery); err != nil {
 		_ = admin.Close()
 		t.Fatal("cannot create isolated ownership fixture")
 	}
@@ -48,7 +54,7 @@ func backendWatchTestPool(t *testing.T) *sql.DB {
 		_ = pool.Close()
 		cleanup, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		if _, err := admin.ExecContext(cleanup, "DROP DATABASE "+quoted+" WITH (FORCE)"); err != nil {
+		if _, err := admin.ExecContext(cleanup, dropQuery); err != nil {
 			t.Error("cannot drop owned backend-watch fixture database")
 		}
 		_ = admin.Close()
