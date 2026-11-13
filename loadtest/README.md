@@ -121,3 +121,11 @@ the *connection* side end-to-end — real HTTP auth, real ticket issuance,
 real WS upgrades, and real concurrent connection volume — which the
 in-process benchmark deliberately does not attempt (it constructs `*Client`
 values directly rather than going through the network).
+
+## Contract verification
+
+Run `node --experimental-vm-modules --test loadtest/ws_connect.test.mjs` from the repository root. CI executes this dependency-free suite with mocked k6 imports while evaluating the actual load script. These tests verify the current `success/data` response envelope, required nonempty string credentials, zero-session failure, early close/connect failure, one measured connection per VU and numeric configuration. They are not a real k6 or server throughput result.
+
+Each VU opens one measured connection. Subsequent executor iterations sleep for one second without logging in again. `ws_handshakes_succeeded` and `ws_sessions_succeeded` must each match `WS_VUS`; a run that never opens a WebSocket cannot pass on successful HTTP checks alone. Every session must complete its configured hold without socket errors. The scenario allows up to `HOLD_SECONDS + 5` seconds of graceful stop/ramp-down for in-flight connections. Short smoke profiles below the 30-second heartbeat interval do not establish heartbeat acceptance.
+
+Example bounded local smoke: `WS_VUS=1 USER_COUNT=1 RAMP_UP=1s HOLD=36s RAMP_DOWN=1s HOLD_SECONDS=35`. Use an isolated disposable backend and a freshly seeded local account; pass its password through the environment. This is contract/liveness evidence, not a capacity/SLA claim. No production endpoint should be used for this profile.
