@@ -326,6 +326,7 @@ export async function restoreFromBackup(
       new TextDecoder().decode(decrypted)
     );
     assertCurrent(scope);
+    if (contents?.version !== BACKUP_VERSION) return false;
     if (!contents.registration || contents.registration.userId !== scope.ownerId) return false;
 
     await awaitScoped(scope, () => importBackupContents(contents, scope));
