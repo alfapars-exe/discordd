@@ -217,6 +217,9 @@ function openChatComposer(session: string, mainWindow: TrustedOverlayMainWindow)
   created.webContents.on("did-start-navigation", (_event: unknown, _url: string, isInPlace: boolean, isMainFrame: boolean) => {
     if (initialLoadComplete && isMainFrame && !isInPlace && chatComposerWindow === created) closeChatComposerWindow();
   });
+  created.webContents.on("render-process-gone", () => {
+    if (chatComposerWindow === created) closeChatComposerWindow();
+  });
   created.on("closed", () => {
     if (chatComposerWindow === created) {
       chatComposerWindow = null;

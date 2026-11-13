@@ -536,4 +536,26 @@ test("native overlay lock toggles only visible widgets and bounds unlocked game 
       }
     });
   }
+  await t.test("composer renderer crash cancels pending sends and retires the compose grant", async () => {
+    try {
+      now += 251;
+      exports.updateVoiceOverlay({ ...snapshot, enabled: false }, area);
+      const session = "crash-compose";
+      exports.updateVoiceOverlay({ ...notificationActions, voiceOverlayChatCompose: true, chatComposeSession: session, chatComposeLabel: "fixture" }, area);
+      const bounds = chatActionWin.getBounds();
+      cursor = { x: bounds.x + 8, y: bounds.y + 10 };
+      const sender = { sender: chatActionWin.webContents, senderFrame: chatActionWin.webContents.mainFrame };
+      assert.ok(exports.takeVoiceOverlayOpenChatComposerIntent(sender, session, mainWindow));
+      const composer = chatComposerWin;
+      const pending = exports.sendOverlayChatMessage({ sender: composer.webContents, senderFrame: composer.webContents.mainFrame }, { session, requestId: "crash-pending", text: "fixture draft" }, mainWindow);
+      composer.webContents.emit("render-process-gone");
+      assert.equal(composer.destroyed, true, "a crashed composer cannot retain an active native window");
+      assert.equal(await pending, "unavailable");
+      assert.equal(forwarded[forwarded.length - 1].channel, "overlay-chat-composer-closed");
+      now += 251;
+      assert.equal(exports.takeVoiceOverlayOpenChatComposerIntent(sender, session, mainWindow), null, "a crashed grant cannot reopen the composer");
+    } finally {
+      exports.closeVoiceOverlay();
+    }
+  });
 });
