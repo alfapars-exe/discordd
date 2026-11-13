@@ -22,6 +22,8 @@ const h = vi.hoisted(() => ({
   electron: false,
   capacitor: false,
   listenNative: vi.fn(),
+  token: vi.fn(),
+  startNative: vi.fn(),
   display: { width: 2560, height: 1440, refreshRate: 144, monitorCount: 1 },
   startAudio: vi.fn(), stopAudio: vi.fn(), toast: vi.fn(), log: vi.fn(),
 }));
@@ -42,8 +44,8 @@ vi.mock("./useSystemAudioCapture", () => ({
 vi.mock("../utils/constants", () => ({
   isElectron: () => h.electron, isCapacitor: () => h.capacitor, isMobileBrowser: () => false, canBrowserScreenShare: () => true,
 }));
-vi.mock("../utils/nativePlugins", () => ({ startNativeScreenShare: vi.fn(), stopNativeScreenShare: vi.fn(), onNativeScreenShareStopped: h.listenNative }));
-vi.mock("../api/voice", () => ({ getScreenShareToken: vi.fn() }));
+vi.mock("../utils/nativePlugins", () => ({ startNativeScreenShare: h.startNative, stopNativeScreenShare: vi.fn(), onNativeScreenShareStopped: h.listenNative }));
+vi.mock("../api/voice", () => ({ getScreenShareToken: h.token }));
 vi.mock("../api/clientLog", () => ({ logToServer: h.log }));
 vi.mock("../i18n", () => ({ default: { t: (key: string) => key } }));
 
@@ -179,6 +181,8 @@ beforeEach(() => {
   h.electron = false;
   h.capacitor = false;
   h.listenNative.mockReset();
+  h.listenNative.mockResolvedValue(() => {});
+  h.token.mockReset(); h.startNative.mockReset();
   h.startAudio.mockReset(); h.stopAudio.mockReset(); h.toast.mockReset(); h.log.mockReset();
   voice.setState({
     isStreaming: true, currentVoiceChannelId: "channel", screenShareQuality: "1080p", screenShareFps: 60,
@@ -193,6 +197,30 @@ afterEach(async () => {
 });
 
 describe("guild screen-share profile lifecycle", () => {
+  it("does not roll back a newer owner when an unmounted native token request fails late", async () => {
+    h.capacitor = true;
+    let complete!: (response: { success: boolean; error: string }) => void;
+    h.token.mockReturnValue(new Promise(resolve => { complete = resolve; }));
+    const f = fixture();
+    await tick();
+    expect(h.token).toHaveBeenCalledTimes(1);
+    f.view.unmount();
+    voice.setState({ isStreaming: true, currentVoiceChannelId: "new-channel" });
+    await act(async () => { complete({ success: false, error: "late denial" }); });
+    expect(voice.getState().isStreaming).toBe(true);
+    expect(voice.getState()._wsSend).not.toHaveBeenCalled();
+    expect(h.startNative).not.toHaveBeenCalled();
+  });
+  it.each([{ success: false, error: "denied" }, { success: true }])("rolls back native sharing when no usable token is returned: %j", async response => {
+    h.capacitor = true;
+    h.token.mockResolvedValue(response);
+    fixture();
+    await tick();
+    expect(h.token).toHaveBeenCalledWith("server", "channel");
+    expect(h.startNative).not.toHaveBeenCalled();
+    expect(voice.getState().isStreaming).toBe(false);
+    expect(voice.getState()._wsSend).toHaveBeenCalledWith("voice_state_update_request", { is_streaming: false });
+  });
   it("removes a native stop listener that finishes registering after unmount and ignores retired callbacks", async () => {
     h.capacitor = true;
     voice.setState({ isStreaming: false });

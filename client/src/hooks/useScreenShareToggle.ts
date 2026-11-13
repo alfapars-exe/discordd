@@ -441,7 +441,8 @@ export function useScreenShareToggle(
       if (!serverId || !channelId) return;
 
       const response = await getScreenShareToken(serverId, channelId);
-      if (shouldCancel() || !response.success || !response.data) {
+      if (shouldCancel()) return;
+      if (!response.success || !response.data) {
         console.error(
           "[useScreenShareToggle] Failed to get screen share token:",
           response.error,
@@ -450,6 +451,7 @@ export function useScreenShareToggle(
           branch,
           error: response.error ?? "unknown",
         });
+        notifyServerStopped();
         return;
       }
 
