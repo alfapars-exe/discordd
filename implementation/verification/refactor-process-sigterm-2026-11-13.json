@@ -1,0 +1,10 @@
+{
+  "source": "5d2d1aea",
+  "signal": "SIGTERM",
+  "healthy_before_signal": true,
+  "exit_code": 0,
+  "shutdown_seconds": 0.172,
+  "graceful_log": true,
+  "scope": "Linux real process, isolated mTLS PostgreSQL database, no active media",
+  "container": "hichat-signal-0a45dcd7ead4"
+}
