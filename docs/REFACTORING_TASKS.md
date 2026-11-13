@@ -893,3 +893,9 @@ LiveKit silme düzeltmesinin mevcut PR #222 ile sonradan açılan PR #270'te ayn
 - Extracted bounded passive HUD payload construction from the native owner. Geometry calculation, lifecycle clocks/tombstones and platform state remain in the caller; the pure builder projects the existing fields without changing renderer contracts.
 - Direct tests cover newest-edge chat slicing, first-edge activity/notification slicing, geometry absence, effective participant limits and preference immutability. Existing owner tests retain welcome/go-live expiry, privacy and child delivery coverage.
 - Integration 61eaf2dc compile/Electron: 336 passed, 1 skipped (`%TEMP%/hichat-hud-payload-integrated.log`). PR #279 head 8a76806e compile/Electron: 297 passed, 1 skipped (`hichat-hud-payload-pr.log`), pushed; current-head CI pending. Native physical display acceptance and remaining lifecycle/registrar inventory are open.
+
+### RF20 — retired HUD callbacks (2026-11-13)
+
+- Before-fix regression proved an old HUD hide callback could hide a replacement chat action window. Hide, move and will-move handlers now require their original native window to remain the current owner.
+- Integration 8c7ca9d2 compile/Electron: 337 passed, 1 skipped (`%TEMP%/hichat-hud-owner-after.log`). PR #279 head 7d460948 compile/Electron: 298 passed, 1 skipped (`hichat-hud-owner-pr.log`), pushed; fresh CI pending. Before-fix evidence: `hichat-hud-owner-before.log`.
+- Repaired a mixed-encoding RF20 status row introduced during the previous documentation edit; the entire status document now decodes as UTF-8. Remaining lifecycle ownership and physical display acceptance stay open.
