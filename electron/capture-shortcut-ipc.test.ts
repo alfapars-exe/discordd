@@ -51,14 +51,14 @@ test("capture commands preserve worker promises, status and diagnostic results",
 test("diagnostic stop rejects malformed and non-v4 tokens before touching capture", () => {
   const h = harness();
   for (const value of [null, 42, "", "not-a-token", "12345678-1234-1234-8234-123456789abc", "12345678-1234-4234-1234-123456789abc"]) assert.throws(() => h.invoke("stop-system-capture-diagnostic", value), /token is invalid/);
-  assert.deepEqual(h.calls, []);
+  assert.deepEqual(h.calls, Array.from({ length: 6 }, () => ["trusted"]));
 });
 
 test("shortcut registration delegates the 64-character bound and preserves native refusal", () => {
   const h = harness(); h.state.registrationResult = false;
   assert.equal(h.invoke("register-ptt-shortcut", "KeyV"), false);
   assert.equal(h.invoke("register-mute-hotkey-shortcut", "KeyM"), false);
-  assert.deepEqual(h.calls, [["trusted"], ["validate", "KeyV", "PTT keyCode", 64], ["ptt", "KeyV"], ["validate", "KeyM", "mute hotkey keyCode", 64], ["mute", "KeyM"]]);
+  assert.deepEqual(h.calls, [["trusted"], ["validate", "KeyV", "PTT keyCode", 64], ["ptt", "KeyV"], ["trusted"], ["validate", "KeyM", "mute hotkey keyCode", 64], ["mute", "KeyM"]]);
   h.calls.length = 0; h.state.rejectInput = true;
   for (const channel of ["register-ptt-shortcut", "register-mute-hotkey-shortcut"]) assert.throws(() => h.invoke(channel, {}), /invalid key/);
   assert.equal(h.calls.some(call => ["ptt", "mute"].includes(String(call[0]))), false);
@@ -67,5 +67,20 @@ test("shortcut registration delegates the 64-character bound and preserves nativ
 test("shortcut cleanup delegates to existing hook owners without acquiring a new hook", () => {
   const h = harness();
   h.invoke("unregister-ptt-shortcut"); h.invoke("unregister-mute-hotkey-shortcut");
-  assert.deepEqual(h.calls, [["trusted"], ["unregisterPTT"], ["unregisterMute"]]);
+  assert.deepEqual(h.calls, [["trusted"], ["unregisterPTT"], ["trusted"], ["unregisterMute"]]);
+});
+
+test("diagnostic capture rejects untrusted callers before worker start or token validation", () => {
+  const h = harness(); h.state.trusted = false;
+  assert.throws(() => h.invoke("start-system-capture-diagnostic"), /untrusted/);
+  assert.throws(() => h.invoke("stop-system-capture-diagnostic", h.token), /untrusted/);
+  assert.throws(() => h.invoke("stop-system-capture-diagnostic", "malformed"), /untrusted/);
+  assert.deepEqual(h.calls, [["trusted"], ["trusted"], ["trusted"]]);
+});
+
+test("mute shortcut mutation rejects untrusted callers before validation or native hooks", () => {
+  const h = harness(); h.state.trusted = false;
+  assert.throws(() => h.invoke("register-mute-hotkey-shortcut", {}), /untrusted/);
+  assert.throws(() => h.invoke("unregister-mute-hotkey-shortcut"), /untrusted/);
+  assert.deepEqual(h.calls, [["trusted"], ["trusted"]]);
 });
