@@ -15,6 +15,7 @@ import (
 
 func TestMessageLimiter_SlidingWindowNoLockout(t *testing.T) {
 	rl := NewMessageRateLimiter(3, 1*time.Second, 0)
+	t.Cleanup(rl.Stop)
 	const user = "u"
 
 	for i := 0; i < 3; i++ {
@@ -39,6 +40,7 @@ func TestMessageLimiter_SlidingWindowNoLockout(t *testing.T) {
 
 func TestMessageLimiter_WindowActuallySlides(t *testing.T) {
 	rl := NewMessageRateLimiter(2, 1*time.Second, 0)
+	t.Cleanup(rl.Stop)
 	const user = "u"
 
 	rl.Allow(user) // t≈0
@@ -65,6 +67,7 @@ func TestMessageLimiter_CooldownModeStillLocksOut(t *testing.T) {
 	// exceeding the cap trips a hard lockout for the full cooldown, even
 	// after the window itself has drained.
 	rl := NewMessageRateLimiter(2, 100*time.Millisecond, 1*time.Hour)
+	t.Cleanup(rl.Stop)
 	const user = "u"
 
 	rl.Allow(user)
