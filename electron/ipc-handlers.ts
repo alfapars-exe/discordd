@@ -483,6 +483,7 @@ export function registerIpcHandlers(): void {
   });
 
   registerAppSettingsIPC(ipcMain, {
+    trusted: assertTrustedMainWindowSender,
     getSettings,
     setSetting,
     getLoginItemSettings: () => app.getLoginItemSettings(),
