@@ -363,6 +363,9 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
           [channelId]: res.data!.has_more,
         },
       }));
+      if (current() && get().selectedDMId === channelId && get().messagesByChannel[channelId]?.length) {
+        get().clearDMUnread(channelId);
+      }
     } else {
       reportDMHistoryFailure();
     }
@@ -522,6 +525,7 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
           hasMoreAfterByChannel: { ...state.hasMoreAfterByChannel, [channelId]: hasMoreAfter },
         };
       });
+      if (!hasMoreAfter && get().selectedDMId === channelId && get().messagesByChannel[channelId]?.length) get().clearDMUnread(channelId);
     } catch {
       if (current()) reportDMHistoryFailure();
     } finally {

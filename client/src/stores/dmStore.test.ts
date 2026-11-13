@@ -579,6 +579,19 @@ describe("dmStore — leaving a jumped-to window", () => {
     expect(getDMMessages).toHaveBeenCalledTimes(1);
   });
 
+  it.each(["jump", "page"])("acknowledges the loaded tail after returning via %s", async path => {
+    await jumpIntoPast();
+    useDMStore.setState({ selectedDMId: CH, dmUnreadCounts: { [CH]: 3 } });
+    if (path === "jump") {
+      getDMMessages.mockResolvedValueOnce(page([makeDM("tail")], true));
+      useDMStore.getState().jumpToPresent(CH);
+    } else {
+      getAfter.mockResolvedValueOnce(page([makeDM("tail")], false, false));
+      await useDMStore.getState().fetchNewerMessages(CH);
+    }
+    await vi.waitFor(() => expect(dmApi.markDMRead).toHaveBeenCalledWith(CH, "tail"));
+    expect(useDMStore.getState().dmUnreadCounts[CH]).toBeUndefined();
+  });
   it("merges held live messages when forward paging reaches the tail", async () => {
     await jumpIntoPast();
     useDMStore.getState().handleDMMessageCreate(makeDM("live-1"));
