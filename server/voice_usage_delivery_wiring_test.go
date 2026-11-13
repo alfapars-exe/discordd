@@ -54,6 +54,10 @@ func voiceUsageShutdownBoundaries(body *ast.BlockStmt) (drain, logs token.Pos, d
 	return
 }
 func voiceUsageExplicitJoin(body *ast.BlockStmt) token.Pos {
+	return voiceUsageExplicitNamedJoin(body, "stopVoiceUsageDelivery")
+}
+
+func voiceUsageExplicitNamedJoin(body *ast.BlockStmt, name string) token.Pos {
 	for _, stmt := range body.List {
 		expr, ok := stmt.(*ast.ExprStmt)
 		if !ok {
@@ -63,7 +67,7 @@ func voiceUsageExplicitJoin(body *ast.BlockStmt) token.Pos {
 		if !ok {
 			continue
 		}
-		if voiceUsageNamedCall(call, "stopVoiceUsageDelivery") {
+		if voiceUsageNamedCall(call, name) {
 			return stmt.Pos()
 		}
 	}
@@ -76,4 +80,31 @@ func TestVoiceUsageDeliveryJoinsAfterHTTPBeforeLogs(t *testing.T) {
 	if !deferred || !join.IsValid() || !drain.IsValid() || !logs.IsValid() || join < drain || join > logs {
 		t.Fatal("usage worker must join after HTTP drain, before log/database shutdown, with deferred fallback")
 	}
+}
+
+func TestVoiceUsageProducersJoinBeforeDeliveryStops(t *testing.T) {
+	body := voiceUsageMainBody(t)
+	drain, logs, _ := voiceUsageShutdownBoundaries(body)
+	delivery := voiceUsageExplicitJoin(body)
+	producers := voiceUsageExplicitNamedJoin(body, "stopVoiceUsageProducers")
+	if !producers.IsValid() || producers < drain || producers > delivery || delivery > logs {
+		t.Fatal("accepted usage producers must join after HTTP drain and before recovery/log shutdown")
+	}
+	producerDefer := voiceUsageDeferredPosition(body, "stopVoiceUsageProducers")
+	workerDefer := voiceUsageDeferredPosition(body, "stopVoiceUsageDelivery")
+	if !producerDefer.IsValid() || !workerDefer.IsValid() || producerDefer < workerDefer {
+		t.Fatal("fallback cleanup must join producers before stopping recovery")
+	}
+
+}
+
+func voiceUsageDeferredPosition(body *ast.BlockStmt, name string) token.Pos {
+	var position token.Pos
+	ast.Inspect(body, func(node ast.Node) bool {
+		if value, ok := node.(*ast.DeferStmt); ok && voiceUsageNamedCall(value.Call, name) {
+			position = value.Pos()
+		}
+		return true
+	})
+	return position
 }

@@ -28,6 +28,11 @@ type deletedVoiceSession struct {
 // cannot resurrect state after this cleanup. The epoch is global to keep the
 // guard bounded; a simultaneous join to another server may need a retry.
 func (s *voiceService) DeleteVoiceChannel(ctx context.Context, serverID, channelID string) {
+	finishUsageOperation, admitted := s.usageOperations.begin()
+	if admitted {
+		defer finishUsageOperation()
+	}
+
 	if serverID == "" || channelID == "" {
 		return
 	}
@@ -83,7 +88,20 @@ func (s *voiceService) DeleteVoiceChannel(ctx context.Context, serverID, channel
 	}
 	s.cleanupRoomPassphraseIfEmpty(channelID)
 	s.mu.Unlock()
+	// The channel row was already deleted: always fence pending joins and
+	// remove in-memory state, even after usage admission closes.
 	endedAt := time.Now()
+	if !admitted {
+		// Committed channel deletion must still attempt eviction. With admission
+		// closed the caller owns completion; do not launch untracked late work.
+		if s.musicBotHook != nil {
+			s.musicBotHook.StopAllForChannel(channelID)
+		}
+		for _, session := range removed {
+			s.completeDeletedVoiceSession(ctx, session, endedAt)
+		}
+		return
+	}
 
 	if s.musicBotHook != nil {
 		logx.Go("voice-channel-delete", func() { s.musicBotHook.StopAllForChannel(channelID) })
@@ -91,7 +109,7 @@ func (s *voiceService) DeleteVoiceChannel(ctx context.Context, serverID, channel
 	if len(removed) == 0 {
 		return
 	}
-	logx.Go("voice-channel-delete", func() {
+	s.usageOperations.child(func() {
 		// Keep cleanup bounded: a deleted channel can have many occupants, so
 		// use a small fixed worker pool rather than one goroutine per identity.
 		tasks := make(chan deletedVoiceSession)
@@ -105,9 +123,7 @@ func (s *voiceService) DeleteVoiceChannel(ctx context.Context, serverID, channel
 			logx.Go("voice-channel-delete-eviction", func() {
 				defer wg.Done()
 				for session := range tasks {
-					s.removeDeletedChannelParticipant(ctx, session.serverID, session.channelID, session.userID)
-					s.removeDeletedChannelParticipant(ctx, session.serverID, session.channelID, session.userID+"_ss")
-					s.creditUsageSession(session.state.UsageSessionID, session.state.LiveKitInstanceID, session.state.LiveKitIsCloud, session.state.JoinedAt, endedAt)
+					s.completeDeletedVoiceSession(ctx, session, endedAt)
 				}
 			})
 		}
@@ -121,3 +137,9 @@ func (s *voiceService) DeleteVoiceChannel(ctx context.Context, serverID, channel
 }
 
 var _ VoiceChannelDeletionHandler = (*voiceService)(nil)
+
+func (s *voiceService) completeDeletedVoiceSession(ctx context.Context, session deletedVoiceSession, endedAt time.Time) {
+	s.removeDeletedChannelParticipant(ctx, session.serverID, session.channelID, session.userID)
+	s.removeDeletedChannelParticipant(ctx, session.serverID, session.channelID, session.userID+"_ss")
+	s.creditUsageSession(session.state.UsageSessionID, session.state.LiveKitInstanceID, session.state.LiveKitIsCloud, session.state.JoinedAt, endedAt)
+}

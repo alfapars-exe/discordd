@@ -6,6 +6,7 @@ import (
 	"errors"
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/repository"
+	"github.com/argeinfina/hichat/ws"
 	"sync"
 	"testing"
 	"time"
@@ -271,5 +272,86 @@ func assertOwnedPendingUsageRecovery(t *testing.T, ctx context.Context, db *sql.
 	stopWorker()
 	if err := db.PingContext(ctx); err != nil {
 		t.Fatalf("worker shutdown closed caller pool: %v", err)
+	}
+}
+
+func TestVoiceUsagePostgresShutdownJoinsAcceptedCredit(t *testing.T) {
+	db := postgresServerFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if _, err := db.ExecContext(ctx, `INSERT INTO livekit_instances(id,url,api_key,api_secret) VALUES('shutdown-instance','http://127.0.0.1','fixture','fixture')`); err != nil {
+		t.Fatal(err)
+	}
+	repo := repository.NewSQLiteLiveKitRepo(db)
+	svc, hub := newTestVoiceServiceWithLiveKitGetter(repo)
+	hub.BroadcastToServerFn = func(string, ws.Event) {}
+	hub.BroadcastToUserFn = func(string, ws.Event) {}
+	s := svc.(*voiceService)
+	t.Cleanup(s.ShutdownUsageProducers)
+	if err := s.JoinChannel("victim", "victim", "Victim", "", "ch1", false, false); err != nil {
+		t.Fatal(err)
+	}
+	s.mu.Lock()
+	state := s.states["victim"]
+	state.LiveKitInstanceID = "shutdown-instance"
+	state.LiveKitIsCloud = true
+	state.JoinedAt = time.Now().Add(-time.Minute)
+	id := state.UsageSessionID
+	s.mu.Unlock()
+	blocker, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer blocker.Rollback()
+	if _, err = blocker.ExecContext(ctx, "LOCK TABLE livekit_monthly_usage IN ACCESS EXCLUSIVE MODE"); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.LeaveChannel("victim"); err != nil {
+		t.Fatal(err)
+	}
+	waitVoiceUsagePostgresLock(t, ctx, blocker, "livekit_monthly_usage")
+	var wantSeconds int
+	if err = blocker.QueryRowContext(ctx, `SELECT seconds FROM voice_usage_credits WHERE credit_id=$1`, id).Scan(&wantSeconds); err != nil || wantSeconds <= 0 {
+		t.Fatalf("accepted credit missing: seconds=%d err=%v", wantSeconds, err)
+	}
+	stopped := make(chan struct{})
+	go func() { s.ShutdownUsageProducers(); close(stopped) }()
+	waitVoiceUsageAdmissionClosed(t, &s.usageOperations)
+	select {
+	case <-stopped:
+		t.Fatal("shutdown returned while accepted PostgreSQL credit was blocked")
+	default:
+	}
+	if err = blocker.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-stopped:
+	case <-ctx.Done():
+		t.Fatal("shutdown did not join accepted PostgreSQL credit")
+	}
+	now := time.Now()
+	used, err := repo.GetMonthlyUsage(ctx, "shutdown-instance", now.Year(), int(now.Month()))
+	if err != nil || used != int64(wantSeconds) {
+		t.Fatalf("accepted credit was not applied before shutdown: usage=%d want=%d err=%v", used, wantSeconds, err)
+	}
+}
+
+func waitVoiceUsagePostgresLock(t *testing.T, ctx context.Context, tx *sql.Tx, table string) {
+	t.Helper()
+	for {
+		var waiting bool
+		if err := tx.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM pg_locks WHERE relation=$1::regclass AND NOT granted)", table).Scan(&waiting); err != nil {
+			t.Fatal(err)
+		}
+		if waiting {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal("usage query never reached PostgreSQL lock wait")
+		default:
+			time.Sleep(time.Millisecond)
+		}
 	}
 }

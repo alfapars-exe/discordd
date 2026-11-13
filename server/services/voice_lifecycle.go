@@ -71,6 +71,12 @@ func (s *voiceService) StartOrphanCleanup() {
 //
 // This guarantees orphanGracePeriod of grace regardless of ticker phase.
 func (s *voiceService) sweepOrphanStates() {
+	finishUsageOperation, admitted := s.usageOperations.begin()
+	if !admitted {
+		return
+	}
+	defer finishUsageOperation()
+
 	onlineIDs := s.onlineChecker.GetOnlineUserIDs()
 	onlineSet := make(map[string]bool, len(onlineIDs))
 	for _, id := range onlineIDs {

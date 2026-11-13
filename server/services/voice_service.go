@@ -151,6 +151,7 @@ type forceMoveGrant struct {
 const maxScreenShares = 0
 
 type voiceService struct {
+	usageOperations    voiceUsageOperations
 	usageWorker        voiceMaintenanceWorker
 	orphanWorker       voiceMaintenanceWorker
 	afkWorker          voiceMaintenanceWorker

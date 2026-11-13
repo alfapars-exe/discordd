@@ -273,6 +273,12 @@ func main() {
 	defer stopVoiceMaintenance()
 	stopVoiceUsageDelivery := services.StartVoiceUsageDelivery(ownerCtx, svcs.Voice)
 	defer stopVoiceUsageDelivery()
+	stopVoiceUsageProducers := func() {
+		if owner, ok := svcs.Voice.(interface{ ShutdownUsageProducers() }); ok {
+			owner.ShutdownUsageProducers()
+		}
+	}
+	defer stopVoiceUsageProducers()
 
 	// 10b. Metrics collector — background goroutine polling LiveKit instances
 	metricsCollector.Start()
@@ -553,6 +559,7 @@ func main() {
 		_ = srv.Close()
 	}
 
+	stopVoiceUsageProducers()
 	stopVoiceUsageDelivery()
 
 	logx.SetAppSink(nil)
