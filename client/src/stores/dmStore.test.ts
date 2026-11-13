@@ -699,3 +699,40 @@ it("keeps authoritative DM append order in history merges and out-of-order WS pr
  vi.mocked(dmApi.getDMMessages).mockResolvedValueOnce(page([second,first,third],false));await useDMStore.getState().fetchMessages(CH);
  expect(ids()).toEqual([first.id,second.id,third.id]);
 });
+
+it("hydrates missing channels when unread metadata changes during the first list request", async () => {
+  const pending = deferred<APIResponse<DMChannelWithUser[]>>();
+  vi.mocked(dmApi.listDMChannels).mockReturnValueOnce(pending.promise);
+  const loading = useDMStore.getState().fetchChannels();
+  useDMStore.setState({ dmUnreadCounts: { [CH]: 1 } });
+  pending.resolve({ success: true, data: [listedDM(CH, 5)] });
+  await loading;
+  expect(useDMStore.getState().dmUnreadCounts[CH]).toBe(1);
+  expect(useDMStore.getState().channels.some(channel => channel.id === CH)).toBe(true);
+});
+
+it("loads peer channels when My Notes is inserted during list hydration", async () => {
+  const pending = deferred<APIResponse<DMChannelWithUser[]>>();
+  vi.mocked(dmApi.listDMChannels).mockReturnValueOnce(pending.promise);
+  const loading = useDMStore.getState().fetchChannels();
+  const notes = listedDM("notes");
+  notes.other_user = { ...notes.other_user, id: "me" };
+  useDMStore.setState({ channels: [notes] });
+  pending.resolve({ success: true, data: [listedDM(CH)] });
+  await loading;
+  expect(useDMStore.getState().channels.map(channel => channel.id)).toEqual([CH, "notes"]);
+});
+
+it("does not restore a removed peer when My Notes is added during hydration", async () => {
+  const removed = listedDM(CH);
+  useDMStore.setState({ channels: [removed] });
+  const pending = deferred<APIResponse<DMChannelWithUser[]>>();
+  vi.mocked(dmApi.listDMChannels).mockReturnValueOnce(pending.promise);
+  const loading = useDMStore.getState().fetchChannels();
+  const notes = listedDM("notes");
+  notes.other_user = { ...notes.other_user, id: "me" };
+  useDMStore.setState({ channels: [notes] });
+  pending.resolve({ success: true, data: [removed] });
+  await loading;
+  expect(useDMStore.getState().channels).toEqual([notes]);
+});
