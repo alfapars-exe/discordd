@@ -27,6 +27,7 @@ import (
 const orphanGracePeriod = 35 * time.Second
 
 type orphanEntry struct {
+	usageSessionID    string
 	userID            string
 	channelID         string
 	joinedAt          time.Time
@@ -166,6 +167,7 @@ func (s *voiceService) sweepOrphanStates() {
 
 		orphans = append(orphans, orphanEntry{
 			userID:            userID,
+			usageSessionID:    state.UsageSessionID,
 			channelID:         channelID,
 			joinedAt:          joinedAt,
 			livekitInstanceID: instanceID,
@@ -227,7 +229,7 @@ func (s *voiceService) sweepOrphanStates() {
 		// Credit the abandoned session — duration counts up to the moment
 		// of cleanup, which is approximately when the user actually
 		// disconnected (within `orphanGracePeriod` of it).
-		s.creditUsageUntil(o.livekitInstanceID, o.livekitIsCloud, o.joinedAt, now)
+		s.creditUsageSession(o.usageSessionID, o.livekitInstanceID, o.livekitIsCloud, o.joinedAt, now)
 	}
 }
 

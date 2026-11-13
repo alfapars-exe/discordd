@@ -506,6 +506,7 @@ func (s *voiceService) disconnectVoiceLocked(targetUserID string, state *models.
 	// triggers later than it should). See the creditUsage dispatch below,
 	// after unlock.
 	disconnectJoinedAt := state.JoinedAt
+	disconnectUsageSessionID := state.UsageSessionID
 	disconnectInstanceID := state.LiveKitInstanceID
 	disconnectIsCloud := state.LiveKitIsCloud
 	delete(s.states, targetUserID)
@@ -582,7 +583,7 @@ func (s *voiceService) disconnectVoiceLocked(targetUserID string, state *models.
 	// its cloud instance's monthly bucket — mirrors LeaveChannel's
 	// go s.creditUsage(...) dispatch. Self-hosted, zero-duration, and
 	// unset cases are no-ops inside creditUsage itself.
-	go s.creditUsageUntil(disconnectInstanceID, disconnectIsCloud, disconnectJoinedAt, time.Now()) // #nosec G118 -- deliberately detached: quota crediting must complete even if the caller's context is cancelled, mirroring LeaveChannel's own dispatch
+	go s.creditUsageSession(disconnectUsageSessionID, disconnectInstanceID, disconnectIsCloud, disconnectJoinedAt, time.Now()) // #nosec G118 -- deliberately detached: quota crediting must complete even if the caller's context is cancelled, mirroring LeaveChannel's own dispatch
 
 	// F2 review MEDIUM fix: channelID emptied by this disconnect (remaining
 	// computed above under the lock, right after delete) → kick the music

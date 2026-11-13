@@ -12,6 +12,7 @@ import (
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/ws"
+	"github.com/google/uuid"
 )
 
 // broadcastToServer queues a voice event for current members who can view its channel.
@@ -285,6 +286,7 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 	var oldChannelID string
 	var oldServerID string
 	var oldJoinedAt time.Time
+	var oldUsageSessionID string
 	var oldInstanceID string
 	var oldIsCloud bool
 	// A-38 review regression fix: the client no longer sends voice_leave on
@@ -325,6 +327,7 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 		oldChannelID = existing.ChannelID
 		oldServerID = existing.ServerID
 		oldJoinedAt = existing.JoinedAt
+		oldUsageSessionID = existing.UsageSessionID
 		channelGeneration = existing.ChannelGeneration + 1
 		oldInstanceID = existing.LiveKitInstanceID
 		oldIsCloud = existing.LiveKitIsCloud
@@ -464,6 +467,7 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 		IsServerDeafened:  wasServerDeafened,
 		LastActivity:      now,
 		JoinedAt:          now,
+		UsageSessionID:    uuid.NewString(),
 		ChannelGeneration: channelGeneration,
 		LiveKitInstanceID: lkInstanceID,
 		LiveKitIsCloud:    lkIsCloud,
@@ -518,7 +522,7 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 		go s.removeParticipantAndScreenShareFromLiveKit(oldChannelID, userID)
 		// Cross-channel switch — credit the old session's duration to the
 		// instance it ran on. Self-hosted instances are skipped.
-		go s.creditUsageUntil(oldInstanceID, oldIsCloud, oldJoinedAt, time.Now())
+		go s.creditUsageSession(oldUsageSessionID, oldInstanceID, oldIsCloud, oldJoinedAt, time.Now())
 
 		// oldChannelID emptied by this switch → kick the music bot (if any),
 		// mirroring LeaveChannel's "Channel emptied → kick the music bot"
@@ -552,6 +556,14 @@ func (s *voiceService) creditUsage(instanceID string, isCloud bool, joinedAt tim
 }
 
 func (s *voiceService) creditUsageUntil(instanceID string, isCloud bool, joinedAt, endedAt time.Time) {
+	s.creditUsageSession(uuid.NewString(), instanceID, isCloud, joinedAt, endedAt)
+}
+
+type voiceUsageRecorder interface {
+	RecordVoiceUsage(context.Context, string, string, int, int, int) error
+}
+
+func (s *voiceService) creditUsageSession(sessionID, instanceID string, isCloud bool, joinedAt, endedAt time.Time) {
 	if !isCloud || instanceID == "" || joinedAt.IsZero() {
 		return
 	}
@@ -564,9 +576,14 @@ func (s *voiceService) creditUsageUntil(instanceID string, isCloud bool, joinedA
 	// maintenance shutdown or a database pool waiter alive indefinitely.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := s.livekitGetter.IncrementMonthlyUsage(
-		ctx, instanceID, year, int(month), seconds,
-	); err != nil {
+	var err error
+	if recorder, ok := s.livekitGetter.(voiceUsageRecorder); ok {
+		err = recorder.RecordVoiceUsage(ctx, sessionID, instanceID, year, int(month), seconds)
+	} else {
+		// Narrow legacy adapters retain their existing additive contract.
+		err = s.livekitGetter.IncrementMonthlyUsage(ctx, instanceID, year, int(month), seconds)
+	}
+	if err != nil {
 		voiceLogger.Error("credit usage failed", "instance_id", instanceID, "seconds", seconds, "err", pkg.ErrText(err))
 	}
 }
@@ -589,6 +606,7 @@ func (s *voiceService) LeaveChannel(userID string) error {
 	// Capture quota fields before delete — used below (still under the lock;
 	// see the defer above) to credit session duration to the instance it ran on.
 	leaveJoinedAt := state.JoinedAt
+	leaveUsageSessionID := state.UsageSessionID
 	leaveInstanceID := state.LiveKitInstanceID
 	leaveIsCloud := state.LiveKitIsCloud
 	delete(s.forceMoveGrants, userID)
@@ -635,7 +653,7 @@ func (s *voiceService) LeaveChannel(userID string) error {
 	go s.removeParticipantAndScreenShareFromLiveKit(channelID, userID)
 	// Credit the completed session's duration to the cloud instance bucket.
 	// Self-hosted, zero-duration, and unset cases are no-ops inside creditUsage.
-	go s.creditUsageUntil(leaveInstanceID, leaveIsCloud, leaveJoinedAt, time.Now())
+	go s.creditUsageSession(leaveUsageSessionID, leaveInstanceID, leaveIsCloud, leaveJoinedAt, time.Now())
 
 	// Channel emptied → kick the music bot (if any) so it doesn't keep
 	// playing to nobody and burning bandwidth/CPU.
