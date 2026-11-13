@@ -492,6 +492,9 @@ jobs:
           node node_modules/electron/install.js
           node -e "require('node:fs').accessSync(require('electron'))"
 
+      - name: Load profile contract tests
+        run: node --experimental-vm-modules --test loadtest/ws_connect.test.mjs
+
       - name: electron:test (resolve-path + regression suite)
         run: npm run electron:test
 

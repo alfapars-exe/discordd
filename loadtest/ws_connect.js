@@ -13,7 +13,7 @@
 // and default to obviously-fake local placeholders.
 import http from 'k6/http';
 import ws from 'k6/ws';
-import { check } from 'k6';
+import { check, sleep } from 'k6';
 import { Counter } from 'k6/metrics';
 
 // ─── Configuration (all overridable via -e or exported env vars) ───
@@ -32,7 +32,7 @@ const USERNAME_PREFIX = __ENV.USERNAME_PREFIX || 'loadtest';
 // the repo is one copy-paste away from being aimed at something real. Fail
 // fast instead.
 const PASSWORD = __ENV.PASSWORD;
-const USER_COUNT = parseInt(__ENV.USER_COUNT || '1', 10);
+const USER_COUNT = Number(__ENV.USER_COUNT || '1');
 
 if (!PASSWORD) {
   // NOSONAR - this is the "you forgot to set it" message, not a credential.
@@ -52,17 +52,22 @@ const USE_LEGACY_TOKEN = (__ENV.USE_LEGACY_TOKEN || 'false') === 'true';
 // down over RAMP_DOWN. Each VU opens exactly one WS connection and keeps it
 // open for the HOLD_SECONDS below (must stay >= HOLD so the connection
 // survives the whole hold window rather than closing early).
-const WS_VUS = parseInt(__ENV.WS_VUS || '200', 10);
+const WS_VUS = Number(__ENV.WS_VUS || '200');
 const RAMP_UP = __ENV.RAMP_UP || '30s';
 const HOLD = __ENV.HOLD || '60s';
 const RAMP_DOWN = __ENV.RAMP_DOWN || '20s';
-const HOLD_SECONDS = parseInt(__ENV.HOLD_SECONDS || '90', 10);
+const HOLD_SECONDS = Number(__ENV.HOLD_SECONDS || '90');
+for (const [name, value] of [['USER_COUNT', USER_COUNT], ['WS_VUS', WS_VUS], ['HOLD_SECONDS', HOLD_SECONDS]]) {
+  if (!Number.isInteger(value) || value < 1) throw new Error(`${name} must be a positive integer`);
+}
 
 // Client -> server heartbeat cadence. Matches the real client's interval;
 // see ws/client.go pongWait (90s = 3 missed heartbeats at 30s each).
 const HEARTBEAT_INTERVAL_MS = 30 * 1000;
 
 const heartbeatAcks = new Counter('heartbeat_acks_received');
+const successfulHandshakes = new Counter('ws_handshakes_succeeded');
+const successfulSessions = new Counter('ws_sessions_succeeded');
 
 export const options = {
   scenarios: {
@@ -74,13 +79,16 @@ export const options = {
         { duration: HOLD, target: WS_VUS },
         { duration: RAMP_DOWN, target: 0 },
       ],
-      gracefulRampDown: '10s',
+      gracefulRampDown: `${HOLD_SECONDS + 5}s`,
+      gracefulStop: `${HOLD_SECONDS + 5}s`,
     },
   },
   thresholds: {
     // Every VU must reach a successful WS handshake — a single failure
     // means the auth/ticket/connect chain broke somewhere.
     checks: ['rate==1.0'],
+    ws_handshakes_succeeded: ['count>0', `count==${WS_VUS}`],
+    ws_sessions_succeeded: [`count==${WS_VUS}`],
     // Time to establish the WS connection (post-upgrade-request).
     ws_connecting: ['p(95)<1000'],
     // Sessions should survive close to the full hold window, not get
@@ -111,19 +119,29 @@ function usernameForVU() {
 
 // login exchanges username/password for an access token via
 // POST /api/auth/login (handlers/auth.go AuthHandler.Login).
+function responseToken(response, field) {
+  if (response.status !== 200) return null;
+  try {
+    if (response.json('success') !== true) return null;
+    const value = response.json(`data.${field}`);
+    return typeof value === 'string' && value.length > 0 ? value : null;
+  } catch { return null; }
+}
+
 function login() {
   const res = http.post(
     `${BASE_URL}/api/auth/login`,
     JSON.stringify({ username: usernameForVU(), password: PASSWORD }),
     { headers: { 'Content-Type': 'application/json' } }
   );
+  const token = responseToken(res, 'access_token');
   const ok = check(res, {
-    'login succeeded': (r) => r.status === 200,
+    'login succeeded': (r) => r.status === 200 && token !== null,
   });
   if (!ok) {
     return null;
   }
-  return res.json('access_token');
+  return token;
 }
 
 // issueTicket exchanges the access token for a one-time WS connect ticket
@@ -136,16 +154,21 @@ function issueTicket(accessToken) {
     null,
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
+  const ticket = responseToken(res, 'ticket');
   const ok = check(res, {
-    'ws-ticket issued': (r) => r.status === 200,
+    'ws-ticket issued': (r) => r.status === 200 && ticket !== null,
   });
   if (!ok) {
     return null;
   }
-  return res.json('ticket');
+  return ticket;
 }
 
 export default function () {
+  // ramping-vus repeats iterations; each VU owns exactly one measured connection.
+  if (__ITER > 0) { sleep(1); return; }
+  successfulHandshakes.add(0);
+  successfulSessions.add(0);
   const accessToken = login();
   if (!accessToken) {
     return;
@@ -164,7 +187,11 @@ export default function () {
     wsURL = `${wsURLFromBase(BASE_URL)}/ws?ticket=${ticket}`;
   }
 
-  const res = ws.connect(wsURL, {}, function (socket) {
+  let completedHold = false;
+  let socketFailed = false;
+  let res = null;
+  try {
+    res = ws.connect(wsURL, {}, function (socket) {
     socket.on('open', function () {
       socket.setInterval(function () {
         socket.send(JSON.stringify({ op: 'heartbeat' }));
@@ -183,15 +210,23 @@ export default function () {
       }
     });
 
-    socket.on('error', function () {});
+    socket.on('error', function () { socketFailed = true; });
 
     // Hold the connection open for the configured window, then close it
     // ourselves so the VU can exit cleanly instead of being cut off by the
     // scenario's ramp-down.
     socket.setTimeout(function () {
+      completedHold = true;
       socket.close();
     }, HOLD_SECONDS * 1000);
   });
 
-  check(res, { 'ws handshake succeeded (status 101)': (r) => r && r.status === 101 });
+  } catch { socketFailed = true; }
+  const completed = check(res, {
+    'ws handshake succeeded (status 101)': (r) => !!r && r.status === 101,
+    'ws session completed hold': () => completedHold,
+    'ws session had no errors': () => !socketFailed,
+  });
+  if (res && res.status === 101) successfulHandshakes.add(1);
+  if (completed) successfulSessions.add(1);
 }
