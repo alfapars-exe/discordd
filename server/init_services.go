@@ -218,15 +218,11 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		services.WithEmailUnsubscribe(repos.EmailUnsubscribe, cfg.Email.AppURL))
 	p2pCallService := services.NewP2PCallService(repos.Friendship, repos.User, hub, emailDeliveryService)
 	emailVerificationService := services.NewEmailVerificationService(repos.EmailVerification, verificationSender)
-	channelService := services.NewChannelService(repos.Channel, repos.Category, hub, channelPermService, auditLogService, repos.Notification)
-	channelDeletionSetter, setterOK := channelService.(interface {
-		SetVoiceChannelDeletionHandler(services.VoiceChannelDeletionHandler)
-	})
 	voiceDeletionHandler, handlerOK := voiceService.(services.VoiceChannelDeletionHandler)
-	if !setterOK || !handlerOK {
-		panic("channel/voice services must support deleted voice-channel cleanup")
+	if !handlerOK {
+		panic("voice service must support deleted voice-channel cleanup")
 	}
-	channelDeletionSetter.SetVoiceChannelDeletionHandler(voiceDeletionHandler)
+	channelService := services.NewChannelService(voiceDeletionHandler, repos.Channel, repos.Category, hub, channelPermService, auditLogService, repos.Notification)
 	threadService := services.NewThreadService(repos.Channel, repos.Message, channelPermService, hub)
 	// Enables best-effort on-disk cleanup of attachment files on delete (see
 	// services/upload_cleanup.go) without widening the constructor signature
