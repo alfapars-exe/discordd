@@ -28,7 +28,7 @@ func (s *voiceService) ShutdownVoiceSessions() {
 			sessions := s.detachVoiceChannel(c.serverID, c.channelID)
 			channels[c] = sessions
 			for _, session := range sessions {
-				s.creditUsageSession(session.state.UsageSessionID, session.state.LiveKitInstanceID, session.state.LiveKitIsCloud, session.state.JoinedAt, endedAt)
+				s.creditDeletedVoiceSession(session, endedAt)
 			}
 		}
 		workers := min(4, len(channels))

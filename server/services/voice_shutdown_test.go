@@ -197,3 +197,21 @@ func TestVoiceShutdownContinuesAfterMusicPanic(t *testing.T) {
 		t.Fatalf("panic skipped cleanup: music=%d identity_lookups=%d", len(music), len(lookups))
 	}
 }
+
+func TestVoiceShutdownContinuesAfterCreditPanic(t *testing.T) {
+	lookups := make(chan string, 16)
+	getter := &panickingChannelCleanupGetter{credits: make(chan string, 8), panicCredit: true}
+	getter.GetByServerIDFn = func(context.Context, string) (*models.LiveKitInstance, error) {
+		lookups <- "lookup"
+		return nil, errors.New("fixture has no media")
+	}
+	svc, _ := newTestVoiceServiceWithLiveKitGetter(getter)
+	s := svc.(*voiceService)
+	for _, id := range []string{"a", "b", "c", "d", "e", "f", "g", "h"} {
+		s.states[id] = &models.VoiceState{UserID: id, ChannelID: "channel-" + id, ServerID: "server", UsageSessionID: id, LiveKitInstanceID: "instance", LiveKitIsCloud: true, JoinedAt: time.Now().Add(-time.Minute)}
+	}
+	s.ShutdownVoiceSessions()
+	if len(getter.credits) != 8 || len(lookups) != 16 || len(s.GetAllVoiceStates()) != 0 {
+		t.Fatalf("credit panic aborted finalization: credits=%d identities=%d", len(getter.credits), len(lookups))
+	}
+}

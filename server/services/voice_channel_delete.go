@@ -47,7 +47,7 @@ func (s *voiceService) deleteVoiceChannelAt(ctx context.Context, serverID, chann
 		// Committed channel deletion must still attempt eviction. With admission
 		// closed the caller owns completion; do not launch untracked late work.
 		if s.musicBotHook != nil {
-			s.musicBotHook.StopAllForChannel(channelID)
+			logx.Run("voice-channel-delete-music", func() { s.musicBotHook.StopAllForChannel(channelID) })
 		}
 		for _, session := range removed {
 			s.completeDeletedVoiceSession(ctx, session, endedAt)
@@ -56,7 +56,7 @@ func (s *voiceService) deleteVoiceChannelAt(ctx context.Context, serverID, chann
 	}
 
 	if s.musicBotHook != nil {
-		s.operations.child(func() { s.musicBotHook.StopAllForChannel(channelID) })
+		s.operations.child(func() { logx.Run("voice-channel-delete-music", func() { s.musicBotHook.StopAllForChannel(channelID) }) })
 	}
 	if len(removed) == 0 {
 		return
@@ -93,13 +93,14 @@ var _ VoiceChannelDeletionHandler = (*voiceService)(nil)
 func (s *voiceService) completeDeletedVoiceSession(ctx context.Context, session deletedVoiceSession, endedAt time.Time) {
 	// Persist accounting before potentially slow media cleanup. Native pending
 	// handoff survives process loss during subsequent LiveKit eviction attempts.
-	s.creditUsageSession(session.state.UsageSessionID, session.state.LiveKitInstanceID, session.state.LiveKitIsCloud, session.state.JoinedAt, endedAt)
+	s.creditDeletedVoiceSession(session, endedAt)
 	s.evictDeletedVoiceSession(ctx, session)
 }
 
 func (s *voiceService) evictDeletedVoiceSession(ctx context.Context, session deletedVoiceSession) {
-	s.removeDeletedChannelParticipant(ctx, session.serverID, session.channelID, session.userID)
-	s.removeDeletedChannelParticipant(ctx, session.serverID, session.channelID, session.userID+"_ss")
+	for _, identity := range []string{session.userID, session.userID + "_ss"} {
+		logx.Run("voice-channel-delete-identity", func() { s.removeDeletedChannelParticipant(ctx, session.serverID, session.channelID, identity) })
+	}
 }
 
 // detachVoiceChannel fences joins and returns exclusive ownership of removed sessions.
@@ -158,4 +159,12 @@ func (s *voiceService) detachVoiceChannel(serverID, channelID string) []deletedV
 	s.cleanupRoomPassphraseIfEmpty(channelID)
 	s.mu.Unlock()
 	return removed
+}
+
+// Isolate an unexpected recorder panic without abandoning later sessions or
+// media cleanup. This is an attempt, not a successful handoff or a retry.
+func (s *voiceService) creditDeletedVoiceSession(session deletedVoiceSession, endedAt time.Time) {
+	logx.Run("voice-channel-delete-credit", func() {
+		s.creditUsageSession(session.state.UsageSessionID, session.state.LiveKitInstanceID, session.state.LiveKitIsCloud, session.state.JoinedAt, endedAt)
+	})
 }
