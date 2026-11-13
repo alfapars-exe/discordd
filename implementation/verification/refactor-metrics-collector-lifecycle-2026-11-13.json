@@ -1,0 +1,23 @@
+{
+  "scope": "RF08 MetricsCollector production lifecycle",
+  "before": {
+    "concurrent_Start": "Repeated Start launched another collector (16 workers requested).",
+    "active_query_Stop": "Stop returned before cancelling the active query.",
+    "concurrent_Stop": "15 of 16 Stop calls panicked."
+  },
+  "after": {
+    "semantics": "Single terminal worker lifecycle; Stop before Start prevents future work; Stop cancels collection context and waits for completion, then closes idle HTTP connections.",
+    "selected_tests_count_5": "PASS 1.063s including normal immediate/periodic snapshots",
+    "selected_race_count_5": "PASS 3.775s including six lifecycle tests",
+    "full_go_vet_and_build": "PASS",
+    "golangci_lint": "0 issues",
+    "real_HTTP_contract": "Local httptest HTTP poll observes request cancellation before Stop completes.",
+    "interleaved_lifecycle": "25 waves of 16 Start/Stop callers per test run.",
+    "normal_collection": "Immediate and periodic synthetic Prometheus samples preserve instance, room, participant, memory values and history purge."
+  },
+  "limitations": [
+    "HTTP test uses a local synthetic metrics server, not a production LiveKit endpoint.",
+    "No real PostgreSQL query cancellation or whole-process signal shutdown is proven by these fixtures.",
+    "Whole services suite and current-head CI remain separate acceptance gates."
+  ]
+}
