@@ -787,3 +787,7 @@ Genel Go yarış denetiminde Docker kesintisinden önce tamamlanmayan repository
 - PR #268, `4771c7c8`: Sunucu listesi snapshot sıralaması temiz main tabanına ayrıldı. `npx vitest run src/stores/serverStore.navigation.test.ts` 15/15 geçti; iki değişen dosyanın ESLint denetimi geçti. Aynı testler origin/main sunucu store koduyla çalıştırıldığında 6 başarısız ve 9 başarılı sonuç verdi. Sabit kaynak geri yüklendi ve çalışma ağacı temizliği denetlendi. Negatif koşu günlüğü `%TEMP%/hichat-server-list-before.log`.
 
 Bu kayıt yerel kaynak doğrulamasıdır. PR CI, birleştirme, yayın ve fiziksel cihaz kabulü ayrı kalır.
+
+**RF28 bağımsız üretim paketi.** PR #238 dalında `c5feda38` üzerinde `HICHAT_E2E_PRODUCTION_CLIENT=1 npx playwright test --project=chromium`, gerçek Go ve mTLS PostgreSQL ile 11/11 geçti (2,1 dakika). Sunucu hazırlığı ve rol testi artık `/src` modüllerini yüklemiyor; oturum yanıtındaki token test belleğinde tutularak gerçek HTTP kullanılıyor. `npm run test:isolation` geçti; Windows dosya symlink senaryosu atlandı. Koşu günlüğü `%TEMP%/hichat-production-review-chromium.log`. Sunucu silmede LiveKit foreign-key hataları ve bir app-log batch timeout görüldü; tarayıcı başarısı bu sunucu hatalarının kapandığı anlamına gelmez. Birleşik daldaki `b26ac84c` / `0feb7ec5` silme düzeltmeleri ayrı teslim edilmelidir.
+
+**RF03 uzak kabul.** PR #263 ve #264 için 13 Kasım son denetiminde 36/36 GitHub kontrolü SUCCESS durumundaydı. Diğer PR'ların CI kapıları henüz kapanmadı; birleştirme ve runtime yayını yapılmadı.
