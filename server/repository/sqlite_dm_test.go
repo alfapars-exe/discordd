@@ -723,6 +723,27 @@ func TestDMRepo_ReplyReference(t *testing.T) {
 	}
 }
 
+func TestDMRepo_ReplyReferenceCannotExposeAnotherConversation(t *testing.T) {
+	db := newTestDB(t)
+	seedDMUsers(t, db)
+	repo := NewSQLiteDMRepo(db.Conn)
+	ctx := context.Background()
+	private := newDMChannel(t, ctx, repo, dmAlice, dmCarol, models.DMStatusAccepted)
+	visible := newDMChannel(t, ctx, repo, dmAlice, dmBob, models.DMStatusAccepted)
+	original := newDMMessage(t, ctx, repo, private.ID, dmCarol, "private content")
+	// A malformed imported reply bypasses the send service's validation.
+	reply := &models.DMMessage{DMChannelID: visible.ID, UserID: dmAlice, Content: strPtr("reply"), ReplyToID: &original.ID}
+	if err := repo.CreateMessage(ctx, reply); err != nil {
+		t.Fatal(err)
+	}
+	got, err := repo.GetMessageByID(ctx, reply.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ref := got.ReferencedMessage; ref != nil && (ref.Content != nil || ref.Author != nil) {
+		t.Fatal("reply disclosed the content or author of another conversation")
+	}
+}
 // ─── Reactions ───
 
 func TestDMRepo_Reactions(t *testing.T) {
