@@ -803,3 +803,13 @@ it("waits for the actual tail before acknowledging a newly opened DM", async () 
   expect(dmApi.markDMRead).toHaveBeenCalledExactlyOnceWith(CH, "actual-tail");
   expect(useDMStore.getState().dmUnreadCounts[CH]).toBeUndefined();
 });
+it("hydrates missing channels when unread metadata changes during the first list request", async () => {
+  const pending = deferred<APIResponse<DMChannelWithUser[]>>();
+  vi.mocked(dmApi.listDMChannels).mockReturnValueOnce(pending.promise);
+  const loading = useDMStore.getState().fetchChannels();
+  useDMStore.setState({ dmUnreadCounts: { [CH]: 1 } });
+  pending.resolve({ success: true, data: [listedDM(CH, 5)] });
+  await loading;
+  expect(useDMStore.getState().dmUnreadCounts[CH]).toBe(1);
+  expect(useDMStore.getState().channels.some(channel => channel.id === CH)).toBe(true);
+});
