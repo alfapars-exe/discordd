@@ -612,13 +612,18 @@ func (s *voiceService) attemptServerMuteUpdate(ctx context.Context, roomClient *
 		return nil // unmute: no track-level action — see applyServerMuteToLiveKit's doc comment
 	}
 
+	s.mutePublishedMicrophone(ctx, roomClient, roomName, channelID, userID, participant.Tracks)
+	return nil
+}
+
+func (s *voiceService) mutePublishedMicrophone(ctx context.Context, roomClient *lksdk.RoomServiceClient, roomName, channelID, userID string, tracks []*livekit.TrackInfo) {
 	// Best-effort: also mute the already-published microphone track
 	// directly, so audio already in flight is silenced immediately rather
 	// than only on the client's next publish/renegotiation. A failure here
 	// does NOT fail the overall attempt — UpdateParticipant above already
 	// applied the durable grant change — logged and swallowed, matching
 	// the mute leg's fail-open policy.
-	for _, track := range participant.Tracks {
+	for _, track := range tracks {
 		if track.Source != livekit.TrackSource_MICROPHONE {
 			continue
 		}
@@ -635,7 +640,6 @@ func (s *voiceService) attemptServerMuteUpdate(ctx context.Context, roomClient *
 		}
 		break // one microphone track expected per participant
 	}
-	return nil
 }
 
 // EnforceModerationOnJoin evicts userID from the LiveKit room for
@@ -787,22 +791,13 @@ func (s *voiceService) sweepAFKUsersContext(parent context.Context) {
 		}
 		timeout, ok := channelTimeouts[c.channelID]
 		if !ok {
-			channel, err := s.channelGetter.GetByID(ctx, c.channelID)
+			resolved, info, err := s.afkChannelPolicy(ctx, c.channelID)
 			if err != nil {
 				continue
 			}
-			server, err := s.afkTimeoutGetter.GetByID(ctx, channel.ServerID)
-			if err != nil {
-				continue
-			}
-			timeout = time.Duration(server.AFKTimeoutMinutes) * time.Minute
+			timeout = resolved
 			channelTimeouts[c.channelID] = timeout
-			channelInfo[c.channelID] = afkEntry{
-				channelID:   c.channelID,
-				channelName: channel.Name,
-				serverID:    server.ID,
-				serverName:  server.Name,
-			}
+			channelInfo[c.channelID] = info
 		}
 
 		if timeout <= 0 {
@@ -841,4 +836,16 @@ func (s *voiceService) sweepAFKUsersContext(parent context.Context) {
 		// Use the existing disconnect flow
 		s.DisconnectUser(entry.userID)
 	}
+}
+
+func (s *voiceService) afkChannelPolicy(ctx context.Context, channelID string) (time.Duration, afkEntry, error) {
+	channel, err := s.channelGetter.GetByID(ctx, channelID)
+	if err != nil {
+		return 0, afkEntry{}, err
+	}
+	server, err := s.afkTimeoutGetter.GetByID(ctx, channel.ServerID)
+	if err != nil {
+		return 0, afkEntry{}, err
+	}
+	return time.Duration(server.AFKTimeoutMinutes) * time.Minute, afkEntry{channelID: channelID, channelName: channel.Name, serverID: server.ID, serverName: server.Name}, nil
 }

@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/repository"
@@ -114,65 +115,10 @@ func TestVoiceUsagePostgresPendingRecovery(t *testing.T) {
 	if err != nil || used != 0 {
 		t.Fatalf("enqueue prematurely changed usage: %d %v", used, err)
 	}
-	if _, err = db.ExecContext(ctx, `CREATE FUNCTION reject_pending_fixture() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'pending fixture failure'; END $$`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = db.ExecContext(ctx, `CREATE TRIGGER reject_pending_fixture BEFORE INSERT OR UPDATE ON livekit_monthly_usage FOR EACH ROW EXECUTE FUNCTION reject_pending_fixture()`); err != nil {
-		t.Fatal(err)
-	}
-	if applied, err := queue.ApplyNextVoiceUsage(ctx); err == nil || applied {
-		t.Fatal("failed aggregate reported applied")
-	}
-	var pending int
-	if err = db.QueryRowContext(ctx, `SELECT count(*) FROM voice_usage_credits WHERE credit_id='pending-session' AND applied_at IS NULL`).Scan(&pending); err != nil || pending != 1 {
-		t.Fatalf("pending handoff lost: %d %v", pending, err)
-	}
-	if _, err = db.ExecContext(ctx, `DROP TRIGGER reject_pending_fixture ON livekit_monthly_usage`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = db.ExecContext(ctx, `CREATE TRIGGER reject_usage_marker BEFORE UPDATE ON voice_usage_credits FOR EACH ROW EXECUTE FUNCTION reject_pending_fixture()`); err != nil {
-		t.Fatal(err)
-	}
-	if applied, err := queue.ApplyNextVoiceUsage(ctx); err == nil || applied {
-		t.Fatal("marker failure reported applied")
-	}
-	used, err = repo.GetMonthlyUsage(ctx, "pending-instance", 2026, 1)
-	if err != nil || used != 0 {
-		t.Fatalf("failed marker committed aggregate: %d %v", used, err)
-	}
-	if _, err = db.ExecContext(ctx, `DROP TRIGGER reject_usage_marker ON voice_usage_credits`); err != nil {
-		t.Fatal(err)
-	}
+	assertPendingUsageWriteFailures(t, ctx, db, repo, queue)
 	// A fresh repository represents restart: no process-local queue is reused.
 	recovered := repository.NewSQLiteLiveKitRepo(db).(pendingVoiceUsageQueue)
-	type applyResult struct {
-		applied bool
-		err     error
-	}
-	results := make(chan applyResult, 16)
-	var workers sync.WaitGroup
-	for i := 0; i < 16; i++ {
-		workers.Add(1)
-		go func() {
-			defer workers.Done()
-			applied, err := recovered.ApplyNextVoiceUsage(ctx)
-			results <- applyResult{applied, err}
-		}()
-	}
-	workers.Wait()
-	close(results)
-	appliedCount := 0
-	for result := range results {
-		if result.err != nil {
-			t.Fatal(result.err)
-		}
-		if result.applied {
-			appliedCount++
-		}
-	}
-	if appliedCount != 1 {
-		t.Fatalf("concurrent recovery applied=%d, want1", appliedCount)
-	}
+	assertConcurrentUsageRecovery(t, ctx, recovered)
 	if applied, err := recovered.ApplyNextVoiceUsage(ctx); err != nil || applied {
 		t.Fatalf("completed credit replayed=%v err=%v", applied, err)
 	}
@@ -183,28 +129,7 @@ func TestVoiceUsagePostgresPendingRecovery(t *testing.T) {
 	if err = queue.EnqueueVoiceUsage(ctx, "worker-pending", "pending-instance", 2026, 1, 30); err != nil {
 		t.Fatal(err)
 	}
-	workerService := &voiceService{livekitGetter: repository.NewSQLiteLiveKitRepo(db)}
-	stopWorker := startVoiceUsageDelivery(ctx, workerService, time.Millisecond)
-	t.Cleanup(stopWorker)
-	for {
-		used, err = repo.GetMonthlyUsage(ctx, "pending-instance", 2026, 1)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if used == 90 {
-			break
-		}
-		select {
-		case <-ctx.Done():
-			t.Fatal("owned worker did not recover durable pending credit")
-		default:
-			time.Sleep(time.Millisecond)
-		}
-	}
-	stopWorker()
-	if err = db.PingContext(ctx); err != nil {
-		t.Fatalf("worker shutdown closed caller pool: %v", err)
-	}
+	assertOwnedPendingUsageRecovery(t, ctx, db, repo)
 
 }
 
@@ -255,5 +180,96 @@ func TestVoiceUsagePostgresServiceHandoffSurvivesApplyFailure(t *testing.T) {
 	used, err := repo.GetMonthlyUsage(ctx, "handoff-instance", 2026, 1)
 	if err != nil || used != 60 {
 		t.Fatalf("service replay inflated usage=%d err=%v", used, err)
+	}
+}
+
+func assertPendingUsageWriteFailures(t *testing.T, ctx context.Context, db *sql.DB, repo repository.LiveKitRepository, queue pendingVoiceUsageQueue) {
+	t.Helper()
+	if _, err := db.ExecContext(ctx, `CREATE FUNCTION reject_pending_fixture() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'pending fixture failure'; END $$`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `CREATE TRIGGER reject_pending_fixture BEFORE INSERT OR UPDATE ON livekit_monthly_usage FOR EACH ROW EXECUTE FUNCTION reject_pending_fixture()`); err != nil {
+		t.Fatal(err)
+	}
+	if applied, err := queue.ApplyNextVoiceUsage(ctx); err == nil || applied {
+		t.Fatal("failed aggregate reported applied")
+	}
+	var pending int
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM voice_usage_credits WHERE credit_id='pending-session' AND applied_at IS NULL`).Scan(&pending); err != nil || pending != 1 {
+		t.Fatalf("pending handoff lost: %d %v", pending, err)
+	}
+	if _, err := db.ExecContext(ctx, `DROP TRIGGER reject_pending_fixture ON livekit_monthly_usage`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `CREATE TRIGGER reject_usage_marker BEFORE UPDATE ON voice_usage_credits FOR EACH ROW EXECUTE FUNCTION reject_pending_fixture()`); err != nil {
+		t.Fatal(err)
+	}
+	if applied, err := queue.ApplyNextVoiceUsage(ctx); err == nil || applied {
+		t.Fatal("marker failure reported applied")
+	}
+	used, err := repo.GetMonthlyUsage(ctx, "pending-instance", 2026, 1)
+	if err != nil || used != 0 {
+		t.Fatalf("failed marker committed aggregate: %d %v", used, err)
+	}
+	if _, err := db.ExecContext(ctx, `DROP TRIGGER reject_usage_marker ON voice_usage_credits`); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func assertConcurrentUsageRecovery(t *testing.T, ctx context.Context, recovered pendingVoiceUsageQueue) {
+	t.Helper()
+	type applyResult struct {
+		applied bool
+		err     error
+	}
+	results := make(chan applyResult, 16)
+	var workers sync.WaitGroup
+	for i := 0; i < 16; i++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			applied, err := recovered.ApplyNextVoiceUsage(ctx)
+			results <- applyResult{applied, err}
+		}()
+	}
+	workers.Wait()
+	close(results)
+	appliedCount := 0
+	for result := range results {
+		if result.err != nil {
+			t.Fatal(result.err)
+		}
+		if result.applied {
+			appliedCount++
+		}
+	}
+	if appliedCount != 1 {
+		t.Fatalf("concurrent recovery applied=%d, want1", appliedCount)
+	}
+}
+
+func assertOwnedPendingUsageRecovery(t *testing.T, ctx context.Context, db *sql.DB, repo repository.LiveKitRepository) {
+	t.Helper()
+	workerService := &voiceService{livekitGetter: repository.NewSQLiteLiveKitRepo(db)}
+	stopWorker := startVoiceUsageDelivery(ctx, workerService, time.Millisecond)
+	t.Cleanup(stopWorker)
+	for {
+		used, err := repo.GetMonthlyUsage(ctx, "pending-instance", 2026, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if used == 90 {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal("owned worker did not recover durable pending credit")
+		default:
+			time.Sleep(time.Millisecond)
+		}
+	}
+	stopWorker()
+	if err := db.PingContext(ctx); err != nil {
+		t.Fatalf("worker shutdown closed caller pool: %v", err)
 	}
 }
