@@ -131,3 +131,50 @@ func TestDMReadRepoMarkUnreadFrom(t *testing.T) {
 		t.Fatalf("last=%q want %q", last, first.ID)
 	}
 }
+
+func TestDMUnreadTransactionReadsItsStoredCursor(t *testing.T) {
+	db := newTestDB(t)
+	seedDMUsers(t, db)
+	ctx := context.Background()
+	dms := NewSQLiteDMRepo(db.Conn)
+	channel := newDMChannel(t, ctx, dms, dmAlice, dmBob, models.DMStatusAccepted)
+	first := newDMMessage(t, ctx, dms, channel.ID, dmAlice, "first")
+	own := newDMMessage(t, ctx, dms, channel.ID, dmBob, "own")
+	last := newDMMessage(t, ctx, dms, channel.ID, dmAlice, "last")
+	runner := NewDMMessageTxRunner(db.Conn)
+	for _, tc := range []struct {
+		name   string
+		target string
+		cursor *string
+		unread int
+	}{
+		{"after own message", last.ID, &own.ID, 1},
+		{"first message", first.ID, nil, 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := runner.InTx(ctx, func(r *DMTxRepos) error {
+				if err := r.LockChannel(ctx, channel.ID); err != nil {
+					return err
+				}
+				written, err := r.DMRead.MarkUnreadFrom(ctx, dmBob, channel.ID, tc.target)
+				if err != nil {
+					return err
+				}
+				cursor, remaining, err := r.ReadState(ctx, dmBob, channel.ID)
+				if err != nil {
+					return err
+				}
+				if written != tc.unread || remaining != tc.unread {
+					t.Errorf("written=%d, remaining=%d, want %d", written, remaining, tc.unread)
+				}
+				if (cursor == nil) != (tc.cursor == nil) || (cursor != nil && tc.cursor != nil && *cursor != *tc.cursor) {
+					t.Errorf("incorrect read cursor for target %s", tc.target)
+				}
+				return nil
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
