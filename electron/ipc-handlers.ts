@@ -1,3 +1,4 @@
+import { registerAppCommandIPC } from "./app-command-ipc";
 import { registerCaptureCommandIPC } from "./capture-command-ipc";
 import { registerGlobalShortcutIPC } from "./global-shortcut-ipc";
 import { registerRegisteredGamesIPC } from "./registered-games-ipc";
@@ -37,7 +38,6 @@ import {registerPTTLeaseHandlers}from "./ptt-ipc";
 // Input validation helpers
 // ──────────────────────────────────────────────────────────────
 
-const MAX_CLIPBOARD_BYTES = 10 * 1024 * 1024; // 10 MB — prevent renderer-side DoS
 
 import { app, clipboard, dialog, globalShortcut, ipcMain, nativeImage, net, screen, shell } from "electron";
 import { autoUpdater } from "electron-updater";
@@ -166,10 +166,9 @@ export function registerIpcHandlers(): () => Promise<void> {
   });
 
   // ─── App / version ──────────────────────────────────────────────
-  ipcMain.handle("get-version", () => app.getVersion());
-  ipcMain.handle("relaunch", () => {
-    app.relaunch();
-    app.quit();
+  registerAppCommandIPC(ipcMain, {
+    getVersion: () => app.getVersion(), relaunch: () => app.relaunch(), quit: () => app.quit(),
+    writeClipboard: text => clipboard.writeText(text), assertString,
   });
 
   registerDiagnosticIPC(ipcMain, {
@@ -204,12 +203,6 @@ export function registerIpcHandlers(): () => Promise<void> {
   registerWindowControlIPC(ipcMain, {
     getMainWindow, setTrayTooltip, assertString, assertFiniteNumber,
     createBadgeImage: url => nativeImage.createFromDataURL(url),
-  });
-
-  ipcMain.handle("write-clipboard", (_e, text: unknown) => {
-    // Audit 2026-05-27: prevent renderer-induced clipboard DoS.
-    assertString(text, "clipboard text", MAX_CLIPBOARD_BYTES);
-    clipboard.writeText(text);
   });
 
   registerAppSettingsIPC(ipcMain, {

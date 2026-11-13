@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { createApplicationShutdown } from "./application-shutdown";
+import { registerAppCommandIPC } from "./app-command-ipc";
 
 function deferred() { let resolve!: () => void; const promise = new Promise<void>(done => { resolve = done; }); return { promise, resolve }; }
 const flush = () => new Promise<void>(resolve => setImmediate(resolve));
@@ -123,14 +124,17 @@ test("real IPC cleanup starts every owner once and still awaits tracker if a sib
 
 test("relaunch IPC follows graceful quit instead of bypassing native cleanup with exit", () => {
   const code = readFileSync(path.join(__dirname, "ipc-handlers.js"), "utf8");
-  const start = code.indexOf('electron_1.ipcMain.handle("relaunch"');
+  const registrar = code.indexOf("(0, app_command_ipc_1.registerAppCommandIPC)");
+  const start = registrar >= 0 ? registrar : code.indexOf('electron_1.ipcMain.handle("relaunch"');
   const end = code.indexOf("\n    });", start);
   assert.ok(start >= 0 && end > start);
   const handlers = new Map<string, () => void>();
   const calls: string[] = [];
   vm.runInNewContext(code.slice(start, end + "\n    });".length), {
     electron_1: { ipcMain: { handle: (name: string, callback: () => void) => handlers.set(name, callback) },
-      app: { relaunch: () => calls.push("relaunch"), quit: () => calls.push("quit"), exit: () => calls.push("forced-exit") } },
+      app: { getVersion: () => "fixture", relaunch: () => calls.push("relaunch"), quit: () => calls.push("quit"), exit: () => calls.push("forced-exit") }, clipboard: { writeText: () => {} } },
+    app_command_ipc_1: { registerAppCommandIPC },
+    assertString: () => {}, ipc_input_validation_1: { assertString: () => {} },
   });
   handlers.get("relaunch")!();
   assert.deepEqual(calls, ["relaunch", "quit"]);
