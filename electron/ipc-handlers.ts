@@ -285,7 +285,7 @@ export function registerIpcHandlers(): () => Promise<void> {
   ipcMain.handle("get-version", () => app.getVersion());
   ipcMain.handle("relaunch", () => {
     app.relaunch();
-    app.exit(0);
+    app.quit();
   });
 
   // ─── Crash report flush ──────────────────────────────────────────
