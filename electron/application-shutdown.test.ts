@@ -151,3 +151,20 @@ test("relaunch IPC follows graceful quit instead of bypassing native cleanup wit
   handlers.get("relaunch")!();
   assert.deepEqual(calls, ["relaunch", "quit"]);
 });
+
+test("prepare, cookie and diagnostic failures cannot prevent the remaining cleanup or quit", async () => {
+  const reports: string[] = [];
+  let stops = 0, quits = 0;
+  const handle = createApplicationShutdown({
+    prepare: () => { throw new Error("private prepare detail"); },
+    flushCookies: async () => { throw new Error("private cookie detail"); },
+    resources: [{ name: "native", stop: () => { stops++; } }],
+    quit: () => { quits++; },
+    report: scope => { reports.push(scope); throw new Error("diagnostic unavailable"); },
+  });
+  handle({ preventDefault: () => {} });
+  await flush();
+  assert.equal(stops, 1);
+  assert.equal(quits, 1);
+  assert.deepEqual(reports.sort(), ["cookies", "prepare"]);
+});
