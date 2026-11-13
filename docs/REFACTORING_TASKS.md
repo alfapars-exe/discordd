@@ -1438,3 +1438,9 @@ Terminal current-head receipt: PR29814a965ea completed36/36 SUCCESS. Exact-head 
 - Built Linux server from source81a6c385 and standalone probe for real login, one-shot WS ticket, voice_join observed before signal, and post-exit native usage-ledger checks. Source and hashes archived; no token/DSN output.
 - Execution failed before fixture creation: owned-container docker run returned Linux Engine API HTTP500; independent docker ps also returned500 after waiting. Both handles were confirmed terminal; no duplicate run was launched and shared Docker was not restarted. The attempt did not execute login/join/SIGTERM.
 - Receipt: `implementation/verification/refactor-active-signal-attempt-2026-11-14.json`; probe/harness text under `implementation/verification/active-voice-signal-2026-11-14/`. Cleanup finally attempted owned-container removal but engine inventory was unavailable, so verify mount/source ownership and remaining QA container state after engine recovery before retry. Active process/physical media and full-project acceptance remain open.
+
+### 2026-11-14 — Publish canonical staged active shutdown
+
+- Published PR298 head22aae5bb with active-session finalization, all-credit-before-media phases, bounded media pool, owned deleted-channel music stop and mandatory native tests. Branch-specific operation field retained; no integration-only membership API copied.
+- Canonical full vet/build/lint passed; runner9 passed. Final targeted JSON has29 passing and13 skipped events (including skipped native subtests; parent pass does not prove them). Docker now fails immediately with Desktop unable to start. Current-head native/race evidence must come from CI, not old527 green receipt or integration results.
+- Receipt: `implementation/verification/refactor-active-shutdown-canonical-2026-11-14.json`. No merge/release/physical acceptance claimed; active process signal and owned-container inventory remain pending engine recovery.
