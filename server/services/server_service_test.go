@@ -60,6 +60,9 @@ type joinServerHarness struct {
 // JoinServer touches after AddMember succeeds, so table-test cases only need
 // to override the field(s) that make that case interesting.
 func newJoinServerHarness() *joinServerHarness {
+	return newJoinServerHarnessWithActivity(nil)
+}
+func newJoinServerHarnessWithActivity(activity GameActivityPrivacyInvalidator) *joinServerHarness {
 	h := &joinServerHarness{
 		serverRepo: &testutil.MockServerRepo{},
 		roleRepo:   &testutil.MockRoleRepo{},
@@ -90,13 +93,14 @@ func newJoinServerHarness() *joinServerHarness {
 		return false, nil
 	}
 
-	h.svc = NewServerService(nil, nil, h.serverRepo, nil, h.roleRepo, nil, nil, h.userRepo, h.banRepo, h.inviteSvc, h.hub, nil, nil, // encryptionKey, auditLogger — not under test here
+	h.svc = NewServerService(activity, nil, h.serverRepo, nil, h.roleRepo, nil, nil, h.userRepo, h.banRepo, h.inviteSvc, h.hub, nil, nil, // encryptionKey, auditLogger — not under test here
 		passthroughMembershipTxRunner{server: h.serverRepo, role: h.roleRepo})
 	return h
 }
 
 func TestJoinServer_ValidInvite_AddsMemberAndMarksUsed(t *testing.T) {
-	h := newJoinServerHarness()
+	activity := &recordingGameActivityInvalidator{}
+	h := newJoinServerHarnessWithActivity(activity)
 
 	var addMemberCalled, markUsedCalled, assignRoleCalled bool
 	h.serverRepo.AddMemberFn = func(_ context.Context, serverID, userID string) error {
@@ -137,6 +141,10 @@ func TestJoinServer_ValidInvite_AddsMemberAndMarksUsed(t *testing.T) {
 	if !assignRoleCalled {
 		t.Error("expected default role to be assigned")
 	}
+	if len(activity.calls) != 1 || activity.calls[0] != (gameActivityInvalidationCall{kind: "added", a: joinTestServerID, b: joinTestUserID}) {
+		t.Fatalf("join activity invalidation = %+v", activity.calls)
+	}
+
 }
 
 func TestJoinServerMemberBroadcastRedactsProfileFields(t *testing.T) {
