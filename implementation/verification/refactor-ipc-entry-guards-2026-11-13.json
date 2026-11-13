@@ -194,10 +194,29 @@
       "log": "%TEMP%/hichat-ipc-entry-coverage.log"
     },
     "go_race": {
-      "status": "in_progress",
+      "status": "failed_package_timeouts",
       "profile": "Docker golang:1.26.10-bookworm; no PostgreSQL DSN, SQLite/general profile",
       "exec_session": 87987,
-      "log": "%TEMP%/hichat-ipc-final-go-race.jsonl"
+      "log": "%TEMP%/hichat-ipc-final-go-race.jsonl",
+      "exit": 1,
+      "test_pass_events": 2950,
+      "test_skip_events": 46,
+      "package_pass": 22,
+      "packages_without_tests": 7,
+      "timed_out_packages": [
+        "repository",
+        "services"
+      ],
+      "race_reports_observed": 0,
+      "limits": "Partial test passes do not establish full race success; both large packages reached 15 minutes."
+    },
+    "go_race_shards": {
+      "status": "in_progress",
+      "exec_session": 45007,
+      "runner": "Existing scripts/go-test-shard.py, 8 shards/package, 2 concurrent jobs, unchanged race+cover+15m gates",
+      "source_directory": "refactor-integration held unchanged for Go source",
+      "log_directory": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-ipc-final-shards-9bdd3e13e08f4be98d1984468c47e1cd",
+      "profile": "General/SQLite; no PostgreSQL DSN"
     }
   }
 }
