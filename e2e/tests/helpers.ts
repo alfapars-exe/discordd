@@ -118,9 +118,24 @@ export function writeOversizeFixture(filename = "too-big.bin"): string {
 export async function dismissOnboardingOverlays(page: Page): Promise<void> {
   // User Profile is hydrated from /users/me in the same auth-store update that
   // supplies the flags controlling these first-run overlays.
-  await expect(page.getByRole("button", { name: "User Profile", exact: true })).toBeVisible({
-    timeout: 20_000,
-  });
+  try {
+    await expect(page.getByRole("button", { name: "User Profile", exact: true })).toBeVisible({
+      timeout: 20_000,
+    });
+  } catch (error) {
+    const loading = await page.locator(".app-loading").count();
+    const assets = await page.evaluate(() => performance.getEntriesByType("resource")
+      .filter(entry => {
+        const url = new URL(entry.name);
+        return url.origin === location.origin && url.pathname.startsWith("/assets/");
+      })
+      .map(entry => ({
+        path: new URL(entry.name).pathname,
+        duration: Math.round(entry.duration),
+      })));
+    console.error("Signed-in profile unavailable", { loading, assets });
+    throw error;
+  }
 
   const welcomeOverlay = page.locator(".welcome-overlay");
   if (await welcomeOverlay.isVisible().catch(() => false)) {
