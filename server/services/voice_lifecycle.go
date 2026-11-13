@@ -772,27 +772,7 @@ func (s *voiceService) StartAFKChecker() {
 func (s *voiceService) sweepAFKUsersContext(parent context.Context) {
 	now := time.Now()
 
-	// Phase 1: identify potential AFK users under read lock
-	type candidate struct {
-		userID    string
-		channelID string
-		idleSince time.Time
-	}
-	var candidates []candidate
-
-	s.mu.RLock()
-	for userID, state := range s.states {
-		// Skip users who are streaming — they're actively sharing content
-		if state.IsStreaming {
-			continue
-		}
-		candidates = append(candidates, candidate{
-			userID:    userID,
-			channelID: state.ChannelID,
-			idleSince: state.LastActivity,
-		})
-	}
-	s.mu.RUnlock()
+	candidates := s.afkCandidates()
 
 	if len(candidates) == 0 {
 		return
@@ -871,4 +851,22 @@ func (s *voiceService) afkChannelPolicy(ctx context.Context, channelID string) (
 		return 0, afkEntry{}, err
 	}
 	return time.Duration(server.AFKTimeoutMinutes) * time.Minute, afkEntry{channelID: channelID, channelName: channel.Name, serverID: server.ID, serverName: server.Name}, nil
+}
+
+type afkCandidate struct {
+	userID, channelID string
+	idleSince         time.Time
+}
+
+// Snapshot only idle candidates; repository lookups run after releasing s.mu.
+func (s *voiceService) afkCandidates() []afkCandidate {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var candidates []afkCandidate
+	for userID, state := range s.states {
+		if !state.IsStreaming {
+			candidates = append(candidates, afkCandidate{userID: userID, channelID: state.ChannelID, idleSince: state.LastActivity})
+		}
+	}
+	return candidates
 }
