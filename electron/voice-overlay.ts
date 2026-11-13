@@ -674,15 +674,15 @@ function ensureOverlay(): BrowserWindow {
   mouseIgnored = true;
   const createdWindow = overlayWindow;
   createdWindow.on("will-move", (event, bounds) => {
-    if (!latestArea || latest?.voiceOverlayMode !== "game") return;
+    if (createdWindow !== overlayWindow || !latestArea || latest?.voiceOverlayMode !== "game") return;
     const constrained = constrainOverlayPosition(bounds, bounds, latestArea);
     if (constrained.x !== bounds.x || constrained.y !== bounds.y) {
       event.preventDefault();
       createdWindow.setPosition(constrained.x, constrained.y, false);
     }
   });
-  createdWindow.on("move", () => { updateMousePolicy(); updateNotificationActionWindow(); updateChatActionWindow(); });
-  createdWindow.on("hide", () => { if(createdWindow===overlayWindow)notifyMediaLifecycle(); clearWelcome(); hideActionWindow(); hideNotificationActionWindow(); hideChatActionWindow(); });
+  createdWindow.on("move", () => { if (createdWindow !== overlayWindow) return; updateMousePolicy(); updateNotificationActionWindow(); updateChatActionWindow(); });
+  createdWindow.on("hide", () => { if (createdWindow !== overlayWindow) return; notifyMediaLifecycle(); clearWelcome(); hideActionWindow(); hideNotificationActionWindow(); hideChatActionWindow(); });
   createdWindow.webContents.on("did-finish-load", () => { if (createdWindow === overlayWindow) { mediaDocumentUsable = true; notifyMediaLifecycle(); } });
   createdWindow.webContents.on("render-process-gone", () => { if(createdWindow===overlayWindow){mediaDocumentUsable = false; notifyMediaLifecycle(true);} });
   createdWindow.webContents.on("did-start-navigation", (_event: unknown, _url: string, isInPlace: boolean, isMainFrame: boolean) => { if (createdWindow===overlayWindow && isMainFrame && !isInPlace) { mediaDocumentUsable = false; notifyMediaLifecycle(true); } });

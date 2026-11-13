@@ -512,6 +512,18 @@ test("native overlay lock toggles only visible widgets and bounds unlocked game 
   assert.equal(mediaLifecycle[mediaLifecycle.length-1],true);void actualHUD;
   stopMediaLifecycle();
   exports.closeVoiceOverlay();
+  await t.test("retired HUD callbacks cannot hide replacement action windows", () => {
+    try {
+      exports.updateVoiceOverlay({ ...notificationActions, voiceOverlayQuickActions: true, voiceOverlayClickableActions: true, voiceActionSession: "old-hud" }, area);
+      const retired = win;
+      exports.closeVoiceOverlay();
+      exports.updateVoiceOverlay({ ...notificationActions, voiceOverlayQuickActions: true, voiceOverlayClickableActions: true, voiceActionSession: "new-hud" }, area);
+      const replacement = chatActionWin;
+      assert.equal(replacement.visible, true);
+      retired.emit("hide");
+      assert.equal(replacement.visible, true, "a queued hide from the retired HUD cannot affect the replacement");
+    } finally { exports.closeVoiceOverlay(); }
+  });
   for (const surface of ["actions", "notification-actions", "chat-actions"]) {
     await t.test(`failed ${surface} load retires its window and permits an explicit feature retry`, async () => {
       const actions = { ...notificationActions, voiceOverlayQuickActions: true, voiceOverlayClickableActions: true, voiceActionSession: "load-failure-voice" };
