@@ -207,3 +207,53 @@ func TestVoiceUsagePostgresPendingRecovery(t *testing.T) {
 	}
 
 }
+
+func TestVoiceUsagePostgresServiceHandoffSurvivesApplyFailure(t *testing.T) {
+	db := postgresServerFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if _, err := db.ExecContext(ctx, `INSERT INTO livekit_instances(id,url,api_key,api_secret) VALUES('handoff-instance','http://127.0.0.1','fixture','fixture')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `CREATE FUNCTION reject_handoff_fixture() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'handoff fixture failure'; END $$`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `CREATE TRIGGER reject_handoff_fixture BEFORE INSERT OR UPDATE ON livekit_monthly_usage FOR EACH ROW EXECUTE FUNCTION reject_handoff_fixture()`); err != nil {
+		t.Fatal(err)
+	}
+	repo := repository.NewSQLiteLiveKitRepo(db)
+	service := &voiceService{livekitGetter: repo}
+	ended := time.Date(2026, time.January, 31, 23, 59, 59, 0, time.UTC)
+	service.creditUsageSession("handoff-session", "handoff-instance", true, ended.Add(-time.Minute), ended)
+	var pending int
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM voice_usage_credits WHERE credit_id='handoff-session' AND applied_at IS NULL`).Scan(&pending); err != nil || pending != 1 {
+		t.Fatalf("service forgot unapplied session: pending=%d err=%v", pending, err)
+	}
+	if _, err := db.ExecContext(ctx, `DROP TRIGGER reject_handoff_fixture ON livekit_monthly_usage`); err != nil {
+		t.Fatal(err)
+	}
+	recovered := &voiceService{livekitGetter: repository.NewSQLiteLiveKitRepo(db)}
+	stop := startVoiceUsageDelivery(ctx, recovered, time.Millisecond)
+	t.Cleanup(stop)
+	for {
+		used, err := repo.GetMonthlyUsage(ctx, "handoff-instance", 2026, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if used == 60 {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal("restart worker never applied accepted session")
+		default:
+			time.Sleep(time.Millisecond)
+		}
+	}
+	stop()
+	service.creditUsageSession("handoff-session", "handoff-instance", true, ended.Add(-time.Minute), ended)
+	used, err := repo.GetMonthlyUsage(ctx, "handoff-instance", 2026, 1)
+	if err != nil || used != 60 {
+		t.Fatalf("service replay inflated usage=%d err=%v", used, err)
+	}
+}

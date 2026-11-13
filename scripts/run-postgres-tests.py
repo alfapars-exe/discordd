@@ -83,7 +83,7 @@ def main():
     if code or skipped or missing_packages or not postgres_retention_passed or not usage_migration_passed or invalid_output:
         return code or 1
     # Both delivery and authorization transactions require real PostgreSQL locks.
-    role_tests = ("TestPostgresRolePatchConcurrentChanges", "TestPostgresMemberRoleReplacement", "TestVoiceMaintenanceAFKPostgresCancellation", "TestVoiceUsagePostgresReplayTransaction", "TestVoiceUsagePostgresPendingRecovery", "TestVoiceUsageCreditPostgresDeadline", "TestVoiceUsageCreditPostgresAdditiveWrites")
+    role_tests = ("TestPostgresRolePatchConcurrentChanges", "TestPostgresMemberRoleReplacement", "TestVoiceMaintenanceAFKPostgresCancellation", "TestVoiceUsagePostgresReplayTransaction", "TestVoiceUsagePostgresPendingRecovery", "TestVoiceUsagePostgresServiceHandoffSurvivesApplyFailure", "TestVoiceUsageCreditPostgresDeadline", "TestVoiceUsageCreditPostgresAdditiveWrites")
     selection = "^(TestChannelDelivery|TestDMIdempotent|TestDMOutbox|TestDMMarkUnreadFrom|" + "|".join(role_tests) + ")"
     services = subprocess.run(["go", "test", "-v", "-count=1", "-timeout=2m", "./services", "-run", selection],
                               cwd=root / "server", stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)

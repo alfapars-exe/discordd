@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/ws"
 	"strings"
@@ -73,5 +74,28 @@ func TestVoiceUsageIdentitySurvivesRejoinAndReachesRecorder(t *testing.T) {
 	}
 	if svc.GetUserVoiceState("victim").UsageSessionID == first {
 		t.Fatal("new session reused old identity")
+	}
+}
+
+type rejectingUsageHandoff struct {
+	recordingUsageGetter
+	enqueues int
+}
+
+func (g *rejectingUsageHandoff) EnqueueVoiceUsage(context.Context, string, string, int, int, int) error {
+	g.enqueues++
+	return errors.New("handoff fixture unavailable")
+}
+func TestVoiceUsageHandoffFailureNeverFallsBackToIncrement(t *testing.T) {
+	getter := &rejectingUsageHandoff{recordingUsageGetter: recordingUsageGetter{recorded: make(chan string, 1)}}
+	getter.IncrementMonthlyUsageFn = func(context.Context, string, int, int, int) error {
+		t.Error("failed durable handoff used unsafe additive fallback")
+		return nil
+	}
+	service := &voiceService{livekitGetter: getter}
+	end := time.Now()
+	service.creditUsageSession("session", "instance", true, end.Add(-time.Minute), end)
+	if getter.enqueues != 1 || len(getter.recorded) != 0 {
+		t.Fatalf("enqueue=%d applied=%d; failed enqueue must stop dispatch", getter.enqueues, len(getter.recorded))
 	}
 }
