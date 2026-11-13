@@ -306,11 +306,17 @@ test("native overlay lock toggles only visible widgets and bounds unlocked game 
     assert.equal(await pending, "sent");
   }
   assert.equal(await exports.sendOverlayChatMessage(composerSenderAfterReopen, { session: "compose-session-2", requestId: "cap-overflow", text: "no" }, mainWindow), "unavailable", "request ledger is bounded and refuses IDs beyond its cap");
-  const reloadPending = exports.sendOverlayChatMessage(composerSenderAfterReopen, { session: "compose-session-2", requestId: "reload-pending", text: "clear on reload" }, mainWindow);
+  const reloadSession = "compose-session-reload";
+  exports.updateVoiceOverlay({ ...renewedCompose, chatComposeSession: reloadSession }, area);
+  now += 251;
+  assert.ok(exports.takeVoiceOverlayOpenChatComposerIntent(chatSender, reloadSession, mainWindow));
+  const reloadSender = { sender: chatComposerWin.webContents, senderFrame: chatComposerWin.webContents.mainFrame };
+  const reloadPending = exports.sendOverlayChatMessage(reloadSender, { session: reloadSession, requestId: "reload-pending", text: "clear on reload" }, mainWindow);
+  assert.equal(JSON.stringify(forwarded[forwarded.length - 1]), JSON.stringify({ channel: "overlay-chat-send", value: { session: reloadSession, requestId: "reload-pending", text: "clear on reload" } }), "the reload test must first create an actual forwarded, pending request");
   chatComposerWin.webContents.emit("did-start-navigation", {}, "app://hichat/overlay.html?surface=chat-composer", false, true);
   assert.equal(await reloadPending, "unavailable", "a child reload cancels its in-flight request");
   assert.equal(chatComposerWin.destroyed, true, "a full-frame composer reload destroys the old draft/session window");
-  assert.equal(exports.takeVoiceOverlayOpenChatComposerIntent(chatSender, "compose-session-2", mainWindow), null, "a reloaded child cannot reuse the prior compose grant");
+  assert.equal(exports.takeVoiceOverlayOpenChatComposerIntent(chatSender, reloadSession, mainWindow), null, "a reloaded child cannot reuse the prior compose grant");
   const rotatedCompose = { ...renewedCompose, chatComposeSession: "compose-session-3" };
   exports.updateVoiceOverlay(rotatedCompose, area);
   now += 251;
