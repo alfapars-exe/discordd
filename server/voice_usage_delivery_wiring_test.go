@@ -108,3 +108,19 @@ func voiceUsageDeferredPosition(body *ast.BlockStmt, name string) token.Pos {
 	})
 	return position
 }
+
+func TestVoiceSessionsFinalizeBeforeRecoveryStops(t *testing.T) {
+	body := voiceUsageMainBody(t)
+	drain, logs, _ := voiceUsageShutdownBoundaries(body)
+	sessions := voiceUsageExplicitNamedJoin(body, "stopVoiceSessions")
+	producers := voiceUsageExplicitNamedJoin(body, "stopVoiceUsageProducers")
+	recovery := voiceUsageExplicitNamedJoin(body, "stopVoiceUsageDelivery")
+	if !sessions.IsValid() || sessions < drain || sessions < producers || sessions > recovery || sessions > logs {
+		t.Fatal("active sessions must finalize after producers and HTTP, before recovery and log shutdown")
+	}
+	sessionDefer := voiceUsageDeferredPosition(body, "stopVoiceSessions")
+	producerDefer := voiceUsageDeferredPosition(body, "stopVoiceUsageProducers")
+	if !sessionDefer.IsValid() || sessionDefer < producerDefer {
+		t.Fatal("fallback active finalization must run before producer/recovery fallback")
+	}
+}

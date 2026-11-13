@@ -1,0 +1,54 @@
+{
+  "date": "2026-11-14",
+  "scope": "Graceful active voice-session finalization before usage recovery and database shutdown",
+  "source_sha256": {
+    "server/main.go": "df488cc4940168e4803623d00b24a1c9b64564c1a56ed7512a5850896ece952d",
+    "server/services/voice_shutdown.go": "cf1cdb6f2d03e935b42b4f79be7b48c4d97c8b67b9853a8587d02dd6f92b6212",
+    "server/services/voice_shutdown_test.go": "2bd89e71237d3a7b070fe3ebc2d835e8e0ce4cca1c30c82615ce0a09bb3724a3",
+    "server/services/voice_channel_delete.go": "1e9a254635de5fa5acc25287332e70c63767d9d057e1682f7d6af9f018ade59a",
+    "server/services/voice_service.go": "df70deed168c44ab485b4f0bd27be0669488b2ef89a42e4c8122708a5111fa42",
+    "server/services/voice_usage_replay_test.go": "9c39a5ad182a81e239f7d780972ed2956c3963dfa662aa9a1547ba6fcc5f8cbf",
+    "server/voice_usage_delivery_wiring_test.go": "a3c7fdb1ec7b704b7800e42ee2d0c93e8d07024a7cfc937fc51f2b9f4a628244"
+  },
+  "before": {
+    "test": "TestVoiceShutdownFinalizesActiveSessionsOnce",
+    "exit": 1,
+    "failure": "active voice sessions have no shutdown finalizer"
+  },
+  "implementation": [
+    "Stop maintenance and join accepted producers",
+    "Snapshot remaining channels and one shared end timestamp",
+    "At most four channel workers reuse synchronous closed-owner cleanup",
+    "sync.Once joins concurrent/repeated finalization",
+    "Explicit/deferred main finalization before recovery/log/database teardown"
+  ],
+  "checks": {
+    "service_regression_count": 3,
+    "service_exit": 0,
+    "service_seconds": 1.443,
+    "host_new_wiring_count": 3,
+    "host_wiring_exit": 0,
+    "host_wiring_seconds": 0.751,
+    "host_active_and_postgres_count": 3,
+    "host_services_exit": 0,
+    "host_services_seconds": 3.55,
+    "verified_mtls_linux_race_count": 3,
+    "race_root_exit": 0,
+    "race_root_seconds": 4.137,
+    "race_services_exit": 0,
+    "race_services_seconds": 6.746,
+    "all_usage_wiring_exit": 0,
+    "all_usage_wiring_seconds": 0.746,
+    "postgres_runner_tests": 14,
+    "runner_exit": 0,
+    "full_vet_exit": 0,
+    "full_build_exit": 0,
+    "full_lint_issues": 0
+  },
+  "limitations": [
+    "Local integration only; published PR298 source527a3ad3 unaffected.",
+    "Media eviction attempts use unavailable/mock LiveKit; no real participant/device acceptance.",
+    "Process signal with active sessions, final credit before network delay, failure recovery and bounded-pool runtime acceptance remain to verify.",
+    "Crash before first durable enqueue and final whole-project acceptance remain open."
+  ]
+}

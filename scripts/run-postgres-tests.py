@@ -96,7 +96,7 @@ def main():
     # Delivery, authorization and collector lifecycle require real PostgreSQL waits.
     service_contract_tests = (
         "TestPostgresRolePatchConcurrentChanges",
-        "TestPostgresMemberRoleReplacement", "TestVoiceMaintenanceAFKPostgresCancellation", "TestVoiceUsagePostgresReplayTransaction", "TestVoiceUsagePostgresPendingRecovery", "TestVoiceUsagePostgresServiceHandoffSurvivesApplyFailure", "TestVoiceUsagePostgresShutdownJoinsAcceptedCredit", "TestVoiceUsagePostgresShutdownJoinsPermissionRecheck", "TestVoiceUsagePostgresLateMemberRevocationPreservesCredit", "TestVoiceUsageCreditPostgresDeadline", "TestVoiceUsageCreditPostgresAdditiveWrites", "TestDeliveryStopCancelsPoolWait", "TestDeliveryClaimCancellationLogging",
+        "TestPostgresMemberRoleReplacement", "TestVoiceMaintenanceAFKPostgresCancellation", "TestVoiceUsagePostgresReplayTransaction", "TestVoiceUsagePostgresPendingRecovery", "TestVoiceUsagePostgresServiceHandoffSurvivesApplyFailure", "TestVoiceUsagePostgresShutdownJoinsAcceptedCredit", "TestVoiceUsagePostgresShutdownFinalizesActiveSession", "TestVoiceUsagePostgresShutdownJoinsPermissionRecheck", "TestVoiceUsagePostgresLateMemberRevocationPreservesCredit", "TestVoiceUsageCreditPostgresDeadline", "TestVoiceUsageCreditPostgresAdditiveWrites", "TestDeliveryStopCancelsPoolWait", "TestDeliveryClaimCancellationLogging",
         "TestPostgresMetricsCollectorCancellation",
     )
     selection = "^(TestChannelDelivery|TestDMIdempotent|TestDMOutbox|TestDMMarkUnreadFrom|" + "|".join(service_contract_tests) + ")"

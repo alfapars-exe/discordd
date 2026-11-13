@@ -424,3 +424,30 @@ func TestVoiceUsagePostgresShutdownJoinsPermissionRecheck(t *testing.T) {
 		t.Fatal("revoked permission retained unauthorized voice session")
 	}
 }
+
+func TestVoiceUsagePostgresShutdownFinalizesActiveSession(t *testing.T) {
+	db := postgresServerFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if _, err := db.ExecContext(ctx, `INSERT INTO livekit_instances(id,url,api_key,api_secret) VALUES('active-instance','http://127.0.0.1','fixture','fixture')`); err != nil {
+		t.Fatal(err)
+	}
+	repo := repository.NewSQLiteLiveKitRepo(db)
+	svc, _ := newTestVoiceServiceWithLiveKitGetter(repo)
+	s := svc.(*voiceService)
+	s.states["reader"] = &models.VoiceState{UserID: "reader", ChannelID: "channel", ServerID: "default", UsageSessionID: "active-credit", LiveKitInstanceID: "active-instance", LiveKitIsCloud: true, JoinedAt: time.Now().Add(-time.Minute)}
+	s.ShutdownVoiceSessions()
+	s.ShutdownVoiceSessions()
+	var seconds int
+	var applied bool
+	if err := db.QueryRowContext(ctx, `SELECT seconds,applied_at IS NOT NULL FROM voice_usage_credits WHERE credit_id='active-credit'`).Scan(&seconds, &applied); err != nil {
+		t.Fatal(err)
+	}
+	var used int64
+	if err := db.QueryRowContext(ctx, `SELECT COALESCE(SUM(used_seconds),0) FROM livekit_monthly_usage WHERE instance_id='active-instance'`).Scan(&used); err != nil {
+		t.Fatal(err)
+	}
+	if seconds <= 0 || !applied || used != int64(seconds) || len(s.GetAllVoiceStates()) != 0 {
+		t.Fatalf("active shutdown incomplete: seconds=%d applied=%v usage=%d states=%d", seconds, applied, used, len(s.GetAllVoiceStates()))
+	}
+}

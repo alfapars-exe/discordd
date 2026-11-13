@@ -1405,3 +1405,10 @@ Terminal current-head receipt: PR29814a965ea completed36/36 SUCCESS. Exact-head 
 - Active-shutdown cleanup inspection found admitted DeleteVoiceChannel still dispatched music stop directly through logx.Go. Its eviction pool was owned, but the music child could outlive terminal shutdown. New regression failed before fix, then music stop was registered with the accepted root.
 - Targeted usage/channel deletion tests passed ten repetitions (3.029s), Linux race ten (5.938s), services vet/lint passed. DSN-free PostgreSQL skips are not database acceptance.
 - This fixes a prerequisite in shared cleanup, not active-session shutdown finalization. Active sessions still need explicit main lifecycle finalization and durable final credit proof before that gate can close. PR298 published527a3ad3 CI43520591216 is live (last checked seven successful jobs, none failed); this fix remains local integration.
+
+### 2026-11-14 — Finalize active voice sessions on graceful shutdown
+
+- Missing finalizer regression failed before implementation. Added terminal sync.Once finalizer: stops maintenance, joins producers, snapshots remaining channels and one end timestamp, then uses at most four channel workers to complete existing closed-owner cleanup without deleting DB channel rows. Concurrent16/repeated calls credit two cloud sessions once, skip self-hosted accounting, stop both music channels and clear voice state.
+- Main explicitly/deferred finalizes sessions after HTTP/producer drain and before recovery/log/database shutdown. Channel cleanup accepts captured end time so queue delay does not extend usage.
+- Host and verified-mTLS Linux race new wiring/active/native-credit tests passed three repetitions; existing usage wiring passed. Full vet/build/lint passed; runner14 passed and active-session PG test became mandatory. Receipt: `implementation/verification/refactor-active-voice-shutdown-2026-11-14.json`.
+- Local integration only. Actual LiveKit/device eviction, process-signal active session, failure recovery, pool-bound runtime and credit-before-network-delay acceptance remain open; this does not close whole RF08 or crash-before-enqueue.

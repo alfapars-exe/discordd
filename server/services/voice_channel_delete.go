@@ -28,6 +28,10 @@ type deletedVoiceSession struct {
 // cannot resurrect state after this cleanup. The epoch is global to keep the
 // guard bounded; a simultaneous join to another server may need a retry.
 func (s *voiceService) DeleteVoiceChannel(ctx context.Context, serverID, channelID string) {
+	s.deleteVoiceChannelAt(ctx, serverID, channelID, time.Now())
+}
+
+func (s *voiceService) deleteVoiceChannelAt(ctx context.Context, serverID, channelID string, endedAt time.Time) {
 	finishOperation, admitted := s.operations.begin()
 	if admitted {
 		defer finishOperation()
@@ -90,7 +94,6 @@ func (s *voiceService) DeleteVoiceChannel(ctx context.Context, serverID, channel
 	s.mu.Unlock()
 	// The channel row was already deleted: always fence pending joins and
 	// remove in-memory state, even after usage admission closes.
-	endedAt := time.Now()
 	if !admitted {
 		// Committed channel deletion must still attempt eviction. With admission
 		// closed the caller owns completion; do not launch untracked late work.

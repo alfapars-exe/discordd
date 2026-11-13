@@ -152,6 +152,7 @@ type forceMoveGrant struct {
 const maxScreenShares = 0
 
 type voiceService struct {
+	sessionShutdown    sync.Once
 	operations         voiceOperations
 	usageWorker        voiceMaintenanceWorker
 	orphanWorker       voiceMaintenanceWorker
