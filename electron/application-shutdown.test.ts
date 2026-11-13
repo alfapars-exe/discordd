@@ -152,10 +152,11 @@ test("relaunch IPC follows graceful quit instead of bypassing native cleanup wit
     electron_1: { ipcMain: { handle: (name: string, callback: () => void) => handlers.set(name, callback) },
       app: { getVersion: () => "fixture", relaunch: () => calls.push("relaunch"), quit: () => calls.push("quit"), exit: () => calls.push("forced-exit") }, clipboard: { writeText: () => {} } },
     app_command_ipc_1: { registerAppCommandIPC },
+    assertTrustedMainWindowSender: () => calls.push("trusted"),
     assertString: () => {}, ipc_input_validation_1: { assertString: () => {} },
   });
   handlers.get("relaunch")!();
-  assert.deepEqual(calls, ["relaunch", "quit"]);
+  assert.deepEqual(calls, ["trusted", "relaunch", "quit"]);
 });
 
 test("prepare, cookie and diagnostic failures cannot prevent the remaining cleanup or quit", async () => {
