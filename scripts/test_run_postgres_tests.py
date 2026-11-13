@@ -18,6 +18,7 @@ class PostgreSQLRunnerTests(unittest.TestCase):
         "--- PASS: TestDMMarkUnreadFrom_ConcurrentSend (0.01s)\n"
         "--- PASS: TestPostgresRolePatchConcurrentChanges (0.01s)\n"
         "--- PASS: TestPostgresMemberRoleReplacement (0.01s)\n"
+        "--- PASS: TestPostgresMetricsCollectorCancellation (0.01s)\n"
     )
 
     def execute(self, events, code=0, service_output=service_passes):
@@ -27,8 +28,9 @@ class PostgreSQLRunnerTests(unittest.TestCase):
         with patch.dict(runner.os.environ, {"HICHAT_TEST_POSTGRES_DSN": "postgres://postgres@127.0.0.1/test"}), patch.object(runner.subprocess, "Popen", return_value=process), patch.object(runner.subprocess, "run", return_value=Mock(stdout=service_output, returncode=0)), patch("sys.stdout", self.output), patch("sys.stderr", io.StringIO()):
             return runner.main()
 
-    def test_both_role_transactions_must_run_on_postgres(self):
-        for name in ("TestPostgresRolePatchConcurrentChanges", "TestPostgresMemberRoleReplacement"):
+    def test_required_service_contracts_must_run_on_postgres(self):
+        for name in ("TestPostgresRolePatchConcurrentChanges", "TestPostgresMemberRoleReplacement",
+                     "TestPostgresMetricsCollectorCancellation"):
             with self.subTest(name=name):
                 remaining = "\n".join(line for line in self.service_passes.splitlines() if name not in line)
                 self.assertEqual(self.execute(self.completed(), service_output=remaining), 1)

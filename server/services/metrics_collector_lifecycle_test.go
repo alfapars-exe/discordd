@@ -124,12 +124,16 @@ func TestMetricsCollectorConcurrentStopAndStopBeforeStart(t *testing.T) {
 
 type lifecycleMetricsHistory struct {
 	repository.MetricsHistoryRepository
+	writes atomic.Int32
+	purges atomic.Int32
 }
 
-func (*lifecycleMetricsHistory) Insert(ctx context.Context, _ *models.MetricsSnapshot) error {
+func (r *lifecycleMetricsHistory) Insert(ctx context.Context, _ *models.MetricsSnapshot) error {
+	r.writes.Add(1)
 	return ctx.Err()
 }
-func (*lifecycleMetricsHistory) PurgeOlderThan(ctx context.Context, _ time.Time) (int64, error) {
+func (r *lifecycleMetricsHistory) PurgeOlderThan(ctx context.Context, _ time.Time) (int64, error) {
+	r.purges.Add(1)
 	return 0, ctx.Err()
 }
 
@@ -144,7 +148,8 @@ func TestMetricsCollectorStopCancelsRealHTTPPoll(t *testing.T) {
 	repo := &lifecycleMetricsRepo{list: func(context.Context) ([]models.LiveKitInstance, error) {
 		return []models.LiveKitInstance{{ID: "instance", URL: server.URL}}, nil
 	}}
-	collector := NewMetricsCollector(repo, &lifecycleMetricsHistory{}, time.Hour, 30, "", nil, nil)
+	history := &lifecycleMetricsHistory{}
+	collector := NewMetricsCollector(repo, history, time.Hour, 30, "", nil, nil)
 	t.Cleanup(collector.Stop)
 	collector.Start()
 	select {
@@ -163,6 +168,9 @@ func TestMetricsCollectorStopCancelsRealHTTPPoll(t *testing.T) {
 	case <-stopped:
 	case <-time.After(time.Second):
 		t.Fatal("Stop did not finish after HTTP cancellation")
+	}
+	if history.writes.Load() != 0 || history.purges.Load() != 0 {
+		t.Fatalf("shutdown cancellation attempted downtime writes/cleanup: writes=%d purges=%d", history.writes.Load(), history.purges.Load())
 	}
 }
 

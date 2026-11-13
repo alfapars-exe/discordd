@@ -1,0 +1,35 @@
+{
+  "scope": "RF08/RF04 actual MetricsCollector repository cancellation",
+  "before": {
+    "shutdown_cancelled_HTTP_poll": "Attempted one unavailable-snapshot write and one history purge; regression failed."
+  },
+  "change": "Stop treating an intentionally cancelled poll as downtime; skip follow-up writes/purge after cancellation. Exercise the real LiveKit repository under PostgreSQL table-lock and pool waits. Require the named test in plain and mutual-TLS CI profiles.",
+  "after": {
+    "mutual_TLS_race": {
+      "top_level_test_pass_counts": {
+        "TestMetricsCollectorConcurrentStartRunsOneWorker": 5,
+        "TestMetricsCollectorStopCancelsAndWaitsForActiveQuery": 5,
+        "TestMetricsCollectorConcurrentStopAndStopBeforeStart": 5,
+        "TestMetricsCollectorStopCancelsRealHTTPPoll": 5,
+        "TestMetricsCollectorInterleavedLifecycleOwners": 5,
+        "TestMetricsCollectorPreservesImmediateAndPeriodicSnapshots": 5,
+        "TestPostgresMetricsCollectorCancellation": 5
+      },
+      "skips": 0,
+      "package_elapsed_seconds": 6.162,
+      "client_policy": "TLS verified without fallback; server pg_stat_ssl confirms client certificate; required-MTLS flag enabled"
+    },
+    "host_Postgres_count_5": "PASS lock and pool waits",
+    "plain_loopback_Postgres_race": "PASS, separate disposable Docker fixture",
+    "fresh_mTLS_harness": "PASS inline-PEM reconnect and required collector contract on local Go 1.27.4",
+    "runner_unit_tests": "6/6 PASS, missing collector contract rejected",
+    "full_go_vet_and_build": "PASS",
+    "golangci_lint": "0 issues",
+    "cancelled_HTTP_poll_after": "No unavailable snapshot or purge attempted"
+  },
+  "limitations": [
+    "This validates real repository/pool cancellation, not complete process signal shutdown or active media teardown.",
+    "Plain loopback CI is a disposable test profile, separate from verified mutual TLS.",
+    "Whole CI on the new commit still must finish."
+  ]
+}

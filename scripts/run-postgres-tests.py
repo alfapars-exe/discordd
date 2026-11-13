@@ -86,13 +86,17 @@ def main():
         print(f"Required PostgreSQL test did not pass: {REQUIRED_SERVER_POSTGRES_TEST}", file=sys.stderr)
     if code or skipped or missing_packages or not postgres_retention_passed or invalid_output or reported_failure:
         return code or 1
-    # Both delivery and authorization transactions require real PostgreSQL locks.
-    role_tests = ("TestPostgresRolePatchConcurrentChanges", "TestPostgresMemberRoleReplacement")
-    selection = "^(TestChannelDelivery|TestDMIdempotent|TestDMOutbox|TestDMMarkUnreadFrom|" + "|".join(role_tests) + ")"
+    # Delivery, authorization and collector lifecycle require real PostgreSQL waits.
+    service_contract_tests = (
+        "TestPostgresRolePatchConcurrentChanges",
+        "TestPostgresMemberRoleReplacement",
+        "TestPostgresMetricsCollectorCancellation",
+    )
+    selection = "^(TestChannelDelivery|TestDMIdempotent|TestDMOutbox|TestDMMarkUnreadFrom|" + "|".join(service_contract_tests) + ")"
     services = subprocess.run(["go", "test", "-v", "-count=1", "-timeout=2m", "./services", "-run", selection],
                               cwd=root / "server", stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     print(redact_database_urls(services.stdout, dsn), end="", flush=True)
-    required_tests = (*role_tests, "TestChannelDeliveryConcurrentRetryAndDeletion",
+    required_tests = (*service_contract_tests, "TestChannelDeliveryConcurrentRetryAndDeletion",
                       "TestDMIdempotentAttachmentsConcurrentReplayKeepsOneOrderedSet",
                       "TestDMOutboxCommitRecoveryReplayAndAuthorization", "TestDMMarkUnreadFrom_ConcurrentSend")
     passed = set(re.findall(r"^--- PASS: (\w+) \(", services.stdout, re.MULTILINE))
