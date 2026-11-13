@@ -13,9 +13,10 @@ export function registerGlobalShortcutIPC(ipc: Pick<IpcMain, "handle">, operatio
     return operations.registerPTT(keyCode);
   });
   ipc.handle("unregister-ptt-shortcut", event => { operations.trusted(event); operations.unregisterPTT(); });
-  ipc.handle("register-mute-hotkey-shortcut", (_event, keyCode: unknown) => {
+  ipc.handle("register-mute-hotkey-shortcut", (event, keyCode: unknown) => {
+    operations.trusted(event);
     assertString(keyCode, "mute hotkey keyCode", 64);
     return operations.registerMuteHotkey(keyCode);
   });
-  ipc.handle("unregister-mute-hotkey-shortcut", () => operations.unregisterMuteHotkey());
+  ipc.handle("unregister-mute-hotkey-shortcut", event => { operations.trusted(event); operations.unregisterMuteHotkey(); });
 }
