@@ -620,6 +620,27 @@ describe("keyBackup — a failed restore rolls the metadata store back", () => {
       "device-before-restore"
     );
   });
+
+  it("logs only fixed restore diagnostics when storage errors contain private key material", async () => {
+    const backup = await seedDeviceThenFailRestore();
+    const secret = "fixture-private-key-must-not-be-logged";
+    const metadataKey = "sk_signing:fixture-private-channel:fixture-private-user:device";
+    metadataStore.set(metadataKey, secret);
+    const failure = Object.assign(new Error(secret), { privateKey: secret, metadataKey });
+    vi.mocked(keyStorageMock.cacheDecryptedMessages).mockRejectedValue(failure);
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(await restoreFromBackup(backup, "pw")).toBe(false);
+      expect(metadataStore.get(metadataKey)).toBe(secret);
+      expect(log).toHaveBeenCalled();
+      for (const call of log.mock.calls) {
+        expect(call.every(value => typeof value === "string")).toBe(true);
+        expect(call.join(" ")).not.toContain(secret);
+        expect(call.join(" ")).not.toContain(metadataKey);
+      }
+      expect(log).toHaveBeenCalledWith("[keyBackup] rollback incomplete: 1 write(s) failed in messageCache");
+    } finally { log.mockRestore(); }
+  });
   it("preserves non-exportable pending-send keys and sealed records during failed restore rollback",async()=>{
     const backup=await seedDeviceThenFailRestore();
     const key=await crypto.subtle.generateKey({name:"AES-GCM",length:256},false,["encrypt","decrypt"]);

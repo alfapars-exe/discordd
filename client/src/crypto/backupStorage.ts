@@ -318,7 +318,8 @@ export async function importBackupContents(contents: BackupContents, scope: Auth
     //
     // Whatever the rollback could not write is reported below rather than
     // swallowed; the user can still re-enter their recovery password to retry.
-    console.error("[keyBackup] restore failed, rolling back to snapshot:", err);
+    // Storage error messages/properties can contain key or metadata values.
+    console.error("[keyBackup] restore failed; rolling back to snapshot");
     const failedStores: string[] = [];
 
     await rollbackWrite(scope, failedStores, "clear", () => keyStorage.clearAllE2EEData());
@@ -410,10 +411,10 @@ async function rollbackWrite(
   try {
     await write();
     assertCurrent(scope);
-  } catch (err) {
+  } catch {
     if (!isCurrent(scope)) return;
     failedStores.push(storeName);
-    console.error(`[keyBackup] rollback write failed for ${storeName}:`, err);
+    console.error(`[keyBackup] rollback write failed for ${storeName}`);
   }
 }
 
