@@ -49,6 +49,9 @@ func (p passthroughDMTxRunner) InTx(_ context.Context, fn func(*repository.DMTxR
 func newDMFixture() *dmTestFixture { return newDMFixtureWithPolicy(nil) }
 
 func newDMFixtureWithPolicy(policy ServerDMPolicy) *dmTestFixture {
+	return newDMFixtureWithEmail(policy, nil)
+}
+func newDMFixtureWithEmail(policy ServerDMPolicy, enqueuer ScheduledEmailEnqueuer) *dmTestFixture {
 	f := &dmTestFixture{
 		repo:    &testutil.MockDMRepo{},
 		users:   &testutil.MockUserRepo{},
@@ -60,7 +63,7 @@ func newDMFixtureWithPolicy(policy ServerDMPolicy) *dmTestFixture {
 		notif:   &testutil.MockNotificationRepo{},
 	}
 	runner := passthroughDMTxRunner{repos: repository.DMTxRepos{DM: f.repo, DMRead: f.dmRead, Notification: f.notif}}
-	f.svc = NewDMService(policy, f.repo, f.users, f.hub, f.block, f.friends, f.unhide, f.dmRead, f.notif, runner, nil)
+	f.svc = NewDMService(policy, f.repo, f.users, f.hub, f.block, f.friends, f.unhide, f.dmRead, f.notif, runner, enqueuer)
 	return f
 }
 
