@@ -14,6 +14,8 @@ class PostgreSQLRunnerTests(unittest.TestCase):
     service_passes = (
         "--- PASS: TestDeliveryClaimCancellationLogging (0.01s)\n"
         "--- PASS: TestDeliveryStopCancelsPoolWait (0.01s)\n"
+        "--- PASS: TestVoiceUsageCreditPostgresDeadline (10.01s)\n"
+        "--- PASS: TestVoiceUsageCreditPostgresAdditiveWrites (0.01s)\n"
         "--- PASS: TestVoiceMaintenanceAFKPostgresCancellation (0.01s)\n"
         "--- PASS: TestChannelDeliveryConcurrentRetryAndDeletion (0.01s)\n"
         "--- PASS: TestDMIdempotentAttachmentsConcurrentReplayKeepsOneOrderedSet (0.01s)\n"
@@ -76,6 +78,11 @@ class PostgreSQLRunnerTests(unittest.TestCase):
     def test_afk_stop_must_pass_real_postgres(self):
         output = "\n".join(line for line in self.service_passes.splitlines() if "TestVoiceMaintenanceAFKPostgresCancellation" not in line)
         self.assertEqual(self.execute(self.completed(), service_output=output), 1)
+
+    def test_usage_contracts_must_run(self):
+        for name in ("TestVoiceUsageCreditPostgresDeadline", "TestVoiceUsageCreditPostgresAdditiveWrites"):
+            output = "\n".join(line for line in self.service_passes.splitlines() if name not in line)
+            self.assertEqual(self.execute(self.completed(), service_output=output), 1)
 
     def completed(self):
         return [
