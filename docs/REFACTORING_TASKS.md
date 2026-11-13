@@ -1432,3 +1432,9 @@ Terminal current-head receipt: PR29814a965ea completed36/36 SUCCESS. Exact-head 
 - Real-PG finalizer test rejects monthly aggregation via trigger after durable enqueue; final credit remains pending, then a fresh repository/owned recovery worker applies it once after fault removal. Monthly aggregate equals saved ledger seconds and another apply finds no work.
 - Both tests passed three host repetitions (3.473s) and three verified-mTLS Linux race repetitions (6.330s); services vet/lint and runner14 passed. Recovery test is mandatory. Receipt: `implementation/verification/refactor-voice-shutdown-bound-recovery-2026-11-14.json`.
 - Local integration only. This proves service/repository recovery, not process crash, pre-enqueue failure or physical media. Active process signal and final-source delivery/whole-project acceptance remain open.
+
+### 2026-11-14 — Prepare active-process SIGTERM probe; engine failure
+
+- Built Linux server from source81a6c385 and standalone probe for real login, one-shot WS ticket, voice_join observed before signal, and post-exit native usage-ledger checks. Source and hashes archived; no token/DSN output.
+- Execution failed before fixture creation: owned-container docker run returned Linux Engine API HTTP500; independent docker ps also returned500 after waiting. Both handles were confirmed terminal; no duplicate run was launched and shared Docker was not restarted. The attempt did not execute login/join/SIGTERM.
+- Receipt: `implementation/verification/refactor-active-signal-attempt-2026-11-14.json`; probe/harness text under `implementation/verification/active-voice-signal-2026-11-14/`. Cleanup finally attempted owned-container removal but engine inventory was unavailable, so verify mount/source ownership and remaining QA container state after engine recovery before retry. Active process/physical media and full-project acceptance remain open.
