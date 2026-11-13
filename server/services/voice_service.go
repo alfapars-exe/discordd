@@ -216,7 +216,10 @@ func NewVoiceService(
 	timeoutChecker MemberTimeoutChecker,
 	banChecker BanChecker,
 	auditLogger AuditWriter,
-) VoiceService {
+) interface {
+	VoiceService
+	VoiceChannelDeletionHandler
+} {
 	service := &voiceService{
 		states:             make(map[string]*models.VoiceState),
 		voiceEpoch:         uuid.NewString(),
