@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 import { decodeBackupContents, InvalidBackupContentsError } from "./backupContentsCodec";
 
 function fixture(): Record<string, unknown> {
+  const bytes = { __b64: btoa(String.fromCharCode(...new Uint8Array(32).fill(1))) };
   return {
     version: 1,
     identity: { publicKey: "AQ==", privateKey: "Ag==" },
@@ -9,7 +10,7 @@ function fixture(): Record<string, unknown> {
     registration: { userId: "owner", deviceId: "device", registrationId: 1 },
     signedPreKeys: [{ id: 1, publicKey: "AQ==", privateKey: "Ag==", signature: "Aw==", createdAt: 1 }],
     preKeys: [{ id: 2, publicKey: "AQ==", privateKey: "Ag==" }],
-    sessions: [{ userId: "peer", deviceId: "peer-device", state: '{"rootKey":{"__b64":"AQ=="}}', createdAt: 1, updatedAt: 2 }],
+    sessions: [{ userId: "peer", deviceId: "peer-device", state: JSON.stringify({ rootKey: bytes, sendingChainKey: null, receivingChainKey: null, sendingRatchetKeyPair: { publicKey: bytes, privateKey: bytes }, receivingRatchetKey: null, sendMessageNumber: 0, receiveMessageNumber: 0, previousSendChainLength: 0, skippedMessageKeys: [] }), createdAt: 1, updatedAt: 2 }],
     senderKeys: [{ channelId: "channel", senderUserId: "owner", senderDeviceId: "device", distributionId: "distribution", chainKey: "AQ==", initialChainKey: "", publicSigningKey: "Ag==", iteration: 1, createdAt: 1 }],
     trustedIdentities: [{ userId: "peer", deviceId: "peer-device", identityKey: "AQ==", firstSeen: 1, verified: false }],
     messageCache: [{ messageId: "message", channelId: "", dmChannelId: "dm", content: "cached", timestamp: 1 }],

@@ -1,4 +1,5 @@
 import { fromBase64 } from "./signalProtocol";
+import { decodeBackupSessionState } from "./backupSessionCodec";
 
 export class InvalidBackupContentsError extends Error {
   constructor() { super("Invalid backup contents"); this.name = "InvalidBackupContentsError"; }
@@ -26,14 +27,6 @@ function rows(value: unknown, validate: (entry: Row) => void) {
   if (!Array.isArray(value)) return invalid();
   for (const entry of value) validate(row(entry));
 }
-function sessionBytes(value: unknown, depth = 0): void {
-  if (depth > 256) invalid();
-  if (!value || typeof value !== "object") return;
-  if (Array.isArray(value)) { for (const entry of value) sessionBytes(entry, depth + 1); return; }
-  const entry = row(value);
-  if ("__b64" in entry) { bytes(entry, ["__b64"]); return; }
-  for (const child of Object.values(entry)) sessionBytes(child, depth + 1);
-}
 
 /** Validate serialized field types and byte encodings before restore touches storage. */
 export function decodeBackupContents(json: string): BackupContents {
@@ -53,7 +46,7 @@ export function decodeBackupContents(json: string): BackupContents {
   rows(value.sessions, entry => {
     strings(entry, ["userId", "deviceId", "state"]);
     numbers(entry, ["createdAt", "updatedAt"]);
-    try { sessionBytes(row(JSON.parse(entry.state as string))); } catch { invalid(); }
+    try { decodeBackupSessionState(entry.state as string); } catch { invalid(); }
   });
   rows(value.senderKeys, entry => {
     strings(entry, ["channelId", "senderUserId", "senderDeviceId", "distributionId"]);

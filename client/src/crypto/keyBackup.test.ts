@@ -109,7 +109,7 @@ describe("backup content version validation", () => {
 });
 
 describe("backup payload validation before storage access", () => {
-  it.each(["registration", "identity", "sessions"])("rejects malformed %s without snapshotting or clearing keys", async (field) => {
+  it.each(["registration", "identity", "sessions", "ratchet"])("rejects malformed %s without snapshotting or clearing keys", async (field) => {
     vi.clearAllMocks();
     const contents = {
       version: 1,
@@ -117,9 +117,10 @@ describe("backup payload validation before storage access", () => {
       signing: { publicKey: btoa("signing"), privateKey: btoa("private") },
       registration: { userId: "test-user", deviceId: "test-device", registrationId: 1 },
       signedPreKeys: [], preKeys: [], sessions: [], senderKeys: [], trustedIdentities: [],
-      [field]: field === "registration"
+      [field === "ratchet" ? "sessions" : field]: field === "registration"
         ? { userId: "test-user", deviceId: "test-device", registrationId: "1" }
-        : field === "identity" ? { publicKey: "%%%", privateKey: btoa("private") } : "not-an-array",
+        : field === "identity" ? { publicKey: "%%%", privateKey: btoa("private") }
+          : field === "ratchet" ? [{ userId: "peer", deviceId: "device", state: '{"rootKey":{"__b64":"AQ=="}}', createdAt: 1, updatedAt: 1 }] : "not-an-array",
     };
     const decrypt = vi.spyOn(crypto.subtle, "decrypt").mockResolvedValueOnce(new TextEncoder().encode(JSON.stringify(contents)).buffer);
     try {
