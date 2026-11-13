@@ -1,3 +1,4 @@
+import { requestUpdateInstallation } from "./update-installation";
 import { createOverlayMediaBroker } from "./overlay-media-broker";
 import { registerCS2JoinIPC } from "./cs2-join-ipc";
 import { registerGameNameIPC } from "./registered-game-name-ipc";
@@ -391,7 +392,7 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle("install-update", () => {
     // isSilent=true (no installer UI), isForceRunAfter=true (auto-restart)
-    autoUpdater.quitAndInstall(true, true);
+    requestUpdateInstallation(() => autoUpdater.quitAndInstall(true, true));
   });
 
   // ─── Desktop capturer (legacy enumeration, separate from picker) ─

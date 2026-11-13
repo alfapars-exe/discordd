@@ -4,6 +4,7 @@ import { autoUpdater } from "electron-updater";
 import path from "path";
 import { getMainWindow, setUpdateDownloaded } from "./window";
 import { setTrayUpdateReady } from "./tray";
+import { requestUpdateInstallation } from "./update-installation";
 
 let prelaunchChecked = false;
 let runtimeCheckInterval: ReturnType<typeof setInterval> | null = null;
@@ -85,7 +86,7 @@ export function setupAutoUpdater(): void {
         icon: path.join(__dirname, "../icons/hlogo.png"),
       });
       notification.on("click", () => {
-        autoUpdater.quitAndInstall(true, true);
+        requestUpdateInstallation(() => autoUpdater.quitAndInstall(true, true));
       });
       notification.show();
     } catch (err) {

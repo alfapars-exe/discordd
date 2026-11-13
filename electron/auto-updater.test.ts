@@ -4,11 +4,13 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import vm from "node:vm";
+import { createUpdateInstallationGate } from "./update-installation";
 
 function harness(packaged = true) {
   const sent: unknown[][] = [], tray: string[] = [], installed: boolean[][] = [];
   const timers = new Set<() => void>(), notifications: FakeNotification[] = [];
   let checks = 0, downloaded = 0;
+  const requestUpdateInstallation = createUpdateInstallationGate();
   const updater = Object.assign(new EventEmitter(), {
     checkForUpdates: async () => { checks++; },
     quitAndInstall: (...args: boolean[]) => { installed.push(args); },
@@ -28,6 +30,7 @@ function harness(packaged = true) {
       if (name === "electron") return { app, Notification: FakeNotification };
       if (name === "electron-updater") return { autoUpdater: updater };
       if (name === "path") return path;
+      if (name === "./update-installation") return { requestUpdateInstallation };
       if (name === "./window") return { getMainWindow: () => ({ webContents: { send: (...args: unknown[]) => { sent.push(args); } } }), setUpdateDownloaded: () => { downloaded++; } };
       if (name === "./tray") return { setTrayUpdateReady: (version: string) => { tray.push(version); } };
       throw new Error(`Unexpected updater dependency: ${name}`);
@@ -59,6 +62,16 @@ test("development setup does not subscribe, poll or mark a check complete", () =
   assert.equal(h.updater.eventNames().length, 0);
   assert.equal(h.timers.size, 0);
   assert.equal(h.checks(), 0);
+});
+
+test("repeated notification clicks request installation only once", () => {
+  const h = harness(); h.api.setupAutoUpdater();
+  h.updater.emit("update-downloaded", { version: "2.0.0" });
+  h.notifications[0].emit("click");
+  h.notifications[0].emit("click");
+  h.updater.emit("update-downloaded", { version: "2.0.0" });
+  h.notifications[1].emit("click");
+  assert.deepEqual(h.installed, [[true, true]]);
 });
 
 test("runtime events retain public channels and the poller performs another check", () => {
