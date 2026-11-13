@@ -1102,3 +1102,10 @@ LiveKit silme düzeltmesinin mevcut PR #222 ile sonradan açılan PR #270'te ayn
 - Tests reject foreign contents, subframes, missing frames, destroyed/absent windows and old navigation frames with zero provider calls, then allow the current main frame. Integration e897e460: full Electron 395 pass/1 skip. Canonical PR #282 source 8ae09b9d: fresh unique TypeScript output, full Electron 274 pass/1 skip. Logs: %TEMP%/hichat-desktop-source-sender-before.log, hichat-desktop-source-sender-after.log and hichat-desktop-source-sender-canonical.log.
 - This is a registrar ownership contract, not a physical source-picker/capture permission or multi-display acceptance receipt. Remaining window/shortcut/capture capabilities and final runtime acceptance remain open.
 - Published to existing PR #282 head c4cfdaff; fresh CI pending. No merge performed.
+
+### RF20 - diagnostic capture and mute-hook mutation ownership (2026-11-13)
+
+- Two failing-before regressions demonstrated diagnostic capture and mute-hook commands bypassed the already supplied main-window assertion. Both diagnostic start/stop and mute shortcut register/unregister now invoke that same assertion before worker/native effects and before token/key validation. Existing capture/PTT assertions and read-only capture status remain unchanged.
+- Tests prove denial cannot start capture, stop with a valid or malformed token, validate an untrusted shortcut input or mutate native hooks. Authorized token validation, worker promise/results, registration refusal, bounds and hook cleanup remain covered; expected calls now include authorization before those operations.
+- Integration aa4450ff: full Electron 397 pass/1 skip. Canonical PR #285 source b5aafd32: fresh unique TypeScript output, full Electron 276 pass/1 skip. Logs: %TEMP%/hichat-capture-shortcut-sender-before.log, hichat-capture-shortcut-sender-after.log and hichat-capture-shortcut-sender-canonical.log. No physical microphone or native hook was exercised. Window-command capability review and final runtime acceptance remain open.
+- Published to existing PR #285 head 0b663800; fresh CI pending. No merge performed.
