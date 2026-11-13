@@ -13,16 +13,19 @@ function updaterHarness(strict = false) {
   const downloaded = new Set<(info: { version: string }) => void>();
   const progress = new Set<(info: { percent: number }) => void>();
   const error = new Set<(message: string) => void>();
+  const install = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
   const subscribe = <T,>(set: Set<T>, callback: T) => { set.add(callback); return () => { set.delete(callback); }; };
   window.electronAPI = {
     onUpdateAvailable: callback => subscribe(available, callback),
     onUpdateDownloaded: callback => subscribe(downloaded, callback),
     onUpdateProgress: callback => subscribe(progress, callback),
     onUpdateError: callback => subscribe(error, callback),
+    installUpdate: () => install(),
   } as NonNullable<Window["electronAPI"]>;
   const view = renderHook(useUpdateChecker, strict ? { wrapper: StrictMode } : undefined);
   return {
     view,
+    install,
     listenerCounts: () => [available.size, downloaded.size, progress.size, error.size],
     available: (version: string) => act(() => available.forEach(callback => callback({ version }))),
     downloaded: (version: string) => act(() => downloaded.forEach(callback => callback({ version }))),
@@ -30,6 +33,27 @@ function updaterHarness(strict = false) {
     error: () => act(() => error.forEach(callback => callback("offline"))),
   };
 }
+
+it("handles a rejected install IPC request without losing ready state or preventing retry", async () => {
+  const h = updaterHarness(); h.downloaded("2.0.0");
+  const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+  const failure = Promise.reject(new Error("IPC install failed"));
+  // Observe the rejected fixture too, so the pre-fix run can assert missing
+  // handling without leaking an intentional rejection into the test runner.
+  void failure.catch(() => {});
+  h.install.mockReturnValueOnce(failure);
+  try {
+    await act(async () => { h.view.result.current.restartAndInstall(); await failure.catch(() => {}); });
+    expect(warning).toHaveBeenCalledExactlyOnceWith("[updater] Install request failed");
+    expect(h.view.result.current.status).toBe("ready");
+    expect(h.view.result.current.update).toEqual({ version: "2.0.0" });
+    await act(async () => { h.view.result.current.restartAndInstall(); });
+    expect(h.install).toHaveBeenCalledTimes(2);
+    expect(h.view.result.current.status).toBe("ready");
+  } finally {
+    warning.mockRestore(); h.view.unmount();
+  }
+});
 
 it.each([false, true])("retains a completed installer through later check/progress/error events (snoozed=%s)", snoozed => {
   const h = updaterHarness(); h.downloaded("2.0.0");
