@@ -10,7 +10,7 @@ func (r *RateLimiters) Stop() {
 	}
 	for _, limiter := range []*ratelimit.LoginRateLimiter{
 		r.Login, r.Register, r.ForgotPwd, r.ResetPwd, r.VerifyEmail,
-		r.EmailUnsubscribe, r.WSTicket, r.DeviceEnum, r.Refresh,
+		r.EmailUnsubscribe, r.WSTicket, r.DeviceEnum, r.Refresh, r.GameJoin,
 	} {
 		if limiter != nil {
 			limiter.Stop()
