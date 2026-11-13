@@ -48,7 +48,8 @@ export function wasPrelaunchChecked(): boolean {
  * pester the user every five minutes about a hiccup.
  */
 export function setupAutoUpdater(): void {
-  if (!app.isPackaged) return;
+  // Runtime setup owns one event subscription set as well as one poller.
+  if (!app.isPackaged || prelaunchChecked) return;
   prelaunchChecked = true;
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
