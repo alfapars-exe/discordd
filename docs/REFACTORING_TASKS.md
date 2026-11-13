@@ -128,6 +128,8 @@ Arşiv E2E senaryosunda PostgreSQL, silinen sunucunun hâlâ referans verdiği s
 
 ## Uygulama izleme — 26 Ekim 2026
 
+Bu bölüm 26 Ekim anlık görüntüsüdür. Sonraki uygulamalar ve açık kabul kapıları için [güncel RF01–RF30 matrisini](REFACTORING_STATUS.md) ve bu belgedeki tarihli kanıt kayıtlarını kullanın. Aşağıdaki tarihsel “henüz uygulanmadı” ifadeleri güncel kaynak durumu değildir.
+
 İlk uygulama grubu, kapsamlı modül ayırmalarından önce test ve kaynak sahipliği sınırlarını kurar. **Planın 30 görevinin tamamı bitmedi.** Bu tablo yerel uygulamayı, CI yürütmesini ve gerçek cihaz kabulünü birbirine karıştırmaz. Aktif kaynak ağacında başka çalışmalar bulunduğundan bütün doğrulamalar kaynak manifestiyle kaydedilir.
 
 | Görev | Uygulanan bölüm | Kalan kabul / iş |
