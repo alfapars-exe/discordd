@@ -72,10 +72,6 @@ func (s *serverService) SetUploadDir(dir string) {
 	s.uploadDir = dir
 }
 
-func (s *serverService) SetGameActivityPreferencesRepository(repo repository.PreferencesRepository) {
-	s.preferencesRepo = repo
-}
-
 // audit emits an audit log event if an audit logger is wired. Nil-safe.
 // Same observability pattern as member/role/voice/channel: both branches
 // log so a "user X joined/left but audit channel stayed empty" report
@@ -90,6 +86,7 @@ func (s *serverService) audit(entry models.AuditLog) {
 }
 
 func NewServerService(
+	preferencesRepo repository.PreferencesRepository,
 	gameActivity GameActivityPrivacyInvalidator,
 	db *sql.DB,
 	serverRepo repository.ServerRepository,
@@ -106,6 +103,7 @@ func NewServerService(
 	membershipTxRunner repository.ServerMembershipTxRunner,
 ) ServerService {
 	return &serverService{
+		preferencesRepo:    preferencesRepo,
 		gameActivity:       gameActivity,
 		db:                 db,
 		serverRepo:         serverRepo,
