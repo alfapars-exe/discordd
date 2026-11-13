@@ -12,6 +12,7 @@ spec.loader.exec_module(runner)
 
 class PostgreSQLRunnerTests(unittest.TestCase):
     service_passes = (
+        "--- PASS: TestDeliveryClaimCancellationLogging (0.01s)\n"
         "--- PASS: TestDeliveryStopCancelsPoolWait (0.01s)\n"
         "--- PASS: TestChannelDeliveryConcurrentRetryAndDeletion (0.01s)\n"
         "--- PASS: TestDMIdempotentAttachmentsConcurrentReplayKeepsOneOrderedSet (0.01s)\n"
