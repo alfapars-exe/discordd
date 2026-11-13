@@ -1,9 +1,33 @@
 {
-  "observedAtUtc": "2026-11-13T09:18:06.9920298Z",
+  "observedAtUtc": "2026-11-13T10:49:40.6470357Z",
   "scope": "Open refactor PRs 221 and later; CI snapshots do not prove runtime acceptance",
   "canonicalServerMediaPr": 222,
   "closedDuplicatePr": 270,
   "pullRequests": [
+    {
+      "number": 274,
+      "url": "https://github.com/alfapars-exe/discordd/pull/274",
+      "title": "Isolate updater IPC contracts from central registration",
+      "head": "e9e1e898ab0f8ea1968e556758dd8f137f486049",
+      "branch": "refactor/updater-ipc",
+      "draft": true,
+      "checks": 34,
+      "success": 7,
+      "pending": 27,
+      "failed": []
+    },
+    {
+      "number": 273,
+      "url": "https://github.com/alfapars-exe/discordd/pull/273",
+      "title": "Reject inherited app setting keys and isolate settings IPC",
+      "head": "11529a1f4560e47b8a58cea6e80fe656e81d2ac6",
+      "branch": "fix/app-settings-ipc",
+      "draft": true,
+      "checks": 34,
+      "success": 13,
+      "pending": 21,
+      "failed": []
+    },
     {
       "number": 272,
       "url": "https://github.com/alfapars-exe/discordd/pull/272",
@@ -11,9 +35,9 @@
       "head": "97c6882adc1224ae69ecae9c19b756bf73f6cc33",
       "branch": "fix/message-highlight-lifetime",
       "draft": true,
-      "checks": 33,
-      "success": 0,
-      "pending": 33,
+      "checks": 36,
+      "success": 36,
+      "pending": 0,
       "failed": []
     },
     {
@@ -23,9 +47,9 @@
       "head": "f66c7b922ce9ae580867015b0b1284ac6a77c0f9",
       "branch": "perf/lazy-settings-modal",
       "draft": true,
-      "checks": 34,
-      "success": 5,
-      "pending": 29,
+      "checks": 36,
+      "success": 36,
+      "pending": 0,
       "failed": []
     },
     {
@@ -35,9 +59,9 @@
       "head": "49d214cc4d2e7e585231d58c6419d344c2109801",
       "branch": "fix/dm-list-hydration",
       "draft": true,
-      "checks": 34,
-      "success": 19,
-      "pending": 15,
+      "checks": 36,
+      "success": 36,
+      "pending": 0,
       "failed": []
     },
     {
@@ -47,9 +71,9 @@
       "head": "4771c7c8d304f62912ae35c0e83a08507813b2bd",
       "branch": "fix/server-list-snapshot-order",
       "draft": true,
-      "checks": 34,
-      "success": 28,
-      "pending": 6,
+      "checks": 36,
+      "success": 36,
+      "pending": 0,
       "failed": []
     },
     {
@@ -59,9 +83,9 @@
       "head": "a341fabab14606e5f376146552af084e1aba9a6e",
       "branch": "fix/websocket-profile-lifetime",
       "draft": true,
-      "checks": 34,
-      "success": 22,
-      "pending": 12,
+      "checks": 36,
+      "success": 36,
+      "pending": 0,
       "failed": []
     },
     {
@@ -84,8 +108,8 @@
       "branch": "fix/refresh-retry-after",
       "draft": true,
       "checks": 36,
-      "success": 35,
-      "pending": 1,
+      "success": 36,
+      "pending": 0,
       "failed": []
     },
     {
@@ -211,13 +235,13 @@
     {
       "number": 254,
       "url": "https://github.com/alfapars-exe/discordd/pull/254",
-      "title": "Restrict Electron saved logins to their stored origin and prevent API redirects",
-      "head": "fc7964a309826f45d4a2454c375270a9d5ae10a2",
+      "title": "Scope saved logins to their origin and isolate credential IPC contracts",
+      "head": "2b5b2e933da35af492a4c52d6edb6a6d3daffcfe",
       "branch": "fix/desktop-api-redirects",
       "draft": true,
-      "checks": 36,
-      "success": 36,
-      "pending": 0,
+      "checks": 34,
+      "success": 31,
+      "pending": 3,
       "failed": []
     },
     {
@@ -407,9 +431,9 @@
       "head": "c5feda38ce44561811b494779f8af7d5ff91e712",
       "branch": "test/production-webkit",
       "draft": false,
-      "checks": 34,
-      "success": 11,
-      "pending": 23,
+      "checks": 36,
+      "success": 36,
+      "pending": 0,
       "failed": []
     },
     {
@@ -428,12 +452,12 @@
       "number": 236,
       "url": "https://github.com/alfapars-exe/discordd/pull/236",
       "title": "Prepare Electron once before running desktop tests",
-      "head": "643e8f0b22d12c93acb7fc503cd98e79b202a998",
+      "head": "86256e96f1ffcf01bb30761b1c3065986a9ba8db",
       "branch": "fix/electron-test-startup",
       "draft": false,
-      "checks": 36,
-      "success": 36,
-      "pending": 0,
+      "checks": 33,
+      "success": 0,
+      "pending": 33,
       "failed": []
     },
     {
@@ -523,8 +547,8 @@
     {
       "number": 228,
       "url": "https://github.com/alfapars-exe/discordd/pull/228",
-      "title": "Retain the self-device handshake requirement during backup restore",
-      "head": "f33f6d9a4afbd1591d04542f77858b3de53d85a1",
+      "title": "Separate scoped key database lifecycle and typed backup storage",
+      "head": "9e529cce10863f56d56d67bcdfe869682bfe89ae",
       "branch": "fix/backup-reset-marker",
       "draft": false,
       "checks": 36,
@@ -571,8 +595,8 @@
     {
       "number": 224,
       "url": "https://github.com/alfapars-exe/discordd/pull/224",
-      "title": "Enforce measured Go and Vitest coverage baselines",
-      "head": "9912dae5d6ca2342579cb19de1e280c516128f44",
+      "title": "Enforce coverage baselines and await registration fixture hydration",
+      "head": "e77def897f52bb20176aab818ad4b402a662193b",
       "branch": "refactor/coverage-floor",
       "draft": false,
       "checks": 36,
@@ -583,8 +607,8 @@
     {
       "number": 223,
       "url": "https://github.com/alfapars-exe/discordd/pull/223",
-      "title": "Make privacy, call notification and DM dependencies explicit",
-      "head": "8072e48930df715a6cc06778d71fcd256767b44c",
+      "title": "Require service privacy, delivery and cleanup dependencies at construction",
+      "head": "4060e24261103583526d56d13992881818359808",
       "branch": "refactor/service-wiring",
       "draft": false,
       "checks": 36,
@@ -599,9 +623,9 @@
       "head": "a138717c3064cbd67da4c2a4eb4fb0659f7efafb",
       "branch": "fix/server-media-cleanup",
       "draft": false,
-      "checks": 33,
-      "success": 0,
-      "pending": 33,
+      "checks": 36,
+      "success": 36,
+      "pending": 0,
       "failed": []
     },
     {
