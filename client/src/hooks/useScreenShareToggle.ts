@@ -1,3 +1,4 @@
+import { createNativeScreenShareController } from "../webrtc/nativeScreenShareController";
 /**
  * useScreenShareToggle — drive LiveKit screen share from voiceStore.isStreaming
  * and reflect external stops back into the store.
@@ -301,6 +302,7 @@ export function useScreenShareToggle(
 
   const screenUpdaterRef = useRef<LiveKitScreenShareUpdater | null>(null);
   const lifecycleRef = useRef<Promise<void>>(Promise.resolve());
+  const nativeControllerRef = useRef<ReturnType<typeof createNativeScreenShareController> | null>(null);
 
   // Native Electron audio capture — excludes our own process tree to prevent
   // screen-share echo. Held in a latest-ref so the toggle effect doesn't
@@ -436,42 +438,27 @@ export function useScreenShareToggle(
     });
 
     if (branch === "capacitor") {
-      const serverId = useServerStore.getState().activeServerId;
-      const channelId = useVoiceStore.getState().currentVoiceChannelId;
-      if (!serverId || !channelId) return;
-
-      const response = await getScreenShareToken(serverId, channelId);
-      if (shouldCancel()) return;
-      if (!response.success || !response.data) {
-        console.error(
-          "[useScreenShareToggle] Failed to get screen share token:",
-          response.error,
-        );
-        logToServer("warn", "screen_share_token_failed", {
-          branch,
-          error: response.error ?? "unknown",
-        });
-        notifyServerStopped();
-        return;
-      }
-
-      // Race guard — the user may have left or switched voice channels while
-      // the token request was in flight; starting the native share with the
-      // stale token would publish into a room we already left.
-      if (useVoiceStore.getState().currentVoiceChannelId !== channelId) {
-        console.warn(
-          "[useScreenShareToggle] Discarding screen share token — voice channel changed during fetch",
-        );
-        return;
-      }
-
-      await startNativeScreenShare(response.data.url, response.data.token);
-      if (shouldCancel()) return;
-      notifyServerStarted();
-      logToServer("info", "screen_share_success", {
-        branch,
-        durationMs: Date.now() - attemptStart,
+      const controller = createNativeScreenShareController({
+        getServerId: () => useServerStore.getState().activeServerId,
+        getChannelId: () => useVoiceStore.getState().currentVoiceChannelId,
+        getToken: getScreenShareToken,
+        start: startNativeScreenShare,
+        stop: stopNativeScreenShare,
+        tokenFailed: error => {
+          console.error("[useScreenShareToggle] Failed to get screen share token:", error);
+          logToServer("warn", "screen_share_token_failed", { branch, error: error ?? "unknown" });
+          notifyServerStopped();
+        },
+        channelChanged: () => {
+          console.warn("[useScreenShareToggle] Discarding screen share token — voice channel changed during fetch");
+        },
+        started: () => {
+          notifyServerStarted();
+          logToServer("info", "screen_share_success", { branch, durationMs: Date.now() - attemptStart });
+        },
       });
+      nativeControllerRef.current = controller;
+      await controller.start(shouldCancel);
     } else if (branch === "electron-audio") {
       const opts = resolveScreenSharePublishDefaults({ ...useVoiceStore.getState(), screenShareQuality: ssq, screenShareFps: ssFps }, displayRef.current);
       // captureOptions (2nd arg) — getDisplayMedia hints; we suppress
@@ -594,7 +581,10 @@ export function useScreenShareToggle(
 
   async function stopShareInternal(branch: ShareBranch): Promise<void> {
     if (branch === "capacitor") {
-      await stopNativeScreenShare();
+      const controller = nativeControllerRef.current;
+      nativeControllerRef.current = null;
+      if (controller) await controller.stop();
+      else await stopNativeScreenShare();
     } else {
       const updater = screenUpdaterRef.current;
       screenUpdaterRef.current = null;
