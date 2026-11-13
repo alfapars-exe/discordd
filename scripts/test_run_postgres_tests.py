@@ -85,11 +85,16 @@ class PostgreSQLRunnerTests(unittest.TestCase):
             output = "\n".join(line for line in self.service_passes.splitlines() if name not in line)
             self.assertEqual(self.execute(self.completed(), service_output=output), 1)
 
+    def test_usage_migration_pass_is_mandatory(self):
+        events = [event for event in self.completed() if event.get("Test") != "TestPostgresVoiceUsageMigrationPreservesTotals"]
+        self.assertEqual(self.execute(events), 1)
+
     def completed(self):
         return [
             {"Action": "pass", "Package": "github.com/argeinfina/hichat", "Test": "TestPurgeExpiredNotificationsPostgres"},
             {"Action": "pass", "Package": "github.com/argeinfina/hichat"},
             {"Action": "pass", "Package": "github.com/argeinfina/hichat/repository"},
+            {"Action": "pass", "Package": "github.com/argeinfina/hichat/database", "Test": "TestPostgresVoiceUsageMigrationPreservesTotals"},
             {"Action": "pass", "Package": "github.com/argeinfina/hichat/database"},
         ]
 

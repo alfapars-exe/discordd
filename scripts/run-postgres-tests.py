@@ -38,6 +38,7 @@ def main():
     skipped = []
     completed = set()
     postgres_retention_passed = False
+    usage_migration_passed = False
     invalid_output = False
     reported_failure = False
     for line in process.stdout:
@@ -66,6 +67,10 @@ def main():
                 and event.get("Package") == "github.com/argeinfina/hichat"
                 and event.get("Test") == REQUIRED_SERVER_POSTGRES_TEST):
             postgres_retention_passed = True
+        if (event.get("Action") == "pass"
+                and event.get("Package") == "github.com/argeinfina/hichat/database"
+                and event.get("Test") == "TestPostgresVoiceUsageMigrationPreservesTotals"):
+            usage_migration_passed = True
         if event.get("Action") == "pass" and not event.get("Test"):
             completed.add(event.get("Package"))
         if event.get("Action") in {"pass", "fail", "skip"}:
@@ -84,7 +89,9 @@ def main():
         print("Required PostgreSQL packages did not complete: " + ", ".join(sorted(missing_packages)), file=sys.stderr)
     if not postgres_retention_passed:
         print(f"Required PostgreSQL test did not pass: {REQUIRED_SERVER_POSTGRES_TEST}", file=sys.stderr)
-    if code or skipped or missing_packages or not postgres_retention_passed or invalid_output or reported_failure:
+    if not usage_migration_passed:
+        print("Required voice usage migration test did not pass", file=sys.stderr)
+    if code or skipped or missing_packages or not postgres_retention_passed or not usage_migration_passed or invalid_output or reported_failure:
         return code or 1
     # Delivery, authorization and collector lifecycle require real PostgreSQL waits.
     service_contract_tests = (
