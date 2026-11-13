@@ -222,6 +222,8 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
     const scope = currentDMAuthScope();
     const generation = useComposerDraftStore.getState().generation;
     const metadataRevision = dmChannelMetadataRevision;
+    const initialChannels = get().channels;
+    const initialUnreadCounts = get().dmUnreadCounts;
     const isCurrent = () => request === dmChannelListRequest && Boolean(scope)
       && dmAuthScopeIsCurrent(scope!)
       && useComposerDraftStore.getState().generation === generation;
@@ -231,7 +233,7 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
       const res = await dmApi.listDMChannels({ isCurrent, timeoutMs: 15_000 });
       if (!isCurrent()) return false;
       if (res.success && res.data) {
-        if (metadataRevision !== dmChannelMetadataRevision) {
+        if (metadataRevision !== dmChannelMetadataRevision && get().channels !== initialChannels) {
           // A WS/read event or another local channel mutation landed while
           // this snapshot was in flight. The event path is newer than this
           // list response, so retain the whole current metadata snapshot
@@ -244,6 +246,13 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
         const dmUnreadCounts: Record<string, number> = {};
         for (const ch of res.data) {
           if (ch.unread_count > 0) dmUnreadCounts[ch.id] = ch.unread_count;
+        }
+        const currentUnreadCounts = get().dmUnreadCounts;
+        for (const id of new Set([...Object.keys(initialUnreadCounts), ...Object.keys(currentUnreadCounts)])) {
+          if (initialUnreadCounts[id] !== currentUnreadCounts[id]) {
+            if (currentUnreadCounts[id] === undefined) delete dmUnreadCounts[id];
+            else dmUnreadCounts[id] = currentUnreadCounts[id];
+          }
         }
         set({ channels: res.data, dmUnreadCounts, isLoading: false });
         return true;

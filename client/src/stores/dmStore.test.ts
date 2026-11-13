@@ -699,3 +699,14 @@ it("keeps authoritative DM append order in history merges and out-of-order WS pr
  vi.mocked(dmApi.getDMMessages).mockResolvedValueOnce(page([second,first,third],false));await useDMStore.getState().fetchMessages(CH);
  expect(ids()).toEqual([first.id,second.id,third.id]);
 });
+
+it("hydrates missing channels when unread metadata changes during the first list request", async () => {
+  const pending = deferred<APIResponse<DMChannelWithUser[]>>();
+  vi.mocked(dmApi.listDMChannels).mockReturnValueOnce(pending.promise);
+  const loading = useDMStore.getState().fetchChannels();
+  useDMStore.setState({ dmUnreadCounts: { [CH]: 1 } });
+  pending.resolve({ success: true, data: [listedDM(CH, 5)] });
+  await loading;
+  expect(useDMStore.getState().dmUnreadCounts[CH]).toBe(1);
+  expect(useDMStore.getState().channels.some(channel => channel.id === CH)).toBe(true);
+});
