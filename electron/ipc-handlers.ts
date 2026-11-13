@@ -392,7 +392,7 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle("install-update", () => {
     // isSilent=true (no installer UI), isForceRunAfter=true (auto-restart)
-    requestUpdateInstallation(() => autoUpdater.quitAndInstall(true, true));
+    requestUpdateInstallation(() => autoUpdater.quitAndInstall(true, true), autoUpdater);
   });
 
   // ─── Desktop capturer (legacy enumeration, separate from picker) ─

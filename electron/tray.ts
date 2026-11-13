@@ -31,7 +31,7 @@ function buildContextMenu(): Menu {
         // relaunch the app. setQuitting unblocks the close-to-tray gate so
         // the running window can shut down cleanly.
         setQuitting(true);
-        requestUpdateInstallation(() => autoUpdater.quitAndInstall(true, true));
+        requestUpdateInstallation(() => autoUpdater.quitAndInstall(true, true), autoUpdater);
       },
     });
     entries.push({ type: "separator" });

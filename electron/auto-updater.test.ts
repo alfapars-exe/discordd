@@ -12,10 +12,14 @@ function harness(packaged = true) {
   const timers = new Set<() => void>(), notifications: FakeNotification[] = [];
   let checks = 0, downloaded = 0;
   const network = { failed: false };
+  const installation = { failed: false };
   const requestUpdateInstallation = createUpdateInstallationGate();
   const updater = Object.assign(new EventEmitter(), {
     checkForUpdates: async () => { checks++; if (network.failed) throw new Error("offline"); },
-    quitAndInstall: (...args: boolean[]) => { installed.push(args); },
+    quitAndInstall: (...args: boolean[]): void => {
+      installed.push(args);
+      if (installation.failed) updater.emit("error", new Error("installer unavailable"));
+    },
   });
   class FakeNotification extends EventEmitter {
     shown = false;
@@ -39,7 +43,7 @@ function harness(packaged = true) {
       throw new Error(`Unexpected updater dependency: ${name}`);
     },
   });
-  return { api: exports, updater, app, sent, tray, installed, timers, notifications, network, checks: () => checks, downloaded: () => downloaded };
+  return { api: exports, updater, app, sent, tray, installed, timers, notifications, network, installation, checks: () => checks, downloaded: () => downloaded };
 }
 
 test("repeated updater setup owns one subscription set, poller and downloaded notification", () => {
@@ -113,6 +117,17 @@ test("repeated notification clicks request installation only once", () => {
   h.updater.emit("update-downloaded", { version: "2.0.0" });
   h.notifications[1].emit("click");
   assert.deepEqual(h.installed, [[true, true]]);
+});
+
+test("installer errors emitted synchronously by the SDK permit another install attempt", () => {
+  const h = harness(); h.api.setupAutoUpdater();
+  h.updater.emit("update-downloaded", { version: "2.0.0" });
+  h.installation.failed = true;
+  h.notifications[0].emit("click");
+  h.installation.failed = false;
+  h.notifications[0].emit("click");
+  assert.deepEqual(h.installed, [[true, true], [true, true]]);
+  assert.equal(h.updater.listenerCount("error"), 1);
 });
 
 test("runtime events retain public channels and the poller performs another check", () => {
