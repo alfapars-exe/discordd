@@ -1,22 +1,12 @@
 package testutil
 
-import (
-	"bytes"
-	"runtime/pprof"
-	"testing"
-)
+import "testing"
 
-// AssertLimiterFixtureCleanup runs the actual fixture under a child test owner
-// and checks that its cleanup restores the maintenance-worker count.
-func AssertLimiterFixtureCleanup(t *testing.T, fixture func(*testing.T)) {
+// AssertLimiterFixtureCleanup runs the actual fixture under a child test owner.
+// Stack inspection belongs in the calling _test.go file; this helper only
+// compares the supplied maintenance-worker counts after child cleanup.
+func AssertLimiterFixtureCleanup(t *testing.T, fixture func(*testing.T), count func() int) {
 	t.Helper()
-	count := func() int {
-		var stacks bytes.Buffer
-		if err := pprof.Lookup("goroutine").WriteTo(&stacks, 2); err != nil {
-			t.Fatal(err)
-		}
-		return bytes.Count(stacks.Bytes(), []byte("created by github.com/argeinfina/hichat/pkg/ratelimit.New"))
-	}
 	before := count()
 	t.Run("owner", fixture)
 	if after := count(); after != before {
