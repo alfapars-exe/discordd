@@ -11,7 +11,7 @@ func TestVoiceStateFanoutIgnoresStaleCachedPermissionGrant(t *testing.T) {
 	fixture := permFixture{serverID: "server", channelID: "channel", roles: map[string][]models.Role{
 		"viewer": {{ID: "role", ServerID: "server", Permissions: models.PermViewChannel}},
 	}}
-	resolver := fixture.newService(&bulkRepoCounter{})
+	resolver := fixture.newService(t, &bulkRepoCounter{})
 	ctx := context.Background()
 	users := []string{"viewer"}
 	warm, err := resolver.ResolveChannelPermissionsBulk(ctx, "channel", users)
