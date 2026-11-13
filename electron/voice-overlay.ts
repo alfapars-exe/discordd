@@ -274,7 +274,7 @@ function updateChatActionWindow(): void {
         if (chatActionWindow !== window) return;
         chatActionSurfaceFailed = true;
         window.close(); chatActionWindow = null; chatActionLoadPending = false; pendingOpenChat = null;
-        if (reason === "load") closeChatComposerWindow();
+        if (reason === "load" || reason === "crash") closeChatComposerWindow();
         if (overlayWindow && !overlayWindow.isDestroyed()) overlayWindow.webContents.send("voice-overlay-update", voiceOverlayPayload());
       },
     });
