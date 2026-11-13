@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -72,6 +72,16 @@ assert.match(deletionHelper, /unlinkSync\(path\)/);
 assert.doesNotMatch(deletionHelper, /rmSync|recursive\s*:/, "the deletion probe must never recursively remove a directory");
 assert.match(archiveSpec, /removeSyntheticExportArchive\(jobID\)/);
 assert.match(archiveSpec, /newJobID\)\.not\.toBe\(jobID\)/);
+
+const testsRoot = join(here, "..", "tests");
+for (const entry of readdirSync(testsRoot, { recursive: true })) {
+  if (!entry.endsWith(".ts")) continue;
+  const source = readFileSync(join(testsRoot, entry), "utf8");
+  assert.doesNotMatch(source, /["'`]\/src\//,
+    entry + " must exercise the production bundle through HTTP or UI");
+}
+assert.match(config, /npm run build -- --base=\//,
+  "the production web fixture must resolve assets after nested-route reloads");
 
 const guardSelfTest = readFileSync(join(here, "test-archive-delete-isolation.mjs"), "utf8");
 assert.match(guardSelfTest, /lstatSync\(e2eRoot\)[\s\S]*realpathSync\(e2eRoot\)[\s\S]*assertRealE2ETempRoot\(realE2eRoot, tmpRoot\)[\s\S]*mkdirSync\(runDir\)/,

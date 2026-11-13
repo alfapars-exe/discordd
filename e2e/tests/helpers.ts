@@ -32,6 +32,26 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { ACCOUNT_FILE, CHANNEL_NOTIFICATION_FIXTURE_FILE, E2E_RUN_ID, PENDING_NOTIFICATION_RECIPIENT_FILE } from "../playwright.config";
 
+const sessionTokens = new WeakMap<Page, string>();
+
+/** Authenticated fixture requests through the real API, using this page's login. */
+export async function fixtureApi<T>(page: Page, path: string, method = "GET", body?: unknown): Promise<T> {
+  const token = sessionTokens.get(page);
+  if (!token) throw new Error("Fixture API requires an authenticated test page");
+  return page.evaluate(async ({ path, method, body, token }) => {
+    const response = await fetch("/api" + path, {
+      method,
+      credentials: "include",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", "X-HiChat-Client": "web" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    if (!response.ok) throw new Error("Fixture API " + method + " failed with HTTP " + response.status);
+    const result = await response.json();
+    if (!result.success) throw new Error("Fixture API returned an unsuccessful response");
+    return result.data;
+  }, { path, method, body, token });
+}
+
 /** Smallest valid PNG (1x1, transparent) — passes the server's MIME sniff. */
 const ONE_BY_ONE_PNG_B64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
@@ -478,7 +498,14 @@ export async function loginAsCredentials(page: Page, account: TestAccount): Prom
 
   await page.getByLabel(/^Username/i).fill(username);
   await page.getByLabel(/^Password/i).fill(password);
+  const loginResponse = page.waitForResponse(response =>
+    new URL(response.url()).pathname === "/api/auth/login"
+    && response.request().method() === "POST");
   await page.getByRole("button", { name: /^Log In$/ }).click();
+  const login = await (await loginResponse).json();
+  const token = login.data?.access_token;
+  expect(typeof token).toBe("string");
+  sessionTokens.set(page, token);
 
   await expect(page).toHaveURL(/\/channels/, { timeout: 20_000 });
   await expectSignedInShell(page);
@@ -531,17 +558,12 @@ export async function openFreshChannel(page: Page): Promise<void> {
 export async function provisionServerForE2E(page: Page, name: string): Promise<void> {
   // The access token intentionally lives only in the app module's memory, so
   // Playwright's separate APIRequestContext cannot authenticate directly.
-  // Refresh and create within the page origin; keep the token in-page and out
-  // of test logs, then reload so the app adopts the rotated refresh cookie.
+  // Use the login response retained in test memory, then reload to hydrate
+  // the new server through the normal application entry point.
   await expect(page.getByRole("button", {name:"User Profile",exact:true})).toBeVisible({timeout:20_000});
-  const result = await page.evaluate(async (serverName) => {
-    // Reuse the app's shared in-memory auth state instead of independently
-    // rotating its refresh cookie while /users/me requests are still running.
-    const authModulePath = "/src/api/client.ts";
-    const {ensureFreshToken} = await import(authModulePath);
-    const token = await ensureFreshToken();
-    if (!token) return {status:401,server:null};
-
+  const token = sessionTokens.get(page);
+  if (!token) throw new Error("Server fixture requires an authenticated test page");
+  const result = await page.evaluate(async ({ serverName, token }) => {
     const response = await fetch("/api/servers", {
       method: "POST",
       headers: {
@@ -560,7 +582,7 @@ export async function provisionServerForE2E(page: Page, name: string): Promise<v
     });
     const body = await response.json().catch(() => null);
     return { status: response.status, server: body?.data ?? body };
-  }, name);
+  }, { serverName: name, token });
   expect(result.status).toBe(201);
   const server = result.server as { id: string; name: string };
   expect(server.id).toBeTruthy();
