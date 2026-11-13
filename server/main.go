@@ -115,10 +115,13 @@ func main() {
 		logx.Fatal("boot", "another backend owns this database", err)
 	}
 	defer func() { _ = owner.Close() }()
-	go database.WatchBackendOwner(ownerCtx, owner, func() {
-		bootLogger.Error("backend ownership lost; stopping service")
-		os.Exit(1)
+	stopOwnerWatch := startBackendOwnerWatch(ownerCtx, func(watchCtx context.Context) {
+		database.WatchBackendOwner(watchCtx, owner, func() {
+			bootLogger.Error("backend ownership lost; stopping service")
+			os.Exit(1)
+		})
 	})
+	defer stopOwnerWatch()
 
 	// Is referential integrity actually enforced? We could not previously
 	// answer that for production: foreign_keys(1) is only set on the local
