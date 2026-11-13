@@ -18,7 +18,7 @@ func (h *deleteEventRecorder) BroadcastToServer(id string, event ws.Event) { h.r
 func TestServerDeleteEventFollowsCommit(t *testing.T) {
 	for _, caller := range []string{"owner", "admin"} {
 		t.Run(caller, func(t *testing.T) {
-			db := newBotTestDB(t)
+			db := newDMSendTestDB(t)
 			for _, stmt := range []string{
 				"INSERT INTO users(id,username,password_hash) VALUES('owner','owner','fixture')",
 				"INSERT INTO servers(id,name,owner_id) VALUES('srv','Test','owner')",
