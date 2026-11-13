@@ -33,7 +33,7 @@
 | RF25 | Locale parity, klavyeyle auth/recovery ve erişilebilir kontrollerin testleri. | Ayarlar/picker/voice kapsamının tamamı ve gerçek ekran okuyucu kabulü. |
 | RF26 | [#249](https://github.com/alfapars-exe/discordd/pull/249) kullanılmayan bağımlılıklar; hedefli format/lint. | Kalan statik analiz ve okunabilirlik işleri; nihai birleşik kaynak standardı. |
 | RF27 | [#232](https://github.com/alfapars-exe/discordd/pull/232), welcome bot HTTP/WS timeout, redirect ve shutdown testleri. | Son kaynakta bot modülünün tam sözleşme ve deployment kanıtının uzlaştırılması. |
-| RF28 | [#238](https://github.com/alfapars-exe/discordd/pull/238): temiz PR dalında üretim Chromium 11/11, WebKit 1/1. | Birleşik 8212d816 üretim Chromium 14/14 ve WebKit smoke 1/1 geçti; tüm hesap/yetki/offline/recovery senaryolarının tam eşlemesi hâlâ açık. |
+| RF28 | [#238](https://github.com/alfapars-exe/discordd/pull/238); birleşik a4eccf63 üzerinde üretim Chromium 14/14 ve WebKit 1/1, gerçek Go/mTLS PostgreSQL, sunucu ERROR ve app-log batch hatası yok. | Tüm hesap/yetki/offline/recovery senaryolarının tam eşlemesi ve paketli/native kabulü hâlâ açık. |
 | RF29 | Arama, geçmiş, grup profil ve WS ölçümleri görev defterinde. | Aynı nihai kaynakta API/DB/client/kaynak bütçeleri, yük profilleri ve uzun oturum/medya ölçümleri. |
 | RF30 | Kaynak, yerel test ve PR CI kanıtları ayrı tutuluyor. | Birleştirme, paketlenmiş runtime, dağıtım, desteklenen platform/DB matrisi ve gerekli fiziksel cihaz kabulü tamamlanmadı. |
 
