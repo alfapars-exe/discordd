@@ -53,6 +53,9 @@ func newMemberHarness() *memberServiceHarness {
 }
 
 func newMemberHarnessWithAudience(audience ProfileAudienceInvalidator) *memberServiceHarness {
+	return newMemberHarnessWithPolicies(audience, nil)
+}
+func newMemberHarnessWithPolicies(audience ProfileAudienceInvalidator, activity GameActivityPrivacyInvalidator) *memberServiceHarness {
 	h := &memberServiceHarness{
 		userRepo:       &testutil.MockUserRepo{},
 		roleRepo:       &testutil.MockRoleRepo{},
@@ -68,7 +71,7 @@ func newMemberHarnessWithAudience(audience ProfileAudienceInvalidator) *memberSe
 	}
 	h.serverRepo.IsMemberFn = func(context.Context, string, string) (bool, error) { return true, nil }
 	tx := roleTestTransaction{&repository.ServerMembershipTxRepos{Server: h.serverRepo, Role: h.roleRepo, User: h.userRepo, Timeout: h.timeoutRepo}}
-	h.svc = NewMemberService(nil, audience,
+	h.svc = NewMemberService(activity, audience,
 		h.userRepo, h.roleRepo, h.banRepo, h.timeoutRepo,
 		h.serverRepo, tx, h.hub, h.voiceKick, nil, h.profileUpdates, // auditLogger — not under test here
 	)
@@ -692,7 +695,8 @@ func TestKick_InvalidatesTargetPermissions(t *testing.T) {
 	// not after the 30s TTL. Otherwise any in-flight request they made
 	// before eviction can still hit protected endpoints for up to half
 	// a minute — a small but real security window.
-	h := newMemberHarness()
+	activity := &recordingGameActivityInvalidator{}
+	h := newMemberHarnessWithPolicies(nil, activity)
 	const srv, actor, target = "s-1", "mod", "victim"
 	h.stubHierarchy(actor, target, srv)
 	inv := &memberInvalidator{}
@@ -700,6 +704,9 @@ func TestKick_InvalidatesTargetPermissions(t *testing.T) {
 
 	if err := h.svc.Kick(context.Background(), srv, actor, target); err != nil {
 		t.Fatalf("Kick: %v", err)
+	}
+	if len(activity.calls) != 1 || activity.calls[0] != (gameActivityInvalidationCall{kind: "removed", a: srv, b: target}) {
+		t.Fatalf("membership activity invalidation = %+v", activity.calls)
 	}
 	if len(inv.userCalls) != 1 || inv.userCalls[0] != target {
 		t.Errorf("InvalidateUser calls = %v, want [%q]", inv.userCalls, target)
