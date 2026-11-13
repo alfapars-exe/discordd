@@ -7,11 +7,13 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/pkg/crypto"
+	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/ws"
 
 	livekit "github.com/livekit/protocol/livekit"
@@ -214,9 +216,17 @@ func (s *voiceService) sweepOrphanStates() {
 	// StopAllForChannel call dispatches (via go, so still non-blocking)
 	// within moments of the decision being made, not after however many
 	// LiveKit round trips happened to precede it in iteration order.
+	// Music stops run alongside eviction, but remain owned by this sweep.
+	// Join them before releasing its producer slot or maintenance owner.
+	var musicStops sync.WaitGroup
+	defer musicStops.Wait()
 	for _, o := range orphans {
 		if o.channelEmpty && s.musicBotHook != nil {
-			go s.musicBotHook.StopAllForChannel(o.channelID)
+			musicStops.Add(1)
+			logx.Go("voice-orphan-music-stop", func() {
+				defer musicStops.Done()
+				s.musicBotHook.StopAllForChannel(o.channelID)
+			})
 		}
 	}
 
