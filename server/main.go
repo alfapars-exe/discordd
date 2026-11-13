@@ -265,6 +265,12 @@ func main() {
 
 	// Voice AFK checker — kicks idle users based on per-server timeout
 	svcs.Voice.StartAFKChecker()
+	stopVoiceMaintenance := func() {
+		if owner, ok := svcs.Voice.(interface{ StopMaintenance() }); ok {
+			owner.StopMaintenance()
+		}
+	}
+	defer stopVoiceMaintenance()
 
 	// 10b. Metrics collector — background goroutine polling LiveKit instances
 	metricsCollector.Start()
@@ -528,6 +534,7 @@ func main() {
 	// comment for why an in-flight timer firing after shutdown begins is
 	// unsafe rather than merely wasteful.
 	stopPresenceDebounce()
+	stopVoiceMaintenance()
 	metricsCollector.Stop()
 	if fanout, ok := svcs.Voice.(interface{ ShutdownVoiceStateFanout() }); ok {
 		fanout.ShutdownVoiceStateFanout()
