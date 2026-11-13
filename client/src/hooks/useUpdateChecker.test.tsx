@@ -34,7 +34,7 @@ function updaterHarness(strict = false) {
 it.each([false, true])("retains a completed installer through later check/progress/error events (snoozed=%s)", snoozed => {
   const h = updaterHarness(); h.downloaded("2.0.0");
   if (snoozed) act(() => h.view.result.current.dismiss());
-  h.available("2.0.0"); h.available("3.0.0"); h.progress(12); h.error();
+  h.available("2.0.0"); h.progress(12); h.error();
   expect(h.view.result.current.status).toBe(snoozed ? "idle" : "ready");
   expect(h.view.result.current.update).toEqual({ version: "2.0.0" });
   expect(h.view.result.current.progress).toBe(100);
@@ -71,6 +71,22 @@ it("clears a failed incomplete download and accepts a successful retry", () => {
   h.available("2.0.0"); h.progress(65); h.downloaded("2.0.0");
   expect(h.view.result.current.status).toBe("ready");
   expect(h.view.result.current.progress).toBe(100);
+  h.view.unmount();
+});
+
+it("lets a different available version own the new download and clears an obsolete ready snooze", () => {
+  const h = updaterHarness(); h.downloaded("2.0.0");
+  act(() => h.view.result.current.dismiss());
+  h.available("3.0.0"); h.progress(42);
+  expect(h.view.result.current.status).toBe("downloading");
+  expect(h.view.result.current.update).toEqual({ version: "3.0.0" });
+  expect(vi.getTimerCount()).toBe(0);
+  h.error();
+  expect(h.view.result.current.status).toBe("idle");
+  expect(h.view.result.current.update).toBeNull();
+  h.available("3.0.0"); h.downloaded("3.0.0");
+  expect(h.view.result.current.status).toBe("ready");
+  expect(h.view.result.current.update).toEqual({ version: "3.0.0" });
   h.view.unmount();
 });
 

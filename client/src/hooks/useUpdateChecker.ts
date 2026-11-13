@@ -50,8 +50,13 @@ export function useUpdateChecker(): UpdateChecker {
     const api = window.electronAPI!;
 
     const stopAvailable = api.onUpdateAvailable((info) => {
-      // Keep the installer already on disk available while later checks run.
-      if (downloadedUpdateRef.current) return;
+      // A duplicate check must not demote this version's completed installer.
+      if (downloadedUpdateRef.current?.version === info.version) return;
+      // A different version starts a new download; the SDK may replace/clear
+      // its old cache, so do not retain the old installer's ready ownership.
+      downloadedUpdateRef.current = null;
+      if (snoozeTimerRef.current) clearTimeout(snoozeTimerRef.current);
+      snoozeTimerRef.current = null;
       setUpdate({ version: info.version });
       setStatus("downloading");
       setProgress(0);
