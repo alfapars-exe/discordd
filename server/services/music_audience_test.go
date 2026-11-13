@@ -437,7 +437,7 @@ func TestMusicAudienceNonAdminRepositoryCallsAreFourNPlusOne(t *testing.T) {
 			var membershipCalls, outerChannelCalls, sends int
 			s.audience.Members = &testutil.MockServerRepo{IsMemberFn: func(context.Context, string, string) (bool, error) { membershipCalls++; return true, nil }}
 			counter := &bulkRepoCounter{}
-			s.perms = (permFixture{serverID: "srv", channelID: "ch", roles: roles}).newService(counter)
+			s.perms = (permFixture{serverID: "srv", channelID: "ch", roles: roles}).newService(t, counter)
 			s.channels = &testutil.MockChannelRepo{GetByIDFn: func(context.Context, string) (*models.Channel, error) {
 				outerChannelCalls++
 				return &models.Channel{ID: "ch", ServerID: "srv", Type: models.ChannelTypeVoice}, nil

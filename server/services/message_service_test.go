@@ -1192,6 +1192,7 @@ func TestBroadcastCreate_RecipientsMatchBulkResolver(t *testing.T) {
 		},
 	}
 	resolver := NewChannelPermissionService(permRepo, roleRepo, channelRepo, &testutil.MockBroadcaster{})
+	t.Cleanup(resolver.(*cachingPermResolver).permCache.Close)
 
 	var got []string
 	hub := &testutil.MockBroadcastAndOnline{
