@@ -740,9 +740,29 @@ func TestDMRepo_ReplyReferenceCannotExposeAnotherConversation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ref := got.ReferencedMessage; ref != nil && (ref.Content != nil || ref.Author != nil) {
-		t.Fatal("reply disclosed the content or author of another conversation")
+	check := func(message *models.DMMessage) {
+		t.Helper()
+		if message.ID != reply.ID {
+			t.Fatalf("unexpected message %q", message.ID)
+		}
+		if ref := message.ReferencedMessage; ref != nil && (ref.Content != nil || ref.Author != nil) {
+			t.Fatal("reply disclosed the content or author of another conversation")
+		}
 	}
+	check(got)
+	if err := repo.PinMessage(ctx, reply.ID); err != nil {
+		t.Fatal(err)
+	}
+	pinned, err := repo.GetPinnedMessages(ctx, visible.ID)
+	if err != nil || len(pinned) != 1 {
+		t.Fatalf("loading pinned reply: %d rows, error %v", len(pinned), err)
+	}
+	check(&pinned[0])
+	found, count, err := repo.SearchMessages(ctx, visible.ID, "reply", 10, 0)
+	if err != nil || count != 1 || len(found) != 1 {
+		t.Fatalf("searching for reply: total %d, rows %d, error %v", count, len(found), err)
+	}
+	check(&found[0])
 }
 // ─── Reactions ───
 
