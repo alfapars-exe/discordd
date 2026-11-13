@@ -211,12 +211,26 @@
       "limits": "Partial test passes do not establish full race success; both large packages reached 15 minutes."
     },
     "go_race_shards": {
-      "status": "in_progress",
+      "status": "completed",
       "exec_session": 45007,
       "runner": "Existing scripts/go-test-shard.py, 8 shards/package, 2 concurrent jobs, unchanged race+cover+15m gates",
       "source_directory": "refactor-integration held unchanged for Go source",
       "log_directory": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-ipc-final-shards-9bdd3e13e08f4be98d1984468c47e1cd",
-      "profile": "General/SQLite; no PostgreSQL DSN"
+      "profile": "General/SQLite; no PostgreSQL DSN",
+      "exit": 0,
+      "successful_shards": 16,
+      "selection_audit": {
+        "repository": {
+          "top_level_names": 436,
+          "each_selected_exactly_once": true,
+          "shards": 8
+        },
+        "services": {
+          "top_level_names": 923,
+          "each_selected_exactly_once": true,
+          "shards": 8
+        }
+      }
     }
   }
 }
