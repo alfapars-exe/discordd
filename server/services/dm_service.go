@@ -116,8 +116,10 @@ func NewDMService(
 	notificationRepo repository.NotificationRepository,
 	txRunner repository.DMMessageTxRunner,
 	communicationEmailEnqueuer ScheduledEmailEnqueuer,
+	reactionPreferences repository.PreferencesRepository,
 ) DMService {
 	return &dmService{
+		reactionPreferences:        reactionPreferences,
 		communicationEmailEnqueuer: communicationEmailEnqueuer,
 		serverDMPolicy:             serverDMPolicy,
 		dmRepo:                     dmRepo,
@@ -134,10 +136,6 @@ func NewDMService(
 
 func (s *dmService) SetUploadDir(dir string) {
 	s.uploadDir = dir
-}
-
-func (s *dmService) SetReactionPreferences(prefs repository.PreferencesRepository) {
-	s.reactionPreferences = prefs
 }
 
 // ─── Shared Helpers ───

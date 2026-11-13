@@ -329,14 +329,10 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		repos.DM, repos.User, hub, blockService, friendshipService, dmSettingsService,
 		repos.DMRead, repos.Notification, repository.NewDMMessageTxRunner(db),
 		emailDeliveryService,
+		repos.Preferences,
 	)
 	services.ConfigureDMDelivery(dmService, db)
 
-	if reactionDM, ok := dmService.(interface {
-		SetReactionPreferences(repository.PreferencesRepository)
-	}); ok {
-		reactionDM.SetReactionPreferences(repos.Preferences)
-	}
 	groupDMService := services.NewGroupDMService(repos.GroupDM, repos.User, repos.Friendship, hub, cfg.LiveKit.URL, cfg.LiveKit.APIKey, cfg.LiveKit.APISecret, encryptionKey, cfg.Upload.Dir)
 	if reactions, ok := groupDMService.(interface {
 		SetReactionDelivery(repository.NotificationRepository, repository.PreferencesRepository, services.BlockChecker)
