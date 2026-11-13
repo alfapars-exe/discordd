@@ -1,3 +1,4 @@
+import { highlightMessage } from "../../utils/highlightMessage";
 /** MessageList — Scrollable message container with auto-scroll, infinite scroll, and compact mode. */
 
 import { useEffect, useLayoutEffect, useRef, useCallback, useMemo, useState } from "react";
@@ -181,8 +182,7 @@ function MessageList() {
       requestAnimationFrame(() => {
         const el = document.getElementById(`msg-${msgId}`);
         if (el) {
-          el.classList.add("msg-highlight");
-          setTimeout(() => el.classList.remove("msg-highlight"), 2000);
+          highlightMessage(el);
         }
       });
     }
@@ -316,8 +316,7 @@ function MessageList() {
     const raf = requestAnimationFrame(() => {
       const el = document.getElementById(`msg-${targetId}`);
       if (el) {
-        el.classList.add("msg-highlight");
-        setTimeout(() => el.classList.remove("msg-highlight"), 2000);
+        highlightMessage(el);
       }
     });
     return () => cancelAnimationFrame(raf);

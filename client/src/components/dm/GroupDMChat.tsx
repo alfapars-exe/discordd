@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { highlightMessage } from "../../utils/highlightMessage";
 import { defaultRangeExtractor, useVirtualizer } from "@tanstack/react-virtual";
 import { useConversationCommand } from "../../hooks/useConversationCommand";
 import { useConversationPageShortcut } from "../../hooks/useConversationPageShortcut";
@@ -306,8 +307,7 @@ export default function GroupDMChat({ groupId }: { groupId: string }) {
     }
     if(typeof target.scrollIntoView==="function")target.scrollIntoView({block:"center"});
     else if(messagesScrollRef.current)messagesScrollRef.current.scrollTop=Math.max(0,messagesScrollRef.current.scrollTop + target.getBoundingClientRect().top - messagesScrollRef.current.getBoundingClientRect().top - messagesScrollRef.current.clientHeight/2);
-    target.classList.add("msg-highlight");
-    window.setTimeout(()=>target.classList.remove("msg-highlight"),2000);
+    highlightMessage(target);
     clear();
   },[scrollTarget,visibleMessages,messages,search,groupId,virtualized,virtualizer,virtualRows]);
   useVoiceShortcutAction("group-call-start", () => {
