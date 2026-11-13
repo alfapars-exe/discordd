@@ -1,0 +1,24 @@
+{
+  "date": "2026-11-14",
+  "pr": 298,
+  "canonical_head": "527a3ad3",
+  "scope": "Permission recheck ownership and late permission revocation credit",
+  "checks": {
+    "three_named_tests_host_count": 3,
+    "host_exit": 0,
+    "host_seconds": 5.057,
+    "three_named_tests_verified_mtls_linux_race_count": 3,
+    "race_exit": 0,
+    "race_seconds": 6.376,
+    "runner_tests": 9,
+    "runner_exit": 0,
+    "services_vet_exit": 0,
+    "services_lint_issues": 0
+  },
+  "fixture_correction": "Initial late permission test used nonexistent ch1; corrected to actual channel/reader/default fixture identities. Blocked-query test channel exists; no-connect permissions, not missing channel, cause revocation.",
+  "limitations": [
+    "No integration-only membership API was introduced into canonical branch.",
+    "Current-head CI pending; prior fdd Sonar success not transferred as new-head proof.",
+    "Late caller still needs DB availability; crash-before-enqueue and physical/full-project acceptance open."
+  ]
+}

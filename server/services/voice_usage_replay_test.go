@@ -421,6 +421,6 @@ func TestVoiceUsagePostgresShutdownJoinsPermissionRecheck(t *testing.T) {
 		t.Fatal("permission lookup was not joined")
 	}
 	if s.GetUserVoiceState("reader") != nil {
-		t.Fatal("missing channel retained unauthorized voice session")
+		t.Fatal("revoked permission retained unauthorized voice session")
 	}
 }

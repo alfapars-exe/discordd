@@ -18,7 +18,7 @@
     "TestVoiceUsagePostgresLateMemberRevocationPreservesCredit"
   ],
   "limitations": [
-    "Missing channel intentionally resolves to no voice permission and removes stale session; initial opposite test expectation corrected.",
+    "Fixture channel exists; absent ConnectVoice permission removes stale session. Earlier missing-channel interpretation was corrected after inspecting postgresServerFixture.",
     "Real authorization repositories/query lock tested; media network is mocked/unavailable.",
     "Local integration only; final whole-project/native/physical acceptance remains open."
   ]

@@ -1393,3 +1393,9 @@ Terminal current-head receipt: PR29814a965ea completed36/36 SUCCESS. Exact-head 
 - Added real permission service/repository test with channels locked by a separate PostgreSQL transaction. Shutdown waits for the pending lookup and resulting missing-channel revocation cleanup. Initial assertion incorrectly expected missing-channel state retained; corrected to actual no-permission behavior without product policy changes.
 - Three host repetitions passed (3.070s); three verified-mTLS Linux race repetitions passed (6.027s). Overlay removing only recheck root admission failed with expected early-shutdown assertion (exit1).
 - Made recheck ownership and late-member credit tests mandatory in PostgreSQL runner; extended missing-test negative controls. All 14 runner tests passed. Receipt: `implementation/verification/refactor-postgres-recheck-ownership-2026-11-14.json`. Local integration only; physical media and final project acceptance remain open.
+
+### 2026-11-14 — Publish canonical recheck/late-credit ownership
+
+- PR298 head527a3ad3 includes recheck root ownership and synchronous late-credit handoff, with existing permission revocation rather than integration-only membership API. Nine named host test events passed (5.057s); nine verified-mTLS Linux race events passed (6.376s). Nine canonical runner tests passed.
+- Evidence correction: postgresServerFixture already seeds channel; the blocked lookup test removes the session due to absent ConnectVoice permissions, not channel absence. Initial late-credit canonical fixture used nonexistent ch1 and failed; corrected to actual reader/channel/default identities before passing. Earlier recheck receipt interpretation corrected.
+- Receipt: `implementation/verification/refactor-permission-credit-canonical-2026-11-14.json`. Current-head CI pending; physical/runtime and final whole-project acceptance remain open.
