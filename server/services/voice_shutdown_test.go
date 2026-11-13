@@ -135,3 +135,22 @@ func TestVoiceShutdownSnapshotsAfterAcceptedJoinFinishes(t *testing.T) {
 		t.Fatal("finalizer left accepted session active")
 	}
 }
+
+func TestVoiceShutdownForgetsOrphanRoomMetadata(t *testing.T) {
+	svc, _ := newTestVoiceService()
+	s := svc.(*voiceService)
+	s.roomPassphrases = map[string]string{"orphan-room": "fixture-key"}
+	s.roomKeyContexts = map[string]string{"orphan-room": "fixture-context"}
+	s.roomKeyVersions = map[string]uint32{"orphan-room": 4}
+	s.screenShareViewers = map[string]map[string]bool{"missing-streamer": {"missing-viewer": true}}
+	s.forceMoveGrants = map[string]forceMoveGrant{"missing-user": {channelID: "gone"}}
+	s.offlineSince = map[string]time.Time{"missing-user": time.Now()}
+	revision := s.voiceRevision
+	s.ShutdownVoiceSessions()
+	if len(s.roomPassphrases)+len(s.roomKeyContexts)+len(s.roomKeyVersions)+len(s.screenShareViewers)+len(s.forceMoveGrants)+len(s.offlineSince) != 0 {
+		t.Fatal("terminal shutdown retained orphan voice metadata")
+	}
+	if s.voiceRevision <= revision {
+		t.Fatal("orphan viewer removal did not advance snapshot revision")
+	}
+}

@@ -1450,3 +1450,9 @@ Terminal current-head receipt: PR29814a965ea completed36/36 SUCCESS. Exact-head 
 - Added deterministic admitted-operation test: shutdown closes admission while accepted join has not published state; accepted operation then publishes under the voice lock and finishes. Finalizer must credit that identity and remove its state. Twenty host repetitions passed (0.727s), services vet/lint passed.
 - Overlay moving producer join after the snapshot failed with snapshot-missed-accepted-join assertion (exit1), without tracked product mutation. Receipt: `implementation/verification/refactor-voice-accepted-shutdown-snapshot-2026-11-14.json`.
 - Local integration only; Docker unavailable, new-test Linux race pending. Published22aae5bb Sonar SUCCESS; ServerCI43524233537 remains live (last checked seven successful jobs, none failed). This modeled-operation test is not physical media or OS-process acceptance.
+
+### 2026-11-14 — Forget orphan voice metadata on terminal shutdown
+
+- No-active-session regression failed: terminal finalizer left orphan room passphrases/contexts/versions, screen viewers, move grants and offline markers. Added final locked cleanup after owned media workers join, with snapshot revision advance for orphan viewer removal. Ordinary channel deletion still preserves unrelated entries.
+- Shutdown/channel-deletion tests passed20 repetitions (1.112s); services vet/lint passed. Receipt: `implementation/verification/refactor-terminal-voice-metadata-2026-11-14.json`. Removing references is not memory zeroization.
+- Local integration only, new-test race pending Docker availability. Current published22aae5bb CI43524233537 remains active;11 successful jobs/no failure, PostgreSQL still in progress. Late terminal calls, process and physical-media acceptance remain open.

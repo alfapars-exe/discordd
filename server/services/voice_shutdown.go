@@ -53,5 +53,22 @@ func (s *voiceService) ShutdownVoiceSessions() {
 		}
 		close(tasks)
 		joined.Wait()
+		s.clearFinalVoiceMetadata()
 	})
+}
+
+// All owned cleanup has joined. Also forget orphan entries without active
+// participants; per-channel cleanup intentionally preserves unrelated entries.
+func (s *voiceService) clearFinalVoiceMetadata() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.screenShareViewers) > 0 {
+		s.bumpVoiceRevisionLocked()
+	}
+	clear(s.roomPassphrases)
+	clear(s.roomKeyContexts)
+	clear(s.roomKeyVersions)
+	clear(s.screenShareViewers)
+	clear(s.forceMoveGrants)
+	clear(s.offlineSince)
 }

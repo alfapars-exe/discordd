@@ -1,0 +1,32 @@
+{
+  "date": "2026-11-14",
+  "scope": "Forget orphan ephemeral voice metadata only at terminal shutdown",
+  "source_sha256": {
+    "server/services/voice_shutdown.go": "6278bd4a2572ea09101120812a71f180d682ae69ab69d184c8a6986d60975455",
+    "server/services/voice_shutdown_test.go": "7162117357389e9b399ecfbade999fde4e84a855cd164a22d2d0a17000f6fd7c"
+  },
+  "before": {
+    "test": "TestVoiceShutdownForgetsOrphanRoomMetadata",
+    "exit": 1,
+    "failure": "terminal shutdown retained orphan voice metadata"
+  },
+  "after": {
+    "shutdown_and_channel_deletion_count": 20,
+    "host_exit": 0,
+    "host_seconds": 1.112,
+    "services_vet_exit": 0,
+    "services_lint_issues": 0
+  },
+  "invariants": [
+    "Cleanup runs after media workers join",
+    "Unrelated channel metadata remains preserved by ordinary channel deletion",
+    "Terminal cleanup removes orphan room key/context/version, viewers, move grants and offline markers",
+    "Viewer snapshot revision advances when orphan entries are removed"
+  ],
+  "limitations": [
+    "Removes map references; not a cryptographic memory-zeroization claim.",
+    "Local integration only; new-test race not available while Docker cannot start.",
+    "Late calls after terminal finalization and final OS-process/physical acceptance remain open.",
+    "Published22aae5bb ServerCI43524233537 still live; last snapshot11 successful jobs, no failures; PostgreSQL in progress."
+  ]
+}
