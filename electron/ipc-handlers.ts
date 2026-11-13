@@ -341,7 +341,7 @@ export function registerIpcHandlers(): void {
     wasPrelaunchChecked,
     checkForUpdates: () => autoUpdater.checkForUpdates(),
     downloadUpdate: () => autoUpdater.downloadUpdate(),
-    quitAndInstall: (silent, restart) => requestUpdateInstallation(() => autoUpdater.quitAndInstall(silent, restart)),
+    quitAndInstall: (silent, restart) => requestUpdateInstallation(() => autoUpdater.quitAndInstall(silent, restart), autoUpdater),
   });
   // ─── Desktop capturer (legacy enumeration, separate from picker) ─
   ipcMain.handle("get-desktop-sources", async () => {

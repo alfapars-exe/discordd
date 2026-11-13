@@ -75,7 +75,7 @@ export function setupAutoUpdater(): void {
           icon: path.join(__dirname, "../icons/hlogo.png"),
         });
         notification.on("click", () => {
-          requestUpdateInstallation(() => autoUpdater.quitAndInstall(true, true));
+          requestUpdateInstallation(() => autoUpdater.quitAndInstall(true, true), autoUpdater);
         });
         notification.show();
       } catch (err) {
