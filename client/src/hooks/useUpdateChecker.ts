@@ -50,17 +50,23 @@ export function useUpdateChecker(): UpdateChecker {
     const api = window.electronAPI!;
 
     const stopAvailable = api.onUpdateAvailable((info) => {
+      // Keep the installer already on disk available while later checks run.
+      if (downloadedUpdateRef.current) return;
       setUpdate({ version: info.version });
       setStatus("downloading");
       setProgress(0);
     });
 
     const stopProgress = api.onUpdateProgress((progressInfo) => {
+      if (downloadedUpdateRef.current) return;
       setProgress(Math.round(progressInfo.percent));
     });
 
     const stopDownloaded = api.onUpdateDownloaded((info) => {
       const downloaded: UpdateInfo = { version: info?.version ?? "" };
+      if (downloadedUpdateRef.current?.version === downloaded.version) return;
+      if (snoozeTimerRef.current) clearTimeout(snoozeTimerRef.current);
+      snoozeTimerRef.current = null;
       downloadedUpdateRef.current = downloaded;
       setUpdate(downloaded);
       setProgress(100);
@@ -108,6 +114,7 @@ export function useUpdateChecker(): UpdateChecker {
     setStatus("idle");
     if (snoozeTimerRef.current) clearTimeout(snoozeTimerRef.current);
     snoozeTimerRef.current = setTimeout(() => {
+      snoozeTimerRef.current = null;
       if (downloadedUpdateRef.current) {
         setUpdate(downloadedUpdateRef.current);
         setProgress(100);
