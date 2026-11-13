@@ -582,3 +582,9 @@ Paralel çalışma hatları: backend veri/lifecycle (RF04–RF11), client state/
 - İlgisiz dirty dosyalar staged edilmez; commit/PR/release artifact'i ile kanıt kaydı aynı kaynak anlık görüntüsünü gösterir.
 - Rollback küçük PR'ın revert'iyle mümkün tutulur. Veri migration'ı varsa backup/restore provası olmadan release kapısı kapanmaz.
 - [REFACTORING_PLAN.md](REFACTORING_PLAN.md), [TECHNICAL_DEBT.md](TECHNICAL_DEBT.md), [TEST_STRATEGY.md](TEST_STRATEGY.md), [CODE_QUALITY_STANDARDS.md](CODE_QUALITY_STANDARDS.md) ve [ARCHITECTURE_IMPROVEMENTS.md](ARCHITECTURE_IMPROVEMENTS.md) ilgili kararlarla eşleşir.
+
+### RF20 - updater action ownership before network/install effects (2026-11-13)
+
+- Two failing-before regressions demonstrated check/download/install handlers did not reject foreign or retired main senders. All three actions now consult the existing current-main sender/frame assertion before provider or installer effects. Check/download authorization is outside provider try/catch, so denial rejects rather than becoming an absent-update/null or download-failed/false result. The read-only prelaunch status contract remains unchanged.
+- Tests cover foreign contents, subframes, missing frames, destroyed/absent windows, old navigation frames and the current frame. Existing provider error normalization, retry and silent/forced restart flags remain tested. A compiled actual-composition test verifies the injected predicate and unchanged event before provider/installer effects.
+- Integration 95a9ac4a: full Electron 391 pass/1 skip. Canonical PR #274 source a75fba63: fresh unique TypeScript output, full Electron 276 pass/1 skip. Logs: %TEMP%/hichat-updater-sender-before.log, hichat-updater-sender-after.log and hichat-updater-sender-canonical.log. No real installer was invoked; physical updater/relaunch and final integrated acceptance remain open.
