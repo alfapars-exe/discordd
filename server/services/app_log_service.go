@@ -314,6 +314,7 @@ func (s *appLogService) flush(parent context.Context, pending []pendingAppLog) {
 	defer cancel()
 	var err error
 	var written int64
+	failedEvents := uint64(len(pending))
 	if batch, ok := s.repo.(interface {
 		InsertBatch(context.Context, []models.AppLog) (int64, error)
 	}); ok {
@@ -324,12 +325,15 @@ func (s *appLogService) flush(parent context.Context, pending []pendingAppLog) {
 				break
 			}
 			written++
+			// A fallback Insert commits independently. Its grouped occurrences
+			// must not be counted as lost if a later row fails.
+			failedEvents -= min(failedEvents, uint64(rows[i].OccurrenceCount))
 		}
 	}
 	if err != nil {
 		s.writeFailures.Add(1)
-		s.failedEvents.Add(uint64(len(pending)))
-		appLogger.Error("failed to write log batch", "count", len(rows), "err", pkg.ErrText(err))
+		s.failedEvents.Add(failedEvents)
+		appLogger.Error("failed to write log batch", "count", len(rows), "written_rows", written, "failed_events", failedEvents, "err", pkg.ErrText(err))
 		return
 	}
 	if written >= 0 && written < int64(len(rows)) {

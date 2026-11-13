@@ -24,6 +24,55 @@ type batchAppLogRepo struct {
 	signalBlocked sync.Once
 }
 
+type partialAppLogRepo struct {
+	fakeAppLogRepo
+	calls, failAt int
+}
+
+func (r *partialAppLogRepo) Insert(ctx context.Context, row *models.AppLog) error {
+	r.calls++
+	if r.calls == r.failAt {
+		return errors.New("storage unavailable")
+	}
+	return r.fakeAppLogRepo.Insert(ctx, row)
+}
+
+func TestAppLogPartialFallbackCountsOnlyUnwrittenOccurrences(t *testing.T) {
+	for _, tc := range []struct {
+		failAt int
+		lost   uint64
+	}{{1, 6}, {2, 3}, {3, 1}, {4, 0}} {
+		t.Run(fmt.Sprintf("fail-at-%d", tc.failAt), func(t *testing.T) {
+			repo := &partialAppLogRepo{failAt: tc.failAt}
+			service := NewAppLogService(repo).(*appLogService)
+			var pending []pendingAppLog
+			for i, count := range []int{3, 2, 1} {
+				for range count {
+					pending = append(pending, pendingAppLog{entry: models.AppLog{Message: fmt.Sprintf("group-%d", i), Level: models.LogLevelError, OccurrenceCount: 1}, metadata: map[string]string{}})
+				}
+			}
+			service.flush(context.Background(), pending)
+			if got := service.Health().FailedEvents; got != tc.lost {
+				t.Fatalf("failed events=%d, want only unwritten occurrences=%d", got, tc.lost)
+			}
+			var saved uint64
+			for _, row := range repo.inserts {
+				saved += uint64(row.OccurrenceCount)
+			}
+			if saved+tc.lost != uint64(len(pending)) {
+				t.Fatalf("saved=%d lost=%d total=%d", saved, tc.lost, len(pending))
+			}
+			wantFailures := uint64(1)
+			if tc.lost == 0 {
+				wantFailures = 0
+			}
+			if got := service.Health().WriteFailures; got != wantFailures {
+				t.Fatalf("write failures=%d, want=%d", got, wantFailures)
+			}
+		})
+	}
+}
+
 func (r *batchAppLogRepo) InsertBatch(ctx context.Context, rows []models.AppLog) (int64, error) {
 	if r.block {
 		if r.blocked != nil {
