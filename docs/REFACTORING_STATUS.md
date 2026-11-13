@@ -21,7 +21,7 @@
 | RF13 | [#226](https://github.com/alfapars-exe/discordd/pull/226) tercih eşlemesi ve senkronizasyon ayrımı. | Son kaynakta account switch, eski yanıt, codec ve yerel alan izolasyonu kabulünü uzlaştırma. |
 | RF14 | [#229](https://github.com/alfapars-exe/discordd/pull/229), [#230](https://github.com/alfapars-exe/discordd/pull/230), [#267](https://github.com/alfapars-exe/discordd/pull/267). | Birleşik reconnect/transport lifecycle, yarış ve uzun oturum kaynak doğrulaması. |
 | RF15 | Kararlı geçmiş düzeltmesi main'de; [#240](https://github.com/alfapars-exe/discordd/pull/240), [#268](https://github.com/alfapars-exe/discordd/pull/268), [#269](https://github.com/alfapars-exe/discordd/pull/269). | Kanal/DM ortak fixture'ları, yetki kaybı, hesap değişimi ve nihai sıralama/read cursor kabulü. |
-| RF16 | [#228](https://github.com/alfapars-exe/discordd/pull/228) backup self-device handshake koruması ve storage öncesi saf JSON/base64 içerik doğrulaması. | Storage/codec/orchestration ayrımının tamamı ve karttaki legacy/current/bozuk backup matrisi henüz kapanmadı. |
+| RF16 | [#228](https://github.com/alfapars-exe/discordd/pull/228) backup self-device handshake koruması ve storage öncesi saf JSON/base64 içerik doğrulaması. | Hesap/DB, codec ve backup storage sınırları ayrıldı; rollback loglarında anahtar sızmaması, tarihsel kullanıcı arşivi corpus ve kalan kart kabulü doğrulanmalı. |
 | RF17 | [#233](https://github.com/alfapars-exe/discordd/pull/233), [#261](https://github.com/alfapars-exe/discordd/pull/261); arama ölçümleri görev defterinde. | İlk sorgunun tam tarama/bellek maliyeti, iptal ve büyük cache sınırlarının nihai kabulü. |
 | RF18 | [#257](https://github.com/alfapars-exe/discordd/pull/257) picker klavye ve listener cleanup. | Paketli gerçek capture, owner crash/reload ve cihaz kabulü. |
 | RF19 | Scoped preload disposer ve updater abonelik testleri. | Splash/runtime state machine ve gerçek indirme/kurulum/yeniden başlatma kabulü. |
@@ -33,7 +33,7 @@
 | RF25 | Locale parity, klavyeyle auth/recovery ve erişilebilir kontrollerin testleri. | Ayarlar/picker/voice kapsamının tamamı ve gerçek ekran okuyucu kabulü. |
 | RF26 | [#249](https://github.com/alfapars-exe/discordd/pull/249) kullanılmayan bağımlılıklar; hedefli format/lint. | Kalan statik analiz ve okunabilirlik işleri; nihai birleşik kaynak standardı. |
 | RF27 | [#232](https://github.com/alfapars-exe/discordd/pull/232), welcome bot HTTP/WS timeout, redirect ve shutdown testleri. | Son kaynakta bot modülünün tam sözleşme ve deployment kanıtının uzlaştırılması. |
-| RF28 | [#238](https://github.com/alfapars-exe/discordd/pull/238): temiz PR dalında üretim Chromium 11/11, WebKit 1/1. | Güncel CI, birleşik üretim çok kullanıcılı matris ve hesap/yetki/offline/recovery senaryolarının tam eşlemesi. |
+| RF28 | [#238](https://github.com/alfapars-exe/discordd/pull/238): temiz PR dalında üretim Chromium 11/11, WebKit 1/1. | Birleşik 8212d816 üretim Chromium 14/14 ve WebKit smoke 1/1 geçti; tüm hesap/yetki/offline/recovery senaryolarının tam eşlemesi hâlâ açık. |
 | RF29 | Arama, geçmiş, grup profil ve WS ölçümleri görev defterinde. | Aynı nihai kaynakta API/DB/client/kaynak bütçeleri, yük profilleri ve uzun oturum/medya ölçümleri. |
 | RF30 | Kaynak, yerel test ve PR CI kanıtları ayrı tutuluyor. | Birleştirme, paketlenmiş runtime, dağıtım, desteklenen platform/DB matrisi ve gerekli fiziksel cihaz kabulü tamamlanmadı. |
 
