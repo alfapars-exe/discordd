@@ -1,3 +1,4 @@
+import { observeOverlayRenderers } from "./overlay-renderer-lifecycle";
 import { registerAppCommandIPC } from "./app-command-ipc";
 import { registerCaptureCommandIPC } from "./capture-command-ipc";
 import { registerGlobalShortcutIPC } from "./global-shortcut-ipc";
@@ -133,14 +134,10 @@ export function registerIpcHandlers(): () => Promise<void> {
     },
   });
   void registeredGames.initialize().catch(() => undefined);
-  app.on("web-contents-created", (_event, contents) => {
-    contents.on("destroyed", () => { overlayMedia.retireForContents(contents); });
-    contents.on("render-process-gone", () => {
-      if (getMainWindow()?.webContents === contents) { overlayMediaPolicy=null; overlayMedia.revoke(); gameOverlay?.clear(); overlayShortcut.setBinding(null); }
-    });
-    contents.on("did-start-navigation", (_navigationEvent, _url, isInPlace, isMainFrame) => {
-      if (isMainFrame && !isInPlace && getMainWindow()?.webContents === contents) { overlayMediaPolicy=null; overlayMedia.revoke(); gameOverlay?.clear(); overlayShortcut.setBinding(null); }
-    });
+  const stopOverlayRendererLifecycle = observeOverlayRenderers({
+    app, mainContents: () => getMainWindow()?.webContents ?? null,
+    retire: contents => overlayMedia.retireForContents(contents),
+    revokeMain: () => { overlayMediaPolicy = null; overlayMedia.revoke(); gameOverlay?.clear(); overlayShortcut.setBinding(null); },
   });
 
   registerRegisteredGamesIPC(ipcMain, {
@@ -150,8 +147,9 @@ export function registerIpcHandlers(): () => Promise<void> {
     removeLayout: key => overlayLayouts.remove(key),
   });
 
+  let stopping = false;
   const applyOverlaySnapshot = (event: Parameters<typeof isTrustedMainWindowSender>[0], raw: unknown): boolean =>
-    applyAcknowledgedVoiceOverlaySnapshot(raw, isTrustedMainWindowSender(event), {
+    !stopping && applyAcknowledgedVoiceOverlaySnapshot(raw, isTrustedMainWindowSender(event), {
       setSuspended: value => overlayShortcut.setSuspended(value),
       setSnapshot: snapshot => { overlayMediaPolicy=snapshot; overlayMedia.refresh(); gameOverlay?.setSnapshot(snapshot); },
     });
@@ -228,8 +226,10 @@ export function registerIpcHandlers(): () => Promise<void> {
   });
   let cleanup: Promise<void> | null = null;
   return () => {
+    stopping = true;
+    overlayMediaPolicy = null;
     const stops: Array<() => unknown> = [
-      () => gameJoin.dispose(), stopOverlayMediaLifecycle, () => overlayMedia.revoke(),
+      () => gameJoin.dispose(), stopOverlayRendererLifecycle, stopOverlayMediaLifecycle, () => overlayMedia.revoke(),
       () => overlayShortcut.dispose(), () => gameOverlay?.dispose(),
       () => registeredGames.dispose(), () => gameWindowTracker.dispose(),
     ];
