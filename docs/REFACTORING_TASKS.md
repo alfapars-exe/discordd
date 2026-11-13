@@ -1444,3 +1444,9 @@ Terminal current-head receipt: PR29814a965ea completed36/36 SUCCESS. Exact-head 
 - Published PR298 head22aae5bb with active-session finalization, all-credit-before-media phases, bounded media pool, owned deleted-channel music stop and mandatory native tests. Branch-specific operation field retained; no integration-only membership API copied.
 - Canonical full vet/build/lint passed; runner9 passed. Final targeted JSON has29 passing and13 skipped events (including skipped native subtests; parent pass does not prove them). Docker now fails immediately with Desktop unable to start. Current-head native/race evidence must come from CI, not old527 green receipt or integration results.
 - Receipt: `implementation/verification/refactor-active-shutdown-canonical-2026-11-14.json`. No merge/release/physical acceptance claimed; active process signal and owned-container inventory remain pending engine recovery.
+
+### 2026-11-14 — Verify terminal snapshot waits for accepted state publication
+
+- Added deterministic admitted-operation test: shutdown closes admission while accepted join has not published state; accepted operation then publishes under the voice lock and finishes. Finalizer must credit that identity and remove its state. Twenty host repetitions passed (0.727s), services vet/lint passed.
+- Overlay moving producer join after the snapshot failed with snapshot-missed-accepted-join assertion (exit1), without tracked product mutation. Receipt: `implementation/verification/refactor-voice-accepted-shutdown-snapshot-2026-11-14.json`.
+- Local integration only; Docker unavailable, new-test Linux race pending. Published22aae5bb Sonar SUCCESS; ServerCI43524233537 remains live (last checked seven successful jobs, none failed). This modeled-operation test is not physical media or OS-process acceptance.

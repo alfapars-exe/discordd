@@ -94,3 +94,44 @@ func TestVoiceShutdownBoundsAndJoinsMediaWorkers(t *testing.T) {
 		t.Fatal("remaining media cleanup incomplete")
 	}
 }
+
+func TestVoiceShutdownSnapshotsAfterAcceptedJoinFinishes(t *testing.T) {
+	getter := &recordingUsageGetter{recorded: make(chan string, 2)}
+	svc, _ := newTestVoiceServiceWithLiveKitGetter(getter)
+	s := svc.(*voiceService)
+	finish, admitted := s.operations.begin()
+	if !admitted {
+		t.Fatal("initial join operation rejected")
+	}
+	done := make(chan struct{})
+	var release sync.Once
+	t.Cleanup(func() { release.Do(finish); s.ShutdownVoiceSessions(); <-done })
+	go func() { s.ShutdownVoiceSessions(); close(done) }()
+	waitVoiceUsageAdmissionClosed(t, &s.operations)
+	select {
+	case <-done:
+		t.Fatal("finalizer escaped accepted join")
+	default:
+	}
+	// An already admitted join may publish its state after admission closes.
+	s.mu.Lock()
+	s.states["accepted"] = &models.VoiceState{UserID: "accepted", ChannelID: "channel", ServerID: "server", UsageSessionID: "accepted-session", LiveKitInstanceID: "instance", LiveKitIsCloud: true, JoinedAt: time.Now().Add(-time.Minute)}
+	s.mu.Unlock()
+	release.Do(finish)
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("finalizer did not join accepted operation")
+	}
+	select {
+	case id := <-getter.recorded:
+		if id != "accepted-session" {
+			t.Fatal("finalizer lost accepted session identity")
+		}
+	default:
+		t.Fatal("snapshot missed accepted join")
+	}
+	if len(s.GetAllVoiceStates()) != 0 {
+		t.Fatal("finalizer left accepted session active")
+	}
+}
