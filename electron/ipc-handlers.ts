@@ -1,3 +1,6 @@
+import { registerOverlayControlIPC } from "./overlay-control-ipc";
+import { observeOverlayRenderers } from "./overlay-renderer-lifecycle";
+import { registerAppCommandIPC } from "./app-command-ipc";
 import { createOverlayMediaBroker } from "./overlay-media-broker";
 import { registerCS2JoinIPC } from "./cs2-join-ipc";
 import { registerGameNameIPC } from "./registered-game-name-ipc";
@@ -38,7 +41,6 @@ const APP_SETTING_VALIDATORS: Record<string, (v: unknown) => v is boolean> = {
   hardwareAcceleration: (v): v is boolean => typeof v === "boolean",
 };
 
-const MAX_CLIPBOARD_BYTES = 10 * 1024 * 1024; // 10 MB — prevent renderer-side DoS
 const MAX_BADGE_COUNT = 99999;
 const MAX_BADGE_ICON_BYTES = 256 * 1024; // 256 KB data URL
 const MAX_PTT_KEYCODE_LEN = 64; // generous bound for any keycode string
@@ -86,7 +88,7 @@ import { wasPrelaunchChecked } from "./auto-updater";
 import { getMainWindow } from "./window";
 import { getVoiceOverlayMediaWindow, subscribeVoiceOverlayMediaLifecycle, updateVoiceOverlay, toggleVoiceOverlayLock, lockVoiceOverlay, configureVoiceOverlayLayout, resetVoiceOverlayLayout, takeVoiceOverlayAction, takeVoiceOverlayOpenInboxIntent, confirmVoiceOverlayOpenInbox, takeVoiceOverlayNotificationReplyIntent, confirmVoiceOverlayNotificationReply, takeVoiceOverlayOpenChatIntent, confirmVoiceOverlayOpenChat, takeVoiceOverlayOpenChatComposerIntent, sendOverlayChatMessage, closeOverlayChatComposer, resolveOverlayChatSend } from "./voice-overlay";
 import { createOverlayLayoutStore } from "./overlay-layout-store";
-import { createOverlayShortcutController, type OverlayShortcutBinding } from "./overlay-shortcut";
+import { createOverlayShortcutController } from "./overlay-shortcut";
 import { isTrustedVoiceOverlaySender, applyAcknowledgedVoiceOverlaySnapshot, type VoiceOverlaySnapshot } from "./voice-overlay-contract";
 import { clearVoiceOverlayGameNotices } from "./voice-overlay";
 import { registerOverlayGameNoticeClearIPC } from "./overlay-game-notice-ipc";
@@ -107,20 +109,29 @@ function diagStamp(): string {
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
 }
 
-export function registerIpcHandlers(): void {
+export function registerIpcHandlers(onCleanup?: (dispose: () => Promise<void>) => void): () => Promise<void> {
+  let stopping = false;
+  let overlayMediaPolicy: VoiceOverlaySnapshot | null = null;
+  const stops: Array<() => unknown> = [];
+  let cleanup: Promise<void> | null = null;
+  const dispose = () => {
+    stopping = true;
+    overlayMediaPolicy = null;
+    cleanup ??= Promise.allSettled(stops.slice().reverse().map(stop => Promise.resolve().then(stop))).then(results => {
+      if (results.some(result => result.status === "rejected")) throw new Error("IPC cleanup failed");
+    });
+    return cleanup;
+  };
+  onCleanup?.(dispose);
   const gameJoin = registerCS2JoinIPC(ipcMain, assertTrustedMainWindowSender, {
     fetch: (url, init) => net.fetch(url, init), openExternal: url => shell.openExternal(url),
     allowLoopback: !app.isPackaged, supported: process.platform === "win32",
   });
-  app.once("before-quit", () => gameJoin.dispose());
+  stops.push(() => gameJoin.dispose());
   // Start the middle-left layout generation without restoring old bottom-edge
   // drag offsets. New drag positions remain persistent in this generation.
   const overlayLayouts = createOverlayLayoutStore({ filePath: path.join(app.getPath("userData"), "overlay-layout-v2.json") });
   configureVoiceOverlayLayout(overlayLayouts);
-  ipcMain.handle("reset-overlay-layout", (event) => {
-    assertTrustedMainWindowSender(event);
-    return resetVoiceOverlayLayout();
-  });
   ipcMain.handle("overlay-voice-action", (event, action: unknown, session: unknown) => {
     const request = takeVoiceOverlayAction(event, action, session);
     const main = getMainWindow();
@@ -165,20 +176,18 @@ export function registerIpcHandlers(): void {
     register: (accelerator, callback) => globalShortcut.register(accelerator, callback),
     unregister: (accelerator) => globalShortcut.unregister(accelerator),
   }, toggleVoiceOverlayLock);
-  ipcMain.handle("set-overlay-shortcut", (event, binding: unknown) => {
-    assertTrustedMainWindowSender(event);
-    const accepted = overlayShortcut.setBinding(binding as OverlayShortcutBinding | null);
-    if (binding === null) lockVoiceOverlay();
-    return accepted;
-  });
-  let overlayMediaPolicy: VoiceOverlaySnapshot | null = null;
+  stops.push(() => overlayShortcut.dispose());
   const overlayMedia = createOverlayMediaBroker({main:getMainWindow,overlay:getVoiceOverlayMediaWindow,policy:()=>overlayMediaPolicy});
+  stops.push(() => overlayMedia.revoke());
   const stopOverlayMediaLifecycle = subscribeVoiceOverlayMediaLifecycle(revoke => { if(revoke)overlayMedia.revoke();else overlayMedia.refresh(); });
-  ipcMain.handle("open-overlay-media-lease", (event, raw:unknown) => overlayMedia.open(event,raw));
-  ipcMain.handle("send-overlay-media", (event, raw:unknown) => overlayMedia.send(event,raw));
-  ipcMain.handle("send-overlay-media-viewport", (event, raw:unknown) => overlayMedia.viewport(event,raw));
-  ipcMain.handle("set-overlay-media-receiver-ready", (event, ready:unknown) => overlayMedia.setReady(event,ready));
-  ipcMain.handle("get-overlay-media-availability", event => overlayMedia.getAvailability(event));
+  stops.push(stopOverlayMediaLifecycle);
+  registerOverlayControlIPC(ipcMain, {
+    trusted: assertTrustedMainWindowSender,
+    resetLayout: resetVoiceOverlayLayout,
+    lock: lockVoiceOverlay,
+    shortcut: overlayShortcut,
+    media: overlayMedia,
+  });
   let gameOverlay: ReturnType<typeof createGameOverlayController> | undefined;
   const gameHelperPath = app.isPackaged
     ? path.join(process.resourcesPath, "native", "game-window.exe")
@@ -188,10 +197,12 @@ export function registerIpcHandlers(): void {
     filePath: path.join(app.getPath("userData"), "registered-games.json"),
     onOverlayPolicyChanged: () => { void gameOverlay?.policyChanged().catch(() => undefined); },
   });
+  stops.push(() => registeredGames.dispose());
   // Unsupported platforms and absent optional helpers must not break app startup.
   const gameWindowTracker = gameOverlaySupported
     ? createGameWindowTracker({ helperPath: gameHelperPath, onChange: () => gameOverlay?.foregroundChanged() })
     : { start: () => {}, stop: async () => {}, dispose: async () => {}, getSnapshot: () => null };
+  stops.push(() => gameWindowTracker.dispose());
   gameOverlay = createGameOverlayController({
     tracker: gameWindowTracker,
     getTargets: () => registeredGames.getOverlayTargets(),
@@ -206,17 +217,15 @@ export function registerIpcHandlers(): void {
       return right > x && bottom > y ? { x, y, width: right - x, height: bottom - y } : null;
     },
   });
+  stops.push(() => gameOverlay?.dispose());
   void registeredGames.initialize().catch(() => undefined);
-  app.on("web-contents-created", (_event, contents) => {
-    contents.on("destroyed", () => { overlayMedia.retireForContents(contents); });
-    contents.on("render-process-gone", () => {
-      if (getMainWindow()?.webContents === contents) { overlayMediaPolicy=null; overlayMedia.revoke(); gameOverlay?.clear(); overlayShortcut.setBinding(null); }
-    });
-    contents.on("did-start-navigation", (_navigationEvent, _url, isInPlace, isMainFrame) => {
-      if (isMainFrame && !isInPlace && getMainWindow()?.webContents === contents) { overlayMediaPolicy=null; overlayMedia.revoke(); gameOverlay?.clear(); overlayShortcut.setBinding(null); }
-    });
+  const stopOverlayRendererLifecycle = observeOverlayRenderers({
+    app, mainContents: () => getMainWindow()?.webContents ?? null,
+    retire: contents => overlayMedia.retireForContents(contents),
+    revokeMain: () => { overlayMediaPolicy = null; overlayMedia.revoke(); gameOverlay?.clear(); overlayShortcut.setBinding(null); },
   });
-  app.once("before-quit", () => { stopOverlayMediaLifecycle(); overlayMedia.revoke(); overlayShortcut.dispose(); gameOverlay?.dispose(); registeredGames.dispose(); void gameWindowTracker.dispose(); });
+
+  stops.push(stopOverlayRendererLifecycle);
 
   ipcMain.handle("get-registered-games", (event) => {
     assertTrustedMainWindowSender(event);
@@ -264,7 +273,7 @@ export function registerIpcHandlers(): void {
   });
 
   const applyOverlaySnapshot = (event: Parameters<typeof isTrustedMainWindowSender>[0], raw: unknown): boolean =>
-    applyAcknowledgedVoiceOverlaySnapshot(raw, isTrustedMainWindowSender(event), {
+    !stopping && applyAcknowledgedVoiceOverlaySnapshot(raw, isTrustedMainWindowSender(event), {
       setSuspended: value => overlayShortcut.setSuspended(value),
       setSnapshot: snapshot => { overlayMediaPolicy=snapshot; overlayMedia.refresh(); gameOverlay?.setSnapshot(snapshot); },
     });
@@ -284,10 +293,10 @@ export function registerIpcHandlers(): void {
     return registeredGames.setOverlayAllowed(id, allowed);
   });
   // ─── App / version ──────────────────────────────────────────────
-  ipcMain.handle("get-version", () => app.getVersion());
-  ipcMain.handle("relaunch", () => {
-    app.relaunch();
-    app.exit(0);
+  registerAppCommandIPC(ipcMain, {
+    trusted: assertTrustedMainWindowSender,
+    getVersion: () => app.getVersion(), relaunch: () => app.relaunch(), quit: () => app.quit(),
+    writeClipboard: text => clipboard.writeText(text), assertString,
   });
 
   // ─── Crash report flush ──────────────────────────────────────────
@@ -484,11 +493,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle("close-window", () => getMainWindow()?.close());
 
   // ─── Clipboard (sandbox-safe path via main process) ──────────────
-  ipcMain.handle("write-clipboard", (_e, text: unknown) => {
-    // Audit 2026-05-27: prevent renderer-induced clipboard DoS.
-    assertString(text, "clipboard text", MAX_CLIPBOARD_BYTES);
-    clipboard.writeText(text);
-  });
+
 
   // ─── App settings (general / windows) ────────────────────────────
   ipcMain.handle("get-app-settings", () => {
@@ -563,6 +568,7 @@ export function registerIpcHandlers(): void {
     return registerMuteHotkey(keyCode);
   });
   ipcMain.handle("unregister-mute-hotkey-shortcut", () => unregisterMuteHotkey());
+  return dispose;
 }
 
 function isTrustedMainWindowSender(event: { sender: unknown; senderFrame: unknown }): boolean {

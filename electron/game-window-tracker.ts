@@ -107,6 +107,7 @@ export function createGameWindowTracker(options: GameWindowTrackerOptions) {
 
   let enabled = false;
   let stoppedPermanently = false;
+  let disposal: Promise<void> | null = null;
   let lifecycleGeneration = 0;
   let child: HelperChild | null = null;
   let childToken = 0;
@@ -300,7 +301,7 @@ export function createGameWindowTracker(options: GameWindowTrackerOptions) {
     },
     /** Stop prevents restart, hides cached state immediately, and waits for reap. */
     async stop(): Promise<void> {
-      if (stoppedPermanently) return;
+      if (stoppedPermanently) { await disposal; return; }
       enabled = false;
       lifecycleGeneration += 1;
       clearRestart();
@@ -313,17 +314,18 @@ export function createGameWindowTracker(options: GameWindowTrackerOptions) {
     },
     /** Terminal shutdown for app quit; later calls to start() cannot revive it. */
     async dispose(): Promise<void> {
-      if (stoppedPermanently) return;
+      if (disposal) return disposal;
+      const current = child;
+      disposal = childClose ?? Promise.resolve();
       stoppedPermanently = true;
       enabled = false;
       lifecycleGeneration += 1;
       clearRestart();
       clearLatest(true);
-      const current = child;
-      const done = childClose;
-      if (!current) return;
-      try { current.kill(); } catch { /* still await the close event */ }
-      if (done) await done;
+      if (current) {
+        try { current.kill(); } catch { /* still await the close event */ }
+      }
+      await disposal;
     },
     /** Snapshot path is for trusted main-process callers only. */
     getSnapshot(): GameWindowSnapshot | null {

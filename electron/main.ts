@@ -1,3 +1,4 @@
+import { createApplicationShutdown } from "./application-shutdown";
 /**
  * electron/main.ts — Electron main process entry point.
  *
@@ -28,6 +29,7 @@ import { setupAutoUpdater } from "./auto-updater";
 import { shutdownCapture } from "./audio-capture";
 import { setupCrashReporter } from "./crash-reporter";
 import { registerIpcHandlers } from "./ipc-handlers";
+let shutdownIPC: (() => Promise<void>) | null = null;
 import { installScreenPicker } from "./screen-picker";
 import { promoteLeftoverBreadcrumb } from "./picker-safe-mode";
 import { initDiagnosticLog, setVerbose } from "./diagnostic-log";
@@ -317,10 +319,13 @@ app.whenReady().then(async () => {
   setupCSP();
   installScreenPicker();
 
-  registerIpcHandlers();
+  shutdownIPC = registerIpcHandlers(dispose => { shutdownIPC = dispose; });
   createMainWindow();
   setupAutoUpdater();
   createTray();
+}).catch(() => {
+  console.error("[startup] application initialization failed");
+  app.quit();
 });
 
 // ─── Platform behaviours ───
@@ -342,33 +347,16 @@ app.on("activate", () => {
 // Wait for the audio capture child process to exit gracefully so Windows
 // doesn't force-kill it mid-cleanup (which surfaces a STATUS_BREAKPOINT
 // crash dialog). Same idea for stopping the uIOhook listener cleanly.
-let shutdownStarted = false;
-app.on("before-quit", (e) => {
-  setQuitting(true);
-  closeVoiceOverlay();
-  shutdownGlobalHotkeys();
-
-  // Force the cookie store to disk before we die.
-  //
-  // Chromium persists cookies LAZILY — a Set-Cookie is applied to the
-  // in-memory jar immediately but flushed to the profile on a timer. A
-  // refresh-token rotation followed by a hard exit (user quits right after
-  // launch, OS kills us during shutdown, crash) can therefore lose the NEW
-  // refresh token while the OLD one has already been invalidated
-  // server-side by the rotation. The user reopens the app and is logged
-  // out — indistinguishable, from their side, from "the app forgot me".
-  //
-  // Fire-and-forget: this must never block or reject the quit path, so the
-  // rejection is swallowed. Worst case we're back to the lazy flush.
-  session.defaultSession.cookies.flushStore().catch((err) => {
-    console.warn("[shutdown] cookie flush failed:", err);
-  });
-
-  if (shutdownStarted) return;
-  const captureShutdown = shutdownCapture();
-  if (!captureShutdown) return; // nothing to wait for
-
-  e.preventDefault();
-  shutdownStarted = true;
-  captureShutdown.then(() => app.quit());
+const handleShutdown = createApplicationShutdown({
+  prepare: () => setQuitting(true),
+  flushCookies: () => session.defaultSession.cookies.flushStore(),
+  resources: [
+    { name: "overlay", stop: () => closeVoiceOverlay() },
+    { name: "hotkeys", stop: () => shutdownGlobalHotkeys() },
+    { name: "capture", stop: () => shutdownCapture() },
+    { name: "ipc", stop: () => shutdownIPC?.() },
+  ],
+  quit: () => app.quit(),
+  report: (scope, reason) => console.warn(`[shutdown] ${scope} cleanup ${reason}`),
 });
+app.on("before-quit", handleShutdown);
