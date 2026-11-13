@@ -90,7 +90,7 @@ func newJoinServerHarness() *joinServerHarness {
 		return false, nil
 	}
 
-	h.svc = NewServerService(nil, h.serverRepo, nil, h.roleRepo, nil, nil, h.userRepo, h.banRepo, h.inviteSvc, h.hub, nil, nil, // encryptionKey, auditLogger — not under test here
+	h.svc = NewServerService(nil, nil, h.serverRepo, nil, h.roleRepo, nil, nil, h.userRepo, h.banRepo, h.inviteSvc, h.hub, nil, nil, // encryptionKey, auditLogger — not under test here
 		passthroughMembershipTxRunner{server: h.serverRepo, role: h.roleRepo})
 	return h
 }
