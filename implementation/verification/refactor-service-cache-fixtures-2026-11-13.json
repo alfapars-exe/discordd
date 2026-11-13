@@ -1,0 +1,33 @@
+{
+  "scope": "RF08 remaining ticket and thread HTTP permission-cache fixtures",
+  "before": {
+    "ticket_fixture_groups": 5,
+    "retained_ticket_workers": 5,
+    "thread_SQLite_HTTP_fixture": "FAIL: got=1 want=0 after real HTTP/repository fixture cleanup"
+  },
+  "change": "All five ticket tests construct through an owned testing.TB helper. The thread HTTP fixture registers its real permission resolver Stop. Replay, user binding, token-version, archive/access/reopen and recipient assertions are preserved.",
+  "after": {
+    "ticket_tests_count_5": "PASS 0.535s",
+    "ticket_race_count_100": "PASS 4.075s",
+    "thread_and_ticket_tests_count_5": "PASS handlers 3.366s, services 0.619s",
+    "thread_and_ticket_race_count_5": "PASS handlers 72.009s, services 3.967s",
+    "full_go_vet_and_build": "PASS",
+    "golangci_lint": "0 issues",
+    "retained_workers": "0 relative to each fixture baseline"
+  },
+  "inventory": {
+    "production_generic_TTL_constructor_families": [
+      "middleware/auth.go",
+      "middleware/permission.go",
+      "services/channel_permission_cache.go",
+      "services/ws_ticket_service.go"
+    ],
+    "channel_permission_fixture_cleanup": "Already covered by PR291; not duplicated in this patch.",
+    "middleware_fixture_cleanup": "PR292 source 9c026c88 covers 37 retained workers.",
+    "remaining_cross_package_fixture": "Thread HTTP permission resolver is included here."
+  },
+  "limitations": [
+    "New-head complete PR292 CI remains required.",
+    "This does not establish whole-process signal shutdown, active-media teardown or completion of all resource-owner families beyond TTL caches."
+  ]
+}
