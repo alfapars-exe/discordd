@@ -481,6 +481,43 @@ func TestMessageRepo_UpdateRoutesOnEncryptionVersion(t *testing.T) {
 	})
 }
 
+func TestMessageRepo_ReplyReferenceStaysInChannel(t *testing.T) {
+	db := newTestDB(t)
+	seedMessageWorld(t, db)
+	repo := NewSQLiteMessageRepo(db.Conn)
+	ctx := context.Background()
+
+	original := newMessage(t, ctx, repo, msgOtherChannel, msgAuthor, "private message")
+	content := "imported reply"
+	reply := &models.Message{ChannelID: msgChannel, UserID: msgSecondUser, Content: &content, ReplyToID: &original.ID}
+	if err := repo.Create(ctx, reply); err != nil {
+		t.Fatal(err)
+	}
+	check := func(msg *models.Message) {
+		t.Helper()
+		if msg.ID != reply.ID {
+			t.Fatalf("unexpected reply %q", msg.ID)
+		}
+		if ref := msg.ReferencedMessage; ref != nil && (ref.Content != nil || ref.Author != nil) {
+			t.Error("cross-channel reply exposed the original content or author")
+		}
+	}
+	got, err := repo.GetByID(ctx, reply.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check(got)
+	page, err := repo.GetByChannelID(ctx, msgChannel, "", 10)
+	if err != nil || len(page) != 1 {
+		t.Fatalf("loading channel history: %d rows, error %v", len(page), err)
+	}
+	check(&page[0])
+	window, _, _, err := repo.GetByChannelIDAround(ctx, msgChannel, reply.ID, 10)
+	if err != nil || len(window) != 1 {
+		t.Fatalf("loading reply window: %d rows, error %v", len(window), err)
+	}
+	check(&window[0])
+}
 // TestMessageRepo_ReplyReference: reply_to_id intentionally has no FK, so a
 // reply outlives the message it answers and degrades to an ID-only reference.
 func TestMessageRepo_ReplyReference(t *testing.T) {
