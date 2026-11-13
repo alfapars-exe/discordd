@@ -477,7 +477,7 @@ Tam istemci koşusu aynı `2a46beda` revizyonunda 461 dosyada 4.640 geçen ve 1 
 
 ## RF17 — Decrypted cache arama maliyeti
 
-13 Kasım 2026'da Chromium üzerinde 3f253b11 revizyonundaki ortak mesaj listesi DM bağlamında 2.000 sentetik mesajla sınandı. Kaydırma isteğinden önce DOM dışında olan qa-1000 hedefi istekten sonra tamamen görünür ve vurguluydu. O anda 29 satır DOM'a bağlıydı. Deney listeye doğrudan hedef kimliğini verdi. Rozet ve kozmetik API'leri çevrimdışıydı.
+13 Kasım 2026'da Chromium üzerinde 3f253b11 revizyonundaki ortak mesaj listesi DM bağlamında 2.000 sentetik mesajla sınandı. Kaydırma isteğinden önce DOM dışında olan qa-1000 hedefi istekten sonra tamamen görünür ve vurguluydu. O anda 29 satır DOM'a bağlıydı. İlk deney hedef kimliğini listeye verdi. Ardından son mesajdaki gerçek yanıt önizlemesine tıklama ve önizleme düğmesine odaklanıp Enter tuşuna basma denemelerinde aynı hedef görünür ve vurgulu hale geldi. Rozet ve kozmetik API'leri çevrimdışıydı.
 
 12 Kasım 2026 ölçümünde `3fb26986` üzerindeki kanal araması Chromium 156.0.8078.4 ve gerçek IndexedDB ile sınandı. `client` ve `e2e` bağımlılıkları kurulduktan sonra depo kökünde `node e2e/scripts/benchmark-encrypted-search.mjs` çalıştırılır. Her veri kümesinin %80’i hedef kanaldadır. Bir ısınma ve üç ölçümde aksanlı sorgunun sonuç sayısı, mesaj kimliklerinin sırası ve içerikleri doğrulandı. Süre, depolama çağrısından eşleşmelerin dönüşüne kadar ölçüldü.
 
