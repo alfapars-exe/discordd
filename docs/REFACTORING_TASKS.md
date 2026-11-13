@@ -887,3 +887,9 @@ LiveKit silme düzeltmesinin mevcut PR #222 ile sonradan açılan PR #270'te ayn
 - Extracted chat, notification and voice action payload builders from native window ownership. Sender/session revalidation, geometry and delivery remain in the owner; payload fields and existing HTTP/IPC contracts are preserved.
 - Direct contract tests exercise compose expansion, selected opaque reply rows, private history/display-data exclusion and shared snapshot immutability. Existing native-owner tests still verify actual child delivery.
 - Integrated source 6c191642: compile and 334 passed, 1 skipped (`%TEMP%/hichat-action-payload-integrated.log`). PR #279 head 4d8f4e53: compile and 295 passed, 1 skipped (`hichat-action-payload-pr.log`), pushed; CI pending for this head. No physical/compositor acceptance claimed.
+
+### RF20 — passive HUD projection (2026-11-13)
+
+- Extracted bounded passive HUD payload construction from the native owner. Geometry calculation, lifecycle clocks/tombstones and platform state remain in the caller; the pure builder projects the existing fields without changing renderer contracts.
+- Direct tests cover newest-edge chat slicing, first-edge activity/notification slicing, geometry absence, effective participant limits and preference immutability. Existing owner tests retain welcome/go-live expiry, privacy and child delivery coverage.
+- Integration 61eaf2dc compile/Electron: 336 passed, 1 skipped (`%TEMP%/hichat-hud-payload-integrated.log`). PR #279 head 8a76806e compile/Electron: 297 passed, 1 skipped (`hichat-hud-payload-pr.log`), pushed; current-head CI pending. Native physical display acceptance and remaining lifecycle/registrar inventory are open.
