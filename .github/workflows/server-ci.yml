@@ -397,7 +397,7 @@ jobs:
       - run: npm audit --package-lock-only --audit-level=high
         working-directory: ${{ matrix.directory }}
 
-  # ─── Playwright E2E: real Go binary + Vite dev client ───
+  # ─── Playwright E2E: real Go binary + production client bundle ───
   # Uses the real Go binary and a unique verified-mTLS PostgreSQL database per run.
   e2e:
     name: Playwright E2E
@@ -421,8 +421,7 @@ jobs:
             client/package-lock.json
             e2e/package-lock.json
 
-      # The suite drives the Vite dev server, so the client only needs its
-      # dependencies — no production bundle build.
+      # Playwright builds and previews the client for each production run.
       - name: Install client deps
         run: npm ci
         working-directory: client
