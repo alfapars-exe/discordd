@@ -733,3 +733,34 @@ it("keeps the inbox sequence on a replay that omits it", () => {
   receive({ ...makeDM("earlier"), created_at: "2027-01-01T00:00:00Z", source_sequence: "2" });
   expect(useDMStore.getState().channels[0].last_message).toMatchObject({id: "latest", source_sequence: "3"});
 });
+
+it.each(["tail", "around", "older", "newer"])("excludes foreign DM rows before decrypting a %s page", async direction => {
+  const foreign = { ...makeDM("foreign"), dm_channel_id: "other" };
+  const target = makeDM("target");
+  const response = page([foreign, target], false, false);
+  const store = useDMStore.getState();
+  if (direction === "older" || direction === "newer") {
+    useDMStore.setState({
+      messagesByChannel: { [CH]: [makeDM("anchor")] },
+      hasMoreByChannel: { [CH]: true },
+      hasMoreAfterByChannel: { [CH]: true },
+    });
+  }
+  switch (direction) {
+    case "around":
+      getAround.mockResolvedValueOnce(response);
+      await store.fetchMessagesAround(CH, target.id);
+      break;
+    case "newer":
+      getAfter.mockResolvedValueOnce(response);
+      await store.fetchNewerMessages(CH);
+      break;
+    default:
+      getDMMessages.mockResolvedValueOnce(response);
+      if (direction === "older") await store.fetchOlderMessages(CH);
+      else await store.fetchMessages(CH);
+  }
+  expect(ids()).toContain(target.id);
+  expect(ids()).not.toContain(foreign.id);
+  expect(vi.mocked(decryptDMMessages).mock.lastCall?.[0]).toEqual([target]);
+});

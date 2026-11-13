@@ -108,6 +108,10 @@ function unseenDMMessages(loaded: DMMessage[], incoming: DMMessage[]): DMMessage
   });
 }
 
+function messagesForDM(channelId: string, messages: DMMessage[] = []): DMMessage[] {
+  return messages.filter(message => message.dm_channel_id === channelId);
+}
+
 function reportDMHistoryFailure(): void {
   useToastStore.getState().addToast("error", i18n.t("dm:historyLoadFailed"));
 }
@@ -335,9 +339,10 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
     }
 
     if (res.success && res.data) {
-      const decrypted = await decryptDMMessages(res.data!.messages ?? [], current, historyVersion.current);
+      const raw = messagesForDM(channelId, res.data.messages);
+      const decrypted = await decryptDMMessages(raw, current, historyVersion.current);
       const messages = decrypted.filter(historyVersion.current);
-      const positions = new Map((res.data.messages??[]).map((message,index)=>[message.id,index]));
+      const positions = new Map(raw.map((message,index)=>[message.id,index]));
       if (current()) void registerSpamBatch(messages, "dm", channelId);
 
       // Re-check abort after the async decrypt — a fast DM-switch during
@@ -387,7 +392,7 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
     const res = await dmApi.getDMMessages(channelId, beforeId, 50, {isCurrent:current, timeoutMs:15000});
     if (!current()) return;
     if (res.success && res.data) {
-      const decrypted = (await decryptDMMessages(res.data!.messages, current, historyVersion.current)).filter(historyVersion.current);
+      const decrypted = (await decryptDMMessages(messagesForDM(channelId, res.data.messages), current, historyVersion.current)).filter(historyVersion.current);
       if (!current()) return;
       void registerSpamBatch(decrypted, "dm", channelId);
 
@@ -437,7 +442,7 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
         return false;
       }
       const page = res.success ? res.data : undefined;
-      const raw = page?.messages ?? [];
+      const raw = messagesForDM(channelId, page?.messages);
       if (!page || !raw.some((m) => m.id === messageId)) {
         // Target gone — keep any existing window; if there is none (the claim
         // made the tab's mount fetch skip), load the tail now.
@@ -499,7 +504,7 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
       const res = await dmApi.getDMMessagesAfter(channelId, afterId, 50, {isCurrent:current, timeoutMs:15000});
       if (!current()) return;
       if (!res.success || !res.data) { reportDMHistoryFailure(); return; }
-      const decrypted = (await decryptDMMessages(res.data.messages ?? [], current, historyVersion.current)).filter(historyVersion.current);
+      const decrypted = (await decryptDMMessages(messagesForDM(channelId, res.data.messages), current, historyVersion.current)).filter(historyVersion.current);
       if (!current()) return;
       void registerSpamBatch(decrypted, "dm", channelId);
       const hasMoreAfter = res.data.has_more_after ?? false;
