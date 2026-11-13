@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/repository"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -148,5 +149,51 @@ func TestVoiceMaintenanceAFKStopCancelsLookup(t *testing.T) {
 	}
 	if s.states["user"] == nil {
 		t.Fatal("cancelled sweep removed voice state")
+	}
+}
+
+func TestVoiceMaintenanceAFKPostgresCancellation(t *testing.T) {
+	db := postgresServerFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	blocker, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer blocker.Rollback()
+	if _, err = blocker.ExecContext(ctx, "LOCK TABLE channels IN ACCESS EXCLUSIVE MODE"); err != nil {
+		t.Fatal(err)
+	}
+	s := &voiceService{states: map[string]*models.VoiceState{"reader": {UserID: "reader", ChannelID: "channel", LastActivity: time.Now().Add(-time.Hour)}}, channelGetter: repository.NewSQLiteChannelRepo(db)}
+	s.afkWorker.startContext(time.Millisecond, s.sweepAFKUsersContext)
+	t.Cleanup(s.StopMaintenance)
+	for {
+		var waiting bool
+		err = blocker.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM pg_locks WHERE relation='channels'::regclass AND NOT granted)").Scan(&waiting)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if waiting {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal("AFK query never waited on locked channel table")
+		default:
+			time.Sleep(time.Millisecond)
+		}
+	}
+	done := make(chan struct{})
+	go func() { s.StopMaintenance(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("Stop did not cancel real PostgreSQL lock wait")
+	}
+	if _, err = blocker.ExecContext(ctx, "SELECT 1"); err != nil {
+		t.Fatalf("Stop invalidated blocking transaction: %v", err)
+	}
+	if s.states["reader"] == nil {
+		t.Fatal("cancelled AFK lookup removed voice state")
 	}
 }

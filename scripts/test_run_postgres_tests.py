@@ -12,6 +12,7 @@ spec.loader.exec_module(runner)
 
 class PostgreSQLRunnerTests(unittest.TestCase):
     service_passes = (
+        "--- PASS: TestVoiceMaintenanceAFKPostgresCancellation (0.01s)\n"
         "--- PASS: TestChannelDelivery (0.01s)\n"
         "--- PASS: TestPostgresRolePatchConcurrentChanges (0.01s)\n"
         "--- PASS: TestPostgresMemberRoleReplacement (0.01s)\n"
@@ -28,6 +29,10 @@ class PostgreSQLRunnerTests(unittest.TestCase):
             with self.subTest(name=name):
                 remaining = "\n".join(line for line in self.service_passes.splitlines() if name not in line)
                 self.assertEqual(self.execute(self.completed(), service_output=remaining), 1)
+
+    def test_afk_stop_must_pass_real_postgres(self):
+        output = "\n".join(line for line in self.service_passes.splitlines() if "TestVoiceMaintenanceAFKPostgresCancellation" not in line)
+        self.assertEqual(self.execute(self.completed(), service_output=output), 1)
 
     def completed(self):
         return [
