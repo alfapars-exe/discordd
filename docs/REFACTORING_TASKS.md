@@ -1329,3 +1329,8 @@ Terminal current-head receipt: PR29814a965ea completed36/36 SUCCESS. Exact-head 
 - MoveUser music cleanup regression failed before fix. MoveUser now enters the terminal operation owner before lookup and registers music/dual-identity eviction children; shutdown rejects new moves before DB work.
 - Targeted host tests passed 10 repetitions (6.956s), Linux race 10 (9.871s); services vet/lint passed. DSN-free PostgreSQL skips are not counted as acceptance. Receipt: `implementation/verification/refactor-voice-move-ownership-2026-11-14.json`.
 - PR298 fb269038 Server CI run 43515470174 remains live (last checked 10 successful jobs, no failures). Forced-disconnect and move fixes remain local integration. Canonical branch lacks integration-only DisconnectServerMember/pendingJoins, so later transfer must use scoped patches and preserve branch-specific test scope.
+
+### 2026-11-14 — Publish canonical admin/move ownership
+
+- Scoped canonical transfer preserved branch-specific voice_state.go and excluded integration-only DisconnectServerMember test. Canonical real-mTLS PostgreSQL targeted tests passed three repetitions (50.577s), Linux race ten (9.697s), services vet/lint passed.
+- Published PR #298 head 2dafbcef. Previous fb269038 CI results do not prove this new head. Receipt: `implementation/verification/refactor-admin-move-canonical-2026-11-14.json`. No merge, release, installed-client or physical-media acceptance is claimed.
