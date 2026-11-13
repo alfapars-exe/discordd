@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"sync"
 	"time"
 )
@@ -11,32 +12,36 @@ type voiceMaintenanceWorker struct {
 	mu      sync.Mutex
 	stopped bool
 	done    chan struct{}
-	cancel  chan struct{}
+	cancel  context.CancelFunc
 }
 
 func (w *voiceMaintenanceWorker) start(interval time.Duration, sweep func()) {
+	w.startContext(interval, func(context.Context) { sweep() })
+}
+
+func (w *voiceMaintenanceWorker) startContext(interval time.Duration, sweep func(context.Context)) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.stopped || w.done != nil {
 		return
 	}
 	w.done = make(chan struct{})
-	w.cancel = make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
+	w.cancel = cancel
 	go func() {
 		defer close(w.done)
+		defer cancel()
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
 			select {
-			case <-w.cancel:
+			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				select {
-				case <-w.cancel:
+				if ctx.Err() != nil {
 					return
-				default:
 				}
-				sweep()
+				sweep(ctx)
 			}
 		}
 	}()
@@ -47,7 +52,7 @@ func (w *voiceMaintenanceWorker) stop() {
 	if !w.stopped {
 		w.stopped = true
 		if w.cancel != nil {
-			close(w.cancel)
+			w.cancel()
 		}
 	}
 	done := w.done
