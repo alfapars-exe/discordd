@@ -13,6 +13,19 @@ function harness() {
 }
 
 describe("native screen share controller", () => {
+  it("rejects an explicit native refusal instead of announcing a nonexistent publication", async () => {
+    const h = harness();
+    h.operations.start.mockResolvedValue(false);
+    await expect(h.controller.start(() => false)).rejects.toThrow("Native screen share did not start");
+    expect(h.operations.started).not.toHaveBeenCalled();
+  });
+
+  it("does not announce native completion after its owner is cancelled", async () => {
+    const h = harness();
+    h.operations.start.mockImplementation(async () => { h.state.cancelled = true; return true; });
+    await h.controller.start(() => h.state.cancelled);
+    expect(h.operations.started).not.toHaveBeenCalled();
+  });
   it("starts only after token retrieval and announces only after native completion", async () => {
     const h = harness();
     let finish!: (value: boolean) => void;
