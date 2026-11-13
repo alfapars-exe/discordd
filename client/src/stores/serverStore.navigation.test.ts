@@ -161,3 +161,19 @@ it("does not restore a server removed while its HTTP list was pending", async ()
   expect(useServerStore.getState().servers).toEqual([]);
   expect(useServerStore.getState().isLoading).toBe(false);
 });
+
+it("ignores a server list response after the signed-in account changes", async () => {
+  let finish!: (value: APIResponse<[]>) => void;
+  vi.mocked(getMyServers).mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+  const pending = useServerStore.getState().fetchServers();
+  vi.spyOn(useAuthStore, "getState").mockReturnValue({
+    ...useAuthStore.getState(),
+    user: { id: "another-account" } as NonNullable<ReturnType<typeof useAuthStore.getState>["user"]>,
+  });
+  const current = [{ id: "current-account-server", name: "Current", icon_url: null }];
+  useServerStore.setState({ servers: current, isLoading: false });
+  finish({ success: true, data: [] });
+  await pending;
+  expect(useServerStore.getState().servers).toEqual(current);
+  expect(useServerStore.getState().isLoading).toBe(false);
+});
