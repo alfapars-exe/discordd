@@ -129,3 +129,22 @@ it("keeps a newer ready snapshot when an older HTTP server list completes", asyn
   await pending;
   expect(useServerStore.getState().servers).toEqual(ready);
 });
+
+it("preserves the latest server list when HTTP requests finish in reverse order", async () => {
+  let finishOld!: (value: APIResponse<[]>) => void;
+  vi.mocked(getMyServers).mockReturnValueOnce(new Promise(resolve => { finishOld = resolve; }));
+  const older = useServerStore.getState().fetchServers();
+  const latest = [{ id: "latest", name: "Latest", icon_url: null }];
+  vi.mocked(getMyServers).mockResolvedValueOnce({ success: true, data: latest });
+  await useServerStore.getState().fetchServers();
+  finishOld({ success: true, data: [] });
+  await older;
+  expect(useServerStore.getState().servers).toEqual(latest);
+  expect(useServerStore.getState().isLoading).toBe(false);
+});
+
+it("releases loading when the current server list request rejects", async () => {
+  vi.mocked(getMyServers).mockRejectedValueOnce(new Error("offline"));
+  await expect(useServerStore.getState().fetchServers()).rejects.toThrow("offline");
+  expect(useServerStore.getState().isLoading).toBe(false);
+});
