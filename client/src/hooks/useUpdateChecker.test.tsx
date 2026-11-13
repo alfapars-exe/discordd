@@ -3,30 +3,166 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { useUpdateChecker } from "./useUpdateChecker";
 
-vi.mock("../utils/constants", () => ({ isElectron: () => true }));
+const platform = vi.hoisted(() => ({ electron: true }));
+vi.mock("../utils/constants", () => ({ isElectron: () => platform.electron }));
 
-afterEach(() => { delete window.electronAPI; vi.useRealTimers(); });
+afterEach(() => { platform.electron = true; delete window.electronAPI; vi.useRealTimers(); });
 
-it("StrictMode remount owns four listeners and unmount clears its snooze timer", () => {
+function updaterHarness(strict = false) {
   vi.useFakeTimers();
   const available = new Set<(info: { version: string }) => void>();
   const downloaded = new Set<(info: { version: string }) => void>();
   const progress = new Set<(info: { percent: number }) => void>();
   const error = new Set<(message: string) => void>();
+  const install = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
   const subscribe = <T,>(set: Set<T>, callback: T) => { set.add(callback); return () => { set.delete(callback); }; };
   window.electronAPI = {
-    onUpdateAvailable: (callback) => subscribe(available, callback),
-    onUpdateDownloaded: (callback) => subscribe(downloaded, callback),
-    onUpdateProgress: (callback) => subscribe(progress, callback),
-    onUpdateError: (callback) => subscribe(error, callback),
+    onUpdateAvailable: callback => subscribe(available, callback),
+    onUpdateDownloaded: callback => subscribe(downloaded, callback),
+    onUpdateProgress: callback => subscribe(progress, callback),
+    onUpdateError: callback => subscribe(error, callback),
+    installUpdate: () => install(),
   } as NonNullable<Window["electronAPI"]>;
-  const view = renderHook(useUpdateChecker, { wrapper: StrictMode });
-  expect([available.size, downloaded.size, progress.size, error.size]).toEqual([1, 1, 1, 1]);
-  act(() => downloaded.forEach((callback) => callback({ version: "test-version" })));
-  expect(view.result.current.status).toBe("ready");
-  act(() => view.result.current.dismiss());
+  const view = renderHook(useUpdateChecker, strict ? { wrapper: StrictMode } : undefined);
+  return {
+    view,
+    install,
+    listenerCounts: () => [available.size, downloaded.size, progress.size, error.size],
+    available: (version: string) => act(() => available.forEach(callback => callback({ version }))),
+    downloaded: (version: string) => act(() => downloaded.forEach(callback => callback({ version }))),
+    progress: (percent: number) => act(() => progress.forEach(callback => callback({ percent }))),
+    error: () => act(() => error.forEach(callback => callback("offline"))),
+  };
+}
+
+it("handles a rejected install IPC request without losing ready state or preventing retry", async () => {
+  const h = updaterHarness(); h.downloaded("2.0.0");
+  const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+  const failure = Promise.reject(new Error("IPC install failed"));
+  // Observe the rejected fixture too, so the pre-fix run can assert missing
+  // handling without leaking an intentional rejection into the test runner.
+  void failure.catch(() => {});
+  h.install.mockReturnValueOnce(failure);
+  try {
+    await act(async () => { h.view.result.current.restartAndInstall(); await failure.catch(() => {}); });
+    expect(warning).toHaveBeenCalledExactlyOnceWith("[updater] Install request failed");
+    expect(h.view.result.current.status).toBe("ready");
+    expect(h.view.result.current.update).toEqual({ version: "2.0.0" });
+    await act(async () => { h.view.result.current.restartAndInstall(); });
+    expect(h.install).toHaveBeenCalledTimes(2);
+    expect(h.view.result.current.status).toBe("ready");
+  } finally {
+    warning.mockRestore(); h.view.unmount();
+  }
+});
+
+it.each([false, true])("retains a completed installer through later check/progress/error events (snoozed=%s)", snoozed => {
+  const h = updaterHarness(); h.downloaded("2.0.0");
+  if (snoozed) act(() => h.view.result.current.dismiss());
+  h.available("2.0.0"); h.progress(12); h.error();
+  expect(h.view.result.current.status).toBe(snoozed ? "idle" : "ready");
+  expect(h.view.result.current.update).toEqual({ version: "2.0.0" });
+  expect(h.view.result.current.progress).toBe(100);
+  if (snoozed) {
+    act(() => vi.advanceTimersByTime(30 * 60 * 1000));
+    expect(h.view.result.current.status).toBe("ready");
+  }
+  h.view.unmount();
+});
+
+it("does not cancel snooze when the same downloaded event is delivered again", () => {
+  const h = updaterHarness(); h.downloaded("2.0.0");
+  act(() => h.view.result.current.dismiss());
+  h.downloaded("2.0.0");
+  expect(h.view.result.current.status).toBe("idle");
   expect(vi.getTimerCount()).toBe(1);
-  view.unmount();
-  expect([available.size, downloaded.size, progress.size, error.size]).toEqual([0, 0, 0, 0]);
+  h.view.unmount();
+});
+
+it("replaces the ready installer only after the new download completes and retires its old snooze", () => {
+  const h = updaterHarness(); h.downloaded("2.0.0");
+  act(() => h.view.result.current.dismiss());
+  h.downloaded("3.0.0");
+  expect(h.view.result.current.status).toBe("ready");
+  expect(h.view.result.current.update).toEqual({ version: "3.0.0" });
   expect(vi.getTimerCount()).toBe(0);
+  h.view.unmount();
+});
+
+it("clears a failed incomplete download and accepts a successful retry", () => {
+  const h = updaterHarness(); h.available("2.0.0"); h.progress(42); h.error();
+  expect(h.view.result.current.status).toBe("idle");
+  expect(h.view.result.current.update).toBeNull();
+  h.available("2.0.0"); h.progress(65); h.downloaded("2.0.0");
+  expect(h.view.result.current.status).toBe("ready");
+  expect(h.view.result.current.progress).toBe(100);
+  h.view.unmount();
+});
+
+it("lets a different available version own the new download and clears an obsolete ready snooze", () => {
+  const h = updaterHarness(); h.downloaded("2.0.0");
+  act(() => h.view.result.current.dismiss());
+  h.available("3.0.0"); h.progress(42);
+  expect(h.view.result.current.status).toBe("downloading");
+  expect(h.view.result.current.update).toEqual({ version: "3.0.0" });
+  expect(vi.getTimerCount()).toBe(0);
+  h.error();
+  expect(h.view.result.current.status).toBe("idle");
+  expect(h.view.result.current.update).toBeNull();
+  h.available("3.0.0"); h.downloaded("3.0.0");
+  expect(h.view.result.current.status).toBe("ready");
+  expect(h.view.result.current.update).toEqual({ version: "3.0.0" });
+  h.view.unmount();
+});
+
+it("StrictMode remount owns four listeners and unmount clears its snooze timer", () => {
+  const h = updaterHarness(true);
+  expect(h.listenerCounts()).toEqual([1, 1, 1, 1]);
+  h.downloaded("test-version");
+  expect(h.view.result.current.status).toBe("ready");
+  act(() => h.view.result.current.dismiss());
+  expect(vi.getTimerCount()).toBe(1);
+  h.view.unmount();
+  expect(h.listenerCounts()).toEqual([0, 0, 0, 0]);
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it("web rendering and install actions need no Electron bridge", () => {
+  platform.electron = false;
+  delete window.electronAPI;
+  const view = renderHook(useUpdateChecker);
+  expect(view.result.current.status).toBe("idle");
+  expect(view.result.current.update).toBeNull();
+  expect(() => view.result.current.restartAndInstall()).not.toThrow();
+  view.unmount();
+});
+
+it("legacy downloaded events without metadata remain ready through snooze", () => {
+  const h = updaterHarness(); h.view.unmount();
+  const api = window.electronAPI!;
+  let downloaded!: (info: unknown) => void;
+  const onDownloaded = api.onUpdateDownloaded;
+  api.onUpdateDownloaded = callback => {
+    downloaded = value => Reflect.apply(callback, undefined, [value]);
+    return onDownloaded(callback);
+  };
+  const view = renderHook(useUpdateChecker);
+  act(() => downloaded(undefined));
+  expect(view.result.current.status).toBe("ready");
+  expect(view.result.current.update).toEqual({ version: "" });
+  act(() => view.result.current.dismiss());
+  act(() => vi.advanceTimersByTime(30 * 60 * 1000));
+  expect(view.result.current.status).toBe("ready");
+  view.unmount();
+  expect(h.listenerCounts()).toEqual([0, 0, 0, 0]);
+});
+
+it("legacy subscription methods without cleanup callbacks can unmount", () => {
+  const h = updaterHarness(); h.view.unmount();
+  const api = window.electronAPI!;
+  for (const name of ["onUpdateAvailable", "onUpdateProgress", "onUpdateDownloaded", "onUpdateError"] as const) {
+    Object.defineProperty(api, name, { value: () => undefined });
+  }
+  const view = renderHook(useUpdateChecker);
+  expect(() => view.unmount()).not.toThrow();
 });

@@ -1,32 +1,11 @@
-/**
- * useUpdateChecker — Electron auto-update hook.
- *
- * Flow:
- * 1. Update check happens at splash screen (main process)
- * 2. If found at runtime, downloads in background (autoDownload=true)
- * 3. Shows "Restart" banner when download completes
- * 4. User clicks restart or update installs on next app quit
- *
- * No-op in web mode.
- */
-
-import { useState, useEffect, useCallback, useRef } from "react";
+/** Electron update subscriptions and snooze timer ownership. No-op on the web. */
+import { useReducer, useEffect, useCallback } from "react";
 import { isElectron } from "../utils/constants";
+import { initialUpdateCheckerState, updateCheckerState, type UpdateInfo } from "../utils/updateCheckerState";
 
-/** Re-show the banner this many ms after user dismisses it. */
 const DISMISS_SNOOZE_MS = 30 * 60 * 1000;
-
-type UpdateStatus =
-  | "idle"
-  | "downloading"
-  | "ready";
-
-type UpdateInfo = {
-  version: string;
-};
-
 type UpdateChecker = {
-  status: UpdateStatus;
+  status: "idle" | "downloading" | "ready";
   update: UpdateInfo | null;
   progress: number;
   restartAndInstall: () => void;
@@ -34,87 +13,35 @@ type UpdateChecker = {
 };
 
 export function useUpdateChecker(): UpdateChecker {
-  const [status, setStatus] = useState<UpdateStatus>("idle");
-  const [update, setUpdate] = useState<UpdateInfo | null>(null);
-  const [progress, setProgress] = useState(0);
-
-  // Holds the downloaded UpdateInfo across a dismiss → snooze → re-show
-  // cycle. Without this, dismissing the banner cleared the React state
-  // and the snooze timer had nothing to restore.
-  const downloadedUpdateRef = useRef<UpdateInfo | null>(null);
-  const snoozeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
+  const [state, dispatch] = useReducer(updateCheckerState, initialUpdateCheckerState);
   useEffect(() => {
     if (!isElectron()) return;
-
     const api = window.electronAPI!;
-
-    const stopAvailable = api.onUpdateAvailable((info) => {
-      setUpdate({ version: info.version });
-      setStatus("downloading");
-      setProgress(0);
-    });
-
-    const stopProgress = api.onUpdateProgress((progressInfo) => {
-      setProgress(Math.round(progressInfo.percent));
-    });
-
-    const stopDownloaded = api.onUpdateDownloaded((info) => {
-      const downloaded: UpdateInfo = { version: info?.version ?? "" };
-      downloadedUpdateRef.current = downloaded;
-      setUpdate(downloaded);
-      setProgress(100);
-      setStatus("ready");
-    });
-
-    const stopError = api.onUpdateError((message) => {
-      // Network errors (tunnel failures, no internet) are expected —
-      // don't show a banner, just log for debugging.
+    const stopAvailable = api.onUpdateAvailable(info => dispatch({ type: "available", version: info.version }));
+    const stopProgress = api.onUpdateProgress(info => dispatch({ type: "progress", percent: info.percent }));
+    const stopDownloaded = api.onUpdateDownloaded(info => dispatch({ type: "downloaded", version: info?.version ?? "" }));
+    const stopError = api.onUpdateError(message => {
       console.warn("[updater] Update check failed:", message);
-      // A failed DOWNLOAD must also clear the "downloading" banner, or it
-      // sits at "Güncelleme indiriliyor N%" forever — the next successful
-      // periodic check restarts the flow cleanly. A finished download
-      // (status "ready", or a snoozed ready state held in
-      // downloadedUpdateRef) is preserved: the installer is on disk and a
-      // later check hiccup shouldn't hide the restart prompt.
-      if (!downloadedUpdateRef.current) {
-        setStatus((s) => (s === "downloading" ? "idle" : s));
-        setUpdate(null);
-        setProgress(0);
-      }
+      dispatch({ type: "error" });
     });
-
     return () => {
-      stopAvailable?.();
-      stopProgress?.();
-      stopDownloaded?.();
-      stopError?.();
-      if (snoozeTimerRef.current) clearTimeout(snoozeTimerRef.current);
-      snoozeTimerRef.current = null;
+      stopAvailable?.(); stopProgress?.(); stopDownloaded?.(); stopError?.();
     };
   }, []);
 
+  const token = state.snoozeToken;
+  useEffect(() => {
+    if (token === null) return;
+    const timer = setTimeout(() => dispatch({ type: "resume", token }), DISMISS_SNOOZE_MS);
+    return () => clearTimeout(timer);
+  }, [token]);
+
   const restartAndInstall = useCallback(() => {
     if (!isElectron()) return;
-    window.electronAPI!.installUpdate();
+    void window.electronAPI!.installUpdate().catch(() => {
+      console.warn("[updater] Install request failed");
+    });
   }, []);
-
-  // Snooze banner for DISMISS_SNOOZE_MS, then re-show. The downloaded
-  // installer is still sitting on disk — we just stopped nagging for
-  // half an hour. Without the snooze, a single dismiss meant the user
-  // never saw the prompt again until the next app launch, which for
-  // tray-resident users effectively meant "never".
-  const dismiss = useCallback(() => {
-    setStatus("idle");
-    if (snoozeTimerRef.current) clearTimeout(snoozeTimerRef.current);
-    snoozeTimerRef.current = setTimeout(() => {
-      if (downloadedUpdateRef.current) {
-        setUpdate(downloadedUpdateRef.current);
-        setProgress(100);
-        setStatus("ready");
-      }
-    }, DISMISS_SNOOZE_MS);
-  }, []);
-
-  return { status, update, progress, restartAndInstall, dismiss };
+  const dismiss = useCallback(() => dispatch({ type: "dismiss" }), []);
+  return { status: state.status, update: state.update, progress: state.progress, restartAndInstall, dismiss };
 }
