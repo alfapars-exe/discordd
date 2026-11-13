@@ -1,0 +1,20 @@
+{
+  "pr": 273,
+  "source_commit": "bb7ee0365f0b63c670d0e7067d2a4e7ad192ab93",
+  "workflow": {
+    "conclusion": "success",
+    "headSha": "bb7ee0365f0b63c670d0e7067d2a4e7ad192ab93",
+    "status": "completed"
+  },
+  "check": {
+    "id": 131961420497,
+    "name": "Migration filename hygiene",
+    "status": "in_progress",
+    "conclusion": "success",
+    "started_at": "2026-11-13T14:57:30Z",
+    "completed_at": "2026-11-13T14:57:38Z",
+    "check_run_url": "https://api.github.com/repos/alfapars-exe/discordd/check-runs/131961420497"
+  },
+  "all_steps_completed_successfully": true,
+  "scope": "Workflow is terminal success; one check record contradicts its own completion timestamp/result. Do not report all 36 checks terminal until state is reconciled. No source change or rerun was made."
+}
