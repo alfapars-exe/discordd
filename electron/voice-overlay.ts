@@ -1,3 +1,4 @@
+import { chatActionPayload, notificationActionPayload, voiceActionPayload } from "./overlay-action-payload";
 import { createOverlayComposerWindow } from "./overlay-composer-window";
 import { createOverlayActionWindow } from "./overlay-action-window";
 import { app, BrowserWindow, screen } from "electron";
@@ -303,13 +304,7 @@ function updateChatActionWindow(): void {
     }
     target.setPosition(bounds.x + bounds.width - 8 - actionWidth, bounds.y + 8, false);
     // The child receives only the action-session token and empty panel defaults.
-    target.webContents.send("voice-overlay-update", {
-      enabled: true, voiceOverlayChat: true, voiceOverlayChatActions: true,
-      chatStatus: "ready", chatMessages: [], chatActionSession: latest!.chatActionSession,
-      voiceOverlayChatCompose: expanded, chatComposeSession: expanded ? latest!.chatComposeSession : undefined,
-      participants: [], voiceOverlayNotifications: false, notifications: [], notificationStatus: undefined,
-      notificationActionSession: undefined,
-    });
+    target.webContents.send("voice-overlay-update", chatActionPayload(latest!, expanded));
     target.showInactive();
   };
   if (target.webContents.isLoading()) {
@@ -362,12 +357,7 @@ function updateNotificationActionWindow(): void {
     }
     // Only bounded opaque IDs, row indexes and session tokens reach this existing child.
     // No actor, conversation identifier, message body or route is forwarded.
-    target.webContents.send("voice-overlay-update", {
-      enabled: true, voiceOverlayNotifications: true, voiceOverlayNotificationActions: true,
-      notificationActionSession: latest!.notificationActionSession, participants: [],
-      notificationReplySession: latest!.notificationReplySession, notificationReplyButtons: replyButtons,
-      voiceOverlayChat: false, voiceOverlayChatActions: false, voiceOverlayChatCompose: false, chatStatus: undefined, chatMessages: undefined, chatActionSession: undefined, chatComposeSession: undefined, chatComposeLabel: undefined,
-    });
+    target.webContents.send("voice-overlay-update", notificationActionPayload(latest!, replyButtons));
     target.showInactive();
   };
   if (target.webContents.isLoading()) {
@@ -405,7 +395,7 @@ function updateMousePolicy(): void {
     if (target !== actionWindow || target.isDestroyed() || !actionAvailable() || (!unlocked && latest?.voiceOverlayClickableActions !== true)) { if (!target.isDestroyed()) target.hide(); return; }
     const bounds = overlayWindow!.getBounds();
     target.setPosition(bounds.x + bounds.width - 96, bounds.y + bounds.height - 48, false);
-    target.webContents.send("voice-overlay-update", { ...latest, participants: [], activities: [], voiceOverlayActivity: false, voiceOverlayNotifications: false, voiceOverlayNotificationActions: false, notificationActionSession: undefined, notifications: [], notificationStatus: undefined, voiceOverlayChat: false, voiceOverlayChatActions: false, voiceOverlayChatCompose: false, chatStatus: undefined, chatMessages: undefined, chatActionSession: undefined, chatComposeSession: undefined, chatComposeLabel: undefined, unlocked });
+    target.webContents.send("voice-overlay-update", voiceActionPayload(latest!, unlocked));
     target.showInactive();
   };
   if (target.webContents.isLoading()) {
