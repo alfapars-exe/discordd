@@ -95,7 +95,7 @@ func TestPostgresVoiceUsageMigrationPreservesTotals(t *testing.T) {
 	if err = db.QueryRowContext(ctx, "SELECT to_regclass($1) IS NOT NULL", schema+".voice_usage_credits").Scan(&exists); err != nil || exists {
 		t.Fatalf("failed migration retained ledger: exists=%v err=%v", exists, err)
 	}
-	if err = MigratePostgres(ctx, db); err != nil {
+	if err = applyPostgresMigrations(ctx, db, entries[:index+1]); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = db.ExecContext(ctx, `INSERT INTO voice_usage_credits(credit_id,instance_id,year,month,seconds) VALUES('preserved','legacy',2026,1,120)`); err != nil {
@@ -104,11 +104,15 @@ func TestPostgresVoiceUsageMigrationPreservesTotals(t *testing.T) {
 	if err = MigratePostgres(ctx, db); err != nil {
 		t.Fatal(err)
 	}
-	var used, credits, journal int
-	if err = db.QueryRowContext(ctx, `SELECT (SELECT used_seconds FROM livekit_monthly_usage WHERE instance_id='legacy' AND year=2026 AND month=1),(SELECT count(*) FROM voice_usage_credits WHERE credit_id='preserved'),(SELECT count(*) FROM postgres_schema_migrations WHERE filename='054_voice_usage_credits.sql')`).Scan(&used, &credits, &journal); err != nil {
+	if err = MigratePostgres(ctx, db); err != nil {
 		t.Fatal(err)
 	}
-	if used != 120 || credits != 1 || journal != 1 {
+	var used, credits, journal int
+	var applied bool
+	if err = db.QueryRowContext(ctx, `SELECT (SELECT used_seconds FROM livekit_monthly_usage WHERE instance_id='legacy' AND year=2026 AND month=1),(SELECT count(*) FROM voice_usage_credits WHERE credit_id='preserved'),(SELECT count(*) FROM postgres_schema_migrations WHERE filename='054_voice_usage_credits.sql'),(SELECT applied_at IS NOT NULL FROM voice_usage_credits WHERE credit_id='preserved')`).Scan(&used, &credits, &journal, &applied); err != nil {
+		t.Fatal(err)
+	}
+	if used != 120 || credits != 1 || journal != 1 || !applied {
 		t.Fatalf("upgrade/restart changed data: total=%d credits=%d journal=%d", used, credits, journal)
 	}
 	if _, err = db.ExecContext(ctx, `INSERT INTO voice_usage_credits(credit_id,instance_id,year,month,seconds) VALUES('invalid','legacy',2026,13,1)`); err == nil {
