@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"github.com/argeinfina/hichat/testutil"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -10,9 +11,7 @@ func TestGameJoinHTTPFixturesReleaseLimiterWorkers(t *testing.T) {
 	before := handlerLimiterWorkers(t)
 	t.Run("admission", TestGameJoinHTTPAdmission)
 	t.Run("late_session_revocation", TestGameJoinTargetsRecheckSessionBeforeResponse)
-	if after := handlerLimiterWorkers(t); after != before {
-		t.Fatalf("game join fixtures retained limiter workers: before=%d after=%d", before, after)
-	}
+	testutil.AssertWorkerCount(t, before, func() int { return handlerLimiterWorkers(t) })
 }
 
 func TestGameJoinUsesInjectedLimiterWithoutCreatingWorkers(t *testing.T) {
