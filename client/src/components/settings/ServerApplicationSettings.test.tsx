@@ -6,7 +6,7 @@ import ServerApplicationSettings from "./ServerApplicationSettings";
 
 vi.mock("../../api/applications", () => ({ listServerApplications: vi.fn() }));
 vi.mock("../../stores/settingsStore", () => ({ useSettingsStore: () => "server" }));
-const t = (key: string) => key;
+let t = (key: string) => key;
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t }) }));
 
 it("reports a rejected application list request and releases the form", async () => {
@@ -29,4 +29,19 @@ it("ignores a superseded request that fails after the current list loads", async
 
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   expect(screen.getByRole("textbox")).toBeEnabled();
+});
+
+it("translates an existing error without reloading the server list", async () => {
+  vi.mocked(listServerApplications).mockRejectedValueOnce(new Error("offline"));
+  const panel = render(<ServerApplicationSettings />);
+  await screen.findByRole("alert");
+  const original = t;
+  try {
+    t = key => "translated " + key;
+    panel.rerender(<ServerApplicationSettings />);
+    expect(screen.getByRole("alert")).toHaveTextContent("translated serverApplications.loadError");
+    expect(listServerApplications).toHaveBeenCalledTimes(1);
+  } finally {
+    t = original;
+  }
 });
