@@ -875,3 +875,9 @@ LiveKit silme düzeltmesinin mevcut PR #222 ile sonradan açılan PR #270'te ayn
 - Chat action termination also closes its composer and settles the pending request as unavailable. This cancels the local request ledger; it does not recall an already forwarded server message.
 - Before-fix fixture: `%TEMP%/hichat-action-crash-before.log`. Final integrated Electron compile/test: 327 passed, 1 skipped (`hichat-action-crash-final.log`). Canonical PR #279 head d698c7ce: 288 passed, 1 skipped (`hichat-action-crash-pr.log`), pushed; fresh CI pending. PR #278 head cf05d808: 36/36 successful checks verified.
 - Physical compositor, DPI and multi-display acceptance remain open. Whole-project refactor is not complete.
+
+### RF20 — retire action documents on reload/navigation (2026-11-13)
+
+- Three before-fix regressions proved loaded action windows retained their owner during main-document reload/navigation. The factory now retires those owners, including associated chat composers. Initial loading, in-place navigation and subframe navigation remain permitted; queued callbacks after close cannot retire a replacement.
+- Integrated source 14076896: TypeScript compilation and Electron suite 331 passed, 1 skipped (`%TEMP%/hichat-action-navigation-after.log`). Canonical PR #279 head c0f7fa39: compile and 292 passed, 1 skipped (`hichat-action-navigation-pr.log`), pushed; fresh head CI pending. Before-fix evidence: `hichat-action-navigation-before.log`.
+- Physical window/compositor acceptance and remaining RF20 snapshot/lifecycle decomposition are still open.
