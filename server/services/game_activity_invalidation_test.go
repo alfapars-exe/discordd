@@ -30,9 +30,8 @@ func (r *recordingGameActivityInvalidator) ServerDeleted(_ context.Context, serv
 }
 
 func TestBlockAndUnblockImmediatelyInvalidateGameActivityRelationship(t *testing.T) {
-	f := newBlockSvcFixture(t)
 	invalidator := &recordingGameActivityInvalidator{}
-	f.svc.(*blockService).SetGameActivityPrivacyInvalidator(invalidator)
+	f := newBlockSvcFixtureWithActivity(t, invalidator)
 	if err := f.svc.BlockUser(context.Background(), "alice", "bob"); err != nil {
 		t.Fatal(err)
 	}
