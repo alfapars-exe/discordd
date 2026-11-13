@@ -27,5 +27,24 @@ it("invalidates a pending reply when the conversation changes", async () => {
   rerender({ key: "second" });
   expect(context.isCurrent()).toBe(false);
   await act(async () => finish(true));
-  expect(scroll).not.toHaveBeenCalled();
+  expect(scroll.mock.calls).toEqual([[null]]);
+});
+
+it("clears a mounted target before fetching a newer reply and ignores an older response", async () => {
+  const scroll = vi.fn();
+  let finishFirst!: (found: boolean) => void;
+  let finishSecond!: (found: boolean) => void;
+  const load = vi.fn()
+    .mockImplementationOnce(() => new Promise<boolean>(resolve => { finishFirst = resolve; }))
+    .mockImplementationOnce(() => new Promise<boolean>(resolve => { finishSecond = resolve; }));
+  const { result } = renderHook(() => useReplyNavigation("channel", id => id === "mounted", load, scroll));
+
+  act(() => result.current("mounted"));
+  act(() => result.current("first"));
+  expect(scroll).toHaveBeenLastCalledWith(null);
+  act(() => result.current("second"));
+  await act(async () => finishSecond(true));
+  await act(async () => finishFirst(true));
+  expect(scroll).toHaveBeenLastCalledWith("second");
+  expect(scroll).not.toHaveBeenCalledWith("first");
 });

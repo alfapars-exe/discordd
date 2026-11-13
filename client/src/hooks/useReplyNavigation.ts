@@ -18,6 +18,8 @@ export function useReplyNavigation(
       scroll(id);
       return;
     }
+    // Cancel the previous row highlight before the asynchronous window load.
+    scroll(null);
     const isCurrent = () => request === generation.current;
     const unavailable = () => {
       if (isCurrent()) useToastStore.getState().addToast("info", t("replyTargetUnavailable"));
