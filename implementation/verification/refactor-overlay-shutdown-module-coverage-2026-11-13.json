@@ -1,0 +1,42 @@
+{
+  "pr": 286,
+  "head": "9b5efe12",
+  "integrationSource": "3ef262e760b4272e377d2bbbea22f523e9a1644b",
+  "node": "v26.13.1",
+  "coverageScope": "Node built-in coverage for three compiled CommonJS modules; not TypeScript-wide or whole-Electron coverage. Actual compiled main/IPC wiring also has functional tests but is not included in these module percentages.",
+  "targetedTestsPassed": 20,
+  "modules": {
+    "application-shutdown.js": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    },
+    "overlay-renderer-lifecycle.js": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    },
+    "game-window-tracker.js": {
+      "lines": 94.93,
+      "branches": 77.55,
+      "functions": 90
+    }
+  },
+  "independentSuite": {
+    "passed": 284,
+    "skipped": 1,
+    "compileExitCode": 0,
+    "testExitCode": 0
+  },
+  "integratedSuite": {
+    "passed": 378,
+    "skipped": 1,
+    "compileExitCode": 0,
+    "testExitCode": 0
+  },
+  "log": "hichat-overlay-shutdown-module-coverage.log",
+  "limits": [
+    "Physical Windows helper/updater/OS-driven shutdown acceptance remains open.",
+    "Five-second timeout is reported failure/continuation, not proof of native child reap."
+  ]
+}
