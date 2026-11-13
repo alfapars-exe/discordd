@@ -201,6 +201,7 @@ func bindPostgres(query string) (string, error) {
 		c := query[i]
 		if c == '\'' || c == '"' || c == '`' {
 			quote := c
+			closed := false
 			escapes := quote == '\'' && startsEscapeString(query, i)
 			out.WriteByte(c)
 			i++
@@ -219,8 +220,12 @@ func bindPostgres(query string) (string, error) {
 						i++
 						continue
 					}
+					closed = true
 					break
 				}
+			}
+			if !closed {
+				return "", fmt.Errorf("unterminated SQL quoted token")
 			}
 			continue
 		}
