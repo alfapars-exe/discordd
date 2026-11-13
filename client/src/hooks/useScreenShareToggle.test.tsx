@@ -24,6 +24,7 @@ const h = vi.hoisted(() => ({
   listenNative: vi.fn(),
   token: vi.fn(),
   startNative: vi.fn(),
+  stopNative: vi.fn(),
   display: { width: 2560, height: 1440, refreshRate: 144, monitorCount: 1 },
   startAudio: vi.fn(), stopAudio: vi.fn(), toast: vi.fn(), log: vi.fn(),
 }));
@@ -44,7 +45,7 @@ vi.mock("./useSystemAudioCapture", () => ({
 vi.mock("../utils/constants", () => ({
   isElectron: () => h.electron, isCapacitor: () => h.capacitor, isMobileBrowser: () => false, canBrowserScreenShare: () => true,
 }));
-vi.mock("../utils/nativePlugins", () => ({ startNativeScreenShare: h.startNative, stopNativeScreenShare: vi.fn(), onNativeScreenShareStopped: h.listenNative }));
+vi.mock("../utils/nativePlugins", () => ({ startNativeScreenShare: h.startNative, stopNativeScreenShare: h.stopNative, onNativeScreenShareStopped: h.listenNative }));
 vi.mock("../api/voice", () => ({ getScreenShareToken: h.token }));
 vi.mock("../api/clientLog", () => ({ logToServer: h.log }));
 vi.mock("../i18n", () => ({ default: { t: (key: string) => key } }));
@@ -183,6 +184,7 @@ beforeEach(() => {
   h.listenNative.mockReset();
   h.listenNative.mockResolvedValue(() => {});
   h.token.mockReset(); h.startNative.mockReset();
+  h.stopNative.mockReset(); h.stopNative.mockResolvedValue(undefined);
   h.startAudio.mockReset(); h.stopAudio.mockReset(); h.toast.mockReset(); h.log.mockReset();
   voice.setState({
     isStreaming: true, currentVoiceChannelId: "channel", screenShareQuality: "1080p", screenShareFps: 60,
@@ -197,6 +199,27 @@ afterEach(async () => {
 });
 
 describe("guild screen-share profile lifecycle", () => {
+  it.each(["stop", "channel", "unmount"])("does not revive native capture after %s during a quality restart", async retirement => {
+    h.capacitor = true;
+    h.token.mockResolvedValue({ success: true, data: { url: "wss://media", token: "token" } });
+    h.startNative.mockResolvedValue(true);
+    const f = fixture();
+    await tick();
+    expect(h.startNative).toHaveBeenCalledTimes(1);
+    const stopped = deferred();
+    h.stopNative.mockReturnValue(stopped.promise);
+    change({ screenShareQuality: "720p" });
+    await tick(350);
+    expect(h.stopNative).toHaveBeenCalledTimes(1);
+    if (retirement === "stop") change({ isStreaming: false });
+    else if (retirement === "channel") change({ currentVoiceChannelId: "another" });
+    else f.view.unmount();
+    await act(async () => { stopped.resolve(); });
+    await tick();
+    expect(h.startNative).toHaveBeenCalledTimes(1);
+    expect(voice.getState().isStreaming).toBe(retirement !== "stop");
+    expect(voice.getState()._wsSend.mock.calls.filter(call => call[1]?.is_streaming === true)).toHaveLength(1);
+  });
   it("rolls back native sharing when the platform returns started=false", async () => {
     h.capacitor = true;
     h.token.mockResolvedValue({ success: true, data: { url: "wss://media", token: "token" } });
