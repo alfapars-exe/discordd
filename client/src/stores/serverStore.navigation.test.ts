@@ -1,3 +1,4 @@
+import { getAuthSessionSnapshot, publishAuthGenerationChange } from "../api/authSessionEvents";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { APIResponse, Server, CategoryWithChannels } from "../types";
 const shell = vi.hoisted(() => ({ enabled: false }));
@@ -176,4 +177,15 @@ it("ignores a server list response after the signed-in account changes", async (
   await pending;
   expect(useServerStore.getState().servers).toEqual(current);
   expect(useServerStore.getState().isLoading).toBe(false);
+});
+
+
+it("releases the old server loading state at a session boundary", async () => {
+  let finish!: (value: APIResponse<[]>) => void;
+  vi.mocked(getMyServers).mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+  const pending = useServerStore.getState().fetchServers();
+  publishAuthGenerationChange(getAuthSessionSnapshot().generation + 1);
+  expect(useServerStore.getState().isLoading).toBe(false);
+  finish({ success: true, data: [] });
+  await pending;
 });

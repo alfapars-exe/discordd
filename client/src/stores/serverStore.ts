@@ -1,4 +1,4 @@
-import { subscribeAuthOwnerChanges } from "../api/authSessionEvents";
+import { subscribeAuthGenerationChanges, subscribeAuthOwnerChanges } from "../api/authSessionEvents";
 import { readStartupCache, rememberStartupServers } from "../utils/startupCache";
 /**
  * Server Store — Multi-server state management.
@@ -351,6 +351,11 @@ export const useServerStore = create<ServerState>((set, get) => ({
     return res.success;
   },
 }));
+
+subscribeAuthGenerationChanges(() => {
+  serverListRequest++;
+  useServerStore.setState({ isLoading: false });
+});
 
 // Only list metadata is hydrated after identity validation. Channel permissions
 // and memberships are fetched afresh; disk data never grants application access.
