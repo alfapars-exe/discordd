@@ -1,5 +1,5 @@
 import { expectReplyLoadsOriginal, limitReplyHistoryPage } from "./replyNavigation.helpers";
-import { test } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { fixtureApi, dismissOnboardingOverlays, loginAsNotificationOwner, loginAsNotificationRecipient } from "./helpers";
 
 test("a DM reply loads the original from outside the current history page", async ({ page, browser }) => {
@@ -26,7 +26,14 @@ test("a DM reply loads the original from outside the current history page", asyn
     const replyId = reply.id;
     const endpoint = "/api/dms/" + channelId + "/messages";
     await limitReplyHistoryPage(page, endpoint);
+    const loadedChannels = page.waitForResponse(response =>
+      new URL(response.url()).pathname === "/api/dms"
+      && response.request().method() === "GET");
     await page.reload();
+    const listed = await loadedChannels;
+    expect(listed.ok()).toBe(true);
+    const listedChannels = (await listed.json()).data as { id: string }[];
+    expect(listedChannels.some(item => item.id === channelId)).toBe(true);
     await dismissOnboardingOverlays(page);
     await page.getByRole("complementary").getByRole("button").filter({ hasText: peerUser.display_name || peerUser.username }).first().click();
     await expectReplyLoadsOriginal(page, endpoint, replyId, originalId, "keyboard");
