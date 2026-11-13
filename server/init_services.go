@@ -328,13 +328,9 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		services.NewServerDMPolicy(repos.Preferences, repos.Server),
 		repos.DM, repos.User, hub, blockService, friendshipService, dmSettingsService,
 		repos.DMRead, repos.Notification, repository.NewDMMessageTxRunner(db),
+		emailDeliveryService,
 	)
 	services.ConfigureDMDelivery(dmService, db)
-	communication, ok := dmService.(services.DMCommunicationEmailConfigurer)
-	if !ok {
-		panic("DM service must support communication email delivery")
-	}
-	communication.SetCommunicationEmailEnqueuer(emailDeliveryService)
 
 	if reactionDM, ok := dmService.(interface {
 		SetReactionPreferences(repository.PreferencesRepository)

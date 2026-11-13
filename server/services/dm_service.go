@@ -74,10 +74,6 @@ type ScheduledEmailEnqueuer interface {
 	EnqueueWithOptions(ctx context.Context, userID, category, dedupeKey, subject, body string, options EmailEnqueueOptions) (bool, error)
 }
 
-type DMCommunicationEmailConfigurer interface {
-	SetCommunicationEmailEnqueuer(ScheduledEmailEnqueuer)
-}
-
 // FriendshipChecker is a minimal ISP interface for friend checks (used by dmService).
 type FriendshipChecker interface {
 	AreFriends(ctx context.Context, userA, userB string) (bool, error)
@@ -108,10 +104,6 @@ type dmService struct {
 	communicationEmailEnqueuer ScheduledEmailEnqueuer
 }
 
-func (s *dmService) SetCommunicationEmailEnqueuer(enqueuer ScheduledEmailEnqueuer) {
-	s.communicationEmailEnqueuer = enqueuer
-}
-
 func NewDMService(
 	serverDMPolicy ServerDMPolicy,
 	dmRepo repository.DMRepository,
@@ -123,18 +115,20 @@ func NewDMService(
 	dmReadRepo repository.DMReadRepository,
 	notificationRepo repository.NotificationRepository,
 	txRunner repository.DMMessageTxRunner,
+	communicationEmailEnqueuer ScheduledEmailEnqueuer,
 ) DMService {
 	return &dmService{
-		serverDMPolicy:   serverDMPolicy,
-		dmRepo:           dmRepo,
-		userRepo:         userRepo,
-		dmReadRepo:       dmReadRepo,
-		notificationRepo: notificationRepo,
-		txRunner:         txRunner,
-		hub:              hub,
-		blockChecker:     blockChecker,
-		friendChecker:    friendshipChecker,
-		unhider:          unhider,
+		communicationEmailEnqueuer: communicationEmailEnqueuer,
+		serverDMPolicy:             serverDMPolicy,
+		dmRepo:                     dmRepo,
+		userRepo:                   userRepo,
+		dmReadRepo:                 dmReadRepo,
+		notificationRepo:           notificationRepo,
+		txRunner:                   txRunner,
+		hub:                        hub,
+		blockChecker:               blockChecker,
+		friendChecker:              friendshipChecker,
+		unhider:                    unhider,
 	}
 }
 
