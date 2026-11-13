@@ -30,10 +30,7 @@ function resolutionFor(quality: string, fps: number, display: DisplayInfo | null
 
 export function createDesktopScreenShareController(operations: DesktopOperations) {
   const { localParticipant } = operations;
-  return {
-    async start(branch: DesktopBranch, ssq: ScreenShareQuality, ssFps: ScreenShareFps,
-      streamName: string, attemptStart: number, initialAudio: boolean, shouldCancel: () => boolean): Promise<void> {
-      const retireCancelledStart = async (publication: LocalTrackPublication | undefined) => {
+      const retireCancelledStart = async (publication: LocalTrackPublication | undefined, streamName: string) => {
         const publications = new Set([publication, ...localParticipant.trackPublications.values()]);
         for (const pub of publications) {
           const track = pub?.track;
@@ -43,7 +40,9 @@ export function createDesktopScreenShareController(operations: DesktopOperations
           await localParticipant.unpublishTrack(track).catch(() => {});
         }
       };
-      if (branch === "electron-audio") {
+  async function startElectron(ssq: ScreenShareQuality, ssFps: ScreenShareFps,
+    streamName: string, attemptStart: number, shouldCancel: () => boolean): Promise<void> {
+    const branch = "electron-audio";
         const opts = resolveScreenSharePublishDefaults({ ...operations.getSettings(), screenShareQuality: ssq, screenShareFps: ssFps }, operations.getDisplay());
         // captureOptions (2nd arg) — getDisplayMedia hints; we suppress
         // audio in this branch because the native helper publishes a
@@ -57,7 +56,7 @@ export function createDesktopScreenShareController(operations: DesktopOperations
           // audio track (below) can join the same stream → A/V sync grouping.
         }, { ...opts.screenSharePublish, stream: streamName });
 
-        if (shouldCancel()) { await retireCancelledStart(publication); return; }
+        if (shouldCancel()) { await retireCancelledStart(publication, streamName); return; }
 
         if (!operations.ownPublishedShare(ssq, ssFps, opts, shouldCancel)) throw new DOMException("Screen source ended before publication", "AbortError");
 
@@ -110,7 +109,10 @@ export function createDesktopScreenShareController(operations: DesktopOperations
           branch,
           durationMs: Date.now() - attemptStart,
         });
-      } else {
+  }
+  async function startBrowser(ssq: ScreenShareQuality, ssFps: ScreenShareFps,
+    streamName: string, attemptStart: number, initialAudio: boolean, shouldCancel: () => boolean): Promise<void> {
+    const branch = "browser";
         // Browser path — LiveKit calls navigator.mediaDevices.getDisplayMedia.
         // Cap-check first so iOS Safari (no getDisplayMedia) surfaces a
         // toast instead of failing silently when the user taps the button.
@@ -145,7 +147,7 @@ export function createDesktopScreenShareController(operations: DesktopOperations
           // Audio publish profile (stereo + DTX-off) merged into the single
           // publishOptions; the video track ignores audio-only fields and vice-versa.
         }, { ...opts.screenSharePublish, ...opts.screenShareAudioPublish, stream: streamName });
-        if (shouldCancel()) { await retireCancelledStart(publication); return; }
+        if (shouldCancel()) { await retireCancelledStart(publication, streamName); return; }
         if (!operations.ownPublishedShare(effQ, effFps, opts, shouldCancel)) throw new DOMException("Screen source ended before publication", "AbortError");
         operations.started();
         operations.logVideo(branch);
@@ -156,8 +158,12 @@ export function createDesktopScreenShareController(operations: DesktopOperations
           effectiveQuality: effQ,
           effectiveFps: effFps,
         });
-      }
-
+  }
+  return {
+    async start(branch: DesktopBranch, ssq: ScreenShareQuality, ssFps: ScreenShareFps,
+      streamName: string, attemptStart: number, initialAudio: boolean, shouldCancel: () => boolean): Promise<void> {
+      if (branch === "electron-audio") await startElectron(ssq, ssFps, streamName, attemptStart, shouldCancel);
+      else await startBrowser(ssq, ssFps, streamName, attemptStart, initialAudio, shouldCancel);
     },
     async stop(): Promise<void> {
       const audio = operations.releaseOwnedShare();

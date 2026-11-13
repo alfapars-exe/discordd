@@ -444,7 +444,7 @@ export function useScreenShareToggle(
         stop: stopNativeScreenShare,
         tokenFailed: error => {
           console.error("[useScreenShareToggle] Failed to get screen share token:", error);
-          logToServer("warn", "screen_share_token_failed", { branch, error: error ?? "unknown" });
+          void logToServer("warn", "screen_share_token_failed", { branch, error: error ?? "unknown" });
           notifyServerStopped();
         },
         channelChanged: () => {
@@ -452,7 +452,7 @@ export function useScreenShareToggle(
         },
         started: () => {
           notifyServerStarted();
-          logToServer("info", "screen_share_success", { branch, durationMs: Date.now() - attemptStart });
+          void logToServer("info", "screen_share_success", { branch, durationMs: Date.now() - attemptStart });
         },
       });
       nativeControllerRef.current = controller;
