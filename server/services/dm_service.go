@@ -95,8 +95,7 @@ type dmService struct {
 	reactionPreferences profilePreferenceReader
 	// uploadDir enables best-effort disk cleanup on message/channel delete
 	// (see upload_cleanup.go). Blank disables cleanup — set via
-	// SetUploadDir, wired in init_services.go so the constructor signature
-	// above stays unchanged.
+	// SetUploadDir in init_services.go.
 	uploadDir string
 	// emojiResolver validates custom-emoji reactions (reaction_emoji.go);
 	// nil rejects every custom emoji. Set via SetEmojiResolver.

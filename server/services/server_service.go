@@ -55,8 +55,7 @@ type serverService struct {
 	permInvalidator    PermissionInvalidator
 	// uploadDir enables best-effort disk cleanup on server delete (see
 	// upload_cleanup.go). Blank disables cleanup — set via SetUploadDir,
-	// wired in init_services.go so the constructor signature below stays
-	// unchanged.
+	// wired in init_services.go.
 	uploadDir string
 }
 

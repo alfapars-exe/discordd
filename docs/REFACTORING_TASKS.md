@@ -389,6 +389,10 @@ Preferences servisinin profil görünürlüğü geçersizleştiricisi ve oyun et
 
 `f4b5bb25` üzerinde PostgreSQL 18.6 ile 17 yaşam döngüsü testi `-race` altında geçti, skip/fail yoktu. Son tercih constructor değişikliği dahil `d0408a97` üzerinde gerçek Go başlangıcı, üretim Chromium ve mTLS PostgreSQL ile iki oturumlu rol/kanal erişim paketi hazırlık dahil 3/3 geçti. Koşu 59,1 saniye sürdü. Kalan koşullu bağlantılar kanal/ses silme temizliği, hub'ın kalıcı kanal gönderimi yeteneği ve oyun katılım teklifi callback'idir. RF11'in tüm başlangıç/kapanış kabulü ve tam sunucu yarış tekrarı açık.
 
+**RF11 hub ve kanal/ses sözleşmesi.** Kanal silme sonrası ses temizliği channel constructor'ına taşındı. Voice constructor'ının dönüş arayüzü bu yeteneği garanti ediyor, başlangıçtaki tür dönüşümü kaldırıldı. `initServices` hub arayüzü artık kalıcı kanal gönderimi, oyun katılım teklifi ve görünür çevrimiçi kullanıcı sorgusunu açıkça gerektiriyor. Bu yetenekler koşullu bağlanmıyor. `b069ad9e` üzerinde altı silme/wiring testi yarış algılayıcısıyla geçti; altı PostgreSQL kanal teslim testi de ayrı izole PostgreSQL 18.6 koşusunda yarış algılayıcısıyla geçti.
+
+`9fe902a0` üzerinde son constructor ve hub değişikliklerini içeren üretim Chromium paketi gerçek Go ve mTLS PostgreSQL ile 14/14 geçti (2,3 dakika). Yenileme hız sınırının 15 saniyelik beklemesinden sonra oturum toparlandı. Tam sunucu yarış paketi ve bütün RF11 kapanış kabulü açık.
+
 | Alan | Tanım |
 |---|---|
 | Task ID | RF11 |

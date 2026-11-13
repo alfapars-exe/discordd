@@ -60,8 +60,7 @@ type channelService struct {
 	notificationRepo repository.NotificationRepository
 	// uploadDir enables best-effort disk cleanup on channel delete (see
 	// upload_cleanup.go). Blank disables cleanup — set via SetUploadDir,
-	// wired in init_services.go so the constructor signature below stays
-	// unchanged.
+	// wired in init_services.go.
 	uploadDir            string
 	voiceDeletionHandler VoiceChannelDeletionHandler
 }
