@@ -332,12 +332,8 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	)
 	services.ConfigureDMDelivery(dmService, db)
 
-	groupDMService := services.NewGroupDMService(repos.GroupDM, repos.User, repos.Friendship, hub, cfg.LiveKit.URL, cfg.LiveKit.APIKey, cfg.LiveKit.APISecret, encryptionKey, cfg.Upload.Dir)
-	if reactions, ok := groupDMService.(interface {
-		SetReactionDelivery(repository.NotificationRepository, repository.PreferencesRepository, services.BlockChecker)
-	}); ok {
-		reactions.SetReactionDelivery(repos.Notification, repos.Preferences, blockService)
-	}
+	groupDMService := services.NewGroupDMService(repos.GroupDM, repos.User, repos.Friendship, hub, cfg.LiveKit.URL, cfg.LiveKit.APIKey, cfg.LiveKit.APISecret, encryptionKey, cfg.Upload.Dir, repos.Notification, repos.Preferences, blockService)
+
 	dmService.SetUploadDir(cfg.Upload.Dir)
 	friendshipService.SetDMAcceptor(dmService) // auto-accept pending DMs when friendship is accepted
 	dmUploadService := services.NewDMUploadService(repos.DM, cfg.Upload.Dir, cfg.Upload.MaxSize)
