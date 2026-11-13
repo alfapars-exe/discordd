@@ -730,6 +730,12 @@ Aynı izole PostgreSQL ile CI'ın rol, üye rolü, teslimat, DM idempotency/outb
 
 Genel Go yarış denetiminde Docker kesintisinden önce tamamlanmayan repository ve services paketleri sekizer bölümde yeniden çalıştırıldı. On altı bölüm geçti. İlk koşuda tamamlanan diğer paketlerle birlikte bütün paketler denetlendi. Bu yerel sonuçlar GitHub CI kabulünü ve RF30 fiziksel cihaz kabulünü tamamlamaz.
 
+### RF28 üretim paketi doğrulama açığı, 13 Kasım 2026
+
+`d1fdaf00` üzerinde gerçek Go sunucusu ve mTLS PostgreSQL ile Chromium geliştirme koşusunda 14/14 test geçti. `HICHAT_E2E_PRODUCTION_CLIENT=1` ile aynı paket 3 geçti, 11 başarısız verdi. Bu sonuç RF28 üretim bundle kabulünü karşılamıyor.
+
+Üretim koşusunda bazı yardımcılar `/src/api/client.ts`, `/src/stores/authStore.ts`, `/src/api/dm.ts` ve `/src/stores/uiStore.ts` modüllerini tarayıcıdan yüklemeye çalışıyor. Derlenmiş uygulamada bu kaynak yolları bulunmuyor. İlgili çağrılar `helpers.ts`, `dm-reply-navigation.spec.ts`, `reply-navigation.spec.ts` ve `role-visibility.spec.ts` içinde. Hazırlık verileri HTTP ile kurulmalı, test edilen gezinme ve yetki davranışları kullanıcı arayüzünden sürülmeli. Oturum yenileme eşzamanlılığı korunarak test yardımcılarının token erişimi yeniden düzenlenmeli. Diğer başarısızlıkların User Profile düğmesi bekleme süresinde oluşması ayrıca incelenmeli.
+
 ## RF30 — Runtime kabulü ve kapanış
 
 | Alan | Tanım |

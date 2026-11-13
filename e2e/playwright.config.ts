@@ -5,8 +5,8 @@
  *   1. The real Go backend, built with CGO_ENABLED=0 into e2e/.tmp/ and run
  *      against a fresh PostgreSQL database per run (see scripts/start-server.mjs).
  *   2. The Vite dev server, which already proxies /api and /ws to :9090
- *      (client/vite.config.ts). No production client build is needed, which
- *      keeps both local runs and CI fast.
+ *      (client/vite.config.ts). Set HICHAT_E2E_PRODUCTION_CLIENT=1 to build
+ *      and serve the production bundle through Vite preview.
  *
  * Both are declared as `webServer` entries so Playwright owns their lifecycle
  * and tears them down even when the run fails.
