@@ -46,6 +46,7 @@ export async function fixtureApi<T>(page: Page, path: string, method = "GET", bo
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     if (!response.ok) throw new Error("Fixture API " + method + " failed with HTTP " + response.status);
+    if (response.status === 204) return undefined;
     const result = await response.json();
     if (!result.success) throw new Error("Fixture API returned an unsuccessful response");
     return result.data;
