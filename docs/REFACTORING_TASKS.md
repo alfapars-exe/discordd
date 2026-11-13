@@ -881,3 +881,9 @@ LiveKit silme düzeltmesinin mevcut PR #222 ile sonradan açılan PR #270'te ayn
 - Three before-fix regressions proved loaded action windows retained their owner during main-document reload/navigation. The factory now retires those owners, including associated chat composers. Initial loading, in-place navigation and subframe navigation remain permitted; queued callbacks after close cannot retire a replacement.
 - Integrated source 14076896: TypeScript compilation and Electron suite 331 passed, 1 skipped (`%TEMP%/hichat-action-navigation-after.log`). Canonical PR #279 head c0f7fa39: compile and 292 passed, 1 skipped (`hichat-action-navigation-pr.log`), pushed; fresh head CI pending. Before-fix evidence: `hichat-action-navigation-before.log`.
 - Physical window/compositor acceptance and remaining RF20 snapshot/lifecycle decomposition are still open.
+
+### RF20 — action snapshot projections (2026-11-13)
+
+- Extracted chat, notification and voice action payload builders from native window ownership. Sender/session revalidation, geometry and delivery remain in the owner; payload fields and existing HTTP/IPC contracts are preserved.
+- Direct contract tests exercise compose expansion, selected opaque reply rows, private history/display-data exclusion and shared snapshot immutability. Existing native-owner tests still verify actual child delivery.
+- Integrated source 6c191642: compile and 334 passed, 1 skipped (`%TEMP%/hichat-action-payload-integrated.log`). PR #279 head 4d8f4e53: compile and 295 passed, 1 skipped (`hichat-action-payload-pr.log`), pushed; CI pending for this head. No physical/compositor acceptance claimed.
