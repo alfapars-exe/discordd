@@ -39,13 +39,13 @@ func (h *Hub) addClient(client *Client) {
 		}
 	}()
 	h.mu.Lock()
+	reject := h.shuttingDown
 	select {
 	case <-client.done:
-		h.mu.Unlock()
-		return
+		reject = true
 	default:
 	}
-	if h.shuttingDown {
+	if reject {
 		h.mu.Unlock()
 		if client.done != nil {
 			client.closeDone()
