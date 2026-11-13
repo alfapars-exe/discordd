@@ -1,3 +1,4 @@
+import { runScreenShareRestart } from "../webrtc/screenShareRestartController";
 import { createDesktopScreenShareController } from "../webrtc/desktopScreenShareController";
 import { ScreenShareLifecycleController } from "../webrtc/screenShareLifecycleController";
 import { createNativeScreenShareController } from "../webrtc/nativeScreenShareController";
@@ -608,47 +609,27 @@ export function useScreenShareToggle(
     oldVals: { q: ScreenShareQuality; fps: ScreenShareFps },
     newVals: { q: ScreenShareQuality; fps: ScreenShareFps },
   ): Promise<void> {
-    if (myGen !== restartGenRef.current) return;
-
-    const { isStreaming: streaming } =
-      useVoiceStore.getState();
-    if (!streaming) return;
-
     const branch = computeShareBranch();
-    const channelId = useVoiceStore.getState().currentVoiceChannelId;
-    const shouldCancel = () => {
-      const current = useVoiceStore.getState();
-      return myGen !== restartGenRef.current || !current.isStreaming || current.currentVoiceChannelId !== channelId;
-    };
-
-    isRestartingRef.current = true;
-    try {
-      logToServer("info", "screen_share_restart", {
-        trigger: oldVals.q !== newVals.q ? "quality" : "fps",
-        oldQuality: oldVals.q,
-        newQuality: newVals.q,
-        oldFps: oldVals.fps,
-        newFps: newVals.fps,
-        branch,
-      });
-
-      await stopShareInternal(branch);
-      if (shouldCancel()) return;
-
-      await startShareInternal(branch, newVals.q, newVals.fps, shouldCancel);
-    } catch (err: unknown) {
-      if (shouldCancel()) return;
-      console.error("[useScreenShareToggle] Restart failed:", err);
-      handleStartFailure(err);
-    } finally {
-      // Only clear suppression if we're still the current restart — a newer
-      // restart may have already taken over the flag.
-      if (myGen === restartGenRef.current) {
-        isRestartingRef.current = false;
-      }
-    }
+    await runScreenShareRestart({
+      isCurrent: () => myGen === restartGenRef.current,
+      isStreaming: () => useVoiceStore.getState().isStreaming,
+      getChannelId: () => useVoiceStore.getState().currentVoiceChannelId,
+      setRestarting: value => { isRestartingRef.current = value; },
+      beforeRestart: () => {
+        logToServer("info", "screen_share_restart", {
+          trigger: oldVals.q !== newVals.q ? "quality" : "fps",
+          oldQuality: oldVals.q, newQuality: newVals.q,
+          oldFps: oldVals.fps, newFps: newVals.fps, branch,
+        });
+      },
+      stop: () => stopShareInternal(branch),
+      start: shouldCancel => startShareInternal(branch, newVals.q, newVals.fps, shouldCancel),
+      failed: err => {
+        console.error("[useScreenShareToggle] Restart failed:", err);
+        handleStartFailure(err);
+      },
+    });
   }
-
   // Effect 4: restart watcher.
   //
   // Fires when screenShareQuality or screenShareFps changes. Debounces 350 ms
