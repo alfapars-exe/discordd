@@ -9,7 +9,7 @@ function harness() {
   const state = { shapeFails: false, load: Promise.resolve() };
   let options: BrowserWindowConstructorOptions | undefined;
   const window = Object.assign(new EventEmitter(), {
-    webContents: new EventEmitter(),
+    webContents: Object.assign(new EventEmitter(), { isLoading: (): boolean => false }),
     setShape: (regions: Rectangle[]) => { calls.push(["shape", regions]); if (state.shapeFails) throw new Error("shape unavailable"); },
     setAlwaysOnTop: (...args: unknown[]) => { calls.push(["top", ...args]); },
     loadURL: (url: string) => { calls.push(["load", url]); return state.load; },
@@ -84,4 +84,25 @@ test("renderer crash reports its owned child and close removes only owned listen
   assert.equal(h.calls.length, count, "retired callbacks cannot affect a replacement owner");
   assert.deepEqual(h.window.webContents.listeners("render-process-gone"), [sibling]);
   assert.equal(h.window.listenerCount("closed"), 0);
+});
+
+test("only a loaded main document navigation retires an action owner", () => {
+  const h = harness();
+  h.window.webContents.isLoading = () => true;
+  h.create();
+  const navigate = (inPlace: boolean, mainFrame: boolean) => h.window.webContents.emit("did-start-navigation", {}, "app://hichat/overlay.html", inPlace, mainFrame);
+  navigate(false, true);
+  assert.equal(h.calls.some(call => call[0] === "failed"), false, "initial navigation is permitted");
+  h.window.webContents.emit("did-finish-load");
+  navigate(true, true); navigate(false, false);
+  assert.equal(h.calls.some(call => call[0] === "failed"), false);
+  const queued = h.window.webContents.listeners("did-start-navigation")[0];
+  navigate(false, true);
+  assert.deepEqual(h.calls[h.calls.length - 1], ["failed", h.nativeWindow, "navigation"]);
+  h.window.emit("closed");
+  const count = h.calls.length;
+  queued({}, "app://hichat/overlay.html", false, true);
+  assert.equal(h.calls.length, count);
+  assert.equal(h.window.webContents.listenerCount("did-start-navigation"), 0);
+  assert.equal(h.window.webContents.listenerCount("did-finish-load"), 0);
 });
