@@ -56,6 +56,12 @@ func (h *Hub) addClient(client *Client) {
 	}
 
 	isFirstConnection := len(h.clients[client.userID]) == 0
+	if profile := client.registrationProfile; profile != nil {
+		if isFirstConnection {
+			h.SetUserInfo(client.userID, profile.Username, profile.DisplayName, profile.AvatarURL)
+		}
+		client.registrationProfile = nil
+	}
 	if !isFirstConnection {
 		for existing := range h.clients[client.userID] {
 			client.prefStatus = existing.prefStatus

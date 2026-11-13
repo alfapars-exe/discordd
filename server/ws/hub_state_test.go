@@ -60,3 +60,31 @@ func TestRemoveClient_EvictsUserInfoOnlyOnFullDisconnect(t *testing.T) {
 		t.Fatalf("full disconnect must evict user info, got %+v", info)
 	}
 }
+
+func TestRegistrationProfileFollowsActiveConnections(t *testing.T) {
+	h := NewHub()
+	connect := func(name string, rejected bool) *Client {
+		c := &Client{hub: h, userID: "reader", done: make(chan struct{}), registrationProfile: &cachedUserInfo{Username: name}}
+		if rejected {
+			c.closeDone()
+		}
+		h.addClient(c)
+		return c
+	}
+
+	connect("rejected", true)
+	if len(h.userInfos) != 0 {
+		t.Fatal("rejected registration retained a profile")
+	}
+	first := connect("original", false)
+	h.UpdateUserInfo("reader", "updated", "", "")
+	second := connect("stale", false)
+	h.removeClient(first)
+	if got := h.getUserUsername("reader"); got != "updated" {
+		t.Fatalf("second tab replaced the active profile: %q", got)
+	}
+	h.removeClient(second)
+	if len(h.userInfos) != 0 {
+		t.Fatal("last disconnect retained a profile")
+	}
+}
