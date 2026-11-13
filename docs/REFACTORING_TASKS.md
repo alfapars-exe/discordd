@@ -1340,3 +1340,10 @@ Terminal current-head receipt: PR29814a965ea completed36/36 SUCCESS. Exact-head 
 - Admin mute shutdown regression failed before fix. Initial test fixture assumed a single channel lookup and panicked; corrected its notification with sync.Once, then reproduced the actual early-shutdown assertion.
 - AdminUpdateState now enters the terminal operation owner before lookup. The async mute leg registers a child; synchronous unmute remains before broadcast and inside the accepted root. New updates after closure return context.Canceled before dependencies.
 - Targeted VoiceUsage/AdminUpdateState/VoiceMaintenance tests passed ten repetitions (5.220s); Linux race ten (8.081s); services vet/lint passed. DSN-free PostgreSQL skips are not acceptance. Changes remain local integration, while PR298 2dafbcef CI43516530987 runs. Webhook, entrance-hook and final physical/runtime acceptance remain open.
+
+### 2026-11-14 — Own moderation webhook media work
+
+- Deleted-room webhook regression failed before fix: producer shutdown returned before LiveKit eviction. Accepted webhook checks now hold a root slot and all deleted-room/moderated-user/mute media dispatches register child work.
+- After the terminal owner drains, late webhook cleanup runs synchronously in caller ownership, preserving moderation instead of dropping it. A late deleted-room test passed ten repetitions (0.877s).
+- Targeted VoiceUsage/EnforceModerationOnJoin/VoiceMaintenance host tests passed ten repetitions (11.931s); final-source Linux race passed ten (15.042s), including late-webhook test. Services vet/lint passed. DSN-free runs skip PostgreSQL-specific tests.
+- Local integration only; PR298 published 2dafbcef remains under CI43516530987 (last checked ten successful jobs, none failed). Entrance hook, late terminal quota credit, full integrated/runtime and physical-media acceptance remain open.

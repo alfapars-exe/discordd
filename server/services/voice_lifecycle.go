@@ -688,6 +688,13 @@ func (s *voiceService) mutePublishedMicrophone(ctx context.Context, roomClient *
 // transient DB hiccup would kick or silence innocent participants for
 // reasons unrelated to moderation.
 func (s *voiceService) EnforceModerationOnJoin(ctx context.Context, serverID, channelID, userID string) {
+	// Keep accepted webhook checks and their media children inside the owner.
+	// Late webhooks still enforce revocation, with synchronous caller-owned
+	// cleanup through dispatchDisconnectCleanup once the terminal owner drains.
+	if finish, admitted := s.usageOperations.begin(); admitted {
+		defer finish()
+	}
+
 	// A JWT issued before channel deletion can remain valid until its expiry.
 	// Re-check the authoritative channel row on every participant_joined
 	// webhook, and evict both identities if the room no longer maps to a live
@@ -700,8 +707,8 @@ func (s *voiceService) EnforceModerationOnJoin(ctx context.Context, serverID, ch
 		if err != nil || channel == nil || channel.ServerID != serverID || channel.Type != models.ChannelTypeVoice {
 			voiceLogger.Warn("EnforceModerationOnJoin: evicting participant from missing or mismatched voice channel",
 				"server_id", serverID, "channel_id", channelID, "user_id", userID, "err", pkg.ErrText(err))
-			go s.removeDeletedChannelParticipant(ctx, serverID, channelID, userID)
-			go s.removeDeletedChannelParticipant(ctx, serverID, channelID, userID+"_ss")
+			s.dispatchDisconnectCleanup(func() { s.removeDeletedChannelParticipant(ctx, serverID, channelID, userID) })
+			s.dispatchDisconnectCleanup(func() { s.removeDeletedChannelParticipant(ctx, serverID, channelID, userID+"_ss") })
 			return
 		}
 	}
@@ -738,7 +745,7 @@ func (s *voiceService) EnforceModerationOnJoin(ctx context.Context, serverID, ch
 		// streaming after their voice session is evicted. See
 		// removeParticipantAndScreenShareFromLiveKit's own doc comment for
 		// the LiveKit call and error handling.
-		go s.removeParticipantAndScreenShareFromLiveKit(channelID, userID)
+		s.dispatchDisconnectCleanup(func() { s.removeParticipantAndScreenShareFromLiveKit(channelID, userID) })
 		return
 	}
 
@@ -750,7 +757,7 @@ func (s *voiceService) EnforceModerationOnJoin(ctx context.Context, serverID, ch
 	if s.currentServerMute(userID, serverID) {
 		voiceLogger.Info("EnforceModerationOnJoin: re-applying server-mute grant on join",
 			"server_id", serverID, "channel_id", channelID, "user_id", userID)
-		go s.applyServerMuteToLiveKit(channelID, userID) // #nosec G118 -- deliberately detached: this is the participant_joined backstop, best-effort by design and carrying its own context.Background()+timeout so it outlives the webhook request
+		s.dispatchDisconnectCleanup(func() { s.applyServerMuteToLiveKit(channelID, userID) })
 	}
 }
 

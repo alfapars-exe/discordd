@@ -399,3 +399,74 @@ func TestVoiceUsageShutdownRejectsAdminStateBeforeLookup(t *testing.T) {
 		t.Fatalf("closed owner admitted admin state update: %v", err)
 	}
 }
+
+type missingUsageChannelGetter struct{}
+
+func (missingUsageChannelGetter) GetByID(context.Context, string) (*models.Channel, error) {
+	return nil, errors.New("channel removed")
+}
+
+func TestVoiceUsageShutdownWaitsForDeletedRoomWebhook(t *testing.T) {
+	entered, release, stopped := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	var enterOnce, releaseOnce sync.Once
+	getter := &mockConfigurableLiveKitGetter{GetByServerIDFn: func(context.Context, string) (*models.LiveKitInstance, error) {
+		enterOnce.Do(func() { close(entered) })
+		<-release
+		return nil, errors.New("fixture has no media server")
+	}}
+	svc, _ := newTestVoiceServiceWithLiveKitGetter(getter)
+	s := svc.(*voiceService)
+	s.channelGetter = missingUsageChannelGetter{}
+	t.Cleanup(func() { releaseOnce.Do(func() { close(release) }); s.ShutdownUsageProducers() })
+	s.EnforceModerationOnJoin(context.Background(), "srv1", "deleted", "victim")
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("deleted-room eviction not started")
+	}
+	go func() { s.ShutdownUsageProducers(); close(stopped) }()
+	select {
+	case <-stopped:
+		t.Fatal("shutdown returned before webhook eviction")
+	case <-time.After(20 * time.Millisecond):
+	}
+	releaseOnce.Do(func() { close(release) })
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("webhook eviction not joined")
+	}
+}
+
+func TestVoiceUsageLateDeletedRoomWebhookOwnsEviction(t *testing.T) {
+	entered, release, stopped := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	var enterOnce, releaseOnce sync.Once
+	getter := &mockConfigurableLiveKitGetter{GetByServerIDFn: func(context.Context, string) (*models.LiveKitInstance, error) {
+		enterOnce.Do(func() { close(entered) })
+		<-release
+		return nil, errors.New("fixture has no media server")
+	}}
+	svc, _ := newTestVoiceServiceWithLiveKitGetter(getter)
+	s := svc.(*voiceService)
+	s.channelGetter = missingUsageChannelGetter{}
+	t.Cleanup(func() { releaseOnce.Do(func() { close(release) }); s.ShutdownUsageProducers() })
+	s.ShutdownUsageProducers()
+	go func() { s.EnforceModerationOnJoin(context.Background(), "srv1", "deleted", "victim"); close(stopped) }()
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("deleted-room eviction not started")
+	}
+
+	select {
+	case <-stopped:
+		t.Fatal("late webhook escaped terminal eviction ownership")
+	case <-time.After(20 * time.Millisecond):
+	}
+	releaseOnce.Do(func() { close(release) })
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("webhook eviction not joined")
+	}
+}
