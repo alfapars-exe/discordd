@@ -303,8 +303,9 @@ export default function GroupDMChat({ groupId }: { groupId: string }) {
       clear();
       return;
     }
-    const target=Array.from(messagesScrollRef.current?.querySelectorAll<HTMLElement>("[data-group-message-id]")??[])
-      .find(element=>element.dataset.groupMessageId===scrollTarget.messageId);
+    const target = messagesScrollRef.current?.querySelector<HTMLElement>(
+      `[data-group-message-id="${CSS.escape(scrollTarget.messageId)}"]`,
+    );
     if(!target){
       if(virtualized)virtualizer.scrollToIndex(targetIndex,{align:"center"});
       return;
