@@ -582,3 +582,9 @@ Paralel çalışma hatları: backend veri/lifecycle (RF04–RF11), client state/
 - İlgisiz dirty dosyalar staged edilmez; commit/PR/release artifact'i ile kanıt kaydı aynı kaynak anlık görüntüsünü gösterir.
 - Rollback küçük PR'ın revert'iyle mümkün tutulur. Veri migration'ı varsa backup/restore provası olmadan release kapısı kapanmaz.
 - [REFACTORING_PLAN.md](REFACTORING_PLAN.md), [TECHNICAL_DEBT.md](TECHNICAL_DEBT.md), [TEST_STRATEGY.md](TEST_STRATEGY.md), [CODE_QUALITY_STANDARDS.md](CODE_QUALITY_STANDARDS.md) ve [ARCHITECTURE_IMPROVEMENTS.md](ARCHITECTURE_IMPROVEMENTS.md) ilgili kararlarla eşleşir.
+
+### RF29 - retired slow WebSocket resource ownership (2026-11-13)
+
+- Fixed f4157516: removeClient closes the retired transport outside the hub lock before presence callbacks; unregisterClient immediately retires completed clients even when its queue is full. Before-fix regressions both failed at 500 ms; afterward both passed five repeats and the full ws package passed.
+- Extended the actual upgraded WebSocket fixture with injected stalled writes to eight default waves or 256 opt-in measurement waves. Every wave waits for both pumps and asserts zero remaining pumps and global/server membership. Three 256-wave runs passed; sampled goroutines stayed at 3, with heap samples recorded without asserting a universal memory threshold.
+- Full ws race run passed in Docker golang:1.26.10-bookworm (14.611 s). This proves bounded injected-backpressure cleanup, not production throughput, authentication/database acceptance, or extended soak. Evidence: implementation/verification/refactor-ws-slow-cleanup-2026-11-13.json. Canonical draft publication/CI and broader RF29 measurements remain open.
