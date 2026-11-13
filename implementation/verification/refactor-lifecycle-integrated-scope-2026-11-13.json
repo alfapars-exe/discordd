@@ -1,0 +1,157 @@
+{
+  "source": "9e54543d",
+  "command": "go test -race -json . ./services ./handlers ./middleware -run <startup/limiter/fixture/gamejoin/metrics/PostgreSQL scope> -count=5 -timeout=2m",
+  "environment": "Local PostgreSQL 18.6 with verified mutual TLS, client certificate required, Docker Go toolchain auto, race enabled",
+  "top_level_tests": [
+    {
+      "package": "github.com/argeinfina/hichat",
+      "test": "TestLimiterAssemblyRollsBackEveryPartialConstruction",
+      "pass_count": 5
+    },
+    {
+      "package": "github.com/argeinfina/hichat",
+      "test": "TestLimiterAssemblyTransfersAllWorkersOnSuccess",
+      "pass_count": 5
+    },
+    {
+      "package": "github.com/argeinfina/hichat",
+      "test": "TestRateLimiterBundleOwnsEveryDeclaredWorker",
+      "pass_count": 5
+    },
+    {
+      "package": "github.com/argeinfina/hichat",
+      "test": "TestServiceInitializationReleasesCacheOnEarlyConfigFailure",
+      "pass_count": 5
+    },
+    {
+      "package": "github.com/argeinfina/hichat",
+      "test": "TestServiceInitializationReleasesCacheWhenHubWiringPanics",
+      "pass_count": 5
+    },
+    {
+      "package": "github.com/argeinfina/hichat",
+      "test": "TestServiceInitializationTransfersLiveWorkersToSuccessfulCaller",
+      "pass_count": 5
+    },
+    {
+      "package": "github.com/argeinfina/hichat/handlers",
+      "test": "TestGameJoinHTTPAdmission",
+      "pass_count": 5
+    },
+    {
+      "package": "github.com/argeinfina/hichat/handlers",
+      "test": "TestGameJoinHTTPFixturesReleaseLimiterWorkers",
+      "pass_count": 5
+    },
+    {
+      "package": "github.com/argeinfina/hichat/handlers",
+      "test": "TestGameJoinTargetsRecheckSessionBeforeResponse",
+      "pass_count": 5
+    },
+    {
+      "package": "github.com/argeinfina/hichat/handlers",
+      "test": "TestGameJoinUsesInjectedLimiterWithoutCreatingWorkers",
+      "pass_count": 5
+    },
+    {
+      "package": "github.com/argeinfina/hichat/handlers",
+      "test": "TestHandlerLimiterFixturesReleaseTheirWorkers",
+      "pass_count": 5
+    },
+    {
+      "package": "github.com/argeinfina/hichat/middleware",
+      "test": "TestMiddlewareLimiterFixtureReleasesItsWorker",
+      "pass_count": 5
+    },
+    {
+      "package": "github.com/argeinfina/hichat/services",
+      "test": "TestGameJoinCompetingSourceNeverRevivesRetiredOfferOnFallback",
+      "pass_count": 5
+    },
+    {
+      "package": "github.com/argeinfina/hichat/services",
+      "test": "TestGameJoinConcurrentConsumeOnlyOneWinner",
+      "pass_count": 5
+    },
+    {
+      "package": "github.com/argeinfina/hichat/services",
+      "test": "TestGameJoinFreshPolicyAndPhysicalDisconnectDuringLookup",
+      "pass_count": 5
+    },
+    {
+      "package": "github.com/argeinfina/hichat/services",
+      "test": "TestGameJoinHeartbeatDoesNotRenewOfferOrTicket",
+      "pass_count": 5
+    },
+    {
+      "package": "github.com/argeinfina/hichat/services",
+      "test": "TestGameJoinOfferSequenceAndStrictRecipe",
+      "pass_count": 5
+    },
+    {
+      "package": "github.com/argeinfina/hichat/services",
+      "test": "TestGameJoinOutstandingTicketBound",
+      "pass_count": 5
+    },
+    {
+      "package": "github.com/argeinfina/hichat/services",
+      "test": "TestGameJoinPolicyFreshConsentRelationshipsAndVoiceScope",
+      "pass_count": 5
+    },
+    {
+      "package": "github.com/argeinfina/hichat/services",
+      "test": "TestGameJoinSingleUseSessionBindingAndNoRecipeBeforeConsume",
+      "pass_count": 5
+    },
+    {
+      "package": "github.com/argeinfina/hichat/services",
+      "test": "TestGameJoinSourceReplacementAndExplicitWithdrawInvalidateTickets",
+      "pass_count": 5
+    },
+    {
+      "package": "github.com/argeinfina/hichat/services",
+      "test": "TestGameJoinVoiceAdmissionRejectsLeaveRejoinSameChannel",
+      "pass_count": 5
+    },
+    {
+      "package": "github.com/argeinfina/hichat/services",
+      "test": "TestMetricsCollectorConcurrentStartRunsOneWorker",
+      "pass_count": 5
+    },
+    {
+      "package": "github.com/argeinfina/hichat/services",
+      "test": "TestMetricsCollectorConcurrentStopAndStopBeforeStart",
+      "pass_count": 5
+    },
+    {
+      "package": "github.com/argeinfina/hichat/services",
+      "test": "TestMetricsCollectorInterleavedLifecycleOwners",
+      "pass_count": 5
+    },
+    {
+      "package": "github.com/argeinfina/hichat/services",
+      "test": "TestMetricsCollectorPreservesImmediateAndPeriodicSnapshots",
+      "pass_count": 5
+    },
+    {
+      "package": "github.com/argeinfina/hichat/services",
+      "test": "TestMetricsCollectorStopCancelsAndWaitsForActiveQuery",
+      "pass_count": 5
+    },
+    {
+      "package": "github.com/argeinfina/hichat/services",
+      "test": "TestMetricsCollectorStopCancelsRealHTTPPoll",
+      "pass_count": 5
+    },
+    {
+      "package": "github.com/argeinfina/hichat/services",
+      "test": "TestPostgresMetricsCollectorCancellation",
+      "pass_count": 5
+    }
+  ],
+  "top_level_pass_events": 145,
+  "skips": 0,
+  "failures": 0,
+  "full_vet_and_build": "PASS",
+  "scope_limit": "Selected integrated lifecycle scope, not whole-project/full-services/process-signal or physical-media acceptance."
+}

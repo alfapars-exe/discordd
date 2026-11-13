@@ -14,10 +14,14 @@
     "negative_control": "Omitting GameJoin from bundle Stop still fails: got=1 want=0 at 0.50s. Original source restored.",
     "restored_source_tests_count_5": "PASS main 0.604s, handlers 0.729s, middleware 0.390s",
     "full_go_vet_and_build": "PASS",
-    "golangci_lint": "0 issues"
+    "golangci_lint": "0 issues",
+    "integrated_selected_tests_count_5": "PASS main 0.772s, handlers 0.787s, middleware 0.432s",
+    "integrated_full_go_vet_and_build": "PASS"
   },
   "limitations": [
     "This addresses profile observation semantics, not a proven production resource leak.",
     "Full new-head CI must pass before the prior CI failure is considered resolved."
-  ]
+  ],
+  "canonical_source": "afa1802d",
+  "integrated_source": "9e54543d"
 }
