@@ -97,6 +97,7 @@ func checkRepositoryDialect(t *testing.T, db *sql.DB) {
 		{insert, "a", "original", first, 1},
 		{insert, "a", "ignored", next, 0},
 		{insert, "b", "other", first, 1},
+		{insert, "c", "same timestamp", first, 1},
 		{update, "a", nil, next, 1},
 	} {
 		result, err := tx.ExecContext(ctx, step.query, "owner", step.target, step.note, step.at)
@@ -130,6 +131,7 @@ func checkRepositoryDialect(t *testing.T, db *sql.DB) {
 			t.Fatalf("prepared EXISTS(%q): %d, %v", key, exists, err)
 		}
 	}
+	checkRepositoryCursorAndListFamilies(t, tx, first, next)
 	if _, err := tx.ExecContext(ctx, insert, "too few"); err == nil {
 		t.Fatal("accepted missing parameters")
 	}

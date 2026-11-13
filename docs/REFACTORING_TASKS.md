@@ -600,3 +600,8 @@ Parametre sınır testi, sürücünün PostgreSQL protokolünde bağlanamayacak 
 - İlgisiz dirty dosyalar staged edilmez; commit/PR/release artifact'i ile kanıt kaydı aynı kaynak anlık görüntüsünü gösterir.
 - Rollback küçük PR'ın revert'iyle mümkün tutulur. Veri migration'ı varsa backup/restore provası olmadan release kapısı kapanmaz.
 - [REFACTORING_PLAN.md](REFACTORING_PLAN.md), [TECHNICAL_DEBT.md](TECHNICAL_DEBT.md), [TEST_STRATEGY.md](TEST_STRATEGY.md), [CODE_QUALITY_STANDARDS.md](CODE_QUALITY_STANDARDS.md) ve [ARCHITECTURE_IMPROVEMENTS.md](ARCHITECTURE_IMPROVEMENTS.md) ilgili kararlarla eşleşir.
+
+### RF05 - portable cursor/list/join corpus extension (2026-11-13)
+
+- Extended the shared SQLite/PostgreSQL transaction fixture with forward/backward tuple cursors and bound limits, dynamic IN parameters, nullable LEFT JOIN and empty results. Equal timestamp rows explicitly test the target-key tie break in both directions. A SQL-looking list value remains a bound value and must not select extra rows; no vulnerability claim is inferred.
+- Five new scenarios passed on both real drivers using the same logical rows, with PostgreSQL over verified mTLS. Final tie-break fixture targeted run: exit 0, 0.291 s, %TEMP%/hichat-dialect-corpus-targeted.log. Earlier full database run before adding the tied row passed (22.174 s), excluding the separately configured TestOpenPostgresInlinePEMReconnect profile; %TEMP%/hichat-dialect-corpus-full.log. These are representative query-family fixtures, not a complete inventory of production SQL or evidence that RF05 is closed. Canonical PR #221 verification is being followed.
