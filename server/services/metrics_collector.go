@@ -75,8 +75,12 @@ type metricsCollector struct {
 	// Delta computation state. Goroutine-safe: only accessed by collector goroutine.
 	prevSamples map[string]*previousSample
 
-	stopCh chan struct{}
-	mu     sync.Mutex // Start/Stop race protection
+	lifecycle context.Context
+	cancel    context.CancelFunc
+	mu        sync.Mutex // Serializes Start with terminal Stop and worker registration.
+	started   bool
+	stopped   bool
+	workers   sync.WaitGroup
 }
 
 func NewMetricsCollector(
@@ -88,6 +92,7 @@ func NewMetricsCollector(
 	screenShareStats ScreenShareCounter,
 	reachabilityReporter LiveKitReachabilityReporter,
 ) MetricsCollector {
+	lifecycle, cancel := context.WithCancel(context.Background())
 	mc := &metricsCollector{
 		livekitRepo:          livekitRepo,
 		historyRepo:          historyRepo,
@@ -97,7 +102,8 @@ func NewMetricsCollector(
 		reachabilityReporter: reachabilityReporter,
 		prevSamples:          make(map[string]*previousSample),
 		vcpuCache:            make(map[int64]int),
-		stopCh:               make(chan struct{}),
+		lifecycle:            lifecycle,
+		cancel:               cancel,
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 			// TLS verification is ON by default. Self-hosters whose LiveKit
@@ -119,24 +125,36 @@ func NewMetricsCollector(
 	return mc
 }
 
-// Start launches the collector goroutine. First collection runs immediately.
+// Start launches one collector worker. First collection runs immediately.
+// Stop is terminal: a stopped collector cannot be restarted.
 func (c *metricsCollector) Start() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-
+	if c.started || c.stopped {
+		return
+	}
+	c.started = true
+	c.workers.Add(1)
 	metricsLogger.Info("starting", "interval", c.interval, "retention_days", c.retentionDays)
-
 	go func() {
+		defer c.workers.Done()
+		if c.lifecycle.Err() != nil {
+			return
+		}
 		c.collectAll()
-
+		if c.lifecycle.Err() != nil {
+			return
+		}
 		ticker := time.NewTicker(c.interval)
 		defer ticker.Stop()
-
 		for {
 			select {
 			case <-ticker.C:
+				if c.lifecycle.Err() != nil {
+					return
+				}
 				c.collectAll()
-			case <-c.stopCh:
+			case <-c.lifecycle.Done():
 				metricsLogger.Info("stopped")
 				return
 			}
@@ -144,15 +162,21 @@ func (c *metricsCollector) Start() {
 	}()
 }
 
+// Stop cancels in-flight work and waits before the owner closes its DB pool.
+// Concurrent/repeated calls, including Stop before Start, are safe.
 func (c *metricsCollector) Stop() {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	close(c.stopCh)
+	if !c.stopped {
+		c.stopped = true
+		c.cancel()
+	}
+	c.mu.Unlock()
+	c.workers.Wait()
+	c.httpClient.CloseIdleConnections()
 }
 
 func (c *metricsCollector) collectAll() {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(c.lifecycle, 60*time.Second)
 	defer cancel()
 
 	instances, err := c.livekitRepo.ListPlatformInstances(ctx)
