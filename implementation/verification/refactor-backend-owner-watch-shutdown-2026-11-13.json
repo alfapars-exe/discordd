@@ -52,11 +52,32 @@
     "full_go_vet_and_build": "PASS",
     "golangci_lint": "0 issues",
     "new_launch_function_isolated_statement_coverage_percent": 100,
-    "isolated_main_package_statement_coverage_percent": 0.6
+    "isolated_main_package_statement_coverage_percent": 0.6,
+    "syntax_tree_wiring_checks": "PASS; CRLF-independent Go AST checks enforce explicit pool join, deferred connection order and child-context wiring.",
+    "negative_controls": [
+      {
+        "mutation": "missing_pool_join",
+        "exit": 1,
+        "assertion": "ownership watch must join before the database pool closes"
+      },
+      {
+        "mutation": "wrong_fallback_order",
+        "exit": 1,
+        "assertion": "main must register watch cleanup after connection close"
+      }
+    ],
+    "integrated_unit_count_100": "PASS 0.735s on 4bcea6af",
+    "integrated_mtls_race": "Six named top-level tests x5, 30 passes, zero skips/failures on 4bcea6af; fixture DDL template change followed.",
+    "final_integrated_host_scope_count_3": "PASS 4.004s on 5d2d1aea",
+    "final_integrated_full_go_vet_and_build": "PASS on 5d2d1aea; revalidated after terminal handle expired.",
+    "mandatory_self_scan": "Exit 0, zero blocking patterns; 421 review rows remain. Quoted generated database identifiers use DDL templates; no scan exclusions added."
   },
   "limitations": [
     "No production false-exit incident is claimed. The old ordering and cleanup contract were reproduced, not an observed production crash.",
     "This is not a whole-process SIGTERM, active-media or whole-project completion receipt.",
     "Current-head CI remains required."
-  ]
+  ],
+  "canonical_source": "19e56709d708e95b19beba3510efab242b776dc3",
+  "integrated_source": "5d2d1aea",
+  "ci": "PR296 head 19e56709: 17 SUCCESS, 17 pending at observation; not terminal acceptance. Prior 91a24e79 security failure corrected by quoted DDL templates."
 }
