@@ -272,7 +272,8 @@ func TestJoinServer_AlreadyMember(t *testing.T) {
 // inside AddMember itself (not just the already-member precheck) must also
 // leave the invite's use slot untouched.
 func TestJoinServer_AddMemberFails(t *testing.T) {
-	h := newJoinServerHarness()
+	activity := &recordingGameActivityInvalidator{}
+	h := newJoinServerHarnessWithPolicies(nil, activity)
 	h.serverRepo.AddMemberFn = func(_ context.Context, _, _ string) error {
 		return errors.New("db error: add member failed")
 	}
@@ -289,6 +290,9 @@ func TestJoinServer_AddMemberFails(t *testing.T) {
 	}
 	if markUsedCalled {
 		t.Error("MarkUsed must not be called when AddMember fails (B3 regression)")
+	}
+	if len(activity.calls) != 0 {
+		t.Fatalf("failed join notified activity: %+v", activity.calls)
 	}
 }
 
