@@ -582,3 +582,9 @@ Paralel çalışma hatları: backend veri/lifecycle (RF04–RF11), client state/
 - İlgisiz dirty dosyalar staged edilmez; commit/PR/release artifact'i ile kanıt kaydı aynı kaynak anlık görüntüsünü gösterir.
 - Rollback küçük PR'ın revert'iyle mümkün tutulur. Veri migration'ı varsa backup/restore provası olmadan release kapısı kapanmaz.
 - [REFACTORING_PLAN.md](REFACTORING_PLAN.md), [TECHNICAL_DEBT.md](TECHNICAL_DEBT.md), [TEST_STRATEGY.md](TEST_STRATEGY.md), [CODE_QUALITY_STANDARDS.md](CODE_QUALITY_STANDARDS.md) ve [ARCHITECTURE_IMPROVEMENTS.md](ARCHITECTURE_IMPROVEMENTS.md) ilgili kararlarla eşleşir.
+
+### RF20 - diagnostic native-operation ownership (2026-11-13)
+
+- Two failing-before regressions demonstrated diagnostic operation callers were not rejected at the registrar for foreign/retired main frames. Added the existing current-main assertion before consuming crash state, building/exporting archives, opening the log directory, setting verbosity and starting/cancelling a performance trace. Seven privileged commands are gated; bounded renderer diagnostic logging and the read-only verbosity getter retain their existing behavior.
+- Tests cover foreign contents, subframes, missing frames, destroyed/absent windows, old navigation frames, zero native/persistence/archive effects after denial, and successful current-frame use. Existing log bounds, upload binary contract, cancellation, optional dump behavior, file failures and verbosity validation remain covered.
+- Integration 03678808: full Electron 393 pass/1 skip. Existing canonical PR #278 source 9734d1cf: fresh unique TypeScript output, full Electron 278 pass/1 skip. Logs: %TEMP%/hichat-diagnostic-sender-before.log, hichat-diagnostic-sender-after.log and hichat-diagnostic-sender-canonical.log. No physical export dialog or trace was exercised. Remaining source/media/window/shortcut capability review and final runtime acceptance remain open.

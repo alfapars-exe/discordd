@@ -1,3 +1,4 @@
+import { registerDiagnosticIPC } from "./diagnostic-ipc";
 import { createOverlayMediaBroker } from "./overlay-media-broker";
 import { registerCS2JoinIPC } from "./cs2-join-ipc";
 import { registerGameNameIPC } from "./registered-game-name-ipc";
@@ -99,13 +100,6 @@ import { createGameWindowTracker } from "./game-window-tracker";
 import { createGameOverlayController } from "./game-overlay-controller";
 import { existsSync } from "node:fs";
 import path from "node:path";
-
-// Compact local timestamp (YYYYMMDD-HHmmss) for diagnostics filenames.
-function diagStamp(): string {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
-}
 
 export function registerIpcHandlers(): void {
   const gameJoin = registerCS2JoinIPC(ipcMain, assertTrustedMainWindowSender, {
@@ -290,84 +284,20 @@ export function registerIpcHandlers(): void {
     app.exit(0);
   });
 
-  // ─── Crash report flush ──────────────────────────────────────────
-  // Renderer calls this after a successful login. Returns the persisted
-  // crash record (if any) and deletes it so the next launch doesn't
-  // double-report. Null means "no crash since last call".
-  ipcMain.handle("consume-last-crash", () => consumeLastCrash());
-
-  // ─── Diagnostic log tee (renderer → local rolling file) ──────────
-  // The renderer mirrors every logToServer event here so it persists locally
-  // even when the best-effort server send drops (offline / pre-login / WS down
-  // / crash). Untrusted input: validate + cap, and force source="renderer"
-  // (the renderer cannot claim to be main/native). Fire-and-forget, no reply.
-  ipcMain.on("diagnostic-log", (_event, raw: unknown) => {
-    if (!raw || typeof raw !== "object") return;
-    const e = raw as { level?: unknown; msg?: unknown; category?: unknown; meta?: unknown };
-    if (typeof e.msg !== "string" || e.msg.length === 0 || e.msg.length > 2000) return;
-    const level = e.level === "warn" || e.level === "error" ? e.level : "info";
-    const category = typeof e.category === "string" && e.category.length <= 64 ? e.category : "";
-    const meta =
-      e.meta && typeof e.meta === "object" && !Array.isArray(e.meta)
-        ? (e.meta as Record<string, unknown>)
-        : undefined;
-    appendDiagnostic({ level, source: "renderer", category, msg: e.msg, meta });
+  registerDiagnosticIPC(ipcMain, {
+    trusted: assertTrustedMainWindowSender,
+    consumeLastCrash, appendDiagnostic, buildUploadBytes, bundleBaseName,
+    now: () => new Date(),
+    showSaveDialog: options => {
+      const win = getMainWindow();
+      return win ? dialog.showSaveDialog(win, options) : dialog.showSaveDialog(options);
+    },
+    writeFile, copyFile, newestCrashDumpFullPath,
+    openLogs: () => shell.openPath(getLogsDir()),
+    isVerbose: () => getSettings().diagnosticVerbose === true,
+    persistVerbose: value => setSetting("diagnosticVerbose", value),
+    setVerbose, capturePerformanceTrace, cancelPerformanceTrace,
   });
-
-  // ─── Diagnostics bundle: build / export / open ───────────────────
-  // Build the gzipped bundle bytes and hand them to the renderer, which uploads
-  // through the existing feedback channel (it owns the API base URL + token).
-  // A Node Buffer serializes to the renderer as a Uint8Array.
-  ipcMain.handle("build-diagnostic-upload", async () => {
-    const data = await buildUploadBytes();
-    return { filename: `${bundleBaseName()}-${diagStamp()}.json.gz`, data };
-  });
-
-  // Save the bundle to a user-chosen file. If a native crash dump exists it is
-  // copied alongside (too large to fold into the gzipped JSON / a feedback
-  // upload). Returns {saved, path?, dumpCopied?}.
-  ipcMain.handle("export-diagnostics", async () => {
-    const data = await buildUploadBytes();
-    const win = getMainWindow();
-    const defaultPath = `${bundleBaseName()}-${diagStamp()}.json.gz`;
-    const opts = {
-      defaultPath,
-      filters: [{ name: "Diagnostics", extensions: ["gz"] }],
-    };
-    const result = win
-      ? await dialog.showSaveDialog(win, opts)
-      : await dialog.showSaveDialog(opts);
-    if (result.canceled || !result.filePath) return { saved: false };
-    await writeFile(result.filePath, data);
-
-    let dumpCopied = false;
-    const dump = newestCrashDumpFullPath();
-    if (dump) {
-      try {
-        const dest = result.filePath.replace(/\.json\.gz$/i, "") + ".dmp";
-        await copyFile(dump, dest);
-        dumpCopied = true;
-      } catch {
-        /* dump copy is best-effort — the gzipped bundle is the primary artifact */
-      }
-    }
-    return { saved: true, path: result.filePath, dumpCopied };
-  });
-
-  // Open the folder holding the rolling logs (so the user can grab a dump or the
-  // raw files directly).
-  ipcMain.handle("open-logs-dir", () => shell.openPath(getLogsDir()));
-
-  // Verbose diagnostic logging toggle (persisted in app settings, applied live).
-  ipcMain.handle("get-diagnostic-verbose", () => getSettings().diagnosticVerbose === true);
-  ipcMain.handle("set-diagnostic-verbose", (_event, value: unknown) => {
-    if (typeof value !== "boolean") throw new TypeError("value must be a boolean");
-    setSetting("diagnosticVerbose", value);
-    setVerbose(value);
-  });
-  ipcMain.handle("capture-performance-trace", () => capturePerformanceTrace());
-  ipcMain.handle("cancel-performance-trace", () => cancelPerformanceTrace());
-
   // ─── Auto-updater (renderer-driven) ─────────────────────────────
   ipcMain.handle("was-update-checked", () => wasPrelaunchChecked());
 
