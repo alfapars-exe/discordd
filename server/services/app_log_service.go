@@ -327,7 +327,9 @@ func (s *appLogService) flush(parent context.Context, pending []pendingAppLog) {
 			written++
 			// A fallback Insert commits independently. Its grouped occurrences
 			// must not be counted as lost if a later row fails.
-			failedEvents -= min(failedEvents, uint64(rows[i].OccurrenceCount))
+			if occurrences := rows[i].OccurrenceCount; occurrences > 0 {
+				failedEvents -= min(failedEvents, uint64(occurrences))
+			}
 		}
 	}
 	if err != nil {
