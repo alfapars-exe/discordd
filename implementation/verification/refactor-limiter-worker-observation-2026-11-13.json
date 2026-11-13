@@ -16,11 +16,12 @@
     "full_go_vet_and_build": "PASS",
     "golangci_lint": "0 issues",
     "integrated_selected_tests_count_5": "PASS main 0.772s, handlers 0.787s, middleware 0.432s",
-    "integrated_full_go_vet_and_build": "PASS"
+    "integrated_full_go_vet_and_build": "PASS",
+    "current_head_CI": "36/36 completed SUCCESS on afa1802db27d5488b47a6e6a5041b611c1e529db"
   },
   "limitations": [
-    "This addresses profile observation semantics, not a proven production resource leak.",
-    "Full new-head CI must pass before the prior CI failure is considered resolved."
+    "The runtime-exit explanation remains an inference; the new-head complete CI matrix passed.",
+    "This does not establish real-process signal or active-media acceptance."
   ],
   "canonical_source": "afa1802d",
   "integrated_source": "9e54543d"

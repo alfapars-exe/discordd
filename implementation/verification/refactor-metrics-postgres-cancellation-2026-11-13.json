@@ -28,12 +28,12 @@
     "cancelled_HTTP_poll_after": "No unavailable snapshot or purge attempted",
     "integrated_mTLS_race": "Seven named metrics/PostgreSQL tests passed five times each, no skips.",
     "integrated_runner_unit_tests": "10/10 PASS; existing delivery requirements and redaction preserved during conflict resolution.",
-    "integrated_full_go_vet_and_build": "PASS"
+    "integrated_full_go_vet_and_build": "PASS",
+    "current_head_CI": "36/36 completed SUCCESS on 700aef3af182ac2717f6ae3d01ad69415a97b3e3"
   },
   "limitations": [
     "This validates real repository/pool cancellation, not complete process signal shutdown or active media teardown.",
-    "Plain loopback CI is a disposable test profile, separate from verified mutual TLS.",
-    "Whole CI on the new commit still must finish."
+    "Plain loopback CI is a disposable test profile, separate from verified mutual TLS."
   ],
   "canonical_source": "700aef3a",
   "integrated_source": "8a0e178c"
