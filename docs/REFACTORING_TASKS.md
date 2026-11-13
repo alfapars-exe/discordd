@@ -1334,3 +1334,9 @@ Terminal current-head receipt: PR29814a965ea completed36/36 SUCCESS. Exact-head 
 
 - Scoped canonical transfer preserved branch-specific voice_state.go and excluded integration-only DisconnectServerMember test. Canonical real-mTLS PostgreSQL targeted tests passed three repetitions (50.577s), Linux race ten (9.697s), services vet/lint passed.
 - Published PR #298 head 2dafbcef. Previous fb269038 CI results do not prove this new head. Receipt: `implementation/verification/refactor-admin-move-canonical-2026-11-14.json`. No merge, release, installed-client or physical-media acceptance is claimed.
+
+### 2026-11-14 — Own administrative mute work
+
+- Admin mute shutdown regression failed before fix. Initial test fixture assumed a single channel lookup and panicked; corrected its notification with sync.Once, then reproduced the actual early-shutdown assertion.
+- AdminUpdateState now enters the terminal operation owner before lookup. The async mute leg registers a child; synchronous unmute remains before broadcast and inside the accepted root. New updates after closure return context.Canceled before dependencies.
+- Targeted VoiceUsage/AdminUpdateState/VoiceMaintenance tests passed ten repetitions (5.220s); Linux race ten (8.081s); services vet/lint passed. DSN-free PostgreSQL skips are not acceptance. Changes remain local integration, while PR298 2dafbcef CI43516530987 runs. Webhook, entrance-hook and final physical/runtime acceptance remain open.

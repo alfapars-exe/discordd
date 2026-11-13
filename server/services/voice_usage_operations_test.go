@@ -344,3 +344,58 @@ func TestVoiceUsageShutdownRejectsMoveBeforeLookup(t *testing.T) {
 		t.Fatalf("closed owner admitted move: %v", err)
 	}
 }
+
+func TestVoiceUsageShutdownWaitsForAdminMute(t *testing.T) {
+	svc, _ := newTestVoiceService()
+	s := svc.(*voiceService)
+	entered, release, stopped := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	t.Cleanup(func() { once.Do(func() { close(release) }); s.ShutdownUsageProducers() })
+	s.channelGetter = &usageBlockingChannelGetter{entered: entered, release: release}
+	s.states["victim"] = &models.VoiceState{UserID: "victim", ChannelID: "ch1", ServerID: "srv1"}
+	muted := true
+	if err := s.AdminUpdateState(context.Background(), "admin", "victim", &muted, nil); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("mute lookup not started")
+	}
+	go func() { s.ShutdownUsageProducers(); close(stopped) }()
+	select {
+	case <-stopped:
+		t.Fatal("shutdown returned before accepted mute finished")
+	case <-time.After(20 * time.Millisecond):
+	}
+	once.Do(func() { close(release) })
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("mute cleanup not joined")
+	}
+}
+
+type usageBlockingChannelGetter struct {
+	once             sync.Once
+	entered, release chan struct{}
+}
+
+func (g *usageBlockingChannelGetter) GetByID(ctx context.Context, _ string) (*models.Channel, error) {
+	g.once.Do(func() { close(g.entered) })
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-g.release:
+		return nil, context.Canceled
+	}
+}
+
+func TestVoiceUsageShutdownRejectsAdminStateBeforeLookup(t *testing.T) {
+	s := &voiceService{}
+	s.ShutdownUsageProducers()
+	muted := true
+	if err := s.AdminUpdateState(context.Background(), "admin", "victim", &muted, nil); !errors.Is(err, context.Canceled) {
+		t.Fatalf("closed owner admitted admin state update: %v", err)
+	}
+}
