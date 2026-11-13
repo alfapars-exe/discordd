@@ -1,3 +1,4 @@
+import { registerRegisteredGamesIPC } from "./registered-games-ipc";
 import { registerWindowControlIPC } from "./window-control-ipc";
 import { registerDesktopMediaIPC } from "./desktop-media-ipc";
 import { registerOverlayActionIPC } from "./overlay-action-ipc";
@@ -9,7 +10,6 @@ import { registerCredentialIPC } from "./credential-ipc";
 import { assertString, assertFiniteNumber } from "./ipc-input-validation";
 import { createOverlayMediaBroker } from "./overlay-media-broker";
 import { registerCS2JoinIPC } from "./cs2-join-ipc";
-import { registerGameNameIPC } from "./registered-game-name-ipc";
 import {registerSystemAudioLeaseIPC}from "./system-audio-ipc";
 import {registerPTTLeaseHandlers}from "./ptt-ipc";
 /**
@@ -144,49 +144,11 @@ export function registerIpcHandlers(): void {
   });
   app.once("before-quit", () => { stopOverlayMediaLifecycle(); overlayMedia.revoke(); overlayShortcut.dispose(); gameOverlay?.dispose(); registeredGames.dispose(); void gameWindowTracker.dispose(); });
 
-  ipcMain.handle("get-registered-games", (event) => {
-    assertTrustedMainWindowSender(event);
-    return registeredGames.snapshot().then((snapshot) => ({ ...snapshot, overlaySupport: process.platform !== "win32" ? "unsupported" : gameOverlaySupported ? "available" : "unavailable" }));
-  });
-  ipcMain.handle("get-registered-game-activity", (event) => {
-    assertTrustedMainWindowSender(event);
-    return registeredGames.getActivity();
-  });
-  ipcMain.handle("set-registered-games-background-detection", async (event, enabled: unknown) => {
-    assertTrustedMainWindowSender(event);
-    if (typeof enabled !== "boolean") throw new TypeError("background detection setting must be boolean");
-    return registeredGames.setBackgroundDetectionEnabled(enabled);
-  });
-  ipcMain.handle("add-registered-game", async (event) => {
-    assertTrustedMainWindowSender(event);
-    if (process.platform !== "win32") return null;
-    const result = await dialog.showOpenDialog({
-      title: "Select a game executable",
-      properties: ["openFile"],
-      filters: [{ name: "Windows applications", extensions: ["exe"] }],
-    });
-    const selected = result.canceled ? undefined : result.filePaths[0];
-    return selected ? registeredGames.addExecutable(selected) : null;
-  });
-  ipcMain.handle("remove-registered-game", async (event, id: unknown) => {
-    assertTrustedMainWindowSender(event);
-    assertString(id, "game id", 64);
-    const removed = await registeredGames.remove(id);
-    if (removed) overlayLayouts.remove(`game:${id}`);
-    return removed;
-  });
-  registerGameNameIPC(ipcMain, assertTrustedMainWindowSender, registeredGames);
-  ipcMain.handle("set-registered-game-join-adapter", (event, id: unknown, adapter: unknown) => {
-    assertTrustedMainWindowSender(event);
-    assertString(id, "registered game id", 64);
-    return registeredGames.setJoinAdapter(id, adapter);
-  });
-
-  ipcMain.handle("set-registered-game-sharing", async (event, id: unknown, allowed: unknown) => {
-    assertTrustedMainWindowSender(event);
-    assertString(id, "game id", 64);
-    if (typeof allowed !== "boolean") throw new TypeError("sharing permission must be boolean");
-    return registeredGames.setShareAllowed(id, allowed);
+  registerRegisteredGamesIPC(ipcMain, {
+    trusted: assertTrustedMainWindowSender, assertString, registeredGames,
+    platform: process.platform, overlaySupported: gameOverlaySupported,
+    showOpenDialog: options => dialog.showOpenDialog(options),
+    removeLayout: key => overlayLayouts.remove(key),
   });
 
   const applyOverlaySnapshot = (event: Parameters<typeof isTrustedMainWindowSender>[0], raw: unknown): boolean =>
@@ -203,12 +165,7 @@ export function registerIpcHandlers(): void {
       gameOverlay?.setSnapshot(overlayMediaPolicy);
     }
   });
-  ipcMain.handle("set-registered-game-overlay", async (event, id: unknown, allowed: unknown) => {
-    assertTrustedMainWindowSender(event);
-    assertString(id, "game id", 64);
-    if (typeof allowed !== "boolean") throw new TypeError("overlay permission must be boolean");
-    return registeredGames.setOverlayAllowed(id, allowed);
-  });
+
   // ─── App / version ──────────────────────────────────────────────
   ipcMain.handle("get-version", () => app.getVersion());
   ipcMain.handle("relaunch", () => {
