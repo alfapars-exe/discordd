@@ -1,16 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { dismissOnboardingOverlays, loginAsNotificationOwner, loginAsNotificationRecipient, readChannelNotificationFixture } from "./helpers";
-
-async function api<T>(page: Page, path: string, method = "GET", body?: unknown): Promise<T> {
-  return page.evaluate(async ({ path, method, body }) => {
-    // Use the authenticated Vite app session without extracting credentials.
-    const modulePath = "/src/api/client.ts";
-    const { apiClient } = await import(modulePath);
-    const result = await apiClient(path, { method, body });
-    if (!result.success) throw Error(method + " " + path + " HTTP " + result.status + " " + result.error);
-    return result.data;
-  }, { path, method, body });
-}
+import { fixtureApi as api, dismissOnboardingOverlays, loginAsNotificationOwner, loginAsNotificationRecipient, readChannelNotificationFixture } from "./helpers";
 
 function receivedMessageIDs(page: Page) {
   const ids = new Set<string>();
@@ -130,11 +119,10 @@ test("channel tree follows role grants and revocations in two authenticated sess
   await open(member);
   await check(member, false);
   // Reuse the owner's browser storage and the application's logout flow.
-  await owner.evaluate(async () => {
-    const modulePath = "/src/stores/authStore.ts";
-    const { useAuthStore } = await import(modulePath);
-    await useAuthStore.getState().logout();
-  });
+  await owner.getByRole("button", { name: "Settings", exact: true }).click();
+  await owner.getByRole("dialog", { name: "Settings" })
+    .getByRole("button", { name: "Log Out", exact: true }).click();
+  await expect(owner).toHaveURL(/\/login/);
   await loginAsNotificationRecipient(owner);
   await open(owner);
   await check(owner, false);
