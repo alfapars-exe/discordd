@@ -177,7 +177,9 @@ export async function dismissOnboardingOverlays(page: Page): Promise<void> {
 /** Assert the signed-in shell currently exposed by the single-server UI. */
 export async function expectSignedInShell(page: Page): Promise<void> {
   const serverRail = page.getByRole("navigation", { name: "Servers", exact: true });
-  await expect(serverRail).toBeVisible({ timeout: 20_000 });
+  // Refresh throttling can require the full one-minute server window plus
+  // the application's next startup retry before the live shell is available.
+  await expect(serverRail).toBeVisible({ timeout: 90_000 });
   await expect(serverRail.getByRole("button", { name: "Friends", exact: true })).toBeVisible();
 }
 
