@@ -7,57 +7,72 @@ import (
 	"testing"
 )
 
-func TestVoiceUsageDeliveryJoinsAfterHTTPBeforeLogs(t *testing.T) {
+func voiceUsageMainBody(t *testing.T) *ast.BlockStmt {
+	t.Helper()
 	file, err := parser.ParseFile(token.NewFileSet(), "main.go", nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var body *ast.BlockStmt
 	for _, decl := range file.Decls {
-		if f, ok := decl.(*ast.FuncDecl); ok && f.Name.Name == "main" {
-			body = f.Body
+		fn, ok := decl.(*ast.FuncDecl)
+		if ok && fn.Name.Name == "main" {
+			return fn.Body
 		}
 	}
-	if body == nil {
-		t.Fatal("main missing")
+	t.Fatal("main missing")
+	return nil
+}
+func voiceUsageNamedCall(call *ast.CallExpr, name string) bool {
+	identifier, ok := call.Fun.(*ast.Ident)
+	return ok && identifier.Name == name
+}
+func voiceUsageMethodCall(call *ast.CallExpr, receiver, name string) bool {
+	selector, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return false
 	}
-	var drain, logs, join token.Pos
-	deferred := false
-	ast.Inspect(body, func(n ast.Node) bool {
-		if d, ok := n.(*ast.DeferStmt); ok {
-			if f, ok := d.Call.Fun.(*ast.Ident); ok && f.Name == "stopVoiceUsageDelivery" {
+	identifier, ok := selector.X.(*ast.Ident)
+	return ok && identifier.Name == receiver && selector.Sel.Name == name
+}
+func voiceUsageShutdownBoundaries(body *ast.BlockStmt) (drain, logs token.Pos, deferred bool) {
+	ast.Inspect(body, func(node ast.Node) bool {
+		switch value := node.(type) {
+		case *ast.DeferStmt:
+			if voiceUsageNamedCall(value.Call, "stopVoiceUsageDelivery") {
 				deferred = true
 			}
-		}
-		call, ok := n.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		sel, ok := call.Fun.(*ast.SelectorExpr)
-		if !ok {
-			return true
-		}
-		receiver, ok := sel.X.(*ast.Ident)
-		if !ok {
-			return true
-		}
-		if receiver.Name == "srv" && sel.Sel.Name == "Shutdown" {
-			drain = call.Pos()
-		}
-		if receiver.Name == "logx" && sel.Sel.Name == "SetAppSink" {
-			logs = call.Pos()
+		case *ast.CallExpr:
+			if voiceUsageMethodCall(value, "srv", "Shutdown") {
+				drain = value.Pos()
+			}
+			if voiceUsageMethodCall(value, "logx", "SetAppSink") {
+				logs = value.Pos()
+			}
 		}
 		return true
 	})
+	return
+}
+func voiceUsageExplicitJoin(body *ast.BlockStmt) token.Pos {
 	for _, stmt := range body.List {
-		if e, ok := stmt.(*ast.ExprStmt); ok {
-			if c, ok := e.X.(*ast.CallExpr); ok {
-				if f, ok := c.Fun.(*ast.Ident); ok && f.Name == "stopVoiceUsageDelivery" {
-					join = stmt.Pos()
-				}
-			}
+		expr, ok := stmt.(*ast.ExprStmt)
+		if !ok {
+			continue
+		}
+		call, ok := expr.X.(*ast.CallExpr)
+		if !ok {
+			continue
+		}
+		if voiceUsageNamedCall(call, "stopVoiceUsageDelivery") {
+			return stmt.Pos()
 		}
 	}
+	return token.NoPos
+}
+func TestVoiceUsageDeliveryJoinsAfterHTTPBeforeLogs(t *testing.T) {
+	body := voiceUsageMainBody(t)
+	drain, logs, deferred := voiceUsageShutdownBoundaries(body)
+	join := voiceUsageExplicitJoin(body)
 	if !deferred || !join.IsValid() || !drain.IsValid() || !logs.IsValid() || join < drain || join > logs {
 		t.Fatal("usage worker must join after HTTP drain, before log/database shutdown, with deferred fallback")
 	}

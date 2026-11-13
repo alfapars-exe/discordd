@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-type pendingVoiceUsageStore interface {
+type pendingVoiceUsageApplier interface {
 	ApplyNextVoiceUsage(context.Context) (bool, error)
 }
 
@@ -18,16 +18,16 @@ func StartVoiceUsageDelivery(parent context.Context, service VoiceService) func(
 func startVoiceUsageDelivery(parent context.Context, service VoiceService, interval time.Duration) func() {
 	s, ok := service.(*voiceService)
 	if !ok {
-		return func() {}
+		return func() { /* Alternate voice implementation owns no worker here. */ }
 	}
-	if _, ok = s.livekitGetter.(pendingVoiceUsageStore); !ok {
-		return func() {}
+	if _, ok = s.livekitGetter.(pendingVoiceUsageApplier); !ok {
+		return func() { /* Legacy getter has no durable pending usage queue. */ }
 	}
 	s.usageWorker.startParent(parent, interval, s.deliverPendingVoiceUsage)
 	return s.usageWorker.stop
 }
 func (s *voiceService) deliverPendingVoiceUsage(parent context.Context) {
-	store, ok := s.livekitGetter.(pendingVoiceUsageStore)
+	store, ok := s.livekitGetter.(pendingVoiceUsageApplier)
 	if !ok {
 		return
 	}
