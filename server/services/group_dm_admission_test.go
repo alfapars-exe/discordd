@@ -67,7 +67,7 @@ func TestGroupAdmissionServiceRejectsKnownIDWithoutAcceptedFriendship(t *testing
 					}
 					return &models.Friendship{UserID: "owner", FriendID: "target", Status: models.FriendshipStatus(status)}, nil
 				}}
-				svc := NewGroupDMService(groups, repository.NewSQLiteUserRepo(db.Conn), friends, hub, "", "", "", nil, "")
+				svc := NewGroupDMService(groups, repository.NewSQLiteUserRepo(db.Conn), friends, hub, "", "", "", nil, "", nil, nil, nil)
 				var err error
 				if action == "create" {
 					_, err = svc.Create(ctx, "owner", &models.CreateGroupDMRequest{Name: "Group", UserIDs: []string{"target"}})
@@ -130,7 +130,7 @@ func TestGroupAdmissionServicePassesAuthenticatedScopeAndRechecksUnfriendBeforeW
 				}
 				events := 0
 				hub := &testutil.MockBroadcaster{BroadcastToUsersFn: func([]string, ws.Event) { events++ }, BroadcastToUserFn: func(string, ws.Event) { events++ }}
-				svc := NewGroupDMService(scoped, repository.NewSQLiteUserRepo(db.Conn), repository.NewSQLiteFriendshipRepo(db.Conn), hub, "", "", "", nil, "")
+				svc := NewGroupDMService(scoped, repository.NewSQLiteUserRepo(db.Conn), repository.NewSQLiteFriendshipRepo(db.Conn), hub, "", "", "", nil, "", nil, nil, nil)
 				var result *models.GroupDM
 				var err error
 				if action == "create" {
