@@ -1,7 +1,8 @@
-import type { BrowserWindow, Display, IpcMain, Rectangle } from "electron";
+import type { BrowserWindow, Display, IpcMain, IpcMainInvokeEvent, Rectangle } from "electron";
 
 type DesktopDisplay = Pick<Display, "size" | "scaleFactor" | "displayFrequency">;
 type DesktopMediaOperations = {
+  trusted: (event: IpcMainInvokeEvent) => void;
   getSerializedSources: typeof import("./screen-picker").getSerializedSources;
   getMainWindow: () => Pick<BrowserWindow, "getBounds"> | null;
   screen: {
@@ -13,7 +14,7 @@ type DesktopMediaOperations = {
 
 /** Legacy source enumeration and current-window display metrics retain their public contracts. */
 export function registerDesktopMediaIPC(ipc: Pick<IpcMain, "handle">, operations: DesktopMediaOperations): void {
-  ipc.handle("get-desktop-sources", () => operations.getSerializedSources());
+  ipc.handle("get-desktop-sources", event => { operations.trusted(event); return operations.getSerializedSources(); });
   ipc.handle("get-display-info", () => {
     const window = operations.getMainWindow();
     const display = window
