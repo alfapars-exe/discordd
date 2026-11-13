@@ -582,3 +582,9 @@ Paralel çalışma hatları: backend veri/lifecycle (RF04–RF11), client state/
 - İlgisiz dirty dosyalar staged edilmez; commit/PR/release artifact'i ile kanıt kaydı aynı kaynak anlık görüntüsünü gösterir.
 - Rollback küçük PR'ın revert'iyle mümkün tutulur. Veri migration'ı varsa backup/restore provası olmadan release kapısı kapanmaz.
 - [REFACTORING_PLAN.md](REFACTORING_PLAN.md), [TECHNICAL_DEBT.md](TECHNICAL_DEBT.md), [TEST_STRATEGY.md](TEST_STRATEGY.md), [CODE_QUALITY_STANDARDS.md](CODE_QUALITY_STANDARDS.md) ve [ARCHITECTURE_IMPROVEMENTS.md](ARCHITECTURE_IMPROVEMENTS.md) ilgili kararlarla eşleşir.
+
+### RF20 - desktop source enumeration ownership (2026-11-13)
+
+- Two failing-before regressions demonstrated get-desktop-sources did not reject foreign/retired main frames. The registrar now requires the existing current-main assertion before source enumeration. Source contents, provider identity and uncached behavior remain unchanged; get-display-info retains its existing monitor/primary fallback contract.
+- Tests reject foreign contents, subframes, missing frames, destroyed/absent windows and old navigation frames with zero provider calls, then allow the current main frame. Integration e897e460: full Electron 395 pass/1 skip. Canonical PR #282 source 8ae09b9d: fresh unique TypeScript output, full Electron 274 pass/1 skip. Logs: %TEMP%/hichat-desktop-source-sender-before.log, hichat-desktop-source-sender-after.log and hichat-desktop-source-sender-canonical.log.
+- This is a registrar ownership contract, not a physical source-picker/capture permission or multi-display acceptance receipt. Remaining window/shortcut/capture capabilities and final runtime acceptance remain open.
