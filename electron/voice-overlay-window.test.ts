@@ -555,6 +555,22 @@ test("native overlay lock toggles only visible widgets and bounds unlocked game 
       } finally { exports.closeVoiceOverlay(); }
     });
   }
+  for (const surface of ["actions", "notification-actions", "chat-actions"]) {
+    await t.test(`reloaded ${surface} retires the old document owner`, () => {
+      try {
+        const actions = { ...notificationActions, voiceOverlayQuickActions: true, voiceOverlayClickableActions: true, voiceActionSession: "reload-voice" };
+        const target = () => surface === "actions" ? actionWin : surface === "notification-actions" ? notificationActionWin : chatActionWin;
+        exports.updateVoiceOverlay({ ...snapshot, enabled: false }, area);
+        exports.updateVoiceOverlay(actions, area);
+        const old = target();
+        old.webContents.emit("did-finish-load");
+        old.webContents.emit("did-start-navigation", {}, "app://hichat/overlay.html", false, true);
+        assert.equal(old.destroyed, true, "a new document cannot inherit the old action owner");
+        exports.updateVoiceOverlay(actions, area);
+        assert.equal(target(), old);
+      } finally { exports.closeVoiceOverlay(); }
+    });
+  }
   await t.test("chat action crash cancels its active composer request", async () => {
     try {
       now += 251;

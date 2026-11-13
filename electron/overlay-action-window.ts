@@ -14,7 +14,7 @@ type ActionWindowOperations = {
   createWindow: (options: BrowserWindowConstructorOptions) => BrowserWindow;
   created: (window: BrowserWindow) => void;
   closed: (window: BrowserWindow) => void;
-  failed: (window: BrowserWindow, reason: "shape" | "load" | "crash") => void;
+  failed: (window: BrowserWindow, reason: "shape" | "load" | "crash" | "navigation") => void;
 };
 
 /** The three non-focusable overlay action surfaces share one native setup policy. */
@@ -33,18 +33,27 @@ export function createOverlayActionWindow(options: ActionWindowOptions, operatio
     return null;
   }
   window.setAlwaysOnTop(true, "floating");
-  let closed = false;
+  let closed = false, loaded = false;
+  const ready = () => { if (!closed) loaded = true; };
+  const navigate = (_event: unknown, _url: string, inPlace: boolean, mainFrame: boolean) => {
+    if (!closed && loaded && mainFrame && !inPlace) operations.failed(window, "navigation");
+  };
   const crashed = () => { if (!closed) operations.failed(window, "crash"); };
   const onClosed = () => {
     if (closed) return;
     closed = true;
     window.webContents.removeListener("render-process-gone", crashed);
+    window.webContents.removeListener("did-start-navigation", navigate);
+    window.webContents.removeListener("did-finish-load", ready);
     window.removeListener("closed", onClosed);
     operations.closed(window);
   };
   window.webContents.on("render-process-gone", crashed);
+  window.webContents.on("did-start-navigation", navigate);
+  window.webContents.once("did-finish-load", ready);
   window.on("closed", onClosed);
   const base = options.development ? "http://localhost:3030" : "app://hichat";
   void window.loadURL(`${base}/overlay.html?surface=${options.surface}`).catch(() => { if (!closed) operations.failed(window, "load"); });
+  if (!window.webContents.isLoading()) ready();
   return window;
 }
