@@ -1,3 +1,4 @@
+import { ScreenShareLifecycleController } from "../webrtc/screenShareLifecycleController";
 import { createNativeScreenShareController } from "../webrtc/nativeScreenShareController";
 /**
  * useScreenShareToggle — drive LiveKit screen share from voiceStore.isStreaming
@@ -301,7 +302,7 @@ export function useScreenShareToggle(
   });
 
   const screenUpdaterRef = useRef<LiveKitScreenShareUpdater | null>(null);
-  const lifecycleRef = useRef<Promise<void>>(Promise.resolve());
+  const lifecycleRef = useRef(new ScreenShareLifecycleController());
   const nativeControllerRef = useRef<ReturnType<typeof createNativeScreenShareController> | null>(null);
 
   // Native Electron audio capture — excludes our own process tree to prevent
@@ -631,37 +632,21 @@ export function useScreenShareToggle(
   useEffect(() => {
     if (!initialSyncDoneRef.current) return;
 
-    let cancelled = false;
-
-    async function toggleScreenShare() {
-      // Retired starts can be skipped. An explicit stop still drains before
-      // a queued new start, so SDK pending capture reuse cannot revive it.
-      if (cancelled && isStreaming) return;
-
-      const branch = computeShareBranch();
-
-      if (isStreaming) {
-        const { screenShareQuality: ssq, screenShareFps: ssFps } =
-          useVoiceStore.getState();
-        await startShareInternal(branch, ssq, ssFps, () => cancelled);
-      } else {
-        await stopShareInternal(branch);
-      }
-    }
-
-    const lifecycle = lifecycleRef.current.catch(() => {}).then(toggleScreenShare);
-    lifecycleRef.current = lifecycle;
-    void lifecycle.catch((err: unknown) => {
-      if (!cancelled) {
+    const transition = lifecycleRef.current.transition({
+      streaming: isStreaming,
+      start: async shouldCancel => {
+        const { screenShareQuality: ssq, screenShareFps: ssFps } = useVoiceStore.getState();
+        await startShareInternal(computeShareBranch(), ssq, ssFps, shouldCancel);
+      },
+      stop: () => stopShareInternal(computeShareBranch()),
+      failed: (err: unknown) => {
         console.error("[useScreenShareToggle] Failed to toggle screen share:", err);
-        if (isStreaming) {
-          handleStartFailure(err);
-        }
-      }
+        if (isStreaming) handleStartFailure(err);
+      },
     });
 
     return () => {
-      cancelled = true;
+      transition.cancel();
       const updater = screenUpdaterRef.current;
       screenUpdaterRef.current = null;
       updater?.dispose();
