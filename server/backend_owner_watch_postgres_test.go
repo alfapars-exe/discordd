@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -54,8 +55,16 @@ func backendWatchTestPool(t *testing.T) *sql.DB {
 		_ = pool.Close()
 		cleanup, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
+		started := time.Now()
 		if _, err := admin.ExecContext(cleanup, dropQuery); err != nil {
-			t.Error("cannot drop owned backend-watch fixture database")
+			// Do not print driver messages/DSNs. Preserve enough typed evidence
+			// to distinguish a server SQLSTATE from a local cleanup deadline.
+			var state interface{ SQLState() string }
+			code := ""
+			if errors.As(err, &state) {
+				code = state.SQLState()
+			}
+			t.Errorf("cannot drop owned backend-watch fixture database: type=%T sqlstate=%q context=%v elapsed=%s", err, code, cleanup.Err(), time.Since(started))
 		}
 		_ = admin.Close()
 	})
