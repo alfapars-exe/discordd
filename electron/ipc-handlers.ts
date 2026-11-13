@@ -218,6 +218,7 @@ export function registerIpcHandlers(onCleanup?: (dispose: () => Promise<void>) =
   });
 
   registerAppSettingsIPC(ipcMain, {
+    trusted: assertTrustedMainWindowSender,
     getSettings,
     setSetting,
     getLoginItemSettings: () => app.getLoginItemSettings(),

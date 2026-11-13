@@ -1,4 +1,4 @@
-import type { IpcMain } from "electron";
+import type { IpcMain, IpcMainInvokeEvent } from "electron";
 import { isAppSettingKey, type AppSettings } from "./settings";
 
 // Diagnostic verbosity has a separate IPC contract.
@@ -11,6 +11,7 @@ const APP_SETTING_VALIDATORS: Record<string, (value: unknown) => value is boolea
 };
 
 type SettingsOperations = {
+  trusted: (event: IpcMainInvokeEvent) => void;
   getSettings: () => AppSettings;
   setSetting: (key: string, value: boolean) => void;
   getLoginItemSettings: () => { openAtLogin: boolean };
@@ -24,7 +25,8 @@ export function registerAppSettingsIPC(ipc: Pick<IpcMain, "handle">, operations:
     cached.openAtLogin = live.openAtLogin;
     return cached;
   });
-  ipc.handle("set-app-setting", (_event, key: unknown, value: unknown) => {
+  ipc.handle("set-app-setting", (event, key: unknown, value: unknown) => {
+    operations.trusted(event);
     if (!isAppSettingKey(key)) {
       throw new TypeError(`unknown app setting: ${String(key)}`);
     }
