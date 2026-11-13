@@ -20,6 +20,8 @@ type VoiceState = {
 };
 const h = vi.hoisted(() => ({
   electron: false,
+  capacitor: false,
+  listenNative: vi.fn(),
   display: { width: 2560, height: 1440, refreshRate: 144, monitorCount: 1 },
   startAudio: vi.fn(), stopAudio: vi.fn(), toast: vi.fn(), log: vi.fn(),
 }));
@@ -38,9 +40,9 @@ vi.mock("./useSystemAudioCapture", () => ({
   useSystemAudioCapture: () => ({ start: h.startAudio, stop: h.stopAudio, isCapturing: h.electron }),
 }));
 vi.mock("../utils/constants", () => ({
-  isElectron: () => h.electron, isCapacitor: () => false, isMobileBrowser: () => false, canBrowserScreenShare: () => true,
+  isElectron: () => h.electron, isCapacitor: () => h.capacitor, isMobileBrowser: () => false, canBrowserScreenShare: () => true,
 }));
-vi.mock("../utils/nativePlugins", () => ({ startNativeScreenShare: vi.fn(), stopNativeScreenShare: vi.fn(), onNativeScreenShareStopped: vi.fn() }));
+vi.mock("../utils/nativePlugins", () => ({ startNativeScreenShare: vi.fn(), stopNativeScreenShare: vi.fn(), onNativeScreenShareStopped: h.listenNative }));
 vi.mock("../api/voice", () => ({ getScreenShareToken: vi.fn() }));
 vi.mock("../api/clientLog", () => ({ logToServer: h.log }));
 vi.mock("../i18n", () => ({ default: { t: (key: string) => key } }));
@@ -175,6 +177,8 @@ beforeEach(() => {
   });
   vi.spyOn(LocalAudioTrack.prototype, "checkForSilence").mockResolvedValue(false);
   h.electron = false;
+  h.capacitor = false;
+  h.listenNative.mockReset();
   h.startAudio.mockReset(); h.stopAudio.mockReset(); h.toast.mockReset(); h.log.mockReset();
   voice.setState({
     isStreaming: true, currentVoiceChannelId: "channel", screenShareQuality: "1080p", screenShareFps: 60,
@@ -189,6 +193,23 @@ afterEach(async () => {
 });
 
 describe("guild screen-share profile lifecycle", () => {
+  it("removes a native stop listener that finishes registering after unmount and ignores retired callbacks", async () => {
+    h.capacitor = true;
+    voice.setState({ isStreaming: false });
+    let registered!: (remove: () => void) => void;
+    const pending = new Promise<() => void>(resolve => { registered = resolve; });
+    h.listenNative.mockReturnValue(pending);
+    const f = fixture();
+    const callback = h.listenNative.mock.calls[0][0] as () => void;
+    f.view.unmount();
+    voice.setState({ isStreaming: true });
+    callback();
+    expect(voice.getState().isStreaming).toBe(true);
+    expect(voice.getState()._wsSend).not.toHaveBeenCalled();
+    const remove = vi.fn();
+    await act(async () => { registered(remove); });
+    expect(remove).toHaveBeenCalledTimes(1);
+  });
   it.each([[false, true], [true, false]])("uses Electron audio intent changed in the picker from %s to %s", async (initial, chosen) => {
     h.electron = true;
     voice.setState({ screenShareAudio: initial });
