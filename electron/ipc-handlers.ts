@@ -370,6 +370,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle("cancel-performance-trace", () => cancelPerformanceTrace());
 
   registerUpdaterIPC(ipcMain, {
+    trusted: assertTrustedMainWindowSender,
     wasPrelaunchChecked,
     checkForUpdates: () => autoUpdater.checkForUpdates(),
     downloadUpdate: () => autoUpdater.downloadUpdate(),
