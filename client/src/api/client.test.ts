@@ -738,3 +738,20 @@ it("keeps invitation codes and search terms out of transport diagnostics", async
     errorLog.mockRestore();
   }
 });
+
+it("honors refresh Retry-After before contacting the server again", async () => {
+  const { apiClient } = await loadClient();
+  const clock = vi.spyOn(Date, "now").mockReturnValue(100000);
+  try {
+    fetchMock.mockResolvedValueOnce(new Response("{}", { status: 429, headers: { "Retry-After": "30" } }));
+    await apiClient("/users/me", { refreshIfMissing: true });
+    await apiClient("/users/me", { refreshIfMissing: true });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    clock.mockReturnValue(130001);
+    fetchMock.mockResolvedValueOnce(new Response("{}", { status: 503 }));
+    await apiClient("/users/me", { refreshIfMissing: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  } finally {
+    clock.mockRestore();
+  }
+});

@@ -193,12 +193,14 @@ function clearTokens(): void {
  */
 let refreshPromise: Promise<boolean> | null = null;
 let refreshRejected = false;
+let refreshRetryAt = 0;
 // Refresh is shared by HTTP and WebSocket consumers, so it must release its
 // promise lock even when the transport or response body stops making progress.
 const REFRESH_TIMEOUT_MS = 15_000;
 
 async function refreshAccessToken(): Promise<boolean> {
   if (refreshPromise) return refreshPromise;
+  if (Date.now() < refreshRetryAt) return false;
 
   refreshRejected = false;
   const pending = doRefresh(authGeneration);
@@ -235,6 +237,14 @@ async function doRefresh(generation: number): Promise<boolean> {
 
     if (generation !== authGeneration) return false;
     if (!res.ok) {
+      if (res.status === 429) {
+        const retryAfter = res.headers.get("Retry-After");
+        const seconds = retryAfter === null ? NaN : Number(retryAfter);
+        const deadline = Number.isFinite(seconds)
+          ? Date.now() + Math.max(0, seconds) * 1000
+          : Date.parse(retryAfter ?? "");
+        if (Number.isFinite(deadline)) refreshRetryAt = deadline;
+      }
       if (res.status === 409) {
         // A concurrent rotation asks us to retry with the current cookie.
         // Only an explicit account or session mismatch requires a new login.
