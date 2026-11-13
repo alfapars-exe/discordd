@@ -215,6 +215,7 @@ export function registerIpcHandlers(onCleanup?: (dispose: () => Promise<void>) =
 
   // ─── Taskbar overlay icon (Windows unread badge) ─────────────────
   registerWindowControlIPC(ipcMain, {
+    trusted: assertTrustedMainWindowSender,
     getMainWindow, setTrayTooltip, assertString, assertFiniteNumber,
     createBadgeImage: url => nativeImage.createFromDataURL(url),
   });
