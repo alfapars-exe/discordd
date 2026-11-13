@@ -32,9 +32,12 @@ async function sendMessage(page: Page, text: string): Promise<void> {
 }
 
 async function setChannelNoticePreference(page: Page, enabled: boolean): Promise<void> {
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  const opener = page.getByRole("button", { name: "Settings", exact: true });
+  await opener.focus();
+  await opener.press("Enter");
   const settings = page.getByRole("dialog", { name: "Settings" });
   await expect(settings).toBeVisible();
+  await expect.poll(() => settings.evaluate(dialog => dialog.contains(document.activeElement))).toBe(true);
   await settings.getByRole("button", { name: "Notifications", exact: true }).click();
   const toggle = settings.getByRole("checkbox", { name: "Channel message notices", exact: true });
   await expect(toggle).toBeAttached();
@@ -55,6 +58,7 @@ async function setChannelNoticePreference(page: Page, enabled: boolean): Promise
   }
   await page.keyboard.press("Escape");
   await expect(settings).toBeHidden();
+  await expect(opener).toBeFocused();
 }
 
 async function refreshNotificationRows(page: Page) {
