@@ -1347,3 +1347,8 @@ Terminal current-head receipt: PR29814a965ea completed36/36 SUCCESS. Exact-head 
 - After the terminal owner drains, late webhook cleanup runs synchronously in caller ownership, preserving moderation instead of dropping it. A late deleted-room test passed ten repetitions (0.877s).
 - Targeted VoiceUsage/EnforceModerationOnJoin/VoiceMaintenance host tests passed ten repetitions (11.931s); final-source Linux race passed ten (15.042s), including late-webhook test. Services vet/lint passed. DSN-free runs skip PostgreSQL-specific tests.
 - Local integration only; PR298 published 2dafbcef remains under CI43516530987 (last checked ten successful jobs, none failed). Entrance hook, late terminal quota credit, full integrated/runtime and physical-media acceptance remain open.
+
+### 2026-11-14 — Own entrance hook under accepted join
+
+- Entrance-hook regression failed before fix: terminal shutdown returned before fresh-join hook finished. JoinChannel now registers the async entrance hook as a child of its already accepted operation, retaining asynchronous response behavior.
+- Integrated VoiceUsage/VoiceMaintenance/JoinChannel tests passed ten repetitions (12.357s). Mute/webhook/entrance changes were applied to canonical source using scoped edits; canonical PostgreSQL/race/full vet-build-lint validation is running, not yet a success claim. Physical audible entrance sound remains unverified.

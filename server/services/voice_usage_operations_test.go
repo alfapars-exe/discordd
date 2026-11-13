@@ -470,3 +470,39 @@ func TestVoiceUsageLateDeletedRoomWebhookOwnsEviction(t *testing.T) {
 		t.Fatal("webhook eviction not joined")
 	}
 }
+
+type blockingUsageEntranceHook struct{ entered, release chan struct{} }
+
+func (h blockingUsageEntranceHook) OnVoiceJoined(string, string, string) {
+	close(h.entered)
+	<-h.release
+}
+
+func TestVoiceUsageShutdownWaitsForEntranceHook(t *testing.T) {
+	svc, _ := newTestVoiceService()
+	s := svc.(*voiceService)
+	entered, release, stopped := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	t.Cleanup(func() { once.Do(func() { close(release) }); s.ShutdownUsageProducers() })
+	s.SetEntranceHook(blockingUsageEntranceHook{entered: entered, release: release})
+	if err := s.JoinChannel("victim", "victim", "Victim", "", "ch1", false, false); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("entrance hook not started")
+	}
+	go func() { s.ShutdownUsageProducers(); close(stopped) }()
+	select {
+	case <-stopped:
+		t.Fatal("shutdown returned before entrance hook")
+	case <-time.After(20 * time.Millisecond):
+	}
+	once.Do(func() { close(release) })
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("entrance hook not joined")
+	}
+}
