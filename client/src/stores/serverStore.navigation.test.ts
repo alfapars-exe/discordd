@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { APIResponse, Server, CategoryWithChannels } from "../types";
 const shell = vi.hoisted(() => ({ enabled: false }));
 vi.mock("../utils/uiShell", () => ({ get UI_SHELL_V2() { return shell.enabled; } }));
-vi.mock("../api/servers", () => ({ getServer: vi.fn(), createServer: vi.fn(), joinServer: vi.fn(), leaveServer: vi.fn(), deleteServer: vi.fn(), reorderServers: vi.fn() }));
-import { getServer, createServer, joinServer, leaveServer, deleteServer, reorderServers } from "../api/servers";
+vi.mock("../api/servers", () => ({ getMyServers: vi.fn(), getServer: vi.fn(), createServer: vi.fn(), joinServer: vi.fn(), leaveServer: vi.fn(), deleteServer: vi.fn(), reorderServers: vi.fn() }));
+import { getMyServers, getServer, createServer, joinServer, leaveServer, deleteServer, reorderServers } from "../api/servers";
 import { useServerStore } from "./serverStore";
 import { useChannelStore } from "./channelStore";
 import { useUIStore } from "./uiStore";
@@ -116,4 +116,16 @@ describe("server reorder rollback ownership", () => {
     expect(await pending).toBe(false);
     expect(useServerStore.getState().servers.find((server) => server.id === "a")?.name).toBe("Updated by WS");
   });
+});
+
+
+it("keeps a newer ready snapshot when an older HTTP server list completes", async () => {
+  let finish!: (value: APIResponse<[]>) => void;
+  vi.mocked(getMyServers).mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+  const pending = useServerStore.getState().fetchServers();
+  const ready = [{ id: "ready", name: "Ready", icon_url: null }];
+  useServerStore.getState().setServersFromReady(ready);
+  finish({ success: true, data: [] });
+  await pending;
+  expect(useServerStore.getState().servers).toEqual(ready);
 });
