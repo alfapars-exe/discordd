@@ -3,9 +3,10 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { useUpdateChecker } from "./useUpdateChecker";
 
-vi.mock("../utils/constants", () => ({ isElectron: () => true }));
+const platform = vi.hoisted(() => ({ electron: true }));
+vi.mock("../utils/constants", () => ({ isElectron: () => platform.electron }));
 
-afterEach(() => { delete window.electronAPI; vi.useRealTimers(); });
+afterEach(() => { platform.electron = true; delete window.electronAPI; vi.useRealTimers(); });
 
 function updaterHarness(strict = false) {
   vi.useFakeTimers();
@@ -124,4 +125,44 @@ it("StrictMode remount owns four listeners and unmount clears its snooze timer",
   h.view.unmount();
   expect(h.listenerCounts()).toEqual([0, 0, 0, 0]);
   expect(vi.getTimerCount()).toBe(0);
+});
+
+it("web rendering and install actions need no Electron bridge", () => {
+  platform.electron = false;
+  delete window.electronAPI;
+  const view = renderHook(useUpdateChecker);
+  expect(view.result.current.status).toBe("idle");
+  expect(view.result.current.update).toBeNull();
+  expect(() => view.result.current.restartAndInstall()).not.toThrow();
+  view.unmount();
+});
+
+it("legacy downloaded events without metadata remain ready through snooze", () => {
+  const h = updaterHarness(); h.view.unmount();
+  const api = window.electronAPI!;
+  let downloaded!: (info: unknown) => void;
+  const onDownloaded = api.onUpdateDownloaded;
+  api.onUpdateDownloaded = callback => {
+    downloaded = value => Reflect.apply(callback, undefined, [value]);
+    return onDownloaded(callback);
+  };
+  const view = renderHook(useUpdateChecker);
+  act(() => downloaded(undefined));
+  expect(view.result.current.status).toBe("ready");
+  expect(view.result.current.update).toEqual({ version: "" });
+  act(() => view.result.current.dismiss());
+  act(() => vi.advanceTimersByTime(30 * 60 * 1000));
+  expect(view.result.current.status).toBe("ready");
+  view.unmount();
+  expect(h.listenerCounts()).toEqual([0, 0, 0, 0]);
+});
+
+it("legacy subscription methods without cleanup callbacks can unmount", () => {
+  const h = updaterHarness(); h.view.unmount();
+  const api = window.electronAPI!;
+  for (const name of ["onUpdateAvailable", "onUpdateProgress", "onUpdateDownloaded", "onUpdateError"] as const) {
+    Object.defineProperty(api, name, { value: () => undefined });
+  }
+  const view = renderHook(useUpdateChecker);
+  expect(() => view.unmount()).not.toThrow();
 });
