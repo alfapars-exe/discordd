@@ -144,6 +144,9 @@ func (s *dmService) deliverNextDM(ctx context.Context) bool {
 		return false
 	}
 	if err != nil {
+		if errors.Is(err, context.Canceled) && errors.Is(ctx.Err(), context.Canceled) {
+			return false
+		}
 		dmLogger.Error("DM outbox claim failed")
 		return false
 	}
