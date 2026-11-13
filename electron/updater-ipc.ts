@@ -1,6 +1,7 @@
-import type { IpcMain } from "electron";
+import type { IpcMain, IpcMainInvokeEvent } from "electron";
 
 type UpdaterOperations = {
+  trusted: (event: IpcMainInvokeEvent) => void;
   wasPrelaunchChecked: () => boolean;
   checkForUpdates: () => Promise<{ updateInfo: unknown } | null | undefined>;
   downloadUpdate: () => Promise<unknown>;
@@ -9,7 +10,8 @@ type UpdaterOperations = {
 
 export function registerUpdaterIPC(ipc: Pick<IpcMain, "handle">, operations: UpdaterOperations): void {
   ipc.handle("was-update-checked", () => operations.wasPrelaunchChecked());
-  ipc.handle("check-update", async () => {
+  ipc.handle("check-update", async event => {
+    operations.trusted(event);
     try {
       const result = await operations.checkForUpdates();
       return result?.updateInfo ?? null;
@@ -17,7 +19,8 @@ export function registerUpdaterIPC(ipc: Pick<IpcMain, "handle">, operations: Upd
       return null;
     }
   });
-  ipc.handle("download-update", async () => {
+  ipc.handle("download-update", async event => {
+    operations.trusted(event);
     try {
       await operations.downloadUpdate();
       return true;
@@ -25,5 +28,5 @@ export function registerUpdaterIPC(ipc: Pick<IpcMain, "handle">, operations: Upd
       return false;
     }
   });
-  ipc.handle("install-update", () => operations.quitAndInstall(true, true));
+  ipc.handle("install-update", event => { operations.trusted(event); operations.quitAndInstall(true, true); });
 }

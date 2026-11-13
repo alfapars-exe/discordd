@@ -197,6 +197,7 @@ export function registerIpcHandlers(onCleanup?: (dispose: () => Promise<void>) =
     setVerbose, capturePerformanceTrace, cancelPerformanceTrace,
   });
   registerUpdaterIPC(ipcMain, {
+    trusted: assertTrustedMainWindowSender,
     wasPrelaunchChecked,
     checkForUpdates: () => autoUpdater.checkForUpdates(),
     downloadUpdate: () => autoUpdater.downloadUpdate(),
