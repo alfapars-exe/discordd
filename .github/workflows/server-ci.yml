@@ -442,10 +442,11 @@ jobs:
       - name: Start isolated PostgreSQL with mutual TLS
         run: bash scripts/start-e2e-postgres.sh
 
-      - name: Chromium application suite
+      - name: Chromium production application suite
         run: node node_modules/@playwright/test/cli.js test --project=chromium
         working-directory: e2e
         env:
+          HICHAT_E2E_PRODUCTION_CLIENT: "1"
           CGO_ENABLED: "0"
 
       - name: WebKit production client smoke
