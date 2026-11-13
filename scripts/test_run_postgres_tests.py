@@ -37,6 +37,11 @@ class PostgreSQLRunnerTests(unittest.TestCase):
         }]
         self.assertEqual(self.execute(events), 1)
 
+    def test_non_object_json_is_reported_as_invalid_output(self):
+        for value in (None, [], "unexpected", 42):
+            with self.subTest(value=value):
+                self.assertEqual(self.execute(self.completed() + [value]), 1)
+
     def completed(self):
         return [
             {"Action": "pass", "Package": "github.com/argeinfina/hichat", "Test": "TestPurgeExpiredNotificationsPostgres"},

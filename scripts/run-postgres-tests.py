@@ -43,6 +43,10 @@ def main():
             print("Unexpected non-JSON output from go test", file=sys.stderr)
             invalid_output = True
             continue
+        if not isinstance(event, dict):
+            print("Unexpected JSON value from go test", file=sys.stderr)
+            invalid_output = True
+            continue
         if event.get("Action") == "fail":
             reported_failure = True
         if event.get("Action") == "skip" and event.get("Test"):
