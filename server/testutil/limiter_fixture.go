@@ -9,7 +9,5 @@ func AssertLimiterFixtureCleanup(t *testing.T, fixture func(*testing.T), count f
 	t.Helper()
 	before := count()
 	t.Run("owner", fixture)
-	if after := count(); after != before {
-		t.Fatalf("fixture retained limiter workers: before=%d after=%d", before, after)
-	}
+	AssertWorkerCount(t, before, count)
 }

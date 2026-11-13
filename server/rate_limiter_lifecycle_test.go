@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/argeinfina/hichat/pkg/ratelimit"
+	"github.com/argeinfina/hichat/testutil"
 )
 
 func limiterWorkerCount(t *testing.T) int {
@@ -47,9 +48,7 @@ func TestRateLimiterBundleOwnsEveryDeclaredWorker(t *testing.T) {
 		t.Fatalf("fixture started %d workers, want %d", got-before, fields.NumField())
 	}
 	owner.Stop()
-	if got := limiterWorkerCount(t); got != before {
-		t.Fatalf("bundle retained %d cleanup workers", got-before)
-	}
+	requireLimiterWorkerCount(t, before)
 	owner.Stop()
 	empty := &RateLimiters{}
 	any(empty).(interface{ Stop() }).Stop()
@@ -68,4 +67,9 @@ func TestMainOwnsRateLimiterShutdownAfterAcquisition(t *testing.T) {
 	if acquisition < 0 || strings.Index(source, cleanup) < acquisition || strings.Count(source, cleanup) != 1 {
 		t.Fatal("main lacks one owned rate limiter cleanup after acquisition")
 	}
+}
+
+func requireLimiterWorkerCount(t *testing.T, want int) {
+	t.Helper()
+	testutil.AssertWorkerCount(t, want, func() int { return limiterWorkerCount(t) })
 }

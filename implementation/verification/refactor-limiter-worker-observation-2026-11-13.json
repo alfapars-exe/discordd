@@ -1,0 +1,23 @@
+{
+  "scope": "PR293 runtime worker-count observation",
+  "CI_failure": {
+    "run": 43471274475,
+    "source": "12fd653d",
+    "test": "TestLimiterAssemblyRollsBackEveryPartialConstruction/12",
+    "observed": "before=0 after=1 after rollback",
+    "no_data_race_reported": true
+  },
+  "analysis": "Completion channels close in the worker final defer, before the goroutine disappears from runtime profiles. Runtime-exit bookkeeping is an inference from this contract; CI did not capture the remaining goroutine stack. An isolated pre-fix 100-repeat race/cover run passed, so the CI mismatch was not locally reproduced.",
+  "change": "Observe the same final worker-count requirement until runtime bookkeeping settles, without rerunning fixtures, changing product Stop, or changing cancellation/test deadlines. Persistent workers still fail after a bounded 500ms observation window.",
+  "after": {
+    "race_and_cover_count_100": "PASS main 7.368s, handlers 12.526s, middleware 3.978s",
+    "negative_control": "Omitting GameJoin from bundle Stop still fails: got=1 want=0 at 0.50s. Original source restored.",
+    "restored_source_tests_count_5": "PASS main 0.604s, handlers 0.729s, middleware 0.390s",
+    "full_go_vet_and_build": "PASS",
+    "golangci_lint": "0 issues"
+  },
+  "limitations": [
+    "This addresses profile observation semantics, not a proven production resource leak.",
+    "Full new-head CI must pass before the prior CI failure is considered resolved."
+  ]
+}

@@ -36,9 +36,7 @@ func TestLimiterAssemblyRollsBackEveryPartialConstruction(t *testing.T) {
 			if caught != marker || calls != failure {
 				t.Fatalf("constructor failure changed: panic=%v calls=%d", caught, calls)
 			}
-			if after := limiterWorkerCount(t); after != before {
-				t.Fatalf("partial construction retained workers: before=%d after=%d", before, after)
-			}
+			requireLimiterWorkerCount(t, before)
 		})
 	}
 }
@@ -51,7 +49,5 @@ func TestLimiterAssemblyTransfersAllWorkersOnSuccess(t *testing.T) {
 		t.Fatalf("successful assembly transferred %d workers, want 18", after-before)
 	}
 	bundle.Stop()
-	if after := limiterWorkerCount(t); after != before {
-		t.Fatalf("caller retained %d workers", after-before)
-	}
+	requireLimiterWorkerCount(t, before)
 }
