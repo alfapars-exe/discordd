@@ -941,3 +941,10 @@ LiveKit silme düzeltmesinin mevcut PR #222 ile sonradan açılan PR #270'te ayn
 - Four direct tests verify validation ordering and exact bounds, rejection without native mutations, non-image URL refusal, badge clear/null-icon, focused-window behavior, maximize state and absent main window.
 - Integration 46b1a816 compile/Electron: 351 passed, 1 skipped (`%TEMP%/hichat-window-ipc-integrated.log`). Independent draft PR #283 head b4c5ad09: compile/Electron 273 passed, 1 skipped (`hichat-window-ipc-pr.log`), pushed. Canonical import conflict resolved without unrelated pending registrars.
 - CI snapshots: #277 head 24365ca4 34 success/1 pending; #279 head 38993999 18/16; #280 head e57b103f 26/8; no failure observed. These counts are not terminal CI evidence. Physical Windows taskbar/tray and remaining registrar/lifecycle acceptance stay open.
+
+### RF20 — registered game command registrar (2026-11-13)
+
+- Nine local game commands now live in `registered-games-ipc.ts`, reusing the existing name registrar and injected trust/string validators. Tracker/detection initialization, overlay policy ownership and shutdown remain in central orchestration. Public channel/platform/registry contracts are preserved.
+- Seven direct tests cover all-channel untrusted rejection, overlay support states, native selection/cancel/empty/unsupported paths, successful-only layout cleanup, boolean/ID bounds and adapter delegation.
+- Integration eeb9af5d compile/Electron: 358 passed, 1 skipped (`%TEMP%/hichat-games-ipc-integrated.log`). Independent draft PR #284 head 989917c6: compile/Electron 276 passed, 1 skipped (`hichat-games-ipc-pr.log`), pushed. Import-only canonical conflict resolved without other pending registrars. CI pending; physical native game/dialog/overlay acceptance remains open.
+- CI snapshots: #277 head 24365ca4 35 success/1 pending; #279 head 38993999 21/13; #280 head e57b103f 32/2, no failures observed. Await terminal current-head proof.
