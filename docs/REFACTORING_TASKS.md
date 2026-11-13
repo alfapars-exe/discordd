@@ -1095,3 +1095,10 @@ LiveKit silme düzeltmesinin mevcut PR #222 ile sonradan açılan PR #270'te ayn
 - Tests cover foreign contents, subframes, missing frames, destroyed/absent windows, old navigation frames, zero native/persistence/archive effects after denial, and successful current-frame use. Existing log bounds, upload binary contract, cancellation, optional dump behavior, file failures and verbosity validation remain covered.
 - Integration 03678808: full Electron 393 pass/1 skip. Existing canonical PR #278 source 9734d1cf: fresh unique TypeScript output, full Electron 278 pass/1 skip. Logs: %TEMP%/hichat-diagnostic-sender-before.log, hichat-diagnostic-sender-after.log and hichat-diagnostic-sender-canonical.log. No physical export dialog or trace was exercised. Remaining source/media/window/shortcut capability review and final runtime acceptance remain open.
 - Published to existing PR #278 head 862395ab; fresh CI pending. No merge performed.
+
+### RF20 - desktop source enumeration ownership (2026-11-13)
+
+- Two failing-before regressions demonstrated get-desktop-sources did not reject foreign/retired main frames. The registrar now requires the existing current-main assertion before source enumeration. Source contents, provider identity and uncached behavior remain unchanged; get-display-info retains its existing monitor/primary fallback contract.
+- Tests reject foreign contents, subframes, missing frames, destroyed/absent windows and old navigation frames with zero provider calls, then allow the current main frame. Integration e897e460: full Electron 395 pass/1 skip. Canonical PR #282 source 8ae09b9d: fresh unique TypeScript output, full Electron 274 pass/1 skip. Logs: %TEMP%/hichat-desktop-source-sender-before.log, hichat-desktop-source-sender-after.log and hichat-desktop-source-sender-canonical.log.
+- This is a registrar ownership contract, not a physical source-picker/capture permission or multi-display acceptance receipt. Remaining window/shortcut/capture capabilities and final runtime acceptance remain open.
+- Published to existing PR #282 head c4cfdaff; fresh CI pending. No merge performed.
