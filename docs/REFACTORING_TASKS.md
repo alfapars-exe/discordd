@@ -934,3 +934,10 @@ LiveKit silme düzeltmesinin mevcut PR #222 ile sonradan açılan PR #270'te ayn
 - Extracted legacy desktop source enumeration and current-window display metrics into a two-channel registrar. Preserved sender policy, public names and response fields. Tests cover monitor movement, fractional DPI-to-physical-pixel rounding, primary fallback, zero refresh rate and uncached source shape.
 - Integration 2d8c8dfb compile/Electron: 347 passed, 1 skipped (`%TEMP%/hichat-desktop-media-ipc-integrated.log`). Independent draft PR #282 head 3c8fc0a9: compile/Electron 272 passed, 1 skipped (`hichat-desktop-media-ipc-pr.log`), pushed. Main-base import conflict resolved without unrelated unmerged modules.
 - CI snapshot: #277 head 24365ca4 32 success/2 pending; #279 head 38993999 11/23; #280 head e57b103f 19/15; #281 head 8ce6720b 1/32; no failures observed in these snapshots. This is not terminal CI proof. Injected screen contracts do not prove physical capture, compositor or multi-display acceptance.
+
+### RF20 — window control and badge IPC boundary (2026-11-13)
+
+- Five channels moved into `window-control-ipc.ts`: taskbar badge, attention flash, minimize, maximize toggle and close. Existing validators are injected from central registration; there is no duplicate validation implementation. Sender policy and public channel/response behavior are preserved.
+- Four direct tests verify validation ordering and exact bounds, rejection without native mutations, non-image URL refusal, badge clear/null-icon, focused-window behavior, maximize state and absent main window.
+- Integration 46b1a816 compile/Electron: 351 passed, 1 skipped (`%TEMP%/hichat-window-ipc-integrated.log`). Independent draft PR #283 head b4c5ad09: compile/Electron 273 passed, 1 skipped (`hichat-window-ipc-pr.log`), pushed. Canonical import conflict resolved without unrelated pending registrars.
+- CI snapshots: #277 head 24365ca4 34 success/1 pending; #279 head 38993999 18/16; #280 head e57b103f 26/8; no failure observed. These counts are not terminal CI evidence. Physical Windows taskbar/tray and remaining registrar/lifecycle acceptance stay open.
