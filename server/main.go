@@ -214,6 +214,7 @@ func main() {
 
 	// 9. Service layer (order matters: channelPerm -> voice -> p2pCall -> rest)
 	svcs, limiters, metricsCollector := initServices(db.Conn, repos, hub, cfg, encryptionKey, readiness)
+	defer limiters.Stop()
 
 	if sink, ok := svcs.AppLog.(interface {
 		ConsumeRecord(context.Context, slog.Record)

@@ -111,6 +111,7 @@ func TestCreateGroupSession_AcceptsV2Envelopes(t *testing.T) {
 func TestCreateGroupSession_RateLimited(t *testing.T) {
 	svc := &stubE2EEService{}
 	limiter := ratelimit.NewMessageRateLimiter(1, time.Minute, 0)
+	t.Cleanup(limiter.Stop)
 	h := NewE2EEHandler(svc, limiter)
 
 	body := `{"session_id":"sess-1","version":2,"envelopes":[

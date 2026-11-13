@@ -151,7 +151,9 @@ func TestCloneHandler_ErrorCodes(t *testing.T) {
 }
 
 func TestCloneHandler_RateLimited(t *testing.T) {
-	f := newCloneHandlerFixture(t, ratelimit.NewMessageRateLimiter(1, time.Minute, 30*time.Second))
+	limiter := ratelimit.NewMessageRateLimiter(1, time.Minute, 30*time.Second)
+	t.Cleanup(limiter.Stop)
+	f := newCloneHandlerFixture(t, limiter)
 	f.putEmoji(t, "aaaaaaaaaaaaaaaa", "src", true)
 	first := httptest.NewRecorder()
 	f.h.CloneEmoji(first, cloneRequest("emojis", "dst", "alice", `{"source_id":"aaaaaaaaaaaaaaaa"}`))
