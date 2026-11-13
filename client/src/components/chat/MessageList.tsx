@@ -309,8 +309,10 @@ function MessageList() {
 
     const targetId = scrollToMessageId;
     const idx = messages.findIndex((m) => m.id === targetId);
-    setScrollToMessageId(null);
-    if (idx < 0) return;
+    if (idx < 0) {
+      setScrollToMessageId(null);
+      return;
+    }
 
     virtualizer.scrollToIndex(idx, { align: "center" });
     const raf = requestAnimationFrame(() => {
@@ -319,6 +321,8 @@ function MessageList() {
         el.classList.add("msg-highlight");
         setTimeout(() => el.classList.remove("msg-highlight"), 2000);
       }
+      // Clearing the request reruns this effect and cancels its pending frame.
+      setScrollToMessageId(null);
     });
     return () => cancelAnimationFrame(raf);
   }, [scrollToMessageId, setScrollToMessageId, messages, virtualizer]);
