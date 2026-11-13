@@ -582,3 +582,9 @@ Paralel çalışma hatları: backend veri/lifecycle (RF04–RF11), client state/
 - İlgisiz dirty dosyalar staged edilmez; commit/PR/release artifact'i ile kanıt kaydı aynı kaynak anlık görüntüsünü gösterir.
 - Rollback küçük PR'ın revert'iyle mümkün tutulur. Veri migration'ı varsa backup/restore provası olmadan release kapısı kapanmaz.
 - [REFACTORING_PLAN.md](REFACTORING_PLAN.md), [TECHNICAL_DEBT.md](TECHNICAL_DEBT.md), [TEST_STRATEGY.md](TEST_STRATEGY.md), [CODE_QUALITY_STANDARDS.md](CODE_QUALITY_STANDARDS.md) ve [ARCHITECTURE_IMPROVEMENTS.md](ARCHITECTURE_IMPROVEMENTS.md) ilgili kararlarla eşleşir.
+
+### RF20 - remaining overlay control/media command registration (2026-11-13)
+
+- Moved seven layout/shortcut/media command registrations from ipc-handlers.ts to overlay-control-ipc.ts. Main-window authorization still precedes layout/shortcut effects; null shortcut bindings still lock after the owner decision. Media commands pass the unchanged event and unknown payload to the same broker, which owns sender/session/input validation.
+- Three registrar contracts cover rejected main callers, acceptance results and null locking order, exact media event/payload forwarding and all seven channel names. Integration 1f6e5b95: full Electron 383 pass/1 skip. Canonical PR #286 source 71f5b6ed: unique clean compiled output, full Electron 289 pass/1 skip. Logs: %TEMP%/hichat-overlay-control-integrated.log and hichat-overlay-control-canonical.log. The initial canonical cherry-pick conflict was resolved by retaining its existing action handlers; unrelated action extraction was not imported.
+- Snapshot acknowledgment and resource ownership remain in the lifecycle composition root. This registration refactor does not establish physical display/capture/quit acceptance or full sender/session inventory completion. Current-head CI must be refreshed after publication.
