@@ -35,7 +35,7 @@ func TestGroupAdmissionServiceRejectsKnownIDWithoutAcceptedFriendship(t *testing
 	for _, action := range []string{"create", "add"} {
 		for _, status := range []string{"missing", "pending", "rejected", "nil", "error", "block error", "blocked"} {
 			t.Run(action+"/"+status, func(t *testing.T) {
-				db := newBotTestDB(t)
+				db := newDMSendTestDB(t)
 				ctx := context.Background()
 				for _, id := range []string{"owner", "target"} {
 					if _, err := db.Conn.Exec(`INSERT INTO users(id,username,password_hash) VALUES(?,?,'x')`, id, id); err != nil {
@@ -104,7 +104,7 @@ func TestGroupAdmissionServicePassesAuthenticatedScopeAndRechecksUnfriendBeforeW
 	for _, action := range []string{"create", "add"} {
 		for _, unfriend := range []bool{false, true} {
 			t.Run(action+map[bool]string{false: "/accepted", true: "/unfriend-before-write"}[unfriend], func(t *testing.T) {
-				db := newBotTestDB(t)
+				db := newDMSendTestDB(t)
 				ctx := context.Background()
 				for _, id := range []string{"owner", "target"} {
 					if _, err := db.Conn.Exec(`INSERT INTO users(id,username,password_hash,dm_privacy) VALUES(?,?,'x','friends_only')`, id, id); err != nil {
