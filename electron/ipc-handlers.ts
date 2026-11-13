@@ -396,7 +396,7 @@ export function registerIpcHandlers(): void {
   });
 
   // ─── Desktop capturer (legacy enumeration, separate from picker) ─
-  registerDesktopMediaIPC(ipcMain, { getSerializedSources, getMainWindow, screen });
+  registerDesktopMediaIPC(ipcMain, { trusted: assertTrustedMainWindowSender, getSerializedSources, getMainWindow, screen });
 
   registerSystemAudioLeaseIPC(ipcMain,assertTrustedMainWindowSender,{reserve:reserveCaptureLease,start:startCaptureLease,release:releaseCaptureLease,retire:retireCaptureSender});
   // ─── Process-exclusive system audio ──────────────────────────────
