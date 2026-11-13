@@ -34,6 +34,24 @@ import { ACCOUNT_FILE, CHANNEL_NOTIFICATION_FIXTURE_FILE, E2E_RUN_ID, PENDING_NO
 
 const sessionTokens = new WeakMap<Page, string>();
 
+/** Authenticated fixture requests through the real API, using this page's login. */
+export async function fixtureApi<T>(page: Page, path: string, method = "GET", body?: unknown): Promise<T> {
+  const token = sessionTokens.get(page);
+  if (!token) throw new Error("Fixture API requires an authenticated test page");
+  return page.evaluate(async ({ path, method, body, token }) => {
+    const response = await fetch("/api" + path, {
+      method,
+      credentials: "include",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", "X-HiChat-Client": "web" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    if (!response.ok) throw new Error("Fixture API " + method + " failed with HTTP " + response.status);
+    const result = await response.json();
+    if (!result.success) throw new Error("Fixture API returned an unsuccessful response");
+    return result.data;
+  }, { path, method, body, token });
+}
+
 /** Smallest valid PNG (1x1, transparent) — passes the server's MIME sniff. */
 const ONE_BY_ONE_PNG_B64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
