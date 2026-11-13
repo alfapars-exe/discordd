@@ -1,3 +1,4 @@
+import { createOverlayActionWindow } from "./overlay-action-window";
 import { app, BrowserWindow, screen } from "electron";
 import { OverlayWelcomeLifecycle } from "./overlay-welcome";
 import { OverlayGameNoticeLifecycle } from "./overlay-game-notices";
@@ -83,11 +84,11 @@ let notificationActionWindow: BrowserWindow | null = null;
 let chatActionWindow: BrowserWindow | null = null;
 let chatComposerWindow: BrowserWindow | null = null;
 let actionLoadPending = false;
-let actionShapeFailed = false;
+let actionSurfaceFailed = false;
 let notificationActionLoadPending = false;
-let notificationActionShapeFailed = false;
+let notificationActionSurfaceFailed = false;
 let chatActionLoadPending = false;
-let chatActionShapeFailed = false;
+let chatActionSurfaceFailed = false;
 let pendingNotificationReply: { session: string; notificationId: string; expiresAt: number } | null = null;
 let lastReplyActionAt = 0;
 let pendingOpenInbox: { session: string; expiresAt: number } | null = null;
@@ -122,8 +123,8 @@ function voiceOverlayPayload() {
     voiceOverlayChat: geometry?.chatVisible ?? false,
     chatStatus: geometry?.chatVisible ? latest.chatStatus : undefined,
     chatMessages: geometry?.chatVisible ? (latest.chatMessages ?? []).slice(-geometry.chatRows) : undefined,
-    notificationActionsUnavailable: latest.voiceOverlayNotificationActions === true && (notificationActionShapeFailed || process.platform !== "win32"),
-    unlocked, layoutSaveFailed, quickActionsUnavailable: actionShapeFailed };
+    notificationActionsUnavailable: latest.voiceOverlayNotificationActions === true && (notificationActionSurfaceFailed || process.platform !== "win32"),
+    unlocked, layoutSaveFailed, quickActionsUnavailable: actionSurfaceFailed };
 }
 
 function hideActionWindow(): void { if (actionWindow && !actionWindow.isDestroyed()) actionWindow.hide(); }
@@ -143,7 +144,7 @@ function notificationActionAvailable(): boolean {
     && latest.notificationStatus === "ready" && (latest.notifications?.length ?? 0) > 0
     && !!latest.notificationActionSession && !!geometry?.notificationsVisible
     && !!overlayWindow && !overlayWindow.isDestroyed() && overlayWindow.isVisible()
-    && process.platform === "win32" && !notificationActionShapeFailed;
+    && process.platform === "win32" && !notificationActionSurfaceFailed;
 }
 
 function chatActionAvailable(): boolean {
@@ -151,7 +152,7 @@ function chatActionAvailable(): boolean {
   return latest?.voiceOverlayCompatibility !== true && !!latest?.enabled && latest.voiceOverlayChat === true && latest.voiceOverlayChatActions === true
     && latest.chatStatus === "ready" && !!latest.chatActionSession && !!geometry?.chatVisible
     && !!overlayWindow && !overlayWindow.isDestroyed() && overlayWindow.isVisible()
-    && process.platform === "win32" && !chatActionShapeFailed;
+    && process.platform === "win32" && !chatActionSurfaceFailed;
 }
 
 function chatComposeAvailable(): boolean {
@@ -266,32 +267,26 @@ function updateChatActionWindow(): void {
   const expanded = chatComposeAvailable();
   const actionWidth = expanded ? 184 : 88;
   if (!chatActionWindow || chatActionWindow.isDestroyed()) {
-    const created = new BrowserWindow({ width: actionWidth, height: 20, frame: false, transparent: true, resizable: false, alwaysOnTop: true, focusable: false, skipTaskbar: true, hasShadow: false, show: false, parent: overlayWindow!, webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, nodeIntegration: false, sandbox: true } });
-    chatActionWindow = created;
-    try {
-      created.setShape(expanded
-        ? [{ x: 0, y: 0, width: 88, height: 20 }, { x: 96, y: 0, width: 88, height: 20 }]
-        : [{ x: 0, y: 0, width: 88, height: 20 }]);
-    } catch {
-      chatActionShapeFailed = true;
-      pendingOpenChat = null;
-      created.close(); chatActionWindow = null;
-      overlayWindow!.webContents.send("voice-overlay-update", voiceOverlayPayload());
-      return;
-    }
-    created.setAlwaysOnTop(true, "floating");
-    created.on("closed", () => { if (chatActionWindow === created) { chatActionWindow = null; chatActionLoadPending = false; pendingOpenChat = null; } });
-    const dev = process.env.NODE_ENV === "development" || !app.isPackaged;
-    void created.loadURL(dev ? "http://localhost:3030/overlay.html?surface=chat-actions" : "app://hichat/overlay.html?surface=chat-actions")
-      .catch(() => {
-        if (chatActionWindow !== created) return;
-        chatActionShapeFailed = true;
-        created.close(); chatActionWindow = null; chatActionLoadPending = false; pendingOpenChat = null;
-        closeChatComposerWindow();
+    const created = createOverlayActionWindow({
+      surface: "chat-actions", width: actionWidth, height: 20, parent: overlayWindow!,
+      preload: path.join(__dirname, "preload.js"), development: process.env.NODE_ENV === "development" || !app.isPackaged,
+      regions: expanded ? [{ x: 0, y: 0, width: 88, height: 20 }, { x: 96, y: 0, width: 88, height: 20 }] : [{ x: 0, y: 0, width: 88, height: 20 }],
+    }, {
+      createWindow: options => new BrowserWindow(options),
+      created: window => { chatActionWindow = window; },
+      closed: window => { if (chatActionWindow === window) { chatActionWindow = null; chatActionLoadPending = false; pendingOpenChat = null; } },
+      failed: (window, reason) => {
+        if (chatActionWindow !== window) return;
+        chatActionSurfaceFailed = true;
+        window.close(); chatActionWindow = null; chatActionLoadPending = false; pendingOpenChat = null;
+        if (reason === "load") closeChatComposerWindow();
         if (overlayWindow && !overlayWindow.isDestroyed()) overlayWindow.webContents.send("voice-overlay-update", voiceOverlayPayload());
-      });
+      },
+    });
+    if (!created) return;
   }
   const target = chatActionWindow;
+  if (!target) return;
   const deliver = () => {
     if (target !== chatActionWindow || target.isDestroyed() || !chatActionAvailable()) { if (!target.isDestroyed()) target.hide(); return; }
     if (chatComposerWindow && !chatComposerWindow.isDestroyed() && (!chatComposeAvailable() || chatComposeSessionScope !== latest!.chatComposeSession)) closeChatComposerWindow();
@@ -304,7 +299,7 @@ function updateChatActionWindow(): void {
         ? [{ x: 0, y: 0, width: 88, height: 20 }, { x: 96, y: 0, width: 88, height: 20 }]
         : [{ x: 0, y: 0, width: 88, height: 20 }]);
     } catch {
-      chatActionShapeFailed = true;
+      chatActionSurfaceFailed = true;
       pendingOpenChat = null;
       closeChatComposerWindow();
       target.hide();
@@ -333,30 +328,26 @@ function updateChatActionWindow(): void {
 function updateNotificationActionWindow(): void {
   if (!notificationActionAvailable()) { hideNotificationActionWindow(); return; }
   if (!notificationActionWindow || notificationActionWindow.isDestroyed()) {
-    const created = new BrowserWindow({ width: INBOX_ACTION_WIDTH, height: INBOX_ACTION_HEIGHT, frame: false, transparent: true, resizable: false, alwaysOnTop: true, focusable: false, skipTaskbar: true, hasShadow: false, show: false, parent: overlayWindow!, webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, nodeIntegration: false, sandbox: true } });
-    notificationActionWindow = created;
-    try {
-      created.setShape([{ x: 0, y: 0, width: INBOX_ACTION_WIDTH, height: INBOX_ACTION_HEIGHT }]);
-    } catch {
-      notificationActionShapeFailed = true;
-      pendingOpenInbox = null; pendingNotificationReply = null;
-      created.close(); notificationActionWindow = null;
-      overlayWindow!.webContents.send("voice-overlay-update", voiceOverlayPayload());
-      return;
-    }
-    created.setAlwaysOnTop(true, "floating");
-    created.on("closed", () => { if (notificationActionWindow === created) { notificationActionWindow = null; notificationActionLoadPending = false; pendingOpenInbox = null; pendingNotificationReply = null; } });
-    const dev = process.env.NODE_ENV === "development" || !app.isPackaged;
-    void created.loadURL(dev ? "http://localhost:3030/overlay.html?surface=notification-actions" : "app://hichat/overlay.html?surface=notification-actions")
-      .catch(() => {
-        if (notificationActionWindow !== created) return;
-        notificationActionShapeFailed = true;
-        created.close(); notificationActionWindow = null; notificationActionLoadPending = false;
+    const created = createOverlayActionWindow({
+      surface: "notification-actions", width: INBOX_ACTION_WIDTH, height: INBOX_ACTION_HEIGHT, parent: overlayWindow!,
+      preload: path.join(__dirname, "preload.js"), development: process.env.NODE_ENV === "development" || !app.isPackaged,
+      regions: [{ x: 0, y: 0, width: INBOX_ACTION_WIDTH, height: INBOX_ACTION_HEIGHT }],
+    }, {
+      createWindow: options => new BrowserWindow(options),
+      created: window => { notificationActionWindow = window; },
+      closed: window => { if (notificationActionWindow === window) { notificationActionWindow = null; notificationActionLoadPending = false; pendingOpenInbox = null; pendingNotificationReply = null; } },
+      failed: window => {
+        if (notificationActionWindow !== window) return;
+        notificationActionSurfaceFailed = true;
+        window.close(); notificationActionWindow = null; notificationActionLoadPending = false;
         pendingOpenInbox = null; pendingNotificationReply = null;
         if (overlayWindow && !overlayWindow.isDestroyed()) overlayWindow.webContents.send("voice-overlay-update", voiceOverlayPayload());
-      });
+      },
+    });
+    if (!created) return;
   }
   const target = notificationActionWindow;
+  if (!target) return;
   const deliver = () => {
     if (target !== notificationActionWindow || target.isDestroyed() || !notificationActionAvailable()) { pendingNotificationReply = null; if (!target.isDestroyed()) target.hide(); return; }
     const bounds = overlayWindow!.getBounds();
@@ -371,7 +362,7 @@ function updateNotificationActionWindow(): void {
     try {
       target.setShape([{ x: 0, y: 0, width: 88, height: 20 }, ...replyButtons.map(item => ({ x: 0, y: 20 + item.row * 32 + 6, width: 88, height: 20 }))]);
     } catch {
-      notificationActionShapeFailed = true; pendingNotificationReply = null; pendingOpenInbox = null;
+      notificationActionSurfaceFailed = true; pendingNotificationReply = null; pendingOpenInbox = null;
       target.hide(); overlayWindow!.webContents.send("voice-overlay-update", voiceOverlayPayload()); return;
     }
     // Only bounded opaque IDs, row indexes and session tokens reach this existing child.
@@ -394,31 +385,27 @@ function updateNotificationActionWindow(): void {
 
 function updateMousePolicy(): void {
   setMouseIgnored(latest?.voiceOverlayCompatibility === true || !unlocked);
-  if (!actionAvailable() || (!unlocked && latest?.voiceOverlayClickableActions !== true) || process.platform !== "win32" || actionShapeFailed) { hideActionWindow(); return; }
+  if (!actionAvailable() || (!unlocked && latest?.voiceOverlayClickableActions !== true) || process.platform !== "win32" || actionSurfaceFailed) { hideActionWindow(); return; }
   if (!actionWindow || actionWindow.isDestroyed()) {
-    const created = new BrowserWindow({ width: 88, height: 40, frame: false, transparent: true, resizable: false, alwaysOnTop: true, focusable: false, skipTaskbar: true, hasShadow: false, show: false, parent: overlayWindow!, webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, nodeIntegration: false, sandbox: true } });
-    actionWindow = created;
-    try {
-      // Native shape governs drawing AND hit testing. The 8-DIP gap is not a window region.
-      created.setShape([{ x: 0, y: 0, width: 40, height: 40 }, { x: 48, y: 0, width: 40, height: 40 }]);
-    } catch {
-      actionShapeFailed = true;
-      created.close(); actionWindow = null;
-      overlayWindow!.webContents.send("voice-overlay-update", voiceOverlayPayload());
-      return;
-    }
-    created.setAlwaysOnTop(true, "floating");
-    created.on("closed", () => { if (actionWindow === created) { actionWindow = null; actionLoadPending = false; } });
-    const dev = process.env.NODE_ENV === "development" || !app.isPackaged;
-    void created.loadURL(dev ? "http://localhost:3030/overlay.html?surface=actions" : "app://hichat/overlay.html?surface=actions")
-      .catch(() => {
-        if (actionWindow !== created) return;
-        actionShapeFailed = true;
-        created.close(); actionWindow = null; actionLoadPending = false;
+    const created = createOverlayActionWindow({
+      surface: "actions", width: 88, height: 40, parent: overlayWindow!,
+      preload: path.join(__dirname, "preload.js"), development: process.env.NODE_ENV === "development" || !app.isPackaged,
+      regions: [{ x: 0, y: 0, width: 40, height: 40 }, { x: 48, y: 0, width: 40, height: 40 }],
+    }, {
+      createWindow: options => new BrowserWindow(options),
+      created: window => { actionWindow = window; },
+      closed: window => { if (actionWindow === window) { actionWindow = null; actionLoadPending = false; } },
+      failed: window => {
+        if (actionWindow !== window) return;
+        actionSurfaceFailed = true;
+        window.close(); actionWindow = null; actionLoadPending = false;
         if (overlayWindow && !overlayWindow.isDestroyed()) overlayWindow.webContents.send("voice-overlay-update", voiceOverlayPayload());
-      });
+      },
+    });
+    if (!created) return;
   }
   const target = actionWindow;
+  if (!target) return;
   const deliver = () => {
     if (target !== actionWindow || target.isDestroyed() || !actionAvailable() || (!unlocked && latest?.voiceOverlayClickableActions !== true)) { if (!target.isDestroyed()) target.hide(); return; }
     const bounds = overlayWindow!.getBounds();
@@ -772,9 +759,9 @@ export function updateVoiceOverlay(snapshot: VoiceOverlaySnapshot, area?: VoiceO
     goLiveTimer = null;
   }
   if (!snapshot.enabled) clearWelcome();
-  if (!snapshot.enabled || !snapshot.voiceOverlayQuickActions) actionShapeFailed = false;
-  if (!snapshot.enabled || !snapshot.voiceOverlayNotifications || !snapshot.voiceOverlayNotificationActions || !snapshot.notificationActionSession) notificationActionShapeFailed = false;
-  if (!snapshot.enabled || !snapshot.voiceOverlayChat || !snapshot.voiceOverlayChatActions || !snapshot.chatActionSession) chatActionShapeFailed = false;
+  if (!snapshot.enabled || !snapshot.voiceOverlayQuickActions) actionSurfaceFailed = false;
+  if (!snapshot.enabled || !snapshot.voiceOverlayNotifications || !snapshot.voiceOverlayNotificationActions || !snapshot.notificationActionSession) notificationActionSurfaceFailed = false;
+  if (!snapshot.enabled || !snapshot.voiceOverlayChat || !snapshot.voiceOverlayChatActions || !snapshot.chatActionSession) chatActionSurfaceFailed = false;
   const nextContext = (context ?? (snapshot.voiceOverlayMode === "game" ? layoutContext : "desktop")) as OverlayLayoutContext;
   const contextChanged = nextContext !== layoutContext;
   const cornerChanged = latest !== null && latest.position !== snapshot.position;
