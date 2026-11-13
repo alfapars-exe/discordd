@@ -233,7 +233,13 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
       const res = await dmApi.listDMChannels({ isCurrent, timeoutMs: 15_000 });
       if (!isCurrent()) return false;
       if (res.success && res.data) {
-        if (metadataRevision !== dmChannelMetadataRevision && get().channels !== initialChannels) {
+        const currentChannels = get().channels;
+        const initialById = new Map(initialChannels.map(channel => [channel.id, channel]));
+        const onlySelfAdded = currentChannels.length >= initialChannels.length
+          && initialChannels.every(channel => currentChannels.includes(channel))
+          && currentChannels.every(channel => initialById.get(channel.id) === channel
+            || channel.other_user.id === scope.ownerId);
+        if (metadataRevision !== dmChannelMetadataRevision && currentChannels !== initialChannels && !onlySelfAdded) {
           // A WS/read event or another local channel mutation landed while
           // this snapshot was in flight. The event path is newer than this
           // list response, so retain the whole current metadata snapshot
@@ -254,7 +260,13 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
             else dmUnreadCounts[id] = currentUnreadCounts[id];
           }
         }
-        set({ channels: res.data, dmUnreadCounts, isLoading: false });
+        const channels = [...res.data];
+        for (const channel of currentChannels) {
+          if (channel.other_user.id === scope.ownerId && !channels.some(item => item.id === channel.id)) {
+            channels.push(channel);
+          }
+        }
+        set({ channels, dmUnreadCounts, isLoading: false });
         return true;
       }
       set({ isLoading: false });

@@ -710,3 +710,15 @@ it("hydrates missing channels when unread metadata changes during the first list
   expect(useDMStore.getState().dmUnreadCounts[CH]).toBe(1);
   expect(useDMStore.getState().channels.some(channel => channel.id === CH)).toBe(true);
 });
+
+it("loads peer channels when My Notes is inserted during list hydration", async () => {
+  const pending = deferred<APIResponse<DMChannelWithUser[]>>();
+  vi.mocked(dmApi.listDMChannels).mockReturnValueOnce(pending.promise);
+  const loading = useDMStore.getState().fetchChannels();
+  const notes = listedDM("notes");
+  notes.other_user = { ...notes.other_user, id: "me" };
+  useDMStore.setState({ channels: [notes] });
+  pending.resolve({ success: true, data: [listedDM(CH)] });
+  await loading;
+  expect(useDMStore.getState().channels.map(channel => channel.id)).toEqual([CH, "notes"]);
+});
