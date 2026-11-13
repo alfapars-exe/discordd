@@ -499,7 +499,7 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 		go s.removeParticipantAndScreenShareFromLiveKit(oldChannelID, userID)
 		// Cross-channel switch — credit the old session's duration to the
 		// instance it ran on. Self-hosted instances are skipped.
-		go s.creditUsage(oldInstanceID, oldIsCloud, oldJoinedAt)
+		go s.creditUsageUntil(oldInstanceID, oldIsCloud, oldJoinedAt, time.Now())
 
 		// oldChannelID emptied by this switch → kick the music bot (if any),
 		// mirroring LeaveChannel's "Channel emptied → kick the music bot"
@@ -529,15 +529,18 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 // or unset cases (e.g. lookup failed at join time). Async-safe — runs in a
 // goroutine from the leave/cleanup paths.
 func (s *voiceService) creditUsage(instanceID string, isCloud bool, joinedAt time.Time) {
+	s.creditUsageUntil(instanceID, isCloud, joinedAt, time.Now())
+}
+
+func (s *voiceService) creditUsageUntil(instanceID string, isCloud bool, joinedAt, endedAt time.Time) {
 	if !isCloud || instanceID == "" || joinedAt.IsZero() {
 		return
 	}
-	seconds := int(time.Since(joinedAt).Seconds())
+	seconds := int(endedAt.Sub(joinedAt).Seconds())
 	if seconds <= 0 {
 		return
 	}
-	now := time.Now()
-	year, month, _ := now.Date()
+	year, month, _ := endedAt.Date()
 	// Session-end accounting outlives its caller, but must not keep a
 	// maintenance shutdown or a database pool waiter alive indefinitely.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -613,7 +616,7 @@ func (s *voiceService) LeaveChannel(userID string) error {
 	go s.removeParticipantAndScreenShareFromLiveKit(channelID, userID)
 	// Credit the completed session's duration to the cloud instance bucket.
 	// Self-hosted, zero-duration, and unset cases are no-ops inside creditUsage.
-	go s.creditUsage(leaveInstanceID, leaveIsCloud, leaveJoinedAt)
+	go s.creditUsageUntil(leaveInstanceID, leaveIsCloud, leaveJoinedAt, time.Now())
 
 	// Channel emptied → kick the music bot (if any) so it doesn't keep
 	// playing to nobody and burning bandwidth/CPU.

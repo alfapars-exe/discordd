@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg/logx"
@@ -82,6 +83,7 @@ func (s *voiceService) DeleteVoiceChannel(ctx context.Context, serverID, channel
 	}
 	s.cleanupRoomPassphraseIfEmpty(channelID)
 	s.mu.Unlock()
+	endedAt := time.Now()
 
 	if s.musicBotHook != nil {
 		logx.Go("voice-channel-delete", func() { s.musicBotHook.StopAllForChannel(channelID) })
@@ -105,7 +107,7 @@ func (s *voiceService) DeleteVoiceChannel(ctx context.Context, serverID, channel
 				for session := range tasks {
 					s.removeDeletedChannelParticipant(ctx, session.serverID, session.channelID, session.userID)
 					s.removeDeletedChannelParticipant(ctx, session.serverID, session.channelID, session.userID+"_ss")
-					s.creditUsage(session.state.LiveKitInstanceID, session.state.LiveKitIsCloud, session.state.JoinedAt)
+					s.creditUsageUntil(session.state.LiveKitInstanceID, session.state.LiveKitIsCloud, session.state.JoinedAt, endedAt)
 				}
 			})
 		}
