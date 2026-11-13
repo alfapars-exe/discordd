@@ -1,6 +1,8 @@
 package services
 
 import (
+	"context"
+	"github.com/argeinfina/hichat/models"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -109,5 +111,42 @@ func TestVoiceMaintenancePublicOwnersJoin(t *testing.T) {
 	s.StartAFKChecker()
 	if firstOrphan != s.orphanWorker.done || firstAFK != s.afkWorker.done {
 		t.Fatal("terminal service restarted")
+	}
+}
+
+type maintenanceBlockingChannelGetter struct {
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (g maintenanceBlockingChannelGetter) GetByID(ctx context.Context, _ string) (*models.Channel, error) {
+	close(g.entered)
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-g.release:
+		return nil, context.Canceled
+	}
+}
+
+func TestVoiceMaintenanceAFKStopCancelsLookup(t *testing.T) {
+	entered, release := make(chan struct{}), make(chan struct{})
+	defer close(release)
+	s := &voiceService{states: map[string]*models.VoiceState{"user": {UserID: "user", ChannelID: "channel", LastActivity: time.Now().Add(-time.Hour)}}, channelGetter: maintenanceBlockingChannelGetter{entered: entered, release: release}}
+	s.afkWorker.startContext(time.Millisecond, s.sweepAFKUsersContext)
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("AFK lookup never started")
+	}
+	done := make(chan struct{})
+	go func() { s.StopMaintenance(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("AFK Stop did not cancel lookup")
+	}
+	if s.states["user"] == nil {
+		t.Fatal("cancelled sweep removed voice state")
 	}
 }

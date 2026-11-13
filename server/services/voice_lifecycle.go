@@ -735,12 +735,12 @@ func (s *voiceService) EnforceModerationOnJoin(ctx context.Context, serverID, ch
 // StartAFKChecker periodically checks for inactive voice users and kicks them.
 // Runs every 30 seconds — checks each user's LastActivity against the server's afk_timeout_minutes.
 func (s *voiceService) StartAFKChecker() {
-	s.afkWorker.start(30*time.Second, s.sweepAFKUsers)
+	s.afkWorker.startContext(30*time.Second, s.sweepAFKUsersContext)
 }
 
 // sweepAFKUsers finds and kicks users who exceeded their server's AFK timeout.
 // Two-phase: identify AFK users under read lock, then kick outside lock.
-func (s *voiceService) sweepAFKUsers() {
+func (s *voiceService) sweepAFKUsersContext(parent context.Context) {
 	now := time.Now()
 
 	// Phase 1: identify potential AFK users under read lock
@@ -774,12 +774,15 @@ func (s *voiceService) sweepAFKUsers() {
 	channelTimeouts := make(map[string]time.Duration) // channelID -> timeout
 	channelInfo := make(map[string]afkEntry)          // channelID -> server/channel names
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(parent, 10*time.Second)
 	defer cancel()
 
 	var toKick []afkEntry
 
 	for _, c := range candidates {
+		if ctx.Err() != nil {
+			return
+		}
 		timeout, ok := channelTimeouts[c.channelID]
 		if !ok {
 			channel, err := s.channelGetter.GetByID(ctx, c.channelID)
@@ -818,6 +821,9 @@ func (s *voiceService) sweepAFKUsers() {
 
 	// Phase 3: kick AFK users
 	for _, entry := range toKick {
+		if ctx.Err() != nil {
+			return
+		}
 		voiceLogger.Info("AFK kick: idle too long", "user_id", entry.userID, "channel_id", entry.channelID, "server_id", entry.serverID)
 
 		// Notify user before disconnect
