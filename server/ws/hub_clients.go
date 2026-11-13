@@ -39,6 +39,12 @@ func (h *Hub) addClient(client *Client) {
 		}
 	}()
 	h.mu.Lock()
+	select {
+	case <-client.done:
+		h.mu.Unlock()
+		return
+	default:
+	}
 	if h.shuttingDown {
 		h.mu.Unlock()
 		if client.done != nil {
