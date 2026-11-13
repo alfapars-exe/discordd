@@ -214,6 +214,7 @@ func main() {
 
 	// 9. Service layer (order matters: channelPerm -> voice -> p2pCall -> rest)
 	svcs, limiters, metricsCollector := initServices(db.Conn, repos, hub, cfg, encryptionKey, readiness)
+	defer stopServiceCacheWorkers(svcs)
 
 	if sink, ok := svcs.AppLog.(interface {
 		ConsumeRecord(context.Context, slog.Record)
@@ -338,6 +339,8 @@ func main() {
 	// 12. HTTP router + routes
 	mux := http.NewServeMux()
 	authMw, permMw := initRoutes(mux, h, svcs.Auth, repos.User, repos.Role, repos.Server, limiters.DeviceEnum, limiters.Refresh, botService)
+	defer authMw.Stop()
+	defer permMw.Stop()
 
 	// 12b. pprof debug endpoints (P3.12) — env-gated (HICHAT_PPROF=1) and,
 	// when enabled, double-gated behind auth + platform-admin. Registered

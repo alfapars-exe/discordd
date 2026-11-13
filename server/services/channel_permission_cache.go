@@ -266,3 +266,6 @@ func (c *cachingPermResolver) InvalidateAll() {
 // Compile-time assertion: cachingPermResolver must satisfy the full
 // interface, since it is the only value NewChannelPermissionService returns.
 var _ ChannelPermissionService = (*cachingPermResolver)(nil)
+
+// Stop retires the owned cache worker after request handling has drained.
+func (s *cachingPermResolver) Stop() { s.permCache.Close() }
