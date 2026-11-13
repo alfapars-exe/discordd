@@ -158,6 +158,12 @@ type pendingVoiceJoin struct {
 }
 
 func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, channelID string, isMuted, isDeafened bool) error {
+	finishUsageOperation, admitted := s.usageOperations.begin()
+	if !admitted {
+		return context.Canceled
+	}
+	defer finishUsageOperation()
+
 	pending := &pendingVoiceJoin{userID: userID}
 	s.mu.Lock()
 	if s.pendingJoins == nil {
@@ -522,7 +528,7 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 		go s.removeParticipantAndScreenShareFromLiveKit(oldChannelID, userID)
 		// Cross-channel switch — credit the old session's duration to the
 		// instance it ran on. Self-hosted instances are skipped.
-		go s.creditUsageSession(oldUsageSessionID, oldInstanceID, oldIsCloud, oldJoinedAt, time.Now())
+		s.dispatchUsageCredit(oldUsageSessionID, oldInstanceID, oldIsCloud, oldJoinedAt, time.Now())
 
 		// oldChannelID emptied by this switch → kick the music bot (if any),
 		// mirroring LeaveChannel's "Channel emptied → kick the music bot"
@@ -599,6 +605,12 @@ func (s *voiceService) creditUsageSession(sessionID, instanceID string, isCloud 
 }
 
 func (s *voiceService) LeaveChannel(userID string) error {
+	finishUsageOperation, admitted := s.usageOperations.begin()
+	if !admitted {
+		return context.Canceled
+	}
+	defer finishUsageOperation()
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -663,7 +675,7 @@ func (s *voiceService) LeaveChannel(userID string) error {
 	go s.removeParticipantAndScreenShareFromLiveKit(channelID, userID)
 	// Credit the completed session's duration to the cloud instance bucket.
 	// Self-hosted, zero-duration, and unset cases are no-ops inside creditUsage.
-	go s.creditUsageSession(leaveUsageSessionID, leaveInstanceID, leaveIsCloud, leaveJoinedAt, time.Now())
+	s.dispatchUsageCredit(leaveUsageSessionID, leaveInstanceID, leaveIsCloud, leaveJoinedAt, time.Now())
 
 	// Channel emptied → kick the music bot (if any) so it doesn't keep
 	// playing to nobody and burning bandwidth/CPU.
