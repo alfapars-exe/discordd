@@ -1472,3 +1472,8 @@ Terminal current-head receipt: PR29814a965ea completed36/36 SUCCESS. Exact-head 
 
 - Extracted the18 required native service test names into one module-level tuple, one name per line. Selection and mandatory-pass checks use the same unchanged ordered tuple. AST comparison against previous source proved exact ordered identity; all14 runner tests passed (0.077s before quote formatting; final pass rerun). No new skips, filters or weakened checks.
 - Local integration only. Published22aae5bb repository shards completed without failure; Combined Go statement coverage is the last live ServerCI job at the latest poll. Prepared canonical fbf10657 remains unpushed until that terminal receipt is captured.
+
+### 2026-11-14 — Archive active-shutdown terminal CI and publish key followup
+
+- Source22aae5bb completed36/36 PR checks and31/31 ServerCI jobs SUCCESS. Exact-head terminal receipt: `implementation/verification/refactor-pr298-22-terminal-2026-11-14.json`; includes native PostgreSQL, selected/full-shard race, coverage, frontend/Electron/mobile checks. Scope remains source/CI, not physical or installed-client acceptance.
+- Only after capturing terminal evidence, pushed prepared fbf10657 terminal key/orphan metadata followup. Existing tests20 and full vet/build/lint passed locally; new-source native/race and Sonar await new CI. Previous22 green is not reused forfbf. PR remains draft/unmerged. Active process SIGTERM still awaits local Docker recovery.
