@@ -1456,3 +1456,9 @@ Terminal current-head receipt: PR29814a965ea completed36/36 SUCCESS. Exact-head 
 - No-active-session regression failed: terminal finalizer left orphan room passphrases/contexts/versions, screen viewers, move grants and offline markers. Added final locked cleanup after owned media workers join, with snapshot revision advance for orphan viewer removal. Ordinary channel deletion still preserves unrelated entries.
 - Shutdown/channel-deletion tests passed20 repetitions (1.112s); services vet/lint passed. Receipt: `implementation/verification/refactor-terminal-voice-metadata-2026-11-14.json`. Removing references is not memory zeroization.
 - Local integration only, new-test race pending Docker availability. Current published22aae5bb CI43524233537 remains active;11 successful jobs/no failure, PostgreSQL still in progress. Late terminal calls, process and physical-media acceptance remain open.
+
+### 2026-11-14 — Fence room key creation after terminal voice cleanup
+
+- Regression failed before fix: MusicRoomKey recreated forgotten room metadata after ShutdownVoiceSessions. Added mu-protected terminal flag set atomically with final map cleanup; shared locked creator rejects both music and media key paths with context.Canceled before cache reuse or generation. Media workers still join before terminal flag/key removal.
+- Shutdown/key tests passed20 repetitions (4.573s); services vet/lint passed. Receipt: `implementation/verification/refactor-terminal-voice-key-fence-2026-11-14.json`. Local integration only; new race pending Docker, no zeroization or physical-media claim.
+- Published22aae5bb ServerCI43524233537 remains live;18 successful jobs/no failure, PostgreSQL still in progress. Active process and final whole-project acceptance remain open.

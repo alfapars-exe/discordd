@@ -62,6 +62,7 @@ func (s *voiceService) ShutdownVoiceSessions() {
 func (s *voiceService) clearFinalVoiceMetadata() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.sessionsFinalized = true
 	if len(s.screenShareViewers) > 0 {
 		s.bumpVoiceRevisionLocked()
 	}

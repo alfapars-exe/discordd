@@ -1,6 +1,8 @@
 package services
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"github.com/argeinfina/hichat/models"
 	"sync"
@@ -152,5 +154,20 @@ func TestVoiceShutdownForgetsOrphanRoomMetadata(t *testing.T) {
 	}
 	if s.voiceRevision <= revision {
 		t.Fatal("orphan viewer removal did not advance snapshot revision")
+	}
+}
+
+func TestVoiceShutdownRejectsLateRoomKeyCreation(t *testing.T) {
+	svc, _ := newTestVoiceService()
+	s := svc.(*voiceService)
+	s.ShutdownVoiceSessions()
+	if _, _, err := s.MusicRoomKey("late-room"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("terminal music key request was accepted: %v", err)
+	}
+	if _, _, _, err := s.roomMediaKey("late-room"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("terminal media key request was accepted: %v", err)
+	}
+	if len(s.roomPassphrases)+len(s.roomKeyContexts)+len(s.roomKeyVersions) != 0 {
+		t.Fatal("late request recreated terminal key metadata")
 	}
 }
