@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { SERVER_APPLICATIONS_CHANGED_EVENT, installServerApplication, listServerApplications, revokeServerApplication, type ApplicationInstallation } from "../../api/applications";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -15,8 +15,28 @@ export default function ServerApplicationSettings() {
   const [items, setItems] = useState<ApplicationInstallation[]>([]), [applicationID, setApplicationID] = useState("");
   const [readMessage, setReadMessage] = useState(false), [sendResponse, setSendResponse] = useState(true);
   const [busy, setBusy] = useState(true), [error, setError] = useState(""), [notice, setNotice] = useState("");
-  async function load() { const result = await listServerApplications(serverID, () => alive.current); if (!alive.current) return; if (!result.success) setError(t("serverApplications.loadError")); else setItems(result.data?.applications ?? []); }
-  useEffect(() => { alive.current = true; void load().finally(() => { if (alive.current) setBusy(false); }); return () => { alive.current = false; }; }, [serverID]); // eslint-disable-line react-hooks/exhaustive-deps
+  const load = useCallback(async (isCurrent = () => alive.current) => {
+    try {
+      const result = await listServerApplications(serverID, isCurrent);
+      if (!isCurrent()) return;
+      if (result.success) setItems(result.data?.applications ?? []);
+      else setError(t("serverApplications.loadError"));
+    } catch {
+      if (isCurrent()) setError(t("serverApplications.loadError"));
+    }
+  }, [serverID, t]);
+
+  useEffect(() => {
+    let current = true;
+    alive.current = true;
+    void load(() => current).finally(() => {
+      if (current) setBusy(false);
+    });
+    return () => {
+      current = false;
+      alive.current = false;
+    };
+  }, [load]);
   async function install() {
     if (!applicationID.trim() || (!readMessage && !sendResponse)) return;
     setBusy(true); setError(""); setNotice("");
