@@ -13,11 +13,23 @@
     "golangci_lint": "0 issues",
     "real_HTTP_contract": "Local httptest HTTP poll observes request cancellation before Stop completes.",
     "interleaved_lifecycle": "25 waves of 16 Start/Stop callers per test run.",
-    "normal_collection": "Immediate and periodic synthetic Prometheus samples preserve instance, room, participant, memory values and history purge."
+    "normal_collection": "Immediate and periodic synthetic Prometheus samples preserve instance, room, participant, memory values and history purge.",
+    "integrated_selected_tests_count_5": "PASS services 1.154s, main 0.659s",
+    "integrated_same_scope_race_count_5": "PASS services 4.021s, main 3.364s",
+    "integrated_full_go_vet_and_build": "PASS",
+    "isolated_function_statement_coverage_percent": {
+      "NewMetricsCollector": 66.7,
+      "Start": 95.7,
+      "Stop": 100,
+      "collectAll": 94.1
+    }
   },
   "limitations": [
     "HTTP test uses a local synthetic metrics server, not a production LiveKit endpoint.",
     "No real PostgreSQL query cancellation or whole-process signal shutdown is proven by these fixtures.",
     "Whole services suite and current-head CI remain separate acceptance gates."
-  ]
+  ],
+  "canonical_source": "b24d47a1",
+  "integrated_source": "a291407f",
+  "pr": 295
 }
