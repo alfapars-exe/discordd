@@ -507,6 +507,14 @@ export async function loginAsNotificationRecipient(page: Page): Promise<void> {
 
 /** Logs a fixture account into a fresh browser context via the real login form. */
 export async function loginAsCredentials(page: Page, account: TestAccount): Promise<void> {
+  page.on("response", response => {
+    if (new URL(response.url()).pathname === "/api/auth/refresh" && !response.ok()) {
+      console.error("E2E session refresh failed", {
+        status: response.status(),
+        retryAfter: response.headers()["retry-after"],
+      });
+    }
+  });
   const { username, password } = account;
 
   await forceEnglish(page);
