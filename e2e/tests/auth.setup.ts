@@ -91,7 +91,11 @@ setup("register a fresh account, then log back in", async ({ page }) => {
   // The submit button is disabled until the ToS checkbox is ticked.
   await page.getByRole("checkbox").check();
   // auth.json maps the "register" key to the label "Continue".
+  const registeredDevice = page.waitForResponse(response =>
+    new URL(response.url()).pathname === "/api/devices"
+    && response.request().method() === "POST", { timeout: 20_000 });
   await page.getByRole("button", { name: /^Continue$/ }).click();
+  expect((await registeredDevice).ok()).toBe(true);
 
   await expect(page).toHaveURL(/\/channels/, { timeout: 20_000 });
   await expectSignedInShell(page);
