@@ -543,6 +543,17 @@ describe("dmStore — fetchMessagesAround vs mount-time fetchMessages race", () 
     expect(useDMStore.getState().isLoadingMessages).toBe(false);
   });
 
+  it("preserves the open history window when a reply target was deleted", async () => {
+    await jumpIntoPast();
+    const previous = ids();
+    getAround.mockResolvedValueOnce({ success: false, status: 404, error: "not found" });
+
+    expect(await useDMStore.getState().fetchMessagesAround(CH, "gone")).toBe(false);
+    expect(ids()).toEqual(previous);
+    expect(useDMStore.getState().hasMoreAfterByChannel[CH]).toBe(true);
+    expect(useDMStore.getState().isLoadingMessages).toBe(false);
+    expect(getDMMessages).not.toHaveBeenCalled();
+  });
   it("releases the claim when the target is gone and loads the tail", async () => {
     getAround.mockResolvedValueOnce({ success: false, status: 404, error: "not found" });
     getDMMessages.mockResolvedValueOnce(page([makeDM("tail-1")], false));

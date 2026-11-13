@@ -429,50 +429,44 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
     const historyVersion = captureDMHistoryVersion(channelId);
     const historyBuffer = beginDMHistoryBuffer(channelId);
     try {
-    const res = await dmApi.getDMMessagesAround(channelId, messageId, 50, {isCurrent:current, signal:controller.signal, timeoutMs:15000});
-    if (!current()) {
-      release();
-      return false;
-    }
+      const res = await dmApi.getDMMessagesAround(channelId, messageId, 50, {isCurrent:current, signal:controller.signal, timeoutMs:15000});
+      if (!current()) return false;
 
-    if ((!res.success || !res.data) && res.status !== 404) {
-      reportDMHistoryFailure();
-      return false;
-    }
-    const page = res.success ? res.data : undefined;
-    const raw = page?.messages ?? [];
-    if (!page || !raw.some((m) => m.id === messageId)) {
-      // Target gone — keep any existing window; if there is none (the claim
-      // made the tab's mount fetch skip), load the tail now.
-      dmInflightFetches.delete(channelId);
-      release();
-      set({ isLoadingMessages: dmInflightFetches.size > 0 });
-      void get().fetchMessages(channelId);
-      return false;
-    }
+      if ((!res.success || !res.data) && res.status !== 404) {
+        reportDMHistoryFailure();
+        return false;
+      }
+      const page = res.success ? res.data : undefined;
+      const raw = page?.messages ?? [];
+      if (!page || !raw.some((m) => m.id === messageId)) {
+        // Target gone — keep any existing window; if there is none (the claim
+        // made the tab's mount fetch skip), load the tail now.
+        dmInflightFetches.delete(channelId);
+        release();
+        set({ isLoadingMessages: dmInflightFetches.size > 0 });
+        void get().fetchMessages(channelId);
+        return false;
+      }
 
-    const decrypted = (await decryptDMMessages(raw, current, historyVersion.current)).filter(historyVersion.current);
-    if (current()) void registerSpamBatch(decrypted, "dm", channelId);
-    if (!current()) {
-      release();
-      return false;
-    }
-    const rawIds = new Set(raw.map(message=>message.id));
-    const positions = new Map(raw.map((message,index)=>[message.id,index]));
-    const retained = [...(get().messagesByChannel[channelId]??[]),...historyBuffer.read()].filter(message=>rawIds.has(message.id)&&!historyVersion.current(message)&&!historyVersion.deleted(message));
-    const windowMessages = sortDMBySource([...new Map([...decrypted,...retained].map(message=>[message.id,message])).values()].map(historyBuffer.apply),positions);
-    if (!windowMessages.some(message=>message.id===messageId)) return false;
-    clearDetachedDMMessages(channelId);
+      const decrypted = (await decryptDMMessages(raw, current, historyVersion.current)).filter(historyVersion.current);
+      if (current()) void registerSpamBatch(decrypted, "dm", channelId);
+      if (!current()) return false;
+      const rawIds = new Set(raw.map(message=>message.id));
+      const positions = new Map(raw.map((message,index)=>[message.id,index]));
+      const retained = [...(get().messagesByChannel[channelId]??[]),...historyBuffer.read()].filter(message=>rawIds.has(message.id)&&!historyVersion.current(message)&&!historyVersion.deleted(message));
+      const windowMessages = sortDMBySource([...new Map([...decrypted,...retained].map(message=>[message.id,message])).values()].map(historyBuffer.apply),positions);
+      if (!windowMessages.some(message=>message.id===messageId)) return false;
+      clearDetachedDMMessages(channelId);
 
-    set((state) => ({
-      messagesByChannel: { ...state.messagesByChannel, [channelId]: windowMessages },
-      hasMoreByChannel: { ...state.hasMoreByChannel, [channelId]: page.has_more },
-      hasMoreAfterByChannel: {
-        ...state.hasMoreAfterByChannel,
-        [channelId]: page.has_more_after ?? false,
-      },
-    }));
-    return true;
+      set((state) => ({
+        messagesByChannel: { ...state.messagesByChannel, [channelId]: windowMessages },
+        hasMoreByChannel: { ...state.hasMoreByChannel, [channelId]: page.has_more },
+        hasMoreAfterByChannel: {
+          ...state.hasMoreAfterByChannel,
+          [channelId]: page.has_more_after ?? false,
+        },
+      }));
+      return true;
     } catch {
       if (current()) reportDMHistoryFailure();
       return false;
