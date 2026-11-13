@@ -1,9 +1,10 @@
+import { getAuthSessionSnapshot, publishAuthGenerationChange } from "../api/authSessionEvents";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { APIResponse, Server, CategoryWithChannels } from "../types";
 const shell = vi.hoisted(() => ({ enabled: false }));
 vi.mock("../utils/uiShell", () => ({ get UI_SHELL_V2() { return shell.enabled; } }));
-vi.mock("../api/servers", () => ({ getServer: vi.fn(), createServer: vi.fn(), joinServer: vi.fn(), leaveServer: vi.fn(), deleteServer: vi.fn(), reorderServers: vi.fn() }));
-import { getServer, createServer, joinServer, leaveServer, deleteServer, reorderServers } from "../api/servers";
+vi.mock("../api/servers", () => ({ getMyServers: vi.fn(), getServer: vi.fn(), createServer: vi.fn(), joinServer: vi.fn(), leaveServer: vi.fn(), deleteServer: vi.fn(), reorderServers: vi.fn() }));
+import { getMyServers, getServer, createServer, joinServer, leaveServer, deleteServer, reorderServers } from "../api/servers";
 import { useServerStore } from "./serverStore";
 import { useChannelStore } from "./channelStore";
 import { useUIStore } from "./uiStore";
@@ -116,4 +117,75 @@ describe("server reorder rollback ownership", () => {
     expect(await pending).toBe(false);
     expect(useServerStore.getState().servers.find((server) => server.id === "a")?.name).toBe("Updated by WS");
   });
+});
+
+
+it("keeps a newer ready snapshot when an older HTTP server list completes", async () => {
+  let finish!: (value: APIResponse<[]>) => void;
+  vi.mocked(getMyServers).mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+  const pending = useServerStore.getState().fetchServers();
+  const ready = [{ id: "ready", name: "Ready", icon_url: null }];
+  useServerStore.getState().setServersFromReady(ready);
+  finish({ success: true, data: [] });
+  await pending;
+  expect(useServerStore.getState().servers).toEqual(ready);
+});
+
+it("preserves the latest server list when HTTP requests finish in reverse order", async () => {
+  let finishOld!: (value: APIResponse<[]>) => void;
+  vi.mocked(getMyServers).mockReturnValueOnce(new Promise(resolve => { finishOld = resolve; }));
+  const older = useServerStore.getState().fetchServers();
+  const latest = [{ id: "latest", name: "Latest", icon_url: null }];
+  vi.mocked(getMyServers).mockResolvedValueOnce({ success: true, data: latest });
+  await useServerStore.getState().fetchServers();
+  finishOld({ success: true, data: [] });
+  await older;
+  expect(useServerStore.getState().servers).toEqual(latest);
+  expect(useServerStore.getState().isLoading).toBe(false);
+});
+
+it("releases loading when the current server list request rejects", async () => {
+  vi.mocked(getMyServers).mockRejectedValueOnce(new Error("offline"));
+  await expect(useServerStore.getState().fetchServers()).rejects.toThrow("offline");
+  expect(useServerStore.getState().isLoading).toBe(false);
+});
+
+it("does not restore a server removed while its HTTP list was pending", async () => {
+  const removed = { id: "removed", name: "Removed", icon_url: null };
+  useServerStore.setState({ servers: [removed], activeServerId: null });
+  let finish!: (value: APIResponse<typeof removed[]>) => void;
+  vi.mocked(getMyServers).mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+  const pending = useServerStore.getState().fetchServers();
+  useServerStore.getState().handleServerDelete(removed.id);
+  finish({ success: true, data: [removed] });
+  await pending;
+  expect(useServerStore.getState().servers).toEqual([]);
+  expect(useServerStore.getState().isLoading).toBe(false);
+});
+
+it("ignores a server list response after the signed-in account changes", async () => {
+  let finish!: (value: APIResponse<[]>) => void;
+  vi.mocked(getMyServers).mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+  const pending = useServerStore.getState().fetchServers();
+  vi.spyOn(useAuthStore, "getState").mockReturnValue({
+    ...useAuthStore.getState(),
+    user: { id: "another-account" } as NonNullable<ReturnType<typeof useAuthStore.getState>["user"]>,
+  });
+  const current = [{ id: "current-account-server", name: "Current", icon_url: null }];
+  useServerStore.setState({ servers: current, isLoading: false });
+  finish({ success: true, data: [] });
+  await pending;
+  expect(useServerStore.getState().servers).toEqual(current);
+  expect(useServerStore.getState().isLoading).toBe(false);
+});
+
+
+it("releases the old server loading state at a session boundary", async () => {
+  let finish!: (value: APIResponse<[]>) => void;
+  vi.mocked(getMyServers).mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+  const pending = useServerStore.getState().fetchServers();
+  publishAuthGenerationChange(getAuthSessionSnapshot().generation + 1);
+  expect(useServerStore.getState().isLoading).toBe(false);
+  finish({ success: true, data: [] });
+  await pending;
 });

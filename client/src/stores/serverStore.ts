@@ -1,4 +1,4 @@
-import { subscribeAuthOwnerChanges } from "../api/authSessionEvents";
+import { subscribeAuthGenerationChanges, subscribeAuthOwnerChanges } from "../api/authSessionEvents";
 import { readStartupCache, rememberStartupServers } from "../utils/startupCache";
 /**
  * Server Store — Multi-server state management.
@@ -18,6 +18,7 @@ import type { Server, ServerListItem, CreateServerRequest, APIResponse } from ".
 
 /** Persist last active server across page reloads */
 const LAST_SERVER_KEY = "mqvi_last_server";
+let serverListRequest = 0;
 
 type ServerState = {
   servers: ServerListItem[];
@@ -67,7 +68,8 @@ export const useServerStore = create<ServerState>((set, get) => ({
   mutedServerIds: new Set<string>(),
 
   setServersFromReady: (servers) => {
-    set({ servers });
+    serverListRequest++;
+    set({ servers, isLoading: false });
     const state = get();
     if (servers.length > 0) {
       // If no active server or active not in list, select first
@@ -87,12 +89,19 @@ export const useServerStore = create<ServerState>((set, get) => ({
   },
 
   fetchServers: async () => {
+    const request = ++serverListRequest;
+    const owner = useAuthStore.getState().user?.id;
+    const generation = getAuthGeneration();
+    const initialServers = get().servers;
+    const current = () => request === serverListRequest
+      && useAuthStore.getState().user?.id === owner && getAuthGeneration() === generation;
     set({ isLoading: true });
-    const res = await serversApi.getMyServers();
-    if (res.success && res.data) {
-      set({ servers: res.data, isLoading: false });
-    } else {
-      set({ isLoading: false });
+    try {
+      const res = await serversApi.getMyServers();
+      if (!current()) return;
+      if (res.success && res.data && get().servers === initialServers) set({ servers: res.data });
+    } finally {
+      if (current()) set({ isLoading: false });
     }
   },
 
@@ -343,9 +352,16 @@ export const useServerStore = create<ServerState>((set, get) => ({
   },
 }));
 
+subscribeAuthGenerationChanges(() => {
+  serverListRequest++;
+  useServerStore.setState({ isLoading: false });
+});
+
 // Only list metadata is hydrated after identity validation. Channel permissions
 // and memberships are fetched afresh; disk data never grants application access.
 subscribeAuthOwnerChanges((owner) => {
+  serverListRequest++;
+  useServerStore.setState({ isLoading: false });
   const snapshot = readStartupCache();
   if (owner && snapshot?.user.id === owner) {
     const savedId = useServerStore.getState().activeServerId;
