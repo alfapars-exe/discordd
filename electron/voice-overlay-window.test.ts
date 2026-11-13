@@ -15,6 +15,7 @@ test("native overlay lock toggles only visible widgets and bounds unlocked game 
   let chatActionWin!: FakeWindow;
   let chatComposerWin!: FakeWindow;
   let failShape = false;
+  let hudLoad: Promise<void> | null = null;
   let failSurface: string | null = null;
   let suppressShow = false;
   let cursor = { x: 0, y: 0 };
@@ -40,6 +41,7 @@ test("native overlay lock toggles only visible widgets and bounds unlocked game 
     setShape(shape: typeof this.shape) { if (failShape) throw new Error("unavailable"); this.shape = shape; }
     setIgnoreMouseEvents(ignored: boolean) { this.ignored = ignored; }
     loadURL(url: string) {
+      if (url.endsWith("/overlay.html") && hudLoad) return hudLoad;
       if (url.includes("surface=notification-actions")) notificationActionWin = this;
       if (url.includes("surface=chat-actions")) chatActionWin = this;
       if (url.includes("surface=chat-composer")) chatComposerWin = this;
@@ -512,6 +514,41 @@ test("native overlay lock toggles only visible widgets and bounds unlocked game 
   assert.equal(mediaLifecycle[mediaLifecycle.length-1],true);void actualHUD;
   stopMediaLifecycle();
   exports.closeVoiceOverlay();
+  await t.test("failed HUD loading closes its owner and requires explicit retry", async () => {
+    try {
+      exports.closeVoiceOverlay();
+      hudLoad = Promise.reject(new Error("fixture HUD load failed"));
+      void hudLoad.catch(() => {});
+      exports.updateVoiceOverlay(snapshot, area);
+      const failed = win;
+      await Promise.resolve();
+      assert.equal(failed.destroyed, true);
+      exports.updateVoiceOverlay(snapshot, area);
+      assert.equal(win, failed, "ordinary snapshots cannot repeatedly reload a failed HUD");
+      hudLoad = null;
+      exports.updateVoiceOverlay({ ...snapshot, enabled: false }, area);
+      exports.updateVoiceOverlay(snapshot, area);
+      assert.notEqual(win, failed);
+      assert.equal(win.visible, true);
+    } finally { hudLoad = null; exports.closeVoiceOverlay(); }
+  });
+  await t.test("late failed HUD loading cannot close a replacement owner", async () => {
+    try {
+      exports.closeVoiceOverlay();
+      let reject!: (error: Error) => void;
+      hudLoad = new Promise<void>((_resolve, fail) => { reject = fail; });
+      void hudLoad.catch(() => {});
+      exports.updateVoiceOverlay(snapshot, area);
+      exports.closeVoiceOverlay();
+      hudLoad = null;
+      exports.updateVoiceOverlay(snapshot, area);
+      const replacement = win;
+      reject(new Error("late retired HUD failure"));
+      await Promise.resolve();
+      assert.equal(replacement.destroyed, false);
+      assert.equal(replacement.visible, true);
+    } finally { hudLoad = null; exports.closeVoiceOverlay(); }
+  });
   await t.test("retired HUD callbacks cannot hide replacement action windows", () => {
     try {
       exports.updateVoiceOverlay({ ...notificationActions, voiceOverlayQuickActions: true, voiceOverlayClickableActions: true, voiceActionSession: "old-hud" }, area);
