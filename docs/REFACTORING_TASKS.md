@@ -722,6 +722,14 @@ Her örnek 1.000 işlemin ortalamasıdır. Aralık dokuz koşudaki en düşük v
 
 Her tekrarda 16. turdan 1.024. tura kadar çift GC sonrasında ölçülen canlı heap değişimleri sırasıyla +361.728, +64.040 ve −5.848 bayttı. Aynı Go test sürecinde alınan 15 örneğin her birinde 4 goroutine vardı. Üç tekrar toplam 23 saniye sürdü. Bu deney uzun süreli üretim yükünü, işletim sistemi belleğini ve gerçek veritabanı erişimini kapsamıyor.
 
+### Go ve PostgreSQL doğrulaması, 13 Kasım 2026
+
+Kaynak revizyonu `0ee543e9` üzerinde PostgreSQL 18.6 ile `python3 scripts/run-postgres-tests.py` tamamlandı. JSON olaylarında alt testler dahil 950 test geçti, atlanan veya başarısız test yoktu. Sunucu, repository ve database paketleri tamamlandı. Scriptin ikinci aşamasındaki rol ve mesaj transaction testleri de geçti.
+
+Aynı izole PostgreSQL ile CI'ın rol, üye rolü, teslimat, DM idempotency/outbox ve okundu imleci seçimi `-race` altında geçti. E-posta sağlayıcısı paketinde ortak regex hiçbir test seçmediği için `f95e9ee2` bu paketi ayrı çalıştırıyor. `go test -race -v ./pkg/email -count=1` dokuz üst seviye testi çalıştırdı ve geçti.
+
+Genel Go yarış denetiminde Docker kesintisinden önce tamamlanmayan repository ve services paketleri sekizer bölümde yeniden çalıştırıldı. On altı bölüm geçti. İlk koşuda tamamlanan diğer paketlerle birlikte bütün paketler denetlendi. Bu yerel sonuçlar GitHub CI kabulünü ve RF30 fiziksel cihaz kabulünü tamamlamaz.
+
 ## RF30 — Runtime kabulü ve kapanış
 
 | Alan | Tanım |
