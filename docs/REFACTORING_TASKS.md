@@ -1375,3 +1375,9 @@ Terminal current-head receipt: PR29814a965ea completed36/36 SUCCESS. Exact-head 
 - Internal voiceUsageOperations/usageOperations/finishUsageOperation names changed to voiceOperations/operations/finishOperation across eight voice modules/tests. The owner now covers quota, media and entrance work, so its internal name and child log label (voice-operation-child) reflect actual responsibility. Public ShutdownUsageProducers and all test names remain unchanged.
 - Targeted voice usage/maintenance/admin/move/webhook/join tests passed three repetitions (9.455s), Linux race three (12.794s). Full Go vet/build and pinned golangci-lint passed (zero issues). DSN-free PostgreSQL skips do not prove database acceptance.
 - This is a separate local refactor after behavior fixes. PR298 published source remains 6236c8b9; CI43517792317 remains live, last checked 18 successful jobs and none failed. Final-source/physical acceptance and crash-before-enqueue remain open.
+
+### 2026-11-14 — Address current PR Sonar failure
+
+- Source6236c8b9 Sonar gate failed on new duplication6.1% (limit3%; 144 duplicate test lines); also reported AFK complexity16 vs15. Shared seven regression wait assertions and extracted locked AFK candidate snapshot. No threshold/exclusion changes.
+- Canonical tests/race passed ten repetitions (12.144s/14.888s), real-PG AFK cancellation three (2.492s), services vet/lint passed. Overlay restoring detached leave music stop failed the preserved regression (exit1). Scoped integration import passed targeted tests (1.819s).
+- Published PR298 fdd59669; new ServerCI43519318350 is pending, so Sonar remediation is not yet externally proven. Receipt: `implementation/verification/refactor-pr298-sonar-source-fix-2026-11-14.json`.
