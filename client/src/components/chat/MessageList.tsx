@@ -1,3 +1,4 @@
+import { highlightMessage } from "../../utils/highlightMessage";
 /** MessageList — Scrollable message container with auto-scroll, infinite scroll, and compact mode. */
 
 import { useEffect, useLayoutEffect, useRef, useCallback, useMemo, useState } from "react";
@@ -313,8 +314,7 @@ function MessageList() {
           el.focus({ preventScroll: true });
         }
         keyboardReply.current = null;
-        el.classList.add("msg-highlight");
-        setTimeout(() => el.classList.remove("msg-highlight"), 2000);
+        highlightMessage(el);
       }
       // Clearing the request reruns this effect and cancels its pending frame.
       setScrollToMessageId(null);

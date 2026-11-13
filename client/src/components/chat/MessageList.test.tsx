@@ -50,7 +50,16 @@ it.each(["reply", "mention"])("highlights the %s target after navigation", (sour
     const row = container.querySelector(".messages-scroll #msg-target");
     expect(container.querySelector("aside #msg-target")).not.toHaveClass("msg-highlight");
     expect(row).toHaveClass("msg-highlight");
-    act(() => vi.advanceTimersByTime(2000));
+    if (source === "reply") {
+      act(() => vi.advanceTimersByTime(1000));
+      fireEvent.click(button);
+      act(() => vi.advanceTimersToNextFrame());
+      act(() => vi.advanceTimersByTime(1000));
+      expect(row).toHaveClass("msg-highlight");
+      act(() => vi.advanceTimersByTime(1000));
+    } else {
+      act(() => vi.advanceTimersByTime(2000));
+    }
     expect(row).not.toHaveClass("msg-highlight");
   } finally {
     vi.useRealTimers();
