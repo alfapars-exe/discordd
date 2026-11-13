@@ -792,3 +792,14 @@ it("keeps unread messages when reopening older history and lets the user mark th
   expect(useDMStore.getState().dmUnreadCounts[CH]).toBeUndefined();
   expect(dmApi.markDMRead).toHaveBeenCalledWith(CH, undefined);
 });
+it("waits for the actual tail before acknowledging a newly opened DM", async () => {
+  useDMStore.setState({ selectedDMId: CH, dmUnreadCounts: { [CH]: 2 } });
+  vi.mocked(dmApi.markDMRead).mockClear();
+  useDMStore.getState().clearDMUnread(CH);
+  expect(dmApi.markDMRead).not.toHaveBeenCalled();
+  expect(useDMStore.getState().dmUnreadCounts[CH]).toBe(2);
+  getDMMessages.mockResolvedValueOnce(page([makeDM("actual-tail")], true));
+  await useDMStore.getState().fetchMessages(CH);
+  expect(dmApi.markDMRead).toHaveBeenCalledExactlyOnceWith(CH, "actual-tail");
+  expect(useDMStore.getState().dmUnreadCounts[CH]).toBeUndefined();
+});

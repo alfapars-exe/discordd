@@ -148,7 +148,8 @@ export const createDMSettingsSlice: StateCreator<
   },
 
   clearDMUnread: (channelId, scope = "visible") => {
-    if (scope === "visible" && get().hasMoreAfterByChannel[channelId]) return;
+    const lastId = scope === "visible" ? get().messagesByChannel[channelId]?.at(-1)?.id : undefined;
+    if (scope === "visible" && (!lastId || get().hasMoreAfterByChannel[channelId])) return;
     const hadUnread = !!get().dmUnreadCounts[channelId];
     set((state) => {
       if (!state.dmUnreadCounts[channelId]) return state;
@@ -161,8 +162,6 @@ export const createDMSettingsSlice: StateCreator<
     // Failure is silent: the local clear already happened and the next
     // fetchChannels re-seeds from the server's view.
     if (!hadUnread) return;
-    const messages = get().messagesByChannel[channelId];
-    const lastId = scope === "visible" ? messages?.at(-1)?.id : undefined;
     dmApi.markDMRead(channelId, lastId).catch(() => {});
   },
 
