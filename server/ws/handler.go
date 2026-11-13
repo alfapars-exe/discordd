@@ -270,7 +270,7 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) {
 	if sessionBound {
 		client.validateSession = validator.ValidateSession
 	}
-	h.hub.SetUserInfo(claims.UserID, claims.Username, displayName, avatarURL)
+	client.registrationProfile = &cachedUserInfo{Username: claims.Username, DisplayName: displayName, AvatarURL: avatarURL}
 
 	// Load user's server list for ready event + BroadcastToServer filtering
 	var readyServers []ReadyServerItem
