@@ -37,7 +37,10 @@ export function useUpdateChecker(): UpdateChecker {
   }, [token]);
 
   const restartAndInstall = useCallback(() => {
-    if (isElectron()) void window.electronAPI!.installUpdate();
+    if (!isElectron()) return;
+    void window.electronAPI!.installUpdate().catch(() => {
+      console.warn("[updater] Install request failed");
+    });
   }, []);
   const dismiss = useCallback(() => dispatch({ type: "dismiss" }), []);
   return { status: state.status, update: state.update, progress: state.progress, restartAndInstall, dismiss };
