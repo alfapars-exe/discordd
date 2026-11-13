@@ -12,6 +12,7 @@ spec.loader.exec_module(runner)
 
 class PostgreSQLRunnerTests(unittest.TestCase):
     service_passes = (
+        "--- PASS: TestDeliveryStopCancelsPoolWait (0.01s)\n"
         "--- PASS: TestChannelDeliveryConcurrentRetryAndDeletion (0.01s)\n"
         "--- PASS: TestDMIdempotentAttachmentsConcurrentReplayKeepsOneOrderedSet (0.01s)\n"
         "--- PASS: TestDMOutboxCommitRecoveryReplayAndAuthorization (0.01s)\n"
@@ -65,6 +66,10 @@ class PostgreSQLRunnerTests(unittest.TestCase):
         for value in (None, [], "unexpected", 42):
             with self.subTest(value=value):
                 self.assertEqual(self.execute(self.completed() + [value]), 1)
+
+    def test_delivery_stop_contract_must_emit_pass(self):
+        output = "\n".join(line for line in self.service_passes.splitlines() if "TestDeliveryStopCancelsPoolWait" not in line)
+        self.assertEqual(self.execute(self.completed(), service_output=output), 1)
 
     def completed(self):
         return [

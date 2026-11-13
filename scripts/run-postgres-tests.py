@@ -89,7 +89,7 @@ def main():
     # Delivery, authorization and collector lifecycle require real PostgreSQL waits.
     service_contract_tests = (
         "TestPostgresRolePatchConcurrentChanges",
-        "TestPostgresMemberRoleReplacement",
+        "TestPostgresMemberRoleReplacement", "TestDeliveryStopCancelsPoolWait",
         "TestPostgresMetricsCollectorCancellation",
     )
     selection = "^(TestChannelDelivery|TestDMIdempotent|TestDMOutbox|TestDMMarkUnreadFrom|" + "|".join(service_contract_tests) + ")"
