@@ -327,6 +327,7 @@ func TestVerifyCurrentScreenShareUsesLiveKitParticipantAndExactTrack(t *testing.
 		return nil, nil
 	}}
 	cachedPermissions := NewChannelPermissionService(permissionRepo, roles, channels, nil)
+	t.Cleanup(cachedPermissions.(*cachingPermResolver).permCache.Close)
 	if _, err := cachedPermissions.ResolveChannelPermissions(context.Background(), "actor-1", "channel-1"); err != nil {
 		t.Fatalf("warm permission cache: %v", err)
 	}

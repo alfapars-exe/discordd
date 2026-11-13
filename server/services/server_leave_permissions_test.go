@@ -59,6 +59,7 @@ func TestPrivateChannelPermissionsAcrossLeaveAndRejoin(t *testing.T) {
 		return &models.Channel{ID: id, ServerID: joinTestServerID, Type: models.ChannelTypeText}, nil
 	}}
 	cache := NewChannelPermissionService(&testutil.MockChannelPermRepo{}, h.roleRepo, channels, h.hub)
+	t.Cleanup(cache.(*cachingPermResolver).permCache.Close)
 	h.svc.SetPermInvalidator(cache)
 	check := func(want models.Permission) {
 		t.Helper()
