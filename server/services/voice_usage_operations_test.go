@@ -187,93 +187,17 @@ func waitVoiceUsageAdmissionClosed(t *testing.T, group *voiceUsageOperations) {
 }
 
 func TestVoiceUsageShutdownWaitsForLeaveMusicCleanup(t *testing.T) {
-	svc, _ := newTestVoiceService()
-	s := svc.(*voiceService)
-	entered, release, stopped := make(chan struct{}), make(chan struct{}), make(chan struct{})
-	var once sync.Once
-	t.Cleanup(func() { once.Do(func() { close(release) }); s.ShutdownUsageProducers() })
-	s.musicBotHook = &mockMusicBotHook{StopAllForChannelFn: func(string) { close(entered); <-release }}
-	s.states["victim"] = &models.VoiceState{UserID: "victim", ChannelID: "ch1", ServerID: "srv1"}
-	if err := s.LeaveChannel("victim"); err != nil {
-		t.Fatal(err)
-	}
-	select {
-	case <-entered:
-	case <-time.After(time.Second):
-		t.Fatal("leave music cleanup not started")
-	}
-	go func() { s.ShutdownUsageProducers(); close(stopped) }()
-	select {
-	case <-stopped:
-		t.Fatal("shutdown returned before leave music cleanup")
-	case <-time.After(20 * time.Millisecond):
-	}
-	once.Do(func() { close(release) })
-	select {
-	case <-stopped:
-	case <-time.After(time.Second):
-		t.Fatal("shutdown did not join leave music cleanup")
-	}
+	assertVoiceMusicCleanupOwned(t, func(s *voiceService) error { return s.LeaveChannel("victim") })
 }
 
 func TestVoiceUsageShutdownWaitsForSwitchMusicCleanup(t *testing.T) {
-	svc, _ := newTestVoiceService()
-	s := svc.(*voiceService)
-	entered, release, stopped := make(chan struct{}), make(chan struct{}), make(chan struct{})
-	var once sync.Once
-	t.Cleanup(func() { once.Do(func() { close(release) }); s.ShutdownUsageProducers() })
-	s.musicBotHook = &mockMusicBotHook{StopAllForChannelFn: func(string) { close(entered); <-release }}
-	s.states["victim"] = &models.VoiceState{UserID: "victim", ChannelID: "ch1", ServerID: "srv1"}
-	if err := s.JoinChannel("victim", "victim", "Victim", "", "ch2", false, false); err != nil {
-		t.Fatal(err)
-	}
-	select {
-	case <-entered:
-	case <-time.After(time.Second):
-		t.Fatal("switch music cleanup not started")
-	}
-	go func() { s.ShutdownUsageProducers(); close(stopped) }()
-	select {
-	case <-stopped:
-		t.Fatal("shutdown returned before switch music cleanup")
-	case <-time.After(20 * time.Millisecond):
-	}
-	once.Do(func() { close(release) })
-	select {
-	case <-stopped:
-	case <-time.After(time.Second):
-		t.Fatal("shutdown did not join switch music cleanup")
-	}
+	assertVoiceMusicCleanupOwned(t, func(s *voiceService) error {
+		return s.JoinChannel("victim", "victim", "Victim", "", "ch2", false, false)
+	})
 }
 
 func TestVoiceUsageShutdownWaitsForAdminMusicCleanup(t *testing.T) {
-	svc, _ := newTestVoiceService()
-	s := svc.(*voiceService)
-	entered, release, stopped := make(chan struct{}), make(chan struct{}), make(chan struct{})
-	var once sync.Once
-	t.Cleanup(func() { once.Do(func() { close(release) }); s.ShutdownUsageProducers() })
-	s.musicBotHook = &mockMusicBotHook{StopAllForChannelFn: func(string) { close(entered); <-release }}
-	s.states["victim"] = &models.VoiceState{UserID: "victim", ChannelID: "ch1", ServerID: "srv1"}
-	if err := s.AdminDisconnectUser(context.Background(), "admin", "victim"); err != nil {
-		t.Fatal(err)
-	}
-	select {
-	case <-entered:
-	case <-time.After(time.Second):
-		t.Fatal("admin music cleanup not started")
-	}
-	go func() { s.ShutdownUsageProducers(); close(stopped) }()
-	select {
-	case <-stopped:
-		t.Fatal("shutdown returned before admin music cleanup")
-	case <-time.After(20 * time.Millisecond):
-	}
-	once.Do(func() { close(release) })
-	select {
-	case <-stopped:
-	case <-time.After(time.Second):
-		t.Fatal("shutdown did not join admin music cleanup")
-	}
+	assertVoiceMusicCleanupOwned(t, func(s *voiceService) error { return s.AdminDisconnectUser(context.Background(), "admin", "victim") })
 }
 
 func TestVoiceUsageLateMemberRevocationOwnsDisconnectCleanup(t *testing.T) {
@@ -308,33 +232,7 @@ func TestVoiceUsageLateMemberRevocationOwnsDisconnectCleanup(t *testing.T) {
 }
 
 func TestVoiceUsageShutdownWaitsForMoveMusicCleanup(t *testing.T) {
-	svc, _ := newTestVoiceService()
-	s := svc.(*voiceService)
-	entered, release, stopped := make(chan struct{}), make(chan struct{}), make(chan struct{})
-	var once sync.Once
-	t.Cleanup(func() { once.Do(func() { close(release) }); s.ShutdownUsageProducers() })
-	s.musicBotHook = &mockMusicBotHook{StopAllForChannelFn: func(string) { close(entered); <-release }}
-	s.states["victim"] = &models.VoiceState{UserID: "victim", ChannelID: "ch1", ServerID: "srv1"}
-	if err := s.MoveUser(context.Background(), "admin", "victim", "ch2"); err != nil {
-		t.Fatal(err)
-	}
-	select {
-	case <-entered:
-	case <-time.After(time.Second):
-		t.Fatal("move music cleanup not started")
-	}
-	go func() { s.ShutdownUsageProducers(); close(stopped) }()
-	select {
-	case <-stopped:
-		t.Fatal("shutdown returned before move music cleanup")
-	case <-time.After(20 * time.Millisecond):
-	}
-	once.Do(func() { close(release) })
-	select {
-	case <-stopped:
-	case <-time.After(time.Second):
-		t.Fatal("shutdown did not join move music cleanup")
-	}
+	assertVoiceMusicCleanupOwned(t, func(s *voiceService) error { return s.MoveUser(context.Background(), "admin", "victim", "ch2") })
 }
 
 func TestVoiceUsageShutdownRejectsMoveBeforeLookup(t *testing.T) {
@@ -504,5 +402,36 @@ func TestVoiceUsageShutdownWaitsForEntranceHook(t *testing.T) {
 	case <-stopped:
 	case <-time.After(time.Second):
 		t.Fatal("entrance hook not joined")
+	}
+}
+
+func assertVoiceMusicCleanupOwned(t *testing.T, operation func(*voiceService) error) {
+	t.Helper()
+	svc, _ := newTestVoiceService()
+	s := svc.(*voiceService)
+	entered, release, stopped := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	t.Cleanup(func() { once.Do(func() { close(release) }); s.ShutdownUsageProducers() })
+	s.musicBotHook = &mockMusicBotHook{StopAllForChannelFn: func(string) { close(entered); <-release }}
+	s.states["victim"] = &models.VoiceState{UserID: "victim", ChannelID: "ch1", ServerID: "srv1"}
+	if err := operation(s); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("music cleanup not started")
+	}
+	go func() { s.ShutdownUsageProducers(); close(stopped) }()
+	select {
+	case <-stopped:
+		t.Fatal("shutdown returned before music cleanup")
+	case <-time.After(20 * time.Millisecond):
+	}
+	once.Do(func() { close(release) })
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("shutdown did not join music cleanup")
 	}
 }

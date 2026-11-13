@@ -1357,3 +1357,9 @@ Terminal current-head receipt: PR29814a965ea completed36/36 SUCCESS. Exact-head 
 
 - Canonical PR298 head 6236c8b9 now includes all three ownership fixes. Real-mTLS PostgreSQL targeted tests passed three repetitions (72.962s), Linux race ten (28.565s); full Go vet/build and golangci-lint passed with zero issues. Receipt: `implementation/verification/refactor-voice-media-owners-canonical-2026-11-14.json`.
 - Current-head CI is pending; previous-head checks are not reused. Final combined acceptance, physical media, active-session shutdown, late terminal credit and crash-before-enqueue remain open.
+
+### 2026-11-14 — Extract music-cleanup shutdown test helper
+
+- Kept all 15 top-level test names (including four independent leave/switch/admin/move regressions) and extracted shared fixture/wait/release assertions. Test source shrank by 71 lines; product code unchanged.
+- Four targeted tests passed 20 repetitions on host (2.304s) and Linux race (5.250s). Services vet/lint passed. A Go-overlay negative control restoring detached leave music stop failed the preserved Leave test with the expected early-shutdown assertion (exit1); tracked product source was never mutated.
+- Receipt: `implementation/verification/refactor-music-cleanup-test-helper-2026-11-14.json`. Local integration only; canonical 6236c8b9 CI43517792317 remains active, last checked six successful jobs/no failure.
