@@ -271,6 +271,8 @@ func main() {
 		}
 	}
 	defer stopVoiceMaintenance()
+	stopVoiceUsageDelivery := services.StartVoiceUsageDelivery(ownerCtx, svcs.Voice)
+	defer stopVoiceUsageDelivery()
 
 	// 10b. Metrics collector — background goroutine polling LiveKit instances
 	metricsCollector.Start()
@@ -550,6 +552,8 @@ func main() {
 		bootLogger.Warn("HTTP shutdown deadline exceeded", "err", pkg.ErrText(shutdownErr))
 		_ = srv.Close()
 	}
+
+	stopVoiceUsageDelivery()
 
 	logx.SetAppSink(nil)
 	svcs.AppLog.Stop()
