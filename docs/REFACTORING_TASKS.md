@@ -1381,3 +1381,9 @@ Terminal current-head receipt: PR29814a965ea completed36/36 SUCCESS. Exact-head 
 - Source6236c8b9 Sonar gate failed on new duplication6.1% (limit3%; 144 duplicate test lines); also reported AFK complexity16 vs15. Shared seven regression wait assertions and extracted locked AFK candidate snapshot. No threshold/exclusion changes.
 - Canonical tests/race passed ten repetitions (12.144s/14.888s), real-PG AFK cancellation three (2.492s), services vet/lint passed. Overlay restoring detached leave music stop failed the preserved regression (exit1). Scoped integration import passed targeted tests (1.819s).
 - Published PR298 fdd59669; new ServerCI43519318350 is pending, so Sonar remediation is not yet externally proven. Receipt: `implementation/verification/refactor-pr298-sonar-source-fix-2026-11-14.json`.
+
+### 2026-11-14 — Own accepted permission/member revocation roots
+
+- Permission recheck regression failed before fix: terminal shutdown returned while fresh permissions were still resolving. Both recheckVoiceAccess and DisconnectServerMember now register accepted root work before snapshot/checks; committed late revocations still run in caller ownership instead of being skipped.
+- Targeted usage/maintenance tests passed ten repetitions (3.017s), Linux race ten (6.017s); real-PG late member credit test passed three (3.414s). Services vet/lint passed. Receipt: `implementation/verification/refactor-voice-revocation-root-2026-11-14.json`.
+- Published fdd59669 SonarCloud is now COMPLETED SUCCESS; last snapshot nine successful checks/no failures, overall CI still running. New root changes local integration only. Late callback/database ordering and full project acceptance remain open.

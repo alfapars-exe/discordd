@@ -839,6 +839,12 @@ func (s *voiceService) GetVoiceEpoch() string {
 }
 
 func (s *voiceService) DisconnectServerMember(serverID, userID string) {
+	// Track accepted revocation work through checks and cleanup. Committed
+	// revocations arriving after terminal drain still run in caller ownership.
+	if finish, admitted := s.operations.begin(); admitted {
+		defer finish()
+	}
+
 	s.mu.Lock()
 	for join := range s.pendingJoins {
 		if join.userID == userID {
@@ -886,6 +892,12 @@ func (s *voiceService) GetUserVoiceChannelID(userID string) string {
 }
 
 func (s *voiceService) recheckVoiceAccess(userID, channelID string) {
+	// Track accepted revocation work through checks and cleanup. Committed
+	// revocations arriving after terminal drain still run in caller ownership.
+	if finish, admitted := s.operations.begin(); admitted {
+		defer finish()
+	}
+
 	type session struct {
 		id         string
 		state      *models.VoiceState

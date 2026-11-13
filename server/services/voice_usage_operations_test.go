@@ -439,3 +439,30 @@ func assertVoiceShutdownJoins(t *testing.T, s *voiceService, entered <-chan stru
 		t.Fatal("shutdown did not join owned work")
 	}
 }
+
+type blockingVoiceAccessResolver struct {
+	ChannelPermResolver
+	entered, release chan struct{}
+}
+
+func (r blockingVoiceAccessResolver) ResolveChannelPermissionsBulk(ctx context.Context, _ string, _ []string) (map[string]models.Permission, error) {
+	close(r.entered)
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-r.release:
+		return nil, context.Canceled
+	}
+}
+
+func TestVoiceUsageShutdownWaitsForPermissionRecheck(t *testing.T) {
+	svc, _ := newTestVoiceService()
+	s := svc.(*voiceService)
+	entered, release, rechecked := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	t.Cleanup(func() { once.Do(func() { close(release) }); <-rechecked; s.ShutdownUsageProducers() })
+	s.states["victim"] = &models.VoiceState{UserID: "victim", ChannelID: "ch1", ServerID: "srv1"}
+	s.permResolver = blockingVoiceAccessResolver{entered: entered, release: release}
+	go func() { s.recheckVoiceAccess("victim", "ch1"); close(rechecked) }()
+	assertVoiceShutdownJoins(t, s, entered, func() { once.Do(func() { close(release) }) })
+}
