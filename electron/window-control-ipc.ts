@@ -1,6 +1,7 @@
-import type { BrowserWindow, IpcMain, NativeImage } from "electron";
+import type { BrowserWindow, IpcMain, IpcMainInvokeEvent, NativeImage } from "electron";
 
 type WindowOperations = {
+  trusted: (event: IpcMainInvokeEvent) => void;
   getMainWindow: () => Pick<BrowserWindow, "setOverlayIcon" | "isFocused" | "flashFrame" | "minimize" | "isMaximized" | "unmaximize" | "maximize" | "close"> | null;
   createBadgeImage: (url: string) => NativeImage;
   setTrayTooltip: (text: string) => void;
@@ -16,7 +17,8 @@ export function registerWindowControlIPC(ipc: Pick<IpcMain, "handle">, operation
   const assertFiniteNumber: WindowOperations["assertFiniteNumber"] = operations.assertFiniteNumber;
   ipc.handle(
     "set-badge-count",
-    (_e: Electron.IpcMainInvokeEvent, count: unknown, iconDataURL: unknown) => {
+    (event: IpcMainInvokeEvent, count: unknown, iconDataURL: unknown) => {
+      operations.trusted(event);
       // Audit 2026-05-27: validate untrusted renderer input.
       assertFiniteNumber(count, "badge count", 0, MAX_BADGE_COUNT);
       if (iconDataURL !== null) {
@@ -41,19 +43,21 @@ export function registerWindowControlIPC(ipc: Pick<IpcMain, "handle">, operation
     },
   );
 
-  ipc.handle("flash-frame", () => {
+  ipc.handle("flash-frame", event => {
+    operations.trusted(event);
     const win = getMainWindow();
     if (win && !win.isFocused()) win.flashFrame(true);
   });
 
   // ─── Custom titlebar window controls ─────────────────────────────
-  ipc.handle("minimize-window", () => getMainWindow()?.minimize());
-  ipc.handle("maximize-window", () => {
+  ipc.handle("minimize-window", event => { operations.trusted(event); getMainWindow()?.minimize(); });
+  ipc.handle("maximize-window", event => {
+    operations.trusted(event);
     const win = getMainWindow();
     if (!win) return;
     if (win.isMaximized()) win.unmaximize();
     else win.maximize();
   });
-  ipc.handle("close-window", () => getMainWindow()?.close());
+  ipc.handle("close-window", event => { operations.trusted(event); getMainWindow()?.close(); });
 
 }
