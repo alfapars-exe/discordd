@@ -72,12 +72,11 @@ import { createGameOverlayController } from "./game-overlay-controller";
 import { existsSync } from "node:fs";
 import path from "node:path";
 
-export function registerIpcHandlers(): void {
+export function registerIpcHandlers(): () => Promise<void> {
   const gameJoin = registerCS2JoinIPC(ipcMain, assertTrustedMainWindowSender, {
     fetch: (url, init) => net.fetch(url, init), openExternal: url => shell.openExternal(url),
     allowLoopback: !app.isPackaged, supported: process.platform === "win32",
   });
-  app.once("before-quit", () => gameJoin.dispose());
   // Start the middle-left layout generation without restoring old bottom-edge
   // drag offsets. New drag positions remain persistent in this generation.
   const overlayLayouts = createOverlayLayoutStore({ filePath: path.join(app.getPath("userData"), "overlay-layout-v2.json") });
@@ -143,7 +142,6 @@ export function registerIpcHandlers(): void {
       if (isMainFrame && !isInPlace && getMainWindow()?.webContents === contents) { overlayMediaPolicy=null; overlayMedia.revoke(); gameOverlay?.clear(); overlayShortcut.setBinding(null); }
     });
   });
-  app.once("before-quit", () => { stopOverlayMediaLifecycle(); overlayMedia.revoke(); overlayShortcut.dispose(); gameOverlay?.dispose(); registeredGames.dispose(); void gameWindowTracker.dispose(); });
 
   registerRegisteredGamesIPC(ipcMain, {
     trusted: assertTrustedMainWindowSender, assertString, registeredGames,
@@ -235,6 +233,18 @@ export function registerIpcHandlers(): void {
     trusted: assertTrustedMainWindowSender, assertString,
     registerPTT, unregisterPTT, registerMuteHotkey, unregisterMuteHotkey,
   });
+  let cleanup: Promise<void> | null = null;
+  return () => {
+    const stops: Array<() => unknown> = [
+      () => gameJoin.dispose(), stopOverlayMediaLifecycle, () => overlayMedia.revoke(),
+      () => overlayShortcut.dispose(), () => gameOverlay?.dispose(),
+      () => registeredGames.dispose(), () => gameWindowTracker.dispose(),
+    ];
+    cleanup ??= Promise.allSettled(stops.map(stop => Promise.resolve().then(stop))).then(results => {
+      if (results.some(result => result.status === "rejected")) throw new Error("IPC cleanup failed");
+    });
+    return cleanup;
+  };
 }
 
 function isTrustedMainWindowSender(event: { sender: unknown; senderFrame: unknown }): boolean {
