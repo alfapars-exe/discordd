@@ -582,3 +582,9 @@ Paralel çalışma hatları: backend veri/lifecycle (RF04–RF11), client state/
 - İlgisiz dirty dosyalar staged edilmez; commit/PR/release artifact'i ile kanıt kaydı aynı kaynak anlık görüntüsünü gösterir.
 - Rollback küçük PR'ın revert'iyle mümkün tutulur. Veri migration'ı varsa backup/restore provası olmadan release kapısı kapanmaz.
 - [REFACTORING_PLAN.md](REFACTORING_PLAN.md), [TECHNICAL_DEBT.md](TECHNICAL_DEBT.md), [TEST_STRATEGY.md](TEST_STRATEGY.md), [CODE_QUALITY_STANDARDS.md](CODE_QUALITY_STANDARDS.md) ve [ARCHITECTURE_IMPROVEMENTS.md](ARCHITECTURE_IMPROVEMENTS.md) ilgili kararlarla eşleşir.
+
+### RF20 - main-frame ownership for persistent application settings (2026-11-13)
+
+- Two failing-before regressions demonstrated set-app-setting did not reject foreign window/frame or retired main-window/frame callers. It now requires the existing current-main assertion before key/value validation, persistence or login-item writes. get-app-settings retains the existing read/synchronization behavior; known flags, boolean bounds and inherited-key rejection remain covered.
+- Negative cases cover foreign contents, subframes, missing frames, destroyed/absent windows, old frames after navigation, malformed input from an unauthorized caller and zero persistence/OS effects. A compiled actual-composition test proves the main assertion is supplied and precedes native writes, followed by a successful authorized write.
+- Integration 7cb1e478: full Electron 388 pass/1 skip. Existing canonical PR #273 source 4e708694: fresh unique TypeScript output, full Electron 277 pass/1 skip. Logs: %TEMP%/hichat-settings-sender-before.log, hichat-settings-sender-after.log and hichat-settings-sender-canonical.log. No physical startup registration was exercised; remaining IPC capability and runtime acceptance stay open.
