@@ -91,3 +91,23 @@ func TestRegistrationProfileFollowsActiveConnections(t *testing.T) {
 		t.Fatal("last disconnect retained a profile")
 	}
 }
+
+func TestShutdownRegistrationReleasesTemporaryProfile(t *testing.T) {
+	h := NewHub()
+	h.shuttingDown = true
+	c := &Client{hub: h, userID: "reader", done: make(chan struct{}), registered: make(chan struct{}), registrationProfile: &cachedUserInfo{Username: "rejected"}}
+	h.addClient(c)
+	if c.registrationProfile != nil || len(h.userInfos) != 0 || len(h.clients) != 0 {
+		t.Fatal("shutdown registration retained client or profile state")
+	}
+	select {
+	case <-c.registered:
+	default:
+		t.Fatal("rejected registration did not release its waiter")
+	}
+	select {
+	case <-c.done:
+	default:
+		t.Fatal("shutdown registration left the client open")
+	}
+}
