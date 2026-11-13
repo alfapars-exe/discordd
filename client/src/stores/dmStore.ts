@@ -235,8 +235,9 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
       if (res.success && res.data) {
         const currentChannels = get().channels;
         const initialById = new Map(initialChannels.map(channel => [channel.id, channel]));
+        const currentById = new Map(currentChannels.map(channel => [channel.id, channel]));
         const onlySelfAdded = currentChannels.length >= initialChannels.length
-          && initialChannels.every(channel => currentChannels.includes(channel))
+          && initialChannels.every(channel => currentById.get(channel.id) === channel)
           && currentChannels.every(channel => initialById.get(channel.id) === channel
             || channel.other_user.id === scope.ownerId);
         if (metadataRevision !== dmChannelMetadataRevision && currentChannels !== initialChannels && !onlySelfAdded) {
@@ -261,9 +262,11 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
           }
         }
         const channels = [...res.data];
+        const listedIds = new Set(channels.map(channel => channel.id));
         for (const channel of currentChannels) {
-          if (channel.other_user.id === scope.ownerId && !channels.some(item => item.id === channel.id)) {
+          if (channel.other_user.id === scope.ownerId && !listedIds.has(channel.id)) {
             channels.push(channel);
+            listedIds.add(channel.id);
           }
         }
         set({ channels, dmUnreadCounts, isLoading: false });
