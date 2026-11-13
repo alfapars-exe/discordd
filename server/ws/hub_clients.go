@@ -226,6 +226,11 @@ func (h *Hub) removeClient(client *Client) {
 	}
 
 	h.mu.Unlock()
+	// Removal retires this socket, including any write blocked on a slow peer.
+	// Close outside the hub lock and before potentially slow presence callbacks.
+	if client.conn != nil {
+		_ = client.conn.Close()
+	}
 	if disconnectCallback != nil {
 		h.presenceCallbacks.submit(ticket, func() { disconnectCallback(userID, "") })
 	} else if presenceCallback != nil {

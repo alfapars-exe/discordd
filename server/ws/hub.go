@@ -183,8 +183,14 @@ func (h *Hub) registerClient(ctx context.Context, client *Client) bool {
 
 func (h *Hub) unregisterClient(client *Client) {
 	select {
+	case <-client.done:
+		return
+	default:
+	}
+	select {
 	case h.unregister <- client:
 	case <-h.stopped:
+	case <-client.done:
 	}
 }
 
