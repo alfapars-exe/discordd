@@ -26,7 +26,6 @@ func TestDeliveryStopCancelsPoolWait(t *testing.T) {
 				}
 			}
 			t.Cleanup(stop)
-			db.SetMaxOpenConns(1)
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			held, err := db.Conn(ctx)
@@ -35,6 +34,7 @@ func TestDeliveryStopCancelsPoolWait(t *testing.T) {
 			}
 			defer held.Close()
 			before := db.Stats().WaitCount
+			db.SetMaxOpenConns(1)
 			deadline := time.Now().Add(3 * time.Second)
 			for db.Stats().WaitCount <= before {
 				if time.Now().After(deadline) {
