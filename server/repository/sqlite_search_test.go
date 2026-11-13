@@ -82,3 +82,41 @@ func TestSearchRepo_EmptyAllowedChannelIDs_ReturnsEmptyWithoutQuerying(t *testin
 		t.Fatalf("expected empty result for an empty (non-nil) allow-list, got %+v", res)
 	}
 }
+
+// Equal relevance and timestamps require an explicit ID tie break so offset
+// pages have a stable boundary on both supported database backends.
+func TestSearchRepo_EqualRankTimestampPagesHaveStableOrder(t *testing.T) {
+	db := newTestDB(t)
+	seedMessageWorld(t, db)
+	ctx := context.Background()
+	for _, id := range []string{"search-a", "search-b", "search-c", "search-hidden"} {
+		channel := msgChannel
+		if id == "search-hidden" {
+			channel = msgOtherChannel
+		}
+		if _, err := db.Conn.ExecContext(ctx, `INSERT INTO messages(id,channel_id,user_id,content,created_at) VALUES(?,?,?,?,?)`, id, channel, msgAuthor, "pagingfixture", "2026-01-01 00:00:00.123456"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	search := NewSQLiteSearchRepo(db.Conn)
+	// The non-existent SQL-looking channel value must remain a bound value.
+	allowed := []string{msgChannel, "' OR 1=1 --"}
+	for offset, want := range []string{"search-c", "search-b", "search-a", ""} {
+		result, err := search.Search(ctx, "pagingfixture", "srv-1", nil, allowed, 1, offset)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.TotalCount != 3 {
+			t.Fatalf("offset %d: count %d, want 3", offset, result.TotalCount)
+		}
+		if want == "" {
+			if len(result.Messages) != 0 {
+				t.Fatalf("offset %d: expected empty page", offset)
+			}
+			continue
+		}
+		if len(result.Messages) != 1 || result.Messages[0].ID != want {
+			t.Fatalf("offset %d: got %+v, want %s", offset, result.Messages, want)
+		}
+	}
+}
