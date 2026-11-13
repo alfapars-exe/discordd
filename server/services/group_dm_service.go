@@ -67,8 +67,32 @@ type groupDMService struct {
 	reactionBlocks        BlockChecker
 }
 
-func NewGroupDMService(groups repository.GroupDMRepository, users repository.UserRepository, friendships repository.FriendshipRepository, hub ws.Broadcaster, liveKitURL, liveKitAPIKey, liveKitAPISecret string, mediaKey []byte, uploadDir string, notifications repository.NotificationRepository, prefs profilePreferenceReader, blocks BlockChecker) GroupDMService {
-	return &groupDMService{reactionNotifications: notifications, reactionPreferences: prefs, reactionBlocks: blocks, groups: groups, users: users, friendships: friendships, hub: hub, liveKitURL: liveKitURL, liveKitAPIKey: liveKitAPIKey, liveKitAPISecret: liveKitAPISecret, mediaKey: append([]byte(nil), mediaKey...), uploadDir: uploadDir}
+func NewGroupDMService(
+	groups repository.GroupDMRepository,
+	users repository.UserRepository,
+	friendships repository.FriendshipRepository,
+	hub ws.Broadcaster,
+	liveKitURL, liveKitAPIKey, liveKitAPISecret string,
+	mediaKey []byte,
+	uploadDir string,
+	notifications repository.NotificationRepository,
+	prefs profilePreferenceReader,
+	blocks BlockChecker,
+) GroupDMService {
+	return &groupDMService{
+		groups:                groups,
+		users:                 users,
+		friendships:           friendships,
+		hub:                   hub,
+		liveKitURL:            liveKitURL,
+		liveKitAPIKey:         liveKitAPIKey,
+		liveKitAPISecret:      liveKitAPISecret,
+		mediaKey:              append([]byte(nil), mediaKey...),
+		uploadDir:             uploadDir,
+		reactionNotifications: notifications,
+		reactionPreferences:   prefs,
+		reactionBlocks:        blocks,
+	}
 }
 
 func (s *groupDMService) GenerateCallToken(ctx context.Context, groupID, userID string) (*models.VoiceTokenResponse, error) {
