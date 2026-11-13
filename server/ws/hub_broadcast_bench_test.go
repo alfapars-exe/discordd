@@ -23,12 +23,9 @@ import (
 // hub_state_test.go's construction style — no h.Run() goroutine, so nothing
 // but the benchmark's own timed loop runs against the hub).
 //
-// slow=false starts one drainer goroutine per client that keeps consuming
-// client.send for the life of the benchmark (a healthy WritePump). slow=true
-// instead pre-fills every client's send buffer to capacity and starts no
-// drainers, forcing every deliver() call down the queueUnregister branch —
-// reproducing a server full of dead/slow connections at broadcast time.
-func benchServerHub(b *testing.B, n int, slow bool) (*Hub, string, func()) {
+// Slow clients start with full queues. Healthy clients are drained between
+// timed batches so a scheduler delay cannot switch the measured delivery path.
+func benchServerHub(b *testing.B, n int, slow bool) (*Hub, string, []*Client) {
 	b.Helper()
 
 	h := NewHub()
@@ -54,39 +51,47 @@ func benchServerHub(b *testing.B, n int, slow bool) (*Hub, string, func()) {
 				c.send <- filler
 			}
 		}
-		return h, sid, func() {}
 	}
+	return h, sid, clients
+}
 
-	done := make(chan struct{})
-	for _, c := range clients {
-		go func(c *Client) {
-			for {
-				select {
-				case <-c.send:
-				case <-done:
-					return
-				}
+// Measure only the deliveries. Draining exactly one entry per delivery also
+// verifies that every healthy client received the full batch.
+func benchHealthyDeliveries(b *testing.B, clients []*Client, deliver func()) {
+	b.Helper()
+	b.ResetTimer()
+	for remaining := b.N; remaining > 0; {
+		batch := min(remaining, cap(clients[0].send))
+		for range batch {
+			deliver()
+		}
+		b.StopTimer()
+		for _, client := range clients {
+			if got := len(client.send); got != batch {
+				b.Fatalf("client %s received %d of %d deliveries", client.userID, got, batch)
 			}
-		}(c)
+			for range batch {
+				<-client.send
+			}
+		}
+		remaining -= batch
+		if remaining > 0 {
+			b.StartTimer()
+		}
 	}
-	return h, sid, func() { close(done) }
 }
 
 // BenchmarkBroadcastToServer_FastClients measures steady-state throughput:
-// every client's WritePump (simulated by a drainer goroutine) keeps up, so
+// every client's queue has room for the entire batch, so
 // deliver always takes the fast `client.send <- data` path.
 func BenchmarkBroadcastToServer_FastClients(b *testing.B) {
 	for _, n := range []int{10, 100, 1000} {
 		b.Run(fmt.Sprintf("clients=%d", n), func(b *testing.B) {
-			h, sid, cleanup := benchServerHub(b, n, false)
-			defer cleanup()
+			h, sid, clients := benchServerHub(b, n, false)
 
 			event := Event{Op: OpMessageCreate, Data: map[string]string{"content": "bench message"}}
 
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				h.BroadcastToServer(sid, event)
-			}
+			benchHealthyDeliveries(b, clients, func() { h.BroadcastToServer(sid, event) })
 		})
 	}
 }
@@ -104,8 +109,7 @@ func BenchmarkBroadcastToServer_FastClients(b *testing.B) {
 func BenchmarkBroadcastToServer_SlowClients(b *testing.B) {
 	for _, n := range []int{10, 100, 1000} {
 		b.Run(fmt.Sprintf("clients=%d", n), func(b *testing.B) {
-			h, sid, cleanup := benchServerHub(b, n, true)
-			defer cleanup()
+			h, sid, _ := benchServerHub(b, n, true)
 
 			event := Event{Op: OpMessageCreate, Data: map[string]string{"content": "bench message"}}
 
@@ -126,27 +130,11 @@ func BenchmarkBroadcastToServer_SlowClients(b *testing.B) {
 
 // BenchmarkDeliver micro-benchmarks the single per-client delivery
 // chokepoint in isolation (bot filter check + channel send), with one
-// continuously-drained human client so every call takes the fast path.
+// human client with available queue capacity so every call takes the fast path.
 func BenchmarkDeliver(b *testing.B) {
 	h := NewHub()
 	c := &Client{hub: h, userID: "bench-single", send: make(chan []byte, sendBufferSize), done: make(chan struct{})}
 
-	done := make(chan struct{})
-	go func() {
-		for {
-			select {
-			case <-c.send:
-			case <-done:
-				return
-			}
-		}
-	}()
-	defer close(done)
-
 	data := []byte(`{"op":"message_create"}`)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		h.deliver(c, OpMessageCreate, data)
-	}
+	benchHealthyDeliveries(b, []*Client{c}, func() { h.deliver(c, OpMessageCreate, data) })
 }
