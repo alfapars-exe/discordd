@@ -256,7 +256,8 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	profileUpdateNotifier := services.NewProfileUpdateNotifier(repos.Preferences, repos.Friendship, repos.Notification, hub)
 	onlineFriendNotifier := services.NewOnlineFriendNotifier(repos.User, repos.Preferences, repos.Friendship, repos.Notification, hub, hub)
 	roleTransactions := repository.NewServerMembershipTxRunner(db)
-	memberService := services.NewMemberService(repos.User, repos.Role, repos.Ban, repos.MemberTimeout, repos.Server, roleTransactions, hub, voiceService, auditLogService, profileUpdateNotifier)
+	profileAudiencePolicy := services.NewProfileAudiencePolicy(repos.Preferences, repos.Friendship, repos.Server)
+	memberService := services.NewMemberService(profileAudiencePolicy, repos.User, repos.Role, repos.Ban, repos.MemberTimeout, repos.Server, roleTransactions, hub, voiceService, auditLogService, profileUpdateNotifier)
 	roleService := services.NewRoleService(repos.Role, roleTransactions, hub, auditLogService)
 	// SetPermInvalidator for both is wired in main.go (after initRoutes),
 	// not here: it needs to fan out to middleware.PermissionMiddleware too,
@@ -349,7 +350,6 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	mediaLabelService.SetBroadcaster(hub)
 	reminderService := services.NewReminderService(repos.Reminder, repos.Message, repos.Channel, repos.DM, channelPermService)
 	userNoteService := services.NewUserNoteService(repos.UserNote, repos.User)
-	profileAudiencePolicy := services.NewProfileAudiencePolicy(repos.Preferences, repos.Friendship, repos.Server)
 	personalizationService := services.NewPersonalizationService(repos.Preferences, repos.User, repos.Server, repos.Friendship)
 	reactionService := services.NewReactionService(repos.Reaction, repos.Message, repos.Channel, hub, channelPermService, repos.MemberTimeout)
 	reactionService.SetNotificationDelivery(repos.Notification, repos.Preferences, repos.User)
@@ -416,11 +416,6 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		setter.SetGameActivityPrivacyInvalidator(gameActivityService)
 	}
 
-	if setter, ok := memberService.(interface {
-		SetProfileAudienceInvalidator(services.ProfileAudienceInvalidator)
-	}); ok {
-		setter.SetProfileAudienceInvalidator(profileAudiencePolicy)
-	}
 	appLogService := services.NewAppLogService(repos.AppLog)
 	clipRecordingService := services.NewClipRecordingService(voiceService, repos.Preferences, appLogService)
 	// auditLogService itself was constructed earlier (right after

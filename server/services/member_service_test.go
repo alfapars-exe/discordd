@@ -64,7 +64,7 @@ func newMemberHarness() *memberServiceHarness {
 	}
 	h.serverRepo.IsMemberFn = func(context.Context, string, string) (bool, error) { return true, nil }
 	tx := roleTestTransaction{&repository.ServerMembershipTxRepos{Server: h.serverRepo, Role: h.roleRepo, User: h.userRepo, Timeout: h.timeoutRepo}}
-	h.svc = NewMemberService(
+	h.svc = NewMemberService(nil,
 		h.userRepo, h.roleRepo, h.banRepo, h.timeoutRepo,
 		h.serverRepo, tx, h.hub, h.voiceKick, nil, h.profileUpdates, // auditLogger — not under test here
 	)
@@ -480,7 +480,7 @@ func TestUpdateProfile_RefreshesHubUserInfoCache(t *testing.T) {
 	h.serverRepo.GetUserServersFn = func(_ context.Context, _ string) ([]models.ServerListItem, error) {
 		return []models.ServerListItem{{ID: "server-1"}}, nil
 	}
-	h.svc.(*memberService).SetProfileAudienceInvalidator(profileAudienceInvalidatorStub{viewers: []string{"friend-1", "server-member-1"}})
+	h.svc.(*memberService).profileAudienceInvalidator = profileAudienceInvalidatorStub{viewers: []string{"friend-1", "server-member-1"}}
 
 	var gotUserID, gotUsername, gotDisplay, gotAvatar string
 	h.hub.UpdateUserInfoFn = func(userID, username, displayName, avatarURL string) {

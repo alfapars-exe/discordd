@@ -37,7 +37,7 @@ func TestPostgresMemberRoleReplacement(t *testing.T) {
 	hub := &testutil.MockEventPublisher{}
 	published := 0
 	hub.BroadcastToServerFn = func(_ string, _ ws.Event) { published++ }
-	svc := NewMemberService(repository.NewSQLiteUserRepo(db), roles, nil, repository.NewSQLiteMemberTimeoutRepo(db), repository.NewSQLiteServerRepo(db), repository.NewServerMembershipTxRunner(db), hub, nil, &log)
+	svc := NewMemberService(nil, repository.NewSQLiteUserRepo(db), roles, nil, repository.NewSQLiteMemberTimeoutRepo(db), repository.NewSQLiteServerRepo(db), repository.NewServerMembershipTxRunner(db), hub, nil, &log)
 	invalidation := &memberInvalidator{}
 	svc.SetPermInvalidator(invalidation)
 	reset := func(t *testing.T) {
