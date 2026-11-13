@@ -1,3 +1,4 @@
+import { serializeBackupSessionState, decodeBackupSessionState } from "./backupSessionCodec";
 import { decodeBackupContents, type BackupContents } from "./backupContentsCodec";
 /**
  * Key Backup — backup/restore E2EE keys with recovery password.
@@ -301,7 +302,7 @@ async function collectBackupContents(scope: AuthScope): Promise<BackupContents> 
     sessions: sessions.map((s) => ({
       userId: s.userId,
       deviceId: s.deviceId,
-      state: JSON.stringify(serializeSessionState(s.state)),
+      state: JSON.stringify(serializeBackupSessionState(s.state)),
       createdAt: s.createdAt,
       updatedAt: s.updatedAt,
     })),
@@ -446,7 +447,7 @@ async function importBackupContents(contents: BackupContents, scope: AuthScope):
 
     // Sessions
     for (const s of contents.sessions) {
-      const state = deserializeSessionState(JSON.parse(s.state));
+      const state = decodeBackupSessionState(s.state);
       await awaitScoped(scope, () => keyStorage.saveSession({
         userId: s.userId,
         deviceId: s.deviceId,
@@ -645,42 +646,6 @@ async function rollbackWrite(
 // ──────────────────────────────────
 // Internal: Session State Serialization
 // ──────────────────────────────────
-
-/** Serialize SessionState Uint8Arrays to base64 for JSON compatibility. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function serializeSessionState(state: any): any {
-  if (state === null || state === undefined) return state;
-  if (state instanceof Uint8Array) return { __b64: toBase64(state) };
-  if (Array.isArray(state)) return state.map(serializeSessionState);
-  if (typeof state === "object") {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result: Record<string, any> = {};
-    for (const [key, value] of Object.entries(state)) {
-      result[key] = serializeSessionState(value);
-    }
-    return result;
-  }
-  return state;
-}
-
-/** Deserialize base64 back to Uint8Array in SessionState. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function deserializeSessionState(data: any): any {
-  if (data === null || data === undefined) return data;
-  if (typeof data === "object" && "__b64" in data) {
-    return fromBase64(data.__b64);
-  }
-  if (Array.isArray(data)) return data.map(deserializeSessionState);
-  if (typeof data === "object") {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result: Record<string, any> = {};
-    for (const [key, value] of Object.entries(data)) {
-      result[key] = deserializeSessionState(value);
-    }
-    return result;
-  }
-  return data;
-}
 
 // ──────────────────────────────────
 // Internal: PBKDF2
