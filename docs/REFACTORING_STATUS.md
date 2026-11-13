@@ -34,7 +34,7 @@
 | RF26 | [#249](https://github.com/alfapars-exe/discordd/pull/249) kullanılmayan bağımlılıklar; hedefli format/lint. | Kalan statik analiz ve okunabilirlik işleri; nihai birleşik kaynak standardı. |
 | RF27 | [#232](https://github.com/alfapars-exe/discordd/pull/232), welcome bot HTTP/WS timeout, redirect ve shutdown testleri. | Son kaynakta bot modülünün tam sözleşme ve deployment kanıtının uzlaştırılması. |
 | RF28 | #238 and integrated source 4dae7d7f: production Chromium 14/14, WebKit 1/1 on real Go/verified-mTLS PostgreSQL; no server ERROR or app-log batch failure. | Complete account/permission/offline/recovery mapping and packaged/native acceptance remain open. |
-| RF29 | Arama, geçmiş, grup profil ve WS ölçümleri görev defterinde. | Aynı nihai kaynakta API/DB/client/kaynak bütçeleri, yük profilleri ve uzun oturum/medya ölçümleri. |
+| RF29 | Search/history/group measurements; #289 verified one authenticated k6 session on real Go/mTLS PostgreSQL; #290 bounded stalled-write and saturated-unregister cleanup, 768 waves, full ws race passed. | Final-source API/DB/client/resource budgets, capacity profiles, extended soak and physical media measurements remain open; #290 current-head CI pending. |
 | RF30 | Kaynak, yerel test ve PR CI kanıtları ayrı tutuluyor. | Birleştirme, paketlenmiş runtime, dağıtım, desteklenen platform/DB matrisi ve gerekli fiziksel cihaz kabulü tamamlanmadı. |
 
 ## Teslimatın sınırları

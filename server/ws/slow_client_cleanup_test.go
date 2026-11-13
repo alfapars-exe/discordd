@@ -142,6 +142,18 @@ func TestRemovingStalledSocketReleasesBothPumps(t *testing.T) {
 			case <-time.After(time.Second):
 				t.Fatal("write never reached the injected backpressure")
 			}
+			// Alternate normal teardown and a saturated hub handoff. A retired
+			// ReadPump must finish even when no Run loop can drain the queue.
+			if wave%2 == 0 {
+				for n := 0; n < cap(hub.unregister); n++ {
+					hub.unregister <- &Client{}
+				}
+				defer func() {
+					for len(hub.unregister) > 0 {
+						<-hub.unregister
+					}
+				}()
+			}
 			hub.removeClient(f.client)
 			deadline := time.NewTimer(500 * time.Millisecond)
 			defer deadline.Stop()

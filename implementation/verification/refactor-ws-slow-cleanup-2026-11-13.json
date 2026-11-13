@@ -35,8 +35,40 @@
     "log": "%TEMP%/hichat-ws-slow-churn.log"
   },
   "remaining": [
-    "Canonical main-based draft PR and CI",
+    "Draft PR CI completion",
     "Production CPU/heap/DB measurements",
     "Extended soak and physical acceptance"
-  ]
+  ],
+  "canonical": {
+    "pr": 290,
+    "source_commit": "b7cdba25",
+    "full_ws_seconds": 4.065,
+    "race_seconds": 7.162,
+    "race_exit": 0,
+    "adaptation": "Main lacks integration registration/shutdown helpers; added done-aware unregisterClient and wired existing ReadPump only.",
+    "golangci_lint": "v2.12.2: 0 issues before combined test extension"
+  },
+  "combined_saturation": {
+    "waves": 768,
+    "saturated_waves": 384,
+    "live_pumps_after_each_wave": 0,
+    "goroutines_at_samples": 3,
+    "race_full_ws_seconds": 7.187,
+    "race_exit": 0,
+    "log": "%TEMP%/hichat-ws-saturated-churn.log",
+    "heap_samples_16_to_256": [
+      [
+        2754552,
+        2804576
+      ],
+      [
+        2806080,
+        2812456
+      ],
+      [
+        2812272,
+        2833712
+      ]
+    ]
+  }
 }
