@@ -19,19 +19,9 @@ import (
 // Advisory ownership is database-wide, so a schema is insufficient isolation.
 func backendWatchTestPool(t *testing.T) *sql.DB {
 	t.Helper()
-	dsn := os.Getenv("HICHAT_TEST_POSTGRES_DSN")
-	if dsn == "" {
-		t.Skip("requires disposable loopback PostgreSQL")
-	}
-	cfg, err := pgx.ParseConfig(dsn)
-	if err != nil {
-		t.Fatal("invalid PostgreSQL fixture configuration")
-	}
-	if (cfg.Host != "127.0.0.1" && cfg.Host != "localhost") || (cfg.Database != "hichat_test" && cfg.Database != "hichat_e2e_control") {
-		t.Fatal("requires an explicit disposable loopback control database")
-	}
+	cfg := backendWatchPostgresConfig(t)
 	var identity [16]byte
-	if _, err = rand.Read(identity[:]); err != nil {
+	if _, err := rand.Read(identity[:]); err != nil {
 		t.Fatal(err)
 	}
 	name := "hichat_owner_watch_" + hex.EncodeToString(identity[:])
@@ -44,7 +34,7 @@ func backendWatchTestPool(t *testing.T) *sql.DB {
 	admin := stdlib.OpenDB(*cfg)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if _, err = admin.ExecContext(ctx, createQuery); err != nil {
+	if _, err := admin.ExecContext(ctx, createQuery); err != nil {
 		_ = admin.Close()
 		t.Fatal("cannot create isolated ownership fixture")
 	}
@@ -55,8 +45,13 @@ func backendWatchTestPool(t *testing.T) *sql.DB {
 		_ = pool.Close()
 		cleanup, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
+		stopObservation := observeBackendFixtureStatement(cleanup, admin, dropQuery)
+		defer stopObservation()
 		started := time.Now()
-		if _, err := admin.ExecContext(cleanup, dropQuery); err != nil {
+		_, dropErr := admin.ExecContext(cleanup, dropQuery)
+		elapsed := time.Since(started)
+		observation := stopObservation()
+		if err := dropErr; err != nil {
 			// Do not print driver messages/DSNs. Preserve enough typed evidence
 			// to distinguish a server SQLSTATE from a local cleanup deadline.
 			var state interface{ SQLState() string }
@@ -64,7 +59,7 @@ func backendWatchTestPool(t *testing.T) *sql.DB {
 			if errors.As(err, &state) {
 				code = state.SQLState()
 			}
-			t.Errorf("cannot drop owned backend-watch fixture database: type=%T sqlstate=%q context=%v elapsed=%s", err, code, cleanup.Err(), time.Since(started))
+			t.Errorf("cannot drop owned backend-watch fixture database: fixture=%s type=%T sqlstate=%q context=%v elapsed=%s observed=%v wait_type=%q wait_event=%q blockers=%d", name, err, code, cleanup.Err(), elapsed, observation.observed, observation.kind, observation.event, observation.blockers)
 		}
 		_ = admin.Close()
 	})
@@ -135,4 +130,74 @@ func TestBackendOwnerWatchPostgresLifecycle(t *testing.T) {
 		stop()
 		ownerFor(t) // A separate checked-out session can acquire the released lock.
 	})
+}
+
+// Only enum-like wait metadata for this exact generated statement is retained.
+// No DSN, raw error message, query text or unrelated session is logged.
+// Stop joins the observer before returning an immutable snapshot.
+type backendFixtureWait struct {
+	observed    bool
+	kind, event string
+	blockers    int
+}
+
+func observeBackendFixtureStatement(parent context.Context, admin *sql.DB, statement string) func() backendFixtureWait {
+	ctx, cancel := context.WithCancel(parent)
+	done := make(chan struct{})
+	result := backendFixtureWait{}
+	go func() {
+		defer close(done)
+		ticker := time.NewTicker(250 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				queryCtx, stop := context.WithTimeout(ctx, 500*time.Millisecond)
+				var kind, event string
+				var blockers int
+				err := admin.QueryRowContext(queryCtx, `SELECT COALESCE(wait_event_type,''),COALESCE(wait_event,''),cardinality(pg_blocking_pids(pid)) FROM pg_stat_activity WHERE datname=current_database() AND query=$1 AND state='active' AND pid<>pg_backend_pid()`, statement).Scan(&kind, &event, &blockers)
+				stop()
+				if err == nil {
+					result = backendFixtureWait{observed: true, kind: kind, event: event, blockers: blockers}
+				}
+			}
+		}
+	}()
+	return func() backendFixtureWait { cancel(); <-done; return result }
+}
+
+func backendWatchPostgresConfig(t *testing.T) *pgx.ConnConfig {
+	t.Helper()
+	dsn := os.Getenv("HICHAT_TEST_POSTGRES_DSN")
+	if dsn == "" {
+		t.Skip("requires disposable loopback PostgreSQL")
+	}
+	cfg, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		t.Fatal("invalid PostgreSQL fixture configuration")
+	}
+	if (cfg.Host != "127.0.0.1" && cfg.Host != "localhost") || (cfg.Database != "hichat_test" && cfg.Database != "hichat_e2e_control") {
+		t.Fatal("requires an explicit disposable loopback control database")
+	}
+	return cfg
+}
+
+func TestBackendOwnerFixtureWaitObservation(t *testing.T) {
+	admin := stdlib.OpenDB(*backendWatchPostgresConfig(t))
+	t.Cleanup(func() { admin.Close() })
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	const statement = "SELECT pg_sleep(1.2) /* hichat-owner-fixture-observer */"
+	stop := observeBackendFixtureStatement(ctx, admin, statement)
+	defer stop()
+	if _, err := admin.ExecContext(ctx, statement); err != nil {
+		t.Fatal("owned observation probe failed")
+	}
+	observation := stop()
+	if !observation.observed || observation.kind == "" || observation.event == "" || observation.blockers != 0 {
+		t.Fatalf("wait observation missing: observed=%v type=%q event=%q blockers=%d", observation.observed, observation.kind, observation.event, observation.blockers)
+	}
+	t.Logf("observed controlled wait: type=%s event=%s blockers=%d", observation.kind, observation.event, observation.blockers)
 }
