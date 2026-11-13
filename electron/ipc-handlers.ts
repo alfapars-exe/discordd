@@ -184,6 +184,7 @@ export function registerIpcHandlers(onCleanup?: (dispose: () => Promise<void>) =
   });
 
   registerDiagnosticIPC(ipcMain, {
+    trusted: assertTrustedMainWindowSender,
     consumeLastCrash, appendDiagnostic, buildUploadBytes, bundleBaseName,
     now: () => new Date(),
     showSaveDialog: options => {

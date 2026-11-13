@@ -1,7 +1,8 @@
-import type { IpcMain, SaveDialogOptions, SaveDialogReturnValue } from "electron";
+import type { IpcMain, IpcMainInvokeEvent, SaveDialogOptions, SaveDialogReturnValue } from "electron";
 import type { DiagnosticEntry } from "./diagnostic-log";
 
 type DiagnosticOperations = {
+  trusted: (event: IpcMainInvokeEvent) => void;
   consumeLastCrash: () => unknown;
   appendDiagnostic: (entry: DiagnosticEntry) => void;
   buildUploadBytes: () => Promise<Buffer>;
@@ -26,7 +27,7 @@ function diagnosticStamp(date: Date): string {
 
 export function registerDiagnosticIPC(ipc: Pick<IpcMain, "handle" | "on">, operations: DiagnosticOperations): void {
   const filename = () => `${operations.bundleBaseName()}-${diagnosticStamp(operations.now())}.json.gz`;
-  ipc.handle("consume-last-crash", () => operations.consumeLastCrash());
+  ipc.handle("consume-last-crash", event => { operations.trusted(event); return operations.consumeLastCrash(); });
   ipc.on("diagnostic-log", (_event, raw: unknown) => {
     if (!raw || typeof raw !== "object") return;
     const entry = raw as { level?: unknown; msg?: unknown; category?: unknown; meta?: unknown };
@@ -37,11 +38,13 @@ export function registerDiagnosticIPC(ipc: Pick<IpcMain, "handle" | "on">, opera
       ? entry.meta as Record<string, unknown> : undefined;
     operations.appendDiagnostic({ level, source: "renderer", category, msg: entry.msg, meta });
   });
-  ipc.handle("build-diagnostic-upload", async () => {
+  ipc.handle("build-diagnostic-upload", async event => {
+    operations.trusted(event);
     const data = await operations.buildUploadBytes();
     return { filename: filename(), data };
   });
-  ipc.handle("export-diagnostics", async () => {
+  ipc.handle("export-diagnostics", async event => {
+    operations.trusted(event);
     const data = await operations.buildUploadBytes();
     const result = await operations.showSaveDialog({ defaultPath: filename(), filters: [{ name: "Diagnostics", extensions: ["gz"] }] });
     if (result.canceled || !result.filePath) return { saved: false };
@@ -58,13 +61,14 @@ export function registerDiagnosticIPC(ipc: Pick<IpcMain, "handle" | "on">, opera
     }
     return { saved: true, path: result.filePath, dumpCopied };
   });
-  ipc.handle("open-logs-dir", () => operations.openLogs());
+  ipc.handle("open-logs-dir", event => { operations.trusted(event); return operations.openLogs(); });
   ipc.handle("get-diagnostic-verbose", () => operations.isVerbose());
-  ipc.handle("set-diagnostic-verbose", (_event, value: unknown) => {
+  ipc.handle("set-diagnostic-verbose", (event, value: unknown) => {
+    operations.trusted(event);
     if (typeof value !== "boolean") throw new TypeError("value must be a boolean");
     operations.persistVerbose(value);
     operations.setVerbose(value);
   });
-  ipc.handle("capture-performance-trace", () => operations.capturePerformanceTrace());
-  ipc.handle("cancel-performance-trace", () => operations.cancelPerformanceTrace());
+  ipc.handle("capture-performance-trace", event => { operations.trusted(event); return operations.capturePerformanceTrace(); });
+  ipc.handle("cancel-performance-trace", event => { operations.trusted(event); return operations.cancelPerformanceTrace(); });
 }
