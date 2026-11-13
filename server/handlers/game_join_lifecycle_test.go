@@ -1,38 +1,27 @@
 package handlers
 
 import (
-	"bytes"
 	"net/http"
 	"net/http/httptest"
-	"runtime/pprof"
 	"testing"
 )
 
-func gameJoinFixtureWorkers(t *testing.T) int {
-	t.Helper()
-	var stacks bytes.Buffer
-	if err := pprof.Lookup("goroutine").WriteTo(&stacks, 2); err != nil {
-		t.Fatal(err)
-	}
-	return bytes.Count(stacks.Bytes(), []byte("created by github.com/argeinfina/hichat/pkg/ratelimit.NewLoginRateLimiter"))
-}
-
 func TestGameJoinHTTPFixturesReleaseLimiterWorkers(t *testing.T) {
-	before := gameJoinFixtureWorkers(t)
+	before := handlerLimiterWorkers(t)
 	t.Run("admission", TestGameJoinHTTPAdmission)
 	t.Run("late_session_revocation", TestGameJoinTargetsRecheckSessionBeforeResponse)
-	if after := gameJoinFixtureWorkers(t); after != before {
+	if after := handlerLimiterWorkers(t); after != before {
 		t.Fatalf("game join fixtures retained limiter workers: before=%d after=%d", before, after)
 	}
 }
 
 func TestGameJoinUsesInjectedLimiterWithoutCreatingWorkers(t *testing.T) {
 	limiter := newGameJoinTestLimiter(t)
-	before := gameJoinFixtureWorkers(t)
+	before := handlerLimiterWorkers(t)
 	first := NewGameJoinHandler(nil, nil, nil, nil, limiter)
 	second := NewGameJoinHandler(nil, nil, nil, nil, limiter)
 	missing := NewGameJoinHandler(nil, nil, nil, nil, nil)
-	if after := gameJoinFixtureWorkers(t); after != before {
+	if after := handlerLimiterWorkers(t); after != before {
 		t.Fatalf("handler constructor spawned workers: before=%d after=%d", before, after)
 	}
 	for i := 0; i < 60; i++ {
