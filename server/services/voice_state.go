@@ -577,7 +577,17 @@ func (s *voiceService) creditUsageSession(sessionID, instanceID string, isCloud 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	var err error
-	if recorder, ok := s.livekitGetter.(voiceUsageRecorder); ok {
+	if handoff, ok := s.livekitGetter.(interface {
+		voiceUsageRecorder
+		EnqueueVoiceUsage(context.Context, string, string, int, int, int) error
+	}); ok {
+		// Commit the pending identity first. A failed/ambiguous application can
+		// then be recovered without depending on this goroutine remaining alive.
+		err = handoff.EnqueueVoiceUsage(ctx, sessionID, instanceID, year, int(month), seconds)
+		if err == nil {
+			err = handoff.RecordVoiceUsage(ctx, sessionID, instanceID, year, int(month), seconds)
+		}
+	} else if recorder, ok := s.livekitGetter.(voiceUsageRecorder); ok {
 		err = recorder.RecordVoiceUsage(ctx, sessionID, instanceID, year, int(month), seconds)
 	} else {
 		// Narrow legacy adapters retain their existing additive contract.
