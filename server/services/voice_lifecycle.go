@@ -60,14 +60,7 @@ func (s *voiceService) UpdateActivity(userID string) {
 // disconnected longer than orphanGracePeriod. Runs every 5s for responsive
 // cleanup after grace expires — per-user timestamps prevent premature removal.
 func (s *voiceService) StartOrphanCleanup() {
-	go func() {
-		ticker := time.NewTicker(5 * time.Second)
-		defer ticker.Stop()
-
-		for range ticker.C {
-			s.sweepOrphanStates()
-		}
-	}()
+	s.orphanWorker.start(5*time.Second, s.sweepOrphanStates)
 }
 
 // sweepOrphanStates uses two-phase per-user tracking:
@@ -742,14 +735,7 @@ func (s *voiceService) EnforceModerationOnJoin(ctx context.Context, serverID, ch
 // StartAFKChecker periodically checks for inactive voice users and kicks them.
 // Runs every 30 seconds — checks each user's LastActivity against the server's afk_timeout_minutes.
 func (s *voiceService) StartAFKChecker() {
-	go func() {
-		ticker := time.NewTicker(30 * time.Second)
-		defer ticker.Stop()
-
-		for range ticker.C {
-			s.sweepAFKUsers()
-		}
-	}()
+	s.afkWorker.start(30*time.Second, s.sweepAFKUsers)
 }
 
 // sweepAFKUsers finds and kicks users who exceeded their server's AFK timeout.

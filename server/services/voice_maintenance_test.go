@@ -1,0 +1,100 @@
+package services
+
+import (
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+)
+
+func TestVoiceMaintenanceHasOwnedShutdown(t *testing.T) {
+	if _, ok := any(&voiceService{}).(interface{ StopMaintenance() }); !ok {
+		t.Fatal("voice cleanup workers have no owner shutdown")
+	}
+}
+
+func TestVoiceMaintenanceStopJoinsSweepAndConcurrentOwners(t *testing.T) {
+	var worker voiceMaintenanceWorker
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	var calls atomic.Int32
+	sweep := func() {
+		if calls.Add(1) == 1 {
+			close(entered)
+		}
+		<-release
+	}
+	var starts sync.WaitGroup
+	for i := 0; i < 16; i++ {
+		starts.Add(1)
+		go func() { defer starts.Done(); worker.start(time.Millisecond, sweep) }()
+	}
+	starts.Wait()
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("sweep not started")
+	}
+	done := make(chan struct{})
+	go func() {
+		var stops sync.WaitGroup
+		for i := 0; i < 16; i++ {
+			stops.Add(1)
+			go func() { defer stops.Done(); worker.stop() }()
+		}
+		stops.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		t.Fatal("Stop returned before sweep exited")
+	case <-time.After(10 * time.Millisecond):
+	}
+	close(release)
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("Stop did not join sweep")
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("duplicate sweeps: %d", calls.Load())
+	}
+	worker.start(time.Millisecond, func() { t.Error("terminal worker restarted") })
+	worker.stop()
+}
+
+func TestVoiceMaintenanceStopBeforeStart(t *testing.T) {
+	var worker voiceMaintenanceWorker
+	worker.stop()
+	worker.start(time.Millisecond, func() { t.Error("stopped worker started") })
+	if worker.done != nil {
+		t.Fatal("Stop-before-Start created a worker")
+	}
+	worker.stop()
+}
+
+func TestVoiceMaintenancePublicOwnersJoin(t *testing.T) {
+	s := &voiceService{}
+	s.StartOrphanCleanup()
+	s.StartAFKChecker()
+	firstOrphan, firstAFK := s.orphanWorker.done, s.afkWorker.done
+	s.StartOrphanCleanup()
+	s.StartAFKChecker()
+	if firstOrphan != s.orphanWorker.done || firstAFK != s.afkWorker.done {
+		t.Fatal("duplicate worker launch")
+	}
+	s.StopMaintenance()
+	for _, done := range []chan struct{}{firstOrphan, firstAFK} {
+		select {
+		case <-done:
+		default:
+			t.Fatal("worker not joined")
+		}
+	}
+	s.StopMaintenance()
+	s.StartOrphanCleanup()
+	s.StartAFKChecker()
+	if firstOrphan != s.orphanWorker.done || firstAFK != s.afkWorker.done {
+		t.Fatal("terminal service restarted")
+	}
+}
