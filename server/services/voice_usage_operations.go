@@ -7,7 +7,7 @@ import (
 )
 
 // voiceUsageOperations closes root admission while allowing already admitted
-// operations to register their child credits before releasing their own slot.
+// operations to register child credits and media cleanup before releasing their own slot.
 // The final slot closes done, so child Add never races a zero-count Wait.
 type voiceUsageOperations struct {
 	mu      sync.Mutex

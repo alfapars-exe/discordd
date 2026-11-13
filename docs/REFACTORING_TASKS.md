@@ -1305,3 +1305,9 @@ Terminal current-head receipt: PR29814a965ea completed36/36 SUCCESS. Exact-head 
 - Music stops still start concurrently before LiveKit eviction; a sweep-local wait group now joins them before releasing the accepted producer slot. The child uses logx.Go for panic reporting.
 - Host targeted maintenance/orphan tests passed 10 repetitions (3.480s); Linux race passed 10 repetitions (6.478s). PostgreSQL-specific tests were skipped in these DSN-free runs. Services vet and golangci-lint passed (0 issues). Physical media and all other asynchronous voice paths remain open.
 - PR #298 head b69a98e3 Server CI run 43514109922 remains in progress; last checked seven jobs successful, no failed job. This new local child-ownership fix is not yet included in that CI head.
+
+### 2026-11-14 — Own normal-leave media children
+
+- Blocking music-hook regression failed before fix: ShutdownUsageProducers returned before accepted LeaveChannel music cleanup. Normal leave now registers both dual-identity LiveKit eviction and music stop as children of its admitted root. Caller remains asynchronous; terminal owner waits for completion.
+- Targeted VoiceUsage/VoiceMaintenance/LeaveChannel tests passed 10 repetitions on host (1.969s) and Linux race (4.452s); services vet and lint passed. DSN-free runs do not establish PostgreSQL-specific acceptance.
+- Cross-channel join, move, admin, webhook and mute media ownership remain open. Full active-session/crash-before-enqueue/physical-media acceptance remains open. This change is local to integration; PR #298 CI currently verifies earlier head 59a916e1.

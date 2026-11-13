@@ -185,3 +185,33 @@ func waitVoiceUsageAdmissionClosed(t *testing.T, group *voiceUsageOperations) {
 		time.Sleep(time.Millisecond)
 	}
 }
+
+func TestVoiceUsageShutdownWaitsForLeaveMusicCleanup(t *testing.T) {
+	svc, _ := newTestVoiceService()
+	s := svc.(*voiceService)
+	entered, release, stopped := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	t.Cleanup(func() { once.Do(func() { close(release) }); s.ShutdownUsageProducers() })
+	s.musicBotHook = &mockMusicBotHook{StopAllForChannelFn: func(string) { close(entered); <-release }}
+	s.states["victim"] = &models.VoiceState{UserID: "victim", ChannelID: "ch1", ServerID: "srv1"}
+	if err := s.LeaveChannel("victim"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("leave music cleanup not started")
+	}
+	go func() { s.ShutdownUsageProducers(); close(stopped) }()
+	select {
+	case <-stopped:
+		t.Fatal("shutdown returned before leave music cleanup")
+	case <-time.After(20 * time.Millisecond):
+	}
+	once.Do(func() { close(release) })
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("shutdown did not join leave music cleanup")
+	}
+}
