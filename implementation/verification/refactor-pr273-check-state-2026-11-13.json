@@ -16,5 +16,21 @@
     "check_run_url": "https://api.github.com/repos/alfapars-exe/discordd/check-runs/131961420497"
   },
   "all_steps_completed_successfully": true,
-  "scope": "Workflow is terminal success; one check record contradicts its own completion timestamp/result. Do not report all 36 checks terminal until state is reconciled. No source change or rerun was made."
+  "scope": "Workflow is terminal success; one check record contradicts its own completion timestamp/result. Do not report all 36 checks terminal until state is reconciled. No source change or rerun was made.",
+  "resolution": {
+    "action": "Requested rerun of terminal workflow migration job after repeated contradictory check records",
+    "run_attempt": 2,
+    "workflow_status": "completed",
+    "workflow_conclusion": "success",
+    "new_check": {
+      "id": 131996969735,
+      "name": "Migration filename hygiene",
+      "status": "completed",
+      "conclusion": "success",
+      "head_sha": "bb7ee0365f0b63c670d0e7067d2a4e7ad192ab93",
+      "completed_at": "2026-11-13T15:58:35Z"
+    },
+    "pr_checks": "36/36 completed SUCCESS, verified live",
+    "source_unchanged": true
+  }
 }
