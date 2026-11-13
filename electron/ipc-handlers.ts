@@ -1,3 +1,4 @@
+import { registerAppCommandIPC } from "./app-command-ipc";
 import { createOverlayMediaBroker } from "./overlay-media-broker";
 import { registerCS2JoinIPC } from "./cs2-join-ipc";
 import { registerGameNameIPC } from "./registered-game-name-ipc";
@@ -38,7 +39,6 @@ const APP_SETTING_VALIDATORS: Record<string, (v: unknown) => v is boolean> = {
   hardwareAcceleration: (v): v is boolean => typeof v === "boolean",
 };
 
-const MAX_CLIPBOARD_BYTES = 10 * 1024 * 1024; // 10 MB — prevent renderer-side DoS
 const MAX_BADGE_COUNT = 99999;
 const MAX_BADGE_ICON_BYTES = 256 * 1024; // 256 KB data URL
 const MAX_PTT_KEYCODE_LEN = 64; // generous bound for any keycode string
@@ -282,10 +282,9 @@ export function registerIpcHandlers(): () => Promise<void> {
     return registeredGames.setOverlayAllowed(id, allowed);
   });
   // ─── App / version ──────────────────────────────────────────────
-  ipcMain.handle("get-version", () => app.getVersion());
-  ipcMain.handle("relaunch", () => {
-    app.relaunch();
-    app.quit();
+  registerAppCommandIPC(ipcMain, {
+    getVersion: () => app.getVersion(), relaunch: () => app.relaunch(), quit: () => app.quit(),
+    writeClipboard: text => clipboard.writeText(text), assertString,
   });
 
   // ─── Crash report flush ──────────────────────────────────────────
@@ -482,11 +481,7 @@ export function registerIpcHandlers(): () => Promise<void> {
   ipcMain.handle("close-window", () => getMainWindow()?.close());
 
   // ─── Clipboard (sandbox-safe path via main process) ──────────────
-  ipcMain.handle("write-clipboard", (_e, text: unknown) => {
-    // Audit 2026-05-27: prevent renderer-induced clipboard DoS.
-    assertString(text, "clipboard text", MAX_CLIPBOARD_BYTES);
-    clipboard.writeText(text);
-  });
+
 
   // ─── App settings (general / windows) ────────────────────────────
   ipcMain.handle("get-app-settings", () => {
