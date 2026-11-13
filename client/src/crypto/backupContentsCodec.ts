@@ -1,6 +1,8 @@
 import { fromBase64 } from "./signalProtocol";
 import { decodeBackupSessionState } from "./backupSessionCodec";
 
+export const BACKUP_VERSION = 1;
+
 export class InvalidBackupContentsError extends Error {
   constructor() { super("Invalid backup contents"); this.name = "InvalidBackupContentsError"; }
 }
@@ -33,7 +35,7 @@ export function decodeBackupContents(json: string): BackupContents {
   let parsed: unknown;
   try { parsed = JSON.parse(json); } catch { return invalid(); }
   const value = row(parsed);
-  if (value.version !== 1) invalid();
+  if (value.version !== BACKUP_VERSION) invalid();
   bytes(row(value.identity), ["publicKey", "privateKey"]);
   bytes(row(value.signing), ["publicKey", "privateKey"]);
   const registration = row(value.registration);
