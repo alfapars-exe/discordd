@@ -1,0 +1,23 @@
+{
+  "source": "5f38cf12",
+  "canonical_pr": 292,
+  "canonical_head": "276a927a4bc638b259adbbabbaa480b1ce5a08df",
+  "change": "Shared concurrent worker stop assertion; all four owner constructors and eight concurrent calls preserved.",
+  "before": {
+    "sonar_new_duplication_percent": 14.4
+  },
+  "after": {
+    "sonar_new_duplication_percent": 0.0,
+    "sonar_check": "SUCCESS",
+    "canonical_targeted_tests_count": 5,
+    "canonical_targeted_race_count": 5,
+    "integrated_targeted_tests": "PASS: pkg/cache, middleware, services, main",
+    "integrated_vet": "PASS ./...",
+    "integrated_build": "PASS ./...",
+    "integrated_targeted_race": "PASS: pkg/cache, middleware, services, main; exit 0"
+  },
+  "limitations": [
+    "Full PR CI still running at receipt creation.",
+    "No physical desktop or full live process shutdown acceptance."
+  ]
+}
