@@ -35,6 +35,7 @@ func TestRequire_BotTokenSetsBotUser(t *testing.T) {
 	// authService is nil: the bot branch returns before any JWT validation,
 	// so the human path's authService is never touched on this request.
 	m := NewAuthMiddleware(nil, userRepo, fakeBotValidator{id: "bot_x"})
+	t.Cleanup(m.Stop)
 
 	var gotUser *models.User
 	handler := m.Require(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
@@ -72,6 +73,7 @@ func TestRequire_BannedBotRejected(t *testing.T) {
 		},
 	}
 	m := NewAuthMiddleware(nil, userRepo, fakeBotValidator{id: "bot_x"})
+	t.Cleanup(m.Stop)
 
 	handlerRan := false
 	handler := m.Require(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
