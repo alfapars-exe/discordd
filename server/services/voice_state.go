@@ -525,7 +525,7 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 	// independently reconnects/tears it down. Same orphaned-stream risk as
 	// MoveUser and AdminDisconnectUser, so it gets the same cleanup.
 	if oldChannelID != "" && oldChannelID != channelID {
-		go s.removeParticipantAndScreenShareFromLiveKit(oldChannelID, userID)
+		s.usageOperations.child(func() { s.removeParticipantAndScreenShareFromLiveKit(oldChannelID, userID) })
 		// Cross-channel switch — credit the old session's duration to the
 		// instance it ran on. Self-hosted instances are skipped.
 		s.dispatchUsageCredit(oldUsageSessionID, oldInstanceID, oldIsCloud, oldJoinedAt, time.Now())
@@ -536,7 +536,7 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 		// oldChannelEmpty's own comment (above, still under the lock) for
 		// why this exists as a second, hand-synced copy of that check.
 		if oldChannelEmpty && s.musicBotHook != nil {
-			go s.musicBotHook.StopAllForChannel(oldChannelID)
+			s.usageOperations.child(func() { s.musicBotHook.StopAllForChannel(oldChannelID) })
 		}
 
 		// F8 review LOW fix: same log line/format LeaveChannel emits (see

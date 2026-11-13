@@ -1311,3 +1311,9 @@ Terminal current-head receipt: PR29814a965ea completed36/36 SUCCESS. Exact-head 
 - Blocking music-hook regression failed before fix: ShutdownUsageProducers returned before accepted LeaveChannel music cleanup. Normal leave now registers both dual-identity LiveKit eviction and music stop as children of its admitted root. Caller remains asynchronous; terminal owner waits for completion.
 - Targeted VoiceUsage/VoiceMaintenance/LeaveChannel tests passed 10 repetitions on host (1.969s) and Linux race (4.452s); services vet and lint passed. DSN-free runs do not establish PostgreSQL-specific acceptance.
 - Cross-channel join, move, admin, webhook and mute media ownership remain open. Full active-session/crash-before-enqueue/physical-media acceptance remains open. This change is local to integration; PR #298 CI currently verifies earlier head 59a916e1.
+
+### 2026-11-14 — Own cross-channel switch media children
+
+- Blocking music-hook regression failed before fix for cross-channel JoinChannel shutdown. Old-room eviction and music stop now register beneath the accepted join operation, matching normal leave ownership.
+- Integrated targeted tests passed 10 repetitions (4.919s), Linux race passed 10 (11.182s); services vet/lint passed. DSN-free runs skip PostgreSQL-specific tests.
+- Canonical transfer initially included unrelated pendingJoins code and failed compilation; restored canonical voice_state.go from its own HEAD and applied only the four leave/switch dispatch changes. Canonical PostgreSQL validation is still running and no delivery success is claimed yet. Admin/move/webhook/mute ownership remains open.
