@@ -40,7 +40,7 @@ import ConfirmDialog from "../shared/ConfirmDialog";
 import ImageLightbox from "../shared/ImageLightbox";
 import DownloadPromptModal from "../shared/DownloadPromptModal";
 import WelcomeModal from "../shared/WelcomeModal";
-import SettingsModal from "../settings/SettingsModal";
+const SettingsModal = lazy(() => import("../settings/SettingsModal"));
 // VoiceProvider is lazy + conditionally mounted so the ~528 KiB livekit chunk
 // stays off /channels' initial load (Mayıs 28 2026 Lighthouse audit). The
 // component itself short-circuits when !isInVoice (see VoiceProvider.tsx:217),
@@ -104,6 +104,7 @@ import MessageDeepLinkHandler from "./MessageDeepLinkHandler";
 import "../../styles/voice-overlay.css";
 
 function AppLayout() {
+  const settingsOpen = useSettingsStore(state => state.isOpen);
   const { ownerId: overlayRenderOwner, generation: overlayRenderGeneration } = getAuthSessionSnapshot();
   useVoiceOverlayCleanup();
   const { sendTyping, sendDMTyping, sendPresenceUpdate, sendVoiceJoin, sendVoiceLeave, sendVoiceStateUpdate, sendWS, connectionStatus, reconnectAttempt } =
@@ -413,7 +414,7 @@ function AppLayout() {
       <ConnectionBanner status={connectionStatus} reconnectAttempt={reconnectAttempt} />
 
       {/* Settings modal */}
-      <SettingsModal />
+      {settingsOpen && <Suspense fallback={null}><SettingsModal /></Suspense>}
 
       {/* Confirm dialog */}
       <ConfirmDialog />
