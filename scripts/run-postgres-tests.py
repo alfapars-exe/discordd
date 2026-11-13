@@ -15,6 +15,7 @@ REQUIRED_PACKAGES = {
 }
 REDACTED_DATABASE = "[test-database]"
 REQUIRED_SERVER_POSTGRES_TEST = "TestPurgeExpiredNotificationsPostgres"
+REQUIRED_ACTIVE_PROCESS_TEST = "TestActiveVoiceProcessPostgresSignal"
 REQUIRED_SERVICE_POSTGRES_TESTS = (
     "TestPostgresRolePatchConcurrentChanges",
     "TestPostgresMemberRoleReplacement",
@@ -58,6 +59,7 @@ def main():
     skipped = []
     completed = set()
     postgres_retention_passed = False
+    active_process_passed = False
     usage_migration_passed = False
     invalid_output = False
     reported_failure = False
@@ -81,12 +83,16 @@ def main():
             # test). Every skip in repository/database remains forbidden, and
             # the PostgreSQL retention contract itself must always execute.
             if (event.get("Package") != "github.com/argeinfina/hichat"
-                    or event.get("Test") == REQUIRED_SERVER_POSTGRES_TEST):
+                    or event.get("Test") in {REQUIRED_SERVER_POSTGRES_TEST, REQUIRED_ACTIVE_PROCESS_TEST}):
                 skipped.append(event["Test"])
         if (event.get("Action") == "pass"
                 and event.get("Package") == "github.com/argeinfina/hichat"
                 and event.get("Test") == REQUIRED_SERVER_POSTGRES_TEST):
             postgres_retention_passed = True
+        if (event.get("Action") == "pass"
+                and event.get("Package") == "github.com/argeinfina/hichat"
+                and event.get("Test") == REQUIRED_ACTIVE_PROCESS_TEST):
+            active_process_passed = True
         if (event.get("Action") == "pass"
                 and event.get("Package") == "github.com/argeinfina/hichat/database"
                 and event.get("Test") == "TestPostgresVoiceUsageMigrationPreservesTotals"):
@@ -109,9 +115,11 @@ def main():
         print("Required PostgreSQL packages did not complete: " + ", ".join(sorted(missing_packages)), file=sys.stderr)
     if not postgres_retention_passed:
         print(f"Required PostgreSQL test did not pass: {REQUIRED_SERVER_POSTGRES_TEST}", file=sys.stderr)
+    if not active_process_passed:
+        print(f"Required active process test did not pass: {REQUIRED_ACTIVE_PROCESS_TEST}", file=sys.stderr)
     if not usage_migration_passed:
         print("Required voice usage migration test did not pass", file=sys.stderr)
-    if code or skipped or missing_packages or not postgres_retention_passed or not usage_migration_passed or invalid_output or reported_failure:
+    if code or skipped or missing_packages or not postgres_retention_passed or not active_process_passed or not usage_migration_passed or invalid_output or reported_failure:
         return code or 1
     # Delivery, authorization and collector lifecycle require real PostgreSQL waits.
 

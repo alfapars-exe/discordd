@@ -1495,3 +1495,10 @@ Terminal current-head receipt: PR29814a965ea completed36/36 SUCCESS. Exact-head 
 - Publishedfbf10657 completed36/36 checks and31/31 ServerCI jobs SUCCESS. Exact-head receipt: `implementation/verification/refactor-pr298-fbf-terminal-2026-11-14.json`.
 - Canonical transfer initially imported integration-specific panic_type log policy, failing existing completion-log tests. Corrected by extracting Run from canonical HEAD recovery body, preserving panic field and pkg.ErrText error redaction without weakening tests. Host services/logx tests10 passed0.998s/1.032s; full vet/build/lint passed.
 - Published3a16b910 only after previous terminal CI was archived. New-head CI/native/race pending; receipt: `implementation/verification/refactor-panic-isolation-canonical-2026-11-14.json`. No native/physical/process success inferred from host tests.
+
+### 2026-11-14 — Require active voice process SIGTERM in Linux native lane
+
+- Added separate test-executable process invoking production main, fresh minimal environment, owned loopback DB and normal login/one-shot WS ticket/voice_join. Requires socket active before SIGTERM, successful exit/graceful marker and exactly one applied native credit equal to monthly total. Not release-artifact or physical media proof.
+- Native runner now rejects missing/skip/wrong-package process result. Integration runner15 and canonical runner10 tests passed; full vet/build/lint passed in both trees. Windows runtime skipped as expected; no POSIX acceptance claimed yet.
+- Canonical transfer initially lacked integration backendWatchTestPool; supplied a scoped loopback/verified-TLS owned DB fixture. Source review corrected child DSN from pgx KV ConnString to URL preserving TLS parameters before CI.
+- Archived previous3a16b910 terminal36/36 checks and31/31 jobs in `implementation/verification/refactor-pr298-3a16-terminal-2026-11-14.json`, then published6162072e process contract. Receipt: `implementation/verification/refactor-active-process-ci-contract-2026-11-14.json`. New-head CI is authoritative; local standalone-binary Docker and physical acceptance remain open.

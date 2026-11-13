@@ -101,6 +101,7 @@ class PostgreSQLRunnerTests(unittest.TestCase):
     def completed(self):
         return [
             {"Action": "pass", "Package": "github.com/argeinfina/hichat", "Test": "TestPurgeExpiredNotificationsPostgres"},
+            {"Action": "pass", "Package": "github.com/argeinfina/hichat", "Test": "TestActiveVoiceProcessPostgresSignal"},
             {"Action": "pass", "Package": "github.com/argeinfina/hichat"},
             {"Action": "pass", "Package": "github.com/argeinfina/hichat/repository"},
             {"Action": "pass", "Package": "github.com/argeinfina/hichat/database", "Test": "TestPostgresVoiceUsageMigrationPreservesTotals"},
@@ -156,3 +157,10 @@ class PostgreSQLRunnerTests(unittest.TestCase):
                 with self.assertRaisesRegex(SystemExit, "loopback"):
                     runner.main()
                 launch.assert_not_called()
+
+    def test_active_process_contract_cannot_be_missing_skipped_or_wrong_package(self):
+        name = "TestActiveVoiceProcessPostgresSignal"
+        without = [event for event in self.completed() if event.get("Test") != name]
+        self.assertEqual(self.execute(without), 1)
+        self.assertEqual(self.execute(without + [{"Action": "skip", "Package": "github.com/argeinfina/hichat", "Test": name}]), 1)
+        self.assertEqual(self.execute(without + [{"Action": "pass", "Package": "github.com/argeinfina/hichat/database", "Test": name}]), 1)
