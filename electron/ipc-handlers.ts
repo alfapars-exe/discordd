@@ -1,3 +1,4 @@
+import { registerOverlayActionIPC } from "./overlay-action-ipc";
 import { createOverlayMediaBroker } from "./overlay-media-broker";
 import { registerCS2JoinIPC } from "./cs2-join-ipc";
 import { registerGameNameIPC } from "./registered-game-name-ipc";
@@ -121,45 +122,7 @@ export function registerIpcHandlers(): void {
     assertTrustedMainWindowSender(event);
     return resetVoiceOverlayLayout();
   });
-  ipcMain.handle("overlay-voice-action", (event, action: unknown, session: unknown) => {
-    const request = takeVoiceOverlayAction(event, action, session);
-    const main = getMainWindow();
-    if (!request || !main || main.isDestroyed()) return false;
-    main.webContents.send("overlay-voice-action", request);
-    return true;
-  });
-  ipcMain.handle("overlay-open-inbox", (event, session: unknown) => {
-    const request = takeVoiceOverlayOpenInboxIntent(event, session);
-    const main = getMainWindow();
-    if (!request || !main || main.isDestroyed()) return false;
-    main.webContents.send("overlay-open-inbox", request);
-    return true;
-  });
-  ipcMain.handle("confirm-overlay-open-inbox", (event, session: unknown) => {
-    return confirmVoiceOverlayOpenInbox(event, session, getMainWindow());
-  });
-  ipcMain.handle("overlay-prepare-notification-reply", (event, raw: unknown) => {
-    const request = takeVoiceOverlayNotificationReplyIntent(event, raw), main = getMainWindow();
-    if (!request || !main || main.isDestroyed()) return false;
-    main.webContents.send("overlay-prepare-notification-reply", request); return true;
-  });
-  ipcMain.handle("confirm-overlay-prepare-notification-reply", (event, raw: unknown) => confirmVoiceOverlayNotificationReply(event, raw, getMainWindow()));
-  ipcMain.handle("overlay-open-chat", (event, session: unknown) => {
-    const request = takeVoiceOverlayOpenChatIntent(event, session);
-    const main = getMainWindow();
-    if (!request || !main || main.isDestroyed()) return false;
-    main.webContents.send("overlay-open-chat", request);
-    return true;
-  });
-  ipcMain.handle("confirm-overlay-open-chat", (event, session: unknown) => {
-    return confirmVoiceOverlayOpenChat(event, session, getMainWindow());
-  });
-  ipcMain.handle("overlay-open-chat-composer", (event, session: unknown) => {
-    return !!takeVoiceOverlayOpenChatComposerIntent(event, session, getMainWindow());
-  });
-  ipcMain.handle("overlay-chat-send", (event, request: unknown) => sendOverlayChatMessage(event, request, getMainWindow()));
-  ipcMain.handle("close-overlay-chat-composer", (event, session: unknown) => closeOverlayChatComposer(event, session));
-  ipcMain.handle("resolve-overlay-chat-send", (event, request: unknown) => resolveOverlayChatSend(event, request, getMainWindow()));
+  registerOverlayActionIPC(ipcMain, { takeVoiceOverlayAction, takeVoiceOverlayOpenInboxIntent, confirmVoiceOverlayOpenInbox, takeVoiceOverlayNotificationReplyIntent, confirmVoiceOverlayNotificationReply, takeVoiceOverlayOpenChatIntent, confirmVoiceOverlayOpenChat, takeVoiceOverlayOpenChatComposerIntent, sendOverlayChatMessage, closeOverlayChatComposer, resolveOverlayChatSend, getMainWindow });
   const overlayShortcut = createOverlayShortcutController({
     supported: process.platform === "win32",
     register: (accelerator, callback) => globalShortcut.register(accelerator, callback),
