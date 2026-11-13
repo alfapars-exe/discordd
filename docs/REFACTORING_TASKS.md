@@ -899,3 +899,9 @@ LiveKit silme düzeltmesinin mevcut PR #222 ile sonradan açılan PR #270'te ayn
 - Before-fix regression proved an old HUD hide callback could hide a replacement chat action window. Hide, move and will-move handlers now require their original native window to remain the current owner.
 - Integration 8c7ca9d2 compile/Electron: 337 passed, 1 skipped (`%TEMP%/hichat-hud-owner-after.log`). PR #279 head 7d460948 compile/Electron: 298 passed, 1 skipped (`hichat-hud-owner-pr.log`), pushed; fresh CI pending. Before-fix evidence: `hichat-hud-owner-before.log`.
 - Repaired a mixed-encoding RF20 status row introduced during the previous documentation edit; the entire status document now decodes as UTF-8. Remaining lifecycle ownership and physical display acceptance stay open.
+
+### RF20 — failed HUD load ownership (2026-11-13)
+
+- Before-fix fixture proved a rejected passive HUD load retained the native window. The rejection is now consumed, the current owner and its children are closed, and ordinary snapshots cannot produce a retry loop. Disable/re-enable or explicit close permits recovery. A late failure from a retired owner cannot close its replacement.
+- Integration fa9bac98 compile/Electron: 339 passed, 1 skipped (`%TEMP%/hichat-hud-load-after.log`). PR #279 head e4fa9bac compile/Electron: 300 passed, 1 skipped (`hichat-hud-load-pr.log`), pushed; fresh head CI pending. Before-fix evidence: `hichat-hud-load-before.log`.
+- Physical compositor and display recovery remain unverified; this is injected native-window contract evidence.
