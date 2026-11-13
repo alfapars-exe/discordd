@@ -181,7 +181,14 @@ type RateLimiters struct {
 // this call, specifically so it can be threaded through to
 // services.NewMetricsCollector below) — nil-safe, so tests/callers that
 // don't care about readiness integration can pass nil.
-func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *config.Config, encryptionKey []byte, reachabilityReporter services.LiveKitReachabilityReporter) (*Services, *RateLimiters, services.MetricsCollector) {
+type serviceHub interface {
+	ws.EventPublisher
+	gameActivityHubPresence
+	SetDurableChannelSends(bool)
+	OnGameJoinOffer(func(string, uint64, any) any)
+}
+
+func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.Config, encryptionKey []byte, reachabilityReporter services.LiveKitReachabilityReporter) (*Services, *RateLimiters, services.MetricsCollector) {
 	// Order-sensitive services
 	channelPermService := services.NewChannelPermissionService(
 		repos.ChannelPermission, repos.Role, repos.Channel, hub,
@@ -241,17 +248,14 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	if database.IsPostgres(db) {
 		services.ConfigureChannelDelivery(messageService, db)
 		channelMessageNotificationWorker.SetDurablePublication(true)
-		if capabilities, ok := hub.(interface{ SetDurableChannelSends(bool) }); ok {
-			capabilities.SetDurableChannelSends(true)
-		}
+		hub.SetDurableChannelSends(true)
 	}
 	uploadService := services.NewUploadService(repos.Attachment, cfg.Upload.Dir, cfg.Upload.MaxSize)
 	profileUpdateNotifier := services.NewProfileUpdateNotifier(repos.Preferences, repos.Friendship, repos.Notification, hub)
 	onlineFriendNotifier := services.NewOnlineFriendNotifier(repos.User, repos.Preferences, repos.Friendship, repos.Notification, hub, hub)
 	roleTransactions := repository.NewServerMembershipTxRunner(db)
 	profileAudiencePolicy := services.NewProfileAudiencePolicy(repos.Preferences, repos.Friendship, repos.Server)
-	presenceHub, _ := hub.(gameActivityHubPresence)
-	gameActivityPolicy := services.NewGameActivityPrivacyPolicy(repos.Preferences, repos.Friendship, repos.Server, gameActivityPresenceAdapter{hub: presenceHub}, repos.Ban)
+	gameActivityPolicy := services.NewGameActivityPrivacyPolicy(repos.Preferences, repos.Friendship, repos.Server, gameActivityPresenceAdapter{hub: hub}, repos.Ban)
 	gameActivityService := services.NewGameActivityService(gameActivityPolicy, repos.Friendship, repos.Server, hub)
 	memberService := services.NewMemberService(gameActivityService, profileAudiencePolicy, repos.User, repos.Role, repos.Ban, repos.MemberTimeout, repos.Server, roleTransactions, hub, voiceService, auditLogService, profileUpdateNotifier)
 	roleService := services.NewRoleService(repos.Role, roleTransactions, hub, auditLogService)
@@ -367,25 +371,21 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 
 	preferencesService := services.NewPreferencesService(repos.Preferences, profileAudiencePolicy, gameActivityService, hub)
 	gameJoinService := services.NewGameJoinService(gameActivityService, services.NewGameJoinPolicy(gameActivityPolicy, repos.Preferences, repos.Friendship, repos.User, repos.AccountLifecycle, repos.Server, repos.Ban, repos.Channel, channelPermService, voiceService))
-	if connector, ok := hub.(interface {
-		OnGameJoinOffer(func(string, uint64, any) any)
-	}); ok {
-		connector.OnGameJoinOffer(func(user string, connection uint64, data any) any {
-			raw, err := json.Marshal(data)
-			if err != nil || len(raw) > 2048 {
-				return nil
-			}
-			decoder := json.NewDecoder(bytes.NewReader(raw))
-			decoder.DisallowUnknownFields()
-			var input services.GameJoinOfferInput
-			if decoder.Decode(&input) != nil {
-				return nil
-			}
-			ctx, cancel := services.BroadcastContext()
-			defer cancel()
-			return gameJoinService.SetOffer(ctx, user, connection, input)
-		})
-	}
+	hub.OnGameJoinOffer(func(user string, connection uint64, data any) any {
+		raw, err := json.Marshal(data)
+		if err != nil || len(raw) > 2048 {
+			return nil
+		}
+		decoder := json.NewDecoder(bytes.NewReader(raw))
+		decoder.DisallowUnknownFields()
+		var input services.GameJoinOfferInput
+		if decoder.Decode(&input) != nil {
+			return nil
+		}
+		ctx, cancel := services.BroadcastContext()
+		defer cancel()
+		return gameJoinService.SetOffer(ctx, user, connection, input)
+	})
 
 	appLogService := services.NewAppLogService(repos.AppLog)
 	clipRecordingService := services.NewClipRecordingService(voiceService, repos.Preferences, appLogService)
