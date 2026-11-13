@@ -82,6 +82,32 @@ vi.mock("./keyStorage", () => {
 import { createBackup, restoreFromBackup } from "./keyBackup";
 import * as keyStorageMock from "./keyStorage";
 
+describe("backup content version validation", () => {
+  it.each([0, 2, "1", null])("rejects version %j before accessing or clearing local keys", async (version) => {
+    vi.clearAllMocks();
+    const contents = {
+      version,
+      identity: { publicKey: btoa("identity"), privateKey: btoa("private") },
+      signing: { publicKey: btoa("signing"), privateKey: btoa("private") },
+      registration: { userId: "test-user", deviceId: "test-device", registrationId: 1 },
+      signedPreKeys: [], preKeys: [], sessions: [], senderKeys: [], trustedIdentities: [],
+    };
+    const decrypt = vi.spyOn(crypto.subtle, "decrypt").mockResolvedValueOnce(
+      new TextEncoder().encode(JSON.stringify(contents)).buffer,
+    );
+    try {
+      expect(await restoreFromBackup({
+        encryptedData: btoa("fixture"), nonce: btoa("fixture-nonce"), salt: btoa("fixture-salt"),
+        algorithm: "aes-256-gcm+pbkdf2-600000",
+      }, "fixture-password")).toBe(false);
+      expect(keyStorageMock.getAllCachedMessages).not.toHaveBeenCalled();
+      expect(keyStorageMock.clearAllE2EEData).not.toHaveBeenCalled();
+    } finally {
+      decrypt.mockRestore();
+    }
+  });
+});
+
 // The metadata double is module state, so it outlives a single test the way a
 // real IndexedDB store would. Reset it before every test in the file.
 let authGeneration = 15000;
