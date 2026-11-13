@@ -12,6 +12,13 @@ func initRateLimiters(
 	newMessage func(int, time.Duration, time.Duration) *ratelimit.MessageRateLimiter,
 ) *RateLimiters {
 	limiters := &RateLimiters{}
+	transferred := false
+	defer func() {
+		if !transferred {
+			limiters.Stop()
+		}
+	}()
+
 	// Rate limiters
 	limiters.Login = newLogin(5, 2*time.Minute)
 	// Chat messages: 10 per trailing 5s, sliding window, NO hard lockout
@@ -70,5 +77,6 @@ func initRateLimiters(
 
 	limiters.GameJoin = newLogin(60, time.Minute)
 
+	transferred = true
 	return limiters
 }
