@@ -18,6 +18,7 @@ class PostgreSQLRunnerTests(unittest.TestCase):
         "--- PASS: TestVoiceUsagePostgresShutdownFinalizesActiveSession (0.01s)\n"
         "--- PASS: TestVoiceUsagePostgresShutdownCreditsBeforeMediaWait (0.01s)\n"
         "--- PASS: TestVoiceUsagePostgresShutdownHandsOffAllBeforeMedia (0.01s)\n"
+        "--- PASS: TestVoiceUsagePostgresShutdownRecoversFailedApplication (0.01s)\n"
         "--- PASS: TestVoiceUsagePostgresShutdownJoinsPermissionRecheck (0.01s)\n"
         "--- PASS: TestVoiceUsagePostgresLateMemberRevocationPreservesCredit (0.01s)\n"
         "--- PASS: TestVoiceUsagePostgresServiceHandoffSurvivesApplyFailure (0.01s)\n"
@@ -89,7 +90,7 @@ class PostgreSQLRunnerTests(unittest.TestCase):
         self.assertEqual(self.execute(self.completed(), service_output=output), 1)
 
     def test_usage_contracts_must_run(self):
-        for name in ("TestVoiceUsagePostgresShutdownJoinsAcceptedCredit", "TestVoiceUsagePostgresShutdownFinalizesActiveSession", "TestVoiceUsagePostgresShutdownCreditsBeforeMediaWait", "TestVoiceUsagePostgresShutdownHandsOffAllBeforeMedia", "TestVoiceUsagePostgresShutdownJoinsPermissionRecheck", "TestVoiceUsagePostgresLateMemberRevocationPreservesCredit", "TestVoiceUsagePostgresServiceHandoffSurvivesApplyFailure", "TestVoiceUsagePostgresPendingRecovery", "TestVoiceUsagePostgresReplayTransaction", "TestVoiceUsageCreditPostgresDeadline", "TestVoiceUsageCreditPostgresAdditiveWrites"):
+        for name in ("TestVoiceUsagePostgresShutdownJoinsAcceptedCredit", "TestVoiceUsagePostgresShutdownFinalizesActiveSession", "TestVoiceUsagePostgresShutdownCreditsBeforeMediaWait", "TestVoiceUsagePostgresShutdownHandsOffAllBeforeMedia", "TestVoiceUsagePostgresShutdownRecoversFailedApplication", "TestVoiceUsagePostgresShutdownJoinsPermissionRecheck", "TestVoiceUsagePostgresLateMemberRevocationPreservesCredit", "TestVoiceUsagePostgresServiceHandoffSurvivesApplyFailure", "TestVoiceUsagePostgresPendingRecovery", "TestVoiceUsagePostgresReplayTransaction", "TestVoiceUsageCreditPostgresDeadline", "TestVoiceUsageCreditPostgresAdditiveWrites"):
             output = "\n".join(line for line in self.service_passes.splitlines() if name not in line)
             self.assertEqual(self.execute(self.completed(), service_output=output), 1)
 

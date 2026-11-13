@@ -1,6 +1,7 @@
 package services
 
 import (
+	"fmt"
 	"github.com/argeinfina/hichat/models"
 	"sync"
 	"testing"
@@ -47,5 +48,49 @@ func TestVoiceShutdownFinalizesActiveSessionsOnce(t *testing.T) {
 	owner.ShutdownVoiceSessions()
 	if len(getter.recorded) != 0 || len(music) != 0 {
 		t.Fatal("repeated shutdown repeated cleanup")
+	}
+}
+
+func TestVoiceShutdownBoundsAndJoinsMediaWorkers(t *testing.T) {
+	getter := &recordingUsageGetter{recorded: make(chan string, 8)}
+	svc, _ := newTestVoiceServiceWithLiveKitGetter(getter)
+	s := svc.(*voiceService)
+	for i := 0; i < 8; i++ {
+		id := fmt.Sprint(i)
+		s.states[id] = &models.VoiceState{UserID: id, ChannelID: "channel-" + id, ServerID: "server", UsageSessionID: "credit-" + id, LiveKitInstanceID: "instance", LiveKitIsCloud: true, JoinedAt: time.Now().Add(-time.Minute)}
+	}
+	entered, release, done := make(chan string, 8), make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	t.Cleanup(func() { once.Do(func() { close(release) }); <-done })
+	s.musicBotHook = &mockMusicBotHook{StopAllForChannelFn: func(channel string) { entered <- channel; <-release }}
+	go func() { s.ShutdownVoiceSessions(); close(done) }()
+	for i := 0; i < 4; i++ {
+		select {
+		case <-entered:
+		case <-time.After(time.Second):
+			t.Fatal("four media workers did not start")
+		}
+	}
+	if len(getter.recorded) != 8 {
+		t.Fatal("media workers started before all credits")
+	}
+	select {
+	case <-entered:
+		t.Fatal("fifth media worker started before release")
+	case <-time.After(20 * time.Millisecond):
+	}
+	select {
+	case <-done:
+		t.Fatal("shutdown did not join media workers")
+	default:
+	}
+	once.Do(func() { close(release) })
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("media workers did not finish")
+	}
+	if len(entered) != 4 || len(s.GetAllVoiceStates()) != 0 {
+		t.Fatal("remaining media cleanup incomplete")
 	}
 }

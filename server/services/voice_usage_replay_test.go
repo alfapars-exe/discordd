@@ -560,3 +560,57 @@ func TestVoiceUsagePostgresShutdownHandsOffAllBeforeMedia(t *testing.T) {
 		})
 	}
 }
+
+func TestVoiceUsagePostgresShutdownRecoversFailedApplication(t *testing.T) {
+	db := postgresServerFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	for _, q := range []string{
+		`INSERT INTO livekit_instances(id,url,api_key,api_secret) VALUES('shutdown-recover','http://127.0.0.1','fixture','fixture')`,
+		`CREATE FUNCTION reject_shutdown_fixture() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'shutdown fixture failure'; END $$`,
+		`CREATE TRIGGER reject_shutdown_fixture BEFORE INSERT OR UPDATE ON livekit_monthly_usage FOR EACH ROW EXECUTE FUNCTION reject_shutdown_fixture()`,
+	} {
+		if _, err := db.ExecContext(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	repo := repository.NewSQLiteLiveKitRepo(db)
+	svc, _ := newTestVoiceServiceWithLiveKitGetter(repo)
+	s := svc.(*voiceService)
+	s.states["reader"] = &models.VoiceState{UserID: "reader", ChannelID: "channel", ServerID: "default", UsageSessionID: "shutdown-recover-credit", LiveKitInstanceID: "shutdown-recover", LiveKitIsCloud: true, JoinedAt: time.Now().Add(-time.Minute)}
+	s.ShutdownVoiceSessions()
+	var seconds int
+	var pending bool
+	if err := db.QueryRowContext(ctx, `SELECT seconds,applied_at IS NULL FROM voice_usage_credits WHERE credit_id='shutdown-recover-credit'`).Scan(&seconds, &pending); err != nil || seconds <= 0 || !pending {
+		t.Fatalf("failed application lost final credit: seconds=%d pending=%v err=%v", seconds, pending, err)
+	}
+	if _, err := db.ExecContext(ctx, `DROP TRIGGER reject_shutdown_fixture ON livekit_monthly_usage`); err != nil {
+		t.Fatal(err)
+	}
+	freshRepo := repository.NewSQLiteLiveKitRepo(db)
+	stop := startVoiceUsageDelivery(ctx, &voiceService{livekitGetter: freshRepo}, time.Millisecond)
+	t.Cleanup(stop)
+	for {
+		var applied bool
+		if err := db.QueryRowContext(ctx, `SELECT applied_at IS NOT NULL FROM voice_usage_credits WHERE credit_id='shutdown-recover-credit'`).Scan(&applied); err != nil {
+			t.Fatal(err)
+		}
+		if applied {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal("restart did not apply final credit")
+		case <-time.After(time.Millisecond):
+		}
+	}
+	stop()
+	applied, err := freshRepo.(repository.VoiceUsageQueue).ApplyNextVoiceUsage(ctx)
+	if err != nil || applied {
+		t.Fatalf("recovered credit replayed: applied=%v err=%v", applied, err)
+	}
+	var used int64
+	if err := db.QueryRowContext(ctx, `SELECT COALESCE(SUM(used_seconds),0) FROM livekit_monthly_usage WHERE instance_id='shutdown-recover'`).Scan(&used); err != nil || used != int64(seconds) {
+		t.Fatalf("recovered final usage=%d want%d err=%v", used, seconds, err)
+	}
+}
