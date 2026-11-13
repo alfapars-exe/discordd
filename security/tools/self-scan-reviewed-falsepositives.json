@@ -12,7 +12,7 @@
     {
       "rule": "go.sql-concat",
       "path": "server/database/postgres_import_test.go",
-      "file_sha256": "02a1ad93236c44c0cb2c784443bdd9414cb0eaf932f4de6055a8e5253b541f86",
+      "file_sha256": "f04d434f933b457f9b697940a3453130ed983a87c58be795ba6fb1be27d7bd8c",
       "line_sha256": "fb9879437de4b36ace22b67076b4aba070f0d691abc561263c44310bda9993da",
       "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
       "proof_ref": "server/database/postgres_import.go:33-45,58-68,98-128,150-180,268;server/database/postgres_import_test.go:48-78,146-164"
