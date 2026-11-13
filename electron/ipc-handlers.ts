@@ -80,7 +80,7 @@ import {
 import { loginWithSavedCredentials } from "./credential-login";
 import { acquirePTTLease, releasePTTLease, retirePTTSender, registerMuteHotkey, registerPTT, unregisterMuteHotkey, unregisterPTT } from "./push-to-talk";
 import { getSerializedSources } from "./screen-picker";
-import { DEFAULT_APP_SETTINGS, getSettings, setSetting } from "./settings";
+import { isAppSettingKey, getSettings, setSetting } from "./settings";
 import { setTrayTooltip } from "./tray";
 import { wasPrelaunchChecked } from "./auto-updater";
 import { getMainWindow } from "./window";
@@ -505,7 +505,7 @@ export function registerIpcHandlers(): void {
     // Previously only validated key existence — value of any type was
     // persisted, enabling renderer-induced config corruption (e.g. setting
     // closeToTray=null silently broke the X button on next launch).
-    if (typeof key !== "string" || !(key in DEFAULT_APP_SETTINGS)) {
+    if (!isAppSettingKey(key)) {
       throw new TypeError(`unknown app setting: ${String(key)}`);
     }
     // Optional chain — undefined validator short-circuits to undefined,
