@@ -354,6 +354,7 @@ func TestPlay_InternalErrorDoesNotLeakDSN(t *testing.T) {
 func TestPlay_RateLimit(t *testing.T) {
 	music := &stubMusicService{}
 	limiter := ratelimit.NewMessageRateLimiter(2, time.Minute, 30*time.Second)
+	t.Cleanup(limiter.Stop)
 	h := NewMusicHandler(music, stubPermResolver{}, limiter)
 
 	// First two requests are within the 2/min budget.

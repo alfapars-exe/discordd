@@ -60,6 +60,7 @@ func newSendFriendRequest(t *testing.T, body string) *http.Request {
 func TestSendRequest_RateLimit(t *testing.T) {
 	svc := &stubFriendshipService{}
 	limiter := ratelimit.NewMessageRateLimiter(2, time.Minute, 30*time.Second)
+	t.Cleanup(limiter.Stop)
 	h := NewFriendshipHandler(svc, limiter)
 
 	for i := 0; i < 2; i++ {
