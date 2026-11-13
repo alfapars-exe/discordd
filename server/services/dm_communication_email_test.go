@@ -24,11 +24,10 @@ func (f *scheduledEmailCapture) EnqueueWithOptions(_ context.Context, user, cate
 }
 
 func TestSendMessage_EnqueuesDelayedGenericUnreadEmailOnlyForAcceptedDM(t *testing.T) {
-	f := newDMFixture()
+	enqueuer := &scheduledEmailCapture{}
+	f := newDMFixtureWithEmail(nil, enqueuer)
 	acceptedFriendsFixture(f)
 	f.repo.CreateMessageFn = func(_ context.Context, msg *models.DMMessage) error { msg.ID = "message-123"; return nil }
-	enqueuer := &scheduledEmailCapture{}
-	f.svc.(*dmService).communicationEmailEnqueuer = enqueuer
 
 	ciphertext := "encrypted payload"
 	device := "device-1"
