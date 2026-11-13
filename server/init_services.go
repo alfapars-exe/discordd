@@ -266,7 +266,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	// not here: it needs to fan out to middleware.PermissionMiddleware too,
 	// which is only constructed inside initRoutes. See main.go's comment
 	// near initRoutes for the full rationale.
-	serverService := services.NewServerService(
+	serverService := services.NewServerService(gameActivityService,
 		db, repos.Server, repos.LiveKit, repos.Role, repos.Channel,
 		repos.Category, repos.User, repos.Ban, inviteService, hub, encryptionKey, auditLogService,
 		roleTransactions,
@@ -393,12 +393,6 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 			defer cancel()
 			return gameJoinService.SetOffer(ctx, user, connection, input)
 		})
-	}
-
-	if setter, ok := serverService.(interface {
-		SetGameActivityPrivacyInvalidator(services.GameActivityPrivacyInvalidator)
-	}); ok {
-		setter.SetGameActivityPrivacyInvalidator(gameActivityService)
 	}
 
 	appLogService := services.NewAppLogService(repos.AppLog)
