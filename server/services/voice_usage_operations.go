@@ -73,3 +73,13 @@ func (s *voiceService) dispatchUsageCredit(sessionID, instanceID string, isCloud
 		voiceLogger.Error("usage producer rejected after terminal shutdown")
 	}
 }
+
+// dispatchDisconnectCleanup joins asynchronous disconnect work while admission
+// is open. Committed membership/permission revocations may arrive after terminal
+// shutdown; their cleanup stays synchronous in that caller rather than escaping
+// the closed owner or being silently dropped. Call only after releasing s.mu.
+func (s *voiceService) dispatchDisconnectCleanup(work func()) {
+	if !s.usageOperations.child(work) {
+		work()
+	}
+}

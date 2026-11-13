@@ -1317,3 +1317,9 @@ Terminal current-head receipt: PR29814a965ea completed36/36 SUCCESS. Exact-head 
 - Blocking music-hook regression failed before fix for cross-channel JoinChannel shutdown. Old-room eviction and music stop now register beneath the accepted join operation, matching normal leave ownership.
 - Integrated targeted tests passed 10 repetitions (4.919s), Linux race passed 10 (11.182s); services vet/lint passed. DSN-free runs skip PostgreSQL-specific tests.
 - Canonical transfer initially included unrelated pendingJoins code and failed compilation; restored canonical voice_state.go from its own HEAD and applied only the four leave/switch dispatch changes. Canonical PostgreSQL validation is still running and no delivery success is claimed yet. Admin/move/webhook/mute ownership remains open.
+
+### 2026-11-14 — Own forced-disconnect media cleanup
+
+- Admin music cleanup regression failed before fix: terminal producer shutdown returned while accepted disconnect cleanup still ran. Shared disconnect cleanup now registers LiveKit eviction and music stop with the owner. After terminal closure, committed membership/permission revocation cleanup executes synchronously in its caller instead of escaping or being dropped.
+- Targeted VoiceUsage/AdminDisconnectUser/VoiceMaintenance tests passed 10 repetitions (4.079s); Linux race passed 10 (8.898s). Late-member-revocation test passed 10 host repetitions (1.113s) and 10 race repetitions (3.522s), confirming voice-state removal and caller-owned cleanup. Services vet/lint passed before adding the late-member test. These DSN-free runs skip PostgreSQL-specific checks.
+- Move, webhook, mute and entrance-hook ownership; late terminal usage credit; crash-before-enqueue and physical media remain open. PR #298 current published head fb269038 CI run 43515470174 is active; this new fix is local integration only.

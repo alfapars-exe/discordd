@@ -245,3 +245,64 @@ func TestVoiceUsageShutdownWaitsForSwitchMusicCleanup(t *testing.T) {
 		t.Fatal("shutdown did not join switch music cleanup")
 	}
 }
+
+func TestVoiceUsageShutdownWaitsForAdminMusicCleanup(t *testing.T) {
+	svc, _ := newTestVoiceService()
+	s := svc.(*voiceService)
+	entered, release, stopped := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	t.Cleanup(func() { once.Do(func() { close(release) }); s.ShutdownUsageProducers() })
+	s.musicBotHook = &mockMusicBotHook{StopAllForChannelFn: func(string) { close(entered); <-release }}
+	s.states["victim"] = &models.VoiceState{UserID: "victim", ChannelID: "ch1", ServerID: "srv1"}
+	if err := s.AdminDisconnectUser(context.Background(), "admin", "victim"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("admin music cleanup not started")
+	}
+	go func() { s.ShutdownUsageProducers(); close(stopped) }()
+	select {
+	case <-stopped:
+		t.Fatal("shutdown returned before admin music cleanup")
+	case <-time.After(20 * time.Millisecond):
+	}
+	once.Do(func() { close(release) })
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("shutdown did not join admin music cleanup")
+	}
+}
+
+func TestVoiceUsageLateMemberRevocationOwnsDisconnectCleanup(t *testing.T) {
+	svc, _ := newTestVoiceService()
+	s := svc.(*voiceService)
+	s.states["victim"] = &models.VoiceState{UserID: "victim", ChannelID: "ch1", ServerID: "srv1"}
+	s.ShutdownUsageProducers()
+	entered, release, done := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	t.Cleanup(func() { once.Do(func() { close(release) }); <-done })
+	s.musicBotHook = &mockMusicBotHook{StopAllForChannelFn: func(string) { close(entered); <-release }}
+	go func() { s.DisconnectServerMember("srv1", "victim"); close(done) }()
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("late revocation dropped music cleanup")
+	}
+	select {
+	case <-done:
+		t.Fatal("late revocation escaped closed cleanup owner")
+	case <-time.After(20 * time.Millisecond):
+	}
+	once.Do(func() { close(release) })
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("late revocation did not finish cleanup")
+	}
+	if s.GetUserVoiceState("victim") != nil {
+		t.Fatal("late revocation retained voice state")
+	}
+}
