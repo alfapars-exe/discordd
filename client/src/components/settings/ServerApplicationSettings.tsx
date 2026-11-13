@@ -20,11 +20,11 @@ export default function ServerApplicationSettings() {
       const result = await listServerApplications(serverID, isCurrent);
       if (!isCurrent()) return;
       if (result.success) setItems(result.data?.applications ?? []);
-      else setError(t("serverApplications.loadError"));
+      else setError("serverApplications.loadError");
     } catch {
-      if (isCurrent()) setError(t("serverApplications.loadError"));
+      if (isCurrent()) setError("serverApplications.loadError");
     }
-  }, [serverID, t]);
+  }, [serverID]);
 
   useEffect(() => {
     let current = true;
@@ -41,22 +41,22 @@ export default function ServerApplicationSettings() {
     if (!applicationID.trim() || (!readMessage && !sendResponse)) return;
     setBusy(true); setError(""); setNotice("");
     const scopes = [...(readMessage ? ["read_message"] : []), ...(sendResponse ? ["send_response"] : [])];
-    try { const result = await installServerApplication(serverID, applicationID.trim(), scopes, () => alive.current); if (!alive.current) return; if (!result.success) setError(t("serverApplications.installError")); else { setApplicationID(""); setNotice(t("serverApplications.installed")); announceServerApplicationsChanged(serverID); await load(); } }
-    catch { if (alive.current) setError(t("serverApplications.installError")); }
+    try { const result = await installServerApplication(serverID, applicationID.trim(), scopes, () => alive.current); if (!alive.current) return; if (!result.success) setError("serverApplications.installError"); else { setApplicationID(""); setNotice("serverApplications.installed"); announceServerApplicationsChanged(serverID); await load(); } }
+    catch { if (alive.current) setError("serverApplications.installError"); }
     finally { if (alive.current) setBusy(false); }
   }
   async function revoke(item: ApplicationInstallation) {
     const approved = await useConfirmStore.getState().open({ title: t("serverApplications.revoke"), message: t("serverApplications.revokeConfirm", { name: item.application_name }), confirmLabel: t("serverApplications.revoke"), cancelLabel: t("sessions.cancel"), danger: true });
     if (!approved || !alive.current) return;
     setBusy(true); setError(""); setNotice("");
-    try { const result = await revokeServerApplication(serverID, item.application_id, () => alive.current); if (!alive.current) return; if (!result.success) setError(t("serverApplications.revokeError")); else { setNotice(t("serverApplications.revoked")); announceServerApplicationsChanged(serverID); await load(); } }
-    catch { if (alive.current) setError(t("serverApplications.revokeError")); }
+    try { const result = await revokeServerApplication(serverID, item.application_id, () => alive.current); if (!alive.current) return; if (!result.success) setError("serverApplications.revokeError"); else { setNotice("serverApplications.revoked"); announceServerApplicationsChanged(serverID); await load(); } }
+    catch { if (alive.current) setError("serverApplications.revokeError"); }
     finally { if (alive.current) setBusy(false); }
   }
   return <section aria-labelledby="server-applications-title" aria-busy={busy}>
     <h2 id="server-applications-title" className="settings-section-title">{t("serverApplications.title")}</h2>
     <p className="settings-hint">{t("serverApplications.description")}</p>
-    {error && <p role="alert" className="auth-error">{error}</p>}{notice && <p role="status">{notice}</p>}
+    {error && <p role="alert" className="auth-error">{t(error)}</p>}{notice && <p role="status">{t(notice)}</p>}
     <div className="settings-field"><label htmlFor="server-application-id" className="settings-label">{t("serverApplications.applicationID")}</label><input id="server-application-id" className="settings-input" value={applicationID} onChange={event => setApplicationID(event.target.value)} disabled={busy} /></div>
     <label><input type="checkbox" checked={readMessage} onChange={event => setReadMessage(event.target.checked)} disabled={busy} /> {t("serverApplications.readMessage")}</label><br />
     <label><input type="checkbox" checked={sendResponse} onChange={event => setSendResponse(event.target.checked)} disabled={busy} /> {t("serverApplications.sendResponse")}</label><br />
