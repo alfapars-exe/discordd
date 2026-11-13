@@ -116,7 +116,7 @@ func NewDMService(
 	notificationRepo repository.NotificationRepository,
 	txRunner repository.DMMessageTxRunner,
 	communicationEmailEnqueuer ScheduledEmailEnqueuer,
-	reactionPreferences repository.PreferencesRepository,
+	reactionPreferences profilePreferenceReader,
 ) DMService {
 	return &dmService{
 		reactionPreferences:        reactionPreferences,
