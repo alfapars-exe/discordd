@@ -1,3 +1,4 @@
+import { registerAppSettingsIPC } from "./app-settings-ipc";
 import { createOverlayMediaBroker } from "./overlay-media-broker";
 import { registerCS2JoinIPC } from "./cs2-join-ipc";
 import { registerGameNameIPC } from "./registered-game-name-ipc";
@@ -28,15 +29,6 @@ import {registerPTTLeaseHandlers}from "./ptt-ipc";
 // ──────────────────────────────────────────────────────────────
 // Input validation helpers
 // ──────────────────────────────────────────────────────────────
-
-/** Per-key validator for app settings — must mirror DEFAULT_APP_SETTINGS shape. */
-const APP_SETTING_VALIDATORS: Record<string, (v: unknown) => v is boolean> = {
-  openAtLogin: (v): v is boolean => typeof v === "boolean",
-  startMinimized: (v): v is boolean => typeof v === "boolean",
-  closeToTray: (v): v is boolean => typeof v === "boolean",
-  transparentBackground: (v): v is boolean => typeof v === "boolean",
-  hardwareAcceleration: (v): v is boolean => typeof v === "boolean",
-};
 
 const MAX_CLIPBOARD_BYTES = 10 * 1024 * 1024; // 10 MB — prevent renderer-side DoS
 const MAX_BADGE_COUNT = 99999;
@@ -80,7 +72,7 @@ import {
 import { loginWithSavedCredentials } from "./credential-login";
 import { acquirePTTLease, releasePTTLease, retirePTTSender, registerMuteHotkey, registerPTT, unregisterMuteHotkey, unregisterPTT } from "./push-to-talk";
 import { getSerializedSources } from "./screen-picker";
-import { isAppSettingKey, getSettings, setSetting } from "./settings";
+import { getSettings, setSetting } from "./settings";
 import { setTrayTooltip } from "./tray";
 import { wasPrelaunchChecked } from "./auto-updater";
 import { getMainWindow } from "./window";
@@ -490,35 +482,11 @@ export function registerIpcHandlers(): void {
     clipboard.writeText(text);
   });
 
-  // ─── App settings (general / windows) ────────────────────────────
-  ipcMain.handle("get-app-settings", () => {
-    // Reflect actual OS state — user may have toggled openAtLogin via
-    // Windows registry / Settings outside the app.
-    const live = app.getLoginItemSettings();
-    const cached = getSettings();
-    cached.openAtLogin = live.openAtLogin;
-    return cached;
-  });
-
-  ipcMain.handle("set-app-setting", (_e, key: unknown, value: unknown) => {
-    // Audit 2026-05-27: full type+range validation.
-    // Previously only validated key existence — value of any type was
-    // persisted, enabling renderer-induced config corruption (e.g. setting
-    // closeToTray=null silently broke the X button on next launch).
-    if (!isAppSettingKey(key)) {
-      throw new TypeError(`unknown app setting: ${String(key)}`);
-    }
-    // Optional chain — undefined validator short-circuits to undefined,
-    // which is falsy, so the throw fires (same semantics as before).
-    if (!APP_SETTING_VALIDATORS[key]?.(value)) {
-      throw new TypeError(
-        `invalid value for ${key}: expected boolean, got ${typeof value}`,
-      );
-    }
-    setSetting(key, value);
-    if (key === "openAtLogin") {
-      app.setLoginItemSettings({ openAtLogin: value });
-    }
+  registerAppSettingsIPC(ipcMain, {
+    getSettings,
+    setSetting,
+    getLoginItemSettings: () => app.getLoginItemSettings(),
+    setLoginItemSettings: value => app.setLoginItemSettings(value),
   });
 
   // ─── Credentials (Remember Me, DPAPI/Keychain encrypted) ─────────
