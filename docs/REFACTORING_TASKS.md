@@ -385,6 +385,10 @@ Kalan koşullu bağlantılar `server/init_services.go` içinde kalıcı kanal g�
 
 Preferences servisinin profil görünürlüğü geçersizleştiricisi ve oyun etkinliği eşitlemesi de constructor'a taşındı. Oyun etkinliği servisi önce oluşturuluyor. Başarılı tercih kaydı sonrasında gözlemcinin çağrıldığı, başarısız kayıtta çağrılmadığı ve tercih verisinin görünürlük olayına taşınmadığı test edildi. `cec39b39` üzerinde `go test -race ./services ./handlers . -run '^TestPreferences|^Test.*ProfileAudience|^TestWiring' -count=1` üç pakette geçti. Bu koşu gerçek PostgreSQL ortamı içermiyordu.
 
+**13 Kasım yaşam döngüsü bağlantıları.** Engelleme, arkadaşlık, üyelik ve sunucu servislerinin oyun etkinliği gizliliği gözlemcileri constructor parametreleri oldu. Üyelik profil görünürlüğü ve sunucu katılımı tercih repository'si de aynı yolla bağlanıyor. Oyun etkinliği servisi bu tüketicilerden önce oluşturuluyor. Engelleme/engeli kaldırma, arkadaşlık kabulü/kaldırma, üye atma, sunucuya katılma, ayrılma ve silme testleri constructor bağlantısını kullanıyor. Ayrılma ve silme yazısı başarısızsa gözlemci çağrılmıyor.
+
+`f4b5bb25` üzerinde PostgreSQL 18.6 ile 17 yaşam döngüsü testi `-race` altında geçti, skip/fail yoktu. Son tercih constructor değişikliği dahil `d0408a97` üzerinde gerçek Go başlangıcı, üretim Chromium ve mTLS PostgreSQL ile iki oturumlu rol/kanal erişim paketi hazırlık dahil 3/3 geçti. Koşu 59,1 saniye sürdü. Kalan koşullu bağlantılar kanal/ses silme temizliği, hub'ın kalıcı kanal gönderimi yeteneği ve oyun katılım teklifi callback'idir. RF11'in tüm başlangıç/kapanış kabulü ve tam sunucu yarış tekrarı açık.
+
 | Alan | Tanım |
 |---|---|
 | Task ID | RF11 |
