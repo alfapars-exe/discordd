@@ -21,7 +21,7 @@ type DesktopOperations = {
   stopped: () => void;
   logVideo: (branch: DesktopBranch) => void;
   logAudio: (branch: DesktopBranch) => void;
-  log: (level: "info" | "warn", message: string, details: Record<string, unknown>) => unknown;
+  log: (level: "info" | "warn", message: string, details: Record<string, string | number | boolean | null | undefined>) => unknown;
 };
 
 function resolutionFor(quality: string, fps: number, display: DisplayInfo | null) {
