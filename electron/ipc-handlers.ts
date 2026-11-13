@@ -1,4 +1,5 @@
 import { registerUpdaterIPC } from "./updater-ipc";
+import { requestUpdateInstallation } from "./update-installation";
 import { registerAppSettingsIPC } from "./app-settings-ipc";
 import { registerCredentialIPC } from "./credential-ipc";
 import { assertString, assertFiniteNumber } from "./ipc-input-validation";
@@ -340,7 +341,7 @@ export function registerIpcHandlers(): void {
     wasPrelaunchChecked,
     checkForUpdates: () => autoUpdater.checkForUpdates(),
     downloadUpdate: () => autoUpdater.downloadUpdate(),
-    quitAndInstall: (silent, restart) => autoUpdater.quitAndInstall(silent, restart),
+    quitAndInstall: (silent, restart) => requestUpdateInstallation(() => autoUpdater.quitAndInstall(silent, restart)),
   });
   // ─── Desktop capturer (legacy enumeration, separate from picker) ─
   ipcMain.handle("get-desktop-sources", async () => {
