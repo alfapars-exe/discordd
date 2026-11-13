@@ -698,6 +698,26 @@ Windows doğrulaması: Electron kaynak seçicisinde test penceresi kendi medya k
 | Acceptance Criteria | Ölçüm koşulları/artifact'leri yeniden üretilebilir; kritik query count üye sayısıyla artmıyor; p95/CPU/heap kötüleşmesi gerekçesiz kabul edilmiyor; ölçüm varyansı raporlanıyor; kazanımı olmayan optimizasyon uygulanmıyor. |
 | Effort | 2–4 mühendis-gün |
 
+### WebSocket yayın ölçümü, 13 Kasım 2026
+
+`4b8bb88c` üzerinde Windows/amd64, Go 1.27.3 ve Ryzen 9 7950X3D ile sunucunun `server` dizininde çalıştırıldı.
+
+```sh
+go test ./ws -run '^$' -bench 'Benchmark(BroadcastToServer|Deliver)' -benchmem -benchtime=1000x -count=9
+```
+
+Her örnek 1.000 işlemin ortalamasıdır. Aralık dokuz koşudaki en düşük ve en yüksek ortalamayı gösterir. Sağlıklı istemcilerde her partinin teslim sayısı doğrulandı. Yavaş istemci senaryosunda kuyruklar dolu başladı. Ölçüm ağ aktarımı ve sokete yazma süresini kapsamıyor.
+
+| Benchmark | Medyan ns/işlem | Aralık ns/işlem | Medyan bayt/işlem | Medyan tahsis/işlem |
+|---|---:|---:|---:|---:|
+| `BenchmarkBroadcastToServer_FastClients/clients=10-32` | 2232 | 1888–3417 | 373 | 7 |
+| `BenchmarkBroadcastToServer_FastClients/clients=100-32` | 12907 | 7928–14869 | 373 | 7 |
+| `BenchmarkBroadcastToServer_FastClients/clients=1000-32` | 151084 | 129796–201698 | 373 | 7 |
+| `BenchmarkBroadcastToServer_SlowClients/clients=10-32` | 2142 | 2054–3069 | 373 | 7 |
+| `BenchmarkBroadcastToServer_SlowClients/clients=100-32` | 10464 | 8079–14769 | 373 | 7 |
+| `BenchmarkBroadcastToServer_SlowClients/clients=1000-32` | 98489 | 85360–118858 | 373 | 7 |
+| `BenchmarkDeliver-32` | 87.7 | 59.2–409.8 | 0 | 0 |
+
 ## RF30 — Runtime kabulü ve kapanış
 
 | Alan | Tanım |
