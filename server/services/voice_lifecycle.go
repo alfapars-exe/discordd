@@ -227,7 +227,7 @@ func (s *voiceService) sweepOrphanStates() {
 		// Credit the abandoned session — duration counts up to the moment
 		// of cleanup, which is approximately when the user actually
 		// disconnected (within `orphanGracePeriod` of it).
-		s.creditUsage(o.livekitInstanceID, o.livekitIsCloud, o.joinedAt)
+		s.creditUsageUntil(o.livekitInstanceID, o.livekitIsCloud, o.joinedAt, now)
 	}
 }
 

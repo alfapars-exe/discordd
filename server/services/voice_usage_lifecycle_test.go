@@ -107,3 +107,20 @@ func TestVoiceUsageCreditPostgresAdditiveWrites(t *testing.T) {
 		t.Fatalf("two independent credits total=%d, want 120", used)
 	}
 }
+
+func TestVoiceUsageCreditUsesCapturedSessionEnd(t *testing.T) {
+	ended := time.Date(2026, time.January, 31, 23, 59, 59, 0, time.UTC)
+	calls := 0
+	s := &voiceService{livekitGetter: &mockConfigurableLiveKitGetter{IncrementMonthlyUsageFn: func(_ context.Context, _ string, year, month, seconds int) error {
+		calls++
+		if year != 2026 || month != 1 || seconds != 60 {
+			t.Errorf("credit=(%d,%d,%d), want captured January session of60s", year, month, seconds)
+		}
+		return nil
+	}}}
+	s.creditUsageUntil("instance", true, ended.Add(-time.Minute), ended)
+	s.creditUsageUntil("instance", true, ended.Add(time.Second), ended)
+	if calls != 1 {
+		t.Fatalf("usage writes=%d, want1; negative duration must not write", calls)
+	}
+}
