@@ -40,7 +40,7 @@ func (s *preferencesRepoStub) Upsert(_ context.Context, userID string, patch jso
 func TestPreferencesServiceValidatesBeforeWriting(t *testing.T) {
 	for _, patch := range []string{`null`, `[]`, `{"voice_settings":{"masterVolume":101}}`, `{"unknown":true}`} {
 		repo := &preferencesRepoStub{}
-		prefs, err := NewPreferencesService(repo, nil).Update(context.Background(), "user-1", json.RawMessage(patch))
+		prefs, err := NewPreferencesService(repo, nil, nil, nil).Update(context.Background(), "user-1", json.RawMessage(patch))
 		if !errors.Is(err, pkg.ErrBadRequest) || prefs != nil || repo.writes != 0 {
 			t.Fatalf("invalid update returned success or wrote: prefs=%v err=%v writes=%d", prefs, err, repo.writes)
 		}
@@ -49,7 +49,7 @@ func TestPreferencesServiceValidatesBeforeWriting(t *testing.T) {
 
 func TestPreferencesServiceStripsLocalFieldsAndVersionsResponse(t *testing.T) {
 	repo := &preferencesRepoStub{}
-	svc := NewPreferencesService(repo, nil)
+	svc := NewPreferencesService(repo, nil, nil, nil)
 	prefs, err := svc.Update(context.Background(), "user-1", json.RawMessage(`{"voice_settings":{"inputDevice":"device-secret","outputDevice":"device-secret","cameraDevice":"device-secret","muteHotkeyGlobal":true,"masterVolume":70}}`))
 	if err != nil {
 		t.Fatal(err)
@@ -73,7 +73,7 @@ func TestPreferencesServiceStripsLocalFieldsAndVersionsResponse(t *testing.T) {
 func TestPreferencesServiceDoesNotMaskDatabaseFailures(t *testing.T) {
 	failure := errors.New("database unavailable")
 	repo := &preferencesRepoStub{err: failure}
-	svc := NewPreferencesService(repo, nil)
+	svc := NewPreferencesService(repo, nil, nil, nil)
 	if prefs, err := svc.Get(context.Background(), "user-1"); prefs != nil || !errors.Is(err, failure) {
 		t.Fatalf("Get failure masked: %+v %v", prefs, err)
 	}
@@ -94,7 +94,7 @@ func TestPreferencesServiceMigratesHiddenNoiseEnginesOnReadAndWrite(t *testing.T
 	for _, engine := range []string{"krisp", "dpdfnet"} {
 		t.Run(engine, func(t *testing.T) {
 			repo := &preferencesRepoStub{}
-			svc := NewPreferencesService(repo, nil)
+			svc := NewPreferencesService(repo, nil, nil, nil)
 			legacy := json.RawMessage(`{"voice_settings":{"noiseReductionEngine":"` + engine + `","masterVolume":70}}`)
 			prefs, err := svc.Update(context.Background(), "user-1", legacy)
 			if err != nil {
@@ -125,8 +125,7 @@ func TestPreferencesServiceInvalidatesProfileAudienceWithoutBroadcastingPreferen
 	}}
 	svc := NewPreferencesService(repo, profileAudienceInvalidatorStub{
 		viewers: []string{"friend-viewer", "shared-server-viewer"},
-	}).(*preferencesService)
-	svc.SetGameActivitySync(nil, hub)
+	}, nil, hub).(*preferencesService)
 
 	if _, err := svc.Update(context.Background(), "target-user", json.RawMessage(`{"privacy":{"profileAudience":"friends_only"}}`)); err != nil {
 		t.Fatal(err)
