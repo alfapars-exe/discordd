@@ -560,6 +560,9 @@ func main() {
 	backupShutdownCancel()
 	logx.Flush(2 * time.Second)
 
+	// Join ownership probes before closing the pool or its dedicated session.
+	stopOwnerWatch()
+
 	if err := db.Close(); err != nil {
 		bootLogger.Error("db close failed", "err", pkg.ErrText(err))
 	}
