@@ -81,6 +81,9 @@ type friendSvcFixture struct {
 // or username is unknown (pkg.ErrNotFound). The friendship repo starts
 // empty (every lookup → ErrNotFound) — tests set GetByPairFn/GetByIDFn.
 func newFriendSvcFixture(t *testing.T) *friendSvcFixture {
+	return newFriendSvcFixtureWithActivity(t, nil)
+}
+func newFriendSvcFixtureWithActivity(t *testing.T, activity GameActivityPrivacyInvalidator) *friendSvcFixture {
 	t.Helper()
 	f := &friendSvcFixture{
 		friends:  &testutil.MockFriendshipRepo{},
@@ -111,7 +114,7 @@ func newFriendSvcFixture(t *testing.T) *friendSvcFixture {
 	f.hub.BroadcastToUserFn = func(userID string, e ws.Event) {
 		f.events = append(f.events, sentEvent{to: userID, ev: e})
 	}
-	f.svc = NewFriendshipService(f.friends, f.users, f.notif, f.hub)
+	f.svc = NewFriendshipService(activity, f.friends, f.users, f.notif, f.hub)
 	f.svc.SetDMAcceptor(f.acceptor)
 	return f
 }
@@ -161,7 +164,7 @@ func TestFriendshipSendRequest_Rejections(t *testing.T) {
 		enqueuer := &stubEmailEnqueuer{}
 		f.svc.SetEmailEnqueuer(enqueuer)
 		policy := &stubFriendRequestPolicy{allowed: false}
-		f.svc = NewFriendshipService(f.friends, f.users, f.notif, f.hub, policy)
+		f.svc = NewFriendshipService(nil, f.friends, f.users, f.notif, f.hub, policy)
 		f.svc.SetEmailEnqueuer(enqueuer)
 		_, err := f.svc.SendRequest(context.Background(), "alice", sendReq("bob"))
 		if !errors.Is(err, pkg.ErrForbidden) {
