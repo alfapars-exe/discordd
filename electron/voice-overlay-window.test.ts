@@ -8,13 +8,14 @@ import vm from "node:vm";
 import { INBOX_ACTION_HEIGHT, INBOX_ACTION_WIDTH } from "./overlay-action-regions";
 import type { VoiceOverlaySnapshot } from "./voice-overlay-contract";
 
-test("native overlay lock toggles only visible widgets and bounds unlocked game movement", async () => {
+test("native overlay lock toggles only visible widgets and bounds unlocked game movement", async (t) => {
   let win!: FakeWindow;
   let actionWin!: FakeWindow;
   let notificationActionWin!: FakeWindow;
   let chatActionWin!: FakeWindow;
   let chatComposerWin!: FakeWindow;
   let failShape = false;
+  let failSurface: string | null = null;
   let suppressShow = false;
   let cursor = { x: 0, y: 0 };
   let now = 1000;
@@ -38,7 +39,17 @@ test("native overlay lock toggles only visible widgets and bounds unlocked game 
     setAlwaysOnTop() {}
     setShape(shape: typeof this.shape) { if (failShape) throw new Error("unavailable"); this.shape = shape; }
     setIgnoreMouseEvents(ignored: boolean) { this.ignored = ignored; }
-    loadURL(url: string) { if (url.includes("surface=notification-actions")) notificationActionWin = this; if (url.includes("surface=chat-actions")) chatActionWin = this; if (url.includes("surface=chat-composer")) chatComposerWin = this; return Promise.resolve(); }
+    loadURL(url: string) {
+      if (url.includes("surface=notification-actions")) notificationActionWin = this;
+      if (url.includes("surface=chat-actions")) chatActionWin = this;
+      if (url.includes("surface=chat-composer")) chatComposerWin = this;
+      if (failSurface && url.endsWith(`surface=${failSurface}`)) {
+        const failure = Promise.reject(new Error("fixture surface load failed"));
+        void failure.catch(() => {}); // Observe the intentional pre-fix fixture rejection.
+        return failure;
+      }
+      return Promise.resolve();
+    }
     hide() { this.visible = false; this.emit("hide"); }
     showInactive() { if (!suppressShow) this.visible = true; }
     show() { this.visible = true; }
@@ -501,4 +512,28 @@ test("native overlay lock toggles only visible widgets and bounds unlocked game 
   assert.equal(mediaLifecycle[mediaLifecycle.length-1],true);void actualHUD;
   stopMediaLifecycle();
   exports.closeVoiceOverlay();
+  for (const surface of ["actions", "notification-actions", "chat-actions"]) {
+    await t.test(`failed ${surface} load retires its window and permits an explicit feature retry`, async () => {
+      const actions = { ...notificationActions, voiceOverlayQuickActions: true, voiceOverlayClickableActions: true, voiceActionSession: "load-failure-voice" };
+      const target = () => surface === "actions" ? actionWin : surface === "notification-actions" ? notificationActionWin : chatActionWin;
+      try {
+        exports.updateVoiceOverlay({ ...snapshot, enabled: false }, area);
+        failSurface = surface;
+        exports.updateVoiceOverlay(actions, area);
+        const failed = target();
+        await Promise.resolve();
+        assert.equal(failed.destroyed, true, "a failed surface must not retain a blank interactive window");
+        exports.updateVoiceOverlay(actions, area);
+        assert.equal(target(), failed, "ordinary snapshots must not repeatedly recreate a failed surface");
+        failSurface = null;
+        exports.updateVoiceOverlay({ ...snapshot, enabled: false }, area);
+        exports.updateVoiceOverlay(actions, area);
+        assert.notEqual(target(), failed);
+        assert.equal(target().visible, true, "explicit feature retry can recover surface loading");
+      } finally {
+        failSurface = null;
+        exports.closeVoiceOverlay();
+      }
+    });
+  }
 });
