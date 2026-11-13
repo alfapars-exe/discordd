@@ -582,3 +582,9 @@ Paralel çalışma hatları: backend veri/lifecycle (RF04–RF11), client state/
 - İlgisiz dirty dosyalar staged edilmez; commit/PR/release artifact'i ile kanıt kaydı aynı kaynak anlık görüntüsünü gösterir.
 - Rollback küçük PR'ın revert'iyle mümkün tutulur. Veri migration'ı varsa backup/restore provası olmadan release kapısı kapanmaz.
 - [REFACTORING_PLAN.md](REFACTORING_PLAN.md), [TECHNICAL_DEBT.md](TECHNICAL_DEBT.md), [TEST_STRATEGY.md](TEST_STRATEGY.md), [CODE_QUALITY_STANDARDS.md](CODE_QUALITY_STANDARDS.md) ve [ARCHITECTURE_IMPROVEMENTS.md](ARCHITECTURE_IMPROVEMENTS.md) ilgili kararlarla eşleşir.
+
+### RF08 - permission fixture cache worker ownership (2026-11-13)
+
+- Shared permission fixture helpers now accept their testing.TB owner and register the cache Close method with t.Cleanup. Propagated the owner through nested fixture factories and their existing inflight/music/voice callers. Production service/cache code and the 200 randomized parity iterations are unchanged.
+- The new regression runs the actual 200-iteration single/bulk parity test as a child owner. Before: 400 cache cleanup workers remained after the child finished (exit 1). After: five repeats returned from zero workers to zero (exit 0). Integration variant 6665fc71 passed all 42 affected top-level tests (6.288 s) and targeted race (17.134 s). Canonical main-based source 295ab67f passed all 40 discovered affected top-level tests (6.054 s), with JSON proving every selected test ran, and targeted race (16.371 s).
+- Receipt: implementation/verification/refactor-permission-fixture-lifecycle-2026-11-13.json. This fixes the demonstrated test-helper ownership leak; it does not establish that the full-package 15-minute timeout is resolved, nor clean every other direct cache constructor. Frozen integration shard execution 45007 does not include this change and must retain its separate source identity.
