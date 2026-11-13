@@ -1,3 +1,5 @@
+import { registerCredentialIPC } from "./credential-ipc";
+import { assertString, assertFiniteNumber } from "./ipc-input-validation";
 import { createOverlayMediaBroker } from "./overlay-media-broker";
 import { registerCS2JoinIPC } from "./cs2-join-ipc";
 import { registerGameNameIPC } from "./registered-game-name-ipc";
@@ -6,14 +8,11 @@ import {registerPTTLeaseHandlers}from "./ptt-ipc";
 /**
  * electron/ipc-handlers.ts — Centralized IPC channel registration.
  *
- * Single responsibility: register every renderer→main IPC handler in one
- * place. Each handler is a thin adapter that calls into a domain module
- * (audio-capture, push-to-talk, credentials, settings, …) — no business
- * logic lives here.
+ * Compose renderer→main IPC handlers and domain registrars. Each registrar
+ * keeps its channel contracts and validation next to its domain operations.
  *
- * Splitting the registration this way keeps the IPC contract auditable
- * (one file lists every channel) while keeping domain modules
- * IPC-agnostic and unit-testable.
+ * This composition root supplies the same sender predicates and platform
+ * adapters to domain registrars while domain logic stays unit-testable.
  *
  * Input validation policy (audit 2026-05-27):
  * Renderer is untrusted (XSS, malicious extension, compromised preload all
@@ -43,29 +42,6 @@ const MAX_BADGE_COUNT = 99999;
 const MAX_BADGE_ICON_BYTES = 256 * 1024; // 256 KB data URL
 const MAX_PTT_KEYCODE_LEN = 64; // generous bound for any keycode string
 
-function assertString(value: unknown, name: string, maxLen: number): asserts value is string {
-  if (typeof value !== "string") {
-    throw new TypeError(`${name} must be a string, got ${typeof value}`);
-  }
-  if (value.length > maxLen) {
-    throw new RangeError(`${name} exceeds max length ${maxLen}`);
-  }
-}
-
-function assertFiniteNumber(
-  value: unknown,
-  name: string,
-  min: number,
-  max: number,
-): asserts value is number {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    throw new TypeError(`${name} must be a finite number`);
-  }
-  if (value < min || value > max) {
-    throw new RangeError(`${name} must be in [${min}, ${max}]`);
-  }
-}
-
 import { app, clipboard, dialog, globalShortcut, ipcMain, nativeImage, net, screen, shell } from "electron";
 import { autoUpdater } from "electron-updater";
 import { getCaptureStatus, startCapture, startDiagnosticCapture, stopCapture, stopDiagnosticCapture,reserveCaptureLease,startCaptureLease,releaseCaptureLease,retireCaptureSender } from "./audio-capture";
@@ -75,7 +51,6 @@ import {
   clearCredentials,
   loadCredentials,
   saveCredentials,
-  toPublicCredentials,
 } from "./credentials";
 import { loginWithSavedCredentials } from "./credential-login";
 import { acquirePTTLease, releasePTTLease, retirePTTSender, registerMuteHotkey, registerPTT, unregisterMuteHotkey, unregisterPTT } from "./push-to-talk";
@@ -521,28 +496,13 @@ export function registerIpcHandlers(): void {
     }
   });
 
-  // ─── Credentials (Remember Me, DPAPI/Keychain encrypted) ─────────
-  ipcMain.handle(
-    "save-credentials",
-    (_e, username: unknown, password: unknown) => {
-      // Audit 2026-05-27: bound credential field lengths to prevent
-      // disk-fill via huge string write.
-      assertString(username, "username", 512);
-      assertString(password, "password", 4096);
-      return saveCredentials(username, password);
-    },
-  );
-  // Username only. The password stays in the main process (pentest
-  // 2026-07-26, H-09): handing it to the renderer meant any XSS in
-  // app://hichat could read a long-lived account password, which is the one
-  // secret the short-lived-token design is there to avoid holding.
-  ipcMain.handle("load-credentials", () => toPublicCredentials(loadCredentials()));
-  // Logs in using the stored password without ever exposing it. Returns
-  // exactly what a renderer-issued login returns: status + parsed body.
-  ipcMain.handle("login-with-saved-credentials", (_e, upstreamOrigin: unknown) =>
-    loginWithSavedCredentials(upstreamOrigin, (input, init) => net.fetch(input, init)),
-  );
-  ipcMain.handle("clear-credentials", () => clearCredentials());
+  // Credential IPC retains main-frame authorization and main-only passwords.
+  registerCredentialIPC(ipcMain, assertTrustedMainWindowSender, {
+    save: saveCredentials,
+    load: loadCredentials,
+    clear: clearCredentials,
+    login: upstream => loginWithSavedCredentials(upstream, (input, init) => net.fetch(input, init)),
+  });
 
   registerPTTLeaseHandlers(ipcMain,assertTrustedMainWindowSender,{acquire:acquirePTTLease,release:releasePTTLease,retire:retirePTTSender});
   // ─── Push-to-Talk shortcuts (uIOhook global keyboard) ────────────
