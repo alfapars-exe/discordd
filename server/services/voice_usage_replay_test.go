@@ -72,4 +72,14 @@ func TestVoiceUsagePostgresReplayTransaction(t *testing.T) {
 	if err != nil || used != 90 {
 		t.Fatalf("usage after retry=%d err=%v, want90", used, err)
 	}
+	ended := time.Date(2026, time.January, 31, 23, 59, 59, 0, time.UTC)
+	service := &voiceService{livekitGetter: repo}
+	service.creditUsageSession("session-three", "usage-instance", true, ended.Add(-time.Minute), ended)
+	service.creditUsageSession("session-three", "usage-instance", true, ended.Add(-time.Minute), ended)
+	service.creditUsageSession("session-four", "usage-instance", true, ended.Add(-time.Minute), ended)
+	used, err = repo.GetMonthlyUsage(ctx, "usage-instance", 2026, 1)
+	if err != nil || used != 210 {
+		t.Fatalf("service replay/session separation usage=%d err=%v, want210", used, err)
+	}
+
 }

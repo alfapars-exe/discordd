@@ -107,7 +107,7 @@ func (s *voiceService) DeleteVoiceChannel(ctx context.Context, serverID, channel
 				for session := range tasks {
 					s.removeDeletedChannelParticipant(ctx, session.serverID, session.channelID, session.userID)
 					s.removeDeletedChannelParticipant(ctx, session.serverID, session.channelID, session.userID+"_ss")
-					s.creditUsageUntil(session.state.LiveKitInstanceID, session.state.LiveKitIsCloud, session.state.JoinedAt, endedAt)
+					s.creditUsageSession(session.state.UsageSessionID, session.state.LiveKitInstanceID, session.state.LiveKitIsCloud, session.state.JoinedAt, endedAt)
 				}
 			})
 		}
