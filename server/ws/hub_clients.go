@@ -33,12 +33,19 @@ func (h *Hub) removeClientFromServerIndex(client *Client, serverID string) {
 // first connection. For subsequent connections, recomputes aggregate status.
 func (h *Hub) addClient(client *Client) {
 	defer func() {
+		client.registrationProfile = nil
 		if client.registered != nil {
 			close(client.registered)
 		}
 	}()
 	h.mu.Lock()
-	if h.shuttingDown {
+	reject := h.shuttingDown
+	select {
+	case <-client.done:
+		reject = true
+	default:
+	}
+	if reject {
 		h.mu.Unlock()
 		if client.done != nil {
 			client.closeDone()
@@ -50,6 +57,11 @@ func (h *Hub) addClient(client *Client) {
 	}
 
 	isFirstConnection := len(h.clients[client.userID]) == 0
+	if profile := client.registrationProfile; profile != nil {
+		if isFirstConnection {
+			h.SetUserInfo(client.userID, profile.Username, profile.DisplayName, profile.AvatarURL)
+		}
+	}
 	if !isFirstConnection {
 		for existing := range h.clients[client.userID] {
 			client.prefStatus = existing.prefStatus
@@ -205,15 +217,9 @@ func (h *Hub) removeClient(client *Client) {
 		activityDisconnectTicket = h.presenceCallbacks.reserve(client.userID, "game_activity_disconnect")
 	}
 
-	// h.mu is now held here too (deferred Unlock above, not the manual
-	// Unlock() this used to have at this point) — evictUserInfo below is a
-	// nested h.mu -> userMu acquisition rather than the fully independent
-	// one this comment used to describe. Still no ordering hazard: nothing
-	// in the package ever acquires userMu before h.mu (grep userMu — only
-	// hub_state.go touches it, and none of those funcs take h.mu), so
-	// there's no reverse-order path to deadlock against. Evict the cached
-	// profile entry once the last connection is gone so userInfos doesn't
-	// grow unboundedly over the process lifetime.
+	// Evict while holding h.mu so a new first connection cannot install its
+	// profile between the last disconnect and eviction. Lock order is
+	// h.mu before userMu throughout registration and removal.
 	if fullyDisconnected {
 		h.evictUserInfo(userID)
 	}

@@ -43,16 +43,17 @@ var dispatchLogger = logx.Component("ws.dispatch")
 // Client represents a single WebSocket connection.
 // Each connection runs two goroutines: ReadPump (read) and WritePump (write).
 type Client struct {
-	sessionID       string
-	registered      chan struct{}
-	validateSession func(context.Context, string, string) error
-	hub             *Hub
-	conn            *websocket.Conn
-	userID          string
-	connectionID    uint64 // unique physical connection identity (not the account session)
-	activitySeq     atomic.Uint64
-	send            chan []byte
-	mu              sync.Mutex // protects conn.WriteMessage
+	registrationProfile *cachedUserInfo
+	sessionID           string
+	registered          chan struct{}
+	validateSession     func(context.Context, string, string) error
+	hub                 *Hub
+	conn                *websocket.Conn
+	userID              string
+	connectionID        uint64 // unique physical connection identity (not the account session)
+	activitySeq         atomic.Uint64
+	send                chan []byte
+	mu                  sync.Mutex // protects conn.WriteMessage
 
 	// done is closed exactly once (via closeDone) when the Hub removes this
 	// client — from removeClient (ban / disconnect) or Shutdown. The send
