@@ -9,6 +9,7 @@ function harness() {
   const state = { shapeFails: false, load: Promise.resolve() };
   let options: BrowserWindowConstructorOptions | undefined;
   const window = Object.assign(new EventEmitter(), {
+    webContents: new EventEmitter(),
     setShape: (regions: Rectangle[]) => { calls.push(["shape", regions]); if (state.shapeFails) throw new Error("shape unavailable"); },
     setAlwaysOnTop: (...args: unknown[]) => { calls.push(["top", ...args]); },
     loadURL: (url: string) => { calls.push(["load", url]); return state.load; },
@@ -64,4 +65,23 @@ test("close callbacks carry their original child identity for owner revalidation
   first.window.emit("closed");
   assert.deepEqual(first.calls[first.calls.length - 1], ["closed", first.nativeWindow]);
   assert.equal(second.calls.some(call => call[0] === "closed"), false);
+});
+
+test("renderer crash reports its owned child and close removes only owned listeners", async () => {
+  const h = harness(); let reject!: (error: Error) => void;
+  h.state.load = new Promise<void>((_resolve, fail) => { reject = fail; });
+  const sibling = () => {};
+  h.window.webContents.on("render-process-gone", sibling);
+  h.create();
+  const queued = h.window.webContents.listeners("render-process-gone")[1];
+  h.window.webContents.emit("render-process-gone");
+  assert.deepEqual(h.calls[h.calls.length - 1], ["failed", h.nativeWindow, "crash"]);
+  h.window.emit("closed");
+  const count = h.calls.length;
+  queued();
+  reject(new Error("late load"));
+  await Promise.resolve();
+  assert.equal(h.calls.length, count, "retired callbacks cannot affect a replacement owner");
+  assert.deepEqual(h.window.webContents.listeners("render-process-gone"), [sibling]);
+  assert.equal(h.window.listenerCount("closed"), 0);
 });

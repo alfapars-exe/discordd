@@ -536,6 +536,44 @@ test("native overlay lock toggles only visible widgets and bounds unlocked game 
       }
     });
   }
+  for (const surface of ["actions", "notification-actions", "chat-actions"]) {
+    await t.test(`crashed ${surface} retires its window until an explicit feature retry`, () => {
+      try {
+        const actions = { ...notificationActions, voiceOverlayQuickActions: true, voiceOverlayClickableActions: true, voiceActionSession: "crash-voice" };
+        const target = () => surface === "actions" ? actionWin : surface === "notification-actions" ? notificationActionWin : chatActionWin;
+        exports.updateVoiceOverlay({ ...snapshot, enabled: false }, area);
+        exports.updateVoiceOverlay(actions, area);
+        const failed = target();
+        failed.webContents.emit("render-process-gone");
+        assert.equal(failed.destroyed, true, "a crashed surface must release its native window");
+        exports.updateVoiceOverlay(actions, area);
+        assert.equal(target(), failed, "ordinary snapshots cannot recreate a crashed surface");
+        exports.updateVoiceOverlay({ ...snapshot, enabled: false }, area);
+        exports.updateVoiceOverlay(actions, area);
+        assert.notEqual(target(), failed);
+        assert.equal(target().visible, true);
+      } finally { exports.closeVoiceOverlay(); }
+    });
+  }
+  await t.test("chat action crash cancels its active composer request", async () => {
+    try {
+      now += 251;
+      exports.updateVoiceOverlay({ ...snapshot, enabled: false }, area);
+      const session = "action-crash-compose";
+      exports.updateVoiceOverlay({ ...notificationActions, voiceOverlayChatCompose: true, chatComposeSession: session, chatComposeLabel: "fixture" }, area);
+      const bounds = chatActionWin.getBounds();
+      cursor = { x: bounds.x + 8, y: bounds.y + 10 };
+      const sender = { sender: chatActionWin.webContents, senderFrame: chatActionWin.webContents.mainFrame };
+      assert.ok(exports.takeVoiceOverlayOpenChatComposerIntent(sender, session, mainWindow));
+      const composer = chatComposerWin;
+      const pending = exports.sendOverlayChatMessage({ sender: composer.webContents, senderFrame: composer.webContents.mainFrame }, { session, requestId: "action-crash-pending", text: "fixture draft" }, mainWindow);
+      chatActionWin.webContents.emit("render-process-gone");
+      assert.equal(composer.destroyed, true);
+      assert.equal(await pending, "unavailable");
+      now += 251;
+      assert.equal(exports.takeVoiceOverlayOpenChatComposerIntent(sender, session, mainWindow), null);
+    } finally { exports.closeVoiceOverlay(); }
+  });
   await t.test("composer renderer crash cancels pending sends and retires the compose grant", async () => {
     try {
       now += 251;
