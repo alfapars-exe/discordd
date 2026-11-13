@@ -235,3 +235,40 @@ func TestPostgresDollarStringsWithBoundValues(t *testing.T) {
 		t.Fatalf("unexpected columns: %q %q %q, err %v", plain, tagged, bound, err)
 	}
 }
+
+func TestBindPostgresRejectsUnterminatedQuotedTokens(t *testing.T) {
+	for _, query := range []string{
+		`SELECT ?, 'unfinished ?`,
+		`SELECT ?, 'escaped quote''`,
+		`SELECT ?, "unfinished ?`,
+		"SELECT ?, `unfinished ?",
+		`SELECT ?, E'escaped\'`,
+		`SELECT ?, E'backslash\`,
+	} {
+		t.Run(query, func(t *testing.T) {
+			got, err := bindPostgres(query)
+			if err == nil || got != "" {
+				t.Fatalf("malformed query returned %q, %v; want empty result and error", got, err)
+			}
+		})
+	}
+}
+
+func TestBindPostgresAcceptsCompleteQuotedTokens(t *testing.T) {
+	for _, query := range []string{
+		`SELECT '', ?`,
+		`SELECT 'it''s ?', ?`,
+		`SELECT "column?", ?`,
+		"SELECT `column?`, ?",
+		`SELECT E'it\'s ?', ?`,
+		`SELECT E'\\', ?`,
+	} {
+		t.Run(query, func(t *testing.T) {
+			got, err := bindPostgres(query)
+			want := query[:len(query)-1] + "$1"
+			if err != nil || got != want {
+				t.Fatalf("complete query returned %q, %v; want %q", got, err, want)
+			}
+		})
+	}
+}
