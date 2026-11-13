@@ -1,4 +1,5 @@
-import { expect, test } from "@playwright/test";
+import { expectReplyLoadsOriginal, limitReplyHistoryPage } from "./replyNavigation.helpers";
+import { test } from "@playwright/test";
 import { dismissOnboardingOverlays, loginAsNotificationOwner, loginAsNotificationRecipient } from "./helpers";
 
 test("a DM reply loads the original from outside the current history page", async ({ page, browser }) => {
@@ -38,27 +39,14 @@ test("a DM reply loads the original from outside the current history page", asyn
       return reply.data.id as string;
     }, {channelId, originalId});
     const endpoint = "/api/dms/" + channelId + "/messages";
-    await page.route(url => url.pathname === endpoint && !["before", "after", "around"].some(key => url.searchParams.has(key)), route => {
-      const url = new URL(route.request().url());
-      url.searchParams.set("limit", "1");
-      return route.continue({url: url.href});
-    });
+    await limitReplyHistoryPage(page, endpoint);
     await page.reload();
     await dismissOnboardingOverlays(page);
     await page.evaluate(async channelId => {
       const path = "/src/stores/uiStore.ts";
       (await import(path)).useUIStore.getState().openTab(channelId, "dm", "E2E peer");
     }, channelId);
-    const preview = page.locator(`#msg-${replyId} .msg-reply-preview`);
-    await expect(preview).toBeVisible();
-    const target = page.locator(`#msg-${originalId}`);
-    await expect(target).toHaveCount(0);
-    const around = page.waitForResponse(response => new URL(response.url()).pathname === endpoint &&
-      new URL(response.url()).searchParams.get("around") === originalId);
-    await preview.click();
-    expect((await around).ok()).toBe(true);
-    await expect(target).toBeInViewport();
-    await expect(target).toHaveClass(/msg-highlight/);
+    await expectReplyLoadsOriginal(page, endpoint, replyId, originalId);
   } finally {
     await peerContext.close();
   }

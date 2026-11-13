@@ -1,3 +1,4 @@
+import { expectReplyLoadsOriginal, limitReplyHistoryPage } from "./replyNavigation.helpers";
 import { expect, test } from "@playwright/test";
 import { composer, dismissOnboardingOverlays, openFreshChannel } from "./helpers";
 
@@ -23,23 +24,10 @@ test("reply preview loads the original message outside the current channel page"
   // Keep the real tail query and response, but request one row to exercise
   // the page boundary without sending fifty filler messages.
   const endpoint = new URL(response.url()).pathname;
-  await page.route(url => url.pathname === endpoint && !["around", "before", "after"].some(key => url.searchParams.has(key)), async route => {
-    const url = new URL(route.request().url());
-    url.searchParams.set("limit", "1");
-    await route.continue({ url: url.href });
-  });
+  await limitReplyHistoryPage(page, endpoint);
   await page.reload();
   await expect(composer(page)).toBeVisible();
   await dismissOnboardingOverlays(page);
   await page.locator("button.ch-tree-item", { hasText: "general" }).first().click();
-  const preview = page.locator(`#msg-${reply} .msg-reply-preview`);
-  await expect(preview).toBeVisible();
-  const target = page.locator(`#msg-${original.id}`);
-  await expect(target).toHaveCount(0);
-  const around = page.waitForResponse(res => new URL(res.url()).pathname === endpoint &&
-    new URL(res.url()).searchParams.get("around") === original.id);
-  await preview.click();
-  expect((await around).ok()).toBe(true);
-  await expect(target).toBeInViewport();
-  await expect(target).toHaveClass(/msg-highlight/);
+  await expectReplyLoadsOriginal(page, endpoint, reply, original.id);
 });
