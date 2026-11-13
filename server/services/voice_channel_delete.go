@@ -94,6 +94,10 @@ func (s *voiceService) completeDeletedVoiceSession(ctx context.Context, session 
 	// Persist accounting before potentially slow media cleanup. Native pending
 	// handoff survives process loss during subsequent LiveKit eviction attempts.
 	s.creditUsageSession(session.state.UsageSessionID, session.state.LiveKitInstanceID, session.state.LiveKitIsCloud, session.state.JoinedAt, endedAt)
+	s.evictDeletedVoiceSession(ctx, session)
+}
+
+func (s *voiceService) evictDeletedVoiceSession(ctx context.Context, session deletedVoiceSession) {
 	s.removeDeletedChannelParticipant(ctx, session.serverID, session.channelID, session.userID)
 	s.removeDeletedChannelParticipant(ctx, session.serverID, session.channelID, session.userID+"_ss")
 }

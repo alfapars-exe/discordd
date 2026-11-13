@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/repository"
@@ -505,5 +506,57 @@ func TestVoiceUsagePostgresShutdownCreditsBeforeMediaWait(t *testing.T) {
 	case <-done:
 	case <-ctx.Done():
 		t.Fatal("shutdown did not join media cleanup")
+	}
+}
+
+func TestVoiceUsagePostgresShutdownHandsOffAllBeforeMedia(t *testing.T) {
+	for _, mode := range []string{"music", "eviction"} {
+		t.Run(mode, func(t *testing.T) {
+			db := postgresServerFixture(t)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if _, err := db.ExecContext(ctx, `INSERT INTO livekit_instances(id,url,api_key,api_secret) VALUES('phase-instance','http://127.0.0.1','fixture','fixture')`); err != nil {
+				t.Fatal(err)
+			}
+			repo := repository.NewSQLiteLiveKitRepo(db)
+			getter := &blockedShutdownLiveKitRepo{LiveKitRepository: repo, VoiceUsageRecorder: repo.(repository.VoiceUsageRecorder), VoiceUsageQueue: repo.(repository.VoiceUsageQueue), entered: make(chan struct{}), release: make(chan struct{})}
+			svc, _ := newTestVoiceServiceWithLiveKitGetter(getter)
+			s := svc.(*voiceService)
+			joined := time.Now().Add(-time.Minute)
+			for i := 0; i < 6; i++ {
+				id := fmt.Sprintf("phase-user-%d", i)
+				s.states[id] = &models.VoiceState{UserID: id, ChannelID: "channel", ServerID: "default", UsageSessionID: fmt.Sprintf("phase-credit-%d", i), LiveKitInstanceID: "phase-instance", LiveKitIsCloud: true, JoinedAt: joined}
+			}
+			if mode == "music" {
+				s.musicBotHook = &mockMusicBotHook{StopAllForChannelFn: func(string) { getter.once.Do(func() { close(getter.entered) }); <-getter.release }}
+			}
+			done := make(chan struct{})
+			var release sync.Once
+			t.Cleanup(func() { release.Do(func() { close(getter.release) }); <-done })
+			go func() { s.ShutdownVoiceSessions(); close(done) }()
+			select {
+			case <-getter.entered:
+			case <-ctx.Done():
+				t.Fatal("media stage did not start")
+			}
+			var count, applied, smallest, largest int
+			if err := db.QueryRowContext(ctx, `SELECT COUNT(*),COUNT(applied_at),COALESCE(MIN(seconds),0),COALESCE(MAX(seconds),0) FROM voice_usage_credits`).Scan(&count, &applied, &smallest, &largest); err != nil {
+				t.Fatal(err)
+			}
+			if count != 6 || applied != 6 || smallest <= 0 || smallest != largest {
+				t.Fatalf("media started before all final credits: rows=%d applied=%d min=%d max=%d", count, applied, smallest, largest)
+			}
+			select {
+			case <-done:
+				t.Fatal("shutdown did not join media stage")
+			default:
+			}
+			release.Do(func() { close(getter.release) })
+			select {
+			case <-done:
+			case <-ctx.Done():
+				t.Fatal("media stage not joined")
+			}
+		})
 	}
 }
