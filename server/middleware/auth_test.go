@@ -17,7 +17,8 @@ const testJWTSecret = "test-secret-key-for-auth-middleware"
 
 // newTestAuthMiddleware wires a real AuthService (so token validation is the
 // production code path, not a stub) over mock repos.
-func newTestAuthMiddleware(userRepo *testutil.MockUserRepo) *AuthMiddleware {
+func newTestAuthMiddleware(t testing.TB, userRepo *testutil.MockUserRepo) *AuthMiddleware {
+	t.Helper()
 	svc := services.NewAuthService(
 		userRepo,
 		&testutil.MockSessionRepo{},
@@ -31,7 +32,9 @@ func newTestAuthMiddleware(userRepo *testutil.MockUserRepo) *AuthMiddleware {
 	// nil bot validator: these tests cover the JWT/scope path only.
 	// Require checks botValidator != nil before consulting it, so nil is
 	// the correct "no bot support in this fixture" value, not a stub.
-	return NewAuthMiddleware(svc, userRepo, nil)
+	middleware := NewAuthMiddleware(svc, userRepo, nil)
+	t.Cleanup(middleware.Stop)
+	return middleware
 }
 
 // signTestToken mints a JWT with the given scope, signed with the same secret
@@ -104,7 +107,7 @@ func TestRequire_RejectsScopedTokens(t *testing.T) {
 					return &models.User{ID: id, Username: "testuser"}, nil
 				},
 			}
-			mw := newTestAuthMiddleware(userRepo)
+			mw := newTestAuthMiddleware(t, userRepo)
 
 			called := false
 			handler := mw.Require(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

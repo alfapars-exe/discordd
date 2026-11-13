@@ -35,6 +35,7 @@ func TestSessionBoundaryIsCheckedEvenWithWarmUserCache(t *testing.T) {
 	auth := &sessionBoundaryStub{active: true}
 	users := &testutil.MockUserRepo{GetByIDFn: func(context.Context, string) (*models.User, error) { reads++; return &models.User{ID: "owner"}, nil }}
 	m := NewAuthMiddleware(auth, users, nil)
+	t.Cleanup(m.Stop)
 	handler := m.Require(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Context().Value(handlers.AuthSessionContextKey) != "session-a" {
 			t.Error("missing bound session context")
