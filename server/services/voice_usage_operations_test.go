@@ -306,3 +306,41 @@ func TestVoiceUsageLateMemberRevocationOwnsDisconnectCleanup(t *testing.T) {
 		t.Fatal("late revocation retained voice state")
 	}
 }
+
+func TestVoiceUsageShutdownWaitsForMoveMusicCleanup(t *testing.T) {
+	svc, _ := newTestVoiceService()
+	s := svc.(*voiceService)
+	entered, release, stopped := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	t.Cleanup(func() { once.Do(func() { close(release) }); s.ShutdownUsageProducers() })
+	s.musicBotHook = &mockMusicBotHook{StopAllForChannelFn: func(string) { close(entered); <-release }}
+	s.states["victim"] = &models.VoiceState{UserID: "victim", ChannelID: "ch1", ServerID: "srv1"}
+	if err := s.MoveUser(context.Background(), "admin", "victim", "ch2"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("move music cleanup not started")
+	}
+	go func() { s.ShutdownUsageProducers(); close(stopped) }()
+	select {
+	case <-stopped:
+		t.Fatal("shutdown returned before move music cleanup")
+	case <-time.After(20 * time.Millisecond):
+	}
+	once.Do(func() { close(release) })
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("shutdown did not join move music cleanup")
+	}
+}
+
+func TestVoiceUsageShutdownRejectsMoveBeforeLookup(t *testing.T) {
+	s := &voiceService{}
+	s.ShutdownUsageProducers()
+	if err := s.MoveUser(context.Background(), "admin", "victim", "ch2"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("closed owner admitted move: %v", err)
+	}
+}

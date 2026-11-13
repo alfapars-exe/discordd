@@ -1,0 +1,28 @@
+{
+  "date": "2026-11-14",
+  "scope": "Admit MoveUser and own its old-room eviction/music children",
+  "source_sha256": {
+    "server/services/voice_admin.go": "1a11359666d82006758716c0ce2f15fe67b9c9c0e1d1bfd343d48d8fffbab90f",
+    "server/services/voice_usage_operations_test.go": "72587ac4a88280779fe7d7b7e3e80dec91ddcc3d75d928ca5d6b95a337579e3c"
+  },
+  "before": {
+    "test": "TestVoiceUsageShutdownWaitsForMoveMusicCleanup",
+    "exit": 1,
+    "failure": "shutdown returned before move music cleanup"
+  },
+  "after": {
+    "host_count": 10,
+    "host_exit": 0,
+    "host_seconds": 6.956,
+    "linux_race_count": 10,
+    "linux_race_exit": 0,
+    "linux_race_seconds": 9.871,
+    "services_vet_exit": 0,
+    "services_lint_issues": 0
+  },
+  "limitations": [
+    "DSN-free checks skip PostgreSQL-specific tests.",
+    "Changes local to integration; published PR298 head remains fb269038.",
+    "Webhook, mute, entrance-hook ownership and physical acceptance remain open."
+  ]
+}

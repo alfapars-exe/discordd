@@ -1323,3 +1323,9 @@ Terminal current-head receipt: PR29814a965ea completed36/36 SUCCESS. Exact-head 
 - Admin music cleanup regression failed before fix: terminal producer shutdown returned while accepted disconnect cleanup still ran. Shared disconnect cleanup now registers LiveKit eviction and music stop with the owner. After terminal closure, committed membership/permission revocation cleanup executes synchronously in its caller instead of escaping or being dropped.
 - Targeted VoiceUsage/AdminDisconnectUser/VoiceMaintenance tests passed 10 repetitions (4.079s); Linux race passed 10 (8.898s). Late-member-revocation test passed 10 host repetitions (1.113s) and 10 race repetitions (3.522s), confirming voice-state removal and caller-owned cleanup. Services vet/lint passed before adding the late-member test. These DSN-free runs skip PostgreSQL-specific checks.
 - Move, webhook, mute and entrance-hook ownership; late terminal usage credit; crash-before-enqueue and physical media remain open. PR #298 current published head fb269038 CI run 43515470174 is active; this new fix is local integration only.
+
+### 2026-11-14 — Own voice move media children
+
+- MoveUser music cleanup regression failed before fix. MoveUser now enters the terminal operation owner before lookup and registers music/dual-identity eviction children; shutdown rejects new moves before DB work.
+- Targeted host tests passed 10 repetitions (6.956s), Linux race 10 (9.871s); services vet/lint passed. DSN-free PostgreSQL skips are not counted as acceptance. Receipt: `implementation/verification/refactor-voice-move-ownership-2026-11-14.json`.
+- PR298 fb269038 Server CI run 43515470174 remains live (last checked 10 successful jobs, no failures). Forced-disconnect and move fixes remain local integration. Canonical branch lacks integration-only DisconnectServerMember/pendingJoins, so later transfer must use scoped patches and preserve branch-specific test scope.
