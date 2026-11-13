@@ -19,6 +19,7 @@ function notifyMediaLifecycle(revoke = false): void { for (const listener of med
 let mediaDocumentUsable = false;
 export function getVoiceOverlayMediaWindow() { return mediaDocumentUsable ? overlayWindow : null; }
 let overlayWindow: BrowserWindow | null = null;
+let hudLoadFailed = false;
 let latest: VoiceOverlaySnapshot | null = null;
 let latestArea: VoiceOverlayWorkArea | null = null;
 const lifecycle = new VoiceOverlayLifecycle();
@@ -712,7 +713,11 @@ function ensureOverlay(): BrowserWindow {
     }
   });
   const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
-  void overlayWindow.loadURL(isDev ? "http://localhost:3030/overlay.html" : "app://hichat/overlay.html");
+  void createdWindow.loadURL(isDev ? "http://localhost:3030/overlay.html" : "app://hichat/overlay.html").catch(() => {
+    if (createdWindow !== overlayWindow) return;
+    closeVoiceOverlay();
+    hudLoadFailed = true;
+  });
   return overlayWindow;
 }
 
@@ -735,7 +740,7 @@ export function updateVoiceOverlay(snapshot: VoiceOverlaySnapshot, area?: VoiceO
     if (goLiveTimer) clearTimeout(goLiveTimer);
     goLiveTimer = null;
   }
-  if (!snapshot.enabled) clearWelcome();
+  if (!snapshot.enabled) { clearWelcome(); hudLoadFailed = false; }
   if (!snapshot.enabled || !snapshot.voiceOverlayQuickActions) actionSurfaceFailed = false;
   if (!snapshot.enabled || !snapshot.voiceOverlayNotifications || !snapshot.voiceOverlayNotificationActions || !snapshot.notificationActionSession) notificationActionSurfaceFailed = false;
   if (!snapshot.enabled || !snapshot.voiceOverlayChat || !snapshot.voiceOverlayChatActions || !snapshot.chatActionSession) chatActionSurfaceFailed = false;
@@ -787,6 +792,7 @@ export function updateVoiceOverlay(snapshot: VoiceOverlaySnapshot, area?: VoiceO
     });
     return;
   }
+  if (hudLoadFailed) return;
   const win = ensureOverlay();
   const boundedSnapshot = { ...snapshot, voiceOverlayMaxParticipants: geometry.effectiveMaxParticipants };
   lifecycle.update(boundedSnapshot, {
@@ -826,6 +832,7 @@ export function updateVoiceOverlay(snapshot: VoiceOverlaySnapshot, area?: VoiceO
 }
 
 export function closeVoiceOverlay(): void {
+  hudLoadFailed = false;
   mediaDocumentUsable = false; notifyMediaLifecycle(true);
   lockVoiceOverlay();
   if (actionWindow && !actionWindow.isDestroyed()) actionWindow.close();
