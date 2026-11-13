@@ -63,6 +63,9 @@ func newJoinServerHarness() *joinServerHarness {
 	return newJoinServerHarnessWithActivity(nil)
 }
 func newJoinServerHarnessWithActivity(activity GameActivityPrivacyInvalidator) *joinServerHarness {
+	return newJoinServerHarnessWithPolicies(nil, activity)
+}
+func newJoinServerHarnessWithPolicies(preferences repository.PreferencesRepository, activity GameActivityPrivacyInvalidator) *joinServerHarness {
 	h := &joinServerHarness{
 		serverRepo: &testutil.MockServerRepo{},
 		roleRepo:   &testutil.MockRoleRepo{},
@@ -93,14 +96,15 @@ func newJoinServerHarnessWithActivity(activity GameActivityPrivacyInvalidator) *
 		return false, nil
 	}
 
-	h.svc = NewServerService(nil, activity, nil, h.serverRepo, nil, h.roleRepo, nil, nil, h.userRepo, h.banRepo, h.inviteSvc, h.hub, nil, nil, // encryptionKey, auditLogger — not under test here
+	h.svc = NewServerService(preferences, activity, nil, h.serverRepo, nil, h.roleRepo, nil, nil, h.userRepo, h.banRepo, h.inviteSvc, h.hub, nil, nil, // encryptionKey, auditLogger — not under test here
 		passthroughMembershipTxRunner{server: h.serverRepo, role: h.roleRepo})
 	return h
 }
 
 func TestJoinServer_ValidInvite_AddsMemberAndMarksUsed(t *testing.T) {
 	activity := &recordingGameActivityInvalidator{}
-	h := newJoinServerHarnessWithActivity(activity)
+	prefs := &preferencesRepoStub{}
+	h := newJoinServerHarnessWithPolicies(prefs, activity)
 
 	var addMemberCalled, markUsedCalled, assignRoleCalled bool
 	h.serverRepo.AddMemberFn = func(_ context.Context, serverID, userID string) error {
@@ -143,6 +147,10 @@ func TestJoinServer_ValidInvite_AddsMemberAndMarksUsed(t *testing.T) {
 	}
 	if len(activity.calls) != 1 || activity.calls[0] != (gameActivityInvalidationCall{kind: "added", a: joinTestServerID, b: joinTestUserID}) {
 		t.Fatalf("join activity invalidation = %+v", activity.calls)
+	}
+
+	if prefs.userID != joinTestUserID {
+		t.Fatalf("join preferences read for %q, want %q", prefs.userID, joinTestUserID)
 	}
 
 }
