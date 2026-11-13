@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/repository"
@@ -423,5 +424,194 @@ func TestVoiceUsagePostgresLatePermissionRevocationPreservesCredit(t *testing.T)
 	}
 	if seconds <= 0 || !applied || used != int64(seconds) {
 		t.Fatalf("late credit not applied once: seconds=%d applied=%v used=%d", seconds, applied, used)
+	}
+}
+
+func TestVoiceUsagePostgresShutdownFinalizesActiveSession(t *testing.T) {
+	db := postgresServerFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if _, err := db.ExecContext(ctx, `INSERT INTO livekit_instances(id,url,api_key,api_secret) VALUES('active-instance','http://127.0.0.1','fixture','fixture')`); err != nil {
+		t.Fatal(err)
+	}
+	repo := repository.NewSQLiteLiveKitRepo(db)
+	svc, _ := newTestVoiceServiceWithLiveKitGetter(repo)
+	s := svc.(*voiceService)
+	s.states["reader"] = &models.VoiceState{UserID: "reader", ChannelID: "channel", ServerID: "default", UsageSessionID: "active-credit", LiveKitInstanceID: "active-instance", LiveKitIsCloud: true, JoinedAt: time.Now().Add(-time.Minute)}
+	s.ShutdownVoiceSessions()
+	s.ShutdownVoiceSessions()
+	var seconds int
+	var applied bool
+	if err := db.QueryRowContext(ctx, `SELECT seconds,applied_at IS NOT NULL FROM voice_usage_credits WHERE credit_id='active-credit'`).Scan(&seconds, &applied); err != nil {
+		t.Fatal(err)
+	}
+	var used int64
+	if err := db.QueryRowContext(ctx, `SELECT COALESCE(SUM(used_seconds),0) FROM livekit_monthly_usage WHERE instance_id='active-instance'`).Scan(&used); err != nil {
+		t.Fatal(err)
+	}
+	if seconds <= 0 || !applied || used != int64(seconds) || len(s.GetAllVoiceStates()) != 0 {
+		t.Fatalf("active shutdown incomplete: seconds=%d applied=%v usage=%d states=%d", seconds, applied, used, len(s.GetAllVoiceStates()))
+	}
+}
+
+type blockedShutdownLiveKitRepo struct {
+	repository.LiveKitRepository
+	repository.VoiceUsageRecorder
+	repository.VoiceUsageQueue
+	entered, release chan struct{}
+	once             sync.Once
+}
+
+func (r *blockedShutdownLiveKitRepo) GetByServerID(ctx context.Context, _ string) (*models.LiveKitInstance, error) {
+	r.once.Do(func() { close(r.entered) })
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-r.release:
+		return nil, errors.New("fixture has no media server")
+	}
+}
+
+func TestVoiceUsagePostgresShutdownCreditsBeforeMediaWait(t *testing.T) {
+	db := postgresServerFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := db.ExecContext(ctx, `INSERT INTO livekit_instances(id,url,api_key,api_secret) VALUES('blocked-media-instance','http://127.0.0.1','fixture','fixture')`); err != nil {
+		t.Fatal(err)
+	}
+	repo := repository.NewSQLiteLiveKitRepo(db)
+	getter := &blockedShutdownLiveKitRepo{LiveKitRepository: repo, VoiceUsageRecorder: repo.(repository.VoiceUsageRecorder), VoiceUsageQueue: repo.(repository.VoiceUsageQueue), entered: make(chan struct{}), release: make(chan struct{})}
+	svc, _ := newTestVoiceServiceWithLiveKitGetter(getter)
+	s := svc.(*voiceService)
+	s.states["reader"] = &models.VoiceState{UserID: "reader", ChannelID: "channel", ServerID: "default", UsageSessionID: "blocked-media-credit", LiveKitInstanceID: "blocked-media-instance", LiveKitIsCloud: true, JoinedAt: time.Now().Add(-time.Minute)}
+	done := make(chan struct{})
+	var release sync.Once
+	t.Cleanup(func() { release.Do(func() { close(getter.release) }); <-done })
+	go func() { s.ShutdownVoiceSessions(); close(done) }()
+	select {
+	case <-getter.entered:
+	case <-ctx.Done():
+		t.Fatal("media cleanup did not start")
+	}
+	var applied bool
+	if err := db.QueryRowContext(ctx, `SELECT applied_at IS NOT NULL FROM voice_usage_credits WHERE credit_id='blocked-media-credit'`).Scan(&applied); err != nil || !applied {
+		t.Fatalf("credit not durable before media wait: applied=%v err=%v", applied, err)
+	}
+	select {
+	case <-done:
+		t.Fatal("shutdown escaped blocked media cleanup")
+	default:
+	}
+	release.Do(func() { close(getter.release) })
+	select {
+	case <-done:
+	case <-ctx.Done():
+		t.Fatal("shutdown did not join media cleanup")
+	}
+}
+
+func TestVoiceUsagePostgresShutdownHandsOffAllBeforeMedia(t *testing.T) {
+	for _, mode := range []string{"music", "eviction"} {
+		t.Run(mode, func(t *testing.T) {
+			db := postgresServerFixture(t)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if _, err := db.ExecContext(ctx, `INSERT INTO livekit_instances(id,url,api_key,api_secret) VALUES('phase-instance','http://127.0.0.1','fixture','fixture')`); err != nil {
+				t.Fatal(err)
+			}
+			repo := repository.NewSQLiteLiveKitRepo(db)
+			getter := &blockedShutdownLiveKitRepo{LiveKitRepository: repo, VoiceUsageRecorder: repo.(repository.VoiceUsageRecorder), VoiceUsageQueue: repo.(repository.VoiceUsageQueue), entered: make(chan struct{}), release: make(chan struct{})}
+			svc, _ := newTestVoiceServiceWithLiveKitGetter(getter)
+			s := svc.(*voiceService)
+			joined := time.Now().Add(-time.Minute)
+			for i := 0; i < 6; i++ {
+				id := fmt.Sprintf("phase-user-%d", i)
+				s.states[id] = &models.VoiceState{UserID: id, ChannelID: "channel", ServerID: "default", UsageSessionID: fmt.Sprintf("phase-credit-%d", i), LiveKitInstanceID: "phase-instance", LiveKitIsCloud: true, JoinedAt: joined}
+			}
+			if mode == "music" {
+				s.musicBotHook = &mockMusicBotHook{StopAllForChannelFn: func(string) { getter.once.Do(func() { close(getter.entered) }); <-getter.release }}
+			}
+			done := make(chan struct{})
+			var release sync.Once
+			t.Cleanup(func() { release.Do(func() { close(getter.release) }); <-done })
+			go func() { s.ShutdownVoiceSessions(); close(done) }()
+			select {
+			case <-getter.entered:
+			case <-ctx.Done():
+				t.Fatal("media stage did not start")
+			}
+			var count, applied, smallest, largest int
+			if err := db.QueryRowContext(ctx, `SELECT COUNT(*),COUNT(applied_at),COALESCE(MIN(seconds),0),COALESCE(MAX(seconds),0) FROM voice_usage_credits`).Scan(&count, &applied, &smallest, &largest); err != nil {
+				t.Fatal(err)
+			}
+			if count != 6 || applied != 6 || smallest <= 0 || smallest != largest {
+				t.Fatalf("media started before all final credits: rows=%d applied=%d min=%d max=%d", count, applied, smallest, largest)
+			}
+			select {
+			case <-done:
+				t.Fatal("shutdown did not join media stage")
+			default:
+			}
+			release.Do(func() { close(getter.release) })
+			select {
+			case <-done:
+			case <-ctx.Done():
+				t.Fatal("media stage not joined")
+			}
+		})
+	}
+}
+
+func TestVoiceUsagePostgresShutdownRecoversFailedApplication(t *testing.T) {
+	db := postgresServerFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	for _, q := range []string{
+		`INSERT INTO livekit_instances(id,url,api_key,api_secret) VALUES('shutdown-recover','http://127.0.0.1','fixture','fixture')`,
+		`CREATE FUNCTION reject_shutdown_fixture() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'shutdown fixture failure'; END $$`,
+		`CREATE TRIGGER reject_shutdown_fixture BEFORE INSERT OR UPDATE ON livekit_monthly_usage FOR EACH ROW EXECUTE FUNCTION reject_shutdown_fixture()`,
+	} {
+		if _, err := db.ExecContext(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	repo := repository.NewSQLiteLiveKitRepo(db)
+	svc, _ := newTestVoiceServiceWithLiveKitGetter(repo)
+	s := svc.(*voiceService)
+	s.states["reader"] = &models.VoiceState{UserID: "reader", ChannelID: "channel", ServerID: "default", UsageSessionID: "shutdown-recover-credit", LiveKitInstanceID: "shutdown-recover", LiveKitIsCloud: true, JoinedAt: time.Now().Add(-time.Minute)}
+	s.ShutdownVoiceSessions()
+	var seconds int
+	var pending bool
+	if err := db.QueryRowContext(ctx, `SELECT seconds,applied_at IS NULL FROM voice_usage_credits WHERE credit_id='shutdown-recover-credit'`).Scan(&seconds, &pending); err != nil || seconds <= 0 || !pending {
+		t.Fatalf("failed application lost final credit: seconds=%d pending=%v err=%v", seconds, pending, err)
+	}
+	if _, err := db.ExecContext(ctx, `DROP TRIGGER reject_shutdown_fixture ON livekit_monthly_usage`); err != nil {
+		t.Fatal(err)
+	}
+	freshRepo := repository.NewSQLiteLiveKitRepo(db)
+	stop := startVoiceUsageDelivery(ctx, &voiceService{livekitGetter: freshRepo}, time.Millisecond)
+	t.Cleanup(stop)
+	for {
+		var applied bool
+		if err := db.QueryRowContext(ctx, `SELECT applied_at IS NOT NULL FROM voice_usage_credits WHERE credit_id='shutdown-recover-credit'`).Scan(&applied); err != nil {
+			t.Fatal(err)
+		}
+		if applied {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal("restart did not apply final credit")
+		case <-time.After(time.Millisecond):
+		}
+	}
+	stop()
+	applied, err := freshRepo.(repository.VoiceUsageQueue).ApplyNextVoiceUsage(ctx)
+	if err != nil || applied {
+		t.Fatalf("recovered credit replayed: applied=%v err=%v", applied, err)
+	}
+	var used int64
+	if err := db.QueryRowContext(ctx, `SELECT COALESCE(SUM(used_seconds),0) FROM livekit_monthly_usage WHERE instance_id='shutdown-recover'`).Scan(&used); err != nil || used != int64(seconds) {
+		t.Fatalf("recovered final usage=%d want%d err=%v", used, seconds, err)
 	}
 }

@@ -412,3 +412,15 @@ func TestVoiceUsageShutdownWaitsForPermissionRecheck(t *testing.T) {
 	go func() { s.recheckVoiceAccess("victim", "ch1"); close(rechecked) }()
 	assertVoiceShutdownJoins(t, s, entered, func() { once.Do(func() { close(release) }) })
 }
+
+func TestVoiceUsageShutdownWaitsForDeletedChannelMusic(t *testing.T) {
+	svc, _ := newTestVoiceService()
+	s := svc.(*voiceService)
+	entered, release := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	t.Cleanup(func() { once.Do(func() { close(release) }); s.ShutdownUsageProducers() })
+	s.states["victim"] = &models.VoiceState{UserID: "victim", ChannelID: "ch1", ServerID: "srv1"}
+	s.musicBotHook = &mockMusicBotHook{StopAllForChannelFn: func(string) { close(entered); <-release }}
+	s.DeleteVoiceChannel(context.Background(), "srv1", "ch1")
+	assertVoiceShutdownJoins(t, s, entered, func() { once.Do(func() { close(release) }) })
+}

@@ -28,14 +28,83 @@ type deletedVoiceSession struct {
 // cannot resurrect state after this cleanup. The epoch is global to keep the
 // guard bounded; a simultaneous join to another server may need a retry.
 func (s *voiceService) DeleteVoiceChannel(ctx context.Context, serverID, channelID string) {
-	finishUsageOperation, admitted := s.usageOperations.begin()
+	s.deleteVoiceChannelAt(ctx, serverID, channelID, time.Now())
+}
+
+func (s *voiceService) deleteVoiceChannelAt(ctx context.Context, serverID, channelID string, endedAt time.Time) {
+	finishOperation, admitted := s.usageOperations.begin()
 	if admitted {
-		defer finishUsageOperation()
+		defer finishOperation()
 	}
 
 	if serverID == "" || channelID == "" {
 		return
 	}
+	removed := s.detachVoiceChannel(serverID, channelID)
+	// The channel row was already deleted: always fence pending joins and
+	// remove in-memory state, even after usage admission closes.
+	if !admitted {
+		// Committed channel deletion must still attempt eviction. With admission
+		// closed the caller owns completion; do not launch untracked late work.
+		if s.musicBotHook != nil {
+			s.musicBotHook.StopAllForChannel(channelID)
+		}
+		for _, session := range removed {
+			s.completeDeletedVoiceSession(ctx, session, endedAt)
+		}
+		return
+	}
+
+	if s.musicBotHook != nil {
+		s.usageOperations.child(func() { s.musicBotHook.StopAllForChannel(channelID) })
+	}
+	if len(removed) == 0 {
+		return
+	}
+	s.usageOperations.child(func() {
+		// Keep cleanup bounded: a deleted channel can have many occupants, so
+		// use a small fixed worker pool rather than one goroutine per identity.
+		tasks := make(chan deletedVoiceSession)
+		workers := 4
+		if len(removed) < workers {
+			workers = len(removed)
+		}
+		var wg sync.WaitGroup
+		wg.Add(workers)
+		for i := 0; i < workers; i++ {
+			logx.Go("voice-channel-delete-eviction", func() {
+				defer wg.Done()
+				for session := range tasks {
+					s.completeDeletedVoiceSession(ctx, session, endedAt)
+				}
+			})
+		}
+		for _, session := range removed {
+			tasks <- session
+		}
+		close(tasks)
+		wg.Wait()
+	})
+	voiceLogger.Info("removed voice state for deleted channel", "server_id", serverID, "channel_id", channelID, "participant_count", len(removed))
+}
+
+var _ VoiceChannelDeletionHandler = (*voiceService)(nil)
+
+func (s *voiceService) completeDeletedVoiceSession(ctx context.Context, session deletedVoiceSession, endedAt time.Time) {
+	// Persist accounting before potentially slow media cleanup. Native pending
+	// handoff survives process loss during subsequent LiveKit eviction attempts.
+	s.creditUsageSession(session.state.UsageSessionID, session.state.LiveKitInstanceID, session.state.LiveKitIsCloud, session.state.JoinedAt, endedAt)
+	s.evictDeletedVoiceSession(ctx, session)
+}
+
+func (s *voiceService) evictDeletedVoiceSession(ctx context.Context, session deletedVoiceSession) {
+	s.removeDeletedChannelParticipant(ctx, session.serverID, session.channelID, session.userID)
+	s.removeDeletedChannelParticipant(ctx, session.serverID, session.channelID, session.userID+"_ss")
+}
+
+// detachVoiceChannel fences joins and returns exclusive ownership of removed sessions.
+// All state mutation remains under s.mu; repository/media work runs afterward.
+func (s *voiceService) detachVoiceChannel(serverID, channelID string) []deletedVoiceSession {
 	var removed []deletedVoiceSession
 	removedUsers := make(map[string]struct{})
 	snapshotChanged := false
@@ -88,58 +157,5 @@ func (s *voiceService) DeleteVoiceChannel(ctx context.Context, serverID, channel
 	}
 	s.cleanupRoomPassphraseIfEmpty(channelID)
 	s.mu.Unlock()
-	// The channel row was already deleted: always fence pending joins and
-	// remove in-memory state, even after usage admission closes.
-	endedAt := time.Now()
-	if !admitted {
-		// Committed channel deletion must still attempt eviction. With admission
-		// closed the caller owns completion; do not launch untracked late work.
-		if s.musicBotHook != nil {
-			s.musicBotHook.StopAllForChannel(channelID)
-		}
-		for _, session := range removed {
-			s.completeDeletedVoiceSession(ctx, session, endedAt)
-		}
-		return
-	}
-
-	if s.musicBotHook != nil {
-		logx.Go("voice-channel-delete", func() { s.musicBotHook.StopAllForChannel(channelID) })
-	}
-	if len(removed) == 0 {
-		return
-	}
-	s.usageOperations.child(func() {
-		// Keep cleanup bounded: a deleted channel can have many occupants, so
-		// use a small fixed worker pool rather than one goroutine per identity.
-		tasks := make(chan deletedVoiceSession)
-		workers := 4
-		if len(removed) < workers {
-			workers = len(removed)
-		}
-		var wg sync.WaitGroup
-		wg.Add(workers)
-		for i := 0; i < workers; i++ {
-			logx.Go("voice-channel-delete-eviction", func() {
-				defer wg.Done()
-				for session := range tasks {
-					s.completeDeletedVoiceSession(ctx, session, endedAt)
-				}
-			})
-		}
-		for _, session := range removed {
-			tasks <- session
-		}
-		close(tasks)
-		wg.Wait()
-	})
-	voiceLogger.Info("removed voice state for deleted channel", "server_id", serverID, "channel_id", channelID, "participant_count", len(removed))
-}
-
-var _ VoiceChannelDeletionHandler = (*voiceService)(nil)
-
-func (s *voiceService) completeDeletedVoiceSession(ctx context.Context, session deletedVoiceSession, endedAt time.Time) {
-	s.removeDeletedChannelParticipant(ctx, session.serverID, session.channelID, session.userID)
-	s.removeDeletedChannelParticipant(ctx, session.serverID, session.channelID, session.userID+"_ss")
-	s.creditUsageSession(session.state.UsageSessionID, session.state.LiveKitInstanceID, session.state.LiveKitIsCloud, session.state.JoinedAt, endedAt)
+	return removed
 }
