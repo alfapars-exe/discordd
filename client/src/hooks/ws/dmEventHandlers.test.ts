@@ -345,6 +345,13 @@ describe("handleDMEvent — dm_message_create own E2EE echo (sent-plaintext FIFO
 });
 
 describe("handleDMEvent — dm_read", () => {
+  it.each([["other", true], ["me", false]] as const)("ignores a read event for user %s with current connection %s", async (user_id, current) => {
+    await handleDMEvent({
+      op: "dm_read",
+      d: { dm_channel_id: "dm-1", user_id, last_read_message_id: null, unread_count: 2 },
+    }, () => current);
+    expect(dmStoreState.handleDMReadSync).not.toHaveBeenCalled();
+  });
   it("clears locally via handleDMReadSync and never calls the API (no echo loop)", async () => {
     const handled = await handleDMEvent({
       op: "dm_read",

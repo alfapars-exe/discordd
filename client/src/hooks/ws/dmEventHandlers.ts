@@ -365,7 +365,8 @@ export async function handleDMEvent(msg: WSMessage, isCurrent: () => boolean = (
       return true;
 
     case "dm_read":
-      // Echo of our own read cursor from another session — local clear only.
+      if (!isCurrent() || !msg.d?.user_id || msg.d.user_id !== useAuthStore.getState().user?.id) return true;
+      // Apply the synchronized unread count locally.
       // Calling markDMRead here would echo again and loop.
       useDMStore.getState().handleDMReadSync(msg.d);
       return true;
