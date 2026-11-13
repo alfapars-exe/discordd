@@ -82,6 +82,21 @@ vi.mock("./keyStorage", () => {
 import { createBackup, restoreFromBackup } from "./keyBackup";
 import * as keyStorageMock from "./keyStorage";
 
+it("restores a serialized ratchet session through the encrypted backup round trip", async () => {
+  vi.clearAllMocks();
+  const bytes = new Uint8Array(32).fill(7);
+  const session = {
+    userId: "peer", deviceId: "peer-device", createdAt: 1, updatedAt: 2,
+    state: { rootKey: bytes, sendingChainKey: null, receivingChainKey: null,
+      sendingRatchetKeyPair: { publicKey: bytes, privateKey: bytes }, receivingRatchetKey: null,
+      sendMessageNumber: 0, receiveMessageNumber: 0, previousSendChainLength: 0, skippedMessageKeys: [] },
+  };
+  vi.mocked(keyStorageMock.getAllSessions).mockResolvedValueOnce([session]);
+  const backup = await createBackup("session-roundtrip-password");
+  expect(await restoreFromBackup(backup, "session-roundtrip-password")).toBe(true);
+  expect(keyStorageMock.saveSession).toHaveBeenCalledExactlyOnceWith(session);
+});
+
 describe("backup content version validation", () => {
   it.each([0, 2, "1", null])("rejects version %j before accessing or clearing local keys", async (version) => {
     vi.clearAllMocks();
