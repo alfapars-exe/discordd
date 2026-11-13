@@ -14,12 +14,17 @@
     "full_middleware_race": "PASS 14.794s",
     "full_go_vet_and_build": "PASS",
     "golangci_lint": "0 issues",
-    "retained_workers": "0 relative to each group baseline"
+    "retained_workers": "0 relative to each group baseline",
+    "integrated_selected_groups_count_5": "PASS handlers 0.744s, middleware 0.422s",
+    "integrated_full_go_vet_and_build": "PASS",
+    "integrated_selected_groups_race_count_5": "PASS handlers 3.439s, middleware 3.095s"
   },
   "limitations": [
     "This receipt covers the named limiter fixtures, not all cache or background-worker constructors.",
     "Middleware auth/permission cache fixture ownership remains to be reconciled with PR292.",
     "MetricsCollector Start/Stop lifecycle is a separate production gap: repeated Start/Stop and cancellation/waiting require tests and remediation.",
     "No physical or full-process shutdown acceptance is claimed."
-  ]
+  ],
+  "canonical_source": "539647b5",
+  "integrated_source": "cdaca069"
 }

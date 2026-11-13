@@ -1191,3 +1191,6 @@ CI correction: PR #294 initially targeted #292 branch and only five checks were 
 
 
 2026-11-13: frozen integrated source 12548e22 full main-package race session 5329 completed exit 0, 202.971s. This covers the main package only, with no PostgreSQL DSN injected into the Docker process; it is not a whole-server or production-profile result. Receipt refactor-partial-limiter-startup-2026-11-13.json updated from running to PASS.
+
+
+2026-11-13 RF08: PR #293 source 539647b5 adds test-owner cleanup to existing limiter fixtures. New regression executes 12 actual handler fixture groups and one middleware group under child owners: all failed before, retaining 14+1 workers, and restore their baseline afterward. Five-repeat regressions passed; complete handlers race passed (87.821s), middleware race passed (14.794s), full vet/build and lint 0 issues passed. Integration cdaca069 selected groups passed five times, full vet/build passed. Evidence: implementation/verification/refactor-limiter-fixture-ownership-2026-11-13.json. Auth/permission middleware caches still need fixture ownership reconciliation. MetricsCollector Start starts duplicate workers and Stop closes a channel without cancellation/waiting/idempotence; production lifecycle remediation remains open. PR293 current-head CI and PR294 exact-head dispatch 43468133456 remain pending.
