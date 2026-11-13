@@ -1352,3 +1352,8 @@ Terminal current-head receipt: PR29814a965ea completed36/36 SUCCESS. Exact-head 
 
 - Entrance-hook regression failed before fix: terminal shutdown returned before fresh-join hook finished. JoinChannel now registers the async entrance hook as a child of its already accepted operation, retaining asynchronous response behavior.
 - Integrated VoiceUsage/VoiceMaintenance/JoinChannel tests passed ten repetitions (12.357s). Mute/webhook/entrance changes were applied to canonical source using scoped edits; canonical PostgreSQL/race/full vet-build-lint validation is running, not yet a success claim. Physical audible entrance sound remains unverified.
+
+### 2026-11-14 — Publish mute/webhook/entrance ownership
+
+- Canonical PR298 head 6236c8b9 now includes all three ownership fixes. Real-mTLS PostgreSQL targeted tests passed three repetitions (72.962s), Linux race ten (28.565s); full Go vet/build and golangci-lint passed with zero issues. Receipt: `implementation/verification/refactor-voice-media-owners-canonical-2026-11-14.json`.
+- Current-head CI is pending; previous-head checks are not reused. Final combined acceptance, physical media, active-session shutdown, late terminal credit and crash-before-enqueue remain open.

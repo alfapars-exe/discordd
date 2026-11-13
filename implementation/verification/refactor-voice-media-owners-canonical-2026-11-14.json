@@ -1,0 +1,29 @@
+{
+  "date": "2026-11-14",
+  "pr": 298,
+  "head": "6236c8b9e6e49a42b68650c0e6a6670048692282",
+  "scope": "Mute webhook and entrance lifecycle ownership",
+  "canonical_source_sha256": {
+    "server/services/voice_admin.go": "28a1fbdaca46056e87986748408fec20f01fd1c13ba911ca289ba449424405f3",
+    "server/services/voice_lifecycle.go": "c35d2b3b63ca9ec543e0ed1a3d69af42ad6900d487d886dfaee0ebb185b4acbf",
+    "server/services/voice_state.go": "7135d8bd4699a30284fc4cf71d1de5537453f737a5a2adcce7f13a111a037c90",
+    "server/services/voice_usage_operations_test.go": "f0f9be27083831738d1c2a45b5b61b85ebc6b19a39aced2024e64f33899ad008"
+  },
+  "checks": {
+    "verified_mtls_postgres_count": 3,
+    "postgres_exit": 0,
+    "postgres_seconds": 72.962,
+    "linux_race_count": 10,
+    "race_exit": 0,
+    "race_seconds": 28.565,
+    "race_postgres": "DSN absent; PostgreSQL-specific tests skipped",
+    "full_vet_exit": 0,
+    "full_build_exit": 0,
+    "full_lint_issues": 0
+  },
+  "limitations": [
+    "Current-head CI pending.",
+    "No physical media/active-session shutdown acceptance.",
+    "Crash-before-enqueue, late terminal quota credit, combined cleanup timeout root cause and final whole-project acceptance remain open."
+  ]
+}
