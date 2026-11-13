@@ -14,7 +14,7 @@
     "full_go_vet_and_build": "PASS",
     "golangci_lint": "0 issues",
     "non_test_helper_profiling_calls": 0,
-    "current_head_sonar": "Pending new push/analysis",
+    "current_head_sonar": "SUCCESS on 12fd653de4396785a89211e08bfbcbe47bbe5430",
     "integrated_selected_tests_count_5": "PASS handlers 0.837s, middleware 0.422s",
     "integrated_full_go_vet_and_build": "PASS",
     "integrated_same_scope_race_count_5": "PASS handlers 3.700s, middleware 3.349s"

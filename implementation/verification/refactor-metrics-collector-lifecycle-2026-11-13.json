@@ -22,7 +22,8 @@
       "Start": 95.7,
       "Stop": 100,
       "collectAll": 94.1
-    }
+    },
+    "current_head_sonar": "SUCCESS on b24d47a1d9a82972a3a736fcf2fa1b1ff642fa75"
   },
   "limitations": [
     "HTTP test uses a local synthetic metrics server, not a production LiveKit endpoint.",
