@@ -142,7 +142,9 @@ func (s *voiceService) deleteVoiceChannelAt(ctx context.Context, serverID, chann
 var _ VoiceChannelDeletionHandler = (*voiceService)(nil)
 
 func (s *voiceService) completeDeletedVoiceSession(ctx context.Context, session deletedVoiceSession, endedAt time.Time) {
+	// Persist accounting before potentially slow media cleanup. Native pending
+	// handoff survives process loss during subsequent LiveKit eviction attempts.
+	s.creditUsageSession(session.state.UsageSessionID, session.state.LiveKitInstanceID, session.state.LiveKitIsCloud, session.state.JoinedAt, endedAt)
 	s.removeDeletedChannelParticipant(ctx, session.serverID, session.channelID, session.userID)
 	s.removeDeletedChannelParticipant(ctx, session.serverID, session.channelID, session.userID+"_ss")
-	s.creditUsageSession(session.state.UsageSessionID, session.state.LiveKitInstanceID, session.state.LiveKitIsCloud, session.state.JoinedAt, endedAt)
 }

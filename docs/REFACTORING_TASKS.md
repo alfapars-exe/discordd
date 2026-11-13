@@ -1412,3 +1412,9 @@ Terminal current-head receipt: PR29814a965ea completed36/36 SUCCESS. Exact-head 
 - Main explicitly/deferred finalizes sessions after HTTP/producer drain and before recovery/log/database shutdown. Channel cleanup accepts captured end time so queue delay does not extend usage.
 - Host and verified-mTLS Linux race new wiring/active/native-credit tests passed three repetitions; existing usage wiring passed. Full vet/build/lint passed; runner14 passed and active-session PG test became mandatory. Receipt: `implementation/verification/refactor-active-voice-shutdown-2026-11-14.json`.
 - Local integration only. Actual LiveKit/device eviction, process-signal active session, failure recovery, pool-bound runtime and credit-before-network-delay acceptance remain open; this does not close whole RF08 or crash-before-enqueue.
+
+### 2026-11-14 — Credit a session before LiveKit eviction waits
+
+- Real-PG blocked-media regression failed before fix: active shutdown had no ledger row while media lookup waited. completeDeletedVoiceSession now performs bounded usage handoff before both participant eviction attempts. Native credit ledger was applied while media remained blocked and shutdown still joined media completion.
+- Two native tests passed three host repetitions (5.300s) and three verified-mTLS Linux race repetitions (8.339s); services vet/lint passed. Made blocked-media test mandatory; runner14 passed. Receipt: `implementation/verification/refactor-voice-credit-before-eviction-2026-11-14.json`.
+- Only per-session LiveKit ordering proven. Music-stop delay, queued sessions before enqueue, active process signal, actual network/device eviction and crash-before-first-enqueue remain open. PR298 current published527a3ad3 last snapshot32/34 successful, none failed, overall still pending.

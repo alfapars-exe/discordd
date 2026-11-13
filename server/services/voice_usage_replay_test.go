@@ -451,3 +451,59 @@ func TestVoiceUsagePostgresShutdownFinalizesActiveSession(t *testing.T) {
 		t.Fatalf("active shutdown incomplete: seconds=%d applied=%v usage=%d states=%d", seconds, applied, used, len(s.GetAllVoiceStates()))
 	}
 }
+
+type blockedShutdownLiveKitRepo struct {
+	repository.LiveKitRepository
+	repository.VoiceUsageRecorder
+	repository.VoiceUsageQueue
+	entered, release chan struct{}
+	once             sync.Once
+}
+
+func (r *blockedShutdownLiveKitRepo) GetByServerID(ctx context.Context, _ string) (*models.LiveKitInstance, error) {
+	r.once.Do(func() { close(r.entered) })
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-r.release:
+		return nil, errors.New("fixture has no media server")
+	}
+}
+
+func TestVoiceUsagePostgresShutdownCreditsBeforeMediaWait(t *testing.T) {
+	db := postgresServerFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := db.ExecContext(ctx, `INSERT INTO livekit_instances(id,url,api_key,api_secret) VALUES('blocked-media-instance','http://127.0.0.1','fixture','fixture')`); err != nil {
+		t.Fatal(err)
+	}
+	repo := repository.NewSQLiteLiveKitRepo(db)
+	getter := &blockedShutdownLiveKitRepo{LiveKitRepository: repo, VoiceUsageRecorder: repo.(repository.VoiceUsageRecorder), VoiceUsageQueue: repo.(repository.VoiceUsageQueue), entered: make(chan struct{}), release: make(chan struct{})}
+	svc, _ := newTestVoiceServiceWithLiveKitGetter(getter)
+	s := svc.(*voiceService)
+	s.states["reader"] = &models.VoiceState{UserID: "reader", ChannelID: "channel", ServerID: "default", UsageSessionID: "blocked-media-credit", LiveKitInstanceID: "blocked-media-instance", LiveKitIsCloud: true, JoinedAt: time.Now().Add(-time.Minute)}
+	done := make(chan struct{})
+	var release sync.Once
+	t.Cleanup(func() { release.Do(func() { close(getter.release) }); <-done })
+	go func() { s.ShutdownVoiceSessions(); close(done) }()
+	select {
+	case <-getter.entered:
+	case <-ctx.Done():
+		t.Fatal("media cleanup did not start")
+	}
+	var applied bool
+	if err := db.QueryRowContext(ctx, `SELECT applied_at IS NOT NULL FROM voice_usage_credits WHERE credit_id='blocked-media-credit'`).Scan(&applied); err != nil || !applied {
+		t.Fatalf("credit not durable before media wait: applied=%v err=%v", applied, err)
+	}
+	select {
+	case <-done:
+		t.Fatal("shutdown escaped blocked media cleanup")
+	default:
+	}
+	release.Do(func() { close(getter.release) })
+	select {
+	case <-done:
+	case <-ctx.Done():
+		t.Fatal("shutdown did not join media cleanup")
+	}
+}
