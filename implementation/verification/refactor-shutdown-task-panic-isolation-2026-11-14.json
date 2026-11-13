@@ -1,0 +1,38 @@
+{
+  "date": "2026-11-14",
+  "scope": "Keep terminal voice media workers alive across individual task panics",
+  "source_sha256": {
+    "server/pkg/logx/go.go": "c8f04c642bfd8c711076832f058383b92da30dcc7697a30d52d3a31280a909c0",
+    "server/services/voice_shutdown.go": "f226e3fb5d9b0c4cbe38bee4b2899b62ea708b54af5d79785d4e1d9297d2480c",
+    "server/services/voice_shutdown_test.go": "63ecdee2bafca07ca60e60c2767ee8441359461ac6b1d59cb33b0be17e9fd772"
+  },
+  "before": {
+    "test": "TestVoiceShutdownContinuesAfterMusicPanic",
+    "exit": 1,
+    "failure": "panicking music hooks stranded shutdown queue"
+  },
+  "after": {
+    "logx_existing_go_tests_count": 20,
+    "logx_exit": 0,
+    "logx_seconds": 1.432,
+    "voice_shutdown_tests_count": 20,
+    "voice_exit": 0,
+    "voice_seconds": 1.098,
+    "full_vet_exit": 0,
+    "full_build_exit": 0,
+    "full_lint_issues": 0
+  },
+  "invariants": [
+    "Synchronous logx.Run preserves panic component/type/stack logging without retry",
+    "Go retains asynchronous behavior by launching Run",
+    "Per-music and per-session eviction guards let worker loop drain remaining queue",
+    "Regression observes eight music attempts and sixteen identity lookups despite music panics"
+  ],
+  "limitations": [
+    "Attempts are verified; panicking music hook is not a successful music stop.",
+    "Other worker pools/credit-stage panics remain separate review scope.",
+    "Local integration only; new Linux race pending Docker or subsequent CI.",
+    "Publishedfbf10657 CI43526056404 still live, last poll12 successful jobs/no failure.",
+    "Whole-project/process/physical acceptance remains open."
+  ]
+}

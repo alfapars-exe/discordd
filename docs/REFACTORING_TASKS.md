@@ -1477,3 +1477,9 @@ Terminal current-head receipt: PR29814a965ea completed36/36 SUCCESS. Exact-head 
 
 - Source22aae5bb completed36/36 PR checks and31/31 ServerCI jobs SUCCESS. Exact-head terminal receipt: `implementation/verification/refactor-pr298-22-terminal-2026-11-14.json`; includes native PostgreSQL, selected/full-shard race, coverage, frontend/Electron/mobile checks. Scope remains source/CI, not physical or installed-client acceptance.
 - Only after capturing terminal evidence, pushed prepared fbf10657 terminal key/orphan metadata followup. Existing tests20 and full vet/build/lint passed locally; new-source native/race and Sonar await new CI. Previous22 green is not reused forfbf. PR remains draft/unmerged. Active process SIGTERM still awaits local Docker recovery.
+
+### 2026-11-14 — Isolate terminal media task panics from worker lifetime
+
+- Eight-channel all-music-panic regression failed before fix: logx.Go recovered each worker panic but workers exited, stranding the remaining task queue. Added synchronous logx.Run using existing component/type/stack panic logging; Go now launches Run. Terminal workers guard music and each session eviction individually, without retries.
+- Existing logx Go tests passed20 repetitions (1.432s); voice shutdown tests20 passed (1.098s), observing all8 music attempts and16 identity lookups despite hook panics. Full vet/build/lint passed. Receipt: `implementation/verification/refactor-shutdown-task-panic-isolation-2026-11-14.json`.
+- Local integration only; new race remains pending Docker/CI. Hook attempt is not successful music stop; other worker pools and credit-stage panic behavior still need review. Publishedfbf10657 CI43526056404 remains live, last checked12 successful jobs/no failure. Final whole-project/process/physical acceptance remains open.

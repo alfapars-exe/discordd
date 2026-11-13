@@ -171,3 +171,29 @@ func TestVoiceShutdownRejectsLateRoomKeyCreation(t *testing.T) {
 		t.Fatal("late request recreated terminal key metadata")
 	}
 }
+
+func TestVoiceShutdownContinuesAfterMusicPanic(t *testing.T) {
+	lookups := make(chan string, 16)
+	getter := &mockConfigurableLiveKitGetter{GetByServerIDFn: func(context.Context, string) (*models.LiveKitInstance, error) {
+		lookups <- "lookup"
+		return nil, errors.New("fixture has no media")
+	}}
+	svc, _ := newTestVoiceServiceWithLiveKitGetter(getter)
+	s := svc.(*voiceService)
+	for i := 0; i < 8; i++ {
+		id := fmt.Sprint(i)
+		s.states[id] = &models.VoiceState{UserID: id, ChannelID: "channel-" + id, ServerID: "server"}
+	}
+	music := make(chan string, 8)
+	s.musicBotHook = &mockMusicBotHook{StopAllForChannelFn: func(channel string) { music <- channel; panic("shutdown fixture") }}
+	done := make(chan struct{})
+	go func() { s.ShutdownVoiceSessions(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("panicking music hooks stranded shutdown queue")
+	}
+	if len(music) != 8 || len(lookups) != 16 {
+		t.Fatalf("panic skipped cleanup: music=%d identity_lookups=%d", len(music), len(lookups))
+	}
+}
