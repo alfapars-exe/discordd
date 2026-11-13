@@ -173,19 +173,7 @@ function MessageList() {
     // Mark as seen — removes from the list permanently (survives channel switch)
     markMentionSeen(channelId, msgId);
 
-    // Virtualized rows may not be in the DOM yet — scroll by index, then
-    // apply the highlight once the row has mounted.
-    const idx = messages.findIndex((m) => m.id === msgId);
-    if (idx >= 0) {
-      virtualizer.scrollToIndex(idx, { align: "center" });
-      requestAnimationFrame(() => {
-        const el = document.getElementById(`msg-${msgId}`);
-        if (el) {
-          el.classList.add("msg-highlight");
-          setTimeout(() => el.classList.remove("msg-highlight"), 2000);
-        }
-      });
-    }
+    setScrollToMessageId(msgId);
   }
 
   // Fetch messages on channel change, disable auto-scroll during transition
@@ -300,7 +288,7 @@ function MessageList() {
     prevMessageCountRef.current = messages.length;
   }, [isLoading, channelId, messages.length, scrollKey]);
 
-  /** Scroll-to-message effect — triggered when reply preview is clicked.
+  /** Scroll-to-message effect — shared by reply previews and mention navigation.
    *  Index-based: with virtualization the target row may not be in the DOM
    *  until scrollToIndex brings it into the window, so the highlight is
    *  applied one frame later. */

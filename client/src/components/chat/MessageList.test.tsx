@@ -11,10 +11,15 @@ const virtualizer = {
 vi.mock("@tanstack/react-virtual", () => ({ useVirtualizer: () => virtualizer }));
 vi.mock("./Message", () => ({ default: () => null }));
 
+vi.mock("../../stores/authStore", () => ({
+  useAuthStore: (select: (state: { user: { id: string } }) => unknown) =>
+    select({ user: { id: "reader" } }),
+}));
+
 const conversation = {
   mode: "dm",
   channelId: "conversation",
-  messages: [{ id: "target" }],
+  messages: [{ id: "target", mentions: ["reader"] }],
   members: [],
   fetchMessages: vi.fn(),
   isMessagePinned: () => false,
@@ -28,7 +33,7 @@ vi.mock("../../hooks/useChatContext", () => ({
   },
 }));
 
-it("keeps the reply target highlighted after consuming the jump request", () => {
+it.each(["reply", "mention"])("highlights the %s target after navigation", (source) => {
   vi.useFakeTimers();
   vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
   try {
@@ -36,7 +41,9 @@ it("keeps the reply target highlighted after consuming the jump request", () => 
       <button onClick={() => requestJump("target")}>Jump to reply</button>
       <MessageList />
     </>);
-    fireEvent.click(screen.getByText("Jump to reply"));
+    const button = screen.getByRole("button", { name: source === "reply" ? "Jump to reply" : "1" });
+    fireEvent.click(button);
+    if (source === "mention") expect(button).not.toBeInTheDocument();
     expect(virtualizer.scrollToIndex).toHaveBeenCalledWith(0, { align: "center" });
     act(() => vi.advanceTimersToNextFrame());
     const row = container.querySelector("#msg-target");
