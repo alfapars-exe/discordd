@@ -1,0 +1,42 @@
+{
+  "date": "2026-11-13",
+  "scope": "Test fixture ownership only; production permission/cache behavior unchanged",
+  "integration_variant_commit": "6665fc71",
+  "canonical_source_commit": "295ab67f",
+  "regression": {
+    "fixture": "Actual 200-iteration single/bulk permission parity test, two cached resolvers per iteration",
+    "before": {
+      "workers_before": 0,
+      "workers_after": 400,
+      "exit": 1,
+      "log": "%TEMP%/hichat-permission-parity-cache-before.log"
+    },
+    "after": {
+      "repetitions": 5,
+      "workers_before": 0,
+      "workers_after": 0,
+      "exit": 0,
+      "log": "%TEMP%/hichat-permission-parity-cache-after.log"
+    }
+  },
+  "affected_tests": {
+    "integration_top_level": 42,
+    "integration_seconds": 6.288,
+    "canonical_top_level": 40,
+    "canonical_seconds": 6.054,
+    "canonical_all_selected_ran": true,
+    "canonical_log": "%TEMP%/hichat-permission-fixture-canonical.jsonl"
+  },
+  "race": {
+    "integration_seconds": 17.134,
+    "canonical_seconds": 16.371,
+    "exit": 0,
+    "profile": "Docker golang:1.26.10-bookworm with auto toolchain; targeted mock/fixture tests, no PostgreSQL DSN",
+    "canonical_log": "%TEMP%/hichat-permission-fixture-canonical-race.log"
+  },
+  "remaining": [
+    "Not proven to resolve the 15-minute full-package timeout",
+    "Other direct cache-backed service fixtures remain outside this helper",
+    "Frozen integration shard session 45007 excludes this change; its results are separate source evidence"
+  ]
+}
