@@ -248,7 +248,7 @@ func runActiveVoiceProcessSignal(t *testing.T) {
 	t.Helper()
 	db := activeVoiceProcessPool(t)
 	seedActiveVoiceProcess(t, db)
-	cfg, err := pgx.ParseConfig(os.Getenv("HICHAT_TEST_POSTGRES_DSN"))
+	cfg, err := pgx.ParseConfig(activeVoiceProcessDSN())
 	if err != nil {
 		t.Fatal("fixture configuration invalid")
 	}
@@ -261,7 +261,7 @@ func runActiveVoiceProcessSignal(t *testing.T) {
 	}
 	port := listener.Addr().(*net.TCPAddr).Port
 	listener.Close()
-	databaseURL, err := url.Parse(os.Getenv("HICHAT_TEST_POSTGRES_DSN"))
+	databaseURL, err := url.Parse(activeVoiceProcessDSN())
 	if err != nil {
 		t.Fatal("fixture URL invalid")
 	}
@@ -316,7 +316,7 @@ func watchActiveVoiceProcessSocket(t *testing.T, conn *websocket.Conn) <-chan st
 
 func activeVoiceProcessPool(t *testing.T) *sql.DB {
 	t.Helper()
-	dsn := os.Getenv("HICHAT_TEST_POSTGRES_DSN")
+	dsn := activeVoiceProcessDSN()
 	if dsn == "" {
 		t.Skip("requires disposable loopback PostgreSQL")
 	}
@@ -336,11 +336,15 @@ func activeVoiceProcessPool(t *testing.T) *sql.DB {
 	}
 	name := "hichat_owner_watch_" + hex.EncodeToString(identity[:])
 	quoted := pgx.Identifier{name}.Sanitize()
+	// Database identifiers cannot be SQL bind values. Only the generated,
+	// pgx-quoted identifier is interpolated into these fixed DDL templates.
+	createQuery := fmt.Sprintf("CREATE DATABASE %s", quoted)
+	dropQuery := fmt.Sprintf("DROP DATABASE %s WITH (FORCE)", quoted)
 	admin := stdlib.OpenDB(*cfg)
 	t.Cleanup(func() { admin.Close() })
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if _, err = admin.ExecContext(ctx, fmt.Sprintf("CREATE DATABASE %s", quoted)); err != nil {
+	if _, err = admin.ExecContext(ctx, createQuery); err != nil {
 		t.Fatal("cannot create owned active-process fixture")
 	}
 	cfg.Database = name
@@ -350,9 +354,18 @@ func activeVoiceProcessPool(t *testing.T) *sql.DB {
 		pool.Close()
 		cleanup, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		if _, err := admin.ExecContext(cleanup, fmt.Sprintf("DROP DATABASE %s WITH (FORCE)", quoted)); err != nil {
+		if _, err := admin.ExecContext(cleanup, dropQuery); err != nil {
 			t.Error("cannot drop owned active-process fixture")
 		}
 	})
 	return pool
+}
+
+// Prefer the dedicated mutual-TLS fixture in CI; local runs may supply the
+// same verified connection through the standard PostgreSQL test variable.
+func activeVoiceProcessDSN() string {
+	if dsn := os.Getenv("HICHAT_ACTIVE_VOICE_POSTGRES_DSN"); dsn != "" {
+		return dsn
+	}
+	return os.Getenv("HICHAT_TEST_POSTGRES_DSN")
 }
