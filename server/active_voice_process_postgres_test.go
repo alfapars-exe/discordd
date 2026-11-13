@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	cryptorand "crypto/rand"
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
@@ -24,6 +25,7 @@ import (
 	crypt "github.com/argeinfina/hichat/pkg/crypto"
 	"github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -244,9 +246,9 @@ func assertActiveVoiceProcessCredit(t *testing.T, db *sql.DB) {
 
 func runActiveVoiceProcessSignal(t *testing.T) {
 	t.Helper()
-	db := backendWatchTestPool(t)
+	db := activeVoiceProcessPool(t)
 	seedActiveVoiceProcess(t, db)
-	cfg, err := pgx.ParseConfig(os.Getenv("HICHAT_TEST_POSTGRES_DSN"))
+	cfg, err := pgx.ParseConfig(activeVoiceProcessDSN())
 	if err != nil {
 		t.Fatal("fixture configuration invalid")
 	}
@@ -259,7 +261,7 @@ func runActiveVoiceProcessSignal(t *testing.T) {
 	}
 	port := listener.Addr().(*net.TCPAddr).Port
 	listener.Close()
-	databaseURL, err := url.Parse(os.Getenv("HICHAT_TEST_POSTGRES_DSN"))
+	databaseURL, err := url.Parse(activeVoiceProcessDSN())
 	if err != nil {
 		t.Fatal("fixture URL invalid")
 	}
@@ -310,4 +312,60 @@ func watchActiveVoiceProcessSocket(t *testing.T, conn *websocket.Conn) <-chan st
 	}()
 	t.Cleanup(func() { conn.Close(); <-disconnected })
 	return disconnected
+}
+
+func activeVoiceProcessPool(t *testing.T) *sql.DB {
+	t.Helper()
+	dsn := activeVoiceProcessDSN()
+	if dsn == "" {
+		t.Skip("requires disposable loopback PostgreSQL")
+	}
+	cfg, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		t.Fatal("fixture configuration invalid")
+	}
+	if (cfg.Host != "127.0.0.1" && cfg.Host != "localhost") || (cfg.Database != "hichat_test" && cfg.Database != "hichat_e2e_control") {
+		t.Fatal("explicit loopback control database required")
+	}
+	if cfg.TLSConfig == nil || cfg.TLSConfig.InsecureSkipVerify || len(cfg.Fallbacks) != 0 {
+		t.Fatal("verified PostgreSQL TLS without fallback required")
+	}
+	var identity [16]byte
+	if _, err = cryptorand.Read(identity[:]); err != nil {
+		t.Fatal("fixture identity unavailable")
+	}
+	name := "hichat_owner_watch_" + hex.EncodeToString(identity[:])
+	quoted := pgx.Identifier{name}.Sanitize()
+	// Database identifiers cannot be SQL bind values. Only the generated,
+	// pgx-quoted identifier is interpolated into these fixed DDL templates.
+	createQuery := fmt.Sprintf("CREATE DATABASE %s", quoted)
+	dropQuery := fmt.Sprintf("DROP DATABASE %s WITH (FORCE)", quoted)
+	admin := stdlib.OpenDB(*cfg)
+	t.Cleanup(func() { admin.Close() })
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if _, err = admin.ExecContext(ctx, createQuery); err != nil {
+		t.Fatal("cannot create owned active-process fixture")
+	}
+	cfg.Database = name
+	pool := stdlib.OpenDB(*cfg)
+	pool.SetMaxOpenConns(4)
+	t.Cleanup(func() {
+		pool.Close()
+		cleanup, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if _, err := admin.ExecContext(cleanup, dropQuery); err != nil {
+			t.Error("cannot drop owned active-process fixture")
+		}
+	})
+	return pool
+}
+
+// Prefer the dedicated mutual-TLS fixture in CI; local runs may supply the
+// same verified connection through the standard PostgreSQL test variable.
+func activeVoiceProcessDSN() string {
+	if dsn := os.Getenv("HICHAT_ACTIVE_VOICE_POSTGRES_DSN"); dsn != "" {
+		return dsn
+	}
+	return os.Getenv("HICHAT_TEST_POSTGRES_DSN")
 }

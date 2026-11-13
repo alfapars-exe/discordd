@@ -1,0 +1,36 @@
+{
+  "date": "2026-11-14",
+  "canonical_head": "2ac1f132df756f2f618d98697bf2098994d27de1",
+  "pr": 298,
+  "previous_head": "6162072edea55e43315fe4f86b4735b6e85f593e",
+  "previous_failures": {
+    "security": "direct ExecContext(fmt.Sprintf) blocked by source gate",
+    "native_process": "verified PostgreSQL TLS without fallback required; native repository fixture uses sslmode=disable"
+  },
+  "changes": [
+    "retain crypto-generated and pgx-quoted database identifiers; name fixed DDL templates",
+    "provision existing isolated mutual-TLS fixture for active process only",
+    "preserve plain repository fixture, mandatory process pass gate, TLS verification and no fallback",
+    "use standalone owned process database fixture in integration and canonical trees"
+  ],
+  "validation": {
+    "source_scan_after_DDL_fix": {
+      "exit": 0,
+      "block_matches": 0
+    },
+    "canonical_vet": "pass",
+    "canonical_lint": "0 issues",
+    "runner_unit_tests": 10,
+    "windows_process_test": "compiled; POSIX runtime skipped",
+    "integration_windows_process_test": "compiled; POSIX runtime skipped"
+  },
+  "new_server_ci": {
+    "run": 43530862476,
+    "status": "pending; not acceptance"
+  },
+  "limitations": [
+    "no current native process pass yet",
+    "no release binary or physical media acceptance",
+    "local Docker unavailable"
+  ]
+}
