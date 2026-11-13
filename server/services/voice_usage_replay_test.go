@@ -180,4 +180,30 @@ func TestVoiceUsagePostgresPendingRecovery(t *testing.T) {
 	if err != nil || used != 60 {
 		t.Fatalf("recovered usage=%d err=%v", used, err)
 	}
+	if err = queue.EnqueueVoiceUsage(ctx, "worker-pending", "pending-instance", 2026, 1, 30); err != nil {
+		t.Fatal(err)
+	}
+	workerService := &voiceService{livekitGetter: repository.NewSQLiteLiveKitRepo(db)}
+	stopWorker := startVoiceUsageDelivery(ctx, workerService, time.Millisecond)
+	t.Cleanup(stopWorker)
+	for {
+		used, err = repo.GetMonthlyUsage(ctx, "pending-instance", 2026, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if used == 90 {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal("owned worker did not recover durable pending credit")
+		default:
+			time.Sleep(time.Millisecond)
+		}
+	}
+	stopWorker()
+	if err = db.PingContext(ctx); err != nil {
+		t.Fatalf("worker shutdown closed caller pool: %v", err)
+	}
+
 }

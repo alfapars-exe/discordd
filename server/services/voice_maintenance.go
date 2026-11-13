@@ -20,13 +20,17 @@ func (w *voiceMaintenanceWorker) start(interval time.Duration, sweep func()) {
 }
 
 func (w *voiceMaintenanceWorker) startContext(interval time.Duration, sweep func(context.Context)) {
+	w.startParent(context.Background(), interval, sweep)
+}
+
+func (w *voiceMaintenanceWorker) startParent(parent context.Context, interval time.Duration, sweep func(context.Context)) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.stopped || w.done != nil {
 		return
 	}
 	w.done = make(chan struct{})
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(parent)
 	w.cancel = cancel
 	go func() {
 		defer close(w.done)

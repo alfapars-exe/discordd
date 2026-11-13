@@ -152,6 +152,7 @@ type forceMoveGrant struct {
 const maxScreenShares = 0
 
 type voiceService struct {
+	usageWorker        voiceMaintenanceWorker
 	orphanWorker       voiceMaintenanceWorker
 	afkWorker          voiceMaintenanceWorker
 	states             map[string]*models.VoiceState // userID -> VoiceState

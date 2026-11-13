@@ -276,6 +276,8 @@ func main() {
 		}
 	}
 	defer stopVoiceMaintenance()
+	stopVoiceUsageDelivery := services.StartVoiceUsageDelivery(ownerCtx, svcs.Voice)
+	defer stopVoiceUsageDelivery()
 
 	// 10b. Metrics collector — background goroutine polling LiveKit instances
 	metricsCollector.Start()
@@ -562,6 +564,8 @@ func main() {
 	stopChannelDelivery()
 	stopDMDelivery()
 	stopDMUploadCleanup()
+
+	stopVoiceUsageDelivery()
 
 	logx.SetAppSink(nil)
 	svcs.AppLog.Stop()
