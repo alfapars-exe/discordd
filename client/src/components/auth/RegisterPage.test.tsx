@@ -5,12 +5,8 @@
  *
  * 1. The native server-picker removal (mirrors LoginPage.test.tsx — see
  *    that file's header comment for the full "why").
- * 2. Email stays optional at registration. Nothing was broken here — every
- *    layer (this form, authStore.register, and the Go server's
- *    CreateUserRequest.Validate()) already treats a blank email as valid.
- *    This test exists so a future change that adds a `required` attribute
- *    or a presence check gets caught immediately instead of silently
- *    reintroducing a mandatory-email requirement nobody asked for.
+ * 2. New registrations require email. Exercise form validation and the real
+ *    auth-store registration path with deterministic API boundaries.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -37,6 +33,13 @@ vi.mock("../../api/auth", () => ({
   getMe: vi.fn(),
 }));
 
+// Registration starts preference hydration in the background. Keep that API
+// deterministic and await its completion so it cannot outlive this test file.
+vi.mock("../../api/preferences", () => ({
+  getPreferences: vi.fn(async () => ({ success: true, data: { user_id: "1", data: {} } })),
+  updatePreferences: vi.fn(async () => ({ success: true, data: { user_id: "1", data: {} } })),
+}));
+
 // authApi.register() is the higher-level function being mocked here — its
 // real implementation already parses the response into this envelope
 // (apiClient<T>() does the res.json() internally), so the mock resolves
@@ -53,6 +56,7 @@ function registerSuccess() {
 }
 
 import RegisterPage from "./RegisterPage";
+import { usePreferencesStore } from "../../stores/preferencesStore";
 
 beforeEach(() => {
   registerMock.mockReset();
@@ -92,11 +96,8 @@ describe("RegisterPage — email is required", () => {
       </MemoryRouter>,
     );
 
-    // No "email is required" validation error blocks this — the only two
-    // client-side checks in RegisterPage.handleSubmit are password
-    // match and password length, neither of which fires here.
 		await fillAndSubmit({ withEmail: false });
-		await new Promise((resolve) => setTimeout(resolve, 50));
+		expect(screen.getByLabelText(/email/i)).toBeInvalid();
 		expect(registerMock).not.toHaveBeenCalled();
     expect(screen.queryByText(/passwordsDoNotMatch|passwordTooShort/i)).not.toBeInTheDocument();
   });
@@ -115,6 +116,8 @@ describe("RegisterPage — email is required", () => {
     await waitFor(() => expect(registerMock).toHaveBeenCalledTimes(1));
     const [payload] = registerMock.mock.calls[0] as [{ email?: string }];
     expect(payload.email).toBe("user@example.com");
+    await usePreferencesStore.getState().fetchAndApply();
+    expect(usePreferencesStore.getState().isLoaded).toBe(true);
   });
 
 	it("marks the email input as required", () => {
