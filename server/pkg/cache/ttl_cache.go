@@ -18,6 +18,8 @@ type TTLCache[K comparable, V any] struct {
 	ttl     time.Duration
 
 	stopCleanup chan struct{}
+	cleanupDone chan struct{}
+	closeOnce   sync.Once
 }
 
 // New creates a TTLCache and starts a background goroutine for eviction.
@@ -29,9 +31,11 @@ func New[K comparable, V any](ttl, cleanupInterval time.Duration) *TTLCache[K, V
 		entries:     make(map[K]entry[V]),
 		ttl:         ttl,
 		stopCleanup: make(chan struct{}),
+		cleanupDone: make(chan struct{}),
 	}
 
 	go func() {
+		defer close(c.cleanupDone)
 		ticker := time.NewTicker(cleanupInterval)
 		defer ticker.Stop()
 
@@ -112,9 +116,11 @@ func (c *TTLCache[K, V]) Len() int {
 	return len(c.entries)
 }
 
-// Close stops the cleanup goroutine.
+// Close retires the cleanup worker and waits for its exit. Concurrent calls
+// share the same completion; cached values remain usable by draining callers.
 func (c *TTLCache[K, V]) Close() {
-	close(c.stopCleanup)
+	c.closeOnce.Do(func() { close(c.stopCleanup) })
+	<-c.cleanupDone
 }
 
 func (c *TTLCache[K, V]) evictExpired() {

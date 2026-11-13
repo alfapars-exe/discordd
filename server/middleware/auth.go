@@ -186,3 +186,6 @@ func (m *AuthMiddleware) Require(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
+
+// Stop retires the middleware cache worker while preserving draining access.
+func (m *AuthMiddleware) Stop() { m.userCache.Close() }
