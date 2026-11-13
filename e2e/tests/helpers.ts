@@ -604,8 +604,9 @@ export async function provisionServerForE2E(page: Page, name: string): Promise<v
   expect(server.id).toBeTruthy();
   expect(server.name).toBe(name);
 
-  // Refresh hydrates the Zustand server list from the isolated E2E database.
+  // Refresh hydrates the server list after the authenticated shell is ready.
   await page.reload();
+  await expectSignedInShell(page);
   const serverButton = page.getByRole("button", { name, exact: true });
   await expect(serverButton).toBeVisible({ timeout: 15_000 });
   await dismissOnboardingOverlays(page);
