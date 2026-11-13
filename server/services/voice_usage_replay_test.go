@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
@@ -353,5 +354,33 @@ func waitVoiceUsagePostgresLock(t *testing.T, ctx context.Context, tx *sql.Tx, t
 		default:
 			time.Sleep(time.Millisecond)
 		}
+	}
+}
+
+func TestVoiceUsagePostgresLateMemberRevocationPreservesCredit(t *testing.T) {
+	db := postgresServerFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if _, err := db.ExecContext(ctx, `INSERT INTO livekit_instances(id,url,api_key,api_secret) VALUES('late-instance','http://127.0.0.1','fixture','fixture')`); err != nil {
+		t.Fatal(err)
+	}
+	repo := repository.NewSQLiteLiveKitRepo(db)
+	svc, _ := newTestVoiceServiceWithLiveKitGetter(repo)
+	s := svc.(*voiceService)
+	s.states["victim"] = &models.VoiceState{UserID: "victim", ChannelID: "ch1", ServerID: "srv1", UsageSessionID: "late-credit", LiveKitInstanceID: "late-instance", LiveKitIsCloud: true, JoinedAt: time.Now().Add(-time.Minute)}
+	s.ShutdownUsageProducers()
+	s.DisconnectServerMember("srv1", "victim")
+	s.DisconnectServerMember("srv1", "victim")
+	var seconds int
+	var applied bool
+	if err := db.QueryRowContext(ctx, `SELECT seconds,applied_at IS NOT NULL FROM voice_usage_credits WHERE credit_id='late-credit'`).Scan(&seconds, &applied); err != nil {
+		t.Fatal(err)
+	}
+	var used int64
+	if err := db.QueryRowContext(ctx, `SELECT COALESCE(SUM(used_seconds),0) FROM livekit_monthly_usage WHERE instance_id='late-instance'`).Scan(&used); err != nil {
+		t.Fatal(err)
+	}
+	if seconds <= 0 || !applied || used != int64(seconds) {
+		t.Fatalf("late credit not applied once: seconds=%d applied=%v used=%d", seconds, applied, used)
 	}
 }

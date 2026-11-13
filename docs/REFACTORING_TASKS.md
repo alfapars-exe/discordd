@@ -1363,3 +1363,9 @@ Terminal current-head receipt: PR29814a965ea completed36/36 SUCCESS. Exact-head 
 - Kept all 15 top-level test names (including four independent leave/switch/admin/move regressions) and extracted shared fixture/wait/release assertions. Test source shrank by 71 lines; product code unchanged.
 - Four targeted tests passed 20 repetitions on host (2.304s) and Linux race (5.250s). Services vet/lint passed. A Go-overlay negative control restoring detached leave music stop failed the preserved Leave test with the expected early-shutdown assertion (exit1); tracked product source was never mutated.
 - Receipt: `implementation/verification/refactor-music-cleanup-test-helper-2026-11-14.json`. Local integration only; canonical 6236c8b9 CI43517792317 remains active, last checked six successful jobs/no failure.
+
+### 2026-11-14 — Preserve late member-revocation usage credit
+
+- Regression failed before fix: completed producer shutdown caused a later committed member revocation to drop its cloud usage credit. Rejected child dispatch now performs the existing bounded accounting handoff synchronously in the late caller; no detached work or additive fallback was introduced.
+- Unit/race usage tests passed ten repetitions (3.402s/5.447s). Real-mTLS PostgreSQL late-revocation test passed three host repetitions (2.858s), then three Linux race repetitions (5.377s), verifying applied ledger seconds equal monthly aggregate after repeated revocation. Final services lint: zero issues. Initial PostgreSQL test compile omitted models import; corrected before successful runs.
+- Receipt: `implementation/verification/refactor-late-member-usage-credit-2026-11-14.json`. Local integration only; DB availability and ownership ordering still required. This does not solve crash-before-first-enqueue or post-DB-close work.

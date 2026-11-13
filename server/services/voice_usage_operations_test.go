@@ -435,3 +435,26 @@ func assertVoiceMusicCleanupOwned(t *testing.T, operation func(*voiceService) er
 		t.Fatal("shutdown did not join music cleanup")
 	}
 }
+
+func TestVoiceUsageLateMemberRevocationPreservesCredit(t *testing.T) {
+	getter := &recordingUsageGetter{recorded: make(chan string, 2)}
+	svc, _ := newTestVoiceServiceWithLiveKitGetter(getter)
+	s := svc.(*voiceService)
+	s.states["victim"] = &models.VoiceState{UserID: "victim", ChannelID: "ch1", ServerID: "srv1", UsageSessionID: "late-session", LiveKitInstanceID: "instance", LiveKitIsCloud: true, JoinedAt: time.Now().Add(-time.Minute)}
+	s.ShutdownUsageProducers()
+	s.DisconnectServerMember("srv1", "victim")
+	select {
+	case id := <-getter.recorded:
+		if id != "late-session" {
+			t.Fatalf("late credit lost identity: %s", id)
+		}
+	default:
+		t.Fatal("committed late member revocation dropped usage credit")
+	}
+	s.DisconnectServerMember("srv1", "victim")
+	select {
+	case <-getter.recorded:
+		t.Fatal("repeated revocation credited removed session twice")
+	default:
+	}
+}
