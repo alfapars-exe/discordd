@@ -197,3 +197,38 @@ func TestVoiceMaintenanceAFKPostgresCancellation(t *testing.T) {
 		t.Fatal("cancelled AFK lookup removed voice state")
 	}
 }
+
+func TestVoiceMaintenanceStopCancelsAllBeforeJoining(t *testing.T) {
+	s := &voiceService{}
+	orphanEntered, releaseOrphan := make(chan struct{}), make(chan struct{})
+	afkEntered, afkCancelled := make(chan struct{}), make(chan struct{})
+	s.orphanWorker.startContext(time.Millisecond, func(context.Context) {
+		close(orphanEntered)
+		<-releaseOrphan
+	})
+	s.afkWorker.startContext(time.Millisecond, func(ctx context.Context) {
+		close(afkEntered)
+		<-ctx.Done()
+		close(afkCancelled)
+	})
+	stopped := make(chan struct{})
+	t.Cleanup(func() { close(releaseOrphan); s.StopMaintenance() })
+	for _, entered := range []chan struct{}{orphanEntered, afkEntered} {
+		select {
+		case <-entered:
+		case <-time.After(time.Second):
+			t.Fatal("maintenance sweep did not start")
+		}
+	}
+	go func() { s.StopMaintenance(); close(stopped) }()
+	select {
+	case <-afkCancelled:
+	case <-time.After(time.Second):
+		t.Fatal("AFK cancellation waited for unrelated orphan sweep")
+	}
+	select {
+	case <-stopped:
+		t.Fatal("shutdown did not join orphan sweep")
+	default:
+	}
+}
