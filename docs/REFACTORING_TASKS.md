@@ -736,6 +736,8 @@ Genel Go yarış denetiminde Docker kesintisinden önce tamamlanmayan repository
 
 Üretim koşusunda bazı yardımcılar `/src/api/client.ts`, `/src/stores/authStore.ts`, `/src/api/dm.ts` ve `/src/stores/uiStore.ts` modüllerini tarayıcıdan yüklemeye çalışıyor. Derlenmiş uygulamada bu kaynak yolları bulunmuyor. İlgili çağrılar `helpers.ts`, `dm-reply-navigation.spec.ts`, `reply-navigation.spec.ts` ve `role-visibility.spec.ts` içinde. Hazırlık verileri HTTP ile kurulmalı, test edilen gezinme ve yetki davranışları kullanıcı arayüzünden sürülmeli. Oturum yenileme eşzamanlılığı korunarak test yardımcılarının token erişimi yeniden düzenlenmeli. Diğer başarısızlıkların User Profile düğmesi bekleme süresinde oluşması ayrıca incelenmeli. Hata anındaki channel-notifications görüntüsünde yalnız HiChat logosu vardı. Bu nedenle düğme seçicisini değiştirmek için kanıt yok. Bu dalda loginAsCredentials zaten expectSignedInShell sonrasında onboarding kontrolünü yapıyor. Derlenmiş modüllerin yüklenmesi ve giriş sonrası yeniden yönlendirme sırasında oluşan tarayıcı hataları bir sonraki koşuda yakalanmalı.
 
+**RF28 üretim DM düzeltmesi.** `159e5b2d` üzerinde üretim paketi, gerçek Go ve mTLS PostgreSQL ile DM yanıt geçmişi testi hazırlık dahil 2/2 geçti. İlk DM listesi isteği sürerken yalnız okundu metadata'sının değişmesi yanıtın tamamını attırıyordu. Store bu durumda listeyi yükleyip değişen okundu sayılarını koruyor. Konuşma listesi değişmişse eski snapshot engeli sürüyor. 102 DM store testi ve ESLint geçti. Sunucu snapshot'ında konuşmanın varlığı ve klavyeyle yanıt önizlemesinden eski mesaja geçiş ayrıca doğrulandı. Tüm üretim Chromium paketinin bu düzeltmeyle birleşik tekrarı bekliyor.
+
 ## RF30 — Runtime kabulü ve kapanış
 
 | Alan | Tanım |
