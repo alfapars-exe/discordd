@@ -29,6 +29,19 @@ class PostgreSQLRunnerTests(unittest.TestCase):
                 remaining = "\n".join(line for line in self.service_passes.splitlines() if name not in line)
                 self.assertEqual(self.execute(self.completed(), service_output=remaining), 1)
 
+    def test_reported_failure_cannot_pass_with_successful_process_exit(self):
+        events = self.completed() + [{
+            "Action": "fail",
+            "Package": "github.com/argeinfina/hichat/repository",
+            "Test": "TestPostgresLock",
+        }]
+        self.assertEqual(self.execute(events), 1)
+
+    def test_non_object_json_is_reported_as_invalid_output(self):
+        for value in (None, [], "unexpected", 42):
+            with self.subTest(value=value):
+                self.assertEqual(self.execute(self.completed() + [value]), 1)
+
     def completed(self):
         return [
             {"Action": "pass", "Package": "github.com/argeinfina/hichat", "Test": "TestPurgeExpiredNotificationsPostgres"},
