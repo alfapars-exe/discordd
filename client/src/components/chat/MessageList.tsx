@@ -305,7 +305,7 @@ function MessageList() {
 
     virtualizer.scrollToIndex(idx, { align: "center" });
     const raf = requestAnimationFrame(() => {
-      const el = document.getElementById(`msg-${targetId}`);
+      const el = scrollRef.current?.querySelector<HTMLElement>(`#${CSS.escape(`msg-${targetId}`)}`);
       if (el) {
         const jump = keyboardReply.current;
         if (jump?.targetId === targetId && jump.conversation === scrollKey &&

@@ -38,6 +38,7 @@ it.each(["reply", "mention"])("highlights the %s target after navigation", (sour
   vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
   try {
     const { container } = render(<>
+      <aside><div id="msg-target" /></aside>
       <button onClick={() => requestJump("target")}>Jump to reply</button>
       <MessageList />
     </>);
@@ -46,7 +47,8 @@ it.each(["reply", "mention"])("highlights the %s target after navigation", (sour
     if (source === "mention") expect(button).not.toBeInTheDocument();
     expect(virtualizer.scrollToIndex).toHaveBeenCalledWith(0, { align: "center" });
     act(() => vi.advanceTimersToNextFrame());
-    const row = container.querySelector("#msg-target");
+    const row = container.querySelector(".messages-scroll #msg-target");
+    expect(container.querySelector("aside #msg-target")).not.toHaveClass("msg-highlight");
     expect(row).toHaveClass("msg-highlight");
     act(() => vi.advanceTimersByTime(2000));
     expect(row).not.toHaveClass("msg-highlight");
