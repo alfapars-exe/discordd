@@ -313,3 +313,165 @@ func TestVoiceUsageShutdownRejectsMoveBeforeLookup(t *testing.T) {
 		t.Fatalf("closed owner admitted move: %v", err)
 	}
 }
+
+func TestVoiceUsageShutdownWaitsForAdminMute(t *testing.T) {
+	svc, _ := newTestVoiceService()
+	s := svc.(*voiceService)
+	entered, release, stopped := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	t.Cleanup(func() { once.Do(func() { close(release) }); s.ShutdownUsageProducers() })
+	s.channelGetter = &usageBlockingChannelGetter{entered: entered, release: release}
+	s.states["victim"] = &models.VoiceState{UserID: "victim", ChannelID: "ch1", ServerID: "srv1"}
+	muted := true
+	if err := s.AdminUpdateState(context.Background(), "admin", "victim", &muted, nil); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("mute lookup not started")
+	}
+	go func() { s.ShutdownUsageProducers(); close(stopped) }()
+	select {
+	case <-stopped:
+		t.Fatal("shutdown returned before accepted mute finished")
+	case <-time.After(20 * time.Millisecond):
+	}
+	once.Do(func() { close(release) })
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("mute cleanup not joined")
+	}
+}
+
+type usageBlockingChannelGetter struct {
+	once             sync.Once
+	entered, release chan struct{}
+}
+
+func (g *usageBlockingChannelGetter) GetByID(ctx context.Context, _ string) (*models.Channel, error) {
+	g.once.Do(func() { close(g.entered) })
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-g.release:
+		return nil, context.Canceled
+	}
+}
+
+func TestVoiceUsageShutdownRejectsAdminStateBeforeLookup(t *testing.T) {
+	s := &voiceService{}
+	s.ShutdownUsageProducers()
+	muted := true
+	if err := s.AdminUpdateState(context.Background(), "admin", "victim", &muted, nil); !errors.Is(err, context.Canceled) {
+		t.Fatalf("closed owner admitted admin state update: %v", err)
+	}
+}
+
+type missingUsageChannelGetter struct{}
+
+func (missingUsageChannelGetter) GetByID(context.Context, string) (*models.Channel, error) {
+	return nil, errors.New("channel removed")
+}
+
+func TestVoiceUsageShutdownWaitsForDeletedRoomWebhook(t *testing.T) {
+	entered, release, stopped := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	var enterOnce, releaseOnce sync.Once
+	getter := &mockConfigurableLiveKitGetter{GetByServerIDFn: func(context.Context, string) (*models.LiveKitInstance, error) {
+		enterOnce.Do(func() { close(entered) })
+		<-release
+		return nil, errors.New("fixture has no media server")
+	}}
+	svc, _ := newTestVoiceServiceWithLiveKitGetter(getter)
+	s := svc.(*voiceService)
+	s.channelGetter = missingUsageChannelGetter{}
+	t.Cleanup(func() { releaseOnce.Do(func() { close(release) }); s.ShutdownUsageProducers() })
+	s.EnforceModerationOnJoin(context.Background(), "srv1", "deleted", "victim")
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("deleted-room eviction not started")
+	}
+	go func() { s.ShutdownUsageProducers(); close(stopped) }()
+	select {
+	case <-stopped:
+		t.Fatal("shutdown returned before webhook eviction")
+	case <-time.After(20 * time.Millisecond):
+	}
+	releaseOnce.Do(func() { close(release) })
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("webhook eviction not joined")
+	}
+}
+
+func TestVoiceUsageLateDeletedRoomWebhookOwnsEviction(t *testing.T) {
+	entered, release, stopped := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	var enterOnce, releaseOnce sync.Once
+	getter := &mockConfigurableLiveKitGetter{GetByServerIDFn: func(context.Context, string) (*models.LiveKitInstance, error) {
+		enterOnce.Do(func() { close(entered) })
+		<-release
+		return nil, errors.New("fixture has no media server")
+	}}
+	svc, _ := newTestVoiceServiceWithLiveKitGetter(getter)
+	s := svc.(*voiceService)
+	s.channelGetter = missingUsageChannelGetter{}
+	t.Cleanup(func() { releaseOnce.Do(func() { close(release) }); s.ShutdownUsageProducers() })
+	s.ShutdownUsageProducers()
+	go func() { s.EnforceModerationOnJoin(context.Background(), "srv1", "deleted", "victim"); close(stopped) }()
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("deleted-room eviction not started")
+	}
+
+	select {
+	case <-stopped:
+		t.Fatal("late webhook escaped terminal eviction ownership")
+	case <-time.After(20 * time.Millisecond):
+	}
+	releaseOnce.Do(func() { close(release) })
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("webhook eviction not joined")
+	}
+}
+
+type blockingUsageEntranceHook struct{ entered, release chan struct{} }
+
+func (h blockingUsageEntranceHook) OnVoiceJoined(string, string, string) {
+	close(h.entered)
+	<-h.release
+}
+
+func TestVoiceUsageShutdownWaitsForEntranceHook(t *testing.T) {
+	svc, _ := newTestVoiceService()
+	s := svc.(*voiceService)
+	entered, release, stopped := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	t.Cleanup(func() { once.Do(func() { close(release) }); s.ShutdownUsageProducers() })
+	s.SetEntranceHook(blockingUsageEntranceHook{entered: entered, release: release})
+	if err := s.JoinChannel("victim", "victim", "Victim", "", "ch1", false, false); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("entrance hook not started")
+	}
+	go func() { s.ShutdownUsageProducers(); close(stopped) }()
+	select {
+	case <-stopped:
+		t.Fatal("shutdown returned before entrance hook")
+	case <-time.After(20 * time.Millisecond):
+	}
+	once.Do(func() { close(release) })
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("entrance hook not joined")
+	}
+}

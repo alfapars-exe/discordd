@@ -486,7 +486,7 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 	// sound. MoveUser does not go through JoinChannel, so admin moves don't
 	// trigger it either. Goroutine: the hook does DB work and s.mu is held.
 	if s.entranceHook != nil {
-		go s.entranceHook.OnVoiceJoined(userID, serverID, channelID)
+		s.usageOperations.child(func() { s.entranceHook.OnVoiceJoined(userID, serverID, channelID) })
 	}
 
 	// Note: unlike LeaveChannel below, this remaining section does NOT run

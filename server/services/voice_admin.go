@@ -37,6 +37,12 @@ import (
 // unfairly leaving a legitimately-unmuted user unable to speak, and it
 // avoids adding LiveKit round-trip latency to every mute action.
 func (s *voiceService) AdminUpdateState(ctx context.Context, adminUserID, targetUserID string, isServerMuted, isServerDeafened *bool) error {
+	finishOperation, admitted := s.usageOperations.begin()
+	if !admitted {
+		return context.Canceled
+	}
+	defer finishOperation()
+
 	s.mu.Lock()
 
 	state, ok := s.states[targetUserID]
@@ -153,7 +159,7 @@ func (s *voiceService) AdminUpdateState(ctx context.Context, adminUserID, target
 		// MutePublishedTrack backstop, fail-open mute / retry-then-evict
 		// unmute, why deafen/_ss are untouched).
 		if newMuted {
-			go s.applyServerMuteToLiveKit(channelID, targetUserID) // #nosec G118 -- deliberately detached: the mute leg is best-effort and must outlive this call, so applyServerMuteToLiveKit carries its own context.Background()+timeout rather than one tied to a caller that may already be gone
+			s.usageOperations.child(func() { s.applyServerMuteToLiveKit(channelID, targetUserID) })
 		}
 	}
 	if deafenChanged {
