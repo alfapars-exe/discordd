@@ -92,13 +92,14 @@ export const useServerStore = create<ServerState>((set, get) => ({
     const request = ++serverListRequest;
     const owner = useAuthStore.getState().user?.id;
     const generation = getAuthGeneration();
+    const initialServers = get().servers;
     const current = () => request === serverListRequest
       && useAuthStore.getState().user?.id === owner && getAuthGeneration() === generation;
     set({ isLoading: true });
     try {
       const res = await serversApi.getMyServers();
       if (!current()) return;
-      if (res.success && res.data) set({ servers: res.data });
+      if (res.success && res.data && get().servers === initialServers) set({ servers: res.data });
     } finally {
       if (current()) set({ isLoading: false });
     }

@@ -148,3 +148,16 @@ it("releases loading when the current server list request rejects", async () => 
   await expect(useServerStore.getState().fetchServers()).rejects.toThrow("offline");
   expect(useServerStore.getState().isLoading).toBe(false);
 });
+
+it("does not restore a server removed while its HTTP list was pending", async () => {
+  const removed = { id: "removed", name: "Removed", icon_url: null };
+  useServerStore.setState({ servers: [removed], activeServerId: null });
+  let finish!: (value: APIResponse<typeof removed[]>) => void;
+  vi.mocked(getMyServers).mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+  const pending = useServerStore.getState().fetchServers();
+  useServerStore.getState().handleServerDelete(removed.id);
+  finish({ success: true, data: [removed] });
+  await pending;
+  expect(useServerStore.getState().servers).toEqual([]);
+  expect(useServerStore.getState().isLoading).toBe(false);
+});
