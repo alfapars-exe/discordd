@@ -1298,3 +1298,10 @@ Terminal current-head receipt: PR29814a965ea completed36/36 SUCCESS. Exact-head 
 - Regression reproduced: a blocked orphan sweep delayed AFK cancellation during StopMaintenance. Both terminal owners are now cancelled before either is joined, preserving repeated/concurrent stop semantics.
 - Regression failed before the fix. Maintenance tests passed 100 repetitions on host and Linux race; services vet and lint passed. These DSN-free runs skip the PostgreSQL-specific test and do not prove active-media shutdown.
 - Receipt: `implementation/verification/refactor-maintenance-cancel-before-join-2026-11-14.json`.
+
+### 2026-11-14 — Join orphan music-stop children
+
+- Deterministic blocking-hook regression failed before the fix: orphan sweep returned while music cleanup still owned stores. The first fixture attempt lacked onlineChecker and was corrected before reproducing the actual assertion failure.
+- Music stops still start concurrently before LiveKit eviction; a sweep-local wait group now joins them before releasing the accepted producer slot. The child uses logx.Go for panic reporting.
+- Host targeted maintenance/orphan tests passed 10 repetitions (3.480s); Linux race passed 10 repetitions (6.478s). PostgreSQL-specific tests were skipped in these DSN-free runs. Services vet and golangci-lint passed (0 issues). Physical media and all other asynchronous voice paths remain open.
+- PR #298 head b69a98e3 Server CI run 43514109922 remains in progress; last checked seven jobs successful, no failed job. This new local child-ownership fix is not yet included in that CI head.

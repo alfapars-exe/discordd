@@ -232,3 +232,31 @@ func TestVoiceMaintenanceStopCancelsAllBeforeJoining(t *testing.T) {
 	default:
 	}
 }
+
+func TestVoiceMaintenanceOrphanSweepJoinsMusicCleanup(t *testing.T) {
+	svc, _ := newTestVoiceServiceWithChannelRepo(newEvictionObservingChannelRepo(make(chan string, 8)))
+	s := svc.(*voiceService)
+	entered, release, done := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	var releaseOnce sync.Once
+	t.Cleanup(func() { releaseOnce.Do(func() { close(release) }); <-done })
+	svc.SetMusicBotHook(&mockMusicBotHook{StopAllForChannelFn: func(string) { close(entered); <-release }})
+	s.states["victim"] = &models.VoiceState{UserID: "victim", ChannelID: "ch1", ServerID: "srv1"}
+	s.offlineSince["victim"] = time.Now().Add(-orphanGracePeriod - time.Second)
+	go func() { s.sweepOrphanStates(); close(done) }()
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("orphan music cleanup not dispatched")
+	}
+	select {
+	case <-done:
+		t.Fatal("orphan sweep returned while music cleanup still owned stores")
+	case <-time.After(20 * time.Millisecond):
+	}
+	releaseOnce.Do(func() { close(release) })
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("orphan sweep did not join released cleanup")
+	}
+}
