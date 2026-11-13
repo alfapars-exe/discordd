@@ -25,7 +25,7 @@
 | RF17 | [#233](https://github.com/alfapars-exe/discordd/pull/233), [#261](https://github.com/alfapars-exe/discordd/pull/261); arama ölçümleri görev defterinde. | İlk sorgunun tam tarama/bellek maliyeti, iptal ve büyük cache sınırlarının nihai kabulü. |
 | RF18 | [#257](https://github.com/alfapars-exe/discordd/pull/257) picker klavye ve listener cleanup. | Paketli gerçek capture, owner crash/reload ve cihaz kabulü. |
 | RF19 | Scoped preload disposer ve updater abonelik testleri. | Splash/runtime state machine ve gerçek indirme/kurulum/yeniden başlatma kabulü. |
-| RF20 | IPC güvenlik düzeltmeleri ve mevcut testler. | Registrar/overlay sorumluluk ayrımının kartın tamamını karşıladığı henüz kanıtlanmadı; sender/session ve çoklu ekran kabulü açık. |
+| RF20 | Credential registrar ve ortak input validator ayrımı #254 içinde; mevcut IPC güvenlik testleri korunuyor. | Registrar/overlay sorumluluk ayrımının kartın tamamını karşıladığı henüz kanıtlanmadı; sender/session ve çoklu ekran kabulü açık. |
 | RF21 | [#242](https://github.com/alfapars-exe/discordd/pull/242) Windows helper; [#251](https://github.com/alfapars-exe/discordd/pull/251) upgrade doğrulayıcısı. | Fiziksel Windows cihazı, overlay/DPI/çoklu ekran ve gerçek kullanıcı profile continuity kabulü. |
 | RF22 | [#243](https://github.com/alfapars-exe/discordd/pull/243), [#244](https://github.com/alfapars-exe/discordd/pull/244): Android emülatör/iOS simülatör kanıtı. | Fiziksel Android/iOS ses, ekran paylaşımı, interruption ve upgrade kabulü. |
 | RF23 | İçeriğe bağlı manifest tasarımı ve doğrulayıcılar mevcut. | Güncel artifact hash'leri, son CI/provenance, provider readiness ve Windows update bulunabilirliği. |
