@@ -285,6 +285,7 @@ export function registerIpcHandlers(): void {
   });
 
   registerDiagnosticIPC(ipcMain, {
+    trusted: assertTrustedMainWindowSender,
     consumeLastCrash, appendDiagnostic, buildUploadBytes, bundleBaseName,
     now: () => new Date(),
     showSaveDialog: options => {

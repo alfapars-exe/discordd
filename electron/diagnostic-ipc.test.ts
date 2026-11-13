@@ -2,33 +2,40 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { IpcMain, IpcMainEvent, IpcMainInvokeEvent } from "electron";
 import type { DiagnosticEntry } from "./diagnostic-log";
+import { isTrustedVoiceOverlaySender } from "./voice-overlay-contract";
 import { registerDiagnosticIPC } from "./diagnostic-ipc";
 
 function harness() {
   const handlers = new Map<string, (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown>();
   const events = new Map<string, (event: IpcMainEvent, raw: unknown) => void>();
   const calls: unknown[][] = [], entries: DiagnosticEntry[] = [], data = Buffer.from("fixture");
-  const state = { save: { canceled: false, filePath: "C:/fixture/diagnostic.JSON.GZ" }, dump: "C:/fixture/crash.dmp" as string | null, verbose: false, copyFails: false, writeFails: false, buildFails: false };
+  const state = { save: { canceled: false, filePath: "C:/fixture/diagnostic.JSON.GZ" }, dump: "C:/fixture/crash.dmp" as string | null, verbose: false, copyFails: false, writeFails: false, buildFails: false, destroyed: false, absent: false };
+  const contents = { mainFrame: {} };
+  const main = { isDestroyed: () => state.destroyed, webContents: contents };
+  const event = { sender: contents, senderFrame: contents.mainFrame } as unknown as IpcMainInvokeEvent;
+  const effects: string[] = [];
   const crash = { reason: "fixture" }, trace = { saved: true, path: "fixture-trace" };
   registerDiagnosticIPC({
     handle: (name, callback) => { assert(!handlers.has(name)); handlers.set(name, callback); },
     on(name, callback) { assert(!events.has(name)); events.set(name, callback); return this; },
   } as Pick<IpcMain, "handle" | "on">, {
-    consumeLastCrash: () => crash,
+    trusted: received => { if (!isTrustedVoiceOverlaySender(received, state.absent ? null : main)) throw new Error("Untrusted IPC sender."); },
+    consumeLastCrash: () => { effects.push("crash"); return crash; },
     appendDiagnostic: entry => { entries.push(entry); },
-    buildUploadBytes: async () => { calls.push(["build"]); if (state.buildFails) throw new Error("build failed"); return data; },
+    buildUploadBytes: async () => { effects.push("build"); calls.push(["build"]); if (state.buildFails) throw new Error("build failed"); return data; },
     bundleBaseName: () => "hichat-diagnostics", now: () => new Date(2026, 10, 13, 12, 34, 56),
     showSaveDialog: async options => { calls.push(["dialog", options]); return state.save; },
     writeFile: async (...args) => { calls.push(["write", ...args]); if (state.writeFails) throw new Error("write failed"); },
     copyFile: async (...args) => { calls.push(["copy", ...args]); if (state.copyFails) throw new Error("copy failed"); },
     newestCrashDumpFullPath: () => { calls.push(["dump"]); return state.dump; },
-    openLogs: async () => "shell-result", isVerbose: () => state.verbose,
-    persistVerbose: value => { calls.push(["persist", value]); state.verbose = value; },
+    openLogs: async () => { effects.push("open"); return "shell-result"; }, isVerbose: () => state.verbose,
+    persistVerbose: value => { effects.push("verbose"); calls.push(["persist", value]); state.verbose = value; },
     setVerbose: value => { calls.push(["live", value]); },
-    capturePerformanceTrace: async () => trace, cancelPerformanceTrace: async () => true,
+    capturePerformanceTrace: async () => { effects.push("trace"); return trace; }, cancelPerformanceTrace: async () => { effects.push("cancel"); return true; },
   });
-  return { state, calls, entries, data, crash, trace, handlers, events,
-    invoke: (name: string, ...args: unknown[]) => handlers.get(name)!({} as IpcMainInvokeEvent, ...args),
+  return { state, calls, entries, data, crash, trace, handlers, events, contents, event, effects,
+    invokeFrom: (received: IpcMainInvokeEvent, name: string, ...args: unknown[]) => handlers.get(name)!(received, ...args),
+    invoke: (name: string, ...args: unknown[]) => handlers.get(name)!(event, ...args),
     log: (raw: unknown) => events.get("diagnostic-log")!({} as IpcMainEvent, raw) };
 }
 
@@ -91,4 +98,38 @@ test("verbose settings validate before persistence and apply live after persiste
   assert.deepEqual(h.calls, []);
   h.invoke("set-diagnostic-verbose", true); h.invoke("set-diagnostic-verbose", false);
   assert.deepEqual(h.calls, [["persist", true], ["live", true], ["persist", false], ["live", false]]);
+});
+
+async function expectDiagnosticDenied(h: ReturnType<typeof harness>, event: IpcMainInvokeEvent) {
+  assert.throws(() => h.invokeFrom(event, "consume-last-crash"), /Untrusted IPC sender/);
+  assert.throws(() => h.invokeFrom(event, "set-diagnostic-verbose", true), /Untrusted IPC sender/);
+  for (const channel of ["build-diagnostic-upload", "export-diagnostics", "open-logs-dir", "capture-performance-trace", "cancel-performance-trace"]) {
+    await assert.rejects(async () => h.invokeFrom(event, channel), /Untrusted IPC sender/);
+  }
+}
+
+test("foreign diagnostic callers cannot consume, export or mutate native diagnostics", async () => {
+  const h = harness();
+  for (const event of [
+    { sender: {}, senderFrame: {} },
+    { sender: h.contents, senderFrame: {} },
+    { sender: h.contents, senderFrame: null },
+  ]) await expectDiagnosticDenied(h, event as unknown as IpcMainInvokeEvent);
+  assert.deepEqual(h.effects, []);
+  assert.deepEqual(h.calls, []);
+});
+
+test("retired diagnostic frames cannot start native work but the current frame can", async () => {
+  const h = harness();
+  for (const unavailable of ["destroyed", "absent"] as const) {
+    h.state[unavailable] = true;
+    await expectDiagnosticDenied(h, h.event);
+    h.state[unavailable] = false;
+  }
+  h.contents.mainFrame = {};
+  await expectDiagnosticDenied(h, h.event);
+  assert.deepEqual(h.effects, []);
+  assert.deepEqual(h.calls, []);
+  assert.equal(h.invokeFrom({ sender: h.contents, senderFrame: h.contents.mainFrame } as unknown as IpcMainInvokeEvent, "consume-last-crash"), h.crash);
+  assert.deepEqual(h.effects, ["crash"]);
 });
