@@ -764,6 +764,7 @@ func TestDMRepo_ReplyReferenceCannotExposeAnotherConversation(t *testing.T) {
 	}
 	check(&found[0])
 }
+
 // ─── Reactions ───
 
 func TestDMRepo_Reactions(t *testing.T) {
