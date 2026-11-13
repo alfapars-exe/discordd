@@ -2,8 +2,9 @@ package main
 
 import (
 	"context"
-	"os"
-	"strings"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -99,22 +100,64 @@ func TestBackendOwnerWatchParentCancellationPropagates(t *testing.T) {
 }
 
 func TestMainDefersWatchJoinBeforeOwnershipConnectionClose(t *testing.T) {
-	data, err := os.ReadFile("main.go")
+	file, err := parser.ParseFile(token.NewFileSet(), "main.go", nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	source := string(data)
-	connectionClose := strings.Index(source, "defer func() { _ = owner.Close() }()")
-	watchCleanup := strings.Index(source, "defer stopOwnerWatch()")
-	if connectionClose < 0 || watchCleanup < connectionClose || strings.Count(source, "defer stopOwnerWatch()") != 1 {
+	matches := func(call *ast.CallExpr, receiver, name string) bool {
+		selector, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok || selector.Sel.Name != name {
+			return false
+		}
+		identifier, ok := selector.X.(*ast.Ident)
+		return ok && identifier.Name == receiver
+	}
+	var connectionClose, watchCleanup, explicitJoin, poolClose token.Pos
+	var watchDefers int
+	var ownedContext, bypass bool
+	ast.Inspect(file, func(node ast.Node) bool {
+		switch value := node.(type) {
+		case *ast.DeferStmt:
+			if name, ok := value.Call.Fun.(*ast.Ident); ok && name.Name == "stopOwnerWatch" {
+				watchCleanup = value.Pos()
+				watchDefers++
+			}
+			if function, ok := value.Call.Fun.(*ast.FuncLit); ok {
+				ast.Inspect(function.Body, func(child ast.Node) bool {
+					if call, ok := child.(*ast.CallExpr); ok && matches(call, "owner", "Close") {
+						connectionClose = value.Pos()
+					}
+					return true
+				})
+			}
+		case *ast.ExprStmt:
+			if call, ok := value.X.(*ast.CallExpr); ok {
+				if name, ok := call.Fun.(*ast.Ident); ok && name.Name == "stopOwnerWatch" {
+					explicitJoin = value.Pos()
+				}
+			}
+		case *ast.CallExpr:
+			if matches(value, "db", "Close") {
+				poolClose = value.Pos()
+			}
+			if matches(value, "database", "WatchBackendOwner") && len(value.Args) > 0 {
+				context, ok := value.Args[0].(*ast.Ident)
+				ownedContext = ok && context.Name == "watchCtx"
+			}
+		case *ast.GoStmt:
+			if matches(value.Call, "database", "WatchBackendOwner") {
+				bypass = true
+			}
+		}
+		return true
+	})
+	if !connectionClose.IsValid() || watchDefers != 1 || watchCleanup < connectionClose {
 		t.Fatal("main must register watch cleanup after connection close so LIFO joins watch first")
 	}
-	poolClose := strings.Index(source, "if err := db.Close();")
-	explicitJoin := strings.Index(source, "\n\tstopOwnerWatch()\n")
-	if explicitJoin < 0 || poolClose < explicitJoin {
+	if !explicitJoin.IsValid() || !poolClose.IsValid() || explicitJoin > poolClose {
 		t.Fatal("ownership watch must join before the database pool closes")
 	}
-	if !strings.Contains(source, "database.WatchBackendOwner(watchCtx, owner,") || strings.Contains(source, "go database.WatchBackendOwner(") {
+	if !ownedContext || bypass {
 		t.Fatal("ownership observer bypasses its owned child context")
 	}
 }
