@@ -124,7 +124,7 @@ export default defineConfig({
     },
     {
       command: process.env.HICHAT_E2E_PRODUCTION_CLIENT === "1"
-        ? `npm run build && npm run preview -- --host localhost --port ${CLIENT_PORT} --strictPort`
+        ? `npm run build -- --base=/ && npm run preview -- --host localhost --port ${CLIENT_PORT} --strictPort`
         : "npm run dev",
       cwd: join(__dirname, "..", "client"),
       url: BASE_URL,
