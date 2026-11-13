@@ -262,6 +262,9 @@ func (s *messageService) deliverNext(ctx context.Context) bool {
 		return false
 	}
 	if err != nil {
+		if errors.Is(err, context.Canceled) && errors.Is(ctx.Err(), context.Canceled) {
+			return false
+		}
 		messageLogger.Error("channel outbox claim failed", "err", pkg.ErrText(err))
 		return false
 	}
