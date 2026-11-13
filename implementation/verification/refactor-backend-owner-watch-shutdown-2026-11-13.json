@@ -1,0 +1,62 @@
+{
+  "scope": "RF08 backend ownership observer shutdown ordering",
+  "refactor_source": "4e3ed7f0",
+  "before": {
+    "source_order": "Pool closes during main shutdown; deferred owned-session close precedes deferred parent cancellation.",
+    "regressions": [
+      "cleanup returned without cancelling ownership watch",
+      "concurrent cleanup did not wait for ownership watch",
+      "ownership watch must join before the database pool closes"
+    ]
+  },
+  "change": "Launch observer with its own child context and completion channel. Cleanup cancels and joins; concurrent/repeated callers are safe. Main explicitly joins before pool close and defers fallback cleanup before dedicated-session close. The genuine-loss callback remains unchanged.",
+  "after": {
+    "unit_tests_count_100": "PASS 0.661s",
+    "host_real_Postgres_lifecycle_count_3": "PASS 4.111s",
+    "final_host_scope_count_1": "PASS 1.894s",
+    "mutual_TLS_race_scope": [
+      {
+        "package": "github.com/argeinfina/hichat",
+        "test": "TestBackendOwnerWatchParentCancellationPropagates",
+        "pass_count": 5
+      },
+      {
+        "package": "github.com/argeinfina/hichat",
+        "test": "TestBackendOwnerWatchPostgresLifecycle",
+        "pass_count": 5
+      },
+      {
+        "package": "github.com/argeinfina/hichat",
+        "test": "TestBackendOwnerWatchStopCancelsAndJoinsBeforeConnectionClose",
+        "pass_count": 5
+      },
+      {
+        "package": "github.com/argeinfina/hichat",
+        "test": "TestBackendOwnerWatchSupportsConcurrentCleanup",
+        "pass_count": 5
+      },
+      {
+        "package": "github.com/argeinfina/hichat",
+        "test": "TestMainDefersWatchJoinBeforeOwnershipConnectionClose",
+        "pass_count": 5
+      },
+      {
+        "package": "github.com/argeinfina/hichat/database",
+        "test": "TestBackendOwnerExcludesSecondAndDetectsLoss",
+        "pass_count": 5
+      }
+    ],
+    "race_top_level_pass_events": 30,
+    "race_skips": 0,
+    "real_Postgres_contract": "Normal cleanup retains the owner session/lock for caller-controlled release; genuine lock loss still invokes fail-closed handler and permits the next backend to acquire. Each test gets its own database because schema isolation cannot isolate database-wide advisory locks.",
+    "full_go_vet_and_build": "PASS",
+    "golangci_lint": "0 issues",
+    "new_launch_function_isolated_statement_coverage_percent": 100,
+    "isolated_main_package_statement_coverage_percent": 0.6
+  },
+  "limitations": [
+    "No production false-exit incident is claimed. The old ordering and cleanup contract were reproduced, not an observed production crash.",
+    "This is not a whole-process SIGTERM, active-media or whole-project completion receipt.",
+    "Current-head CI remains required."
+  ]
+}
