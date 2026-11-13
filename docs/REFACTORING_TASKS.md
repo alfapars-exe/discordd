@@ -1462,3 +1462,8 @@ Terminal current-head receipt: PR29814a965ea completed36/36 SUCCESS. Exact-head 
 - Regression failed before fix: MusicRoomKey recreated forgotten room metadata after ShutdownVoiceSessions. Added mu-protected terminal flag set atomically with final map cleanup; shared locked creator rejects both music and media key paths with context.Canceled before cache reuse or generation. Media workers still join before terminal flag/key removal.
 - Shutdown/key tests passed20 repetitions (4.573s); services vet/lint passed. Receipt: `implementation/verification/refactor-terminal-voice-key-fence-2026-11-14.json`. Local integration only; new race pending Docker, no zeroization or physical-media claim.
 - Published22aae5bb ServerCI43524233537 remains live;18 successful jobs/no failure, PostgreSQL still in progress. Active process and final whole-project acceptance remain open.
+
+### 2026-11-14 — Native active-shutdown CI passed; terminal-key followup prepared
+
+- Published22aae5bb PostgreSQL job132225881418 completed SUCCESS. Downloaded completed log, verified all four mandatory active shutdown tests passed and selected native race step completed SUCCESS with TestVoiceUsagePostgres included. Receipt: `implementation/verification/refactor-pr298-22-native-ci-2026-11-14.json`. Overall43524233537 still live on repository shards; do not report overall green yet.
+- Canonical local fbf10657 now contains accepted-snapshot test, orphan metadata cleanup and terminal key creation fence. Host tests20 passed4.524s, full vet/build/lint passed. Not pushed to avoid cancelling existing native/repository CI; receipt: `implementation/verification/refactor-terminal-key-canonical-prepared-2026-11-14.json`. Its new race proof remains pending, distinct from published22.

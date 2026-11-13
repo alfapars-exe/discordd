@@ -1,0 +1,18 @@
+{
+  "date": "2026-11-14",
+  "canonical_local_head": "fbf1065734347dc69ee08501f388a3503cb5cb5f",
+  "scope": "Prepared terminal metadata/key followup, not yet pushed",
+  "checks": {
+    "host_key_shutdown_count": 20,
+    "host_exit": 0,
+    "host_seconds": 4.524,
+    "full_vet_exit": 0,
+    "full_build_exit": 0,
+    "full_lint_issues": 0
+  },
+  "delivery": "Withheld new push while existing22aae5bb CI repository shards run",
+  "limitations": [
+    "No new-source native/race proof while Docker unavailable.",
+    "Published native CI receipt belongs to22aae5bb only."
+  ]
+}
