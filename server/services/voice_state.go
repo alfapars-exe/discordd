@@ -506,7 +506,7 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 	// independently reconnects/tears it down. Same orphaned-stream risk as
 	// MoveUser and AdminDisconnectUser, so it gets the same cleanup.
 	if oldChannelID != "" && oldChannelID != channelID {
-		go s.removeParticipantAndScreenShareFromLiveKit(oldChannelID, userID)
+		s.usageOperations.child(func() { s.removeParticipantAndScreenShareFromLiveKit(oldChannelID, userID) })
 		// Cross-channel switch — credit the old session's duration to the
 		// instance it ran on. Self-hosted instances are skipped.
 		s.dispatchUsageCredit(oldUsageSessionID, oldInstanceID, oldIsCloud, oldJoinedAt, time.Now())
@@ -517,7 +517,7 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 		// oldChannelEmpty's own comment (above, still under the lock) for
 		// why this exists as a second, hand-synced copy of that check.
 		if oldChannelEmpty && s.musicBotHook != nil {
-			go s.musicBotHook.StopAllForChannel(oldChannelID)
+			s.usageOperations.child(func() { s.musicBotHook.StopAllForChannel(oldChannelID) })
 		}
 
 		// F8 review LOW fix: same log line/format LeaveChannel emits (see
@@ -653,7 +653,7 @@ func (s *voiceService) LeaveChannel(userID string) error {
 	// sub-participant, if any, so a departing user's screen share doesn't
 	// keep streaming after their voice connection is gone (DisconnectUser
 	// routes through this same LeaveChannel, so it's covered too).
-	go s.removeParticipantAndScreenShareFromLiveKit(channelID, userID)
+	s.usageOperations.child(func() { s.removeParticipantAndScreenShareFromLiveKit(channelID, userID) })
 	// Credit the completed session's duration to the cloud instance bucket.
 	// Self-hosted, zero-duration, and unset cases are no-ops inside creditUsage.
 	s.dispatchUsageCredit(leaveUsageSessionID, leaveInstanceID, leaveIsCloud, leaveJoinedAt, time.Now())
@@ -661,7 +661,7 @@ func (s *voiceService) LeaveChannel(userID string) error {
 	// Channel emptied → kick the music bot (if any) so it doesn't keep
 	// playing to nobody and burning bandwidth/CPU.
 	if channelEmpty && s.musicBotHook != nil {
-		go s.musicBotHook.StopAllForChannel(channelID)
+		s.usageOperations.child(func() { s.musicBotHook.StopAllForChannel(channelID) })
 	}
 
 	voiceLogger.Info("user left voice channel", "user_id", userID, "channel_id", channelID)
