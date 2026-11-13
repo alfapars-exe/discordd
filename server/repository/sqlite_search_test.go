@@ -12,6 +12,7 @@ package repository
 
 import (
 	"context"
+	"strings"
 	"testing"
 )
 
@@ -118,5 +119,37 @@ func TestSearchRepo_EqualRankTimestampPagesHaveStableOrder(t *testing.T) {
 		if len(result.Messages) != 1 || result.Messages[0].ID != want {
 			t.Fatalf("offset %d: got %+v, want %s", offset, result.Messages, want)
 		}
+	}
+}
+
+func TestSearchRepo_SQLiteRelevancePrecedesTimestampTieBreak(t *testing.T) {
+	// This contract belongs to FTS5; PostgreSQL intentionally uses a different
+	// search engine and must not be claimed to have equivalent relevance scores.
+	db, _ := newSQLiteTestDBWithPath(t)
+	seedMessageWorld(t, db)
+	ctx := context.Background()
+	for _, row := range []struct{ id, content, at string }{
+		{"rank-older", "rankfixture", "2026-01-01 00:00:00"},
+		{"rank-newer", "rankfixture " + strings.Repeat("filler ", 100), "2026-02-01 00:00:00"},
+	} {
+		if _, err := db.Conn.ExecContext(ctx, `INSERT INTO messages(id,channel_id,user_id,content,created_at) VALUES(?,?,?,?,?)`, row.id, msgChannel, msgAuthor, row.content, row.at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var olderRank, newerRank float64
+	for id, destination := range map[string]*float64{"rank-older": &olderRank, "rank-newer": &newerRank} {
+		if err := db.Conn.QueryRowContext(ctx, `SELECT fts.rank FROM messages_fts fts JOIN messages m ON m.rowid=fts.rowid WHERE messages_fts MATCH ? AND m.id=?`, sanitizeFTSQuery("rankfixture"), id).Scan(destination); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if olderRank >= newerRank {
+		t.Fatalf("fixture must give the older hit better relevance: older=%g newer=%g", olderRank, newerRank)
+	}
+	result, err := NewSQLiteSearchRepo(db.Conn).Search(ctx, "rankfixture", "srv-1", nil, []string{msgChannel}, 1, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.TotalCount != 2 || len(result.Messages) != 1 || result.Messages[0].ID != "rank-older" {
+		t.Fatalf("timestamp displaced primary relevance: %+v", result)
 	}
 }
