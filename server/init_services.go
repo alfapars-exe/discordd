@@ -464,64 +464,6 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 		reachabilityReporter,
 	)
 
-	// Rate limiters
-	loginLimiter := ratelimit.NewLoginRateLimiter(5, 2*time.Minute)
-	// Chat messages: 10 per trailing 5s, sliding window, NO hard lockout
-	// (cooldown=0). The previous 5/5s fixed window + 15s lockout was
-	// trivially tripped by fast-but-normal typists — six quick lines cost a
-	// hard 15-second freeze that users read as "sending is stuck". Channel
-	// and DM budgets are separate instances so DM traffic can't starve
-	// channel sends (or vice versa).
-	messageLimiter := ratelimit.NewMessageRateLimiter(10, 5*time.Second, 0)
-	dmMessageLimiter := ratelimit.NewMessageRateLimiter(10, 5*time.Second, 0)
-	registerLimiter := ratelimit.NewLoginRateLimiter(3, 10*time.Minute) // 3 registrations per 10 min per IP
-	forgotPwdLimiter := ratelimit.NewLoginRateLimiter(3, 5*time.Minute) // 3 forgot-password per 5 min per IP
-	resetPwdLimiter := ratelimit.NewLoginRateLimiter(5, 5*time.Minute)  // 5 reset attempts per 5 min per IP
-	verifyEmailLimiter := ratelimit.NewLoginRateLimiter(10, 5*time.Minute)
-	unsubscribeLimiter := ratelimit.NewLoginRateLimiter(20, 5*time.Minute)
-	feedbackLimiter := ratelimit.NewMessageRateLimiter(2, 1*time.Minute, 30*time.Second) // 2 feedback per min, 30s cooldown
-	// 30/min/IP: a normal client refreshes a ticket on reconnect (~1-3/min
-	// even on flaky mobile networks); 30 is generous enough to absorb
-	// reconnect storms while killing the brute-force / DoS scenario.
-	wsTicketLimiter := ratelimit.NewLoginRateLimiter(30, 1*time.Minute)
-
-	// Uploads: 20 per minute per user, 30s cooldown once exceeded.
-	// Sizing rationale: a photo drop of 10 files at once is fine
-	// (nowhere near 20/min); a legit chat rarely posts even 5 uploads
-	// per minute. 30s cooldown is short enough to not annoy legit users
-	// but long enough to make a scripted spam cost noticeable.
-	uploadLimiter := ratelimit.NewMessageRateLimiter(20, 1*time.Minute, 30*time.Second)
-
-	// DeviceEnum (P0-BD-02): the client fetches public device info / prekey
-	// bundles lazily (one bundle per new conversation), so 30/min/IP sits far
-	// above legitimate use while making bulk harvesting of the device-key
-	// database impractical from a single source.
-	deviceEnumLimiter := ratelimit.NewLoginRateLimiter(30, 1*time.Minute)
-
-	// GroupSession (pentest C-03 follow-up finding 3): 20 per minute per
-	// user, 30s cooldown once exceeded -- same shape as uploadLimiter above.
-	groupSessionLimiter := ratelimit.NewMessageRateLimiter(20, 1*time.Minute, 30*time.Second)
-
-	// Refresh (security scan 2026-07-31, finding N-14): 30 per minute per IP,
-	// same shape and rationale as wsTicketLimiter above -- refresh is called
-	// on reconnect/near-expiry, not per keystroke.
-	refreshLimiter := ratelimit.NewLoginRateLimiter(30, 1*time.Minute)
-
-	// MusicPlay (resource scan 2026-08-02): 5 per minute per user, 30s
-	// cooldown once exceeded -- see the RateLimiters.MusicPlay doc comment
-	// above for the subprocess-cost rationale.
-	musicPlayLimiter := ratelimit.NewMessageRateLimiter(5, 1*time.Minute, 30*time.Second)
-
-	// SocialAction (Faz B, 2026-10-21): 20 per minute per user, 30s cooldown
-	// once exceeded -- see the RateLimiters.SocialAction doc comment above.
-	socialActionLimiter := ratelimit.NewMessageRateLimiter(20, 1*time.Minute, 30*time.Second)
-
-	// CosmeticEquip (Faz G1): 10 per minute per user, 30s cooldown once
-	// exceeded -- see the RateLimiters.CosmeticEquip doc comment above.
-	cosmeticEquipLimiter := ratelimit.NewMessageRateLimiter(10, 1*time.Minute, 30*time.Second)
-
-	gameJoinLimiter := ratelimit.NewLoginRateLimiter(60, time.Minute)
-
 	wsTicketService := services.NewWSTicketService()
 	rollback = append(rollback, wsTicketService.(interface{ Stop() }).Stop)
 	svcs := &Services{
@@ -601,26 +543,7 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 		OnlineFriendNotifier:    onlineFriendNotifier,
 	}
 
-	limiters := &RateLimiters{
-		GameJoin:         gameJoinLimiter,
-		Login:            loginLimiter,
-		Message:          messageLimiter,
-		DMMessage:        dmMessageLimiter,
-		Register:         registerLimiter,
-		ForgotPwd:        forgotPwdLimiter,
-		ResetPwd:         resetPwdLimiter,
-		VerifyEmail:      verifyEmailLimiter,
-		EmailUnsubscribe: unsubscribeLimiter,
-		Feedback:         feedbackLimiter,
-		WSTicket:         wsTicketLimiter,
-		DeviceEnum:       deviceEnumLimiter,
-		Upload:           uploadLimiter,
-		GroupSession:     groupSessionLimiter,
-		Refresh:          refreshLimiter,
-		MusicPlay:        musicPlayLimiter,
-		SocialAction:     socialActionLimiter,
-		CosmeticEquip:    cosmeticEquipLimiter,
-	}
+	limiters := initRateLimiters(ratelimit.NewLoginRateLimiter, ratelimit.NewMessageRateLimiter)
 
 	transferred = true
 	return svcs, limiters, metricsCollector
