@@ -120,3 +120,18 @@ test("real IPC cleanup starts every owner once and still awaits tracker if a sib
   assert.equal(finished, true);
   assert.equal(dispose(), first);
 });
+
+test("relaunch IPC follows graceful quit instead of bypassing native cleanup with exit", () => {
+  const code = readFileSync(path.join(__dirname, "ipc-handlers.js"), "utf8");
+  const start = code.indexOf('electron_1.ipcMain.handle("relaunch"');
+  const end = code.indexOf("\n    });", start);
+  assert.ok(start >= 0 && end > start);
+  const handlers = new Map<string, () => void>();
+  const calls: string[] = [];
+  vm.runInNewContext(code.slice(start, end + "\n    });".length), {
+    electron_1: { ipcMain: { handle: (name: string, callback: () => void) => handlers.set(name, callback) },
+      app: { relaunch: () => calls.push("relaunch"), quit: () => calls.push("quit"), exit: () => calls.push("forced-exit") } },
+  });
+  handlers.get("relaunch")!();
+  assert.deepEqual(calls, ["relaunch", "quit"]);
+});
