@@ -18,6 +18,7 @@ func TestMusicAccessFreshPermissionBypassesPositiveCacheAndHonorsInvalidation(t 
 	}}
 	permissions := &testutil.MockChannelPermRepo{GetByChannelAndRolesFn: func(context.Context, string, []string) ([]models.ChannelPermissionOverride, error) { return nil, nil }}
 	cached := NewChannelPermissionService(permissions, roles, channels, &testutil.MockBroadcaster{}).(*cachingPermResolver)
+	t.Cleanup(cached.permCache.Close)
 	if got, err := cached.ResolveChannelPermissions(context.Background(), "user", "ch"); err != nil || !got.Has(models.PermSpeak) {
 		t.Fatal("positive cache fixture not seeded", err)
 	}

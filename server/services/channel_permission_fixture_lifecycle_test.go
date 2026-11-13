@@ -25,18 +25,32 @@ func permissionFixtureCacheWorkers() int {
 }
 
 func TestPermissionFixtureReleasesCacheWorkersWithItsTestOwner(t *testing.T) {
-	before := permissionFixtureCacheWorkers()
-	t.Run("owner", TestResolveChannelPermissionsBulk_ParityWithSinglePath)
-	deadline := time.Now().Add(500 * time.Millisecond)
-	for {
-		after := permissionFixtureCacheWorkers()
-		if after <= before {
-			t.Logf("cache cleanup workers before=%d after=%d", before, after)
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("test owner retained cache workers: before=%d after=%d", before, after)
-		}
-		time.Sleep(time.Millisecond)
+	for _, fixture := range []struct {
+		name string
+		run  func(*testing.T)
+	}{
+		{"parity", TestResolveChannelPermissionsBulk_ParityWithSinglePath},
+		{"fresh_music_access", TestMusicAccessFreshPermissionBypassesPositiveCacheAndHonorsInvalidation},
+		{"message_recipients", TestBroadcastCreate_RecipientsMatchBulkResolver},
+		{"search", TestSearch_ExcludesUnreadableChannel},
+		{"stream_notifier", TestVerifyCurrentScreenShareUsesLiveKitParticipantAndExactTrack},
+		{"thread_invalidation", TestParentOverrideInvalidatesWarmThreadReaders},
+	} {
+		t.Run(fixture.name, func(t *testing.T) {
+			before := permissionFixtureCacheWorkers()
+			t.Run("owner", fixture.run)
+			deadline := time.Now().Add(500 * time.Millisecond)
+			for {
+				after := permissionFixtureCacheWorkers()
+				if after <= before {
+					t.Logf("cache cleanup workers before=%d after=%d", before, after)
+					return
+				}
+				if time.Now().After(deadline) {
+					t.Fatalf("test owner retained cache workers: before=%d after=%d", before, after)
+				}
+				time.Sleep(time.Millisecond)
+			}
+		})
 	}
 }
