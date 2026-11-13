@@ -1,3 +1,4 @@
+import { registerUpdaterIPC } from "./updater-ipc";
 import { createOverlayMediaBroker } from "./overlay-media-broker";
 import { registerCS2JoinIPC } from "./cs2-join-ipc";
 import { registerGameNameIPC } from "./registered-game-name-ipc";
@@ -368,32 +369,13 @@ export function registerIpcHandlers(): void {
   ipcMain.handle("capture-performance-trace", () => capturePerformanceTrace());
   ipcMain.handle("cancel-performance-trace", () => cancelPerformanceTrace());
 
-  // ─── Auto-updater (renderer-driven) ─────────────────────────────
-  ipcMain.handle("was-update-checked", () => wasPrelaunchChecked());
-
-  ipcMain.handle("check-update", async () => {
-    try {
-      const result = await autoUpdater.checkForUpdates();
-      return result?.updateInfo ?? null;
-    } catch {
-      return null;
-    }
+  registerUpdaterIPC(ipcMain, {
+    trusted: assertTrustedMainWindowSender,
+    wasPrelaunchChecked,
+    checkForUpdates: () => autoUpdater.checkForUpdates(),
+    downloadUpdate: () => autoUpdater.downloadUpdate(),
+    quitAndInstall: (silent, restart) => autoUpdater.quitAndInstall(silent, restart),
   });
-
-  ipcMain.handle("download-update", async () => {
-    try {
-      await autoUpdater.downloadUpdate();
-      return true;
-    } catch {
-      return false;
-    }
-  });
-
-  ipcMain.handle("install-update", () => {
-    // isSilent=true (no installer UI), isForceRunAfter=true (auto-restart)
-    autoUpdater.quitAndInstall(true, true);
-  });
-
   // ─── Desktop capturer (legacy enumeration, separate from picker) ─
   ipcMain.handle("get-desktop-sources", async () => {
     return await getSerializedSources();
