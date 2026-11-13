@@ -948,3 +948,9 @@ LiveKit silme düzeltmesinin mevcut PR #222 ile sonradan açılan PR #270'te ayn
 - Seven direct tests cover all-channel untrusted rejection, overlay support states, native selection/cancel/empty/unsupported paths, successful-only layout cleanup, boolean/ID bounds and adapter delegation.
 - Integration eeb9af5d compile/Electron: 358 passed, 1 skipped (`%TEMP%/hichat-games-ipc-integrated.log`). Independent draft PR #284 head 989917c6: compile/Electron 276 passed, 1 skipped (`hichat-games-ipc-pr.log`), pushed. Import-only canonical conflict resolved without other pending registrars. CI pending; physical native game/dialog/overlay acceptance remains open.
 - CI snapshots: #277 head 24365ca4 35 success/1 pending; #279 head 38993999 21/13; #280 head e57b103f 32/2, no failures observed. Await terminal current-head proof.
+
+### RF19/RF20/RF28 — current source production E2E and terminal CI (2026-11-13)
+
+- Integrated source 4dae7d7f held unchanged through both runs. Real Go server, fresh per-run verified-mTLS PostgreSQL databases, production Vite base=/: Chromium 14/14 passed (2.6m), WebKit smoke 1/1 passed (42.9s), both exit 0. Both logs contain zero server level=ERROR and app-log batch failures. Chromium includes refresh 400/401 diagnostics; assertions passed. ffmpeg/yt-dlp unavailable in this fixture.
+- Source-bound evidence: `implementation/verification/refactor-overlay-updater-production-e2e-2026-11-13.json`; logs `%TEMP%/hichat-overlay-updater-production-chromium.log` and `hichat-overlay-updater-production-webkit.log`. Toolchain Node v26.13.1, Go go1.27.4 windows/amd64. This supersedes the older a4eccf63 browser receipt for the changed updater/app-log source.
+- PR #277 head 24365ca4 and PR #280 head e57b103f each terminal 36/36 SUCCESS, verified live. No additional PR was merged. Packaged Electron, physical media/display, provider release and historical app-log root cause remain separate open gates.
