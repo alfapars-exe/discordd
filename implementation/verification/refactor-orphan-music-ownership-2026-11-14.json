@@ -1,0 +1,27 @@
+{
+  "date": "2026-11-14",
+  "scope": "Orphan sweep owns music-stop children through join",
+  "canonical_head": "59a916e1",
+  "pr": 298,
+  "source_sha256": {
+    "server/services/voice_lifecycle.go": "5b5877794c40483ca9768d9df45154a8221003e9f230a2d164e9d60037c47dc8",
+    "server/services/voice_maintenance_test.go": "ec23539b8e858d2a1a610e95ccfff6d58c8a7fc5cce970c867be0d0509341845"
+  },
+  "verification": {
+    "before": "assertion failed: orphan sweep returned while music cleanup still owned stores",
+    "host_count": 10,
+    "host_exit": 0,
+    "linux_race_count": 10,
+    "linux_race_exit": 0,
+    "canonical_verified_mtls_postgres_count": 3,
+    "canonical_postgres_exit": 0,
+    "canonical_postgres_seconds": 4.115,
+    "services_vet_exit": 0,
+    "services_lint_issues": 0
+  },
+  "limitations": [
+    "CI for current head pending.",
+    "Other leave/move/admin asynchronous media cleanup paths remain open.",
+    "Not physical media or complete shutdown acceptance."
+  ]
+}
