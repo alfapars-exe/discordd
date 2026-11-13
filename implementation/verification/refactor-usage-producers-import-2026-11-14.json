@@ -140,11 +140,22 @@
     "bb848eaa_postgres": "FAIL missing legacy voice_usage_credits source table, fixed by compatibility commit",
     "14a965ea_checks": "pending; do not inherit prior-head checks"
   },
-  "mandatory_self_scan": "Earlier frozen source exited0 with0 blockers/421 review rows. Final frozen source running under session20893 at observation.",
+  "mandatory_self_scan": {
+    "source": "14a965ea",
+    "exit_code": 0,
+    "blocking_matches": 0,
+    "review_rows": 421,
+    "status": "completed; review queue is not blanket security acceptance"
+  },
   "limitations": [
     "Accepted usage roots and registered credit/deletion children are drained; remaining non-usage media work and active-session final credit acceptance remain open.",
     "Process crash before first durable enqueue is still not covered.",
     "Late committed channel deletion remains synchronous/caller-owned after admission closes, preserving memory cleanup, media eviction attempt and music cleanup.",
     "No whole-project race/coverage, release downgrade, real backup restore or physical media acceptance claim."
+  ],
+  "source_scope_notes": [
+    "Thirty-test canonical race scope preceded the final historical-bootstrap fixture and late-music assertion; these were verified separately with portable bootstrap race and late-deletion100-repeat tests.",
+    "Final source lint and source-wide self-scan passed after the last code change.",
+    "Integrated eight-test corrected scope includes actual historical150 upgrade and accepted PostgreSQL credit shutdown; original underspecified-fixture failure remains recorded in chronology."
   ]
 }

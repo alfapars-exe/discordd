@@ -1,6 +1,6 @@
 # Refactor kabul durumu
 
-13 Kasım 2026. Bu matris [görev kartlarının](REFACTORING_TASKS.md) kapsamını korur. Kaynak veya CI başarısı tek başına bir kartı kapatmaz. Aşağıdaki açık kapılar tamamlanmadan bütün proje için refactor tamamlandı denemez. PR bağlantıları teslimat yerini gösterir; birleştirme veya yayın kanıtı değildir.
+14 Kasım 2026. Bu matris [görev kartlarının](REFACTORING_TASKS.md) kapsamını korur. Kaynak veya CI başarısı tek başına bir kartı kapatmaz. Aşağıdaki açık kapılar tamamlanmadan bütün proje için refactor tamamlandı denemez. PR bağlantıları teslimat yerini gösterir; birleştirme veya yayın kanıtı değildir.
 
 ## Görevler ve kalan kabul kapıları
 
