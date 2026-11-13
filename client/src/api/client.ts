@@ -193,12 +193,14 @@ function clearTokens(): void {
  */
 let refreshPromise: Promise<boolean> | null = null;
 let refreshFailureStatus = 0;
+let refreshRetryAt = 0;
 // Refresh is shared by HTTP and WebSocket consumers, so it must release its
 // promise lock even when the transport or response body stops making progress.
 const REFRESH_TIMEOUT_MS = 15_000;
 
 async function refreshAccessToken(): Promise<boolean> {
   if (refreshPromise) return refreshPromise;
+  if (Date.now() < refreshRetryAt) return false;
 
   refreshFailureStatus = 0;
   const pending = doRefresh(authGeneration);
@@ -236,6 +238,14 @@ async function doRefresh(generation: number): Promise<boolean> {
     if (generation !== authGeneration) return false;
     if (!res.ok) {
       refreshFailureStatus = res.status;
+      if (res.status === 429) {
+        const retryAfter = res.headers.get("Retry-After");
+        const seconds = retryAfter === null ? NaN : Number(retryAfter);
+        const deadline = Number.isFinite(seconds)
+          ? Date.now() + Math.max(0, seconds) * 1000
+          : Date.parse(retryAfter ?? "");
+        if (Number.isFinite(deadline)) refreshRetryAt = deadline;
+      }
       // Only clear tokens on explicit auth rejection — 5xx/429/network errors
       // don't mean the token is invalid, just that the server/network failed.
       if (res.status === 401 || res.status === 403) {
