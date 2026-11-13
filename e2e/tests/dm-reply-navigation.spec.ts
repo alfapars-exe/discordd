@@ -8,7 +8,7 @@ test("a DM reply loads the original from outside the current history page", asyn
   try {
     const peer = await peerContext.newPage();
     await loginAsNotificationRecipient(peer);
-    const peerUser = await fixtureApi<{ id: string; username: string }>(peer, "/users/me");
+    const peerUser = await fixtureApi<{ id: string; username: string; display_name?: string }>(peer, "/users/me");
     const channel = await fixtureApi<{ id: string; e2ee_enabled: boolean }>(page, "/dms", "POST", { user_id: peerUser.id });
     const channelId = channel.id;
     if (channel.e2ee_enabled) {
@@ -28,7 +28,7 @@ test("a DM reply loads the original from outside the current history page", asyn
     await limitReplyHistoryPage(page, endpoint);
     await page.reload();
     await dismissOnboardingOverlays(page);
-    await page.locator("button.ch-tree-dm").filter({ hasText: peerUser.username }).first().click();
+    await page.getByRole("complementary").getByRole("button").filter({ hasText: peerUser.display_name || peerUser.username }).first().click();
     await expectReplyLoadsOriginal(page, endpoint, replyId, originalId, "keyboard");
   } finally {
     await peerContext.close();
