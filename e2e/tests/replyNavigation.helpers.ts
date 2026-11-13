@@ -10,7 +10,7 @@ export async function limitReplyHistoryPage(page: Page, endpoint: string) {
   });
 }
 
-export async function expectReplyLoadsOriginal(page: Page, endpoint: string, replyId: string, originalId: string) {
+export async function expectReplyLoadsOriginal(page: Page, endpoint: string, replyId: string, originalId: string, activation: "click" | "keyboard") {
   const preview = page.locator(`#msg-${replyId} .msg-reply-preview`);
   await expect(preview).toBeVisible();
   const target = page.locator(`#msg-${originalId}`);
@@ -19,7 +19,16 @@ export async function expectReplyLoadsOriginal(page: Page, endpoint: string, rep
     const url = new URL(response.url());
     return url.pathname === endpoint && url.searchParams.get("around") === originalId;
   });
-  await preview.click();
+  if (activation === "keyboard") {
+    await preview.focus();
+    await page.keyboard.press("Shift+Tab");
+    await expect(preview).not.toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(preview).toBeFocused();
+    await page.keyboard.press("Enter");
+  } else {
+    await preview.click();
+  }
   expect((await around).ok()).toBe(true);
   await expect(target).toBeInViewport();
   await expect(target).toHaveClass(/msg-highlight/);

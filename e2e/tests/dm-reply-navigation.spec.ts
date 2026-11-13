@@ -46,7 +46,7 @@ test("a DM reply loads the original from outside the current history page", asyn
       const path = "/src/stores/uiStore.ts";
       (await import(path)).useUIStore.getState().openTab(channelId, "dm", "E2E peer");
     }, channelId);
-    await expectReplyLoadsOriginal(page, endpoint, replyId, originalId);
+    await expectReplyLoadsOriginal(page, endpoint, replyId, originalId, "keyboard");
   } finally {
     await peerContext.close();
   }

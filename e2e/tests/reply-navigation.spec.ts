@@ -29,5 +29,5 @@ test("reply preview loads the original message outside the current channel page"
   await expect(composer(page)).toBeVisible();
   await dismissOnboardingOverlays(page);
   await page.locator("button.ch-tree-item", { hasText: "general" }).first().click();
-  await expectReplyLoadsOriginal(page, endpoint, reply, original.id);
+  await expectReplyLoadsOriginal(page, endpoint, reply, original.id, "click");
 });
