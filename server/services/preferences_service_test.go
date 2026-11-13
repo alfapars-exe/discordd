@@ -146,3 +146,32 @@ func TestPreferencesServiceInvalidatesProfileAudienceWithoutBroadcastingPreferen
 		t.Fatalf("unrelated privacy patch triggered profile invalidation: %+v", event)
 	}
 }
+
+type preferencesActivityCapture struct {
+	users []string
+}
+
+func (c *preferencesActivityCapture) PolicyChanged(_ context.Context, userID string) {
+	c.users = append(c.users, userID)
+}
+
+func TestPreferencesConstructorNotifiesActivityOnlyAfterCommit(t *testing.T) {
+	for _, failed := range []bool{false, true} {
+		t.Run(map[bool]string{false: "committed", true: "failed"}[failed], func(t *testing.T) {
+			repo := &preferencesRepoStub{}
+			if failed {
+				repo.err = errors.New("database unavailable")
+			}
+			activity := &preferencesActivityCapture{}
+			svc := NewPreferencesService(repo, nil, activity, nil)
+			_, err := svc.Update(context.Background(), "owner", json.RawMessage(`{"privacy":{"shareGameActivity":false}}`))
+			if failed {
+				if err == nil || len(activity.users) != 0 {
+					t.Fatalf("failed write notified activity: err=%v users=%v", err, activity.users)
+				}
+			} else if err != nil || len(activity.users) != 1 || activity.users[0] != "owner" {
+				t.Fatalf("committed preference notification: err=%v users=%v", err, activity.users)
+			}
+		})
+	}
+}
