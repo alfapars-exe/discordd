@@ -694,17 +694,21 @@ export function useScreenShareToggle(
     if (!isCapacitor()) return;
 
     let removeListener: (() => void) | null = null;
+    let retired = false;
 
     onNativeScreenShareStopped(() => {
+      if (retired) return;
       const { isStreaming: currentlyStreaming } = useVoiceStore.getState();
       if (currentlyStreaming) {
         notifyServerStopped();
       }
     }).then((cleanup) => {
-      removeListener = cleanup;
+      if (retired) cleanup();
+      else removeListener = cleanup;
     });
 
     return () => {
+      retired = true;
       removeListener?.();
     };
   }, []);
