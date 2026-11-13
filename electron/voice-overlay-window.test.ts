@@ -8,13 +8,15 @@ import vm from "node:vm";
 import { INBOX_ACTION_HEIGHT, INBOX_ACTION_WIDTH } from "./overlay-action-regions";
 import type { VoiceOverlaySnapshot } from "./voice-overlay-contract";
 
-test("native overlay lock toggles only visible widgets and bounds unlocked game movement", async () => {
+test("native overlay lock toggles only visible widgets and bounds unlocked game movement", async (t) => {
   let win!: FakeWindow;
   let actionWin!: FakeWindow;
   let notificationActionWin!: FakeWindow;
   let chatActionWin!: FakeWindow;
   let chatComposerWin!: FakeWindow;
   let failShape = false;
+  let hudLoad: Promise<void> | null = null;
+  let failSurface: string | null = null;
   let suppressShow = false;
   let cursor = { x: 0, y: 0 };
   let now = 1000;
@@ -38,7 +40,18 @@ test("native overlay lock toggles only visible widgets and bounds unlocked game 
     setAlwaysOnTop() {}
     setShape(shape: typeof this.shape) { if (failShape) throw new Error("unavailable"); this.shape = shape; }
     setIgnoreMouseEvents(ignored: boolean) { this.ignored = ignored; }
-    loadURL(url: string) { if (url.includes("surface=notification-actions")) notificationActionWin = this; if (url.includes("surface=chat-actions")) chatActionWin = this; if (url.includes("surface=chat-composer")) chatComposerWin = this; return Promise.resolve(); }
+    loadURL(url: string) {
+      if (url.endsWith("/overlay.html") && hudLoad) return hudLoad;
+      if (url.includes("surface=notification-actions")) notificationActionWin = this;
+      if (url.includes("surface=chat-actions")) chatActionWin = this;
+      if (url.includes("surface=chat-composer")) chatComposerWin = this;
+      if (failSurface && url.endsWith(`surface=${failSurface}`)) {
+        const failure = Promise.reject(new Error("fixture surface load failed"));
+        void failure.catch(() => {}); // Observe the intentional pre-fix fixture rejection.
+        return failure;
+      }
+      return Promise.resolve();
+    }
     hide() { this.visible = false; this.emit("hide"); }
     showInactive() { if (!suppressShow) this.visible = true; }
     show() { this.visible = true; }
@@ -293,11 +306,17 @@ test("native overlay lock toggles only visible widgets and bounds unlocked game 
     assert.equal(await pending, "sent");
   }
   assert.equal(await exports.sendOverlayChatMessage(composerSenderAfterReopen, { session: "compose-session-2", requestId: "cap-overflow", text: "no" }, mainWindow), "unavailable", "request ledger is bounded and refuses IDs beyond its cap");
-  const reloadPending = exports.sendOverlayChatMessage(composerSenderAfterReopen, { session: "compose-session-2", requestId: "reload-pending", text: "clear on reload" }, mainWindow);
+  const reloadSession = "compose-session-reload";
+  exports.updateVoiceOverlay({ ...renewedCompose, chatComposeSession: reloadSession }, area);
+  now += 251;
+  assert.ok(exports.takeVoiceOverlayOpenChatComposerIntent(chatSender, reloadSession, mainWindow));
+  const reloadSender = { sender: chatComposerWin.webContents, senderFrame: chatComposerWin.webContents.mainFrame };
+  const reloadPending = exports.sendOverlayChatMessage(reloadSender, { session: reloadSession, requestId: "reload-pending", text: "clear on reload" }, mainWindow);
+  assert.equal(JSON.stringify(forwarded[forwarded.length - 1]), JSON.stringify({ channel: "overlay-chat-send", value: { session: reloadSession, requestId: "reload-pending", text: "clear on reload" } }), "the reload test must first create an actual forwarded, pending request");
   chatComposerWin.webContents.emit("did-start-navigation", {}, "app://hichat/overlay.html?surface=chat-composer", false, true);
   assert.equal(await reloadPending, "unavailable", "a child reload cancels its in-flight request");
   assert.equal(chatComposerWin.destroyed, true, "a full-frame composer reload destroys the old draft/session window");
-  assert.equal(exports.takeVoiceOverlayOpenChatComposerIntent(chatSender, "compose-session-2", mainWindow), null, "a reloaded child cannot reuse the prior compose grant");
+  assert.equal(exports.takeVoiceOverlayOpenChatComposerIntent(chatSender, reloadSession, mainWindow), null, "a reloaded child cannot reuse the prior compose grant");
   const rotatedCompose = { ...renewedCompose, chatComposeSession: "compose-session-3" };
   exports.updateVoiceOverlay(rotatedCompose, area);
   now += 251;
@@ -501,4 +520,134 @@ test("native overlay lock toggles only visible widgets and bounds unlocked game 
   assert.equal(mediaLifecycle[mediaLifecycle.length-1],true);void actualHUD;
   stopMediaLifecycle();
   exports.closeVoiceOverlay();
+  await t.test("failed HUD loading closes its owner and requires explicit retry", async () => {
+    try {
+      exports.closeVoiceOverlay();
+      hudLoad = Promise.reject(new Error("fixture HUD load failed"));
+      void hudLoad.catch(() => {});
+      exports.updateVoiceOverlay(snapshot, area);
+      const failed = win;
+      await Promise.resolve();
+      assert.equal(failed.destroyed, true);
+      exports.updateVoiceOverlay(snapshot, area);
+      assert.equal(win, failed, "ordinary snapshots cannot repeatedly reload a failed HUD");
+      hudLoad = null;
+      exports.updateVoiceOverlay({ ...snapshot, enabled: false }, area);
+      exports.updateVoiceOverlay(snapshot, area);
+      assert.notEqual(win, failed);
+      assert.equal(win.visible, true);
+    } finally { hudLoad = null; exports.closeVoiceOverlay(); }
+  });
+  await t.test("late failed HUD loading cannot close a replacement owner", async () => {
+    try {
+      exports.closeVoiceOverlay();
+      let reject!: (error: Error) => void;
+      hudLoad = new Promise<void>((_resolve, fail) => { reject = fail; });
+      void hudLoad.catch(() => {});
+      exports.updateVoiceOverlay(snapshot, area);
+      exports.closeVoiceOverlay();
+      hudLoad = null;
+      exports.updateVoiceOverlay(snapshot, area);
+      const replacement = win;
+      reject(new Error("late retired HUD failure"));
+      await Promise.resolve();
+      assert.equal(replacement.destroyed, false);
+      assert.equal(replacement.visible, true);
+    } finally { hudLoad = null; exports.closeVoiceOverlay(); }
+  });
+  await t.test("retired HUD callbacks cannot hide replacement action windows", () => {
+    try {
+      exports.updateVoiceOverlay({ ...notificationActions, voiceOverlayQuickActions: true, voiceOverlayClickableActions: true, voiceActionSession: "old-hud" }, area);
+      const retired = win;
+      exports.closeVoiceOverlay();
+      exports.updateVoiceOverlay({ ...notificationActions, voiceOverlayQuickActions: true, voiceOverlayClickableActions: true, voiceActionSession: "new-hud" }, area);
+      const replacement = chatActionWin;
+      assert.equal(replacement.visible, true);
+      retired.emit("hide");
+      assert.equal(replacement.visible, true, "a queued hide from the retired HUD cannot affect the replacement");
+    } finally { exports.closeVoiceOverlay(); }
+  });
+  for (const surface of ["actions", "notification-actions", "chat-actions"]) {
+    await t.test(`failed ${surface} load retires its window and permits an explicit feature retry`, async () => {
+      const actions = { ...notificationActions, voiceOverlayQuickActions: true, voiceOverlayClickableActions: true, voiceActionSession: "load-failure-voice" };
+      const target = () => surface === "actions" ? actionWin : surface === "notification-actions" ? notificationActionWin : chatActionWin;
+      try {
+        exports.updateVoiceOverlay({ ...snapshot, enabled: false }, area);
+        failSurface = surface;
+        exports.updateVoiceOverlay(actions, area);
+        const failed = target();
+        await Promise.resolve();
+        assert.equal(failed.destroyed, true, "a failed surface must not retain a blank interactive window");
+        exports.updateVoiceOverlay(actions, area);
+        assert.equal(target(), failed, "ordinary snapshots must not repeatedly recreate a failed surface");
+        failSurface = null;
+        exports.updateVoiceOverlay({ ...snapshot, enabled: false }, area);
+        exports.updateVoiceOverlay(actions, area);
+        assert.notEqual(target(), failed);
+        assert.equal(target().visible, true, "explicit feature retry can recover surface loading");
+      } finally {
+        failSurface = null;
+        exports.closeVoiceOverlay();
+      }
+    });
+  }
+  for (const surface of ["actions", "notification-actions", "chat-actions"]) {
+    await t.test(`crashed ${surface} retires its window until an explicit feature retry`, () => {
+      try {
+        const actions = { ...notificationActions, voiceOverlayQuickActions: true, voiceOverlayClickableActions: true, voiceActionSession: "crash-voice" };
+        const target = () => surface === "actions" ? actionWin : surface === "notification-actions" ? notificationActionWin : chatActionWin;
+        exports.updateVoiceOverlay({ ...snapshot, enabled: false }, area);
+        exports.updateVoiceOverlay(actions, area);
+        const failed = target();
+        failed.webContents.emit("render-process-gone");
+        assert.equal(failed.destroyed, true, "a crashed surface must release its native window");
+        exports.updateVoiceOverlay(actions, area);
+        assert.equal(target(), failed, "ordinary snapshots cannot recreate a crashed surface");
+        exports.updateVoiceOverlay({ ...snapshot, enabled: false }, area);
+        exports.updateVoiceOverlay(actions, area);
+        assert.notEqual(target(), failed);
+        assert.equal(target().visible, true);
+      } finally { exports.closeVoiceOverlay(); }
+    });
+  }
+  for (const surface of ["actions", "notification-actions", "chat-actions"]) {
+    await t.test(`reloaded ${surface} retires the old document owner`, () => {
+      try {
+        const actions = { ...notificationActions, voiceOverlayQuickActions: true, voiceOverlayClickableActions: true, voiceActionSession: "reload-voice" };
+        const target = () => surface === "actions" ? actionWin : surface === "notification-actions" ? notificationActionWin : chatActionWin;
+        exports.updateVoiceOverlay({ ...snapshot, enabled: false }, area);
+        exports.updateVoiceOverlay(actions, area);
+        const old = target();
+        old.webContents.emit("did-finish-load");
+        old.webContents.emit("did-start-navigation", {}, "app://hichat/overlay.html", false, true);
+        assert.equal(old.destroyed, true, "a new document cannot inherit the old action owner");
+        exports.updateVoiceOverlay(actions, area);
+        assert.equal(target(), old);
+      } finally { exports.closeVoiceOverlay(); }
+    });
+  }
+  for (const surface of ["chat-actions", "chat-composer"]) {
+    await t.test(`${surface} renderer crash cancels pending sends and retires the compose grant`, async () => {
+    try {
+      now += 251;
+      exports.updateVoiceOverlay({ ...snapshot, enabled: false }, area);
+      const session = `crash-compose-${surface}`;
+      exports.updateVoiceOverlay({ ...notificationActions, voiceOverlayChatCompose: true, chatComposeSession: session, chatComposeLabel: "fixture" }, area);
+      const bounds = chatActionWin.getBounds();
+      cursor = { x: bounds.x + 8, y: bounds.y + 10 };
+      const sender = { sender: chatActionWin.webContents, senderFrame: chatActionWin.webContents.mainFrame };
+      assert.ok(exports.takeVoiceOverlayOpenChatComposerIntent(sender, session, mainWindow));
+      const composer = chatComposerWin;
+      const pending = exports.sendOverlayChatMessage({ sender: composer.webContents, senderFrame: composer.webContents.mainFrame }, { session, requestId: `crash-pending-${surface}`, text: "fixture draft" }, mainWindow);
+      (surface === "chat-actions" ? chatActionWin : composer).webContents.emit("render-process-gone");
+      assert.equal(composer.destroyed, true, "a crashed composer cannot retain an active native window");
+      assert.equal(await pending, "unavailable");
+      assert.equal(forwarded[forwarded.length - 1].channel, "overlay-chat-composer-closed");
+      now += 251;
+      assert.equal(exports.takeVoiceOverlayOpenChatComposerIntent(sender, session, mainWindow), null, "a crashed grant cannot reopen the composer");
+    } finally {
+      exports.closeVoiceOverlay();
+    }
+  });
+  }
 });
