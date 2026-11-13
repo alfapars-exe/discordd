@@ -23,6 +23,8 @@ $port = ([Net.IPEndPoint]$listener.LocalEndpoint).Port
 $listener.Stop()
 $previousGoToolchain = $env:GOTOOLCHAIN
 $previousTestDSN = $env:HICHAT_TEST_POSTGRES_TLS_DSN
+$previousServiceDSN = $env:HICHAT_TEST_POSTGRES_DSN
+$previousRequireMTLS = $env:HICHAT_TEST_POSTGRES_REQUIRE_MTLS
 $previousCA = $env:HICHAT_PG_CA_PEM
 $previousCert = $env:HICHAT_PG_CERT_PEM
 $previousKey = $env:HICHAT_PG_KEY_PEM
@@ -111,6 +113,12 @@ COPY --chown=postgres:postgres --chmod=0644 pg_hba.conf /tls/pg_hba.conf
     $env:HICHAT_PG_CA_PEM = Get-Content -Raw -LiteralPath (Join-Path $tempDir "ca.crt")
     $env:HICHAT_PG_CERT_PEM = Get-Content -Raw -LiteralPath (Join-Path $tempDir "client.crt")
     $env:HICHAT_PG_KEY_PEM = Get-Content -Raw -LiteralPath (Join-Path $tempDir "client.key")
+    $env:HICHAT_TEST_POSTGRES_DSN = $env:HICHAT_TEST_POSTGRES_TLS_DSN
+    foreach ($entry in @{sslrootcert="ca.crt";sslcert="client.crt";sslkey="client.key"}.GetEnumerator()) {
+        $certificatePath = (Join-Path $tempDir $entry.Value).Replace('\', '/')
+        $env:HICHAT_TEST_POSTGRES_DSN += "&$($entry.Key)=$([Uri]::EscapeDataString($certificatePath))"
+    }
+    $env:HICHAT_TEST_POSTGRES_REQUIRE_MTLS = "1"
     $env:CGO_ENABLED = "0"
 
     Push-Location $serverDir
@@ -121,6 +129,15 @@ COPY --chown=postgres:postgres --chmod=0644 pg_hba.conf /tls/pg_hba.conf
             if ($LASTEXITCODE -ne 0) { throw "Could not select Go toolchain $toolchain." }
             & $GoBinary test ./database -run '^TestOpenPostgresInlinePEMReconnect$' -count=1 -timeout=60s -v
             if ($LASTEXITCODE -ne 0) { throw "PostgreSQL inline-PEM integration test failed under $toolchain." }
+            $collectorOutput = & $GoBinary test ./services -run '^TestPostgresMetricsCollectorCancellation$' -count=1 -timeout=2m -v 2>&1
+            $collectorExit = $LASTEXITCODE
+            $collectorText = $collectorOutput -join "`n"
+            Write-Output ($collectorText.Replace($env:HICHAT_TEST_POSTGRES_DSN, '[REDACTED_DATABASE_URL]'))
+            if ($collectorExit -ne 0 -or $collectorText -notmatch '(?m)^--- PASS: TestPostgresMetricsCollectorCancellation ' -or
+                $collectorText -match '--- SKIP:|\[no tests to run\]') {
+                throw "PostgreSQL mTLS collector cancellation contract did not pass under $toolchain."
+            }
+
         }
     }
     finally {
@@ -144,6 +161,8 @@ finally {
     finally {
         $env:GOTOOLCHAIN = $previousGoToolchain
         $env:HICHAT_TEST_POSTGRES_TLS_DSN = $previousTestDSN
+        $env:HICHAT_TEST_POSTGRES_DSN = $previousServiceDSN
+        $env:HICHAT_TEST_POSTGRES_REQUIRE_MTLS = $previousRequireMTLS
         $env:HICHAT_PG_CA_PEM = $previousCA
         $env:HICHAT_PG_CERT_PEM = $previousCert
         $env:HICHAT_PG_KEY_PEM = $previousKey

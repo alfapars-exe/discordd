@@ -181,6 +181,9 @@ func (c *metricsCollector) collectAll() {
 
 	instances, err := c.livekitRepo.ListPlatformInstances(ctx)
 	if err != nil {
+		if c.lifecycle.Err() != nil {
+			return
+		}
 		metricsLogger.Error("failed to list instances", "err", pkg.ErrText(err))
 		return
 	}
@@ -191,7 +194,13 @@ func (c *metricsCollector) collectAll() {
 
 	now := time.Now().UTC()
 	for i := range instances {
+		if ctx.Err() != nil {
+			return
+		}
 		c.collectOne(ctx, &instances[i], now)
+	}
+	if ctx.Err() != nil {
+		return
 	}
 
 	// Purge expired data
@@ -237,6 +246,11 @@ func (c *metricsCollector) collectOne(ctx context.Context, inst *models.LiveKitI
 		}
 	}
 
+	// Cancellation is not a LiveKit outage and must not publish downtime.
+	if ctx.Err() != nil {
+		return
+	}
+
 	if c.reachabilityReporter != nil {
 		c.reachabilityReporter.ReportLiveKitReachable(livekitOK)
 	}
@@ -255,6 +269,10 @@ func (c *metricsCollector) collectOne(ctx context.Context, inst *models.LiveKitI
 			bwOutBps = hBwOut
 			hetznerOK = true
 		}
+	}
+
+	if ctx.Err() != nil {
+		return
 	}
 
 	// Fallback: LiveKit process delta when Hetzner is unavailable
