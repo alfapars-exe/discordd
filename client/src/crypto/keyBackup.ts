@@ -1,3 +1,4 @@
+import { decodeBackupContents, type BackupContents } from "./backupContentsCodec";
 /**
  * Key Backup — backup/restore E2EE keys with recovery password.
  *
@@ -99,98 +100,6 @@ function parseAlgorithm(algorithm: string): { iterations: number } {
 // ──────────────────────────────────
 // Backup Types
 // ──────────────────────────────────
-
-/** Backup contents before encryption — all E2EE keys and sessions. */
-type BackupContents = {
-  version: number;
-  identity: {
-    publicKey: string; // base64
-    privateKey: string; // base64
-  };
-  signing: {
-    publicKey: string;
-    privateKey: string;
-  };
-  registration: {
-    registrationId: number;
-    deviceId: string;
-    userId: string;
-  };
-  signedPreKeys: Array<{
-    id: number;
-    publicKey: string;
-    privateKey: string;
-    signature: string;
-    createdAt: number;
-  }>;
-  sessions: Array<{
-    userId: string;
-    deviceId: string;
-    state: string; // JSON stringified SessionState (with base64 encoded bytes)
-    createdAt: number;
-    updatedAt: number;
-  }>;
-  senderKeys: Array<{
-    channelId: string;
-    senderUserId: string;
-    senderDeviceId: string;
-    distributionId: string;
-    chainKey: string;
-    /**
-     * Iteration-0 anchor, OPTIONAL because a key genuinely may not have one:
-     * sender keys stored before this field existed carry no anchor, and the
-     * repair in channelEncryption is gated on that absence.
-     *
-     * Backups written before this was optional encode absence as "" rather
-     * than omitting the key, so readers must treat the empty string as absent
-     * too (security scan 2026-07-31 follow-up).
-     */
-    initialChainKey?: string;
-    publicSigningKey: string;
-    iteration: number;
-    createdAt: number;
-    /**
-     * Replay-protection window for this distribution. Both fields are OPTIONAL
-     * on purpose: backups written before they were carried simply lack them,
-     * and normalizeReplayWindow turns absence into the safe "nothing evicted,
-     * nothing seen" state. Additive-only, so BACKUP_VERSION stays 1 — an older
-     * client restoring a newer backup ignores the extra JSON members.
-     *
-     * They must be carried at all because a restore that dropped them handed
-     * the user back a key with an EMPTY window and a live iteration counter,
-     * re-opening every ciphertext already accepted under this chain (security
-     * scan 2026-07-31, finding N-11 on the backup path).
-     */
-    seenIterations?: number[];
-    replayFloor?: number;
-  }>;
-  /** One-time prekeys — critical for X3DH. Without them, PreKey messages
-   *  can't be decrypted after restore (3-DH vs 4-DH mismatch). */
-  preKeys: Array<{
-    id: number;
-    publicKey: string;
-    privateKey: string;
-  }>;
-  trustedIdentities: Array<{
-    userId: string;
-    deviceId: string;
-    identityKey: string;
-    firstSeen: number;
-    verified: boolean;
-  }>;
-  /** Prekey ID counter — prevents new prekeys from colliding with old IDs after restore */
-  nextPrekeyId?: number;
-  /** Decrypted message cache — allows reading old messages after restore */
-  messageCache?: Array<{
-    messageId: string;
-    channelId: string;
-    dmChannelId: string | null;
-    content: string;
-    timestamp: number;
-    encryptedSourceTag?:string;
-    fileKeys?:import("./fileEncryption").EncryptedFileMeta[];
-  }>;
-};
 
 /**
  * Decodes a sender key's iteration-0 anchor from a backup, preserving absence.
@@ -322,11 +231,10 @@ export async function restoreFromBackup(
     assertCurrent(scope);
 
     // 3. JSON parse
-    const contents: BackupContents = JSON.parse(
+    const contents = decodeBackupContents(
       new TextDecoder().decode(decrypted)
     );
     assertCurrent(scope);
-    if (contents?.version !== BACKUP_VERSION) return false;
     if (!contents.registration || contents.registration.userId !== scope.ownerId) return false;
 
     await awaitScoped(scope, () => importBackupContents(contents, scope));

@@ -108,6 +108,28 @@ describe("backup content version validation", () => {
   });
 });
 
+describe("backup payload validation before storage access", () => {
+  it.each(["registration", "identity", "sessions"])("rejects malformed %s without snapshotting or clearing keys", async (field) => {
+    vi.clearAllMocks();
+    const contents = {
+      version: 1,
+      identity: { publicKey: btoa("identity"), privateKey: btoa("private") },
+      signing: { publicKey: btoa("signing"), privateKey: btoa("private") },
+      registration: { userId: "test-user", deviceId: "test-device", registrationId: 1 },
+      signedPreKeys: [], preKeys: [], sessions: [], senderKeys: [], trustedIdentities: [],
+      [field]: field === "registration"
+        ? { userId: "test-user", deviceId: "test-device", registrationId: "1" }
+        : field === "identity" ? { publicKey: "%%%", privateKey: btoa("private") } : "not-an-array",
+    };
+    const decrypt = vi.spyOn(crypto.subtle, "decrypt").mockResolvedValueOnce(new TextEncoder().encode(JSON.stringify(contents)).buffer);
+    try {
+      expect(await restoreFromBackup({ encryptedData: btoa("fixture"), nonce: btoa("fixture-nonce"), salt: btoa("fixture-salt"), algorithm: "aes-256-gcm+pbkdf2-600000" }, "fixture-password")).toBe(false);
+      expect(keyStorageMock.getAllCachedMessages).not.toHaveBeenCalled();
+      expect(keyStorageMock.clearAllE2EEData).not.toHaveBeenCalled();
+    } finally { decrypt.mockRestore(); }
+  });
+});
+
 // The metadata double is module state, so it outlives a single test the way a
 // real IndexedDB store would. Reset it before every test in the file.
 let authGeneration = 15000;
