@@ -27,8 +27,8 @@ func (r *groupPrivateSettingsRepo) IsMember(_ context.Context, _, user string) (
 func (r *groupPrivateSettingsRepo) ListMemberIDs(context.Context, string) ([]string, error) {
 	return []string{"alice", "bob"}, nil
 }
-func (r *groupPrivateSettingsRepo) ListForUser(context.Context, string) ([]models.GroupDM, error) {
-	return []models.GroupDM{{ID: "group", KeyEpoch: 1}}, nil
+func (r *groupPrivateSettingsRepo) ListForUser(_ context.Context, user string) ([]models.GroupDM, error) {
+	return []models.GroupDM{{ID: "group", KeyEpoch: 1, IsMuted: r.muted && user == "bob"}}, nil
 }
 func (r *groupPrivateSettingsRepo) GetReadState(_ context.Context, group, user string) (*models.GroupDMReadState, error) {
 	var anchor *string

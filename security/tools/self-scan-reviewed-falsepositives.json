@@ -116,18 +116,18 @@
     {
       "rule": "go.sql-concat",
       "path": "server/repository/sqlite_group_dm.go",
-      "file_sha256": "7364ede93cfeca36a9e4462ddbb95c5408a65d6fcd39fabfb2c96df5b5f27140",
+      "file_sha256": "a8149541f19a5a43e5f9f82a4f6b469de0d99c046eccff35fb9f696877faa739",
       "line_sha256": "7c8f35c7ab1143e7ce941b75912d6549057a6489e5b5ff88fc5186b31a600746",
       "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
-      "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
+      "proof_ref": "server/repository/sqlite_group_dm.go:397-399,416,424"
     },
     {
       "rule": "go.sql-concat",
       "path": "server/repository/sqlite_group_dm.go",
-      "file_sha256": "7364ede93cfeca36a9e4462ddbb95c5408a65d6fcd39fabfb2c96df5b5f27140",
+      "file_sha256": "a8149541f19a5a43e5f9f82a4f6b469de0d99c046eccff35fb9f696877faa739",
       "line_sha256": "947be30c7ec80d463d9bb7a1f6be1fa6fc2a38536edecc2adfb58ec5006e5fe0",
       "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
-      "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
+      "proof_ref": "server/repository/sqlite_group_dm.go:195"
     },
     {
       "rule": "go.sql-concat",
@@ -396,10 +396,10 @@
     {
       "rule": "go.sql-concat",
       "path": "server/repository/sqlite_role.go",
-      "file_sha256": "daed54f83b026e10395c1792d680082c861c8b3bda776b021c7490fae5633bcf",
+      "file_sha256": "f810f102abd5cfc549d77543d82fc7c79bee0bdc229027bb7348b7671cdbb960",
       "line_sha256": "ef4236201d83d38461fe8ebef9c181a3c3813f0526d007a9924729378239aafe",
       "reason": "All four callers supply a literal row-lock query. The only suffix is the constant NOWAIT clause. Server, user and role IDs are bound arguments in both the immediate attempt and its retry.",
-      "proof_ref": "server/repository/sqlite_role.go:32-39,231,305-308,320;server/repository/server_membership_tx.go:63-70"
+      "proof_ref": "server/repository/sqlite_role.go:33-40,251,325-328,340;server/repository/server_membership_tx.go:63-70"
     }
   ]
 }

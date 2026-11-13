@@ -11,6 +11,15 @@ import (
 //go:embed postgres_migrations/*.sql
 var postgresMigrations embed.FS
 
+// Embedded PostgreSQL scripts may use native operators and dollar-quoted
+// function bodies. Only the script execution bypasses repository bind syntax.
+type nativeMigrationKey struct{}
+
+func execNativeMigration(ctx context.Context, tx *sql.Tx, script string) error {
+	_, err := tx.ExecContext(context.WithValue(ctx, nativeMigrationKey{}, true), script)
+	return err
+}
+
 // MigratePostgres applies only native PostgreSQL migrations, atomically and
 // under an advisory lock. Existing SQLite migration history is kept separate.
 func MigratePostgres(ctx context.Context, db *sql.DB) error {
@@ -47,7 +56,7 @@ func applyPostgresMigrations(ctx context.Context, db *sql.DB, entries []fs.DirEn
 		if err != nil {
 			return err
 		}
-		if _, err = tx.ExecContext(ctx, string(b)); err != nil {
+		if err = execNativeMigration(ctx, tx, string(b)); err != nil {
 			return fmt.Errorf("PostgreSQL migration %s: %w", entry.Name(), err)
 		}
 		if _, err = tx.ExecContext(ctx, "INSERT INTO postgres_schema_migrations(filename) VALUES($1)", entry.Name()); err != nil {

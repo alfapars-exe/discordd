@@ -16,6 +16,7 @@ type GroupDMRepository interface {
 	// admissionActor is mandatory for public services; omission is trusted internal legacy/import use only.
 	Create(ctx context.Context, group *models.GroupDM, memberIDs []string, admissionActor ...string) error
 	GetByID(ctx context.Context, id string) (*models.GroupDM, error)
+	// ListForUser includes ordered public member profiles for each visible group.
 	ListForUser(ctx context.Context, userID string) ([]models.GroupDM, error)
 	ListMemberIDs(ctx context.Context, groupID string) ([]string, error)
 	IsMember(ctx context.Context, groupID, userID string) (bool, error)

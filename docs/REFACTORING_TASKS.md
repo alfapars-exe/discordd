@@ -185,6 +185,14 @@ Paralel çalışma hatları: backend veri/lifecycle (RF04–RF11), client state/
 
 ## RF05 — SQL dialect dönüşüm güvenliği
 
+**Sorgu envanteri.** `server/repository` altındaki test dışı Go kaynaklarında numarasız soru işareti 110 dosyada, numaralı parametre dört dosyada, virgülle ayrılan dinamik parametre listesi on dosyada geçiyor. Aynı taramada `ON CONFLICT` 56, `SELECT EXISTS` 19, JSON işlemleri dört, `(created_at,id)` ikilisi dört ve satır kilidi ifadeleri yedi dosyada bulundu. Bunlar metin eşleşmesi olan dosya sayılarıdır. Bir dosya birden çok aileye girebilir. Dinamik sorgular için üretilen tüm metinleri saymaz. Örnekler `sqlite_account_asset_cleanup.go` (numaralı parametre), `application_game_grants.go` (upsert ve EXISTS), `postgres_search.go` (dinamik liste) ve `dm_message_tx.go` (satır kilidi).
+
+Parametre sınır testi, sürücünün PostgreSQL protokolünde bağlanamayacak 65.536. pozisyonu ürettiğini gösterdi. Dönüştürücü artık sınırı hem açık numaralarda hem de son numarayı izleyen örtük parametrede denetler. Ayrı bir regresyonda nil `*sql.NullString` argümanı sürücüde paniğe yol açtı. Standart Go dönüştürücüsüyle bu değer SQL NULL olarak iletilir. Ortak sorgu testi her iki veritabanında da sonucu denetler.
+
+**12 Kasım doğrulaması.** Güncel PostgreSQL adaptörü repository sorgularındaki `?` ve `?N` parametrelerini sürücü sınırında çeviriyor. Aşağıdaki regex/upsert bulgusu ilk inceleme revizyonuna ait. Yerel düzeltme, iç içe SQL yorumlarındaki soru işaretlerini koruyor ve gömülü PostgreSQL migration dosyalarını bağlama dönüşümü dışında çalıştırıyor. Bir migration içindeki JSON anahtar operatörü ve aynı transaction içindeki sonraki parametreli sorgu PostgreSQL üzerinde doğrulandı.
+
+`server/database/postgres_dialect_test.go` içindeki `TestRepositoryDialectContracts` aynı veriyle SQLite ve PostgreSQL üzerinde çalışır. Birleşik anahtarlı upsert, çakışmada yazmayı atlama, NULL, tekrarlanan ve sırasız numaralı parametreler, tırnak ve yorum içindeki soru işaretleri, mikrosaniye farkıyla zaman süzme, hazırlanmış EXISTS sorgusunun 0/1 sonucu, eksik argüman reddi ve rollback sonrası satır sayısı denetlenir. PostgreSQL 18.6 ile yerel `go test ./database -skip '^TestOpenPostgresInlinePEMReconnect$' -count=1` geçti. Sertifikayla yeniden bağlantı ayrı test hattına ait. Bu senaryolar repository genelindeki sorgu ailelerinin tam envanterini kapsamıyor.
+
 | Alan | Tanım |
 |---|---|
 | Task ID | RF05 |
@@ -199,6 +207,8 @@ Paralel çalışma hatları: backend veri/lifecycle (RF04–RF11), client state/
 | Effort | 3–5 mühendis-gün |
 
 ## RF06 — Eski şema migration kabulü
+
+**SQLite içe aktarma.** Boş migration defterinde 144–150 sürümlerinin her biri gerçek migration dosyalarından üretilmiş şema ve dosya dizisi SHA-256 özetleriyle tanınır. Yalnız eşleşen sürüme kadar olan kayıtlar aynı transaction içinde eklenir. Sonraki migration dosyaları olağan sırada çalışır. Testler yedi sürümü, eksik şemayı, sonradan eklenmiş indeksi, değiştirilmiş migration dosyasını, kayıt yazılırken geri almayı ve veri içeren 144 kopyasının güncel sürüme iki kez açılmasını denetler. Operatör adımları `deploy/infra/README.md` içindedir. Gerçek kullanıcı yedeğiyle geri yükleme kabulü açıktır.
 
 | Alan | Tanım |
 |---|---|
@@ -244,6 +254,14 @@ Paralel çalışma hatları: backend veri/lifecycle (RF04–RF11), client state/
 | Effort | 1–2 mühendis-gün |
 
 ## RF09 — Üye/grup sorgularının veri kapsamı
+
+**Grup konuşmaları.** Mesaj geçmişi ve tek grup görünümü istek başına tek toplu profil okuması kullanır. Kullanıcının grup listesi ise görünür grupları, sıralı üye profillerini ve okuyucuya özel durumu tek SQL sorgusunda alır. İlk okunmamış mesaj her grup için bir kez hesaplanır. SQLite ve PostgreSQL 18.6 testleri üç grup ve iki okuyucuyla görünürlüğü, üye sırasını, özel sessize alma ayarını, ilk okunmamış mesajı ve eksik okundu kaydının reddedilmesini doğruladı. Eksik mesaj yazarı önceki gibi `ErrNotFound` üretir.
+
+**RF29 ölçümü.** `HICHAT_MEASURE_GROUP_PROFILES=1` ile `go test ./repository -run '^TestGroupPublicProfileParity$' -count=1 -v` iki yazardan gelen 100 mesajın profil okumasını karşılaştırır. Bir ısınma ve 30 örnekte yerel PostgreSQL 18.6 p95 süresi 100 tekil okumada 10,874 ms, toplu okumada 0,521 ms oldu. Her iki yolda bağlantı havuzu beklemesi 0 s ölçüldü. SQLite tekil okumada 3,284 ms verdi. Toplu SQLite ölçümünde p95 zamanlayıcının çözünürlüğünün altında kaldı. Bu süreler HTTP isteğinin tamamını ve eşzamanlı kullanıcı yükünü kapsamaz.
+
+**Sunucu üye listesi.** `memberService.GetAll` tüm platform kullanıcılarını okuyor, ayrı bir sorguyla üyelikleri çekiyor ve sonucu bellekte süzüyordu. Artık `ListServerMemberProfiles` üyelik tablosunu kullanıcı tablosuna sunucu kimliğiyle bağlar. Kullanıcı adı sıralaması korunur. Üye yanıtının kullandığı profil ve görünürlük alanları seçilir. Parola özeti ve e-posta sorgudan çıkarıldı. Rol, takma ad ve zaman aşımı okumaları toplu kalır. SQLite ve PostgreSQL 18.6 kabul testinde iki üye, bir dış kullanıcı, boş sonuç, sıra ve profil alanları denetlendi. Grup konuşması projeksiyonları ve p95 ölçümü ayrıca izleniyor.
+
+**Toplu rol okuması, 12 Kasım.** Kanal erişim denetimi, audit yayını ve üye listesinin kullandığı `GetRolesForUsers`, büyük bir alıcı listesinde her kimlik için bir SQL parametresi oluşturuyordu. 65.542 girdilik test SQLite üzerinde parametre sınırı hatasını yeniden üretti. 999 ve üzeri girdide sorgu artık kimlik kümesini bağlı bir JSON parametresinden okur. Sorgu tek bir veritabanı görünümünde çalışır. SQLite ve PostgreSQL 18.6 üzerinde rol sırası, yinelenen kullanıcı, başka sunucudaki rol, rolü olmayan kullanıcı ve listenin sonundaki üye doğrulandı. Bu kontrol gönderim gecikmesini veya bağlantı kapasitesini ölçmez.
 
 | Alan | Tanım |
 |---|---|
@@ -582,3 +600,31 @@ Paralel çalışma hatları: backend veri/lifecycle (RF04–RF11), client state/
 - İlgisiz dirty dosyalar staged edilmez; commit/PR/release artifact'i ile kanıt kaydı aynı kaynak anlık görüntüsünü gösterir.
 - Rollback küçük PR'ın revert'iyle mümkün tutulur. Veri migration'ı varsa backup/restore provası olmadan release kapısı kapanmaz.
 - [REFACTORING_PLAN.md](REFACTORING_PLAN.md), [TECHNICAL_DEBT.md](TECHNICAL_DEBT.md), [TEST_STRATEGY.md](TEST_STRATEGY.md), [CODE_QUALITY_STANDARDS.md](CODE_QUALITY_STANDARDS.md) ve [ARCHITECTURE_IMPROVEMENTS.md](ARCHITECTURE_IMPROVEMENTS.md) ilgili kararlarla eşleşir.
+
+### RF05 - portable cursor/list/join corpus extension (2026-11-13)
+
+- Extended the shared SQLite/PostgreSQL transaction fixture with forward/backward tuple cursors and bound limits, dynamic IN parameters, nullable LEFT JOIN and empty results. Equal timestamp rows explicitly test the target-key tie break in both directions. A SQL-looking list value remains a bound value and must not select extra rows; no vulnerability claim is inferred.
+- Five new scenarios passed on both real drivers using the same logical rows, with PostgreSQL over verified mTLS. Final tie-break fixture targeted run: exit 0, 0.291 s, %TEMP%/hichat-dialect-corpus-targeted.log. Earlier full database run before adding the tied row passed (22.174 s), excluding the separately configured TestOpenPostgresInlinePEMReconnect profile; %TEMP%/hichat-dialect-corpus-full.log. These are representative query-family fixtures, not a complete inventory of production SQL or evidence that RF05 is closed. Canonical PR #221 verification is being followed.
+- Canonical PR #221 source 3c41e71e: full database package passed (28.591 s) with verified-mTLS PostgreSQL, excluding only the separately configured inline-PEM reconnect profile; %TEMP%/hichat-dialect-corpus-canonical-full.log. This includes the final equal-timestamp fixture. No production code changed.
+
+### RF05 - explicit error for incomplete quoted tokens (2026-11-13)
+
+- Six regressions demonstrated that bindPostgres returned transformed SQL without error for unterminated single/double/backtick tokens and escaped PostgreSQL E strings. It now returns an empty query and a fixed error unless the token closes. This is lexical error-contract consistency with existing comment/dollar-string rejection, not a SQL parser or a demonstrated injection vulnerability. Backtick coverage describes scanner preservation, not PostgreSQL syntax support.
+- Six positive controls preserve complete quoted content and binding, including doubled quotes and backslashes. Targeted before run failed all six negative controls; after run passed. Logs: %TEMP%/hichat-dialect-unclosed-before.log and hichat-dialect-unclosed-after.log.
+- Full canonical database package passed with local verified-mTLS PostgreSQL (30.431 s), excluding the separately configured inline-PEM reconnect profile; %TEMP%/hichat-dialect-unclosed-full.log. Complete production SQL inventory and final-source acceptance remain open.
+
+### RF05 - reproducible source call inventory (2026-11-13)
+
+- Added scripts/query-inventory: read-only standard-library Go AST scanner for candidate Exec/Query/QueryRow/Prepare calls, with/without Context. It reports source locations and direct string literals; identifiers and dynamic expressions remain explicitly unresolved. Receiver typing, reachability, build-tag filtering and runtime execution are not inferred.
+- On integration e3b32199 source plus the tool: 181 non-test repository files, 957 candidate call sites, 654 literal and 303 unresolved. This replaces ambiguous text-count assumptions with a reproducible navigation artifact; it does not prove semantic corpus completion. Full JSON is local at %TEMP%/hichat-query-inventory.json. Positive/negative family fixture mapping remains RF05 work.
+- Tool contracts verify context argument indexing, literal versus unresolved expressions, source locations, test-file exclusion and failure for missing repository source. They pass; added the command to the existing Go base CI job. Instructions and limitations are in scripts/query-inventory/README.md. No database or product behavior changed in this tooling commit.
+- Canonical PR #221 source 6a92f2d8 tool run: 181 files, 949 candidate calls (646 literals, 303 unresolved); integration differs by eight literal call sites from other refactors. Contract tests passed (0.512 s), JSON accounting matched and workflow YAML parsed. Canonical local report: %TEMP%/hichat-query-inventory-canonical.json. Counts identify work, not semantic test coverage.
+
+### RF05 - real search-query tie ordering (2026-11-13)
+
+- Traced unresolved postgres_search.go dynamic count/page queries to the existing real repository Search contracts. Added an equal-rank/equal-timestamp fixture with three visible rows, one excluded-channel row and a SQL-looking bound allow-list value. It checks count, all one-row offset pages and the terminal empty page on both database backends.
+- Before-fix SQLite returned search-a on page zero where the explicit descending tie contract requires search-c. SQLite FTS now orders by rank first, then created_at DESC and id DESC; relevance remains primary. PostgreSQL already uses the timestamp/ID order and passed unchanged. This establishes tie behavior, not universal FTS/ILIKE relevance equivalence or snapshot-stable pagination during concurrent writes.
+- All three SearchRepo contracts passed on SQLite (1.137 s) and real verified-mTLS PostgreSQL (2.396 s). Logs: %TEMP%/hichat-search-tie-before.log, hichat-search-tie-sqlite.log and hichat-search-tie-postgres.log. The source inventory remains incomplete; these tests map one dynamic query family to actual repository execution.
+- Search tie fix: full golangci-lint v2.12.2 passed with 0 issues (exit 0). No broad repository rerun was substituted for the dedicated SQLite/PostgreSQL search contracts; fresh canonical CI follows the push.
+
+- Added a SQLite FTS relevance guard for the search tie fix: an older, higher-relevance hit must precede a newer lower-relevance hit. The fixture first verifies distinct actual FTS ranks. All four SearchRepo tests passed (3.002 s); go vet ./repository passed. A temporary timestamp-first mutation was rejected by this new test (exit 1) and the product file was restored byte-for-byte. Logs: %TEMP%/hichat-search-relevance-sqlite.log and hichat-search-relevance-mutant.log. This is a SQLite-specific relevance contract, not equivalence with PostgreSQL ILIKE ranking.

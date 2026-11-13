@@ -152,18 +152,13 @@ func NewMemberService(
 }
 
 func (s *memberService) GetAll(ctx context.Context, serverID string) ([]models.MemberWithRoles, error) {
-	users, err := s.userRepo.GetAll(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get all users: %w", err)
-	}
-
-	memberIDs, err := s.serverRepo.ListMemberIDs(ctx, serverID)
+	users, err := s.userRepo.ListServerMemberProfiles(ctx, serverID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list server members: %w", err)
 	}
-	memberSet := make(map[string]struct{}, len(memberIDs))
-	for _, userID := range memberIDs {
-		memberSet[userID] = struct{}{}
+	memberIDs := make([]string, len(users))
+	for i := range users {
+		memberIDs[i] = users[i].ID
 	}
 
 	rolesByUser, err := s.roleRepo.GetRolesForUsers(ctx, serverID, memberIDs)
@@ -199,10 +194,6 @@ func (s *memberService) GetAll(ctx context.Context, serverID string) ([]models.M
 
 	members := make([]models.MemberWithRoles, 0)
 	for i := range users {
-		if _, ok := memberSet[users[i].ID]; !ok {
-			continue
-		}
-
 		roles := rolesByUser[users[i].ID]
 		m := models.ToMemberWithRoles(&users[i], roles)
 		if nick, ok := nicknames[users[i].ID]; ok && nick != "" {

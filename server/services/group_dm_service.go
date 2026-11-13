@@ -137,13 +137,20 @@ func (s *groupDMService) hydrate(ctx context.Context, group *models.GroupDM) err
 	if err != nil {
 		return err
 	}
+	profiles, err := s.users.PublicUsersByID(ctx, ids)
+	if err != nil {
+		return err
+	}
+	return setGroupMembers(group, ids, profiles)
+}
+
+func setGroupMembers(group *models.GroupDM, ids []string, profiles map[string]*models.PublicUser) error {
 	group.Members = make([]models.PublicUser, 0, len(ids))
 	for _, id := range ids {
-		u, err := s.users.GetByID(ctx, id)
-		if err != nil {
-			return err
+		if profiles[id] == nil {
+			return pkg.ErrNotFound
 		}
-		group.Members = append(group.Members, *models.ToPublicUser(u))
+		group.Members = append(group.Members, *profiles[id])
 	}
 	return nil
 }
@@ -220,25 +227,7 @@ func (s *groupDMService) Create(ctx context.Context, creatorID string, req *mode
 }
 
 func (s *groupDMService) List(ctx context.Context, userID string) ([]models.GroupDM, error) {
-	groups, err := s.groups.ListForUser(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	for i := range groups {
-		if err := s.hydrate(ctx, &groups[i]); err != nil {
-			return nil, err
-		}
-		readState, readErr := s.groups.GetReadState(ctx, groups[i].ID, userID)
-		err = readErr
-		if err != nil {
-			return nil, err
-		}
-		groups[i].UnreadCount, groups[i].ReadRevision = readState.UnreadCount, readState.Revision
-		groups[i].OldestUnreadMessageID = readState.OldestUnreadMessageID
-		groups[i].LastReadSourceSequence, groups[i].ReadKeyEpoch = readState.LastReadSourceSequence, readState.KeyEpoch
-		groups[i].IsMuted, groups[i].SettingsRevision = readState.IsMuted, readState.SettingsRevision
-	}
-	return groups, nil
+	return s.groups.ListForUser(ctx, userID)
 }
 
 func (s *groupDMService) Get(ctx context.Context, groupID, userID string) (*models.GroupDM, error) {
@@ -465,12 +454,19 @@ func (s *groupDMService) GetMessagesAround(ctx context.Context, groupID, userID,
 }
 
 func (s *groupDMService) enrichMessageHistory(ctx context.Context, items []models.GroupDMMessage) error {
+	authors := make([]string, len(items))
 	for i := range items {
-		u, err := s.users.GetByID(ctx, items[i].UserID)
-		if err != nil {
-			return err
+		authors[i] = items[i].UserID
+	}
+	profiles, err := s.users.PublicUsersByID(ctx, authors)
+	if err != nil {
+		return err
+	}
+	for i := range items {
+		items[i].User = profiles[items[i].UserID]
+		if items[i].User == nil {
+			return pkg.ErrNotFound
 		}
-		items[i].User = models.ToPublicUser(u)
 	}
 	ids := make([]string, len(items))
 	for i := range items {
