@@ -28,7 +28,7 @@ func TestSendMessage_EnqueuesDelayedGenericUnreadEmailOnlyForAcceptedDM(t *testi
 	acceptedFriendsFixture(f)
 	f.repo.CreateMessageFn = func(_ context.Context, msg *models.DMMessage) error { msg.ID = "message-123"; return nil }
 	enqueuer := &scheduledEmailCapture{}
-	f.svc.(DMCommunicationEmailConfigurer).SetCommunicationEmailEnqueuer(enqueuer)
+	f.svc.(*dmService).communicationEmailEnqueuer = enqueuer
 
 	ciphertext := "encrypted payload"
 	device := "device-1"
@@ -63,7 +63,7 @@ func TestSendMessage_SkipsUnreadEmailForPendingRequestAndSelfDM(t *testing.T) {
 		f.repo.CountMessagesBySenderFn = func(context.Context, string, string) (int, error) { return 0, nil }
 		f.repo.CreateMessageFn = func(_ context.Context, msg *models.DMMessage) error { msg.ID = "pending-message"; return nil }
 		e := &scheduledEmailCapture{}
-		f.svc.(DMCommunicationEmailConfigurer).SetCommunicationEmailEnqueuer(e)
+		f.svc.(*dmService).communicationEmailEnqueuer = e
 		if _, err := f.svc.SendMessage(context.Background(), "alice", "ch-1", &models.CreateDMMessageRequest{Content: "request"}); err != nil {
 			t.Fatal(err)
 		}
@@ -81,7 +81,7 @@ func TestSendMessage_SkipsUnreadEmailForPendingRequestAndSelfDM(t *testing.T) {
 		}
 		f.repo.CreateMessageFn = func(_ context.Context, msg *models.DMMessage) error { msg.ID = "self-message"; return nil }
 		e := &scheduledEmailCapture{}
-		f.svc.(DMCommunicationEmailConfigurer).SetCommunicationEmailEnqueuer(e)
+		f.svc.(*dmService).communicationEmailEnqueuer = e
 		if _, err := f.svc.SendMessage(context.Background(), "alice", "self", &models.CreateDMMessageRequest{Content: "note"}); err != nil {
 			t.Fatal(err)
 		}
@@ -96,7 +96,7 @@ func TestSendMessage_UnreadEmailEnqueueFailureDoesNotFailCommittedMessage(t *tes
 	acceptedFriendsFixture(f)
 	f.repo.CreateMessageFn = func(_ context.Context, msg *models.DMMessage) error { msg.ID = "message-123"; return nil }
 	e := &scheduledEmailCapture{err: errors.New("sensitive provider detail")}
-	f.svc.(DMCommunicationEmailConfigurer).SetCommunicationEmailEnqueuer(e)
+	f.svc.(*dmService).communicationEmailEnqueuer = e
 	if _, err := f.svc.SendMessage(context.Background(), "alice", "ch-1", &models.CreateDMMessageRequest{Content: "hello"}); err != nil {
 		t.Fatalf("best-effort email failure changed successful DM send: %v", err)
 	}

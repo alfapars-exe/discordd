@@ -60,7 +60,7 @@ func newDMFixtureWithPolicy(policy ServerDMPolicy) *dmTestFixture {
 		notif:   &testutil.MockNotificationRepo{},
 	}
 	runner := passthroughDMTxRunner{repos: repository.DMTxRepos{DM: f.repo, DMRead: f.dmRead, Notification: f.notif}}
-	f.svc = NewDMService(policy, f.repo, f.users, f.hub, f.block, f.friends, f.unhide, f.dmRead, f.notif, runner)
+	f.svc = NewDMService(policy, f.repo, f.users, f.hub, f.block, f.friends, f.unhide, f.dmRead, f.notif, runner, nil)
 	return f
 }
 

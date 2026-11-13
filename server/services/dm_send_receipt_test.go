@@ -62,7 +62,7 @@ func TestDMIdempotentSendConcurrentReplayConflictAndDeletion(t *testing.T) {
 		t.Fatal(err)
 	}
 	block := &testutil.MockBlockChecker{}
-	svc := NewDMService(nil, repo, repository.NewSQLiteUserRepo(db.Conn), &testutil.MockBroadcaster{}, block, nil, nil, repository.NewSQLiteDMReadRepo(db.Conn), repository.NewSQLiteNotificationRepo(db.Conn), repository.NewDMMessageTxRunner(db.Conn))
+	svc := NewDMService(nil, repo, repository.NewSQLiteUserRepo(db.Conn), &testutil.MockBroadcaster{}, block, nil, nil, repository.NewSQLiteDMReadRepo(db.Conn), repository.NewSQLiteNotificationRepo(db.Conn), repository.NewDMMessageTxRunner(db.Conn), nil)
 	const key = "send-request-0000001"
 	var wg sync.WaitGroup
 	ids := make(chan string, 8)
@@ -160,7 +160,7 @@ func TestDMIdempotentSendRollsBackReceiptAndUnread(t *testing.T) {
 	if _, err := db.Conn.Exec(triggerSQL); err != nil {
 		t.Fatal(err)
 	}
-	svc := NewDMService(nil, repo, repository.NewSQLiteUserRepo(db.Conn), &testutil.MockBroadcaster{}, nil, nil, nil, repository.NewSQLiteDMReadRepo(db.Conn), repository.NewSQLiteNotificationRepo(db.Conn), repository.NewDMMessageTxRunner(db.Conn))
+	svc := NewDMService(nil, repo, repository.NewSQLiteUserRepo(db.Conn), &testutil.MockBroadcaster{}, nil, nil, nil, repository.NewSQLiteDMReadRepo(db.Conn), repository.NewSQLiteNotificationRepo(db.Conn), repository.NewDMMessageTxRunner(db.Conn), nil)
 	req := &models.CreateDMMessageRequest{Content: "retry after rollback", ClientMessageID: "send-request-0000002"}
 	if _, err := svc.SendMessage(ctx, "alice", ch.ID, req); err == nil {
 		t.Fatal("expected failed notification transaction")
