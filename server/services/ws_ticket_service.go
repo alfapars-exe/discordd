@@ -124,3 +124,6 @@ func (s *wsTicketService) ConsumeSession(ticket string) (string, int, string, er
 	s.store.Delete(ticket)
 	return rec.userID, rec.tokenVersion, rec.sessionID, nil
 }
+
+// Stop retires the owned cache worker after request handling has drained.
+func (s *wsTicketService) Stop() { s.store.Close() }

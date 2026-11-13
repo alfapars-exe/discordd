@@ -34,6 +34,7 @@ func TestPermissionInvalidationSupersedesInflightGrant(t *testing.T) {
 				return []models.Role{{Permissions: models.PermViewChannel}}, nil
 			}}
 			mw := NewPermissionMiddleware(repo)
+			t.Cleanup(mw.Stop)
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			req := httptest.NewRequest("GET", "/", nil).WithContext(ctx)
@@ -82,6 +83,7 @@ func TestPermissionInvalidationChurnFailsClosedAndBounded(t *testing.T) {
 		mw.InvalidateAll()
 		return []models.Role{{Permissions: models.PermAdmin}}, nil
 	}})
+	t.Cleanup(mw.Stop)
 	p, err := mw.resolveEffectivePerms(httptest.NewRequest("GET", "/", nil), "u", "s")
 	if p != 0 || !errors.Is(err, pkg.ErrForbidden) || calls != 3 {
 		t.Fatal("unbounded or stale grant", p, err, calls)
