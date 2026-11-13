@@ -738,6 +738,8 @@ Genel Go yarış denetiminde Docker kesintisinden önce tamamlanmayan repository
 
 **RF28 üretim DM düzeltmesi.** `159e5b2d` üzerinde üretim paketi, gerçek Go ve mTLS PostgreSQL ile DM yanıt geçmişi testi hazırlık dahil 2/2 geçti. İlk DM listesi isteği sürerken yalnız okundu metadata'sının değişmesi yanıtın tamamını attırıyordu. Store bu durumda listeyi yükleyip değişen okundu sayılarını koruyor. Konuşma listesi değişmişse eski snapshot engeli sürüyor. 102 DM store testi ve ESLint geçti. Sunucu snapshot'ında konuşmanın varlığı ve klavyeyle yanıt önizlemesinden eski mesaja geçiş ayrıca doğrulandı. Tüm üretim Chromium paketinin bu düzeltmeyle birleşik tekrarı bekliyor.
 
+**RF28 birleşik üretim tekrarı.** `0c9a104f` kaynak durumunda Chromium paketi 14/14 geçti. Üretim istemcisi `npm run build -- --base=/` ile derlendi ve Vite preview üzerinden sunuldu. Gerçek Go sunucusu ve mTLS PostgreSQL kullanıldı. Koşu yaklaşık iki dakika sürdü. Yenileme endpoint'i 429 ve 25 saniyelik Retry-After döndürdü; istemci yeni isteği bekletti ve oturum toparlandı. Hazır ekran için 90 saniye, test başına 120 saniye ayrıldı. Bu sonuç fiziksel cihaz ve GitHub CI kabulünü tamamlamıyor.
+
 ## RF30 — Runtime kabulü ve kapanış
 
 | Alan | Tanım |
