@@ -740,6 +740,8 @@ Genel Go yarış denetiminde Docker kesintisinden önce tamamlanmayan repository
 
 **RF28 birleşik üretim tekrarı.** `0c9a104f` kaynak durumunda Chromium paketi 14/14 geçti. Üretim istemcisi `npm run build -- --base=/` ile derlendi ve Vite preview üzerinden sunuldu. Gerçek Go sunucusu ve mTLS PostgreSQL kullanıldı. Koşu yaklaşık iki dakika sürdü. Yenileme endpoint'i 429 ve 25 saniyelik Retry-After döndürdü; istemci yeni isteği bekletti ve oturum toparlandı. Hazır ekran için 90 saniye, test başına 120 saniye ayrıldı. Bu sonuç fiziksel cihaz ve GitHub CI kabulünü tamamlamıyor.
 
+**RF03 güncel kapsam.** `2b4a13b5` üzerinde `npx vitest run --coverage` 467 dosyada 4.706 test geçti, bir opt-in benchmark atlandı. Genel statement %66,24, branch %63,73, function %60,59, line %67,16 ölçüldü ve yapılandırılmış eşikler geçti. DM store line %84,69 ve branch %74,51, server store line %78,66 ve branch %71,42 oldu. Bu ölçüm kaynak test kapsamıdır.
+
 ## RF30 — Runtime kabulü ve kapanış
 
 | Alan | Tanım |
