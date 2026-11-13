@@ -849,6 +849,12 @@ func (s *voiceService) GetUserVoiceChannelID(userID string) string {
 }
 
 func (s *voiceService) recheckVoiceAccess(userID, channelID string) {
+	// Track accepted revocation checks through their cleanup. Late committed
+	// revocations still run in caller ownership after the terminal owner drains.
+	if finish, admitted := s.usageOperations.begin(); admitted {
+		defer finish()
+	}
+
 	type session struct {
 		id         string
 		state      *models.VoiceState

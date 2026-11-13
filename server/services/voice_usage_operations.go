@@ -70,7 +70,11 @@ func (s *voiceService) ShutdownUsageProducers() { s.usageOperations.closeAndWait
 
 func (s *voiceService) dispatchUsageCredit(sessionID, instanceID string, isCloud bool, joinedAt, endedAt time.Time) {
 	if !s.usageOperations.child(func() { s.creditUsageSession(sessionID, instanceID, isCloud, joinedAt, endedAt) }) {
-		voiceLogger.Error("usage producer rejected after terminal shutdown")
+		// A committed revocation can finish after the terminal owner drains.
+		// Preserve its bounded accounting handoff in caller ownership rather
+		// than dropping the credit or launching an untracked goroutine. Such
+		// late callers must have released s.mu, as disconnectVoiceLocked does.
+		s.creditUsageSession(sessionID, instanceID, isCloud, joinedAt, endedAt)
 	}
 }
 

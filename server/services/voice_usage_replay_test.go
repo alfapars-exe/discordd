@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
@@ -353,5 +354,74 @@ func waitVoiceUsagePostgresLock(t *testing.T, ctx context.Context, tx *sql.Tx, t
 		default:
 			time.Sleep(time.Millisecond)
 		}
+	}
+}
+
+func TestVoiceUsagePostgresShutdownJoinsPermissionRecheck(t *testing.T) {
+	db := postgresServerFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	blocker, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer blocker.Rollback()
+	if _, err = blocker.ExecContext(ctx, "LOCK TABLE channels IN ACCESS EXCLUSIVE MODE"); err != nil {
+		t.Fatal(err)
+	}
+	svc, hub := newTestVoiceService()
+	s := svc.(*voiceService)
+	s.states["reader"] = &models.VoiceState{UserID: "reader", ChannelID: "channel", ServerID: "server"}
+	s.permResolver = newUncachedChannelPermService(repository.NewSQLiteChannelPermRepo(db), repository.NewSQLiteRoleRepo(db), repository.NewSQLiteChannelRepo(db), hub)
+	rechecked, stopped := make(chan struct{}), make(chan struct{})
+	go func() { s.recheckVoiceAccess("reader", "channel"); close(rechecked) }()
+	t.Cleanup(func() { blocker.Rollback(); <-rechecked; s.ShutdownUsageProducers() })
+	waitVoiceUsagePostgresLock(t, ctx, blocker, "channels")
+	go func() { s.ShutdownUsageProducers(); close(stopped) }()
+	waitVoiceUsageAdmissionClosed(t, &s.usageOperations)
+	select {
+	case <-stopped:
+		t.Fatal("shutdown returned before PostgreSQL permission lookup")
+	case <-time.After(20 * time.Millisecond):
+	}
+	if err = blocker.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-stopped:
+	case <-ctx.Done():
+		t.Fatal("permission lookup was not joined")
+	}
+	if s.GetUserVoiceState("reader") != nil {
+		t.Fatal("missing channel retained unauthorized voice session")
+	}
+}
+
+func TestVoiceUsagePostgresLatePermissionRevocationPreservesCredit(t *testing.T) {
+	db := postgresServerFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if _, err := db.ExecContext(ctx, `INSERT INTO livekit_instances(id,url,api_key,api_secret) VALUES('late-instance','http://127.0.0.1','fixture','fixture')`); err != nil {
+		t.Fatal(err)
+	}
+	repo := repository.NewSQLiteLiveKitRepo(db)
+	svc, hub := newTestVoiceServiceWithLiveKitGetter(repo)
+	s := svc.(*voiceService)
+	s.permResolver = newUncachedChannelPermService(repository.NewSQLiteChannelPermRepo(db), repository.NewSQLiteRoleRepo(db), repository.NewSQLiteChannelRepo(db), hub)
+	s.states["reader"] = &models.VoiceState{UserID: "reader", ChannelID: "channel", ServerID: "default", UsageSessionID: "late-credit", LiveKitInstanceID: "late-instance", LiveKitIsCloud: true, JoinedAt: time.Now().Add(-time.Minute)}
+	s.ShutdownUsageProducers()
+	s.recheckVoiceAccess("reader", "channel")
+	s.recheckVoiceAccess("reader", "channel")
+	var seconds int
+	var applied bool
+	if err := db.QueryRowContext(ctx, `SELECT seconds,applied_at IS NOT NULL FROM voice_usage_credits WHERE credit_id='late-credit'`).Scan(&seconds, &applied); err != nil {
+		t.Fatal(err)
+	}
+	var used int64
+	if err := db.QueryRowContext(ctx, `SELECT COALESCE(SUM(used_seconds),0) FROM livekit_monthly_usage WHERE instance_id='late-instance'`).Scan(&used); err != nil {
+		t.Fatal(err)
+	}
+	if seconds <= 0 || !applied || used != int64(seconds) {
+		t.Fatalf("late credit not applied once: seconds=%d applied=%v used=%d", seconds, applied, used)
 	}
 }
