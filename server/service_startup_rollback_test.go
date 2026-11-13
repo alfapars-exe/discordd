@@ -48,3 +48,36 @@ func TestServiceInitializationReleasesCacheOnEarlyConfigFailure(t *testing.T) {
 
 func (h *failingStartupHub) IsVisibleOnline(string) (bool, error) { return false, nil }
 func (h *failingStartupHub) SetDurableChannelSends(bool)          {}
+
+func TestServiceInitializationTransfersLiveWorkersToSuccessfulCaller(t *testing.T) {
+	caches, limitersBefore := routeCacheWorkerCount(t), limiterWorkerCount(t)
+	svcs, limiters, metrics := initServices(nil, &Repositories{}, ws.NewHub(), &config.Config{}, nil, nil)
+	t.Cleanup(func() {
+		limiters.Stop()
+		stopServiceCacheWorkers(svcs)
+		metrics.Stop()
+		if owner, ok := svcs.Voice.(interface{ ShutdownVoiceStateFanout() }); ok {
+			owner.ShutdownVoiceStateFanout()
+		}
+		if owner, ok := svcs.OnlineFriendNotifier.(interface{ Stop() }); ok {
+			owner.Stop()
+		}
+		if owner, ok := svcs.LinkPreview.(interface{ Stop() }); ok {
+			owner.Stop()
+		}
+	})
+	if got := routeCacheWorkerCount(t); got != caches+2 {
+		t.Fatalf("successful initialization transferred %d cache workers, want 2", got-caches)
+	}
+	if got := limiterWorkerCount(t); got != limitersBefore+18 {
+		t.Fatalf("successful initialization transferred %d limiter workers, want 18", got-limitersBefore)
+	}
+	stopServiceCacheWorkers(svcs)
+	limiters.Stop()
+	if got := routeCacheWorkerCount(t); got != caches {
+		t.Fatalf("caller retained %d cache workers", got-caches)
+	}
+	if got := limiterWorkerCount(t); got != limitersBefore {
+		t.Fatalf("caller retained %d limiter workers", got-limitersBefore)
+	}
+}
