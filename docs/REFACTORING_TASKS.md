@@ -1292,3 +1292,9 @@ Terminal current-head receipt: PR29814a965ea completed36/36 SUCCESS. Exact-head 
 - Added a joined, cancellable observer restricted to the exact owned cleanup statement. Failure output includes wait metadata and blocker count without DSNs or unrelated SQL. The cleanup deadline remains 10 seconds; no retry was added.
 - Combined race JSON contains 105 passing test events across three terminal passing packages (five repetitions). A controlled PostgreSQL wait probe passed three repetitions; vet, build and pinned golangci-lint passed.
 - The earlier cleanup timeout did not reproduce and its root cause remains open. This diagnostic change does not establish whole-project completion. Receipt: `implementation/verification/refactor-owner-cleanup-observation-2026-11-14.json`.
+
+### 2026-11-14 — Cancel independent maintenance owners before join
+
+- Regression reproduced: a blocked orphan sweep delayed AFK cancellation during StopMaintenance. Both terminal owners are now cancelled before either is joined, preserving repeated/concurrent stop semantics.
+- Regression failed before the fix. Maintenance tests passed 100 repetitions on host and Linux race; services vet and lint passed. These DSN-free runs skip the PostgreSQL-specific test and do not prove active-media shutdown.
+- Receipt: `implementation/verification/refactor-maintenance-cancel-before-join-2026-11-14.json`.

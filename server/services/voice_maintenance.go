@@ -51,7 +51,7 @@ func (w *voiceMaintenanceWorker) startParent(parent context.Context, interval ti
 	}()
 }
 
-func (w *voiceMaintenanceWorker) stop() {
+func (w *voiceMaintenanceWorker) cancelAndDone() <-chan struct{} {
 	w.mu.Lock()
 	if !w.stopped {
 		w.stopped = true
@@ -61,13 +61,24 @@ func (w *voiceMaintenanceWorker) stop() {
 	}
 	done := w.done
 	w.mu.Unlock()
-	if done != nil {
+	return done
+}
+
+func (w *voiceMaintenanceWorker) stop() {
+	if done := w.cancelAndDone(); done != nil {
 		<-done
 	}
 }
 
 // StopMaintenance joins orphan and AFK sweeps; active media is owned separately.
 func (s *voiceService) StopMaintenance() {
-	s.orphanWorker.stop()
-	s.afkWorker.stop()
+	// Cancel both owners before joining either: a slow orphan sweep must not
+	// delay cancellation of an independent AFK database operation.
+	orphanDone := s.orphanWorker.cancelAndDone()
+	afkDone := s.afkWorker.cancelAndDone()
+	for _, done := range []<-chan struct{}{orphanDone, afkDone} {
+		if done != nil {
+			<-done
+		}
+	}
 }
