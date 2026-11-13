@@ -441,6 +441,8 @@ Birleşik dalda komut düzeltmesini kapsayan müzik servisi yarış koşusu 483,
 
 Bire bir DM ve kanal geçmişi, zaman damgalarını UTC ofseti ve milisaniye altı kesirleri hesaba katarak karşılaştırıyor. Sunucu sıra numarası bulunan DM'lerde bu numara öncelikli. Eski DM sayfası, zaten yüklü bir mesajla çakıştığında ekrandaki düzenlenmiş kopya korunuyor. Tekrarlanan kimlikler hem eski hem yeni sayfalarda eleniyor.
 
+39e66ca4 revizyonunda gerçek Go sunucusu ve mTLS PostgreSQL ile Playwright Chromium projesi kurulum dahil 13/13 geçti (1,8 dakika). İki oturumda üst kanal izni kaldırılınca önceden açılan alt konuşmanın HTTP geçmişi ve WebSocket teslimi engellendi. Yüklü kanal sayfasının dışındaki yanıt hedefine geçiş de geçti. Bu koşuda grup dışı DM yanıt hedefine tarayıcıdan geçiş sınanmadı.
+
 006e3b7c üzerinde Linux/amd64 ve Go 1.26.11 ile DM okundu imleci, oturumlar arası teslim ve yanıt referanslarının kanal sınırı testleri üç kez yarış algılayıcısıyla çalıştırıldı. WebSocket, servis ve repository paketlerindeki seçili testler geçti. Repository testlerinde SQLite kullanıldı.
 
 Birleşik 426fa853 revizyonunda Go vet ve build geçti. Windows Go koşusunda alt testler dahil 4.020 test geçti ve 57 test atlandı. İstemci üretim derlemesi geçti. Vite küçültülmüş bazı parçalar için 500 kB uyarısı verdi. ESLint iki TanStack Virtual uyarısı ve sıfır hata bildirdi. Electron ana süreç testlerinin 276’sı Windows’ta geçti. Sembolik bağlantı testi aynı derlenmiş dosyalarla Linux konteynerinde geçti.
