@@ -1387,3 +1387,9 @@ Terminal current-head receipt: PR29814a965ea completed36/36 SUCCESS. Exact-head 
 - Permission recheck regression failed before fix: terminal shutdown returned while fresh permissions were still resolving. Both recheckVoiceAccess and DisconnectServerMember now register accepted root work before snapshot/checks; committed late revocations still run in caller ownership instead of being skipped.
 - Targeted usage/maintenance tests passed ten repetitions (3.017s), Linux race ten (6.017s); real-PG late member credit test passed three (3.414s). Services vet/lint passed. Receipt: `implementation/verification/refactor-voice-revocation-root-2026-11-14.json`.
 - Published fdd59669 SonarCloud is now COMPLETED SUCCESS; last snapshot nine successful checks/no failures, overall CI still running. New root changes local integration only. Late callback/database ordering and full project acceptance remain open.
+
+### 2026-11-14 — Require real-PG permission recheck ownership
+
+- Added real permission service/repository test with channels locked by a separate PostgreSQL transaction. Shutdown waits for the pending lookup and resulting missing-channel revocation cleanup. Initial assertion incorrectly expected missing-channel state retained; corrected to actual no-permission behavior without product policy changes.
+- Three host repetitions passed (3.070s); three verified-mTLS Linux race repetitions passed (6.027s). Overlay removing only recheck root admission failed with expected early-shutdown assertion (exit1).
+- Made recheck ownership and late-member credit tests mandatory in PostgreSQL runner; extended missing-test negative controls. All 14 runner tests passed. Receipt: `implementation/verification/refactor-postgres-recheck-ownership-2026-11-14.json`. Local integration only; physical media and final project acceptance remain open.

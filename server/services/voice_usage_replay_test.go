@@ -384,3 +384,43 @@ func TestVoiceUsagePostgresLateMemberRevocationPreservesCredit(t *testing.T) {
 		t.Fatalf("late credit not applied once: seconds=%d applied=%v used=%d", seconds, applied, used)
 	}
 }
+
+func TestVoiceUsagePostgresShutdownJoinsPermissionRecheck(t *testing.T) {
+	db := postgresServerFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	blocker, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer blocker.Rollback()
+	if _, err = blocker.ExecContext(ctx, "LOCK TABLE channels IN ACCESS EXCLUSIVE MODE"); err != nil {
+		t.Fatal(err)
+	}
+	svc, hub := newTestVoiceService()
+	s := svc.(*voiceService)
+	s.states["reader"] = &models.VoiceState{UserID: "reader", ChannelID: "channel", ServerID: "server"}
+	s.permResolver = newUncachedChannelPermService(repository.NewSQLiteChannelPermRepo(db), repository.NewSQLiteRoleRepo(db), repository.NewSQLiteChannelRepo(db), hub)
+	rechecked, stopped := make(chan struct{}), make(chan struct{})
+	go func() { s.recheckVoiceAccess("reader", "channel"); close(rechecked) }()
+	t.Cleanup(func() { blocker.Rollback(); <-rechecked; s.ShutdownUsageProducers() })
+	waitVoiceUsagePostgresLock(t, ctx, blocker, "channels")
+	go func() { s.ShutdownUsageProducers(); close(stopped) }()
+	waitVoiceUsageAdmissionClosed(t, &s.operations)
+	select {
+	case <-stopped:
+		t.Fatal("shutdown returned before PostgreSQL permission lookup")
+	case <-time.After(20 * time.Millisecond):
+	}
+	if err = blocker.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-stopped:
+	case <-ctx.Done():
+		t.Fatal("permission lookup was not joined")
+	}
+	if s.GetUserVoiceState("reader") != nil {
+		t.Fatal("missing channel retained unauthorized voice session")
+	}
+}
