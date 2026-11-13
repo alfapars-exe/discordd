@@ -4,6 +4,7 @@
 package services
 
 import (
+	"context"
 	cryptorand "crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -14,6 +15,9 @@ import (
 )
 
 func (s *voiceService) getOrCreateRoomPassphraseLocked(roomName string) (string, error) {
+	if s.sessionsFinalized {
+		return "", context.Canceled
+	}
 	if passphrase, ok := s.roomPassphrases[roomName]; ok {
 		s.ensureRoomKeyContextLocked(roomName, passphrase)
 		return passphrase, nil

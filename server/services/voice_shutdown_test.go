@@ -1,6 +1,8 @@
 package services
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"github.com/argeinfina/hichat/models"
 	"sync"
@@ -92,5 +94,80 @@ func TestVoiceShutdownBoundsAndJoinsMediaWorkers(t *testing.T) {
 	}
 	if len(entered) != 4 || len(s.GetAllVoiceStates()) != 0 {
 		t.Fatal("remaining media cleanup incomplete")
+	}
+}
+
+func TestVoiceShutdownSnapshotsAfterAcceptedJoinFinishes(t *testing.T) {
+	getter := &recordingUsageGetter{recorded: make(chan string, 2)}
+	svc, _ := newTestVoiceServiceWithLiveKitGetter(getter)
+	s := svc.(*voiceService)
+	finish, admitted := s.usageOperations.begin()
+	if !admitted {
+		t.Fatal("initial join operation rejected")
+	}
+	done := make(chan struct{})
+	var release sync.Once
+	t.Cleanup(func() { release.Do(finish); s.ShutdownVoiceSessions(); <-done })
+	go func() { s.ShutdownVoiceSessions(); close(done) }()
+	waitVoiceUsageAdmissionClosed(t, &s.usageOperations)
+	select {
+	case <-done:
+		t.Fatal("finalizer escaped accepted join")
+	default:
+	}
+	// An already admitted join may publish its state after admission closes.
+	s.mu.Lock()
+	s.states["accepted"] = &models.VoiceState{UserID: "accepted", ChannelID: "channel", ServerID: "server", UsageSessionID: "accepted-session", LiveKitInstanceID: "instance", LiveKitIsCloud: true, JoinedAt: time.Now().Add(-time.Minute)}
+	s.mu.Unlock()
+	release.Do(finish)
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("finalizer did not join accepted operation")
+	}
+	select {
+	case id := <-getter.recorded:
+		if id != "accepted-session" {
+			t.Fatal("finalizer lost accepted session identity")
+		}
+	default:
+		t.Fatal("snapshot missed accepted join")
+	}
+	if len(s.GetAllVoiceStates()) != 0 {
+		t.Fatal("finalizer left accepted session active")
+	}
+}
+
+func TestVoiceShutdownForgetsOrphanRoomMetadata(t *testing.T) {
+	svc, _ := newTestVoiceService()
+	s := svc.(*voiceService)
+	s.roomPassphrases = map[string]string{"orphan-room": "fixture-key"}
+	s.roomKeyContexts = map[string]string{"orphan-room": "fixture-context"}
+	s.roomKeyVersions = map[string]uint32{"orphan-room": 4}
+	s.screenShareViewers = map[string]map[string]bool{"missing-streamer": {"missing-viewer": true}}
+	s.forceMoveGrants = map[string]forceMoveGrant{"missing-user": {channelID: "gone"}}
+	s.offlineSince = map[string]time.Time{"missing-user": time.Now()}
+	revision := s.voiceRevision
+	s.ShutdownVoiceSessions()
+	if len(s.roomPassphrases)+len(s.roomKeyContexts)+len(s.roomKeyVersions)+len(s.screenShareViewers)+len(s.forceMoveGrants)+len(s.offlineSince) != 0 {
+		t.Fatal("terminal shutdown retained orphan voice metadata")
+	}
+	if s.voiceRevision <= revision {
+		t.Fatal("orphan viewer removal did not advance snapshot revision")
+	}
+}
+
+func TestVoiceShutdownRejectsLateRoomKeyCreation(t *testing.T) {
+	svc, _ := newTestVoiceService()
+	s := svc.(*voiceService)
+	s.ShutdownVoiceSessions()
+	if _, _, err := s.MusicRoomKey("late-room"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("terminal music key request was accepted: %v", err)
+	}
+	if _, _, _, err := s.roomMediaKey("late-room"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("terminal media key request was accepted: %v", err)
+	}
+	if len(s.roomPassphrases)+len(s.roomKeyContexts)+len(s.roomKeyVersions) != 0 {
+		t.Fatal("late request recreated terminal key metadata")
 	}
 }

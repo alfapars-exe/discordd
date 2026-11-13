@@ -151,6 +151,7 @@ type forceMoveGrant struct {
 const maxScreenShares = 0
 
 type voiceService struct {
+	sessionsFinalized  bool // guarded by mu; no room keys may be created after terminal cleanup
 	sessionShutdown    sync.Once
 	usageOperations    voiceUsageOperations
 	usageWorker        voiceMaintenanceWorker
