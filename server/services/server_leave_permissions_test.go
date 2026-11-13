@@ -140,3 +140,25 @@ func TestLeaveServerFencesVoiceJoinAfterAdmission(t *testing.T) {
 		})
 	}
 }
+
+func TestLeaveConstructorActivityNotificationFollowsMembershipWrite(t *testing.T) {
+	for _, failed := range []bool{false, true} {
+		t.Run(map[bool]string{false: "committed", true: "failed"}[failed], func(t *testing.T) {
+			activity := &recordingGameActivityInvalidator{}
+			h := newJoinServerHarnessWithActivity(activity)
+			if failed {
+				h.serverRepo.RemoveMemberFn = func(context.Context, string, string) error {
+					return errors.New("membership write failed")
+				}
+			}
+			err := h.svc.LeaveServer(context.Background(), joinTestServerID, joinTestUserID)
+			if failed {
+				if err == nil || len(activity.calls) != 0 {
+					t.Fatalf("failed leave notified activity: err=%v calls=%+v", err, activity.calls)
+				}
+			} else if err != nil || len(activity.calls) != 1 || activity.calls[0] != (gameActivityInvalidationCall{kind: "removed", a: joinTestServerID, b: joinTestUserID}) {
+				t.Fatalf("committed leave notification: err=%v calls=%+v", err, activity.calls)
+			}
+		})
+	}
+}
