@@ -1,3 +1,4 @@
+import { createOverlayComposerWindow } from "./overlay-composer-window";
 import { createOverlayActionWindow } from "./overlay-action-window";
 import { app, BrowserWindow, screen } from "electron";
 import { OverlayWelcomeLifecycle } from "./overlay-welcome";
@@ -207,21 +208,21 @@ function openChatComposer(session: string, mainWindow: TrustedOverlayMainWindow)
   const height = Math.max(1, Math.min(280, workArea.height));
   const x = Math.max(workArea.x, Math.min(workArea.x + workArea.width - width, overlayWindow.getBounds().x + overlayWindow.getBounds().width - width));
   const y = Math.max(workArea.y, Math.min(workArea.y + workArea.height - height, overlayWindow.getBounds().y + overlayWindow.getBounds().height - height));
-  const created = new BrowserWindow({ width, height, x, y, frame: false, transparent: true, resizable: false, alwaysOnTop: true, focusable: true, skipTaskbar: true, hasShadow: true, show: false, parent: overlayWindow, webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, nodeIntegration: false, sandbox: true } });
-  chatComposerWindow = created;
-  chatComposeSessionScope = session;
-  chatComposerMainWindow = mainWindow;
-  terminalChatRequestIds.clear();
-  let initialLoadComplete = false;
-  created.setAlwaysOnTop(true, "floating");
-  created.webContents.on("did-start-navigation", (_event: unknown, _url: string, isInPlace: boolean, isMainFrame: boolean) => {
-    if (initialLoadComplete && isMainFrame && !isInPlace && chatComposerWindow === created) closeChatComposerWindow();
-  });
-  created.webContents.on("render-process-gone", () => {
-    if (chatComposerWindow === created) closeChatComposerWindow();
-  });
-  created.on("closed", () => {
-    if (chatComposerWindow === created) {
+  createOverlayComposerWindow({
+    bounds: { width, height, x, y }, parent: overlayWindow,
+    preload: path.join(__dirname, "preload.js"), development: process.env.NODE_ENV === "development" || !app.isPackaged,
+  }, {
+    createWindow: options => new BrowserWindow(options),
+    created: window => {
+      chatComposerWindow = window;
+      chatComposeSessionScope = session;
+      chatComposerMainWindow = mainWindow;
+      terminalChatRequestIds.clear();
+    },
+    ready: window => deliverChatComposerSnapshot(window, session, true),
+    retire: window => { if (chatComposerWindow === window) closeChatComposerWindow(); },
+    closed: window => {
+      if (chatComposerWindow !== window) return;
       chatComposerWindow = null;
       chatComposeSessionScope = null;
       blockedChatComposeSession = session;
@@ -232,17 +233,8 @@ function openChatComposer(session: string, mainWindow: TrustedOverlayMainWindow)
       if (parent && !parent.isDestroyed()) {
         try { parent.webContents.send("overlay-chat-composer-closed", { session }); } catch { /* The parent may be closing at the same time. */ }
       }
-    }
+    },
   });
-  const dev = process.env.NODE_ENV === "development" || !app.isPackaged;
-  void created.loadURL(dev ? "http://localhost:3030/overlay.html?surface=chat-composer" : "app://hichat/overlay.html?surface=chat-composer")
-    .catch(() => { if (chatComposerWindow === created) closeChatComposerWindow(); });
-  const deliver = () => {
-    initialLoadComplete = true;
-    deliverChatComposerSnapshot(created, session, true);
-  };
-  if (created.webContents.isLoading()) created.webContents.once("did-finish-load", deliver);
-  else deliver();
   return true;
 }
 
