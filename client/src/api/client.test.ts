@@ -668,3 +668,42 @@ describe("cold session restore", () => {
     expect((await apiClient("/users/me", { refreshIfMissing: true })).error).toContain("service_unavailable:"); expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
+
+it("honors refresh Retry-After before contacting the server again", async () => {
+  const { apiClient } = await loadClient();
+  const clock = vi.spyOn(Date, "now").mockReturnValue(100000);
+  try {
+    fetchMock.mockResolvedValueOnce(new Response("{}", { status: 429, headers: { "Retry-After": "30" } }));
+    await apiClient("/users/me", { refreshIfMissing: true });
+    await apiClient("/users/me", { refreshIfMissing: true });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    clock.mockReturnValue(130001);
+    fetchMock.mockResolvedValueOnce(new Response("{}", { status: 503 }));
+    await apiClient("/users/me", { refreshIfMissing: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  } finally {
+    clock.mockRestore();
+  }
+});
+
+it.each([
+  ["Thu, 01 Jan 1970 00:02:10 GMT", 130001],
+  ["invalid", 100001],
+])("handles refresh Retry-After %s", async (header, nextTime) => {
+  const { apiClient } = await loadClient();
+  const clock = vi.spyOn(Date, "now").mockReturnValue(100000);
+  try {
+    fetchMock.mockResolvedValueOnce(new Response("{}", { status: 429, headers: { "Retry-After": header } }));
+    await apiClient("/users/me", { refreshIfMissing: true });
+    if (header !== "invalid") {
+      await apiClient("/users/me", { refreshIfMissing: true });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    }
+    clock.mockReturnValue(nextTime);
+    fetchMock.mockResolvedValueOnce(new Response("{}", { status: 503 }));
+    await apiClient("/users/me", { refreshIfMissing: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  } finally {
+    clock.mockRestore();
+  }
+});
