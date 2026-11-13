@@ -266,17 +266,12 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	// not here: it needs to fan out to middleware.PermissionMiddleware too,
 	// which is only constructed inside initRoutes. See main.go's comment
 	// near initRoutes for the full rationale.
-	serverService := services.NewServerService(gameActivityService,
+	serverService := services.NewServerService(repos.Preferences, gameActivityService,
 		db, repos.Server, repos.LiveKit, repos.Role, repos.Channel,
 		repos.Category, repos.User, repos.Ban, inviteService, hub, encryptionKey, auditLogService,
 		roleTransactions,
 	)
 	serverService.SetUploadDir(cfg.Upload.Dir)
-	if setter, ok := serverService.(interface {
-		SetGameActivityPreferencesRepository(repository.PreferencesRepository)
-	}); ok {
-		setter.SetGameActivityPreferencesRepository(repos.Preferences)
-	}
 	livekitAdminService := services.NewLiveKitAdminService(
 		repos.LiveKit, repos.Server, repos.User, repos.Channel,
 		voiceService, encryptionKey, cfg.HetznerAPIToken, cfg.AllowLiveKitInstanceCreation,

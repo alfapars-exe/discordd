@@ -93,7 +93,7 @@ func newJoinServerHarnessWithActivity(activity GameActivityPrivacyInvalidator) *
 		return false, nil
 	}
 
-	h.svc = NewServerService(activity, nil, h.serverRepo, nil, h.roleRepo, nil, nil, h.userRepo, h.banRepo, h.inviteSvc, h.hub, nil, nil, // encryptionKey, auditLogger — not under test here
+	h.svc = NewServerService(nil, activity, nil, h.serverRepo, nil, h.roleRepo, nil, nil, h.userRepo, h.banRepo, h.inviteSvc, h.hub, nil, nil, // encryptionKey, auditLogger — not under test here
 		passthroughMembershipTxRunner{server: h.serverRepo, role: h.roleRepo})
 	return h
 }
