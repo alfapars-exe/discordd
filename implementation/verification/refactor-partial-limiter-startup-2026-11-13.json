@@ -58,9 +58,11 @@
     "new_initRateLimiters_statement_coverage_percent": 100,
     "isolated_main_package_statement_coverage_percent": 1.9,
     "integrated_full_main_race": {
-      "status": "running",
-      "session_id": 5329,
+      "status": "PASS",
+      "exit_code": 0,
+      "seconds": 202.971,
       "source": "12548e22",
+      "command": "go test -race . -count=1 -timeout=5m",
       "log": "%TEMP%/hichat-integrated-startup-main-race-12548e22.log"
     }
   },
