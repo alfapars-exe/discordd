@@ -1,3 +1,4 @@
+import { startRuntimeUpdater } from "./runtime-updater";
 /** Background update checks must never delay the main window or session restore. */
 import { app, Notification } from "electron";
 import { autoUpdater } from "electron-updater";
@@ -7,7 +8,7 @@ import { setTrayUpdateReady } from "./tray";
 import { requestUpdateInstallation } from "./update-installation";
 
 let prelaunchChecked = false;
-let runtimeCheckInterval: ReturnType<typeof setInterval> | null = null;
+
 
 /**
  * How often we re-poll GitHub Releases for a newer version while the app
@@ -49,61 +50,46 @@ export function wasPrelaunchChecked(): boolean {
  * pester the user every five minutes about a hiccup.
  */
 export function setupAutoUpdater(): void {
-  // Runtime setup owns one event subscription set as well as one poller.
   if (!app.isPackaged || prelaunchChecked) return;
   prelaunchChecked = true;
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
 
-  autoUpdater.on("update-available", (info) => {
-    getMainWindow()?.webContents.send("update-available", info);
+  const dispose = startRuntimeUpdater({
+    updater: autoUpdater,
+    available: info => {
+      getMainWindow()?.webContents.send("update-available", info);
+    },
+    progress: progress => {
+      getMainWindow()?.webContents.send("update-progress", progress);
+    },
+    downloaded: info => {
+      getMainWindow()?.webContents.send("update-downloaded", info);
+      setTrayUpdateReady(info.version);
+      // Let the close button quit for installation instead of hiding to tray.
+      setUpdateDownloaded();
+      try {
+        const notification = new Notification({
+          title: "HiChat! — Güncelleme Hazır",
+          body: `v${info.version} indirildi. Yeniden başlatmak için tıklayın.`,
+          icon: path.join(__dirname, "../icons/hlogo.png"),
+        });
+        notification.on("click", () => {
+          requestUpdateInstallation(() => autoUpdater.quitAndInstall(true, true));
+        });
+        notification.show();
+      } catch (err) {
+        // Renderer and tray still surface the ready update if the OS denies a toast.
+        console.warn("[auto-updater] notification failed:", err);
+      }
+    },
+    failed: err => {
+      getMainWindow()?.webContents.send("update-error", err.message);
+    },
+    startPolling: check => {
+      const interval = setInterval(check, RUNTIME_CHECK_MS);
+      return () => clearInterval(interval);
+    },
   });
-  autoUpdater.on("download-progress", (progress) => {
-    getMainWindow()?.webContents.send("update-progress", progress);
-  });
-  autoUpdater.on("update-downloaded", (info) => {
-    // Renderer banner — visible only when a window is open. Backed up by
-    // the next three signals so tray-only users never miss the update.
-    getMainWindow()?.webContents.send("update-downloaded", info);
-
-    // Tray menu entry — surfaces "Restart and install" so users who keep
-    // the app tray-resident can apply the update without ever opening
-    // the renderer.
-    setTrayUpdateReady(info.version);
-
-    // Close-button semantics swap — the next X click will quit() instead
-    // of going to tray, letting autoInstallOnAppQuit actually fire. The
-    // alternative (autoInstallOnAppQuit waiting for a quit that never
-    // comes) is exactly why close-to-tray users sat on stale versions.
-    setUpdateDownloaded();
-
-    // Native Windows toast — fires once per update, even when the window
-    // is minimised to tray. Click invokes quitAndInstall directly.
-    try {
-      const notification = new Notification({
-        title: "HiChat! — Güncelleme Hazır",
-        body: `v${info.version} indirildi. Yeniden başlatmak için tıklayın.`,
-        icon: path.join(__dirname, "../icons/hlogo.png"),
-      });
-      notification.on("click", () => {
-        requestUpdateInstallation(() => autoUpdater.quitAndInstall(true, true));
-      });
-      notification.show();
-    } catch (err) {
-      // OS denied notifications, or running without a desktop session —
-      // tray entry + renderer banner still cover the path.
-      console.warn("[auto-updater] notification failed:", err);
-    }
-  });
-  autoUpdater.on("error", (err) => {
-    getMainWindow()?.webContents.send("update-error", err.message);
-  });
-
-  // Initial check + recurring poll. Both swallow errors so a temporary
-  // network blip doesn't crash the main process.
-  autoUpdater.checkForUpdates().catch(() => undefined);
-  if (runtimeCheckInterval) clearInterval(runtimeCheckInterval);
-  runtimeCheckInterval = setInterval(() => {
-    autoUpdater.checkForUpdates().catch(() => undefined);
-  }, RUNTIME_CHECK_MS);
+  app.once("will-quit", dispose);
 }

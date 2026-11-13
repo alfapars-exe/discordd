@@ -5,14 +5,16 @@ import path from "node:path";
 import test from "node:test";
 import vm from "node:vm";
 import { createUpdateInstallationGate } from "./update-installation";
+import { startRuntimeUpdater } from "./runtime-updater";
 
 function harness(packaged = true) {
   const sent: unknown[][] = [], tray: string[] = [], installed: boolean[][] = [];
   const timers = new Set<() => void>(), notifications: FakeNotification[] = [];
   let checks = 0, downloaded = 0;
+  const network = { failed: false };
   const requestUpdateInstallation = createUpdateInstallationGate();
   const updater = Object.assign(new EventEmitter(), {
-    checkForUpdates: async () => { checks++; },
+    checkForUpdates: async () => { checks++; if (network.failed) throw new Error("offline"); },
     quitAndInstall: (...args: boolean[]) => { installed.push(args); },
   });
   class FakeNotification extends EventEmitter {
@@ -20,7 +22,7 @@ function harness(packaged = true) {
     constructor(public options: Record<string, unknown>) { super(); notifications.push(this); }
     show() { this.shown = true; }
   }
-  const app = { isPackaged: packaged };
+  const app = Object.assign(new EventEmitter(), { isPackaged: packaged });
   const exports = {} as typeof import("./auto-updater");
   vm.runInNewContext(readFileSync(path.join(__dirname, "auto-updater.js"), "utf8"), {
     exports, __dirname, console,
@@ -31,12 +33,13 @@ function harness(packaged = true) {
       if (name === "electron-updater") return { autoUpdater: updater };
       if (name === "path") return path;
       if (name === "./update-installation") return { requestUpdateInstallation };
+      if (name === "./runtime-updater") return { startRuntimeUpdater };
       if (name === "./window") return { getMainWindow: () => ({ webContents: { send: (...args: unknown[]) => { sent.push(args); } } }), setUpdateDownloaded: () => { downloaded++; } };
       if (name === "./tray") return { setTrayUpdateReady: (version: string) => { tray.push(version); } };
       throw new Error(`Unexpected updater dependency: ${name}`);
     },
   });
-  return { api: exports, updater, app, sent, tray, installed, timers, notifications, checks: () => checks, downloaded: () => downloaded };
+  return { api: exports, updater, app, sent, tray, installed, timers, notifications, network, checks: () => checks, downloaded: () => downloaded };
 }
 
 test("repeated updater setup owns one subscription set, poller and downloaded notification", () => {
@@ -62,6 +65,44 @@ test("development setup does not subscribe, poll or mark a check complete", () =
   assert.equal(h.updater.eventNames().length, 0);
   assert.equal(h.timers.size, 0);
   assert.equal(h.checks(), 0);
+});
+
+test("shutdown retires owned polling and callbacks without removing sibling subscriptions", () => {
+  const h = harness();
+  let siblingCalls = 0;
+  const sibling = () => { siblingCalls++; };
+  h.updater.on("update-available", sibling);
+  h.api.setupAutoUpdater();
+  const queuedAvailable = h.updater.listeners("update-available")[1];
+  const queuedProgress = h.updater.listeners("download-progress")[0];
+  const queuedDownloaded = h.updater.listeners("update-downloaded")[0];
+  const queuedError = h.updater.listeners("error")[0];
+  const queuedPoll = [...h.timers][0];
+  h.app.emit("will-quit"); h.app.emit("will-quit");
+  assert.equal(h.timers.size, 0);
+  assert.deepEqual(h.updater.listeners("update-available"), [sibling]);
+  assert.equal(h.updater.listenerCount("download-progress"), 0);
+  assert.equal(h.updater.listenerCount("update-downloaded"), 0);
+  assert.equal(h.updater.listenerCount("error"), 0);
+  queuedAvailable({ version: "late" }); queuedPoll();
+  queuedProgress({ percent: 42 }); queuedDownloaded({ version: "late" }); queuedError(new Error("late"));
+  h.updater.emit("update-available", { version: "sibling" });
+  assert.equal(h.sent.length, 0);
+  assert.equal(h.notifications.length, 0);
+  assert.equal(h.checks(), 1);
+  assert.equal(siblingCalls, 1);
+});
+
+test("offline runtime checks settle silently and polling can recover", async () => {
+  const h = harness(); h.network.failed = true;
+  h.api.setupAutoUpdater();
+  await new Promise<void>(resolve => setImmediate(resolve));
+  assert.equal(h.checks(), 1);
+  h.network.failed = false;
+  for (const poll of h.timers) poll();
+  await new Promise<void>(resolve => setImmediate(resolve));
+  assert.equal(h.checks(), 2);
+  assert.equal(h.sent.length, 0);
 });
 
 test("repeated notification clicks request installation only once", () => {
