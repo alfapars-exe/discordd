@@ -1,3 +1,4 @@
+import { overlayHUDPayload } from "./overlay-hud-payload";
 import { chatActionPayload, notificationActionPayload, voiceActionPayload } from "./overlay-action-payload";
 import { createOverlayComposerWindow } from "./overlay-composer-window";
 import { createOverlayActionWindow } from "./overlay-action-window";
@@ -111,22 +112,13 @@ let lastChatComposeActionAt = 0;
 function voiceOverlayPayload() {
   if (!latest) return null;
   const geometry = calculateVoiceOverlayGeometry(latest, latestArea ?? screen.getPrimaryDisplay().workArea);
-  return { ...latest, mediaHeight: geometry?.mediaHeight ?? 0, goLiveHeight: geometry?.goLiveHeight ?? 0,
-    gameActivityNotices: gameNoticeLifecycle.current(latest).slice(0, geometry?.gameActivityNoticeRows ?? 0),
-    gameActivityNoticeHeight: geometry?.gameActivityNoticeHeight ?? 0,
+  return overlayHUDPayload(latest, geometry, {
+    gameActivityNotices: gameNoticeLifecycle.current(latest),
     goLive: geometry?.goLiveHeight && latest.voiceOverlayGoLive && latest.goLiveEligible && latest.goLiveSession === goLiveNoticeSession ? goLiveLifecycle.current(Date.now()) : null,
-    welcomeHeight: geometry?.welcomeHeight ?? 0,
     welcome: geometry?.welcomeHeight && latest.voiceOverlayWelcome ? welcomeLifecycle.current(Date.now()) : null,
-    voiceOverlayMaxParticipants: geometry?.effectiveMaxParticipants ?? 0,
-    voiceOverlayActivity: geometry?.activityVisible ?? false,
-    activities: geometry?.activityVisible ? (latest.activities ?? []).slice(0, geometry.activityRows) : [],
-    voiceOverlayNotifications: geometry?.notificationsVisible ?? false,
-    notifications: geometry?.notificationsVisible ? (latest.notifications ?? []).slice(0, geometry.notificationRows) : [],
-    voiceOverlayChat: geometry?.chatVisible ?? false,
-    chatStatus: geometry?.chatVisible ? latest.chatStatus : undefined,
-    chatMessages: geometry?.chatVisible ? (latest.chatMessages ?? []).slice(-geometry.chatRows) : undefined,
-    notificationActionsUnavailable: latest.voiceOverlayNotificationActions === true && (notificationActionSurfaceFailed || process.platform !== "win32"),
-    unlocked, layoutSaveFailed, quickActionsUnavailable: actionSurfaceFailed };
+    notificationActionsUnavailable: notificationActionSurfaceFailed || process.platform !== "win32",
+    unlocked, layoutSaveFailed, quickActionsUnavailable: actionSurfaceFailed,
+  });
 }
 
 function hideActionWindow(): void { if (actionWindow && !actionWindow.isDestroyed()) actionWindow.hide(); }
