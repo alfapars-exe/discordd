@@ -45,10 +45,23 @@ func TestVoiceMaintenanceStopJoinsSweepAndConcurrentOwners(t *testing.T) {
 		stops.Wait()
 		close(done)
 	}()
+	deadline := time.Now().Add(time.Second)
+	for {
+		worker.mu.Lock()
+		stopped := worker.stopped
+		worker.mu.Unlock()
+		if stopped {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("Stop never cancelled worker")
+		}
+		time.Sleep(time.Millisecond)
+	}
 	select {
 	case <-done:
 		t.Fatal("Stop returned before sweep exited")
-	case <-time.After(10 * time.Millisecond):
+	default:
 	}
 	close(release)
 	select {
