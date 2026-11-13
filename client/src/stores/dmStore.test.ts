@@ -14,6 +14,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 vi.mock("../api/dm", () => ({
   listDMChannels: vi.fn(),
+  markDMRead: vi.fn(async () => ({ success: true })),
   getDMMessages: vi.fn(),
   getDMMessagesAround: vi.fn(),
   getDMMessagesAfter: vi.fn(),
@@ -763,4 +764,18 @@ it.each(["tail", "around", "older", "newer"])("excludes foreign DM rows before d
   expect(ids()).toContain(target.id);
   expect(ids()).not.toContain(foreign.id);
   expect(vi.mocked(decryptDMMessages).mock.lastCall?.[0]).toEqual([target]);
+});
+
+it("keeps unread messages when reopening older history and lets the user mark the entire DM read", () => {
+  useDMStore.setState({
+    dmUnreadCounts: { [CH]: 2 },
+    messagesByChannel: { [CH]: [makeDM("old-window-end")] },
+    hasMoreAfterByChannel: { [CH]: true },
+  });
+  useDMStore.getState().clearDMUnread(CH);
+  expect(useDMStore.getState().dmUnreadCounts[CH]).toBe(2);
+  expect(dmApi.markDMRead).not.toHaveBeenCalled();
+  useDMStore.getState().clearDMUnread(CH, "entire-conversation");
+  expect(useDMStore.getState().dmUnreadCounts[CH]).toBeUndefined();
+  expect(dmApi.markDMRead).toHaveBeenCalledWith(CH, undefined);
 });
