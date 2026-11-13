@@ -383,6 +383,8 @@ Birleşik dalda komut düzeltmesini kapsayan müzik servisi yarış koşusu 483,
 
 Kalan koşullu bağlantılar `server/init_services.go` içinde kalıcı kanal gönderimi hub yeteneği, sunucu işlemleri ve P2P politika değişimi gözlemcilerini içeriyor. Bunların constructor'a taşınması için sahip servislerin callback döngüleri ve disabled/no-op davranışları ayrı ayrı doğrulanmalı. RF11 tamamlandı olarak işaretlenmedi.
 
+Preferences servisinin profil görünürlüğü geçersizleştiricisi ve oyun etkinliği eşitlemesi de constructor'a taşındı. Oyun etkinliği servisi önce oluşturuluyor. Başarılı tercih kaydı sonrasında gözlemcinin çağrıldığı, başarısız kayıtta çağrılmadığı ve tercih verisinin görünürlük olayına taşınmadığı test edildi. `cec39b39` üzerinde `go test -race ./services ./handlers . -run '^TestPreferences|^Test.*ProfileAudience|^TestWiring' -count=1` üç pakette geçti. Bu koşu gerçek PostgreSQL ortamı içermiyordu.
+
 | Alan | Tanım |
 |---|---|
 | Task ID | RF11 |
