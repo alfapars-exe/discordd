@@ -1,3 +1,5 @@
+import { registerCaptureCommandIPC } from "./capture-command-ipc";
+import { registerGlobalShortcutIPC } from "./global-shortcut-ipc";
 import { createOverlayMediaBroker } from "./overlay-media-broker";
 import { registerCS2JoinIPC } from "./cs2-join-ipc";
 import { registerGameNameIPC } from "./registered-game-name-ipc";
@@ -41,7 +43,6 @@ const APP_SETTING_VALIDATORS: Record<string, (v: unknown) => v is boolean> = {
 const MAX_CLIPBOARD_BYTES = 10 * 1024 * 1024; // 10 MB — prevent renderer-side DoS
 const MAX_BADGE_COUNT = 99999;
 const MAX_BADGE_ICON_BYTES = 256 * 1024; // 256 KB data URL
-const MAX_PTT_KEYCODE_LEN = 64; // generous bound for any keycode string
 
 function assertString(value: unknown, name: string, maxLen: number): asserts value is string {
   if (typeof value !== "string") {
@@ -429,15 +430,8 @@ export function registerIpcHandlers(): void {
 
   registerSystemAudioLeaseIPC(ipcMain,assertTrustedMainWindowSender,{reserve:reserveCaptureLease,start:startCaptureLease,release:releaseCaptureLease,retire:retireCaptureSender});
   // ─── Process-exclusive system audio ──────────────────────────────
-  ipcMain.handle("start-system-capture", event => {assertTrustedMainWindowSender(event);return startCapture();});
-  ipcMain.handle("stop-system-capture", event => {assertTrustedMainWindowSender(event);return stopCapture();});
-  ipcMain.handle("get-system-capture-status", () => getCaptureStatus());
-  ipcMain.handle("start-system-capture-diagnostic", () => startDiagnosticCapture());
-  ipcMain.handle("stop-system-capture-diagnostic", (_event, token: unknown) => {
-    if (typeof token !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(token)) {
-      throw new TypeError("diagnostic capture token is invalid");
-    }
-    return stopDiagnosticCapture(token);
+  registerCaptureCommandIPC(ipcMain, assertTrustedMainWindowSender, {
+    startCapture, stopCapture, getCaptureStatus, startDiagnosticCapture, stopDiagnosticCapture,
   });
 
   // ─── Taskbar overlay icon (Windows unread badge) ─────────────────
@@ -546,23 +540,10 @@ export function registerIpcHandlers(): void {
 
   registerPTTLeaseHandlers(ipcMain,assertTrustedMainWindowSender,{acquire:acquirePTTLease,release:releasePTTLease,retire:retirePTTSender});
   // ─── Push-to-Talk shortcuts (uIOhook global keyboard) ────────────
-  ipcMain.handle("register-ptt-shortcut", (_e, keyCode: unknown) => {
-    assertTrustedMainWindowSender(_e);
-    // Audit 2026-05-27: keyCode is mapped against an allowlist inside
-    // registerPTT(), but bound the string here defensively to avoid
-    // pathological inputs reaching the keymap lookup.
-    assertString(keyCode, "PTT keyCode", MAX_PTT_KEYCODE_LEN);
-    return registerPTT(keyCode);
+  registerGlobalShortcutIPC(ipcMain, {
+    trusted: assertTrustedMainWindowSender, assertString,
+    registerPTT, unregisterPTT, registerMuteHotkey, unregisterMuteHotkey,
   });
-  ipcMain.handle("unregister-ptt-shortcut", (event) => {assertTrustedMainWindowSender(event);unregisterPTT();});
-
-  // ─── Global mute-toggle hotkey (uIOhook, shares the PTT hook) ────
-  ipcMain.handle("register-mute-hotkey-shortcut", (_e, keyCode: unknown) => {
-    // Same validation policy as register-ptt-shortcut above.
-    assertString(keyCode, "mute hotkey keyCode", MAX_PTT_KEYCODE_LEN);
-    return registerMuteHotkey(keyCode);
-  });
-  ipcMain.handle("unregister-mute-hotkey-shortcut", () => unregisterMuteHotkey());
 }
 
 function isTrustedMainWindowSender(event: { sender: unknown; senderFrame: unknown }): boolean {

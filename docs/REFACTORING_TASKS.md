@@ -582,3 +582,9 @@ Paralel çalışma hatları: backend veri/lifecycle (RF04–RF11), client state/
 - İlgisiz dirty dosyalar staged edilmez; commit/PR/release artifact'i ile kanıt kaydı aynı kaynak anlık görüntüsünü gösterir.
 - Rollback küçük PR'ın revert'iyle mümkün tutulur. Veri migration'ı varsa backup/restore provası olmadan release kapısı kapanmaz.
 - [REFACTORING_PLAN.md](REFACTORING_PLAN.md), [TECHNICAL_DEBT.md](TECHNICAL_DEBT.md), [TEST_STRATEGY.md](TEST_STRATEGY.md), [CODE_QUALITY_STANDARDS.md](CODE_QUALITY_STANDARDS.md) ve [ARCHITECTURE_IMPROVEMENTS.md](ARCHITECTURE_IMPROVEMENTS.md) ilgili kararlarla eşleşir.
+
+### RF20 - diagnostic capture and mute-hook mutation ownership (2026-11-13)
+
+- Two failing-before regressions demonstrated diagnostic capture and mute-hook commands bypassed the already supplied main-window assertion. Both diagnostic start/stop and mute shortcut register/unregister now invoke that same assertion before worker/native effects and before token/key validation. Existing capture/PTT assertions and read-only capture status remain unchanged.
+- Tests prove denial cannot start capture, stop with a valid or malformed token, validate an untrusted shortcut input or mutate native hooks. Authorized token validation, worker promise/results, registration refusal, bounds and hook cleanup remain covered; expected calls now include authorization before those operations.
+- Integration aa4450ff: full Electron 397 pass/1 skip. Canonical PR #285 source b5aafd32: fresh unique TypeScript output, full Electron 276 pass/1 skip. Logs: %TEMP%/hichat-capture-shortcut-sender-before.log, hichat-capture-shortcut-sender-after.log and hichat-capture-shortcut-sender-canonical.log. No physical microphone or native hook was exercised. Window-command capability review and final runtime acceptance remain open.
