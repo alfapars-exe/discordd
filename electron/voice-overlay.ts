@@ -682,8 +682,20 @@ function ensureOverlay(): BrowserWindow {
       createdWindow.setPosition(constrained.x, constrained.y, false);
     }
   });
-  createdWindow.on("move", () => { if (createdWindow !== overlayWindow) return; updateMousePolicy(); updateNotificationActionWindow(); updateChatActionWindow(); });
-  createdWindow.on("hide", () => { if (createdWindow !== overlayWindow) return; notifyMediaLifecycle(); clearWelcome(); hideActionWindow(); hideNotificationActionWindow(); hideChatActionWindow(); });
+  createdWindow.on("move", () => {
+    if (createdWindow !== overlayWindow) return;
+    updateMousePolicy();
+    updateNotificationActionWindow();
+    updateChatActionWindow();
+  });
+  createdWindow.on("hide", () => {
+    if (createdWindow !== overlayWindow) return;
+    notifyMediaLifecycle();
+    clearWelcome();
+    hideActionWindow();
+    hideNotificationActionWindow();
+    hideChatActionWindow();
+  });
   createdWindow.webContents.on("did-finish-load", () => { if (createdWindow === overlayWindow) { mediaDocumentUsable = true; notifyMediaLifecycle(); } });
   createdWindow.webContents.on("render-process-gone", () => { if(createdWindow===overlayWindow){mediaDocumentUsable = false; notifyMediaLifecycle(true);} });
   createdWindow.webContents.on("did-start-navigation", (_event: unknown, _url: string, isInPlace: boolean, isMainFrame: boolean) => { if (createdWindow===overlayWindow && isMainFrame && !isInPlace) { mediaDocumentUsable = false; notifyMediaLifecycle(true); } });
