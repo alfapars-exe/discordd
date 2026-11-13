@@ -39,8 +39,10 @@ func TestServerDeleteEventFollowsCommit(t *testing.T) {
 					t.Errorf("broadcast before commit or wrong event: remaining=%d op=%s err=%v", remaining, event.Op, err)
 				}
 			}}
+			activity := &recordingGameActivityInvalidator{}
+			service := NewServerService(activity, db.Conn, repo, nil, nil, nil, nil, nil, nil, nil, hub, nil, nil, nil)
 			remove := func() error {
-				return (&serverService{db: db.Conn, serverRepo: repo, hub: hub}).DeleteServer(ctx, "srv", "owner")
+				return service.DeleteServer(ctx, "srv", "owner")
 			}
 			if caller == "admin" {
 				remove = func() error {
@@ -50,11 +52,17 @@ func TestServerDeleteEventFollowsCommit(t *testing.T) {
 			if err := remove(); err == nil || events != 0 {
 				t.Fatalf("failed deletion emitted %d events, err=%v", events, err)
 			}
+			if len(activity.calls) != 0 {
+				t.Fatalf("failed deletion notified activity: %+v", activity.calls)
+			}
 			if _, err := db.Conn.Exec("DELETE FROM server_delete_guard"); err != nil {
 				t.Fatal(err)
 			}
 			if err := remove(); err != nil || events != 1 {
 				t.Fatalf("successful deletion emitted %d events, err=%v", events, err)
+			}
+			if caller == "owner" && (len(activity.calls) != 1 || activity.calls[0] != (gameActivityInvalidationCall{kind: "deleted", a: "srv"})) {
+				t.Fatalf("committed deletion activity notification: %+v", activity.calls)
 			}
 		})
 	}
