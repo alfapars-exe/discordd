@@ -544,6 +544,12 @@ func main() {
 		_ = srv.Close()
 	}
 
+	// HTTP producers have drained; join delivery consumers before their log
+	// sinks and database close. Deferred cleanup still covers early returns.
+	stopChannelDelivery()
+	stopDMDelivery()
+	stopDMUploadCleanup()
+
 	logx.SetAppSink(nil)
 	svcs.AppLog.Stop()
 	svcs.AuditLog.Stop()

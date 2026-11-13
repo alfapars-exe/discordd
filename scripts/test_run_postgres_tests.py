@@ -12,6 +12,7 @@ spec.loader.exec_module(runner)
 
 class PostgreSQLRunnerTests(unittest.TestCase):
     service_passes = (
+        "--- PASS: TestDeliveryStopCancelsPoolWait (0.01s)\n"
         "--- PASS: TestChannelDelivery (0.01s)\n"
         "--- PASS: TestPostgresRolePatchConcurrentChanges (0.01s)\n"
         "--- PASS: TestPostgresMemberRoleReplacement (0.01s)\n"
@@ -24,7 +25,7 @@ class PostgreSQLRunnerTests(unittest.TestCase):
             return runner.main()
 
     def test_both_role_transactions_must_run_on_postgres(self):
-        for name in ("TestPostgresRolePatchConcurrentChanges", "TestPostgresMemberRoleReplacement"):
+        for name in ("TestPostgresRolePatchConcurrentChanges", "TestPostgresMemberRoleReplacement", "TestDeliveryStopCancelsPoolWait"):
             with self.subTest(name=name):
                 remaining = "\n".join(line for line in self.service_passes.splitlines() if name not in line)
                 self.assertEqual(self.execute(self.completed(), service_output=remaining), 1)
