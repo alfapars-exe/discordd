@@ -282,7 +282,14 @@ function updateChatActionWindow(): void {
     created.setAlwaysOnTop(true, "floating");
     created.on("closed", () => { if (chatActionWindow === created) { chatActionWindow = null; chatActionLoadPending = false; pendingOpenChat = null; } });
     const dev = process.env.NODE_ENV === "development" || !app.isPackaged;
-    void created.loadURL(dev ? "http://localhost:3030/overlay.html?surface=chat-actions" : "app://hichat/overlay.html?surface=chat-actions");
+    void created.loadURL(dev ? "http://localhost:3030/overlay.html?surface=chat-actions" : "app://hichat/overlay.html?surface=chat-actions")
+      .catch(() => {
+        if (chatActionWindow !== created) return;
+        chatActionShapeFailed = true;
+        created.close(); chatActionWindow = null; chatActionLoadPending = false; pendingOpenChat = null;
+        closeChatComposerWindow();
+        if (overlayWindow && !overlayWindow.isDestroyed()) overlayWindow.webContents.send("voice-overlay-update", voiceOverlayPayload());
+      });
   }
   const target = chatActionWindow;
   const deliver = () => {
@@ -340,7 +347,14 @@ function updateNotificationActionWindow(): void {
     created.setAlwaysOnTop(true, "floating");
     created.on("closed", () => { if (notificationActionWindow === created) { notificationActionWindow = null; notificationActionLoadPending = false; pendingOpenInbox = null; pendingNotificationReply = null; } });
     const dev = process.env.NODE_ENV === "development" || !app.isPackaged;
-    void created.loadURL(dev ? "http://localhost:3030/overlay.html?surface=notification-actions" : "app://hichat/overlay.html?surface=notification-actions");
+    void created.loadURL(dev ? "http://localhost:3030/overlay.html?surface=notification-actions" : "app://hichat/overlay.html?surface=notification-actions")
+      .catch(() => {
+        if (notificationActionWindow !== created) return;
+        notificationActionShapeFailed = true;
+        created.close(); notificationActionWindow = null; notificationActionLoadPending = false;
+        pendingOpenInbox = null; pendingNotificationReply = null;
+        if (overlayWindow && !overlayWindow.isDestroyed()) overlayWindow.webContents.send("voice-overlay-update", voiceOverlayPayload());
+      });
   }
   const target = notificationActionWindow;
   const deliver = () => {
@@ -396,7 +410,13 @@ function updateMousePolicy(): void {
     created.setAlwaysOnTop(true, "floating");
     created.on("closed", () => { if (actionWindow === created) { actionWindow = null; actionLoadPending = false; } });
     const dev = process.env.NODE_ENV === "development" || !app.isPackaged;
-    void created.loadURL(dev ? "http://localhost:3030/overlay.html?surface=actions" : "app://hichat/overlay.html?surface=actions");
+    void created.loadURL(dev ? "http://localhost:3030/overlay.html?surface=actions" : "app://hichat/overlay.html?surface=actions")
+      .catch(() => {
+        if (actionWindow !== created) return;
+        actionShapeFailed = true;
+        created.close(); actionWindow = null; actionLoadPending = false;
+        if (overlayWindow && !overlayWindow.isDestroyed()) overlayWindow.webContents.send("voice-overlay-update", voiceOverlayPayload());
+      });
   }
   const target = actionWindow;
   const deliver = () => {
