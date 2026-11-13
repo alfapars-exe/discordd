@@ -51,13 +51,14 @@ func TestDMUnreadCursorDeliveredToBothSessions(t *testing.T) {
 	go hub.Run()
 	t.Cleanup(hub.Shutdown)
 	users := gameActivityE2EUsers{"reader": {ID: "reader", Username: "Reader", PrefStatus: models.UserStatusOnline}}
-	tickets := gameActivityE2ETickets{users: map[string]string{"one": "reader", "two": "reader"}}
+	users["sender"] = &models.User{ID: "sender", Username: "Sender", PrefStatus: models.UserStatusOnline}
+	tickets := gameActivityE2ETickets{users: map[string]string{"one": "reader", "two": "reader", "peer": "sender"}}
 	handler := ws.NewHandler(hub, nil, tickets, nil, nil, users, nil, nil, nil, nil)
 	server := httptest.NewServer(http.HandlerFunc(handler.HandleConnection))
 	t.Cleanup(server.Close)
 	endpoint := "ws" + strings.TrimPrefix(server.URL, "http")
-	var sessions []*websocket.Conn
-	for _, ticket := range []string{"one", "two"} {
+	sessions := map[string]*websocket.Conn{}
+	for _, ticket := range []string{"one", "two", "peer"} {
 		conn := dialGameActivityClient(t, endpoint, ticket)
 		defer conn.Close()
 		conn.SetReadDeadline(time.Now().Add(5 * time.Second))
@@ -65,18 +66,29 @@ func TestDMUnreadCursorDeliveredToBothSessions(t *testing.T) {
 		if err := conn.ReadJSON(&ready); err != nil || ready.Op != ws.OpReady {
 			t.Fatalf("session readiness: %v, %v", ready.Op, err)
 		}
-		sessions = append(sessions, conn)
+		sessions[ticket] = conn
 	}
 	service := services.NewDMService(nil, repo, nil, hub, nil, nil, nil, nil, nil, repository.NewDMMessageTxRunner(db.Conn))
 	if _, err := service.MarkUnreadFrom(ctx, "reader", channel.ID, ids[1]); err != nil {
 		t.Fatal(err)
 	}
-	for _, conn := range sessions {
+	// A later frame on the peer connection bounds the negative assertion.
+	hub.BroadcastToUser("sender", ws.Event{Op: "test_barrier"})
+	for ticket, conn := range sessions {
 		conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 		for {
 			var event ws.Event
 			if err := conn.ReadJSON(&event); err != nil {
 				t.Fatal(err)
+			}
+			if ticket == "peer" {
+				if event.Op == ws.OpDMRead {
+					t.Fatal("personal read cursor delivered to the peer")
+				}
+				if event.Op == "test_barrier" {
+					break
+				}
+				continue
 			}
 			if event.Op != ws.OpDMRead {
 				continue
