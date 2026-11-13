@@ -32,13 +32,12 @@ export function createDesktopScreenShareController(operations: DesktopOperations
   const { localParticipant } = operations;
   const retireCancelledStart = async (publication: LocalTrackPublication | undefined, streamName: string) => {
     const publications = new Set([publication, ...localParticipant.trackPublications.values()]);
-    for (const pub of publications) {
-      const track = pub?.track;
-      if (!track || pub?.options?.stream !== streamName) continue;
+    const tracks = [...publications].flatMap(pub => pub?.track && pub.options?.stream === streamName ? [pub.track] : []);
+    for (const track of tracks) {
       track.mediaStreamTrack.enabled = false;
       track.stop();
-      await localParticipant.unpublishTrack(track).catch(() => {});
     }
+    await Promise.all(tracks.map(track => localParticipant.unpublishTrack(track).catch(() => {})));
   };
   async function startElectron(ssq: ScreenShareQuality, ssFps: ScreenShareFps,
     streamName: string, attemptStart: number, shouldCancel: () => boolean): Promise<void> {

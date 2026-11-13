@@ -36,6 +36,23 @@ it("retires only this capture's stream after a cancelled picker", async () => {
   expect(h.operations.started).not.toHaveBeenCalled();
 });
 
+it("silences every owned track before waiting for a delayed unpublish", async () => {
+  const h = harness(), ownedAudio = publication("owned");
+  h.participant.trackPublications.set("owned-audio", ownedAudio);
+  let finish!: () => void;
+  const pending = new Promise<void>(resolve => { finish = resolve; });
+  h.participant.unpublishTrack.mockReturnValue(pending);
+  const retiring = h.controller.start("browser", "1080p", 60, "owned", 0, true, () => true);
+  try {
+    await vi.waitFor(() => expect(h.participant.unpublishTrack).toHaveBeenCalled());
+    expect(ownedAudio.track!.mediaStreamTrack.enabled).toBe(false);
+    expect(ownedAudio.track!.stop).toHaveBeenCalledTimes(1);
+    expect(h.foreign.track!.stop).not.toHaveBeenCalled();
+  } finally {
+    finish(); await retiring;
+  }
+});
+
 it("does not announce a source whose ownership could not be acquired", async () => {
   const h = harness(); h.operations.ownPublishedShare.mockReturnValue(false);
   await expect(h.controller.start("browser", "1080p", 60, "owned", 0, false, () => false)).rejects.toMatchObject({ name: "AbortError" });
