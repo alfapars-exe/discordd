@@ -45,6 +45,10 @@ import {
 import { sendWithRetryAndToast } from "./shared/sendWithRetry";
 import { channelSendIntent, completeChannelSendIntent, clearChannelSendIntents, supportsDurableChannelSends } from "./shared/channelSendIntent";
 
+function messagesForChannel(channelId: string, messages: Message[] = []): Message[] {
+  return messages.filter(message => message.channel_id === channelId);
+}
+
 /** The sidebar server list is only labels/icons, never an encryption policy. */
 async function resolveMessageServer(serverId: string): Promise<Server | null> {
   const activeServer = useServerStore.getState().activeServer;
@@ -386,7 +390,7 @@ export const useMessageStore = create<MessageState>((set, get) => {
         if (res.status === 403) get().evictChannelHistory(channelId);
         return;
       }
-      const apiRows = await decryptChannelMessages(res.data.messages ?? [], serverId, ownsRequest);
+      const apiRows = await decryptChannelMessages(messagesForChannel(channelId, res.data.messages), serverId, ownsRequest);
       if (!ownsRequest()) return;
       grantHistoryAccess(channelId);
       const accessCurrent = captureHistoryAccess(channelId);
@@ -443,7 +447,7 @@ export const useMessageStore = create<MessageState>((set, get) => {
         return;
       }
       const page = res.data;
-      const decrypted = await decryptChannelMessages(page.messages ?? [], serverId, ownsRequest);
+      const decrypted = await decryptChannelMessages(messagesForChannel(channelId, page.messages), serverId, ownsRequest);
       if (!ownsRequest()) return;
       const accessCurrent = captureHistoryAccess(channelId);
       void registerSpamBatch(changes.apply(decrypted), "channel", channelId, () => isCurrent() && accessCurrent());
@@ -541,7 +545,7 @@ export const useMessageStore = create<MessageState>((set, get) => {
       return false;
     }
     const page = res.success ? res.data : undefined;
-    const raw = page?.messages ?? [];
+    const raw = messagesForChannel(channelId, page?.messages);
     const resumePreviousWindow = () => {
       inflightFetches.delete(channelId);
       release();
@@ -609,7 +613,7 @@ export const useMessageStore = create<MessageState>((set, get) => {
         return;
       }
       const hasMoreAfter = res.data.has_more_after ?? false;
-      const page = await decryptChannelMessages(res.data.messages ?? [], serverId, ownsRequest);
+      const page = await decryptChannelMessages(messagesForChannel(channelId, res.data.messages), serverId, ownsRequest);
       if (!ownsRequest()) return;
       const accessCurrent = captureHistoryAccess(channelId);
       void registerSpamBatch(changes.apply(page), "channel", channelId, () => isCurrent() && accessCurrent());

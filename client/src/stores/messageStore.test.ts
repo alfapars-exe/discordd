@@ -892,3 +892,37 @@ if (process.env.HICHAT_BENCH_CHANNEL_HISTORY === "1") {
     }
   }, 60000);
 }
+
+it.each(["tail", "older", "newer", "around"])("isolates the %s history page before decryption", async direction => {
+  const target = makeMessage("target");
+  const foreign = makeMessage("z-foreign", "private-channel");
+  const response = ok([target, foreign]);
+  const store = useMessageStore.getState();
+  markAsRead.mockClear();
+  if (direction === "older" || direction === "newer") {
+    useMessageStore.setState({
+      messagesByChannel: { "ch-1": [makeMessage("anchor")] },
+      hasMoreByChannel: { "ch-1": true },
+      hasMoreAfterByChannel: { "ch-1": true },
+    });
+  }
+  switch (direction) {
+    case "around":
+      getMessagesAround.mockResolvedValueOnce(response);
+      await store.fetchAroundMessage("srv-1", "ch-1", target.id);
+      break;
+    case "newer":
+      getMessagesAfter.mockResolvedValueOnce(response);
+      await store.fetchNewerMessages("ch-1", "srv-1");
+      break;
+    default:
+      getMessages.mockResolvedValueOnce(response);
+      if (direction === "older") await store.fetchOlderMessages("ch-1", "srv-1");
+      else await store.fetchMessages("ch-1", "srv-1");
+  }
+  expect(decryptMock.mock.lastCall?.[0]).toEqual([target]);
+  const ids = useMessageStore.getState().messagesByChannel["ch-1"].map(message => message.id);
+  expect(ids).toContain(target.id);
+  expect(ids).not.toContain(foreign.id);
+  if (direction === "tail") expect(markAsRead).toHaveBeenLastCalledWith("ch-1", target.id);
+});
