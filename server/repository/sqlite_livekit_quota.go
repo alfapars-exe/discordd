@@ -13,8 +13,10 @@ import (
 	"github.com/argeinfina/hichat/pkg"
 )
 
-// IncrementMonthlyUsage adds `seconds` to (instance, year, month). Idempotent
-// across crashes — duplicate calls only inflate the row, never duplicate it.
+// IncrementMonthlyUsage adds `seconds` to (instance, year, month). Repeated
+// calls add again; callers must not retry an ambiguous result without a
+// separate durable idempotency key. The primary key prevents duplicate rows,
+// not duplicate usage credits.
 // Skipped silently when seconds <= 0 so cleanup paths can call it on every
 // session-end without checking duration first.
 func (r *sqliteLiveKitRepo) IncrementMonthlyUsage(
@@ -27,7 +29,7 @@ func (r *sqliteLiveKitRepo) IncrementMonthlyUsage(
 		INSERT INTO livekit_monthly_usage (instance_id, year, month, used_seconds)
 		VALUES (?, ?, ?, ?)
 		ON CONFLICT(instance_id, year, month)
-		DO UPDATE SET used_seconds = used_seconds + excluded.used_seconds`
+		DO UPDATE SET used_seconds = livekit_monthly_usage.used_seconds + excluded.used_seconds`
 	if _, err := r.db.ExecContext(ctx, query, instanceID, year, month, seconds); err != nil {
 		return fmt.Errorf("failed to increment monthly usage: %w", err)
 	}
