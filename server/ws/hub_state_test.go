@@ -72,7 +72,10 @@ func TestRegistrationProfileFollowsActiveConnections(t *testing.T) {
 		return c
 	}
 
-	connect("rejected", true)
+	rejected := connect("rejected", true)
+	if rejected.registrationProfile != nil {
+		t.Fatal("rejected client retained its registration profile")
+	}
 	if len(h.userInfos) != 0 {
 		t.Fatal("rejected registration retained a profile")
 	}

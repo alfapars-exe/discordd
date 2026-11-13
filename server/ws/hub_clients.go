@@ -33,6 +33,7 @@ func (h *Hub) removeClientFromServerIndex(client *Client, serverID string) {
 // first connection. For subsequent connections, recomputes aggregate status.
 func (h *Hub) addClient(client *Client) {
 	defer func() {
+		client.registrationProfile = nil
 		if client.registered != nil {
 			close(client.registered)
 		}
