@@ -182,10 +182,22 @@ type RateLimiters struct {
 // services.NewMetricsCollector below) — nil-safe, so tests/callers that
 // don't care about readiness integration can pass nil.
 func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *config.Config, encryptionKey []byte, reachabilityReporter services.LiveKitReachabilityReporter) (*Services, *RateLimiters, services.MetricsCollector) {
+	// Own service cache/context resources until the complete bundle is returned.
+	// Do not recover here: initialization panics must retain their original value.
+	transferred := false
+	var rollback []func()
+	defer func() {
+		if !transferred {
+			for i := len(rollback) - 1; i >= 0; i-- {
+				rollback[i]()
+			}
+		}
+	}()
 	// Order-sensitive services
 	channelPermService := services.NewChannelPermissionService(
 		repos.ChannelPermission, repos.Role, repos.Channel, hub,
 	)
+	rollback = append(rollback, channelPermService.(interface{ Stop() }).Stop)
 	serverEventService := services.NewServerEventService(repos.ServerEvent, repos.Server, repos.Role, repos.Channel, channelPermService)
 	// auditLogService is constructed here, right after channelPermService,
 	// so it can be passed as a constructor parameter (not a post-construction
@@ -199,6 +211,9 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	voiceService := services.NewVoiceService(
 		repos.Channel, repos.LiveKit, channelPermService, hub, hub, repos.Server, encryptionKey, repos.MemberTimeout, repos.Ban, auditLogService,
 	)
+	if fanout, ok := voiceService.(interface{ ShutdownVoiceStateFanout() }); ok {
+		rollback = append(rollback, fanout.ShutdownVoiceStateFanout)
+	}
 	p2pCallService := services.NewP2PCallService(repos.Friendship, repos.User, hub)
 
 	// Email service (optional)
@@ -267,6 +282,9 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	uploadService := services.NewUploadService(repos.Attachment, cfg.Upload.Dir, cfg.Upload.MaxSize)
 	profileUpdateNotifier := services.NewProfileUpdateNotifier(repos.Preferences, repos.Friendship, repos.Notification, hub)
 	onlineFriendNotifier := services.NewOnlineFriendNotifier(repos.User, repos.Preferences, repos.Friendship, repos.Notification, hub, hub)
+	if owner, ok := onlineFriendNotifier.(interface{ Stop() }); ok {
+		rollback = append(rollback, owner.Stop)
+	}
 	roleTransactions := repository.NewServerMembershipTxRunner(db)
 	memberService := services.NewMemberService(repos.User, repos.Role, repos.Ban, repos.MemberTimeout, repos.Server, roleTransactions, hub, voiceService, auditLogService, profileUpdateNotifier)
 	roleService := services.NewRoleService(repos.Role, roleTransactions, hub, auditLogService)
@@ -392,6 +410,9 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	adminServerService.SetUploadDir(cfg.Upload.Dir)
 
 	linkPreviewService := services.NewLinkPreviewService(repos.LinkPreview)
+	if owner, ok := linkPreviewService.(interface{ Stop() }); ok {
+		rollback = append(rollback, owner.Stop)
+	}
 	badgeService := services.NewBadgeService(repos.Badge, hub)
 	preferencesService := services.NewPreferencesService(repos.Preferences)
 	presenceHub, _ := hub.(gameActivityHubPresence)
@@ -560,6 +581,8 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	// exceeded -- see the RateLimiters.CosmeticEquip doc comment above.
 	cosmeticEquipLimiter := ratelimit.NewMessageRateLimiter(10, 1*time.Minute, 30*time.Second)
 
+	wsTicketService := services.NewWSTicketService()
+	rollback = append(rollback, wsTicketService.(interface{ Stop() }).Stop)
 	svcs := &Services{
 		Auth:                    authService,
 		MFA:                     mfaService,
@@ -615,7 +638,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		Cosmetic:                cosmeticService,
 		ExpressionClone:         expressionCloneService,
 		MusicBot:                musicBotService,
-		WSTicket:                services.NewWSTicketService(),
+		WSTicket:                wsTicketService,
 		Backup:                  services.NewBackupService(cfg.Backup),
 		Notification:            notificationService,
 		Reminder:                reminderService,
@@ -657,5 +680,6 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		CosmeticEquip:    cosmeticEquipLimiter,
 	}
 
+	transferred = true
 	return svcs, limiters, metricsCollector
 }
