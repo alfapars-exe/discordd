@@ -29,6 +29,9 @@ type blockSvcFixture struct {
 // newBlockSvcFixture knows users "alice" and "bob"; the friendship repo
 // starts empty (GetByPair → pkg.ErrNotFound).
 func newBlockSvcFixture(t *testing.T) *blockSvcFixture {
+	return newBlockSvcFixtureWithActivity(t, nil)
+}
+func newBlockSvcFixtureWithActivity(t *testing.T, activity GameActivityPrivacyInvalidator) *blockSvcFixture {
 	t.Helper()
 	f := &blockSvcFixture{
 		friends: &testutil.MockFriendshipRepo{},
@@ -49,7 +52,7 @@ func newBlockSvcFixture(t *testing.T) *blockSvcFixture {
 	f.hub.BroadcastToUserFn = func(userID string, e ws.Event) {
 		f.events = append(f.events, sentEvent{to: userID, ev: e})
 	}
-	f.svc = NewBlockService(f.friends, f.users, f.hub)
+	f.svc = NewBlockService(activity, f.friends, f.users, f.hub)
 	return f
 }
 

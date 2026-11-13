@@ -42,7 +42,7 @@ func TestBlockUserAtomicEventsFollowCommit(t *testing.T) {
 				}
 				return outcome == "replaced", nil
 			}}
-			svc := NewBlockService(repo, f.users, f.hub)
+			svc := NewBlockService(nil, repo, f.users, f.hub)
 			err := svc.BlockUser(context.Background(), "alice", "bob")
 			if !called {
 				t.Fatal("atomic writer not called")

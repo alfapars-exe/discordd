@@ -289,7 +289,10 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	readStateService := services.NewReadStateService(repos.ReadState, channelPermService)
 
 	// BlockService before DMService (DMService uses it as BlockChecker)
-	blockService := services.NewBlockService(repos.Friendship, repos.User, hub)
+	presenceHub, _ := hub.(gameActivityHubPresence)
+	gameActivityPolicy := services.NewGameActivityPrivacyPolicy(repos.Preferences, repos.Friendship, repos.Server, gameActivityPresenceAdapter{hub: presenceHub}, repos.Ban)
+	gameActivityService := services.NewGameActivityService(gameActivityPolicy, repos.Friendship, repos.Server, hub)
+	blockService := services.NewBlockService(gameActivityService, repos.Friendship, repos.User, hub)
 
 	// DMSettingsService before DMService (DMService uses it as DMSettingsUnhider)
 	dmSettingsService := services.NewDMSettingsService(repos.DMSettings, repos.DM, hub)
@@ -371,9 +374,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 
 	linkPreviewService := services.NewLinkPreviewService(repos.LinkPreview)
 	badgeService := services.NewBadgeService(repos.Badge, hub)
-	presenceHub, _ := hub.(gameActivityHubPresence)
-	gameActivityPolicy := services.NewGameActivityPrivacyPolicy(repos.Preferences, repos.Friendship, repos.Server, gameActivityPresenceAdapter{hub: presenceHub}, repos.Ban)
-	gameActivityService := services.NewGameActivityService(gameActivityPolicy, repos.Friendship, repos.Server, hub)
+
 	preferencesService := services.NewPreferencesService(repos.Preferences, profileAudiencePolicy, gameActivityService, hub)
 	gameJoinService := services.NewGameJoinService(gameActivityService, services.NewGameJoinPolicy(gameActivityPolicy, repos.Preferences, repos.Friendship, repos.User, repos.AccountLifecycle, repos.Server, repos.Ban, repos.Channel, channelPermService, voiceService))
 	if connector, ok := hub.(interface {
@@ -395,11 +396,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 			return gameJoinService.SetOffer(ctx, user, connection, input)
 		})
 	}
-	if setter, ok := blockService.(interface {
-		SetGameActivityPrivacyInvalidator(services.GameActivityPrivacyInvalidator)
-	}); ok {
-		setter.SetGameActivityPrivacyInvalidator(gameActivityService)
-	}
+
 	if setter, ok := friendshipService.(interface {
 		SetGameActivityPrivacyInvalidator(services.GameActivityPrivacyInvalidator)
 	}); ok {
