@@ -1,11 +1,11 @@
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { useAuthStore } from "../../stores/authStore";
 import { useServerStore } from "../../stores/serverStore";
 import { useConfirmStore } from "../../stores/confirmStore";
 import { useSettingsWorkspace } from "../../hooks/useSettingsWorkspace";
-import { SettingsWorkspaceContext } from "./settingsWorkspaceContext";
+import { SettingsWorkspaceContext, useSettingsDraft } from "./settingsWorkspaceContext";
 import type { SettingsTab } from "../../stores/settingsStore";
 import type { LiveKitInstanceAdmin, Server } from "../../types";
 import * as admin from "../../api/admin";
@@ -213,4 +213,29 @@ it("does not report a failed delete as success or discard the selected draft", a
   await waitFor(() => expect(admin.deleteLiveKitInstance).toHaveBeenCalledWith(a.id, undefined));
   await waitFor(() => expect(url()).not.toBeDisabled());
   expect(url()).toHaveValue(a.url); expect(screen.getByText(a.url)).toBeInTheDocument();
+});
+
+function CommitDraft({ dirty, closeNow, close }: { dirty: boolean; closeNow: boolean; close: () => void }) {
+  useSettingsDraft(dirty);
+  useLayoutEffect(() => { if (closeNow) close(); }, [closeNow, close, dirty]);
+  return null;
+}
+function CommitGuardHarness({ dirty, closeNow }: { dirty: boolean; closeNow: boolean }) {
+  const [tab, setTab] = useState<SettingsTab>("appearance");
+  const ref = useRef<HTMLDivElement>(null);
+  const workspace = useSettingsWorkspace({ isOpen: true, scope: "owner", activeTab: tab, allowedTabs: ["appearance"], setActiveTab: setTab, closeSettings: closed }, ref);
+  return <SettingsWorkspaceContext.Provider value={workspace}><div ref={ref}><CommitDraft dirty={dirty} closeNow={closeNow} close={workspace.close} /></div></SettingsWorkspaceContext.Provider>;
+}
+
+it("guards a dirty draft before commit-time navigation can discard it", () => {
+  render(<CommitGuardHarness dirty={true} closeNow={true} />);
+  expect(closed).not.toHaveBeenCalled();
+  expect(useConfirmStore.getState().options).not.toBeNull();
+});
+
+it("clears an acknowledged draft before commit-time close can see stale dirtiness", () => {
+  const view = render(<CommitGuardHarness dirty={true} closeNow={false} />);
+  view.rerender(<CommitGuardHarness dirty={false} closeNow={true} />);
+  expect(closed).toHaveBeenCalledOnce();
+  expect(useConfirmStore.getState().options).toBeNull();
 });
