@@ -30,6 +30,10 @@ class PostgreSQLRunnerTests(unittest.TestCase):
                 remaining = "\n".join(line for line in self.service_passes.splitlines() if name not in line)
                 self.assertEqual(self.execute(self.completed(), service_output=remaining), 1)
 
+    def test_delivery_stop_contract_must_emit_pass(self):
+        output = "\n".join(line for line in self.service_passes.splitlines() if "TestDeliveryStopCancelsPoolWait" not in line)
+        self.assertEqual(self.execute(self.completed(), service_output=output), 1)
+
     def completed(self):
         return [
             {"Action": "pass", "Package": "github.com/argeinfina/hichat", "Test": "TestPurgeExpiredNotificationsPostgres"},
