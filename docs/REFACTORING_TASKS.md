@@ -780,3 +780,10 @@ Genel Go yarış denetiminde Docker kesintisinden önce tamamlanmayan repository
 - İlgisiz dirty dosyalar staged edilmez; commit/PR/release artifact'i ile kanıt kaydı aynı kaynak anlık görüntüsünü gösterir.
 - Rollback küçük PR'ın revert'iyle mümkün tutulur. Veri migration'ı varsa backup/restore provası olmadan release kapısı kapanmaz.
 - [REFACTORING_PLAN.md](REFACTORING_PLAN.md), [TECHNICAL_DEBT.md](TECHNICAL_DEBT.md), [TEST_STRATEGY.md](TEST_STRATEGY.md), [CODE_QUALITY_STANDARDS.md](CODE_QUALITY_STANDARDS.md) ve [ARCHITECTURE_IMPROVEMENTS.md](ARCHITECTURE_IMPROVEMENTS.md) ilgili kararlarla eşleşir.
+
+## Ayrı PR doğrulaması — 13 Kasım 2026
+
+- PR #267, `a341faba`: WebSocket profil ömrü düzeltmesi temiz main tabanında doğrulandı. `go test -race ./ws -count=1` geçti. Kapanmış kayıt ilk regresyon koşusunda başarısızdı; kayıt reddi düzeltildikten sonra geçti. Kapanış sırasında profil temizliği, kayıt bekleyicisinin serbest bırakılması ve istemci kapanışı dahil iki regresyon `-count=20` ile geçti. Yerel günlükler `%TEMP%/hichat-ws-profile-review-fixed.log` ve `%TEMP%/hichat-ws-registration-repeat.log`.
+- PR #268, `4771c7c8`: Sunucu listesi snapshot sıralaması temiz main tabanına ayrıldı. `npx vitest run src/stores/serverStore.navigation.test.ts` 15/15 geçti; iki değişen dosyanın ESLint denetimi geçti. Aynı testler origin/main sunucu store koduyla çalıştırıldığında 6 başarısız ve 9 başarılı sonuç verdi. Sabit kaynak geri yüklendi ve çalışma ağacı temizliği denetlendi. Negatif koşu günlüğü `%TEMP%/hichat-server-list-before.log`.
+
+Bu kayıt yerel kaynak doğrulamasıdır. PR CI, birleştirme, yayın ve fiziksel cihaz kabulü ayrı kalır.
