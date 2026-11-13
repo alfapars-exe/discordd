@@ -475,7 +475,7 @@ func newRealMemberHandler(t *testing.T, current *models.User) (*MemberHandler, *
 			return nil
 		},
 	}
-	svc := services.NewMemberService(nil, users, nil, nil, nil, &testutil.MockServerRepo{}, nil,
+	svc := services.NewMemberService(nil, nil, users, nil, nil, nil, &testutil.MockServerRepo{}, nil,
 		&testutil.MockEventPublisher{}, nil, nil)
 	return NewMemberHandler(svc), &written
 }

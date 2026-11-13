@@ -68,7 +68,7 @@ func newMemberHarnessWithAudience(audience ProfileAudienceInvalidator) *memberSe
 	}
 	h.serverRepo.IsMemberFn = func(context.Context, string, string) (bool, error) { return true, nil }
 	tx := roleTestTransaction{&repository.ServerMembershipTxRepos{Server: h.serverRepo, Role: h.roleRepo, User: h.userRepo, Timeout: h.timeoutRepo}}
-	h.svc = NewMemberService(audience,
+	h.svc = NewMemberService(nil, audience,
 		h.userRepo, h.roleRepo, h.banRepo, h.timeoutRepo,
 		h.serverRepo, tx, h.hub, h.voiceKick, nil, h.profileUpdates, // auditLogger — not under test here
 	)
