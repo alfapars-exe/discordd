@@ -1,0 +1,23 @@
+# Overlay action IPC sender/session evidence
+
+Source: `7e67ff78b1e94bb7f93deeb97d0459d35a231ea4`. Static policy trace plus executed owner and registrar tests; not physical-device acceptance.
+
+All rows use identity-based `isTrustedVoiceOverlaySender`: live window, exact webContents and non-null current mainFrame. Registrar routing adds a live-main check to forwarded intents; owners retain all permission/session decisions.
+
+| Channel | Owner | Sender boundary | Session and consumption boundary |
+|---|---|---|---|
+| `overlay-voice-action` | [`takeVoiceOverlayAction`](../../electron/voice-overlay.ts#L399) | Current visible action child, or unlocked HUD; exact webContents/mainFrame identity | Current voiceActionSession; visible enabled HUD; matching physical hit; 250 ms throttle |
+| `overlay-open-inbox` | [`takeVoiceOverlayOpenInboxIntent`](../../electron/voice-overlay.ts#L412) | Current visible notification child; exact frame identity | Current notificationActionSession; ready visible notification panel; physical inbox hit; 250 ms throttle; creates 5-second one-shot intent |
+| `confirm-overlay-open-inbox` | [`confirmVoiceOverlayOpenInbox`](../../electron/voice-overlay.ts#L425) | Current main window exact frame identity | Consumes pending intent; current session and visible child; deadline and availability revalidated before focus |
+| `overlay-prepare-notification-reply` | [`takeVoiceOverlayNotificationReplyIntent`](../../electron/voice-overlay.ts#L468) | Current visible notification child; exact frame identity | Exact two-field request; bounded tokens; current reply session and allowed visible mention/reply ID; physical row hit; throttle; 5-second intent |
+| `confirm-overlay-prepare-notification-reply` | [`confirmVoiceOverlayNotificationReply`](../../electron/voice-overlay.ts#L482) | Current main window exact frame identity | Consumes pending intent; exact session/notification ID; deadline, visible child and reply availability revalidated |
+| `overlay-open-chat` | [`takeVoiceOverlayOpenChatIntent`](../../electron/voice-overlay.ts#L495) | Current visible chat action child; exact frame identity | Current chatActionSession; ready visible panel; physical hit; throttle; 5-second one-shot intent |
+| `confirm-overlay-open-chat` | [`confirmVoiceOverlayOpenChat`](../../electron/voice-overlay.ts#L594) | Current main window exact frame identity | Consumes pending intent; deadline/current session/child visibility/availability revalidated before focus |
+| `overlay-open-chat-composer` | [`takeVoiceOverlayOpenChatComposerIntent`](../../electron/voice-overlay.ts#L512) | Current visible chat action child; exact frame identity | Compose enabled/current grant; live main owner; physical hit and throttle; previously retired grant cannot reopen |
+| `overlay-chat-send` | [`sendOverlayChatMessage`](../../electron/voice-overlay.ts#L536) | Current visible composer exact frame; same owned main-window instance | Exact three-field request; current grant; bounded request ID/text; replay ledger max 64; one in flight; 5-second result timeout |
+| `resolve-overlay-chat-send` | [`resolveOverlayChatSend`](../../electron/voice-overlay.ts#L570) | Same composer-owned main window; exact frame identity | Exact request/session/result; current compose availability; settles exact in-flight request once |
+| `close-overlay-chat-composer` | [`closeOverlayChatComposer`](../../electron/voice-overlay.ts#L585) | Current composer exact frame identity | Current composer grant equals latest grant; retires composer and pending request |
+
+Executed evidence: `overlay-action-ipc.test.ts` covers all eleven route names, rejected intents, missing/destroyed main window and argument identity. `voice-overlay-window.test.ts` covers owner/frame rejection, scope rotation, one-shot/expired intents, wrong main owner, plaintext bounds, replay/capacity, exact completion, timeout, compatibility revocation and document retirement. The reload-cancellation fixture now creates a fresh grant and proves forwarding before reload; its old cap-exhausted setup did not prove an in-flight request existed.
+
+Limits: main renderer account/channel access revalidation must be reconciled separately with renderer and HTTP authorization evidence. Identity and current local capability checks alone do not prove server authorization. Other IPC families, dynamically named registrations, physical cursor/compositor behavior and packed-runtime acceptance remain open. This is the overlay action subset of the 77-entry discovery inventory, not a project-wide authorization certificate.

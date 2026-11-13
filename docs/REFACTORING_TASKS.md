@@ -916,3 +916,9 @@ LiveKit silme düzeltmesinin mevcut PR #222 ile sonradan açılan PR #270'te ayn
 - Eleven action/confirmation/composer channels moved from central registration to `overlay-action-ipc.ts`. Existing authorization/session owners remain authoritative. Five routing tests cover rejection, missing/destroyed main window and identity-preserving delegation across all eleven channels.
 - Integration c458dddc compile/Electron: 344 passed, 1 skipped (`%TEMP%/hichat-overlay-ipc-integrated.log`). Independent PR #280 head e57b103f: compile/Electron 274 passed, 1 skipped (`hichat-overlay-ipc-pr.log`), pushed as draft; CI pending. Main-base import conflict resolved without importing other unmerged registrars.
 - Added a source-bound literal IPC registration discovery inventory under `implementation/verification/refactor-ipc-registration-inventory-2026-11-13.json`. It is not sender-policy acceptance: dynamic registrations and per-channel policy reconciliation remain open.
+
+### RF20 — sender/session trace and real pending reload fixture (2026-11-13)
+
+- Added an eleven-channel source-bound policy matrix in `implementation/verification/refactor-overlay-ipc-policy-2026-11-13.md`, distinguishing registrar routing, owner/frame/session policy and renderer/server access revalidation still requiring reconciliation.
+- Audit found the old composer reload fixture attempted to send after exhausting its 64-ID cap; its immediate rejection was not evidence of cancellation. The fixture now rotates to a fresh grant and asserts actual forwarding before reload, then verifies cancellation and grant retirement.
+- Integration 7e67ff78 compile/Electron: 344 passed, 1 skipped (`%TEMP%/hichat-overlay-reload-pending-integrated.log`). PR #279 head 38993999 compile/Electron: 300 passed, 1 skipped (`hichat-overlay-reload-pending-pr.log`), pushed; fresh CI pending. No physical or project-wide authorization completion claimed.
