@@ -718,6 +718,10 @@ Her örnek 1.000 işlemin ortalamasıdır. Aralık dokuz koşudaki en düşük v
 | `BenchmarkBroadcastToServer_SlowClients/clients=1000-32` | 98489 | 85360–118858 | 373 | 7 |
 | `BenchmarkDeliver-32` | 87.7 | 59.2–409.8 | 0 | 0 |
 
+**RF29 bağlantı döngüsü.** Windows/amd64, Go 1.27.3 üzerinde `HICHAT_MEASURE_WS_CHURN=1` ile `go test ./ws -run '^TestWebSocketConnectionChurnReleasesMembership$' -count=3 -v` geçti. Her tekrarda sekizer gerçek yerel bağlantı 1.024 turda açıldı ve TCP reset ile kapatıldı. Hub her tur sonunda kullanıcı ve sunucu üyelik sorgularında boş liste döndürdü. İlk denemede normal TCP kapanışı yerel geçici portları tüketti. Ölçüm profili ani kopmayı kullanıyor, varsayılan test normal kapatmayı koruyor.
+
+Her tekrarda 16. turdan 1.024. tura kadar çift GC sonrasında ölçülen canlı heap değişimleri sırasıyla +361.728, +64.040 ve −5.848 bayttı. Aynı Go test sürecinde alınan 15 örneğin her birinde 4 goroutine vardı. Üç tekrar toplam 23 saniye sürdü. Bu deney uzun süreli üretim yükünü, işletim sistemi belleğini ve gerçek veritabanı erişimini kapsamıyor.
+
 ## RF30 — Runtime kabulü ve kapanış
 
 | Alan | Tanım |
