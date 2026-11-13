@@ -101,21 +101,33 @@ test("real IPC cleanup starts every owner once and still awaits tracker if a sib
   assert.ok(start >= 0 && end > start);
   const tracker = deferred();
   const calls: string[] = [];
-  const dispose = vm.runInNewContext(`(function () { ${code.slice(start, end)} })()`, {
+  const context = {
+    stopping: false, overlayMediaPolicy: { privateFixture: true } as unknown,
+    isTrustedMainWindowSender: () => true,
+    voice_overlay_contract_1: { applyAcknowledgedVoiceOverlaySnapshot: () => true },
     gameJoin: { dispose: () => { calls.push("join"); throw new Error("private path"); } },
+    stopOverlayRendererLifecycle: () => { calls.push("renderers"); },
     stopOverlayMediaLifecycle: () => { calls.push("subscription"); },
     overlayMedia: { revoke: () => { calls.push("media"); } },
     overlayShortcut: { dispose: () => { calls.push("shortcut"); } },
     gameOverlay: { dispose: () => { calls.push("overlay"); } },
     registeredGames: { dispose: () => { calls.push("registry"); } },
     gameWindowTracker: { dispose: () => { calls.push("tracker"); return tracker.promise; } },
-  }) as () => Promise<void>;
+  };
+  const snapshotStart = code.indexOf("const applyOverlaySnapshot =");
+  const snapshotEnd = code.indexOf("electron_1.ipcMain.on", snapshotStart);
+  assert.ok(snapshotStart >= 0 && snapshotEnd > snapshotStart);
+  const policy = vm.runInNewContext(`(function () { ${code.slice(snapshotStart, snapshotEnd)} return applyOverlaySnapshot; })()`, context) as () => boolean;
+  assert.equal(policy(), true);
+  const dispose = vm.runInNewContext(`(function () { ${code.slice(start, end)} })()`, context) as () => Promise<void>;
   const first = dispose(), second = dispose();
+  assert.equal(context.overlayMediaPolicy, null, "shutdown immediately releases the retained snapshot");
+  assert.equal(policy(), false, "late renderer snapshots cannot revive a stopped overlay owner");
   assert.equal(first, second, "the IPC resource group has one completion owner");
   let finished = false;
   const observed = first.catch(error => { finished = true; assert.equal(error.message, "IPC cleanup failed"); });
   await flush();
-  assert.deepEqual(calls, ["join", "subscription", "media", "shortcut", "overlay", "registry", "tracker"]);
+  assert.deepEqual(calls, ["join", "renderers", "subscription", "media", "shortcut", "overlay", "registry", "tracker"]);
   assert.equal(finished, false);
   tracker.resolve(); await observed;
   assert.equal(finished, true);
