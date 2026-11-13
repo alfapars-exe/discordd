@@ -97,11 +97,13 @@ test("real main shutdown wiring prevents repeated quit and awaits IPC plus captu
 test("real IPC cleanup starts every owner once and still awaits tracker if a sibling fails", async () => {
   const code = readFileSync(path.join(__dirname, "ipc-handlers.js"), "utf8");
   const start = code.lastIndexOf("let cleanup = null;");
-  const end = code.indexOf("\n}\nfunction isTrustedMainWindowSender", start);
+  const owner = code.indexOf("const dispose =", start);
+  const end = owner >= 0 ? code.indexOf("onCleanup?.(dispose)", owner) : code.indexOf("\n}\nfunction isTrustedMainWindowSender", start);
   assert.ok(start >= 0 && end > start);
   const tracker = deferred();
   const calls: string[] = [];
   const context = {
+    stops: [] as Array<() => unknown>,
     stopping: false, overlayMediaPolicy: { privateFixture: true } as unknown,
     isTrustedMainWindowSender: () => true,
     voice_overlay_contract_1: { applyAcknowledgedVoiceOverlaySnapshot: () => true },
@@ -119,7 +121,11 @@ test("real IPC cleanup starts every owner once and still awaits tracker if a sib
   assert.ok(snapshotStart >= 0 && snapshotEnd > snapshotStart);
   const policy = vm.runInNewContext(`(function () { ${code.slice(snapshotStart, snapshotEnd)} return applyOverlaySnapshot; })()`, context) as () => boolean;
   assert.equal(policy(), true);
-  const dispose = vm.runInNewContext(`(function () { ${code.slice(start, end)} })()`, context) as () => Promise<void>;
+  if (owner >= 0) {
+    const acquisitions = code.split("\n").filter(line => line.includes("stops.push("));
+    vm.runInNewContext(acquisitions.join("\n"), context);
+  }
+  const dispose = vm.runInNewContext(`(function () { ${code.slice(start, end)} ${owner >= 0 ? "return dispose;" : ""} })()`, context) as () => Promise<void>;
   const first = dispose(), second = dispose();
   assert.equal(context.overlayMediaPolicy, null, "shutdown immediately releases the retained snapshot");
   assert.equal(policy(), false, "late renderer snapshots cannot revive a stopped overlay owner");
@@ -127,7 +133,7 @@ test("real IPC cleanup starts every owner once and still awaits tracker if a sib
   let finished = false;
   const observed = first.catch(error => { finished = true; assert.equal(error.message, "IPC cleanup failed"); });
   await flush();
-  assert.deepEqual(calls, ["join", "renderers", "subscription", "media", "shortcut", "overlay", "registry", "tracker"]);
+  assert.deepEqual(calls, ["renderers", "overlay", "tracker", "registry", "subscription", "media", "shortcut", "join"]);
   assert.equal(finished, false);
   tracker.resolve(); await observed;
   assert.equal(finished, true);
@@ -167,4 +173,46 @@ test("prepare, cookie and diagnostic failures cannot prevent the remaining clean
   assert.equal(stops, 1);
   assert.equal(quits, 1);
   assert.deepEqual(reports.sort(), ["cookies", "prepare"]);
+});
+
+test("main publishes IPC cleanup before a later registration failure can abort startup", async () => {
+  const code = readFileSync(path.join(__dirname, "main.js"), "utf8");
+  const start = code.indexOf("shutdownIPC = (0, ipc_handlers_1.registerIpcHandlers)");
+  const end = code.indexOf("(0, window_1.createMainWindow)();", start);
+  assert.ok(start >= 0 && end > start);
+  let cleaned = false;
+  const dispose = async () => { cleaned = true; };
+  const context = {
+    shutdownIPC: null as (() => Promise<void>) | null,
+    ipc_handlers_1: { registerIpcHandlers: (publish?: (stop: () => Promise<void>) => void) => {
+      publish?.(dispose);
+      throw new Error("fixture late registration failure");
+    } },
+  };
+  assert.throws(() => vm.runInNewContext(code.slice(start, end), context), /fixture late registration failure/);
+  assert.equal(context.shutdownIPC, dispose, "the failure must not strand already-acquired native resources");
+  await context.shutdownIPC?.();
+  assert.equal(cleaned, true);
+});
+
+test("a partially acquired IPC owner cleans only its acquired prefix in reverse order", async () => {
+  const code = readFileSync(path.join(__dirname, "ipc-handlers.js"), "utf8");
+  const start = code.indexOf("let cleanup = null;");
+  const end = code.indexOf("onCleanup?.(dispose)", start);
+  assert.ok(start >= 0 && end > start);
+  const calls: string[] = [];
+  const context = {
+    stops: [] as Array<() => unknown>, stopping: false, overlayMediaPolicy: { fixture: true } as unknown,
+    gameJoin: { dispose: () => { calls.push("join"); } },
+    overlayShortcut: { dispose: () => { calls.push("shortcut"); } },
+    overlayMedia: { revoke: () => { calls.push("media"); } },
+  };
+  const acquired = code.split("\n").filter(line => line.includes("stops.push(")).slice(0, 3);
+  assert.equal(acquired.length, 3);
+  vm.runInNewContext(acquired.join("\n"), context);
+  const dispose = vm.runInNewContext(`(function () { ${code.slice(start, end)} return dispose; })()`, context) as () => Promise<void>;
+  await dispose(); await dispose();
+  assert.deepEqual(calls, ["media", "shortcut", "join"]);
+  assert.equal(context.overlayMediaPolicy, null);
+  assert.equal(context.stopping, true);
 });

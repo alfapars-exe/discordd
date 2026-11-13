@@ -319,10 +319,13 @@ app.whenReady().then(async () => {
   setupCSP();
   installScreenPicker();
 
-  shutdownIPC = registerIpcHandlers();
+  shutdownIPC = registerIpcHandlers(dispose => { shutdownIPC = dispose; });
   createMainWindow();
   setupAutoUpdater();
   createTray();
+}).catch(() => {
+  console.error("[startup] application initialization failed");
+  app.quit();
 });
 
 // ─── Platform behaviours ───

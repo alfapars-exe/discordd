@@ -108,11 +108,25 @@ function diagStamp(): string {
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
 }
 
-export function registerIpcHandlers(): () => Promise<void> {
+export function registerIpcHandlers(onCleanup?: (dispose: () => Promise<void>) => void): () => Promise<void> {
+  let stopping = false;
+  let overlayMediaPolicy: VoiceOverlaySnapshot | null = null;
+  const stops: Array<() => unknown> = [];
+  let cleanup: Promise<void> | null = null;
+  const dispose = () => {
+    stopping = true;
+    overlayMediaPolicy = null;
+    cleanup ??= Promise.allSettled(stops.slice().reverse().map(stop => Promise.resolve().then(stop))).then(results => {
+      if (results.some(result => result.status === "rejected")) throw new Error("IPC cleanup failed");
+    });
+    return cleanup;
+  };
+  onCleanup?.(dispose);
   const gameJoin = registerCS2JoinIPC(ipcMain, assertTrustedMainWindowSender, {
     fetch: (url, init) => net.fetch(url, init), openExternal: url => shell.openExternal(url),
     allowLoopback: !app.isPackaged, supported: process.platform === "win32",
   });
+  stops.push(() => gameJoin.dispose());
   // Start the middle-left layout generation without restoring old bottom-edge
   // drag offsets. New drag positions remain persistent in this generation.
   const overlayLayouts = createOverlayLayoutStore({ filePath: path.join(app.getPath("userData"), "overlay-layout-v2.json") });
@@ -165,15 +179,17 @@ export function registerIpcHandlers(): () => Promise<void> {
     register: (accelerator, callback) => globalShortcut.register(accelerator, callback),
     unregister: (accelerator) => globalShortcut.unregister(accelerator),
   }, toggleVoiceOverlayLock);
+  stops.push(() => overlayShortcut.dispose());
   ipcMain.handle("set-overlay-shortcut", (event, binding: unknown) => {
     assertTrustedMainWindowSender(event);
     const accepted = overlayShortcut.setBinding(binding as OverlayShortcutBinding | null);
     if (binding === null) lockVoiceOverlay();
     return accepted;
   });
-  let overlayMediaPolicy: VoiceOverlaySnapshot | null = null;
   const overlayMedia = createOverlayMediaBroker({main:getMainWindow,overlay:getVoiceOverlayMediaWindow,policy:()=>overlayMediaPolicy});
+  stops.push(() => overlayMedia.revoke());
   const stopOverlayMediaLifecycle = subscribeVoiceOverlayMediaLifecycle(revoke => { if(revoke)overlayMedia.revoke();else overlayMedia.refresh(); });
+  stops.push(stopOverlayMediaLifecycle);
   ipcMain.handle("open-overlay-media-lease", (event, raw:unknown) => overlayMedia.open(event,raw));
   ipcMain.handle("send-overlay-media", (event, raw:unknown) => overlayMedia.send(event,raw));
   ipcMain.handle("send-overlay-media-viewport", (event, raw:unknown) => overlayMedia.viewport(event,raw));
@@ -188,10 +204,12 @@ export function registerIpcHandlers(): () => Promise<void> {
     filePath: path.join(app.getPath("userData"), "registered-games.json"),
     onOverlayPolicyChanged: () => { void gameOverlay?.policyChanged().catch(() => undefined); },
   });
+  stops.push(() => registeredGames.dispose());
   // Unsupported platforms and absent optional helpers must not break app startup.
   const gameWindowTracker = gameOverlaySupported
     ? createGameWindowTracker({ helperPath: gameHelperPath, onChange: () => gameOverlay?.foregroundChanged() })
     : { start: () => {}, stop: async () => {}, dispose: async () => {}, getSnapshot: () => null };
+  stops.push(() => gameWindowTracker.dispose());
   gameOverlay = createGameOverlayController({
     tracker: gameWindowTracker,
     getTargets: () => registeredGames.getOverlayTargets(),
@@ -206,12 +224,15 @@ export function registerIpcHandlers(): () => Promise<void> {
       return right > x && bottom > y ? { x, y, width: right - x, height: bottom - y } : null;
     },
   });
+  stops.push(() => gameOverlay?.dispose());
   void registeredGames.initialize().catch(() => undefined);
   const stopOverlayRendererLifecycle = observeOverlayRenderers({
     app, mainContents: () => getMainWindow()?.webContents ?? null,
     retire: contents => overlayMedia.retireForContents(contents),
     revokeMain: () => { overlayMediaPolicy = null; overlayMedia.revoke(); gameOverlay?.clear(); overlayShortcut.setBinding(null); },
   });
+
+  stops.push(stopOverlayRendererLifecycle);
 
   ipcMain.handle("get-registered-games", (event) => {
     assertTrustedMainWindowSender(event);
@@ -258,7 +279,6 @@ export function registerIpcHandlers(): () => Promise<void> {
     return registeredGames.setShareAllowed(id, allowed);
   });
 
-  let stopping = false;
   const applyOverlaySnapshot = (event: Parameters<typeof isTrustedMainWindowSender>[0], raw: unknown): boolean =>
     !stopping && applyAcknowledgedVoiceOverlaySnapshot(raw, isTrustedMainWindowSender(event), {
       setSuspended: value => overlayShortcut.setSuspended(value),
@@ -554,20 +574,7 @@ export function registerIpcHandlers(): () => Promise<void> {
     return registerMuteHotkey(keyCode);
   });
   ipcMain.handle("unregister-mute-hotkey-shortcut", () => unregisterMuteHotkey());
-  let cleanup: Promise<void> | null = null;
-  return () => {
-    stopping = true;
-    overlayMediaPolicy = null;
-    const stops: Array<() => unknown> = [
-      () => gameJoin.dispose(), stopOverlayRendererLifecycle, stopOverlayMediaLifecycle, () => overlayMedia.revoke(),
-      () => overlayShortcut.dispose(), () => gameOverlay?.dispose(),
-      () => registeredGames.dispose(), () => gameWindowTracker.dispose(),
-    ];
-    cleanup ??= Promise.allSettled(stops.map(stop => Promise.resolve().then(stop))).then(results => {
-      if (results.some(result => result.status === "rejected")) throw new Error("IPC cleanup failed");
-    });
-    return cleanup;
-  };
+  return dispose;
 }
 
 function isTrustedMainWindowSender(event: { sender: unknown; senderFrame: unknown }): boolean {
