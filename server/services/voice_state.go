@@ -538,8 +538,12 @@ func (s *voiceService) creditUsage(instanceID string, isCloud bool, joinedAt tim
 	}
 	now := time.Now()
 	year, month, _ := now.Date()
+	// Session-end accounting outlives its caller, but must not keep a
+	// maintenance shutdown or a database pool waiter alive indefinitely.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	if err := s.livekitGetter.IncrementMonthlyUsage(
-		context.Background(), instanceID, year, int(month), seconds,
+		ctx, instanceID, year, int(month), seconds,
 	); err != nil {
 		voiceLogger.Error("credit usage failed", "instance_id", instanceID, "seconds", seconds, "err", pkg.ErrText(err))
 	}
