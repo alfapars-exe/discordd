@@ -30,13 +30,9 @@ func (s *preferencesService) SetGameActivitySync(policy GameActivityPolicyInvali
 	s.gameActivity, s.hub = policy, hub
 }
 
-func (s *preferencesService) SetProfileAudienceInvalidator(invalidator ProfileAudienceInvalidator) {
-	s.profileAudienceInvalidator = invalidator
-}
-
 // NewPreferencesService creates a new PreferencesService.
-func NewPreferencesService(repo repository.PreferencesRepository) PreferencesService {
-	return &preferencesService{repo: repo}
+func NewPreferencesService(repo repository.PreferencesRepository, invalidator ProfileAudienceInvalidator) PreferencesService {
+	return &preferencesService{repo: repo, profileAudienceInvalidator: invalidator}
 }
 
 func (s *preferencesService) Get(ctx context.Context, userID string) (*models.UserPreferences, error) {

@@ -371,7 +371,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 
 	linkPreviewService := services.NewLinkPreviewService(repos.LinkPreview)
 	badgeService := services.NewBadgeService(repos.Badge, hub)
-	preferencesService := services.NewPreferencesService(repos.Preferences)
+	preferencesService := services.NewPreferencesService(repos.Preferences, profileAudiencePolicy)
 	presenceHub, _ := hub.(gameActivityHubPresence)
 	gameActivityPolicy := services.NewGameActivityPrivacyPolicy(repos.Preferences, repos.Friendship, repos.Server, gameActivityPresenceAdapter{hub: presenceHub}, repos.Ban)
 	gameActivityService := services.NewGameActivityService(gameActivityPolicy, repos.Friendship, repos.Server, hub)
@@ -420,11 +420,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	}); ok {
 		setter.SetGameActivitySync(gameActivityService, hub)
 	}
-	if setter, ok := preferencesService.(interface {
-		SetProfileAudienceInvalidator(services.ProfileAudienceInvalidator)
-	}); ok {
-		setter.SetProfileAudienceInvalidator(profileAudiencePolicy)
-	}
+
 	if setter, ok := memberService.(interface {
 		SetProfileAudienceInvalidator(services.ProfileAudienceInvalidator)
 	}); ok {
