@@ -795,3 +795,9 @@ Bu kayıt yerel kaynak doğrulamasıdır. PR CI, birleştirme, yayın ve fizikse
 **RF17 bağımsız ayarlar yükleme ölçümü.** `f66c7b92` üzerinde ayarlar yalnız açıkken React.lazy ile bağlanıyor. Aynı Node ve `npm run build` komutuyla temiz main tabanında AppLayout JS 974,48 kB / gzip 271,78 kB iken 951,21 kB / gzip 265,46 kB oldu. Ayrılan SettingsModal JS 26,24 kB / gzip 7,65 kB. AppLayout CSS 10,57→6,68 kB. Altı modal testi, iki değişen dosyada ESLint, TypeScript ve Vite geçti. Bu ölçüm başlangıç gecikmesini kanıtlamaz. Günlükler `%TEMP%/hichat-settings-build-before.log` ve `%TEMP%/hichat-settings-build-after.log`.
 
 **RF17 vurgu zamanlayıcısı.** PR #272, `97c6882a`, temiz main tabanında kanalın iki gezinme yolu ve grup DM için ortak satır bazlı zamanlayıcı kullanıyor. Aynı satıra tekrar gidildiğinde ilk timeout'un ikinci vurguyu erken kaldırdığı regresyon önce başarısız oldu; düzeltme sonrasında geçti. Ayrı satırların süreleri bağımsız sınandı. Hedefli koşuda 49 geçti, bir opt-in test atlandı. TypeScript geçti; ESLint sıfır hata ve mevcut iki TanStack Virtual uyumluluk uyarısı verdi. PR #266 son GitHub denetiminde 36/36 SUCCESS; birleştirilmedi.
+
+## PR teslimat uzlaştırması — 13 Kasım 2026
+
+Toplu GitHub kontrolü `implementation/verification/refactor-pr-snapshot-2026-11-13.json` içinde PR numarası, dal, güncel head, taslak durumu ve CI özetiyle saklandı. Bu anlık görüntüde 43 açık refactor PR'ının kontrolleri tamamlandı; devam edenler ayrı gösteriliyor. Başarılı CI, merge veya fiziksel runtime kabulü anlamına gelmez.
+
+LiveKit silme düzeltmesinin mevcut PR #222 ile sonradan açılan PR #270'te aynı olduğu doğrulandı. #270'in tek ilave testi #222'ye taşındı (`a138717c`); iki dalın dosya ağaçları eşit. #270 kapatıldı. Bu belgedeki önceki #270 referansları tarihsel kayıttır; kanonik teslimat #222'dir ve test eklenmesi nedeniyle yeni CI koşusu beklenir. Ana çalışma ağacı değiştirilmedi.
