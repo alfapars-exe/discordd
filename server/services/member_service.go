@@ -92,10 +92,6 @@ func (s *memberService) SetPermInvalidator(inv PermissionInvalidator) {
 	s.permInvalidator = inv
 }
 
-func (s *memberService) SetGameActivityPrivacyInvalidator(invalidator GameActivityPrivacyInvalidator) {
-	s.gameActivity = invalidator
-}
-
 // invalidateUserPerms — nil-safe wrapper so call sites stay flat.
 // Optional dependency: test setups frequently leave it nil.
 func (s *memberService) invalidateUserPerms(userID string) {
@@ -108,7 +104,7 @@ func (s *memberService) invalidateUserPerms(userID string) {
 //
 // Logs both branches so a "I kicked X / banned Y but the audit channel
 // stayed empty" report tells us exactly where the pipeline dropped:
-// nil logger ⇒ init_services.go's NewMemberService(nil, ..., auditLogService)
+// nil logger ⇒ init_services.go's NewMemberService(nil, nil, ..., auditLogService)
 // wiring regressed; otherwise look at [audit_log] downstream logs from
 // audit_log_service.persistAndBroadcast for Insert / broadcast outcomes.
 // Same pattern as voiceService.audit.
@@ -122,6 +118,7 @@ func (s *memberService) audit(entry models.AuditLog) {
 }
 
 func NewMemberService(
+	gameActivity GameActivityPrivacyInvalidator,
 	profileAudienceInvalidator ProfileAudienceInvalidator,
 	userRepo repository.UserRepository,
 	roleRepo repository.RoleRepository,
@@ -135,6 +132,7 @@ func NewMemberService(
 	profileUpdates ...ProfileUpdateNotifier,
 ) MemberService {
 	s := &memberService{
+		gameActivity:               gameActivity,
 		profileAudienceInvalidator: profileAudienceInvalidator,
 		memberReader:               memberReader{userRepo: userRepo, roleRepo: roleRepo, serverRepo: serverRepo, timeoutRepo: timeoutRepo},
 		roleTransactions:           roleTransactions,

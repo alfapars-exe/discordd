@@ -257,7 +257,10 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	onlineFriendNotifier := services.NewOnlineFriendNotifier(repos.User, repos.Preferences, repos.Friendship, repos.Notification, hub, hub)
 	roleTransactions := repository.NewServerMembershipTxRunner(db)
 	profileAudiencePolicy := services.NewProfileAudiencePolicy(repos.Preferences, repos.Friendship, repos.Server)
-	memberService := services.NewMemberService(profileAudiencePolicy, repos.User, repos.Role, repos.Ban, repos.MemberTimeout, repos.Server, roleTransactions, hub, voiceService, auditLogService, profileUpdateNotifier)
+	presenceHub, _ := hub.(gameActivityHubPresence)
+	gameActivityPolicy := services.NewGameActivityPrivacyPolicy(repos.Preferences, repos.Friendship, repos.Server, gameActivityPresenceAdapter{hub: presenceHub}, repos.Ban)
+	gameActivityService := services.NewGameActivityService(gameActivityPolicy, repos.Friendship, repos.Server, hub)
+	memberService := services.NewMemberService(gameActivityService, profileAudiencePolicy, repos.User, repos.Role, repos.Ban, repos.MemberTimeout, repos.Server, roleTransactions, hub, voiceService, auditLogService, profileUpdateNotifier)
 	roleService := services.NewRoleService(repos.Role, roleTransactions, hub, auditLogService)
 	// SetPermInvalidator for both is wired in main.go (after initRoutes),
 	// not here: it needs to fan out to middleware.PermissionMiddleware too,
@@ -400,11 +403,6 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		setter.SetGameActivityPrivacyInvalidator(gameActivityService)
 	}
 	if setter, ok := friendshipService.(interface {
-		SetGameActivityPrivacyInvalidator(services.GameActivityPrivacyInvalidator)
-	}); ok {
-		setter.SetGameActivityPrivacyInvalidator(gameActivityService)
-	}
-	if setter, ok := memberService.(interface {
 		SetGameActivityPrivacyInvalidator(services.GameActivityPrivacyInvalidator)
 	}); ok {
 		setter.SetGameActivityPrivacyInvalidator(gameActivityService)
