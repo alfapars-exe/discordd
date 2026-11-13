@@ -35,7 +35,7 @@ func TestChannelListPermissionsAreRecipientScoped(t *testing.T) {
 	stale := models.PermAll
 	source := []models.Channel{{ID: "write", Type: models.ChannelTypeText, EffectivePermissions: &stale}, {ID: "denied", Type: models.ChannelTypeText}, {ID: "voice", Type: models.ChannelTypeVoice}}
 	repo := &testutil.MockChannelRepo{GetAllByServerFn: func(context.Context, string) ([]models.Channel, error) { return source, nil }}
-	svc := NewChannelService(repo, listPermissionCategories{}, nil, listPermissionResolver{}, nil, nil)
+	svc := NewChannelService(nil, repo, listPermissionCategories{}, nil, listPermissionResolver{}, nil, nil)
 	writer, err := svc.GetAllGrouped(ctx, "server", "writer")
 	if err != nil {
 		t.Fatal(err)
@@ -64,7 +64,7 @@ func TestChannelListPermissionsAreRecipientScoped(t *testing.T) {
 	}
 }
 func TestChannelListPermissionResolutionFailureIsClosed(t *testing.T) {
-	svc := NewChannelService(&testutil.MockChannelRepo{}, listPermissionCategories{}, nil, listPermissionResolver{fail: true}, nil, nil)
+	svc := NewChannelService(nil, &testutil.MockChannelRepo{}, listPermissionCategories{}, nil, listPermissionResolver{fail: true}, nil, nil)
 	if _, err := svc.GetAllGrouped(context.Background(), "server", "writer"); err == nil {
 		t.Fatal("missing permission map must not be treated as sendable")
 	}
