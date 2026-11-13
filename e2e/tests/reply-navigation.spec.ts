@@ -1,6 +1,6 @@
 import { expectReplyLoadsOriginal, limitReplyHistoryPage } from "./replyNavigation.helpers";
 import { expect, test } from "@playwright/test";
-import { composer, dismissOnboardingOverlays, openFreshChannel } from "./helpers";
+import { fixtureApi, composer, dismissOnboardingOverlays, openFreshChannel } from "./helpers";
 
 test("reply preview loads the original message outside the current channel page", async ({ page }) => {
   await openFreshChannel(page);
@@ -11,15 +11,9 @@ test("reply preview loads the original message outside the current channel page"
   const response = await created;
   expect(response.ok()).toBe(true);
   const original = (await response.json()).data;
-  const reply = await page.evaluate(async ({ original, endpoint }) => {
-    const modulePath = "/src/api/client.ts";
-    const { apiClient } = await import(modulePath);
-    const result = await apiClient(endpoint, {
-      method: "POST", body: { content: "Reply at the tail", reply_to_id: original },
-    });
-    if (!result.success) throw new Error("Reply fixture creation failed");
-    return result.data.id as string;
-  }, { original: original.id, endpoint: new URL(response.url()).pathname.slice("/api".length) });
+  const reply = await fixtureApi<{ id: string }>(page,
+    new URL(response.url()).pathname.slice("/api".length), "POST",
+    { content: "Reply at the tail", reply_to_id: original.id });
 
   // Keep the real tail query and response, but request one row to exercise
   // the page boundary without sending fifty filler messages.
@@ -29,5 +23,5 @@ test("reply preview loads the original message outside the current channel page"
   await expect(composer(page)).toBeVisible();
   await dismissOnboardingOverlays(page);
   await page.locator("button.ch-tree-item", { hasText: "general" }).first().click();
-  await expectReplyLoadsOriginal(page, endpoint, reply, original.id, "click");
+  await expectReplyLoadsOriginal(page, endpoint, reply.id, original.id, "click");
 });
