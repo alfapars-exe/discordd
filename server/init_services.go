@@ -84,7 +84,7 @@ type Services struct {
 	Entrance                services.EntranceService
 	Cosmetic                services.CosmeticService
 	ExpressionClone         services.ExpressionCloneService
-	MusicBot                services.MusicBotService
+	MusicBot                services.MusicBotRuntime
 	WSTicket                services.WSTicketService
 	Backup                  *services.BackupService
 	Notification            services.NotificationService
@@ -181,7 +181,14 @@ type RateLimiters struct {
 // this call, specifically so it can be threaded through to
 // services.NewMetricsCollector below) — nil-safe, so tests/callers that
 // don't care about readiness integration can pass nil.
-func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *config.Config, encryptionKey []byte, reachabilityReporter services.LiveKitReachabilityReporter) (*Services, *RateLimiters, services.MetricsCollector) {
+type serviceHub interface {
+	ws.EventPublisher
+	gameActivityHubPresence
+	SetDurableChannelSends(bool)
+	OnGameJoinOffer(func(string, uint64, any) any)
+}
+
+func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.Config, encryptionKey []byte, reachabilityReporter services.LiveKitReachabilityReporter) (*Services, *RateLimiters, services.MetricsCollector) {
 	// Order-sensitive services
 	channelPermService := services.NewChannelPermissionService(
 		repos.ChannelPermission, repos.Role, repos.Channel, hub,
@@ -199,7 +206,6 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	voiceService := services.NewVoiceService(
 		repos.Channel, repos.LiveKit, channelPermService, hub, hub, repos.Server, encryptionKey, repos.MemberTimeout, repos.Ban, auditLogService,
 	)
-	p2pCallService := services.NewP2PCallService(repos.Friendship, repos.User, hub)
 
 	// Email service (optional)
 	var emailSender email.EmailSender
@@ -217,28 +223,10 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	categorySender, _ := emailSender.(email.CategorySender)
 	emailDeliveryService := services.NewEmailDeliveryService(repos.EmailDelivery, categorySender,
 		services.WithEmailUnsubscribe(repos.EmailUnsubscribe, cfg.Email.AppURL))
-	if communication, ok := p2pCallService.(interface{ SetEmailEnqueuer(services.EmailEnqueuer) }); ok {
-		communication.SetEmailEnqueuer(emailDeliveryService)
-	}
+	p2pCallService := services.NewP2PCallService(repos.Friendship, repos.User, hub, emailDeliveryService)
 	emailVerificationService := services.NewEmailVerificationService(repos.EmailVerification, verificationSender)
-	authService := services.NewAuthService(
-		repos.User, repos.Session, repos.ResetToken, hub, emailSender,
-		cfg.JWT.Secret, cfg.JWT.AccessTokenExpiry, cfg.JWT.RefreshTokenExpiry, services.WithMFA(mfaService), services.WithAuthSessions(repos.AuthSession), services.WithAccountLifecycle(repos.AccountLifecycle), services.WithAccountAnonymization(repos.AccountAnonymization), services.WithApplicationRemoval(repos.ApplicationRemoval), services.WithServerOwnership(repos.ServerOwnership),
-	)
-	// "Log out from all devices" / password change must also kick any live
-	// voice or screen-share session, mirroring adminUserService's ban/delete
-	// path (security review 2026-08-01, finding 3). voiceService already
-	// exists at this point (constructed above), so no ordering hazard.
-	authService.SetVoiceDisconnecter(voiceService)
-	channelService := services.NewChannelService(repos.Channel, repos.Category, hub, channelPermService, auditLogService, repos.Notification)
-	channelDeletionSetter, setterOK := channelService.(interface {
-		SetVoiceChannelDeletionHandler(services.VoiceChannelDeletionHandler)
-	})
-	voiceDeletionHandler, handlerOK := voiceService.(services.VoiceChannelDeletionHandler)
-	if !setterOK || !handlerOK {
-		panic("channel/voice services must support deleted voice-channel cleanup")
-	}
-	channelDeletionSetter.SetVoiceChannelDeletionHandler(voiceDeletionHandler)
+
+	channelService := services.NewChannelService(voiceService, repos.Channel, repos.Category, hub, channelPermService, auditLogService, repos.Notification)
 	threadService := services.NewThreadService(repos.Channel, repos.Message, channelPermService, hub)
 	// Enables best-effort on-disk cleanup of attachment files on delete (see
 	// services/upload_cleanup.go) without widening the constructor signature
@@ -260,31 +248,27 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	if database.IsPostgres(db) {
 		services.ConfigureChannelDelivery(messageService, db)
 		channelMessageNotificationWorker.SetDurablePublication(true)
-		if capabilities, ok := hub.(interface{ SetDurableChannelSends(bool) }); ok {
-			capabilities.SetDurableChannelSends(true)
-		}
+		hub.SetDurableChannelSends(true)
 	}
 	uploadService := services.NewUploadService(repos.Attachment, cfg.Upload.Dir, cfg.Upload.MaxSize)
 	profileUpdateNotifier := services.NewProfileUpdateNotifier(repos.Preferences, repos.Friendship, repos.Notification, hub)
 	onlineFriendNotifier := services.NewOnlineFriendNotifier(repos.User, repos.Preferences, repos.Friendship, repos.Notification, hub, hub)
 	roleTransactions := repository.NewServerMembershipTxRunner(db)
-	memberService := services.NewMemberService(repos.User, repos.Role, repos.Ban, repos.MemberTimeout, repos.Server, roleTransactions, hub, voiceService, auditLogService, profileUpdateNotifier)
+	profileAudiencePolicy := services.NewProfileAudiencePolicy(repos.Preferences, repos.Friendship, repos.Server)
+	gameActivityPolicy := services.NewGameActivityPrivacyPolicy(repos.Preferences, repos.Friendship, repos.Server, gameActivityPresenceAdapter{hub: hub}, repos.Ban)
+	gameActivityService := services.NewGameActivityService(gameActivityPolicy, repos.Friendship, repos.Server, hub)
+	memberService := services.NewMemberService(gameActivityService, profileAudiencePolicy, repos.User, repos.Role, repos.Ban, repos.MemberTimeout, repos.Server, roleTransactions, hub, voiceService, auditLogService, profileUpdateNotifier)
 	roleService := services.NewRoleService(repos.Role, roleTransactions, hub, auditLogService)
 	// SetPermInvalidator for both is wired in main.go (after initRoutes),
 	// not here: it needs to fan out to middleware.PermissionMiddleware too,
 	// which is only constructed inside initRoutes. See main.go's comment
 	// near initRoutes for the full rationale.
-	serverService := services.NewServerService(
+	serverService := services.NewServerService(repos.Preferences, gameActivityService,
 		db, repos.Server, repos.LiveKit, repos.Role, repos.Channel,
 		repos.Category, repos.User, repos.Ban, inviteService, hub, encryptionKey, auditLogService,
 		roleTransactions,
 	)
 	serverService.SetUploadDir(cfg.Upload.Dir)
-	if setter, ok := serverService.(interface {
-		SetGameActivityPreferencesRepository(repository.PreferencesRepository)
-	}); ok {
-		setter.SetGameActivityPreferencesRepository(repos.Preferences)
-	}
 	livekitAdminService := services.NewLiveKitAdminService(
 		repos.LiveKit, repos.Server, repos.User, repos.Channel,
 		voiceService, encryptionKey, cfg.HetznerAPIToken, cfg.AllowLiveKitInstanceCreation,
@@ -299,7 +283,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	readStateService := services.NewReadStateService(repos.ReadState, channelPermService)
 
 	// BlockService before DMService (DMService uses it as BlockChecker)
-	blockService := services.NewBlockService(repos.Friendship, repos.User, hub)
+	blockService := services.NewBlockService(gameActivityService, repos.Friendship, repos.User, hub)
 
 	// DMSettingsService before DMService (DMService uses it as DMSettingsUnhider)
 	dmSettingsService := services.NewDMSettingsService(repos.DMSettings, repos.DM, hub)
@@ -333,30 +317,19 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		},
 		repos.Server,
 	)
-	friendshipService := services.NewFriendshipService(repos.Friendship, repos.User, repos.Notification, hub, friendRequestPolicy)
+	friendshipService := services.NewFriendshipService(gameActivityService, repos.Friendship, repos.User, repos.Notification, hub, friendRequestPolicy)
 	friendshipService.SetEmailEnqueuer(emailDeliveryService)
 	dmService := services.NewDMService(
+		services.NewServerDMPolicy(repos.Preferences, repos.Server),
 		repos.DM, repos.User, hub, blockService, friendshipService, dmSettingsService,
 		repos.DMRead, repos.Notification, repository.NewDMMessageTxRunner(db),
+		emailDeliveryService,
+		repos.Preferences,
 	)
 	services.ConfigureDMDelivery(dmService, db)
-	if communication, ok := dmService.(services.DMCommunicationEmailConfigurer); ok {
-		communication.SetCommunicationEmailEnqueuer(emailDeliveryService)
-	}
-	if concreteDMService, ok := dmService.(interface{ SetServerDMPolicy(services.ServerDMPolicy) }); ok {
-		concreteDMService.SetServerDMPolicy(services.NewServerDMPolicy(repos.Preferences, repos.Server))
-	}
-	if reactionDM, ok := dmService.(interface {
-		SetReactionPreferences(repository.PreferencesRepository)
-	}); ok {
-		reactionDM.SetReactionPreferences(repos.Preferences)
-	}
-	groupDMService := services.NewGroupDMService(repos.GroupDM, repos.User, repos.Friendship, hub, cfg.LiveKit.URL, cfg.LiveKit.APIKey, cfg.LiveKit.APISecret, encryptionKey, cfg.Upload.Dir)
-	if reactions, ok := groupDMService.(interface {
-		SetReactionDelivery(repository.NotificationRepository, repository.PreferencesRepository, services.BlockChecker)
-	}); ok {
-		reactions.SetReactionDelivery(repos.Notification, repos.Preferences, blockService)
-	}
+
+	groupDMService := services.NewGroupDMService(repos.GroupDM, repos.User, repos.Friendship, hub, cfg.LiveKit.URL, cfg.LiveKit.APIKey, cfg.LiveKit.APISecret, encryptionKey, cfg.Upload.Dir, repos.Notification, repos.Preferences, blockService)
+
 	dmService.SetUploadDir(cfg.Upload.Dir)
 	friendshipService.SetDMAcceptor(dmService) // auto-accept pending DMs when friendship is accepted
 	dmUploadService := services.NewDMUploadService(repos.DM, cfg.Upload.Dir, cfg.Upload.MaxSize)
@@ -371,7 +344,6 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	mediaLabelService.SetBroadcaster(hub)
 	reminderService := services.NewReminderService(repos.Reminder, repos.Message, repos.Channel, repos.DM, channelPermService)
 	userNoteService := services.NewUserNoteService(repos.UserNote, repos.User)
-	profileAudiencePolicy := services.NewProfileAudiencePolicy(repos.Preferences, repos.Friendship, repos.Server)
 	personalizationService := services.NewPersonalizationService(repos.Preferences, repos.User, repos.Server, repos.Friendship)
 	reactionService := services.NewReactionService(repos.Reaction, repos.Message, repos.Channel, hub, channelPermService, repos.MemberTimeout)
 	reactionService.SetNotificationDelivery(repos.Notification, repos.Preferences, repos.User)
@@ -393,65 +365,24 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 
 	linkPreviewService := services.NewLinkPreviewService(repos.LinkPreview)
 	badgeService := services.NewBadgeService(repos.Badge, hub)
-	preferencesService := services.NewPreferencesService(repos.Preferences)
-	presenceHub, _ := hub.(gameActivityHubPresence)
-	gameActivityPolicy := services.NewGameActivityPrivacyPolicy(repos.Preferences, repos.Friendship, repos.Server, gameActivityPresenceAdapter{hub: presenceHub}, repos.Ban)
-	gameActivityService := services.NewGameActivityService(gameActivityPolicy, repos.Friendship, repos.Server, hub)
+	preferencesService := services.NewPreferencesService(repos.Preferences, profileAudiencePolicy, gameActivityService, hub)
 	gameJoinService := services.NewGameJoinService(gameActivityService, services.NewGameJoinPolicy(gameActivityPolicy, repos.Preferences, repos.Friendship, repos.User, repos.AccountLifecycle, repos.Server, repos.Ban, repos.Channel, channelPermService, voiceService))
-	if connector, ok := hub.(interface {
-		OnGameJoinOffer(func(string, uint64, any) any)
-	}); ok {
-		connector.OnGameJoinOffer(func(user string, connection uint64, data any) any {
-			raw, err := json.Marshal(data)
-			if err != nil || len(raw) > 2048 {
-				return nil
-			}
-			decoder := json.NewDecoder(bytes.NewReader(raw))
-			decoder.DisallowUnknownFields()
-			var input services.GameJoinOfferInput
-			if decoder.Decode(&input) != nil {
-				return nil
-			}
-			ctx, cancel := services.BroadcastContext()
-			defer cancel()
-			return gameJoinService.SetOffer(ctx, user, connection, input)
-		})
-	}
-	if setter, ok := blockService.(interface {
-		SetGameActivityPrivacyInvalidator(services.GameActivityPrivacyInvalidator)
-	}); ok {
-		setter.SetGameActivityPrivacyInvalidator(gameActivityService)
-	}
-	if setter, ok := friendshipService.(interface {
-		SetGameActivityPrivacyInvalidator(services.GameActivityPrivacyInvalidator)
-	}); ok {
-		setter.SetGameActivityPrivacyInvalidator(gameActivityService)
-	}
-	if setter, ok := memberService.(interface {
-		SetGameActivityPrivacyInvalidator(services.GameActivityPrivacyInvalidator)
-	}); ok {
-		setter.SetGameActivityPrivacyInvalidator(gameActivityService)
-	}
-	if setter, ok := serverService.(interface {
-		SetGameActivityPrivacyInvalidator(services.GameActivityPrivacyInvalidator)
-	}); ok {
-		setter.SetGameActivityPrivacyInvalidator(gameActivityService)
-	}
-	if setter, ok := preferencesService.(interface {
-		SetGameActivitySync(services.GameActivityPolicyInvalidator, ws.Broadcaster)
-	}); ok {
-		setter.SetGameActivitySync(gameActivityService, hub)
-	}
-	if setter, ok := preferencesService.(interface {
-		SetProfileAudienceInvalidator(services.ProfileAudienceInvalidator)
-	}); ok {
-		setter.SetProfileAudienceInvalidator(profileAudiencePolicy)
-	}
-	if setter, ok := memberService.(interface {
-		SetProfileAudienceInvalidator(services.ProfileAudienceInvalidator)
-	}); ok {
-		setter.SetProfileAudienceInvalidator(profileAudiencePolicy)
-	}
+	hub.OnGameJoinOffer(func(user string, connection uint64, data any) any {
+		raw, err := json.Marshal(data)
+		if err != nil || len(raw) > 2048 {
+			return nil
+		}
+		decoder := json.NewDecoder(bytes.NewReader(raw))
+		decoder.DisallowUnknownFields()
+		var input services.GameJoinOfferInput
+		if decoder.Decode(&input) != nil {
+			return nil
+		}
+		ctx, cancel := services.BroadcastContext()
+		defer cancel()
+		return gameJoinService.SetOffer(ctx, user, connection, input)
+	})
+
 	appLogService := services.NewAppLogService(repos.AppLog)
 	clipRecordingService := services.NewClipRecordingService(voiceService, repos.Preferences, appLogService)
 	// auditLogService itself was constructed earlier (right after
@@ -485,13 +416,15 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		repos.Channel, repos.LiveKit, channelPermService, hub, repos.User, encryptionKey, appLogService, repos.MusicSession, voiceService,
 		services.MusicAudienceDependencies{Voice: voiceService, Members: repos.Server},
 	)
-	if observer, ok := musicBotService.(services.MusicRequesterRetirementObserver); ok {
-		if setter, yes := authService.(interface {
-			SetMusicRequesterRetirementObserver(services.MusicRequesterRetirementObserver)
-		}); yes {
-			setter.SetMusicRequesterRetirementObserver(observer)
-		}
-	}
+	authService := services.NewAuthService(
+		repos.User, repos.Session, repos.ResetToken, hub, emailSender,
+		cfg.JWT.Secret, cfg.JWT.AccessTokenExpiry, cfg.JWT.RefreshTokenExpiry, services.WithMFA(mfaService), services.WithAuthSessions(repos.AuthSession), services.WithAccountLifecycle(repos.AccountLifecycle), services.WithAccountAnonymization(repos.AccountAnonymization, musicBotService), services.WithApplicationRemoval(repos.ApplicationRemoval), services.WithServerOwnership(repos.ServerOwnership),
+	)
+	// "Log out from all devices" / password change must also kick any live
+	// voice or screen-share session, mirroring adminUserService's ban/delete
+	// path (security review 2026-08-01, finding 3). voiceService already
+	// exists at this point (constructed above), so no ordering hazard.
+	authService.SetVoiceDisconnecter(voiceService)
 	// Wire the channel-empty hook — when the last human leaves, voice service
 	// asks music bot to stop so it doesn't keep playing to nobody.
 	voiceService.SetMusicBotHook(musicBotService)

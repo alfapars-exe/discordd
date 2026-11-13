@@ -82,10 +82,6 @@ type memberService struct {
 	userInvalidator            UserCacheInvalidator
 }
 
-func (s *memberService) SetProfileAudienceInvalidator(invalidator ProfileAudienceInvalidator) {
-	s.profileAudienceInvalidator = invalidator
-}
-
 // SetUserCacheInvalidator keeps authenticated /users/me reads fresh after
 // profile writes, including avatar/banner uploads using the same service.
 func (s *memberService) SetUserCacheInvalidator(inv UserCacheInvalidator) {
@@ -94,10 +90,6 @@ func (s *memberService) SetUserCacheInvalidator(inv UserCacheInvalidator) {
 
 func (s *memberService) SetPermInvalidator(inv PermissionInvalidator) {
 	s.permInvalidator = inv
-}
-
-func (s *memberService) SetGameActivityPrivacyInvalidator(invalidator GameActivityPrivacyInvalidator) {
-	s.gameActivity = invalidator
 }
 
 // invalidateUserPerms — nil-safe wrapper so call sites stay flat.
@@ -112,7 +104,7 @@ func (s *memberService) invalidateUserPerms(userID string) {
 //
 // Logs both branches so a "I kicked X / banned Y but the audit channel
 // stayed empty" report tells us exactly where the pipeline dropped:
-// nil logger ⇒ init_services.go's NewMemberService(..., auditLogService)
+// nil logger ⇒ init_services.go's NewMemberService(nil, nil, ..., auditLogService)
 // wiring regressed; otherwise look at [audit_log] downstream logs from
 // audit_log_service.persistAndBroadcast for Insert / broadcast outcomes.
 // Same pattern as voiceService.audit.
@@ -126,6 +118,8 @@ func (s *memberService) audit(entry models.AuditLog) {
 }
 
 func NewMemberService(
+	gameActivity GameActivityPrivacyInvalidator,
+	profileAudienceInvalidator ProfileAudienceInvalidator,
 	userRepo repository.UserRepository,
 	roleRepo repository.RoleRepository,
 	banRepo repository.BanRepository,
@@ -138,12 +132,14 @@ func NewMemberService(
 	profileUpdates ...ProfileUpdateNotifier,
 ) MemberService {
 	s := &memberService{
-		memberReader:     memberReader{userRepo: userRepo, roleRepo: roleRepo, serverRepo: serverRepo, timeoutRepo: timeoutRepo},
-		roleTransactions: roleTransactions,
-		banRepo:          banRepo,
-		hub:              hub,
-		voiceKick:        voiceKick,
-		auditLogger:      auditLogger,
+		gameActivity:               gameActivity,
+		profileAudienceInvalidator: profileAudienceInvalidator,
+		memberReader:               memberReader{userRepo: userRepo, roleRepo: roleRepo, serverRepo: serverRepo, timeoutRepo: timeoutRepo},
+		roleTransactions:           roleTransactions,
+		banRepo:                    banRepo,
+		hub:                        hub,
+		voiceKick:                  voiceKick,
+		auditLogger:                auditLogger,
 	}
 	if len(profileUpdates) > 0 {
 		s.profileUpdates = profileUpdates[0]

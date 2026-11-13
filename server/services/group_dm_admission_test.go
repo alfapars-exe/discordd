@@ -35,7 +35,7 @@ func TestGroupAdmissionServiceRejectsKnownIDWithoutAcceptedFriendship(t *testing
 	for _, action := range []string{"create", "add"} {
 		for _, status := range []string{"missing", "pending", "rejected", "nil", "error", "block error", "blocked"} {
 			t.Run(action+"/"+status, func(t *testing.T) {
-				db := newBotTestDB(t)
+				db := newDMSendTestDB(t)
 				ctx := context.Background()
 				for _, id := range []string{"owner", "target"} {
 					if _, err := db.Conn.Exec(`INSERT INTO users(id,username,password_hash) VALUES(?,?,'x')`, id, id); err != nil {
@@ -67,7 +67,7 @@ func TestGroupAdmissionServiceRejectsKnownIDWithoutAcceptedFriendship(t *testing
 					}
 					return &models.Friendship{UserID: "owner", FriendID: "target", Status: models.FriendshipStatus(status)}, nil
 				}}
-				svc := NewGroupDMService(groups, repository.NewSQLiteUserRepo(db.Conn), friends, hub, "", "", "", nil, "")
+				svc := NewGroupDMService(groups, repository.NewSQLiteUserRepo(db.Conn), friends, hub, "", "", "", nil, "", nil, nil, nil)
 				var err error
 				if action == "create" {
 					_, err = svc.Create(ctx, "owner", &models.CreateGroupDMRequest{Name: "Group", UserIDs: []string{"target"}})
@@ -104,7 +104,7 @@ func TestGroupAdmissionServicePassesAuthenticatedScopeAndRechecksUnfriendBeforeW
 	for _, action := range []string{"create", "add"} {
 		for _, unfriend := range []bool{false, true} {
 			t.Run(action+map[bool]string{false: "/accepted", true: "/unfriend-before-write"}[unfriend], func(t *testing.T) {
-				db := newBotTestDB(t)
+				db := newDMSendTestDB(t)
 				ctx := context.Background()
 				for _, id := range []string{"owner", "target"} {
 					if _, err := db.Conn.Exec(`INSERT INTO users(id,username,password_hash,dm_privacy) VALUES(?,?,'x','friends_only')`, id, id); err != nil {
@@ -130,7 +130,7 @@ func TestGroupAdmissionServicePassesAuthenticatedScopeAndRechecksUnfriendBeforeW
 				}
 				events := 0
 				hub := &testutil.MockBroadcaster{BroadcastToUsersFn: func([]string, ws.Event) { events++ }, BroadcastToUserFn: func(string, ws.Event) { events++ }}
-				svc := NewGroupDMService(scoped, repository.NewSQLiteUserRepo(db.Conn), repository.NewSQLiteFriendshipRepo(db.Conn), hub, "", "", "", nil, "")
+				svc := NewGroupDMService(scoped, repository.NewSQLiteUserRepo(db.Conn), repository.NewSQLiteFriendshipRepo(db.Conn), hub, "", "", "", nil, "", nil, nil, nil)
 				var result *models.GroupDM
 				var err error
 				if action == "create" {

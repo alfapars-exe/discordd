@@ -74,10 +74,6 @@ type ScheduledEmailEnqueuer interface {
 	EnqueueWithOptions(ctx context.Context, userID, category, dedupeKey, subject, body string, options EmailEnqueueOptions) (bool, error)
 }
 
-type DMCommunicationEmailConfigurer interface {
-	SetCommunicationEmailEnqueuer(ScheduledEmailEnqueuer)
-}
-
 // FriendshipChecker is a minimal ISP interface for friend checks (used by dmService).
 type FriendshipChecker interface {
 	AreFriends(ctx context.Context, userA, userB string) (bool, error)
@@ -108,11 +104,8 @@ type dmService struct {
 	communicationEmailEnqueuer ScheduledEmailEnqueuer
 }
 
-func (s *dmService) SetCommunicationEmailEnqueuer(enqueuer ScheduledEmailEnqueuer) {
-	s.communicationEmailEnqueuer = enqueuer
-}
-
 func NewDMService(
+	serverDMPolicy ServerDMPolicy,
 	dmRepo repository.DMRepository,
 	userRepo repository.UserRepository,
 	hub ws.Broadcaster,
@@ -122,28 +115,27 @@ func NewDMService(
 	dmReadRepo repository.DMReadRepository,
 	notificationRepo repository.NotificationRepository,
 	txRunner repository.DMMessageTxRunner,
+	communicationEmailEnqueuer ScheduledEmailEnqueuer,
+	reactionPreferences profilePreferenceReader,
 ) DMService {
 	return &dmService{
-		dmRepo:           dmRepo,
-		userRepo:         userRepo,
-		dmReadRepo:       dmReadRepo,
-		notificationRepo: notificationRepo,
-		txRunner:         txRunner,
-		hub:              hub,
-		blockChecker:     blockChecker,
-		friendChecker:    friendshipChecker,
-		unhider:          unhider,
+		reactionPreferences:        reactionPreferences,
+		communicationEmailEnqueuer: communicationEmailEnqueuer,
+		serverDMPolicy:             serverDMPolicy,
+		dmRepo:                     dmRepo,
+		userRepo:                   userRepo,
+		dmReadRepo:                 dmReadRepo,
+		notificationRepo:           notificationRepo,
+		txRunner:                   txRunner,
+		hub:                        hub,
+		blockChecker:               blockChecker,
+		friendChecker:              friendshipChecker,
+		unhider:                    unhider,
 	}
 }
 
 func (s *dmService) SetUploadDir(dir string) {
 	s.uploadDir = dir
-}
-
-func (s *dmService) SetServerDMPolicy(policy ServerDMPolicy) { s.serverDMPolicy = policy }
-
-func (s *dmService) SetReactionPreferences(prefs repository.PreferencesRepository) {
-	s.reactionPreferences = prefs
 }
 
 // ─── Shared Helpers ───

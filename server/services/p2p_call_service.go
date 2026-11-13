@@ -47,10 +47,6 @@ type P2PCallService interface {
 type p2pCallTimer interface{ Stop() bool }
 type p2pAfterFunc func(time.Duration, func()) p2pCallTimer
 
-type P2PCallEmailConfigurer interface {
-	SetEmailEnqueuer(EmailEnqueuer)
-}
-
 const p2pRingTimeout = 30 * time.Second
 
 type p2pCallService struct {
@@ -68,12 +64,6 @@ type p2pCallService struct {
 	afterFunc     p2pAfterFunc
 	emailEnqueuer EmailEnqueuer
 	mu            sync.RWMutex
-}
-
-func (s *p2pCallService) SetEmailEnqueuer(enqueuer EmailEnqueuer) {
-	s.mu.Lock()
-	s.emailEnqueuer = enqueuer
-	s.mu.Unlock()
 }
 
 func (s *p2pCallService) SetAppLogger(logger P2PAppLogger) {
@@ -95,9 +85,11 @@ func NewP2PCallService(
 	friendChecker FriendChecker,
 	userGetter UserInfoGetter,
 	hub ws.BroadcastAndOnline,
+	emailEnqueuer EmailEnqueuer,
 ) P2PCallService {
 	return &p2pCallService{
 		friendChecker: friendChecker,
+		emailEnqueuer: emailEnqueuer,
 		userGetter:    userGetter,
 		hub:           hub,
 		activeCalls:   make(map[string]*models.P2PCall),

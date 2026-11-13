@@ -56,10 +56,6 @@ type friendshipService struct {
 	gameActivity  GameActivityPrivacyInvalidator
 }
 
-func (s *friendshipService) SetGameActivityPrivacyInvalidator(invalidator GameActivityPrivacyInvalidator) {
-	s.gameActivity = invalidator
-}
-
 func (s *friendshipService) reconcileActivityRelationship(ctx context.Context, userA, userB string) {
 	if s.gameActivity != nil {
 		s.gameActivity.RelationshipChanged(ctx, userA, userB)
@@ -67,6 +63,7 @@ func (s *friendshipService) reconcileActivityRelationship(ctx context.Context, u
 }
 
 func NewFriendshipService(
+	gameActivity GameActivityPrivacyInvalidator,
 	friendRepo repository.FriendshipRepository,
 	userRepo repository.UserRepository,
 	notifRepo repository.NotificationRepository,
@@ -74,10 +71,11 @@ func NewFriendshipService(
 	policies ...FriendRequestPolicy,
 ) FriendshipService {
 	service := &friendshipService{
-		friendRepo: friendRepo,
-		userRepo:   userRepo,
-		notifRepo:  notifRepo,
-		hub:        hub,
+		gameActivity: gameActivity,
+		friendRepo:   friendRepo,
+		userRepo:     userRepo,
+		notifRepo:    notifRepo,
+		hub:          hub,
 	}
 	if len(policies) > 0 {
 		service.requestPolicy = policies[0]

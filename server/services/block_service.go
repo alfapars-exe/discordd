@@ -43,10 +43,6 @@ type blockService struct {
 	gameActivity GameActivityPrivacyInvalidator
 }
 
-func (s *blockService) SetGameActivityPrivacyInvalidator(invalidator GameActivityPrivacyInvalidator) {
-	s.gameActivity = invalidator
-}
-
 func (s *blockService) reconcileActivityRelationship(ctx context.Context, userA, userB string) {
 	if s.gameActivity != nil {
 		s.gameActivity.RelationshipChanged(ctx, userA, userB)
@@ -54,14 +50,16 @@ func (s *blockService) reconcileActivityRelationship(ctx context.Context, userA,
 }
 
 func NewBlockService(
+	gameActivity GameActivityPrivacyInvalidator,
 	friendRepo repository.FriendshipRepository,
 	userRepo repository.UserRepository,
 	hub ws.Broadcaster,
 ) BlockService {
 	return &blockService{
-		friendRepo: friendRepo,
-		userRepo:   userRepo,
-		hub:        hub,
+		gameActivity: gameActivity,
+		friendRepo:   friendRepo,
+		userRepo:     userRepo,
+		hub:          hub,
 	}
 }
 

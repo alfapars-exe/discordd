@@ -503,9 +503,7 @@ func main() {
 	// let the runtime SIGKILL the subprocesses mid-write anyway. Must still
 	// run before hub.Shutdown(), since Stop broadcasts a final
 	// IsActive=false state over the hub.
-	if stopper, ok := svcs.MusicBot.(services.MusicBotStopper); ok {
-		stopper.StopAll()
-	}
+	svcs.MusicBot.StopAll()
 	musicBridge.Close()
 
 	stopRuntimeStats()

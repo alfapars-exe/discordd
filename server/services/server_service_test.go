@@ -60,6 +60,12 @@ type joinServerHarness struct {
 // JoinServer touches after AddMember succeeds, so table-test cases only need
 // to override the field(s) that make that case interesting.
 func newJoinServerHarness() *joinServerHarness {
+	return newJoinServerHarnessWithActivity(nil)
+}
+func newJoinServerHarnessWithActivity(activity GameActivityPrivacyInvalidator) *joinServerHarness {
+	return newJoinServerHarnessWithPolicies(nil, activity)
+}
+func newJoinServerHarnessWithPolicies(preferences repository.PreferencesRepository, activity GameActivityPrivacyInvalidator) *joinServerHarness {
 	h := &joinServerHarness{
 		serverRepo: &testutil.MockServerRepo{},
 		roleRepo:   &testutil.MockRoleRepo{},
@@ -90,13 +96,15 @@ func newJoinServerHarness() *joinServerHarness {
 		return false, nil
 	}
 
-	h.svc = NewServerService(nil, h.serverRepo, nil, h.roleRepo, nil, nil, h.userRepo, h.banRepo, h.inviteSvc, h.hub, nil, nil, // encryptionKey, auditLogger — not under test here
+	h.svc = NewServerService(preferences, activity, nil, h.serverRepo, nil, h.roleRepo, nil, nil, h.userRepo, h.banRepo, h.inviteSvc, h.hub, nil, nil, // encryptionKey, auditLogger — not under test here
 		passthroughMembershipTxRunner{server: h.serverRepo, role: h.roleRepo})
 	return h
 }
 
 func TestJoinServer_ValidInvite_AddsMemberAndMarksUsed(t *testing.T) {
-	h := newJoinServerHarness()
+	activity := &recordingGameActivityInvalidator{}
+	prefs := &preferencesRepoStub{}
+	h := newJoinServerHarnessWithPolicies(prefs, activity)
 
 	var addMemberCalled, markUsedCalled, assignRoleCalled bool
 	h.serverRepo.AddMemberFn = func(_ context.Context, serverID, userID string) error {
@@ -137,6 +145,14 @@ func TestJoinServer_ValidInvite_AddsMemberAndMarksUsed(t *testing.T) {
 	if !assignRoleCalled {
 		t.Error("expected default role to be assigned")
 	}
+	if len(activity.calls) != 1 || activity.calls[0] != (gameActivityInvalidationCall{kind: "added", a: joinTestServerID, b: joinTestUserID}) {
+		t.Fatalf("join activity invalidation = %+v", activity.calls)
+	}
+
+	if prefs.userID != joinTestUserID {
+		t.Fatalf("join preferences read for %q, want %q", prefs.userID, joinTestUserID)
+	}
+
 }
 
 func TestJoinServerMemberBroadcastRedactsProfileFields(t *testing.T) {
@@ -256,7 +272,8 @@ func TestJoinServer_AlreadyMember(t *testing.T) {
 // inside AddMember itself (not just the already-member precheck) must also
 // leave the invite's use slot untouched.
 func TestJoinServer_AddMemberFails(t *testing.T) {
-	h := newJoinServerHarness()
+	activity := &recordingGameActivityInvalidator{}
+	h := newJoinServerHarnessWithPolicies(nil, activity)
 	h.serverRepo.AddMemberFn = func(_ context.Context, _, _ string) error {
 		return errors.New("db error: add member failed")
 	}
@@ -273,6 +290,9 @@ func TestJoinServer_AddMemberFails(t *testing.T) {
 	}
 	if markUsedCalled {
 		t.Error("MarkUsed must not be called when AddMember fails (B3 regression)")
+	}
+	if len(activity.calls) != 0 {
+		t.Fatalf("failed join notified activity: %+v", activity.calls)
 	}
 }
 

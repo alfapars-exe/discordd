@@ -51,7 +51,7 @@ func preferencesRequest(method, body string, authenticated bool) *http.Request {
 
 func TestPreferencesHandlerValidPartialPatchAndMetadata(t *testing.T) {
 	repo := &handlerPreferencesRepo{}
-	handler := NewPreferencesHandler(services.NewPreferencesService(repo))
+	handler := NewPreferencesHandler(services.NewPreferencesService(repo, nil, nil, nil))
 	w := httptest.NewRecorder()
 	handler.Update(w, preferencesRequest(http.MethodPatch, `{"data":{"voice_settings":{"masterVolume":75,"inputDevice":"device-secret"}}}`, true))
 	if w.Code != http.StatusOK {
@@ -96,7 +96,7 @@ func TestPreferencesHandlerRejectsInvalidEnvelopesAndFields(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			repo := &handlerPreferencesRepo{}
-			handler := NewPreferencesHandler(services.NewPreferencesService(repo))
+			handler := NewPreferencesHandler(services.NewPreferencesService(repo, nil, nil, nil))
 			w := httptest.NewRecorder()
 			handler.Update(w, preferencesRequest(http.MethodPatch, tt.body, true))
 			if w.Code != tt.status || repo.writes != 0 || !strings.Contains(w.Body.String(), `"success":false`) {
@@ -110,7 +110,7 @@ func TestPreferencesHandlerAuthenticationAndDatabaseErrors(t *testing.T) {
 	for _, method := range []string{http.MethodGet, http.MethodPatch} {
 		for _, authenticated := range []bool{false, true} {
 			repo := &handlerPreferencesRepo{err: errors.New("database failure /private/file.db")}
-			handler := NewPreferencesHandler(services.NewPreferencesService(repo))
+			handler := NewPreferencesHandler(services.NewPreferencesService(repo, nil, nil, nil))
 			w := httptest.NewRecorder()
 			req := preferencesRequest(method, `{"data":{"theme":"ocean"}}`, authenticated)
 			if method == http.MethodGet {
@@ -137,7 +137,7 @@ func TestPreferencesHandlerAccountAffinity(t *testing.T) {
 		for _, expected := range []string{"", "request-user", "different-account"} {
 			t.Run(method+"/"+expected, func(t *testing.T) {
 				repo := &handlerPreferencesRepo{}
-				handler := NewPreferencesHandler(services.NewPreferencesService(repo))
+				handler := NewPreferencesHandler(services.NewPreferencesService(repo, nil, nil, nil))
 				body, err := json.Marshal(models.UpdatePreferencesRequest{ExpectedUserID: expected, Data: json.RawMessage(`{"theme":"ocean"}`)})
 				if err != nil {
 					t.Fatal(err)
@@ -177,7 +177,7 @@ func TestPreferencesHandlerSQLiteIntegration(t *testing.T) {
 	if _, err := db.Conn.Exec(`INSERT INTO users (id, username, password_hash) VALUES (?, ?, ?)`, "request-user", "prefs-http", "x"); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewPreferencesHandler(services.NewPreferencesService(repository.NewSQLitePreferencesRepo(database.NewRetryingQuerier(db.Conn))))
+	handler := NewPreferencesHandler(services.NewPreferencesService(repository.NewSQLitePreferencesRepo(database.NewRetryingQuerier(db.Conn)), nil, nil, nil))
 	w := httptest.NewRecorder()
 	handler.Get(w, preferencesRequest(http.MethodGet, "", true))
 	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"data":{}`) || !strings.Contains(w.Body.String(), `"schema_version":1`) {

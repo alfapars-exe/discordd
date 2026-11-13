@@ -70,12 +70,6 @@ func (s *channelService) SetUploadDir(dir string) {
 	s.uploadDir = dir
 }
 
-// SetVoiceChannelDeletionHandler wires post-commit cleanup without widening
-// ChannelService's public interface or changing its constructor contract.
-func (s *channelService) SetVoiceChannelDeletionHandler(handler VoiceChannelDeletionHandler) {
-	s.voiceDeletionHandler = handler
-}
-
 // audit emits an audit log event if an audit logger is wired. Nil-safe.
 // Same observability pattern as member/role/voice: both branches log so a
 // "I created/renamed/deleted a channel but audit channel stayed empty"
@@ -90,6 +84,7 @@ func (s *channelService) audit(entry models.AuditLog) {
 }
 
 func NewChannelService(
+	voiceDeletionHandler VoiceChannelDeletionHandler,
 	channelRepo repository.ChannelRepository,
 	categoryRepo repository.CategoryRepository,
 	hub ws.BroadcastAndOnline,
@@ -98,12 +93,13 @@ func NewChannelService(
 	notificationRepo repository.NotificationRepository,
 ) ChannelService {
 	return &channelService{
-		channelRepo:      channelRepo,
-		categoryRepo:     categoryRepo,
-		hub:              hub,
-		visChecker:       visChecker,
-		auditLogger:      auditLogger,
-		notificationRepo: notificationRepo,
+		voiceDeletionHandler: voiceDeletionHandler,
+		channelRepo:          channelRepo,
+		categoryRepo:         categoryRepo,
+		hub:                  hub,
+		visChecker:           visChecker,
+		auditLogger:          auditLogger,
+		notificationRepo:     notificationRepo,
 	}
 }
 

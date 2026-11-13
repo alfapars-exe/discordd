@@ -23,7 +23,7 @@ func TestDMEncryptionControlIsHumanOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	dm := repository.NewSQLiteDMRepo(db.Conn)
-	svc := NewDMService(dm, repository.NewSQLiteUserRepo(db.Conn), &testutil.MockBroadcaster{}, nil, nil, nil, repository.NewSQLiteDMReadRepo(db.Conn), repository.NewSQLiteNotificationRepo(db.Conn), repository.NewDMMessageTxRunner(db.Conn))
+	svc := NewDMService(nil, dm, repository.NewSQLiteUserRepo(db.Conn), &testutil.MockBroadcaster{}, nil, nil, nil, repository.NewSQLiteDMReadRepo(db.Conn), repository.NewSQLiteNotificationRepo(db.Conn), repository.NewDMMessageTxRunner(db.Conn), nil, nil)
 	for _, bot := range []string{"game", "legacy"} {
 		ch := &models.DMChannel{User1ID: "alice", User2ID: bot, Status: models.DMStatusAccepted}
 		if err := dm.CreateChannel(ctx, ch); err != nil {
