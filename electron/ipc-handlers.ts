@@ -178,6 +178,7 @@ export function registerIpcHandlers(onCleanup?: (dispose: () => Promise<void>) =
 
   // ─── App / version ──────────────────────────────────────────────
   registerAppCommandIPC(ipcMain, {
+    trusted: assertTrustedMainWindowSender,
     getVersion: () => app.getVersion(), relaunch: () => app.relaunch(), quit: () => app.quit(),
     writeClipboard: text => clipboard.writeText(text), assertString,
   });
