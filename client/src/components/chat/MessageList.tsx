@@ -79,6 +79,7 @@ function MessageList() {
   const currentMember = currentUser ? memberById.get(currentUser.id) : undefined;
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const keyboardReply = useRef<{ targetId: string; button: HTMLElement; conversation: string } | null>(null);
   useConversationPageShortcut(
     mode === "dm" ? { kind: "dm", id: channelId } : { kind: "channel", id: channelId, serverId },
     scrollRef,
@@ -306,6 +307,12 @@ function MessageList() {
     const raf = requestAnimationFrame(() => {
       const el = document.getElementById(`msg-${targetId}`);
       if (el) {
+        const jump = keyboardReply.current;
+        if (jump?.targetId === targetId && jump.conversation === scrollKey &&
+            (document.activeElement === jump.button || document.activeElement === document.body)) {
+          el.focus({ preventScroll: true });
+        }
+        keyboardReply.current = null;
         el.classList.add("msg-highlight");
         setTimeout(() => el.classList.remove("msg-highlight"), 2000);
       }
@@ -313,7 +320,7 @@ function MessageList() {
       setScrollToMessageId(null);
     });
     return () => cancelAnimationFrame(raf);
-  }, [scrollToMessageId, setScrollToMessageId, messages, virtualizer]);
+  }, [scrollToMessageId, setScrollToMessageId, messages, virtualizer, scrollKey]);
 
   /** Scroll handler — save position + update stick-to-bottom intent + trigger infinite scroll */
   const handleScroll = useCallback(() => {
@@ -398,6 +405,13 @@ function MessageList() {
     <div style={{ position: "relative", flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <div
         ref={scrollRef}
+        onClickCapture={event => {
+          const button = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-reply-target]") : null;
+          const targetId = button?.dataset.replyTarget;
+          keyboardReply.current = event.detail === 0 && button && targetId
+            ? { targetId, button, conversation: scrollKey }
+            : null;
+        }}
         onScroll={handleScroll}
         className="messages-scroll"
       >
@@ -441,6 +455,7 @@ function MessageList() {
                   <div
                     key={`${scrollKey}:${String(vi.key)}`}
                     id={`msg-${msg.id}`}
+                    tabIndex={-1}
                     data-index={vi.index}
                     ref={virtualizer.measureElement}
                     style={{

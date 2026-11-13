@@ -501,7 +501,7 @@ function Message({
           </div>
 
           {message.reply_to_id && (
-            <button type="button" className="msg-reply-preview" onClick={handleScrollToReply}>
+            <button type="button" className="msg-reply-preview" data-reply-target={message.reply_to_id} onClick={handleScrollToReply}>
               <span className="msg-reply-bar" />
               {message.referenced_message?.author ? (
                 <>

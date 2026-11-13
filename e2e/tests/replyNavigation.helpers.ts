@@ -32,4 +32,5 @@ export async function expectReplyLoadsOriginal(page: Page, endpoint: string, rep
   expect((await around).ok()).toBe(true);
   await expect(target).toBeInViewport();
   await expect(target).toHaveClass(/msg-highlight/);
+  if (activation === "keyboard") await expect(target).toBeFocused();
 }
