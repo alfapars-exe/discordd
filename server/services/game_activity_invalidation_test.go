@@ -50,9 +50,8 @@ func TestBlockAndUnblockImmediatelyInvalidateGameActivityRelationship(t *testing
 }
 
 func TestFriendshipAcceptAndRemoveImmediatelyInvalidateGameActivityRelationship(t *testing.T) {
-	f := newFriendSvcFixture(t)
 	invalidator := &recordingGameActivityInvalidator{}
-	f.svc.(*friendshipService).SetGameActivityPrivacyInvalidator(invalidator)
+	f := newFriendSvcFixtureWithActivity(t, invalidator)
 	f.setByID(pendingFriendship("alice", "bob"))
 	f.friends.UpdateStatusFn = func(context.Context, string, models.FriendshipStatus) error { return nil }
 	f.notif.MarkFriendRequestReadFn = func(context.Context, string, string) ([]string, error) { return nil, nil }

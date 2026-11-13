@@ -326,7 +326,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		},
 		repos.Server,
 	)
-	friendshipService := services.NewFriendshipService(repos.Friendship, repos.User, repos.Notification, hub, friendRequestPolicy)
+	friendshipService := services.NewFriendshipService(gameActivityService, repos.Friendship, repos.User, repos.Notification, hub, friendRequestPolicy)
 	friendshipService.SetEmailEnqueuer(emailDeliveryService)
 	dmService := services.NewDMService(
 		services.NewServerDMPolicy(repos.Preferences, repos.Server),
@@ -397,11 +397,6 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		})
 	}
 
-	if setter, ok := friendshipService.(interface {
-		SetGameActivityPrivacyInvalidator(services.GameActivityPrivacyInvalidator)
-	}); ok {
-		setter.SetGameActivityPrivacyInvalidator(gameActivityService)
-	}
 	if setter, ok := memberService.(interface {
 		SetGameActivityPrivacyInvalidator(services.GameActivityPrivacyInvalidator)
 	}); ok {
