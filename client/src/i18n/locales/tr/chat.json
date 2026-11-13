@@ -1,4 +1,5 @@
 {
+  "replyTargetUnavailable": "Yanıt verilen mesaj açılamadı.",
   "spamSyncFailed": "Spam kutusuna kaydedilemedi.",
   "spamRetry": "Tekrar dene",
   "spamHidden": "Şüpheli spam mesajı gizlendi. Mesaj silinmedi.",

@@ -1,4 +1,5 @@
 {
+  "replyTargetUnavailable": "Could not open the original message.",
   "spamSyncFailed": "Could not save to the spam inbox.",
   "spamRetry": "Retry",
   "spamHidden": "Suspected spam hidden. The message has not been deleted.",

@@ -1,5 +1,6 @@
 /** DMChatProvider — Maps DM store to ChatContext (no roles/permissions in DMs). */
 
+import { useReplyNavigation } from "../../hooks/useReplyNavigation";
 import { useMemo, useCallback, useRef, type ReactNode } from "react";
 import { ChatContext, type ChatContextValue, type ChatMessage } from "../../hooks/useChatContext";
 import { useDMStore } from "../../stores/dmStore";
@@ -108,10 +109,11 @@ function DMChatProvider({
     [draftKey]
   );
 
-  const setScrollToMessageId = useCallback(
-    (id: string | null) => storeSetScrollToMessageId(id),
-    [storeSetScrollToMessageId]
-  );
+  const containsMessage = useCallback((id: string) =>
+    useDMStore.getState().messagesByChannel[channelId]?.some(message => message.id === id) ?? false, [channelId]);
+  const loadReplyWindow = useCallback((id: string, context: { isCurrent: () => boolean }) =>
+    useDMStore.getState().fetchMessagesAround(channelId, id, context), [channelId]);
+  const setScrollToMessageId = useReplyNavigation(draftKey, containsMessage, loadReplyWindow, storeSetScrollToMessageId);
 
   const sendTyping = useCallback(
     () => sendDMTypingProp(channelId),
