@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useId } from "react";
+import { createContext, useContext, useLayoutEffect, useId } from "react";
 import type { SettingsTab } from "../../stores/settingsStore";
 
 export type SettingsSection = { id: string; label: string };
@@ -20,7 +20,7 @@ export function useSettingsDraft(dirty: boolean) {
   const workspace = useContext(SettingsWorkspaceContext);
   const register = workspace?.registerDraft;
   const id = useId();
-  useEffect(() => {
+  useLayoutEffect(() => {
     register?.(id, dirty);
     return () => register?.(id, false);
   }, [register, id, dirty]);

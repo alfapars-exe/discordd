@@ -582,3 +582,9 @@ Paralel çalışma hatları: backend veri/lifecycle (RF04–RF11), client state/
 - İlgisiz dirty dosyalar staged edilmez; commit/PR/release artifact'i ile kanıt kaydı aynı kaynak anlık görüntüsünü gösterir.
 - Rollback küçük PR'ın revert'iyle mümkün tutulur. Veri migration'ı varsa backup/restore provası olmadan release kapısı kapanmaz.
 - [REFACTORING_PLAN.md](REFACTORING_PLAN.md), [TECHNICAL_DEBT.md](TECHNICAL_DEBT.md), [TEST_STRATEGY.md](TEST_STRATEGY.md), [CODE_QUALITY_STANDARDS.md](CODE_QUALITY_STANDARDS.md) ve [ARCHITECTURE_IMPROVEMENTS.md](ARCHITECTURE_IMPROVEMENTS.md) ilgili kararlarla eşleşir.
+
+### RF20 - main-window native command ownership (2026-11-13)
+
+- Two failing-before regressions demonstrated badge, flash, minimize, maximize and close commands did not reject foreign/retired main frames. All five now require the existing current-main assertion before validation, image creation, tray mutation or native window calls.
+- Tests cover foreign contents, subframes, missing frames, destroyed/absent windows and old navigation frames, with zero effects after denial and successful current-frame use. Existing bounds, image URL rejection, focus/maximize behavior and badge clearing remain covered. The former absent-window no-op fixture now explicitly exercises the owner disappearing after successful authorization; a caller whose owner is absent at authorization is rejected.
+- Integration 3d7ce640: full Electron 399 pass/1 skip. Canonical PR #283 source 58f2a10e: fresh unique TypeScript output, full Electron 275 pass/1 skip. Logs: %TEMP%/hichat-window-sender-before.log, hichat-window-sender-after.log and hichat-window-sender-canonical.log. No physical badge/taskbar/titlebar behavior was exercised; final inventory/runtime acceptance remains open.

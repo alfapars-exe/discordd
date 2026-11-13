@@ -1,3 +1,4 @@
+import { registerWindowControlIPC } from "./window-control-ipc";
 import { createOverlayMediaBroker } from "./overlay-media-broker";
 import { registerCS2JoinIPC } from "./cs2-join-ipc";
 import { registerGameNameIPC } from "./registered-game-name-ipc";
@@ -39,8 +40,6 @@ const APP_SETTING_VALIDATORS: Record<string, (v: unknown) => v is boolean> = {
 };
 
 const MAX_CLIPBOARD_BYTES = 10 * 1024 * 1024; // 10 MB — prevent renderer-side DoS
-const MAX_BADGE_COUNT = 99999;
-const MAX_BADGE_ICON_BYTES = 256 * 1024; // 256 KB data URL
 const MAX_PTT_KEYCODE_LEN = 64; // generous bound for any keycode string
 
 function assertString(value: unknown, name: string, maxLen: number): asserts value is string {
@@ -441,49 +440,12 @@ export function registerIpcHandlers(): void {
   });
 
   // ─── Taskbar overlay icon (Windows unread badge) ─────────────────
-  ipcMain.handle(
-    "set-badge-count",
-    (_e: Electron.IpcMainInvokeEvent, count: unknown, iconDataURL: unknown) => {
-      // Audit 2026-05-27: validate untrusted renderer input.
-      assertFiniteNumber(count, "badge count", 0, MAX_BADGE_COUNT);
-      if (iconDataURL !== null) {
-        assertString(iconDataURL, "iconDataURL", MAX_BADGE_ICON_BYTES);
-        // Restrict to data:image/* — refuse javascript:, file:, http:, etc.
-        if (!iconDataURL.startsWith("data:image/")) {
-          throw new TypeError("iconDataURL must be a data:image/* URL");
-        }
-      }
-      const win = getMainWindow();
-      if (!win) return;
-      if (count === 0 || !iconDataURL) {
-        win.setOverlayIcon(null, "");
-      } else {
-        // iconDataURL is narrowed to string by assertString above
-        win.setOverlayIcon(
-          nativeImage.createFromDataURL(iconDataURL),
-          `${count} unread`,
-        );
-      }
-      setTrayTooltip(count > 0 ? `HiChat! (${count})` : "HiChat!");
-    },
-  );
-
-  ipcMain.handle("flash-frame", () => {
-    const win = getMainWindow();
-    if (win && !win.isFocused()) win.flashFrame(true);
+  registerWindowControlIPC(ipcMain, {
+    trusted: assertTrustedMainWindowSender,
+    getMainWindow, setTrayTooltip, assertString, assertFiniteNumber,
+    createBadgeImage: url => nativeImage.createFromDataURL(url),
   });
 
-  // ─── Custom titlebar window controls ─────────────────────────────
-  ipcMain.handle("minimize-window", () => getMainWindow()?.minimize());
-  ipcMain.handle("maximize-window", () => {
-    const win = getMainWindow();
-    if (!win) return;
-    if (win.isMaximized()) win.unmaximize();
-    else win.maximize();
-  });
-  ipcMain.handle("close-window", () => getMainWindow()?.close());
-
-  // ─── Clipboard (sandbox-safe path via main process) ──────────────
   ipcMain.handle("write-clipboard", (_e, text: unknown) => {
     // Audit 2026-05-27: prevent renderer-induced clipboard DoS.
     assertString(text, "clipboard text", MAX_CLIPBOARD_BYTES);
