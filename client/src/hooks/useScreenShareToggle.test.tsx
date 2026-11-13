@@ -197,6 +197,18 @@ afterEach(async () => {
 });
 
 describe("guild screen-share profile lifecycle", () => {
+  it("rolls back native sharing when the platform returns started=false", async () => {
+    h.capacitor = true;
+    h.token.mockResolvedValue({ success: true, data: { url: "wss://media", token: "token" } });
+    h.startNative.mockResolvedValue(false);
+    fixture();
+    await tick();
+    expect(h.startNative).toHaveBeenCalledWith("wss://media", "token");
+    expect(voice.getState().isStreaming).toBe(false);
+    expect(voice.getState()._wsSend).toHaveBeenCalledWith("voice_state_update_request", { is_streaming: false });
+    expect(voice.getState()._wsSend).not.toHaveBeenCalledWith("voice_state_update_request", { is_streaming: true });
+    expect(h.toast).toHaveBeenCalledTimes(1);
+  });
   it("does not roll back a newer owner when an unmounted native token request fails late", async () => {
     h.capacitor = true;
     let complete!: (response: { success: boolean; error: string }) => void;

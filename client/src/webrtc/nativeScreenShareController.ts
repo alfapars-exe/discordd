@@ -8,7 +8,7 @@ type NativeShareOperations = {
   getServerId: () => string | null;
   getChannelId: () => string | null;
   getToken: (serverId: string, channelId: string) => Promise<TokenResponse>;
-  start: (url: string, token: string) => Promise<unknown>;
+  start: (url: string, token: string) => Promise<boolean>;
   stop: () => Promise<unknown>;
   tokenFailed: (error: string | undefined) => void;
   channelChanged: () => void;
@@ -32,8 +32,10 @@ export function createNativeScreenShareController(operations: NativeShareOperati
         operations.channelChanged();
         return;
       }
-      await operations.start(response.data.url, response.data.token);
-      if (!shouldCancel()) operations.started();
+      const started = await operations.start(response.data.url, response.data.token);
+      if (shouldCancel()) return;
+      if (!started) throw new Error("Native screen share did not start");
+      operations.started();
     },
     async stop(): Promise<void> { await operations.stop(); },
   };
