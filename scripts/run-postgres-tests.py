@@ -15,6 +15,26 @@ REQUIRED_PACKAGES = {
 }
 REDACTED_DATABASE = "[test-database]"
 REQUIRED_SERVER_POSTGRES_TEST = "TestPurgeExpiredNotificationsPostgres"
+REQUIRED_SERVICE_POSTGRES_TESTS = (
+    "TestPostgresRolePatchConcurrentChanges",
+    "TestPostgresMemberRoleReplacement",
+    "TestVoiceMaintenanceAFKPostgresCancellation",
+    "TestVoiceUsagePostgresReplayTransaction",
+    "TestVoiceUsagePostgresPendingRecovery",
+    "TestVoiceUsagePostgresServiceHandoffSurvivesApplyFailure",
+    "TestVoiceUsagePostgresShutdownJoinsAcceptedCredit",
+    "TestVoiceUsagePostgresShutdownFinalizesActiveSession",
+    "TestVoiceUsagePostgresShutdownCreditsBeforeMediaWait",
+    "TestVoiceUsagePostgresShutdownHandsOffAllBeforeMedia",
+    "TestVoiceUsagePostgresShutdownRecoversFailedApplication",
+    "TestVoiceUsagePostgresShutdownJoinsPermissionRecheck",
+    "TestVoiceUsagePostgresLateMemberRevocationPreservesCredit",
+    "TestVoiceUsageCreditPostgresDeadline",
+    "TestVoiceUsageCreditPostgresAdditiveWrites",
+    "TestDeliveryStopCancelsPoolWait",
+    "TestDeliveryClaimCancellationLogging",
+    "TestPostgresMetricsCollectorCancellation",
+)
 
 
 def redact_database_urls(output, dsn):
@@ -94,16 +114,12 @@ def main():
     if code or skipped or missing_packages or not postgres_retention_passed or not usage_migration_passed or invalid_output or reported_failure:
         return code or 1
     # Delivery, authorization and collector lifecycle require real PostgreSQL waits.
-    service_contract_tests = (
-        "TestPostgresRolePatchConcurrentChanges",
-        "TestPostgresMemberRoleReplacement", "TestVoiceMaintenanceAFKPostgresCancellation", "TestVoiceUsagePostgresReplayTransaction", "TestVoiceUsagePostgresPendingRecovery", "TestVoiceUsagePostgresServiceHandoffSurvivesApplyFailure", "TestVoiceUsagePostgresShutdownJoinsAcceptedCredit", "TestVoiceUsagePostgresShutdownFinalizesActiveSession", "TestVoiceUsagePostgresShutdownCreditsBeforeMediaWait", "TestVoiceUsagePostgresShutdownHandsOffAllBeforeMedia", "TestVoiceUsagePostgresShutdownRecoversFailedApplication", "TestVoiceUsagePostgresShutdownJoinsPermissionRecheck", "TestVoiceUsagePostgresLateMemberRevocationPreservesCredit", "TestVoiceUsageCreditPostgresDeadline", "TestVoiceUsageCreditPostgresAdditiveWrites", "TestDeliveryStopCancelsPoolWait", "TestDeliveryClaimCancellationLogging",
-        "TestPostgresMetricsCollectorCancellation",
-    )
-    selection = "^(TestChannelDelivery|TestDMIdempotent|TestDMOutbox|TestDMMarkUnreadFrom|" + "|".join(service_contract_tests) + ")"
+
+    selection = "^(TestChannelDelivery|TestDMIdempotent|TestDMOutbox|TestDMMarkUnreadFrom|" + "|".join(REQUIRED_SERVICE_POSTGRES_TESTS) + ")"
     services = subprocess.run(["go", "test", "-v", "-count=1", "-timeout=2m", "./services", "-run", selection],
                               cwd=root / "server", stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     print(redact_database_urls(services.stdout, dsn), end="", flush=True)
-    required_tests = (*service_contract_tests, "TestChannelDeliveryConcurrentRetryAndDeletion",
+    required_tests = (*REQUIRED_SERVICE_POSTGRES_TESTS, "TestChannelDeliveryConcurrentRetryAndDeletion",
                       "TestDMIdempotentAttachmentsConcurrentReplayKeepsOneOrderedSet",
                       "TestDMOutboxCommitRecoveryReplayAndAuthorization", "TestDMMarkUnreadFrom_ConcurrentSend")
     passed = set(re.findall(r"^--- PASS: (\w+) \(", services.stdout, re.MULTILINE))

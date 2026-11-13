@@ -1467,3 +1467,8 @@ Terminal current-head receipt: PR29814a965ea completed36/36 SUCCESS. Exact-head 
 
 - Published22aae5bb PostgreSQL job132225881418 completed SUCCESS. Downloaded completed log, verified all four mandatory active shutdown tests passed and selected native race step completed SUCCESS with TestVoiceUsagePostgres included. Receipt: `implementation/verification/refactor-pr298-22-native-ci-2026-11-14.json`. Overall43524233537 still live on repository shards; do not report overall green yet.
 - Canonical local fbf10657 now contains accepted-snapshot test, orphan metadata cleanup and terminal key creation fence. Host tests20 passed4.524s, full vet/build/lint passed. Not pushed to avoid cancelling existing native/repository CI; receipt: `implementation/verification/refactor-terminal-key-canonical-prepared-2026-11-14.json`. Its new race proof remains pending, distinct from published22.
+
+### 2026-11-14 — Make mandatory PostgreSQL service list reviewable
+
+- Extracted the18 required native service test names into one module-level tuple, one name per line. Selection and mandatory-pass checks use the same unchanged ordered tuple. AST comparison against previous source proved exact ordered identity; all14 runner tests passed (0.077s before quote formatting; final pass rerun). No new skips, filters or weakened checks.
+- Local integration only. Published22aae5bb repository shards completed without failure; Combined Go statement coverage is the last live ServerCI job at the latest poll. Prepared canonical fbf10657 remains unpushed until that terminal receipt is captured.
