@@ -171,6 +171,8 @@ type RateLimiters struct {
 	// caller could spam N servers per request. 10/min per user, 30s
 	// cooldown (same shape as SocialAction). One shared budget for both.
 	CosmeticEquip *ratelimit.MessageRateLimiter
+	// GameJoin is shared by all game-join endpoints, preserving 60/min per user.
+	GameJoin *ratelimit.LoginRateLimiter
 }
 
 // initServices creates all services. Order matters:
@@ -560,6 +562,8 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	// exceeded -- see the RateLimiters.CosmeticEquip doc comment above.
 	cosmeticEquipLimiter := ratelimit.NewMessageRateLimiter(10, 1*time.Minute, 30*time.Second)
 
+	gameJoinLimiter := ratelimit.NewLoginRateLimiter(60, time.Minute)
+
 	svcs := &Services{
 		Auth:                    authService,
 		MFA:                     mfaService,
@@ -638,6 +642,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	}
 
 	limiters := &RateLimiters{
+		GameJoin:         gameJoinLimiter,
 		Login:            loginLimiter,
 		Message:          messageLimiter,
 		DMMessage:        dmMessageLimiter,
