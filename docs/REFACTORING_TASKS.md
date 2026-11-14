@@ -1933,3 +1933,8 @@ Security correction to the former failure-path status contract: valid forgot-pas
 ### RF07 — composed HTTP registration/legacy login contract (2026-11-14)
 
 A new test composes actual AuthHandler with actual auth service and explicit fake repositories. New registration without email returns400 before username lookup; an existing email-less account logs in with correct password, receives access token and HttpOnly refresh cookie, and never returns the password hash. Wrong password remains401 with no cookie. Focused legacy/recovery/credential handler tests and handler vet pass. This closes that composed handler/service compatibility gap, not real database/browser acceptance or whole RF07.
+
+
+### RF07 — actual identifier case semantics across databases (2026-11-14)
+
+New repository contract verifies existing username case-insensitive lookup and exact stored-email lookup (different email casing is not found), using actual migrated SQLite and dedicated PostgreSQL18.6. Both pass with no skips. Recovery trims identifier boundaries in its existing model/service tests; this test prevents inventing incompatible email case-folding without reconciling registration/uniqueness. Dedicated loopback/non-TLS container stopped after verification. This is case-boundary storage evidence, not complete RF07 or physical provider acceptance.
