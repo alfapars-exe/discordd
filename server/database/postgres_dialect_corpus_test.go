@@ -48,3 +48,42 @@ func checkRepositoryCursorAndListFamilies(t *testing.T, tx *sql.Tx, first, next 
 		})
 	}
 }
+
+// UPDATE RETURNING is used by role PATCH; DELETE IN (SELECT ...) is used by
+// server cascade cleanup. Exercise matching and non-matching tenant predicates.
+func checkRepositoryMutationFamilies(t *testing.T, tx *sql.Tx) {
+	t.Helper()
+	for _, target := range []string{"b", "missing"} {
+		var got string
+		err := tx.QueryRow(`UPDATE dialect_grant SET note=? WHERE owner=? AND target=? RETURNING target`, "patched ? literal", "owner", target).Scan(&got)
+		if target == "missing" {
+			if err != sql.ErrNoRows {
+				t.Fatalf("missing RETURNING: %q, %v", got, err)
+			}
+		} else if err != nil || got != target {
+			t.Fatalf("matched RETURNING: %q, %v", got, err)
+		}
+	}
+	var note string
+	if err := tx.QueryRow(`SELECT note FROM dialect_grant WHERE owner=? AND target=?`, "owner", "b").Scan(&note); err != nil || note != "patched ? literal" {
+		t.Fatalf("bound update value: %q, %v", note, err)
+	}
+	for _, owner := range []string{"other-owner", "owner"} {
+		result, err := tx.Exec(`DELETE FROM dialect_grant WHERE owner=? AND target IN (
+   SELECT target FROM dialect_grant WHERE owner=? AND target=?)`, owner, "owner", "b")
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := int64(0)
+		if owner == "owner" {
+			want = 1
+		}
+		if got, err := result.RowsAffected(); err != nil || got != want {
+			t.Fatalf("cascade owner %q: affected %d, want %d: %v", owner, got, want, err)
+		}
+	}
+	var count int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM dialect_grant WHERE owner=?`, "owner").Scan(&count); err != nil || count != 2 {
+		t.Fatalf("remaining tenant rows: %d, %v", count, err)
+	}
+}

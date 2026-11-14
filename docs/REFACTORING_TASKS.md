@@ -1878,3 +1878,8 @@ The real applyAccountPreferences adapter used by bootstrap now has a composed vo
 ### RF05 — current lexical boundary audit (2026-11-14)
 
 Current postgres_dialect has no regex/upsert text rewrite: native migration dispatch is preserved and ordinary repository markers pass through lexical binding. Local bind/migration-dispatch contract selection passes, including malformed quoted tokens, escapes, comments, dollar strings and bind bounds. This does not establish complete production query-family inventory or native result equivalence. Existing cursor/list corpus is explicitly representative. RF05 remains open pending positive/negative fixture mapping for all used families; no injection vulnerability is inferred from the gap. Receipt: implementation/verification/refactor-rf05-current-boundary-audit-2026-11-14.json.
+
+
+### RF05 — mutation family result equivalence (2026-11-14)
+
+Shared dialect contracts now exercise role-style UPDATE RETURNING and cascade-style DELETE IN SELECT. Matching/missing updates, literal bound values, owner-mismatch zero effects, matching deletion and remaining rows are asserted before rollback. The same contract passed SQLite and dedicated PostgreSQL18.6 with zero skips. Owned temporary container stopped; dev containers untouched. Local loopback/non-TLS/non-race evidence does not replace CI race/TLS gates. Full family inventory remains open. Receipt: implementation/verification/refactor-rf05-mutation-equivalence-2026-11-14.json.

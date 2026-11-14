@@ -132,6 +132,7 @@ func checkRepositoryDialect(t *testing.T, db *sql.DB) {
 		}
 	}
 	checkRepositoryCursorAndListFamilies(t, tx, first, next)
+	checkRepositoryMutationFamilies(t, tx)
 	if _, err := tx.ExecContext(ctx, insert, "too few"); err == nil {
 		t.Fatal("accepted missing parameters")
 	}
