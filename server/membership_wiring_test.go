@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/services"
 	"github.com/argeinfina/hichat/ws"
 	"reflect"
@@ -55,5 +56,36 @@ func TestMembershipCompositionReturnsAllDeclaredOwners(t *testing.T) {
 	group := initMembershipServices(membershipFixtureDependencies(t))
 	if group.Members == nil || group.Roles == nil || group.Servers == nil {
 		t.Fatalf("incomplete membership group: %+v", group)
+	}
+}
+
+func TestMembershipCompositionRejectsMissingRepositories(t *testing.T) {
+	base := membershipFixtureDependencies(t)
+	for _, field := range []string{"Preferences", "User", "Role", "Ban", "MemberTimeout", "Server", "LiveKit", "Channel", "Category"} {
+		t.Run(field, func(t *testing.T) {
+			deps := base
+			repos := *base.Repositories
+			deps.Repositories = &repos
+			value := reflect.ValueOf(&repos).Elem().FieldByName(field)
+			value.Set(reflect.Zero(value.Type()))
+			var caught any
+			func() { defer func() { caught = recover() }(); initMembershipServices(deps) }()
+			if fmt.Sprint(caught) != "membership requires repository "+field {
+				t.Fatalf("panic=%v want missing %s", caught, field)
+			}
+		})
+	}
+}
+
+type nilMembershipServer struct{ repository.ServerStore }
+
+func TestMembershipCompositionRejectsTypedNilServer(t *testing.T) {
+	deps := membershipFixtureDependencies(t)
+	var value *nilMembershipServer
+	deps.Repositories.Server = value
+	var caught any
+	func() { defer func() { caught = recover() }(); initMembershipServices(deps) }()
+	if fmt.Sprint(caught) != "membership requires repository Server" {
+		t.Fatalf("typed nil server accepted: %v", caught)
 	}
 }

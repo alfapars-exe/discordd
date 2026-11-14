@@ -47,6 +47,17 @@ func initMembershipServices(deps membershipDependencies) membershipServices {
 		}
 	}
 	repos := deps.Repositories
+	for _, input := range []struct {
+		name  string
+		value any
+	}{
+		{"Preferences", repos.Preferences}, {"User", repos.User}, {"Role", repos.Role}, {"Ban", repos.Ban},
+		{"MemberTimeout", repos.MemberTimeout}, {"Server", repos.Server}, {"LiveKit", repos.LiveKit}, {"Channel", repos.Channel}, {"Category", repos.Category},
+	} {
+		if missingCompositionInput(input.value) {
+			panic("membership requires repository " + input.name)
+		}
+	}
 	transactions := repository.NewServerMembershipTxRunner(deps.Database)
 	members := services.NewMemberService(deps.Activity, deps.Profiles, repos.User, repos.Role, repos.Ban, repos.MemberTimeout, repos.Server, transactions, deps.Hub, deps.Voice, deps.Audit, deps.UserCache, deps.Permissions, deps.ProfileUpdates)
 	roles := services.NewRoleService(repos.Role, transactions, deps.Hub, deps.Audit, deps.Permissions)

@@ -2568,3 +2568,9 @@ Root startup/rollback/callback/cache/route and actual role-revocation/auth-cache
 initMembershipServices validates Database, Repositories, Hub, Voice, Activity, Profiles, Invites, Audit, UserCache, Permissions and ProfileUpdates before constructing services or capturing voice cleanup. Eleven missing-input cases and typed-nil voice regression failed first; valid-group test confirms all three service owners are retained. Controlled interface providers test the composition boundary only; actual root role/auth-cache integration tests retain behavioral provider coverage.
 
 Root membership/startup/rollback/callback/cache/route tests passed (4.594s), build and root vet passed; all 50 reviewed source records validate unchanged. Individual membership repository fields and other domain matrices remain open. Remote Server CI 43651387878 on 08c1494f completed successfully; total PR rollup must still be checked before a global CI claim.
+
+### RF11 — membership repository dependency matrix (2026-11-15)
+
+Membership composition now validates Preferences, User, Role, Ban, MemberTimeout, Server, LiveKit, Channel and Category repositories before creating its shared transaction coordinator. Nine missing-repository cases and a typed-nil ServerStore case failed before implementation. The earlier top-level dependency matrix and valid three-owner construction remain intact. No lower-level service optional behavior or transaction semantics changed.
+
+Root membership/startup/callback/cache/route and real role/auth-cache wiring checks passed (5.017s); build, root vet and all 50 reviewed source records passed. This is composition presence validation, not DB connectivity or repository/DB identity proof. Other domain grouping/required-input inventories and full RF11 combined/race acceptance remain open. CI 43652505951 on ef2c2e72 is live, five completed jobs without observed failure.
