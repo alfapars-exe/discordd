@@ -29,6 +29,15 @@ type MessageService interface {
 	SetUploadDir(dir string)
 }
 
+// MessageRuntime retains delivery completion and worker ownership at composition.
+// Read-only consumers continue to depend on MessageService.
+type MessageRuntime interface {
+	MessageService
+	CompleteChannelSend(context.Context, *models.Message) error
+	AttachmentOutcome(context.Context, string, int, *models.Attachment, string) error
+	StartChannelDelivery(context.Context) func()
+}
+
 type messageService struct {
 	deliveryDB      *sql.DB
 	deliveryWake    chan struct{}
@@ -90,7 +99,7 @@ func NewMessageService(
 	auditLogger AuditWriter,
 	notificationRepo repository.NotificationRepository,
 	deliveryDB *sql.DB,
-) MessageService {
+) MessageRuntime {
 	// Nil deliberately keeps standalone/legacy fixtures on their direct path.
 	var wake chan struct{}
 	if deliveryDB != nil {

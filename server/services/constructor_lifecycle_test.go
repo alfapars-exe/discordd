@@ -465,3 +465,15 @@ func TestMessageConstructorDeclaresDurableDeliveryDatabase(t *testing.T) {
 		t.Fatal("durable delivery database must be explicit")
 	}
 }
+
+func TestMessageFactoryDeclaresDeliveryRuntime(t *testing.T) {
+	result := reflect.TypeOf(NewMessageService).Out(0)
+	required := reflect.TypeFor[interface {
+		CompleteChannelSend(context.Context, *models.Message) error
+		AttachmentOutcome(context.Context, string, int, *models.Attachment, string) error
+		StartChannelDelivery(context.Context) func()
+	}]()
+	if !result.Implements(required) {
+		t.Fatalf("factory result %s hides delivery runtime", result)
+	}
+}

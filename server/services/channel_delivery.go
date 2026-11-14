@@ -120,9 +120,12 @@ func (s *messageService) loadAttachmentStates(ctx context.Context, m *models.Mes
 }
 
 // StartChannelDelivery returns a stop function which waits for its worker.
-func StartChannelDelivery(parent context.Context, service MessageService) func() {
-	s, ok := service.(*messageService)
-	if !ok || s.deliveryDB == nil {
+func StartChannelDelivery(parent context.Context, service interface{ StartChannelDelivery(context.Context) func() }) func() {
+	return service.StartChannelDelivery(parent)
+}
+
+func (s *messageService) StartChannelDelivery(parent context.Context) func() {
+	if s.deliveryDB == nil {
 		return func() { /* No worker exists for a legacy fixture. */ }
 	}
 	ctx, cancel := channelWorkerContext(parent)

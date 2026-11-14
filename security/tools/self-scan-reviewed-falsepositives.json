@@ -340,18 +340,18 @@
     {
       "rule": "go.sql-concat",
       "path": "server/services/channel_delivery.go",
-      "file_sha256": "c25d859eb2359348bdf6dedb354bff883f5954923912d695209b34fe77f78a54",
+      "file_sha256": "b8dfff5ac3c4390896161a93b5d3f320cbd7b1e6631fb39b7470f63c9e37812a",
       "line_sha256": "b9e0dcf41d9c6f4062cda62024095077af22625d7f722a3e1b4a89c426369e0a",
       "reason": "The exact match contains fixed SQL arithmetic for attempt counts and lease timestamps, with no SQL string interpolation.",
-      "proof_ref": "server/services/channel_delivery.go:250"
+      "proof_ref": "server/services/channel_delivery.go:253"
     },
     {
       "rule": "go.sql-concat",
       "path": "server/services/channel_delivery.go",
-      "file_sha256": "c25d859eb2359348bdf6dedb354bff883f5954923912d695209b34fe77f78a54",
+      "file_sha256": "b8dfff5ac3c4390896161a93b5d3f320cbd7b1e6631fb39b7470f63c9e37812a",
       "line_sha256": "11bc8e7a1de4aeca027449fff5f2c52dc0b81088401995e892fcac6344f7d84c",
       "reason": "The exact match contains fixed SQL arithmetic for attempt counts and lease timestamps, with no SQL string interpolation.",
-      "proof_ref": "server/services/channel_delivery.go:264"
+      "proof_ref": "server/services/channel_delivery.go:267"
     },
     {
       "rule": "go.sql-concat",

@@ -282,7 +282,7 @@ func main() {
 	stopServerEvents := svcs.ServerEventWorker.Start(context.Background())
 	stopFriendAnniversaries := svcs.FriendAnniversaryWorker.Start(context.Background())
 	stopEmailDelivery := svcs.EmailDelivery.Start(context.Background())
-	stopChannelDelivery := services.StartChannelDelivery(context.Background(), svcs.Message)
+	stopChannelDelivery := svcs.Message.StartChannelDelivery(context.Background())
 	defer stopChannelDelivery()
 	stopDMDelivery, dmDeliveryErr := services.StartDMDelivery(ownerCtx, svcs.DM)
 	if dmDeliveryErr != nil {

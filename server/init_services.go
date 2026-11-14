@@ -40,7 +40,7 @@ type Services struct {
 	Channel                 services.ChannelService
 	Thread                  services.ThreadService
 	Category                services.CategoryService
-	Message                 services.MessageService
+	Message                 services.MessageRuntime
 	Upload                  services.UploadService
 	DMUpload                services.DMUploadService
 	GroupDMUpload           services.GroupDMUploadService
