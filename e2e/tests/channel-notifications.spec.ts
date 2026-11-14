@@ -1,3 +1,4 @@
+import { setChannelNoticePreference } from "./channelNoticePreference.helpers";
 import { test, expect, type Page } from "@playwright/test";
 import {
   composer,
@@ -9,7 +10,6 @@ import {
   resetChannelNotificationFixture,
 } from "./helpers";
 
-const PREFERENCE_PATH = "/api/users/me/preferences";
 const NOTIFICATION_LIST_PATH = "/api/users/me/notifications";
 
 async function openFixtureChannel(page: Page, serverName: string, channelName: string): Promise<void> {
@@ -29,36 +29,6 @@ async function sendMessage(page: Page, text: string): Promise<void> {
   // Grouped follow-up messages share a rendered text node with their timestamp,
   // so assert the unique marker in its message article instead of exact text.
   await expect(messageList(page).getByRole("article").filter({ hasText: text })).toBeVisible({ timeout: 15_000 });
-}
-
-async function setChannelNoticePreference(page: Page, enabled: boolean): Promise<void> {
-  const opener = page.getByRole("button", { name: "Settings", exact: true });
-  await opener.focus();
-  await opener.press("Enter");
-  const settings = page.getByRole("dialog", { name: "Settings" });
-  await expect(settings).toBeVisible();
-  await expect.poll(() => settings.evaluate(dialog => dialog.contains(document.activeElement))).toBe(true);
-  await settings.getByRole("button", { name: "Notifications", exact: true }).click();
-  const toggle = settings.getByRole("checkbox", { name: "Channel message notices", exact: true });
-  await expect(toggle).toBeAttached();
-  if ((await toggle.isChecked()) !== enabled) {
-    const saved = page.waitForResponse((response) => {
-      const url = new URL(response.url());
-      return url.pathname === PREFERENCE_PATH
-        && response.request().method() === "PATCH"
-        && response.ok();
-    });
-    // The checkbox is visually hidden (width/height 0); click its visible
-    // switch label, which is the control a user actually operates.
-    const switchLabel = toggle.locator("xpath=..");
-    await expect(switchLabel).toHaveClass(/\bvs-switch\b/);
-    await switchLabel.click();
-    await saved;
-    await expect(toggle).toBeChecked({ checked: enabled });
-  }
-  await page.keyboard.press("Escape");
-  await expect(settings).toBeHidden();
-  await expect(opener).toBeFocused();
 }
 
 async function refreshNotificationRows(page: Page) {
