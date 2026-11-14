@@ -128,10 +128,17 @@ func (h *Hub) addClient(client *Client) {
 // RequestGameActivitySnapshot is called after ready is queued so activity
 // snapshots cannot overtake the stream's initial synchronization marker.
 func (h *Hub) RequestGameActivitySnapshot(userID string) {
-	cb := h.onGameActivitySnapshot
-	if cb != nil {
-		go cb(userID)
+	h.mu.Lock()
+	if h.shuttingDown || h.onGameActivitySnapshot == nil {
+		h.mu.Unlock()
+		return
 	}
+	cb := h.onGameActivitySnapshot
+	// Share the bounded owner and same-user ordering used by connect/update.
+	// Shutdown cancels queued tickets and joins callbacks already running.
+	ticket := h.presenceCallbacks.reserve(userID, "game_activity_snapshot")
+	h.mu.Unlock()
+	h.presenceCallbacks.submit(ticket, func() { cb(userID) })
 }
 
 func (h *Hub) QueueGameActivityUpdate(client *Client, sequence uint64, game *GameActivityClientGame) {
