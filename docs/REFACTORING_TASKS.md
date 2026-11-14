@@ -1828,3 +1828,8 @@ Two declared-type regressions failed first: notification factory omitted reactio
 ### RF11 — DM/group reaction writer contracts (2026-11-14)
 
 DM now receives its reaction writer as an explicit narrow constructor dependency; its ordinary inbox repository remains for other operations. Group uses NotificationStore because the same dependency also serves unread-summary refresh; its field is now named notifications. Constructor regressions failed first. Runtime reaction-writer capability assertions are removed from both paths; nil explicitly disables isolated fixtures. The group inbox fixture fails on unexpected reaction writes. Private reaction/privacy/block/pending/author-membership, DM/group, wiring and composed startup tests pass across4 packages; build and vet pass. Intermediate compile check caught and preserved the group unread-summary dependency. Fresh native PostgreSQL/Linux race/production CI and whole RF11 audit remain required. Receipt: implementation/verification/refactor-rf11-private-reaction-writer-contracts-2026-11-14.json.
+
+
+### Exact-hit review after DM constructor change (2026-11-14)
+
+Manifest validation rejected the changed dm_delivery_test.go source hash. Re-review against14d proves the only source change is an explicit nil reaction-writer argument; the reviewed SQL interval literal and bound message ID atline114 are unchanged. Exactly one file hash was updated; rule, line hash, reason, proof reference and50-record total remain unchanged. Manifest validation and6 validator tests pass. Full current-source security scan remains CI-owned. Receipt: implementation/verification/refactor-reviewed-dm-constructor-manifest-2026-11-14.json.

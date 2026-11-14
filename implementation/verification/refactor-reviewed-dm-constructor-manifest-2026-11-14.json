@@ -1,0 +1,17 @@
+{
+  "scope": "Re-review one exact go.sql-concat record after DM constructor signature migration",
+  "path": "server/services/dm_delivery_test.go",
+  "old_source_sha256": "34fd003acdd9e77c6a136dd0369e90b7c8ab2073ea9bf35950ff16c216403095",
+  "new_source_sha256": "aea7acd555bce4939aeb9c633e0cc9b8b91554a52bab6558eeab3aaf0bd5c9ab",
+  "line_sha256": "9ccf4cafd9283abf6c22aa4b12916b651f3d76c2ba1133a8123575a34e010100",
+  "review": "Only difference against14d is one explicit nil reaction-writer constructor argument at line54. Reviewed SQL atline114 unchanged: fixed one-day interval arithmetic inside a literal; message ID remains bound. Rule, reason, proof reference and exact line hash unchanged. No exclusions or records added.",
+  "initial_validation": "rejected stale source hash in entry48",
+  "policy": "No scan gate weakened; full manifest validation and unit tests follow",
+  "validation": {
+    "manifest": "valid50 exact source records",
+    "unit_tests": 6,
+    "unit_seconds": 27.165,
+    "unit_exit": 0,
+    "full_security_scan": "current-source CI required"
+  }
+}
