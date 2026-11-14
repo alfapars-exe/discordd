@@ -64,7 +64,7 @@ type Repositories struct {
 	MediaAsset              repository.MediaAssetRepository
 	RuntimeTelemetry        repository.RuntimeTelemetryRepository
 	DMRead                  repository.DMReadRepository
-	Notification            repository.NotificationRepository
+	Notification            repository.NotificationStore
 	Reminder                repository.ReminderRepository
 	Saved                   repository.SavedRepository
 	UserNote                repository.UserNoteRepository

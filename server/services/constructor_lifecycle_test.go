@@ -83,3 +83,10 @@ func TestReactionConstructorRequiresNotificationDependencies(t *testing.T) {
 		}
 	}
 }
+
+func TestReactionDependenciesRequireNotificationWriter(t *testing.T) {
+	field, _ := reflect.TypeFor[ReactionNotificationDependencies]().FieldByName("Notifications")
+	if !field.Type.Implements(reflect.TypeFor[reactionNotificationCreator]()) {
+		t.Fatalf("reaction dependency %s can omit reaction writer capability", field.Type)
+	}
+}

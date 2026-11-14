@@ -1818,3 +1818,8 @@ A real file-backed SQLite fixture with embedded migrations now builds initReposi
 ### RF11 — reaction delivery dependency group (2026-11-14)
 
 Channel reaction constructor now explicitly takes ReactionNotificationDependencies (notification repository, preference reader, user reader); SetNotificationDelivery is removed. The constructor contract regression failed before the change. Existing preference-mode, self/removal and dedupe assertions use constructor wiring and pass with wiring/composed startup tests. Reaction-only fixtures explicitly choose a zero-value disabled group. Build and vet pass; handler package compiled but selected no tests in the targeted run. Existing optional writer capability gate is unchanged and remains an audit boundary. Receipt: implementation/verification/refactor-rf11-reaction-notification-constructor-2026-11-14.json.
+
+
+### RF11 — channel reaction writer capability made explicit (2026-11-14)
+
+Two declared-type regressions failed first: notification factory omitted reaction-write capability and the channel reaction dependency could accept a repository without it. New ReactionNotificationWriter and factory NotificationStore preserve that capability through composition; the channel reaction constructor consumes the narrow writer directly and its optional runtime assertion is removed. Explicit nil/prefs-disabled behavior, privacy checks, dedupe SQL and wire fields remain. Targeted repository/services/main tests, build and vet pass in the local SQLite profile. DM/group reaction assertions remain separate open work; native PostgreSQL/Linux race/current-source CI and whole RF11 acceptance remain required. Receipt: implementation/verification/refactor-rf11-reaction-writer-contract-2026-11-14.json.

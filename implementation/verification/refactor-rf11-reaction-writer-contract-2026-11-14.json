@@ -1,0 +1,46 @@
+{
+  "source_parent": "14d17d67",
+  "scope": "RF11 explicit channel reaction writer capability",
+  "before": [
+    {
+      "test": "TestNotificationConstructorDeclaresReactionWriter",
+      "exit": 1,
+      "reason": "factory declared only NotificationRepository without reaction-write method"
+    },
+    {
+      "test": "TestReactionDependenciesRequireNotificationWriter",
+      "exit": 1,
+      "reason": "constructor dependency allowed missing writer capability"
+    }
+  ],
+  "change": [
+    "Introduce narrow repository.ReactionNotificationWriter",
+    "NotificationStore factory and composition-root repository field retain complete notification/reaction capability",
+    "Channel reaction constructor dependency and stored writer use narrow typed capability directly",
+    "Remove channel reaction optional type assertion; explicit nil/prefs-disabled behavior preserved",
+    "Shared internal writer alias retains unchanged private-DM/group helper signature semantics"
+  ],
+  "validation": [
+    {
+      "command": "go test ./repository ./services . -run 'TestNotificationConstructor|Test.*ReactionNotification|TestReaction|Test.*Wiring|TestServiceInitialization|TestFriendshipDMProduction' -count=1 -timeout=3m",
+      "exit": 0,
+      "repository_seconds": 1.533,
+      "services_seconds": 0.882,
+      "root_seconds": 2.395
+    },
+    {
+      "command": "go build ./...",
+      "exit": 0
+    },
+    {
+      "command": "go vet ./repository ./services .",
+      "exit": 0
+    }
+  ],
+  "limits": [
+    "Local default SQLite profile; native PostgreSQL and Linux race remain CI gates",
+    "DM/group reaction runtime capability assertions are not removed by this scoped channel change",
+    "No delivery policy, dedupe SQL, privacy gate or wire-field changes",
+    "Whole RF11 still requires requirement audit"
+  ]
+}

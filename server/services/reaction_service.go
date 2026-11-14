@@ -27,21 +27,19 @@ type reactionService struct {
 	hub              ws.BroadcastAndOnline
 	permResolver     ChannelPermResolver
 	timeoutChecker   MemberTimeoutChecker
-	notificationRepo repository.NotificationRepository
+	notificationRepo repository.ReactionNotificationWriter
 	preferenceRepo   profilePreferenceReader
 	// emojiResolver validates custom-emoji reactions (reaction_emoji.go);
 	// nil rejects every custom emoji. Set via SetEmojiResolver.
 	emojiResolver EmojiResolver
 }
 
-type reactionNotificationCreator interface {
-	CreateReactionIfAbsent(context.Context, *models.Notification, string) (bool, error)
-}
+type reactionNotificationCreator = repository.ReactionNotificationWriter
 
 // ReactionNotificationDependencies explicitly selects delivery collaborators.
 // The zero value disables notifications for isolated reaction-only callers.
 type ReactionNotificationDependencies struct {
-	Notifications repository.NotificationRepository
+	Notifications repository.ReactionNotificationWriter
 	Preferences   profilePreferenceReader
 	Users         repository.UserRepository
 }
@@ -176,8 +174,8 @@ func (s *reactionService) ToggleReaction(ctx context.Context, serverID, messageI
 }
 
 func (s *reactionService) createReactionNotification(ctx context.Context, serverID string, message *models.Message, actorID, emoji string) {
-	creator, ok := s.notificationRepo.(reactionNotificationCreator)
-	if !ok || s.preferenceRepo == nil {
+	creator := s.notificationRepo
+	if creator == nil || s.preferenceRepo == nil {
 		return
 	}
 	// The author may have lost channel access since writing the message.

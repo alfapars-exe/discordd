@@ -44,3 +44,15 @@ type NotificationRepository interface {
 	// MarkDMRequestRead is the dm_request counterpart, keyed by dm_channel_id.
 	MarkDMRequestRead(ctx context.Context, userID, dmChannelID string) ([]string, error)
 }
+
+// ReactionNotificationWriter atomically deduplicates reaction inbox writes.
+type ReactionNotificationWriter interface {
+	CreateReactionIfAbsent(context.Context, *models.Notification, string) (bool, error)
+}
+
+// NotificationStore retains production write capabilities at the factory boundary.
+// Consumers only requiring ordinary inbox operations use NotificationRepository.
+type NotificationStore interface {
+	NotificationRepository
+	ReactionNotificationWriter
+}
