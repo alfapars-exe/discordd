@@ -1637,3 +1637,8 @@ PR303 source39a1476b12e59702582cd3c9b37000a6369f3052 completed36/36 checks, Serv
 ### 2026-11-14 — Music current full services verified and draft published
 
 Final fe6852fd canonical services81.591s and integrated services82.588s passed; final logx cachedpass. The earlier explicit-stop compatibility failure is fixed while retaining its existing assertion. Published draft #304; current Linux race/full CI pending. Persisted source-bound receipt refactor-music-worker-shutdown-2026-11-14.json updated. No real provider/media/physical-device, final combined acceptance or whole RF10 closure claim.
+
+
+### 2026-11-14 — Music producer panic cleanup proof
+
+Added actual Enqueue/connect-panic test: panic still reaches request recovery, bot map empties, and terminal StopAll drains registered producers. Removing Enqueue finish in a temporary source overlay fails ownership leaked after connect panic at2.12s. Positive panic/waiter/StopAll matrix20 passed2.979s canonical and3.893s integrated; Windows lint0 passed. Current Linux test binary executed under Ubuntu WSL with --exec passed20 (no race). Initial shell-mediated regex invocation exit127 is not accepted evidence. Local follow-up410bf58b is not yet pushed while PR304 sourcefe6852fd CI remains active. Receipt refactor-music-worker-shutdown-2026-11-14.json updated; current-follow-up full CI/real provider/media acceptance remain open.

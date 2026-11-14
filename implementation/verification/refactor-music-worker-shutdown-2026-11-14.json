@@ -35,5 +35,23 @@
     "real provider/media/process and physical-device acceptance",
     "global refactor and final combined acceptance"
   ],
-  "pr": "https://github.com/alfapars-exe/discordd/pull/304"
+  "pr": "https://github.com/alfapars-exe/discordd/pull/304",
+  "panic_followup": {
+    "local_head": "410bf58bca97af346130e09b07af5eb5344addf8",
+    "state": "local only; PR304 still fe6852fd",
+    "behavior": "connect panic reaches request recovery, bot removed, StopAll drains accepted producer",
+    "counterfactual": "overlay removes Enqueue producer finish; test fails producer ownership leaked after connect panic at2.12s",
+    "canonical_selected_repetitions": 20,
+    "canonical_seconds": 2.979,
+    "integrated_selected_repetitions": 20,
+    "integrated_seconds": 3.893,
+    "windows_lint": "passed",
+    "linux_wsl": {
+      "status": "passed",
+      "repetitions": 20,
+      "race": false,
+      "command_transport": "wsl --exec; initial shell-mediated regex invocation exit127 not counted",
+      "log": "hichat-music-owner-wsl20.log"
+    }
+  }
 }
