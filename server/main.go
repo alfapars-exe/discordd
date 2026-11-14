@@ -583,6 +583,7 @@ func main() {
 
 	// Join background backup logging before sinks close; final snapshot stays post-drain.
 	svcs.Backup.Stop()
+	h.Diagnostics.Stop()
 	logx.SetAppSink(nil)
 	svcs.AppLog.Stop()
 	svcs.AuditLog.Stop()

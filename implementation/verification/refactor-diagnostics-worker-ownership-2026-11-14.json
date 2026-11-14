@@ -1,0 +1,24 @@
+{
+  "state": "published_draft",
+  "before": "TestDiagnosticsStopJoinsAcceptedEmail failed: no worker shutdown owner",
+  "behavior": "close admission, cancel accepted email, join send and logging before app log closes; four-slot limit and204 preserved",
+  "local": {
+    "diagnostics_repetitions": 20,
+    "canonical_targeted_seconds": 9.296,
+    "integrated_targeted_seconds": 9.769,
+    "canonical_full_handlers_seconds": 5.614,
+    "canonical_full_logx_seconds": 1.464,
+    "canonical_vet_build": "passed",
+    "canonical_windows_lint": "passed",
+    "canonical_linux_lint": "passed",
+    "integrated_vet_build": "passed",
+    "integrated_lint": "passed"
+  },
+  "compatibility": "canonical logx.Run extracts existing panic handling without changing its logging policy; integrated existing stronger redaction preserved",
+  "remaining": [
+    "Linux race and current source CI",
+    "real provider acceptance not claimed"
+  ],
+  "source_head": "39a1476b12e59702582cd3c9b37000a6369f3052",
+  "pr": "https://github.com/alfapars-exe/discordd/pull/303"
+}

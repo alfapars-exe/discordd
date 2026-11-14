@@ -1603,3 +1603,10 @@ Three new original-source subcases failed owner join: P2P end, channel typing an
 ### 2026-11-14 — Publish shared callback owner after terminal voice proof
 
 PR302 source882bd6c395e0adcefb9d509b73eb5757392ab66f completed36/36 successful checks; Server CI43549779679 terminalsuccess. Archived source-bound check/job metadata in implementation/verification/refactor-pr302-882-terminal-2026-11-14.json. Only after this terminal proof, pushed ed53302a with shared voice/P2P/typing owner and rewrote PR title/body to final scope. Full current canonical vet/build passed after constructor fixture change. Current ed53302a race/full CI remains pending; previous-source green is not inherited. Refactor-wide, provider/device and final combined acceptance remain open.
+
+
+### 2026-11-14 — Diagnostics worker ownership and backup terminal proof
+
+DiagnosticsHandler bounded sends to four but lacked a shutdown owner; new regression failed on missing owner. Added mutex-serialized admission/worker registration, terminal Stop, lifecycle cancellation and join including send/log completion. Main stops diagnostics after HTTP drain before log sinks/writers close. Retained204, backpressure, filename and60s timeout. Synchronous logx.Run extracts canonical existing panic policy so worker completion follows recovery logging; integrated stronger redaction is preserved. Concurrent/repeated Stop and late admission tested. Diagnostics20 passed9.296s; integrated diagnostics/logx20 passed9.769/1.463s; canonical full handlers/logx passed5.614/1.464s; canonical full vet/build, Windows/Linux lint0 and integrated full vet/build/lint0 passed. Source39a1476b published draft #303; Linux race/full CI pending. Mock sender only, no real email/provider acceptance. Receipt refactor-diagnostics-worker-ownership-2026-11-14.json.
+
+Backup PR301 source936c42596908f036f6f8e3635241ac9902b4624a subsequently completed36/36 checks; Server CI43550268177 terminalsuccess, including its Linux real-process cancellation race shard. Exact-source check/job proof archived refactor-pr301-936-terminal-2026-11-14.json. Whole RF08, provider backup/restore and final combined acceptance remain open.
