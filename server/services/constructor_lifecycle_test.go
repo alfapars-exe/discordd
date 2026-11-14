@@ -710,3 +710,10 @@ func TestMusicAudienceDeclaresFreshPermissionSource(t *testing.T) {
 		t.Fatal("music audience hides fresh permission source")
 	}
 }
+
+func TestMusicSessionFactoryRetainsRuntimeCapabilities(t *testing.T) {
+	result := reflect.TypeOf(repository.NewSQLiteMusicSessionRepo).Out(0)
+	if !result.Implements(reflect.TypeFor[musicControlStore]()) || !result.Implements(reflect.TypeFor[musicRequesterPrivacyStore]()) || !result.Implements(reflect.TypeFor[musicLegacyEnqueueStore]()) {
+		t.Fatal("music session factory hides runtime capabilities")
+	}
+}

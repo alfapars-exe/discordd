@@ -69,7 +69,7 @@ type Repositories struct {
 	Reminder                repository.ReminderRepository
 	Saved                   repository.SavedRepository
 	UserNote                repository.UserNoteRepository
-	MusicSession            repository.MusicSessionRepository
+	MusicSession            repository.MusicSessionStore
 	DataExport              repository.DataExportRepository
 	ProfileShowcase         repository.ProfileShowcaseRepository
 	ServerEvent             repository.ServerEventRepository
