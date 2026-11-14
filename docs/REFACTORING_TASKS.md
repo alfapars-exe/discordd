@@ -1953,3 +1953,8 @@ New forwarding TxQuerier counter records actual QueryContext executions against 
 ### RF09 — actual large population and query failure contracts (2026-11-14)
 
 Large-population fixture now inserts1001 actual members and1001 unrelated users in addition to the existing seed. SQLite and PostgreSQL18.6 both return exactly1003 server members in username order with credentials excluded, using one QueryContext call. Public projection returns all1001 requested existing profiles with duplicate/missing IDs handled, also one call. Separate injected query failures propagate with errors.Is and no successful partial projection. All3 projection tests pass locally on SQLite; large-population test passes native PostgreSQL; repository vet passes. Owned temporary PostgreSQL stopped. Concurrent load/p95 at this population and complete service/group error mapping remain open, so RF09 is not closed.
+
+
+### RF09 — service bulk failure boundaries (2026-11-14)
+
+New member profile/role failure cases preserve wrapped causes, return no successful partial membership, and forbid later nickname/timeout enrichment or per-user fallback. Group history profile failure similarly propagates without per-user fallback. Existing bulk-author/missing-author contract remains. Four selected top-level tests pass, including0/1/1001 population and profile/role subcases; service vet passes. Non-fatal nickname/timeout behavior and API fields are unchanged. Full RF09/RF29 acceptance remains open.

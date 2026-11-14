@@ -2,8 +2,10 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/testutil"
 	"testing"
 )
 
@@ -66,5 +68,57 @@ func TestMemberProjectionBulkCallsDoNotGrowPerMember(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestMemberProjectionBulkFailureStopsEnrichment(t *testing.T) {
+	for _, stage := range []string{"profiles", "roles"} {
+		t.Run(stage, func(t *testing.T) {
+			h := newMemberHarness()
+			failure := errors.New("controlled bulk projection failure")
+			h.userRepo.ListServerMemberProfilesFn = func(context.Context, string) ([]models.User, error) {
+				if stage == "profiles" {
+					return nil, failure
+				}
+				return []models.User{{ID: "member"}}, nil
+			}
+			h.roleRepo.GetRolesForUsersFn = func(context.Context, string, []string) (map[string][]models.Role, error) {
+				if stage != "roles" {
+					t.Fatal("roles queried after profile failure")
+				}
+				return nil, failure
+			}
+			h.userRepo.GetByIDFn = func(context.Context, string) (*models.User, error) {
+				t.Fatal("unexpected per-user fallback")
+				return nil, nil
+			}
+			h.serverRepo.GetNicknamesForServerFn = func(context.Context, string) (map[string]string, error) {
+				t.Fatal("nickname enrichment after failure")
+				return nil, nil
+			}
+			h.timeoutRepo.ListActiveFn = func(context.Context, string) ([]models.MemberTimeout, error) {
+				t.Fatal("timeout enrichment after failure")
+				return nil, nil
+			}
+			rows, err := h.svc.GetAll(context.Background(), "scope")
+			if !errors.Is(err, failure) || rows != nil {
+				t.Fatal("bulk error became successful partial membership")
+			}
+		})
+	}
+}
+
+func TestGroupHistoryProfileFailureHasNoPerUserFallback(t *testing.T) {
+	failure := errors.New("controlled group profile failure")
+	users := &testutil.MockUserRepo{
+		PublicUsersByIDFn: func(context.Context, []string) (map[string]*models.PublicUser, error) { return nil, failure },
+		GetByIDFn: func(context.Context, string) (*models.User, error) {
+			t.Fatal("unexpected per-user fallback")
+			return nil, nil
+		},
+	}
+	svc := &groupDMService{groups: &groupAroundFixture{}, users: users}
+	if err := svc.enrichMessageHistory(context.Background(), []models.GroupDMMessage{{UserID: "author"}}); !errors.Is(err, failure) {
+		t.Fatal("group history masked profile failure")
 	}
 }
