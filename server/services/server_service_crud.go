@@ -106,11 +106,7 @@ func (s *serverService) CreateServer(ctx context.Context, ownerID string, req *m
 			return fmt.Errorf("failed to create server: %w", err)
 		}
 
-		snapshotWriter, ok := txServerRepo.(repository.GameActivityMembershipSnapshotRepository)
-		if !ok {
-			return fmt.Errorf("server repository cannot persist game activity membership snapshot")
-		}
-		if err := snapshotWriter.AddMemberWithGameActivityAudience(ctx, server.ID, ownerID, gameActivityAudience); err != nil {
+		if err := txServerRepo.AddMemberWithGameActivityAudience(ctx, server.ID, ownerID, gameActivityAudience); err != nil {
 			return fmt.Errorf("failed to add owner as member: %w", err)
 		}
 
