@@ -241,7 +241,7 @@ func (s *musicBotService) persistEnqueue(ctx context.Context, bot *botInstance, 
 		if err := s.CheckLegacyControl(ctx, bot.channelID); err != nil {
 			return err
 		}
-		if writer, ok := s.sessions.(musicLegacyEnqueueStore); ok {
+		if writer := s.legacyEnqueue; writer != nil {
 			if err := writer.SaveMusicEnqueue(ctx, s.sessionSnapshot(bot), actor); err != nil {
 				return err
 			}

@@ -13,7 +13,7 @@ const deletedMusicRequesterName = "Deleted User"
 type MusicRequesterPrivacyStore interface {
 	SanitizeMusicTracks(context.Context, []models.MusicTrack) ([]models.MusicTrack, error)
 }
-type musicLegacyEnqueueStore interface {
+type MusicLegacyEnqueueStore interface {
 	SaveMusicEnqueue(context.Context, models.MusicSession, string) error
 }
 

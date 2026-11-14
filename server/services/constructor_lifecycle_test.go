@@ -713,14 +713,20 @@ func TestMusicAudienceDeclaresFreshPermissionSource(t *testing.T) {
 
 func TestMusicSessionFactoryRetainsRuntimeCapabilities(t *testing.T) {
 	result := reflect.TypeOf(repository.NewSQLiteMusicSessionRepo).Out(0)
-	if !result.Implements(reflect.TypeFor[musicControlStore]()) || !result.Implements(reflect.TypeFor[MusicRequesterPrivacyStore]()) || !result.Implements(reflect.TypeFor[musicLegacyEnqueueStore]()) {
+	if !result.Implements(reflect.TypeFor[musicControlStore]()) || !result.Implements(reflect.TypeFor[MusicRequesterPrivacyStore]()) || !result.Implements(reflect.TypeFor[MusicLegacyEnqueueStore]()) {
 		t.Fatal("music session factory hides runtime capabilities")
 	}
 }
 
 func TestMusicConstructorDeclaresRequesterPrivacy(t *testing.T) {
 	factory := reflect.TypeOf(NewMusicBotService)
-	if factory.In(9).Kind() == reflect.Slice {
+	if factory.In(9) != reflect.TypeFor[MusicRequesterPrivacyStore]() {
 		t.Fatal("music constructor hides requester privacy provider")
+	}
+}
+
+func TestMusicConstructorDeclaresLegacyEnqueueWriter(t *testing.T) {
+	if reflect.TypeOf(NewMusicBotService).In(10) != reflect.TypeFor[MusicLegacyEnqueueStore]() {
+		t.Fatal("music constructor hides legacy enqueue writer")
 	}
 }

@@ -37,6 +37,7 @@ func musicPrivacyFixture(t *testing.T, protocol2 ...bool) (*mfaHarness, *authSer
 	store := repository.NewSQLiteMusicSessionRepo(h.db.Conn)
 	svc.sessions = store
 	svc.requesterPrivacy = store
+	svc.legacyEnqueue = store
 	svc.users = repository.NewSQLiteUserRepo(h.db.Conn)
 	bot := svc.bots["ch"]
 	bot.currentTrack = &models.MusicTrack{QueueItemID: uuid.NewString(), VideoID: "current", Title: h.user.Username, RequestedByUserID: h.user.ID, RequestedByName: h.user.Username, DurationSeconds: 100}

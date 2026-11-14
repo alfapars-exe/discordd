@@ -221,6 +221,7 @@ type musicBotService struct {
 	users            MusicBotUserGetter
 	sessions         MusicSessionStore
 	requesterPrivacy MusicRequesterPrivacyStore
+	legacyEnqueue    MusicLegacyEnqueueStore
 	roomKeys         MusicRoomKeySource
 	audience         MusicAudienceDependencies
 
@@ -298,6 +299,7 @@ func NewMusicBotService(
 	sessions MusicSessionStore,
 	roomKeys MusicRoomKeySource,
 	requesterPrivacy MusicRequesterPrivacyStore,
+	legacyEnqueue MusicLegacyEnqueueStore,
 	audience ...MusicAudienceDependencies,
 ) MusicBotRuntime {
 	service := &musicBotService{
@@ -312,6 +314,7 @@ func NewMusicBotService(
 		appLogger:        appLogger,
 		sessions:         sessions,
 		requesterPrivacy: requesterPrivacy,
+		legacyEnqueue:    legacyEnqueue,
 		roomKeys:         roomKeys,
 		extractSem:       make(chan struct{}, maxConcurrentMusicExtractions),
 	}
