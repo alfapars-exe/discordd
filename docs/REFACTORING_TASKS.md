@@ -1704,3 +1704,17 @@ canlı replay durumu değiştirilmez. Düzenlenmiş eski kayıtlar, ekler ve eks
 başlangıç anahtarı bu otomatik yolun dışında kalır. Üretim E2E artık hem yeni
 etiketli hem test fixture'ında etiketi kaldırılmış yedekle geri yükleme ve
 sayfa yenilemesini sınayacak. Bu iki yeni tarayıcı sonucu henüz bekleniyor.
+
+14 Kasım üretim kabul kilometre taşı: `8c341d74` adayının 36/36 kontrolü geçti.
+Normal Chromium 15/15; yeni etiketli ve eski etiketsiz metin yedeği kurtarma
+profili setup dahil 3/3; WebKit 1/1 ve e-posta kurtarma 2/2 başarılı. İki kripto
+senaryosu da kimliği, geçmiş mesajını ve yenileme sonrasını UI'da doğruladı.
+Kanıtlar `refactor-integration-8c3-terminal-2026-11-14.json` ve
+`refactor-rf28-8c3-production-e2e-2026-11-14.json` altında.
+
+RF28 tam kapanışı için kayıp HTTP yanıtı testinin yanına gerçek tarayıcı
+çevrimdışı/çevrimiçi testi eklendi. Hesap tercihlerinin iki oturum ve aynı
+storage üzerinde A/B/A izolasyonu ayrı geçici DB profilinde sınanacak. Rol
+senaryoları artık her testte kendi sentetik sunucusunu yeniliyor; sayfalar hata
+yolunda da kapanıyor. Profil kümeleri gerçek Playwright discovery ile ayrıldı;
+çakışan modlar reddediliyor. Bu yeni matriste henüz tarayıcı sonucu yok.

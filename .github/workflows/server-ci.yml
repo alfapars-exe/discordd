@@ -511,6 +511,14 @@ jobs:
           HICHAT_E2E_CRYPTO_RECOVERY: "1"
           CGO_ENABLED: "0"
 
+      - name: Verify account preference isolation in a fresh production database
+        run: node node_modules/@playwright/test/cli.js test --project=chromium tests/preferences-isolation.spec.ts
+        working-directory: e2e
+        env:
+          HICHAT_E2E_PRODUCTION_CLIENT: "1"
+          HICHAT_E2E_PREFERENCE_ISOLATION: "1"
+          CGO_ENABLED: "0"
+
       - name: WebKit production client smoke
         run: node node_modules/@playwright/test/cli.js test --project=webkit-smoke
         working-directory: e2e

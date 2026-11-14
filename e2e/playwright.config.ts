@@ -53,11 +53,18 @@ export const ACCOUNT_FILE = join(__dirname, ".tmp", "account.json");
 export const CHANNEL_NOTIFICATION_FIXTURE_FILE = join(__dirname, ".tmp", "channel-notification-fixture.json");
 export const PENDING_NOTIFICATION_RECIPIENT_FILE = join(__dirname, ".tmp", "notification-recipient-pending.json");
 
+// Account-level recovery/preferences scenarios own independent run databases.
+const isolatedProfiles = [
+  { enabled: process.env.HICHAT_E2E_CRYPTO_RECOVERY === "1", pattern: /crypto-recovery\.spec\.ts/ },
+  { enabled: process.env.HICHAT_E2E_RECOVERY_MAIL === "1", pattern: /recovery-mail\.spec\.ts/ },
+  { enabled: process.env.HICHAT_E2E_PREFERENCE_ISOLATION === "1", pattern: /preferences-isolation\.spec\.ts/ },
+].filter(profile => profile.enabled);
+if (isolatedProfiles.length > 1) throw new Error("Select only one isolated E2E profile");
+const isolatedSpec = isolatedProfiles[0]?.pattern;
+
 export default defineConfig({
   testDir: "./tests",
-  // Recovery changes the shared disposable account password, so run it in its own database.
-  testMatch: process.env.HICHAT_E2E_CRYPTO_RECOVERY === "1" ? /crypto-recovery\.spec\.ts/
-    : process.env.HICHAT_E2E_RECOVERY_MAIL === "1" ? /recovery-mail\.spec\.ts/ : undefined,
+  testMatch: isolatedSpec,
   outputDir: "./test-results",
   globalTeardown: "./scripts/cleanup-test-credentials.mjs",
 
@@ -97,8 +104,8 @@ export default defineConfig({
     },
     {
       name: "chromium",
-      testIgnore: process.env.HICHAT_E2E_RECOVERY_MAIL === "1" || process.env.HICHAT_E2E_CRYPTO_RECOVERY === "1"
-        ? /auth\.setup\.ts/ : [/auth\.setup\.ts/, /recovery-mail\.spec\.ts/, /crypto-recovery\.spec\.ts/],
+      testIgnore: isolatedSpec ? /auth\.setup\.ts/
+        : [/auth\.setup\.ts/, /recovery-mail\.spec\.ts/, /crypto-recovery\.spec\.ts/, /preferences-isolation\.spec\.ts/],
       dependencies: ["setup"],
       use: { ...devices["Desktop Chrome"] },
     },

@@ -80,3 +80,13 @@ PostgreSQL fixture. It checks ciphertext-only server storage, wrong-password
 rejection, restored identity fingerprint, and historical plaintext rendering from
 a fresh browser context, including a reload. Listing the test is not evidence
 that browser recovery passed.
+
+Account notification preference isolation has its own database profile:
+`HICHAT_E2E_PREFERENCE_ISOLATION=1 HICHAT_E2E_PRODUCTION_CLIENT=1 npx playwright test --project=chromium tests/preferences-isolation.spec.ts`.
+It checks two browser sessions, persisted server values, reloads, and A/B/A
+switching within the same browser storage. Recovery-mail, crypto-recovery and
+preference-isolation mode flags are mutually exclusive. `npm run test:isolation`
+uses actual Playwright discovery to check the four test sets and conflicting
+mode rejection; it starts no browser or database. Discovery is not runtime proof.
+The normal production suite separately includes a real browser offline/online
+send retry, in addition to the committed-send/lost-response regression.

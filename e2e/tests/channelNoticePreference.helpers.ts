@@ -2,7 +2,7 @@ import { expect, type Page } from "@playwright/test";
 
 const PREFERENCE_PATH = "/api/users/me/preferences";
 
-export async function setChannelNoticePreference(page: Page, enabled: boolean): Promise<void> {
+async function openChannelNoticePreference(page: Page) {
   const opener = page.getByRole("button", { name: "Settings", exact: true });
   await opener.focus();
   await opener.press("Enter");
@@ -12,6 +12,11 @@ export async function setChannelNoticePreference(page: Page, enabled: boolean): 
   await settings.getByRole("button", { name: "Notifications", exact: true }).click();
   const toggle = settings.getByRole("checkbox", { name: "Channel message notices", exact: true });
   await expect(toggle).toBeAttached();
+  return { opener, settings, toggle };
+}
+
+export async function setChannelNoticePreference(page: Page, enabled: boolean): Promise<void> {
+  const { opener, settings, toggle } = await openChannelNoticePreference(page);
   if ((await toggle.isChecked()) !== enabled) {
     const saved = page.waitForResponse((response) => {
       const url = new URL(response.url());
@@ -32,3 +37,12 @@ export async function setChannelNoticePreference(page: Page, enabled: boolean): 
   await expect(opener).toBeFocused();
 }
 
+export async function readChannelNoticePreference(page: Page): Promise<boolean> {
+  const { opener, settings, toggle } = await openChannelNoticePreference(page);
+  await expect(settings.getByRole("status").filter({ hasText: "Account settings synced" })).toBeVisible();
+  const checked = await toggle.isChecked();
+  await page.keyboard.press("Escape");
+  await expect(settings).toBeHidden();
+  await expect(opener).toBeFocused();
+  return checked;
+}
