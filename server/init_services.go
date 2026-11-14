@@ -70,7 +70,7 @@ type Services struct {
 	AdminServer             services.AdminServerService
 	Device                  services.DeviceService
 	E2EE                    services.E2EEService
-	LinkPreview             services.LinkPreviewService
+	LinkPreview             services.LinkPreviewRuntime
 	Badge                   services.BadgeService
 	Preferences             services.PreferencesService
 	AppLog                  services.AppLogService
@@ -104,7 +104,7 @@ type Services struct {
 	ServerEventWorker       *services.ServerEventWorker
 	FriendAnniversaryWorker *services.FriendAnniversaryWorker
 	ChannelNotifWorker      *services.ChannelMessageNotificationWorker
-	OnlineFriendNotifier    services.OnlineFriendNotifier
+	OnlineFriendNotifier    services.OnlineFriendNotifierRuntime
 	EmailDelivery           *services.EmailDeliveryService
 }
 
@@ -270,9 +270,7 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	uploadService := services.NewUploadService(repos.Attachment, cfg.Upload.Dir, cfg.Upload.MaxSize)
 	profileUpdateNotifier := services.NewProfileUpdateNotifier(repos.Preferences, repos.Friendship, repos.Notification, hub)
 	onlineFriendNotifier := services.NewOnlineFriendNotifier(repos.User, repos.Preferences, repos.Friendship, repos.Notification, hub, hub)
-	if owner, ok := onlineFriendNotifier.(interface{ Stop() }); ok {
-		rollback = append(rollback, owner.Stop)
-	}
+	rollback = append(rollback, onlineFriendNotifier.Stop)
 	roleTransactions := repository.NewServerMembershipTxRunner(db)
 	profileAudiencePolicy := services.NewProfileAudiencePolicy(repos.Preferences, repos.Friendship, repos.Server)
 	gameActivityPolicy := services.NewGameActivityPrivacyPolicy(repos.Preferences, repos.Friendship, repos.Server, gameActivityPresenceAdapter{hub: hub}, repos.Ban)
@@ -387,9 +385,7 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	adminServerService.SetUploadDir(cfg.Upload.Dir)
 
 	linkPreviewService := services.NewLinkPreviewService(repos.LinkPreview)
-	if owner, ok := linkPreviewService.(interface{ Stop() }); ok {
-		rollback = append(rollback, owner.Stop)
-	}
+	rollback = append(rollback, linkPreviewService.Stop)
 	badgeService := services.NewBadgeService(repos.Badge, hub)
 
 	preferencesService := services.NewPreferencesService(repos.Preferences, profileAudiencePolicy, gameActivityService, hub)

@@ -68,6 +68,13 @@ type OnlineFriendNotifier interface {
 	ObserveOffline(string)
 }
 
+// OnlineFriendNotifierRuntime gives the composition root explicit cleanup ownership.
+// Request consumers continue to use the narrower OnlineFriendNotifier interface.
+type OnlineFriendNotifierRuntime interface {
+	OnlineFriendNotifier
+	Stop()
+}
+
 type onlineFriendNotifier struct {
 	users         onlineFriendUserReader
 	prefs         onlineFriendPreferenceReader
@@ -90,7 +97,7 @@ func NewOnlineFriendNotifier(
 	notifications repository.NotificationRepository,
 	presence onlineFriendPresenceReader,
 	hub ws.Broadcaster,
-) OnlineFriendNotifier {
+) OnlineFriendNotifierRuntime {
 	guardedWriter, _ := notifications.(repository.OnlineFriendNotificationRepository)
 	lifecycle, stop := context.WithCancel(context.Background())
 	return &onlineFriendNotifier{

@@ -516,11 +516,11 @@ func main() {
 	}()
 
 	<-done
-	if stopper, ok := svcs.LinkPreview.(interface{ Stop() }); ok {
-		stopper.Stop()
+	if svcs.LinkPreview != nil {
+		svcs.LinkPreview.Stop()
 	}
-	if stopper, ok := svcs.OnlineFriendNotifier.(interface{ Stop() }); ok {
-		stopper.Stop()
+	if svcs.OnlineFriendNotifier != nil {
+		svcs.OnlineFriendNotifier.Stop()
 	}
 	bootLogger.Info("shutting down")
 

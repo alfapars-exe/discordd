@@ -40,6 +40,13 @@ type LinkPreviewService interface {
 	GetPreview(ctx context.Context, rawURL string) (*models.LinkPreview, error)
 }
 
+// LinkPreviewRuntime gives the composition root explicit cleanup ownership.
+// Request consumers continue to use the narrower LinkPreviewService interface.
+type LinkPreviewRuntime interface {
+	LinkPreviewService
+	Stop()
+}
+
 const cacheTTL = 24 * time.Hour
 const maxBodySize = 512 * 1024
 const maxRedirects = 3
@@ -64,7 +71,7 @@ type linkPreviewService struct {
 
 // NewLinkPreviewService creates a service with an SSRF-safe HTTP client.
 // DNS resolution results are checked against private IP ranges.
-func NewLinkPreviewService(repo repository.LinkPreviewRepository) LinkPreviewService {
+func NewLinkPreviewService(repo repository.LinkPreviewRepository) LinkPreviewRuntime {
 	safeDialer := &net.Dialer{Timeout: 5 * time.Second}
 
 	transport := &http.Transport{

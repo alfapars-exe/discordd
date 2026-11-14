@@ -1,0 +1,39 @@
+{
+  "source_parent": "2a7cf9cc",
+  "scope": "RF11 required lifecycle contract for link-preview and online-friend services",
+  "before": {
+    "test": "TestResourceOwningConstructorsDeclareStop",
+    "exit": 1,
+    "failures": [
+      "LinkPreviewService constructor result omits Stop",
+      "OnlineFriendNotifier constructor result omits Stop"
+    ]
+  },
+  "change": [
+    "Constructors return exported runtime interfaces embedding unchanged narrow request interfaces plus Stop",
+    "Services bundle retains runtime interfaces",
+    "Startup rollback registers known Stop directly",
+    "Shutdown calls Stop on nonnil owned services without optional capability assertions"
+  ],
+  "validation": [
+    {
+      "command": "go test ./services . -run 'TestResourceOwning|Test.*Preview|TestOnlineFriend|Test.*Wiring|Test.*Startup|Test.*Lifecycle|Test.*Rollback' -count=1 -timeout=3m",
+      "exit": 0,
+      "services_package_seconds": 2.187,
+      "root_package_seconds": 0.784
+    },
+    {
+      "command": "go build ./...",
+      "exit": 0
+    },
+    {
+      "command": "go vet ./services .",
+      "exit": 0
+    }
+  ],
+  "limits": [
+    "Windows Go1.27.4 CGO0; Linux race/native tests remain CI gates",
+    "No changed provider/network policy or notification semantics",
+    "RF11 remaining service contracts and full startup/shutdown acceptance still require audit"
+  ]
+}
