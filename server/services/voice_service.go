@@ -20,6 +20,7 @@ import (
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg/logx"
+	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
 	"github.com/google/uuid"
 )
@@ -160,6 +161,7 @@ type forceMoveGrant struct {
 const maxScreenShares = 0
 
 type voiceService struct {
+	voiceAccess        repository.VoiceAccessReader
 	sessionsFinalized  bool // guarded by mu; no room keys may be created after terminal cleanup
 	sessionShutdown    sync.Once
 	operations         voiceOperations
@@ -223,6 +225,8 @@ type MemberTimeoutChecker interface {
 // VoiceRuntimeDependencies is selected explicitly by the composition owner.
 // Its zero value disables integrations and persistent app logging.
 type VoiceRuntimeDependencies struct {
+	// Nil explicitly selects the portable standalone admission/visibility path.
+	VoiceAccess repository.VoiceAccessReader
 	// Nil explicitly retains the standalone cached-resolver path.
 	FreshPermissions FreshChannelPermResolver
 	Integrations     func(VoiceService) (VoiceEntranceHook, MusicBotChannelHook)
@@ -243,6 +247,7 @@ func NewVoiceService(
 	runtime VoiceRuntimeDependencies,
 ) VoiceRuntime {
 	service := &voiceService{
+		voiceAccess:        runtime.VoiceAccess,
 		states:             make(map[string]*models.VoiceState),
 		voiceEpoch:         uuid.NewString(),
 		roomPassphrases:    make(map[string]string),

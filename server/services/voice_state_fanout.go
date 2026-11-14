@@ -216,9 +216,7 @@ func (f *voiceStateFanout) deliver(batch []voiceStateFanoutEvent, membersByServe
 	if len(onlineIDs) == 0 {
 		return
 	}
-	if repo, ok := s.channelGetter.(interface {
-		VoiceVisibleUsers(context.Context, string, string, []string) ([]string, error)
-	}); ok {
+	if repo := s.voiceAccess; repo != nil {
 		visible, err := repo.VoiceVisibleUsers(ctx, item.serverID, item.channelID, onlineIDs)
 		if err != nil {
 			f.dropCount.Add(uint64(len(batch)))

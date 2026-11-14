@@ -9,6 +9,7 @@ import (
 
 // Repositories holds all repository instances.
 type Repositories struct {
+	VoiceAccess             repository.VoiceAccessReader
 	User                    repository.UserRepository
 	Session                 repository.SessionRepository
 	MFA                     repository.MFARepository
@@ -89,6 +90,7 @@ type Repositories struct {
 // using the raw connection.
 func initRepositories(conn *sql.DB, dataExportOptions ...repository.DataExportStorageOptions) *Repositories {
 	db := database.NewRetryingQuerier(conn)
+	channel := repository.NewSQLiteChannelRepo(db)
 	return &Repositories{
 		User:                    repository.NewSQLiteUserRepo(db),
 		Session:                 repository.NewSQLiteSessionRepo(db),
@@ -103,7 +105,8 @@ func initRepositories(conn *sql.DB, dataExportOptions ...repository.DataExportSt
 		AccountAssetCleanup:     repository.NewSQLiteAccountAssetCleanupRepo(db),
 		EmailVerification:       repository.NewSQLiteEmailVerificationRepo(db),
 		Role:                    repository.NewSQLiteRoleRepo(db),
-		Channel:                 repository.NewSQLiteChannelRepo(db),
+		Channel:                 channel,
+		VoiceAccess:             channel.VoiceAccess(),
 		Category:                repository.NewSQLiteCategoryRepo(db),
 		Message:                 repository.NewSQLiteMessageRepo(db),
 		Attachment:              repository.NewSQLiteAttachmentRepo(db),
