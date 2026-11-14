@@ -3,16 +3,22 @@ package handlers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/services"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 )
 
 func TestMessageHandlerRequiresCompletionAndAttachmentState(t *testing.T) {
 	dependency := reflect.TypeOf(NewMessageHandler).In(0)
 	required := reflect.TypeFor[interface {
+		ChannelEvents(context.Context, string, string, string, int64) (*services.ChannelEventPage, error)
+		ChannelDeliveryHealth(context.Context) (*services.ChannelDeliveryHealth, error)
 		KeepChannelSendAlive(context.Context, string) func()
 		CompleteChannelSend(context.Context, *models.Message) error
 		AttachmentOutcome(context.Context, string, int, *models.Attachment, string) error
@@ -78,5 +84,88 @@ func TestMessageCreateDeclaredDeliveryHooksPreservePartialResponseAndReleaseBudg
 	}
 	if service.broadcastCount() != 0 {
 		t.Fatal("completion error triggered a second delivery path")
+	}
+}
+
+type messageDeliveryReaderRecorder struct {
+	*stubMessageService
+	eventsCalls, healthCalls int
+	scope                    []string
+	cursor                   int64
+	ctx                      context.Context
+	err                      error
+}
+
+func (r *messageDeliveryReaderRecorder) ChannelEvents(ctx context.Context, server, channel, user string, cursor int64) (*services.ChannelEventPage, error) {
+	r.eventsCalls++
+	r.scope = []string{server, channel, user}
+	r.cursor = cursor
+	r.ctx = ctx
+	return &services.ChannelEventPage{Cursor: 42, Reset: true}, r.err
+}
+func (r *messageDeliveryReaderRecorder) ChannelDeliveryHealth(ctx context.Context) (*services.ChannelDeliveryHealth, error) {
+	r.healthCalls++
+	r.ctx = ctx
+	return &services.ChannelDeliveryHealth{Pending: 3}, r.err
+}
+func TestMessageDeliveryReadEndpointsUseDeclaredContract(t *testing.T) {
+	for _, tc := range []struct {
+		name, cursor          string
+		authenticated, health bool
+		err                   error
+		status, calls         int
+	}{
+		{name: "events success", cursor: "17", authenticated: true, status: 200, calls: 1},
+		{name: "events forbidden", cursor: "17", authenticated: true, err: fmt.Errorf("scope: %w", pkg.ErrForbidden), status: 403, calls: 1},
+		{name: "events disabled", cursor: "0", authenticated: true, err: pkg.ErrNotFound, status: 404, calls: 1},
+		{name: "missing actor", cursor: "17", status: 401},
+		{name: "negative cursor", cursor: "-1", authenticated: true, status: 400},
+		{name: "malformed cursor", cursor: "invalid", authenticated: true, status: 400},
+		{name: "health success", health: true, status: 200, calls: 1},
+		{name: "health disabled", health: true, err: pkg.ErrNotFound, status: 404, calls: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			service := &messageDeliveryReaderRecorder{stubMessageService: &stubMessageService{}, err: tc.err}
+			handler := NewMessageHandler(service, nil, 0, nil, nil)
+			request := httptest.NewRequest(http.MethodGet, "/delivery?after_sequence="+tc.cursor, nil)
+			request.SetPathValue("id", "delivery-channel")
+			ctx := context.WithValue(request.Context(), ServerIDContextKey, "delivery-server")
+			if tc.authenticated {
+				ctx = context.WithValue(ctx, UserContextKey, &models.User{ID: "reader"})
+			}
+			request = request.WithContext(ctx)
+			response := httptest.NewRecorder()
+			if tc.health {
+				handler.DeliveryHealth(response, request)
+			} else {
+				handler.Events(response, request)
+			}
+			if response.Code != tc.status {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+			if service.eventsCalls+service.healthCalls != tc.calls {
+				t.Fatal("unexpected backend call count")
+			}
+			if tc.calls > 0 && service.ctx != request.Context() {
+				t.Fatal("request context lost")
+			}
+			if !tc.health && tc.calls > 0 {
+				if !reflect.DeepEqual(service.scope, []string{"delivery-server", "delivery-channel", "reader"}) {
+					t.Fatal("event authorization scope lost")
+				}
+				if tc.cursor == "17" && service.cursor != 17 {
+					t.Fatal("event cursor lost")
+				}
+			}
+			if tc.status == 200 {
+				field := `"cursor":42`
+				if tc.health {
+					field = `"pending":3`
+				}
+				if !strings.Contains(response.Body.String(), field) {
+					t.Fatalf("response fields lost: %s", response.Body.String())
+				}
+			}
+		})
 	}
 }

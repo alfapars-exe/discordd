@@ -32,6 +32,8 @@ type MessageService interface {
 // MessageRequestService declares persistence hooks used by HTTP sends.
 // Read-only consumers continue to depend on MessageService.
 type MessageRequestService interface {
+	ChannelEvents(context.Context, string, string, string, int64) (*ChannelEventPage, error)
+	ChannelDeliveryHealth(context.Context) (*ChannelDeliveryHealth, error)
 	KeepChannelSendAlive(context.Context, string) func()
 	MessageService
 	CompleteChannelSend(context.Context, *models.Message) error

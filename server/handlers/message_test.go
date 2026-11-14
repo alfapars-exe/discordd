@@ -499,3 +499,10 @@ func (s *stubMessageService) AttachmentOutcome(context.Context, string, int, *mo
 }
 
 func (s *stubMessageService) KeepChannelSendAlive(context.Context, string) func() { return func() {} }
+
+func (s *stubMessageService) ChannelEvents(context.Context, string, string, string, int64) (*services.ChannelEventPage, error) {
+	return nil, pkg.ErrNotFound
+}
+func (s *stubMessageService) ChannelDeliveryHealth(context.Context) (*services.ChannelDeliveryHealth, error) {
+	return nil, pkg.ErrNotFound
+}

@@ -369,14 +369,7 @@ func (h *MessageHandler) Events(w http.ResponseWriter, r *http.Request) {
 		pkg.Error(w, pkg.ErrBadRequest)
 		return
 	}
-	reader, ok := h.messageService.(interface {
-		ChannelEvents(context.Context, string, string, string, int64) (*services.ChannelEventPage, error)
-	})
-	if !ok {
-		pkg.Error(w, pkg.ErrNotFound)
-		return
-	}
-	page, err := reader.ChannelEvents(r.Context(), server, r.PathValue("id"), user.ID, after)
+	page, err := h.messageService.ChannelEvents(r.Context(), server, r.PathValue("id"), user.ID, after)
 	if err != nil {
 		pkg.Error(w, err)
 		return
@@ -385,14 +378,7 @@ func (h *MessageHandler) Events(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *MessageHandler) DeliveryHealth(w http.ResponseWriter, r *http.Request) {
-	monitor, ok := h.messageService.(interface {
-		ChannelDeliveryHealth(context.Context) (*services.ChannelDeliveryHealth, error)
-	})
-	if !ok {
-		pkg.Error(w, pkg.ErrNotFound)
-		return
-	}
-	health, err := monitor.ChannelDeliveryHealth(r.Context())
+	health, err := h.messageService.ChannelDeliveryHealth(r.Context())
 	if err != nil {
 		pkg.Error(w, err)
 		return
