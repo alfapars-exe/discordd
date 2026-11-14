@@ -2048,3 +2048,8 @@ initServices now constructs PermissionCache, owns its rollback/cleanup and build
 ### RF11 — role permission invalidator constructor (2026-11-14)
 
 Role constructor explicitly receives PermissionInvalidator; production injects the already composed shared fan-out and removes the late setter. Constructor regression failed before change. Existing permission-change invalidates-all, cosmetic-only preserves-cache and delete invalidates-all tests inject during construction and pass; real root primed-grant revocation403 and wiring tests also pass. Standalone native mutation fixture explicitly selects nil, retaining its prior mode. Build/vet/diff check pass; no reviewed exact-hit file changed. Member/server setter migrations and fresh native/race/current-source CI remain open.
+
+
+### CI follow-up — promoted permission cache Close selector (2026-11-14)
+
+Server CI43634370619 on188a4a48 failed golangci-lint job132567817027 with one staticcheck QF1008 at middleware/permission.go157: explicit embedded PermissionCache selector is redundant. Stop now calls promoted Close directly; same owner and idempotent join behavior. Full middleware tests1.979s and vet pass. Local golangci-lint binary unavailable; fresh CI must establish lint success. Other jobs are not claimed terminal here.

@@ -154,4 +154,4 @@ func (m *PermissionMiddleware) Require(perm models.Permission, next http.Handler
 }
 
 // Stop retires the middleware cache worker while preserving draining access.
-func (m *PermissionMiddleware) Stop() { m.PermissionCache.Close() }
+func (m *PermissionMiddleware) Stop() { m.Close() }
