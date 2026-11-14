@@ -18,6 +18,28 @@ type voiceMediaDependencies struct {
 
 // initVoiceMediaServices binds media hooks before voice allocates its workers.
 func initVoiceMediaServices(deps voiceMediaDependencies) (services.EntranceService, services.MusicBotRuntime) {
+	for _, input := range []struct {
+		name  string
+		value any
+	}{
+		{"Repositories", deps.Repositories}, {"Hub", deps.Hub}, {"Permissions", deps.Permissions},
+		{"FreshPermissions", deps.FreshPermissions}, {"Voice", deps.Voice}, {"Logger", deps.Logger},
+	} {
+		if missingCompositionInput(input.value) {
+			panic("voice media requires " + input.name)
+		}
+	}
+	for _, input := range []struct {
+		name  string
+		value any
+	}{
+		{"Entrance", deps.Repositories.Entrance}, {"Server", deps.Repositories.Server}, {"Role", deps.Repositories.Role},
+		{"Channel", deps.Repositories.Channel}, {"LiveKit", deps.Repositories.LiveKit}, {"User", deps.Repositories.User}, {"MusicSession", deps.Repositories.MusicSession},
+	} {
+		if missingCompositionInput(input.value) {
+			panic("voice media requires repository " + input.name)
+		}
+	}
 	repos, hub, permissions, fresh, voice := deps.Repositories, deps.Hub, deps.Permissions, deps.FreshPermissions, deps.Voice
 	uploadDir, encryptionKey, logger := deps.UploadDir, deps.EncryptionKey, deps.Logger
 	entrance := services.NewEntranceService(repos.Entrance, repos.Server, repos.Role, repos.Channel,
