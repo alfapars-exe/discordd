@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/argeinfina/hichat/config"
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
 	"log/slog"
 	"reflect"
@@ -434,5 +435,22 @@ func TestOnlineFriendFactoryDeclaresPresenceLifecycleCapability(t *testing.T) {
 	}]()
 	if !result.Implements(required) {
 		t.Fatalf("factory result %s hides presence lifecycle capability", result)
+	}
+}
+
+func TestOnlineFriendConstructorDeclaresGuardedWriterAndCandidateReader(t *testing.T) {
+	factory := reflect.TypeOf(NewOnlineFriendNotifier)
+	if factory.NumIn() != 7 {
+		t.Fatalf("online friend constructor inputs=%d, want7", factory.NumIn())
+	}
+	if factory.In(3) != reflect.TypeFor[repository.OnlineFriendNotificationRepository]() {
+		t.Fatal("guarded writer must be explicit")
+	}
+	if factory.In(6) != reflect.TypeFor[repository.OnlineFriendCandidateReader]() {
+		t.Fatal("candidate reader must be explicit")
+	}
+	output := reflect.TypeOf(repository.NewSQLiteNotificationRepo).Out(0)
+	if !output.Implements(factory.In(3)) || !output.Implements(factory.In(6)) {
+		t.Fatal("production notification factory hides presence capabilities")
 	}
 }

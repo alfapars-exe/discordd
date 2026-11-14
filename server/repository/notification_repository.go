@@ -56,3 +56,11 @@ type NotificationStore interface {
 	NotificationRepository
 	ReactionNotificationWriter
 }
+
+// NotificationRuntimeStore retains all production capabilities at composition;
+// domain services continue to accept only their narrower requirements.
+type NotificationRuntimeStore interface {
+	NotificationStore
+	OnlineFriendNotificationRepository
+	OnlineFriendCandidateReader
+}

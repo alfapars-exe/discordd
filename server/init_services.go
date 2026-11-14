@@ -270,7 +270,7 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	}
 	uploadService := services.NewUploadService(repos.Attachment, cfg.Upload.Dir, cfg.Upload.MaxSize)
 	profileUpdateNotifier := services.NewProfileUpdateNotifier(repos.Preferences, repos.Friendship, repos.Notification, hub)
-	onlineFriendNotifier := services.NewOnlineFriendNotifier(repos.User, repos.Preferences, repos.Friendship, repos.Notification, hub, hub)
+	onlineFriendNotifier := services.NewOnlineFriendNotifier(repos.User, repos.Preferences, repos.Friendship, repos.Notification, hub, hub, repos.Notification)
 	rollback = append(rollback, onlineFriendNotifier.Stop)
 	roleTransactions := repository.NewServerMembershipTxRunner(db)
 	profileAudiencePolicy := services.NewProfileAudiencePolicy(repos.Preferences, repos.Friendship, repos.Server)
