@@ -183,6 +183,7 @@ type RateLimiters struct {
 // services.NewMetricsCollector below) — nil-safe, so tests/callers that
 // don't care about readiness integration can pass nil.
 type serviceHub interface {
+	GameActivityEpoch() string
 	services.AuthSessionDisconnecter
 	services.GameJoinConnectionGate
 	ws.EventPublisher
@@ -280,7 +281,7 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	roleTransactions := repository.NewServerMembershipTxRunner(db)
 	profileAudiencePolicy := services.NewProfileAudiencePolicy(repos.Preferences, repos.Friendship, repos.Server)
 	gameActivityPolicy := services.NewGameActivityPrivacyPolicy(repos.Preferences, repos.Friendship, repos.Server, gameActivityPresenceAdapter{hub: hub}, repos.Ban)
-	gameActivityService := services.NewGameActivityService(gameActivityPolicy, repos.Friendship, repos.Server, hub)
+	gameActivityService := services.NewGameActivityService(gameActivityPolicy, repos.Friendship, repos.Server, hub, hub.GameActivityEpoch())
 	memberService := services.NewMemberService(gameActivityService, profileAudiencePolicy, repos.User, repos.Role, repos.Ban, repos.MemberTimeout, repos.Server, roleTransactions, hub, voiceService, auditLogService, authCache, permInvalidator, profileUpdateNotifier)
 	roleService := services.NewRoleService(repos.Role, roleTransactions, hub, auditLogService, permInvalidator)
 	serverService := services.NewServerService(repos.Preferences, gameActivityService,

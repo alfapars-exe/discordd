@@ -84,3 +84,5 @@ func TestServiceInitializationTransfersLiveWorkersToSuccessfulCaller(t *testing.
 		t.Fatalf("caller retained %d limiter workers", got-limitersBefore)
 	}
 }
+
+func (*failingStartupHub) GameActivityEpoch() string { return "startup-fixture" }

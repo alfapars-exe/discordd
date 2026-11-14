@@ -95,7 +95,7 @@ func TestProductionHubCallbackCompositionRegistersEveryGroupExactlyOnce(t *testi
 			t.Cleanup(hub.Shutdown)
 			var game *services.GameActivityService
 			if enabled {
-				game = services.NewGameActivityService(nil, nil, nil, hub)
+				game = services.NewGameActivityService(nil, nil, nil, hub, hub.GameActivityEpoch())
 				t.Cleanup(game.Stop)
 			}
 			voice, p2p := &voiceRoutingRecorder{}, &p2pRoutingRecorder{}

@@ -74,7 +74,7 @@ func TestFriendshipAcceptAndRemoveImmediatelyInvalidateGameActivityRelationship(
 }
 
 func TestGameActivityMembershipRemovedIsIdempotentForUnknownViewerGrant(t *testing.T) {
-	svc := NewGameActivityService(&activityPolicyStub{}, nil, nil, nil)
+	svc := NewGameActivityService(&activityPolicyStub{}, nil, nil, nil, "")
 	// No grants are present; a committed removal still reconciles the target
 	// safely and must not panic on missing optional readers.
 	svc.MembershipRemoved(context.Background(), "server", "user")

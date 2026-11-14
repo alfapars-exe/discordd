@@ -122,7 +122,7 @@ func TestGameActivityWebSocketTwoViewersOptOutAndPhysicalDisconnect(t *testing.T
 	friends := &gameActivityE2EFriends{accepted: map[string]bool{gameActivityPairKey("publisher", "allowed"): true}}
 	prefs := &gameActivityE2EPrefs{share: true}
 	policy := services.NewGameActivityPrivacyPolicy(prefs, friends, gameActivityE2EServers{}, e2eVisiblePresence{hub: hub})
-	activity := services.NewGameActivityService(policy, friends, gameActivityE2EServers{}, hub)
+	activity := services.NewGameActivityService(policy, friends, gameActivityE2EServers{}, hub, hub.GameActivityEpoch())
 	activityCtx, cancelActivity := context.WithCancel(context.Background())
 	t.Cleanup(func() { cancelActivity(); activity.Stop() })
 	hub.OnGameActivityConnect(activity.Connect)

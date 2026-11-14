@@ -2236,3 +2236,9 @@ NewAppLogService now requires an explicit optional AppLogBatchWriter. Production
 Selected AppLog/root logging/wiring/route/startup tests passed (services 10.905s/root 0.764s), build and scoped vet passed, manifest retains 50 valid records unchanged. No persistence SQL changed; full current-head CI remains required.
 
 Remote source a487723f7fb1c14e8df647d040435a87f5ac74cd completed run 43640216867 attempt 2 with all 36 PR checks successful. Only the failed Security scan job was rerun after attempt 1 timed out downloading setup-go before scanning. Receipt implementation/verification/refactor-integration-a487-terminal-2026-11-15.json retains this distinction. Later changes are not proved by that receipt. RF11/project-wide completion remains open.
+
+### RF11 — explicit game activity epoch selection (2026-11-15)
+
+NewGameActivityService now requires an explicit epoch value. Production and the real WebSocket E2E fixture supply Hub.GameActivityEpoch(); standalone fixtures pass empty to generate independent UUIDs. Removed epoch-provider discovery from the activity constructor. serviceHub declares the source method and startup fixtures supply it explicitly. The constructor regression failed first. New behavior tests verify an explicit value is preserved, no capable broadcaster is rediscovered, and independently generated standalone identities differ.
+
+Selected activity/join/WebSocket/composition/startup/wiring/route tests passed (services 0.699s/ws 1.210s/root 0.776s), build and scoped vet passed, all 50 manifest records remain valid. Searching service production files for inline interface assertions now finds none, but this is not a complete dependency audit: named-interface/concrete-type selection such as voice permission invalidation callbacks and fanout membership still needs classification/verification. RF11 and broader RF01-RF30 acceptance remain open. CI 43642047425 remains in progress for cc77d2be without an observed failed job.

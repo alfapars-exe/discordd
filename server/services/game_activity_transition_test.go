@@ -32,7 +32,7 @@ func TestGameActivityLiveTransitionDoesNotReplayForSnapshotsPolicyRenameOrFallba
 		events = append(events, event.Data.(ws.GameActivityData))
 	}}
 	policy := &transitionPolicy{visible: true}
-	svc := NewGameActivityService(policy, activityServiceFriends{}, activityMembershipServers{members: map[string]bool{"host": true, "viewer": true}}, hub)
+	svc := NewGameActivityService(policy, activityServiceFriends{}, activityMembershipServers{members: map[string]bool{"host": true, "viewer": true}}, hub, "")
 	take := func() []ws.GameActivityData {
 		mu.Lock()
 		defer mu.Unlock()
@@ -106,7 +106,7 @@ func TestGameActivityOwnerNeverReceivesTransitionAndUnselectedCandidateCannotNot
 			recipients = append(recipients, ids...)
 		}
 	}}
-	svc := NewGameActivityService(&transitionPolicy{visible: true}, activityServiceFriends{}, activityServiceServers{}, hub)
+	svc := NewGameActivityService(&transitionPolicy{visible: true}, activityServiceFriends{}, activityServiceServers{}, hub, "")
 	svc.Connect("host", 1)
 	svc.Update(ctx, "host", 1, 1, &ws.GameActivityClientGame{ID: "a", Name: "A"})
 	if len(recipients) != 1 || recipients[0] != "viewer" {
@@ -128,7 +128,7 @@ func TestGameActivityTransitionRechecksSourceLeaseAfterFreshPolicy(t *testing.T)
 		}
 	}}
 	policy := &transitionPolicy{visible: true}
-	svc := NewGameActivityService(policy, activityServiceFriends{}, activityServiceServers{}, hub)
+	svc := NewGameActivityService(policy, activityServiceFriends{}, activityServiceServers{}, hub, "")
 	policy.beforeView = func() {
 		svc.mu.Lock()
 		defer svc.mu.Unlock()

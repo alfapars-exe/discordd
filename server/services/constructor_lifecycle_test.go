@@ -549,3 +549,10 @@ func TestAppLogConstructorDeclaresOptionalBatchWriter(t *testing.T) {
 		t.Fatal("batch writer must be explicit")
 	}
 }
+
+func TestGameActivityConstructorDeclaresEpochSource(t *testing.T) {
+	factory := reflect.TypeOf(NewGameActivityService)
+	if factory.NumIn() != 5 || factory.In(4).Kind() != reflect.String {
+		t.Fatal("activity epoch must be an explicit constructor value")
+	}
+}

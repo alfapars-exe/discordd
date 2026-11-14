@@ -63,7 +63,7 @@ func joinFixture(t *testing.T) (*GameJoinService, *GameActivityService, *joinTes
 	t.Helper()
 	h := &joinTestHub{}
 	h.live.Store(true)
-	a := NewGameActivityService(&activityPolicyStub{}, nil, nil, h)
+	a := NewGameActivityService(&activityPolicyStub{}, nil, nil, h, "")
 	p := &joinTestPolicy{}
 	s := NewGameJoinService(a, p, h)
 	game := ws.GameActivityClientGame{ID: "11111111-1111-4111-8111-111111111111", Name: "CS2", CanonicalGameID: models.CS2CanonicalGameID}

@@ -104,10 +104,10 @@ func (s *GameActivityService) lockTargetContext(ctx context.Context, userID stri
 	}
 }
 
-func NewGameActivityService(policy GameActivityPrivacyPolicy, friends gameActivityRecipientFriendReader, servers gameActivityRecipientServerReader, hub ws.Broadcaster) *GameActivityService {
-	epoch := uuid.NewString()
-	if provider, ok := hub.(interface{ GameActivityEpoch() string }); ok && provider.GameActivityEpoch() != "" {
-		epoch = provider.GameActivityEpoch()
+func NewGameActivityService(policy GameActivityPrivacyPolicy, friends gameActivityRecipientFriendReader, servers gameActivityRecipientServerReader, hub ws.Broadcaster, epoch string) *GameActivityService {
+	// Empty explicitly selects an independent standalone epoch.
+	if epoch == "" {
+		epoch = uuid.NewString()
 	}
 	service := &GameActivityService{policy: policy, epoch: epoch, friends: friends, servers: servers, hub: hub, sources: map[string]map[uint64]gameActivitySource{}, connections: map[string]map[uint64]bool{}, lastSequences: map[string]map[uint64]uint64{}, grants: map[string]map[gameActivityGrant]bool{}, revisions: map[string]uint64{}, published: map[string]gameActivityPublished{}, stop: make(chan struct{}), workerDone: make(chan struct{}), tickerFactory: func(interval time.Duration) (<-chan time.Time, func()) {
 		ticker := time.NewTicker(interval)
