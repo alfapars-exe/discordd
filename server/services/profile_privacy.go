@@ -30,6 +30,11 @@ type profileFriendshipReader interface {
 	IsBlocked(context.Context, string, string) (bool, error)
 }
 
+type profileAudienceFriendshipReader interface {
+	profileFriendshipReader
+	repository.ProfileAudienceBlockReader
+}
+
 type profileServerReader interface {
 	GetUserServers(context.Context, string) ([]models.ServerListItem, error)
 	GetMemberCount(context.Context, string) (int, error)
@@ -65,11 +70,11 @@ type ProfileAudienceServicePolicy interface {
 
 type profileAudiencePolicy struct {
 	prefs   profileAudiencePreferenceReader
-	friends profileFriendshipReader
+	friends profileAudienceFriendshipReader
 	servers profileServerReader
 }
 
-func NewProfileAudiencePolicy(prefs profileAudiencePreferenceReader, friends profileFriendshipReader, servers profileServerReader) ProfileAudienceServicePolicy {
+func NewProfileAudiencePolicy(prefs profileAudiencePreferenceReader, friends profileAudienceFriendshipReader, servers profileServerReader) ProfileAudienceServicePolicy {
 	return &profileAudiencePolicy{prefs: prefs, friends: friends, servers: servers}
 }
 
@@ -225,11 +230,7 @@ func (p *profileAudiencePolicy) ListProfileAudienceViewers(ctx context.Context, 
 	if len(candidates) == 0 {
 		return candidates, nil
 	}
-	blocks, ok := p.friends.(repository.ProfileAudienceBlockReader)
-	if !ok {
-		return nil, errors.New("profile audience: bulk block reader is unavailable")
-	}
-	blocked, err := blocks.ListBlockedUserIDs(ctx, targetID, candidates)
+	blocked, err := p.friends.ListBlockedUserIDs(ctx, targetID, candidates)
 	if err != nil {
 		return nil, err
 	}
@@ -352,11 +353,7 @@ func (p *profileAudiencePolicy) CanViewInServerMany(ctx context.Context, viewerI
 	if err != nil {
 		return nil, err
 	}
-	blockReader, ok := p.friends.(repository.ProfileAudienceBlockReader)
-	if !ok {
-		return nil, errors.New("profile audience: bulk block reader is unavailable")
-	}
-	blockedIDs, err := blockReader.ListBlockedUserIDs(ctx, viewerID, targets)
+	blockedIDs, err := p.friends.ListBlockedUserIDs(ctx, viewerID, targets)
 	if err != nil {
 		return nil, err
 	}

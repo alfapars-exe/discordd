@@ -700,7 +700,7 @@ func TestFriendshipFactoryDeclaresAtomicBlockWriter(t *testing.T) {
 }
 
 func TestBlockConstructorRequiresAtomicWriter(t *testing.T) {
-	if reflect.TypeOf(NewBlockService).In(1) != reflect.TypeFor[repository.FriendshipStore]() {
+	if reflect.TypeOf(NewBlockService).In(1) != reflect.TypeFor[repository.BlockRelationshipStore]() {
 		t.Fatal("block constructor hides required atomic write")
 	}
 }
@@ -747,5 +747,12 @@ func TestProfileAudienceDeclaresStrictPreferenceReads(t *testing.T) {
 	required := reflect.TypeFor[profilePreferenceBatchReader]()
 	if !reflect.TypeOf(NewProfileAudiencePolicy).In(0).Implements(required) || !reflect.TypeOf(repository.NewSQLitePreferencesRepo).Out(0).Implements(required) {
 		t.Fatal("profile policy/factory hides strict bulk preferences")
+	}
+}
+
+func TestProfileAudienceDeclaresBulkBlocks(t *testing.T) {
+	required := reflect.TypeFor[repository.ProfileAudienceBlockReader]()
+	if !reflect.TypeOf(NewProfileAudiencePolicy).In(1).Implements(required) || !reflect.TypeOf(repository.NewSQLiteFriendshipRepo).Out(0).Implements(required) {
+		t.Fatal("profile policy/factory hides bulk block reads")
 	}
 }

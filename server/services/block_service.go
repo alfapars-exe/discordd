@@ -36,7 +36,7 @@ type BlockChecker interface {
 }
 
 type blockService struct {
-	friendRepo   repository.FriendshipStore
+	friendRepo   repository.BlockRelationshipStore
 	userRepo     repository.UserRepository
 	hub          ws.Broadcaster
 	gameActivity GameActivityPrivacyInvalidator
@@ -50,7 +50,7 @@ func (s *blockService) reconcileActivityRelationship(ctx context.Context, userA,
 
 func NewBlockService(
 	gameActivity GameActivityPrivacyInvalidator,
-	friendRepo repository.FriendshipStore,
+	friendRepo repository.BlockRelationshipStore,
 	userRepo repository.UserRepository,
 	hub ws.Broadcaster,
 ) BlockService {
