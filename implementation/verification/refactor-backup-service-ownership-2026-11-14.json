@@ -43,6 +43,104 @@
     "wsl_linux_pass_repetitions": 20,
     "ignored_cancellation_overlay": "failed at 2 second assertion; owned fixture self-exited at20.01 seconds; exit1",
     "linux_crosscompile": "passed",
-    "linux_lint": "passed"
+    "linux_lint": "passed",
+    "current_ci_service_shard": {
+      "source": "936c42596908f036f6f8e3635241ac9902b4624a",
+      "run": 43550268177,
+      "job": {
+        "completedAt": "2026-11-14T03:15:15Z",
+        "conclusion": "success",
+        "databaseId": 132310983344,
+        "name": "Go tests (./services shard 7/8)",
+        "startedAt": "2026-11-14T03:11:20Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-14T03:11:22Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-14T03:11:21Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:11:26Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 2,
+            "startedAt": "2026-11-14T03:11:22Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:11:30Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 3,
+            "startedAt": "2026-11-14T03:11:26Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:11:30Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 4,
+            "startedAt": "2026-11-14T03:11:30Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:15:10Z",
+            "conclusion": "success",
+            "name": "go test shard (race + cover)",
+            "number": 5,
+            "startedAt": "2026-11-14T03:11:30Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:15:12Z",
+            "conclusion": "success",
+            "name": "Upload shard coverage",
+            "number": 6,
+            "startedAt": "2026-11-14T03:15:10Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:15:12Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 10,
+            "startedAt": "2026-11-14T03:15:12Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:15:12Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 11,
+            "startedAt": "2026-11-14T03:15:12Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:15:12Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 12,
+            "startedAt": "2026-11-14T03:15:12Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:15:12Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 13,
+            "startedAt": "2026-11-14T03:15:12Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/alfapars-exe/discordd/actions/runs/43550268177/job/132310983344"
+      },
+      "test_log_lines": [
+        "2026-11-14T03:12:19.3399277Z   TestBackupCommandCancellationJoinsOwnedProcess"
+      ]
+    }
   }
 }
