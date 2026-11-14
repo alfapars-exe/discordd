@@ -2053,3 +2053,8 @@ Role constructor explicitly receives PermissionInvalidator; production injects t
 ### CI follow-up — promoted permission cache Close selector (2026-11-14)
 
 Server CI43634370619 on188a4a48 failed golangci-lint job132567817027 with one staticcheck QF1008 at middleware/permission.go157: explicit embedded PermissionCache selector is redundant. Stop now calls promoted Close directly; same owner and idempotent join behavior. Full middleware tests1.979s and vet pass. Local golangci-lint binary unavailable; fresh CI must establish lint success. Other jobs are not claimed terminal here.
+
+
+### RF11 — member permission invalidator constructor (2026-11-14)
+
+Member constructor now requires PermissionInvalidator after identity invalidator, before optional profile notifier. Seven calls updated; production passes shared fan-out and setter removed. Kick/ban/role-change fixtures inject during construction; constructor regression failed before implementation. Selected service/middleware/handler/root cache/wiring tests pass, build/vet pass. Fresh dedicated PostgreSQL18.6 TestPostgresMemberRoleReplacement passes all9 subcases/no skips, including second-write/commit failures, duplicate retry, protected/foreign roles and concurrent grant/revocation. Temporary loopback/non-TLS container stopped; Windows run is non-race. No reviewed exact-hit file changed. Server constructor migration and fresh source-bound CI remain open; the earlier lint correction is separately committed.

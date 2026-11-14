@@ -351,8 +351,8 @@ func TestIdentityWritersRequireCacheInvalidator(t *testing.T) {
 		t.Error("admin invalidator is not explicit")
 	}
 	member := reflect.TypeOf(NewMemberService)
-	if member.NumIn() != 13 {
-		t.Errorf("member constructor inputs=%d, want13", member.NumIn())
+	if member.NumIn() != 14 {
+		t.Errorf("member constructor inputs=%d, want14", member.NumIn())
 	} else if member.In(11) != reflect.TypeFor[UserCacheInvalidator]() {
 		t.Error("member invalidator is not explicit")
 	}
@@ -373,5 +373,18 @@ func TestRoleConstructorRequiresPermissionInvalidator(t *testing.T) {
 	}
 	if _, ok := reflect.TypeFor[RoleService]().MethodByName("SetPermInvalidator"); ok {
 		t.Fatal("role request interface exposes cache wiring")
+	}
+}
+
+func TestMemberConstructorRequiresPermissionInvalidator(t *testing.T) {
+	factory := reflect.TypeOf(NewMemberService)
+	if factory.NumIn() != 14 {
+		t.Fatalf("member constructor inputs=%d, want14", factory.NumIn())
+	}
+	if factory.In(12) != reflect.TypeFor[PermissionInvalidator]() {
+		t.Fatal("member permission invalidator is not explicit")
+	}
+	if _, ok := reflect.TypeFor[MemberService]().MethodByName("SetPermInvalidator"); ok {
+		t.Fatal("member request interface exposes permission wiring")
 	}
 }

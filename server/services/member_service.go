@@ -47,10 +47,6 @@ type MemberService interface {
 	// SetNickname applies a per-server nickname. nil or "" clears.
 	// Caller (handler/route) enforces PermManageNicknames for non-self.
 	SetNickname(ctx context.Context, serverID, actorID, targetID string, nickname *string) (*models.MemberWithRoles, error)
-	// SetPermInvalidator wires the per-channel permission cache so that
-	// role-assignment, kick, and ban operations drop the affected user's
-	// cached permissions immediately rather than after permCacheTTL.
-	SetPermInvalidator(inv PermissionInvalidator)
 }
 
 // VoiceDisconnecter disconnects a user from voice on kick/ban (ISP).
@@ -79,10 +75,6 @@ type memberService struct {
 	profileAudienceInvalidator ProfileAudienceInvalidator
 	gameActivity               GameActivityPrivacyInvalidator
 	userInvalidator            UserCacheInvalidator
-}
-
-func (s *memberService) SetPermInvalidator(inv PermissionInvalidator) {
-	s.permInvalidator = inv
 }
 
 // invalidateUserPerms — nil-safe wrapper so call sites stay flat.
@@ -123,9 +115,11 @@ func NewMemberService(
 	voiceKick VoiceDisconnecter,
 	auditLogger AuditWriter,
 	userInvalidator UserCacheInvalidator,
+	permInvalidator PermissionInvalidator,
 	profileUpdates ...ProfileUpdateNotifier,
 ) MemberService {
 	s := &memberService{
+		permInvalidator:            permInvalidator,
 		userInvalidator:            userInvalidator,
 		gameActivity:               gameActivity,
 		profileAudienceInvalidator: profileAudienceInvalidator,

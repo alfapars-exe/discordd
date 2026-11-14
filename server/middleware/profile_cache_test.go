@@ -45,7 +45,7 @@ func TestProfileWriteImmediatelyRefreshesAuthenticatedMe(t *testing.T) {
 	a, b := register("profile_cache_a"), register("profile_cache_b")
 	mw := NewAuthMiddleware(auth, users, nil, nil)
 	t.Cleanup(mw.Stop)
-	member := services.NewMemberService(nil, nil, users, nil, nil, nil, &testutil.MockServerRepo{}, nil, hub, nil, nil, mw)
+	member := services.NewMemberService(nil, nil, users, nil, nil, nil, &testutil.MockServerRepo{}, nil, hub, nil, nil, mw, nil)
 	authHandler := handlers.NewAuthHandler(auth, nil, nil, nil, nil, nil, nil)
 	memberHandler := handlers.NewMemberHandler(member)
 	mux := http.NewServeMux()

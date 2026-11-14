@@ -55,7 +55,11 @@ func newMemberHarness() *memberServiceHarness {
 func newMemberHarnessWithAudience(audience ProfileAudienceInvalidator) *memberServiceHarness {
 	return newMemberHarnessWithPolicies(audience, nil)
 }
-func newMemberHarnessWithPolicies(audience ProfileAudienceInvalidator, activity GameActivityPrivacyInvalidator) *memberServiceHarness {
+func newMemberHarnessWithPolicies(audience ProfileAudienceInvalidator, activity GameActivityPrivacyInvalidator, invalidators ...PermissionInvalidator) *memberServiceHarness {
+	var invalidator PermissionInvalidator
+	if len(invalidators) > 0 {
+		invalidator = invalidators[0]
+	}
 	h := &memberServiceHarness{
 		userRepo:       &testutil.MockUserRepo{},
 		roleRepo:       &testutil.MockRoleRepo{},
@@ -73,7 +77,7 @@ func newMemberHarnessWithPolicies(audience ProfileAudienceInvalidator, activity 
 	tx := roleTestTransaction{&repository.ServerMembershipTxRepos{Server: h.serverRepo, Role: h.roleRepo, User: h.userRepo, Timeout: h.timeoutRepo}}
 	h.svc = NewMemberService(activity, audience,
 		h.userRepo, h.roleRepo, h.banRepo, h.timeoutRepo,
-		h.serverRepo, tx, h.hub, h.voiceKick, nil, nil, h.profileUpdates, // auditLogger — not under test here
+		h.serverRepo, tx, h.hub, h.voiceKick, nil, nil, invalidator, h.profileUpdates, // auditLogger — not under test here
 	)
 	return h
 }
@@ -696,11 +700,10 @@ func TestKick_InvalidatesTargetPermissions(t *testing.T) {
 	// before eviction can still hit protected endpoints for up to half
 	// a minute — a small but real security window.
 	activity := &recordingGameActivityInvalidator{}
-	h := newMemberHarnessWithPolicies(nil, activity)
+	inv := &memberInvalidator{}
+	h := newMemberHarnessWithPolicies(nil, activity, inv)
 	const srv, actor, target = "s-1", "mod", "victim"
 	h.stubHierarchy(actor, target, srv)
-	inv := &memberInvalidator{}
-	h.svc.SetPermInvalidator(inv)
 
 	if err := h.svc.Kick(context.Background(), srv, actor, target); err != nil {
 		t.Fatalf("Kick: %v", err)
@@ -718,11 +721,10 @@ func TestKick_InvalidatesTargetPermissions(t *testing.T) {
 }
 
 func TestBan_InvalidatesTargetPermissions(t *testing.T) {
-	h := newMemberHarness()
+	inv := &memberInvalidator{}
+	h := newMemberHarnessWithPolicies(nil, nil, inv)
 	const srv, actor, target = "s-1", "mod", "victim"
 	h.stubHierarchy(actor, target, srv)
-	inv := &memberInvalidator{}
-	h.svc.SetPermInvalidator(inv)
 
 	// Ban reads target user, then removes membership. Stub user repo so
 	// GetByID(target) succeeds.
@@ -744,10 +746,9 @@ func TestModifyRoles_InvalidatesTargetPermissions(t *testing.T) {
 	// The cache invalidation must land — otherwise the target keeps
 	// their old permissions for up to 30s despite the UI showing the
 	// new role set.
-	h := newMemberHarness()
-	const srv, actor, target = "s-1", "actor", "target"
 	inv := &memberInvalidator{}
-	h.svc.SetPermInvalidator(inv)
+	h := newMemberHarnessWithPolicies(nil, nil, inv)
+	const srv, actor, target = "s-1", "actor", "target"
 
 	h.roleRepo.GetByUserIDAndServerFn = func(_ context.Context, uid, _ string) ([]models.Role, error) {
 		if uid == actor {
