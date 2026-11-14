@@ -16,7 +16,6 @@ import (
 	"github.com/argeinfina/hichat/config"
 	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/middleware"
-	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/pkg/crypto"
 	"github.com/argeinfina/hichat/pkg/i18n"
@@ -201,11 +200,7 @@ func main() {
 	defer stopServiceCacheWorkers(svcs)
 	defer limiters.Stop()
 
-	if sink, ok := svcs.AppLog.(interface {
-		ConsumeRecord(context.Context, slog.Record)
-	}); ok {
-		logx.SetAppSink(sink.ConsumeRecord)
-	}
+	logx.SetAppSink(svcs.AppLog.ConsumeRecord)
 
 	// 9b. Wire structured app logger into Hub and services
 	hub.SetAppLogger(svcs.AppLog)
@@ -273,12 +268,7 @@ func main() {
 	// 10f. Runtime stats logger — periodic process metrics into the structured
 	// log stream (no external scraper on a single-instance HF Space) AND into
 	// the durable runtime_telemetry rollup (P3.11, repos.RuntimeTelemetry).
-	stopRuntimeStats := startRuntimeStatsLogger(hub, db, time.Minute, repos.RuntimeTelemetry, httpStats, cfg.TelemetryRetentionDays, func() models.AppLogHealth {
-		if h, ok := svcs.AppLog.(interface{ Health() models.AppLogHealth }); ok {
-			return h.Health()
-		}
-		return models.AppLogHealth{}
-	})
+	stopRuntimeStats := startRuntimeStatsLogger(hub, db, time.Minute, repos.RuntimeTelemetry, httpStats, cfg.TelemetryRetentionDays, svcs.AppLog.Health)
 
 	// 10g. Maintenance sweeper — hourly purge of expired sessions and stale
 	// link-preview cache rows (audit P1-BD-04: DeleteExpired had no caller,

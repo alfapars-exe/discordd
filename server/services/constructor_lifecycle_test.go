@@ -5,6 +5,7 @@ import (
 	"github.com/argeinfina/hichat/config"
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/ws"
+	"log/slog"
 	"reflect"
 	"testing"
 )
@@ -399,5 +400,16 @@ func TestServerConstructorRequiresPermissionInvalidator(t *testing.T) {
 	}
 	if _, ok := reflect.TypeFor[ServerService]().MethodByName("SetPermInvalidator"); ok {
 		t.Fatal("server request interface exposes permission wiring")
+	}
+}
+
+func TestAppLogFactoryDeclaresSinkAndHealthCapabilities(t *testing.T) {
+	result := reflect.TypeOf(NewAppLogService).Out(0)
+	required := reflect.TypeFor[interface {
+		ConsumeRecord(context.Context, slog.Record)
+		Health() models.AppLogHealth
+	}]()
+	if !result.Implements(required) {
+		t.Fatalf("app log factory result %s omits sink/health", result)
 	}
 }

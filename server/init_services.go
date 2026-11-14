@@ -72,7 +72,7 @@ type Services struct {
 	LinkPreview             services.LinkPreviewRuntime
 	Badge                   services.BadgeService
 	Preferences             services.PreferencesService
-	AppLog                  services.AppLogService
+	AppLog                  services.AppLogRuntime
 	Email                   email.EmailSender
 	AuditLog                services.AuditLogService
 	Feedback                services.FeedbackService

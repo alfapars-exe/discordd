@@ -36,6 +36,14 @@ type AppLogService interface {
 	Stop()
 }
 
+// AppLogRuntime retains the sink and health capabilities owned by startup.
+// HTTP handlers continue to consume the narrower AppLogService contract.
+type AppLogRuntime interface {
+	AppLogService
+	ConsumeRecord(context.Context, slog.Record)
+	Health() models.AppLogHealth
+}
+
 const appLogRetentionDays = 7
 const appLogBatchSize = 64
 const maxAppLogBytes = 8 * 1024
@@ -60,7 +68,7 @@ type appLogService struct {
 	stopDeadline                                                atomic.Int64
 }
 
-func NewAppLogService(repo repository.AppLogRepository) AppLogService {
+func NewAppLogService(repo repository.AppLogRepository) AppLogRuntime {
 	return &appLogService{repo: repo, ch: make(chan pendingAppLog, 256), errors: make(chan pendingAppLog, 512), done: make(chan struct{})}
 }
 

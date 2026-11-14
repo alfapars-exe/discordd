@@ -2063,3 +2063,8 @@ Member constructor now requires PermissionInvalidator after identity invalidator
 ### RF11 — server permission invalidator constructor (2026-11-14)
 
 Server constructor now explicitly receives PermissionInvalidator;3 calls updated and final production permission setter removed. Constructor regression failed before change. Leave success/removal-failure fixtures inject at construction; fixture initially retained nil, and failing targeted invalidation assertion caught it before correction. Isolated leave/rejoin cache fixture seeds private test state before operations and is not constructor proof. Join/leave/rejoin/delete event, real route grant revocation and wiring selections pass; build/vet/diff check pass. No reviewed exact-hit source changed. Prior CI lint job onf40043e9 now confirms SUCCESS; overall CI still in progress. Full RF11 requirement audit/native/race and current unpushed source validation remain open.
+
+
+### RF11 — app log factory declares sink/health runtime contract (2026-11-14)
+
+NewAppLogService now returns AppLogRuntime, retaining ConsumeRecord and Health alongside existing service lifecycle. Services keeps that declared runtime type; handlers retain narrow AppLogService. Main directly binds app sink and passes Health to runtime stats, removing capability assertions and silent zero-health fallback. Declared-result regression failed before change. Existing AppLog pipeline/health and root wiring/startup selections pass10.858/0.774s after removing a now-unused main import; build/vet/diff check pass. No reviewed exact-hit source changed. Current-source CI and full RF11 audit remain open.
