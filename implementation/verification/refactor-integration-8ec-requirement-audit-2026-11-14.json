@@ -188,7 +188,23 @@
           "Statuses: existing=34, missing=6, implemented_unverified=208, accepted=2, excluded=11",
           "Acceptance complete: NO"
         ],
-        "remaining": "per-command runtime/test/skip counts and original baseline comparison still require scope review"
+        "remaining": "per-command runtime/test/skip counts and original baseline comparison still require scope review",
+        "frozen_local_go": {
+          "server": {
+            "passed": 4324,
+            "failed": 0,
+            "skipped": 84,
+            "seconds": 207.52768120000837
+          },
+          "welcome_bot": {
+            "passed": 20,
+            "failed": 0,
+            "skipped": 0,
+            "seconds": 10.358203700001468
+          },
+          "profile": "Windows Go1.27.4 CGO0 no race; provider env absent; Linux race/Postgres separately proven by CI",
+          "source_stable": true
+        }
       }
     },
     {
@@ -442,7 +458,16 @@
         "Tests": "Aynı yol farklı içerik, preview sonrası değişiklik, hash sonrası değişiklik, dirty source, eksik LFS, değişmiş remote HEAD, unmanaged user data ve idempotent no-op. Tamamen fake API ile.",
         "Acceptance Criteria": "İçerik değişirse reviewed digest geçersiz; uyuşmazlıkta create_commit hiç çağrılmıyor; yayınlanan byte'lar manifest hash'iyle aynı; exact deployed commit sonraki readiness doğrulamasına aktarılıyor."
       },
-      "status": "not_yet_audited_requirement_by_requirement"
+      "status": "clean_source_requirement_gap_reproduced_in_frozen_source",
+      "followup": {
+        "source": "388a9fc8fffbb264933ad30a312e6cd1758bc907",
+        "pr": 307,
+        "fake_api_tests": 20,
+        "canonical_all_python_tests": 35,
+        "integrated_all_python_tests": 44,
+        "current_source_ci": "pending",
+        "workflow_handoff": "deploy-space.yml EXPECTED_COMMIT consumes steps.source.outputs.deployed_commit"
+      }
     },
     {
       "id": "RF24",
