@@ -145,3 +145,29 @@ func checkMusicProducerShutdown(t *testing.T, stage string) {
 		t.Fatalf("late bot remained after shutdown: %d", remaining)
 	}
 }
+
+func TestMusicShutdownDrainsProducerAfterConnectPanic(t *testing.T) {
+	svc := newConcurrencyTestService(t, &eventLog{}, func(*botInstance, *models.MusicTrack) error { return nil })
+	svc.connectBotFn = func(context.Context, *botInstance) error { panic("fixture connect panic") }
+	var recovered any
+	func() {
+		defer func() { recovered = recover() }()
+		_, _ = svc.Enqueue(context.Background(), "actor", concTestChannel, concTestURL)
+	}()
+	if recovered == nil {
+		t.Fatal("connect panic no longer reaches request recovery")
+	}
+	stopped := make(chan struct{})
+	go func() { svc.StopAll(); close(stopped) }()
+	select {
+	case <-stopped:
+	case <-time.After(2 * time.Second):
+		t.Fatal("producer ownership leaked after connect panic")
+	}
+	svc.mu.RLock()
+	remaining := len(svc.bots)
+	svc.mu.RUnlock()
+	if remaining != 0 {
+		t.Fatalf("panicked connection retained %d bots", remaining)
+	}
+}
