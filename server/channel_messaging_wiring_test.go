@@ -3,9 +3,11 @@ package main
 import (
 	"fmt"
 	"github.com/argeinfina/hichat/config"
+	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/services"
 	"github.com/argeinfina/hichat/testutil"
 	"github.com/argeinfina/hichat/ws"
+	"reflect"
 	"testing"
 )
 
@@ -47,8 +49,43 @@ func TestChannelMessagingRejectsMissingCompositionInputs(t *testing.T) {
 }
 
 func TestChannelMessagingStandaloneModeRetainsDeclaredOwners(t *testing.T) {
-	group := initChannelMessagingServices(nil, &Repositories{}, ws.NewHub(), &config.Config{}, &testutil.MockChannelPermResolver{}, nil)
+	group := initChannelMessagingServices(nil, startupPolicyRepositories(t), ws.NewHub(), &config.Config{}, &testutil.MockChannelPermResolver{}, nil)
 	if group.Message == nil || group.Upload == nil || group.Notifications == nil || group.DeliveryDB != nil {
 		t.Fatalf("standalone owners=%+v", group)
+	}
+}
+
+func TestChannelMessagingRejectsMissingRepositoryReaders(t *testing.T) {
+	base := startupPolicyRepositories(t)
+	for _, field := range []string{"Message", "Attachment", "Channel", "User", "Mention", "RoleMention", "Role", "Reaction", "ReadState", "MemberTimeout", "Notification", "Preferences"} {
+		t.Run(field, func(t *testing.T) {
+			repos := *base
+			value := reflect.ValueOf(&repos).Elem().FieldByName(field)
+			value.Set(reflect.Zero(value.Type()))
+			var caught any
+			func() {
+				defer func() { caught = recover() }()
+				initChannelMessagingServices(nil, &repos, ws.NewHub(), &config.Config{}, &testutil.MockChannelPermResolver{}, nil)
+			}()
+			if fmt.Sprint(caught) != "channel messaging requires repository "+field {
+				t.Fatalf("panic=%v want missing %s", caught, field)
+			}
+		})
+	}
+}
+
+type nilMessagingMessage struct{ repository.MessageRepository }
+
+func TestChannelMessagingRejectsTypedNilMessageRepository(t *testing.T) {
+	repos := startupPolicyRepositories(t)
+	var missing *nilMessagingMessage
+	repos.Message = missing
+	var caught any
+	func() {
+		defer func() { caught = recover() }()
+		initChannelMessagingServices(nil, repos, ws.NewHub(), &config.Config{}, &testutil.MockChannelPermResolver{}, nil)
+	}()
+	if fmt.Sprint(caught) != "channel messaging requires repository Message" {
+		t.Fatalf("typed nil repository accepted: %v", caught)
 	}
 }

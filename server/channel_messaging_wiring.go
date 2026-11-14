@@ -35,6 +35,18 @@ func initChannelMessagingServices(db *sql.DB, repos *Repositories, hub channelMe
 	if missingCompositionInput(permissions) {
 		panic("channel messaging requires permissions")
 	}
+	for _, input := range []struct {
+		name  string
+		value any
+	}{
+		{"Message", repos.Message}, {"Attachment", repos.Attachment}, {"Channel", repos.Channel}, {"User", repos.User},
+		{"Mention", repos.Mention}, {"RoleMention", repos.RoleMention}, {"Role", repos.Role}, {"Reaction", repos.Reaction},
+		{"ReadState", repos.ReadState}, {"MemberTimeout", repos.MemberTimeout}, {"Notification", repos.Notification}, {"Preferences", repos.Preferences},
+	} {
+		if missingCompositionInput(input.value) {
+			panic("channel messaging requires repository " + input.name)
+		}
+	}
 	var deliveryDB *sql.DB
 	if database.IsPostgres(db) {
 		deliveryDB = db
