@@ -26,3 +26,16 @@ func TestResourceOwningConstructorsDeclareStop(t *testing.T) {
 		})
 	}
 }
+
+func TestVoiceConstructorDeclaresAllShutdownOwners(t *testing.T) {
+	required := reflect.TypeFor[interface {
+		StopMaintenance()
+		ShutdownUsageProducers()
+		ShutdownVoiceSessions()
+		ShutdownVoiceStateFanout()
+	}]()
+	result := reflect.TypeOf(NewVoiceService).Out(0)
+	if !result.Implements(required) {
+		t.Fatalf("voice constructor result %s omits required lifecycle owners", result)
+	}
+}

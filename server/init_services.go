@@ -47,7 +47,7 @@ type Services struct {
 	GroupDMUpload           services.GroupDMUploadService
 	Member                  services.MemberService
 	Role                    services.RoleService
-	Voice                   services.VoiceService
+	Voice                   services.VoiceRuntime
 	Invite                  services.InviteService
 	Pin                     services.PinService
 	Search                  services.SearchService
@@ -220,9 +220,7 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	voiceService := services.NewVoiceService(
 		repos.Channel, repos.LiveKit, channelPermService, hub, hub, repos.Server, encryptionKey, repos.MemberTimeout, repos.Ban, auditLogService,
 	)
-	if fanout, ok := voiceService.(interface{ ShutdownVoiceStateFanout() }); ok {
-		rollback = append(rollback, fanout.ShutdownVoiceStateFanout)
-	}
+	rollback = append(rollback, voiceService.ShutdownVoiceStateFanout)
 
 	// Email service (optional)
 	var emailSender email.EmailSender

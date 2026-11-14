@@ -1758,3 +1758,8 @@ Link-preview and online-friend constructors previously returned interfaces omitt
 ### RF28 — explicit online retry dispatch proof (2026-11-14)
 
 Strict CI43573607343 passed the previous DM and account-switch cases first try, but offline retry was flaky: second Enter left the draft unchanged. ReadOnly=false alone did not resolve this. The retry now uses actual Send Message button actionability, which includes composer/send-permission gates, and additionally requires the real POST response status201. All draft, count and reload assertions remain. navigator.onLine alone is not a send-ready signal. The exact transient gate is not independently proven by the snapshot; no product root-cause closure claim. Profile/isolation checks pass; fresh strict production CI required. Receipt: implementation/verification/refactor-rf28-offline-dispatch-proof-2026-11-14.json.
+
+
+### RF11 — voice constructor retains all shutdown owners (2026-11-14)
+
+The declared Voice constructor result previously exposed request/channel-deletion methods but omitted StopMaintenance, ShutdownUsageProducers, ShutdownVoiceSessions and ShutdownVoiceStateFanout. The new declared-result regression failed before the change. Named VoiceRuntime and Services now retain those lifecycle guarantees; startup rollback and main shutdown use direct calls in the existing call/defer order. Relevant voice lifecycle/accounting/channel, wiring and initialization tests pass in services and main; build and vet pass. This is compile-time ownership and fixture proof, not physical media or Linux race acceptance. Receipt: implementation/verification/refactor-rf11-voice-runtime-ownership-2026-11-14.json.

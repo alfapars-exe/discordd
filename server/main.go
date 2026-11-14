@@ -271,23 +271,17 @@ func main() {
 	// Voice AFK checker — kicks idle users based on per-server timeout
 	svcs.Voice.StartAFKChecker()
 	stopVoiceMaintenance := func() {
-		if owner, ok := svcs.Voice.(interface{ StopMaintenance() }); ok {
-			owner.StopMaintenance()
-		}
+		svcs.Voice.StopMaintenance()
 	}
 	defer stopVoiceMaintenance()
 	stopVoiceUsageDelivery := services.StartVoiceUsageDelivery(ownerCtx, svcs.Voice)
 	defer stopVoiceUsageDelivery()
 	stopVoiceUsageProducers := func() {
-		if owner, ok := svcs.Voice.(interface{ ShutdownUsageProducers() }); ok {
-			owner.ShutdownUsageProducers()
-		}
+		svcs.Voice.ShutdownUsageProducers()
 	}
 	defer stopVoiceUsageProducers()
 	stopVoiceSessions := func() {
-		if owner, ok := svcs.Voice.(interface{ ShutdownVoiceSessions() }); ok {
-			owner.ShutdownVoiceSessions()
-		}
+		svcs.Voice.ShutdownVoiceSessions()
 	}
 	defer stopVoiceSessions()
 
@@ -556,9 +550,7 @@ func main() {
 	stopPresenceDebounce()
 	stopVoiceMaintenance()
 	metricsCollector.Stop()
-	if fanout, ok := svcs.Voice.(interface{ ShutdownVoiceStateFanout() }); ok {
-		fanout.ShutdownVoiceStateFanout()
-	}
+	svcs.Voice.ShutdownVoiceStateFanout()
 	hub.Shutdown()
 
 	// Drain HTTP before stopping the log writer so in-flight failures retain

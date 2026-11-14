@@ -113,6 +113,17 @@ type VoiceService interface {
 	MusicRoomKey(roomName string) (passphrase string, keyIndex uint32, err error)
 }
 
+// VoiceRuntime is owned by the composition root; handlers use VoiceService.
+// These shutdown methods join distinct resources in the existing server order.
+type VoiceRuntime interface {
+	VoiceService
+	VoiceChannelDeletionHandler
+	StopMaintenance()
+	ShutdownUsageProducers()
+	ShutdownVoiceSessions()
+	ShutdownVoiceStateFanout()
+}
+
 // AuditWriter — narrow ISP interface for audit log writes from services.
 // Mirrors VoiceAppLogger's pattern: every service that emits audit events
 // holds this interface as an optional field (nil = no-op) so wiring stays
@@ -222,10 +233,7 @@ func NewVoiceService(
 	timeoutChecker MemberTimeoutChecker,
 	banChecker BanChecker,
 	auditLogger AuditWriter,
-) interface {
-	VoiceService
-	VoiceChannelDeletionHandler
-} {
+) VoiceRuntime {
 	service := &voiceService{
 		states:             make(map[string]*models.VoiceState),
 		voiceEpoch:         uuid.NewString(),
