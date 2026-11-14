@@ -96,7 +96,7 @@ type dmService struct {
 	reactionWriter      repository.ReactionNotificationWriter
 	deliveryDB          *sql.DB
 	deliveryHub         ws.Broadcaster
-	dmRepo              repository.DMRepository
+	dmRepo              repository.DMRequestStore
 	userRepo            repository.UserRepository
 	dmReadRepo          repository.DMReadRepository
 	notificationRepo    repository.NotificationRepository
@@ -119,7 +119,7 @@ type dmService struct {
 
 func NewDMService(
 	serverDMPolicy ServerDMPolicy,
-	dmRepo repository.DMRepository,
+	dmRepo repository.DMRequestStore,
 	userRepo repository.UserRepository,
 	hub ws.Broadcaster,
 	blockChecker BlockChecker,

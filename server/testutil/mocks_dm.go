@@ -224,3 +224,10 @@ func (m *MockDMSettingsUnhider) UnhideForNewMessage(ctx context.Context, userID,
 	}
 	return nil
 }
+
+// AcceptPendingUnblocked explicitly adapts the ordinary status-write fixture.
+// Concurrency/denial tests override this method with conditionalDMRepo.
+func (m *MockDMRepo) AcceptPendingUnblocked(ctx context.Context, id string) (bool, error) {
+	err := m.UpdateChannelStatus(ctx, id, models.DMStatusAccepted)
+	return err == nil, err
+}

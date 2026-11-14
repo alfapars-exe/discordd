@@ -658,3 +658,9 @@ func TestDMRepositoryFactoryDeclaresAtomicRequests(t *testing.T) {
 		t.Fatal("DM factory hides atomic request transitions")
 	}
 }
+
+func TestDMConstructorRequiresAtomicRequestStore(t *testing.T) {
+	if reflect.TypeOf(NewDMService).In(1) != reflect.TypeFor[repository.DMRequestStore]() {
+		t.Fatal("DM constructor hides required atomic request transitions")
+	}
+}

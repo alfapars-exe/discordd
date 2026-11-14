@@ -388,7 +388,7 @@
     {
       "rule": "go.sql-concat",
       "path": "server/services/dm_delivery_test.go",
-      "file_sha256": "d4ca348d7378ca9be400f3b7d4a79bd2497b0a3cad634c22257c555deee51a8a",
+      "file_sha256": "219918c212d38c1033afe9cd98bdc33d616fd1361eb14c902286ead97f141603",
       "line_sha256": "9ccf4cafd9283abf6c22aa4b12916b651f3d76c2ba1133a8123575a34e010100",
       "reason": "The exact fixture statement adds a fixed PostgreSQL interval inside one SQL literal to simulate an unexpired lease; message ID is a bound parameter, not concatenated SQL.",
       "proof_ref": "server/services/dm_delivery_test.go:113"
