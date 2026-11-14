@@ -288,14 +288,7 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
 
         // A cold reload can fetch ciphertext before the local keys are
         // ready. Discard that projection and reload under the verified keys.
-        if (!isCurrent()) return;
-        useMessageStore.getState().invalidateFetchCache();
-        if (!isCurrent()) return;
-        useDMStore.getState().invalidateFetchCache();
-        if (!isCurrent()) return;
-        const activeChannelId = useChannelStore.getState().selectedChannelId;
-        if (activeChannelId) useMessageStore.getState().fetchMessages(activeChannelId);
-        if (!isCurrent()) return;
+        if (!refreshEncryptedHistory(isCurrent)) return;
 
         // Background: prekey check + device list + backup status + deferred recovery prompt
         get().handlePrekeyLow();
@@ -407,16 +400,7 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
       get().fetchDevices();
 
       // Invalidate message cache so messages get re-decrypted
-      if (!isCurrent()) return;
-      useMessageStore.getState().invalidateFetchCache();
-      if (!isCurrent()) return;
-      useDMStore.getState().invalidateFetchCache();
-      if (!isCurrent()) return;
-
-      const activeChannelId = useChannelStore.getState().selectedChannelId;
-      if (activeChannelId) {
-        useMessageStore.getState().fetchMessages(activeChannelId);
-      }
+      if (!refreshEncryptedHistory(isCurrent)) return;
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Device setup failed";
@@ -482,18 +466,7 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
       get().fetchDevices();
 
       // Invalidate cache — messages will now decrypt with restored keys
-      if (!isCurrent()) return false;
-      useMessageStore.getState().invalidateFetchCache();
-      if (!isCurrent()) return false;
-      useDMStore.getState().invalidateFetchCache();
-      if (!isCurrent()) return false;
-
-      const activeChannelId = useChannelStore.getState().selectedChannelId;
-      if (activeChannelId) {
-        useMessageStore.getState().fetchMessages(activeChannelId);
-      }
-
-      return isCurrent();
+      return refreshEncryptedHistory(isCurrent);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Recovery failed";
@@ -758,6 +731,18 @@ subscribeAuthGenerationChanges(() => { void useE2EEStore.getState().reset(); });
 // ──────────────────────────────────
 // Internal Helpers
 // ──────────────────────────────────
+
+/** Refresh only the session whose encryption keys became usable. */
+function refreshEncryptedHistory(isCurrent: () => boolean): boolean {
+  if (!isCurrent()) return false;
+  useMessageStore.getState().invalidateFetchCache();
+  if (!isCurrent()) return false;
+  useDMStore.getState().invalidateFetchCache();
+  if (!isCurrent()) return false;
+  const channelId = useChannelStore.getState().selectedChannelId;
+  if (channelId) useMessageStore.getState().fetchMessages(channelId);
+  return isCurrent();
+}
 
 function captureStoreScope(): () => boolean {
   const scope = getAuthSessionSnapshot();

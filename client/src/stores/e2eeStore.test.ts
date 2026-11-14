@@ -721,6 +721,16 @@ describe("e2eeStore", () => {
       expect(historyMocks.fetch).not.toHaveBeenCalled();
     });
 
+    it("stops before clearing DM history if channel invalidation replaces the session", async () => {
+      historyMocks.selectedChannelId = "previous-session-channel";
+      vi.mocked(e2eeApi.listMyDevices).mockResolvedValue({ success: true, data: [] });
+      historyMocks.invalidate.mockImplementationOnce(() => publishAuthGenerationChange(getAuthSessionSnapshot().generation + 1));
+      await useE2EEStore.getState().initialize("userA");
+      expect(historyMocks.invalidate).toHaveBeenCalledOnce();
+      expect(historyMocks.invalidateDM).not.toHaveBeenCalled();
+      expect(historyMocks.fetch).not.toHaveBeenCalled();
+    });
+
     it("refetches the visible history after existing keys become ready on reload", async () => {
       historyMocks.selectedChannelId = "early-channel";
       vi.mocked(e2eeApi.listMyDevices).mockResolvedValue({ success: true, data: [] });
