@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { randomBytes } from "node:crypto";
+import { randomBytes, webcrypto } from "node:crypto";
 import {
   composer, dismissOnboardingOverlays, fixtureApi, loginAsNotificationOwner,
   messageList, readChannelNotificationFixture, resetChannelNotificationFixture,
@@ -19,95 +19,122 @@ async function openChannel(page: Page, serverName: string) {
   await expect(composer(page)).toBeVisible();
 }
 
-test("a fresh device restores its identity and encrypted history from a password backup", async ({ browser }) => {
-  test.skip(process.env.HICHAT_E2E_CRYPTO_RECOVERY !== "1", "Owns a separate disposable database and identities");
-  test.setTimeout(180_000);
-  const originalContext = await browser.newContext();
-  const restoredContext = await browser.newContext();
-  try {
-    const original = await originalContext.newPage();
-    await loginAsNotificationOwner(original);
-    // A retry reuses this run's disposable identity. Remove only its backup
-    // before the fixture reset reloads the app, so prior attempts cannot turn
-    // the initial set-password step into a change/restore flow.
-    await fixtureApi(original, "/e2ee/key-backup", "DELETE");
-    await resetChannelNotificationFixture(original);
-    const fixture = readChannelNotificationFixture();
-    // Establish the backup before enabling encryption so a first-use prompt
-    // cannot intercept channel navigation. Refresh it after sending history.
-    const password = `Q!${randomBytes(24).toString("hex")}`;
-    const initialSettings = await encryptionSettings(original);
-    const fingerprint = await initialSettings.locator(".e2ee-fingerprint").innerText();
-    await initialSettings.locator("#recoveryPwd").fill(password);
-    await initialSettings.locator("#recoveryPwdConfirm").fill(password);
-    const initialUpload = original.waitForResponse(response =>
-      new URL(response.url()).pathname === "/api/e2ee/key-backup" && response.request().method() === "PUT");
-    await initialSettings.getByRole("button", { name: "Set Recovery Password", exact: true }).click();
-    expect((await initialUpload).ok()).toBe(true);
-    await expect(initialSettings.getByRole("button", { name: "Change Recovery Password", exact: true })).toBeVisible();
-    // Successful saving clears both fields; changing the password is then
-    // correctly disabled until the user supplies a new one.
-    await expect(initialSettings.locator("#recoveryPwd")).toHaveValue("");
-    await expect(initialSettings.locator("#recoveryPwdConfirm")).toHaveValue("");
-    await expect(original.getByRole("status").filter({ hasText: "Recovery password set successfully" })).toBeVisible();
-    await original.keyboard.press("Escape");
-    await expect(initialSettings).toBeHidden();
-    await fixtureApi(original, `/servers/${fixture.serverId}`, "PATCH", { e2ee_enabled: true });
-    await original.reload();
-    await dismissOnboardingOverlays(original);
-    await openChannel(original, fixture.serverName);
-    const plaintext = `encrypted-history-${randomBytes(12).toString("hex")}`;
-    const committed = original.waitForResponse(response =>
-      new URL(response.url()).pathname === `/api/servers/${fixture.serverId}/channels/${fixture.channelId}/messages`
-      && response.request().method() === "POST");
-    await composer(original).fill(plaintext);
-    await composer(original).press("Enter");
-    const response = await committed;
-    expect(response.status()).toBe(201);
-    const message = (await response.json()).data;
-    expect(message.encryption_version).toBe(1);
-    expect(JSON.stringify(message)).not.toContain(plaintext);
-    await expect(messageList(original).getByRole("article").filter({ hasText: plaintext })).toHaveCount(1);
+// Independent fixture preparation: emulate a v1 writer that encrypted the
+// same cache receipt before source tags existed. Product code is not imported.
+async function removeBackupSourceTag(page: Page, password: string, messageId: string) {
+  const backup = await fixtureApi<{ version: number; algorithm: string; encrypted_data: string; nonce: string; salt: string }>(page, "/e2ee/key-backup");
+  expect(backup.algorithm).toBe("aes-256-gcm+pbkdf2-2000000");
+  const material = await webcrypto.subtle.importKey("raw", Buffer.from(password, "utf8"), "PBKDF2", false, ["deriveKey"]);
+  const key = await webcrypto.subtle.deriveKey({ name: "PBKDF2", salt: Buffer.from(backup.salt, "base64"), iterations: 2_000_000, hash: "SHA-256" }, material, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+  const plaintext = await webcrypto.subtle.decrypt({ name: "AES-GCM", iv: Buffer.from(backup.nonce, "base64") }, key, Buffer.from(backup.encrypted_data, "base64"));
+  const contents = JSON.parse(Buffer.from(plaintext).toString("utf8")) as { version: number; messageCache: Array<{ messageId: string; encryptedSourceTag?: string }> };
+  expect(contents.version).toBe(1);
+  const receipt = contents.messageCache.find(row => row.messageId === messageId);
+  expect(receipt).toBeDefined();
+  if (!receipt) throw new Error("fixture backup did not include the sent message");
+  expect(receipt.encryptedSourceTag).toMatch(/^channel-v1:/);
+  delete receipt.encryptedSourceTag;
+  // Never reuse the original GCM nonce when changing authenticated plaintext.
+  const nonce = randomBytes(12);
+  const encrypted = await webcrypto.subtle.encrypt({ name: "AES-GCM", iv: nonce }, key, Buffer.from(JSON.stringify(contents), "utf8"));
+  await fixtureApi(page, "/e2ee/key-backup", "PUT", {
+    version: backup.version, algorithm: backup.algorithm, salt: backup.salt,
+    nonce: nonce.toString("base64"), encrypted_data: Buffer.from(encrypted).toString("base64"),
+  });
+}
 
-    const settings = await encryptionSettings(original);
-    await settings.locator("#recoveryPwd").fill(password);
-    await settings.locator("#recoveryPwdConfirm").fill(password);
-    const uploaded = original.waitForResponse(response =>
-      new URL(response.url()).pathname === "/api/e2ee/key-backup" && response.request().method() === "PUT");
-    await settings.getByRole("button", { name: "Change Recovery Password", exact: true }).click();
-    expect((await uploaded).ok()).toBe(true);
-    await expect(original.getByRole("status").filter({ hasText: "Recovery password set successfully" })).toBeVisible();
-    await originalContext.close();
+for (const cacheFormat of ["source-tagged", "legacy-unversioned"] as const) {
+  test(`a fresh device restores identity and encrypted history (${cacheFormat})`, async ({ browser }) => {
+    test.skip(process.env.HICHAT_E2E_CRYPTO_RECOVERY !== "1", "Owns a separate disposable database and identities");
+    test.setTimeout(180_000);
+    const originalContext = await browser.newContext();
+    const restoredContext = await browser.newContext();
+    try {
+      const original = await originalContext.newPage();
+      await loginAsNotificationOwner(original);
+      // A retry reuses this run's disposable identity. Remove only its backup
+      // before the fixture reset reloads the app, so prior attempts cannot turn
+      // the initial set-password step into a change/restore flow.
+      await fixtureApi(original, "/e2ee/key-backup", "DELETE");
+      await resetChannelNotificationFixture(original);
+      const fixture = readChannelNotificationFixture();
+      // Establish the backup before enabling encryption so a first-use prompt
+      // cannot intercept channel navigation. Refresh it after sending history.
+      const password = `Q!${randomBytes(24).toString("hex")}`;
+      const initialSettings = await encryptionSettings(original);
+      const fingerprint = await initialSettings.locator(".e2ee-fingerprint").innerText();
+      await initialSettings.locator("#recoveryPwd").fill(password);
+      await initialSettings.locator("#recoveryPwdConfirm").fill(password);
+      const initialUpload = original.waitForResponse(response =>
+        new URL(response.url()).pathname === "/api/e2ee/key-backup" && response.request().method() === "PUT");
+      await initialSettings.getByRole("button", { name: "Set Recovery Password", exact: true }).click();
+      expect((await initialUpload).ok()).toBe(true);
+      await expect(initialSettings.getByRole("button", { name: "Change Recovery Password", exact: true })).toBeVisible();
+      // Successful saving clears both fields; changing the password is then
+      // correctly disabled until the user supplies a new one.
+      await expect(initialSettings.locator("#recoveryPwd")).toHaveValue("");
+      await expect(initialSettings.locator("#recoveryPwdConfirm")).toHaveValue("");
+      await expect(original.getByRole("status").filter({ hasText: "Recovery password set successfully" })).toBeVisible();
+      await original.keyboard.press("Escape");
+      await expect(initialSettings).toBeHidden();
+      await fixtureApi(original, `/servers/${fixture.serverId}`, "PATCH", { e2ee_enabled: true });
+      await original.reload();
+      await dismissOnboardingOverlays(original);
+      await openChannel(original, fixture.serverName);
+      const plaintext = `encrypted-history-${randomBytes(12).toString("hex")}`;
+      const committed = original.waitForResponse(response =>
+        new URL(response.url()).pathname === `/api/servers/${fixture.serverId}/channels/${fixture.channelId}/messages`
+        && response.request().method() === "POST");
+      await composer(original).fill(plaintext);
+      await composer(original).press("Enter");
+      const response = await committed;
+      expect(response.status()).toBe(201);
+      const message = (await response.json()).data;
+      expect(message.encryption_version).toBe(1);
+      expect(JSON.stringify(message)).not.toContain(plaintext);
+      await expect(messageList(original).getByRole("article").filter({ hasText: plaintext })).toHaveCount(1);
 
-    // A new browser context has no cookies, IndexedDB keys, or message cache.
-    const restored = await restoredContext.newPage();
-    // Emit only fixed diagnostic categories, never plaintext, keys or tokens.
-    restored.on("console", event => {
-      if (event.type() !== "error") return;
-      const category = event.text().match(/Replay detected|No sender key found|Distribution ID mismatch|No initial chain key|Invalid signature/);
-      if (category) console.error("Restored history crypto rejection:", category[0]);
-    });
-    await loginAsNotificationOwner(restored);
-    await restored.getByRole("button", { name: "Restore from Recovery Password", exact: true }).click();
-    const recovery = restored.locator(".modal-card").filter({ has: restored.getByRole("heading", { name: "Restore Encryption Keys", exact: true }) });
-    await recovery.getByPlaceholder("Enter recovery password", { exact: true }).fill(`wrong-${randomBytes(24).toString("hex")}`);
-    await recovery.getByRole("button", { name: "Restore Keys", exact: true }).click();
-    await expect(restored.getByRole("alert").filter({ hasText: "Invalid recovery password" })).toBeVisible();
-    await expect(recovery).toBeVisible();
-    await recovery.getByPlaceholder("Enter recovery password", { exact: true }).fill(password);
-    await recovery.getByRole("button", { name: "Restore Keys", exact: true }).click();
-    await expect(restored.getByRole("status").filter({ hasText: "Keys restored successfully" })).toBeVisible();
-    await expect(recovery).toBeHidden();
-    const restoredSettings = await encryptionSettings(restored);
-    await expect(restoredSettings.locator(".e2ee-fingerprint")).toHaveText(fingerprint);
-    await restored.keyboard.press("Escape");
-    await expect(restoredSettings).toBeHidden();
-    await openChannel(restored, fixture.serverName);
-    await expect(messageList(restored).getByRole("article").filter({ hasText: plaintext })).toHaveCount(1);
-    await restored.reload();
-    await dismissOnboardingOverlays(restored);
-    await expect(messageList(restored).getByRole("article").filter({ hasText: plaintext })).toHaveCount(1);
-  } finally {
-    await Promise.all([originalContext.close(), restoredContext.close()]);
-  }
-});
+      const settings = await encryptionSettings(original);
+      await settings.locator("#recoveryPwd").fill(password);
+      await settings.locator("#recoveryPwdConfirm").fill(password);
+      const uploaded = original.waitForResponse(response =>
+        new URL(response.url()).pathname === "/api/e2ee/key-backup" && response.request().method() === "PUT");
+      await settings.getByRole("button", { name: "Change Recovery Password", exact: true }).click();
+      expect((await uploaded).ok()).toBe(true);
+      await expect(original.getByRole("status").filter({ hasText: "Recovery password set successfully" })).toBeVisible();
+      if (cacheFormat === "legacy-unversioned") await removeBackupSourceTag(original, password, message.id);
+      await originalContext.close();
+
+      // A new browser context has no cookies, IndexedDB keys, or message cache.
+      const restored = await restoredContext.newPage();
+      // Emit only fixed diagnostic categories, never plaintext, keys or tokens.
+      restored.on("console", event => {
+        if (event.type() !== "error") return;
+        const category = event.text().match(/Replay detected|No sender key found|Distribution ID mismatch|No initial chain key|Invalid signature/);
+        if (category) console.error("Restored history crypto rejection:", category[0]);
+      });
+      await loginAsNotificationOwner(restored);
+      await restored.getByRole("button", { name: "Restore from Recovery Password", exact: true }).click();
+      const recovery = restored.locator(".modal-card").filter({ has: restored.getByRole("heading", { name: "Restore Encryption Keys", exact: true }) });
+      await recovery.getByPlaceholder("Enter recovery password", { exact: true }).fill(`wrong-${randomBytes(24).toString("hex")}`);
+      await recovery.getByRole("button", { name: "Restore Keys", exact: true }).click();
+      await expect(restored.getByRole("alert").filter({ hasText: "Invalid recovery password" })).toBeVisible();
+      await expect(recovery).toBeVisible();
+      await recovery.getByPlaceholder("Enter recovery password", { exact: true }).fill(password);
+      await recovery.getByRole("button", { name: "Restore Keys", exact: true }).click();
+      await expect(restored.getByRole("status").filter({ hasText: "Keys restored successfully" })).toBeVisible();
+      await expect(recovery).toBeHidden();
+      const restoredSettings = await encryptionSettings(restored);
+      await expect(restoredSettings.locator(".e2ee-fingerprint")).toHaveText(fingerprint);
+      await restored.keyboard.press("Escape");
+      await expect(restoredSettings).toBeHidden();
+      await openChannel(restored, fixture.serverName);
+      await expect(messageList(restored).getByRole("article").filter({ hasText: plaintext })).toHaveCount(1);
+      await restored.reload();
+      await dismissOnboardingOverlays(restored);
+      await expect(messageList(restored).getByRole("article").filter({ hasText: plaintext })).toHaveCount(1);
+    } finally {
+      await Promise.all([originalContext.close(), restoredContext.close()]);
+    }
+  });
+}
