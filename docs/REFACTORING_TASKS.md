@@ -1522,3 +1522,7 @@ PR #298 `7a5e44ba` native PostgreSQL işi 132251172133 SUCCESS. Zorunlu aktif s�
 ### 2026-11-14 — Aktif kredi için süreç restart kabulü hazırlığı
 
 Birleşik süreç testi ilk aktif SIGTERM sonrası kredi satırının tüm alanlarını JSONB ile snapshot alır, aynı sahipli veritabanıyla ikinci gerçek sunucu sürecini açar, health ve graceful SIGTERM çıkışını doğrular. İkinci kapanışta aggregate=ledger/count/pending kontrolleri ve kredi payload/created_at/applied_at dahil tam satır eşitliği zorunludur. Windows test derlemesi (POSIX atlaması), vet ve lint 0 sorun geçti; native çalıştırma henüz yapılmadı. Aktif süreç race head `058b2117` CI tamamlanmadan kanonik dala yeni push yapılmayacak. Önceki `7a5e44ba` native işi SUCCESS olsa da sonraki push tüm workflow’u iptal etti; bütün commit için 36/36 başarı iddiası yok.
+
+### 2026-11-14 — Aktif süreç native race kabulü
+
+PR #298 `058b2117` native PostgreSQL işi 132254279430 SUCCESS. Zorunlu normal süreç PASS (1 kredi/pending0/applied1, usage2=ledger2) sonrasında ayrı `go test -race . -run ^TestActiveVoiceProcessPostgresSignal$` adımı da SUCCESS, 13,383 saniye. Parent ve üretim main’i çağıran ayrı child executable race ile derlenir; child başarısız çıkışı kabul edilmez. Kanıt: `implementation/verification/refactor-pr298-058-native-race-success-2026-11-14.json`. Tüm workflow için dört repository shard’ı halen çalışıyor; bu kayıt 36/36 başarı iddiası değildir. Restart takip değişikliği kanonik dalda yerel `956c95ab`, uzak dala henüz gönderilmedi. Yayın binary’si, fiziksel medya ve pre-enqueue crash kapıları açık.
