@@ -1768,3 +1768,8 @@ The declared Voice constructor result previously exposed request/channel-deletio
 ### RF11 — game-join transport adapter separation (2026-11-14)
 
 initServices now only binds gameJoinOfferCallback; JSON serialization,2048-byte limit, strict typed decoding and bounded context ownership moved unchanged into a dedicated transport adapter. Tests verify DTO/actor/physical-connection and response preservation, deadline and post-call cancellation, and seven invalid payload categories without service dispatch. Existing GameJoin service/wiring/initialization tests plus build and vet pass. No domain authorization or wire fields changed. Whole RF11 and Linux race/current CI acceptance remain open. Receipt: implementation/verification/refactor-rf11-game-join-adapter-2026-11-14.json.
+
+
+### RF28 — smoke waits for actual signed-out readiness (2026-11-14)
+
+CI43574345347 passed offline retry (including201), DM history and role cases first try. Only Chromium login/recovery smoke was flaky: first password-field visibility used15s while screenshot showed the real server-waking screen. Its initial form readiness gate now matches the shared login helper at90s. Keyboard/recovery/focus/script-error assertions and strict flaky rejection remain. No fixed sleep or rate-limit bypass. Fresh full production CI required. Receipt: implementation/verification/refactor-rf28-smoke-auth-readiness-2026-11-14.json.
