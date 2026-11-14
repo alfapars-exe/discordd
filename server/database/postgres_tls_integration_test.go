@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -54,6 +55,38 @@ func TestOpenPostgresInlinePEMReconnect(t *testing.T) {
 	if firstVersion != secondVersion {
 		t.Fatalf("PostgreSQL version changed across pool connections: %d and %d", firstVersion, secondVersion)
 	}
+
+	// These failures use the same live endpoint as the successful handshakes,
+	// rather than merely rejecting incomplete configuration before connecting.
+	t.Run("rejects_untrusted_server_chain", func(t *testing.T) {
+		// A valid client leaf is not the server's trust anchor. Both client
+		// credentials stay valid, so rejection must be certificate verification.
+		t.Setenv("HICHAT_PG_CA_PEM", os.Getenv("HICHAT_PG_CERT_PEM"))
+		rejected, err := OpenPostgres(ctx, dsn)
+		if rejected != nil {
+			_ = rejected.Close()
+			t.Fatal("untrusted server chain returned a usable pool")
+		}
+		if err == nil || !strings.Contains(err.Error(), "(tls_certificate)") {
+			t.Fatalf("expected live server certificate rejection, got %v", err)
+		}
+	})
+	t.Run("rejects_client_identity_mismatch", func(t *testing.T) {
+		other, err := url.Parse(dsn)
+		if err != nil {
+			t.Fatal("invalid integration DSN")
+		}
+		password, _ := other.User.Password()
+		other.User = url.UserPassword("hichat_tls_other_identity", password)
+		rejected, err := OpenPostgres(ctx, other.String())
+		if rejected != nil {
+			_ = rejected.Close()
+			t.Fatal("mismatched client identity returned a usable pool")
+		}
+		if err == nil || !strings.Contains(err.Error(), "(authentication)") {
+			t.Fatalf("expected live client identity rejection, got %v", err)
+		}
+	})
 }
 
 func assertTLSBackend(t *testing.T, ctx context.Context, conn *sql.Conn) (pid int, version int) {
