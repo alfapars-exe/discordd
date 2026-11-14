@@ -77,27 +77,8 @@ func main() {
 	// the boot log instead of buried inside per-track Enqueue failures.
 	logMusicBotDeps()
 
-	// 2a. Boot-time restore from HF Bucket — runs BEFORE database.New so
-	//     migrations land on the recovered state, not a fresh schema.
-	//     No-op when (a) HF_TOKEN unset, (b) DSN is remote libSQL/Turso, or
-	//     (c) the local DB file already has data. See services/backup_service.go
-	//     for the exact predicate. Failure is logged but does not abort boot
-	//     — worst case we start with an empty DB and the next periodic
-	//     snapshot (10c below) takes over.
-	//
-	//     A throwaway BackupService instance is used here because
-	//     initServices builds the long-lived one a few steps down and
-	//     BackupService is stateless. Holding two for ~10 seconds is
-	//     cheaper than threading a parameter through initServices.
-	{
-		boot := services.NewBackupService(cfg.Backup, nil)
-		restoreCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-		if err := boot.Restore(restoreCtx); err != nil {
-			bootLogger.Error("backup restore failed, continuing with whatever DB is on disk", "err", pkg.ErrText(err))
-		}
-		cancel()
-	}
-
+	// PostgreSQL is required above and owns durable database recovery.
+	// Legacy SQLite snapshot restore remains an explicit operator/test API.
 	// 2b. Database
 	migrationsFS, err := fs.Sub(database.EmbeddedMigrations, "migrations")
 	if err != nil {

@@ -2013,3 +2013,8 @@ WithAuthAppLogger uses existing AuthOption composition to select optional persis
 ### RF11 — backup logger constructor ownership (2026-11-14)
 
 Backup constructor now takes explicit optional logger. Long-lived production service receives appLogService; early pre-database restore and isolated test fixture explicitly select nil. Late setter/main binding removed. Required-parameter regression failed before change. Actual info/error logger and disabled mode, root wiring and all21 tests declared in backup_service_test.go pass (restore/snapshot/rotation/shutdown/cancellation). Server build, targeted vet and diff check pass. No external HF bucket or real backup restore claim; whole RF11 and current-source CI remain open.
+
+
+### RF08/RF11 — remove unreachable PostgreSQL boot restore owner (2026-11-14)
+
+Current main requires PostgreSQL DATABASE_URL before boot restore. Config.Database.Path is DATABASE_URL and Backup.DBPath chooses the same nonempty DATABASE_URL; Restore returns immediately for remote DSNs. Therefore the temporary boot BackupService was an unreachable-work/no-op owner, not a demonstrated active orphan on the current product. Removed this obsolete boot block and corrected legacy Restore lifecycle documentation. Legacy Restore implementation remains; all21 backup file tests pass. Full root tests pass13.614s; config compiles with no test files. Server build/vet pass. Actual remote backup recovery, uploads behavior and remaining lifecycle audit are not claimed complete.

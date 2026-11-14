@@ -1,4 +1,4 @@
-// backup_service_restore.go: boot-time restore of the DB snapshot and uploads tree from the HF Bucket.
+// backup_service_restore.go: legacy SQLite snapshot and uploads restore from the HF Bucket.
 package services
 
 import (
@@ -20,7 +20,7 @@ import (
 //
 // Returns nil (no-op) when:
 //   - cfg.Enabled == false (HF_TOKEN unset → self-host path)
-//   - cfg.DBPath is a remote libSQL/Turso DSN
+//   - cfg.DBPath is a remote database DSN (including PostgreSQL)
 //   - the file already exists and is >= 4 KiB (and BACKUP_FORCE_RESTORE != "1")
 //   - the bucket has no snapshot yet (fresh deploy, "404 / not found")
 //   - the downloaded snapshot fails PRAGMA integrity_check
@@ -29,8 +29,8 @@ import (
 // already on disk; an empty file just means migrations build the schema
 // from scratch. The only fatal-ish failure (returned as an error to the
 // caller) is the rare case where the staging file lands but cannot be
-// moved into place — main.go logs and continues either way, so even
-// this is best-effort.
+// moved into place. Callers own the recovery policy and must Stop the
+// service to cancel/join any accepted asynchronous uploads restore.
 //
 // Uploads are restored asynchronously after the DB so the HTTP server
 // can come up promptly even when the uploads dir is large; attachments
