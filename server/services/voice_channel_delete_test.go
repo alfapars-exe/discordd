@@ -210,7 +210,7 @@ func TestDeleteVoiceChannelContinuesAfterCleanupPanic(t *testing.T) {
 				}
 				return nil, errors.New("fixture has no media")
 			}
-			svc, _ := newTestVoiceServiceWithLiveKitGetter(getter)
+			svc, _ := newTestVoiceServiceWithLiveKitGetter(getter, getter.RecordVoiceUsage)
 			s := svc.(*voiceService)
 			for _, id := range []string{"a", "b", "c", "d", "e", "f", "g", "h"} {
 				s.states[id] = &models.VoiceState{UserID: id, ServerID: "server", ChannelID: "channel", UsageSessionID: id, LiveKitInstanceID: "instance", LiveKitIsCloud: true, JoinedAt: time.Now().Add(-time.Minute)}

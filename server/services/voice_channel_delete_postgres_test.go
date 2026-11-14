@@ -22,7 +22,7 @@ func TestVoiceUsagePostgresChannelDeletionHandsOffAllBeforeMedia(t *testing.T) {
 			}
 			repo := repository.NewSQLiteLiveKitRepo(db)
 			getter := &blockedShutdownLiveKitRepo{LiveKitRepository: repo, VoiceUsageRecorder: repo.(repository.VoiceUsageRecorder), VoiceUsageQueue: repo.(repository.VoiceUsageQueue), entered: make(chan struct{}), release: make(chan struct{})}
-			svc, _ := newTestVoiceServiceWithLiveKitGetter(getter)
+			svc, _ := newTestVoiceServiceWithLiveKitGetter(getter, NewDurableVoiceUsageCredit(getter))
 			s := svc.(*voiceService)
 			joined := time.Now().Add(-time.Minute)
 			for i := 0; i < 6; i++ {

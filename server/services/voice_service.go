@@ -162,6 +162,7 @@ type forceMoveGrant struct {
 const maxScreenShares = 0
 
 type voiceService struct {
+	usageCredit        VoiceUsageCredit
 	usageRecovery      PendingVoiceUsageApplier
 	voiceAccess        repository.VoiceAccessReader
 	sessionsFinalized  bool // guarded by mu; no room keys may be created after terminal cleanup
@@ -227,6 +228,7 @@ type MemberTimeoutChecker interface {
 // VoiceRuntimeDependencies is selected explicitly by the composition owner.
 // Its zero value disables integrations and persistent app logging.
 type VoiceRuntimeDependencies struct {
+	UsageCredit VoiceUsageCredit
 	// Nil disables the durable pending-usage recovery worker.
 	UsageRecovery PendingVoiceUsageApplier
 	// Nil explicitly selects the portable standalone admission/visibility path.
@@ -251,6 +253,7 @@ func NewVoiceService(
 	runtime VoiceRuntimeDependencies,
 ) VoiceRuntime {
 	service := &voiceService{
+		usageCredit:        runtime.UsageCredit,
 		usageRecovery:      runtime.UsageRecovery,
 		voiceAccess:        runtime.VoiceAccess,
 		states:             make(map[string]*models.VoiceState),

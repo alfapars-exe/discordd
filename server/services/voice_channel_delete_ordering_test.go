@@ -29,7 +29,7 @@ func TestDeleteVoiceChannelHandsOffAllCreditsBeforeMedia(t *testing.T) {
 				<-release
 				return nil, errors.New("fixture media unavailable")
 			}
-			svc, _ := newTestVoiceServiceWithLiveKitGetter(getter)
+			svc, _ := newTestVoiceServiceWithLiveKitGetter(getter, getter.RecordVoiceUsage)
 			s := svc.(*voiceService)
 			for i := 0; i < 8; i++ {
 				id := fmt.Sprint(i)
@@ -84,7 +84,7 @@ func TestDeleteVoiceChannelBoundsAndJoinsCreditPhase(t *testing.T) {
 		media <- struct{}{}
 		return nil, errors.New("fixture media unavailable")
 	}
-	svc, _ := newTestVoiceServiceWithLiveKitGetter(getter)
+	svc, _ := newTestVoiceServiceWithLiveKitGetter(getter, getter.RecordVoiceUsage)
 	s := svc.(*voiceService)
 	s.musicBotHook = &mockMusicBotHook{StopAllForChannelFn: func(string) { media <- struct{}{} }}
 	for i := 0; i < 8; i++ {

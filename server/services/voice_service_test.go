@@ -1244,8 +1244,12 @@ func (m *mockConfigurableLiveKitGetter) MigrateOneServer(ctx context.Context, se
 // injectable LiveKitInstanceGetter, for tests that need
 // VoiceState.LiveKitInstanceID/LiveKitIsCloud actually populated (see
 // mockConfigurableLiveKitGetter).
-func newTestVoiceServiceWithLiveKitGetter(lkGetter LiveKitInstanceGetter) (VoiceRuntime, *testutil.MockBroadcaster) {
+func newTestVoiceServiceWithLiveKitGetter(lkGetter LiveKitInstanceGetter, credit ...VoiceUsageCredit) (VoiceRuntime, *testutil.MockBroadcaster) {
 	hub := &testutil.MockBroadcaster{}
+	runtime := VoiceRuntimeDependencies{}
+	if len(credit) > 0 {
+		runtime.UsageCredit = credit[0]
+	}
 	svc := NewVoiceService(
 		&testutil.MockChannelRepo{
 			GetByIDFn: func(_ context.Context, id string) (*models.Channel, error) {
@@ -1268,10 +1272,10 @@ func newTestVoiceServiceWithLiveKitGetter(lkGetter LiveKitInstanceGetter) (Voice
 				return []string{"voice-test-member"}, nil
 			},
 		},
-		nil,                             // encryptionKey
-		nil,                             // timeoutChecker — not under test here
-		nil,                             // banChecker — not under test here
-		nil, VoiceRuntimeDependencies{}, // auditLogger — not under test here
+		nil,          // encryptionKey
+		nil,          // timeoutChecker — not under test here
+		nil,          // banChecker — not under test here
+		nil, runtime, // auditLogger — not under test here
 	)
 	return svc, hub
 }

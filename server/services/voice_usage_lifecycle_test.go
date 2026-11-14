@@ -51,7 +51,7 @@ func TestVoiceUsageCreditPostgresDeadline(t *testing.T) {
 	if _, err = blocker.ExecContext(ctx, "LOCK TABLE livekit_monthly_usage IN ACCESS EXCLUSIVE MODE"); err != nil {
 		t.Fatal(err)
 	}
-	s := &voiceService{livekitGetter: repository.NewSQLiteLiveKitRepo(db)}
+	s := &voiceService{livekitGetter: repository.NewSQLiteLiveKitRepo(db), usageCredit: NewDurableVoiceUsageCredit(repository.NewSQLiteLiveKitRepo(db))}
 	done := make(chan struct{})
 	go func() { s.creditUsage("credit-instance", true, time.Now().Add(-time.Minute)); close(done) }()
 	for {

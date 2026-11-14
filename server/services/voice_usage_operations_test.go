@@ -94,7 +94,7 @@ func TestVoiceUsageShutdownWaitsForAcceptedLeaveCredit(t *testing.T) {
 	getter.GetByServerIDFn = func(context.Context, string) (*models.LiveKitInstance, error) {
 		return &models.LiveKitInstance{ID: "instance", IsPlatformManaged: true}, nil
 	}
-	svc, hub := newTestVoiceServiceWithLiveKitGetter(getter)
+	svc, hub := newTestVoiceServiceWithLiveKitGetter(getter, getter.RecordVoiceUsage)
 	hub.BroadcastToServerFn = func(string, ws.Event) {}
 	hub.BroadcastToUserFn = func(string, ws.Event) {}
 	s := svc.(*voiceService)
@@ -397,7 +397,7 @@ func TestVoiceUsageShutdownWaitsForEntranceHook(t *testing.T) {
 
 func TestVoiceUsageLateMemberRevocationPreservesCredit(t *testing.T) {
 	getter := &recordingUsageGetter{recorded: make(chan string, 2)}
-	svc, _ := newTestVoiceServiceWithLiveKitGetter(getter)
+	svc, _ := newTestVoiceServiceWithLiveKitGetter(getter, getter.RecordVoiceUsage)
 	s := svc.(*voiceService)
 	s.states["victim"] = &models.VoiceState{UserID: "victim", ChannelID: "ch1", ServerID: "srv1", UsageSessionID: "late-session", LiveKitInstanceID: "instance", LiveKitIsCloud: true, JoinedAt: time.Now().Add(-time.Minute)}
 	s.ShutdownUsageProducers()

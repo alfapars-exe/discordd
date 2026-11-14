@@ -77,7 +77,7 @@ func TestVoiceUsagePostgresReplayTransaction(t *testing.T) {
 		t.Fatalf("usage after retry=%d err=%v, want90", used, err)
 	}
 	ended := time.Date(2026, time.January, 31, 23, 59, 59, 0, time.UTC)
-	service := &voiceService{livekitGetter: repo}
+	service := &voiceService{livekitGetter: repo, usageCredit: NewDurableVoiceUsageCredit(repo)}
 	service.creditUsageSession("session-three", "usage-instance", true, ended.Add(-time.Minute), ended)
 	service.creditUsageSession("session-three", "usage-instance", true, ended.Add(-time.Minute), ended)
 	service.creditUsageSession("session-four", "usage-instance", true, ended.Add(-time.Minute), ended)
@@ -150,7 +150,7 @@ func TestVoiceUsagePostgresServiceHandoffSurvivesApplyFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	repo := repository.NewSQLiteLiveKitRepo(db)
-	service := &voiceService{livekitGetter: repo}
+	service := &voiceService{livekitGetter: repo, usageCredit: NewDurableVoiceUsageCredit(repo)}
 	ended := time.Date(2026, time.January, 31, 23, 59, 59, 0, time.UTC)
 	service.creditUsageSession("handoff-session", "handoff-instance", true, ended.Add(-time.Minute), ended)
 	var pending int
@@ -285,7 +285,7 @@ func TestVoiceUsagePostgresShutdownJoinsAcceptedCredit(t *testing.T) {
 		t.Fatal(err)
 	}
 	repo := repository.NewSQLiteLiveKitRepo(db)
-	svc, hub := newTestVoiceServiceWithLiveKitGetter(repo)
+	svc, hub := newTestVoiceServiceWithLiveKitGetter(repo, NewDurableVoiceUsageCredit(repo))
 	hub.BroadcastToServerFn = func(string, ws.Event) {}
 	hub.BroadcastToUserFn = func(string, ws.Event) {}
 	s := svc.(*voiceService)
@@ -366,7 +366,7 @@ func TestVoiceUsagePostgresLateMemberRevocationPreservesCredit(t *testing.T) {
 		t.Fatal(err)
 	}
 	repo := repository.NewSQLiteLiveKitRepo(db)
-	svc, _ := newTestVoiceServiceWithLiveKitGetter(repo)
+	svc, _ := newTestVoiceServiceWithLiveKitGetter(repo, NewDurableVoiceUsageCredit(repo))
 	s := svc.(*voiceService)
 	s.states["victim"] = &models.VoiceState{UserID: "victim", ChannelID: "ch1", ServerID: "srv1", UsageSessionID: "late-credit", LiveKitInstanceID: "late-instance", LiveKitIsCloud: true, JoinedAt: time.Now().Add(-time.Minute)}
 	s.ShutdownUsageProducers()
@@ -434,7 +434,7 @@ func TestVoiceUsagePostgresShutdownFinalizesActiveSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	repo := repository.NewSQLiteLiveKitRepo(db)
-	svc, _ := newTestVoiceServiceWithLiveKitGetter(repo)
+	svc, _ := newTestVoiceServiceWithLiveKitGetter(repo, NewDurableVoiceUsageCredit(repo))
 	s := svc.(*voiceService)
 	s.states["reader"] = &models.VoiceState{UserID: "reader", ChannelID: "channel", ServerID: "default", UsageSessionID: "active-credit", LiveKitInstanceID: "active-instance", LiveKitIsCloud: true, JoinedAt: time.Now().Add(-time.Minute)}
 	s.ShutdownVoiceSessions()
@@ -480,7 +480,7 @@ func TestVoiceUsagePostgresShutdownCreditsBeforeMediaWait(t *testing.T) {
 	}
 	repo := repository.NewSQLiteLiveKitRepo(db)
 	getter := &blockedShutdownLiveKitRepo{LiveKitRepository: repo, VoiceUsageRecorder: repo.(repository.VoiceUsageRecorder), VoiceUsageQueue: repo.(repository.VoiceUsageQueue), entered: make(chan struct{}), release: make(chan struct{})}
-	svc, _ := newTestVoiceServiceWithLiveKitGetter(getter)
+	svc, _ := newTestVoiceServiceWithLiveKitGetter(getter, NewDurableVoiceUsageCredit(getter))
 	s := svc.(*voiceService)
 	s.states["reader"] = &models.VoiceState{UserID: "reader", ChannelID: "channel", ServerID: "default", UsageSessionID: "blocked-media-credit", LiveKitInstanceID: "blocked-media-instance", LiveKitIsCloud: true, JoinedAt: time.Now().Add(-time.Minute)}
 	done := make(chan struct{})
@@ -520,7 +520,7 @@ func TestVoiceUsagePostgresShutdownHandsOffAllBeforeMedia(t *testing.T) {
 			}
 			repo := repository.NewSQLiteLiveKitRepo(db)
 			getter := &blockedShutdownLiveKitRepo{LiveKitRepository: repo, VoiceUsageRecorder: repo.(repository.VoiceUsageRecorder), VoiceUsageQueue: repo.(repository.VoiceUsageQueue), entered: make(chan struct{}), release: make(chan struct{})}
-			svc, _ := newTestVoiceServiceWithLiveKitGetter(getter)
+			svc, _ := newTestVoiceServiceWithLiveKitGetter(getter, NewDurableVoiceUsageCredit(getter))
 			s := svc.(*voiceService)
 			joined := time.Now().Add(-time.Minute)
 			for i := 0; i < 6; i++ {
@@ -575,7 +575,7 @@ func TestVoiceUsagePostgresShutdownRecoversFailedApplication(t *testing.T) {
 		}
 	}
 	repo := repository.NewSQLiteLiveKitRepo(db)
-	svc, _ := newTestVoiceServiceWithLiveKitGetter(repo)
+	svc, _ := newTestVoiceServiceWithLiveKitGetter(repo, NewDurableVoiceUsageCredit(repo))
 	s := svc.(*voiceService)
 	s.states["reader"] = &models.VoiceState{UserID: "reader", ChannelID: "channel", ServerID: "default", UsageSessionID: "shutdown-recover-credit", LiveKitInstanceID: "shutdown-recover", LiveKitIsCloud: true, JoinedAt: time.Now().Add(-time.Minute)}
 	s.ShutdownVoiceSessions()

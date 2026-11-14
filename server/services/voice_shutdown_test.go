@@ -12,7 +12,7 @@ import (
 
 func TestVoiceShutdownFinalizesActiveSessionsOnce(t *testing.T) {
 	getter := &recordingUsageGetter{recorded: make(chan string, 4)}
-	svc, _ := newTestVoiceServiceWithLiveKitGetter(getter)
+	svc, _ := newTestVoiceServiceWithLiveKitGetter(getter, getter.RecordVoiceUsage)
 	s := svc.(*voiceService)
 	owner, ok := any(s).(interface{ ShutdownVoiceSessions() })
 	if !ok {
@@ -55,7 +55,7 @@ func TestVoiceShutdownFinalizesActiveSessionsOnce(t *testing.T) {
 
 func TestVoiceShutdownBoundsAndJoinsMediaWorkers(t *testing.T) {
 	getter := &recordingUsageGetter{recorded: make(chan string, 8)}
-	svc, _ := newTestVoiceServiceWithLiveKitGetter(getter)
+	svc, _ := newTestVoiceServiceWithLiveKitGetter(getter, getter.RecordVoiceUsage)
 	s := svc.(*voiceService)
 	for i := 0; i < 8; i++ {
 		id := fmt.Sprint(i)
@@ -99,7 +99,7 @@ func TestVoiceShutdownBoundsAndJoinsMediaWorkers(t *testing.T) {
 
 func TestVoiceShutdownSnapshotsAfterAcceptedJoinFinishes(t *testing.T) {
 	getter := &recordingUsageGetter{recorded: make(chan string, 2)}
-	svc, _ := newTestVoiceServiceWithLiveKitGetter(getter)
+	svc, _ := newTestVoiceServiceWithLiveKitGetter(getter, getter.RecordVoiceUsage)
 	s := svc.(*voiceService)
 	finish, admitted := s.operations.begin()
 	if !admitted {
@@ -205,7 +205,7 @@ func TestVoiceShutdownContinuesAfterCreditPanic(t *testing.T) {
 		lookups <- "lookup"
 		return nil, errors.New("fixture has no media")
 	}
-	svc, _ := newTestVoiceServiceWithLiveKitGetter(getter)
+	svc, _ := newTestVoiceServiceWithLiveKitGetter(getter, getter.RecordVoiceUsage)
 	s := svc.(*voiceService)
 	for _, id := range []string{"a", "b", "c", "d", "e", "f", "g", "h"} {
 		s.states[id] = &models.VoiceState{UserID: id, ChannelID: "channel-" + id, ServerID: "server", UsageSessionID: id, LiveKitInstanceID: "instance", LiveKitIsCloud: true, JoinedAt: time.Now().Add(-time.Minute)}
