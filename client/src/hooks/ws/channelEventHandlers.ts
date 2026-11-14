@@ -1,3 +1,4 @@
+import { cacheChannelMessage } from "../../crypto/channelMessageCache";
 import i18n from "../../i18n";
 /**
  * Channel-domain WS event handlers.
@@ -121,12 +122,9 @@ export async function handleChannelEvent(msg: WSMessage, isCurrent: () => boolea
           if (!eventSessionCurrent()) return true;
           message = { ...message, content: payload?.content ?? null, e2ee_file_keys: payload?.file_keys };
 
-          if (payload?.content) {
+          if (payload && (payload.content || payload.file_keys?.length)) {
             if (!eventSessionCurrent()) return true;
-            keyStorage.cacheDecryptedMessage({
-              messageId: message.id, channelId: message.channel_id, dmChannelId: null,
-              content: payload.content, timestamp: new Date(message.created_at).getTime(),
-            }).catch(() => {});
+            cacheChannelMessage(message, payload, eventSessionCurrent).catch(() => {});
           }
         } catch (err) {
           if (!eventSessionCurrent()) return true;
@@ -245,12 +243,9 @@ export async function handleChannelEvent(msg: WSMessage, isCurrent: () => boolea
           if (!eventSessionCurrent()) return true;
           updatedMsg = { ...updatedMsg, content: payload?.content ?? null, e2ee_file_keys: payload?.file_keys };
 
-          if (payload?.content) {
+          if (payload && (payload.content || payload.file_keys?.length)) {
             if (!eventSessionCurrent()) return true;
-            keyStorage.cacheDecryptedMessage({
-              messageId: updatedMsg.id, channelId: updatedMsg.channel_id, dmChannelId: null,
-              content: payload.content, timestamp: new Date(updatedMsg.created_at).getTime(),
-            }).catch(() => {});
+            cacheChannelMessage(updatedMsg, payload, eventSessionCurrent).catch(() => {});
           }
         } catch (err) {
           if (!eventSessionCurrent()) return true;
