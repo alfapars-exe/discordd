@@ -581,6 +581,8 @@ func main() {
 	stopVoiceSessions()
 	stopVoiceUsageDelivery()
 
+	// Join background backup logging before sinks close; final snapshot stays post-drain.
+	svcs.Backup.Stop()
 	logx.SetAppSink(nil)
 	svcs.AppLog.Stop()
 	svcs.AuditLog.Stop()

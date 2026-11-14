@@ -1,0 +1,26 @@
+{
+  "source_head": "1b47c315898cc6642e5211a387bd141a1dc91e03",
+  "pr": "https://github.com/alfapars-exe/discordd/pull/301",
+  "before": {
+    "commit": "469e67a2",
+    "result": "two lifecycle regressions failed against original implementation"
+  },
+  "local": {
+    "lifecycle_repetitions": 20,
+    "canonical_full_services_seconds": 89.51,
+    "integrated_full_services_seconds": 90.121,
+    "canonical_vet_build": "passed",
+    "canonical_windows_linux_lint": "passed",
+    "integrated_windows_linux_lint": "passed"
+  },
+  "ci": {
+    "server_run": 43548854216,
+    "status": "in_progress"
+  },
+  "limitations": [
+    "Linux real subprocess cancellation test awaits CI execution",
+    "No live HF backup/restore acceptance",
+    "Partial uploads restore resume remains open",
+    "No release or installation acceptance"
+  ]
+}
