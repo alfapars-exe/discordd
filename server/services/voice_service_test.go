@@ -110,7 +110,7 @@ func (h *voiceTestBroadcaster) BroadcastToUsers(ids []string, event ws.Event) {
 // JoinChannel doesn't have to be re-satisfied by every pre-existing test in
 // this package. Tests that specifically exercise the gate (denied/allowed
 // paths) build their own harness — see TestVoiceJoinChannel_Authorization*.
-func newTestVoiceService() (VoiceService, *testutil.MockBroadcaster) {
+func newTestVoiceService() (VoiceRuntime, *testutil.MockBroadcaster) {
 	hub := &testutil.MockBroadcaster{}
 	svc := NewVoiceService(
 		&testutil.MockChannelRepo{
@@ -179,7 +179,7 @@ func TestVoiceMusicRoomKeySharesRotationLifecycle(t *testing.T) {
 // timeoutChecker moved from a post-construction setter to a constructor
 // param (A-29b), so these tests build the checker in rather than calling
 // a setter afterward.
-func newTestVoiceServiceWithTimeoutChecker(checker MemberTimeoutChecker) (VoiceService, *testutil.MockBroadcaster) {
+func newTestVoiceServiceWithTimeoutChecker(checker MemberTimeoutChecker) (VoiceRuntime, *testutil.MockBroadcaster) {
 	hub := &testutil.MockBroadcaster{}
 	svc := NewVoiceService(
 		&testutil.MockChannelRepo{
@@ -216,7 +216,7 @@ func newTestVoiceServiceWithTimeoutChecker(checker MemberTimeoutChecker) (VoiceS
 // TestEnforceModerationOnJoin* below (A-29a). Either checker may be nil.
 // channelRepo is injectable (not the shared happy-path default) so tests
 // can observe eviction dispatch — see newEvictionObservingChannelRepo.
-func newTestVoiceServiceWithModeration(timeoutChecker MemberTimeoutChecker, banChecker BanChecker, channelRepo ChannelGetter) (VoiceService, *testutil.MockBroadcaster) {
+func newTestVoiceServiceWithModeration(timeoutChecker MemberTimeoutChecker, banChecker BanChecker, channelRepo ChannelGetter) (VoiceRuntime, *testutil.MockBroadcaster) {
 	hub := &testutil.MockBroadcaster{}
 	svc := NewVoiceService(
 		channelRepo,
@@ -345,7 +345,7 @@ func drainCalls(calls chan string) {
 // Used by the A-29d admin-path / cross-channel-switch / orphan-sweep
 // dispatch tests below, extending the same injection pattern
 // newTestVoiceServiceWithModeration already uses for EnforceModerationOnJoin.
-func newTestVoiceServiceWithChannelRepo(channelRepo ChannelGetter) (VoiceService, *testutil.MockBroadcaster) {
+func newTestVoiceServiceWithChannelRepo(channelRepo ChannelGetter) (VoiceRuntime, *testutil.MockBroadcaster) {
 	hub := &testutil.MockBroadcaster{}
 	svc := NewVoiceService(
 		channelRepo,
@@ -1244,7 +1244,7 @@ func (m *mockConfigurableLiveKitGetter) MigrateOneServer(ctx context.Context, se
 // injectable LiveKitInstanceGetter, for tests that need
 // VoiceState.LiveKitInstanceID/LiveKitIsCloud actually populated (see
 // mockConfigurableLiveKitGetter).
-func newTestVoiceServiceWithLiveKitGetter(lkGetter LiveKitInstanceGetter) (VoiceService, *testutil.MockBroadcaster) {
+func newTestVoiceServiceWithLiveKitGetter(lkGetter LiveKitInstanceGetter) (VoiceRuntime, *testutil.MockBroadcaster) {
 	hub := &testutil.MockBroadcaster{}
 	svc := NewVoiceService(
 		&testutil.MockChannelRepo{
@@ -1852,7 +1852,7 @@ func TestEnforceModerationOnJoin_NilCheckers_NoOp(t *testing.T) {
 // membership flag and permission resolver, for tests that specifically
 // exercise JoinChannel's N-01 authorization gate. See newTestVoiceService's
 // doc comment for the happy-path default used by every other test here.
-func newAuthVoiceService(isMember bool, resolvePerms func(ctx context.Context, userID, channelID string) (models.Permission, error)) (VoiceService, *testutil.MockBroadcaster) {
+func newAuthVoiceService(isMember bool, resolvePerms func(ctx context.Context, userID, channelID string) (models.Permission, error)) (VoiceRuntime, *testutil.MockBroadcaster) {
 	hub := &testutil.MockBroadcaster{}
 	svc := NewVoiceService(
 		&testutil.MockChannelRepo{
@@ -2595,7 +2595,7 @@ var tokenTestEncryptionKey = []byte("0123456789abcdef0123456789abcdef")[:32]
 // ciphertext/key pair, unlike the shared always-erroring mockLiveKitGetter).
 // GenerateToken itself never touches lksdk.RoomServiceClient — only
 // crypto.Decrypt + local JWT signing — so this makes no network call.
-func newTokenTestVoiceService(t *testing.T) VoiceService {
+func newTokenTestVoiceService(t *testing.T) VoiceRuntime {
 	t.Helper()
 	encAPIKey, err := crypto.Encrypt(tokenTestAPIKey, tokenTestEncryptionKey)
 	if err != nil {
@@ -3114,7 +3114,7 @@ func refusedLoopbackAddr(t *testing.T) string {
 // does its own single GetByServerID in its own setup), which is how these
 // tests distinguish "single mute attempt" from "unmute retry cycle, then
 // eviction fallback" without any deeper wire-level mocking.
-func newServerMuteNetworkTestVoiceService(t *testing.T, setupCalls chan string) (VoiceService, *testutil.MockBroadcaster) {
+func newServerMuteNetworkTestVoiceService(t *testing.T, setupCalls chan string) (VoiceRuntime, *testutil.MockBroadcaster) {
 	t.Helper()
 	encAPIKey, err := crypto.Encrypt(tokenTestAPIKey, tokenTestEncryptionKey)
 	if err != nil {

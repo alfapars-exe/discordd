@@ -1978,3 +1978,8 @@ SpamInboxService and MediaLabelService now require explicit broadcaster argument
 ### RF11 — voice/media composition domain boundary (2026-11-14)
 
 Entrance/music construction and both voice hook bindings now live in initVoiceMediaServices, completing this mutually dependent composition before returning to startup. initServices receives both services and no longer interleaves these bindings with auth/cosmetics construction. Existing startup wiring/composed service tests, entrance fresh/rejoin/reject/switch/nil-hook and voice deletion regressions, build and root vet pass. This is a domain wiring extraction; the setter-based cycle remains explicitly open and is not represented as completed constructor migration. No media/provider acceptance claimed.
+
+
+### RF11 — voice request interface excludes composition mutation (2026-11-14)
+
+SetEntranceHook, SetMusicBotHook and SetAppLogger moved from request-facing VoiceService to composition-owned VoiceRuntime. Concrete behavior and hook nil modes remain unchanged. Regression failed because request interface exposed all3 methods; it now confirms only runtime owner exposes them. Eight voice fixture return declarations preserve the runtime type for setup rather than regaining capabilities with assertions. Hook/deletion/composed wiring tests pass; handlers/ws compile (selected filter matches no tests there), server build and targeted vet pass. This narrows capability ownership; setter cycle and complete RF11 acceptance remain open.

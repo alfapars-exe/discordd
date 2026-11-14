@@ -99,11 +99,7 @@ type VoiceService interface {
 	UpdateActivity(userID string)
 	StartOrphanCleanup()
 	StartAFKChecker()
-	SetAppLogger(logger VoiceAppLogger)
-	SetMusicBotHook(hook MusicBotChannelHook)
-	// SetEntranceHook wires the entrance-sound trigger fired on a fresh
-	// voice join (see VoiceEntranceHook). Nil disables it.
-	SetEntranceHook(hook VoiceEntranceHook)
+
 	// EnforceModerationOnJoin evicts userID from the LiveKit room for
 	// (serverID, channelID) if they are currently timed out or banned on
 	// serverID. See voice_lifecycle.go for the implementation and the
@@ -117,6 +113,11 @@ type VoiceService interface {
 // These shutdown methods join distinct resources in the existing server order.
 type VoiceRuntime interface {
 	VoiceService
+	SetAppLogger(logger VoiceAppLogger)
+	SetMusicBotHook(hook MusicBotChannelHook)
+	// SetEntranceHook wires the entrance-sound trigger fired on a fresh
+	// voice join (see VoiceEntranceHook). Nil disables it.
+	SetEntranceHook(hook VoiceEntranceHook)
 	VoiceChannelDeletionHandler
 	StopMaintenance()
 	ShutdownUsageProducers()

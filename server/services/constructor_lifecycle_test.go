@@ -145,3 +145,16 @@ func TestRecipientPrivateConstructorsRequireBroadcaster(t *testing.T) {
 		}
 	}
 }
+
+func TestVoiceRequestInterfaceExcludesCompositionSetters(t *testing.T) {
+	request := reflect.TypeFor[VoiceService]()
+	owner := reflect.TypeFor[VoiceRuntime]()
+	for _, name := range []string{"SetEntranceHook", "SetMusicBotHook", "SetAppLogger"} {
+		if _, ok := request.MethodByName(name); ok {
+			t.Errorf("request interface exposes %s", name)
+		}
+		if _, ok := owner.MethodByName(name); !ok {
+			t.Errorf("runtime owner omits %s", name)
+		}
+	}
+}
