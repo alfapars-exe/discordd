@@ -310,6 +310,12 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
 
         await get().setupNewDevice(userId);
         if (!isCurrent()) return;
+        // Fresh keys cannot decrypt the backed-up history. Offer restoration
+        // explicitly: the deferred activity check only prompts users who have
+        // no backup, so it cannot expose the existing-backup restore view.
+        if (get().initStatus === "ready" && get().hasRecoveryBackup) {
+          set({ showRecoveryPrompt: true });
+        }
         scheduleDeferredRecoveryCheck(get);
       }
     } catch (err) {

@@ -90,6 +90,37 @@ describe("e2eeStore", () => {
     vi.mocked(inspectLegacyKeyArchive).mockResolvedValue({ status: "none" });
   });
 
+  describe("new-device backup recovery offer", () => {
+    it("does not offer restoration when fresh-device registration fails", async () => {
+      vi.mocked(keyStorage.hasLocalKeys).mockResolvedValueOnce(false);
+      vi.mocked(keyStorage.getMetadata).mockResolvedValue(null);
+      vi.mocked(deviceManager.registerNewDevice).mockRejectedValueOnce(new Error("registration unavailable"));
+      vi.mocked(e2eeApi.downloadKeyBackup).mockResolvedValueOnce({
+        success: true, data: { id: "backup", user_id: "userA", version: 1, created_at: "2026-11-14T00:00:00Z", updated_at: "2026-11-14T00:00:00Z", encrypted_data: "ciphertext", nonce: "nonce", salt: "salt", algorithm: "test" },
+      });
+      useE2EEStore.setState({ showRecoveryPrompt: false, recoveryPromptDismissed: false });
+      await useE2EEStore.getState().initialize("userA");
+      expect(useE2EEStore.getState().initStatus).not.toBe("ready");
+      expect(useE2EEStore.getState().showRecoveryPrompt).toBe(false);
+    });
+
+    it.each([true, false])("offers recovery on a fresh device only when backup exists: %s", async (hasBackup) => {
+      vi.mocked(keyStorage.hasLocalKeys).mockResolvedValue(false);
+      vi.mocked(keyStorage.getMetadata).mockResolvedValue(null);
+      vi.mocked(deviceManager.registerNewDevice).mockResolvedValue("fresh-device");
+      vi.mocked(e2eeApi.listMyDevices).mockResolvedValue({ success: true, data: [] });
+      vi.mocked(e2eeApi.downloadKeyBackup).mockResolvedValue({
+        success: true, data: hasBackup ? { id: "backup", user_id: "userA", version: 1, created_at: "2026-11-14T00:00:00Z", updated_at: "2026-11-14T00:00:00Z", encrypted_data: "ciphertext", nonce: "nonce", salt: "salt", algorithm: "test" } : undefined,
+      });
+      useE2EEStore.setState({ showRecoveryPrompt: false, recoveryPromptDismissed: false });
+      await useE2EEStore.getState().initialize("userA");
+      expect(useE2EEStore.getState().initStatus).toBe("ready");
+      expect(useE2EEStore.getState().hasRecoveryBackup).toBe(hasBackup);
+      expect(useE2EEStore.getState().showRecoveryPrompt).toBe(hasBackup);
+      expect(keyBackup.restoreFromBackup).not.toHaveBeenCalled();
+    });
+  });
+
   // ─── Decryption Error Management ───
 
   describe("addDecryptionError", () => {
