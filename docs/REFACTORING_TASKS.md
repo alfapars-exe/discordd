@@ -1788,3 +1788,8 @@ configuredEmailProvider now owns the unchanged three-field enablement predicate 
 ### RF11 — auth voice revocation dependency at construction (2026-11-14)
 
 Auth no longer relies on post-construction SetVoiceDisconnecter. Constructor requires an explicit VoiceDisconnecter argument; production passes the existing voice runtime, while isolated media-free callers explicitly pass nil. Declared-parameter regression failed before the change. Revocation spy harness now uses constructor injection, preserving its full fan-out assertions. Other concrete mutation fixtures keep their voice assertions; no acceptance test removed. Targeted auth/password/revocation/anonymization/application-removal/handler/middleware/wiring/startup tests passed in4 packages, build and vet passed, exact-hit manifest remains valid50. No HTTP/WS wire change or local race claim. Receipt: implementation/verification/refactor-rf11-auth-voice-constructor-2026-11-14.json.
+
+
+### RF11 — friend-request repository adapter separation (2026-11-14)
+
+Friend-ID projection and pair-status/error mapping moved unchanged out of initServices into a two-method repository adapter. Tests prove context/identity preservation, stable list order, empty-list and list-error handling, accepted-only edge mapping, wrapped NotFound as nonfriend, and propagation of other pair failures. Existing policy, wiring and initialization tests plus build and vet pass. No policy or wire behavior changed. Remaining post-construction observers/resolvers and full current-source race/CI acceptance remain open. Receipt: implementation/verification/refactor-rf11-friend-request-adapter-2026-11-14.json.

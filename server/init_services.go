@@ -8,8 +8,6 @@ import (
 
 	"github.com/argeinfina/hichat/config"
 	"github.com/argeinfina/hichat/database"
-	"github.com/argeinfina/hichat/models"
-	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/pkg/crypto"
 	"github.com/argeinfina/hichat/pkg/email"
 	"github.com/argeinfina/hichat/pkg/ratelimit"
@@ -300,30 +298,9 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	// message/DM/friendship services below (each takes repos.Notification).
 	notificationService := services.NewNotificationService(repos.Notification, hub)
 
+	friendGraph := friendRequestGraphAdapter{reader: repos.Friendship}
 	friendRequestPolicy := services.NewFriendRequestPolicy(
-		repos.Preferences,
-		func(ctx context.Context, userID string) ([]string, error) {
-			friends, err := repos.Friendship.ListFriends(ctx, userID)
-			if err != nil {
-				return nil, err
-			}
-			ids := make([]string, 0, len(friends))
-			for _, friend := range friends {
-				ids = append(ids, friend.UserID)
-			}
-			return ids, nil
-		},
-		func(ctx context.Context, userA, userB string) (bool, error) {
-			friendship, err := repos.Friendship.GetByPair(ctx, userA, userB)
-			if err != nil {
-				if errors.Is(err, pkg.ErrNotFound) {
-					return false, nil
-				}
-				return false, err
-			}
-			return friendship.Status == models.FriendshipStatusAccepted, nil
-		},
-		repos.Server,
+		repos.Preferences, friendGraph.listFriendIDs, friendGraph.areFriends, repos.Server,
 	)
 	friendshipService := services.NewFriendshipService(gameActivityService, repos.Friendship, repos.User, repos.Notification, hub, friendRequestPolicy)
 	friendshipService.SetEmailEnqueuer(emailDeliveryService)
