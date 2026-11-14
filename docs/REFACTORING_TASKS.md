@@ -2292,3 +2292,9 @@ NewDMService returns DMRuntime, retaining FinalizeDMCreate, GetDMEvents and work
 Selected DM/delivery/handler/root startup/wiring/route tests passed (services 5.029s/handlers 0.626s/root 0.796s), build and scoped vet passed. Dedicated PostgreSQL 18.6 passed six DM outbox tests and two delivery cancellation/logging tests (6.457s), no skips. Owned container stopped/removed; loopback sslmode=disable/non-race limits remain. HTTP request capability assertions remain open.
 
 After verifying source diff and exact unchanged SQL line hashes, refreshed only the two affected dm_delivery.go reviewed file hashes/references. All 50 manifest records validate and six validator tests passed (27.311s). CI 43643536594 remains live on e5b68684 without an observed failed job; current-head aggregate acceptance and RF11 closure remain open.
+
+### RF11 — explicit DM HTTP delivery contract (2026-11-15)
+
+DMRequestService declares completion, replay and committed deletion receipts at the HTTP constructor boundary; DMRuntime retains worker ownership above it. Removed optional capability assertions and legacy fallback paths that production never selected. Constructor regression failed before implementation. Completion regression verifies original request context/message, finalize-before-broadcast ordering and no publication on completion failure; existing deletion receipt and replay contracts remain.
+
+Selected DM handler/service tests passed (0.700s/6.008s); full handlers passed (7.230s), build and scoped vet passed. All 50 reviewed source records validate unchanged. No HTTP field/event changes or physical-client claim. Remote e5b686847a1332c19202817b210ed552409d3fce completed all 36 checks successfully; exact-source receipt: implementation/verification/refactor-integration-e5b6-terminal-2026-11-15.json. Later local source requires its own CI; RF11 and overall refactor remain open.

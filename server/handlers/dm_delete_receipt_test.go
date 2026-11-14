@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-type deletionReceiptStub struct{ services.DMService }
+type deletionReceiptStub struct{ services.DMRequestService }
 
 func (deletionReceiptStub) DeleteMessageWithReceipt(context.Context, string, string) (*models.DMMessageDeleteReceipt, error) {
 	return &models.DMMessageDeleteReceipt{ID: "m", DMChannelID: "ch", Message: "message deleted"}, nil

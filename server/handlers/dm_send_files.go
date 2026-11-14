@@ -21,12 +21,8 @@ func dmFormPointer(r *http.Request, key string) *string {
 }
 
 func (h *DMHandler) finishDMSend(r *http.Request, msg *models.DMMessage) error {
-	if finalizer, ok := h.dmService.(interface {
-		FinalizeDMCreate(context.Context, *models.DMMessage) error
-	}); ok {
-		if err := finalizer.FinalizeDMCreate(r.Context(), msg); err != nil {
-			return err
-		}
+	if err := h.dmService.FinalizeDMCreate(r.Context(), msg); err != nil {
+		return err
 	}
 	h.dmService.BroadcastCreate(msg)
 	return nil

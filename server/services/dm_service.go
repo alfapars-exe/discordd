@@ -78,13 +78,18 @@ type FriendshipChecker interface {
 	AreFriends(ctx context.Context, userA, userB string) (bool, error)
 }
 
-// DMRuntime retains delivery completion, replay and worker ownership at composition.
-// Ordinary domain consumers can continue to accept DMService.
-type DMRuntime interface {
+// DMRequestService declares committed-send/replay/receipt capabilities used by HTTP.
+type DMRequestService interface {
 	DMService
-	StartDMDelivery(context.Context) (func(), error)
+	DMDeletionReceiptService
+	DMEventReplayService
 	FinalizeDMCreate(context.Context, *models.DMMessage) error
-	GetDMEvents(context.Context, string, string, int64) (*DMEventPage, error)
+}
+
+// DMRuntime retains delivery worker ownership at composition.
+type DMRuntime interface {
+	DMRequestService
+	StartDMDelivery(context.Context) (func(), error)
 }
 
 type dmService struct {
