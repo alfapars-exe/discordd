@@ -1723,3 +1723,8 @@ yolunda da kapanıyor. Profil kümeleri gerçek Playwright discovery ile ayrıld
 ### RF28 — isolated fixture deletion follow-up (2026-11-14)
 
 Candidate eca7d4fc CI43570586532 failed in production Chromium: the second role test could not reset the preceding thread fixture (PostgreSQL channels_starter_message_id_fkey, HTTP500). The offline retry case passed only on retry. The cascade now explicitly clears target-server thread starter links inside its transaction before descendant deletion; unrelated-server links remain covered. SQLite and native local PostgreSQL cascade suites passed. The new cycle fixture also passed before the fix, so it does not independently reproduce the CI failure. Offline retry waits for the composer send ticket to release after the failure toast; draft and duplicate checks remain. Fresh browser CI is required. Receipt: implementation/verification/refactor-thread-cascade-ci-followup-2026-11-14.json.
+
+
+### RF08 — Ping failure ownership acceptance (2026-11-14)
+
+Added a driver-level Ping failure fixture which opens a real database/sql connection before rejecting Ping. It verifies cause preservation, no returned owner, exactly one driver Close, zero pool connections and no reconnect through the failed pool. Existing migration-failure and successful ownership-transfer tests remain; the three constructor tests passed locally. This fills the missing Ping branch evidence and does not stand in for native PostgreSQL, race or whole worker-lifecycle acceptance. Receipt: implementation/verification/refactor-rf08-ping-cleanup-2026-11-14.json.

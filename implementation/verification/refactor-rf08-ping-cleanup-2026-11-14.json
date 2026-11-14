@@ -1,0 +1,24 @@
+{
+  "source_parent": "9fc412d2",
+  "scope": "RF08 SQLite constructor ownership: inject Ping failure after an actual driver connection opens",
+  "new_test": "TestInitializationPingFailureClosesOpenedConnection",
+  "assertions": [
+    "errors.Is preserves injected cause; no DB ownership returned",
+    "one driver connection opened and exactly one closed",
+    "zero remaining open pool connections",
+    "pool unusable after failure and cannot reconnect"
+  ],
+  "targeted_command": "go test ./database -run TestInitialization|TestSuccessfulInitialization -count=1 -timeout=2m",
+  "targeted_exit": 0,
+  "targeted_package_seconds": 0.373,
+  "existing_tests_retained": [
+    "TestInitializationFailureClosesOwnedPool",
+    "TestSuccessfulInitializationTransfersPoolOwnership"
+  ],
+  "profile": "Windows Go1.27.4, CGO0; fake driver only for Ping injection, existing real SQLite migration success/failure tests retained",
+  "limits": [
+    "Not PostgreSQL TLS proof",
+    "Full RF08 includes worker shutdown and refresh behavior; this test alone does not close the card",
+    "Race validation requires Linux CI"
+  ]
+}
