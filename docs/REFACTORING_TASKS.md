@@ -1873,3 +1873,8 @@ A full voiceStore regression seeds active transport/media state, then runs prefe
 ### RF13 — composed account adapter preserves voice state (2026-11-14)
 
 The real applyAccountPreferences adapter used by bootstrap now has a composed voiceStore test: reset/preserve plus account hydration retain transport/media state and callbacks while applying account volume. Null fenced reads do not hydrate data.124 tests across voiceStore/preferencesStore/sync hook, targeted ESLint and TypeScript build pass. Bootstrap loader invocation and physical media remain outside this test; whole RF13 remains open. Receipt: implementation/verification/refactor-rf13-composed-account-adapter-2026-11-14.json.
+
+
+### RF05 — current lexical boundary audit (2026-11-14)
+
+Current postgres_dialect has no regex/upsert text rewrite: native migration dispatch is preserved and ordinary repository markers pass through lexical binding. Local bind/migration-dispatch contract selection passes, including malformed quoted tokens, escapes, comments, dollar strings and bind bounds. This does not establish complete production query-family inventory or native result equivalence. Existing cursor/list corpus is explicitly representative. RF05 remains open pending positive/negative fixture mapping for all used families; no injection vulnerability is inferred from the gap. Receipt: implementation/verification/refactor-rf05-current-boundary-audit-2026-11-14.json.
