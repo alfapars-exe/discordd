@@ -168,15 +168,37 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
         with:
           python-version: '3.12'
+      - name: Start active-process PostgreSQL with mutual TLS
+        run: bash scripts/start-e2e-postgres.sh
+      - name: Build production server for active-process acceptance
+        working-directory: server
+        run: go build -o "$RUNNER_TEMP/active-voice-server" .
       - name: Execute server, repository, and database tests; reject required test skips
         env:
           HICHAT_TEST_POSTGRES_DSN: postgres://postgres@127.0.0.1:5432/hichat_test?sslmode=disable
+          HICHAT_ACTIVE_VOICE_POSTGRES_DSN: ${{ env.HICHAT_E2E_POSTGRES_DSN }}
+          HICHAT_ACTIVE_VOICE_SERVER_BINARY: ${{ runner.temp }}/active-voice-server
         run: python3 scripts/run-postgres-tests.py
       - name: Race-check role mutations, durable delivery and email queues against PostgreSQL
         working-directory: server
         env:
           HICHAT_TEST_POSTGRES_DSN: postgres://postgres@127.0.0.1:5432/hichat_test?sslmode=disable
-        run: go test -race ./services ./repository ./pkg/email -run '^(TestPostgresRole|TestPostgresMemberRoleReplacement|TestChannelDelivery|TestDMIdempotent|TestDMOutbox|TestDMMarkUnreadFrom|TestEmail)' -count=1 -timeout=5m
+        run: go test -race ./services ./repository ./database ./pkg/email -run '^(TestPostgresRole|TestPostgresMemberRoleReplacement|TestVoiceMaintenanceAFKPostgresCancellation|TestVoiceUsageCreditPostgres|TestVoiceUsagePostgres|TestPostgresVoiceUsageMigration|TestChannelDelivery|TestDMIdempotent|TestDMOutbox|TestDMMarkUnreadFrom|TestEmail)' -count=1 -timeout=5m
+
+      - name: Race-check active voice process SIGTERM against mutual TLS PostgreSQL
+        working-directory: server
+        env:
+          HICHAT_ACTIVE_VOICE_POSTGRES_DSN: ${{ env.HICHAT_E2E_POSTGRES_DSN }}
+          HICHAT_ACTIVE_VOICE_SERVER_BINARY: ${{ runner.temp }}/active-voice-server-race
+        run: |
+          test -n "$HICHAT_ACTIVE_VOICE_POSTGRES_DSN"
+          go build -race -o "$HICHAT_ACTIVE_VOICE_SERVER_BINARY" .
+          go test -race . -run '^TestActiveVoiceProcessPostgresSignal$' -count=1 -timeout=2m
+
+      - name: Stop active-process PostgreSQL
+        if: always()
+        run: |
+          if [[ "${HICHAT_E2E_PG_CONTAINER:-}" == hichat-e2e-pg-* ]]; then docker rm -f "$HICHAT_E2E_PG_CONTAINER"; fi
 
   server-postgres-tls:
     name: PostgreSQL client certificate reconnect

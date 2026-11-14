@@ -12,6 +12,20 @@ spec.loader.exec_module(runner)
 
 class PostgreSQLRunnerTests(unittest.TestCase):
     service_passes = (
+        "--- PASS: TestVoiceUsagePostgresShutdownJoinsAcceptedCredit (0.01s)\n"
+        "--- PASS: TestVoiceUsagePostgresShutdownFinalizesActiveSession (0.01s)\n"
+        "--- PASS: TestVoiceUsagePostgresShutdownCreditsBeforeMediaWait (0.01s)\n"
+        "--- PASS: TestVoiceUsagePostgresShutdownHandsOffAllBeforeMedia (0.01s)\n"
+        "--- PASS: TestVoiceUsagePostgresChannelDeletionHandsOffAllBeforeMedia (0.01s)\n"
+        "--- PASS: TestVoiceUsagePostgresShutdownRecoversFailedApplication (0.01s)\n"
+        "--- PASS: TestVoiceUsagePostgresShutdownJoinsPermissionRecheck (0.01s)\n"
+        "--- PASS: TestVoiceUsagePostgresLatePermissionRevocationPreservesCredit (0.01s)\n"
+        "--- PASS: TestVoiceUsagePostgresServiceHandoffSurvivesApplyFailure (0.01s)\n"
+        "--- PASS: TestVoiceUsagePostgresPendingRecovery (0.01s)\n"
+        "--- PASS: TestVoiceUsagePostgresReplayTransaction (0.01s)\n"
+        "--- PASS: TestVoiceUsageCreditPostgresDeadline (10.01s)\n"
+        "--- PASS: TestVoiceUsageCreditPostgresAdditiveWrites (0.01s)\n"
+        "--- PASS: TestVoiceMaintenanceAFKPostgresCancellation (0.01s)\n"
         "--- PASS: TestChannelDelivery (0.01s)\n"
         "--- PASS: TestPostgresRolePatchConcurrentChanges (0.01s)\n"
         "--- PASS: TestPostgresMemberRoleReplacement (0.01s)\n"
@@ -29,11 +43,26 @@ class PostgreSQLRunnerTests(unittest.TestCase):
                 remaining = "\n".join(line for line in self.service_passes.splitlines() if name not in line)
                 self.assertEqual(self.execute(self.completed(), service_output=remaining), 1)
 
+    def test_afk_stop_must_pass_real_postgres(self):
+        output = "\n".join(line for line in self.service_passes.splitlines() if "TestVoiceMaintenanceAFKPostgresCancellation" not in line)
+        self.assertEqual(self.execute(self.completed(), service_output=output), 1)
+
+    def test_usage_contracts_must_run(self):
+        for name in ("TestVoiceUsagePostgresShutdownJoinsAcceptedCredit", "TestVoiceUsagePostgresShutdownFinalizesActiveSession", "TestVoiceUsagePostgresShutdownCreditsBeforeMediaWait", "TestVoiceUsagePostgresShutdownHandsOffAllBeforeMedia", "TestVoiceUsagePostgresChannelDeletionHandsOffAllBeforeMedia", "TestVoiceUsagePostgresShutdownRecoversFailedApplication", "TestVoiceUsagePostgresShutdownJoinsPermissionRecheck", "TestVoiceUsagePostgresLatePermissionRevocationPreservesCredit", "TestVoiceUsagePostgresServiceHandoffSurvivesApplyFailure", "TestVoiceUsagePostgresPendingRecovery", "TestVoiceUsagePostgresReplayTransaction", "TestVoiceUsageCreditPostgresDeadline", "TestVoiceUsageCreditPostgresAdditiveWrites"):
+            output = "\n".join(line for line in self.service_passes.splitlines() if name not in line)
+            self.assertEqual(self.execute(self.completed(), service_output=output), 1)
+
+    def test_usage_migration_pass_is_mandatory(self):
+        events = [event for event in self.completed() if event.get("Test") != "TestPostgresVoiceUsageMigrationPreservesTotals"]
+        self.assertEqual(self.execute(events), 1)
+
     def completed(self):
         return [
             {"Action": "pass", "Package": "github.com/argeinfina/hichat", "Test": "TestPurgeExpiredNotificationsPostgres"},
+            {"Action": "pass", "Package": "github.com/argeinfina/hichat", "Test": "TestActiveVoiceProcessPostgresSignal"},
             {"Action": "pass", "Package": "github.com/argeinfina/hichat"},
             {"Action": "pass", "Package": "github.com/argeinfina/hichat/repository"},
+            {"Action": "pass", "Package": "github.com/argeinfina/hichat/database", "Test": "TestPostgresVoiceUsageMigrationPreservesTotals"},
             {"Action": "pass", "Package": "github.com/argeinfina/hichat/database"},
         ]
 
@@ -86,3 +115,10 @@ class PostgreSQLRunnerTests(unittest.TestCase):
                 with self.assertRaisesRegex(SystemExit, "loopback"):
                     runner.main()
                 launch.assert_not_called()
+
+    def test_active_process_contract_cannot_be_missing_skipped_or_wrong_package(self):
+        name = "TestActiveVoiceProcessPostgresSignal"
+        without = [event for event in self.completed() if event.get("Test") != name]
+        self.assertEqual(self.execute(without), 1)
+        self.assertEqual(self.execute(without + [{"Action": "skip", "Package": "github.com/argeinfina/hichat", "Test": name}]), 1)
+        self.assertEqual(self.execute(without + [{"Action": "pass", "Package": "github.com/argeinfina/hichat/database", "Test": name}]), 1)
