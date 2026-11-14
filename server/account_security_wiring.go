@@ -52,6 +52,18 @@ func initAccountSecurityServices(deps accountSecurityDependencies) accountSecuri
 		panic("account security email provider is typed nil")
 	}
 	repos, cfg := deps.Repositories, deps.Config
+	for _, input := range []struct {
+		name  string
+		value any
+	}{
+		{"User", repos.User}, {"Session", repos.Session}, {"ResetToken", repos.ResetToken}, {"MFA", repos.MFA}, {"EmailVerification", repos.EmailVerification},
+		{"AuthSession", repos.AuthSession}, {"AccountLifecycle", repos.AccountLifecycle}, {"AccountAnonymization", repos.AccountAnonymization},
+		{"ApplicationRemoval", repos.ApplicationRemoval}, {"ServerOwnership", repos.ServerOwnership},
+	} {
+		if missingCompositionInput(input.value) {
+			panic("account security requires repository " + input.name)
+		}
+	}
 	mfa := services.NewMFAService(repos.MFA, repos.User, deps.EncryptionKey)
 	verification := services.NewEmailVerificationService(repos.EmailVerification, deps.Email)
 	auth := services.NewAuthService(repos.User, repos.Session, repos.ResetToken, deps.Hub, deps.Email, deps.Voice,
