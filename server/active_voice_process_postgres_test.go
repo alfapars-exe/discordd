@@ -282,7 +282,31 @@ func runActiveVoiceProcessSignal(t *testing.T) {
 	if err = db.QueryRow("SELECT COUNT(*) FROM voice_usage_credits WHERE instance_id='active-instance'").Scan(&before); err != nil || before != 0 {
 		t.Fatal("fixture session was not active before signal")
 	}
-	if err = child.Process.Signal(syscall.SIGTERM); err != nil {
+	stopActiveVoiceProcess(t, child, done, childResult, logPath)
+	assertActiveVoiceProcessCredit(t, db)
+	beforeRestart := activeVoiceProcessCreditSnapshot(t, db)
+	restarted, restartedDone, restartedResult, restartedLog := startActiveVoiceProcess(t, databaseURL.String(), port)
+	waitActiveVoiceHealth(t, baseURL, restartedDone)
+	stopActiveVoiceProcess(t, restarted, restartedDone, restartedResult, restartedLog)
+	assertActiveVoiceProcessCredit(t, db)
+	if afterRestart := activeVoiceProcessCreditSnapshot(t, db); beforeRestart != afterRestart {
+		t.Fatal("restart rewrote the applied voice credit")
+	}
+	t.Log("ACTIVE_VOICE_RESTART_RESULT retained_credit=true")
+}
+
+func activeVoiceProcessCreditSnapshot(t *testing.T, db *sql.DB) string {
+	t.Helper()
+	var snapshot string
+	if err := db.QueryRow("SELECT to_jsonb(c)::text FROM voice_usage_credits c WHERE instance_id='active-instance'").Scan(&snapshot); err != nil {
+		t.Fatal("applied credit snapshot unavailable")
+	}
+	return snapshot
+}
+
+func stopActiveVoiceProcess(t *testing.T, child *exec.Cmd, done <-chan struct{}, result *error, logPath string) {
+	t.Helper()
+	if err := child.Process.Signal(syscall.SIGTERM); err != nil {
 		t.Fatal("SIGTERM delivery failed")
 	}
 	select {
@@ -290,14 +314,13 @@ func runActiveVoiceProcessSignal(t *testing.T) {
 	case <-time.After(30 * time.Second):
 		t.Fatal("active server did not shut down")
 	}
-	if *childResult != nil {
+	if *result != nil {
 		t.Fatal("active server did not exit successfully")
 	}
 	log, err := os.ReadFile(logPath)
 	if err != nil || !bytes.Contains(log, []byte("server stopped gracefully")) {
 		t.Fatal("graceful shutdown marker missing")
 	}
-	assertActiveVoiceProcessCredit(t, db)
 }
 
 func watchActiveVoiceProcessSocket(t *testing.T, conn *websocket.Conn) <-chan struct{} {
