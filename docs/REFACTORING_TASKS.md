@@ -1893,3 +1893,8 @@ Existing AST inventory now resolves same-file explicit string constants/constant
 ### RF05 — bound query constant expression traversal (2026-11-14)
 
 A failing regression showed the new resolver bounded constant references but accepted excessive parenthesized nesting. Actual expression depth and total node visits are now bounded; unsupported branches return no partial SQL. Four tool tests pass and production inventory counts remain659 literals/31 constants/273 unresolved. This is tooling correctness, not a product SQL defect or RF05 closure. Receipt: implementation/verification/refactor-rf05-inventory-expression-bounds-2026-11-14.json.
+
+
+### RF05 — dynamic channel search producer/test mapping (2026-11-14)
+
+Unresolved PostgreSQL channel count/page expressions map to shared bound conditions, optional explicit channel and dynamic allowed-channel IN list. Three actual repository tests pass on both SQLite and dedicated PostgreSQL18.6 with zero skips: count/data filtering and intersection, empty allow-list, stable equal-rank timestamp pagination. Source hashes and producer locations recorded. This proves those shared contracts, not identical relevance/ILIKE semantics or DM search coverage. Temporary container stopped. Full RF05 remains open. Receipt: implementation/verification/refactor-rf05-dynamic-channel-search-mapping-2026-11-14.json.
