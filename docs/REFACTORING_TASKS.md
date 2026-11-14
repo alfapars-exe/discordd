@@ -1526,3 +1526,7 @@ Birleşik süreç testi ilk aktif SIGTERM sonrası kredi satırının tüm alanl
 ### 2026-11-14 — Aktif süreç native race kabulü
 
 PR #298 `058b2117` native PostgreSQL işi 132254279430 SUCCESS. Zorunlu normal süreç PASS (1 kredi/pending0/applied1, usage2=ledger2) sonrasında ayrı `go test -race . -run ^TestActiveVoiceProcessPostgresSignal$` adımı da SUCCESS, 13,383 saniye. Parent ve üretim main’i çağıran ayrı child executable race ile derlenir; child başarısız çıkışı kabul edilmez. Kanıt: `implementation/verification/refactor-pr298-058-native-race-success-2026-11-14.json`. Tüm workflow için dört repository shard’ı halen çalışıyor; bu kayıt 36/36 başarı iddiası değildir. Restart takip değişikliği kanonik dalda yerel `956c95ab`, uzak dala henüz gönderilmedi. Yayın binary’si, fiziksel medya ve pre-enqueue crash kapıları açık.
+
+### 2026-11-14 — Terminal aktif süreç race teslimatı ve restart takibi
+
+PR #298 `058b2117` terminal 36/36 SUCCESS; Server CI 43532722522 terminal 31/31 SUCCESS. Tam kanıt `implementation/verification/refactor-pr298-058-terminal-2026-11-14.json`. Böylece normal ve race aktif süreç kabulü aynı kaynak için tüm CI ile birlikte kaydedildi. Ardından hazır restart testi `956c95ab` uzak dala gönderildi; bu yeni kaynak önceki başarıyı devralmaz. Yeni Linux normal/race restart sonucu bekleniyor; yerel kanonik vet/lint ve Windows derlemesi geçti.
