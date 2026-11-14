@@ -1,5 +1,5 @@
 {
-  "source_head": "882bd6c395e0adcefb9d509b73eb5757392ab66f",
+  "source_head": "ed53302ae2c5a58cf3596927979a5d48f4b21c10",
   "pr": "https://github.com/alfapars-exe/discordd/pull/302",
   "before": {
     "join_and_late_admission": "both failed on original source",
@@ -15,7 +15,7 @@
     "integrated_seconds": 5.824,
     "integrated_vet_build_lint": "passed"
   },
-  "ci": "pending",
+  "ci": "pending_current_ed53302a",
   "remaining": [
     "Linux race/full CI for follow-up source",
     "final combined-source CI",
@@ -36,6 +36,8 @@
     "integrated_full_ws_seconds": 16.148,
     "integrated_lint": "passed",
     "compatibility": "preserved integrated call_id callback signature and additional wire test",
-    "publication": "local follow-up commit only; PR302 still tests previous882bd6c3 source"
-  }
+    "publication": "pushed after previous source completed36/36 checks",
+    "canonical_vet_build_current": "passed"
+  },
+  "previous_source_head": "882bd6c395e0adcefb9d509b73eb5757392ab66f"
 }
