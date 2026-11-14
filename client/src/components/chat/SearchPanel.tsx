@@ -3,7 +3,8 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { searchMessages } from "../../api/search";
-import { searchCachedMessages } from "../../crypto/keyStorage";
+import { getCachedDecryptedMessage, searchCachedMessages } from "../../crypto/keyStorage";
+import type { CachedDecryptedMessage } from "../../crypto/types";
 import { useServerStore } from "../../stores/serverStore";
 import { useE2EEStore } from "../../stores/e2eeStore";
 import { useMessageStore } from "../../stores/messageStore";
@@ -25,14 +26,20 @@ type SearchPanelProps = {
   onSelectResult?: (message: Message) => Promise<boolean>;
 };
 
-function SearchPanel({ channelId, onClose, onSelectResult }: SearchPanelProps) {
+function SearchPanel(props: SearchPanelProps) {
+  const activeServerId = useServerStore((s) => s.activeServerId);
+  const serverE2eeEnabled = useServerStore((s) => s.activeServer?.e2ee_enabled ?? false);
+  const keysReady = useE2EEStore((s) => s.initStatus === "ready");
+  const scope = JSON.stringify([activeServerId, props.channelId, serverE2eeEnabled, serverE2eeEnabled && keysReady]);
+  return <ScopedSearchPanel key={scope} {...props} activeServerId={activeServerId} serverE2eeEnabled={serverE2eeEnabled} />;
+}
+
+function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId, serverE2eeEnabled }: SearchPanelProps & {
+  activeServerId: string | null;
+  serverE2eeEnabled: boolean;
+}) {
   const { t, i18n } = useTranslation("chat");
   const { t: tE2ee } = useTranslation("e2ee");
-  const isE2EEReady = useE2EEStore((s) => s.initStatus === "ready");
-  // E2EE is per-server. Plaintext servers can use backend FTS5; only route
-  // through the IndexedDB cache when the active server is actually encrypted.
-  const serverE2eeEnabled = useServerStore((s) => s.activeServer?.e2ee_enabled ?? false);
-  const useLocalSearch = serverE2eeEnabled && isE2EEReady;
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult | null>(null);
   const [isSearching, setIsSearching] = useState(false);
@@ -41,6 +48,9 @@ function SearchPanel({ channelId, onClose, onSelectResult }: SearchPanelProps) {
   // Monotonic id per doSearch call — a slow response for an abandoned query
   // must not overwrite the results of the search started after it.
   const searchSeqRef = useRef(0);
+  const localSearch = useRef<AbortController | null>(null);
+  const localMatches = useRef<string[] | null>(null);
+  const deletedIds = useRef(new Set<string>());
   const inputRef = useRef<HTMLInputElement>(null);
 
   const limit = 25;
@@ -53,6 +63,8 @@ function SearchPanel({ channelId, onClose, onSelectResult }: SearchPanelProps) {
   // Clear any pending debounce on unmount — the timer would otherwise fire
   // after close and call setState on an unmounted panel.
   useEffect(() => () => {
+    localSearch.current?.abort();
+    searchSeqRef.current++;
     if (debounceRef.current) clearTimeout(debounceRef.current);
   }, []);
 
@@ -61,26 +73,49 @@ function SearchPanel({ channelId, onClose, onSelectResult }: SearchPanelProps) {
       // Bumping before the empty-query early return also invalidates any
       // in-flight search when the user clears the input.
       const seq = ++searchSeqRef.current;
+      localSearch.current?.abort();
 
       if (searchQuery.trim().length < 1) {
         setResults(null);
+        setIsSearching(false);
         return;
       }
 
       setIsSearching(true);
 
-      // E2EE active — client-side IndexedDB search (server has NULL content)
-      if (useLocalSearch && channelId) {
+      const current = useServerStore.getState();
+      if (!activeServerId || current.activeServerId !== activeServerId || current.activeServer?.id !== activeServerId ||
+          (current.activeServer.e2ee_enabled ?? false) !== serverE2eeEnabled) {
+        setResults(null);
+        setIsSearching(false);
+        return;
+      }
+      if (serverE2eeEnabled) {
+        if (!channelId || useE2EEStore.getState().initStatus !== "ready") {
+          setResults(null);
+          setIsSearching(false);
+          return;
+        }
         try {
-          const cached = await searchCachedMessages(channelId, searchQuery.trim());
-          // A newer search started while this one was awaiting — its results
-          // (and spinner state) own the panel now.
+          const controller = new AbortController();
+          localSearch.current = controller;
+          const term = searchQuery.trim();
+          let paged: CachedDecryptedMessage[];
+          if (localMatches.current) {
+            const ids = localMatches.current.slice(searchOffset, searchOffset + limit);
+            const rows = await Promise.all(ids.map(getCachedDecryptedMessage));
+            const lowerTerm = term.toLowerCase();
+            paged = rows.filter((row): row is CachedDecryptedMessage => row !== null && row.channelId === channelId &&
+              row.content.toLowerCase().includes(lowerTerm) && !deletedIds.current.has(row.messageId));
+          } else {
+            const cached = await searchCachedMessages(channelId, term, controller.signal);
+            if (seq !== searchSeqRef.current) return;
+            const sorted = cached.filter(row => !deletedIds.current.has(row.messageId)).sort((a, b) => b.timestamp - a.timestamp);
+            localMatches.current = sorted.map(row => row.messageId);
+            paged = sorted.slice(searchOffset, searchOffset + limit);
+          }
           if (seq !== searchSeqRef.current) return;
-          // Simulate pagination (IndexedDB returns all results)
-          const total = cached.length;
-          const paged = cached
-            .sort((a, b) => b.timestamp - a.timestamp) // newest first
-            .slice(searchOffset, searchOffset + limit);
+          const total = localMatches.current.length;
 
           // CachedDecryptedMessage -> Message minimal format for rendering
           const messages: Message[] = paged.map((c) => ({
@@ -110,9 +145,7 @@ function SearchPanel({ channelId, onClose, onSelectResult }: SearchPanelProps) {
       }
 
       // Plaintext — server-side FTS5 search
-      const serverId = useServerStore.getState().activeServerId;
-      if (!serverId) return;
-      const res = await searchMessages(serverId, searchQuery.trim(), channelId, limit, searchOffset);
+      const res = await searchMessages(activeServerId, searchQuery.trim(), channelId, limit, searchOffset);
       // Out-of-order guard — see the local-search path above.
       if (seq !== searchSeqRef.current) return;
       if (res.success && res.data) {
@@ -122,11 +155,14 @@ function SearchPanel({ channelId, onClose, onSelectResult }: SearchPanelProps) {
       }
       setIsSearching(false);
     },
-    [channelId, useLocalSearch]
+    [activeServerId, channelId, serverE2eeEnabled]
   );
 
   /** Debounced search on input change */
   function handleInputChange(value: string) {
+    localMatches.current = null;
+    searchSeqRef.current++;
+    localSearch.current?.abort();
     setQuery(value);
     setOffset(0);
 
@@ -151,6 +187,23 @@ function SearchPanel({ channelId, onClose, onSelectResult }: SearchPanelProps) {
     doSearch(query, newOffset);
   }
 
+  const removeLocalMatch = useCallback((id: string) => {
+    deletedIds.current.add(id);
+    const ids = localMatches.current;
+    if (!ids) return false;
+    const position = ids.indexOf(id);
+    if (position < 0) return false;
+    ids.splice(position, 1);
+    const total = ids.length;
+    setResults(prev => prev && ({ messages: prev.messages.filter(m => m.id !== id), total_count: total }));
+    if (position < offset + limit) {
+      const lastOffset = Math.max(0, Math.floor((total - 1) / limit) * limit);
+      const nextOffset = Math.min(offset, lastOffset);
+      setOffset(nextOffset);
+      void doSearch(query, nextOffset);
+    }
+    return true;
+  }, [doSearch, offset, query]);
 
   // Live deletion while the panel is open: results are a snapshot, so a
   // WS-deleted message would linger as a dead row. Subscribe to the narrow
@@ -162,6 +215,7 @@ function SearchPanel({ channelId, onClose, onSelectResult }: SearchPanelProps) {
     const unsubscribe = useMessageStore.subscribe((state, prev) => {
       const deleted = state.lastDeleted;
       if (!deleted || deleted === prev.lastDeleted) return;
+      if (serverE2eeEnabled && deleted.channel_id === channelId && removeLocalMatch(deleted.id)) return;
       setResults((prevResults) => {
         if (!prevResults || !prevResults.messages.some((m) => m.id === deleted.id)) {
           return prevResults;
@@ -175,7 +229,7 @@ function SearchPanel({ channelId, onClose, onSelectResult }: SearchPanelProps) {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [channelId, removeLocalMatch, serverE2eeEnabled]);
 
   /** Clicking a result navigates to the original message. The result
    *  list is a snapshot — if the message was deleted meanwhile, the
@@ -187,17 +241,18 @@ function SearchPanel({ channelId, onClose, onSelectResult }: SearchPanelProps) {
       if (!onSelectResult) return;
       const found = await onSelectResult(msg);
       if (found) return;
+      if (serverE2eeEnabled && removeLocalMatch(msg.id)) return;
       setResults((prev) =>
-        prev
+        prev?.messages.some((m) => m.id === msg.id)
           ? {
               ...prev,
               messages: prev.messages.filter((m) => m.id !== msg.id),
               total_count: Math.max(0, prev.total_count - 1),
             }
-          : null,
+          : prev,
       );
     },
-    [onSelectResult],
+    [onSelectResult, removeLocalMatch, serverE2eeEnabled],
   );
 
   function formatDate(dateStr: string): string {
@@ -244,7 +299,7 @@ function SearchPanel({ channelId, onClose, onSelectResult }: SearchPanelProps) {
       </div>
 
       {/* E2EE client-side search note — only when server is actually encrypted */}
-      {useLocalSearch && (
+      {serverE2eeEnabled && (
         <p className="search-e2ee-note">{tE2ee("clientSearchNote")}</p>
       )}
 

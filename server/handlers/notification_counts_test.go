@@ -84,3 +84,9 @@ func TestNotificationCountHandlerNeverFallsBackOnAggregateFailure(t *testing.T) 
 		t.Fatalf("missing actor=%d", w.Code)
 	}
 }
+
+// This fixture explicitly selects the legacy equal-count adaptation.
+func (f *legacyCountFixture) CountUnreadSummary(ctx context.Context, owner string) (models.NotificationUnreadCounts, error) {
+	n, err := f.CountUnread(ctx, owner)
+	return models.NotificationUnreadCounts{UnreadCount: n, BadgeUnreadCount: n}, err
+}

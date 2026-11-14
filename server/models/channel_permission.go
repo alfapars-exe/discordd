@@ -5,9 +5,10 @@ import "fmt"
 // ChannelPermissionOverride — per-channel role permission override.
 //
 // Effective permission calculation (Discord algorithm):
-//   base = OR of all role permissions
-//   for each role: allow |= override.allow, deny |= override.deny
-//   effective = (base & ~deny) | allow
+//
+//	base = OR of all role permissions
+//	for each role: allow |= override.allow, deny |= override.deny
+//	effective = (base & ~deny) | allow
 type ChannelPermissionOverride struct {
 	ChannelID string     `json:"channel_id"`
 	RoleID    string     `json:"role_id"`

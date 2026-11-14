@@ -29,9 +29,7 @@ func (s *serverService) joinServerTx(ctx context.Context, serverID, userID, defa
 		// cannot race past a concurrent `small` join's count decision. Count is
 		// only used for `small`; without the optional capability, ordinary
 		// `all`/`none` joins remain compatible while `small` fails closed.
-		if counter, ok := r.Server.(interface {
-			LockAndCountMembersForGameActivityJoin(context.Context, string) (int, error)
-		}); ok {
+		if counter := r.GameActivityCounter; counter != nil {
 			count, err := counter.LockAndCountMembersForGameActivityJoin(ctx, serverID)
 			if err != nil {
 				return fmt.Errorf("failed to lock server for game activity audience snapshot: %w", err)
@@ -41,9 +39,7 @@ func (s *serverService) joinServerTx(ctx context.Context, serverID, userID, defa
 			}
 		}
 		var addErr error
-		if snapshotWriter, ok := r.Server.(interface {
-			AddMemberWithGameActivityAudience(context.Context, string, string, bool) error
-		}); ok {
+		if snapshotWriter := r.GameActivityWriter; snapshotWriter != nil {
 			addErr = snapshotWriter.AddMemberWithGameActivityAudience(ctx, serverID, userID, gameActivityAllowed)
 		} else {
 			addErr = r.Server.AddMember(ctx, serverID, userID)
@@ -111,6 +107,9 @@ func (s *serverService) JoinServer(ctx context.Context, userID, inviteCode strin
 	if err := s.joinServerTx(ctx, serverID, userID, defaultRoleID, audience); err != nil {
 		return nil, err
 	}
+	if s.permInvalidator != nil {
+		s.permInvalidator.InvalidateUser(userID)
+	}
 	if s.gameActivity != nil {
 		s.gameActivity.MembershipAdded(ctx, serverID, userID)
 	}
@@ -123,7 +122,7 @@ func (s *serverService) JoinServer(ctx context.Context, userID, inviteCode strin
 	// to a rare failure is far cheaper than losing an otherwise-successful
 	// join over it.
 	if err := s.inviteService.MarkUsed(ctx, inviteCode); err != nil {
-		serverLogger.Error("failed to mark invite used", "invite_code", inviteCode, "err", pkg.ErrText(err))
+		serverLogger.Error("failed to mark invite used", "server_id", serverID, "err", pkg.ErrText(err))
 	}
 
 	server, err := s.serverRepo.GetByID(ctx, serverID)
@@ -131,9 +130,7 @@ func (s *serverService) JoinServer(ctx context.Context, userID, inviteCode strin
 		return nil, fmt.Errorf("failed to get server: %w", err)
 	}
 	snapshotAllowedForJoin := false
-	if snapshotReader, ok := s.serverRepo.(interface {
-		GetMemberGameActivityAudience(context.Context, string, string) (*bool, error)
-	}); ok {
+	if snapshotReader := s.snapshotReader; snapshotReader != nil {
 		if snapshot, snapshotErr := snapshotReader.GetMemberGameActivityAudience(ctx, serverID, userID); snapshotErr == nil && snapshot != nil {
 			snapshotAllowedForJoin = *snapshot
 		}
@@ -194,8 +191,14 @@ func (s *serverService) LeaveServer(ctx context.Context, serverID, userID string
 		return fmt.Errorf("%w: server owner cannot leave; transfer ownership first", pkg.ErrForbidden)
 	}
 
-	if err := s.serverRepo.RemoveMember(ctx, serverID, userID); err != nil {
+	if err := s.serverRepo.LeaveMember(ctx, serverID, userID); err != nil {
 		return fmt.Errorf("failed to remove member: %w", err)
+	}
+	if s.permInvalidator != nil {
+		s.permInvalidator.InvalidateUser(userID)
+	}
+	if s.membershipVoiceCleanup != nil {
+		s.membershipVoiceCleanup(serverID, userID)
 	}
 	if s.gameActivity != nil {
 		s.gameActivity.MembershipRemoved(ctx, serverID, userID)

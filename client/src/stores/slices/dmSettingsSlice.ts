@@ -20,7 +20,7 @@ export type DMSettingsSlice = {
   incrementDMUnread: (channelId: string) => void;
   decrementDMUnread: (channelId: string) => void;
   /** Local clear + server read-cursor advance (best-effort). */
-  clearDMUnread: (channelId: string) => void;
+  clearDMUnread: (channelId: string, scope?: "visible" | "entire-conversation") => void;
   /** `dm_read` from another of our sessions: local clear only, no API call. */
   handleDMReadSync: (data: { dm_channel_id: string; unread_count?: number }) => void;
   /** Sum of unread counts, excluding muted channels. */
@@ -147,7 +147,9 @@ export const createDMSettingsSlice: StateCreator<
     });
   },
 
-  clearDMUnread: (channelId) => {
+  clearDMUnread: (channelId, scope = "visible") => {
+    const lastId = scope === "visible" ? get().messagesByChannel[channelId]?.at(-1)?.id : undefined;
+    if (scope === "visible" && (!lastId || get().hasMoreAfterByChannel[channelId])) return;
     const hadUnread = !!get().dmUnreadCounts[channelId];
     set((state) => {
       if (!state.dmUnreadCounts[channelId]) return state;
@@ -160,8 +162,6 @@ export const createDMSettingsSlice: StateCreator<
     // Failure is silent: the local clear already happened and the next
     // fetchChannels re-seeds from the server's view.
     if (!hadUnread) return;
-    const messages = get().messagesByChannel[channelId];
-    const lastId = messages && messages.length > 0 ? messages[messages.length - 1].id : undefined;
     dmApi.markDMRead(channelId, lastId).catch(() => {});
   },
 

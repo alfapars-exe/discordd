@@ -160,7 +160,6 @@ function AdminServerList() {
       setIsLoading(false);
     }
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ─── Instance change ───

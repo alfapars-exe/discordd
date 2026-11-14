@@ -1,5 +1,6 @@
 /** ChannelChatProvider — Maps channel stores (message, pin, member) to ChatContext. */
 
+import { useReplyNavigation } from "../../hooks/useReplyNavigation";
 import { useMemo, useCallback, useRef, type ReactNode } from "react";
 import { ChatContext, type ChatContextValue, type ChatMessage } from "../../hooks/useChatContext";
 import { useMessageStore } from "../../stores/messageStore";
@@ -145,10 +146,11 @@ function ChannelChatProvider({
     [draftKey]
   );
 
-  const setScrollToMessageId = useCallback(
-    (id: string | null) => storeSetScrollToMessageId(id),
-    [storeSetScrollToMessageId]
-  );
+  const containsMessage = useCallback((id: string) =>
+    useMessageStore.getState().messagesByChannel[channelId]?.some(message => message.id === id) ?? false, [channelId]);
+  const loadReplyWindow = useCallback((id: string, context: { isCurrent: () => boolean }) =>
+    targetServerId ? useMessageStore.getState().fetchAroundMessage(targetServerId, channelId, id, context) : Promise.resolve(false), [channelId, targetServerId]);
+  const setScrollToMessageId = useReplyNavigation(draftKey, containsMessage, loadReplyWindow, storeSetScrollToMessageId);
 
   const sendTyping = useCallback(
     () => sendTypingProp(channelId),

@@ -531,6 +531,23 @@ export async function decryptGroupMessage(
   message: SenderKeyMessage,
   isCurrent: () => boolean = () => true
 ): Promise<string> {
+  return decryptGroupPayload(channelId, senderUserId, senderDeviceId, message, isCurrent, false);
+}
+
+/** Verify archived ciphertext without consuming or resetting live replay state.
+ * Used only to authenticate a legacy cache receipt; live delivery uses decryptGroupMessage.
+ */
+export async function decryptGroupHistory(
+  channelId: string, senderUserId: string, senderDeviceId: string,
+  message: SenderKeyMessage, isCurrent: () => boolean = () => true,
+): Promise<string> {
+  return decryptGroupPayload(channelId, senderUserId, senderDeviceId, message, isCurrent, true);
+}
+
+async function decryptGroupPayload(
+  channelId: string, senderUserId: string, senderDeviceId: string,
+  message: SenderKeyMessage, isCurrent: () => boolean, readOnlyHistory: boolean,
+): Promise<string> {
   const current = captureAuthGuard(isCurrent);
   const assertCurrent = () => {
     assertAuthCurrent(current);
@@ -581,12 +598,12 @@ export async function decryptGroupMessage(
     );
   }
 
-  // Replay protection: reject messages whose iteration we've already
+  // Live replay protection: reject messages whose iteration we've already
   // accepted under this distribution. Without this, an attacker (or a
   // bug in delivery) can resurface an old ciphertext and the client will
   // re-decrypt and re-render it. The seenIterations window covers both
   // in-order and out-of-order paths below.
-  if (isReplay(senderKey, message.iteration)) {
+  if (!readOnlyHistory && isReplay(senderKey, message.iteration)) {
     throw new Error(
       `Replay detected: iteration ${message.iteration} already processed ` +
         `for distribution ${message.distributionId}`
@@ -640,7 +657,7 @@ export async function decryptGroupMessage(
   // This handles historical messages from fetchMessages.
   const isOutOfOrder = message.iteration < currentIteration;
 
-  if (isOutOfOrder) {
+  if (readOnlyHistory || isOutOfOrder) {
     if (!senderKey.initialChainKey) {
       throw new Error(
         `Message iteration ${message.iteration} is behind current ` +
@@ -669,9 +686,11 @@ export async function decryptGroupMessage(
     // of the same ciphertext is rejected. We persist the senderKey here
     // even though we don't mutate chainKey/iteration — only seenIterations
     // changes.
-    recordIteration(senderKey, message.iteration);
-    await keyStorage.saveSenderKey(senderKey, current);
-    assertCurrent();
+    if (!readOnlyHistory) {
+      recordIteration(senderKey, message.iteration);
+      await keyStorage.saveSenderKey(senderKey, current);
+      assertCurrent();
+    }
 
     return new TextDecoder().decode(plaintext);
   }

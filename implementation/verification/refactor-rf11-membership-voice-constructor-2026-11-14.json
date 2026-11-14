@@ -1,0 +1,36 @@
+{
+  "source_parent": "78022d75",
+  "scope": "RF11 server-leave voice cleanup constructor dependency",
+  "before": {
+    "test": "TestServerConstructorRequiresMembershipVoiceCleanup",
+    "exit": 1,
+    "reason": "constructor had no cleanup parameter; dependency14 was transaction runner"
+  },
+  "change": "ServerService constructor takes explicit membership voice cleanup callback; production passes DisconnectServerMember. Setter removed. Leave and tagged LiveKit fixtures now pass cleanup at construction. Assertions retained.",
+  "validation": [
+    {
+      "command": "go test ./services . -run 'TestServerConstructor|TestLeaveServer|TestPrivateChannelPermissionsAcrossLeaveAndRejoin|TestJoinServer|Test.*Wiring|TestServiceInitialization|TestDeleteServer' -count=1 -timeout=3m",
+      "exit": 0,
+      "services_seconds": 0.654,
+      "root_seconds": 0.755
+    },
+    {
+      "command": "go test ./services -tags livekit_integration -run '^$' -count=1 -timeout=3m",
+      "exit": 0,
+      "scope": "compile only; zero selected tests"
+    },
+    {
+      "command": "go build ./...",
+      "exit": 0
+    },
+    {
+      "command": "go vet ./services .",
+      "exit": 0
+    }
+  ],
+  "limits": [
+    "Explicit nil remains available for isolated media-free fixtures",
+    "No local live-provider or physical-media claim",
+    "Fresh Linux race/native CI required after this constructor signature change"
+  ]
+}

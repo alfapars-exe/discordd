@@ -1,0 +1,42 @@
+{
+  "date": "2026-11-14",
+  "pr": 298,
+  "head": "fdd59669e5d74e9e29f690dde4c3c94364c2c29b",
+  "previous_sonar": {
+    "head": "6236c8b9",
+    "gate": "ERROR",
+    "new_duplicated_lines_density": 6.1,
+    "threshold": 3,
+    "duplicated_test_lines": 144,
+    "issue": "go:S3776 AFK cognitive complexity16 exceeds15"
+  },
+  "changes": [
+    "Shared shutdown assertion across seven independent named regressions",
+    "Extract lock-protected AFK candidate snapshot without changing timeout or kick policy"
+  ],
+  "checks": {
+    "canonical_host_count": 10,
+    "host_exit": 0,
+    "host_seconds": 12.144,
+    "canonical_linux_race_count": 10,
+    "race_exit": 0,
+    "race_seconds": 14.888,
+    "canonical_postgres_afk_count": 3,
+    "postgres_exit": 0,
+    "postgres_seconds": 2.492,
+    "services_vet_exit": 0,
+    "services_lint_issues": 0,
+    "negative_overlay_exit": 1,
+    "negative_assertion": "shutdown returned before owned work",
+    "integration_targeted_exit": 0,
+    "integration_seconds": 1.819
+  },
+  "current_ci": {
+    "run": 43519318350,
+    "status": "pending; terminal and Sonar results not yet verified"
+  },
+  "limitations": [
+    "No Sonar exclusions or thresholds changed.",
+    "Whole-project/runtime/physical acceptance remains open."
+  ]
+}

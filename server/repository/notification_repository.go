@@ -30,6 +30,8 @@ type NotificationRepository interface {
 	// returns how many rows changed.
 	MarkAllRead(ctx context.Context, userID string) (int64, error)
 	CountUnread(ctx context.Context, userID string) (int, error)
+	// CountUnreadSummary reads inbox and badge aggregates from one snapshot.
+	CountUnreadSummary(context.Context, string) (models.NotificationUnreadCounts, error)
 	// DeleteByMessageID removes every notification pointing at a deleted
 	// channel message (best-effort cleanup from the message delete paths).
 	DeleteByMessageID(ctx context.Context, messageID string) error
@@ -43,4 +45,24 @@ type NotificationRepository interface {
 	MarkFriendRequestRead(ctx context.Context, userID, actorID string) ([]string, error)
 	// MarkDMRequestRead is the dm_request counterpart, keyed by dm_channel_id.
 	MarkDMRequestRead(ctx context.Context, userID, dmChannelID string) ([]string, error)
+}
+
+// ReactionNotificationWriter atomically deduplicates reaction inbox writes.
+type ReactionNotificationWriter interface {
+	CreateReactionIfAbsent(context.Context, *models.Notification, string) (bool, error)
+}
+
+// NotificationStore retains production write capabilities at the factory boundary.
+// Consumers only requiring ordinary inbox operations use NotificationRepository.
+type NotificationStore interface {
+	NotificationRepository
+	ReactionNotificationWriter
+}
+
+// NotificationRuntimeStore retains all production capabilities at composition;
+// domain services continue to accept only their narrower requirements.
+type NotificationRuntimeStore interface {
+	NotificationStore
+	OnlineFriendNotificationRepository
+	OnlineFriendCandidateReader
 }

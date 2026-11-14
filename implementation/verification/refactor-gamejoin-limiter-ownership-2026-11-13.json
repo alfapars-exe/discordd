@@ -1,0 +1,30 @@
+{
+  "scope": "RF08/RF11 GameJoinHandler limiter ownership",
+  "before": {
+    "real_http_fixture_worker_count_before": 0,
+    "real_http_fixture_worker_count_after": 10,
+    "regression": "FAIL: game join fixtures retained limiter workers"
+  },
+  "change": "Move 60/min GameJoin limiter creation into RateLimiters and inject the mandatory dependency into GameJoinHandler. Handler construction creates no worker. Bundle Stop covers all 18 declared limiter fields. Test fixtures close owned limiters.",
+  "after": {
+    "targeted_tests_count_5": "PASS handlers/main",
+    "targeted_race_count_5": "PASS handlers 3.236s, main 3.232s",
+    "full_handlers_package": "PASS 5.726s",
+    "full_go_vet_and_build": "PASS",
+    "golangci_lint": "0 issues",
+    "shared_budget_contract": "60 allowed calls across two handlers, then 429 with Retry-After 60; nil fails closed; Stop preserves exhausted budget",
+    "fixture_workers_after": "same as before (0 retained)",
+    "mutation": "Removing GameJoin from bundle Stop is rejected: bundle retained 1 cleanup workers",
+    "production_inventory": "18 limiter constructor calls, all in initServices; handler constructor no longer starts a worker",
+    "integrated_targeted_tests_count_5": "PASS handlers 0.517s, main 0.513s",
+    "integrated_targeted_race_count_5": "PASS handlers 3.189s, main 3.187s",
+    "integrated_full_go_vet_and_build": "PASS"
+  },
+  "limitations": [
+    "Partial service-construction failure ownership remains open.",
+    "Current-head CI and actual live-process shutdown remain separate gates.",
+    "Constructor signature changes internally; HTTP/WS contracts remain unchanged."
+  ],
+  "canonical_source": "047a9837",
+  "integrated_source": "a8ba509d"
+}

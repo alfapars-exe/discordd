@@ -22,7 +22,7 @@ func strptr(s string) *string { return &s }
 // newAuthServiceForReset builds the full service with caller-controlled reset
 // repo + email sender so the reset flow's collaborators are observable.
 func newAuthServiceForReset(userRepo *testutil.MockUserRepo, resetRepo *testutil.MockResetRepo, email *testutil.MockEmailSender) AuthService {
-	return NewAuthService(userRepo, &testutil.MockSessionRepo{}, resetRepo, &testutil.MockEventPublisher{}, email, testJWTSecret, 15, 7)
+	return NewAuthService(userRepo, &testutil.MockSessionRepo{}, resetRepo, &testutil.MockEventPublisher{}, email, nil, testJWTSecret, 15, 7)
 }
 
 func TestChangeEmail(t *testing.T) {
@@ -44,7 +44,9 @@ func TestChangeEmail(t *testing.T) {
 	t.Run("valid change persists the new email", func(t *testing.T) {
 		var saved *string
 		ur := &testutil.MockUserRepo{
-			GetByIDFn:    func(context.Context, string) (*models.User, error) { return &models.User{ID: "u1", PasswordHash: hash}, nil },
+			GetByIDFn: func(context.Context, string) (*models.User, error) {
+				return &models.User{ID: "u1", PasswordHash: hash}, nil
+			},
 			UpdateEmailFn: func(_ context.Context, _ string, email *string) error { saved = email; return nil },
 		}
 		svc := newAuthServiceForReset(ur, &testutil.MockResetRepo{}, &testutil.MockEmailSender{})
@@ -150,6 +152,26 @@ func TestForgotPassword(t *testing.T) {
 		}
 	})
 
+	t.Run("cooldown lookup failure preserves existing reset links", func(t *testing.T) {
+		lookupErr := errors.New("cooldown lookup unavailable")
+		users := &testutil.MockUserRepo{GetByEmailFn: func(context.Context, string) (*models.User, error) {
+			return &models.User{ID: "u1", Email: strptr("u@example.com")}, nil
+		}}
+		reset := &testutil.MockResetRepo{
+			GetLatestByUserIDFn: func(context.Context, string) (*models.PasswordResetToken, error) {
+				return nil, lookupErr
+			},
+			DeleteByUserIDFn: func(context.Context, string) error {
+				t.Fatal("removed existing reset links after a failed cooldown check")
+				return nil
+			},
+		}
+		svc := newAuthServiceForReset(users, reset, &testutil.MockEmailSender{})
+		if _, err := svc.ForgotPassword(ctx, "u@example.com"); !errors.Is(err, lookupErr) {
+			t.Fatal("expected cooldown lookup error")
+		}
+	})
+
 	t.Run("valid request stores a token and sends the email", func(t *testing.T) {
 		var createdHash string
 		var sentTo, sentToken string
@@ -180,7 +202,7 @@ func TestForgotPassword(t *testing.T) {
 			t.Error("expected a reset token to be stored")
 		}
 		if sentTo != "u@example.com" || sentToken == "" {
-			t.Errorf("email send got to=%q token=%q, want the address and a plaintext token", sentTo, sentToken)
+			t.Error("reset email must include a token and reach the account address")
 		}
 		// The DB stores the hash, never the plaintext token that was emailed.
 		if createdHash == sentToken {

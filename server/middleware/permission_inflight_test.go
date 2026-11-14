@@ -33,7 +33,9 @@ func TestPermissionInvalidationSupersedesInflightGrant(t *testing.T) {
 				}
 				return []models.Role{{Permissions: models.PermViewChannel}}, nil
 			}}
-			mw := NewPermissionMiddleware(repo)
+			owner := NewPermissionCache()
+			mw := NewPermissionMiddleware(repo, owner)
+			t.Cleanup(mw.Stop)
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			req := httptest.NewRequest("GET", "/", nil).WithContext(ctx)
@@ -51,11 +53,11 @@ func TestPermissionInvalidationSupersedesInflightGrant(t *testing.T) {
 			// Invalidation completes while the old database result is withheld.
 			switch mode {
 			case "all":
-				mw.InvalidateAll()
+				owner.InvalidateAll()
 			case "user":
-				mw.InvalidateUser("u")
+				owner.InvalidateUser("u")
 			case "server":
-				mw.InvalidateServerPermissions("s")
+				owner.InvalidateServerPermissions("s")
 			}
 			once.Do(func() { close(release) })
 			select {
@@ -81,7 +83,8 @@ func TestPermissionInvalidationChurnFailsClosedAndBounded(t *testing.T) {
 		calls++
 		mw.InvalidateAll()
 		return []models.Role{{Permissions: models.PermAdmin}}, nil
-	}})
+	}}, nil)
+	t.Cleanup(mw.Stop)
 	p, err := mw.resolveEffectivePerms(httptest.NewRequest("GET", "/", nil), "u", "s")
 	if p != 0 || !errors.Is(err, pkg.ErrForbidden) || calls != 3 {
 		t.Fatal("unbounded or stale grant", p, err, calls)

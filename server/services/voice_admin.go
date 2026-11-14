@@ -37,6 +37,12 @@ import (
 // unfairly leaving a legitimately-unmuted user unable to speak, and it
 // avoids adding LiveKit round-trip latency to every mute action.
 func (s *voiceService) AdminUpdateState(ctx context.Context, adminUserID, targetUserID string, isServerMuted, isServerDeafened *bool) error {
+	finishOperation, admitted := s.operations.begin()
+	if !admitted {
+		return context.Canceled
+	}
+	defer finishOperation()
+
 	s.mu.Lock()
 
 	state, ok := s.states[targetUserID]
@@ -153,7 +159,7 @@ func (s *voiceService) AdminUpdateState(ctx context.Context, adminUserID, target
 		// MutePublishedTrack backstop, fail-open mute / retry-then-evict
 		// unmute, why deafen/_ss are untouched).
 		if newMuted {
-			go s.applyServerMuteToLiveKit(channelID, targetUserID) // #nosec G118 -- deliberately detached: the mute leg is best-effort and must outlive this call, so applyServerMuteToLiveKit carries its own context.Background()+timeout rather than one tied to a caller that may already be gone
+			s.operations.child(func() { s.applyServerMuteToLiveKit(channelID, targetUserID) })
 		}
 	}
 	if deafenChanged {
@@ -189,6 +195,12 @@ func (s *voiceService) AdminUpdateState(ctx context.Context, adminUserID, target
 // cross-channel switch now deliberately replicates (voice_state.go). Safe
 // unconditionally now that cross-server moves are rejected outright.
 func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, targetChannelID string) error {
+	finishOperation, admitted := s.operations.begin()
+	if !admitted {
+		return context.Canceled
+	}
+	defer finishOperation()
+
 	channel, err := s.channelGetter.GetByID(ctx, targetChannelID)
 	if err != nil {
 		return fmt.Errorf("%w: target channel not found", pkg.ErrNotFound)
@@ -404,7 +416,7 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 	// mirroring LeaveChannel's "Channel emptied → kick the music bot"
 	// dispatch (same nil-guard, same StopAllForChannel call).
 	if len(sourceRemaining) == 0 && s.musicBotHook != nil {
-		go s.musicBotHook.StopAllForChannel(sourceChannelID)
+		s.operations.child(func() { s.musicBotHook.StopAllForChannel(sourceChannelID) })
 	}
 
 	// Remove phantom from old LiveKit room (best-effort). Dual-identity
@@ -416,7 +428,7 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 	// "_ss" identity is left orphaned in sourceChannelID exactly like the
 	// main identity was before this fix existed, so it gets the same
 	// best-effort cleanup.
-	go s.removeParticipantAndScreenShareFromLiveKit(sourceChannelID, targetUserID) // #nosec G118 -- deliberately detached: best-effort cleanup that must outlive this call (see removeParticipantFromLiveKit's own doc comment), so it carries its own context.Background()+10s timeout rather than one tied to a caller that may already be gone
+	s.operations.child(func() { s.removeParticipantAndScreenShareFromLiveKit(sourceChannelID, targetUserID) })
 
 	// Audit: voice move (only when an admin moved someone else; self-moves
 	// are not moderation events and we don't log them).
@@ -446,6 +458,12 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 // is its own call to closeOutScreenShareLocked (voice_screenshare.go), not
 // inherited from anywhere. Same helper call as MoveUser.
 func (s *voiceService) AdminDisconnectUser(ctx context.Context, disconnecterUserID, targetUserID string) error {
+	finishOperation, admitted := s.operations.begin()
+	if !admitted {
+		return context.Canceled
+	}
+	defer finishOperation()
+
 	s.mu.Lock()
 
 	state, ok := s.states[targetUserID]
@@ -506,6 +524,7 @@ func (s *voiceService) disconnectVoiceLocked(targetUserID string, state *models.
 	// triggers later than it should). See the creditUsage dispatch below,
 	// after unlock.
 	disconnectJoinedAt := state.JoinedAt
+	disconnectUsageSessionID := state.UsageSessionID
 	disconnectInstanceID := state.LiveKitInstanceID
 	disconnectIsCloud := state.LiveKitIsCloud
 	delete(s.states, targetUserID)
@@ -577,19 +596,19 @@ func (s *voiceService) disconnectVoiceLocked(targetUserID string, state *models.
 	// sub-participant would otherwise keep streaming after their main
 	// connection is gone, same MEDIUM finding removeParticipantAndScreenShareFromLiveKit
 	// was added for.
-	go s.removeParticipantAndScreenShareFromLiveKit(channelID, targetUserID) // #nosec G118 -- deliberately detached: best-effort cleanup that must outlive this call (see removeParticipantFromLiveKit's own doc comment), so it carries its own context.Background()+10s timeout rather than one tied to a caller that may already be gone
+	s.dispatchDisconnectCleanup(func() { s.removeParticipantAndScreenShareFromLiveKit(channelID, targetUserID) })
 	// F4 review MEDIUM fix: credit the force-ended session's duration to
 	// its cloud instance's monthly bucket — mirrors LeaveChannel's
 	// go s.creditUsage(...) dispatch. Self-hosted, zero-duration, and
 	// unset cases are no-ops inside creditUsage itself.
-	go s.creditUsage(disconnectInstanceID, disconnectIsCloud, disconnectJoinedAt) // #nosec G118 -- deliberately detached: quota crediting must complete even if the caller's context is cancelled, mirroring LeaveChannel's own dispatch
+	s.dispatchUsageCredit(disconnectUsageSessionID, disconnectInstanceID, disconnectIsCloud, disconnectJoinedAt, time.Now()) // #nosec G118 -- deliberately detached: quota crediting must complete even if the caller's context is cancelled, mirroring LeaveChannel's own dispatch
 
 	// F2 review MEDIUM fix: channelID emptied by this disconnect (remaining
 	// computed above under the lock, right after delete) → kick the music
 	// bot (if any), mirroring LeaveChannel's "Channel emptied → kick the
 	// music bot" dispatch (same nil-guard, same StopAllForChannel call).
 	if len(remaining) == 0 && s.musicBotHook != nil {
-		go s.musicBotHook.StopAllForChannel(channelID)
+		s.dispatchDisconnectCleanup(func() { s.musicBotHook.StopAllForChannel(channelID) })
 	}
 
 }

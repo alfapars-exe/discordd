@@ -2,8 +2,8 @@
  * Tests for the credential surface exposed to the renderer
  * (pentest 2026-07-26, H-09).
  *
- * Only toPublicCredentials is covered. The read/write path needs safeStorage,
- * which needs a running Electron app; importing this module is safe because
+ * The backend policy uses an injected safeStorage interface. Real encryption
+ * needs a running Electron app; importing this module is safe because
  * nothing here calls into it.
  *
  * The property is a negative one — "the password is not in the result" — so
@@ -13,7 +13,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { toPublicCredentials } from "./credentials";
+import { canProtectCredentials, toPublicCredentials } from "./credentials";
 
 test("strips the password from what the renderer receives", () => {
   const result = toPublicCredentials({
@@ -34,4 +34,23 @@ test("keeps the username, so autofill still works", () => {
 
 test("passes null through for a device with nothing stored", () => {
   assert.equal(toPublicCredentials(null), null);
+});
+
+test("Linux credentials require an available OS password manager", () => {
+  for (const backend of ["basic_text", "unknown", "gnome_libsecret", "kwallet", "kwallet5", "kwallet6"] as const) {
+    const storage = { isEncryptionAvailable: () => true, getSelectedStorageBackend: () => backend };
+    assert.equal(canProtectCredentials(storage, "linux"), backend !== "basic_text" && backend !== "unknown");
+    assert.equal(canProtectCredentials({ ...storage, isEncryptionAvailable: () => false }, "linux"), false);
+  }
+});
+
+test("Windows and macOS check availability without querying a Linux-only API", () => {
+  for (const platform of ["win32", "darwin"] as const) {
+    for (const available of [false, true]) {
+      assert.equal(canProtectCredentials({
+        isEncryptionAvailable: () => available,
+        getSelectedStorageBackend: () => { throw new Error("Linux-only API"); },
+      }, platform), available);
+    }
+  }
 });

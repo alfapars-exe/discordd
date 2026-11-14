@@ -17,7 +17,7 @@ type sqliteNotificationRepo struct {
 	db database.TxQuerier
 }
 
-func NewSQLiteNotificationRepo(db database.TxQuerier) NotificationRepository {
+func NewSQLiteNotificationRepo(db database.TxQuerier) NotificationRuntimeStore {
 	return &sqliteNotificationRepo{db: db}
 }
 

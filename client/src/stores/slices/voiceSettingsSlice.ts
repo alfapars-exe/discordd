@@ -7,6 +7,7 @@
  */
 
 import type { StateCreator } from "zustand";
+import { DEVICE_LOCAL_VOICE_SETTING_KEYS } from "../voicePreferenceScope";
 import { usePreferencesStore } from "../preferencesStore";
 import type { VoiceStore } from "../voiceStore";
 
@@ -461,22 +462,7 @@ function persistNow(settings: VoiceSettings): void {
   }
 }
 
-const DEVICE_LOCAL_KEYS = new Set<keyof VoiceSettings>([
-  "inputDevice", "outputDevice", "cameraDevice", "muteHotkeyGlobal",
-  "voiceOverlayEnabled", "voiceOverlayMode", "voiceOverlaySpeakingOpacity", "voiceOverlayIdleOpacity",
-  "voiceOverlayScale", "voiceOverlayPosition", "voiceOverlaySpeakingOnly",
-  "voiceOverlayPinned",
-  "voiceOverlayQuickActions", "voiceOverlayClickableActions",
-  "voiceOverlayCompatibility",
-  "voiceOverlayActivity", "voiceOverlayVideo", "voiceOverlayStreams", "voiceOverlayWelcome", "voiceOverlayGoLive",
-  "voiceOverlayGameActivityNotifications", "voiceOverlayNowPlayingNotifications",
-  "voiceOverlayNotifications",
-  "voiceOverlayNotificationActions",
-  "voiceOverlayChat",
-  "voiceOverlayChatActions",
-  "voiceOverlayChatCompose",
-  "voiceOverlayAvatarSize", "voiceOverlayNameDisplay", "voiceOverlayMaxParticipants",
-]);
+const DEVICE_LOCAL_KEYS = new Set<keyof VoiceSettings>(DEVICE_LOCAL_VOICE_SETTING_KEYS);
 let observedSettings = loadSettings();
 
 /** Register edits immediately, before a concurrent hydration can apply. */
@@ -1036,34 +1022,7 @@ export const createVoiceSettingsSlice: StateCreator<
       const current = get();
       const defaults: VoiceSettings = {
         ...DEFAULT_SETTINGS, userVolumes: {}, screenShareVolumes: {}, localMutedUsers: {},
-        inputDevice: current.inputDevice, outputDevice: current.outputDevice,
-        cameraDevice: current.cameraDevice, muteHotkeyGlobal: current.muteHotkeyGlobal,
-        voiceOverlayEnabled: current.voiceOverlayEnabled,
-        voiceOverlayMode: current.voiceOverlayMode,
-        voiceOverlaySpeakingOpacity: current.voiceOverlaySpeakingOpacity,
-        voiceOverlayIdleOpacity: current.voiceOverlayIdleOpacity,
-        voiceOverlayScale: current.voiceOverlayScale,
-        voiceOverlayPosition: current.voiceOverlayPosition,
-        voiceOverlayPinned: current.voiceOverlayPinned,
-        voiceOverlayQuickActions: current.voiceOverlayQuickActions,
-        voiceOverlayClickableActions: current.voiceOverlayClickableActions,
-        voiceOverlayCompatibility: current.voiceOverlayCompatibility,
-        voiceOverlayActivity: current.voiceOverlayActivity,
-        voiceOverlayVideo: current.voiceOverlayVideo,
-        voiceOverlayStreams: current.voiceOverlayStreams,
-        voiceOverlayWelcome: current.voiceOverlayWelcome,
-        voiceOverlayGoLive: current.voiceOverlayGoLive,
-        voiceOverlayGameActivityNotifications: current.voiceOverlayGameActivityNotifications,
-        voiceOverlayNowPlayingNotifications: current.voiceOverlayNowPlayingNotifications,
-        voiceOverlayNotifications: current.voiceOverlayNotifications,
-        voiceOverlayNotificationActions: current.voiceOverlayNotificationActions,
-        voiceOverlayChat: current.voiceOverlayChat,
-        voiceOverlayChatActions: current.voiceOverlayChatActions,
-        voiceOverlayChatCompose: current.voiceOverlayChatCompose,
-        voiceOverlaySpeakingOnly: current.voiceOverlaySpeakingOnly,
-        voiceOverlayAvatarSize: current.voiceOverlayAvatarSize,
-        voiceOverlayNameDisplay: current.voiceOverlayNameDisplay,
-        voiceOverlayMaxParticipants: current.voiceOverlayMaxParticipants,
+        ...Object.fromEntries(DEVICE_LOCAL_VOICE_SETTING_KEYS.map(key => [key, current[key]])),
       };
       observedSettings = defaults;
       persistNow(defaults);

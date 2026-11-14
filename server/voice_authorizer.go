@@ -19,7 +19,7 @@ type voiceAdminAuthorizer struct {
 }
 
 // newVoiceAdminAuthorizer constructs the WS-layer authorizer. Wired in
-// main.go right after registerHubCallbacks via hub.SetVoiceAdminAuthorizer.
+// main.go before registerHubCallbacks via hub.ConfigureRuntime.
 func newVoiceAdminAuthorizer(voiceState services.VoiceStateGetter, permResolver services.ChannelPermResolver) *voiceAdminAuthorizer {
 	return &voiceAdminAuthorizer{voiceState: voiceState, permResolver: permResolver}
 }

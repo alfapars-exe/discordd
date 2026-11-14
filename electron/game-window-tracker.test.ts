@@ -229,3 +229,27 @@ test("construction rejects non-absolute or non-executable helper paths", () => {
   assert.throws(() => createGameWindowTracker({ helperPath: "game-window.exe" }));
   assert.throws(() => createGameWindowTracker({ helperPath: "C:\\HiChat\\native\\game-window.dll" }));
 });
+
+test("concurrent terminal disposal callers all wait for the same child reap", async () => {
+  const { tracker, children, clock } = trackerHarness();
+  tracker.start();
+  const first = tracker.dispose();
+  const second = tracker.dispose();
+  const stopping = tracker.stop();
+  let stopFinished = false;
+  void stopping.then(() => { stopFinished = true; });
+  let secondFinished = false;
+  void second.then(() => { secondFinished = true; });
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(secondFinished, false, "a repeated dispose cannot report completion while its child is still alive");
+  assert.equal(stopFinished, false, "stop during terminal disposal also waits for child reap");
+  assert.equal(children[0].killed, true);
+  children[0].emit("close", 0, null);
+  await Promise.all([first, second, stopping]);
+  assert.equal(secondFinished, true);
+  assert.equal(stopFinished, true);
+  await tracker.dispose();
+  tracker.start(); clock.advance(60_000);
+  assert.equal(children.length, 1, "terminal disposal cannot restart a child");
+});

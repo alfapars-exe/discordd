@@ -29,6 +29,7 @@ import * as senderKeyProtocol from "./senderKeyProtocol.js";
 import * as signalProtocol from "./signalProtocol.js";
 import * as e2eeApi from "../api/e2ee.js";
 import * as keyStorage from "./keyStorage.js";
+import { channelMessageCacheEntry, readChannelMessageCache } from "./channelMessageCache";
 import { fromBase64 } from "./signalProtocol.js";
 import { LegacyDeviceError } from "./dmEncryption.js";
 import { decodePayload, type E2EEPayload } from "./e2eePayload.js";
@@ -816,6 +817,21 @@ export async function decryptChannelMessages(
       msg.sender_device_id
     ) {
       try {
+        // Reading history must not replay an accepted frame through the
+        // ratchet. Reuse only a cache entry for this exact encrypted source.
+        const cached = await readChannelMessageCache(msg, isCurrent, async () => {
+          // This path is eligible only for an unedited, text-only legacy
+          // cache record. Do not install distributions or mutate replay state.
+          const plaintext = await senderKeyProtocol.decryptGroupHistory(
+            msg.channel_id, msg.user_id, msg.sender_device_id!, JSON.parse(msg.ciphertext!) as SenderKeyMessage, isCurrent,
+          );
+          return isCurrent() ? decodePayload(plaintext) : null;
+        });
+        if (!isCurrent()) return staleProjection();
+        if (cached) {
+          result.push({ ...msg, content: cached.content, e2ee_file_keys: cached.file_keys });
+          continue;
+        }
         const payload = await decryptChannelMessage(
           msg.user_id,
           msg.channel_id,
@@ -833,14 +849,9 @@ export async function decryptChannelMessages(
         });
 
         // Successful decrypt → write to IndexedDB cache (for search)
-        if (payload?.content) {
-          toCache.push({
-            messageId: msg.id,
-            channelId: msg.channel_id,
-            dmChannelId: null,
-            content: payload.content,
-            timestamp: new Date(msg.created_at).getTime(),
-          });
+        if (payload && (payload.content || payload.file_keys?.length)) {
+          toCache.push(await channelMessageCacheEntry(msg, payload));
+          if (!isCurrent()) return staleProjection();
         }
       } catch (err) {
         if (!isCurrent()) return staleProjection();

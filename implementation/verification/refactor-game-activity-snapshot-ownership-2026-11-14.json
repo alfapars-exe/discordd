@@ -1,0 +1,34 @@
+{
+  "date": "2026-11-14",
+  "pr": 300,
+  "canonical_source": "3e0b131cc03fb19253d78ac70f0c10b2c1f20f9e",
+  "base": "7484408ab8dcff16ac17d6d784ab86f5ec6c22ff",
+  "scope": "RequestGameActivitySnapshot reserves under Hub mutex, submits outside mutex through existing eight-worker/256-pending callback dispatcher; stop rejects new requests, cancels queued tickets and joins active callbacks; same-user FIFO with other-user progress",
+  "negative_overlay": {
+    "exit": 1,
+    "failures": [
+      "callback owner finished shutdown while snapshot was still running",
+      "snapshot callback admitted after Hub shutdown",
+      "same-user snapshot overtook accepted predecessor"
+    ],
+    "log_sha256": "9c18b3025cba6e7d9e8e018ec2ac69c9d862c15930d882c509011f00758f03de",
+    "join_test_barrier": "wait for owner stopSubmit before checking shutdownDone; earlier scheduler-only window strengthened"
+  },
+  "validation": {
+    "canonical_current_snapshot_repetitions": 50,
+    "canonical_current_snapshot_seconds": 4.349,
+    "canonical_current_full_ws_seconds": 4.67,
+    "existing_callback_repetitions": 20,
+    "integration_current_snapshot_registration_repetitions": 20,
+    "integration_current_snapshot_registration_seconds": 4.13,
+    "canonical_and_integration_vet_build": "pass",
+    "canonical_and_integration_lint": "0 issues; global linter lock handled sequentially"
+  },
+  "fixture_contract": "await four initial snapshots; strict game identity assertions; same live denied-socket reader for all three 200ms observations; cleanup closes and joins reader",
+  "unverified": [
+    "new-source Linux race and complete PR CI",
+    "final combined-source acceptance",
+    "provider/physical platform acceptance"
+  ],
+  "server_ci_run": 43541778893
+}

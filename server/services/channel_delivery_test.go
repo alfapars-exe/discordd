@@ -68,8 +68,7 @@ func channelDeliveryFixture(t *testing.T) (*messageService, *sql.DB, *testutil.M
 		return m, nil
 	}}
 	hub := &testutil.MockBroadcastAndOnline{GetOnlineUserIDsForServerFn: func(string) []string { return []string{"sender", "reader"} }}
-	service := NewMessageService(repository.NewSQLiteMessageRepo(db), repository.NewSQLiteAttachmentRepo(db), repository.NewSQLiteChannelRepo(db), repository.NewSQLiteUserRepo(db), repository.NewSQLiteMentionRepo(db), repository.NewSQLiteRoleMentionRepo(db), repository.NewSQLiteRoleRepo(db), repository.NewSQLiteReactionRepo(db), repository.NewPostgresReadStateRepo(db), nil, repository.NewMessageTxRunner(db), hub, perms, nil, repository.NewSQLiteNotificationRepo(db))
-	ConfigureChannelDelivery(service, db)
+	service := NewMessageService(repository.NewSQLiteMessageRepo(db), repository.NewSQLiteAttachmentRepo(db), repository.NewSQLiteChannelRepo(db), repository.NewSQLiteUserRepo(db), repository.NewSQLiteMentionRepo(db), repository.NewSQLiteRoleMentionRepo(db), repository.NewSQLiteRoleRepo(db), repository.NewSQLiteReactionRepo(db), repository.NewPostgresReadStateRepo(db), nil, repository.NewMessageTxRunner(db), hub, perms, nil, repository.NewSQLiteNotificationRepo(db), db)
 	return service.(*messageService), db, hub, perms
 }
 

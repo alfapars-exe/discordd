@@ -1,0 +1,16 @@
+{
+  "source": "1dfb78e401705f1d5548ecb9cc6041dffabdf7e1",
+  "scope": "tracked HEAD archive; untracked generated coverage preserved in original worktree",
+  "exit_code": 0,
+  "block_matches": 0,
+  "review_records": 50,
+  "review_rows": 427,
+  "report_sha256": "2287835bb787d392e57039d444653004509a4436bf75b3acde234fc7095aac62",
+  "production_test_sha256": "5d438fe215d6b89501c81e8d612c6a2292c3b4417a88c8b03e5a71616f4dbf16",
+  "current_test_matches_scanned": true,
+  "limitations": [
+    "tracked source only, matches clean CI checkout scope",
+    "untracked generated coverage retained in original worktree",
+    "not native production process runtime evidence"
+  ]
+}

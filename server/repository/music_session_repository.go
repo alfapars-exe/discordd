@@ -16,12 +16,21 @@ type MusicSessionRepository interface {
 	Delete(context.Context, string) error
 }
 
+// MusicSessionStore retains durable command and privacy capabilities at composition.
+// Ordinary session consumers continue to use MusicSessionRepository.
+type MusicSessionStore interface {
+	MusicSessionRepository
+	MusicControlRepository
+	SanitizeMusicTracks(context.Context, []models.MusicTrack) ([]models.MusicTrack, error)
+	SaveMusicEnqueue(context.Context, models.MusicSession, string) error
+}
+
 type sqliteMusicSessionRepo struct {
 	db       database.TxQuerier
 	postgres bool
 }
 
-func NewSQLiteMusicSessionRepo(db database.TxQuerier) MusicSessionRepository {
+func NewSQLiteMusicSessionRepo(db database.TxQuerier) MusicSessionStore {
 	return &sqliteMusicSessionRepo{db: db, postgres: database.IsPostgres(db)}
 }
 

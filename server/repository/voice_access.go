@@ -100,3 +100,5 @@ func (r *postgresVoiceChannelRepo) VoiceVisibleUsers(ctx context.Context, server
 	}
 	return visible, rows.Err()
 }
+
+func (r *postgresVoiceChannelRepo) VoiceAccess() VoiceAccessReader { return r }

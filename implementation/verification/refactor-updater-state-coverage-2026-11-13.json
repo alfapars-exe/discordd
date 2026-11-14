@@ -1,0 +1,89 @@
+{
+  "sourceCommit": "c68191dfd4184e8e31c30e442cf48670b2402720",
+  "node": "v26.13.1",
+  "command": "npx vitest run --coverage",
+  "exitCode": 0,
+  "filesPassed": 476,
+  "testsPassed": 4814,
+  "testsSkipped": 1,
+  "unhandledErrors": 0,
+  "durationSeconds": 110.91,
+  "total": {
+    "lines": {
+      "total": 37414,
+      "covered": 25269,
+      "skipped": 0,
+      "pct": 67.53
+    },
+    "statements": {
+      "total": 51071,
+      "covered": 34011,
+      "skipped": 0,
+      "pct": 66.59
+    },
+    "functions": {
+      "total": 11983,
+      "covered": 7311,
+      "skipped": 0,
+      "pct": 61.01
+    },
+    "branches": {
+      "total": 39058,
+      "covered": 25011,
+      "skipped": 0,
+      "pct": 64.03
+    },
+    "branchesTrue": {
+      "total": 0,
+      "covered": 0,
+      "skipped": 0,
+      "pct": 100
+    }
+  },
+  "modules": [
+    {
+      "file": "client/src/hooks/useUpdateChecker.ts",
+      "statements": 94.44,
+      "branches": 62.5,
+      "functions": 100,
+      "lines": 100
+    },
+    {
+      "file": "client/src/utils/updateCheckerState.ts",
+      "statements": 100,
+      "branches": 100,
+      "functions": 100,
+      "lines": 100
+    },
+    {
+      "file": "client/src/webrtc/desktopScreenShareController.ts",
+      "statements": 81.57,
+      "branches": 76.08,
+      "functions": 69.23,
+      "lines": 96.42
+    },
+    {
+      "file": "client/src/webrtc/nativeScreenShareController.ts",
+      "statements": 100,
+      "branches": 100,
+      "functions": 100,
+      "lines": 100
+    },
+    {
+      "file": "client/src/webrtc/screenShareLifecycleController.ts",
+      "statements": 100,
+      "branches": 100,
+      "functions": 100,
+      "lines": 100
+    },
+    {
+      "file": "client/src/webrtc/screenShareRestartController.ts",
+      "statements": 100,
+      "branches": 100,
+      "functions": 100,
+      "lines": 100
+    }
+  ],
+  "log": "TEMP/hichat-client-coverage-after-updater-state.log",
+  "limits": "Unit/integration coverage does not prove physical audio/capture, OS installer execution or provider deployment"
+}

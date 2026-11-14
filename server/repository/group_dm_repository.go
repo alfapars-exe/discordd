@@ -16,6 +16,7 @@ type GroupDMRepository interface {
 	// admissionActor is mandatory for public services; omission is trusted internal legacy/import use only.
 	Create(ctx context.Context, group *models.GroupDM, memberIDs []string, admissionActor ...string) error
 	GetByID(ctx context.Context, id string) (*models.GroupDM, error)
+	// ListForUser includes ordered public member profiles for each visible group.
 	ListForUser(ctx context.Context, userID string) ([]models.GroupDM, error)
 	ListMemberIDs(ctx context.Context, groupID string) ([]string, error)
 	IsMember(ctx context.Context, groupID, userID string) (bool, error)
@@ -42,4 +43,15 @@ type GroupDMRepository interface {
 	GetAttachments(ctx context.Context, messageIDs []string) (map[string][]models.GroupDMAttachment, error)
 	GetAttachmentByFileURL(ctx context.Context, fileURL string) (*models.GroupDMAttachment, error)
 	GetAttachmentFileURLsByGroup(ctx context.Context, groupID string) ([]string, error)
+}
+
+// GroupNotificationDelivery serializes committed metadata push with revocation.
+type GroupNotificationDelivery interface {
+	DeliverCommittedGroupNotifications(context.Context, string, string, func(*models.Notification)) error
+}
+
+// GroupDMStore retains production integrations at the factory boundary.
+type GroupDMStore interface {
+	GroupDMRepository
+	GroupNotificationDelivery
 }

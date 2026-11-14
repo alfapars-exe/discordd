@@ -1,0 +1,20 @@
+{
+  "scope": "RF05 AST query inventory explicit constant resolution",
+  "regression": "Same-file package/local string constants and shadowed query failed to resolve before fix; mutable and dynamic expressions must remain unresolved.",
+  "validation": {
+    "command": "go test ./scripts/query-inventory/main.go ./scripts/query-inventory/main_test.go",
+    "exit": 0,
+    "tests": 3
+  },
+  "inventory": {
+    "parsed_files": 182,
+    "literal_calls": 659,
+    "constant_calls": 31,
+    "unresolved_calls": 273
+  },
+  "limits": [
+    "Method-name candidates do not establish receiver typing or execution",
+    "Cross-file/imported/implicit constants remain unresolved",
+    "Full family/fixture mapping and RF05 closure remain open"
+  ]
+}

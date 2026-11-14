@@ -18,12 +18,66 @@ import (
 
 type batchAppLogRepo struct {
 	fakeAppLogRepo
-	batchCalls int
-	block      bool
+	batchCalls    int
+	block         bool
+	blocked       chan struct{}
+	signalBlocked sync.Once
+}
+
+type partialAppLogRepo struct {
+	fakeAppLogRepo
+	calls, failAt int
+}
+
+func (r *partialAppLogRepo) Insert(ctx context.Context, row *models.AppLog) error {
+	r.calls++
+	if r.calls == r.failAt {
+		return errors.New("storage unavailable")
+	}
+	return r.fakeAppLogRepo.Insert(ctx, row)
+}
+
+func TestAppLogPartialFallbackCountsOnlyUnwrittenOccurrences(t *testing.T) {
+	for _, tc := range []struct {
+		failAt int
+		lost   uint64
+	}{{1, 6}, {2, 3}, {3, 1}, {4, 0}} {
+		t.Run(fmt.Sprintf("fail-at-%d", tc.failAt), func(t *testing.T) {
+			repo := &partialAppLogRepo{failAt: tc.failAt}
+			service := NewAppLogService(repo, nil).(*appLogService)
+			var pending []pendingAppLog
+			for i, count := range []int{3, 2, 1} {
+				for range count {
+					pending = append(pending, pendingAppLog{entry: models.AppLog{Message: fmt.Sprintf("group-%d", i), Level: models.LogLevelError, OccurrenceCount: 1}, metadata: map[string]string{}})
+				}
+			}
+			service.flush(context.Background(), pending)
+			if got := service.Health().FailedEvents; got != tc.lost {
+				t.Fatalf("failed events=%d, want only unwritten occurrences=%d", got, tc.lost)
+			}
+			var saved uint64
+			for _, row := range repo.inserts {
+				saved += uint64(row.OccurrenceCount)
+			}
+			if saved+tc.lost != uint64(len(pending)) {
+				t.Fatalf("saved=%d lost=%d total=%d", saved, tc.lost, len(pending))
+			}
+			wantFailures := uint64(1)
+			if tc.lost == 0 {
+				wantFailures = 0
+			}
+			if got := service.Health().WriteFailures; got != wantFailures {
+				t.Fatalf("write failures=%d, want=%d", got, wantFailures)
+			}
+		})
+	}
 }
 
 func (r *batchAppLogRepo) InsertBatch(ctx context.Context, rows []models.AppLog) (int64, error) {
 	if r.block {
+		if r.blocked != nil {
+			r.signalBlocked.Do(func() { close(r.blocked) })
+		}
 		<-ctx.Done()
 		return 0, ctx.Err()
 	}
@@ -36,7 +90,7 @@ func (r *batchAppLogRepo) InsertBatch(ctx context.Context, rows []models.AppLog)
 
 func TestAppLogPipelinePriorityGroupingAndOccurrenceTime(t *testing.T) {
 	repo := &batchAppLogRepo{}
-	svc := NewAppLogService(repo).(*appLogService)
+	svc := NewAppLogService(repo, repo).(*appLogService)
 	for i := 0; i < cap(svc.ch); i++ {
 		svc.Log(context.Background(), models.LogLevelInfo, models.LogCategoryClient, nil, nil, "telemetry", nil)
 	}
@@ -81,7 +135,7 @@ func TestAppLogPipelinePriorityGroupingAndOccurrenceTime(t *testing.T) {
 }
 
 func TestAppLogQueuesRemainBoundedAndErrorHasReservedCapacity(t *testing.T) {
-	s := NewAppLogService(&fakeAppLogRepo{}).(*appLogService)
+	s := NewAppLogService(&fakeAppLogRepo{}, nil).(*appLogService)
 	for i := 0; i < cap(s.ch)+10; i++ {
 		s.Log(context.Background(), models.LogLevelInfo, models.LogCategoryClient, nil, nil, "info", nil)
 	}
@@ -99,7 +153,7 @@ func TestAppLogQueuesRemainBoundedAndErrorHasReservedCapacity(t *testing.T) {
 
 func TestAppLogFailedStorageDoesNotBlockEnqueueOrShutdown(t *testing.T) {
 	r := &batchAppLogRepo{block: true}
-	s := NewAppLogService(r).(*appLogService)
+	s := NewAppLogService(r, r).(*appLogService)
 	start := time.Now()
 	for i := 0; i < 64; i++ {
 		s.Log(context.Background(), models.LogLevelError, models.LogCategoryGeneral, nil, nil, fmt.Sprint(i), nil)
@@ -120,7 +174,7 @@ func TestAppLogFailedStorageDoesNotBlockEnqueueOrShutdown(t *testing.T) {
 
 func TestAppLogConcurrentStopAndSizeLimit(t *testing.T) {
 	r := &batchAppLogRepo{}
-	s := NewAppLogService(r).(*appLogService)
+	s := NewAppLogService(r, r).(*appLogService)
 	s.Start()
 	var wg sync.WaitGroup
 	for i := 0; i < 8; i++ {
@@ -145,7 +199,7 @@ func TestAppLogConcurrentStopAndSizeLimit(t *testing.T) {
 
 func TestAppLogNoRetryOfFailedBatch(t *testing.T) {
 	r := &batchAppLogRepo{block: true}
-	s := NewAppLogService(r).(*appLogService)
+	s := NewAppLogService(r, r).(*appLogService)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	s.flush(ctx, []pendingAppLog{{entry: models.AppLog{Message: "fail", Level: models.LogLevelError, OccurrenceCount: 1}, metadata: map[string]string{}}})
@@ -155,7 +209,7 @@ func TestAppLogNoRetryOfFailedBatch(t *testing.T) {
 }
 
 func BenchmarkAppLogEnqueue(b *testing.B) {
-	s := NewAppLogService(&fakeAppLogRepo{}).(*appLogService)
+	s := NewAppLogService(&fakeAppLogRepo{}, nil).(*appLogService)
 	ctx := pkg.WithRequestID(context.Background(), "benchmark-request")
 	meta := map[string]string{"component": "http", "event_code": "HTTP_INTERNAL", "err": "connection unavailable"}
 	b.ReportAllocs()
@@ -169,10 +223,23 @@ func TestAppLogRequestLatencyUnderStorageFailure(t *testing.T) {
 	for _, mode := range []string{"disabled", "healthy", "unavailable"} {
 		t.Run(mode, func(t *testing.T) {
 			repo := &batchAppLogRepo{block: mode == "unavailable"}
-			svc := NewAppLogService(repo).(*appLogService)
+			svc := NewAppLogService(repo, repo).(*appLogService)
+			if repo.block {
+				repo.blocked = make(chan struct{})
+			}
 			if mode != "disabled" {
 				svc.Start()
 				defer svc.Stop()
+			}
+			if repo.block {
+				for range appLogBatchSize {
+					svc.Log(context.Background(), models.LogLevelError, models.LogCategoryGeneral, nil, nil, "prime writer", nil)
+				}
+				select {
+				case <-repo.blocked:
+				case <-time.After(5 * time.Second):
+					t.Fatal("writer never reached blocked repository")
+				}
 			}
 			ctx := pkg.WithRequestID(context.Background(), "load-request")
 			req := httptest.NewRequest("POST", "/diagnostic", nil).WithContext(ctx)
@@ -200,5 +267,14 @@ func TestAppLogRequestLatencyUnderStorageFailure(t *testing.T) {
 				t.Fatalf("DB outage affected request latency: %s", p95)
 			}
 		})
+	}
+}
+
+func TestAppLogExplicitSingleWriterDoesNotDiscoverBatchCapability(t *testing.T) {
+	repo := &batchAppLogRepo{}
+	service := NewAppLogService(repo, nil).(*appLogService)
+	service.flush(context.Background(), []pendingAppLog{{entry: models.AppLog{Level: models.LogLevelError, Message: "single", OccurrenceCount: 1}, metadata: map[string]string{}}})
+	if repo.batchCalls != 0 || len(repo.inserts) != 1 {
+		t.Fatal("single writer rediscovered batch capability or lost row")
 	}
 }

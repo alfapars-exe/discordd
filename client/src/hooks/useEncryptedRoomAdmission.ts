@@ -30,6 +30,7 @@ export function useEncryptedRoomAdmission(options: Options) {
   const tokenOwner = mediaTokenSubject(options.token);
   const latest = useRef(options);
   useLayoutEffect(() => { latest.current = options; });
+  const activeBinding = useRef<Binding | null>(null);
   const [binding, setBinding] = useState<Binding | null>(null);
   const [, changed] = useState(0);
   const [reconnectRevision, reconnect] = useState(0);
@@ -38,14 +39,24 @@ export function useEncryptedRoomAdmission(options: Options) {
   useLayoutEffect(() => {
     if (!enabled || !worker) return;
     const authScope = JSON.stringify(getAuthSessionSnapshot());
+    const reportSetupFailure = (error: unknown) => {
+      let active = true;
+      queueMicrotask(() => {
+        if (!active || JSON.stringify(getAuthSessionSnapshot()) !== authScope) return;
+        setRoomFailure({ scope, error });
+        latest.current.onError(error);
+      });
+      return () => { active = false; };
+    };
     if (!tokenOwner || tokenOwner !== getAuthSessionSnapshot().ownerId) {
-      const error = new VoiceFailure("session");
-      queueMicrotask(() => { if (latest.current.scope === scope) { setRoomFailure({ scope, error }); latest.current.onError(error); } });
-      return;
+      return reportSetupFailure(new VoiceFailure("session"));
     }
     let room: Room;
-    try { room = new Room({ ...latest.current.roomOptions, e2ee: { keyProvider, worker } }); }
-    catch (error) { queueMicrotask(() => { if (latest.current.enabled && latest.current.scope === scope) { setRoomFailure({ scope, error }); latest.current.onError(error); } }); return; }
+    try {
+      room = new Room({ ...latest.current.roomOptions, e2ee: { keyProvider, worker } });
+    } catch (error) {
+      return reportSetupFailure(error);
+    }
     const record: Binding = { room,
       scope, active: true, admitted: false, ready: false, keyScope: "", revision: 0, error: null, paused: new Map(), pending: new Set(), captureLease:registerCaptureAdmission(room.localParticipant,()=>record.active&&record.ready&&!record.error&&latest.current.keyReady&&latest.current.keyScope===record.keyScope&&JSON.stringify(getAuthSessionSnapshot())===authScope&&latest.current.isCurrentSource?.()!==false) };
     const pause = (publication: LocalTrackPublication) => {
@@ -120,7 +131,7 @@ export function useEncryptedRoomAdmission(options: Options) {
       record.active = false; record.ready = false; record.revision++; pauseAll();record.captureLease.retire(); void record.room.disconnect(); changed((value) => value + 1);
     };
     const ownerSubscription = subscribeAuthOwnerChanges(retireAuth), generationSubscription = subscribeAuthGenerationChanges(retireAuth);
-    queueMicrotask(() => { if (record.active && JSON.stringify(getAuthSessionSnapshot()) === authScope) { setRoomFailure(null); setBinding(record); } });
+    queueMicrotask(() => { if (record.active && JSON.stringify(getAuthSessionSnapshot()) === authScope) { activeBinding.current = record; setRoomFailure(null); setBinding(record); } });
     return () => {
       record.active = false; record.ready = false; record.revision++; pauseAll();record.captureLease.retire();
       ownerSubscription(); generationSubscription();
@@ -134,8 +145,8 @@ export function useEncryptedRoomAdmission(options: Options) {
   }, [enabled, scope, keyProvider, worker, tokenOwner]);
 
   useLayoutEffect(() => {
-    if (!binding || !binding.active || binding.scope !== scope || !enabled) return;
-    const record = binding;
+    const record = activeBinding.current;
+    if (!record || record !== binding || !record.active || record.scope !== scope || !enabled) return;
     const revision = ++record.revision;
     const authScope = JSON.stringify(getAuthSessionSnapshot());
     record.ready = false;record.captureLease.close();

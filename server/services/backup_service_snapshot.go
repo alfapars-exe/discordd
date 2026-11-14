@@ -27,8 +27,23 @@ func (b *BackupService) runBackup() {
 // shutdown grace window. Errors are logged but do not propagate; each step's
 // failure is independent of the others.
 func (b *BackupService) runBackupCore(dbOnly bool) {
+	ctx, finish, accepted := b.beginBackupOperation(context.Background())
+	if !accepted {
+		return
+	}
+	defer finish()
+	b.runBackupContext(ctx, dbOnly)
+}
+
+func (b *BackupService) runBackupContext(ctx context.Context, dbOnly bool) {
+	if ctx.Err() != nil {
+		return
+	}
 	b.backupMu.Lock()
 	defer b.backupMu.Unlock()
+	if ctx.Err() != nil {
+		return
+	}
 
 	start := time.Now()
 	backupLogger.Info("cycle start", "db_only", dbOnly)
@@ -55,47 +70,10 @@ func (b *BackupService) runBackupCore(dbOnly bool) {
 		// VACUUM INTO refuses an existing destination — remove any leftover
 		// from a previous failed run before the new snapshot.
 		_ = os.Remove(snapshotPath)
-		dbStart := time.Now()
-		if err := b.snapshotSQLite(snapshotPath); err != nil {
-			b.fail("sqlite snapshot", err)
-			// Don't bail — still try to mirror uploads. DB snapshot might
-			// fail for a transient lock; uploads sync is independent.
-		} else {
-			backupLogger.Info("sqlite snapshot ok", "duration", time.Since(dbStart))
-		}
+		// Keep cleanup under backupMu, including cancellation/error exits.
+		defer func() { _ = os.Remove(snapshotPath) }()
+		b.backupDatabaseSnapshot(ctx, snapshotPath)
 
-		// Verify BEFORE promote. The upload below overwrites
-		// `latest/db/hichat.db` in place, so shipping an unverified
-		// snapshot would replace the last known-good backup with a corrupt
-		// one — and nothing would notice until a restore months later, at
-		// which point every copy in `latest/` is already bad. Failing the
-		// cycle here costs one hour of recovery point; skipping the check
-		// can cost the whole backup.
-		//
-		// context.Background (not svcCtx) deliberately: Shutdown() cancels
-		// svcCtx before running its final cycle. See the svcCtx field doc.
-		if _, err := os.Stat(snapshotPath); err == nil {
-			if err := b.verifyDBIntegrity(context.Background(), snapshotPath); err != nil {
-				b.fail("snapshot integrity check", err)
-			} else {
-				// Upload DB snapshot — single file `cp` to the bucket's
-				// `db/hichat.db` path. Overwrite-in-place; HF Buckets are mutable.
-				dbUploadStart := time.Now()
-				if err := b.hfCopy(snapshotPath, "db/hichat.db"); err != nil {
-					b.fail("hf cp db", err)
-				} else {
-					backupLogger.Info("db upload ok", "duration", time.Since(dbUploadStart))
-					// Versioned history: a second, dated copy of the same
-					// verified bytes. Only after `latest/` succeeded — the
-					// live mirror is the priority, history is the bonus.
-					b.rotateDailySnapshot(context.Background(), snapshotPath)
-				}
-			}
-		}
-
-		// Cleanup: remove the local snapshot so it doesn't accumulate on
-		// /data between cycles. The next run rebuilds from scratch.
-		_ = os.Remove(snapshotPath)
 	}
 
 	// 3. Copy uploads without deletion: an empty or unavailable mount must
@@ -103,9 +81,9 @@ func (b *BackupService) runBackupCore(dbOnly bool) {
 	//    This is independent of the database backend.
 	//    Skipped on the shutdown (dbOnly) path so the critical DB upload
 	//    never starves inside HF's limited shutdown grace window.
-	if !dbOnly {
+	if !dbOnly && ctx.Err() == nil {
 		uploadsStart := time.Now()
-		if err := b.hfSyncDir(b.cfg.UploadDir, "uploads"); err != nil {
+		if err := b.hfSyncDir(ctx, b.cfg.UploadDir, "uploads"); err != nil {
 			b.fail("hf sync uploads", err)
 		} else {
 			backupLogger.Info("uploads sync ok", "duration", time.Since(uploadsStart))
@@ -121,6 +99,54 @@ func (b *BackupService) runBackupCore(dbOnly bool) {
 	})
 }
 
+func (b *BackupService) backupDatabaseSnapshot(ctx context.Context, snapshotPath string) {
+	dbStart := time.Now()
+	if err := b.snapshotSQLite(ctx, snapshotPath); err != nil {
+		b.fail("sqlite snapshot", err)
+		// Don't bail — still try to mirror uploads. DB snapshot might
+		// fail for a transient lock; uploads sync is independent.
+	} else {
+		backupLogger.Info("sqlite snapshot ok", "duration", time.Since(dbStart))
+	}
+
+	if ctx.Err() != nil {
+		return
+	}
+
+	b.promoteVerifiedSnapshot(ctx, snapshotPath)
+}
+
+func (b *BackupService) promoteVerifiedSnapshot(ctx context.Context, snapshotPath string) {
+	// Verify BEFORE promote. The upload below overwrites
+	// `latest/db/hichat.db` in place, so shipping an unverified
+	// snapshot would replace the last known-good backup with a corrupt
+	// one — and nothing would notice until a restore months later, at
+	// which point every copy in `latest/` is already bad. Failing the
+	// cycle here costs one hour of recovery point; skipping the check
+	// can cost the whole backup.
+	//
+	// The final cycle receives its caller context; background cycles
+	// receive service cancellation, including integrity and rotation.
+	if _, err := os.Stat(snapshotPath); err == nil {
+		if err := b.verifyDBIntegrity(ctx, snapshotPath); err != nil {
+			b.fail("snapshot integrity check", err)
+		} else {
+			// Upload DB snapshot — single file `cp` to the bucket's
+			// `db/hichat.db` path. Overwrite-in-place; HF Buckets are mutable.
+			dbUploadStart := time.Now()
+			if err := b.hfCopy(ctx, snapshotPath, "db/hichat.db"); err != nil {
+				b.fail("hf cp db", err)
+			} else {
+				backupLogger.Info("db upload ok", "duration", time.Since(dbUploadStart))
+				// Versioned history: a second, dated copy of the same
+				// verified bytes. Only after `latest/` succeeded — the
+				// live mirror is the priority, history is the bonus.
+				b.rotateDailySnapshot(ctx, snapshotPath)
+			}
+		}
+	}
+}
+
 // snapshotSQLite runs `sqlite3 <db> 'VACUUM INTO <dest>'` to produce a
 // crash-consistent snapshot of the live database.
 //
@@ -128,9 +154,12 @@ func (b *BackupService) runBackupCore(dbOnly bool) {
 // while the source DB is open — it acquires a read lock, copies pages
 // into a new file, and releases. The resulting file is a self-contained
 // DB with no WAL sidecar.
-func (b *BackupService) snapshotSQLite(destPath string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+func (b *BackupService) snapshotSQLite(parent context.Context, destPath string) error {
+	ctx, cancel := context.WithTimeout(parent, 5*time.Minute)
 	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 
 	// Quoted-path SQL — Go's exec doesn't run a shell, so we pass the
 	// VACUUM INTO statement as a single arg with single-quoted path.
@@ -148,17 +177,20 @@ func (b *BackupService) snapshotSQLite(destPath string) error {
 
 // hfCopy uploads a single file to the bucket at the given subpath
 // (relative to the bucket's `latest/` prefix). Uses `hf buckets cp`.
-func (b *BackupService) hfCopy(srcFile, destSubpath string) error {
-	return b.hfCopyURI(srcFile, fmt.Sprintf("hf://buckets/%s/latest/%s", b.cfg.HFBucket, destSubpath))
+func (b *BackupService) hfCopy(ctx context.Context, srcFile, destSubpath string) error {
+	return b.hfCopyURI(ctx, srcFile, fmt.Sprintf("hf://buckets/%s/latest/%s", b.cfg.HFBucket, destSubpath))
 }
 
 // hfCopyURI is the single-file upload primitive behind hfCopy and the
 // daily rotation. It takes a fully-qualified `hf://` destination because
 // the dated snapshots live under `daily/`, outside the `latest/` prefix
 // that hfCopy hardcodes.
-func (b *BackupService) hfCopyURI(srcFile, destURI string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+func (b *BackupService) hfCopyURI(parent context.Context, srcFile, destURI string) error {
+	ctx, cancel := context.WithTimeout(parent, 30*time.Minute)
 	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 
 	out, err := b.runCmd(ctx, b.hfEnv(), "hf", "buckets", "cp", srcFile, destURI)
 	if err != nil {

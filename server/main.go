@@ -16,7 +16,6 @@ import (
 	"github.com/argeinfina/hichat/config"
 	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/middleware"
-	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/pkg/crypto"
 	"github.com/argeinfina/hichat/pkg/i18n"
@@ -77,27 +76,8 @@ func main() {
 	// the boot log instead of buried inside per-track Enqueue failures.
 	logMusicBotDeps()
 
-	// 2a. Boot-time restore from HF Bucket — runs BEFORE database.New so
-	//     migrations land on the recovered state, not a fresh schema.
-	//     No-op when (a) HF_TOKEN unset, (b) DSN is remote libSQL/Turso, or
-	//     (c) the local DB file already has data. See services/backup_service.go
-	//     for the exact predicate. Failure is logged but does not abort boot
-	//     — worst case we start with an empty DB and the next periodic
-	//     snapshot (10c below) takes over.
-	//
-	//     A throwaway BackupService instance is used here because
-	//     initServices builds the long-lived one a few steps down and
-	//     BackupService is stateless. Holding two for ~10 seconds is
-	//     cheaper than threading a parameter through initServices.
-	{
-		boot := services.NewBackupService(cfg.Backup)
-		restoreCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-		if err := boot.Restore(restoreCtx); err != nil {
-			bootLogger.Error("backup restore failed, continuing with whatever DB is on disk", "err", pkg.ErrText(err))
-		}
-		cancel()
-	}
-
+	// PostgreSQL is required above and owns durable database recovery.
+	// Legacy SQLite snapshot restore remains an explicit operator/test API.
 	// 2b. Database
 	migrationsFS, err := fs.Sub(database.EmbeddedMigrations, "migrations")
 	if err != nil {
@@ -115,10 +95,13 @@ func main() {
 		logx.Fatal("boot", "another backend owns this database", err)
 	}
 	defer func() { _ = owner.Close() }()
-	go database.WatchBackendOwner(ownerCtx, owner, func() {
-		bootLogger.Error("backend ownership lost; stopping service")
-		os.Exit(1)
+	stopOwnerWatch := startBackendOwnerWatch(ownerCtx, func(watchCtx context.Context) {
+		database.WatchBackendOwner(watchCtx, owner, func() {
+			bootLogger.Error("backend ownership lost; stopping service")
+			os.Exit(1)
+		})
 	})
+	defer stopOwnerWatch()
 
 	// Is referential integrity actually enforced? We could not previously
 	// answer that for production: foreign_keys(1) is only set on the local
@@ -214,19 +197,18 @@ func main() {
 
 	// 9. Service layer (order matters: channelPerm -> voice -> p2pCall -> rest)
 	svcs, limiters, metricsCollector := initServices(db.Conn, repos, hub, cfg, encryptionKey, readiness)
+	defer stopServiceCacheWorkers(svcs)
+	defer limiters.Stop()
 
-	if sink, ok := svcs.AppLog.(interface {
-		ConsumeRecord(context.Context, slog.Record)
-	}); ok {
-		logx.SetAppSink(sink.ConsumeRecord)
+	logx.SetAppSink(svcs.AppLog.ConsumeRecord)
+
+	// 9b. Complete the Hub/service cycle before callbacks or Run can dispatch.
+	if err := hub.ConfigureRuntime(ws.RuntimeDependencies{
+		AppLogger:            svcs.AppLog,
+		VoiceAdminAuthorizer: newVoiceAdminAuthorizer(svcs.Voice, svcs.ChannelPermission),
+	}); err != nil {
+		logx.Fatal("boot", "invalid hub runtime dependencies", err)
 	}
-
-	// 9b. Wire structured app logger into Hub and services
-	hub.SetAppLogger(svcs.AppLog)
-	svcs.Voice.SetAppLogger(svcs.AppLog)
-	svcs.P2PCall.SetAppLogger(svcs.AppLog)
-	svcs.Auth.SetAppLogger(svcs.AppLog)
-	svcs.Backup.SetAppLogger(svcs.AppLog)
 
 	// 9c. Audit logger is no longer wired here via setter: voice/member/role/
 	// channel/server/message services all take it as a NewXService(...)
@@ -234,25 +216,12 @@ func main() {
 	// forgets the wiring fails to compile instead of silently dropping every
 	// audit event. See wiring_test.go for the completeness check this enables.
 
-	// SetPermInvalidator wiring happens after initRoutes below (step 12),
-	// not here: it fans out to both channelPermService (available now) and
-	// permMw (middleware.PermissionMiddleware, only constructed inside
-	// initRoutes) via services.NewMultiInvalidator, so it needs permMw's
-	// late binding — same pattern as svcs.AdminUser.SetUserCacheInvalidator(authMw)
-	// below.
-
 	// 9d. voiceService's member-timeout checker (repos.MemberTimeout) is now
 	// wired through NewVoiceService's constructor (initServices), same as
 	// messageService/reactionService — no setter call needed here anymore.
 
 	// 10. Hub callbacks (must be after services, before hub.Run)
 	stopPresenceDebounce := registerHubCallbacks(hub, repos.User, repos.DM, svcs.Voice, svcs.P2PCall, repos.Channel, repos.Server, svcs.ChannelPermission, svcs.GameActivity, svcs.OnlineFriendNotifier)
-
-	// 10a. WS-layer defense-in-depth authorizer for voice moderation events
-	// (admin mute/deafen, move, disconnect) — see voice_authorizer.go and
-	// ws/hub_callbacks.go's VoiceAdminAuthorizer doc comment. Without this,
-	// authorizeVoiceModeration always returns true (fail-open).
-	hub.SetVoiceAdminAuthorizer(newVoiceAdminAuthorizer(svcs.Voice, svcs.ChannelPermission))
 
 	// hub.Run is the single goroutine processing every WS register/unregister
 	// for the whole server — a panic here would otherwise crash the entire
@@ -265,6 +234,20 @@ func main() {
 
 	// Voice AFK checker — kicks idle users based on per-server timeout
 	svcs.Voice.StartAFKChecker()
+	stopVoiceMaintenance := func() {
+		svcs.Voice.StopMaintenance()
+	}
+	defer stopVoiceMaintenance()
+	stopVoiceUsageDelivery := svcs.Voice.StartVoiceUsageDelivery(ownerCtx)
+	defer stopVoiceUsageDelivery()
+	stopVoiceUsageProducers := func() {
+		svcs.Voice.ShutdownUsageProducers()
+	}
+	defer stopVoiceUsageProducers()
+	stopVoiceSessions := func() {
+		svcs.Voice.ShutdownVoiceSessions()
+	}
+	defer stopVoiceSessions()
 
 	// 10b. Metrics collector — background goroutine polling LiveKit instances
 	metricsCollector.Start()
@@ -284,19 +267,14 @@ func main() {
 	// 10f. Runtime stats logger — periodic process metrics into the structured
 	// log stream (no external scraper on a single-instance HF Space) AND into
 	// the durable runtime_telemetry rollup (P3.11, repos.RuntimeTelemetry).
-	stopRuntimeStats := startRuntimeStatsLogger(hub, db, time.Minute, repos.RuntimeTelemetry, httpStats, cfg.TelemetryRetentionDays, func() models.AppLogHealth {
-		if h, ok := svcs.AppLog.(interface{ Health() models.AppLogHealth }); ok {
-			return h.Health()
-		}
-		return models.AppLogHealth{}
-	})
+	stopRuntimeStats := startRuntimeStatsLogger(hub, db, time.Minute, repos.RuntimeTelemetry, httpStats, cfg.TelemetryRetentionDays, svcs.AppLog.Health)
 
 	// 10g. Maintenance sweeper — hourly purge of expired sessions and stale
 	// link-preview cache rows (audit P1-BD-04: DeleteExpired had no caller,
 	// so both tables grew without bound). The same pass runs a read-only
 	// orphan census; it logs a warning per affected table and deletes nothing.
 	stopMaintenance := startMaintenanceSweeper(repos.Session, repos.LinkPreview, db.Conn, time.Hour, repos.DataExport)
-	stopAuthMaintenance := services.StartAuthMaintenance(context.Background(), svcs.Auth)
+	stopAuthMaintenance := svcs.Auth.StartAuthMaintenance(context.Background())
 	defer stopAuthMaintenance()
 	stopAccountAssetCleanup := svcs.AccountAssetCleanup.Start(context.Background())
 	stopMessageReminders := svcs.ReminderWorker.Start(context.Background())
@@ -304,14 +282,14 @@ func main() {
 	stopServerEvents := svcs.ServerEventWorker.Start(context.Background())
 	stopFriendAnniversaries := svcs.FriendAnniversaryWorker.Start(context.Background())
 	stopEmailDelivery := svcs.EmailDelivery.Start(context.Background())
-	stopChannelDelivery := services.StartChannelDelivery(context.Background(), svcs.Message)
+	stopChannelDelivery := svcs.Message.StartChannelDelivery(context.Background())
 	defer stopChannelDelivery()
-	stopDMDelivery, dmDeliveryErr := services.StartDMDelivery(ownerCtx, svcs.DM)
+	stopDMDelivery, dmDeliveryErr := svcs.DM.StartDMDelivery(ownerCtx)
 	if dmDeliveryErr != nil {
 		logx.Fatal("boot", "failed to initialize DM outbox", dmDeliveryErr)
 	}
 	defer stopDMDelivery()
-	stopDMUploadCleanup := services.StartDMUploadCleanup(ownerCtx, svcs.DMUpload)
+	stopDMUploadCleanup := svcs.DMUpload.StartDMUploadCleanup(ownerCtx)
 	defer stopDMUploadCleanup()
 
 	// 10h. Readiness checker — polls the deep dependency checks every 30s and
@@ -329,15 +307,16 @@ func main() {
 	// owner-facing bot management endpoints (create/list/revoke), AND the
 	// read-only WS bot gateway (handler.go botValidator). Constructed before
 	// the handler layer so the WS handler can validate bot tokens.
-	botService := services.NewBotService(repository.NewBotRepository(db.Conn), hub)
-	botService.SetApplicationPermissionResolver(svcs.ChannelPermission)
+	botService := services.NewBotService(repository.NewBotRepository(db.Conn), services.BotRuntimeDependencies{Disconnecter: hub, Broadcaster: hub, Permissions: svcs.ChannelPermission, Memberships: hub})
 
 	// 11. Handler layer
 	h := initHandlers(svcs, repos, limiters, hub, cfg, encryptionKey, botService)
 
 	// 12. HTTP router + routes
 	mux := http.NewServeMux()
-	authMw, permMw := initRoutes(mux, h, svcs.Auth, repos.User, repos.Role, repos.Server, limiters.DeviceEnum, limiters.Refresh, botService)
+	authMw, permMw := initRoutes(mux, h, svcs.Auth, repos.User, repos.Role, repos.Server, limiters.DeviceEnum, limiters.Refresh, botService, svcs.AuthCache, svcs.PermissionCache)
+	defer authMw.Stop()
+	defer permMw.Stop()
 
 	// 12b. pprof debug endpoints (P3.12) — env-gated (HICHAT_PPROF=1) and,
 	// when enabled, double-gated behind auth + platform-admin. Registered
@@ -350,36 +329,9 @@ func main() {
 		logx.Fatal("boot", "music worker setup failed", err)
 	}
 
-	// Wire the auth user-cache invalidator into the admin user service so a
-	// platform ban / hard-delete / admin-status change drops the cached user
-	// row immediately, instead of letting a just-banned account keep making
-	// authenticated REST calls until the ~30s cache TTL expires (F-7).
-	svcs.AdminUser.SetUserCacheInvalidator(authMw)
+	// Identity writers and middleware already share their constructor-owned cache.
 
-	// Same wiring for the auth service itself: ChangePassword, ResetPassword,
-	// and LogoutAllDevices all call revokeAllSessions, which drops the
-	// cached user row so a bumped token_version is enforced on the next
-	// HTTP request instead of up to ~30s later.
-	svcs.Auth.SetUserCacheInvalidator(authMw)
-	// Profile writes must also be visible to the next authenticated /users/me
-	// read, rather than returning the pre-save cached profile for 30 seconds.
-	svcs.Member.SetUserCacheInvalidator(authMw)
-
-	// Wire the server-level permission cache (middleware/permission.go) into
-	// the same PermissionInvalidator fan-out as channelPermService's
-	// per-channel cache. permMw only exists after initRoutes runs, so this
-	// wiring can't happen inside initServices (services.NewMultiInvalidator
-	// is the composite; see permission.go's doc comment for what each call
-	// does). Wiring completes before the server accepts requests, so there
-	// is no window where a role/member write bypasses invalidation.
-	permInvalidator := services.NewMultiInvalidator(svcs.ChannelPermission, permMw)
-	if ownershipAuth, ok := svcs.Auth.(interface {
-		SetOwnershipInvalidator(services.PermissionInvalidator)
-	}); ok {
-		ownershipAuth.SetOwnershipInvalidator(permInvalidator)
-	}
-	svcs.Role.SetPermInvalidator(permInvalidator)
-	svcs.Member.SetPermInvalidator(permInvalidator)
+	// Permission fan-out already owns both caches before route construction.
 
 	// 13. Static file serving
 	registerStaticAndUploads(mux, cfg)
@@ -488,11 +440,11 @@ func main() {
 	}()
 
 	<-done
-	if stopper, ok := svcs.LinkPreview.(interface{ Stop() }); ok {
-		stopper.Stop()
+	if svcs.LinkPreview != nil {
+		svcs.LinkPreview.Stop()
 	}
-	if stopper, ok := svcs.OnlineFriendNotifier.(interface{ Stop() }); ok {
-		stopper.Stop()
+	if svcs.OnlineFriendNotifier != nil {
+		svcs.OnlineFriendNotifier.Stop()
 	}
 	bootLogger.Info("shutting down")
 
@@ -503,9 +455,7 @@ func main() {
 	// let the runtime SIGKILL the subprocesses mid-write anyway. Must still
 	// run before hub.Shutdown(), since Stop broadcasts a final
 	// IsActive=false state over the hub.
-	if stopper, ok := svcs.MusicBot.(services.MusicBotStopper); ok {
-		stopper.StopAll()
-	}
+	svcs.MusicBot.StopAll()
 	musicBridge.Close()
 
 	stopRuntimeStats()
@@ -528,10 +478,9 @@ func main() {
 	// comment for why an in-flight timer firing after shutdown begins is
 	// unsafe rather than merely wasteful.
 	stopPresenceDebounce()
+	stopVoiceMaintenance()
 	metricsCollector.Stop()
-	if fanout, ok := svcs.Voice.(interface{ ShutdownVoiceStateFanout() }); ok {
-		fanout.ShutdownVoiceStateFanout()
-	}
+	svcs.Voice.ShutdownVoiceStateFanout()
 	hub.Shutdown()
 
 	// Drain HTTP before stopping the log writer so in-flight failures retain
@@ -544,6 +493,19 @@ func main() {
 		_ = srv.Close()
 	}
 
+	// HTTP producers have drained; join delivery consumers before their log
+	// sinks and database close. Deferred cleanup still covers early returns.
+	stopChannelDelivery()
+	stopDMDelivery()
+	stopDMUploadCleanup()
+
+	stopVoiceUsageProducers()
+	stopVoiceSessions()
+	stopVoiceUsageDelivery()
+
+	// Join background backup logging before sinks close; final snapshot stays post-drain.
+	svcs.Backup.Stop()
+	h.Diagnostics.Stop()
 	logx.SetAppSink(nil)
 	svcs.AppLog.Stop()
 	svcs.AuditLog.Stop()
@@ -556,6 +518,9 @@ func main() {
 	svcs.Backup.Shutdown(backupShutdownCtx)
 	backupShutdownCancel()
 	logx.Flush(2 * time.Second)
+
+	// Join ownership probes before closing the pool or its dedicated session.
+	stopOwnerWatch()
 
 	if err := db.Close(); err != nil {
 		bootLogger.Error("db close failed", "err", pkg.ErrText(err))

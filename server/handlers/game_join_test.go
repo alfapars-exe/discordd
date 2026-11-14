@@ -2,10 +2,12 @@ package handlers
 
 import (
 	"context"
+	"github.com/argeinfina/hichat/pkg/ratelimit"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
@@ -78,7 +80,7 @@ func TestGameJoinHTTPAdmission(t *testing.T) {
 			if tc.mutate != nil {
 				tc.mutate(a, u, l)
 			}
-			h := NewGameJoinHandler(services.NewGameJoinService(nil, nil), a, u, l)
+			h := NewGameJoinHandler(services.NewGameJoinService(nil, nil, nil), a, u, l, newGameJoinTestLimiter(t))
 			r := httptest.NewRequest(http.MethodPost, "/api/game-join/tickets/consume", strings.NewReader(tc.body))
 			r.Header.Set("Authorization", "Bearer synthetic-access")
 			w := httptest.NewRecorder()
@@ -95,7 +97,7 @@ func TestGameJoinHTTPAdmission(t *testing.T) {
 
 func TestGameJoinTargetsRecheckSessionBeforeResponse(t *testing.T) {
 	a := &joinHTTPAuth{claims: models.TokenClaims{UserID: "viewer", SessionID: "session"}, revokeAt: 2}
-	h := NewGameJoinHandler(services.NewGameJoinService(nil, nil), a, &joinHTTPUsers{user: models.User{ID: "viewer"}}, &joinHTTPLifecycle{})
+	h := NewGameJoinHandler(services.NewGameJoinService(nil, nil, nil), a, &joinHTTPUsers{user: models.User{ID: "viewer"}}, &joinHTTPLifecycle{}, newGameJoinTestLimiter(t))
 	r := httptest.NewRequest(http.MethodPost, "/api/game-join/targets", strings.NewReader(`{"expected_user_id":"viewer","targets":[{"target_user_id":"host","context":"friend"}]}`))
 	r.Header.Set("Authorization", "Bearer synthetic-access")
 	w := httptest.NewRecorder()
@@ -103,4 +105,11 @@ func TestGameJoinTargetsRecheckSessionBeforeResponse(t *testing.T) {
 	if w.Code != http.StatusUnauthorized || a.calls != 2 {
 		t.Fatalf("revoked late session: status=%d checks=%d", w.Code, a.calls)
 	}
+}
+
+func newGameJoinTestLimiter(t *testing.T) *ratelimit.LoginRateLimiter {
+	t.Helper()
+	limiter := ratelimit.NewLoginRateLimiter(60, time.Minute)
+	t.Cleanup(limiter.Stop)
+	return limiter
 }

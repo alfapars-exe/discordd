@@ -30,9 +30,8 @@ func (r *recordingGameActivityInvalidator) ServerDeleted(_ context.Context, serv
 }
 
 func TestBlockAndUnblockImmediatelyInvalidateGameActivityRelationship(t *testing.T) {
-	f := newBlockSvcFixture(t)
 	invalidator := &recordingGameActivityInvalidator{}
-	f.svc.(*blockService).SetGameActivityPrivacyInvalidator(invalidator)
+	f := newBlockSvcFixtureWithActivity(t, invalidator)
 	if err := f.svc.BlockUser(context.Background(), "alice", "bob"); err != nil {
 		t.Fatal(err)
 	}
@@ -51,9 +50,8 @@ func TestBlockAndUnblockImmediatelyInvalidateGameActivityRelationship(t *testing
 }
 
 func TestFriendshipAcceptAndRemoveImmediatelyInvalidateGameActivityRelationship(t *testing.T) {
-	f := newFriendSvcFixture(t)
 	invalidator := &recordingGameActivityInvalidator{}
-	f.svc.(*friendshipService).SetGameActivityPrivacyInvalidator(invalidator)
+	f := newFriendSvcFixtureWithActivity(t, invalidator)
 	f.setByID(pendingFriendship("alice", "bob"))
 	f.friends.UpdateStatusFn = func(context.Context, string, models.FriendshipStatus) error { return nil }
 	f.notif.MarkFriendRequestReadFn = func(context.Context, string, string) ([]string, error) { return nil, nil }
@@ -76,7 +74,7 @@ func TestFriendshipAcceptAndRemoveImmediatelyInvalidateGameActivityRelationship(
 }
 
 func TestGameActivityMembershipRemovedIsIdempotentForUnknownViewerGrant(t *testing.T) {
-	svc := NewGameActivityService(&activityPolicyStub{}, nil, nil, nil)
+	svc := NewGameActivityService(&activityPolicyStub{}, nil, nil, nil, "")
 	// No grants are present; a committed removal still reconciles the target
 	// safely and must not panic on missing optional readers.
 	svc.MembershipRemoved(context.Background(), "server", "user")

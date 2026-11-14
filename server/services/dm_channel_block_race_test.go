@@ -13,23 +13,18 @@ import (
 )
 
 type dmCreateBlockBarrier struct {
-	repository.DMRepository
+	repository.DMRequestStore
 	before func()
 }
 
 func (r dmCreateBlockBarrier) CreateChannel(ctx context.Context, ch *models.DMChannel) error {
 	r.before()
-	return r.DMRepository.CreateChannel(ctx, ch)
+	return r.DMRequestStore.CreateChannel(ctx, ch)
 }
 
 func (r dmCreateBlockBarrier) CreateChannelUnblocked(ctx context.Context, ch *models.DMChannel) (bool, error) {
 	r.before()
-	if writer, ok := r.DMRepository.(interface {
-		CreateChannelUnblocked(context.Context, *models.DMChannel) (bool, error)
-	}); ok {
-		return writer.CreateChannelUnblocked(ctx, ch)
-	}
-	return true, r.DMRepository.CreateChannel(ctx, ch)
+	return r.DMRequestStore.CreateChannelUnblocked(ctx, ch)
 }
 
 // A deterministic interleaving of two real requests: block commits after the
@@ -48,7 +43,7 @@ func TestDMChannelConcurrentBlockAfterPrecheckPreventsInsertAndEvent(t *testing.
 		return &models.User{ID: id, DMPrivacy: "everyone"}, nil
 	}
 	f.block.IsBlockedFn = func(context.Context, string, string) (bool, error) { return false, nil }
-	f.svc.(*dmService).dmRepo = dmCreateBlockBarrier{DMRepository: repo, before: func() {
+	f.svc.(*dmService).dmRepo = dmCreateBlockBarrier{DMRequestStore: repo, before: func() {
 		now := time.Now().UTC()
 		if _, err := blocks.CreateBlockAtomic(context.Background(), &models.Friendship{ID: "late-block", UserID: "bob", FriendID: "alice", Status: models.FriendshipStatusBlocked, CreatedAt: now, UpdatedAt: now}); err != nil {
 			t.Fatal(err)

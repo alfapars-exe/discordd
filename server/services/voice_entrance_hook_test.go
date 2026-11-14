@@ -51,7 +51,7 @@ func TestJoinChannel_EntranceHook_FreshJoinFiresOnce(t *testing.T) {
 	svc, hub := newTestVoiceService()
 	hub.BroadcastToServerFn = func(_ string, _ ws.Event) {}
 	hook := newRecordingEntranceHook()
-	svc.SetEntranceHook(hook)
+	testVoiceState(svc).entranceHook = hook
 
 	if err := svc.JoinChannel("u1", "alice", "Alice", "", "ch1", false, false); err != nil {
 		t.Fatalf("join failed: %v", err)
@@ -64,7 +64,7 @@ func TestJoinChannel_EntranceHook_SameChannelRejoinDoesNotFire(t *testing.T) {
 	svc, hub := newTestVoiceService()
 	hub.BroadcastToServerFn = func(_ string, _ ws.Event) {}
 	hook := newRecordingEntranceHook()
-	svc.SetEntranceHook(hook)
+	testVoiceState(svc).entranceHook = hook
 
 	if err := svc.JoinChannel("u1", "alice", "Alice", "", "ch1", false, false); err != nil {
 		t.Fatalf("join failed: %v", err)
@@ -84,7 +84,7 @@ func TestJoinChannel_EntranceHook_RejectedJoinDoesNotFire(t *testing.T) {
 	})
 	hub.BroadcastToServerFn = func(_ string, _ ws.Event) {}
 	hook := newRecordingEntranceHook()
-	svc.SetEntranceHook(hook)
+	testVoiceState(svc).entranceHook = hook
 
 	if err := svc.JoinChannel("intruder", "x", "X", "", "ch1", false, false); err == nil {
 		t.Fatal("expected authorizeJoin to reject a non-member")
@@ -96,7 +96,7 @@ func TestJoinChannel_EntranceHook_ChannelSwitchFiresForNewChannel(t *testing.T) 
 	svc, hub := newTestVoiceService()
 	hub.BroadcastToServerFn = func(_ string, _ ws.Event) {}
 	hook := newRecordingEntranceHook()
-	svc.SetEntranceHook(hook)
+	testVoiceState(svc).entranceHook = hook
 
 	if err := svc.JoinChannel("u1", "alice", "Alice", "", "ch1", false, false); err != nil {
 		t.Fatalf("join failed: %v", err)
@@ -112,7 +112,7 @@ func TestJoinChannel_EntranceHook_ChannelSwitchFiresForNewChannel(t *testing.T) 
 func TestJoinChannel_EntranceHook_NilHookIsSafe(t *testing.T) {
 	svc, hub := newTestVoiceService()
 	hub.BroadcastToServerFn = func(_ string, _ ws.Event) {}
-	svc.SetEntranceHook(nil)
+	testVoiceState(svc).entranceHook = nil
 
 	if err := svc.JoinChannel("u1", "alice", "Alice", "", "ch1", false, false); err != nil {
 		t.Fatalf("join with nil entrance hook failed: %v", err)

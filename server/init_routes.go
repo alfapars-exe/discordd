@@ -165,12 +165,23 @@ func initRoutes(
 	deviceEnumLimiter middleware.IPRateLimiter,
 	refreshLimiter middleware.IPRateLimiter,
 	botService *services.BotService,
+	authCache *middleware.AuthUserCache,
+	permissionCache *middleware.PermissionCache,
 ) (*middleware.AuthMiddleware, *middleware.PermissionMiddleware) {
 	// Middleware. *services.BotService satisfies middleware.BotTokenValidator
 	// (ValidateBotToken), so the same instance powers token validation here and
 	// the owner-facing bot management handler below — one source of truth.
-	authMw := middleware.NewAuthMiddleware(authService, userRepo, botService)
-	permMw := middleware.NewPermissionMiddleware(roleRepo)
+	authMw := middleware.NewAuthMiddleware(authService, userRepo, botService, authCache)
+	permMw := middleware.NewPermissionMiddleware(roleRepo, permissionCache)
+	// Until registration succeeds, this initializer owns both cleanup workers.
+	// A registrar panic must propagate unchanged after releasing those workers.
+	handedOff := false
+	defer func() {
+		if !handedOff {
+			authMw.Stop()
+			permMw.Stop()
+		}
+	}()
 	serverMw := middleware.NewServerMembershipMiddleware(serverRepo)
 	platformAdminMw := middleware.NewPlatformAdminMiddleware()
 
@@ -233,5 +244,6 @@ func initRoutes(
 	d.registerCosmeticRoutes()
 	d.registerWSRoutes()
 
+	handedOff = true
 	return authMw, permMw
 }

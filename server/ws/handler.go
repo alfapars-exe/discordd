@@ -270,7 +270,7 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) {
 	if sessionBound {
 		client.validateSession = validator.ValidateSession
 	}
-	h.hub.SetUserInfo(claims.UserID, claims.Username, displayName, avatarURL)
+	client.registrationProfile = &cachedUserInfo{Username: claims.Username, DisplayName: displayName, AvatarURL: avatarURL}
 
 	// Load user's server list for ready event + BroadcastToServer filtering
 	var readyServers []ReadyServerItem
@@ -317,20 +317,27 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) {
 		mutedChannelIDs = []string{}
 	}
 
-	h.hub.register <- client
+	if !h.hub.registerClient(r.Context(), client) {
+		_ = conn.Close()
+		return
+	}
+	// READY promises that this connection is visible to presence and event delivery.
+	select {
+	case <-client.registered:
+	case <-h.hub.stopped:
+		_ = conn.Close()
+		return
+	case <-r.Context().Done():
+		_ = conn.Close()
+		h.hub.unregisterClient(client)
+		return
+	}
 	if sessionBound {
-		select {
-		case <-client.registered:
-		case <-r.Context().Done():
-			_ = conn.Close()
-			h.hub.unregister <- client
-			return
-		}
 		// Close the authorization/registration race: if revoke ran before
 		// the client became visible to the hub, this second check catches it.
 		if err := validator.ValidateSession(r.Context(), claims.UserID, claims.SessionID); err != nil {
 			_ = conn.Close()
-			h.hub.unregister <- client
+			h.hub.unregisterClient(client)
 			return
 		}
 	}

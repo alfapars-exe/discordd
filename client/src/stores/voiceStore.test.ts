@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { useVoiceStore } from "./voiceStore";
 import { DEFAULT_SETTINGS } from "./slices/voiceSettingsSlice";
+import * as nativePlugins from "../utils/nativePlugins";
+import { ensureFreshToken } from "../api/client";
 import * as voiceApi from "../api/voice";
 import { isVoiceRecoveryAllowed, markVoiceActive } from "./shared/voiceRecovery";
 
@@ -841,9 +843,37 @@ describe("voiceStore", () => {
     expect(tokens.mock.calls.map(call => call[1])).toEqual(["new"]);
   });
 
+  it("keeps foreground join and leave usable when the background service rejects", async () => {
+    const start = vi.spyOn(nativePlugins, "startVoiceCallService").mockRejectedValue(new Error("denied"));
+    const stop = vi.spyOn(nativePlugins, "stopVoiceCallService").mockRejectedValue(new Error("denied"));
+    try {
+      vi.mocked(voiceApi.getVoiceToken).mockResolvedValueOnce({
+        success: true, data: { channel_id: "voice", token: "test", url: "wss://example.test" },
+      });
+      expect(await useVoiceStore.getState().joinVoiceChannel("voice")).toBeTruthy();
+      expect(useVoiceStore.getState().currentVoiceChannelId).toBe("voice");
+      expect(start).toHaveBeenCalledOnce();
+      useVoiceStore.getState().leaveVoiceChannel();
+      expect(stop).toHaveBeenCalledOnce();
+      expect(useVoiceStore.getState().currentVoiceChannelId).toBeNull();
+    } finally {
+      start.mockRestore();
+      stop.mockRestore();
+    }
+  });
+
   describe("joinVoiceChannel — failure toasts", () => {
     beforeEach(() => {
       addToast.mockReset();
+    });
+
+    it("does not repeat token recovery based on digits in an API error message", async () => {
+      vi.mocked(ensureFreshToken).mockClear();
+      vi.mocked(voiceApi.getVoiceToken).mockResolvedValueOnce({
+        success: false, status: 503, error: "upstream unavailable (reference 4012)",
+      });
+      expect(await useVoiceStore.getState().joinVoiceChannel("voice")).toBeNull();
+      expect(ensureFreshToken).toHaveBeenCalledTimes(1);
     });
 
     it("returns null and toasts the timed-out-specific message when the server reports an active timeout", async () => {
@@ -930,4 +960,51 @@ it("retains manual intent on same-account call/channel and preference resets",()
  useVoiceStore.setState({isMuted:true,isDeafened:false,muteBeforeDeafen:null});useVoiceStore.getState().toggleDeafen();
  useVoiceStore.getState().leaveVoiceChannel();useVoiceStore.getState().resetAccountPreferences();
  expect(useVoiceStore.getState()).toMatchObject({isMuted:true,isDeafened:true,muteBeforeDeafen:true});useVoiceStore.getState().toggleDeafen();expect(useVoiceStore.getState().isMuted).toBe(true);
+});
+
+
+it("preserves active voice transport and media state during account preference hydration", () => {
+  resetStore();
+  const onLeave = vi.fn();
+  const send = vi.fn();
+  const session = {
+    currentVoiceChannelId: "active-channel", livekitUrl: "wss://voice.example.test",
+    livekitToken: "active-token", e2eePassphrase: "active-room-key",
+    isMuted: true, isDeafened: true, muteBeforeDeafen: true, isStreaming: true,
+    preMuteVolumes: { participant: 73 }, _onLeaveCallback: onLeave, _wsSend: send,
+  };
+  useVoiceStore.setState({ ...session, masterVolume: 42 });
+  useVoiceStore.getState().resetAccountPreferences(true);
+  expect(useVoiceStore.getState()).toMatchObject(session);
+  expect(useVoiceStore.getState().masterVolume).toBe(DEFAULT_SETTINGS.masterVolume);
+  useVoiceStore.getState().applyFromServer({ masterVolume: 64, inputVolume: 125 });
+  expect(useVoiceStore.getState()).toMatchObject({ ...session, masterVolume: 64, inputVolume: 125 });
+  expect(useVoiceStore.getState()._onLeaveCallback).toBe(onLeave);
+  expect(useVoiceStore.getState()._wsSend).toBe(send);
+  expect(onLeave).not.toHaveBeenCalled();
+  expect(send).not.toHaveBeenCalled();
+  resetStore();
+});
+
+
+it("preserves voice session through the composed account preferences adapter", async () => {
+  const { applyAccountPreferences } = await import("./applyAccountPreferences");
+  resetStore();
+  const onLeave = vi.fn();
+  const send = vi.fn();
+  const session = {
+    currentVoiceChannelId: "adapter-channel", livekitToken: "adapter-token",
+    livekitUrl: "wss://voice.example.test", e2eePassphrase: "adapter-room-key",
+    isMuted: true, isDeafened: true, muteBeforeDeafen: true, isStreaming: true,
+    preMuteVolumes: { participant: 61 }, _onLeaveCallback: onLeave, _wsSend: send,
+  };
+  useVoiceStore.setState({ ...session, masterVolume: 21 });
+  applyAccountPreferences(() => ({ voice_settings: { masterVolume: 67 } }), true, true);
+  expect(useVoiceStore.getState()).toMatchObject({ ...session, masterVolume: 67 });
+  expect(onLeave).not.toHaveBeenCalled();
+  expect(send).not.toHaveBeenCalled();
+  // An invalidated account fence must not hydrate a previous owner's values.
+  applyAccountPreferences(() => null, false, true);
+  expect(useVoiceStore.getState()).toMatchObject({ ...session, masterVolume: 67 });
+  resetStore();
 });

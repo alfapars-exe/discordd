@@ -34,7 +34,11 @@ func musicPrivacyFixture(t *testing.T, protocol2 ...bool) (*mfaHarness, *authSer
 	}
 	svc := newTestMusicBotService("ch", "srv")
 	svc.restored = map[string]models.MusicSession{}
-	svc.sessions = repository.NewSQLiteMusicSessionRepo(h.db.Conn)
+	store := repository.NewSQLiteMusicSessionRepo(h.db.Conn)
+	svc.sessions = store
+	svc.requesterPrivacy = store
+	svc.legacyEnqueue = store
+	svc.controls = store
 	svc.users = repository.NewSQLiteUserRepo(h.db.Conn)
 	bot := svc.bots["ch"]
 	bot.currentTrack = &models.MusicTrack{QueueItemID: uuid.NewString(), VideoID: "current", Title: h.user.Username, RequestedByUserID: h.user.ID, RequestedByName: h.user.Username, DurationSeconds: 100}
@@ -50,7 +54,7 @@ func musicPrivacyFixture(t *testing.T, protocol2 ...bool) (*mfaHarness, *authSer
 			t.Fatal(err)
 		}
 	}
-	auth.SetMusicRequesterRetirementObserver(svc)
+	WithAccountAnonymization(auth.accountAnonymization, svc)(auth)
 	return h, auth, login, svc
 }
 
@@ -145,7 +149,7 @@ func TestMusicRequesterPrivacyDeletionFailureRollsBackWithoutRuntimeObserver(t *
 	}
 	beforeQueue := rows[0]
 	var calls atomic.Int32
-	auth.SetMusicRequesterRetirementObserver(musicRequesterObserverFunc(func(id string) { calls.Add(1); svc.AnonymizeMusicRequester(id) }))
+	auth.musicRequesterRetirement = musicRequesterObserverFunc(func(id string) { calls.Add(1); svc.AnonymizeMusicRequester(id) })
 	if _, err := h.db.Conn.Exec(`CREATE TRIGGER deny_music_retirement BEFORE UPDATE OF deleted_at ON users BEGIN SELECT RAISE(ABORT,'injected retirement failure'); END`); err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +194,7 @@ func TestMusicRequesterPrivacyPublicationFenceOrdersEqualRevisionReplacement(t *
 		getDone <- svc.WithPublicMusicState(context.Background(), "ch", func(state *models.MusicBotChannelState) { close(captured); <-release; consume(state) })
 	}()
 	<-captured
-	auth.SetMusicRequesterRetirementObserver(musicRequesterObserverFunc(func(id string) { close(observerStarted); svc.AnonymizeMusicRequester(id) }))
+	auth.musicRequesterRetirement = musicRequesterObserverFunc(func(id string) { close(observerStarted); svc.AnonymizeMusicRequester(id) })
 	deleteDone := make(chan error, 1)
 	go func() {
 		deleteDone <- auth.DeleteAccount(context.Background(), h.user.ID, login.SessionID, "current-password", "")
@@ -240,7 +244,9 @@ func (failingMusicIdentityStore) SanitizeMusicTracks(context.Context, []models.M
 
 func TestMusicRequesterPrivacyIdentityLookupFailureNeverPublishesOldName(t *testing.T) {
 	_, _, _, svc := musicPrivacyFixture(t)
-	svc.sessions = failingMusicIdentityStore{svc.sessions, svc.sessions.(musicControlStore)}
+	failing := failingMusicIdentityStore{svc.sessions, svc.sessions.(musicControlStore)}
+	svc.sessions = failing
+	svc.requesterPrivacy = failing
 	var publications atomic.Int32
 	svc.hub = &testutil.MockBroadcaster{BroadcastToUsersFn: func([]string, ws.Event) { publications.Add(1) }}
 	if state, err := svc.GetStateWithError(context.Background(), "ch"); err == nil || state != nil {
@@ -260,5 +266,20 @@ func TestMusicRequesterPrivacyAlreadyCanonicalCacheStillPublishesReplacement(t *
 	svc.AnonymizeMusicRequester("retired")
 	if publications != 1 || svc.GetState("ch").Revision != 0 || svc.GetState("ch").Queue[0].QueueItemID != "same-item" {
 		t.Fatal("already canonical cache did not fence a replacement for older deliveries")
+	}
+}
+
+func TestMusicRequesterPrivacyExplicitDisabledSelection(t *testing.T) {
+	capable := failingMusicIdentityStore{}
+	state := &models.MusicBotChannelState{Queue: []models.MusicTrack{{RequestedByName: "fixture"}}}
+	service := &musicBotService{sessions: capable}
+	got, err := service.sanitizeMusicState(context.Background(), state)
+	if err != nil || got != state {
+		t.Fatalf("disabled provider was rediscovered: state=%+v err=%v", got, err)
+	}
+	service.requesterPrivacy = capable
+	got, err = service.sanitizeMusicState(context.Background(), state)
+	if err == nil || got != nil {
+		t.Fatal("explicit provider failure fell back to unsanitized state")
 	}
 }

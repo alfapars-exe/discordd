@@ -20,7 +20,7 @@ type sqliteFriendshipRepo struct {
 	db database.TxQuerier
 }
 
-func NewSQLiteFriendshipRepo(db database.TxQuerier) FriendshipRepository {
+func NewSQLiteFriendshipRepo(db database.TxQuerier) FriendshipStore {
 	return &sqliteFriendshipRepo{db: db}
 }
 

@@ -1,3 +1,4 @@
+import { cacheChannelMessage } from "../crypto/channelMessageCache";
 /**
  * Message Store — Channel message state management.
  */
@@ -25,7 +26,6 @@ import {
   SuppressedRosterError,
 } from "../crypto/channelEncryption";
 import { encodePayload } from "../crypto/e2eePayload";
-import * as keyStorage from "../crypto/keyStorage";
 import type { Message, ReactionGroup, Server } from "../types";
 import { DEFAULT_MESSAGE_LIMIT } from "../utils/constants";
 import {
@@ -44,6 +44,10 @@ import {
 } from "./shared/channelHistoryAccess";
 import { sendWithRetryAndToast } from "./shared/sendWithRetry";
 import { channelSendIntent, completeChannelSendIntent, clearChannelSendIntents, supportsDurableChannelSends } from "./shared/channelSendIntent";
+
+function messagesForChannel(channelId: string, messages: Message[] = []): Message[] {
+  return messages.filter(message => message.channel_id === channelId);
+}
 
 /** The sidebar server list is only labels/icons, never an encryption policy. */
 async function resolveMessageServer(serverId: string): Promise<Server | null> {
@@ -386,7 +390,7 @@ export const useMessageStore = create<MessageState>((set, get) => {
         if (res.status === 403) get().evictChannelHistory(channelId);
         return;
       }
-      const apiRows = await decryptChannelMessages(res.data.messages ?? [], serverId, ownsRequest);
+      const apiRows = await decryptChannelMessages(messagesForChannel(channelId, res.data.messages), serverId, ownsRequest);
       if (!ownsRequest()) return;
       grantHistoryAccess(channelId);
       const accessCurrent = captureHistoryAccess(channelId);
@@ -443,7 +447,7 @@ export const useMessageStore = create<MessageState>((set, get) => {
         return;
       }
       const page = res.data;
-      const decrypted = await decryptChannelMessages(page.messages ?? [], serverId, ownsRequest);
+      const decrypted = await decryptChannelMessages(messagesForChannel(channelId, page.messages), serverId, ownsRequest);
       if (!ownsRequest()) return;
       const accessCurrent = captureHistoryAccess(channelId);
       void registerSpamBatch(changes.apply(decrypted), "channel", channelId, () => isCurrent() && accessCurrent());
@@ -541,7 +545,7 @@ export const useMessageStore = create<MessageState>((set, get) => {
       return false;
     }
     const page = res.success ? res.data : undefined;
-    const raw = page?.messages ?? [];
+    const raw = messagesForChannel(channelId, page?.messages);
     const resumePreviousWindow = () => {
       inflightFetches.delete(channelId);
       release();
@@ -609,7 +613,7 @@ export const useMessageStore = create<MessageState>((set, get) => {
         return;
       }
       const hasMoreAfter = res.data.has_more_after ?? false;
-      const page = await decryptChannelMessages(res.data.messages ?? [], serverId, ownsRequest);
+      const page = await decryptChannelMessages(messagesForChannel(channelId, res.data.messages), serverId, ownsRequest);
       if (!ownsRequest()) return;
       const accessCurrent = captureHistoryAccess(channelId);
       void registerSpamBatch(changes.apply(page), "channel", channelId, () => isCurrent() && accessCurrent());
@@ -742,17 +746,12 @@ export const useMessageStore = create<MessageState>((set, get) => {
               // permanently unreadable, so overlay the plaintext we just
               // encrypted. handleMessageCreate dedupes by id either way.
               get().handleMessageCreate({ ...created, content, e2ee_file_keys: fileMetas }, session);
-              if (content) {
+              if (content || fileMetas?.length) {
                 // Sender-key ratchets can't re-decrypt our own past messages
                 // on refetch — persist the plaintext like the echo path does.
                 if (!isCurrentSession()) return false;
-                keyStorage.cacheDecryptedMessage({
-                  messageId: created.id,
-                  channelId,
-                  dmChannelId: null,
-                  content,
-                  timestamp: new Date(created.created_at).getTime(),
-                }, isCurrentSession).catch(() => {});
+                await cacheChannelMessage({ ...created, channel_id: channelId }, { content, file_keys: fileMetas }, isCurrentSession).catch(() => {});
+                if (!isCurrentSession()) return false;
               }
             }
           }

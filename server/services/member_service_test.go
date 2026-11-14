@@ -49,6 +49,17 @@ func (s *stubProfileUpdateNotifier) NotifyProfileUpdated(_ context.Context, acto
 }
 
 func newMemberHarness() *memberServiceHarness {
+	return newMemberHarnessWithAudience(nil)
+}
+
+func newMemberHarnessWithAudience(audience ProfileAudienceInvalidator) *memberServiceHarness {
+	return newMemberHarnessWithPolicies(audience, nil)
+}
+func newMemberHarnessWithPolicies(audience ProfileAudienceInvalidator, activity GameActivityPrivacyInvalidator, invalidators ...PermissionInvalidator) *memberServiceHarness {
+	var invalidator PermissionInvalidator
+	if len(invalidators) > 0 {
+		invalidator = invalidators[0]
+	}
 	h := &memberServiceHarness{
 		userRepo:       &testutil.MockUserRepo{},
 		roleRepo:       &testutil.MockRoleRepo{},
@@ -64,9 +75,9 @@ func newMemberHarness() *memberServiceHarness {
 	}
 	h.serverRepo.IsMemberFn = func(context.Context, string, string) (bool, error) { return true, nil }
 	tx := roleTestTransaction{&repository.ServerMembershipTxRepos{Server: h.serverRepo, Role: h.roleRepo, User: h.userRepo, Timeout: h.timeoutRepo}}
-	h.svc = NewMemberService(
+	h.svc = NewMemberService(activity, audience,
 		h.userRepo, h.roleRepo, h.banRepo, h.timeoutRepo,
-		h.serverRepo, tx, h.hub, h.voiceKick, nil, h.profileUpdates, // auditLogger — not under test here
+		h.serverRepo, tx, h.hub, h.voiceKick, nil, nil, invalidator, h.profileUpdates, // auditLogger — not under test here
 	)
 	return h
 }
@@ -330,14 +341,14 @@ func TestGetAll_BulkLoadsTimeoutsViaListActive(t *testing.T) {
 	const srv = "srv1"
 	mutedExpiry := time.Now().UTC().Add(10 * time.Minute)
 
-	h.userRepo.GetAllFn = func(_ context.Context) ([]models.User, error) {
+	h.userRepo.ListServerMemberProfilesFn = func(_ context.Context, id string) ([]models.User, error) {
+		if id != srv {
+			t.Fatalf("unexpected server %q", id)
+		}
 		return []models.User{
 			{ID: "a", Username: "a"},
 			{ID: "b", Username: "b"},
 		}, nil
-	}
-	h.serverRepo.ListMemberIDsFn = func(_ context.Context, _ string) ([]string, error) {
-		return []string{"a", "b"}, nil
 	}
 	h.roleRepo.GetRolesForUsersFn = func(_ context.Context, _ string, _ []string) (map[string][]models.Role, error) {
 		return map[string][]models.Role{}, nil
@@ -469,7 +480,7 @@ func TestUnban_DeletesRow(t *testing.T) {
 // ─── UpdateProfile refreshes the hub userInfos cache ───
 
 func TestUpdateProfile_RefreshesHubUserInfoCache(t *testing.T) {
-	h := newMemberHarness()
+	h := newMemberHarnessWithAudience(profileAudienceInvalidatorStub{viewers: []string{"friend-1", "server-member-1"}})
 	const uid = "u1"
 	bio := "profile only"
 
@@ -480,7 +491,6 @@ func TestUpdateProfile_RefreshesHubUserInfoCache(t *testing.T) {
 	h.serverRepo.GetUserServersFn = func(_ context.Context, _ string) ([]models.ServerListItem, error) {
 		return []models.ServerListItem{{ID: "server-1"}}, nil
 	}
-	h.svc.(*memberService).SetProfileAudienceInvalidator(profileAudienceInvalidatorStub{viewers: []string{"friend-1", "server-member-1"}})
 
 	var gotUserID, gotUsername, gotDisplay, gotAvatar string
 	h.hub.UpdateUserInfoFn = func(userID, username, displayName, avatarURL string) {
@@ -689,14 +699,17 @@ func TestKick_InvalidatesTargetPermissions(t *testing.T) {
 	// not after the 30s TTL. Otherwise any in-flight request they made
 	// before eviction can still hit protected endpoints for up to half
 	// a minute — a small but real security window.
-	h := newMemberHarness()
+	activity := &recordingGameActivityInvalidator{}
+	inv := &memberInvalidator{}
+	h := newMemberHarnessWithPolicies(nil, activity, inv)
 	const srv, actor, target = "s-1", "mod", "victim"
 	h.stubHierarchy(actor, target, srv)
-	inv := &memberInvalidator{}
-	h.svc.SetPermInvalidator(inv)
 
 	if err := h.svc.Kick(context.Background(), srv, actor, target); err != nil {
 		t.Fatalf("Kick: %v", err)
+	}
+	if len(activity.calls) != 1 || activity.calls[0] != (gameActivityInvalidationCall{kind: "removed", a: srv, b: target}) {
+		t.Fatalf("membership activity invalidation = %+v", activity.calls)
 	}
 	if len(inv.userCalls) != 1 || inv.userCalls[0] != target {
 		t.Errorf("InvalidateUser calls = %v, want [%q]", inv.userCalls, target)
@@ -708,11 +721,10 @@ func TestKick_InvalidatesTargetPermissions(t *testing.T) {
 }
 
 func TestBan_InvalidatesTargetPermissions(t *testing.T) {
-	h := newMemberHarness()
+	inv := &memberInvalidator{}
+	h := newMemberHarnessWithPolicies(nil, nil, inv)
 	const srv, actor, target = "s-1", "mod", "victim"
 	h.stubHierarchy(actor, target, srv)
-	inv := &memberInvalidator{}
-	h.svc.SetPermInvalidator(inv)
 
 	// Ban reads target user, then removes membership. Stub user repo so
 	// GetByID(target) succeeds.
@@ -734,10 +746,9 @@ func TestModifyRoles_InvalidatesTargetPermissions(t *testing.T) {
 	// The cache invalidation must land — otherwise the target keeps
 	// their old permissions for up to 30s despite the UI showing the
 	// new role set.
-	h := newMemberHarness()
-	const srv, actor, target = "s-1", "actor", "target"
 	inv := &memberInvalidator{}
-	h.svc.SetPermInvalidator(inv)
+	h := newMemberHarnessWithPolicies(nil, nil, inv)
+	const srv, actor, target = "s-1", "actor", "target"
 
 	h.roleRepo.GetByUserIDAndServerFn = func(_ context.Context, uid, _ string) ([]models.Role, error) {
 		if uid == actor {

@@ -57,6 +57,7 @@ func TestThreadSQLiteHTTPArchiveAccessAndReopen(t *testing.T) {
 	q := database.NewRetryingQuerier(db.Conn)
 	channels := repository.NewSQLiteChannelRepo(q)
 	permissions := services.NewChannelPermissionService(repository.NewSQLiteChannelPermRepo(q), repository.NewSQLiteRoleRepo(q), channels, &testutil.MockBroadcaster{})
+	t.Cleanup(permissions.(interface{ Stop() }).Stop)
 	broadcasts := 0
 	hub := &testutil.MockBroadcastAndOnline{
 		GetOnlineUserIDsForServerFn: func(string) []string { return []string{"starter", "moderator", "reader", "outsider"} },
@@ -72,7 +73,7 @@ func TestThreadSQLiteHTTPArchiveAccessAndReopen(t *testing.T) {
 			broadcasts++
 		}},
 	}
-	handler := NewThreadHandler(services.NewThreadService(channels, repository.NewSQLiteMessageRepo(q), permissions, hub))
+	handler := NewThreadHandler(services.NewThreadService(channels, repository.NewSQLiteMessageRepo(q), permissions, hub, permissions))
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /channels/{channelId}/threads", handler.Create)
 	mux.HandleFunc("GET /threads/{threadId}", handler.Get)

@@ -1,14 +1,12 @@
 package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 	"log/slog"
-	"mime/multipart"
 	"net/http"
 )
 
@@ -21,12 +19,8 @@ func dmFormPointer(r *http.Request, key string) *string {
 }
 
 func (h *DMHandler) finishDMSend(r *http.Request, msg *models.DMMessage) error {
-	if finalizer, ok := h.dmService.(interface {
-		FinalizeDMCreate(context.Context, *models.DMMessage) error
-	}); ok {
-		if err := finalizer.FinalizeDMCreate(r.Context(), msg); err != nil {
-			return err
-		}
+	if err := h.dmService.FinalizeDMCreate(r.Context(), msg); err != nil {
+		return err
 	}
 	h.dmService.BroadcastCreate(msg)
 	return nil
@@ -121,13 +115,7 @@ func (h *DMHandler) stageDMSendFiles(r *http.Request, user, channel string, req 
 	if _, err := h.dmService.GetMessages(r.Context(), user, channel, "", 1); err != nil {
 		return nil, err
 	}
-	stager, ok := h.dmUploadService.(interface {
-		Stage(context.Context, multipart.File, *multipart.FileHeader, bool) (*models.DMAttachment, *models.DMUploadDigest, error)
-		Discard(*models.DMAttachment)
-	})
-	if !ok {
-		return nil, fmt.Errorf("%w: upload staging unavailable", pkg.ErrBadRequest)
-	}
+	stager := h.dmUploadService
 	cleanup := func() {
 		for i := range req.StagedAttachments {
 			stager.Discard(&req.StagedAttachments[i])

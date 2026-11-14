@@ -1,0 +1,49 @@
+{
+  "source_parent": "294642ef",
+  "scope": "RF11 configured email provider capability contract",
+  "before": {
+    "command": "go test ./pkg/email -run '^TestResendConstructorDeclaresAllConfiguredCapabilities$' -count=1",
+    "exit": 1,
+    "missing_declared_capabilities": [
+      "VerificationSender",
+      "CategorySender"
+    ]
+  },
+  "change": "NewResendSender returns Provider embedding EmailSender, VerificationSender, CategorySender; initServices retains this complete optional provider and injects it directly into narrow service dependencies, removing silent capability assertions. Disabled configuration remains nil.",
+  "validation": [
+    {
+      "command": "go test ./pkg/email ./services . -run 'TestResend|Test.*Email|Test.*Mail|Test.*Wiring|TestServiceInitialization' -count=1 -timeout=3m",
+      "exit": 0,
+      "email_seconds": 1.144,
+      "services_seconds": 2.25,
+      "root_seconds": 0.769
+    },
+    {
+      "command": "go build ./...",
+      "exit": 0
+    },
+    {
+      "command": "go vet ./pkg/email ./services .",
+      "exit": 0
+    }
+  ],
+  "limits": [
+    "Local HTTP fixtures and service tests; no actual provider email sent by this change",
+    "Windows Go1.27.4 CGO0; Linux race and current-source production mail profile remain CI acceptance",
+    "RF11 broader domain grouping and all mandatory dependency cases still require audit"
+  ],
+  "optional_configuration_matrix": {
+    "source_parent": "d98b7444",
+    "change": "Extract configuredEmailProvider from initServices without changing three-field enablement predicate or log behavior",
+    "test": "TestConfiguredEmailProviderRequiresCompleteOptionalConfiguration",
+    "cases": 8,
+    "expected": "seven incomplete configurations return nil; complete configuration preserves category sender address",
+    "command": "go test . ./pkg/email -run 'TestConfiguredEmailProvider|TestResend|Test.*Email|Test.*Mail|Test.*Wiring|TestServiceInitialization' -count=1 -timeout=3m",
+    "exit": 0,
+    "root_seconds": 0.794,
+    "email_seconds": 0.803,
+    "build": "go build ./... exit0",
+    "vet": "go vet ./pkg/email . exit0",
+    "external_mail_sent": false
+  }
+}

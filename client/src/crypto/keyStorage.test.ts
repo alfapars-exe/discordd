@@ -19,7 +19,7 @@
 
 import "fake-indexeddb/auto";
 import { IDBFactory as FakeIDBFactory } from "fake-indexeddb";
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import * as keyStorage from "./keyStorage";
 import { publishAuthGenerationChange, publishAuthOwnerChange } from "../api/authSessionEvents";
 import type {
@@ -483,6 +483,26 @@ describe("keyStorage — deleteAllSenderKeysForChannel prefix scoping", () => {
 // ──────────────────────────────────
 
 describe("keyStorage — searchCachedMessages (byChannel index + cursor)", () => {
+  it.each([keyStorage.searchCachedMessages, keyStorage.searchCachedDMMessages])(
+    "stops advancing an abandoned search cursor",
+    async (search) => {
+      await keyStorage.cacheDecryptedMessages(["a", "b", "c"].map(messageId =>
+        makeCachedMessage({ messageId, channelId: "target", dmChannelId: "target", content: "private" })
+      ));
+      const controller = new AbortController();
+      const advance = IDBCursor.prototype.continue;
+      const spy = vi.spyOn(IDBCursor.prototype, "continue").mockImplementation(function (this: IDBCursor, key) {
+        controller.abort();
+        advance.call(this, key);
+      });
+      try {
+        await expect(search("target", "private", controller.signal)).rejects.toMatchObject({ name: "AbortError" });
+        expect(spy).toHaveBeenCalledTimes(1);
+      } finally {
+        spy.mockRestore();
+      }
+    }
+  );
   it("aborts the bulk plaintext write when its owning session becomes stale", async () => {
     let checks = 0;
     let current = true;
@@ -550,6 +570,27 @@ describe("keyStorage — searchCachedDMMessages (byDMChannel index + cursor)", (
 });
 
 describe("keyStorage — single message cache read", () => {
+  it("removes a deleted channel message from subsequent searches only in its owning channel", async () => {
+    const row = makeCachedMessage({ messageId: "deleted", channelId: "c1", dmChannelId: null, content: "searchable" });
+    await keyStorage.cacheDecryptedMessage(row);
+    expect(await keyStorage.deleteCachedChannelMessage(row.messageId, "other", () => true)).toBe(false);
+    expect(await keyStorage.deleteCachedChannelMessage(row.messageId, "c1", () => false)).toBe(false);
+    expect(await keyStorage.searchCachedMessages("c1", "searchable")).toEqual([row]);
+    expect(await keyStorage.deleteCachedChannelMessage(row.messageId, "c1", () => true)).toBe(true);
+    expect(await keyStorage.searchCachedMessages("c1", "searchable")).toEqual([]);
+  });
+
+  it("evicts plaintext before a fresh search after a WebSocket channel deletion", async () => {
+    const { handleChannelEvent } = await import("../hooks/ws/channelEventHandlers");
+    publishAuthOwnerChange("key-storage-test-owner");
+    const row = makeCachedMessage({ messageId: "deleted", channelId: "c1", dmChannelId: null, content: "searchable" });
+    await keyStorage.cacheDecryptedMessage(row);
+    const deletion = { op: "message_delete", d: { id: row.messageId, channel_id: row.channelId } } as const;
+    await handleChannelEvent(deletion, () => false);
+    expect(await keyStorage.getCachedDecryptedMessage(row.messageId)).toEqual(row);
+    await handleChannelEvent(deletion);
+    expect(await keyStorage.searchCachedMessages("c1", "searchable")).toEqual([]);
+  });
   it("deletes a matching DM cache record from direct reads and indexed search",async()=>{
     const message=makeCachedMessage({messageId:"deleted",channelId:"",dmChannelId:"dm",content:"searchable"});
     await keyStorage.cacheDecryptedMessage(message);
@@ -717,6 +758,30 @@ describe("keyStorage — lifecycle", () => {
 
     await keyStorage.saveRegistrationData(makeRegistration());
     expect(await keyStorage.hasLocalKeys()).toBe(true);
+  });
+
+  it("arms a fresh self-device handshake only when clearing for restore", async () => {
+    await keyStorage.setMetadata("deviceId", "old-device");
+    await keyStorage.clearAllE2EEData({ resetSelfFanout: true });
+    expect(await keyStorage.getAllMetadata()).toEqual([["self_fanout_reset", true]]);
+    await keyStorage.clearAllE2EEData();
+    expect(await keyStorage.getAllMetadata()).toEqual([]);
+  });
+
+  it("preserves existing keys if the restore marker write throws", async () => {
+    await keyStorage.saveIdentityKeyPair(makeIdentity());
+    await keyStorage.setMetadata("deviceId", "original-device");
+    const originalIdentity = await keyStorage.getIdentityKeyPair();
+    expect(originalIdentity).not.toBeNull();
+    const failure = new Error("marker write failed");
+    const put = vi.spyOn(IDBObjectStore.prototype, "put").mockImplementationOnce(() => { throw failure; });
+    try {
+      await expect(keyStorage.clearAllE2EEData({ resetSelfFanout: true })).rejects.toBe(failure);
+    } finally {
+      put.mockRestore();
+    }
+    expect(await keyStorage.getIdentityKeyPair()).toEqual(originalIdentity);
+    expect(await keyStorage.getMetadata("deviceId")).toBe("original-device");
   });
 
   it("clearAllE2EEData wipes every store and drops hasLocalKeys back to false", async () => {

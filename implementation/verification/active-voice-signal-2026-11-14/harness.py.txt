@@ -1,0 +1,75 @@
+import pathlib,tempfile,json,subprocess,time,secrets,os,urllib.parse
+out=pathlib.Path(pathlib.Path(tempfile.gettempdir(),'hichat-active-signal-current.txt').read_text())
+fixture=pathlib.Path(tempfile.gettempdir(),'hichat-e2e-pg.DeAG67')
+u=urllib.parse.urlsplit((fixture/'control-url.txt').read_text().strip())
+assert u.hostname in ('localhost','127.0.0.1') and u.path in ('/hichat_test','/hichat_e2e_control')
+control=urllib.parse.urlunsplit((u.scheme,u.netloc.rsplit(':',1)[0]+':5432',u.path,u.query,u.fragment))
+run='active-'+secrets.token_hex(12);(out/run).mkdir();name='hichat-active-'+secrets.token_hex(6)
+def call(args,**kw):
+ r=subprocess.run(args,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,**kw)
+ if r.returncode:
+  (out/'command-failure.log').write_bytes(r.stdout)
+  raise RuntimeError('owned QA command failed; private logs retained')
+ return r
+def probe(action):
+ r=call(['docker','exec','--env-file',str(out/'server.env'),name,'/out/active-probe',action])
+ rows=[x for x in r.stdout.decode(errors='replace').splitlines() if x.startswith('{')]
+ assert rows,'probe status absent'
+ return json.loads(rows[-1])
+created=False;server=None;joiner=None
+try:
+ call(['docker','run','-d','--name',name,'--network','container:hichat-e2e-pg-97fa48ea9acf2957','-v',str(out)+':/out','-v',str(fixture)+':/tmp/hichat-e2e-pg.DeAG67:ro','golang:1.26.10-bookworm','sleep','900'])
+ env=os.environ.copy();env['HICHAT_E2E_POSTGRES_DSN']=control
+ call(['docker','exec','-e','HICHAT_E2E_POSTGRES_DSN',name,'/out/pg-fixture','create','/out/'+run,run],env=env);created=True
+ dsn=json.loads((out/run/'hichat-e2e-postgres.json').read_text())['url']
+ cfg={'DATABASE_URL':dsn,'SERVER_HOST':'127.0.0.1','SERVER_PORT':'19461','JWT_SECRET':'hichat-isolated-active-signal-test-secret-not-for-production','ENCRYPTION_KEY':'0123456789abcdef'*4,'ENVIRONMENT':'development','LOG_LEVEL':'info','LOG_FORMAT':'text','UPLOAD_DIR':'/out/'+run+'/uploads','DATA_EXPORT_DIR':'/out/'+run+'/exports'}
+ (out/'server.env').write_text(''.join(k+'='+v+'\n' for k,v in cfg.items()))
+ seeded=probe('seed');assert seeded['credits']==0 and seeded['used']==0
+ results=[]
+ for cycle in range(2):
+  marker=out/'join-ready.json'
+  if marker.exists():marker.unlink()
+  log=(out/('server-'+str(cycle)+'.log')).open('wb')
+  server=subprocess.Popen(['docker','exec','--env-file',str(out/'server.env'),'-w','/out/'+run,name,'sh','-c','echo $$ > /out/server.pid; exec /out/hichat'],stdout=log,stderr=subprocess.STDOUT)
+  healthy=False
+  for _ in range(120):
+   if server.poll() is not None:break
+   r=subprocess.run(['docker','exec',name,'bash','-c',"exec 3<>/dev/tcp/127.0.0.1/19461; printf 'GET /api/health HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3; head -n 1 <&3"],capture_output=True)
+   if b'200' in r.stdout:healthy=True;break
+   time.sleep(.5)
+  assert healthy,'server health failed; private log retained'
+  joinlog=(out/('join-'+str(cycle)+'.log')).open('wb')
+  joiner=subprocess.Popen(['docker','exec','--env-file',str(out/'server.env'),name,'/out/active-probe','join'],stdout=joinlog,stderr=subprocess.STDOUT)
+  for _ in range(100):
+   if marker.exists() or joiner.poll() is not None:break
+   time.sleep(.2)
+  assert marker.exists() and joiner.poll() is None,'normal login/ticket/voice join failed; private probe log retained'
+  observed=json.loads(marker.read_text());assert observed['voice_join_observed']
+  time.sleep(2.2)
+  assert joiner.poll() is None,'WS disconnected before signal'
+  before=probe('read');assert before['credits']==cycle,'active session was credited before signal'
+  pid=(out/'server.pid').read_text().strip();assert pid.isdigit()
+  started=time.monotonic();call(['docker','exec',name,'kill','-TERM',pid])
+  code=server.wait(timeout=60);elapsed=time.monotonic()-started;log.close()
+  joincode=joiner.wait(timeout=10);joinlog.close()
+  text=(out/('server-'+str(cycle)+'.log')).read_text(errors='replace')
+  assert code==0 and 'server stopped gracefully' in text,'graceful process exit failed'
+  assert joincode==0,'probe did not complete on server close'
+  after=probe('read')
+  assert after['credits']==cycle+1 and after['applied']==cycle+1 and after['pending']==0,'final active credit absent'
+  assert after['used']==after['ledger_seconds'] and after['used']>before['used'],'ledger/monthly usage mismatch'
+  results.append({'cycle':cycle+1,'healthy':healthy,'normal_auth_and_voice_join':observed,'ws_active_before_signal':True,'before':before,'after':after,'exit_code':code,'shutdown_seconds':round(elapsed,3),'graceful_log':True})
+ result={'source':'81a6c385','scope':'Actual Go Linux process; normal login, one-shot WS ticket and voice_join active at SIGTERM; native verified-mTLS PostgreSQL; LiveKit endpoint intentionally unavailable, no physical media','cycles':results}
+ (out/'result.json').write_text(json.dumps(result,indent=2));print(json.dumps(result))
+finally:
+ if server is not None and server.poll() is None:
+  try:
+   pid=(out/'server.pid').read_text().strip();assert pid.isdigit()
+   subprocess.run(['docker','exec',name,'kill','-TERM',pid],capture_output=True)
+   server.wait(timeout=30)
+  except Exception:
+   if 'pid' in locals() and pid.isdigit():subprocess.run(['docker','exec',name,'kill','-KILL',pid],capture_output=True)
+ if created:
+  env=os.environ.copy();env['HICHAT_E2E_POSTGRES_DSN']=control
+  call(['docker','exec','-e','HICHAT_E2E_POSTGRES_DSN',name,'/out/pg-fixture','drop','/out/'+run,run],env=env)
+ subprocess.run(['docker','rm','-f',name],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)

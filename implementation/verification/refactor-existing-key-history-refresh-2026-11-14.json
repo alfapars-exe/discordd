@@ -1,0 +1,24 @@
+{
+  "base_source": "c9ddad08bd1003fdcaea0a641adb679bc4a9f31b",
+  "ci_run": 43567346349,
+  "e2e_job": 132363956173,
+  "observed": "Backup creation, wrong-password rejection, successful restore, matching identity fingerprint and first historical plaintext assertion passed. The assertion after page reload failed. Screenshot shows the same channel with an empty message body; no replay diagnostic was emitted.",
+  "regression_before": {
+    "passed": 46,
+    "failed": 1,
+    "case": "Visible history is not refetched when existing keys become ready after reload."
+  },
+  "change": "After existing-key identity validation becomes ready, invalidate early ciphertext projections and refetch the selected channel. Recheck session ownership between store effects.",
+  "validation": {
+    "combined_files": 9,
+    "combined_passed": 262,
+    "failed": 0,
+    "store_after_additional_reentrant_session_case": 48,
+    "typescript": "passed",
+    "changed_store_eslint": "passed"
+  },
+  "limits": [
+    "Production reload outcome with this fix is pending.",
+    "Legacy history path is separate and also awaits browser verification."
+  ]
+}

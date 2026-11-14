@@ -1,0 +1,30 @@
+{
+  "source": "9d08552e",
+  "same_database_restart_cycles": [
+    {
+      "cycle": 1,
+      "healthy": true,
+      "contender_rejected": true,
+      "exit_code": 0,
+      "shutdown_seconds": 0.25,
+      "graceful_log": true
+    },
+    {
+      "cycle": 2,
+      "healthy": true,
+      "contender_rejected": true,
+      "exit_code": 0,
+      "shutdown_seconds": 0.141,
+      "graceful_log": true
+    },
+    {
+      "cycle": 3,
+      "healthy": true,
+      "contender_rejected": true,
+      "exit_code": 0,
+      "shutdown_seconds": 0.141,
+      "graceful_log": true
+    }
+  ],
+  "scope": "Linux real processes, verified-mTLS isolated PostgreSQL, idle shutdown; no active media"
+}

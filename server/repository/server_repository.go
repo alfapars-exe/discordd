@@ -25,6 +25,7 @@ type ServerRepository interface {
 
 	GetUserServers(ctx context.Context, userID string) ([]models.ServerListItem, error)
 	AddMember(ctx context.Context, serverID, userID string) error
+	LeaveMember(ctx context.Context, serverID, userID string) error
 	RemoveMember(ctx context.Context, serverID, userID string) error
 	IsMember(ctx context.Context, serverID, userID string) (bool, error)
 	GetMemberCount(ctx context.Context, serverID string) (int, error)
@@ -80,4 +81,23 @@ type GameActivityMembershipSnapshotRepository interface {
 // whose member count does not exceed maxMembers.
 type ProfileAudienceSharedServerReader interface {
 	ListSmallSharedServerUserIDs(ctx context.Context, viewerID string, targetIDs []string, maxMembers int) (map[string]bool, error)
+}
+
+// GameActivityMembershipCounter serializes the join-time audience decision.
+type GameActivityMembershipCounter interface {
+	LockAndCountMembersForGameActivityJoin(context.Context, string) (int, error)
+}
+type GameActivityMembershipWriter interface {
+	AddMemberWithGameActivityAudience(context.Context, string, string, bool) error
+}
+
+// ServerStore retains transaction integration capabilities at the factory.
+type ServerStore interface {
+	ServerRepository
+	GameActivityMembershipSnapshotRepository
+	GameActivityMembershipCounter
+}
+
+type GameActivityMembershipReader interface {
+	GetMemberGameActivityAudience(context.Context, string, string) (*bool, error)
 }

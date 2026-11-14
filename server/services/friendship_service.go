@@ -26,8 +26,6 @@ type FriendshipService interface {
 	RemoveFriend(ctx context.Context, userID, targetUserID string) error
 	ListFriends(ctx context.Context, userID string) ([]models.FriendshipWithUser, error)
 	ListRequests(ctx context.Context, userID string) (*FriendRequestsResponse, error)
-	SetDMAcceptor(acceptor DMRequestAcceptor)
-	SetEmailEnqueuer(enqueuer EmailEnqueuer)
 }
 
 // DMRequestAcceptor is a minimal ISP interface for auto-accepting pending DMs.
@@ -52,12 +50,8 @@ type friendshipService struct {
 	hub           ws.Broadcaster
 	dmAcceptor    DMRequestAcceptor
 	requestPolicy FriendRequestPolicy
-	emailEnqueuer EmailEnqueuer
+	emailEnqueuer ScheduledEmailEnqueuer
 	gameActivity  GameActivityPrivacyInvalidator
-}
-
-func (s *friendshipService) SetGameActivityPrivacyInvalidator(invalidator GameActivityPrivacyInvalidator) {
-	s.gameActivity = invalidator
 }
 
 func (s *friendshipService) reconcileActivityRelationship(ctx context.Context, userA, userB string) {
@@ -67,30 +61,28 @@ func (s *friendshipService) reconcileActivityRelationship(ctx context.Context, u
 }
 
 func NewFriendshipService(
+	gameActivity GameActivityPrivacyInvalidator,
 	friendRepo repository.FriendshipRepository,
 	userRepo repository.UserRepository,
 	notifRepo repository.NotificationRepository,
 	hub ws.Broadcaster,
+	emailEnqueuer ScheduledEmailEnqueuer,
+	dmAcceptor DMRequestAcceptor,
 	policies ...FriendRequestPolicy,
 ) FriendshipService {
 	service := &friendshipService{
-		friendRepo: friendRepo,
-		userRepo:   userRepo,
-		notifRepo:  notifRepo,
-		hub:        hub,
+		gameActivity:  gameActivity,
+		emailEnqueuer: emailEnqueuer,
+		dmAcceptor:    dmAcceptor,
+		friendRepo:    friendRepo,
+		userRepo:      userRepo,
+		notifRepo:     notifRepo,
+		hub:           hub,
 	}
 	if len(policies) > 0 {
 		service.requestPolicy = policies[0]
 	}
 	return service
-}
-
-func (s *friendshipService) SetDMAcceptor(acceptor DMRequestAcceptor) {
-	s.dmAcceptor = acceptor
-}
-
-func (s *friendshipService) SetEmailEnqueuer(enqueuer EmailEnqueuer) {
-	s.emailEnqueuer = enqueuer
 }
 
 // AreFriends checks if two users have an accepted friendship. Satisfies FriendChecker ISP.
@@ -234,16 +226,9 @@ func (s *friendshipService) enqueueFriendshipEmail(targetID, friendshipID, event
 	if s.emailEnqueuer == nil {
 		return
 	}
-	contextual, ok := s.emailEnqueuer.(ScheduledEmailEnqueuer)
-	if !ok {
-		// Fail closed rather than create an unbound social email that cannot
-		// recheck whether the underlying friendship event is still current.
-		friendshipLogger.Error("friendship email enqueuer lacks event-context support", "event", event)
-		return
-	}
 	mailCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	if _, err := contextual.EnqueueWithOptions(
+	if _, err := s.emailEnqueuer.EnqueueWithOptions(
 		mailCtx,
 		targetID,
 		models.EmailCategorySocial,

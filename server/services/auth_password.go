@@ -23,6 +23,9 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// ErrPasswordRecoveryUnavailable is server-wide and checked before account lookup.
+var ErrPasswordRecoveryUnavailable = fmt.Errorf("%w: password reset is not configured on this server", pkg.ErrBadRequest)
+
 // ChangePassword updates the user's password after verifying the current one.
 //
 // Verifying currentPassword (not just the JWT) protects against:
@@ -127,7 +130,7 @@ func (s *authService) ChangeEmail(ctx context.Context, userID, password, newEmai
 // Email enumeration protection: returns success even if email not found.
 func (s *authService) ForgotPassword(ctx context.Context, identifier string) (int, error) {
 	if s.emailSender == nil || s.resetRepo == nil {
-		return 0, fmt.Errorf("%w: password reset is not configured on this server", pkg.ErrBadRequest)
+		return 0, ErrPasswordRecoveryUnavailable
 	}
 
 	identifier = strings.TrimSpace(identifier)
@@ -146,17 +149,9 @@ func (s *authService) ForgotPassword(ctx context.Context, identifier string) (in
 	}
 	emailAddr := strings.TrimSpace(*user.Email)
 
-	// Cooldown check
-	lastToken, err := s.resetRepo.GetLatestByUserID(ctx, user.ID)
-	if err == nil && lastToken != nil {
-		elapsed := time.Since(lastToken.CreatedAt)
-		if elapsed < resetCooldown {
-			remaining := int((resetCooldown - elapsed).Seconds())
-			if remaining < 1 {
-				remaining = 1
-			}
-			return remaining, nil
-		}
+	remaining, err := s.passwordResetCooldown(ctx, user.ID)
+	if err != nil || remaining > 0 {
+		return remaining, err
 	}
 
 	// Clean up old tokens for this user
@@ -196,6 +191,24 @@ func (s *authService) ForgotPassword(ctx context.Context, identifier string) (in
 
 	authLogger.Info("password reset email sent", "user_id", user.ID)
 	return 0, nil
+}
+
+func (s *authService) passwordResetCooldown(ctx context.Context, userID string) (int, error) {
+	token, err := s.resetRepo.GetLatestByUserID(ctx, userID)
+	if errors.Is(err, pkg.ErrNotFound) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("failed to check password reset cooldown: %w", err)
+	}
+	if token == nil {
+		return 0, nil
+	}
+	remaining := resetCooldown - time.Since(token.CreatedAt)
+	if remaining <= 0 {
+		return 0, nil
+	}
+	return max(1, int(remaining.Seconds())), nil
 }
 
 // ResetPassword validates the token, updates the password, and deletes all tokens for the user.

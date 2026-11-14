@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"time"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
@@ -35,13 +34,8 @@ func logOnlineFriendFailure(userID string, err error) {
 	hubLogger.LogAttrs(context.Background(), level, "online friend notification failed", attrs...)
 }
 
-func notifyOnlineAfterPresence(notifier services.OnlineFriendNotifier, userID string) error {
-	if fresh, ok := notifier.(interface{ NotifyOnlinePresence(string) error }); ok {
-		return fresh.NotifyOnlinePresence(userID)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	return notifier.NotifyOnline(ctx, userID)
+func notifyOnlineAfterPresence(notifier services.OnlineFriendPresenceNotifier, userID string) error {
+	return notifier.NotifyOnlinePresence(userID)
 }
 
 // registerHubCallbacks wires Hub events to service layer logic.
@@ -67,8 +61,20 @@ func notifyOnlineAfterPresence(notifier services.OnlineFriendNotifier, userID st
 // below rather than written inline, because the Hub stores callbacks in
 // unexported fields — a test cannot retrieve them after registration, so
 // they have to be constructible on their own to be testable.
+type hubCallbackRegistrar interface {
+	presenceStatePublisher
+	voiceCallbackRegistrar
+	p2pCallbackRegistrar
+	gameActivityCallbackRegistrar
+	OnUserFirstConnect(ws.UserConnectionCallback)
+	OnUserFullyDisconnected(ws.UserConnectionCallback)
+	OnPresenceManualUpdate(ws.PresenceManualUpdateCallback)
+	OnChannelTyping(ws.ChannelTypingCallback)
+	OnDMTyping(ws.DMTypingCallback)
+}
+
 func registerHubCallbacks(
-	hub *ws.Hub,
+	hub hubCallbackRegistrar,
 	userRepo repository.UserRepository,
 	dmRepo repository.DMRepository,
 	voiceService services.VoiceService,
@@ -77,7 +83,7 @@ func registerHubCallbacks(
 	serverRepo repository.ServerRepository,
 	channelPermResolver services.ChannelPermResolver,
 	gameActivity *services.GameActivityService,
-	onlineFriendNotifiers ...services.OnlineFriendNotifier,
+	onlineFriendNotifiers ...services.OnlineFriendPresenceNotifier,
 ) (stopPresenceDebounce func()) {
 	onlineFriendNotifier := firstOnlineFriendNotifier(onlineFriendNotifiers)
 	// presenceDebouncer delays the OFFLINE presence transition (DB write +
@@ -95,134 +101,18 @@ func registerHubCallbacks(
 	hub.OnUserFullyDisconnected(userFullyDisconnectedCallback(hub, userRepo, voiceService, p2pCallService, presenceDebouncer, onlineFriendNotifier))
 
 	hub.OnPresenceManualUpdate(presenceUpdateCallback(hub, userRepo, onlineFriendNotifier))
+	stopGameActivity := func() {}
 	if gameActivity != nil {
-		gameActivity.Start()
-		hub.OnGameActivityConnect(func(userID string, connectionID uint64) {
-			gameActivity.Connect(userID, connectionID)
-		})
-		hub.OnGameActivityUpdate(func(userID string, connectionID, sequence uint64, game *ws.GameActivityClientGame) {
-			ctx, cancel := services.BroadcastContext()
-			defer cancel()
-			gameActivity.Update(ctx, userID, connectionID, sequence, game)
-		})
-		hub.OnGameActivityDisconnect(func(userID string, connectionID uint64) {
-			ctx, cancel := services.BroadcastContext()
-			defer cancel()
-			gameActivity.Disconnect(ctx, userID, connectionID)
-		})
-		hub.OnGameActivitySnapshot(func(userID string) {
-			ctx, cancel := services.BroadcastContext()
-			defer cancel()
-			gameActivity.Snapshot(ctx, userID)
-		})
-		hub.OnGameActivityPresenceChange(func(userID string) {
-			ctx, cancel := services.BroadcastContext()
-			defer cancel()
-			gameActivity.PolicyChanged(ctx, userID)
-		})
+		stopGameActivity = registerGameActivityCallbacks(hub, gameActivity)
 	}
 
 	// ─── Voice Callbacks ───
 
-	hub.OnVoiceJoin(func(userID, username, displayName, avatarURL, channelID string, isMuted, isDeafened bool) {
-		if err := voiceService.JoinChannel(userID, username, displayName, avatarURL, channelID, isMuted, isDeafened); err != nil {
-			hubLogger.Error("voice join failed", "area", "voice", "user_id", userID, "channel_id", channelID, "err", pkg.ErrText(err))
-			return
-		}
-
-		// Activity tracking runs after the in-memory join has already taken
-		// effect, so it is pure bookkeeping — one bounded budget covers all
-		// three writes rather than letting each stall independently.
-		ctx, cancel := services.BroadcastContext()
-		defer cancel()
-
-		// Track last voice activity for admin panel
-		if actErr := userRepo.UpdateLastVoiceActivity(ctx, userID); actErr != nil {
-			hubLogger.Error("failed to update user voice activity", "area", "voice", "user_id", userID, "err", pkg.ErrText(actErr))
-		}
-
-		// Track server-level voice activity
-		ch, chErr := channelRepo.GetByID(ctx, channelID)
-		if chErr != nil {
-			hubLogger.Error("channel lookup for activity tracking failed", "area", "voice", "channel_id", channelID, "err", pkg.ErrText(chErr))
-			return
-		}
-		if actErr := serverRepo.UpdateLastVoiceActivity(ctx, ch.ServerID); actErr != nil {
-			hubLogger.Error("failed to update server voice activity", "area", "voice", "server_id", ch.ServerID, "err", pkg.ErrText(actErr))
-		}
-	})
-	hub.OnVoiceLeave(func(userID string) {
-		if err := voiceService.LeaveChannel(userID); err != nil {
-			hubLogger.Error("voice leave failed", "area", "voice", "user_id", userID, "err", pkg.ErrText(err))
-		}
-	})
-	hub.OnVoiceStateUpdate(func(userID string, isMuted, isDeafened, isStreaming *bool) {
-		if err := voiceService.UpdateState(userID, isMuted, isDeafened, isStreaming); err != nil {
-			hubLogger.Error("voice state update failed", "area", "voice", "user_id", userID, "err", pkg.ErrText(err))
-		}
-	})
-	// The three moderation callbacks below only spend their context on
-	// DB-backed permission resolution (services/voice_admin.go) — the LiveKit
-	// side effects don't take it — so the broadcast budget fits them exactly.
-	hub.OnVoiceAdminStateUpdate(func(adminUserID, targetUserID string, isServerMuted, isServerDeafened *bool) {
-		ctx, cancel := services.BroadcastContext()
-		defer cancel()
-
-		if err := voiceService.AdminUpdateState(ctx, adminUserID, targetUserID, isServerMuted, isServerDeafened); err != nil {
-			hubLogger.Error("voice admin state update failed", "area", "voice", "admin_user_id", adminUserID, "target_user_id", targetUserID, "err", pkg.ErrText(err))
-		}
-	})
-	hub.OnVoiceMoveUser(func(moverUserID, targetUserID, targetChannelID string) {
-		ctx, cancel := services.BroadcastContext()
-		defer cancel()
-
-		if err := voiceService.MoveUser(ctx, moverUserID, targetUserID, targetChannelID); err != nil {
-			hubLogger.Error("voice move user failed", "area", "voice", "mover_user_id", moverUserID, "target_user_id", targetUserID, "channel_id", targetChannelID, "err", pkg.ErrText(err))
-		}
-	})
-	hub.OnVoiceDisconnectUser(func(disconnecterUserID, targetUserID string) {
-		ctx, cancel := services.BroadcastContext()
-		defer cancel()
-
-		if err := voiceService.AdminDisconnectUser(ctx, disconnecterUserID, targetUserID); err != nil {
-			hubLogger.Error("voice admin disconnect user failed", "area", "voice", "disconnecter_user_id", disconnecterUserID, "target_user_id", targetUserID, "err", pkg.ErrText(err))
-		}
-	})
-	hub.OnScreenShareWatch(func(viewerUserID, streamerUserID string, watching bool) {
-		voiceService.WatchScreenShare(viewerUserID, streamerUserID, watching)
-	})
-	hub.OnVoiceActivity(func(userID string) {
-		voiceService.UpdateActivity(userID)
-	})
+	registerVoiceCallbacks(hub, voiceService, userRepo, channelRepo, serverRepo)
 
 	// ─── P2P Call Callbacks ───
 
-	hub.OnP2PCallInitiate(func(callerID string, data ws.P2PCallInitiateData) {
-		callType := models.P2PCallType(data.CallType)
-		if err := p2pCallService.InitiateCall(callerID, data.ReceiverID, callType); err != nil {
-			hubLogger.Error("p2p call initiate failed", "area", "p2p", "caller_id", callerID, "receiver_id", data.ReceiverID, "err", pkg.ErrText(err))
-		}
-	})
-	hub.OnP2PCallAccept(func(userID string, data ws.P2PCallAcceptData) {
-		if err := p2pCallService.AcceptCall(userID, data.CallID); err != nil {
-			hubLogger.Error("p2p call accept failed", "area", "p2p", "user_id", userID, "call_id", data.CallID, "err", pkg.ErrText(err))
-		}
-	})
-	hub.OnP2PCallDecline(func(userID string, data ws.P2PCallDeclineData) {
-		if err := p2pCallService.DeclineCall(userID, data.CallID); err != nil {
-			hubLogger.Error("p2p call decline failed", "area", "p2p", "user_id", userID, "call_id", data.CallID, "err", pkg.ErrText(err))
-		}
-	})
-	hub.OnP2PCallEnd(func(userID string) {
-		if err := p2pCallService.EndCall(userID); err != nil {
-			hubLogger.Error("p2p call end failed", "area", "p2p", "user_id", userID, "err", pkg.ErrText(err))
-		}
-	})
-	hub.OnP2PSignal(func(senderID string, data ws.P2PSignalData) {
-		if err := p2pCallService.RelaySignal(senderID, data.CallID, data); err != nil {
-			hubLogger.Error("p2p signal relay failed", "area", "p2p", "sender_id", senderID, "call_id", data.CallID, "err", pkg.ErrText(err))
-		}
-	})
+	registerP2PCallbacks(hub, p2pCallService)
 
 	// ─── Channel Typing Callback ───
 	// Validates BOTH the sender and each recipient have ReadMessages
@@ -236,9 +126,7 @@ func registerHubCallbacks(
 
 	return func() {
 		presenceDebouncer.stopAll()
-		if gameActivity != nil {
-			gameActivity.Stop()
-		}
+		stopGameActivity()
 	}
 }
 
@@ -255,7 +143,7 @@ func registerHubCallbacks(
 // directly — needed for the presence-offline debounce tests in
 // presence_debounce_test.go, which assert on both this callback and
 // userFullyDisconnectedCallback sharing one debouncer instance.
-func userFirstConnectCallback(hub ws.EventPublisher, userRepo repository.UserRepository, debouncer *presenceOfflineDebouncer, onlineFriendNotifiers ...services.OnlineFriendNotifier) ws.UserConnectionCallback {
+func userFirstConnectCallback(hub ws.EventPublisher, userRepo repository.UserRepository, debouncer *presenceOfflineDebouncer, onlineFriendNotifiers ...services.OnlineFriendPresenceNotifier) ws.UserConnectionCallback {
 	return func(userID, _ string) {
 		// A fresh first-connection this soon after the user's last
 		// connection fully closed means they reconnected within
@@ -341,7 +229,7 @@ func userFullyDisconnectedCallback(
 	voiceService services.VoiceService,
 	p2pCallService services.P2PCallService,
 	debouncer *presenceOfflineDebouncer,
-	onlineFriendNotifiers ...services.OnlineFriendNotifier,
+	onlineFriendNotifiers ...services.OnlineFriendPresenceNotifier,
 ) ws.UserConnectionCallback {
 	return func(userID, _ string) {
 		// Hub connection lifecycle owns the invisible flag. Do not clear it
@@ -381,7 +269,7 @@ func userFullyDisconnectedCallback(
 // debounce interaction (schedule → cancel-on-reconnect → fire-time recheck)
 // is testable without constructing the voice/P2P service dependencies that
 // function ALSO drives synchronously (see presence_debounce_test.go).
-func scheduleOfflinePresenceTransition(debouncer *presenceOfflineDebouncer, hub ws.EventPublisher, userRepo repository.UserRepository, userID string, onlineFriendNotifiers ...services.OnlineFriendNotifier) {
+func scheduleOfflinePresenceTransition(debouncer *presenceOfflineDebouncer, hub ws.EventPublisher, userRepo repository.UserRepository, userID string, onlineFriendNotifiers ...services.OnlineFriendPresenceNotifier) {
 	debouncer.schedule(userID, func(gen uint64) {
 		offlinePresenceTransition(hub, userRepo, debouncer, userID, gen, onlineFriendNotifiers...)
 	})
@@ -396,7 +284,7 @@ func scheduleOfflinePresenceTransition(debouncer *presenceOfflineDebouncer, hub 
 // debouncer's own mutex, so in the normal path cancel() always wins if the
 // reconnect happened before the timer fired; this is defense-in-depth, not
 // the primary mechanism.
-func offlinePresenceTransition(hub ws.EventPublisher, userRepo repository.UserRepository, debouncer *presenceOfflineDebouncer, userID string, gen uint64, onlineFriendNotifiers ...services.OnlineFriendNotifier) {
+func offlinePresenceTransition(hub ws.EventPublisher, userRepo repository.UserRepository, debouncer *presenceOfflineDebouncer, userID string, gen uint64, onlineFriendNotifiers ...services.OnlineFriendPresenceNotifier) {
 	for _, connectedID := range hub.GetOnlineUserIDs() {
 		if connectedID == userID {
 			return
@@ -458,7 +346,7 @@ func offlinePresenceTransition(hub ws.EventPublisher, userRepo repository.UserRe
 	hubLogger.Info("user disconnected, DB set to offline", "area", "presence", "user_id", userID, "grace", presenceOfflineGrace.String())
 }
 
-func firstOnlineFriendNotifier(notifiers []services.OnlineFriendNotifier) services.OnlineFriendNotifier {
+func firstOnlineFriendNotifier(notifiers []services.OnlineFriendPresenceNotifier) services.OnlineFriendPresenceNotifier {
 	if len(notifiers) == 0 {
 		return nil
 	}
@@ -482,7 +370,7 @@ type presenceStatePublisher interface {
 	CommitPresenceVisibility(userID, status string) bool
 }
 
-func presenceUpdateCallback(hub presenceStatePublisher, userRepo repository.UserRepository, onlineFriendNotifiers ...services.OnlineFriendNotifier) ws.PresenceManualUpdateCallback {
+func presenceUpdateCallback(hub presenceStatePublisher, userRepo repository.UserRepository, onlineFriendNotifiers ...services.OnlineFriendPresenceNotifier) ws.PresenceManualUpdateCallback {
 	return func(userID string, status string, isAuto bool) {
 		// Auto updates include aggregate tab connect/disconnect and idle
 		// transitions. Do not let one of those clear a user's manually-set
@@ -641,7 +529,7 @@ func channelTypingCallback(hub ws.BroadcastAndOnline, channelRepo repository.Cha
 // dmTypingCallback relays a DM typing indicator to the conversation's other
 // member. Fires on every keystroke burst, so the channel lookup is bounded —
 // an unbounded one would let a wedged DB accumulate goroutines fast.
-func dmTypingCallback(hub *ws.Hub, dmRepo repository.DMRepository) ws.DMTypingCallback {
+func dmTypingCallback(hub ws.Broadcaster, dmRepo repository.DMRepository) ws.DMTypingCallback {
 	return func(senderUserID, senderUsername, dmChannelID string) {
 		ctx, cancel := services.BroadcastContext()
 		defer cancel()

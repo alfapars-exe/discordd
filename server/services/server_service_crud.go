@@ -106,11 +106,7 @@ func (s *serverService) CreateServer(ctx context.Context, ownerID string, req *m
 			return fmt.Errorf("failed to create server: %w", err)
 		}
 
-		snapshotWriter, ok := txServerRepo.(repository.GameActivityMembershipSnapshotRepository)
-		if !ok {
-			return fmt.Errorf("server repository cannot persist game activity membership snapshot")
-		}
-		if err := snapshotWriter.AddMemberWithGameActivityAudience(ctx, server.ID, ownerID, gameActivityAudience); err != nil {
+		if err := txServerRepo.AddMemberWithGameActivityAudience(ctx, server.ID, ownerID, gameActivityAudience); err != nil {
 			return fmt.Errorf("failed to add owner as member: %w", err)
 		}
 
@@ -350,28 +346,6 @@ func (s *serverService) DeleteServer(ctx context.Context, serverID, userID strin
 		return fmt.Errorf("%w: only the server owner can delete the server", pkg.ErrForbidden)
 	}
 
-	// LiveKit cleanup: delete self-hosted instance, decrement platform instance
-	if server.LiveKitInstanceID != nil {
-		instance, err := s.livekitRepo.GetByID(ctx, *server.LiveKitInstanceID)
-		if err == nil {
-			if instance.IsPlatformManaged {
-				if decErr := s.livekitRepo.DecrementServerCount(ctx, instance.ID); decErr != nil {
-					serverLogger.Error("failed to decrement livekit server count", "instance_id", instance.ID, "err", pkg.ErrText(decErr))
-				}
-			} else {
-				if delErr := s.livekitRepo.Delete(ctx, instance.ID); delErr != nil {
-					serverLogger.Error("failed to delete self-hosted livekit instance", "instance_id", instance.ID, "err", pkg.ErrText(delErr))
-				}
-			}
-		}
-	}
-
-	// Broadcast before delete (server_members are needed for BroadcastToServer)
-	s.hub.BroadcastToServer(serverID, ws.Event{
-		Op:   ws.OpServerDelete,
-		Data: map[string]string{"id": serverID},
-	})
-
 	// Pre-fetch attachment file_urls for the post-delete disk cleanup below.
 	// A fetch failure here is logged and non-fatal — the delete still
 	// proceeds, it just can't clean up files it couldn't enumerate.
@@ -380,16 +354,18 @@ func (s *serverService) DeleteServer(ctx context.Context, serverID, userID strin
 		serverLogger.Error("failed to fetch file urls before server delete", "server_id", serverID, "err", pkg.ErrText(urlErr))
 	}
 
-	// Transactional so the cascade (channels, roles, messages, ...) and the
-	// server row either all go or none do — Delete alone, called on the
-	// pool-bound repo, would run each table's delete as its own
-	// auto-committed statement and could strand a half-cleaned server on a
-	// mid-cascade failure.
+	// Commit database cleanup before removing files or notifying game activity.
 	if err := database.WithTx(ctx, s.db, func(tx *sql.Tx) error {
 		return repository.NewSQLiteServerRepoWithDialect(tx, database.IsPostgres(s.db)).Delete(ctx, serverID)
 	}); err != nil {
 		return fmt.Errorf("failed to delete server: %w", err)
 	}
+	// The hub tracks connected server members independently of the database rows.
+	s.hub.BroadcastToServer(serverID, ws.Event{
+		Op:   ws.OpServerDelete,
+		Data: map[string]string{"id": serverID},
+	})
+
 	if s.gameActivity != nil {
 		s.gameActivity.ServerDeleted(ctx, serverID)
 	}

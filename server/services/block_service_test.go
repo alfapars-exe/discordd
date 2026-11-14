@@ -29,6 +29,9 @@ type blockSvcFixture struct {
 // newBlockSvcFixture knows users "alice" and "bob"; the friendship repo
 // starts empty (GetByPair → pkg.ErrNotFound).
 func newBlockSvcFixture(t *testing.T) *blockSvcFixture {
+	return newBlockSvcFixtureWithActivity(t, nil)
+}
+func newBlockSvcFixtureWithActivity(t *testing.T, activity GameActivityPrivacyInvalidator) *blockSvcFixture {
 	t.Helper()
 	f := &blockSvcFixture{
 		friends: &testutil.MockFriendshipRepo{},
@@ -49,7 +52,7 @@ func newBlockSvcFixture(t *testing.T) *blockSvcFixture {
 	f.hub.BroadcastToUserFn = func(userID string, e ws.Event) {
 		f.events = append(f.events, sentEvent{to: userID, ev: e})
 	}
-	f.svc = NewBlockService(f.friends, f.users, f.hub)
+	f.svc = NewBlockService(activity, blockFixtureStore{f.friends}, f.users, f.hub)
 	return f
 }
 
@@ -341,4 +344,32 @@ func TestBlockService_IsBlocked_DelegatesToRepo(t *testing.T) {
 	if len(asked) != 1 || asked[0] != "alice|bob" {
 		t.Errorf("repo IsBlocked calls = %v, want [alice|bob]", asked)
 	}
+}
+
+// blockFixtureStore adapts legacy function-field assertions explicitly. Real
+// atomicity is verified by repository and commit-order integration tests.
+type blockFixtureStore struct{ *testutil.MockFriendshipRepo }
+
+func (r blockFixtureStore) CreateBlockAtomic(ctx context.Context, row *models.Friendship) (bool, error) {
+	existing, err := r.GetByPair(ctx, row.UserID, row.FriendID)
+	if err != nil && !errors.Is(err, pkg.ErrNotFound) {
+		return false, err
+	}
+	removed := false
+	if existing != nil {
+		if existing.Status == models.FriendshipStatusBlocked {
+			if existing.UserID == row.UserID {
+				return false, pkg.ErrAlreadyExists
+			}
+		} else {
+			if err := r.Delete(ctx, existing.ID); err != nil {
+				return false, err
+			}
+			removed = true
+		}
+	}
+	if err := r.Create(ctx, row); err != nil {
+		return false, err
+	}
+	return removed, nil
 }

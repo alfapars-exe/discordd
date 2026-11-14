@@ -32,6 +32,27 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { ACCOUNT_FILE, CHANNEL_NOTIFICATION_FIXTURE_FILE, E2E_RUN_ID, PENDING_NOTIFICATION_RECIPIENT_FILE } from "../playwright.config";
 
+const sessionTokens = new WeakMap<Page, string>();
+
+/** Authenticated fixture requests through the real API, using this page's login. */
+export async function fixtureApi<T>(page: Page, path: string, method = "GET", body?: unknown): Promise<T> {
+  const token = sessionTokens.get(page);
+  if (!token) throw new Error("Fixture API requires an authenticated test page");
+  return page.evaluate(async ({ path, method, body, token }) => {
+    const response = await fetch("/api" + path, {
+      method,
+      credentials: "include",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", "X-HiChat-Client": "web" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    if (!response.ok) throw new Error("Fixture API " + method + " failed with HTTP " + response.status);
+    if (response.status === 204) return undefined;
+    const result = await response.json();
+    if (!result.success) throw new Error("Fixture API returned an unsuccessful response");
+    return result.data;
+  }, { path, method, body, token });
+}
+
 /** Smallest valid PNG (1x1, transparent) — passes the server's MIME sniff. */
 const ONE_BY_ONE_PNG_B64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
@@ -118,9 +139,24 @@ export function writeOversizeFixture(filename = "too-big.bin"): string {
 export async function dismissOnboardingOverlays(page: Page): Promise<void> {
   // User Profile is hydrated from /users/me in the same auth-store update that
   // supplies the flags controlling these first-run overlays.
-  await expect(page.getByRole("button", { name: "User Profile", exact: true })).toBeVisible({
-    timeout: 20_000,
-  });
+  try {
+    await expect(page.getByRole("button", { name: "User Profile", exact: true })).toBeVisible({
+      timeout: 20_000,
+    });
+  } catch (error) {
+    const loading = await page.locator(".app-loading").count();
+    const assets = await page.evaluate(() => performance.getEntriesByType("resource")
+      .filter(entry => {
+        const url = new URL(entry.name);
+        return url.origin === location.origin && url.pathname.startsWith("/assets/");
+      })
+      .map(entry => ({
+        path: new URL(entry.name).pathname,
+        duration: Math.round(entry.duration),
+      })));
+    console.error("Signed-in profile unavailable", { loading, assets });
+    throw error;
+  }
 
   const welcomeOverlay = page.locator(".welcome-overlay");
   if (await welcomeOverlay.isVisible().catch(() => false)) {
@@ -141,7 +177,9 @@ export async function dismissOnboardingOverlays(page: Page): Promise<void> {
 /** Assert the signed-in shell currently exposed by the single-server UI. */
 export async function expectSignedInShell(page: Page): Promise<void> {
   const serverRail = page.getByRole("navigation", { name: "Servers", exact: true });
-  await expect(serverRail).toBeVisible({ timeout: 20_000 });
+  // Refresh throttling can require the full one-minute server window plus
+  // the application's next startup retry before the live shell is available.
+  await expect(serverRail).toBeVisible({ timeout: 90_000 });
   await expect(serverRail.getByRole("button", { name: "Friends", exact: true })).toBeVisible();
 }
 
@@ -471,14 +509,32 @@ export async function loginAsNotificationRecipient(page: Page): Promise<void> {
 
 /** Logs a fixture account into a fresh browser context via the real login form. */
 export async function loginAsCredentials(page: Page, account: TestAccount): Promise<void> {
+  page.on("response", response => {
+    if (new URL(response.url()).pathname === "/api/auth/refresh" && !response.ok()) {
+      console.error("E2E session refresh failed", {
+        status: response.status(),
+        retryAfter: response.headers()["retry-after"],
+      });
+    }
+  });
   const { username, password } = account;
 
   await forceEnglish(page);
   await page.goto("/login");
 
+  // Startup may honor a refresh Retry-After before deciding this browser is
+  // signed out. Wait for the real form rather than racing that wake-up phase.
+  await expect(page.getByLabel(/^Username/i)).toBeVisible({ timeout: 90_000 });
   await page.getByLabel(/^Username/i).fill(username);
   await page.getByLabel(/^Password/i).fill(password);
+  const loginResponse = page.waitForResponse(response =>
+    new URL(response.url()).pathname === "/api/auth/login"
+    && response.request().method() === "POST");
   await page.getByRole("button", { name: /^Log In$/ }).click();
+  const login = await (await loginResponse).json();
+  const token = login.data?.access_token;
+  expect(typeof token).toBe("string");
+  sessionTokens.set(page, token);
 
   await expect(page).toHaveURL(/\/channels/, { timeout: 20_000 });
   await expectSignedInShell(page);
@@ -531,17 +587,12 @@ export async function openFreshChannel(page: Page): Promise<void> {
 export async function provisionServerForE2E(page: Page, name: string): Promise<void> {
   // The access token intentionally lives only in the app module's memory, so
   // Playwright's separate APIRequestContext cannot authenticate directly.
-  // Refresh and create within the page origin; keep the token in-page and out
-  // of test logs, then reload so the app adopts the rotated refresh cookie.
+  // Use the login response retained in test memory, then reload to hydrate
+  // the new server through the normal application entry point.
   await expect(page.getByRole("button", {name:"User Profile",exact:true})).toBeVisible({timeout:20_000});
-  const result = await page.evaluate(async (serverName) => {
-    // Reuse the app's shared in-memory auth state instead of independently
-    // rotating its refresh cookie while /users/me requests are still running.
-    const authModulePath = "/src/api/client.ts";
-    const {ensureFreshToken} = await import(authModulePath);
-    const token = await ensureFreshToken();
-    if (!token) return {status:401,server:null};
-
+  const token = sessionTokens.get(page);
+  if (!token) throw new Error("Server fixture requires an authenticated test page");
+  const result = await page.evaluate(async ({ serverName, token }) => {
     const response = await fetch("/api/servers", {
       method: "POST",
       headers: {
@@ -560,14 +611,15 @@ export async function provisionServerForE2E(page: Page, name: string): Promise<v
     });
     const body = await response.json().catch(() => null);
     return { status: response.status, server: body?.data ?? body };
-  }, name);
+  }, { serverName: name, token });
   expect(result.status).toBe(201);
   const server = result.server as { id: string; name: string };
   expect(server.id).toBeTruthy();
   expect(server.name).toBe(name);
 
-  // Refresh hydrates the Zustand server list from the isolated E2E database.
+  // Refresh hydrates the server list after the authenticated shell is ready.
   await page.reload();
+  await expectSignedInShell(page);
   const serverButton = page.getByRole("button", { name, exact: true });
   await expect(serverButton).toBeVisible({ timeout: 15_000 });
   await dismissOnboardingOverlays(page);

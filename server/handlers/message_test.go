@@ -134,8 +134,8 @@ func (s *stubUploadService) Upload(_ context.Context, messageID string, _ multip
 }
 
 var (
-	_ services.MessageService = (*stubMessageService)(nil)
-	_ services.UploadService  = (*stubUploadService)(nil)
+	_ services.MessageRequestService = (*stubMessageService)(nil)
+	_ services.UploadService         = (*stubUploadService)(nil)
 )
 
 // ─── request builders ───
@@ -487,4 +487,22 @@ func TestMessageCreate_E2EEFieldConsistency(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Standalone handler fixtures deliberately use direct asynchronous delivery.
+func (s *stubMessageService) CompleteChannelSend(_ context.Context, message *models.Message) error {
+	go s.BroadcastCreate(message)
+	return nil
+}
+func (s *stubMessageService) AttachmentOutcome(context.Context, string, int, *models.Attachment, string) error {
+	return nil
+}
+
+func (s *stubMessageService) KeepChannelSendAlive(context.Context, string) func() { return func() {} }
+
+func (s *stubMessageService) ChannelEvents(context.Context, string, string, string, int64) (*services.ChannelEventPage, error) {
+	return nil, pkg.ErrNotFound
+}
+func (s *stubMessageService) ChannelDeliveryHealth(context.Context) (*services.ChannelDeliveryHealth, error) {
+	return nil, pkg.ErrNotFound
 }

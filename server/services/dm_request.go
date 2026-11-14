@@ -10,7 +10,6 @@ import (
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
-	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
 )
 
@@ -66,13 +65,7 @@ func (s *dmService) DeclineRequest(ctx context.Context, userID, channelID string
 	if err := verifyDMRequestRecipient(channel, userID, "decline"); err != nil {
 		return err
 	}
-	decliner, ok := s.dmRepo.(repository.PendingDMDecliner)
-	if !ok {
-		// An unconditional legacy DeleteChannel fallback would recreate the
-		// accept/decline data-loss race. Do not imply it is safe.
-		return fmt.Errorf("%w: atomic pending DM decline is unavailable", pkg.ErrInternal)
-	}
-	changed, fileURLs, ids, err := decliner.DeclinePending(ctx, channelID, userID)
+	changed, fileURLs, ids, err := s.dmRepo.DeclinePending(ctx, channelID, userID)
 	if err != nil {
 		return fmt.Errorf("failed to decline DM request: %w", err)
 	}
@@ -142,17 +135,14 @@ func (s *dmService) AcceptPendingChannels(ctx context.Context, userA, userB stri
 }
 
 func (s *dmService) acceptPendingStatus(ctx context.Context, channelID string) error {
-	if writer, ok := s.dmRepo.(repository.PendingDMAccepter); ok {
-		changed, err := writer.AcceptPendingUnblocked(ctx, channelID)
-		if err != nil {
-			return err
-		}
-		if !changed {
-			return fmt.Errorf("%w: DM request changed or blocked", pkg.ErrConflict)
-		}
-		return nil
+	changed, err := s.dmRepo.AcceptPendingUnblocked(ctx, channelID)
+	if err != nil {
+		return err
 	}
-	return s.dmRepo.UpdateChannelStatus(ctx, channelID, models.DMStatusAccepted)
+	if !changed {
+		return fmt.Errorf("%w: DM request changed or blocked", pkg.ErrConflict)
+	}
+	return nil
 }
 
 func (s *dmService) verifyRequestNotBlocked(ctx context.Context, channel *models.DMChannel) error {

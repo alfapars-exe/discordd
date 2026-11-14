@@ -1,0 +1,23 @@
+{
+  "date": "2026-11-14",
+  "scope": "Accepted voice join finishes before terminal session snapshot",
+  "source_sha256": "c3aeb7db9160e9b503dec869e0e83d86fcc7ef48c41348847702ffc44471d825",
+  "checks": {
+    "host_repetitions": 20,
+    "host_exit": 0,
+    "host_seconds": 0.727,
+    "services_vet_exit": 0,
+    "services_lint_issues": 0
+  },
+  "negative_control": {
+    "mechanism": "Go overlay moves producer join after channel snapshot",
+    "exit": 1,
+    "failure": "snapshot missed accepted join"
+  },
+  "limitations": [
+    "Models admitted operation state publication; no new OS-process or PostgreSQL acceptance.",
+    "Docker remains unavailable; new-test Linux race not run locally.",
+    "Local integration only.",
+    "Published PR298 head22aae5bb Sonar SUCCESS; ServerCI43524233537 still in progress at last poll, seven jobs successful, none failed."
+  ]
+}

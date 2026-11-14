@@ -518,9 +518,8 @@ func countFinalStates(events []ws.Event) int {
 // doomed bot — 200 OK, then stopBot wiped its track — and stopBot's final
 // IsActive=false then hid the panel of whatever bot served the channel next.
 // Now stopping is set before the fatal event, so the Enqueue gets a fresh
-// bot, and the doomed bot's final state is not sent over it. The Enqueue runs
-// synchronously from the hub callback for the fatal music_bot_error, which
-// is exactly inside that window — no timing involved.
+// bot, and the doomed bot's final state is not sent over it. The fatal event starts the next Enqueue while the old session's
+// teardown lock holds that window open.
 func TestPlayLoop_FailureCapEnqueueGetsFreshBot(t *testing.T) {
 	log := &eventLog{}
 	var plays atomic.Int32
@@ -543,8 +542,12 @@ func TestPlayLoop_FailureCapEnqueueGetsFreshBot(t *testing.T) {
 		if !doomed.stopping.Load() {
 			t.Error("fatal music_bot_error broadcast before the bot was marked stopping")
 		}
-		_, err := svc.Enqueue(context.Background(), "u", concTestChannel, concTestURL)
-		enqueued <- err
+		doomed.sessionMu.Lock()
+		go func() {
+			defer doomed.sessionMu.Unlock()
+			_, err := svc.Enqueue(context.Background(), "u", concTestChannel, concTestURL)
+			enqueued <- err
+		}()
 	}}
 	doomed = seedIdleBot(svc)
 	doomed.queue = []models.MusicTrack{{VideoID: "a"}, {VideoID: "b"}, {VideoID: "c"}}
@@ -863,5 +866,32 @@ func TestEnqueueSaveFailureRearmsIdleLeave(t *testing.T) {
 	bot.mu.Unlock()
 	if !rearmed || !queueEmpty {
 		t.Fatalf("failed enqueue left idle state inconsistent: timer=%v empty=%v", rearmed, queueEmpty)
+	}
+}
+
+func TestMusicCommandsRejectStoppingSession(t *testing.T) {
+	const id = "00000000-0000-4000-8000-000000000001"
+	for name, command := range map[string]func(*musicBotService) error{
+		"skip":    func(s *musicBotService) error { return s.Skip("ch") },
+		"pause":   func(s *musicBotService) error { return s.Pause("ch") },
+		"resume":  func(s *musicBotService) error { return s.Resume("ch") },
+		"seek":    func(s *musicBotService) error { return s.Seek("ch", 10) },
+		"remove":  func(s *musicBotService) error { return s.RemoveQueueItem("ch", id, 0) },
+		"reorder": func(s *musicBotService) error { return s.ReorderQueue("ch", []string{id}, 0) },
+		"shuffle": func(s *musicBotService) error { return s.ShuffleQueue("ch", 0) },
+		"repeat":  func(s *musicBotService) error { return s.SetRepeatMode("ch", "all") },
+	} {
+		t.Run(name, func(t *testing.T) {
+			s := newTestMusicBotService("ch", "server")
+			bot := s.bots["ch"]
+			bot.queue = []models.MusicTrack{{QueueItemID: id}}
+			bot.stopping.Store(true)
+			if err := command(s); !errors.Is(err, pkg.ErrNotFound) {
+				t.Fatalf("command against stopping session returned %v", err)
+			}
+			if bot.revision != 0 || len(bot.queue) != 1 {
+				t.Fatal("stopping session was mutated")
+			}
+		})
 	}
 }

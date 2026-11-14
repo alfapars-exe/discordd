@@ -1,6 +1,6 @@
 /** VoiceSettings — Voice & Audio settings tab. All settings persisted via voiceStore + localStorage. */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useVoiceStore } from "../../stores/voiceStore";
 import type { InputMode } from "../../stores/voiceStore";
@@ -24,6 +24,8 @@ const engineLabels: Record<string, string> = {
 const formatDb = (value: number) => Number.isFinite(value) ? `${value.toFixed(1)} dBFS` : "−∞ dBFS";
 
 function VoiceSettings() {
+  const inputDeviceId = useId();
+  const outputDeviceId = useId();
   const { t } = useTranslation("settings");
 
   // ─── Store state ───
@@ -194,8 +196,9 @@ function VoiceSettings() {
 
       {/* ─── Input Device ─── */}
       <div className="vs-section">
-        <div className="vs-label">{t("inputDevice")}</div>
+        <label className="vs-label" htmlFor={inputDeviceId}>{t("inputDevice")}</label>
         <select
+          id={inputDeviceId}
           className="vs-select"
           value={inputDevice}
           onChange={(e) => setInputDevice(e.target.value)}
@@ -268,8 +271,9 @@ function VoiceSettings() {
 
       {/* ─── Output Device ─── */}
       <div className="vs-section">
-        <div className="vs-label">{t("outputDevice")}</div>
+        <label className="vs-label" htmlFor={outputDeviceId}>{t("outputDevice")}</label>
         <select
+          id={outputDeviceId}
           className="vs-select"
           value={outputDevice}
           onChange={(e) => setOutputDevice(e.target.value)}

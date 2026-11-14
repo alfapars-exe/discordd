@@ -20,7 +20,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 
 vi.mock("react-i18next", () => ({ useTranslation: () => ({
-    t: (key: string) => key,
+    t: (key: string, options?: { count?: number }) => key === "searchResultCount" ? String(options?.count) : key,
     i18n: { language: "en" },
   }), initReactI18next: { type: "3rdParty", init: () => {} } }));
 
@@ -30,6 +30,7 @@ vi.mock("../../api/search", () => ({
 
 vi.mock("../../crypto/keyStorage", () => ({
   searchCachedMessages: vi.fn(async () => []),
+  getCachedDecryptedMessage: vi.fn(),
 }));
 
 // e2ee disabled + not ready -> the panel takes the server-side FTS5 path.
@@ -38,7 +39,7 @@ vi.mock("../../stores/serverStore", async () => {
   return {
     useServerStore: create(() => ({
       activeServerId: "srv-1",
-      activeServer: { e2ee_enabled: false },
+      activeServer: { id: "srv-1", e2ee_enabled: false },
     })),
   };
 });
@@ -73,7 +74,10 @@ vi.mock("../shared/Avatar", () => ({
 
 import SearchPanel from "./SearchPanel";
 import { searchMessages } from "../../api/search";
+import { getCachedDecryptedMessage, searchCachedMessages } from "../../crypto/keyStorage";
 import { useMessageStore } from "../../stores/messageStore";
+import { useServerStore } from "../../stores/serverStore";
+import { useE2EEStore } from "../../stores/e2eeStore";
 import { useToastStore } from "../../stores/toastStore";
 import type { SearchResult } from "../../api/search";
 import type { APIResponse, Message } from "../../types";
@@ -128,7 +132,24 @@ describe("SearchPanel — result races", () => {
   });
 
   afterEach(() => {
+    act(() => {
+      useServerStore.setState({ activeServer: { ...useServerStore.getState().activeServer!, e2ee_enabled: false } });
+      useE2EEStore.setState({ initStatus: "uninitialized" });
+    });
     vi.useRealTimers();
+  });
+
+  it.each([
+    ["uninitialized", "ch-1"],
+    ["ready", undefined],
+  ] as const)("keeps an encrypted search local when status is %s and channel is %s", async (initStatus, channelId) => {
+    useServerStore.setState({ activeServer: { ...useServerStore.getState().activeServer!, e2ee_enabled: true } });
+    useE2EEStore.setState({ initStatus });
+    vi.mocked(searchMessages).mockResolvedValue(ok([]));
+    render(<SearchPanel channelId={channelId} onClose={() => {}} />);
+    typeQuery("private search");
+    await act(async () => {});
+    expect(searchMessages).not.toHaveBeenCalled();
   });
 
   it("ignores an older response that resolves after a newer one", async () => {
@@ -158,6 +179,43 @@ describe("SearchPanel — result races", () => {
     expect(screen.getByText("newer result")).toBeInTheDocument();
   });
 
+  it("removes decrypted results and abandons an ongoing scan when keys become unavailable", async () => {
+    useServerStore.setState({ activeServer: { ...useServerStore.getState().activeServer!, e2ee_enabled: true } });
+    useE2EEStore.setState({ initStatus: "ready" });
+    const row = { messageId: "id", channelId: "ch-1", dmChannelId: null, content: "private match", timestamp: 1 };
+    const delayed = deferred<typeof row[]>();
+    vi.mocked(searchCachedMessages).mockResolvedValueOnce([row]).mockReturnValueOnce(delayed.promise);
+    render(<SearchPanel channelId="ch-1" onClose={() => {}} />);
+    typeQuery("private");
+    await act(async () => {});
+    expect(screen.getByText(row.content)).toBeInTheDocument();
+    act(() => useE2EEStore.setState({ initStatus: "uninitialized" }));
+    expect(screen.queryByText(row.content)).not.toBeInTheDocument();
+    act(() => useE2EEStore.setState({ initStatus: "ready" }));
+    typeQuery("match");
+    const signal = vi.mocked(searchCachedMessages).mock.lastCall?.[2];
+    act(() => useE2EEStore.setState({ initStatus: "uninitialized" }));
+    expect(signal?.aborted).toBe(true);
+    await act(async () => delayed.resolve([row]));
+    expect(screen.queryByText(row.content)).not.toBeInTheDocument();
+  });
+
+  it("clears the previous channel's results and ignores its pending response", async () => {
+    const pending = deferred<APIResponse<SearchResult>>();
+    vi.mocked(searchMessages)
+      .mockResolvedValueOnce(ok([makeMessage("old", "previous channel")]))
+      .mockReturnValueOnce(pending.promise);
+    const view = render(<SearchPanel channelId="ch-1" onClose={() => {}} />);
+    typeQuery("first");
+    await act(async () => {});
+    expect(screen.getByText("previous channel")).toBeInTheDocument();
+    typeQuery("second");
+    view.rerender(<SearchPanel channelId="ch-2" onClose={() => {}} />);
+    expect(screen.queryByText("previous channel")).not.toBeInTheDocument();
+    await act(async () => pending.resolve(ok([makeMessage("late", "previous response")])));
+    expect(screen.queryByText("previous response")).not.toBeInTheDocument();
+  });
+
   it("drops a result row when messageStore reports its live deletion", async () => {
     vi.mocked(searchMessages).mockResolvedValueOnce(
       ok([makeMessage("m-x", "doomed row"), makeMessage("m-y", "surviving row")])
@@ -179,6 +237,45 @@ describe("SearchPanel — result races", () => {
     expect(screen.queryByText("doomed row")).not.toBeInTheDocument();
     expect(screen.getByText("surviving row")).toBeInTheDocument();
   });
+
+  it("keeps a deleted result off subsequent local search pages", async () => {
+    useServerStore.setState({ activeServer: { ...useServerStore.getState().activeServer!, e2ee_enabled: true } });
+    useE2EEStore.setState({ initStatus: "ready" });
+    const rows = Array.from({ length: 52 }, (_, i) => ({
+      messageId: String(i), channelId: "ch-1", dmChannelId: null,
+      content: `hit number ${i}`, timestamp: i,
+    }));
+    vi.mocked(searchCachedMessages).mockClear().mockImplementation(async () => [...rows]);
+    vi.mocked(getCachedDecryptedMessage).mockImplementation(async id => rows.find(row => row.messageId === id) ?? null);
+    render(<SearchPanel channelId="ch-1" onClose={() => {}} />);
+    typeQuery("hit");
+    await act(async () => {});
+    act(() => useMessageStore.setState({ lastDeleted: { id: "23", channel_id: "ch-1" } }));
+    fireEvent.click(screen.getByRole("button", { name: "searchNext" }));
+    await act(async () => {});
+    expect(screen.getByText("hit number 24")).toBeInTheDocument();
+    expect(screen.queryByText("hit number 23")).not.toBeInTheDocument();
+    expect(searchCachedMessages).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns to the last available page when its only local result is deleted", async () => {
+    useServerStore.setState({ activeServer: { ...useServerStore.getState().activeServer!, e2ee_enabled: true } });
+    useE2EEStore.setState({ initStatus: "ready" });
+    const rows = Array.from({ length: 26 }, (_, i) => ({
+      messageId: String(i), channelId: "ch-1", dmChannelId: null, content: `match ${i}`, timestamp: i,
+    }));
+    vi.mocked(searchCachedMessages).mockResolvedValueOnce(rows);
+    vi.mocked(getCachedDecryptedMessage).mockImplementation(async id => rows.find(row => row.messageId === id) ?? null);
+    render(<SearchPanel channelId="ch-1" onClose={() => {}} />);
+    typeQuery("match");
+    await act(async () => {});
+    fireEvent.click(screen.getByRole("button", { name: "searchNext" }));
+    await act(async () => {});
+    expect(screen.getByText("match 0")).toBeInTheDocument();
+    await act(async () => useMessageStore.setState({ lastDeleted: { id: "0", channel_id: "ch-1" } }));
+    expect(screen.getByText("match 25")).toBeInTheDocument();
+    expect(screen.queryByText("match 0")).not.toBeInTheDocument();
+  });
 });
 
 describe("SearchPanel — result click", () => {
@@ -190,6 +287,18 @@ describe("SearchPanel — result click", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it("counts a deletion once when navigation and WebSocket report the same missing row", async () => {
+    vi.mocked(searchMessages).mockResolvedValueOnce(ok([makeMessage("a", "gone row"), makeMessage("b", "kept row")]));
+    const navigation = deferred<boolean>();
+    render(<SearchPanel channelId="ch-1" onClose={() => {}} onSelectResult={() => navigation.promise} />);
+    typeQuery("row");
+    await act(async () => {});
+    fireEvent.click(screen.getByText("gone row"));
+    act(() => useMessageStore.setState({ lastDeleted: { id: "a", channel_id: "ch-1" } }));
+    await act(async () => navigation.resolve(false));
+    expect(screen.getByText("1", { selector: ".search-count" })).toBeInTheDocument();
   });
 
   it("drops the row (no duplicate panel toast) when navigation reports the message gone", async () => {

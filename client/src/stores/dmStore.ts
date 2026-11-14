@@ -99,6 +99,19 @@ function captureDMReadContext(): () => boolean {
     && useE2EEStore.getState().localDeviceId === deviceId;
 }
 
+function unseenDMMessages(loaded: DMMessage[], incoming: DMMessage[]): DMMessage[] {
+  const seen = new Set(loaded.map(message => message.id));
+  return incoming.filter(message => {
+    if (seen.has(message.id)) return false;
+    seen.add(message.id);
+    return true;
+  });
+}
+
+function messagesForDM(channelId: string, messages: DMMessage[] = []): DMMessage[] {
+  return messages.filter(message => message.dm_channel_id === channelId);
+}
+
 function reportDMHistoryFailure(): void {
   useToastStore.getState().addToast("error", i18n.t("dm:historyLoadFailed"));
 }
@@ -195,7 +208,7 @@ type DMCoreState = {
   getMessagesForChannel: (channelId: string) => DMMessage[];
   getTypingUsers: (channelId: string) => string[];
   invalidateMessages: (channelId: string) => void;
-  invalidateFetchCache: () => void;
+  invalidateFetchCache: (options?: { preserveChannelList?: boolean }) => void;
 };
 
 export type DMStore = DMCoreState & DMSettingsSlice & DMWsSlice;
@@ -222,6 +235,8 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
     const scope = currentDMAuthScope();
     const generation = useComposerDraftStore.getState().generation;
     const metadataRevision = dmChannelMetadataRevision;
+    const initialChannels = get().channels;
+    const initialUnreadCounts = get().dmUnreadCounts;
     const isCurrent = () => request === dmChannelListRequest && Boolean(scope)
       && dmAuthScopeIsCurrent(scope!)
       && useComposerDraftStore.getState().generation === generation;
@@ -231,7 +246,14 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
       const res = await dmApi.listDMChannels({ isCurrent, timeoutMs: 15_000 });
       if (!isCurrent()) return false;
       if (res.success && res.data) {
-        if (metadataRevision !== dmChannelMetadataRevision) {
+        const currentChannels = get().channels;
+        const initialById = new Map(initialChannels.map(channel => [channel.id, channel]));
+        const currentById = new Map(currentChannels.map(channel => [channel.id, channel]));
+        const onlySelfAdded = currentChannels.length >= initialChannels.length
+          && initialChannels.every(channel => currentById.get(channel.id) === channel)
+          && currentChannels.every(channel => initialById.get(channel.id) === channel
+            || channel.other_user.id === scope.ownerId);
+        if (metadataRevision !== dmChannelMetadataRevision && currentChannels !== initialChannels && !onlySelfAdded) {
           // A WS/read event or another local channel mutation landed while
           // this snapshot was in flight. The event path is newer than this
           // list response, so retain the whole current metadata snapshot
@@ -245,7 +267,22 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
         for (const ch of res.data) {
           if (ch.unread_count > 0) dmUnreadCounts[ch.id] = ch.unread_count;
         }
-        set({ channels: res.data, dmUnreadCounts, isLoading: false });
+        const currentUnreadCounts = get().dmUnreadCounts;
+        for (const id of new Set([...Object.keys(initialUnreadCounts), ...Object.keys(currentUnreadCounts)])) {
+          if (initialUnreadCounts[id] !== currentUnreadCounts[id]) {
+            if (currentUnreadCounts[id] === undefined) delete dmUnreadCounts[id];
+            else dmUnreadCounts[id] = currentUnreadCounts[id];
+          }
+        }
+        const channels = [...res.data];
+        const listedIds = new Set(channels.map(channel => channel.id));
+        for (const channel of currentChannels) {
+          if (channel.other_user.id === scope.ownerId && !listedIds.has(channel.id)) {
+            channels.push(channel);
+            listedIds.add(channel.id);
+          }
+        }
+        set({ channels, dmUnreadCounts, isLoading: false });
         return true;
       }
       set({ isLoading: false });
@@ -326,9 +363,10 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
     }
 
     if (res.success && res.data) {
-      const decrypted = await decryptDMMessages(res.data!.messages ?? [], current, historyVersion.current);
+      const raw = messagesForDM(channelId, res.data.messages);
+      const decrypted = await decryptDMMessages(raw, current, historyVersion.current);
       const messages = decrypted.filter(historyVersion.current);
-      const positions = new Map((res.data.messages??[]).map((message,index)=>[message.id,index]));
+      const positions = new Map(raw.map((message,index)=>[message.id,index]));
       if (current()) void registerSpamBatch(messages, "dm", channelId);
 
       // Re-check abort after the async decrypt — a fast DM-switch during
@@ -349,6 +387,9 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
           [channelId]: res.data!.has_more,
         },
       }));
+      if (current() && get().selectedDMId === channelId && get().messagesByChannel[channelId]?.length) {
+        get().clearDMUnread(channelId);
+      }
     } else {
       reportDMHistoryFailure();
     }
@@ -378,14 +419,14 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
     const res = await dmApi.getDMMessages(channelId, beforeId, 50, {isCurrent:current, timeoutMs:15000});
     if (!current()) return;
     if (res.success && res.data) {
-      const decrypted = (await decryptDMMessages(res.data!.messages, current, historyVersion.current)).filter(historyVersion.current);
+      const decrypted = (await decryptDMMessages(messagesForDM(channelId, res.data.messages), current, historyVersion.current)).filter(historyVersion.current);
       if (!current()) return;
       void registerSpamBatch(decrypted, "dm", channelId);
 
       set((state) => ({
         messagesByChannel: {
           ...state.messagesByChannel,
-          [channelId]: sortDMBySource([...decrypted, ...state.messagesByChannel[channelId]].map(historyBuffer.apply)),
+          [channelId]: sortDMBySource([...unseenDMMessages(messages, decrypted), ...messages].map(historyBuffer.apply)),
         },
         hasMoreByChannel: {
           ...state.hasMoreByChannel,
@@ -420,50 +461,44 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
     const historyVersion = captureDMHistoryVersion(channelId);
     const historyBuffer = beginDMHistoryBuffer(channelId);
     try {
-    const res = await dmApi.getDMMessagesAround(channelId, messageId, 50, {isCurrent:current, signal:controller.signal, timeoutMs:15000});
-    if (!current()) {
-      release();
-      return false;
-    }
+      const res = await dmApi.getDMMessagesAround(channelId, messageId, 50, {isCurrent:current, signal:controller.signal, timeoutMs:15000});
+      if (!current()) return false;
 
-    if ((!res.success || !res.data) && res.status !== 404) {
-      reportDMHistoryFailure();
-      return false;
-    }
-    const page = res.success ? res.data : undefined;
-    const raw = page?.messages ?? [];
-    if (!page || !raw.some((m) => m.id === messageId)) {
-      // Target gone — keep any existing window; if there is none (the claim
-      // made the tab's mount fetch skip), load the tail now.
-      dmInflightFetches.delete(channelId);
-      release();
-      set({ isLoadingMessages: dmInflightFetches.size > 0 });
-      void get().fetchMessages(channelId);
-      return false;
-    }
+      if ((!res.success || !res.data) && res.status !== 404) {
+        reportDMHistoryFailure();
+        return false;
+      }
+      const page = res.success ? res.data : undefined;
+      const raw = messagesForDM(channelId, page?.messages);
+      if (!page || !raw.some((m) => m.id === messageId)) {
+        // Target gone — keep any existing window; if there is none (the claim
+        // made the tab's mount fetch skip), load the tail now.
+        dmInflightFetches.delete(channelId);
+        release();
+        set({ isLoadingMessages: dmInflightFetches.size > 0 });
+        void get().fetchMessages(channelId);
+        return false;
+      }
 
-    const decrypted = (await decryptDMMessages(raw, current, historyVersion.current)).filter(historyVersion.current);
-    if (current()) void registerSpamBatch(decrypted, "dm", channelId);
-    if (!current()) {
-      release();
-      return false;
-    }
-    const rawIds = new Set(raw.map(message=>message.id));
-    const positions = new Map(raw.map((message,index)=>[message.id,index]));
-    const retained = [...(get().messagesByChannel[channelId]??[]),...historyBuffer.read()].filter(message=>rawIds.has(message.id)&&!historyVersion.current(message)&&!historyVersion.deleted(message));
-    const windowMessages = sortDMBySource([...new Map([...decrypted,...retained].map(message=>[message.id,message])).values()].map(historyBuffer.apply),positions);
-    if (!windowMessages.some(message=>message.id===messageId)) return false;
-    clearDetachedDMMessages(channelId);
+      const decrypted = (await decryptDMMessages(raw, current, historyVersion.current)).filter(historyVersion.current);
+      if (current()) void registerSpamBatch(decrypted, "dm", channelId);
+      if (!current()) return false;
+      const rawIds = new Set(raw.map(message=>message.id));
+      const positions = new Map(raw.map((message,index)=>[message.id,index]));
+      const retained = [...(get().messagesByChannel[channelId]??[]),...historyBuffer.read()].filter(message=>rawIds.has(message.id)&&!historyVersion.current(message)&&!historyVersion.deleted(message));
+      const windowMessages = sortDMBySource([...new Map([...decrypted,...retained].map(message=>[message.id,message])).values()].map(historyBuffer.apply),positions);
+      if (!windowMessages.some(message=>message.id===messageId)) return false;
+      clearDetachedDMMessages(channelId);
 
-    set((state) => ({
-      messagesByChannel: { ...state.messagesByChannel, [channelId]: windowMessages },
-      hasMoreByChannel: { ...state.hasMoreByChannel, [channelId]: page.has_more },
-      hasMoreAfterByChannel: {
-        ...state.hasMoreAfterByChannel,
-        [channelId]: page.has_more_after ?? false,
-      },
-    }));
-    return true;
+      set((state) => ({
+        messagesByChannel: { ...state.messagesByChannel, [channelId]: windowMessages },
+        hasMoreByChannel: { ...state.hasMoreByChannel, [channelId]: page.has_more },
+        hasMoreAfterByChannel: {
+          ...state.hasMoreAfterByChannel,
+          [channelId]: page.has_more_after ?? false,
+        },
+      }));
+      return true;
     } catch {
       if (current()) reportDMHistoryFailure();
       return false;
@@ -496,7 +531,7 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
       const res = await dmApi.getDMMessagesAfter(channelId, afterId, 50, {isCurrent:current, timeoutMs:15000});
       if (!current()) return;
       if (!res.success || !res.data) { reportDMHistoryFailure(); return; }
-      const decrypted = (await decryptDMMessages(res.data.messages ?? [], current, historyVersion.current)).filter(historyVersion.current);
+      const decrypted = (await decryptDMMessages(messagesForDM(channelId, res.data.messages), current, historyVersion.current)).filter(historyVersion.current);
       if (!current()) return;
       void registerSpamBatch(decrypted, "dm", channelId);
       const hasMoreAfter = res.data.has_more_after ?? false;
@@ -505,13 +540,7 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
 
       set((state) => {
         const current = state.messagesByChannel[channelId] ?? [];
-        const seen = new Set(current.map((m) => m.id));
-        const appended: DMMessage[] = [];
-        for (const m of [...decrypted, ...held]) {
-          if (seen.has(m.id)) continue;
-          seen.add(m.id);
-          appended.push(m);
-        }
+        const appended = unseenDMMessages(current, [...decrypted, ...held]);
         return {
           messagesByChannel: {
             ...state.messagesByChannel,
@@ -520,6 +549,7 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
           hasMoreAfterByChannel: { ...state.hasMoreAfterByChannel, [channelId]: hasMoreAfter },
         };
       });
+      if (!hasMoreAfter && get().selectedDMId === channelId && get().messagesByChannel[channelId]?.length) get().clearDMUnread(channelId);
     } catch {
       if (current()) reportDMHistoryFailure();
     } finally {
@@ -800,8 +830,10 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
     });
   },
 
-  invalidateFetchCache: () => {
-    dmChannelListRequest++;
+  invalidateFetchCache: (options) => {
+    // Key readiness invalidates decrypted message history, not channel metadata.
+    // Preserve an initial list request so cold startup cannot leave the sidebar empty.
+    if (!options?.preserveChannelList) dmChannelListRequest++;
     // Cancel any in-flight fetches; their late completion would re-populate
     // messagesByChannel with stale ciphertext encrypted against the
     // pre-restore E2EE state.
@@ -812,7 +844,13 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
     dmInflightNewerFetches.clear();
     dmAroundPending.clear();
     clearDetachedDMMessages();
-    set({ messagesByChannel: {}, hasMoreByChannel: {}, hasMoreAfterByChannel: {},isLoading:false,isLoadingMessages:false });
+    set({
+      messagesByChannel: {},
+      hasMoreByChannel: {},
+      hasMoreAfterByChannel: {},
+      ...(options?.preserveChannelList ? {} : { isLoading: false }),
+      isLoadingMessages: false,
+    });
   },
 }));
 

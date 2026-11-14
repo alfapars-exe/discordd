@@ -38,8 +38,12 @@ func (t *manualP2PTimer) Fire() {
 }
 
 func newManualP2PService() (*p2pCallService, *testutil.MockEventPublisher, **manualP2PTimer) {
+	return newManualP2PServiceWithEmail(nil)
+}
+
+func newManualP2PServiceWithEmail(email EmailEnqueuer) (*p2pCallService, *testutil.MockEventPublisher, **manualP2PTimer) {
 	hub := &testutil.MockEventPublisher{}
-	svc := NewP2PCallService(p2pFriendLookup{}, p2pUserLookup{}, hub).(*p2pCallService)
+	svc := NewP2PCallService(p2pFriendLookup{}, p2pUserLookup{}, hub, email, nil).(*p2pCallService)
 	var timer *manualP2PTimer
 	svc.afterFunc = func(d time.Duration, fn func()) p2pCallTimer {
 		if d != p2pRingTimeout {
@@ -52,7 +56,8 @@ func newManualP2PService() (*p2pCallService, *testutil.MockEventPublisher, **man
 }
 
 func TestP2PCallRingTimeoutEndsBothPartiesAndEnqueuesGenericMissedCall(t *testing.T) {
-	svc, hub, timerPtr := newManualP2PService()
+	enqueuer := &stubEmailEnqueuer{}
+	svc, hub, timerPtr := newManualP2PServiceWithEmail(enqueuer)
 	var delivered []struct {
 		user  string
 		event ws.Event
@@ -63,8 +68,6 @@ func TestP2PCallRingTimeoutEndsBothPartiesAndEnqueuesGenericMissedCall(t *testin
 			event ws.Event
 		}{user, event})
 	}
-	enqueuer := &stubEmailEnqueuer{}
-	svc.SetEmailEnqueuer(enqueuer)
 	if err := svc.InitiateCall("caller", "receiver", models.P2PCallTypeVoice); err != nil {
 		t.Fatal(err)
 	}
@@ -96,12 +99,34 @@ func TestP2PCallRingTimeoutEndsBothPartiesAndEnqueuesGenericMissedCall(t *testin
 	}
 }
 
+func TestP2PCallLateDeclinePreservesAcceptedCall(t *testing.T) {
+	svc, hub, _ := newManualP2PService()
+	if err := svc.InitiateCall("caller", "receiver", models.P2PCallTypeVoice); err != nil {
+		t.Fatal(err)
+	}
+	id := svc.GetUserCall("caller").ID
+	if err := svc.EndCall("caller", "previous-call"); !errors.Is(err, pkg.ErrNotFound) {
+		t.Fatalf("stale hangup returned %v", err)
+	}
+	if err := svc.AcceptCall("receiver", id); err != nil {
+		t.Fatal(err)
+	}
+	hub.BroadcastToUserFn = func(string, ws.Event) { t.Error("late decline published an event") }
+	if err := svc.DeclineCall("receiver", id); !errors.Is(err, pkg.ErrBadRequest) {
+		t.Fatalf("late decline returned %v", err)
+	}
+	for _, user := range []string{"caller", "receiver"} {
+		if call := svc.GetUserCall(user); call == nil || call.ID != id || call.Status != models.P2PCallStatusActive {
+			t.Errorf("accepted call missing for %s", user)
+		}
+	}
+}
+
 func TestP2PCallTerminalActionsCancelRingTimer(t *testing.T) {
 	for _, action := range []string{"accept", "decline", "end", "disconnect"} {
 		t.Run(action, func(t *testing.T) {
-			svc, _, timerPtr := newManualP2PService()
 			enqueuer := &stubEmailEnqueuer{}
-			svc.SetEmailEnqueuer(enqueuer)
+			svc, _, timerPtr := newManualP2PServiceWithEmail(enqueuer)
 			if err := svc.InitiateCall("caller", "receiver", models.P2PCallTypeVideo); err != nil {
 				t.Fatal(err)
 			}
@@ -117,7 +142,7 @@ func TestP2PCallTerminalActionsCancelRingTimer(t *testing.T) {
 			case "decline":
 				err = svc.DeclineCall("receiver", svc.GetUserCall("caller").ID)
 			case "end":
-				err = svc.EndCall("caller")
+				err = svc.EndCall("caller", "")
 			case "disconnect":
 				svc.HandleDisconnect("receiver")
 			}

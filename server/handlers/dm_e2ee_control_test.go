@@ -12,7 +12,7 @@ import (
 )
 
 type dmEncryptionControlStub struct {
-	services.DMService
+	services.DMRequestService
 	calls int
 }
 

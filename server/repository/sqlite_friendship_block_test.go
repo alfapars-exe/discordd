@@ -92,7 +92,7 @@ func TestAtomicBlockWinsConcurrentPendingAcceptance(t *testing.T) {
 	go func() { <-start; acceptResult <- repo.UpdateStatus(ctx, "pending", models.FriendshipStatusAccepted) }()
 	go func() {
 		<-start
-		_, err := repo.(AtomicBlockWriter).CreateBlockAtomic(ctx, &models.Friendship{ID: "new-block", UserID: dmBob, FriendID: dmAlice, Status: models.FriendshipStatusBlocked, CreatedAt: now, UpdatedAt: now})
+		_, err := repo.CreateBlockAtomic(ctx, &models.Friendship{ID: "new-block", UserID: dmBob, FriendID: dmAlice, Status: models.FriendshipStatusBlocked, CreatedAt: now, UpdatedAt: now})
 		blockResult <- err
 	}()
 	close(start)
@@ -133,7 +133,7 @@ func TestAtomicBlockRollsBackRelationshipOnInsertFailure(t *testing.T) {
 	bad := *original
 	bad.ID = reverse.ID
 	bad.Status = models.FriendshipStatusBlocked
-	if _, err := repo.(AtomicBlockWriter).CreateBlockAtomic(ctx, &bad); err == nil {
+	if _, err := repo.CreateBlockAtomic(ctx, &bad); err == nil {
 		t.Fatal("primary-key collision accepted")
 	}
 	if row, err := repo.GetByID(ctx, original.ID); err != nil || row.Status != models.FriendshipStatusAccepted {
@@ -142,7 +142,7 @@ func TestAtomicBlockRollsBackRelationshipOnInsertFailure(t *testing.T) {
 	block := *original
 	block.ID = "block"
 	block.Status = models.FriendshipStatusBlocked
-	removed, err := repo.(AtomicBlockWriter).CreateBlockAtomic(ctx, &block)
+	removed, err := repo.CreateBlockAtomic(ctx, &block)
 	if err != nil || !removed {
 		t.Fatalf("atomic replacement removed=%v err=%v", removed, err)
 	}
@@ -169,7 +169,7 @@ func TestAtomicBlockConcurrentReplacement(t *testing.T) {
 	for i, pair := range [][2]string{{dmAlice, dmBob}, {dmBob, dmAlice}} {
 		go func(id string, pair [2]string) {
 			<-start
-			removed, err := repo.(AtomicBlockWriter).CreateBlockAtomic(ctx, &models.Friendship{ID: id, UserID: pair[0], FriendID: pair[1], Status: models.FriendshipStatusBlocked, CreatedAt: now, UpdatedAt: now})
+			removed, err := repo.CreateBlockAtomic(ctx, &models.Friendship{ID: id, UserID: pair[0], FriendID: pair[1], Status: models.FriendshipStatusBlocked, CreatedAt: now, UpdatedAt: now})
 			results <- outcome{removed, err}
 		}([]string{"a", "b"}[i], pair)
 	}

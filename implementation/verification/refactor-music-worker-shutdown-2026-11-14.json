@@ -1,0 +1,73 @@
+{
+  "source_head": "fec953fe190b609d2c76be4606ba40d715fde8a4",
+  "branch": "fix/music-worker-shutdown",
+  "state": "published_draft_ci_pending",
+  "before": "actual Enqueue with blocked playback fails StopAll returned before accepted playback worker exited",
+  "implementation": [
+    "serialize terminal admission and work registration under service mutex",
+    "track playback/publication/disconnect/idle workers independently of current bot map",
+    "cancel and join enqueue/restore/bot-creation producers",
+    "join only after channel/bot/session locks released",
+    "preserve existing explicit-stop sentinel for late admission"
+  ],
+  "validation": {
+    "four_lifecycle_subcases_repetitions_both": 20,
+    "initial_canonical_services_seconds": 90.12,
+    "initial_canonical_logx_seconds": 6.947,
+    "initial_integrated_full": "failed existing late-admission sentinel assertion; fixed product error rather than weakening assertion",
+    "post_compatibility_canonical_targeted_seconds": 2.675,
+    "post_compatibility_integrated_targeted_seconds": 2.716,
+    "canonical_full_final": {
+      "status": "passed",
+      "services_seconds": 81.591,
+      "logx": "cached pass"
+    },
+    "integrated_full_final": {
+      "status": "passed",
+      "services_seconds": 82.588,
+      "logx": "cached pass"
+    },
+    "canonical_vet_build_windows_linux_lint": "passed before sentinel compatibility follow-up",
+    "integrated_vet_build_lint": "passed before sentinel compatibility follow-up"
+  },
+  "remaining": [
+    "Linux race and complete current-source CI",
+    "real provider/media/process and physical-device acceptance",
+    "global refactor and final combined acceptance"
+  ],
+  "pr": "https://github.com/alfapars-exe/discordd/pull/304",
+  "panic_followup": {
+    "local_head": "410bf58bca97af346130e09b07af5eb5344addf8",
+    "state": "published with fec953fe",
+    "behavior": "connect panic reaches request recovery, bot removed, StopAll drains accepted producer",
+    "counterfactual": "overlay removes Enqueue producer finish; test fails producer ownership leaked after connect panic at2.12s",
+    "canonical_selected_repetitions": 20,
+    "canonical_seconds": 2.979,
+    "integrated_selected_repetitions": 20,
+    "integrated_seconds": 3.893,
+    "windows_lint": "passed",
+    "linux_wsl": {
+      "status": "passed",
+      "repetitions": 20,
+      "race": false,
+      "command_transport": "wsl --exec; initial shell-mediated regex invocation exit127 not counted",
+      "log": "hichat-music-owner-wsl20.log"
+    }
+  },
+  "previous_source_head": "fe6852fdd11e070073e56b346856c8b44c4839c5",
+  "guard_followup": {
+    "before": "actual Enqueue with hanging resolver fails shutdown cancellation; guard waits5.07s deadline",
+    "change": "URL guard retains5s deadline but derives from music lifetime; pipeline context also derives from lifetime; intentional owner cancellation produces no playback error",
+    "deadline_skip_stop_regression_repetitions": 2,
+    "deadline_skip_stop_seconds": 10.961,
+    "url_shutdown_repetitions": 30,
+    "url_shutdown_seconds": 0.551,
+    "integrated_lifecycle_repetitions": 20,
+    "integrated_seconds": 2.886,
+    "canonical_full_services_seconds": 102.753,
+    "integrated_full_services_seconds": 101.276,
+    "logx": "cached pass",
+    "canonical_vet_build_windows_linux_lint": "passed",
+    "ci": "pending current fec953fe; previous fe6852fd completed36/36"
+  }
+}

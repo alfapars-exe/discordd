@@ -30,6 +30,9 @@ jobs:
           cache: true
           cache-dependency-path: server/go.sum
 
+      - name: Repository query inventory contracts
+        run: go test ./scripts/query-inventory/main.go ./scripts/query-inventory/main_test.go
+
       # Production uses PostgreSQL; legacy SQLite fixtures cover offline import.
       - name: go vet
         run: go vet ./...
@@ -55,7 +58,7 @@ jobs:
       - name: Welcome bot tests and vet (independent Go module)
         working-directory: bots/welcome-bot
         run: |
-          go test ./... -count=1 -timeout=60s
+          go test -race ./... -count=1 -timeout=60s
           go vet ./...
 
       - name: Pinned JS solver Linux process and real Deno contracts
@@ -83,6 +86,19 @@ jobs:
           go test -race -covermode=atomic -coverprofile="$RUNNER_TEMP/go-coverage/base.out" -timeout=15m "${packages[@]}"
           python3 ../scripts/coverage-meta.py "$RUNNER_TEMP/go-coverage/base.out"
         working-directory: server
+
+      - name: Verify voluntary leave evicts LiveKit participants
+        shell: bash
+        working-directory: server
+        env:
+          HICHAT_TEST_LIVEKIT_URL: ws://127.0.0.1:7880
+          HICHAT_TEST_LIVEKIT_KEY: devkey
+          HICHAT_TEST_LIVEKIT_SECRET: secret
+        run: |
+          cid=$(docker run -d --network host livekit/livekit-server:v1.9.12@sha256:2c13cbf2edcbf13ea7b20d05c10b394d04d8fb3fe358269cff845a90b4de9576 --dev --bind 127.0.0.1 --node-ip 127.0.0.1)
+          trap 'docker rm -f "$cid" >/dev/null' EXIT
+          curl --fail --silent --show-error --retry 20 --retry-connrefused --retry-delay 1 http://127.0.0.1:7880/ >/dev/null
+          go test -race -tags livekit_integration ./services -run '^TestVoluntaryLeaveEvictsLiveKitParticipants$' -count=1 -timeout=2m
 
       - name: Upload base coverage
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -168,15 +184,39 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
         with:
           python-version: '3.12'
+      - name: Start active-process PostgreSQL with mutual TLS
+        run: bash scripts/start-e2e-postgres.sh
+      - name: Build production server for active-process acceptance
+        working-directory: server
+        run: go build -o "$RUNNER_TEMP/active-voice-server" .
       - name: Execute server, repository, and database tests; reject required test skips
         env:
           HICHAT_TEST_POSTGRES_DSN: postgres://postgres@127.0.0.1:5432/hichat_test?sslmode=disable
+          HICHAT_ACTIVE_VOICE_POSTGRES_DSN: ${{ env.HICHAT_E2E_POSTGRES_DSN }}
+          HICHAT_ACTIVE_VOICE_SERVER_BINARY: ${{ runner.temp }}/active-voice-server
         run: python3 scripts/run-postgres-tests.py
       - name: Race-check role mutations, durable delivery and email queues against PostgreSQL
         working-directory: server
         env:
           HICHAT_TEST_POSTGRES_DSN: postgres://postgres@127.0.0.1:5432/hichat_test?sslmode=disable
-        run: go test -race ./services ./repository ./pkg/email -run '^(TestPostgresRole|TestPostgresMemberRoleReplacement|TestChannelDelivery|TestDMIdempotent|TestDMOutbox|TestDMMarkUnreadFrom|TestEmail)' -count=1 -timeout=5m
+        run: |
+          go test -race ./pkg/email -count=1
+          go test -race ./services ./repository ./database -run '^(TestPostgresRole|TestPostgresMemberRoleReplacement|TestVoiceMaintenanceAFKPostgresCancellation|TestVoiceUsageCreditPostgres|TestVoiceUsagePostgres|TestPostgresVoiceUsageMigration|TestDeliveryStopCancelsPoolWait|TestDeliveryClaimCancellationLogging|TestPostgresMetricsCollectorCancellation|TestChannelDelivery|TestDMIdempotent|TestDMOutbox|TestDMMarkUnreadFrom|TestEmail)' -count=1 -timeout=5m
+
+      - name: Race-check active voice process SIGTERM against mutual TLS PostgreSQL
+        working-directory: server
+        env:
+          HICHAT_ACTIVE_VOICE_POSTGRES_DSN: ${{ env.HICHAT_E2E_POSTGRES_DSN }}
+          HICHAT_ACTIVE_VOICE_SERVER_BINARY: ${{ runner.temp }}/active-voice-server-race
+        run: |
+          test -n "$HICHAT_ACTIVE_VOICE_POSTGRES_DSN"
+          go build -race -o "$HICHAT_ACTIVE_VOICE_SERVER_BINARY" .
+          go test -race . -run '^TestActiveVoiceProcessPostgresSignal$' -count=1 -timeout=2m
+
+      - name: Stop active-process PostgreSQL
+        if: always()
+        run: |
+          if [[ "${HICHAT_E2E_PG_CONTAINER:-}" == hichat-e2e-pg-* ]]; then docker rm -f "$HICHAT_E2E_PG_CONTAINER"; fi
 
   server-postgres-tls:
     name: PostgreSQL client certificate reconnect
@@ -208,9 +248,19 @@ jobs:
           merge-multiple: true
       - name: Merge only profiles from identical source manifests
         run: python3 scripts/merge-go-coverage.py --expected-profiles 17 --output coverage/go.out 'coverage/inputs/**/*.out'
-      - name: Report statement coverage
+      - name: Enforce combined Go statement coverage baseline
         working-directory: server
-        run: go tool cover -func=../coverage/go.out
+        shell: bash
+        run: |
+          go tool cover -func=../coverage/go.out | tee ../coverage/go-summary.txt
+          awk -v floor=58.7 '
+            $1 == "total:" && $2 == "(statements)" && $3 ~ /^[0-9]+\.[0-9]+%$/ {
+              total = $3 + 0
+              found = 1
+              printf "Combined Go statement coverage %.1f%% (minimum %.1f%%)\n", total, floor
+            }
+            END { exit !(found && total >= floor) }
+          ' ../coverage/go-summary.txt
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: go-coverage-combined
@@ -369,6 +419,10 @@ jobs:
         run: npm run build
         working-directory: client
 
+      - name: Verify packaged audio engines
+        run: npm run test:audio:wasm:dist
+        working-directory: client
+
       - name: Microphone worklet CSP packaging
         run: node --test scripts/audio-build-csp.test.mjs
         working-directory: client
@@ -397,7 +451,7 @@ jobs:
       - run: npm audit --package-lock-only --audit-level=high
         working-directory: ${{ matrix.directory }}
 
-  # ─── Playwright E2E: real Go binary + Vite dev client ───
+  # ─── Playwright E2E: real Go binary + production Vite bundle ───
   # Uses the real Go binary and a unique verified-mTLS PostgreSQL database per run.
   e2e:
     name: Playwright E2E
@@ -421,8 +475,8 @@ jobs:
             client/package-lock.json
             e2e/package-lock.json
 
-      # The suite drives the Vite dev server, so the client only needs its
-      # dependencies — no production bundle build.
+      # Playwright builds and serves the production client when
+      # HICHAT_E2E_PRODUCTION_CLIENT=1 is set on the test steps below.
       - name: Install client deps
         run: npm ci
         working-directory: client
@@ -442,19 +496,50 @@ jobs:
       - name: Start isolated PostgreSQL with mutual TLS
         run: bash scripts/start-e2e-postgres.sh
 
-      - name: Playwright test
-        run: npx playwright test
+      - name: Chromium production application suite
+        run: node node_modules/@playwright/test/cli.js test --project=chromium
         working-directory: e2e
         env:
+          HICHAT_E2E_PRODUCTION_CLIENT: "1"
           CGO_ENABLED: "0"
+
+      - name: Recover encrypted history in a fresh production database
+        run: node node_modules/@playwright/test/cli.js test --project=chromium tests/crypto-recovery.spec.ts
+        working-directory: e2e
+        env:
+          HICHAT_E2E_PRODUCTION_CLIENT: "1"
+          HICHAT_E2E_CRYPTO_RECOVERY: "1"
+          CGO_ENABLED: "0"
+
+      - name: Verify account preference isolation in a fresh production database
+        run: node node_modules/@playwright/test/cli.js test --project=chromium tests/preferences-isolation.spec.ts
+        working-directory: e2e
+        env:
+          HICHAT_E2E_PRODUCTION_CLIENT: "1"
+          HICHAT_E2E_PREFERENCE_ISOLATION: "1"
+          CGO_ENABLED: "0"
+
+      - name: WebKit production client smoke
+        run: node node_modules/@playwright/test/cli.js test --project=webkit-smoke
+        working-directory: e2e
+        env:
+          HICHAT_E2E_PRODUCTION_CLIENT: "1"
+          CGO_ENABLED: "0"
+
+      - name: Recover account from delivered email in a fresh database
+        working-directory: e2e
+        env:
+          HICHAT_E2E_RECOVERY_MAIL: "1"
+          CGO_ENABLED: "0"
+        run: node node_modules/@playwright/test/cli.js test --project=chromium tests/recovery-mail.spec.ts
 
       - name: Stop isolated PostgreSQL
         if: always()
         run: |
           if [[ "${HICHAT_E2E_PG_CONTAINER:-}" == hichat-e2e-pg-* ]]; then docker rm -f "$HICHAT_E2E_PG_CONTAINER"; fi
 
-      - name: Upload report on failure
-        if: failure()
+      - name: Upload browser report and retry evidence
+        if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report
@@ -485,12 +570,8 @@ jobs:
       - name: Install root deps
         run: npm ci
 
-      # Install once before parallel node:test imports, without launching
-      # Chromium or requiring a graphical/sandbox configuration on the runner.
-      - name: Resolve Electron binary
-        run: |
-          node node_modules/electron/install.js
-          node -e "require('node:fs').accessSync(require('electron'))"
+      - name: Load profile contract tests
+        run: node --experimental-vm-modules --test loadtest/ws_connect.test.mjs
 
       - name: electron:test (resolve-path + regression suite)
         run: npm run electron:test
@@ -506,6 +587,7 @@ jobs:
         run: |
           python3 scripts/check-text-encoding.py
           python3 -m unittest discover -s scripts -p 'test_*.py'
+          python3 -m unittest discover -s deploy/infra -p 'test_*.py'
 
   # ─── Prod image build (HF Space Dockerfile) ───
   # The root Dockerfile is what HF Space actually builds on `git push origin`.
@@ -559,13 +641,18 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Check for duplicate migration numeric prefixes
+        shell: python
         run: |
-          cd server/database/migrations
-          dupes=$(ls *.sql | sed -E 's/^([0-9]+)_.*/\1/' | sort | uniq -d)
-          unexpected=$(printf '%s\n' "$dupes" | grep -vx '072' | grep -vx '' || true)
-          if [ -n "$unexpected" ]; then
-            echo "::error::Duplicate migration numeric prefix(es): $unexpected"
-            echo "Each migration needs a unique NNN_ prefix. Only 072 is grandfathered."
-            exit 1
-          fi
-          echo "Migration prefixes OK (072 grandfathered)."
+          from collections import defaultdict
+          from pathlib import Path
+
+          groups = defaultdict(set)
+          for migration in Path("server/database/migrations").glob("*.sql"):
+              prefix, _, _ = migration.name.partition("_")
+              if prefix.isdigit():
+                  groups[prefix].add(migration.name)
+
+          legacy_pair = {"072_attachments_file_url_unique.sql", "072_bot_accounts.sql"}
+          for prefix, names in sorted(groups.items()):
+              if len(names) > 1 and names != legacy_pair:
+                  raise SystemExit(f"Duplicate migration prefix {prefix}: {', '.join(sorted(names))}")

@@ -207,16 +207,14 @@ export async function handleDMEvent(msg: WSMessage, isCurrent: () => boolean = (
       );
 
       const dmState = useDMStore.getState();
-      if (dmMsg.dm_channel_id === dmState.selectedDMId&&disposition==="allow") {
-        // Viewing this DM — advance the server read cursor so other devices
-        // (and the next fetchChannels seed) don't count it as unread. Same
-        // contract as channelEventHandlers' markAsRead for the active channel.
-        dmApi.markDMRead(dmMsg.dm_channel_id, dmMsg.id).catch(() => {});
+      if (dmMsg.dm_channel_id === dmState.selectedDMId) {
+        if (disposition === "allow" && !dmState.hasMoreAfterByChannel[dmMsg.dm_channel_id]) {
+          dmApi.markDMRead(dmMsg.dm_channel_id, dmMsg.id).catch(() => {});
+        } else {
+          dmState.incrementDMUnread(dmMsg.dm_channel_id);
+        }
         return true;
       }
-
-      if(dmMsg.dm_channel_id===dmState.selectedDMId){dmState.incrementDMUnread(dmMsg.dm_channel_id);return true;}
-
       // Unread always counts (the badge is still shown, dimmed, on a muted
       // DM); only the attention-grabbing cues honour the mute.
       dmState.incrementDMUnread(dmMsg.dm_channel_id);
@@ -367,7 +365,8 @@ export async function handleDMEvent(msg: WSMessage, isCurrent: () => boolean = (
       return true;
 
     case "dm_read":
-      // Echo of our own read cursor from another session — local clear only.
+      if (!isCurrent() || !msg.d?.user_id || msg.d.user_id !== useAuthStore.getState().user?.id) return true;
+      // Apply the synchronized unread count locally.
       // Calling markDMRead here would echo again and loop.
       useDMStore.getState().handleDMReadSync(msg.d);
       return true;

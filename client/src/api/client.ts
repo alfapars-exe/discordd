@@ -192,15 +192,17 @@ function clearTokens(): void {
  * tokens and causing unexpected logouts.
  */
 let refreshPromise: Promise<boolean> | null = null;
-let refreshFailureStatus = 0;
+let refreshRejected = false;
+let refreshRetryAt = 0;
 // Refresh is shared by HTTP and WebSocket consumers, so it must release its
 // promise lock even when the transport or response body stops making progress.
 const REFRESH_TIMEOUT_MS = 15_000;
 
 async function refreshAccessToken(): Promise<boolean> {
   if (refreshPromise) return refreshPromise;
+  if (Date.now() < refreshRetryAt) return false;
 
-  refreshFailureStatus = 0;
+  refreshRejected = false;
   const pending = doRefresh(authGeneration);
   refreshPromise = pending;
   try {
@@ -235,7 +237,24 @@ async function doRefresh(generation: number): Promise<boolean> {
 
     if (generation !== authGeneration) return false;
     if (!res.ok) {
-      refreshFailureStatus = res.status;
+      if (res.status === 429) {
+        const retryAfter = res.headers.get("Retry-After");
+        const seconds = retryAfter === null ? NaN : Number(retryAfter);
+        const deadline = Number.isFinite(seconds)
+          ? Date.now() + Math.max(0, seconds) * 1000
+          : Date.parse(retryAfter ?? "");
+        if (Number.isFinite(deadline)) refreshRetryAt = deadline;
+      }
+      if (res.status === 409) {
+        // A concurrent rotation asks us to retry with the current cookie.
+        // Only an explicit account or session mismatch requires a new login.
+        const conflict = await lifetime.wait(() => res.json());
+        if (generation === authGeneration) {
+          refreshRejected = conflict?.code === "ACCOUNT_MISMATCH" || conflict?.code === "SESSION_MISMATCH";
+        }
+        return false;
+      }
+      refreshRejected = [400, 401, 403].includes(res.status);
       // Only clear tokens on explicit auth rejection — 5xx/429/network errors
       // don't mean the token is invalid, just that the server/network failed.
       if (res.status === 401 || res.status === 403) {
@@ -401,7 +420,7 @@ export async function apiClient<T>(
       const generation = authGeneration;
       const restored = await lifetime.wait(refreshAccessToken);
       if (cancelled()) return cancellation();
-      if (!restored) return { success: false, error: authGeneration !== generation || (refreshFailureStatus >= 400 && refreshFailureStatus < 500 && ![408, 429].includes(refreshFailureStatus)) ? "unauthorized" : "service_unavailable: session refresh failed" };
+      if (!restored) return { success: false, error: authGeneration !== generation || refreshRejected ? "unauthorized" : "service_unavailable: session refresh failed" };
       token = getAccessToken();
     }
     if (!options.skipAuthRefresh && token && isTokenAboutToExpire(token)) {
@@ -447,7 +466,7 @@ export async function apiClient<T>(
       // matters. The old `getRefreshToken()` gate guarded against a
       // pre-cookie storage scheme that no longer exists.
       if (isDev) {
-        console.warn(`[apiClient] 401 on ${method} ${endpoint} — attempting refresh`);
+        console.warn(`[apiClient] 401 on ${method} request — attempting refresh`);
       }
       const refreshed = await lifetime.wait(refreshAccessToken);
       if (cancelled()) return cancellation();
@@ -455,10 +474,10 @@ export async function apiClient<T>(
         headers["Authorization"] = `Bearer ${getAccessToken()}`;
         res = await lifetime.wait(() => fetch(apiUrl(endpoint), { ...fetchOptions, headers }));
         if (isDev) {
-          console.warn(`[apiClient] retry after refresh: ${method} ${endpoint} status=${res.status}`);
+          console.warn(`[apiClient] retry after refresh: ${method} request status=${res.status}`);
         }
       } else if (isDev) {
-        console.warn(`[apiClient] refresh FAILED on ${method} ${endpoint} — returning original 401`);
+        console.warn(`[apiClient] refresh FAILED on ${method} request — returning original 401`);
       }
     }
 
@@ -493,14 +512,14 @@ export async function apiClient<T>(
       // sentinel'e düş ki UI ham HTML değil dostça mesaj göstersin.
       const contentType = res.headers.get("content-type") ?? "";
       if (isGatewayError || contentType.includes("text/html")) {
-        console.error(`[apiClient] ${method} ${endpoint}: HTML response (HTTP ${res.status})`);
+        console.error(`[apiClient] ${method} request: HTML response (HTTP ${res.status})`);
         return {
           success: false,
           error: `service_unavailable: HTTP ${res.status}`,
           status: res.status,
         } as APIResponse<T>;
       }
-      console.error(`[apiClient] ${method} ${endpoint}: invalid JSON (HTTP ${res.status})`);
+      console.error(`[apiClient] ${method} request: invalid JSON (HTTP ${res.status})`);
       return {
         success: false,
         error: `HTTP ${res.status}: ${res.statusText}`,
@@ -510,11 +529,11 @@ export async function apiClient<T>(
   } catch (err) {
     if (cancelled()) return cancellation();
     if (lifetime.timedOut() || isAbortError(err)) {
-      console.error(`[apiClient] ${method} ${endpoint}: timed out after ${timeoutMs}ms`);
+      console.error(`[apiClient] ${method} request: timed out after ${timeoutMs}ms`);
       return timeoutResponse<T>();
     }
     const message = err instanceof Error ? err.message : "Network request failed";
-    console.error(`[apiClient] ${method} ${endpoint}:`, message);
+    console.error(`[apiClient] ${method} request: network failure`);
     // Never label a timeout as a network error: automatic retries of a write
     // that may have reached the server could otherwise duplicate it.
     return { success: false, error: message, isNetworkError: true } as APIResponse<T>;

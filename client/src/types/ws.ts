@@ -201,7 +201,7 @@ export interface WSPayloadMap {
   dm_request_decline: { dm_channel_id: string };
   // Echoed to the reader's own sessions after POST /dms/{id}/read so other
   // devices drop their local unread count for that channel.
-  dm_read: { dm_channel_id: string; user_id: string; last_read_message_id: string | null };
+  dm_read: { dm_channel_id: string; user_id: string; last_read_message_id: string | null; unread_count?: number };
   group_dm_create: GroupDM;
   group_dm_update: GroupDM;
   group_dm_delete: { group_id: string };

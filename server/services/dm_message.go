@@ -108,11 +108,7 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 			return nil, err
 		}
 		requestHash = fmt.Sprintf("%x", sha256.Sum256(encoded))
-		receipts, ok := s.dmRepo.(repository.DMSendReceipts)
-		if !ok {
-			return nil, fmt.Errorf("%w: dm_send_receipts_unavailable", pkg.ErrBadRequest)
-		}
-		previous, err := receipts.FindDMSend(ctx, channelID, userID, req.ClientMessageID, requestHash)
+		previous, err := s.dmRepo.FindDMSend(ctx, channelID, userID, req.ClientMessageID, requestHash)
 		if err != nil || previous != nil {
 			return previous, err
 		}
@@ -264,11 +260,10 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 			}
 		}
 		if req.ClientMessageID != "" {
-			receipts, ok := r.DM.(repository.DMSendReceipts)
-			if !ok || r.LockChannel == nil {
+			if r.LockChannel == nil {
 				return fmt.Errorf("%w: dm_send_receipts_unavailable", pkg.ErrBadRequest)
 			}
-			previous, err := receipts.FindDMSend(ctx, channelID, userID, req.ClientMessageID, requestHash)
+			previous, err := r.DM.FindDMSend(ctx, channelID, userID, req.ClientMessageID, requestHash)
 			if err != nil {
 				return err
 			}
@@ -344,7 +339,7 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 			}
 		}
 		if req.ClientMessageID != "" {
-			if err := r.DM.(repository.DMSendReceipts).RecordDMSend(ctx, channelID, userID, req.ClientMessageID, requestHash, msg.ID); err != nil {
+			if err := r.DM.RecordDMSend(ctx, channelID, userID, req.ClientMessageID, requestHash, msg.ID); err != nil {
 				return err
 			}
 		}
@@ -623,6 +618,7 @@ func (s *dmService) MarkUnreadFrom(ctx context.Context, userID, channelID, messa
 	if _, err := s.verifyChannelMembership(ctx, userID, channelID); err != nil {
 		return 0, err
 	}
+	var actualCursor *string
 	var count int
 	if err := s.txRunner.InTx(ctx, func(r *repository.DMTxRepos) error {
 		// Match sends and MarkRead: lock the channel before dm_reads. Its
@@ -634,13 +630,16 @@ func (s *dmService) MarkUnreadFrom(ctx context.Context, userID, channelID, messa
 		}
 		var err error
 		count, err = r.DMRead.MarkUnreadFrom(ctx, userID, channelID, messageID)
+		if err == nil && r.ReadState != nil {
+			actualCursor, count, err = r.ReadState(ctx, userID, channelID)
+		}
 		return err
 	}); err != nil {
 		return 0, err
 	}
 	s.hub.BroadcastToUser(userID, ws.Event{Op: ws.OpDMRead, Data: map[string]any{
 		"dm_channel_id": channelID, "user_id": userID,
-		"last_read_message_id": messageID, "unread_count": count,
+		"last_read_message_id": actualCursor, "unread_count": count,
 	}})
 	return count, nil
 }

@@ -1,0 +1,40 @@
+{
+  "date": "2026-11-14",
+  "scope": "Cancel independent voice maintenance workers before joining either",
+  "source_sha256": {
+    "server/services/voice_maintenance.go": "6b00f8b5303d765e99cb760d57a75b2b38d1a866278e3110745155196689eaec",
+    "server/services/voice_maintenance_test.go": "7a89712aadf311e1bfd922061a16d8b516cd07712ec5d3615cf99e52d4095d62"
+  },
+  "regression_before": {
+    "test": "TestVoiceMaintenanceStopCancelsAllBeforeJoining",
+    "exit_code": 1,
+    "failure": "AFK cancellation waited for unrelated orphan sweep"
+  },
+  "after": {
+    "host_maintenance_count": 100,
+    "host_exit": 0,
+    "linux_race_maintenance_count": 100,
+    "linux_race_exit": 0,
+    "vet_services_exit": 0,
+    "lint_services_issues": 0,
+    "host_verified_mtls_postgres": {
+      "repetitions": 3,
+      "passing_test_events": 21,
+      "skips": 0,
+      "exit_code": 0,
+      "elapsed_seconds": 3.104
+    }
+  },
+  "limitations": [
+    "PostgreSQL-specific maintenance test skipped in these DSN-free runs; this change is covered by deterministic worker cancellation/join tests.",
+    "Active media cleanup and complete shutdown acceptance remain open."
+  ],
+  "delivery": {
+    "pr": 298,
+    "head": "b69a98e32a1a02cf21f7bc21d80c2ccee2999c25",
+    "server_ci_run": 43514109922,
+    "frontend_run": 43514109953,
+    "mobile_run": 43514109792,
+    "status": "started; terminal results pending"
+  }
+}

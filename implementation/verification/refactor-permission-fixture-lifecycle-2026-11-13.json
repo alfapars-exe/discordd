@@ -1,0 +1,53 @@
+{
+  "date": "2026-11-13",
+  "scope": "Permission cache test-fixture ownership; no production service/cache changes",
+  "canonical_source_commit": "615b5457",
+  "integration_source_commit": "2a3f8fd2",
+  "source_hashes": {
+    "server/services/channel_permission_fixture_lifecycle_test.go": "fbc4720f4e134eb8208bbe7ab3bee8432549cdababb0d83db99d836e59c78652",
+    "server/services/channel_permission_fresh_test.go": "a1a05140f4414b2cfe6f629297cc78683489488bbf4ffe583e1a41930716d01b",
+    "server/services/channel_permission_inflight_test.go": "6e5cf551f4750ad930efd12e9e675548d729fe3c78075aa9e42d1cfee6438848",
+    "server/services/channel_permission_service_test.go": "885acaeedd8af5e73cb72fe4873fff1d7397c6c8418b9eac440695e7cb045dd8",
+    "server/services/message_service_test.go": "669e165426216d075d48b03315d4c8d5293825a8ab9073123d6bbc0bc90995e9",
+    "server/services/music_audience_test.go": "6f63f94e8219b0aa28febba37e08bd4cb5dafbce528df2dd9a8b89815f15baf4",
+    "server/services/search_service_test.go": "d08009d00a847071f0ab02e0af2978b98033a1fe4a15a279118eac5ed4337194",
+    "server/services/stream_start_notifier_test.go": "2df701a4938afe8fc374f29a870ad20cfb83e300c433796fb24b5f0d1f4d9747",
+    "server/services/thread_permission_cache_test.go": "38a3174d679434f15342932e16345f8255d7e0707a347814d516ed6bf97d6751",
+    "server/services/voice_state_fanout_fresh_test.go": "381ff411f20dbfd99c05fa149689b2a9818fba1ed1a0f8d7621bd3ebb6974b38"
+  },
+  "shared_helper_regression": {
+    "before_workers": 400,
+    "after_workers": 0,
+    "after_repetitions": 5,
+    "before_log": "%TEMP%/hichat-permission-parity-cache-before.log",
+    "after_log": "%TEMP%/hichat-permission-parity-cache-after.log"
+  },
+  "direct_fixture_extension": {
+    "before_new_retained_workers": 6,
+    "before_log": "%TEMP%/hichat-permission-direct-fixtures-before.log",
+    "after_integration_fixture_groups": 7,
+    "after_canonical_fixture_groups": 6,
+    "after_each_group_returns_to_initial_count": true,
+    "after_repetitions": 5,
+    "after_log": "%TEMP%/hichat-permission-direct-fixtures-after.log",
+    "canonical_exclusion": "Leave/rejoin fixture is absent from main; unrelated integration fixture and implementation dependencies were not imported."
+  },
+  "latest_verification": {
+    "integration_top_level_tests": 54,
+    "integration_seconds": 5.909,
+    "integration_race_seconds": 15.869,
+    "canonical_top_level_tests": 51,
+    "canonical_seconds": 5.875,
+    "canonical_race_seconds": 15.612,
+    "all_selected_tests_ran": true,
+    "exit": 0,
+    "canonical_log": "%TEMP%/hichat-permission-fixture-expanded-canonical.jsonl",
+    "canonical_race_log": "%TEMP%/hichat-permission-fixture-expanded-canonical-race.log",
+    "profile": "Mock/fixture tests without PostgreSQL DSN; race in Docker golang:1.26.10-bookworm with auto toolchain"
+  },
+  "remaining": [
+    "Does not establish resolution of the full-package timeout",
+    "Production resource lifecycle and other packages are separate acceptance work",
+    "Frozen integration shard session 45007 excludes these test changes and keeps its separate source identity"
+  ]
+}

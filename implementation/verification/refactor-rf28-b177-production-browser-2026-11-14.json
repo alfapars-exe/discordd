@@ -1,0 +1,151 @@
+{
+  "source": "b177a77d0cc2c9bdf3e8e1e35f4c287fec6629b4",
+  "run": 43571777453,
+  "job": 132377510438,
+  "conclusion": "success",
+  "steps": [
+    {
+      "name": "Set up job",
+      "conclusion": "success",
+      "started_at": "2026-11-14T07:35:03Z",
+      "completed_at": "2026-11-14T07:35:06Z"
+    },
+    {
+      "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+      "conclusion": "success",
+      "started_at": "2026-11-14T07:35:06Z",
+      "completed_at": "2026-11-14T07:35:13Z"
+    },
+    {
+      "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+      "conclusion": "success",
+      "started_at": "2026-11-14T07:35:13Z",
+      "completed_at": "2026-11-14T07:35:15Z"
+    },
+    {
+      "name": "Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+      "conclusion": "success",
+      "started_at": "2026-11-14T07:35:15Z",
+      "completed_at": "2026-11-14T07:35:21Z"
+    },
+    {
+      "name": "Install client deps",
+      "conclusion": "success",
+      "started_at": "2026-11-14T07:35:21Z",
+      "completed_at": "2026-11-14T07:35:31Z"
+    },
+    {
+      "name": "Install e2e deps",
+      "conclusion": "success",
+      "started_at": "2026-11-14T07:35:31Z",
+      "completed_at": "2026-11-14T07:35:31Z"
+    },
+    {
+      "name": "Verify disposable E2E isolation guards",
+      "conclusion": "success",
+      "started_at": "2026-11-14T07:35:31Z",
+      "completed_at": "2026-11-14T07:35:34Z"
+    },
+    {
+      "name": "Install Playwright Chromium and WebKit",
+      "conclusion": "success",
+      "started_at": "2026-11-14T07:35:34Z",
+      "completed_at": "2026-11-14T07:36:26Z"
+    },
+    {
+      "name": "Start isolated PostgreSQL with mutual TLS",
+      "conclusion": "success",
+      "started_at": "2026-11-14T07:36:26Z",
+      "completed_at": "2026-11-14T07:36:42Z"
+    },
+    {
+      "name": "Chromium production application suite",
+      "conclusion": "success",
+      "started_at": "2026-11-14T07:36:42Z",
+      "completed_at": "2026-11-14T07:39:54Z"
+    },
+    {
+      "name": "Recover encrypted history in a fresh production database",
+      "conclusion": "success",
+      "started_at": "2026-11-14T07:39:54Z",
+      "completed_at": "2026-11-14T07:40:53Z"
+    },
+    {
+      "name": "Verify account preference isolation in a fresh production database",
+      "conclusion": "success",
+      "started_at": "2026-11-14T07:40:53Z",
+      "completed_at": "2026-11-14T07:41:48Z"
+    },
+    {
+      "name": "WebKit production client smoke",
+      "conclusion": "success",
+      "started_at": "2026-11-14T07:41:48Z",
+      "completed_at": "2026-11-14T07:42:24Z"
+    },
+    {
+      "name": "Recover account from delivered email in a fresh database",
+      "conclusion": "success",
+      "started_at": "2026-11-14T07:42:24Z",
+      "completed_at": "2026-11-14T07:42:42Z"
+    },
+    {
+      "name": "Stop isolated PostgreSQL",
+      "conclusion": "success",
+      "started_at": "2026-11-14T07:42:42Z",
+      "completed_at": "2026-11-14T07:42:42Z"
+    },
+    {
+      "name": "Upload report on failure",
+      "conclusion": "skipped",
+      "started_at": "2026-11-14T07:42:42Z",
+      "completed_at": "2026-11-14T07:42:42Z"
+    },
+    {
+      "name": "Post Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+      "conclusion": "success",
+      "started_at": "2026-11-14T07:42:42Z",
+      "completed_at": "2026-11-14T07:42:43Z"
+    },
+    {
+      "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+      "conclusion": "success",
+      "started_at": "2026-11-14T07:42:43Z",
+      "completed_at": "2026-11-14T07:42:43Z"
+    },
+    {
+      "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+      "conclusion": "success",
+      "started_at": "2026-11-14T07:42:43Z",
+      "completed_at": "2026-11-14T07:42:43Z"
+    },
+    {
+      "name": "Complete job",
+      "conclusion": "success",
+      "started_at": "2026-11-14T07:42:43Z",
+      "completed_at": "2026-11-14T07:42:43Z"
+    }
+  ],
+  "summary_lines": [
+    "  14 passed (3.2m)",
+    "2026-11-14T07:39:54.6695960Z   14 passed (3.2m)",
+    "2026-11-14T07:40:53.3151677Z ##[notice]  3 passed (58.2s)",
+    "2026-11-14T07:40:53.3154206Z   3 passed (58.2s)",
+    "2026-11-14T07:41:48.3821554Z ##[notice]  2 passed (54.6s)",
+    "2026-11-14T07:41:48.3849284Z   2 passed (54.6s)",
+    "2026-11-14T07:42:24.4160988Z ##[notice]  1 passed (35.6s)",
+    "2026-11-14T07:42:24.4162594Z   1 passed (35.6s)",
+    "2026-11-14T07:42:42.7212178Z ##[notice]  2 passed (17.9s)",
+    "2026-11-14T07:42:42.7216242Z   2 passed (17.9s)"
+  ],
+  "scope": "Production browser job only. Overall Server CI still running when captured. Not later local commits, publication or physical media acceptance.",
+  "retry_only_passes": [
+    "dm-reply-navigation.spec.ts",
+    "role-visibility.spec.ts"
+  ],
+  "regular_chromium": {
+    "first_attempt_passes": 14,
+    "flaky": 2,
+    "failed_after_retry": 0
+  },
+  "limits": "Job succeeded under the old retry policy, but two retry-only passes remain unresolved. Not stable browser acceptance or whole Server CI proof."
+}

@@ -1,0 +1,32 @@
+{
+  "date": "2026-11-14",
+  "source": "7a5e44ba508dd10ad3ecc09ba16ac50760c77b1f",
+  "run": 43531792417,
+  "job": 132251172133,
+  "job_conclusion": "success",
+  "evidence": [
+    "2026-11-14T00:07:21.3487738Z     active_voice_process_postgres_test.go:50: ACTIVE_VOICE_SIGNAL_RESULT credits=1 pending=0 applied=1 usage=2 ledger=2",
+    "2026-11-14T00:07:21.3662115Z {\"Action\": \"pass\", \"Package\": \"github.com/argeinfina/hichat\", \"Test\": \"TestActiveVoiceProcessPostgresSignal\", \"Elapsed\": 3.12}"
+  ],
+  "assertions": [
+    "normal login and one-shot WS ticket",
+    "production ws.Event join with own-user/channel/action response",
+    "live socket and zero existing credit before SIGTERM",
+    "separate instrumented server process exits 0 with graceful marker",
+    "exactly one credit applied; no pending credit; aggregate equals ledger; at least two seconds"
+  ],
+  "accounting": {
+    "credits": 1,
+    "pending": 0,
+    "applied": 1,
+    "usage_seconds": 2,
+    "ledger_seconds": 2
+  },
+  "scope": "Linux separate test executable invokes production main with verified mutual-TLS PostgreSQL; selected repository/service/database race lane also passed. Active process itself was not race-instrumented in this source.",
+  "limitations": [
+    "not release binary acceptance",
+    "LiveKit endpoint intentionally unavailable; not actual media eviction or device acceptance",
+    "not crash-before-first-enqueue proof"
+  ],
+  "next_source": "058b2117 adds separate mandatory active-process race command; result pending"
+}

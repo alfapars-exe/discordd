@@ -16,7 +16,7 @@ func TestNotificationUnreadSummaryAuthoritativeBeyondPageAndReadIsolation(t *tes
 	dm := NewSQLiteDMRepo(wrapForRepo(db))
 	channel := newDMChannel(t, ctx, dm, dmAlice, dmBob, models.DMStatusAccepted)
 	repo := NewSQLiteNotificationRepo(wrapForRepo(db))
-	summary := repo.(*sqliteNotificationRepo)
+	summary := repo
 	assertCounts := func(owner string, inbox, badge int) {
 		t.Helper()
 		got, err := summary.CountUnreadSummary(ctx, owner)
@@ -97,7 +97,7 @@ func TestNotificationUnreadSummaryExcludesOnlyExactCanonicalDMSource(t *testing.
 	seedDMUsers(t, db)
 	ctx := context.Background()
 	repo := NewSQLiteNotificationRepo(wrapForRepo(db))
-	summary := repo.(*sqliteNotificationRepo)
+	summary := repo
 	actor, message, dm, server, channel := "sender", "message", "dm", "server", "channel"
 	canonical := models.Notification{UserID: dmBob, Kind: models.NotificationKindSystem, ActorID: &actor, MessageID: &message, DMChannelID: &dm, Payload: json.RawMessage(`{"action":"incoming_message","source":"dm"}`)}
 	variants := []struct {

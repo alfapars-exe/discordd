@@ -51,6 +51,28 @@ describe("account-scoped preference synchronization", () => {
     vi.useRealTimers();
   });
 
+  it.each([true, false])("restores channel message notification choice %s offline without leaking accounts", async value => {
+    await ready({ notifications: { channelMessageNotifications: value } });
+    expect(JSON.parse(localStorage.getItem(snapshotKey)!)).toEqual({ notifications: { channelMessageNotifications: value } });
+    state().reset();
+    state().bindAccount("alice");
+    mocks.get.mockRejectedValueOnce(new Error("offline"));
+    await state().fetchAndApply();
+    expect(state().data.notifications).toEqual({ channelMessageNotifications: value });
+    expect(state().syncError).toBe("preferences_load_failed");
+    state().bindAccount("bob");
+    expect(state().data).toEqual({});
+  });
+
+  it("never queues device-only overlay flags in an account patch", async () => {
+    await ready();
+    state().set({ voice_settings: { masterVolume: 65, voiceOverlayCompatibility: true, voiceOverlayVideo: true, voiceOverlayStreams: true, voiceOverlayWelcome: true, voiceOverlayGoLive: true } });
+    expect(state().data.voice_settings).toEqual({ masterVolume: 65 });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(mocks.update).toHaveBeenCalledTimes(1);
+    expect(mocks.update.mock.calls[0][0]).toEqual({ voice_settings: { masterVolume: 65 } });
+  });
+
   it("does not send or queue unauthenticated edits", async () => {
     state().set({ theme: "midnight" });
     await vi.advanceTimersByTimeAsync(1000);

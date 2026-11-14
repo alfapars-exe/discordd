@@ -1,0 +1,75 @@
+{
+  "source": "f87825b8",
+  "full_go_vet_and_build": "PASS",
+  "race_status": "FAIL: owned database cleanup deadline, not accepted as a passing combined run",
+  "top_level_pass_events": {
+    "TestBackendOwnerWatchPostgresLifecycle": 4,
+    "TestBackendOwnerWatchStopCancelsAndJoinsBeforeConnectionClose": 5,
+    "TestBackendOwnerWatchSupportsConcurrentCleanup": 5,
+    "TestBackendOwnerWatchParentCancellationPropagates": 5,
+    "TestMainDefersWatchJoinBeforeOwnershipConnectionClose": 5,
+    "TestDeliveryWorkersJoinAfterHTTPDrainBeforeLogShutdown": 5,
+    "TestBackendOwnerExcludesSecondAndDetectsLoss": 5,
+    "TestDeliveryStopCancelsPoolWait": 5,
+    "TestDeliveryClaimCancellationLogging": 5,
+    "TestVoiceMaintenanceHasOwnedShutdown": 5,
+    "TestVoiceMaintenanceStopJoinsSweepAndConcurrentOwners": 5,
+    "TestVoiceMaintenanceStopBeforeStart": 5,
+    "TestVoiceMaintenancePublicOwnersJoin": 5,
+    "TestVoiceMaintenanceAFKStopCancelsLookup": 5,
+    "TestVoiceMaintenanceAFKPostgresCancellation": 5
+  },
+  "skips": [],
+  "failures": [
+    {
+      "Time": "2026-11-13T19:59:40.813916077Z",
+      "Action": "fail",
+      "Package": "github.com/argeinfina/hichat",
+      "Test": "TestBackendOwnerWatchPostgresLifecycle",
+      "Elapsed": 11.2
+    },
+    {
+      "Time": "2026-11-13T19:59:40.852848072Z",
+      "Action": "fail",
+      "Package": "github.com/argeinfina/hichat",
+      "Elapsed": 23.371
+    }
+  ],
+  "failure_evidence": "Backend owner fixture DROP DATABASE canceled at its existing 10-second deadline; PostgreSQL log confirmed user-request cancellation. No product assertion failure identified. Concurrent schema/database setup and process tests were running; cause beyond cancellation is not proven.",
+  "cleanup": "Explicitly inspected exact generated database: zero sessions. Dropped only that owned database with unchanged 10-second timeout; command passed.",
+  "process_restart": {
+    "source": "f87825b8",
+    "same_database_restart_cycles": [
+      {
+        "cycle": 1,
+        "healthy": true,
+        "contender_rejected": true,
+        "exit_code": 0,
+        "shutdown_seconds": 0.187,
+        "graceful_log": true
+      },
+      {
+        "cycle": 2,
+        "healthy": true,
+        "contender_rejected": true,
+        "exit_code": 0,
+        "shutdown_seconds": 0.172,
+        "graceful_log": true
+      },
+      {
+        "cycle": 3,
+        "healthy": true,
+        "contender_rejected": true,
+        "exit_code": 0,
+        "shutdown_seconds": 0.156,
+        "graceful_log": true
+      }
+    ],
+    "scope": "Linux real processes, verified-mTLS isolated PostgreSQL, idle shutdown; no active media"
+  },
+  "limitations": [
+    "Race cleanup failure remains unresolved; this receipt is not whole-project acceptance.",
+    "Idle Linux real-process restart excludes active media, in-flight drain and physical Windows acceptance.",
+    "Usage accounting currently uses unbounded Background context and needs durable bounded ownership."
+  ]
+}

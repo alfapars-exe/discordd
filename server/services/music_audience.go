@@ -17,17 +17,32 @@ type MusicAudienceMembership interface {
 // MusicAudienceDependencies are trusted server dependencies, never client recipients.
 // Missing dependencies fail closed; HTTP View-only state reads use their own gate.
 type MusicAudienceDependencies struct {
-	Voice   MusicAudienceVoice
-	Members MusicAudienceMembership
+	Voice            MusicAudienceVoice
+	Members          MusicAudienceMembership
+	FreshPermissions MusicAudienceFreshPermissions
 }
-type musicAudienceFreshPermissions interface {
+type MusicAudienceFreshPermissions interface {
 	ResolveChannelPermissionsFresh(context.Context, string, string) (models.Permission, error)
 }
 
-func (s *musicBotService) broadcastMusicAudience(serverID, channelID string, event ws.Event) bool {
+type musicPublisher struct {
+	bot   *botInstance
+	final bool
+	fatal bool
+}
+
+// Called under the service read lock immediately before enqueue.
+func (p musicPublisher) ownsDelivery(current *botInstance) bool {
+	if p.final {
+		return current == nil || current == p.bot
+	}
+	return current == p.bot && (p.fatal || !p.bot.stopping.Load())
+}
+
+func (s *musicBotService) broadcastMusicAudience(serverID, channelID string, event ws.Event, publisher *musicPublisher) bool {
 	voice, members := s.audience.Voice, s.audience.Members
-	fresh, ok := s.perms.(musicAudienceFreshPermissions)
-	if voice == nil || members == nil || !ok || s.channels == nil || s.hub == nil {
+	fresh := s.audience.FreshPermissions
+	if voice == nil || members == nil || fresh == nil || s.channels == nil || s.hub == nil {
 		return false
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), sessionRepoTimeout)
@@ -63,7 +78,17 @@ func (s *musicBotService) broadcastMusicAudience(serverID, channelID string, eve
 		// Authorize once immediately before this recipient's enqueue; no
 		// preliminary database read is reused. A later recipient's lookup
 		// cannot retroactively recall an already authorized enqueued event.
-		s.hub.BroadcastToUsers([]string{expected.UserID}, event)
+		if publisher != nil {
+			s.mu.RLock()
+			if !publisher.ownsDelivery(s.bots[channelID]) {
+				s.mu.RUnlock()
+				return sent
+			}
+			s.hub.BroadcastToUsers([]string{expected.UserID}, event)
+			s.mu.RUnlock()
+		} else {
+			s.hub.BroadcastToUsers([]string{expected.UserID}, event)
+		}
 		sent = true
 	}
 	return sent

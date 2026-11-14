@@ -92,6 +92,26 @@ type ChannelPermissionService interface {
 	InvalidateAll()
 }
 
+// FreshChannelPermResolver bypasses cached decisions for live voice checks.
+type FreshChannelPermResolver interface {
+	ResolveChannelPermissionsBulkFresh(context.Context, string, []string) (map[string]models.Permission, error)
+	ResolveChannelPermissionsFresh(context.Context, string, string) (models.Permission, error)
+}
+
+// PermissionInvalidationSource binds the active voice recheck before serving.
+// Binding is a startup-only composition operation.
+type PermissionInvalidationSource interface {
+	BindInvalidationCallback(func(userID, channelID string))
+}
+
+// ChannelPermissionRuntime retains cleanup ownership at the composition root.
+type ChannelPermissionRuntime interface {
+	PermissionInvalidationSource
+	FreshChannelPermResolver
+	ChannelPermissionService
+	Stop()
+}
+
 // PermissionInvalidator is the cache-invalidation slice of
 // ChannelPermissionService, exposed as its own interface so
 // RoleService / MemberService can depend on the smallest possible
@@ -144,7 +164,7 @@ func NewChannelPermissionService(
 	roleRepo repository.RoleRepository,
 	channelGetter ChannelGetter,
 	hub ws.Broadcaster,
-) ChannelPermissionService {
+) ChannelPermissionRuntime {
 	inner := newUncachedChannelPermService(permRepo, roleRepo, channelGetter, hub)
 	return newCachingPermResolver(inner)
 }

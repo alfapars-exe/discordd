@@ -18,12 +18,12 @@ func TestDMEncryptionControlIsHumanOnly(t *testing.T) {
 		INSERT INTO users(id,username,password_hash,is_bot,owner_user_id) VALUES('game','gamebot','x',1,'owner'),('legacy','legacybot','x',1,'owner');`); err != nil {
 		t.Fatal(err)
 	}
-	bots := NewBotService(repository.NewBotRepository(db.Conn))
+	bots := NewBotService(repository.NewBotRepository(db.Conn), BotRuntimeDependencies{})
 	if _, err := bots.RegisterGameIdentity(ctx, "owner", "game"); err != nil {
 		t.Fatal(err)
 	}
 	dm := repository.NewSQLiteDMRepo(db.Conn)
-	svc := NewDMService(dm, repository.NewSQLiteUserRepo(db.Conn), &testutil.MockBroadcaster{}, nil, nil, nil, repository.NewSQLiteDMReadRepo(db.Conn), repository.NewSQLiteNotificationRepo(db.Conn), repository.NewDMMessageTxRunner(db.Conn))
+	svc := NewDMService(nil, dm, repository.NewSQLiteUserRepo(db.Conn), &testutil.MockBroadcaster{}, nil, nil, nil, repository.NewSQLiteDMReadRepo(db.Conn), repository.NewSQLiteNotificationRepo(db.Conn), repository.NewDMMessageTxRunner(db.Conn), nil, nil, nil, nil, nil)
 	for _, bot := range []string{"game", "legacy"} {
 		ch := &models.DMChannel{User1ID: "alice", User2ID: bot, Status: models.DMStatusAccepted}
 		if err := dm.CreateChannel(ctx, ch); err != nil {

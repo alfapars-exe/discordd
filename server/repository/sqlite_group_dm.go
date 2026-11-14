@@ -14,7 +14,7 @@ import (
 
 type sqliteGroupDMRepo struct{ db database.TxQuerier }
 
-func NewSQLiteGroupDMRepo(db database.TxQuerier) GroupDMRepository { return &sqliteGroupDMRepo{db: db} }
+func NewSQLiteGroupDMRepo(db database.TxQuerier) GroupDMStore { return &sqliteGroupDMRepo{db: db} }
 
 // An omitted admission actor is reserved for trusted internal legacy/import callers.
 // Public services always supply the authenticated actor; HTTP never supplies this scope.
@@ -65,7 +65,22 @@ func (r *sqliteGroupDMRepo) GetByID(ctx context.Context, id string) (*models.Gro
 	return g, nil
 }
 func (r *sqliteGroupDMRepo) ListForUser(ctx context.Context, userID string) ([]models.GroupDM, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT g.id,g.owner_id,g.name,g.icon_url,g.key_epoch,g.call_room_key,g.created_at,g.updated_at FROM group_dm_channels g JOIN group_dm_members m ON m.group_id=g.id WHERE m.user_id=? ORDER BY g.updated_at DESC`, userID)
+	rows, err := r.db.QueryContext(ctx, `WITH viewer AS MATERIALIZED (
+		SELECT m.group_id,m.is_muted,m.settings_revision,r.user_id AS reader,r.unread_count,r.revision,r.last_read_source_sequence,
+			(SELECT msg.id FROM group_dm_messages msg WHERE msg.group_id=m.group_id AND msg.user_id<>m.user_id
+			 AND msg.source_sequence>r.last_read_source_sequence ORDER BY msg.source_sequence LIMIT 1) AS anchor
+		FROM group_dm_members m LEFT JOIN group_dm_reads r ON r.group_id=m.group_id AND r.user_id=m.user_id
+		WHERE m.user_id=?
+	)
+		SELECT g.id,g.owner_id,g.name,g.icon_url,g.key_epoch,g.call_room_key,g.created_at,g.updated_at,
+		viewer.reader,COALESCE(viewer.unread_count,0),COALESCE(viewer.revision,0),COALESCE(viewer.last_read_source_sequence,0),
+		viewer.anchor,viewer.is_muted,viewer.settings_revision,
+		u.id,u.username,u.display_name,u.avatar_url,u.status,u.custom_status,u.created_at
+		FROM viewer
+		JOIN group_dm_channels g ON g.id=viewer.group_id
+		JOIN group_dm_members member ON member.group_id=g.id
+		JOIN users u ON u.id=member.user_id
+		ORDER BY g.updated_at DESC,g.id,member.joined_at,member.user_id`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -73,10 +88,22 @@ func (r *sqliteGroupDMRepo) ListForUser(ctx context.Context, userID string) ([]m
 	out := []models.GroupDM{}
 	for rows.Next() {
 		var g models.GroupDM
-		if err := rows.Scan(&g.ID, &g.OwnerID, &g.Name, &g.IconURL, &g.KeyEpoch, &g.CallRoomKey, &g.CreatedAt, &g.UpdatedAt); err != nil {
+		var member models.PublicUser
+		var reader sql.NullString
+		if err := rows.Scan(&g.ID, &g.OwnerID, &g.Name, &g.IconURL, &g.KeyEpoch, &g.CallRoomKey, &g.CreatedAt, &g.UpdatedAt,
+			&reader, &g.UnreadCount, &g.ReadRevision, &g.LastReadSourceSequence, &g.OldestUnreadMessageID, &g.IsMuted, &g.SettingsRevision,
+			&member.ID, &member.Username, &member.DisplayName, &member.AvatarURL, &member.Status, &member.CustomStatus, &member.CreatedAt); err != nil {
 			return nil, err
 		}
-		out = append(out, g)
+		if !reader.Valid {
+			return nil, pkg.ErrNotFound
+		}
+		g.ReadKeyEpoch = g.KeyEpoch
+		if len(out) == 0 || out[len(out)-1].ID != g.ID {
+			out = append(out, g)
+		}
+		last := &out[len(out)-1]
+		last.Members = append(last.Members, member)
 	}
 	return out, rows.Err()
 }

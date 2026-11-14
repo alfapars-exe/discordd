@@ -37,6 +37,17 @@ func (m memberJoin) name() string {
 	return m.Username
 }
 
+func (e event) welcomeText(serverID string) (string, bool) {
+	if e.Op != "member_join" || e.ServerID != serverID {
+		return "", false
+	}
+	var member memberJoin
+	if json.Unmarshal(e.Data, &member) != nil || member.ID == "" || member.name() == "" {
+		return "", false
+	}
+	return "Aramiza hos geldin, @" + member.name() + "!", true
+}
+
 type botConfig struct {
 	base    string
 	gateway string
@@ -63,6 +74,19 @@ func parseConfig(base, token, server, channel string) (botConfig, error) {
 	return botConfig{base: strings.TrimRight(parsed.String(), "/"), gateway: gateway.String(), token: token, server: server, channel: channel}, nil
 }
 
+func newMessageClient() *http.Client {
+	return &http.Client{
+		Timeout: 10 * time.Second,
+		CheckRedirect: func(next *http.Request, via []*http.Request) error {
+			origin := via[0].URL
+			if next.Method != http.MethodPost || next.URL.Scheme != origin.Scheme || !strings.EqualFold(next.URL.Host, origin.Host) || len(via) >= 10 {
+				return http.ErrUseLastResponse
+			}
+			return nil
+		},
+	}
+}
+
 func main() {
 	config, err := parseConfig(os.Getenv("HICHAT_BASE"), os.Getenv("BOT_TOKEN"), os.Getenv("WELCOME_SERVER"), os.Getenv("WELCOME_CHANNEL"))
 	if err != nil {
@@ -70,12 +94,12 @@ func main() {
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := newMessageClient()
 	dialer := *websocket.DefaultDialer
 	dialer.HandshakeTimeout = 10 * time.Second
 	delay := time.Second
 	for ctx.Err() == nil {
-		err = runGateway(ctx, config, &dialer, client)
+		err = runGateway(ctx, config, &dialer, client, 90*time.Second)
 		if ctx.Err() != nil {
 			break
 		}
@@ -96,7 +120,7 @@ func main() {
 	}
 }
 
-func runGateway(ctx context.Context, config botConfig, dialer *websocket.Dialer, client *http.Client) error {
+func runGateway(ctx context.Context, config botConfig, dialer *websocket.Dialer, client *http.Client, idleTimeout time.Duration) error {
 	connection, response, err := dialer.DialContext(ctx, config.gateway, http.Header{"Authorization": {"Bearer " + config.token}})
 	if err != nil {
 		if response != nil {
@@ -106,6 +130,18 @@ func runGateway(ctx context.Context, config botConfig, dialer *websocket.Dialer,
 	}
 	defer connection.Close()
 	connection.SetReadLimit(64 * 1024)
+	// The gateway sends protocol pings even when no members join.
+	refreshDeadline := func() error { return connection.SetReadDeadline(time.Now().Add(idleTimeout)) }
+	if err := refreshDeadline(); err != nil {
+		return err
+	}
+	replyToPing := connection.PingHandler()
+	connection.SetPingHandler(func(payload string) error {
+		if err := refreshDeadline(); err != nil {
+			return err
+		}
+		return replyToPing(payload)
+	})
 	done := make(chan struct{})
 	defer close(done)
 	go func() {
@@ -120,14 +156,14 @@ func runGateway(ctx context.Context, config botConfig, dialer *websocket.Dialer,
 		if err := connection.ReadJSON(&incoming); err != nil {
 			return err
 		}
-		if incoming.Op != "member_join" || (incoming.ServerID != "" && incoming.ServerID != config.server) {
+		if err := refreshDeadline(); err != nil {
+			return err
+		}
+		text, ok := incoming.welcomeText(config.server)
+		if !ok {
 			continue
 		}
-		var member memberJoin
-		if json.Unmarshal(incoming.Data, &member) != nil || member.ID == "" || member.name() == "" {
-			continue
-		}
-		if err := postMessage(ctx, client, config, "Aramiza hos geldin, @"+member.name()+"!"); err != nil {
+		if err := postMessage(ctx, client, config, text); err != nil {
 			log.Printf("welcome could not be posted: %v", err)
 		} else {
 			log.Print("welcome posted")

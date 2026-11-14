@@ -29,6 +29,23 @@ type MessageService interface {
 	SetUploadDir(dir string)
 }
 
+// MessageRequestService declares persistence hooks used by HTTP sends.
+// Read-only consumers continue to depend on MessageService.
+type MessageRequestService interface {
+	ChannelEvents(context.Context, string, string, string, int64) (*ChannelEventPage, error)
+	ChannelDeliveryHealth(context.Context) (*ChannelDeliveryHealth, error)
+	KeepChannelSendAlive(context.Context, string) func()
+	MessageService
+	CompleteChannelSend(context.Context, *models.Message) error
+	AttachmentOutcome(context.Context, string, int, *models.Attachment, string) error
+}
+
+// MessageRuntime retains worker ownership at composition.
+type MessageRuntime interface {
+	MessageRequestService
+	StartChannelDelivery(context.Context) func()
+}
+
 type messageService struct {
 	deliveryDB      *sql.DB
 	deliveryWake    chan struct{}
@@ -89,8 +106,16 @@ func NewMessageService(
 	permResolver ChannelPermResolver,
 	auditLogger AuditWriter,
 	notificationRepo repository.NotificationRepository,
-) MessageService {
+	deliveryDB *sql.DB,
+) MessageRuntime {
+	// Nil deliberately keeps standalone/legacy fixtures on their direct path.
+	var wake chan struct{}
+	if deliveryDB != nil {
+		wake = make(chan struct{}, 1)
+	}
 	return &messageService{
+		deliveryDB:       deliveryDB,
+		deliveryWake:     wake,
 		messageRepo:      messageRepo,
 		attachmentRepo:   attachmentRepo,
 		channelRepo:      channelRepo,

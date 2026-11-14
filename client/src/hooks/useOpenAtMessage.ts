@@ -81,7 +81,7 @@ export function useOpenAtMessage(): {
       openTab(channelId, "text", label, serverInfo);
       const navigationRevision = useUIStore.getState().navigationRevision;
 
-      const found = await fetchAroundMessage(targetServerId, channelId, messageId);
+      const found = await fetchAroundMessage(targetServerId, channelId, messageId, context);
       if (context && !context.isCurrent()) return false;
       const current = useUIStore.getState();
       if (UI_SHELL_V2 && (current.navigationRevision !== navigationRevision || current.destination.type !== "text" || current.destination.channelId !== channelId)) return found;

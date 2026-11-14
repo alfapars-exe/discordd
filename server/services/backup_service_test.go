@@ -32,7 +32,7 @@ func newTestBackupService(t *testing.T, cfg config.BackupConfig) (*BackupService
 	if cfg.WorkDir == "" {
 		cfg.WorkDir = filepath.Join(t.TempDir(), "workdir")
 	}
-	svc := NewBackupService(cfg)
+	svc := NewBackupService(cfg, nil)
 	fake := &fakeRunner{}
 	svc.runCmd = fake.run
 	// Drain any async uploads-restore goroutine before the test's t.TempDir
@@ -537,7 +537,7 @@ func TestSnapshotSQLite_RedactsAuthTokenInError(t *testing.T) {
 		},
 	}
 
-	err := svc.snapshotSQLite(filepath.Join(t.TempDir(), "snap.db"))
+	err := svc.snapshotSQLite(context.Background(), filepath.Join(t.TempDir(), "snap.db"))
 	if err == nil {
 		t.Fatal("expected snapshotSQLite to surface the sqlite3 failure, got nil")
 	}

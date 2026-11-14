@@ -40,7 +40,7 @@ func (s *preferencesRepoStub) Upsert(_ context.Context, userID string, patch jso
 func TestPreferencesServiceValidatesBeforeWriting(t *testing.T) {
 	for _, patch := range []string{`null`, `[]`, `{"voice_settings":{"masterVolume":101}}`, `{"unknown":true}`} {
 		repo := &preferencesRepoStub{}
-		prefs, err := NewPreferencesService(repo).Update(context.Background(), "user-1", json.RawMessage(patch))
+		prefs, err := NewPreferencesService(repo, nil, nil, nil).Update(context.Background(), "user-1", json.RawMessage(patch))
 		if !errors.Is(err, pkg.ErrBadRequest) || prefs != nil || repo.writes != 0 {
 			t.Fatalf("invalid update returned success or wrote: prefs=%v err=%v writes=%d", prefs, err, repo.writes)
 		}
@@ -49,7 +49,7 @@ func TestPreferencesServiceValidatesBeforeWriting(t *testing.T) {
 
 func TestPreferencesServiceStripsLocalFieldsAndVersionsResponse(t *testing.T) {
 	repo := &preferencesRepoStub{}
-	svc := NewPreferencesService(repo)
+	svc := NewPreferencesService(repo, nil, nil, nil)
 	prefs, err := svc.Update(context.Background(), "user-1", json.RawMessage(`{"voice_settings":{"inputDevice":"device-secret","outputDevice":"device-secret","cameraDevice":"device-secret","muteHotkeyGlobal":true,"masterVolume":70}}`))
 	if err != nil {
 		t.Fatal(err)
@@ -73,7 +73,7 @@ func TestPreferencesServiceStripsLocalFieldsAndVersionsResponse(t *testing.T) {
 func TestPreferencesServiceDoesNotMaskDatabaseFailures(t *testing.T) {
 	failure := errors.New("database unavailable")
 	repo := &preferencesRepoStub{err: failure}
-	svc := NewPreferencesService(repo)
+	svc := NewPreferencesService(repo, nil, nil, nil)
 	if prefs, err := svc.Get(context.Background(), "user-1"); prefs != nil || !errors.Is(err, failure) {
 		t.Fatalf("Get failure masked: %+v %v", prefs, err)
 	}
@@ -94,7 +94,7 @@ func TestPreferencesServiceMigratesHiddenNoiseEnginesOnReadAndWrite(t *testing.T
 	for _, engine := range []string{"krisp", "dpdfnet"} {
 		t.Run(engine, func(t *testing.T) {
 			repo := &preferencesRepoStub{}
-			svc := NewPreferencesService(repo)
+			svc := NewPreferencesService(repo, nil, nil, nil)
 			legacy := json.RawMessage(`{"voice_settings":{"noiseReductionEngine":"` + engine + `","masterVolume":70}}`)
 			prefs, err := svc.Update(context.Background(), "user-1", legacy)
 			if err != nil {
@@ -123,9 +123,9 @@ func TestPreferencesServiceInvalidatesProfileAudienceWithoutBroadcastingPreferen
 	hub := &testutil.MockBroadcaster{BroadcastToUsersFn: func(users []string, got ws.Event) {
 		recipients, event = users, got
 	}}
-	svc := NewPreferencesService(repo).(*preferencesService)
-	svc.SetGameActivitySync(nil, hub)
-	svc.SetProfileAudienceInvalidator(profileAudienceInvalidatorStub{viewers: []string{"friend-viewer", "shared-server-viewer"}})
+	svc := NewPreferencesService(repo, profileAudienceInvalidatorStub{
+		viewers: []string{"friend-viewer", "shared-server-viewer"},
+	}, nil, hub).(*preferencesService)
 
 	if _, err := svc.Update(context.Background(), "target-user", json.RawMessage(`{"privacy":{"profileAudience":"friends_only"}}`)); err != nil {
 		t.Fatal(err)
@@ -144,5 +144,34 @@ func TestPreferencesServiceInvalidatesProfileAudienceWithoutBroadcastingPreferen
 	}
 	if event.Op != "" || len(recipients) != 0 {
 		t.Fatalf("unrelated privacy patch triggered profile invalidation: %+v", event)
+	}
+}
+
+type preferencesActivityCapture struct {
+	users []string
+}
+
+func (c *preferencesActivityCapture) PolicyChanged(_ context.Context, userID string) {
+	c.users = append(c.users, userID)
+}
+
+func TestPreferencesConstructorNotifiesActivityOnlyAfterCommit(t *testing.T) {
+	for _, failed := range []bool{false, true} {
+		t.Run(map[bool]string{false: "committed", true: "failed"}[failed], func(t *testing.T) {
+			repo := &preferencesRepoStub{}
+			if failed {
+				repo.err = errors.New("database unavailable")
+			}
+			activity := &preferencesActivityCapture{}
+			svc := NewPreferencesService(repo, nil, activity, nil)
+			_, err := svc.Update(context.Background(), "owner", json.RawMessage(`{"privacy":{"shareGameActivity":false}}`))
+			if failed {
+				if err == nil || len(activity.users) != 0 {
+					t.Fatalf("failed write notified activity: err=%v users=%v", err, activity.users)
+				}
+			} else if err != nil || len(activity.users) != 1 || activity.users[0] != "owner" {
+				t.Fatalf("committed preference notification: err=%v users=%v", err, activity.users)
+			}
+		})
 	}
 }

@@ -16,7 +16,7 @@ import (
 // uses (see wsTokenRevoked in ws/handler.go).
 
 func TestWSTicket_IssueThenConsumeOnce(t *testing.T) {
-	svc := NewWSTicketService()
+	svc := newTestWSTicketService(t)
 
 	ticket, err := svc.Issue("user-1", 0)
 	if err != nil {
@@ -45,7 +45,7 @@ func TestWSTicket_IssueThenConsumeOnce(t *testing.T) {
 }
 
 func TestWSTicket_ConsumeInvalid(t *testing.T) {
-	svc := NewWSTicketService()
+	svc := newTestWSTicketService(t)
 	cases := map[string]string{
 		"empty":            "",
 		"never issued":     "deadbeefdeadbeef",
@@ -59,7 +59,7 @@ func TestWSTicket_ConsumeInvalid(t *testing.T) {
 }
 
 func TestWSTicket_IssueProducesDistinctTickets(t *testing.T) {
-	svc := NewWSTicketService()
+	svc := newTestWSTicketService(t)
 	seen := make(map[string]bool, 200)
 	for i := 0; i < 200; i++ {
 		ticket, err := svc.Issue("u", 0)
@@ -74,7 +74,7 @@ func TestWSTicket_IssueProducesDistinctTickets(t *testing.T) {
 }
 
 func TestWSTicket_ConsumeReturnsTheBoundUser(t *testing.T) {
-	svc := NewWSTicketService()
+	svc := newTestWSTicketService(t)
 	alice, _ := svc.Issue("alice", 1)
 	bob, _ := svc.Issue("bob", 2)
 
@@ -92,7 +92,7 @@ func TestWSTicket_ConsumeReturnsTheBoundUser(t *testing.T) {
 // 1 at mint time is never silently upgraded to a later stamp just because
 // another ticket for a different (or bumped) user was issued afterward.
 func TestWSTicket_ConsumeReturnsTheStampedTokenVersion(t *testing.T) {
-	svc := NewWSTicketService()
+	svc := newTestWSTicketService(t)
 
 	staleTicket, err := svc.Issue("user-1", 1) // minted before a token_version bump
 	if err != nil {
@@ -109,4 +109,15 @@ func TestWSTicket_ConsumeReturnsTheStampedTokenVersion(t *testing.T) {
 	if _, tv, err := svc.Consume(freshTicket); err != nil || tv != 2 {
 		t.Errorf("fresh ticket Consume = (tv=%d, err=%v), want (tv=2, err=nil)", tv, err)
 	}
+}
+
+func newTestWSTicketService(t testing.TB) WSTicketService {
+	t.Helper()
+	service := NewWSTicketService()
+	owner, ok := service.(interface{ Stop() })
+	if !ok {
+		t.Fatal("ticket fixture lacks cache worker shutdown")
+	}
+	t.Cleanup(owner.Stop)
+	return service
 }

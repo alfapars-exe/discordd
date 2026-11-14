@@ -21,16 +21,16 @@ import (
 // starve each other's allowance. uploadLimiter is a separate per-user cap
 // that only fires on multipart requests (20/min); text-only DMs don't touch it.
 type DMHandler struct {
-	dmService       services.DMService
-	dmUploadService services.DMUploadService
+	dmService       services.DMRequestService
+	dmUploadService services.DMUploadRequestService
 	maxUploadSize   int64
 	messageLimiter  *ratelimit.MessageRateLimiter
 	uploadLimiter   *ratelimit.MessageRateLimiter
 }
 
 func NewDMHandler(
-	dmService services.DMService,
-	dmUploadService services.DMUploadService,
+	dmService services.DMRequestService,
+	dmUploadService services.DMUploadRequestService,
 	maxUploadSize int64,
 	messageLimiter *ratelimit.MessageRateLimiter,
 	uploadLimiter *ratelimit.MessageRateLimiter,
@@ -264,12 +264,7 @@ func (h *DMHandler) GetEvents(w http.ResponseWriter, r *http.Request) {
 		pkg.ErrorWithMessage(w, 400, "valid after cursor required")
 		return
 	}
-	service, ok := h.dmService.(services.DMEventReplayService)
-	if !ok {
-		pkg.ErrorWithMessage(w, 404, "DM events unavailable")
-		return
-	}
-	page, err := service.GetDMEvents(r.Context(), user.ID, r.PathValue("channelId"), after)
+	page, err := h.dmService.GetDMEvents(r.Context(), user.ID, r.PathValue("channelId"), after)
 	if err != nil {
 		pkg.Error(w, err)
 		return
@@ -397,21 +392,12 @@ func (h *DMHandler) DeleteMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if service, ok := h.dmService.(services.DMDeletionReceiptService); ok {
-		receipt, err := service.DeleteMessageWithReceipt(r.Context(), user.ID, messageID)
-		if err != nil {
-			pkg.Error(w, err)
-			return
-		}
-		pkg.JSON(w, http.StatusOK, receipt)
-		return
-	}
-	if err := h.dmService.DeleteMessage(r.Context(), user.ID, messageID); err != nil {
+	receipt, err := h.dmService.DeleteMessageWithReceipt(r.Context(), user.ID, messageID)
+	if err != nil {
 		pkg.Error(w, err)
 		return
 	}
-
-	pkg.JSON(w, http.StatusOK, map[string]string{"message": "message deleted"})
+	pkg.JSON(w, http.StatusOK, receipt)
 }
 
 // ─── Reaction Endpoints ───

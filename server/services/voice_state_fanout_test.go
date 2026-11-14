@@ -50,6 +50,7 @@ func (fanoutTestMembers) IsMember(context.Context, string, string) (bool, error)
 
 func newFanoutTestService(hub *fanoutTestHub, members fanoutTestMembers, resolve func(context.Context, string, []string) (map[string]models.Permission, error)) *voiceService {
 	return &voiceService{
+		fanoutAudience:   VoiceFanoutDependencies{Online: hub, Members: members},
 		channelGetter:    fanoutTestChannels{channel: &models.Channel{ID: "channel-1", ServerID: "server-1", Type: models.ChannelTypeVoice}},
 		hub:              hub,
 		permResolver:     &testutil.MockChannelPermResolver{ResolveChannelPermissionsBulkFn: resolve},

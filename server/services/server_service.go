@@ -29,43 +29,37 @@ type ServerService interface {
 }
 
 type serverService struct {
-	db            *sql.DB // for WithTx in CreateServer/DeleteServer
-	serverRepo    repository.ServerRepository
-	livekitRepo   repository.LiveKitRepository
-	roleRepo      repository.RoleRepository
-	channelRepo   repository.ChannelRepository
-	categoryRepo  repository.CategoryRepository
-	userRepo      repository.UserRepository
-	banRepo       repository.BanRepository // N-02: JoinServer's ban gate
-	inviteService InviteService
-	hub           ws.BroadcastAndManage
-	encryptionKey []byte // AES-256-GCM for LiveKit credentials
-	auditLogger   AuditWriter
+	membershipVoiceCleanup func(serverID, userID string)
+	db                     *sql.DB // for WithTx in CreateServer/DeleteServer
+	serverRepo             repository.ServerRepository
+	livekitRepo            repository.LiveKitRepository
+	roleRepo               repository.RoleRepository
+	channelRepo            repository.ChannelRepository
+	categoryRepo           repository.CategoryRepository
+	userRepo               repository.UserRepository
+	banRepo                repository.BanRepository // N-02: JoinServer's ban gate
+	inviteService          InviteService
+	hub                    ws.BroadcastAndManage
+	encryptionKey          []byte // AES-256-GCM for LiveKit credentials
+	auditLogger            AuditWriter
 	// membershipTxRunner backs JoinServer's atomic AddMember+AssignToUser
 	// (server_service_membership.go). A separate mockable seam from the raw
 	// `db` field above (rather than another database.WithTx(s.db, ...) call
 	// like CreateServer/DeleteServer use) so the existing mock-based
 	// JoinServer tests keep working without a real *sql.DB.
+	snapshotReader     repository.GameActivityMembershipReader
 	membershipTxRunner repository.ServerMembershipTxRunner
 	preferencesRepo    repository.PreferencesRepository
 	gameActivity       GameActivityPrivacyInvalidator
+	permInvalidator    PermissionInvalidator
 	// uploadDir enables best-effort disk cleanup on server delete (see
 	// upload_cleanup.go). Blank disables cleanup — set via SetUploadDir,
-	// wired in init_services.go so the constructor signature below stays
-	// unchanged.
+	// wired in init_services.go.
 	uploadDir string
 }
 
 func (s *serverService) SetUploadDir(dir string) {
 	s.uploadDir = dir
-}
-
-func (s *serverService) SetGameActivityPreferencesRepository(repo repository.PreferencesRepository) {
-	s.preferencesRepo = repo
-}
-
-func (s *serverService) SetGameActivityPrivacyInvalidator(invalidator GameActivityPrivacyInvalidator) {
-	s.gameActivity = invalidator
 }
 
 // audit emits an audit log event if an audit logger is wired. Nil-safe.
@@ -82,6 +76,8 @@ func (s *serverService) audit(entry models.AuditLog) {
 }
 
 func NewServerService(
+	preferencesRepo repository.PreferencesRepository,
+	gameActivity GameActivityPrivacyInvalidator,
 	db *sql.DB,
 	serverRepo repository.ServerRepository,
 	livekitRepo repository.LiveKitRepository,
@@ -94,21 +90,29 @@ func NewServerService(
 	hub ws.BroadcastAndManage,
 	encryptionKey []byte,
 	auditLogger AuditWriter,
+	membershipVoiceCleanup func(serverID, userID string),
 	membershipTxRunner repository.ServerMembershipTxRunner,
+	permInvalidator PermissionInvalidator,
+	snapshotReader repository.GameActivityMembershipReader,
 ) ServerService {
 	return &serverService{
-		db:                 db,
-		serverRepo:         serverRepo,
-		livekitRepo:        livekitRepo,
-		roleRepo:           roleRepo,
-		channelRepo:        channelRepo,
-		categoryRepo:       categoryRepo,
-		userRepo:           userRepo,
-		banRepo:            banRepo,
-		inviteService:      inviteService,
-		hub:                hub,
-		encryptionKey:      encryptionKey,
-		auditLogger:        auditLogger,
-		membershipTxRunner: membershipTxRunner,
+		permInvalidator:        permInvalidator,
+		snapshotReader:         snapshotReader,
+		membershipVoiceCleanup: membershipVoiceCleanup,
+		preferencesRepo:        preferencesRepo,
+		gameActivity:           gameActivity,
+		db:                     db,
+		serverRepo:             serverRepo,
+		livekitRepo:            livekitRepo,
+		roleRepo:               roleRepo,
+		channelRepo:            channelRepo,
+		categoryRepo:           categoryRepo,
+		userRepo:               userRepo,
+		banRepo:                banRepo,
+		inviteService:          inviteService,
+		hub:                    hub,
+		encryptionKey:          encryptionKey,
+		auditLogger:            auditLogger,
+		membershipTxRunner:     membershipTxRunner,
 	}
 }

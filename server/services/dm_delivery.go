@@ -6,22 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/ws"
 	"strconv"
 	"time"
 )
-
-// ConfigureDMDelivery binds publication to the database's singleton backend owner.
-func ConfigureDMDelivery(service DMService, db *sql.DB) {
-	if s, ok := service.(*dmService); ok && s.deliveryDB == nil && database.IsPostgres(db) {
-		s.deliveryDB = db
-		s.deliveryHub = s.hub
-		s.hub = dmDurableHub{s.hub}
-	}
-}
 
 func durableDMOperation(op string) bool {
 	switch op {
@@ -47,9 +37,14 @@ func (h dmDurableHub) BroadcastToUser(user string, event ws.Event) {
 
 // StartDMDelivery runs only after backend ownership acquisition and before HTTP serving.
 // Acknowledgment means dispatch to the hub, not a physical device receipt.
-func StartDMDelivery(parent context.Context, service DMService) (func(), error) {
-	s, ok := service.(*dmService)
-	if !ok || s.deliveryDB == nil {
+func StartDMDelivery(parent context.Context, service interface {
+	StartDMDelivery(context.Context) (func(), error)
+}) (func(), error) {
+	return service.StartDMDelivery(parent)
+}
+
+func (s *dmService) StartDMDelivery(parent context.Context) (func(), error) {
+	if s.deliveryDB == nil {
 		return func() {}, nil
 	}
 	ctx, cancel := context.WithCancel(parent)
@@ -144,6 +139,9 @@ func (s *dmService) deliverNextDM(ctx context.Context) bool {
 		return false
 	}
 	if err != nil {
+		if errors.Is(err, context.Canceled) && errors.Is(ctx.Err(), context.Canceled) {
+			return false
+		}
 		dmLogger.Error("DM outbox claim failed")
 		return false
 	}

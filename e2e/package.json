@@ -2,10 +2,10 @@
   "name": "hichat-e2e",
   "private": true,
   "version": "0.0.0",
-  "description": "End-to-end tests for HiChat! (real Go server + Vite dev client)",
+  "description": "End-to-end tests for HiChat! (real Go server + production or development client)",
   "scripts": {
     "test": "playwright test",
-    "test:isolation": "node ./scripts/test-playwright-isolation.mjs",
+    "test:isolation": "node ./scripts/test-playwright-isolation.mjs && node ./scripts/test-playwright-profiles.mjs",
     "test:headed": "playwright test --headed",
     "test:ui": "playwright test --ui",
     "report": "playwright show-report"

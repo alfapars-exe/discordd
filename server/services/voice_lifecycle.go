@@ -7,11 +7,13 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/pkg/crypto"
+	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/ws"
 
 	livekit "github.com/livekit/protocol/livekit"
@@ -27,6 +29,7 @@ import (
 const orphanGracePeriod = 35 * time.Second
 
 type orphanEntry struct {
+	usageSessionID    string
 	userID            string
 	channelID         string
 	joinedAt          time.Time
@@ -60,14 +63,7 @@ func (s *voiceService) UpdateActivity(userID string) {
 // disconnected longer than orphanGracePeriod. Runs every 5s for responsive
 // cleanup after grace expires — per-user timestamps prevent premature removal.
 func (s *voiceService) StartOrphanCleanup() {
-	go func() {
-		ticker := time.NewTicker(5 * time.Second)
-		defer ticker.Stop()
-
-		for range ticker.C {
-			s.sweepOrphanStates()
-		}
-	}()
+	s.orphanWorker.start(5*time.Second, s.sweepOrphanStates)
 }
 
 // sweepOrphanStates uses two-phase per-user tracking:
@@ -77,6 +73,12 @@ func (s *voiceService) StartOrphanCleanup() {
 //
 // This guarantees orphanGracePeriod of grace regardless of ticker phase.
 func (s *voiceService) sweepOrphanStates() {
+	finishOperation, admitted := s.operations.begin()
+	if !admitted {
+		return
+	}
+	defer finishOperation()
+
 	onlineIDs := s.onlineChecker.GetOnlineUserIDs()
 	onlineSet := make(map[string]bool, len(onlineIDs))
 	for _, id := range onlineIDs {
@@ -173,6 +175,7 @@ func (s *voiceService) sweepOrphanStates() {
 
 		orphans = append(orphans, orphanEntry{
 			userID:            userID,
+			usageSessionID:    state.UsageSessionID,
 			channelID:         channelID,
 			joinedAt:          joinedAt,
 			livekitInstanceID: instanceID,
@@ -213,9 +216,17 @@ func (s *voiceService) sweepOrphanStates() {
 	// StopAllForChannel call dispatches (via go, so still non-blocking)
 	// within moments of the decision being made, not after however many
 	// LiveKit round trips happened to precede it in iteration order.
+	// Music stops run alongside eviction, but remain owned by this sweep.
+	// Join them before releasing its producer slot or maintenance owner.
+	var musicStops sync.WaitGroup
+	defer musicStops.Wait()
 	for _, o := range orphans {
 		if o.channelEmpty && s.musicBotHook != nil {
-			go s.musicBotHook.StopAllForChannel(o.channelID)
+			musicStops.Add(1)
+			logx.Go("voice-orphan-music-stop", func() {
+				defer musicStops.Done()
+				s.musicBotHook.StopAllForChannel(o.channelID)
+			})
 		}
 	}
 
@@ -234,7 +245,7 @@ func (s *voiceService) sweepOrphanStates() {
 		// Credit the abandoned session — duration counts up to the moment
 		// of cleanup, which is approximately when the user actually
 		// disconnected (within `orphanGracePeriod` of it).
-		s.creditUsage(o.livekitInstanceID, o.livekitIsCloud, o.joinedAt)
+		s.creditUsageSession(o.usageSessionID, o.livekitInstanceID, o.livekitIsCloud, o.joinedAt, now)
 	}
 }
 
@@ -617,13 +628,18 @@ func (s *voiceService) attemptServerMuteUpdate(ctx context.Context, roomClient *
 		return nil // unmute: no track-level action — see applyServerMuteToLiveKit's doc comment
 	}
 
+	s.mutePublishedMicrophone(ctx, roomClient, roomName, channelID, userID, participant.Tracks)
+	return nil
+}
+
+func (s *voiceService) mutePublishedMicrophone(ctx context.Context, roomClient *lksdk.RoomServiceClient, roomName, channelID, userID string, tracks []*livekit.TrackInfo) {
 	// Best-effort: also mute the already-published microphone track
 	// directly, so audio already in flight is silenced immediately rather
 	// than only on the client's next publish/renegotiation. A failure here
 	// does NOT fail the overall attempt — UpdateParticipant above already
 	// applied the durable grant change — logged and swallowed, matching
 	// the mute leg's fail-open policy.
-	for _, track := range participant.Tracks {
+	for _, track := range tracks {
 		if track.Source != livekit.TrackSource_MICROPHONE {
 			continue
 		}
@@ -640,7 +656,6 @@ func (s *voiceService) attemptServerMuteUpdate(ctx context.Context, roomClient *
 		}
 		break // one microphone track expected per participant
 	}
-	return nil
 }
 
 // EnforceModerationOnJoin evicts userID from the LiveKit room for
@@ -673,6 +688,13 @@ func (s *voiceService) attemptServerMuteUpdate(ctx context.Context, roomClient *
 // transient DB hiccup would kick or silence innocent participants for
 // reasons unrelated to moderation.
 func (s *voiceService) EnforceModerationOnJoin(ctx context.Context, serverID, channelID, userID string) {
+	// Keep accepted webhook checks and their media children inside the owner.
+	// Late webhooks still enforce revocation, with synchronous caller-owned
+	// cleanup through dispatchDisconnectCleanup once the terminal owner drains.
+	if finish, admitted := s.operations.begin(); admitted {
+		defer finish()
+	}
+
 	// A JWT issued before channel deletion can remain valid until its expiry.
 	// Re-check the authoritative channel row on every participant_joined
 	// webhook, and evict both identities if the room no longer maps to a live
@@ -685,8 +707,8 @@ func (s *voiceService) EnforceModerationOnJoin(ctx context.Context, serverID, ch
 		if err != nil || channel == nil || channel.ServerID != serverID || channel.Type != models.ChannelTypeVoice {
 			voiceLogger.Warn("EnforceModerationOnJoin: evicting participant from missing or mismatched voice channel",
 				"server_id", serverID, "channel_id", channelID, "user_id", userID, "err", pkg.ErrText(err))
-			go s.removeDeletedChannelParticipant(ctx, serverID, channelID, userID)
-			go s.removeDeletedChannelParticipant(ctx, serverID, channelID, userID+"_ss")
+			s.dispatchDisconnectCleanup(func() { s.removeDeletedChannelParticipant(ctx, serverID, channelID, userID) })
+			s.dispatchDisconnectCleanup(func() { s.removeDeletedChannelParticipant(ctx, serverID, channelID, userID+"_ss") })
 			return
 		}
 	}
@@ -723,7 +745,7 @@ func (s *voiceService) EnforceModerationOnJoin(ctx context.Context, serverID, ch
 		// streaming after their voice session is evicted. See
 		// removeParticipantAndScreenShareFromLiveKit's own doc comment for
 		// the LiveKit call and error handling.
-		go s.removeParticipantAndScreenShareFromLiveKit(channelID, userID)
+		s.dispatchDisconnectCleanup(func() { s.removeParticipantAndScreenShareFromLiveKit(channelID, userID) })
 		return
 	}
 
@@ -735,49 +757,22 @@ func (s *voiceService) EnforceModerationOnJoin(ctx context.Context, serverID, ch
 	if s.currentServerMute(userID, serverID) {
 		voiceLogger.Info("EnforceModerationOnJoin: re-applying server-mute grant on join",
 			"server_id", serverID, "channel_id", channelID, "user_id", userID)
-		go s.applyServerMuteToLiveKit(channelID, userID) // #nosec G118 -- deliberately detached: this is the participant_joined backstop, best-effort by design and carrying its own context.Background()+timeout so it outlives the webhook request
+		s.dispatchDisconnectCleanup(func() { s.applyServerMuteToLiveKit(channelID, userID) })
 	}
 }
 
 // StartAFKChecker periodically checks for inactive voice users and kicks them.
 // Runs every 30 seconds — checks each user's LastActivity against the server's afk_timeout_minutes.
 func (s *voiceService) StartAFKChecker() {
-	go func() {
-		ticker := time.NewTicker(30 * time.Second)
-		defer ticker.Stop()
-
-		for range ticker.C {
-			s.sweepAFKUsers()
-		}
-	}()
+	s.afkWorker.startContext(30*time.Second, s.sweepAFKUsersContext)
 }
 
 // sweepAFKUsers finds and kicks users who exceeded their server's AFK timeout.
 // Two-phase: identify AFK users under read lock, then kick outside lock.
-func (s *voiceService) sweepAFKUsers() {
+func (s *voiceService) sweepAFKUsersContext(parent context.Context) {
 	now := time.Now()
 
-	// Phase 1: identify potential AFK users under read lock
-	type candidate struct {
-		userID    string
-		channelID string
-		idleSince time.Time
-	}
-	var candidates []candidate
-
-	s.mu.RLock()
-	for userID, state := range s.states {
-		// Skip users who are streaming — they're actively sharing content
-		if state.IsStreaming {
-			continue
-		}
-		candidates = append(candidates, candidate{
-			userID:    userID,
-			channelID: state.ChannelID,
-			idleSince: state.LastActivity,
-		})
-	}
-	s.mu.RUnlock()
+	candidates := s.afkCandidates()
 
 	if len(candidates) == 0 {
 		return
@@ -788,30 +783,24 @@ func (s *voiceService) sweepAFKUsers() {
 	channelTimeouts := make(map[string]time.Duration) // channelID -> timeout
 	channelInfo := make(map[string]afkEntry)          // channelID -> server/channel names
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(parent, 10*time.Second)
 	defer cancel()
 
 	var toKick []afkEntry
 
 	for _, c := range candidates {
+		if ctx.Err() != nil {
+			return
+		}
 		timeout, ok := channelTimeouts[c.channelID]
 		if !ok {
-			channel, err := s.channelGetter.GetByID(ctx, c.channelID)
+			resolved, info, err := s.afkChannelPolicy(ctx, c.channelID)
 			if err != nil {
 				continue
 			}
-			server, err := s.afkTimeoutGetter.GetByID(ctx, channel.ServerID)
-			if err != nil {
-				continue
-			}
-			timeout = time.Duration(server.AFKTimeoutMinutes) * time.Minute
+			timeout = resolved
 			channelTimeouts[c.channelID] = timeout
-			channelInfo[c.channelID] = afkEntry{
-				channelID:   c.channelID,
-				channelName: channel.Name,
-				serverID:    server.ID,
-				serverName:  server.Name,
-			}
+			channelInfo[c.channelID] = info
 		}
 
 		if timeout <= 0 {
@@ -832,6 +821,9 @@ func (s *voiceService) sweepAFKUsers() {
 
 	// Phase 3: kick AFK users
 	for _, entry := range toKick {
+		if ctx.Err() != nil {
+			return
+		}
 		voiceLogger.Info("AFK kick: idle too long", "user_id", entry.userID, "channel_id", entry.channelID, "server_id", entry.serverID)
 
 		// Notify user before disconnect
@@ -847,4 +839,34 @@ func (s *voiceService) sweepAFKUsers() {
 		// Use the existing disconnect flow
 		s.DisconnectUser(entry.userID)
 	}
+}
+
+func (s *voiceService) afkChannelPolicy(ctx context.Context, channelID string) (time.Duration, afkEntry, error) {
+	channel, err := s.channelGetter.GetByID(ctx, channelID)
+	if err != nil {
+		return 0, afkEntry{}, err
+	}
+	server, err := s.afkTimeoutGetter.GetByID(ctx, channel.ServerID)
+	if err != nil {
+		return 0, afkEntry{}, err
+	}
+	return time.Duration(server.AFKTimeoutMinutes) * time.Minute, afkEntry{channelID: channelID, channelName: channel.Name, serverID: server.ID, serverName: server.Name}, nil
+}
+
+type afkCandidate struct {
+	userID, channelID string
+	idleSince         time.Time
+}
+
+// Snapshot only idle candidates; repository lookups run after releasing s.mu.
+func (s *voiceService) afkCandidates() []afkCandidate {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var candidates []afkCandidate
+	for userID, state := range s.states {
+		if !state.IsStreaming {
+			candidates = append(candidates, afkCandidate{userID: userID, channelID: state.ChannelID, idleSince: state.LastActivity})
+		}
+	}
+	return candidates
 }

@@ -11,7 +11,7 @@ func TestVoiceStateFanoutIgnoresStaleCachedPermissionGrant(t *testing.T) {
 	fixture := permFixture{serverID: "server", channelID: "channel", roles: map[string][]models.Role{
 		"viewer": {{ID: "role", ServerID: "server", Permissions: models.PermViewChannel}},
 	}}
-	resolver := fixture.newService(&bulkRepoCounter{})
+	resolver := fixture.newService(t, &bulkRepoCounter{})
 	ctx := context.Background()
 	users := []string{"viewer"}
 	warm, err := resolver.ResolveChannelPermissionsBulk(ctx, "channel", users)
@@ -25,7 +25,9 @@ func TestVoiceStateFanoutIgnoresStaleCachedPermissionGrant(t *testing.T) {
 	if err != nil || !stale["viewer"].Has(models.PermViewChannel) {
 		t.Fatal("fixture did not retain the cached grant")
 	}
-	fresh, err := resolveFreshFanoutPermissions(ctx, resolver, "channel", users)
+	service := NewVoiceService(nil, nil, resolver, nil, nil, nil, nil, nil, nil, nil, VoiceRuntimeDependencies{FreshPermissions: resolver}).(*voiceService)
+	t.Cleanup(service.ShutdownVoiceStateFanout)
+	fresh, err := service.currentVoiceBulkPermissions(ctx, "channel", users)
 	if err != nil || fresh["viewer"].Has(models.PermViewChannel) {
 		t.Fatalf("voice fanout retained revoked grant: permissions=%v err=%v", fresh, err)
 	}

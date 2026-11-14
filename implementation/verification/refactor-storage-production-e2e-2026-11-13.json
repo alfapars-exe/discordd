@@ -1,0 +1,32 @@
+{
+  "observedAtUtc": "2026-11-13T10:18:58.9920501Z",
+  "sourceRevision": "8212d816a39e722df6b91f7ac965638f6a796a72",
+  "stack": [
+    "Production Vite client bundle built with --base=/",
+    "Real Go HTTP/WebSocket server",
+    "Isolated verified-mTLS PostgreSQL"
+  ],
+  "productionClientEnvironment": "HICHAT_E2E_PRODUCTION_CLIENT=1",
+  "runs": [
+    {
+      "command": "npx playwright test --project=chromium",
+      "exitCode": 0,
+      "passed": 14,
+      "duration": "2.3m",
+      "log": "hichat-storage-production-chromium.log"
+    },
+    {
+      "command": "npx playwright test --project=webkit-smoke",
+      "exitCode": 0,
+      "passed": 1,
+      "duration": "40.0s",
+      "log": "hichat-storage-production-webkit.log"
+    }
+  ],
+  "limits": [
+    "Chromium application suite and WebKit auth smoke have different scope",
+    "No physical media acceptance",
+    "No physical multi-device backup restore acceptance",
+    "No merge/deployment proof"
+  ]
+}

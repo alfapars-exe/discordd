@@ -17,6 +17,11 @@ type OnlineFriendCandidate struct {
 	Preferences *models.UserPreferences
 }
 
+// OnlineFriendCandidateReader supplies the optional bulk prefilter.
+type OnlineFriendCandidateReader interface {
+	ListOnlineFriendCandidates(context.Context, string) ([]OnlineFriendCandidate, error)
+}
+
 func (r *sqliteNotificationRepo) ListOnlineFriendCandidates(ctx context.Context, actorID string) ([]OnlineFriendCandidate, error) {
 	rows, err := r.db.QueryContext(ctx, `WITH candidates AS (
 	 SELECT DISTINCT CASE WHEN f.user_id=? THEN f.friend_id ELSE f.user_id END AS user_id

@@ -71,12 +71,13 @@ type sessionCaptureHub struct {
 func (h *sessionCaptureHub) DisconnectSession(owner, id string) {
 	h.ended = append(h.ended, owner+":"+id)
 }
-func boundAuthHarness(t *testing.T) (*mfaHarness, *authService, *sessionCaptureHub) {
+func boundAuthHarness(t *testing.T, options ...AuthOption) (*mfaHarness, *authService, *sessionCaptureHub) {
 	t.Helper()
 	h := newMFAHarness(t)
 	users := repository.NewSQLiteUserRepo(h.db.Conn)
 	hub := &sessionCaptureHub{MockEventPublisher: &testutil.MockEventPublisher{}}
-	svc := NewAuthService(users, repository.NewSQLiteSessionRepo(h.db.Conn), nil, hub, nil, testJWTSecret, 15, 7, WithAuthSessions(repository.NewSQLiteAuthSessionRepo(h.db.Conn)), WithMFA(h.svc)).(*authService)
+	options = append([]AuthOption{WithAuthSessionDisconnecter(hub), WithAuthSessions(repository.NewSQLiteAuthSessionRepo(h.db.Conn)), WithMFA(h.svc)}, options...)
+	svc := NewAuthService(users, repository.NewSQLiteSessionRepo(h.db.Conn), nil, hub, nil, nil, testJWTSecret, 15, 7, options...).(*authService)
 	return h, svc, hub
 }
 func sessionLogin(t *testing.T, s *authService, name string) *AuthTokens {
@@ -194,7 +195,7 @@ func TestAuthSessionsRegistrationAtomicBindingAndUpgrade(t *testing.T) {
 	if err := s.ValidateSession(ctx, tokens.User.ID, tokens.SessionID); err != nil {
 		t.Fatal(err)
 	}
-	legacy := NewAuthService(repository.NewSQLiteUserRepo(h.db.Conn), repository.NewSQLiteSessionRepo(h.db.Conn), nil, nil, nil, testJWTSecret, 15, 7)
+	legacy := NewAuthService(repository.NewSQLiteUserRepo(h.db.Conn), repository.NewSQLiteSessionRepo(h.db.Conn), nil, nil, nil, nil, testJWTSecret, 15, 7)
 	old, err := legacy.Login(ctx, &models.LoginRequest{Username: h.user.Username, Password: "current-password"})
 	if err != nil {
 		t.Fatal(err)
@@ -208,5 +209,24 @@ func TestAuthSessionsRegistrationAtomicBindingAndUpgrade(t *testing.T) {
 	}
 	if err := s.ValidateSession(ctx, h.user.ID, upgraded.SessionID); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestAuthSessionDisconnectionIsExplicitlyDisabledWithoutOption(t *testing.T) {
+	hub := &sessionCaptureHub{MockEventPublisher: &testutil.MockEventPublisher{}}
+	service := NewAuthService(nil, nil, nil, hub, nil, nil, testJWTSecret, 15, 7).(*authService)
+	service.disconnectSession("owner", "session")
+	if len(hub.ended) != 0 {
+		t.Fatal("standalone auth rediscovered an undeclared session disconnecter")
+	}
+}
+
+func TestAuthSessionDisconnectionConstructorOptionSelectsExactSession(t *testing.T) {
+	ordinary := &sessionCaptureHub{MockEventPublisher: &testutil.MockEventPublisher{}}
+	selected := &sessionCaptureHub{MockEventPublisher: &testutil.MockEventPublisher{}}
+	service := NewAuthService(nil, nil, nil, ordinary, nil, nil, testJWTSecret, 15, 7, WithAuthSessionDisconnecter(selected)).(*authService)
+	service.disconnectSession("owner", "selected-session")
+	if len(ordinary.ended) != 0 || len(selected.ended) != 1 || selected.ended[0] != "owner:selected-session" {
+		t.Fatal("session disconnect scope or explicit integration selection lost")
 	}
 }

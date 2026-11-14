@@ -1,0 +1,35 @@
+{
+  "source": "4dae7d7f37e18f08a6e57fe4295597985ef172bb",
+  "node": "v26.13.1",
+  "go": "go1.27.4 windows/amd64",
+  "fixture": "Real Go HTTP/WebSocket server; fresh isolated database per run on verified-mTLS PostgreSQL; production Vite build with base=/; no reuse of developer servers.",
+  "runs": [
+    {
+      "project": "chromium",
+      "passed": 14,
+      "duration": "2.6m",
+      "exitCode": 0,
+      "log": "hichat-overlay-updater-production-chromium.log",
+      "serverErrorLines": 0,
+      "appLogBatchFailureLines": 0
+    },
+    {
+      "project": "webkit-smoke",
+      "passed": 1,
+      "duration": "42.9s",
+      "exitCode": 0,
+      "log": "hichat-overlay-updater-production-webkit.log",
+      "serverErrorLines": 0,
+      "appLogBatchFailureLines": 0
+    }
+  ],
+  "observations": [
+    "Chromium diagnostics include refresh 400/401 responses; all assertions passed.",
+    "Fixture environment lacks ffmpeg/yt-dlp; no physical media acceptance claimed."
+  ],
+  "limits": [
+    "Not packaged Electron/native window acceptance.",
+    "Not provider deployment, Windows installation or physical multi-device media proof.",
+    "No claim that the historical app-log timeout root cause is resolved."
+  ]
+}

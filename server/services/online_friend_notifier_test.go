@@ -84,7 +84,7 @@ func TestOnlineFriendNotifierCreatesOnlyOptedInVisibleFriendNotifications(t *tes
 				t.Fatalf("broadcast op = %q", event.Op)
 			}
 			pushed = append(pushed, userID)
-		}},
+		}}, nil,
 	)
 
 	if err := notifier.NotifyOnline(context.Background(), "actor"); err != nil {
@@ -137,7 +137,7 @@ func TestOnlineFriendNotifierActorPrivacyAndPresenceFailClosed(t *testing.T) {
 			}
 			notifier := NewOnlineFriendNotifier(users, prefs, friends, guardedOnlineNotices(
 				func(context.Context, *models.Notification) error { created++; return nil },
-			), onlineIDs, &testutil.MockBroadcaster{})
+			), onlineIDs, &testutil.MockBroadcaster{}, nil)
 			if err := notifier.NotifyOnline(context.Background(), "actor"); err != nil {
 				t.Fatalf("NotifyOnline: %v", err)
 			}
@@ -165,7 +165,7 @@ func TestOnlineFriendNotifierBlocksAndDeduplicatesEpochs(t *testing.T) {
 	}
 	notifier := NewOnlineFriendNotifier(users, prefs, friends, guardedOnlineNotices(
 		func(_ context.Context, n *models.Notification) error { created = append(created, n.UserID); return nil },
-	), onlineFriendPresenceStub{"actor"}, &testutil.MockBroadcaster{})
+	), onlineFriendPresenceStub{"actor"}, &testutil.MockBroadcaster{}, nil)
 
 	for range 3 {
 		if err := notifier.NotifyOnline(context.Background(), "actor"); err != nil {
@@ -209,7 +209,7 @@ func TestOnlineFriendNotifierRetriesFailedRecipientWithoutDuplicatingSuccess(t *
 			created = append(created, n.UserID)
 			return nil
 		},
-	), onlineFriendPresenceStub{"actor"}, &testutil.MockBroadcaster{})
+	), onlineFriendPresenceStub{"actor"}, &testutil.MockBroadcaster{}, nil)
 
 	if err := notifier.NotifyOnline(context.Background(), "actor"); err == nil {
 		t.Fatal("expected create failure")
@@ -244,7 +244,7 @@ func TestOnlineFriendNotifierDoesNotBroadcastWhenGuardedWriteFindsRevokedEdge(t 
 		"friend": json.RawMessage(`{"notifications":{"onlineFriendNotifications":true}}`),
 	}, friends, writer, onlineFriendPresenceStub{"actor"}, &testutil.MockBroadcaster{
 		BroadcastToUserFn: func(string, ws.Event) { broadcast++ },
-	})
+	}, nil)
 	if err := notifier.NotifyOnline(context.Background(), "actor"); err != nil {
 		t.Fatalf("NotifyOnline: %v", err)
 	}

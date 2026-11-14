@@ -60,7 +60,6 @@ type DMService interface {
 	SearchMessages(ctx context.Context, userID, channelID, query string, limit, offset int) (*models.DMSearchResult, error)
 	ToggleE2EE(ctx context.Context, userID, channelID string, enabled bool) (*models.DMChannel, error)
 	SetUploadDir(dir string)
-	SetEmojiResolver(r EmojiResolver)
 }
 
 // Optional extension preserves existing DMService implementations and callers.
@@ -74,19 +73,30 @@ type ScheduledEmailEnqueuer interface {
 	EnqueueWithOptions(ctx context.Context, userID, category, dedupeKey, subject, body string, options EmailEnqueueOptions) (bool, error)
 }
 
-type DMCommunicationEmailConfigurer interface {
-	SetCommunicationEmailEnqueuer(ScheduledEmailEnqueuer)
-}
-
 // FriendshipChecker is a minimal ISP interface for friend checks (used by dmService).
 type FriendshipChecker interface {
 	AreFriends(ctx context.Context, userA, userB string) (bool, error)
 }
 
+// DMRequestService declares committed-send/replay/receipt capabilities used by HTTP.
+type DMRequestService interface {
+	DMService
+	DMDeletionReceiptService
+	DMEventReplayService
+	FinalizeDMCreate(context.Context, *models.DMMessage) error
+}
+
+// DMRuntime retains delivery worker ownership at composition.
+type DMRuntime interface {
+	DMRequestService
+	StartDMDelivery(context.Context) (func(), error)
+}
+
 type dmService struct {
+	reactionWriter      repository.ReactionNotificationWriter
 	deliveryDB          *sql.DB
 	deliveryHub         ws.Broadcaster
-	dmRepo              repository.DMRepository
+	dmRepo              repository.DMRequestStore
 	userRepo            repository.UserRepository
 	dmReadRepo          repository.DMReadRepository
 	notificationRepo    repository.NotificationRepository
@@ -99,21 +109,17 @@ type dmService struct {
 	reactionPreferences profilePreferenceReader
 	// uploadDir enables best-effort disk cleanup on message/channel delete
 	// (see upload_cleanup.go). Blank disables cleanup — set via
-	// SetUploadDir, wired in init_services.go so the constructor signature
-	// above stays unchanged.
+	// SetUploadDir in init_services.go.
 	uploadDir string
 	// emojiResolver validates custom-emoji reactions (reaction_emoji.go);
-	// nil rejects every custom emoji. Set via SetEmojiResolver.
+	// nil explicitly disables custom emoji reactions.
 	emojiResolver              EmojiResolver
 	communicationEmailEnqueuer ScheduledEmailEnqueuer
 }
 
-func (s *dmService) SetCommunicationEmailEnqueuer(enqueuer ScheduledEmailEnqueuer) {
-	s.communicationEmailEnqueuer = enqueuer
-}
-
 func NewDMService(
-	dmRepo repository.DMRepository,
+	serverDMPolicy ServerDMPolicy,
+	dmRepo repository.DMRequestStore,
 	userRepo repository.UserRepository,
 	hub ws.Broadcaster,
 	blockChecker BlockChecker,
@@ -122,28 +128,39 @@ func NewDMService(
 	dmReadRepo repository.DMReadRepository,
 	notificationRepo repository.NotificationRepository,
 	txRunner repository.DMMessageTxRunner,
-) DMService {
+	communicationEmailEnqueuer ScheduledEmailEnqueuer,
+	reactionPreferences profilePreferenceReader,
+	reactionWriter repository.ReactionNotificationWriter,
+	emojiResolver EmojiResolver,
+	deliveryDB *sql.DB,
+) DMRuntime {
+	var deliveryHub ws.Broadcaster
+	if deliveryDB != nil {
+		deliveryHub = hub
+		hub = dmDurableHub{hub}
+	}
 	return &dmService{
-		dmRepo:           dmRepo,
-		userRepo:         userRepo,
-		dmReadRepo:       dmReadRepo,
-		notificationRepo: notificationRepo,
-		txRunner:         txRunner,
-		hub:              hub,
-		blockChecker:     blockChecker,
-		friendChecker:    friendshipChecker,
-		unhider:          unhider,
+		deliveryDB:                 deliveryDB,
+		deliveryHub:                deliveryHub,
+		emojiResolver:              emojiResolver,
+		reactionWriter:             reactionWriter,
+		reactionPreferences:        reactionPreferences,
+		communicationEmailEnqueuer: communicationEmailEnqueuer,
+		serverDMPolicy:             serverDMPolicy,
+		dmRepo:                     dmRepo,
+		userRepo:                   userRepo,
+		dmReadRepo:                 dmReadRepo,
+		notificationRepo:           notificationRepo,
+		txRunner:                   txRunner,
+		hub:                        hub,
+		blockChecker:               blockChecker,
+		friendChecker:              friendshipChecker,
+		unhider:                    unhider,
 	}
 }
 
 func (s *dmService) SetUploadDir(dir string) {
 	s.uploadDir = dir
-}
-
-func (s *dmService) SetServerDMPolicy(policy ServerDMPolicy) { s.serverDMPolicy = policy }
-
-func (s *dmService) SetReactionPreferences(prefs repository.PreferencesRepository) {
-	s.reactionPreferences = prefs
 }
 
 // ─── Shared Helpers ───

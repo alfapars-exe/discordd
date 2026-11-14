@@ -1,0 +1,24 @@
+{
+  "source_parent": "2c2db26e",
+  "finding": "b177 Playwright job succeeded despite two retry-only passes; failure-only artifact upload omitted their DOM diagnostics",
+  "before": {
+    "command": "node e2e/scripts/test-playwright-profiles.mjs",
+    "exit": 1,
+    "assertion": "CI must reject retry-only passes; false !== true"
+  },
+  "change": "CI failOnFlakyTests enabled; CLI-discovered configuration guard verifies it; report upload uses always()",
+  "after": {
+    "command": "npm --prefix e2e run test:isolation",
+    "exit": 0,
+    "windows_file_symlink_case": "skipped explicitly"
+  },
+  "open": [
+    "DM peer sidebar locator timeout after reload",
+    "Username field timeout during reused-browser login after logout"
+  ],
+  "limits": [
+    "No root-cause or stable browser claim for the two flaky cases yet",
+    "Existing report directories are overwritten by later profile runs; strict failure stops subsequent profile steps and preserves failing-run diagnostics",
+    "Native CI on new source still required"
+  ]
+}

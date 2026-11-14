@@ -501,8 +501,8 @@ function Message({
           </div>
 
           {message.reply_to_id && (
-            <div className="msg-reply-preview" onClick={handleScrollToReply}>
-              <div className="msg-reply-bar" />
+            <button type="button" className="msg-reply-preview" data-reply-target={message.reply_to_id} onClick={handleScrollToReply}>
+              <span className="msg-reply-bar" />
               {message.referenced_message?.author ? (
                 <>
                   <span className="msg-reply-author">
@@ -518,7 +518,7 @@ function Message({
               ) : (
                 <span className="msg-reply-deleted">{t("replyDeleted")}</span>
               )}
-            </div>
+            </button>
           )}
 
           {isPinned && (

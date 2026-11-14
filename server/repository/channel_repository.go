@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/argeinfina/hichat/models"
 )
@@ -25,4 +26,17 @@ type ChannelRepository interface {
 	// which cascade only where the DB actually enforces foreign keys) is
 	// deleted — see services.removeUploadFilesByURL.
 	GetFileURLsByChannelID(ctx context.Context, channelID string) ([]string, error)
+}
+
+// VoiceAccessReader provides same-snapshot admission/routing and audience reads.
+type VoiceAccessReader interface {
+	VoiceAdmission(context.Context, string, string) (*models.VoiceAdmission, error)
+	VoiceTokenAccess(context.Context, string, string, time.Time) (*models.VoiceAdmission, *models.LiveKitInstance, int64, error)
+	VoiceVisibleUsers(context.Context, string, string, []string) ([]string, error)
+}
+
+// ChannelStore declares optional backend-specific voice access at composition.
+type ChannelStore interface {
+	ChannelRepository
+	VoiceAccess() VoiceAccessReader
 }

@@ -22,7 +22,7 @@ func TestPostgresVoiceAdmissionAndAudience(t *testing.T) {
 		{q: "INSERT INTO user_roles(user_id,role_id,server_id) VALUES('viewer','role','guild')"},
 	})
 	ctx := context.Background()
-	repo := NewSQLiteChannelRepo(wrapForRepo(d)).(*postgresVoiceChannelRepo)
+	repo := NewSQLiteChannelRepo(wrapForRepo(d)).VoiceAccess()
 	check := func(visible bool) {
 		t.Helper()
 		a, err := repo.VoiceAdmission(ctx, "viewer", "room")
@@ -55,5 +55,12 @@ func TestPostgresVoiceAdmissionAndAudience(t *testing.T) {
 	a, err := repo.VoiceAdmission(ctx, "other", "room")
 	if err != nil || a.Member {
 		t.Fatalf("nonmember %v err %v", a, err)
+	}
+}
+
+func TestSQLiteChannelFactoryExplicitlyDisablesSnapshotVoiceAccess(t *testing.T) {
+	db, _ := newSQLiteTestDBWithPath(t)
+	if NewSQLiteChannelRepo(db.Conn).VoiceAccess() != nil {
+		t.Fatal("SQLite snapshot voice access must be explicitly disabled")
 	}
 }

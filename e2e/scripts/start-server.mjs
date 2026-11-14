@@ -179,6 +179,10 @@ function main() {
   if (!/^run-\d+-\d+-[a-f0-9]{16}$/.test(runId)) {
     throw new Error("[e2e-server] Playwright must provide a unique HICHAT_E2E_RUN_ID");
   }
+  const voicePort = process.env.HICHAT_E2E_LIVEKIT_PORT;
+  if (voicePort !== undefined && (!/^[1-9][0-9]{0,4}$/.test(voicePort) || Number(voicePort) > 65535)) {
+    throw new Error("HICHAT_E2E_LIVEKIT_PORT must be a loopback fixture port");
+  }
   const runDir = join(TMP_ROOT, runId);
   const uploadDir = join(runDir, "uploads");
   mkdirSync(runDir);
@@ -215,13 +219,16 @@ function main() {
     ENCRYPTION_KEY,
     // HF_TOKEN empty => BackupConfig.Enabled=false, so no bucket sync runs.
     HF_TOKEN: "",
-    // Voice is out of scope; leave LiveKit unconfigured.
-    LIVEKIT_URL: "",
-    LIVEKIT_API_KEY: "",
-    LIVEKIT_API_SECRET: "",
+    // livekit-server --dev credentials apply only to the opted-in local fixture.
+    LIVEKIT_URL: voicePort ? `ws://127.0.0.1:${voicePort}` : "",
+    LIVEKIT_API_KEY: voicePort ? "devkey" : "",
+    LIVEKIT_API_SECRET: voicePort ? "secret" : "",
     // Optional integrations off — each is disabled by an empty value.
     SENTRY_DSN: "",
-    RESEND_API_KEY: "",
+    RESEND_API_KEY: process.env.HICHAT_E2E_RECOVERY_MAIL === "1" ? "local-recovery-fixture" : "",
+    RESEND_BASE_URL: "http://127.0.0.1:19387/",
+    RESEND_FROM: "recovery@example.test",
+    APP_URL: "http://localhost:3030/",
     KLIPY_API_KEY: "",
     ENVIRONMENT: "development",
     // warn, not info: the access-log middleware writes a line per HTTP

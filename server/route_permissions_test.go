@@ -197,7 +197,9 @@ var handlerInternalGates = map[string]string{
 // also turns it red. Restoring either turns the test green again.
 func TestRoutePermissions_EveryRouteHasADeclaredGate(t *testing.T) {
 	rec := newGateRecordingRegistrar()
-	initRoutes(rec, &Handlers{}, nil, nil, nil, nil, nil, nil, nil)
+	authMw, permMw := initRoutes(rec, &Handlers{}, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	defer authMw.Stop()
+	defer permMw.Stop()
 
 	seen := make(map[string]bool, len(rec.patterns))
 	for _, pattern := range rec.patterns {

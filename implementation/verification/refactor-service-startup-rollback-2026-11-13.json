@@ -1,0 +1,25 @@
+{
+  "canonical_source": "a2a48de6",
+  "integrated_source": "3b3f5a11b27ed6e8e3c0ae2f830f0c9186cf021b",
+  "pr": 294,
+  "base_pr": 292,
+  "before": {
+    "failing_hub_callback": "1 permission cache worker retained after initServices panic"
+  },
+  "after": {
+    "canonical_early_config_and_hub_failure_race_count_5": "PASS 3.310s",
+    "canonical_full_go_vet_build": "PASS",
+    "canonical_golangci_lint": "0 issues",
+    "integrated_early_and_hub_failure_plus_successful_handoff_count_5": "PASS 0.665s",
+    "integrated_same_scope_race_count_5": "PASS 3.229s",
+    "integrated_full_go_vet_build": "PASS",
+    "successful_handoff": "2 cache workers and 18 limiter workers stay live after return, then return to baseline after caller cleanup",
+    "panic_identity": "original hub marker preserved"
+  },
+  "limitations": [
+    "Successful handoff test is integration-only because it depends on PR293 limiter Stop.",
+    "No late failure after limiter acquisition is injected or proven yet.",
+    "No live server-process signal shutdown or final-source full matrix acceptance is claimed.",
+    "PR294 is stacked on PR292; PR293 and PR294 current-head CI pending."
+  ]
+}

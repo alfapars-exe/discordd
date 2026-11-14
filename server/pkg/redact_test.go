@@ -176,3 +176,42 @@ func indexOf(haystack, needle string) int {
 	}
 	return -1
 }
+
+func TestRedactEscapedJSONCredentialAndTabBearer(t *testing.T) {
+	for input, want := range map[string]string{
+		`{"password":"prefix\"sensitive-tail","ok":"visible"}`: `{"password":"***","ok":"visible"}`,
+		"Bearer\tsensitive-token":                              "Bearer ***",
+	} {
+		if got := RedactSecrets(input); got != want {
+			t.Errorf("RedactSecrets(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
+
+func TestRedactPostgresKeywordPasswords(t *testing.T) {
+	for _, tc := range []struct{ input, want string }{
+		{`host=db password='private word' port=5432`, "host=db password=*** port=5432"},
+		{`host=db password = 'private\' word' port=5432`, "host=db password = *** port=5432"},
+		{`host=db password=private\ word port=5432`, "host=db password=*** port=5432"},
+		{`host=db password=first&private-tail port=5432`, "host=db password=*** port=5432"},
+		{`host=db password=first"private-tail port=5432`, "host=db password=*** port=5432"},
+		{`postgres://db/app?password=first&mode=verify-full`, "postgres://db/app?password=***&mode=verify-full"},
+	} {
+		if got := ErrText(errors.New(tc.input)); got != tc.want {
+			t.Errorf("credential masking = %q, want %q", got, tc.want)
+		}
+	}
+}
+
+func TestSafeLogStringPreservesContextAfterInvalidUTF8(t *testing.T) {
+	const input = "before\xffafter"
+	if got := SafeLogString(input, 64); got != "before�after" {
+		t.Errorf("unbounded diagnostic = %q", got)
+	}
+	if got := SafeLogString(input, 11); got != "before�af" {
+		t.Errorf("bounded diagnostic = %q", got)
+	}
+	if got := SafeLogString("a界b", 3); got != "a" {
+		t.Errorf("partial final rune retained: %q", got)
+	}
+}

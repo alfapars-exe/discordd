@@ -10,7 +10,6 @@ package services
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -37,14 +36,10 @@ type BlockChecker interface {
 }
 
 type blockService struct {
-	friendRepo   repository.FriendshipRepository
+	friendRepo   repository.FriendshipStore
 	userRepo     repository.UserRepository
 	hub          ws.Broadcaster
 	gameActivity GameActivityPrivacyInvalidator
-}
-
-func (s *blockService) SetGameActivityPrivacyInvalidator(invalidator GameActivityPrivacyInvalidator) {
-	s.gameActivity = invalidator
 }
 
 func (s *blockService) reconcileActivityRelationship(ctx context.Context, userA, userB string) {
@@ -54,14 +49,16 @@ func (s *blockService) reconcileActivityRelationship(ctx context.Context, userA,
 }
 
 func NewBlockService(
-	friendRepo repository.FriendshipRepository,
+	gameActivity GameActivityPrivacyInvalidator,
+	friendRepo repository.FriendshipStore,
 	userRepo repository.UserRepository,
 	hub ws.Broadcaster,
 ) BlockService {
 	return &blockService{
-		friendRepo: friendRepo,
-		userRepo:   userRepo,
-		hub:        hub,
+		gameActivity: gameActivity,
+		friendRepo:   friendRepo,
+		userRepo:     userRepo,
+		hub:          hub,
 	}
 }
 
@@ -73,68 +70,15 @@ func (s *blockService) BlockUser(ctx context.Context, blockerID, targetID string
 	if _, err := s.userRepo.GetByID(ctx, targetID); err != nil {
 		return fmt.Errorf("%w: user not found", pkg.ErrNotFound)
 	}
-	if writer, ok := s.friendRepo.(repository.AtomicBlockWriter); ok {
-		now := time.Now().UTC()
-		removed, err := writer.CreateBlockAtomic(ctx, &models.Friendship{ID: uuid.New().String(), UserID: blockerID, FriendID: targetID, Status: models.FriendshipStatusBlocked, CreatedAt: now, UpdatedAt: now})
-		if err != nil {
-			return err
-		}
-		// No relationship-removal or success event is emitted before commit.
-		if removed {
-			s.hub.BroadcastToUser(targetID, ws.Event{Op: ws.OpFriendRemove, Data: map[string]string{"user_id": blockerID}})
-		}
-		s.broadcastBlock(blockerID, targetID)
-		s.reconcileActivityRelationship(ctx, blockerID, targetID)
-		return nil
-	}
-
-	existing, err := s.friendRepo.GetByPair(ctx, blockerID, targetID)
-	if err != nil && !errors.Is(err, pkg.ErrNotFound) {
+	now := time.Now().UTC()
+	removed, err := s.friendRepo.CreateBlockAtomic(ctx, &models.Friendship{ID: uuid.New().String(), UserID: blockerID, FriendID: targetID, Status: models.FriendshipStatusBlocked, CreatedAt: now, UpdatedAt: now})
+	if err != nil {
 		return err
 	}
-
-	if existing != nil {
-		if existing.Status == models.FriendshipStatusBlocked {
-			if existing.UserID == blockerID {
-				return fmt.Errorf("%w: user already blocked", pkg.ErrAlreadyExists)
-			}
-			// A reverse block belongs to its owner. Keep it and add our own
-			// directed row; unblocking ourselves must not remove their choice.
-		} else {
-			// pending or accepted — delete, then create blocked
-			if err := s.friendRepo.Delete(ctx, existing.ID); err != nil {
-				return err
-			}
-			s.reconcileActivityRelationship(ctx, blockerID, targetID)
-
-			// Notify the other party about friendship removal
-			otherID := existing.UserID
-			if existing.UserID == blockerID {
-				otherID = existing.FriendID
-			}
-			s.hub.BroadcastToUser(otherID, ws.Event{
-				Op: ws.OpFriendRemove,
-				Data: map[string]string{
-					"user_id": blockerID,
-				},
-			})
-		}
+	// Publish only after the complete relationship transition commits.
+	if removed {
+		s.hub.BroadcastToUser(targetID, ws.Event{Op: ws.OpFriendRemove, Data: map[string]string{"user_id": blockerID}})
 	}
-
-	now := time.Now().UTC()
-	blocked := &models.Friendship{
-		ID:        uuid.New().String(),
-		UserID:    blockerID,
-		FriendID:  targetID,
-		Status:    models.FriendshipStatusBlocked,
-		CreatedAt: now,
-		UpdatedAt: now,
-	}
-
-	if err := s.friendRepo.Create(ctx, blocked); err != nil {
-		return fmt.Errorf("failed to create block record: %w", err)
-	}
-
 	s.broadcastBlock(blockerID, targetID)
 	s.reconcileActivityRelationship(ctx, blockerID, targetID)
 	return nil

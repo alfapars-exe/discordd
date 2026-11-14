@@ -23,9 +23,9 @@ func TestApplicationRemovalFreshProofAndScopedRuntime(t *testing.T) {
 	inv := &stubInvalidator{}
 	users := &adminInvalStub{}
 	voice := &testutil.MockVoiceDisconnecter{}
-	s.SetOwnershipInvalidator(inv)
-	s.SetUserCacheInvalidator(users)
-	s.SetVoiceDisconnecter(voice)
+	s.ownershipInvalidator = inv
+	s.userInvalidator = users
+	s.voiceKit = voice
 	s.applicationRemoval = repository.NewSQLiteApplicationRemovalRepo(h.db.Conn)
 	disconnected := ""
 	hub.DisconnectUserFn = func(id string) { disconnected = id }
@@ -79,12 +79,12 @@ func TestApplicationRemovalFailureDoesNotDisconnect(t *testing.T) {
 			inv := &stubInvalidator{}
 			users := &adminInvalStub{}
 			voice := &testutil.MockVoiceDisconnecter{}
-			s.SetOwnershipInvalidator(inv)
-			s.SetUserCacheInvalidator(users)
-			s.SetVoiceDisconnecter(voice)
+			s.ownershipInvalidator = inv
+			s.userInvalidator = users
+			s.voiceKit = voice
 			disconnects := 0
 			observers := 0
-			s.SetMusicRequesterRetirementObserver(musicRequesterObserverFunc(func(string) { observers++ }))
+			s.musicRequesterRetirement = musicRequesterObserverFunc(func(string) { observers++ })
 			hub.DisconnectUserFn = func(string) { disconnects++ }
 			repo := repository.NewSQLiteApplicationRemovalRepo(h.db.Conn)
 			s.applicationRemoval = applicationRemovalTransition(func(ctx context.Context, actor, sid, hash, mfa, app string, now int64) error {

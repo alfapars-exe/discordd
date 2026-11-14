@@ -1,4 +1,3 @@
-import { rememberStartupChannels } from "../utils/startupCache";
 /**
  * Channel Store — Channel and category state management.
  */
@@ -134,7 +133,6 @@ export const useChannelStore = create<ChannelState>((set, get) => ({
     if (res.success && res.data) {
       const allVisible = res.data.flatMap((group) => group.channels);
       reconcileHistoryAccess(serverId, cached, allVisible);
-      rememberStartupChannels(owner, serverId, res.data);
       // Always update the cache — even if the user has already switched to
       // another server by the time the response arrives. Next time they come
       // back the freshest tree paints instantly.

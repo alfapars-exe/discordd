@@ -1,3 +1,7 @@
+import { runScreenShareRestart } from "../webrtc/screenShareRestartController";
+import { createDesktopScreenShareController } from "../webrtc/desktopScreenShareController";
+import { ScreenShareLifecycleController } from "../webrtc/screenShareLifecycleController";
+import { createNativeScreenShareController } from "../webrtc/nativeScreenShareController";
 /**
  * useScreenShareToggle — drive LiveKit screen share from voiceStore.isStreaming
  * and reflect external stops back into the store.
@@ -42,7 +46,6 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 import {
   RoomEvent,
   Track,
-  LocalAudioTrack as LKLocalAudioTrack,
   type LocalParticipant,
   type LocalTrackPublication,
   type LocalVideoTrack,
@@ -57,9 +60,8 @@ import {
 import { useServerStore } from "../stores/serverStore";
 import { useToastStore } from "../stores/toastStore";
 import { useSystemAudioCapture } from "./useSystemAudioCapture";
-import { useDisplayInfo, type DisplayInfo } from "./useDisplayInfo";
+import { useDisplayInfo } from "./useDisplayInfo";
 import { resolveScreenSharePublishDefaults, type ScreenSharePublishDefaults } from "../utils/screenShareProfile";
-import { privateScreenResolution } from "../utils/privateScreenQuality";
 import { isScreenShareReconfiguring, LiveKitScreenShareUpdater } from "../webrtc/livekitScreenShareUpdate";
 import {
   isElectron,
@@ -75,30 +77,6 @@ import {
 import { getScreenShareToken } from "../api/voice";
 import { logToServer } from "../api/clientLog";
 import i18n from "../i18n";
-
-type ScreenShareResolution = {
-  width: number;
-  height: number;
-  frameRate: number;
-};
-
-/**
- * Map (quality, fps) to a getDisplayMedia constraint set. The browser/Electron
- * side honors this as a hint — the browser may downsample if the source can't
- * deliver the requested rate.
- *
- * `display` is the monitor metrics from useDisplayInfo. Needed to resolve
- * the "native"/-1 sentinels into concrete numbers — see Track P. Falls back
- * to 1080p/60 when display is null (hook still loading or browser without
- * IPC) so the function never returns a 0-pixel resolution.
- */
-function resolutionFor(
-  quality: string,
-  fps: number,
-  display: DisplayInfo | null,
-): ScreenShareResolution {
-  return privateScreenResolution({ screenShareQuality: quality, screenShareFps: fps }, display);
-}
 
 function notifyServerStopped() {
   const { _wsSend } = useVoiceStore.getState();
@@ -300,7 +278,8 @@ export function useScreenShareToggle(
   });
 
   const screenUpdaterRef = useRef<LiveKitScreenShareUpdater | null>(null);
-  const lifecycleRef = useRef<Promise<void>>(Promise.resolve());
+  const lifecycleRef = useRef(new ScreenShareLifecycleController());
+  const nativeControllerRef = useRef<ReturnType<typeof createNativeScreenShareController> | null>(null);
 
   // Native Electron audio capture — excludes our own process tree to prevent
   // screen-share echo. Held in a latest-ref so the toggle effect doesn't
@@ -332,6 +311,11 @@ export function useScreenShareToggle(
   const restartGenRef = useRef(0);
   const restartTimerRef = useRef<number | null>(null);
   const isRestartingRef = useRef(false);
+
+  function retireRestart() {
+    ++restartGenRef.current;
+    isRestartingRef.current = false;
+  }
 
   function updatePublishedShare(updater: LiveKitScreenShareUpdater) {
     const state = useVoiceStore.getState();
@@ -376,6 +360,33 @@ export function useScreenShareToggle(
     return true;
   }
 
+  function desktopController() {
+    return createDesktopScreenShareController({
+      localParticipant,
+      getSettings: () => useVoiceStore.getState(),
+      getDisplay: () => displayRef.current,
+      isMobileBrowser,
+      canBrowserScreenShare,
+      ownPublishedShare,
+      startAudio: current => systemAudioCaptureRef.current.start(current),
+      setAudioPublication: publication => { customAudioPubRef.current = publication; },
+      releaseOwnedShare: () => {
+        const updater = screenUpdaterRef.current;
+        screenUpdaterRef.current = null;
+        updater?.dispose();
+        const audio = customAudioPubRef.current ?? localParticipant.getTrackPublication(Track.Source.ScreenShareAudio);
+        customAudioPubRef.current = null;
+        return audio;
+      },
+      stopAudio: () => systemAudioCaptureRef.current.stop(),
+      unsupported: () => useToastStore.getState().addToast("error", i18n.t("screenShareNotSupported", { ns: "voice" }), 6000),
+      started: notifyServerStarted,
+      stopped: notifyServerStopped,
+      logVideo: branch => logPublishedTrackDetails(localParticipant, branch),
+      logAudio: branch => logPublishedAudioTrackDetails(localParticipant, branch),
+      log: logToServer,
+    });
+  }
   // ──────────────────────────────────────────────────────────────────────
   // Shared start/stop helpers used by Effect 1 AND `runRestart`.
   //
@@ -392,17 +403,6 @@ export function useScreenShareToggle(
   ): Promise<void> {
     if (shouldCancel()) return;
     const streamName = `screenshare-${crypto.randomUUID()}`;
-    const retireCancelledStart = async (publication: LocalTrackPublication | undefined) => {
-      const publications = new Set([publication, ...localParticipant.trackPublications.values()]);
-      for (const pub of publications) {
-        const track = pub?.track;
-        if (!track || pub?.options?.stream !== streamName) continue;
-        track.mediaStreamTrack.enabled = false;
-        track.stop();
-        await localParticipant.unpublishTrack(track).catch(() => {});
-      }
-    };
-
     // Diagnostic — record the publish attempt with every input that
     // could influence the encode path. Captured BEFORE the branch so a
     // crash mid-branch still has the attempt row to correlate against.
@@ -436,172 +436,40 @@ export function useScreenShareToggle(
     });
 
     if (branch === "capacitor") {
-      const serverId = useServerStore.getState().activeServerId;
-      const channelId = useVoiceStore.getState().currentVoiceChannelId;
-      if (!serverId || !channelId) return;
-
-      const response = await getScreenShareToken(serverId, channelId);
-      if (shouldCancel() || !response.success || !response.data) {
-        console.error(
-          "[useScreenShareToggle] Failed to get screen share token:",
-          response.error,
-        );
-        logToServer("warn", "screen_share_token_failed", {
-          branch,
-          error: response.error ?? "unknown",
-        });
-        return;
-      }
-
-      // Race guard — the user may have left or switched voice channels while
-      // the token request was in flight; starting the native share with the
-      // stale token would publish into a room we already left.
-      if (useVoiceStore.getState().currentVoiceChannelId !== channelId) {
-        console.warn(
-          "[useScreenShareToggle] Discarding screen share token — voice channel changed during fetch",
-        );
-        return;
-      }
-
-      await startNativeScreenShare(response.data.url, response.data.token);
-      if (shouldCancel()) return;
-      notifyServerStarted();
-      logToServer("info", "screen_share_success", {
-        branch,
-        durationMs: Date.now() - attemptStart,
+      const controller = createNativeScreenShareController({
+        getServerId: () => useServerStore.getState().activeServerId,
+        getChannelId: () => useVoiceStore.getState().currentVoiceChannelId,
+        getToken: getScreenShareToken,
+        start: startNativeScreenShare,
+        stop: stopNativeScreenShare,
+        tokenFailed: error => {
+          console.error("[useScreenShareToggle] Failed to get screen share token:", error);
+          void logToServer("warn", "screen_share_token_failed", { branch, error: error ?? "unknown" });
+          notifyServerStopped();
+        },
+        channelChanged: () => {
+          console.warn("[useScreenShareToggle] Discarding screen share token — voice channel changed during fetch");
+        },
+        started: () => {
+          notifyServerStarted();
+          void logToServer("info", "screen_share_success", { branch, durationMs: Date.now() - attemptStart });
+        },
       });
-    } else if (branch === "electron-audio") {
-      const opts = resolveScreenSharePublishDefaults({ ...useVoiceStore.getState(), screenShareQuality: ssq, screenShareFps: ssFps }, displayRef.current);
-      // captureOptions (2nd arg) — getDisplayMedia hints; we suppress
-      // audio in this branch because the native helper publishes a
-      // separate audio track later.
-      // The updater retains this capture for subsequent profile changes.
-      const publication = await localParticipant.setScreenShareEnabled(true, {
-        audio: false,
-        resolution: resolutionFor(ssq, ssFps, displayRef.current),
-        contentHint: opts.screenShareCapture.contentHint,
-        // Name the video's MediaStream so the separately-published WASAPI
-        // audio track (below) can join the same stream → A/V sync grouping.
-      }, { ...opts.screenSharePublish, stream: streamName });
-
-      if (shouldCancel()) { await retireCancelledStart(publication); return; }
-
-      if (!ownPublishedShare(ssq, ssFps, opts, shouldCancel)) throw new DOMException("Screen source ended before publication", "AbortError");
-
-      // Video is published — tell the server now so viewers see is_streaming=true
-      // even if the audio capture below fails (which is logged as
-      // screen_share_success_no_audio).
-      notifyServerStarted();
-      logPublishedTrackDetails(localParticipant, branch);
-
-      // Read the choice after the picker closes: both enabling and disabling
-      // its audio checkbox must apply to this capture, without a second picker.
-      if (!useVoiceStore.getState().screenShareAudio) {
-        void logToServer("info", "screen_share_success", { branch, audio: false, durationMs: Date.now() - attemptStart });
-        return;
-      }
-      const audioTrack = await systemAudioCaptureRef.current.start(()=>!shouldCancel());
-      if (shouldCancel() || !audioTrack) {
-        // Video already published; audio track failed (Mac/Linux no
-        // native helper, WASAPI denied, etc.). Log the partial state so
-        // we can tell crash-with-audio from crash-without.
-        logToServer("warn", "screen_share_success_no_audio", {
-          branch,
-          durationMs: Date.now() - attemptStart,
-          reason: shouldCancel() ? "cancelled" : "no_audio_track",
-        });
-        return;
-      }
-
-      const lkTrack = new LKLocalAudioTrack(audioTrack, undefined, true);
-      lkTrack.source=Track.Source.ScreenShareAudio;
-      await lkTrack.mute();
-      if(shouldCancel()||audioTrack.readyState!=="live"){lkTrack.stop();return;}
-      const pub = await localParticipant.publishTrack(lkTrack, {
-        source: Track.Source.ScreenShareAudio,
-        // Media profile: forced stereo + DTX-off + dedicated bitrate (see
-        // useScreenSharePublishDefaults). Critical here because the track comes
-        // from a WebAudio MediaStreamDestination whose getSettings() often omits
-        // channelCount — without forceStereo the SDK publishes mono + DTX-on,
-        // which is the "yayın sesi kalitesiz" bug.
-        ...opts.screenShareAudioPublish,
-        // Same stream name as the video above → one MediaStream for A/V sync.
-        stream: streamName,
-      });
-      if(shouldCancel()||audioTrack.readyState!=="live"){lkTrack.stop();await localParticipant.unpublishTrack(lkTrack).catch(()=>{});return;}
-      await lkTrack.unmute();
-      if(shouldCancel()||audioTrack.readyState!=="live"){lkTrack.stop();await localParticipant.unpublishTrack(lkTrack).catch(()=>{});return;}
-      customAudioPubRef.current = pub;
-      logPublishedAudioTrackDetails(localParticipant, branch);
-      logToServer("info", "screen_share_success", {
-        branch,
-        durationMs: Date.now() - attemptStart,
-      });
+      nativeControllerRef.current = controller;
+      await controller.start(shouldCancel);
     } else {
-      // Browser path — LiveKit calls navigator.mediaDevices.getDisplayMedia.
-      // Cap-check first so iOS Safari (no getDisplayMedia) surfaces a
-      // toast instead of failing silently when the user taps the button.
-      if (!canBrowserScreenShare()) {
-        useToastStore.getState().addToast(
-          "error",
-          i18n.t("screenShareNotSupported", { ns: "voice" }),
-          6000,
-        );
-        notifyServerStopped();
-        return;
-      }
-
-      // Mobile browsers (Android Chrome on phone): clamp to 720p/30fps
-      // regardless of the user's saved quality preference. A 1440p
-      // request on a 360-px-wide phone screen wastes upstream bandwidth
-      // and trips OOM on weak GPUs.
-      const effQ = isMobileBrowser() ? "720p" : ssq;
-      const effFps = isMobileBrowser() ? 30 : ssFps;
-      const opts = resolveScreenSharePublishDefaults({ ...useVoiceStore.getState(), screenShareQuality: effQ, screenShareFps: effFps }, displayRef.current);
-      const publication = await localParticipant.setScreenShareEnabled(true, {
-        // Clean STEREO capture for media audio: voice DSP (echo cancellation /
-        // noise suppression / AGC) would mangle music/game audio, so disable it
-        // and request two channels. A unique stream groups this capture's
-        // audio/video and lets a cancelled picker retire only its own source.
-        audio: ss.screenShareAudio
-          ? {
-              echoCancellation: false,
-              noiseSuppression: false,
-              autoGainControl: false,
-              channelCount: 2,
-            }
-          : false,
-        resolution: resolutionFor(effQ, effFps, displayRef.current),
-        contentHint: opts.screenShareCapture.contentHint,
-        // Audio publish profile (stereo + DTX-off) merged into the single
-        // publishOptions; the video track ignores audio-only fields and vice-versa.
-      }, { ...opts.screenSharePublish, ...opts.screenShareAudioPublish, stream: streamName });
-      if (shouldCancel()) { await retireCancelledStart(publication); return; }
-      if (!ownPublishedShare(effQ, effFps, opts, shouldCancel)) throw new DOMException("Screen source ended before publication", "AbortError");
-      notifyServerStarted();
-      logPublishedTrackDetails(localParticipant, branch);
-      if (ss.screenShareAudio) logPublishedAudioTrackDetails(localParticipant, branch);
-      logToServer("info", "screen_share_success", {
-        branch,
-        durationMs: Date.now() - attemptStart,
-        effectiveQuality: effQ,
-        effectiveFps: effFps,
-      });
+      await desktopController().start(branch, ssq, ssFps, streamName, attemptStart, ss.screenShareAudio, shouldCancel);
     }
   }
 
   async function stopShareInternal(branch: ShareBranch): Promise<void> {
     if (branch === "capacitor") {
-      await stopNativeScreenShare();
+      const controller = nativeControllerRef.current;
+      nativeControllerRef.current = null;
+      if (controller) await controller.stop();
+      else await stopNativeScreenShare();
     } else {
-      const updater = screenUpdaterRef.current;
-      screenUpdaterRef.current = null;
-      updater?.dispose();
-      const audio=customAudioPubRef.current ?? localParticipant.getTrackPublication(Track.Source.ScreenShareAudio);
-      customAudioPubRef.current=null;
-      systemAudioCaptureRef.current.stop();
-      if(audio?.track)await localParticipant.unpublishTrack(audio.track);
-      await localParticipant.setScreenShareEnabled(false);
+      await desktopController().stop();
     }
   }
 
@@ -639,37 +507,21 @@ export function useScreenShareToggle(
   useEffect(() => {
     if (!initialSyncDoneRef.current) return;
 
-    let cancelled = false;
-
-    async function toggleScreenShare() {
-      // Retired starts can be skipped. An explicit stop still drains before
-      // a queued new start, so SDK pending capture reuse cannot revive it.
-      if (cancelled && isStreaming) return;
-
-      const branch = computeShareBranch();
-
-      if (isStreaming) {
-        const { screenShareQuality: ssq, screenShareFps: ssFps } =
-          useVoiceStore.getState();
-        await startShareInternal(branch, ssq, ssFps, () => cancelled);
-      } else {
-        await stopShareInternal(branch);
-      }
-    }
-
-    const lifecycle = lifecycleRef.current.catch(() => {}).then(toggleScreenShare);
-    lifecycleRef.current = lifecycle;
-    void lifecycle.catch((err: unknown) => {
-      if (!cancelled) {
+    const transition = lifecycleRef.current.transition({
+      streaming: isStreaming,
+      start: async shouldCancel => {
+        const { screenShareQuality: ssq, screenShareFps: ssFps } = useVoiceStore.getState();
+        await startShareInternal(computeShareBranch(), ssq, ssFps, shouldCancel);
+      },
+      stop: () => stopShareInternal(computeShareBranch()),
+      failed: (err: unknown) => {
         console.error("[useScreenShareToggle] Failed to toggle screen share:", err);
-        if (isStreaming) {
-          handleStartFailure(err);
-        }
-      }
+        if (isStreaming) handleStartFailure(err);
+      },
     });
 
     return () => {
-      cancelled = true;
+      transition.cancel();
       const updater = screenUpdaterRef.current;
       screenUpdaterRef.current = null;
       updater?.dispose();
@@ -694,17 +546,21 @@ export function useScreenShareToggle(
     if (!isCapacitor()) return;
 
     let removeListener: (() => void) | null = null;
+    let retired = false;
 
     onNativeScreenShareStopped(() => {
+      if (retired) return;
       const { isStreaming: currentlyStreaming } = useVoiceStore.getState();
       if (currentlyStreaming) {
         notifyServerStopped();
       }
     }).then((cleanup) => {
-      removeListener = cleanup;
+      if (retired) cleanup();
+      else removeListener = cleanup;
     });
 
     return () => {
+      retired = true;
       removeListener?.();
     };
   }, []);
@@ -753,43 +609,27 @@ export function useScreenShareToggle(
     oldVals: { q: ScreenShareQuality; fps: ScreenShareFps },
     newVals: { q: ScreenShareQuality; fps: ScreenShareFps },
   ): Promise<void> {
-    if (myGen !== restartGenRef.current) return;
-
-    const { isStreaming: streaming } =
-      useVoiceStore.getState();
-    if (!streaming) return;
-
     const branch = computeShareBranch();
-    const shouldCancel = () => myGen !== restartGenRef.current;
-
-    isRestartingRef.current = true;
-    try {
-      logToServer("info", "screen_share_restart", {
-        trigger: oldVals.q !== newVals.q ? "quality" : "fps",
-        oldQuality: oldVals.q,
-        newQuality: newVals.q,
-        oldFps: oldVals.fps,
-        newFps: newVals.fps,
-        branch,
-      });
-
-      await stopShareInternal(branch);
-      if (shouldCancel()) return;
-
-      await startShareInternal(branch, newVals.q, newVals.fps, shouldCancel);
-    } catch (err: unknown) {
-      if (shouldCancel()) return;
-      console.error("[useScreenShareToggle] Restart failed:", err);
-      handleStartFailure(err);
-    } finally {
-      // Only clear suppression if we're still the current restart — a newer
-      // restart may have already taken over the flag.
-      if (myGen === restartGenRef.current) {
-        isRestartingRef.current = false;
-      }
-    }
+    await runScreenShareRestart({
+      isCurrent: () => myGen === restartGenRef.current,
+      isStreaming: () => useVoiceStore.getState().isStreaming,
+      getChannelId: () => useVoiceStore.getState().currentVoiceChannelId,
+      setRestarting: value => { isRestartingRef.current = value; },
+      beforeRestart: () => {
+        logToServer("info", "screen_share_restart", {
+          trigger: oldVals.q !== newVals.q ? "quality" : "fps",
+          oldQuality: oldVals.q, newQuality: newVals.q,
+          oldFps: oldVals.fps, newFps: newVals.fps, branch,
+        });
+      },
+      stop: () => stopShareInternal(branch),
+      start: shouldCancel => startShareInternal(branch, newVals.q, newVals.fps, shouldCancel),
+      failed: err => {
+        console.error("[useScreenShareToggle] Restart failed:", err);
+        handleStartFailure(err);
+      },
+    });
   }
-
   // Effect 4: restart watcher.
   //
   // Fires when screenShareQuality or screenShareFps changes. Debounces 350 ms
@@ -848,6 +688,7 @@ export function useScreenShareToggle(
     }, 350);
 
     return () => {
+      retireRestart();
       if (restartTimerRef.current !== null) {
         window.clearTimeout(restartTimerRef.current);
         restartTimerRef.current = null;

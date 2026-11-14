@@ -1,0 +1,32 @@
+{
+  "source_parent": "8ccf5d9d",
+  "scope": "RF11 voice runtime lifecycle ownership",
+  "before": {
+    "test": "TestVoiceConstructorDeclaresAllShutdownOwners",
+    "exit": 1,
+    "reason": "declared constructor result omits maintenance, usage-producer, session and fanout shutdown methods"
+  },
+  "change": "Named VoiceRuntime embeds unchanged request and channel-deletion interfaces plus four shutdown owners. Services retains it. Rollback and main shutdown call guaranteed methods directly; call/defer order preserved.",
+  "validation": [
+    {
+      "command": "go test ./services . -run 'TestVoice(Constructor|Maintenance|Shutdown|Usage|Channel)|TestResourceOwning|Test.*Wiring|TestServiceInitialization' -count=1 -timeout=3m",
+      "exit": 0,
+      "services_seconds": 0.941,
+      "root_seconds": 0.765
+    },
+    {
+      "command": "go build ./...",
+      "exit": 0
+    },
+    {
+      "command": "go vet ./services .",
+      "exit": 0
+    }
+  ],
+  "limits": [
+    "Windows Go1.27.4 CGO0; no local race claim",
+    "Current remote CI tests parent8ccf5d9d; this later source needs fresh CI",
+    "Physical media behavior unchanged and not tested by lifecycle fixture",
+    "Whole RF11 startup/shutdown acceptance still subject to requirement audit"
+  ]
+}

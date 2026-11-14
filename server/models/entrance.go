@@ -166,7 +166,7 @@ type EntranceSelection struct {
 }
 
 // EntranceSelectionRow is the storage shape of a selection (scope_server_id
-// '' = global, preset as canonical JSON text).
+// ” = global, preset as canonical JSON text).
 type EntranceSelectionRow struct {
 	UserID        string
 	ScopeServerID string

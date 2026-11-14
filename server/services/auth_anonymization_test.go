@@ -16,8 +16,8 @@ func TestAccountAnonymizationRequiresPasswordFactorAndRevokes(t *testing.T) {
 	h, s, hub := boundAuthHarness(t)
 	invalidator := &adminInvalStub{}
 	voice := &testutil.MockVoiceDisconnecter{}
-	s.SetUserCacheInvalidator(invalidator)
-	s.SetVoiceDisconnecter(voice)
+	s.userInvalidator = invalidator
+	s.voiceKit = voice
 	disconnected := ""
 	hub.DisconnectUserFn = func(id string) { disconnected = id }
 	s.accountAnonymization = repository.NewSQLiteAccountAnonymizationRepo(h.db.Conn)
@@ -57,11 +57,10 @@ func TestAccountAnonymizationFailureDoesNotRevoke(t *testing.T) {
 	invalidation := &adminInvalStub{}
 	voice := &testutil.MockVoiceDisconnecter{}
 	disconnects, observers := 0, 0
-	s.SetUserCacheInvalidator(invalidation)
-	s.SetVoiceDisconnecter(voice)
+	s.userInvalidator = invalidation
+	s.voiceKit = voice
 	hub.DisconnectUserFn = func(string) { disconnects++ }
-	s.SetMusicRequesterRetirementObserver(musicRequesterObserverFunc(func(string) { observers++ }))
-	s.accountAnonymization = repository.NewSQLiteAccountAnonymizationRepo(h.db.Conn)
+	WithAccountAnonymization(repository.NewSQLiteAccountAnonymizationRepo(h.db.Conn), musicRequesterObserverFunc(func(string) { observers++ }))(s)
 	ctx := context.Background()
 	login := sessionLogin(t, s, h.user.Username)
 	if _, err := h.db.Conn.Exec(`CREATE TRIGGER deny_delete BEFORE UPDATE OF deleted_at ON users BEGIN SELECT RAISE(ABORT,'fixture failure'); END`); err != nil {
@@ -87,9 +86,9 @@ func TestMusicRequesterPrivacyObserverCannotDelaySecurityRevocation(t *testing.T
 			voice := &testutil.MockVoiceDisconnecter{}
 			ownership := &stubInvalidator{}
 			disconnected := ""
-			auth.SetUserCacheInvalidator(invalidation)
-			auth.SetVoiceDisconnecter(voice)
-			auth.SetOwnershipInvalidator(ownership)
+			auth.userInvalidator = invalidation
+			auth.voiceKit = voice
+			auth.ownershipInvalidator = ownership
 			hub.DisconnectUserFn = func(id string) { disconnected = id }
 			target := h.user.ID
 			if application {
@@ -104,13 +103,13 @@ func TestMusicRequesterPrivacyObserverCannotDelaySecurityRevocation(t *testing.T
 			started, release := make(chan struct{}), make(chan struct{})
 			var releaseOnce sync.Once
 			defer releaseOnce.Do(func() { close(release) })
-			auth.SetMusicRequesterRetirementObserver(musicRequesterObserverFunc(func(id string) {
+			auth.musicRequesterRetirement = musicRequesterObserverFunc(func(id string) {
 				if id != target {
 					t.Errorf("wrong observer target %s", id)
 				}
 				close(started)
 				<-release
-			}))
+			})
 			done := make(chan error, 1)
 			go func() {
 				if application {

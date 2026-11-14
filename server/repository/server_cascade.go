@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/argeinfina/hichat/database"
@@ -255,11 +257,6 @@ var deleteServerCascadeStmts = []struct {
 		query: `DELETE FROM cosmetic_items WHERE server_id = ?`,
 		args:  func(id string) []any { return []any{id} },
 	},
-	{
-		// The server row itself, last — everything above joins through it.
-		query: `DELETE FROM servers WHERE id = ?`,
-		args:  func(id string) []any { return []any{id} },
-	},
 }
 
 // deleteServerCascade removes serverID and every row scoped to it, returning
@@ -291,21 +288,41 @@ func deleteServerCascadeWithDialect(ctx context.Context, q database.TxQuerier, s
 			return fmt.Errorf("failed to acquire server cascade fence: %w", err)
 		}
 	}
-	last := len(deleteServerCascadeStmts) - 1
-	for i, stmt := range deleteServerCascadeStmts {
-		result, err := q.ExecContext(ctx, stmt.query, stmt.args(serverID)...)
-		if err != nil {
+	// Break the channel -> starter message -> channel cycle before deleting
+	// messages. Keep this separate from the descendant deletion inventory.
+	if _, err := q.ExecContext(ctx, `UPDATE channels SET starter_message_id = NULL WHERE server_id = ? AND starter_message_id IS NOT NULL`, serverID); err != nil {
+		return fmt.Errorf("clear thread starter links: %w", err)
+	}
+	for _, stmt := range deleteServerCascadeStmts {
+		if _, err := q.ExecContext(ctx, stmt.query, stmt.args(serverID)...); err != nil {
 			return fmt.Errorf("server cascade delete failed: %w", err)
 		}
-		if i == last {
-			affected, raErr := result.RowsAffected()
-			if raErr != nil {
-				return fmt.Errorf("failed to check rows affected: %w", raErr)
-			}
-			if affected == 0 {
-				return pkg.ErrNotFound
-			}
+	}
+	var instance sql.NullString
+	err := q.QueryRowContext(ctx, "DELETE FROM servers WHERE id=? RETURNING livekit_instance_id", serverID).Scan(&instance)
+	if errors.Is(err, sql.ErrNoRows) {
+		return pkg.ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("delete server: %w", err)
+	}
+	if !instance.Valid {
+		return nil
+	}
+	if postgres {
+		// Two servers can release the same private instance concurrently.
+		// Serialize the reference checks before deciding which release is last.
+		if _, err := q.ExecContext(ctx, "SELECT id FROM livekit_instances WHERE id=? FOR UPDATE", instance.String); err != nil {
+			return fmt.Errorf("lock media assignment: %w", err)
 		}
+	}
+	if _, err := q.ExecContext(ctx, `UPDATE livekit_instances SET server_count=CASE WHEN server_count>0 THEN server_count-1 ELSE 0 END
+		WHERE id=? AND is_platform_managed=1`, instance.String); err != nil {
+		return fmt.Errorf("release managed media assignment: %w", err)
+	}
+	if _, err := q.ExecContext(ctx, `DELETE FROM livekit_instances WHERE id=? AND is_platform_managed=0
+		AND NOT EXISTS(SELECT 1 FROM servers WHERE livekit_instance_id=?)`, instance.String, instance.String); err != nil {
+		return fmt.Errorf("release private media assignment: %w", err)
 	}
 	return nil
 }

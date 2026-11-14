@@ -110,7 +110,7 @@ func (r *sqliteSearchRepo) Search(ctx context.Context, query string, serverID st
 		JOIN channels ch ON ch.id = m.channel_id
 		LEFT JOIN users u ON m.user_id = u.id
 		WHERE ` + where + `
-		ORDER BY fts.rank
+		ORDER BY fts.rank, m.created_at DESC, m.id DESC
 		LIMIT ? OFFSET ?`
 	dataArgs := append(append([]any{}, args...), limit, offset)
 

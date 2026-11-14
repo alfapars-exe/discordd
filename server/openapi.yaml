@@ -600,8 +600,21 @@ paths:
       responses:
         '200': { $ref: '#/components/responses/AuthTokensResponse' }
         '400': { $ref: '#/components/responses/BadRequestError' }
-        '401': { $ref: '#/components/responses/UnauthorizedError' }
-        '429': { $ref: '#/components/responses/TooManyRequestsError' }
+        '401':
+          description: >-
+            Invalid credentials, MFA_REQUIRED when a second factor is needed, or
+            MFA_INVALID for an invalid or previously consumed code. MFA challenges
+            and rejections do not issue session cookies or an access token.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '429':
+          description: Login IP rate limit or account MFA attempt limit exceeded.
+          headers:
+            Retry-After: { schema: { type: integer }, description: Delay in seconds. MFA_RATE_LIMITED returns 300. }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
   /api/auth/refresh:
     post:
       operationId: authRefresh
@@ -660,11 +673,14 @@ paths:
       operationId: authForgotPassword
       summary: Request a password-reset email.
       description: >-
-        IP rate limited, plus a 90s per-email server-side cooldown. Always
-        returns the same generic message regardless of whether the email
-        exists or is cooling down (enumeration protection) — response
-        message is literally "if the email exists, a reset link has been
-        sent".
+        Accepts a username or email address. The IP rate limit applies to
+        every request. A 90-second cooldown applies per account. Unknown
+        accounts, accounts without an email address, and requests during
+        cooldown receive the same success message as an accepted delivery
+        request: "if the account exists, a reset link has been sent".
+        Account-specific lookup, persistence and delivery failures receive this
+        same response to avoid revealing account existence. Recovery disabled
+        server-wide remains a 400 response.
       tags: [Auth]
       security: []
       requestBody: { $ref: '#/components/requestBodies/ForgotPasswordRequestBody' }
@@ -678,7 +694,7 @@ paths:
       summary: Complete a password reset using the emailed token.
       description: >-
         IP rate limited. Validates the token (SHA-256 hash lookup), updates
-        the password, deletes the token (one-time use), and invalidates
+        the password, deletes all outstanding reset tokens for the account, and invalidates
         every existing session for the account — deletes all
         refresh-session rows, bumps token_version, and disconnects any
         open WebSocket. Every client (including a possible attacker's)
@@ -1077,6 +1093,72 @@ paths:
         '200': { $ref: '#/components/responses/StubOK' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
+
+  /api/users/me/mfa:
+    get:
+      operationId: mfaStatus
+      summary: Read the account's MFA status and remaining recovery code count.
+      tags: [Auth]
+      parameters:
+        - { name: expected_user_id, in: query, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Current account security status.
+          headers:
+            Cache-Control: { schema: { type: string, enum: [no-store] } }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    required: [enabled, recovery_remaining]
+                    properties:
+                      enabled: { type: boolean }
+                      recovery_remaining: { type: integer }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '409': { description: ACCOUNT_MISMATCH when the requested owner differs from the authenticated account. }
+        '503': { description: MFA_UNAVAILABLE }
+  /api/users/me/mfa/{action}:
+    post:
+      operationId: mfaManage
+      summary: Manage the authenticated user's second factor.
+      tags: [Auth]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: action, in: path, required: true, schema: { type: string, enum: [setup, cancel, confirm, recovery, disable] } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expected_user_id]
+              properties:
+                expected_user_id: { type: string }
+                password: { type: string, format: password, description: 'Required for setup, recovery code regeneration and disable.' }
+                setup_id: { type: string, description: Pending setup identifier for confirm or cancel. }
+                code: { type: string, writeOnly: true, description: TOTP for confirm. Verification code for recovery or disable. }
+      responses:
+        '200':
+          description: >-
+            The data envelope contains setup_id, secret, uri and expires_at for setup,
+            cancelled for cancel, recovery_codes for confirm or recovery, and enabled for disable.
+          headers:
+            Cache-Control: { schema: { type: string, enum: [no-store] } }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { description: Account mismatch or conflicting MFA state. }
+        '429':
+          description: MFA_RATE_LIMITED
+          headers:
+            Retry-After: { schema: { type: integer, example: 300 } }
+        '503': { description: MFA_UNAVAILABLE }
 
   /api/users/me/media-label:
     get:
@@ -5967,6 +6049,7 @@ components:
           type: string
           minLength: 8
           format: password
+          description: At least 8 Unicode code points and at most 72 UTF-8 bytes.
         display_name:
           type: string
           maxLength: 32
@@ -5995,6 +6078,8 @@ components:
       properties:
         username: { type: string }
         password: { type: string, format: password }
+        mfa_code: { type: string, writeOnly: true, description: TOTP or unused recovery code when MFA is enabled. }
+        reactivate: { type: boolean, description: Request account reactivation at login. }
       required: [username, password]
       example:
         username: hb_wanderer
@@ -6066,6 +6151,7 @@ components:
           type: string
           minLength: 8
           format: password
+          description: At least 8 Unicode code points and at most 72 UTF-8 bytes.
       required: [token, new_password]
       example:
         token: "9f8e7d6c5b4a3210"
@@ -6092,13 +6178,9 @@ components:
         current_password: { type: string, format: password }
         new_password:
           type: string
-          minLength: 6
+          minLength: 8
           format: password
-          description: >-
-            AuthService.ChangePassword enforces a 6-character minimum here —
-            note this is LOWER than registration's 8-character minimum
-            (models.CreateUserRequest.Validate); documented as coded, not a
-            recommendation.
+          description: At least 8 Unicode code points and at most 72 UTF-8 bytes.
       required: [current_password, new_password]
       example:
         current_password: "correct-horse-battery-staple"

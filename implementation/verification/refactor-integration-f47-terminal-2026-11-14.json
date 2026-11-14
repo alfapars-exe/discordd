@@ -1,0 +1,200 @@
+{
+  "source": "f47def38925d0fbf0760eda4e04b4418f17706e9",
+  "run": 43632662030,
+  "status": "completed",
+  "conclusion": "success",
+  "checks_total": 36,
+  "checks_success": 36,
+  "jobs": [
+    {
+      "name": "PostgreSQL client certificate reconnect",
+      "databaseId": 132562482333,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Client lint, type, test & build",
+      "databaseId": 132562482552,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Security scan",
+      "databaseId": 132562482616,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "PostgreSQL repository and migration contracts",
+      "databaseId": 132562482617,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "golangci-lint",
+      "databaseId": 132562482634,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Migration filename hygiene",
+      "databaseId": 132562482643,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Go base tests & build",
+      "databaseId": 132562482653,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "npm audit (.)",
+      "databaseId": 132562482677,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Playwright E2E",
+      "databaseId": 132562482699,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Go tests (./services shard 1/8)",
+      "databaseId": 132562482736,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Electron main-process tests",
+      "databaseId": 132562482764,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "npm audit (e2e)",
+      "databaseId": 132562482776,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Prod image build (HF Dockerfile)",
+      "databaseId": 132562482797,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Go tests (./services shard 3/8)",
+      "databaseId": 132562482805,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "npm audit (client)",
+      "databaseId": 132562482811,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Go tests (./repository shard 3/8)",
+      "databaseId": 132562482825,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Go tests (./repository shard 6/8)",
+      "databaseId": 132562482888,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Go tests (./repository shard 1/8)",
+      "databaseId": 132562482890,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Go tests (./repository shard 4/8)",
+      "databaseId": 132562482896,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Go tests (./services shard 7/8)",
+      "databaseId": 132562482912,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Go tests (./services shard 4/8)",
+      "databaseId": 132562482914,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Go tests (./repository shard 0/8)",
+      "databaseId": 132562482919,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Go tests (./services shard 5/8)",
+      "databaseId": 132562482923,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Go tests (./services shard 2/8)",
+      "databaseId": 132562482938,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Go tests (./services shard 6/8)",
+      "databaseId": 132562482977,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Go tests (./repository shard 2/8)",
+      "databaseId": 132562482987,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Go tests (./repository shard 7/8)",
+      "databaseId": 132562483011,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Go tests (./repository shard 5/8)",
+      "databaseId": 132562483087,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Go tests (./services shard 0/8)",
+      "databaseId": 132562483263,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Combined Go statement coverage",
+      "databaseId": 132565981777,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Go test & build",
+      "databaseId": 132566082343,
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ],
+  "limits": [
+    "Later cache owner commits need fresh CI",
+    "No provider deployment or physical media acceptance"
+  ]
+}

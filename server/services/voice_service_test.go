@@ -110,7 +110,7 @@ func (h *voiceTestBroadcaster) BroadcastToUsers(ids []string, event ws.Event) {
 // JoinChannel doesn't have to be re-satisfied by every pre-existing test in
 // this package. Tests that specifically exercise the gate (denied/allowed
 // paths) build their own harness — see TestVoiceJoinChannel_Authorization*.
-func newTestVoiceService() (VoiceService, *testutil.MockBroadcaster) {
+func newTestVoiceService() (VoiceRuntime, *testutil.MockBroadcaster) {
 	hub := &testutil.MockBroadcaster{}
 	svc := NewVoiceService(
 		&testutil.MockChannelRepo{
@@ -134,10 +134,10 @@ func newTestVoiceService() (VoiceService, *testutil.MockBroadcaster) {
 				return []string{"voice-test-member"}, nil
 			},
 		}, // afkTimeoutGetter — also backs the N-01 membership check
-		nil, // encryptionKey
-		nil, // timeoutChecker — nil here is intentional; see TestVoiceJoinChannel_NilTimeoutChecker_Allows. Production always passes repos.MemberTimeout.
-		nil, // banChecker — same rationale
-		nil, // auditLogger — same rationale
+		nil,                                                            // encryptionKey
+		nil,                                                            // timeoutChecker — nil here is intentional; see TestVoiceJoinChannel_NilTimeoutChecker_Allows. Production always passes repos.MemberTimeout.
+		nil,                                                            // banChecker — same rationale
+		nil, VoiceRuntimeDependencies{Fanout: voiceFixtureFanout(hub)}, // auditLogger — same rationale
 	)
 	return svc, hub
 }
@@ -179,7 +179,7 @@ func TestVoiceMusicRoomKeySharesRotationLifecycle(t *testing.T) {
 // timeoutChecker moved from a post-construction setter to a constructor
 // param (A-29b), so these tests build the checker in rather than calling
 // a setter afterward.
-func newTestVoiceServiceWithTimeoutChecker(checker MemberTimeoutChecker) (VoiceService, *testutil.MockBroadcaster) {
+func newTestVoiceServiceWithTimeoutChecker(checker MemberTimeoutChecker) (VoiceRuntime, *testutil.MockBroadcaster) {
 	hub := &testutil.MockBroadcaster{}
 	svc := NewVoiceService(
 		&testutil.MockChannelRepo{
@@ -205,8 +205,8 @@ func newTestVoiceServiceWithTimeoutChecker(checker MemberTimeoutChecker) (VoiceS
 		},
 		nil, // encryptionKey
 		checker,
-		nil, // banChecker — not under test here
-		nil, // auditLogger — not under test here
+		nil,                                                            // banChecker — not under test here
+		nil, VoiceRuntimeDependencies{Fanout: voiceFixtureFanout(hub)}, // auditLogger — not under test here
 	)
 	return svc, hub
 }
@@ -216,7 +216,7 @@ func newTestVoiceServiceWithTimeoutChecker(checker MemberTimeoutChecker) (VoiceS
 // TestEnforceModerationOnJoin* below (A-29a). Either checker may be nil.
 // channelRepo is injectable (not the shared happy-path default) so tests
 // can observe eviction dispatch — see newEvictionObservingChannelRepo.
-func newTestVoiceServiceWithModeration(timeoutChecker MemberTimeoutChecker, banChecker BanChecker, channelRepo ChannelGetter) (VoiceService, *testutil.MockBroadcaster) {
+func newTestVoiceServiceWithModeration(timeoutChecker MemberTimeoutChecker, banChecker BanChecker, channelRepo ChannelGetter) (VoiceRuntime, *testutil.MockBroadcaster) {
 	hub := &testutil.MockBroadcaster{}
 	svc := NewVoiceService(
 		channelRepo,
@@ -239,7 +239,7 @@ func newTestVoiceServiceWithModeration(timeoutChecker MemberTimeoutChecker, banC
 		nil, // encryptionKey
 		timeoutChecker,
 		banChecker,
-		nil, // auditLogger — not under test here
+		nil, VoiceRuntimeDependencies{Fanout: voiceFixtureFanout(hub)}, // auditLogger — not under test here
 	)
 	return svc, hub
 }
@@ -345,7 +345,7 @@ func drainCalls(calls chan string) {
 // Used by the A-29d admin-path / cross-channel-switch / orphan-sweep
 // dispatch tests below, extending the same injection pattern
 // newTestVoiceServiceWithModeration already uses for EnforceModerationOnJoin.
-func newTestVoiceServiceWithChannelRepo(channelRepo ChannelGetter) (VoiceService, *testutil.MockBroadcaster) {
+func newTestVoiceServiceWithChannelRepo(channelRepo ChannelGetter) (VoiceRuntime, *testutil.MockBroadcaster) {
 	hub := &testutil.MockBroadcaster{}
 	svc := NewVoiceService(
 		channelRepo,
@@ -365,10 +365,10 @@ func newTestVoiceServiceWithChannelRepo(channelRepo ChannelGetter) (VoiceService
 				return []string{"voice-test-member"}, nil
 			},
 		},
-		nil, // encryptionKey
-		nil, // timeoutChecker — not under test here
-		nil, // banChecker — not under test here
-		nil, // auditLogger — not under test here
+		nil,                                                            // encryptionKey
+		nil,                                                            // timeoutChecker — not under test here
+		nil,                                                            // banChecker — not under test here
+		nil, VoiceRuntimeDependencies{Fanout: voiceFixtureFanout(hub)}, // auditLogger — not under test here
 	)
 	return svc, hub
 }
@@ -856,11 +856,11 @@ func TestJoinChannel_CrossChannelSwitch_StopsMusicBotWhenOldChannelEmpties(t *te
 	hub.BroadcastToServerFn = func(_ string, _ ws.Event) {}
 
 	stopped := make(chan string, 4)
-	svc.SetMusicBotHook(&mockMusicBotHook{
+	testVoiceState(svc).musicBotHook = &mockMusicBotHook{
 		StopAllForChannelFn: func(channelID string) {
 			stopped <- channelID
 		},
-	})
+	}
 
 	if err := svc.JoinChannel("u1", "alice", "Alice", "", "ch1", false, false); err != nil {
 		t.Fatalf("initial join failed: %v", err)
@@ -895,11 +895,11 @@ func TestJoinChannel_CrossChannelSwitch_DoesNotStopMusicBotWhenOldChannelStillOc
 	hub.BroadcastToServerFn = func(_ string, _ ws.Event) {}
 
 	stopped := make(chan string, 4)
-	svc.SetMusicBotHook(&mockMusicBotHook{
+	testVoiceState(svc).musicBotHook = &mockMusicBotHook{
 		StopAllForChannelFn: func(channelID string) {
 			stopped <- channelID
 		},
-	})
+	}
 
 	if err := svc.JoinChannel("u1", "alice", "Alice", "", "ch1", false, false); err != nil {
 		t.Fatalf("u1 initial join failed: %v", err)
@@ -1081,10 +1081,10 @@ func TestJoinChannel_SameChannelRejoin_TransientAuthError_PreservesLiveSession(t
 				return false, transientErr // rejoin: a transient DB hiccup, NOT a sentinel
 			},
 		},
-		nil, // encryptionKey
-		nil, // timeoutChecker
-		nil, // banChecker
-		nil, // auditLogger
+		nil,                                                            // encryptionKey
+		nil,                                                            // timeoutChecker
+		nil,                                                            // banChecker
+		nil, VoiceRuntimeDependencies{Fanout: voiceFixtureFanout(hub)}, // auditLogger
 	)
 
 	if err := svc.JoinChannel("u1", "alice", "Alice", "", "ch1", false, false); err != nil {
@@ -1142,9 +1142,9 @@ func TestAdminDisconnectUser_StopsMusicBotWhenChannelEmpties(t *testing.T) {
 	hub.BroadcastToUserFn = func(_ string, _ ws.Event) {}
 
 	stopped := make(chan string, 4)
-	svc.SetMusicBotHook(&mockMusicBotHook{
+	testVoiceState(svc).musicBotHook = &mockMusicBotHook{
 		StopAllForChannelFn: func(channelID string) { stopped <- channelID },
-	})
+	}
 
 	if err := svc.JoinChannel("victim", "victim", "Victim", "", "ch1", false, false); err != nil {
 		t.Fatalf("initial join failed: %v", err)
@@ -1172,9 +1172,9 @@ func TestAdminDisconnectUser_DoesNotStopMusicBotWhenChannelStillOccupied(t *test
 	hub.BroadcastToUserFn = func(_ string, _ ws.Event) {}
 
 	stopped := make(chan string, 4)
-	svc.SetMusicBotHook(&mockMusicBotHook{
+	testVoiceState(svc).musicBotHook = &mockMusicBotHook{
 		StopAllForChannelFn: func(channelID string) { stopped <- channelID },
-	})
+	}
 
 	if err := svc.JoinChannel("victim", "victim", "Victim", "", "ch1", false, false); err != nil {
 		t.Fatalf("victim initial join failed: %v", err)
@@ -1244,8 +1244,12 @@ func (m *mockConfigurableLiveKitGetter) MigrateOneServer(ctx context.Context, se
 // injectable LiveKitInstanceGetter, for tests that need
 // VoiceState.LiveKitInstanceID/LiveKitIsCloud actually populated (see
 // mockConfigurableLiveKitGetter).
-func newTestVoiceServiceWithLiveKitGetter(lkGetter LiveKitInstanceGetter) (VoiceService, *testutil.MockBroadcaster) {
+func newTestVoiceServiceWithLiveKitGetter(lkGetter LiveKitInstanceGetter, credit ...VoiceUsageCredit) (VoiceRuntime, *testutil.MockBroadcaster) {
 	hub := &testutil.MockBroadcaster{}
+	runtime := VoiceRuntimeDependencies{Fanout: voiceFixtureFanout(hub)}
+	if len(credit) > 0 {
+		runtime.UsageCredit = credit[0]
+	}
 	svc := NewVoiceService(
 		&testutil.MockChannelRepo{
 			GetByIDFn: func(_ context.Context, id string) (*models.Channel, error) {
@@ -1268,10 +1272,10 @@ func newTestVoiceServiceWithLiveKitGetter(lkGetter LiveKitInstanceGetter) (Voice
 				return []string{"voice-test-member"}, nil
 			},
 		},
-		nil, // encryptionKey
-		nil, // timeoutChecker — not under test here
-		nil, // banChecker — not under test here
-		nil, // auditLogger — not under test here
+		nil,          // encryptionKey
+		nil,          // timeoutChecker — not under test here
+		nil,          // banChecker — not under test here
+		nil, runtime, // auditLogger — not under test here
 	)
 	return svc, hub
 }
@@ -1474,9 +1478,9 @@ func TestMoveUser_StopsMusicBotWhenSourceChannelEmpties(t *testing.T) {
 	hub.BroadcastToUsersFn = func(_ []string, _ ws.Event) {}
 
 	stopped := make(chan string, 4)
-	svc.SetMusicBotHook(&mockMusicBotHook{
+	testVoiceState(svc).musicBotHook = &mockMusicBotHook{
 		StopAllForChannelFn: func(channelID string) { stopped <- channelID },
-	})
+	}
 
 	if err := svc.JoinChannel("victim", "victim", "Victim", "", "ch1", false, false); err != nil {
 		t.Fatalf("initial join failed: %v", err)
@@ -1506,9 +1510,9 @@ func TestMoveUser_DoesNotStopMusicBotWhenSourceChannelStillOccupied(t *testing.T
 	hub.BroadcastToUsersFn = func(_ []string, _ ws.Event) {}
 
 	stopped := make(chan string, 4)
-	svc.SetMusicBotHook(&mockMusicBotHook{
+	testVoiceState(svc).musicBotHook = &mockMusicBotHook{
 		StopAllForChannelFn: func(channelID string) { stopped <- channelID },
-	})
+	}
 
 	if err := svc.JoinChannel("victim", "victim", "Victim", "", "ch1", false, false); err != nil {
 		t.Fatalf("victim initial join failed: %v", err)
@@ -1630,9 +1634,9 @@ func TestOrphanSweep_StopsMusicBotWhenChannelEmpties(t *testing.T) {
 	hub.BroadcastToServerFn = func(_ string, _ ws.Event) {}
 
 	stopped := make(chan string, 4)
-	svc.SetMusicBotHook(&mockMusicBotHook{
+	testVoiceState(svc).musicBotHook = &mockMusicBotHook{
 		StopAllForChannelFn: func(channelID string) { stopped <- channelID },
-	})
+	}
 
 	vs, ok := svc.(*voiceService)
 	if !ok {
@@ -1684,17 +1688,17 @@ func TestOrphanSweep_DoesNotStopMusicBotWhenChannelStillOccupied(t *testing.T) {
 		&testutil.MockServerRepo{
 			IsMemberFn: func(_ context.Context, _, _ string) (bool, error) { return true, nil },
 		},
-		nil, // encryptionKey
-		nil, // timeoutChecker
-		nil, // banChecker
-		nil, // auditLogger
+		nil,                                                            // encryptionKey
+		nil,                                                            // timeoutChecker
+		nil,                                                            // banChecker
+		nil, VoiceRuntimeDependencies{Fanout: voiceFixtureFanout(hub)}, // auditLogger
 	)
 	hub.BroadcastToServerFn = func(_ string, _ ws.Event) {}
 
 	stopped := make(chan string, 4)
-	svc.SetMusicBotHook(&mockMusicBotHook{
+	testVoiceState(svc).musicBotHook = &mockMusicBotHook{
 		StopAllForChannelFn: func(channelID string) { stopped <- channelID },
-	})
+	}
 
 	vs, ok := svc.(*voiceService)
 	if !ok {
@@ -1852,7 +1856,7 @@ func TestEnforceModerationOnJoin_NilCheckers_NoOp(t *testing.T) {
 // membership flag and permission resolver, for tests that specifically
 // exercise JoinChannel's N-01 authorization gate. See newTestVoiceService's
 // doc comment for the happy-path default used by every other test here.
-func newAuthVoiceService(isMember bool, resolvePerms func(ctx context.Context, userID, channelID string) (models.Permission, error)) (VoiceService, *testutil.MockBroadcaster) {
+func newAuthVoiceService(isMember bool, resolvePerms func(ctx context.Context, userID, channelID string) (models.Permission, error)) (VoiceRuntime, *testutil.MockBroadcaster) {
 	hub := &testutil.MockBroadcaster{}
 	svc := NewVoiceService(
 		&testutil.MockChannelRepo{
@@ -1881,10 +1885,10 @@ func newAuthVoiceService(isMember bool, resolvePerms func(ctx context.Context, u
 				return []string{"voice-test-member"}, nil
 			},
 		},
-		nil, // encryptionKey
-		nil, // timeoutChecker — not under test here
-		nil, // banChecker — not under test here
-		nil, // auditLogger — not under test here
+		nil,                                                            // encryptionKey
+		nil,                                                            // timeoutChecker — not under test here
+		nil,                                                            // banChecker — not under test here
+		nil, VoiceRuntimeDependencies{Fanout: voiceFixtureFanout(hub)}, // auditLogger — not under test here
 	)
 	return svc, hub
 }
@@ -2595,7 +2599,7 @@ var tokenTestEncryptionKey = []byte("0123456789abcdef0123456789abcdef")[:32]
 // ciphertext/key pair, unlike the shared always-erroring mockLiveKitGetter).
 // GenerateToken itself never touches lksdk.RoomServiceClient — only
 // crypto.Decrypt + local JWT signing — so this makes no network call.
-func newTokenTestVoiceService(t *testing.T) VoiceService {
+func newTokenTestVoiceService(t *testing.T) VoiceRuntime {
 	t.Helper()
 	encAPIKey, err := crypto.Encrypt(tokenTestAPIKey, tokenTestEncryptionKey)
 	if err != nil {
@@ -2633,9 +2637,9 @@ func newTokenTestVoiceService(t *testing.T) VoiceService {
 			IsMemberFn: func(_ context.Context, _, _ string) (bool, error) { return true, nil },
 		},
 		tokenTestEncryptionKey,
-		nil, // timeoutChecker
-		nil, // banChecker
-		nil, // auditLogger
+		nil,                                                            // timeoutChecker
+		nil,                                                            // banChecker
+		nil, VoiceRuntimeDependencies{Fanout: voiceFixtureFanout(hub)}, // auditLogger
 	)
 	return svc
 }
@@ -3114,7 +3118,7 @@ func refusedLoopbackAddr(t *testing.T) string {
 // does its own single GetByServerID in its own setup), which is how these
 // tests distinguish "single mute attempt" from "unmute retry cycle, then
 // eviction fallback" without any deeper wire-level mocking.
-func newServerMuteNetworkTestVoiceService(t *testing.T, setupCalls chan string) (VoiceService, *testutil.MockBroadcaster) {
+func newServerMuteNetworkTestVoiceService(t *testing.T, setupCalls chan string) (VoiceRuntime, *testutil.MockBroadcaster) {
 	t.Helper()
 	encAPIKey, err := crypto.Encrypt(tokenTestAPIKey, tokenTestEncryptionKey)
 	if err != nil {
@@ -3154,9 +3158,9 @@ func newServerMuteNetworkTestVoiceService(t *testing.T, setupCalls chan string) 
 			IsMemberFn: func(_ context.Context, _, _ string) (bool, error) { return true, nil },
 		},
 		tokenTestEncryptionKey,
-		nil, // timeoutChecker
-		nil, // banChecker
-		nil, // auditLogger
+		nil,                                                            // timeoutChecker
+		nil,                                                            // banChecker
+		nil, VoiceRuntimeDependencies{Fanout: voiceFixtureFanout(hub)}, // auditLogger
 	)
 	return svc, hub
 }
@@ -3446,4 +3450,11 @@ func TestActiveVoiceAccessInvalidation(t *testing.T) {
 	if svc.GetUserVoiceState("revoked") != nil || svc.GetUserVoiceState("allowed") == nil {
 		t.Fatal("incorrect voice sessions after revocation")
 	}
+}
+
+// Test fixtures may seed private state before operations; production binds hooks only in the constructor.
+func testVoiceState(service VoiceService) *voiceService { return service.(*voiceService) }
+
+func voiceFixtureFanout(hub *testutil.MockBroadcaster) VoiceFanoutDependencies {
+	return VoiceFanoutDependencies{Online: &voiceTestBroadcaster{hub}, Members: fanoutTestMembers{ids: []string{"voice-test-member"}}}
 }

@@ -14,6 +14,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 vi.mock("../api/dm", () => ({
   listDMChannels: vi.fn(),
+  markDMRead: vi.fn(async () => ({ success: true })),
   getDMMessages: vi.fn(),
   getDMMessagesAround: vi.fn(),
   getDMMessagesAfter: vi.fn(),
@@ -226,7 +227,7 @@ it.each(["account", "generation", "device"])("drops DM history fetched under an 
   expect(decryptDMMessages).not.toHaveBeenCalled();
   expect(ids()).toEqual([]);
 });
-it("keeps history cancellable while decryption is pending", async () => {
+it.each([false, true])("keeps history cancellable while decryption is pending (preserve list=%s)", async (preserveChannelList) => {
   const pending = deferred<DMMessage[]>();
   vi.mocked(dmApi.getDMMessages).mockResolvedValueOnce(page([makeDM("old")], false));
   vi.mocked(decryptDMMessages).mockReturnValueOnce(pending.promise);
@@ -234,7 +235,7 @@ it("keeps history cancellable while decryption is pending", async () => {
   await Promise.resolve();
   const guard = vi.mocked(decryptDMMessages).mock.calls[0][1];
   expect(guard?.()).toBe(true);
-  useDMStore.getState().invalidateFetchCache();
+  useDMStore.getState().invalidateFetchCache({ preserveChannelList });
   expect(guard?.()).toBe(false);
   pending.resolve([makeDM("old")]);
   await loading;
@@ -251,14 +252,14 @@ it("does not prepend an older page into a replaced history window", async () => 
   expect(decryptDMMessages).not.toHaveBeenCalled();
   expect(ids()).toEqual(["replacement"]);
 });
-it("does not let an invalidated newer-page request release its replacement lock", async () => {
+it.each([false, true])("does not let an invalidated newer-page request release its replacement lock (preserve list=%s)", async (preserveChannelList) => {
   const seed = () => useDMStore.setState({messagesByChannel:{[CH]:[makeDM("anchor")]},hasMoreAfterByChannel:{[CH]:true}});
   seed();
   const old = deferred<APIResponse<DMMessagePage>>();
   const replacement = deferred<APIResponse<DMMessagePage>>();
   vi.mocked(dmApi.getDMMessagesAfter).mockReturnValueOnce(old.promise).mockReturnValueOnce(replacement.promise);
   const first = useDMStore.getState().fetchNewerMessages(CH);
-  useDMStore.getState().invalidateFetchCache();
+  useDMStore.getState().invalidateFetchCache({ preserveChannelList });
   seed();
   const second = useDMStore.getState().fetchNewerMessages(CH);
   old.resolve(page([makeDM("stale")], false, false));
@@ -543,6 +544,17 @@ describe("dmStore — fetchMessagesAround vs mount-time fetchMessages race", () 
     expect(useDMStore.getState().isLoadingMessages).toBe(false);
   });
 
+  it("preserves the open history window when a reply target was deleted", async () => {
+    await jumpIntoPast();
+    const previous = ids();
+    getAround.mockResolvedValueOnce({ success: false, status: 404, error: "not found" });
+
+    expect(await useDMStore.getState().fetchMessagesAround(CH, "gone")).toBe(false);
+    expect(ids()).toEqual(previous);
+    expect(useDMStore.getState().hasMoreAfterByChannel[CH]).toBe(true);
+    expect(useDMStore.getState().isLoadingMessages).toBe(false);
+    expect(getDMMessages).not.toHaveBeenCalled();
+  });
   it("releases the claim when the target is gone and loads the tail", async () => {
     getAround.mockResolvedValueOnce({ success: false, status: 404, error: "not found" });
     getDMMessages.mockResolvedValueOnce(page([makeDM("tail-1")], false));
@@ -567,6 +579,19 @@ describe("dmStore — leaving a jumped-to window", () => {
     expect(getDMMessages).toHaveBeenCalledTimes(1);
   });
 
+  it.each(["jump", "page"])("acknowledges the loaded tail after returning via %s", async path => {
+    await jumpIntoPast();
+    useDMStore.setState({ selectedDMId: CH, dmUnreadCounts: { [CH]: 3 } });
+    if (path === "jump") {
+      getDMMessages.mockResolvedValueOnce(page([makeDM("tail")], true));
+      useDMStore.getState().jumpToPresent(CH);
+    } else {
+      getAfter.mockResolvedValueOnce(page([makeDM("tail")], false, false));
+      await useDMStore.getState().fetchNewerMessages(CH);
+    }
+    await vi.waitFor(() => expect(dmApi.markDMRead).toHaveBeenCalledWith(CH, "tail"));
+    expect(useDMStore.getState().dmUnreadCounts[CH]).toBeUndefined();
+  });
   it("merges held live messages when forward paging reaches the tail", async () => {
     await jumpIntoPast();
     useDMStore.getState().handleDMMessageCreate(makeDM("live-1"));
@@ -580,12 +605,12 @@ describe("dmStore — leaving a jumped-to window", () => {
   });
   it("uses the latest edit of a live message held outside a jumped-to window", async () => {
     await jumpIntoPast();
-    useDMStore.getState().handleDMMessageCreate(makeDM("live"));
+    useDMStore.getState().handleDMMessageCreate({...makeDM("live"), source_sequence:"42"});
     useDMStore.getState().handleDMMessageUpdate({...makeDM("live"),content:"edited while held"});
     getAfter.mockResolvedValueOnce(page([],false,false));
     await useDMStore.getState().fetchNewerMessages(CH);
     expect(ids()).toEqual(["old-1","target","live"]);
-    expect(useDMStore.getState().messagesByChannel[CH][2].content).toBe("edited while held");
+    expect(useDMStore.getState().messagesByChannel[CH][2]).toMatchObject({content:"edited while held", source_sequence:"42"});
   });
   it("retains held-message reaction and pin events while the forward response is pending",async()=>{
     await jumpIntoPast();useDMStore.getState().handleDMMessageCreate(makeDM("live"));
@@ -696,6 +721,149 @@ it("keeps authoritative DM append order in history merges and out-of-order WS pr
  useDMStore.setState({channels:[listedDM(CH)],messagesByChannel:{[CH]:[]}});
  useDMStore.getState().handleDMMessageCreate(third);useDMStore.getState().handleDMMessageCreate(first);useDMStore.getState().handleDMMessageCreate(second);
  expect(ids()).toEqual([first.id,second.id,third.id]);expect(useDMStore.getState().channels[0].last_message?.id).toBe(third.id);
+ useDMStore.setState({messagesByChannel:{}});
  vi.mocked(dmApi.getDMMessages).mockResolvedValueOnce(page([second,first,third],false));await useDMStore.getState().fetchMessages(CH);
+ expect(dmApi.getDMMessages).toHaveBeenCalledOnce();
  expect(ids()).toEqual([first.id,second.id,third.id]);
+});
+
+it("prepends each older DM once and preserves the loaded copy on overlap", async () => {
+  const anchor = { ...makeDM("anchor"), content: "current edit" };
+  useDMStore.setState({ messagesByChannel: { [CH]: [anchor] }, hasMoreByChannel: { [CH]: true } });
+  const older = makeDM("older");
+  vi.mocked(dmApi.getDMMessages).mockResolvedValueOnce(page([older, older, makeDM("anchor")], false));
+  await useDMStore.getState().fetchOlderMessages(CH);
+  expect(ids()).toEqual(["older", "anchor"]);
+  expect(useDMStore.getState().messagesByChannel[CH][1].content).toBe("current edit");
+  expect(useDMStore.getState().hasMoreByChannel[CH]).toBe(false);
+});
+
+it("keeps the inbox sequence on a replay that omits it", () => {
+  const latest = { ...makeDM("latest"), source_sequence: "3" };
+  useDMStore.setState({channels: [listedDM(CH)]});
+  const receive = useDMStore.getState().handleDMMessageCreate;
+  receive(latest);
+  receive(makeDM("latest"));
+  receive({ ...makeDM("earlier"), created_at: "2027-01-01T00:00:00Z", source_sequence: "2" });
+  expect(useDMStore.getState().channels[0].last_message).toMatchObject({id: "latest", source_sequence: "3"});
+});
+
+it.each(["tail", "around", "older", "newer"])("excludes foreign DM rows before decrypting a %s page", async direction => {
+  const foreign = { ...makeDM("foreign"), dm_channel_id: "other" };
+  const target = makeDM("target");
+  const response = page([foreign, target], false, false);
+  const store = useDMStore.getState();
+  if (direction === "older" || direction === "newer") {
+    useDMStore.setState({
+      messagesByChannel: { [CH]: [makeDM("anchor")] },
+      hasMoreByChannel: { [CH]: true },
+      hasMoreAfterByChannel: { [CH]: true },
+    });
+  }
+  switch (direction) {
+    case "around":
+      getAround.mockResolvedValueOnce(response);
+      await store.fetchMessagesAround(CH, target.id);
+      break;
+    case "newer":
+      getAfter.mockResolvedValueOnce(response);
+      await store.fetchNewerMessages(CH);
+      break;
+    default:
+      getDMMessages.mockResolvedValueOnce(response);
+      if (direction === "older") await store.fetchOlderMessages(CH);
+      else await store.fetchMessages(CH);
+  }
+  expect(ids()).toContain(target.id);
+  expect(ids()).not.toContain(foreign.id);
+  expect(vi.mocked(decryptDMMessages).mock.lastCall?.[0]).toEqual([target]);
+});
+
+it("keeps unread messages when reopening older history and lets the user mark the entire DM read", () => {
+  useDMStore.setState({
+    dmUnreadCounts: { [CH]: 2 },
+    messagesByChannel: { [CH]: [makeDM("old-window-end")] },
+    hasMoreAfterByChannel: { [CH]: true },
+  });
+  useDMStore.getState().clearDMUnread(CH);
+  expect(useDMStore.getState().dmUnreadCounts[CH]).toBe(2);
+  expect(dmApi.markDMRead).not.toHaveBeenCalled();
+  useDMStore.getState().clearDMUnread(CH, "entire-conversation");
+  expect(useDMStore.getState().dmUnreadCounts[CH]).toBeUndefined();
+  expect(dmApi.markDMRead).toHaveBeenCalledWith(CH, undefined);
+});
+it("waits for the actual tail before acknowledging a newly opened DM", async () => {
+  useDMStore.setState({ selectedDMId: CH, dmUnreadCounts: { [CH]: 2 } });
+  vi.mocked(dmApi.markDMRead).mockClear();
+  useDMStore.getState().clearDMUnread(CH);
+  expect(dmApi.markDMRead).not.toHaveBeenCalled();
+  expect(useDMStore.getState().dmUnreadCounts[CH]).toBe(2);
+  getDMMessages.mockResolvedValueOnce(page([makeDM("actual-tail")], true));
+  await useDMStore.getState().fetchMessages(CH);
+  expect(dmApi.markDMRead).toHaveBeenCalledExactlyOnceWith(CH, "actual-tail");
+  expect(useDMStore.getState().dmUnreadCounts[CH]).toBeUndefined();
+});
+it("hydrates missing channels when unread metadata changes during the first list request", async () => {
+  const pending = deferred<APIResponse<DMChannelWithUser[]>>();
+  vi.mocked(dmApi.listDMChannels).mockReturnValueOnce(pending.promise);
+  const loading = useDMStore.getState().fetchChannels();
+  useDMStore.setState({ dmUnreadCounts: { [CH]: 1 } });
+  pending.resolve({ success: true, data: [listedDM(CH, 5)] });
+  await loading;
+  expect(useDMStore.getState().dmUnreadCounts[CH]).toBe(1);
+  expect(useDMStore.getState().channels.some(channel => channel.id === CH)).toBe(true);
+});
+
+it("loads peer channels when My Notes is inserted during list hydration", async () => {
+  const pending = deferred<APIResponse<DMChannelWithUser[]>>();
+  vi.mocked(dmApi.listDMChannels).mockReturnValueOnce(pending.promise);
+  const loading = useDMStore.getState().fetchChannels();
+  const notes = listedDM("notes");
+  notes.other_user = { ...notes.other_user, id: "me" };
+  useDMStore.setState({ channels: [notes] });
+  pending.resolve({ success: true, data: [listedDM(CH)] });
+  await loading;
+  expect(useDMStore.getState().channels.map(channel => channel.id)).toEqual([CH, "notes"]);
+});
+
+it("does not restore a removed peer when My Notes is added during hydration", async () => {
+  const removed = listedDM(CH);
+  useDMStore.setState({ channels: [removed] });
+  const pending = deferred<APIResponse<DMChannelWithUser[]>>();
+  vi.mocked(dmApi.listDMChannels).mockReturnValueOnce(pending.promise);
+  const loading = useDMStore.getState().fetchChannels();
+  const notes = listedDM("notes");
+  notes.other_user = { ...notes.other_user, id: "me" };
+  useDMStore.setState({ channels: [notes] });
+  pending.resolve({ success: true, data: [removed] });
+  await loading;
+  expect(useDMStore.getState().channels).toEqual([notes]);
+});
+
+it("keeps channel-list hydration alive when only encrypted history is invalidated", async () => {
+  const pending = deferred<APIResponse<DMChannelWithUser[]>>();
+  vi.mocked(dmApi.listDMChannels).mockReturnValueOnce(pending.promise);
+  useDMStore.setState({ messagesByChannel: { [CH]: [makeDM("old-key-history")] }, isLoadingMessages: true });
+  const loading = useDMStore.getState().fetchChannels();
+  useDMStore.getState().invalidateFetchCache({ preserveChannelList: true });
+  expect(useDMStore.getState().isLoading).toBe(true);
+  expect(useDMStore.getState().messagesByChannel).toEqual({});
+  expect(useDMStore.getState().isLoadingMessages).toBe(false);
+  pending.resolve({ success: true, data: [listedDM(CH)] });
+  expect(await loading).toBe(true);
+  expect(useDMStore.getState().channels.map(channel => channel.id)).toEqual([CH]);
+  expect(useDMStore.getState().isLoading).toBe(false);
+});
+
+it.each(["account", "generation"])("still rejects an abandoned %s list after key readiness invalidation", async change => {
+  const pending = deferred<APIResponse<DMChannelWithUser[]>>();
+  vi.mocked(dmApi.listDMChannels).mockReturnValueOnce(pending.promise);
+  const loading = useDMStore.getState().fetchChannels();
+  useDMStore.getState().invalidateFetchCache({ preserveChannelList: true });
+  if (change === "account") hoisted.userId = "other";
+  else useComposerDraftStore.getState().reset();
+  useDMStore.setState({ channels: [listedDM("replacement-account")] });
+  pending.resolve({ success: true, data: [listedDM("abandoned")] });
+  expect(await loading).toBe(false);
+  expect(useDMStore.getState().channels.map(channel => channel.id)).toEqual(["replacement-account"]);
 });

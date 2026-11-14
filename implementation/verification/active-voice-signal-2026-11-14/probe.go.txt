@@ -1,0 +1,43 @@
+package main
+import("bytes";"context";"encoding/hex";"encoding/json";"errors";"fmt";"net/http";"net/url";"os";"strings";"time";"github.com/argeinfina/hichat/database";"github.com/argeinfina/hichat/models";crypt "github.com/argeinfina/hichat/pkg/crypto";"github.com/gorilla/websocket";"github.com/jackc/pgx/v5";"golang.org/x/crypto/bcrypt")
+func main(){if err:=run();err!=nil{fmt.Fprintln(os.Stderr,"isolated active voice probe failed");os.Exit(1)}}
+func run()error{
+ action:=os.Args[1]
+ if action=="join"{return join()}
+ cfg,err:=pgx.ParseConfig(os.Getenv("DATABASE_URL"));if err!=nil{return err};if cfg.Host!="127.0.0.1"&&cfg.Host!="localhost"{return errors.New("loopback required")};if !strings.HasPrefix(cfg.Database,"hichat_e2e_"){return errors.New("owned database required")}
+ ctx,cancel:=context.WithTimeout(context.Background(),15*time.Second);defer cancel()
+ db,err:=database.OpenPostgres(ctx,os.Getenv("DATABASE_URL"));if err!=nil{return err};defer db.Close()
+ if action=="seed"{
+  if err=database.MigratePostgres(ctx,db);err!=nil{return err}
+  hash,err:=bcrypt.GenerateFromPassword([]byte("ActiveSignalFixture-123!"),bcrypt.DefaultCost);if err!=nil{return err}
+  key,err:=hex.DecodeString(os.Getenv("ENCRYPTION_KEY"));if err!=nil{return err};apiKey,err:=crypt.Encrypt("active-fixture-key",key);if err!=nil{return err};apiSecret,err:=crypt.Encrypt("active-fixture-secret",key);if err!=nil{return err}
+  queries:=[]struct{q string;args []any}{
+   {`INSERT INTO users(id,username,password_hash) VALUES('active-user','active_signal_user',$1)`,[]any{string(hash)}},
+   {`INSERT INTO livekit_instances(id,url,api_key,api_secret,is_platform_managed) VALUES('active-instance','http://127.0.0.1:9',$1,$2,1)`,[]any{apiKey,apiSecret}},
+   {`INSERT INTO servers(id,name,owner_id,livekit_instance_id) VALUES('active-server','Active signal','active-user','active-instance')`,nil},
+   {`INSERT INTO server_members(server_id,user_id) VALUES('active-server','active-user')`,nil},
+   {`INSERT INTO channels(id,name,type,server_id) VALUES('active-voice','voice','voice','active-server')`,nil},
+   {`INSERT INTO roles(id,name,permissions,is_owner,server_id) VALUES('active-role','Owner',$1,1,'active-server')`,[]any{int64(models.PermAll)}},
+   {`INSERT INTO user_roles(user_id,role_id,server_id) VALUES('active-user','active-role','active-server')`,nil},
+  };for _,q:=range queries{if _,err=db.ExecContext(ctx,q.q,q.args...);err!=nil{return err}}
+ }
+ var used,credits,pending,applied,seconds int64
+ if err=db.QueryRowContext(ctx,`SELECT COALESCE((SELECT SUM(used_seconds) FROM livekit_monthly_usage WHERE instance_id='active-instance'),0),COUNT(*),COUNT(*) FILTER(WHERE applied_at IS NULL),COUNT(applied_at),COALESCE(SUM(seconds),0) FROM voice_usage_credits WHERE instance_id='active-instance'`).Scan(&used,&credits,&pending,&applied,&seconds);err!=nil{return err}
+ return json.NewEncoder(os.Stdout).Encode(map[string]any{"used":used,"credits":credits,"pending":pending,"applied":applied,"ledger_seconds":seconds})
+}
+func post(path,token string,body any,target any)error{
+ b,err:=json.Marshal(body);if err!=nil{return err};req,err:=http.NewRequest("POST","http://127.0.0.1:19461"+path,bytes.NewReader(b));if err!=nil{return err};req.Header.Set("Content-Type","application/json");if token!=""{req.Header.Set("Authorization","Bearer "+token)}
+ client:=http.Client{Timeout:5*time.Second};resp,err:=client.Do(req);if err!=nil{return err};defer resp.Body.Close();if resp.StatusCode!=200{return fmt.Errorf("request rejected: %d",resp.StatusCode)};return json.NewDecoder(resp.Body).Decode(target)
+}
+func join()error{
+ var auth struct{Data struct{AccessToken string `json:"access_token"`} `json:"data"`}
+ if err:=post("/api/auth/login","",map[string]string{"username":"active_signal_user","password":"ActiveSignalFixture-123!"},&auth);err!=nil{return err};if auth.Data.AccessToken==""{return errors.New("login token missing")}
+ var ticket struct{Data struct{Ticket string `json:"ticket"`} `json:"data"`}
+ if err:=post("/api/auth/ws-ticket",auth.Data.AccessToken,map[string]string{},&ticket);err!=nil{return err};if ticket.Data.Ticket==""{return errors.New("ticket missing")}
+ conn,_,err:=websocket.DefaultDialer.Dial("ws://127.0.0.1:19461/ws?ticket="+url.QueryEscape(ticket.Data.Ticket),nil);if err!=nil{return err};defer conn.Close();conn.SetReadDeadline(time.Now().Add(15*time.Second))
+ for{var event struct{Op string `json:"op"`};if err=conn.ReadJSON(&event);err!=nil{return err};if event.Op=="ready"{break}}
+ if err=conn.WriteJSON(map[string]any{"op":"voice_join","data":map[string]any{"channel_id":"active-voice"}});err!=nil{return err}
+ for{var event struct{Op string `json:"op"`;Data struct{UserID string `json:"user_id"`;ChannelID string `json:"channel_id"`;Action string `json:"action"`} `json:"data"`};if err=conn.ReadJSON(&event);err!=nil{return err};if event.Op=="voice_state_update"&&event.Data.UserID=="active-user"&&event.Data.ChannelID=="active-voice"&&event.Data.Action=="join"{break}}
+ if err=os.WriteFile("/out/join-ready.json",[]byte(`{"login":true,"ticket":true,"voice_join_observed":true}`),0600);err!=nil{return err}
+ conn.SetReadDeadline(time.Now().Add(45*time.Second));for{var event any;if err=conn.ReadJSON(&event);err!=nil{return nil}}
+}

@@ -20,6 +20,7 @@ import (
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg/logx"
+	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
 	"github.com/google/uuid"
 )
@@ -82,6 +83,7 @@ type VoiceService interface {
 	GetUserVoiceState(userID string) *models.VoiceState
 	GetAllVoiceStates() []models.VoiceState
 	DisconnectUser(userID string)
+	DisconnectServerMember(serverID, userID string)
 	GetStreamCount(channelID string) int
 	AdminUpdateState(ctx context.Context, adminUserID, targetUserID string, isServerMuted, isServerDeafened *bool) error
 	MoveUser(ctx context.Context, moverUserID, targetUserID, targetChannelID string) error
@@ -98,11 +100,7 @@ type VoiceService interface {
 	UpdateActivity(userID string)
 	StartOrphanCleanup()
 	StartAFKChecker()
-	SetAppLogger(logger VoiceAppLogger)
-	SetMusicBotHook(hook MusicBotChannelHook)
-	// SetEntranceHook wires the entrance-sound trigger fired on a fresh
-	// voice join (see VoiceEntranceHook). Nil disables it.
-	SetEntranceHook(hook VoiceEntranceHook)
+
 	// EnforceModerationOnJoin evicts userID from the LiveKit room for
 	// (serverID, channelID) if they are currently timed out or banned on
 	// serverID. See voice_lifecycle.go for the implementation and the
@@ -110,6 +108,20 @@ type VoiceService interface {
 	// that is its only caller.
 	EnforceModerationOnJoin(ctx context.Context, serverID, channelID, userID string)
 	MusicRoomKey(roomName string) (passphrase string, keyIndex uint32, err error)
+}
+
+// VoiceRuntime is owned by the composition root; handlers use VoiceService.
+// These shutdown methods join distinct resources in the existing server order.
+type VoiceRuntime interface {
+	GameJoinVoiceAdmission
+	StartVoiceUsageDelivery(context.Context) func()
+	VoiceService
+
+	VoiceChannelDeletionHandler
+	StopMaintenance()
+	ShutdownUsageProducers()
+	ShutdownVoiceSessions()
+	ShutdownVoiceStateFanout()
 }
 
 // AuditWriter — narrow ISP interface for audit log writes from services.
@@ -151,6 +163,16 @@ type forceMoveGrant struct {
 const maxScreenShares = 0
 
 type voiceService struct {
+	fanoutAudience     VoiceFanoutDependencies
+	usageCredit        VoiceUsageCredit
+	usageRecovery      PendingVoiceUsageApplier
+	voiceAccess        repository.VoiceAccessReader
+	sessionsFinalized  bool // guarded by mu; no room keys may be created after terminal cleanup
+	sessionShutdown    sync.Once
+	operations         voiceOperations
+	usageWorker        voiceMaintenanceWorker
+	orphanWorker       voiceMaintenanceWorker
+	afkWorker          voiceMaintenanceWorker
 	states             map[string]*models.VoiceState // userID -> VoiceState
 	roomPassphrases    map[string]string             // roomName -> E2EE SFrame passphrase
 	roomKeyContexts    map[string]string
@@ -168,6 +190,7 @@ type voiceService struct {
 	channelGetter    ChannelGetter
 	livekitGetter    LiveKitInstanceGetter
 	permResolver     ChannelPermResolver
+	freshPermissions FreshChannelPermResolver
 	hub              ws.Broadcaster
 	onlineChecker    OnlineUserChecker
 	afkTimeoutGetter AFKTimeoutGetter
@@ -194,6 +217,7 @@ type voiceService struct {
 	// channelDeleteEpoch rejects a JoinChannel operation that began before a
 	// channel deletion but reaches the state mutation after its cleanup pass.
 	channelDeleteEpoch uint64
+	pendingJoins       map[*pendingVoiceJoin]struct{}
 }
 
 // MemberTimeoutChecker — narrow ISP interface so voiceService doesn't
@@ -201,6 +225,23 @@ type voiceService struct {
 // already implements this method.
 type MemberTimeoutChecker interface {
 	IsActive(ctx context.Context, serverID, userID string) (bool, error)
+}
+
+// VoiceRuntimeDependencies is selected explicitly by the composition owner.
+// Its zero value disables integrations and persistent app logging.
+type VoiceRuntimeDependencies struct {
+	Fanout VoiceFanoutDependencies
+	// Nil disables standalone permission-change subscriptions.
+	PermissionInvalidations PermissionInvalidationSource
+	UsageCredit             VoiceUsageCredit
+	// Nil disables the durable pending-usage recovery worker.
+	UsageRecovery PendingVoiceUsageApplier
+	// Nil explicitly selects the portable standalone admission/visibility path.
+	VoiceAccess repository.VoiceAccessReader
+	// Nil explicitly retains the standalone cached-resolver path.
+	FreshPermissions FreshChannelPermResolver
+	Integrations     func(VoiceService) (VoiceEntranceHook, MusicBotChannelHook)
+	AppLogger        VoiceAppLogger
 }
 
 func NewVoiceService(
@@ -214,8 +255,13 @@ func NewVoiceService(
 	timeoutChecker MemberTimeoutChecker,
 	banChecker BanChecker,
 	auditLogger AuditWriter,
-) VoiceService {
+	runtime VoiceRuntimeDependencies,
+) VoiceRuntime {
 	service := &voiceService{
+		fanoutAudience:     runtime.Fanout,
+		usageCredit:        runtime.UsageCredit,
+		usageRecovery:      runtime.UsageRecovery,
+		voiceAccess:        runtime.VoiceAccess,
 		states:             make(map[string]*models.VoiceState),
 		voiceEpoch:         uuid.NewString(),
 		roomPassphrases:    make(map[string]string),
@@ -227,6 +273,7 @@ func NewVoiceService(
 		channelGetter:      channelGetter,
 		livekitGetter:      livekitGetter,
 		permResolver:       permResolver,
+		freshPermissions:   runtime.FreshPermissions,
 		hub:                hub,
 		onlineChecker:      onlineChecker,
 		afkTimeoutGetter:   afkTimeoutGetter,
@@ -234,10 +281,17 @@ func NewVoiceService(
 		timeoutChecker:     timeoutChecker,
 		banChecker:         banChecker,
 		auditLogger:        auditLogger,
+		appLogger:          runtime.AppLogger,
+	}
+	// Build mutually dependent integrations against initialized voice state,
+	// before allocating workers or exposing the service to request handlers.
+	// Nil explicitly selects standalone voice without media hooks.
+	if runtime.Integrations != nil {
+		service.entranceHook, service.musicBotHook = runtime.Integrations(service)
 	}
 	service.voiceFanout = newVoiceStateFanout(service)
-	if cache, ok := permResolver.(*cachingPermResolver); ok {
-		cache.afterInvalidation = service.recheckVoiceAccess
+	if runtime.PermissionInvalidations != nil {
+		runtime.PermissionInvalidations.BindInvalidationCallback(service.recheckVoiceAccess)
 	}
 	return service
 }
@@ -248,20 +302,6 @@ func (s *voiceService) ShutdownVoiceStateFanout() {
 	if s.voiceFanout != nil {
 		s.voiceFanout.shutdown()
 	}
-}
-
-func (s *voiceService) SetMusicBotHook(hook MusicBotChannelHook) {
-	s.musicBotHook = hook
-}
-
-// SetEntranceHook is called once during wiring, before any WS client can
-// join a voice channel, so the field needs no lock (same as SetMusicBotHook).
-func (s *voiceService) SetEntranceHook(hook VoiceEntranceHook) {
-	s.entranceHook = hook
-}
-
-func (s *voiceService) SetAppLogger(logger VoiceAppLogger) {
-	s.appLogger = logger
 }
 
 // audit emits an audit log event if an audit logger is wired. Nil-safe.

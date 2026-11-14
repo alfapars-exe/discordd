@@ -53,7 +53,7 @@ func (b *BackupService) rotateDailySnapshot(ctx context.Context, snapshotPath st
 	}
 
 	dest := b.dailyPrefix() + today + "/hichat.db"
-	if err := b.hfCopyURI(snapshotPath, dest); err != nil {
+	if err := b.hfCopyURI(ctx, snapshotPath, dest); err != nil {
 		b.fail("hf cp daily", err)
 		// lastDailyDate stays unset so the next cycle retries today rather
 		// than leaving a hole in the history for a transient upload error.
@@ -243,7 +243,10 @@ func (b *BackupService) removeDailySnapshot(ctx context.Context, date string) er
 // hfSyncDir copies a local directory tree to the backup prefix without
 // deleting remote objects. An empty or incomplete mount must never erase
 // the recovery copy. Explicit asset retirement owns deletion separately.
-func (b *BackupService) hfSyncDir(srcDir, destSubpath string) error {
+func (b *BackupService) hfSyncDir(parent context.Context, srcDir, destSubpath string) error {
+	if err := parent.Err(); err != nil {
+		return err
+	}
 	// Sanity: skip if the source doesn't exist — common on a fresh
 	// deploy where no uploads have happened yet.
 	if _, err := os.Stat(srcDir); err != nil {
@@ -251,8 +254,11 @@ func (b *BackupService) hfSyncDir(srcDir, destSubpath string) error {
 		return nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Minute)
+	ctx, cancel := context.WithTimeout(parent, 60*time.Minute)
 	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 
 	dest := fmt.Sprintf("hf://buckets/%s/latest/%s", b.cfg.HFBucket, destSubpath)
 	out, err := b.runCmd(ctx, b.hfEnv(), "hf", "sync", srcDir, dest)

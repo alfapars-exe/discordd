@@ -72,9 +72,8 @@ func removeOnlyChannelService(store *reactionStore, perms models.Permission, eve
 		&testutil.MockChannelRepo{GetByIDFn: func(_ context.Context, _ string) (*models.Channel, error) {
 			return &models.Channel{ID: "ch1", ServerID: "srv1"}, nil
 		}},
-		hub, resolver, nil,
+		hub, resolver, nil, ReactionNotificationDependencies{}, newReactionResolver(),
 	)
-	svc.SetEmojiResolver(newReactionResolver())
 	return svc
 }
 
@@ -153,7 +152,7 @@ func TestReactionEmoji_Channel_RemoveOnly(t *testing.T) {
 }
 
 func removeOnlyDMService(store *reactionStore, participants [2]string) DMService {
-	f := newDMFixture()
+	f := newDMFixtureWithEmail(nil, nil, newReactionResolver())
 	f.repo.GetMessageByIDFn = func(_ context.Context, id string) (*models.DMMessage, error) {
 		return &models.DMMessage{ID: id, DMChannelID: "dm1"}, nil
 	}
@@ -162,7 +161,6 @@ func removeOnlyDMService(store *reactionStore, participants [2]string) DMService
 	}
 	f.repo.ToggleReactionFn = store.toggle
 	f.repo.RemoveReactionFn = store.remove
-	f.svc.SetEmojiResolver(newReactionResolver())
 	return f.svc
 }
 

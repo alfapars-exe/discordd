@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -184,5 +185,55 @@ func TestErrorWithMessage_NoCode(t *testing.T) {
 	body := rr.Body.String()
 	if strings.Contains(body, `"code"`) {
 		t.Errorf("expected no code field in message-only response, got: %s", body)
+	}
+}
+
+func TestJSONEncodingFailureReturnsErrorEnvelope(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	JSON(recorder, http.StatusCreated, make(chan int))
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", recorder.Code)
+	}
+	var response APIResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Success || response.Code != "INTERNAL" || response.Error != "internal server error" {
+		t.Fatalf("unexpected response: %+v", response)
+	}
+}
+
+type disconnectedResponseWriter struct {
+	*httptest.ResponseRecorder
+	statusWrites int
+	bodyWrites   int
+}
+
+func (w *disconnectedResponseWriter) WriteHeader(status int) {
+	w.statusWrites++
+	w.ResponseRecorder.WriteHeader(status)
+}
+
+func (w *disconnectedResponseWriter) Write([]byte) (int, error) {
+	w.bodyWrites++
+	return 0, io.ErrClosedPipe
+}
+
+func TestDisconnectedResponseDoesNotWriteAgain(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		status int
+		send   func(http.ResponseWriter)
+	}{
+		{"success", http.StatusCreated, func(w http.ResponseWriter) { JSON(w, http.StatusCreated, "ok") }},
+		{"error", http.StatusForbidden, func(w http.ResponseWriter) { Error(w, ErrForbidden) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			writer := &disconnectedResponseWriter{ResponseRecorder: httptest.NewRecorder()}
+			tc.send(writer)
+			if writer.Code != tc.status || writer.statusWrites != 1 || writer.bodyWrites != 1 {
+				t.Errorf("status %d, header writes %d, body writes %d", writer.Code, writer.statusWrites, writer.bodyWrites)
+			}
+		})
 	}
 }

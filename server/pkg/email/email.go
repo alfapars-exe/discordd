@@ -12,6 +12,7 @@ import (
 	"html"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -30,6 +31,14 @@ type CategorySender interface {
 	SendCategoryEmail(context.Context, string, string, string) error
 	CategoryFrom() string
 	SendPreparedCategoryEmail(context.Context, string, models.EmailDeliveryPayload) (string, error)
+}
+
+// Provider is the complete configured delivery contract used by startup.
+// Individual services keep their narrower sender dependencies.
+type Provider interface {
+	EmailSender
+	VerificationSender
+	CategorySender
 }
 
 var ErrImmutableEmailPayload = errors.New("provider rejected immutable email payload")
@@ -52,7 +61,7 @@ type resendSender struct {
 	appURL    string
 }
 
-func NewResendSender(apiKey, fromEmail, appURL string) EmailSender {
+func NewResendSender(apiKey, fromEmail, appURL string) Provider {
 	return &resendSender{
 		client:    resend.NewCustomClient(&http.Client{Transport: idempotencyTransport{http.DefaultTransport}, Timeout: time.Minute}, strings.Trim(strings.TrimSpace(apiKey), "'")),
 		fromEmail: fromEmail,
@@ -69,7 +78,7 @@ func (s *resendSender) SendCategoryEmail(ctx context.Context, toEmail, subject, 
 }
 
 func (s *resendSender) SendPasswordReset(ctx context.Context, toEmail, token string) error {
-	resetLink := fmt.Sprintf("%s/reset-password?token=%s", s.appURL, token)
+	resetLink := html.EscapeString(fmt.Sprintf("%s/reset-password?token=%s", strings.TrimRight(s.appURL, "/"), url.QueryEscape(token)))
 
 	body := fmt.Sprintf(`<!DOCTYPE html>
 <html>
@@ -121,9 +130,12 @@ func (s *resendSender) SendPasswordReset(ctx context.Context, toEmail, token str
 		Html:    body,
 	}
 
-	_, err := s.client.Emails.SendWithContext(ctx, params)
+	response, err := s.client.Emails.SendWithContext(ctx, params)
 	if err != nil {
 		return fmt.Errorf("failed to send password reset email: %w", err)
+	}
+	if response == nil || response.Id == "" {
+		return errors.New("password reset email delivery was not confirmed")
 	}
 
 	return nil

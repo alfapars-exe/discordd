@@ -27,12 +27,22 @@ func TestPostgresImportPreservesDataAndRejectsReuse(t *testing.T) {
 		t.Fatal("test database must be local")
 	}
 	admin := stdlib.OpenDB(*cfg)
-	defer admin.Close()
+	defer func() {
+		if err := admin.Close(); err != nil {
+			t.Errorf("close PostgreSQL fixture admin pool: %v", err)
+		}
+	}()
 	schema := fmt.Sprintf("hichat_import_%d", time.Now().UnixNano())
 	if _, err = admin.Exec("CREATE SCHEMA " + schema); err != nil {
 		t.Fatal(err)
 	}
-	defer admin.Exec("DROP SCHEMA " + schema + " CASCADE")
+	defer func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if _, err := admin.ExecContext(cleanupCtx, "DROP SCHEMA "+schema+" CASCADE"); err != nil {
+			t.Errorf("drop PostgreSQL fixture schema %s: %v", schema, err)
+		}
+	}()
 	cfg.RuntimeParams["search_path"] = schema + ",public"
 	target := PostgreSQLPool(cfg)
 	defer target.Close()
@@ -88,6 +98,7 @@ func TestPostgresImportPreservesDataAndRejectsReuse(t *testing.T) {
 		`INSERT INTO attachments(id,message_id,filename,file_url) VALUES('import-file','import-message','f.bin','/api/uploads/preserved.bin')`,
 		`INSERT INTO livekit_instances(id,url,api_key,api_secret) VALUES('test-instance','https://example.invalid','test-only','test-only')`,
 		`INSERT INTO livekit_metrics_history(id,instance_id) VALUES(42,'test-instance')`,
+		`INSERT INTO livekit_monthly_usage(instance_id,year,month,used_seconds) VALUES('test-instance',2026,1,120)`,
 	} {
 		if _, err = source.Conn.Exec(q); err != nil {
 			t.Fatal(err)
@@ -120,6 +131,7 @@ func TestPostgresImportPreservesDataAndRejectsReuse(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertImportedDMOutboxEmpty(t, target)
+	assertImportedVoiceUsage(t, ctx, target)
 	// Assert coverage against the actual source schema, not an obsolete count
 	// that stops the acceptance test whenever an additive migration is added.
 	expectedRows, err := source.Conn.Query(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'messages_fts%' AND name NOT LIKE 'dm_messages_fts%'`)
@@ -205,4 +217,17 @@ func assertImportedDMOutboxEmpty(t *testing.T, db *sql.DB) {
 	if queued != 0 {
 		t.Fatal("offline import queued historical DM events")
 	}
+}
+
+func assertImportedVoiceUsage(t *testing.T, ctx context.Context, target *sql.DB) {
+	t.Helper()
+	var usage int
+	if err := target.QueryRowContext(ctx, `SELECT used_seconds FROM livekit_monthly_usage WHERE instance_id='test-instance' AND year=2026 AND month=1`).Scan(&usage); err != nil || usage != 120 {
+		t.Fatalf("legacy usage total changed during import: %d %v", usage, err)
+	}
+	var credits int
+	if err := target.QueryRowContext(ctx, `SELECT count(*) FROM voice_usage_credits`).Scan(&credits); err != nil || credits != 0 {
+		t.Fatalf("import fabricated usage credits: %d %v", credits, err)
+	}
+
 }

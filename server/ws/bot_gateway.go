@@ -90,12 +90,18 @@ func (h *Handler) HandleBotConnection(w http.ResponseWriter, r *http.Request) {
 		}
 		return nil
 	}
-	h.hub.register <- client
+	if !h.hub.registerClient(r.Context(), client) {
+		_ = conn.Close()
+		return
+	}
 	select {
 	case <-client.registered:
+	case <-h.hub.stopped:
+		_ = conn.Close()
+		return
 	case <-r.Context().Done():
 		_ = conn.Close()
-		h.hub.unregister <- client
+		h.hub.unregisterClient(client)
 		return
 	}
 
@@ -108,7 +114,7 @@ func (h *Handler) HandleBotConnection(w http.ResponseWriter, r *http.Request) {
 			_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(4001, "credential_revoked"), time.Now().Add(writeWait))
 		}
 		_ = conn.Close()
-		h.hub.unregister <- client
+		h.hub.unregisterClient(client)
 		return
 	}
 	logx.Go("ws.bot_write_pump", client.WritePump)

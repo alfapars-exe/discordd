@@ -44,6 +44,11 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   diagnosticVerbose: false,
 };
 
+/** Only persisted default keys are settings; Object prototype names are not. */
+export function isAppSettingKey(key: unknown): key is string {
+  return typeof key === "string" && Object.prototype.hasOwnProperty.call(DEFAULT_APP_SETTINGS, key);
+}
+
 let cached: AppSettings | null = null;
 
 function settingsPath(): string {
@@ -80,7 +85,7 @@ export function getSettings(): AppSettings {
 
 /** Mutate one boolean setting and persist. Unknown keys are ignored. */
 export function setSetting(key: string, value: boolean): void {
-  if (!(key in DEFAULT_APP_SETTINGS)) return;
+  if (!isAppSettingKey(key)) return;
   const current = getSettings();
   (current as unknown as Record<string, boolean>)[key] = value;
   save(current);

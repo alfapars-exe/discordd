@@ -35,7 +35,7 @@ func newUploadTestAuthService() services.AuthService {
 		&testutil.MockResetRepo{},
 		&testutil.MockEventPublisher{},
 		&testutil.MockEmailSender{},
-		testUploadJWTSecret,
+		nil, testUploadJWTSecret,
 		15,
 		7,
 	)

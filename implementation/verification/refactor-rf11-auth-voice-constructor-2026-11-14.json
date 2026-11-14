@@ -1,0 +1,36 @@
+{
+  "source_parent": "1c3d0457",
+  "scope": "RF11 auth voice revocation injection",
+  "before": {
+    "test": "TestAuthConstructorRequiresVoiceRevocationDependency",
+    "exit": 1,
+    "reason": "constructor position5 was jwt string; voice dependency could only be attached by later setter"
+  },
+  "change": "NewAuthService takes explicit VoiceDisconnecter before JWT settings; production passes already-created voice runtime. Setter removed; revocation spy harness receives its voice collaborator in constructor. Media-free fixtures pass nil explicitly; concrete mutation fixtures retain their assertions.",
+  "validation": [
+    {
+      "command": "go test ./services ./handlers ./middleware . -run 'TestAuth|Test.*Password|Test.*Revoke|Test.*Anonymization|TestApplicationRemoval|Test.*Wiring|TestServiceInitialization|TestUpload|TestMiddleware' -count=1 -timeout=3m",
+      "exit": 0,
+      "package_seconds": {
+        "services": 9.804,
+        "handlers": 1.154,
+        "middleware": 1.452,
+        "root": 0.961
+      }
+    },
+    {
+      "command": "go build ./...",
+      "exit": 0
+    },
+    {
+      "command": "go vet ./services ./handlers ./middleware .",
+      "exit": 0
+    }
+  ],
+  "reviewed_hit_manifest": "valid50 exact records",
+  "limits": [
+    "This enforces explicit dependency selection; nil remains supported for intentionally media-free isolated callers",
+    "HTTP/WS request and response fields unchanged",
+    "Windows Go1.27.4 CGO0; fresh Linux race and production acceptance remain required"
+  ]
+}

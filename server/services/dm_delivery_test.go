@@ -51,8 +51,7 @@ func dmOutboxFixture(t *testing.T) (*dmService, *sql.DB, *models.DMChannel, *dmE
 	}
 	captured := &dmEventCapture{}
 	hub := &testutil.MockBroadcaster{BroadcastToUserFn: captured.add}
-	service := NewDMService(repo, repository.NewSQLiteUserRepo(db.Conn), hub, nil, nil, nil, repository.NewSQLiteDMReadRepo(db.Conn), repository.NewSQLiteNotificationRepo(db.Conn), repository.NewDMMessageTxRunner(db.Conn))
-	ConfigureDMDelivery(service, db.Conn)
+	service := NewDMService(nil, repo, repository.NewSQLiteUserRepo(db.Conn), hub, nil, nil, nil, repository.NewSQLiteDMReadRepo(db.Conn), repository.NewSQLiteNotificationRepo(db.Conn), repository.NewDMMessageTxRunner(db.Conn), nil, nil, nil, nil, db.Conn)
 	return service.(*dmService), db.Conn, ch, captured
 }
 
@@ -149,7 +148,7 @@ func TestDMOutboxCommitRecoveryReplayAndAuthorization(t *testing.T) {
 }
 
 type unavailableDMReader struct {
-	repository.DMRepository
+	repository.DMRequestStore
 	fail bool
 }
 
@@ -157,14 +156,14 @@ func (r *unavailableDMReader) GetMessageByID(ctx context.Context, id string) (*m
 	if r.fail {
 		return nil, errors.New("fixture temporary read failure")
 	}
-	return r.DMRepository.GetMessageByID(ctx, id)
+	return r.DMRequestStore.GetMessageByID(ctx, id)
 }
 
 func TestDMOutboxRetryOrderingDeletionAndRetention(t *testing.T) {
 	s, db, ch, events := dmOutboxFixture(t)
 	m := sendDMOutboxFixture(t, s, ch.ID)
 	s.BroadcastCreate(m)
-	reader := &unavailableDMReader{DMRepository: s.dmRepo, fail: true}
+	reader := &unavailableDMReader{DMRequestStore: s.dmRepo, fail: true}
 	s.dmRepo = reader
 	s.dmDeliveryTick(context.Background())
 	if len(events.read()) != 0 {

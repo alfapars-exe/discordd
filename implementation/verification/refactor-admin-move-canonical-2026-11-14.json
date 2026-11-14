@@ -1,0 +1,31 @@
+{
+  "date": "2026-11-14",
+  "pr": 298,
+  "canonical_head": "2dafbcef",
+  "scope": "Forced disconnect and MoveUser cleanup ownership",
+  "source_sha256": {
+    "server/services/voice_admin.go": "1a11359666d82006758716c0ce2f15fe67b9c9c0e1d1bfd343d48d8fffbab90f",
+    "server/services/voice_usage_operations.go": "c5c723327f67417aa2fe0b79958c3d0faeb331dc0dd3c47a1ccaf61febe9bb71",
+    "server/services/voice_usage_operations_test.go": "8cdaef8b962cc31b7562561edb312c35ab2e6fef29d610b41617868e2624d96d"
+  },
+  "canonical_checks": {
+    "verified_mtls_postgres": {
+      "count": 3,
+      "exit": 0,
+      "seconds": 50.577
+    },
+    "linux_race": {
+      "count": 10,
+      "exit": 0,
+      "seconds": 9.697,
+      "postgres": "DSN absent; PostgreSQL-specific tests skipped"
+    },
+    "vet_services_exit": 0,
+    "lint_services_issues": 0
+  },
+  "limitations": [
+    "Current-head CI pending.",
+    "Late-member-revocation test belongs to integration only; canonical lacks DisconnectServerMember.",
+    "Remaining webhook/mute/entrance ownership, late terminal quota credit, final combined/runtime/physical acceptance remain open."
+  ]
+}

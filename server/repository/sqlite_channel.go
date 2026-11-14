@@ -16,7 +16,7 @@ type sqliteChannelRepo struct {
 	db database.TxQuerier
 }
 
-func NewSQLiteChannelRepo(db database.TxQuerier) ChannelRepository {
+func NewSQLiteChannelRepo(db database.TxQuerier) ChannelStore {
 	repo := &sqliteChannelRepo{db: db}
 	if database.IsPostgres(db) {
 		return &postgresVoiceChannelRepo{repo}
@@ -300,3 +300,5 @@ func (r *sqliteChannelRepo) GetMaxPosition(ctx context.Context, categoryID strin
 
 	return maxPos, nil
 }
+
+func (r *sqliteChannelRepo) VoiceAccess() VoiceAccessReader { return nil }

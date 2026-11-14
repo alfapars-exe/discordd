@@ -1,0 +1,36 @@
+import { expect, test } from "@playwright/test";
+import { composer, messageList, openFreshChannel } from "./helpers";
+
+test("an offline send preserves its draft and retries online without duplicates", async ({ page }) => {
+  await openFreshChannel(page);
+  const draft = `offline-retry-${Date.now()}`;
+  const rows = () => messageList(page).getByRole("article").filter({ hasText: draft });
+  try {
+    await page.context().setOffline(true);
+    await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
+    await composer(page).fill(draft);
+    await composer(page).press("Enter");
+    await expect(page.getByRole("alert").filter({ hasText: /Message couldn't be sent/i })).toBeVisible({ timeout: 20_000 });
+    await expect(composer(page)).toHaveValue(draft);
+    // The failure toast precedes the composer finally block. Wait until its
+    // send ticket is released before allowing a user retry.
+    await expect(composer(page)).toHaveJSProperty("readOnly", false);
+    await expect(rows()).toHaveCount(0);
+  } finally {
+    await page.context().setOffline(false);
+  }
+  await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(true);
+  // navigator.onLine only reports connectivity. The real send button also
+  // waits for the composer/permission gates, unlike Enter on the textarea.
+  const [sent] = await Promise.all([
+    page.waitForResponse(response =>
+      response.request().method() === "POST"
+      && /^\/api\/servers\/[^/]+\/channels\/[^/]+\/messages$/.test(new URL(response.url()).pathname)),
+    page.getByRole("button", { name: "Send Message", exact: true }).click(),
+  ]);
+  expect(sent.status()).toBe(201);
+  await expect(composer(page)).toHaveValue("");
+  await expect(rows()).toHaveCount(1);
+  await page.reload();
+  await expect(rows()).toHaveCount(1);
+});

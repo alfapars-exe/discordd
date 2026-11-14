@@ -3,25 +3,23 @@
  *
  * Stack under test:
  *   1. The real Go backend, built with CGO_ENABLED=0 into e2e/.tmp/ and run
- *      against a fresh SQLite file per run (see scripts/start-server.mjs).
+ *      against a fresh PostgreSQL database per run (see scripts/start-server.mjs).
  *   2. The Vite dev server, which already proxies /api and /ws to :9090
- *      (client/vite.config.ts). No production client build is needed, which
- *      keeps both local runs and CI fast.
+ *      (client/vite.config.ts). Set HICHAT_E2E_PRODUCTION_CLIENT=1 to build
+ *      and serve the production bundle through Vite preview.
  *
  * Both are declared as `webServer` entries so Playwright owns their lifecycle
  * and tears them down even when the run fails.
  *
- * Ports are fixed rather than random because client/vite.config.ts hardcodes
- * `strictPort: true` on 3030 and the dev proxy target `localhost:9090`.
- * Overriding either would mean editing production source.
+ * The suite pins the API port and passes its loopback URL to Vite through
+ * HICHAT_DEV_API_TARGET so the browser and fixtures use the same API.
  *
  * baseURL uses `localhost` deliberately: the hichat_media attachment cookie is
  * set with Secure + SameSite=None (server/handlers/auth.go), and Chromium only
  * accepts Secure cookies from a trustworthy origin. http://localhost qualifies;
  * a LAN IP would not, and every image assertion would fail as a 401.
  *
- * Local run (from repo root):
- *   cd e2e && npm ci && npx playwright install chromium && npm test
+ * Local setup and PostgreSQL prerequisites are documented in e2e/README.md.
  */
 
 import { defineConfig, devices } from "@playwright/test";
@@ -55,22 +53,33 @@ export const ACCOUNT_FILE = join(__dirname, ".tmp", "account.json");
 export const CHANNEL_NOTIFICATION_FIXTURE_FILE = join(__dirname, ".tmp", "channel-notification-fixture.json");
 export const PENDING_NOTIFICATION_RECIPIENT_FILE = join(__dirname, ".tmp", "notification-recipient-pending.json");
 
+// Account-level recovery/preferences scenarios own independent run databases.
+const isolatedProfiles = [
+  { enabled: process.env.HICHAT_E2E_CRYPTO_RECOVERY === "1", pattern: /crypto-recovery\.spec\.ts/ },
+  { enabled: process.env.HICHAT_E2E_RECOVERY_MAIL === "1", pattern: /recovery-mail\.spec\.ts/ },
+  { enabled: process.env.HICHAT_E2E_PREFERENCE_ISOLATION === "1", pattern: /preferences-isolation\.spec\.ts/ },
+].filter(profile => profile.enabled);
+if (isolatedProfiles.length > 1) throw new Error("Select only one isolated E2E profile");
+const isolatedSpec = isolatedProfiles[0]?.pattern;
+
 export default defineConfig({
   testDir: "./tests",
+  testMatch: isolatedSpec,
   outputDir: "./test-results",
   globalTeardown: "./scripts/cleanup-test-credentials.mjs",
 
-  // The suite shares one backend, one account and one server/channel, so
-  // parallelism across files would interleave writes to the same message
-  // stream. Single worker keeps assertions deterministic.
+  // Tests share the disposable backend and fixture identities. Message tests
+  // provision fresh servers/channels; notification tests reset their fixture.
+  // One worker serializes these identity and fixture lifecycle operations.
   fullyParallel: false,
   workers: 1,
 
   forbidOnly: !!process.env.CI,
+  failOnFlakyTests: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [["github"], ["list"], ["html", { open: "never" }]] : [["list"], ["html", { open: "never" }]],
 
-  timeout: 60_000,
+  timeout: 120_000,
   expect: { timeout: 15_000 },
 
   use: {
@@ -96,7 +105,8 @@ export default defineConfig({
     },
     {
       name: "chromium",
-      testIgnore: /auth\.setup\.ts/,
+      testIgnore: isolatedSpec ? /auth\.setup\.ts/
+        : [/auth\.setup\.ts/, /recovery-mail\.spec\.ts/, /crypto-recovery\.spec\.ts/, /preferences-isolation\.spec\.ts/],
       dependencies: ["setup"],
       use: { ...devices["Desktop Chrome"] },
     },
@@ -123,7 +133,9 @@ export default defineConfig({
       stderr: "pipe",
     },
     {
-      command: "npm run dev",
+      command: process.env.HICHAT_E2E_PRODUCTION_CLIENT === "1"
+        ? `npm run build -- --base=/ && npm run preview -- --host localhost --port ${CLIENT_PORT} --strictPort`
+        : "npm run dev",
       cwd: join(__dirname, "..", "client"),
       url: BASE_URL,
       // Vite's first cold dep-optimize pass on this client is slow.
