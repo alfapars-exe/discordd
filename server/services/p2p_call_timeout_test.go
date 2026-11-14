@@ -43,7 +43,7 @@ func newManualP2PService() (*p2pCallService, *testutil.MockEventPublisher, **man
 
 func newManualP2PServiceWithEmail(email EmailEnqueuer) (*p2pCallService, *testutil.MockEventPublisher, **manualP2PTimer) {
 	hub := &testutil.MockEventPublisher{}
-	svc := NewP2PCallService(p2pFriendLookup{}, p2pUserLookup{}, hub, email).(*p2pCallService)
+	svc := NewP2PCallService(p2pFriendLookup{}, p2pUserLookup{}, hub, email, nil).(*p2pCallService)
 	var timer *manualP2PTimer
 	svc.afterFunc = func(d time.Duration, fn func()) p2pCallTimer {
 		if d != p2pRingTimeout {

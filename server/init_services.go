@@ -233,7 +233,7 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	mfaService := services.NewMFAService(repos.MFA, repos.User, encryptionKey)
 	emailDeliveryService := services.NewEmailDeliveryService(repos.EmailDelivery, emailSender,
 		services.WithEmailUnsubscribe(repos.EmailUnsubscribe, cfg.Email.AppURL))
-	p2pCallService := services.NewP2PCallService(repos.Friendship, repos.User, hub, emailDeliveryService)
+	p2pCallService := services.NewP2PCallService(repos.Friendship, repos.User, hub, emailDeliveryService, appLogService)
 	emailVerificationService := services.NewEmailVerificationService(repos.EmailVerification, emailSender)
 
 	channelService := services.NewChannelService(voiceService, repos.Channel, repos.Category, hub, channelPermService, auditLogService, repos.Notification)

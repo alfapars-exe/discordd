@@ -1998,3 +1998,8 @@ Additional constructor tests prove factory panic identity propagates with initia
 ### RF11 — voice runtime dependency group owns logger (2026-11-14)
 
 VoiceRuntimeDependencies groups integration construction and app logger in the explicit final constructor argument. Production passes logger before integrations run; zero value selects standalone/no persistent logging. Voice SetAppLogger is removed from runtime/concrete service and main late wiring. Seventeen constructor calls updated to explicit groups. Required-group regression failed before change. Logger-ready-before-factory and actual info/error logging test passes, alongside constructor disabled/panic/hook/root wiring selections. Server build, targeted vet and diff check pass. No changed file has an exact-hit record. Full RF11 audit and source-bound CI remain open.
+
+
+### RF11 — P2P logger constructor ownership (2026-11-14)
+
+P2P constructor now requires explicit P2PAppLogger; production injects existing appLogService and standalone tests select nil. Late setter and request-interface logger mutation removed. Constructor regression failed before change. Actual logger error path and explicit disabled mode pass, as do P2P service/WebSocket and composed root wiring selections. Handler package compiles with no selected tests. Server build, targeted vet and diff check pass. No changed P2P file has an exact-hit record. Full RF11/current-source CI remain open.

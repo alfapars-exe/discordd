@@ -228,7 +228,6 @@ func main() {
 
 	// 9b. Wire structured app logger into Hub and services
 	hub.SetAppLogger(svcs.AppLog)
-	svcs.P2PCall.SetAppLogger(svcs.AppLog)
 	svcs.Auth.SetAppLogger(svcs.AppLog)
 	svcs.Backup.SetAppLogger(svcs.AppLog)
 

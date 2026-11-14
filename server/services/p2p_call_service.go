@@ -41,7 +41,6 @@ type P2PCallService interface {
 	RelaySignal(senderID, callID string, signal ws.P2PSignalData) error
 	HandleDisconnect(userID string)
 	GetUserCall(userID string) *models.P2PCall
-	SetAppLogger(logger P2PAppLogger)
 }
 
 type p2pCallTimer interface{ Stop() bool }
@@ -66,10 +65,6 @@ type p2pCallService struct {
 	mu            sync.RWMutex
 }
 
-func (s *p2pCallService) SetAppLogger(logger P2PAppLogger) {
-	s.appLogger = logger
-}
-
 // context.Background(): logError's callers span request-handling and
 // WS-disconnect-driven cleanup, not all of which carry a request-scoped
 // context that's still relevant by the time the log fires. Threading ctx
@@ -86,8 +81,10 @@ func NewP2PCallService(
 	userGetter UserInfoGetter,
 	hub ws.BroadcastAndOnline,
 	emailEnqueuer EmailEnqueuer,
+	logger P2PAppLogger,
 ) P2PCallService {
 	return &p2pCallService{
+		appLogger:     logger,
 		friendChecker: friendChecker,
 		emailEnqueuer: emailEnqueuer,
 		userGetter:    userGetter,

@@ -267,3 +267,30 @@ func TestVoiceConstructorLoggerIsReadyBeforeIntegrationFactory(t *testing.T) {
 		t.Fatal("constructor logger did not retain both logging paths")
 	}
 }
+
+func TestP2PConstructorRequiresLogger(t *testing.T) {
+	factory := reflect.TypeOf(NewP2PCallService)
+	if factory.NumIn() != 5 {
+		t.Fatalf("P2P constructor inputs=%d, want5", factory.NumIn())
+	}
+	if factory.In(4) != reflect.TypeFor[P2PAppLogger]() {
+		t.Fatal("P2P logger is not explicit")
+	}
+	if _, ok := reflect.TypeFor[P2PCallService]().MethodByName("SetAppLogger"); ok {
+		t.Fatal("P2P request interface exposes logger mutation")
+	}
+}
+
+func TestP2PConstructorLoggerAndExplicitDisabledMode(t *testing.T) {
+	logger := &constructorVoiceLogger{}
+	service := NewP2PCallService(nil, nil, nil, nil, logger).(*p2pCallService)
+	service.logError(nil, "P2P constructor fixture", nil)
+	if len(logger.levels) != 1 || logger.levels[0] != models.LogLevelError {
+		t.Fatal("P2P constructor logger not used")
+	}
+	disabled := NewP2PCallService(nil, nil, nil, nil, nil).(*p2pCallService)
+	disabled.logError(nil, "disabled fixture", nil)
+	if disabled.appLogger != nil {
+		t.Fatal("disabled logger not retained")
+	}
+}
