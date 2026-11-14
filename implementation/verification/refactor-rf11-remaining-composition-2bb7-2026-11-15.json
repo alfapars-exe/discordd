@@ -1,0 +1,89 @@
+{
+  "source": "2bb70833229263092ccface1132f5018f02b9d6f",
+  "method": "Read current initServices constructors and cleanup registration; qualitative next-work inventory, not a completion or exhaustive runtime proof.",
+  "remaining_groups": [
+    {
+      "domain": "channel navigation and reading",
+      "source": "server/init_services.go",
+      "providers": [
+        "Channel",
+        "Thread",
+        "Category",
+        "ServerEvent",
+        "Pin",
+        "Search",
+        "ReadState"
+      ],
+      "next": "Group named permission/audit/voice dependencies; preserve fresh publication versus cached read distinctions and channel upload setup."
+    },
+    {
+      "domain": "moderation and reporting",
+      "source": "server/init_services.go",
+      "providers": [
+        "SpamInbox",
+        "MediaLabel",
+        "Reaction",
+        "Report",
+        "ReportUpload"
+      ],
+      "next": "Retain repository-backed moderation, shared emoji resolver, notification writers and message/DM readers; validate required providers."
+    },
+    {
+      "domain": "administration",
+      "source": "server/init_services.go",
+      "providers": [
+        "AdminUser",
+        "AdminServer",
+        "LiveKitAdmin"
+      ],
+      "next": "Keep voice disconnect, auth invalidation, optional email and filesystem cleanup dependencies explicit; preserve transaction/database inputs."
+    },
+    {
+      "domain": "expression and profile assets",
+      "source": "server/init_services.go",
+      "providers": [
+        "Soundboard",
+        "Sticker",
+        "ExpressionClone",
+        "Cosmetic",
+        "Badge"
+      ],
+      "next": "Retain shared Emoji owner and copy entitlement checks; validate before constructors that may create upload directories."
+    },
+    {
+      "domain": "operations and lifecycle",
+      "source": "server/init_services.go",
+      "providers": [
+        "AppLog",
+        "AuditLog",
+        "EmailDelivery",
+        "OnlineFriendNotifier",
+        "LinkPreview",
+        "MetricsCollector",
+        "WSTicket",
+        "RateLimiters"
+      ],
+      "next": "Audit constructor allocation and ownership before grouping; preserve reverse rollback and explicit transfer on successful return."
+    }
+  ],
+  "observed_lifecycle": {
+    "voice": "Integrations called before voice fanout allocation; shutdown registered after successful NewVoiceService.",
+    "metrics": "Constructor creates cancelable lifecycle and HTTP transport; worker starts only in Start. Full rollback ownership across late failures still to verify.",
+    "tickets": "Constructor allocates TTL cache and rollback immediately registers Stop.",
+    "preview": "Lazy in-flight work and explicit Stop owner retained in rollback.",
+    "personal_reminders": "Worker constructed in returned bundle; startup remains separately owned."
+  },
+  "acceptance_still_required": [
+    "Remaining mandatory/optional provider matrices",
+    "Controlled complete callback routes with startup/shutdown ordering",
+    "Full resource acquisition failure matrix",
+    "Current-source Go race and PostgreSQL combined contracts",
+    "RF01-RF30 requirements beyond RF11"
+  ],
+  "live_local_verification": {
+    "source": "2bb70833229263092ccface1132f5018f02b9d6f",
+    "command": "go test ./services ./handlers ./repository ./ws . -count=1",
+    "session": 85485,
+    "status": "running; no result asserted"
+  }
+}
