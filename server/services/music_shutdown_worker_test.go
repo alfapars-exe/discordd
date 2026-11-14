@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/argeinfina/hichat/models"
+	"net"
 	"sync"
 	"testing"
 	"time"
@@ -170,4 +171,52 @@ func TestMusicShutdownDrainsProducerAfterConnectPanic(t *testing.T) {
 	if remaining != 0 {
 		t.Fatalf("panicked connection retained %d bots", remaining)
 	}
+}
+
+type musicShutdownGuardResolver struct {
+	entered  chan struct{}
+	canceled chan struct{}
+}
+
+func (r musicShutdownGuardResolver) LookupIPAddr(ctx context.Context, _ string) ([]net.IPAddr, error) {
+	close(r.entered)
+	<-ctx.Done()
+	close(r.canceled)
+	return nil, ctx.Err()
+}
+
+func TestMusicStopAllCancelsPlaybackURLGuard(t *testing.T) {
+	entered, canceled := make(chan struct{}), make(chan struct{})
+	original := musicURLResolver
+	musicURLResolver = musicShutdownGuardResolver{entered: entered, canceled: canceled}
+	t.Cleanup(func() { musicURLResolver = original })
+	events := &eventLog{}
+	svc := newConcurrencyTestService(t, events, nil)
+	t.Cleanup(svc.StopAll)
+	if _, err := svc.Enqueue(context.Background(), "actor", concTestChannel, concTestURL); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("playback guard did not start")
+	}
+	stopped := make(chan struct{})
+	go func() { svc.StopAll(); close(stopped) }()
+	select {
+	case <-canceled:
+	case <-time.After(time.Second):
+		t.Fatal("URL guard did not receive shutdown cancellation")
+	}
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("canceled playback guard did not join")
+	}
+	for _, event := range events.snapshot() {
+		if event.Op == "music_bot_error" {
+			t.Fatal("shutdown guard cancellation reported a playback error")
+		}
+	}
+
 }
