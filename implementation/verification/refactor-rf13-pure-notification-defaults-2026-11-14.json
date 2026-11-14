@@ -1,0 +1,20 @@
+{
+  "source_parent": "33849f12",
+  "scope": "RF13 pure notification preferences contract and derived cache fields",
+  "change": "Move unchanged NotificationPreferences type/default block to store-free notificationPreferenceDefaults module. Existing utility re-exports API. Cache field and boolean lists derive from the same defaults; no preferences-store import in pure codec contract.",
+  "preservation": "Type/default block verified byte-identical to33849f12 source, independent of checkout newline normalization",
+  "validation": {
+    "vitest_command": "npx vitest run src/stores/preferencesCodec.test.ts src/stores/preferencesStore.test.ts src/utils/notificationPreferences.test.ts src/stores/accountPreferenceConsumers.test.ts src/api/preferences.test.ts src/hooks/usePreferencesSync.test.ts --reporter=dot",
+    "passed": 112,
+    "files": 6,
+    "vitest_exit": 0,
+    "build": "npm run build (tsc -b && vite build) exit0",
+    "lint": "targeted ESLint exit0"
+  },
+  "tests": "Every notification default and boolean opposite round-trips; unknown keys excluded; offline/account tests retained",
+  "build_warnings": "WASM URL, browser-externalized fs/path in audio vendor and large chunks remain; no warning filter changed",
+  "limits": [
+    "Full RF13 field/default unification beyond notifications and physical voice-session preservation not established by this narrow extraction",
+    "Current-source production/preference profile and combined CI still required"
+  ]
+}

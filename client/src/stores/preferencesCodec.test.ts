@@ -1,3 +1,4 @@
+import { DEFAULT_NOTIFICATION_PREFERENCES } from "../utils/notificationPreferenceDefaults";
 import { describe, expect, it } from "vitest";
 import { APPEARANCE_DEFAULTS, APPEARANCE_RANGES } from "./appearancePreferences";
 import { cacheable, decodeLegacyAppearance } from "./preferencesCodec";
@@ -28,4 +29,12 @@ describe("notification account cache", () => {
   it.each([true, false])("preserves channel message notification opt-in %s", value => {
     expect(cacheable({ notifications: { channelMessageNotifications: value } })).toEqual({ notifications: { channelMessageNotifications: value } });
   });
+});
+
+it("round-trips every notification default and its boolean opposite from the pure contract", () => {
+  for (const values of [DEFAULT_NOTIFICATION_PREFERENCES, Object.fromEntries(
+    Object.entries(DEFAULT_NOTIFICATION_PREFERENCES).map(([key, value]) => [key, typeof value === "boolean" ? !value : value]),
+  )]) {
+    expect(cacheable({ notifications: { ...values, unknownField: true, token: "private" } })).toEqual({ notifications: values });
+  }
 });

@@ -1838,3 +1838,8 @@ Manifest validation rejected the changed dm_delivery_test.go source hash. Re-rev
 ### RF13 — channel notification choice omitted from offline cache (2026-11-14)
 
 Four real codec/store regressions failed: channelMessageNotifications true/false was absent from the known cache fields, leaving no acknowledged snapshot for offline startup. The existing boolean is now cacheable and type-checked.63 codec/store/notification-preference tests pass, including offline restore, account switch isolation and malformed value rejection. This behavior fix is separate from defaults/codec deduplication. No wire or storage key changed. Receipt: implementation/verification/refactor-rf13-channel-notice-cache-2026-11-14.json.
+
+
+### RF13 — notification defaults as pure shared contract (2026-11-14)
+
+After the separate channel-notice cache fix, NotificationPreferences and defaults moved byte-identically into a store-free module; existing notification utility imports remain compatible through re-exports. Codec cache-field and boolean lists now derive from those defaults. Round-trip tests cover every default and its boolean opposite, plus unknown-field exclusion.112 tests across6 preference/API/consumer files, production TypeScript+Vite build and targeted ESLint pass. No warning suppression changed; existing audio vendor/WASM and chunk-size warnings remain. Whole RF13 and current-source production acceptance remain open. Receipt: implementation/verification/refactor-rf13-pure-notification-defaults-2026-11-14.json.
