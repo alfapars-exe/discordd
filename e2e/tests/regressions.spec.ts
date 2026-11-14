@@ -1,5 +1,5 @@
 /**
- * regressions.spec.ts — pins three fixes that landed on feat/audit-hardening.
+ * regressions.spec.ts — durable retries, attachment rendering and upload failures.
  *
  * Each test names the behaviour it locks in and asserts the thing that would
  * actually have been wrong before the fix, not a proxy for it.

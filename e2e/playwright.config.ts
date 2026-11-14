@@ -60,9 +60,9 @@ export default defineConfig({
   outputDir: "./test-results",
   globalTeardown: "./scripts/cleanup-test-credentials.mjs",
 
-  // The suite shares one backend, one account and one server/channel, so
-  // parallelism across files would interleave writes to the same message
-  // stream. Single worker keeps assertions deterministic.
+  // Tests share the disposable backend and fixture identities. Message tests
+  // provision fresh servers/channels; notification tests reset their fixture.
+  // One worker serializes these identity and fixture lifecycle operations.
   fullyParallel: false,
   workers: 1,
 
