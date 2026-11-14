@@ -85,7 +85,7 @@ func TestPrivateReactionNotificationGates(t *testing.T) {
 					return &models.DMChannel{ID: "private", User1ID: "actor", User2ID: "author", Status: status}, nil
 				},
 				ToggleReactionFn: func(context.Context, string, string, string) (bool, error) { return tc.added, nil },
-			}, nil, hub, blocks, nil, nil, nil, repo, nil, nil, reactionPrefsStub{"direct"}, repo, nil)
+			}, nil, hub, blocks, nil, nil, nil, repo, nil, nil, reactionPrefsStub{"direct"}, repo, nil, nil)
 			if err := dm.ToggleReaction(context.Background(), "actor", "message", "👍"); err != nil {
 				t.Fatal(err)
 			}

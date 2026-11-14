@@ -118,8 +118,16 @@ func NewDMService(
 	reactionPreferences profilePreferenceReader,
 	reactionWriter repository.ReactionNotificationWriter,
 	emojiResolver EmojiResolver,
+	deliveryDB *sql.DB,
 ) DMService {
+	var deliveryHub ws.Broadcaster
+	if deliveryDB != nil {
+		deliveryHub = hub
+		hub = dmDurableHub{hub}
+	}
 	return &dmService{
+		deliveryDB:                 deliveryDB,
+		deliveryHub:                deliveryHub,
 		emojiResolver:              emojiResolver,
 		reactionWriter:             reactionWriter,
 		reactionPreferences:        reactionPreferences,

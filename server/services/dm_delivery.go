@@ -6,22 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/ws"
 	"strconv"
 	"time"
 )
-
-// ConfigureDMDelivery binds publication to the database's singleton backend owner.
-func ConfigureDMDelivery(service DMService, db *sql.DB) {
-	if s, ok := service.(*dmService); ok && s.deliveryDB == nil && database.IsPostgres(db) {
-		s.deliveryDB = db
-		s.deliveryHub = s.hub
-		s.hub = dmDurableHub{s.hub}
-	}
-}
 
 func durableDMOperation(op string) bool {
 	switch op {

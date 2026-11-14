@@ -325,12 +325,11 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 		repos.DM, repos.User, hub, blockService, friendGraph, dmSettingsService,
 		repos.DMRead, repos.Notification, repository.NewDMMessageTxRunner(db),
 		emailDeliveryService,
-		repos.Preferences, repos.Notification, emojiService,
+		repos.Preferences, repos.Notification, emojiService, deliveryDB,
 	)
 	// Read friendship edges directly so DM construction does not depend on the
 	// friendship writer; auto-accept can then be a constructor dependency.
 	friendshipService := services.NewFriendshipService(gameActivityService, repos.Friendship, repos.User, repos.Notification, hub, emailDeliveryService, dmService, friendRequestPolicy)
-	services.ConfigureDMDelivery(dmService, db)
 
 	groupDMService := services.NewGroupDMService(repos.GroupDM, repos.User, repos.Friendship, hub, cfg.LiveKit.URL, cfg.LiveKit.APIKey, cfg.LiveKit.APISecret, encryptionKey, cfg.Upload.Dir, repos.Notification, repos.Preferences, blockService, repos.GroupDM)
 

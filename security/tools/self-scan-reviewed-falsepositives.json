@@ -372,7 +372,7 @@
     {
       "rule": "go.sql-concat",
       "path": "server/services/dm_delivery.go",
-      "file_sha256": "3d03739168604ea4a259931d322cd56cb46b8b041e98d95a955e4fce032f8308",
+      "file_sha256": "459770537b7fc82ea8ae04860573a3a681c3b80bbaa17a72116b9970e605c5ff",
       "line_sha256": "35d61981a49cecfec2795904654d63c4055fc0a7131ce795cd098299b16dd681",
       "reason": "The plus signs are fixed PostgreSQL timestamp and attempt arithmetic inside a single SQL literal. No SQL string concatenation occurs; the retry event ID remains a bound argument.",
       "proof_ref": "server/services/dm_delivery.go:142,152;server/services/dm_delivery_test.go:TestDMOutboxRetryOrderingDeletionAndRetention"
@@ -380,7 +380,7 @@
     {
       "rule": "go.sql-concat",
       "path": "server/services/dm_delivery.go",
-      "file_sha256": "3d03739168604ea4a259931d322cd56cb46b8b041e98d95a955e4fce032f8308",
+      "file_sha256": "459770537b7fc82ea8ae04860573a3a681c3b80bbaa17a72116b9970e605c5ff",
       "line_sha256": "b0c9f492f92a7d02eafb57e17a8d7db5f096e1f1c04dab7f625b21dea03e7220",
       "reason": "The plus signs are fixed PostgreSQL timestamp and attempt arithmetic inside a single SQL literal. No SQL string concatenation occurs; the retry event ID remains a bound argument.",
       "proof_ref": "server/services/dm_delivery.go:142,152;server/services/dm_delivery_test.go:TestDMOutboxRetryOrderingDeletionAndRetention"
@@ -388,10 +388,10 @@
     {
       "rule": "go.sql-concat",
       "path": "server/services/dm_delivery_test.go",
-      "file_sha256": "e1ed6c534d2c2c051ffd9f5b54ed7e9240240e5213bc86336d7d638c08c548b7",
+      "file_sha256": "d4ca348d7378ca9be400f3b7d4a79bd2497b0a3cad634c22257c555deee51a8a",
       "line_sha256": "9ccf4cafd9283abf6c22aa4b12916b651f3d76c2ba1133a8123575a34e010100",
       "reason": "The exact fixture statement adds a fixed PostgreSQL interval inside one SQL literal to simulate an unexpired lease; message ID is a bound parameter, not concatenated SQL.",
-      "proof_ref": "server/services/dm_delivery_test.go:114"
+      "proof_ref": "server/services/dm_delivery_test.go:113"
     },
     {
       "rule": "go.sql-concat",
