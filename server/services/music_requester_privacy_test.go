@@ -34,7 +34,9 @@ func musicPrivacyFixture(t *testing.T, protocol2 ...bool) (*mfaHarness, *authSer
 	}
 	svc := newTestMusicBotService("ch", "srv")
 	svc.restored = map[string]models.MusicSession{}
-	svc.sessions = repository.NewSQLiteMusicSessionRepo(h.db.Conn)
+	store := repository.NewSQLiteMusicSessionRepo(h.db.Conn)
+	svc.sessions = store
+	svc.requesterPrivacy = store
 	svc.users = repository.NewSQLiteUserRepo(h.db.Conn)
 	bot := svc.bots["ch"]
 	bot.currentTrack = &models.MusicTrack{QueueItemID: uuid.NewString(), VideoID: "current", Title: h.user.Username, RequestedByUserID: h.user.ID, RequestedByName: h.user.Username, DurationSeconds: 100}
@@ -240,7 +242,9 @@ func (failingMusicIdentityStore) SanitizeMusicTracks(context.Context, []models.M
 
 func TestMusicRequesterPrivacyIdentityLookupFailureNeverPublishesOldName(t *testing.T) {
 	_, _, _, svc := musicPrivacyFixture(t)
-	svc.sessions = failingMusicIdentityStore{svc.sessions, svc.sessions.(musicControlStore)}
+	failing := failingMusicIdentityStore{svc.sessions, svc.sessions.(musicControlStore)}
+	svc.sessions = failing
+	svc.requesterPrivacy = failing
 	var publications atomic.Int32
 	svc.hub = &testutil.MockBroadcaster{BroadcastToUsersFn: func([]string, ws.Event) { publications.Add(1) }}
 	if state, err := svc.GetStateWithError(context.Background(), "ch"); err == nil || state != nil {
@@ -260,5 +264,20 @@ func TestMusicRequesterPrivacyAlreadyCanonicalCacheStillPublishesReplacement(t *
 	svc.AnonymizeMusicRequester("retired")
 	if publications != 1 || svc.GetState("ch").Revision != 0 || svc.GetState("ch").Queue[0].QueueItemID != "same-item" {
 		t.Fatal("already canonical cache did not fence a replacement for older deliveries")
+	}
+}
+
+func TestMusicRequesterPrivacyExplicitDisabledSelection(t *testing.T) {
+	capable := failingMusicIdentityStore{}
+	state := &models.MusicBotChannelState{Queue: []models.MusicTrack{{RequestedByName: "fixture"}}}
+	service := &musicBotService{sessions: capable}
+	got, err := service.sanitizeMusicState(context.Background(), state)
+	if err != nil || got != state {
+		t.Fatalf("disabled provider was rediscovered: state=%+v err=%v", got, err)
+	}
+	service.requesterPrivacy = capable
+	got, err = service.sanitizeMusicState(context.Background(), state)
+	if err == nil || got != nil {
+		t.Fatal("explicit provider failure fell back to unsanitized state")
 	}
 }

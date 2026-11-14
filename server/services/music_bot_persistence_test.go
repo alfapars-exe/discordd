@@ -111,7 +111,7 @@ func TestRestoreAbortsWhenStopClearsSnapshottedRestoredSession(t *testing.T) {
 	store := &memoryMusicSessions{items: map[string]models.MusicSession{"ch": session}}
 	svc := NewMusicBotService(
 		&stubChannelGetter{channel: &models.Channel{ID: "ch", ServerID: "srv", Type: models.ChannelTypeVoice}},
-		nil, nil, &testutil.MockBroadcaster{}, stubMusicUserGetter{}, nil, nil, store, nil,
+		nil, nil, &testutil.MockBroadcaster{}, stubMusicUserGetter{}, nil, nil, store, nil, nil,
 	).(*musicBotService)
 	snapshotTaken := make(chan struct{})
 	releaseRestore := make(chan struct{})
@@ -162,7 +162,7 @@ func TestFailedEnqueueKeepsRestoredQueuePausedAndRestorable(t *testing.T) {
 	}, failNext: 1}
 	svc := NewMusicBotService(
 		&stubChannelGetter{channel: &models.Channel{ID: "ch", ServerID: "srv", Type: models.ChannelTypeVoice}},
-		nil, nil, &testutil.MockBroadcaster{}, stubMusicUserGetter{}, nil, nil, store, nil,
+		nil, nil, &testutil.MockBroadcaster{}, stubMusicUserGetter{}, nil, nil, store, nil, nil,
 	).(*musicBotService)
 	svc.connectBotFn = func(context.Context, *botInstance) error { return nil }
 	svc.extractTracksFn = func(context.Context, string, string, string) ([]models.MusicTrack, error) {
@@ -212,7 +212,7 @@ func TestStopSerializesRestoredDeleteAgainstConcurrentEnqueue(t *testing.T) {
 	store := &blockingDeleteMusicSessions{memoryMusicSessions: base, started: make(chan struct{}), release: make(chan struct{})}
 	svc := NewMusicBotService(
 		&stubChannelGetter{channel: &models.Channel{ID: "ch", ServerID: "srv", Type: models.ChannelTypeVoice}},
-		nil, nil, &testutil.MockBroadcaster{}, stubMusicUserGetter{}, nil, nil, store, nil,
+		nil, nil, &testutil.MockBroadcaster{}, stubMusicUserGetter{}, nil, nil, store, nil, nil,
 	).(*musicBotService)
 	svc.connectBotFn = func(context.Context, *botInstance) error { return nil }
 	svc.extractTracksFn = func(context.Context, string, string, string) ([]models.MusicTrack, error) {
@@ -290,7 +290,7 @@ func TestEnqueueAppendsToRestoredPausedQueue(t *testing.T) {
 	}}
 	svc := NewMusicBotService(
 		&stubChannelGetter{channel: &models.Channel{ID: "ch", ServerID: "srv", Type: models.ChannelTypeVoice}},
-		nil, nil, &testutil.MockBroadcaster{}, stubMusicUserGetter{}, nil, nil, store, nil,
+		nil, nil, &testutil.MockBroadcaster{}, stubMusicUserGetter{}, nil, nil, store, nil, nil,
 	).(*musicBotService)
 	svc.connectBotFn = func(context.Context, *botInstance) error { return nil }
 	svc.extractTracksFn = func(context.Context, string, string, string) ([]models.MusicTrack, error) {
@@ -334,7 +334,7 @@ func TestMusicSessionLoadsPausedWithoutConnecting(t *testing.T) {
 		ChannelID: "ch", ServerID: "srv", RepeatMode: "all", Revision: 9,
 		Queue: []models.MusicTrack{{QueueItemID: "00000000-0000-4000-8000-000000000001", Title: "Interrupted"}},
 	}}}
-	svc := NewMusicBotService(&stubChannelGetter{channel: &models.Channel{ID: "ch", ServerID: "srv", Type: models.ChannelTypeVoice}}, nil, nil, &testutil.MockBroadcaster{}, stubMusicUserGetter{}, nil, nil, store, nil).(*musicBotService)
+	svc := NewMusicBotService(&stubChannelGetter{channel: &models.Channel{ID: "ch", ServerID: "srv", Type: models.ChannelTypeVoice}}, nil, nil, &testutil.MockBroadcaster{}, stubMusicUserGetter{}, nil, nil, store, nil, nil).(*musicBotService)
 	connected := 0
 	svc.connectBotFn = func(context.Context, *botInstance) error { connected++; return nil }
 	state := svc.GetState("ch")
@@ -347,7 +347,7 @@ func TestEnqueueSaveFailureRollsBackAndRetryStartsPlayback(t *testing.T) {
 	store := &memoryMusicSessions{items: make(map[string]models.MusicSession), failNext: 1}
 	svc := NewMusicBotService(
 		&stubChannelGetter{channel: &models.Channel{ID: "ch", ServerID: "srv", Type: models.ChannelTypeVoice}},
-		nil, nil, &testutil.MockBroadcaster{}, stubMusicUserGetter{}, nil, nil, store, nil,
+		nil, nil, &testutil.MockBroadcaster{}, stubMusicUserGetter{}, nil, nil, store, nil, nil,
 	).(*musicBotService)
 	svc.connectBotFn = func(context.Context, *botInstance) error { return nil }
 	svc.extractTracksFn = func(context.Context, string, string, string) ([]models.MusicTrack, error) {
@@ -406,7 +406,7 @@ func TestEnqueueConnectPanicReleasesChannelLifecycleLock(t *testing.T) {
 	store := &memoryMusicSessions{items: make(map[string]models.MusicSession)}
 	svc := NewMusicBotService(
 		&stubChannelGetter{channel: &models.Channel{ID: "ch", ServerID: "srv", Type: models.ChannelTypeVoice}},
-		nil, nil, &testutil.MockBroadcaster{}, stubMusicUserGetter{}, nil, nil, store, nil,
+		nil, nil, &testutil.MockBroadcaster{}, stubMusicUserGetter{}, nil, nil, store, nil, nil,
 	).(*musicBotService)
 	var attempts int
 	svc.connectBotFn = func(context.Context, *botInstance) error {

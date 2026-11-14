@@ -10,7 +10,7 @@ import (
 
 const deletedMusicRequesterName = "Deleted User"
 
-type musicRequesterPrivacyStore interface {
+type MusicRequesterPrivacyStore interface {
 	SanitizeMusicTracks(context.Context, []models.MusicTrack) ([]models.MusicTrack, error)
 }
 type musicLegacyEnqueueStore interface {
@@ -27,8 +27,8 @@ func (s *musicBotService) sanitizeMusicState(ctx context.Context, state *models.
 	if state == nil {
 		return nil, nil
 	}
-	store, ok := s.sessions.(musicRequesterPrivacyStore)
-	if !ok {
+	store := s.requesterPrivacy
+	if store == nil {
 		return state, nil
 	}
 	all := append([]models.MusicTrack(nil), state.Queue...)

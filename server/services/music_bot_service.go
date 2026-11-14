@@ -212,16 +212,17 @@ type musicBotService struct {
 	// A fixed stripe set avoids an unbounded per-channel lock registry.
 	lifecycleLocks [64]sync.Mutex
 
-	channels      ChannelGetter
-	livekit       LiveKitInstanceGetter
-	perms         ChannelPermResolver
-	hub           ws.Broadcaster
-	encryptionKey []byte
-	appLogger     VoiceAppLogger
-	users         MusicBotUserGetter
-	sessions      MusicSessionStore
-	roomKeys      MusicRoomKeySource
-	audience      MusicAudienceDependencies
+	channels         ChannelGetter
+	livekit          LiveKitInstanceGetter
+	perms            ChannelPermResolver
+	hub              ws.Broadcaster
+	encryptionKey    []byte
+	appLogger        VoiceAppLogger
+	users            MusicBotUserGetter
+	sessions         MusicSessionStore
+	requesterPrivacy MusicRequesterPrivacyStore
+	roomKeys         MusicRoomKeySource
+	audience         MusicAudienceDependencies
 
 	// playTrackFn is the per-track work seam (mirrors BackupService.runCmd):
 	// nil in production, where playLoop falls back to s.playTrack; tests set
@@ -296,21 +297,23 @@ func NewMusicBotService(
 	appLogger VoiceAppLogger,
 	sessions MusicSessionStore,
 	roomKeys MusicRoomKeySource,
+	requesterPrivacy MusicRequesterPrivacyStore,
 	audience ...MusicAudienceDependencies,
 ) MusicBotRuntime {
 	service := &musicBotService{
-		bots:          make(map[string]*botInstance),
-		restored:      make(map[string]models.MusicSession),
-		channels:      channels,
-		livekit:       livekit,
-		perms:         perms,
-		hub:           hub,
-		encryptionKey: encryptionKey,
-		users:         users,
-		appLogger:     appLogger,
-		sessions:      sessions,
-		roomKeys:      roomKeys,
-		extractSem:    make(chan struct{}, maxConcurrentMusicExtractions),
+		bots:             make(map[string]*botInstance),
+		restored:         make(map[string]models.MusicSession),
+		channels:         channels,
+		livekit:          livekit,
+		perms:            perms,
+		hub:              hub,
+		encryptionKey:    encryptionKey,
+		users:            users,
+		appLogger:        appLogger,
+		sessions:         sessions,
+		requesterPrivacy: requesterPrivacy,
+		roomKeys:         roomKeys,
+		extractSem:       make(chan struct{}, maxConcurrentMusicExtractions),
 	}
 	if len(audience) == 1 {
 		service.audience = audience[0]

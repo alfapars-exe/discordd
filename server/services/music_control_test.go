@@ -29,7 +29,9 @@ func guardedMusicFixture(t *testing.T) (*musicBotService, musicControlStore) {
 	}
 	svc := newTestMusicBotService("ch", "srv")
 	svc.restored = map[string]models.MusicSession{}
-	svc.sessions = repository.NewSQLiteMusicSessionRepo(db.Conn)
+	store := repository.NewSQLiteMusicSessionRepo(db.Conn)
+	svc.sessions = store
+	svc.requesterPrivacy = store
 	svc.bots["ch"].currentTrack = &models.MusicTrack{QueueItemID: uuid.NewString(), DurationSeconds: 100, VideoID: "current"}
 	return svc, svc.sessions.(musicControlStore)
 }
