@@ -1718,3 +1718,8 @@ storage üzerinde A/B/A izolasyonu ayrı geçici DB profilinde sınanacak. Rol
 senaryoları artık her testte kendi sentetik sunucusunu yeniliyor; sayfalar hata
 yolunda da kapanıyor. Profil kümeleri gerçek Playwright discovery ile ayrıldı;
 çakışan modlar reddediliyor. Bu yeni matriste henüz tarayıcı sonucu yok.
+
+
+### RF28 — isolated fixture deletion follow-up (2026-11-14)
+
+Candidate eca7d4fc CI43570586532 failed in production Chromium: the second role test could not reset the preceding thread fixture (PostgreSQL channels_starter_message_id_fkey, HTTP500). The offline retry case passed only on retry. The cascade now explicitly clears target-server thread starter links inside its transaction before descendant deletion; unrelated-server links remain covered. SQLite and native local PostgreSQL cascade suites passed. The new cycle fixture also passed before the fix, so it does not independently reproduce the CI failure. Offline retry waits for the composer send ticket to release after the failure toast; draft and duplicate checks remain. Fresh browser CI is required. Receipt: implementation/verification/refactor-thread-cascade-ci-followup-2026-11-14.json.

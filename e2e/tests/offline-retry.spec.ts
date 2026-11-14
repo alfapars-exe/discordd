@@ -12,6 +12,9 @@ test("an offline send preserves its draft and retries online without duplicates"
     await composer(page).press("Enter");
     await expect(page.getByRole("alert").filter({ hasText: /Message couldn't be sent/i })).toBeVisible({ timeout: 20_000 });
     await expect(composer(page)).toHaveValue(draft);
+    // The failure toast precedes the composer finally block. Wait until its
+    // send ticket is released before allowing a user retry.
+    await expect(composer(page)).toHaveJSProperty("readOnly", false);
     await expect(rows()).toHaveCount(0);
   } finally {
     await page.context().setOffline(false);

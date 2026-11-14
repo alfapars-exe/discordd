@@ -288,6 +288,11 @@ func deleteServerCascadeWithDialect(ctx context.Context, q database.TxQuerier, s
 			return fmt.Errorf("failed to acquire server cascade fence: %w", err)
 		}
 	}
+	// Break the channel -> starter message -> channel cycle before deleting
+	// messages. Keep this separate from the descendant deletion inventory.
+	if _, err := q.ExecContext(ctx, `UPDATE channels SET starter_message_id = NULL WHERE server_id = ? AND starter_message_id IS NOT NULL`, serverID); err != nil {
+		return fmt.Errorf("clear thread starter links: %w", err)
+	}
 	for _, stmt := range deleteServerCascadeStmts {
 		if _, err := q.ExecContext(ctx, stmt.query, stmt.args(serverID)...); err != nil {
 			return fmt.Errorf("server cascade delete failed: %w", err)
