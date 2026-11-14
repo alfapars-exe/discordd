@@ -81,6 +81,12 @@ test("a fresh device restores its identity and encrypted history from a password
 
     // A new browser context has no cookies, IndexedDB keys, or message cache.
     const restored = await restoredContext.newPage();
+    // Emit only fixed diagnostic categories, never plaintext, keys or tokens.
+    restored.on("console", event => {
+      if (event.type() !== "error") return;
+      const category = event.text().match(/Replay detected|No sender key found|Distribution ID mismatch|No initial chain key|Invalid signature/);
+      if (category) console.error("Restored history crypto rejection:", category[0]);
+    });
     await loginAsNotificationOwner(restored);
     await restored.getByRole("button", { name: "Restore from Recovery Password", exact: true }).click();
     const recovery = restored.locator(".modal-card").filter({ has: restored.getByRole("heading", { name: "Restore Encryption Keys", exact: true }) });
