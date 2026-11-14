@@ -89,31 +89,9 @@ func registerHubCallbacks(
 	hub.OnUserFullyDisconnected(userFullyDisconnectedCallback(hub, userRepo, voiceService, p2pCallService, presenceDebouncer, onlineFriendNotifier))
 
 	hub.OnPresenceManualUpdate(presenceUpdateCallback(hub, userRepo, onlineFriendNotifier))
+	stopGameActivity := func() {}
 	if gameActivity != nil {
-		gameActivity.Start()
-		hub.OnGameActivityConnect(func(userID string, connectionID uint64) {
-			gameActivity.Connect(userID, connectionID)
-		})
-		hub.OnGameActivityUpdate(func(userID string, connectionID, sequence uint64, game *ws.GameActivityClientGame) {
-			ctx, cancel := services.BroadcastContext()
-			defer cancel()
-			gameActivity.Update(ctx, userID, connectionID, sequence, game)
-		})
-		hub.OnGameActivityDisconnect(func(userID string, connectionID uint64) {
-			ctx, cancel := services.BroadcastContext()
-			defer cancel()
-			gameActivity.Disconnect(ctx, userID, connectionID)
-		})
-		hub.OnGameActivitySnapshot(func(userID string) {
-			ctx, cancel := services.BroadcastContext()
-			defer cancel()
-			gameActivity.Snapshot(ctx, userID)
-		})
-		hub.OnGameActivityPresenceChange(func(userID string) {
-			ctx, cancel := services.BroadcastContext()
-			defer cancel()
-			gameActivity.PolicyChanged(ctx, userID)
-		})
+		stopGameActivity = registerGameActivityCallbacks(hub, gameActivity)
 	}
 
 	// ─── Voice Callbacks ───
@@ -136,9 +114,7 @@ func registerHubCallbacks(
 
 	return func() {
 		presenceDebouncer.stopAll()
-		if gameActivity != nil {
-			gameActivity.Stop()
-		}
+		stopGameActivity()
 	}
 }
 
