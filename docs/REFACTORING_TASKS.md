@@ -1918,3 +1918,8 @@ Current-source selection passes8 top-level Go tests across services/handlers/mod
 ### RF07 — recovery provider and persistence failure contracts (2026-11-14)
 
 Two new service tests cover fake provider failure, cancellation during send, actual context deadline during send and persistence failure before send. Cause wrapping is preserved; sender receives normalized stored address and a proof matching the persisted SHA256 hash; storage failure prevents delivery. All pass without printing proof values. These are service/fake-provider contracts; public HTTP failure mapping and real delivery remain separate. RF07 remains open. Receipt: implementation/verification/refactor-rf07-provider-failure-contracts-2026-11-14.json.
+
+
+### RF07 — recovery HTTP failure envelope (2026-11-14)
+
+Actual handler/encoder tests cover wrapped provider diagnostic, deadline and cancellation: current500/INTERNAL generic envelope, no session/cooldown headers. Existing successful known/unknown/cooldown equality also passes;2 top-level tests/7 cases. Stub service means this is handler evidence. Known provider failure500 differs from unknown-success200, so outage enumeration equivalence is not established and remains an explicit RF07 risk; no wire/status change made here. Receipt: implementation/verification/refactor-rf07-recovery-http-failures-2026-11-14.json.

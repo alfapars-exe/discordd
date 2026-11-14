@@ -1,0 +1,16 @@
+{
+  "source_parent": "d1d9cb85",
+  "scope": "RF07 recovery HTTP provider failure envelope",
+  "validation": {
+    "command": "go test ./handlers -run ^TestRecoveryEndpoint -count=1 -v",
+    "exit": 0,
+    "top_level_tests": 2,
+    "subtests": 7
+  },
+  "evidence": "Actual AuthHandler and response encoder with stub service. Wrapped provider diagnostics, deadline and cancellation retain existing500/INTERNAL generic internal-server-error body. No session cookie or Retry-After. Existing successful known/unknown/cooldown response equality remains.",
+  "limits": [
+    "Known-account provider failure is500 whereas successful unknown recovery is200; this selection does not prove enumeration equivalence under provider outage",
+    "No product wire/status changes made",
+    "Composed service/HTTP acceptance and complete RF07 remain open"
+  ]
+}

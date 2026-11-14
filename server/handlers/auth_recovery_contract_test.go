@@ -2,6 +2,10 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"github.com/argeinfina/hichat/pkg"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -49,6 +53,28 @@ func TestRecoveryEndpointKeepsKnownUnknownAndCooldownResponsesEquivalent(t *test
 			}
 			if response.Body.String() != expected {
 				t.Fatal("public response disclosed identifier existence/cooldown")
+			}
+		})
+	}
+}
+
+func TestRecoveryEndpointProviderErrorsKeepGenericInternalEnvelope(t *testing.T) {
+	for _, cause := range []error{errors.New("controlled provider diagnostic"), context.DeadlineExceeded, context.Canceled} {
+		t.Run(cause.Error(), func(t *testing.T) {
+			service := &recoveryContractService{recover: func(string) (int, error) { return 0, fmt.Errorf("failed to send reset email: %w", cause) }}
+			handler := NewAuthHandler(service, nil, nil, nil, nil, nil, nil)
+			response := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodPost, "/api/auth/forgot-password", strings.NewReader(`{"identifier":"person@example.test"}`))
+			handler.ForgotPassword(response, request)
+			var body pkg.APIResponse
+			if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+				t.Fatal(err)
+			}
+			if response.Code != http.StatusInternalServerError || body.Success || body.Error != "internal server error" || body.Code != "INTERNAL" || body.Data != nil {
+				t.Fatalf("unexpected public error contract: status=%d envelope=%+v", response.Code, body)
+			}
+			if response.Header().Get("Retry-After") != "" || response.Header().Get("Set-Cookie") != "" {
+				t.Fatal("provider failure must not issue session or cooldown headers")
 			}
 		})
 	}
