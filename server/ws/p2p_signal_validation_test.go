@@ -21,9 +21,12 @@ func TestP2PCallEndWireCompatibility(t *testing.T) {
 			t.Fatal(err)
 		}
 		delivered := make(chan [2]string, 1)
-		client := &Client{userID: "owner", hub: &Hub{onP2PCallEnd: func(actor, id string) {
+		hub := NewHub()
+		t.Cleanup(hub.Shutdown)
+		hub.OnP2PCallEnd(func(actor, id string) {
 			delivered <- [2]string{actor, id}
-		}}}
+		})
+		client := &Client{userID: "owner", hub: hub}
 		client.handleP2PCallEnd(event)
 		select {
 		case got := <-delivered:
@@ -68,13 +71,15 @@ func TestP2PSignalICEBounds(t *testing.T) {
 
 func TestP2PSignalHandlerUsesValidatedDTOAndAuthenticatedActor(t *testing.T) {
 	delivered := make(chan string, 1)
-	hub := &Hub{onP2PSignal: func(actor string, data P2PSignalData) {
+	hub := NewHub()
+	t.Cleanup(hub.Shutdown)
+	hub.OnP2PSignal(func(actor string, data P2PSignalData) {
 		if data.MediaProtocol != 1 || len(data.Sources) != 2 {
 			delivered <- "bad-fields"
 			return
 		}
 		delivered <- actor
-	}}
+	})
 	client := &Client{hub: hub, userID: "authenticated"}
 	invalid := validP2PDescription()
 	invalid.Sources[1].MID = "0"

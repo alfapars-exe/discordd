@@ -32,7 +32,7 @@ func (c *Client) handleVoiceJoin(event Event) {
 
 	if c.hub.onVoiceJoin != nil {
 		info := c.hub.getUserInfo(c.userID)
-		c.dispatchVoiceCallback("ws.voice_join", func() {
+		c.dispatchOwnedCallback("ws.voice_join", func() {
 			c.hub.onVoiceJoin(c.userID, info.Username, info.DisplayName, info.AvatarURL, data.ChannelID, data.IsMuted, data.IsDeafened)
 		})
 	}
@@ -40,13 +40,13 @@ func (c *Client) handleVoiceJoin(event Event) {
 
 func (c *Client) handleVoiceLeave() {
 	if c.hub.onVoiceLeave != nil {
-		c.dispatchVoiceCallback("ws.voice_leave", func() { c.hub.onVoiceLeave(c.userID) })
+		c.dispatchOwnedCallback("ws.voice_leave", func() { c.hub.onVoiceLeave(c.userID) })
 	}
 }
 
 func (c *Client) handleVoiceActivity() {
 	if c.hub.onVoiceActivity != nil {
-		c.dispatchVoiceCallback("ws.voice_activity", func() { c.hub.onVoiceActivity(c.userID) })
+		c.dispatchOwnedCallback("ws.voice_activity", func() { c.hub.onVoiceActivity(c.userID) })
 	}
 }
 
@@ -62,7 +62,7 @@ func (c *Client) handleVoiceStateUpdate(event Event) {
 	}
 
 	if c.hub.onVoiceStateUpdate != nil {
-		c.dispatchVoiceCallback("ws.voice_state_update", func() { c.hub.onVoiceStateUpdate(c.userID, data.IsMuted, data.IsDeafened, data.IsStreaming) })
+		c.dispatchOwnedCallback("ws.voice_state_update", func() { c.hub.onVoiceStateUpdate(c.userID, data.IsMuted, data.IsDeafened, data.IsStreaming) })
 	}
 }
 
@@ -89,7 +89,7 @@ func (c *Client) handleVoiceAdminStateUpdate(event Event) {
 	// callback before invoking the service. The bounded dispatcher can apply
 	// backpressure at admission instead of creating unlimited goroutines.
 	if c.hub.onVoiceAdminStateUpdate != nil {
-		c.dispatchVoiceCallback("ws.voice_admin_state_update", func() {
+		c.dispatchOwnedCallback("ws.voice_admin_state_update", func() {
 			if !c.hub.authorizeVoiceModeration(c.userID, data.TargetUserID, "mute") {
 				dispatchLogger.Warn("voice_admin_state_update denied: insufficient perms",
 					"actor_id", c.userID, "target_id", data.TargetUserID)
@@ -118,7 +118,7 @@ func (c *Client) handleVoiceMoveUser(event Event) {
 
 	// Authorize in the owned callback before invoking the service.
 	if c.hub.onVoiceMoveUser != nil {
-		c.dispatchVoiceCallback("ws.voice_move_user", func() {
+		c.dispatchOwnedCallback("ws.voice_move_user", func() {
 			if !c.hub.authorizeVoiceModeration(c.userID, data.TargetUserID, "move") {
 				dispatchLogger.Warn("voice_move_user denied: insufficient perms",
 					"actor_id", c.userID, "target_id", data.TargetUserID)
@@ -147,7 +147,7 @@ func (c *Client) handleVoiceDisconnectUser(event Event) {
 
 	// Authorize in the owned callback before invoking the service.
 	if c.hub.onVoiceDisconnectUser != nil {
-		c.dispatchVoiceCallback("ws.voice_disconnect_user", func() {
+		c.dispatchOwnedCallback("ws.voice_disconnect_user", func() {
 			if !c.hub.authorizeVoiceModeration(c.userID, data.TargetUserID, "disconnect") {
 				dispatchLogger.Warn("voice_disconnect_user denied: insufficient perms",
 					"actor_id", c.userID, "target_id", data.TargetUserID)
@@ -175,20 +175,6 @@ func (c *Client) handleScreenShareWatch(event Event) {
 	}
 
 	if c.hub.onScreenShareWatch != nil {
-		c.dispatchVoiceCallback("ws.screen_share_watch", func() { c.hub.onScreenShareWatch(c.userID, data.StreamerUserID, data.Watching) })
+		c.dispatchOwnedCallback("ws.screen_share_watch", func() { c.hub.onScreenShareWatch(c.userID, data.StreamerUserID, data.Watching) })
 	}
-}
-
-// dispatchVoiceCallback shares Hub callback ownership and per-user ordering.
-// Reserve under Hub.mu so shutdown closes admission before joining workers.
-func (c *Client) dispatchVoiceCallback(name string, callback func()) {
-	h := c.hub
-	h.mu.Lock()
-	if h.shuttingDown {
-		h.mu.Unlock()
-		return
-	}
-	ticket := h.presenceCallbacks.reserve(c.userID, name)
-	h.mu.Unlock()
-	h.presenceCallbacks.submit(ticket, callback)
 }

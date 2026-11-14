@@ -17,9 +17,25 @@
   },
   "ci": "pending",
   "remaining": [
-    "Linux race and complete current-source CI",
+    "Linux race/full CI for follow-up source",
     "final combined-source CI",
-    "physical voice/LiveKit",
-    "P2P/typing callback ownership"
-  ]
+    "physical voice/LiveKit"
+  ],
+  "local_followup_head": "ed53302ae2c5a58cf3596927979a5d48f4b21c10",
+  "p2p_typing_followup": {
+    "before": "P2P end, channel typing and DM typing all failed owner shutdown join",
+    "change": "one dispatchOwnedCallback shared by voice, P2P and typing handlers",
+    "canonical_regressions_repetitions": 30,
+    "canonical_full_ws_repetitions": 3,
+    "canonical_full_ws_seconds": 11.816,
+    "canonical_vet_build_windows_linux_lint": "passed before constructor-only fixture correction",
+    "fixture_correction": "construct Hub via NewHub and join on cleanup; retain authenticated-actor and validated-DTO assertions",
+    "integrated_targeted_repetitions": 20,
+    "integrated_targeted_seconds": 5.687,
+    "integrated_full_ws_repetitions": 3,
+    "integrated_full_ws_seconds": 16.148,
+    "integrated_lint": "passed",
+    "compatibility": "preserved integrated call_id callback signature and additional wire test",
+    "publication": "local follow-up commit only; PR302 still tests previous882bd6c3 source"
+  }
 }
