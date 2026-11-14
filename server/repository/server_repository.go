@@ -97,3 +97,7 @@ type ServerStore interface {
 	GameActivityMembershipSnapshotRepository
 	GameActivityMembershipCounter
 }
+
+type GameActivityMembershipReader interface {
+	GetMemberGameActivityAudience(context.Context, string, string) (*bool, error)
+}

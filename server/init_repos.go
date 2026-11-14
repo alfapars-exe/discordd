@@ -28,7 +28,7 @@ type Repositories struct {
 	Attachment              repository.AttachmentRepository
 	Ban                     repository.BanRepository
 	MemberTimeout           repository.MemberTimeoutRepository
-	Server                  repository.ServerRepository
+	Server                  repository.ServerStore
 	Invite                  repository.InviteRepository
 	Pin                     repository.PinRepository
 	Search                  repository.SearchRepository

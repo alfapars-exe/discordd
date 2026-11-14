@@ -394,8 +394,8 @@ func TestMemberConstructorRequiresPermissionInvalidator(t *testing.T) {
 
 func TestServerConstructorRequiresPermissionInvalidator(t *testing.T) {
 	factory := reflect.TypeOf(NewServerService)
-	if factory.NumIn() != 17 {
-		t.Fatalf("server constructor inputs=%d, want17", factory.NumIn())
+	if factory.NumIn() != 18 {
+		t.Fatalf("server constructor inputs=%d, want18", factory.NumIn())
 	}
 	if factory.In(16) != reflect.TypeFor[PermissionInvalidator]() {
 		t.Fatal("server permission invalidator is not explicit")
@@ -512,5 +512,18 @@ func TestMembershipTransactionDeclaresPrivacySnapshotDependencies(t *testing.T) 
 		if _, ok := repos.FieldByName(name); !ok {
 			t.Fatalf("transaction bundle hides %s", name)
 		}
+	}
+}
+
+func TestServerConstructorDeclaresMembershipSnapshotReader(t *testing.T) {
+	factory := reflect.TypeOf(NewServerService)
+	if factory.NumIn() != 18 {
+		t.Fatalf("server constructor inputs=%d want18", factory.NumIn())
+	}
+	required := reflect.TypeFor[interface {
+		GetMemberGameActivityAudience(context.Context, string, string) (*bool, error)
+	}]()
+	if !factory.In(17).Implements(required) {
+		t.Fatal("post-join snapshot reader must be explicit")
 	}
 }

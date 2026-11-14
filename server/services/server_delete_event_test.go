@@ -40,7 +40,7 @@ func TestServerDeleteEventFollowsCommit(t *testing.T) {
 				}
 			}}
 			activity := &recordingGameActivityInvalidator{}
-			service := NewServerService(nil, activity, db.Conn, repo, nil, nil, nil, nil, nil, nil, nil, hub, nil, nil, nil, nil, nil)
+			service := NewServerService(nil, activity, db.Conn, repo, nil, nil, nil, nil, nil, nil, nil, hub, nil, nil, nil, nil, nil, nil)
 			remove := func() error {
 				return service.DeleteServer(ctx, "srv", "owner")
 			}

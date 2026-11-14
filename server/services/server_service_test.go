@@ -60,15 +60,15 @@ type joinServerHarness struct {
 // JoinServer touches after AddMember succeeds, so table-test cases only need
 // to override the field(s) that make that case interesting.
 func newJoinServerHarness(cleanup ...func(string, string)) *joinServerHarness {
-	return newJoinServerHarnessWithPolicies(nil, nil, nil, cleanup...)
+	return newJoinServerHarnessWithPolicies(nil, nil, nil, nil, cleanup...)
 }
 func newJoinServerHarnessWithPermInvalidator(inv PermissionInvalidator, cleanup ...func(string, string)) *joinServerHarness {
-	return newJoinServerHarnessWithPolicies(nil, nil, inv, cleanup...)
+	return newJoinServerHarnessWithPolicies(nil, nil, inv, nil, cleanup...)
 }
 func newJoinServerHarnessWithActivity(activity GameActivityPrivacyInvalidator) *joinServerHarness {
-	return newJoinServerHarnessWithPolicies(nil, activity, nil)
+	return newJoinServerHarnessWithPolicies(nil, activity, nil, nil)
 }
-func newJoinServerHarnessWithPolicies(preferences repository.PreferencesRepository, activity GameActivityPrivacyInvalidator, invalidator PermissionInvalidator, cleanup ...func(string, string)) *joinServerHarness {
+func newJoinServerHarnessWithPolicies(preferences repository.PreferencesRepository, activity GameActivityPrivacyInvalidator, invalidator PermissionInvalidator, snapshotReader repository.GameActivityMembershipReader, cleanup ...func(string, string)) *joinServerHarness {
 	h := &joinServerHarness{
 		serverRepo: &testutil.MockServerRepo{},
 		roleRepo:   &testutil.MockRoleRepo{},
@@ -104,14 +104,14 @@ func newJoinServerHarnessWithPolicies(preferences repository.PreferencesReposito
 		voiceCleanup = cleanup[0]
 	}
 	h.svc = NewServerService(preferences, activity, nil, h.serverRepo, nil, h.roleRepo, nil, nil, h.userRepo, h.banRepo, h.inviteSvc, h.hub, nil, nil, // encryptionKey, auditLogger — not under test here
-		voiceCleanup, passthroughMembershipTxRunner{server: h.serverRepo, role: h.roleRepo}, invalidator)
+		voiceCleanup, passthroughMembershipTxRunner{server: h.serverRepo, role: h.roleRepo}, invalidator, snapshotReader)
 	return h
 }
 
 func TestJoinServer_ValidInvite_AddsMemberAndMarksUsed(t *testing.T) {
 	activity := &recordingGameActivityInvalidator{}
 	prefs := &preferencesRepoStub{}
-	h := newJoinServerHarnessWithPolicies(prefs, activity, nil)
+	h := newJoinServerHarnessWithPolicies(prefs, activity, nil, nil)
 
 	var addMemberCalled, markUsedCalled, assignRoleCalled bool
 	h.serverRepo.AddMemberFn = func(_ context.Context, serverID, userID string) error {
@@ -280,7 +280,7 @@ func TestJoinServer_AlreadyMember(t *testing.T) {
 // leave the invite's use slot untouched.
 func TestJoinServer_AddMemberFails(t *testing.T) {
 	activity := &recordingGameActivityInvalidator{}
-	h := newJoinServerHarnessWithPolicies(nil, activity, nil)
+	h := newJoinServerHarnessWithPolicies(nil, activity, nil, nil)
 	h.serverRepo.AddMemberFn = func(_ context.Context, _, _ string) error {
 		return errors.New("db error: add member failed")
 	}
@@ -377,5 +377,61 @@ func TestJoinServer_NoBan_Allowed(t *testing.T) {
 	}
 	if !addMemberCalled {
 		t.Error("expected AddMember to be called when the user has no ban")
+	}
+}
+
+type membershipSnapshotReaderFunc func(context.Context, string, string) (*bool, error)
+
+func (f membershipSnapshotReaderFunc) GetMemberGameActivityAudience(ctx context.Context, server, user string) (*bool, error) {
+	return f(ctx, server, user)
+}
+func TestJoinServerUsesDeclaredSnapshotReaderForCreateEvent(t *testing.T) {
+	yes, no := true, false
+	for _, tc := range []struct {
+		name           string
+		value          *bool
+		err            error
+		disabled, want bool
+	}{
+		{name: "allowed", value: &yes, want: true},
+		{name: "denied", value: &no},
+		{name: "legacy nil snapshot"},
+		{name: "reader error", value: &yes, err: errors.New("snapshot unavailable")},
+		{name: "disabled reader", disabled: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			reads := 0
+			var reader repository.GameActivityMembershipReader
+			if !tc.disabled {
+				reader = membershipSnapshotReaderFunc(func(_ context.Context, server, user string) (*bool, error) {
+					reads++
+					if server != joinTestServerID || user != joinTestUserID {
+						t.Fatal("snapshot scope lost")
+					}
+					return tc.value, tc.err
+				})
+			}
+			harness := newJoinServerHarnessWithPolicies(nil, nil, nil, reader)
+			creates := 0
+			harness.hub.BroadcastToUserFn = func(user string, event ws.Event) {
+				if event.Op == ws.OpServerCreate {
+					creates++
+					item, ok := event.Data.(models.ServerListItem)
+					if !ok || user != joinTestUserID || item.GameActivityAudience != tc.want {
+						t.Fatalf("server create privacy snapshot=%#v", event.Data)
+					}
+				}
+			}
+			if _, err := harness.svc.JoinServer(context.Background(), joinTestUserID, joinTestCode); err != nil {
+				t.Fatal(err)
+			}
+			wantReads := 1
+			if tc.disabled {
+				wantReads = 0
+			}
+			if reads != wantReads || creates != 1 {
+				t.Fatalf("snapshot reads=%d creates=%d", reads, creates)
+			}
+		})
 	}
 }

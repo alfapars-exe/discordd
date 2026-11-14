@@ -47,6 +47,7 @@ type serverService struct {
 	// `db` field above (rather than another database.WithTx(s.db, ...) call
 	// like CreateServer/DeleteServer use) so the existing mock-based
 	// JoinServer tests keep working without a real *sql.DB.
+	snapshotReader     repository.GameActivityMembershipReader
 	membershipTxRunner repository.ServerMembershipTxRunner
 	preferencesRepo    repository.PreferencesRepository
 	gameActivity       GameActivityPrivacyInvalidator
@@ -92,9 +93,11 @@ func NewServerService(
 	membershipVoiceCleanup func(serverID, userID string),
 	membershipTxRunner repository.ServerMembershipTxRunner,
 	permInvalidator PermissionInvalidator,
+	snapshotReader repository.GameActivityMembershipReader,
 ) ServerService {
 	return &serverService{
 		permInvalidator:        permInvalidator,
+		snapshotReader:         snapshotReader,
 		membershipVoiceCleanup: membershipVoiceCleanup,
 		preferencesRepo:        preferencesRepo,
 		gameActivity:           gameActivity,

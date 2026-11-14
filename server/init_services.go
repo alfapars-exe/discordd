@@ -285,7 +285,7 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	serverService := services.NewServerService(repos.Preferences, gameActivityService,
 		db, repos.Server, repos.LiveKit, repos.Role, repos.Channel,
 		repos.Category, repos.User, repos.Ban, inviteService, hub, encryptionKey, auditLogService,
-		voiceService.DisconnectServerMember, roleTransactions, permInvalidator,
+		voiceService.DisconnectServerMember, roleTransactions, permInvalidator, repos.Server,
 	)
 	serverService.SetUploadDir(cfg.Upload.Dir)
 

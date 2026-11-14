@@ -130,9 +130,7 @@ func (s *serverService) JoinServer(ctx context.Context, userID, inviteCode strin
 		return nil, fmt.Errorf("failed to get server: %w", err)
 	}
 	snapshotAllowedForJoin := false
-	if snapshotReader, ok := s.serverRepo.(interface {
-		GetMemberGameActivityAudience(context.Context, string, string) (*bool, error)
-	}); ok {
+	if snapshotReader := s.snapshotReader; snapshotReader != nil {
 		if snapshot, snapshotErr := snapshotReader.GetMemberGameActivityAudience(ctx, serverID, userID); snapshotErr == nil && snapshot != nil {
 			snapshotAllowedForJoin = *snapshot
 		}
