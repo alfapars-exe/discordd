@@ -75,3 +75,44 @@ test('empty run or missing structured results cannot produce green evidence', (t
   assert.equal(report.success, false);
   assert.ok(report.checks[0].summary.reportError);
 });
+
+const clientResult = (overrides) => JSON.stringify({ numTotalTestSuites: 1, numPassedTests: 1, numFailedTests: 0, numPendingTests: 0, ...overrides });
+const invalidStructuredResults = [
+ { name: 'client-only-skips', id: 'client-test', stdout: clientResult({ numPassedTests: 0, numPendingTests: 2 }) },
+ { name: 'client-failure-with-zero-exit', id: 'client-test', stdout: clientResult({ numFailedTests: 1 }) },
+ { name: 'client-suite-failure', id: 'client-test', stdout: clientResult({ numFailedTestSuites: 1 }) },
+ { name: 'client-explicit-unsuccessful', id: 'client-test', stdout: clientResult({ success: false }) },
+ { name: 'client-negative-count', id: 'client-test', stdout: clientResult({ numPendingTests: -1, numPassedTests: 2 }) },
+ { name: 'go-only-skips', id: 'server', stdout: '{"Action":"skip","Test":"TestRequiresEnvironment"}' },
+ { name: 'go-incomplete-run', id: 'server', stdout: '{"Action":"run","Test":"TestStarted"}' },
+ { name: 'go-failure-with-zero-exit', id: 'server', stdout: '{"Action":"pass","Test":"TestOne"}\n{"Action":"fail","Test":"TestTwo"}' },
+ { name: 'go-package-teardown-failure', id: 'server', stdout: '{"Action":"pass","Test":"TestOne"}\n{"Action":"fail","Package":"fixture"}' },
+];
+for (const fixture of invalidStructuredResults) {
+ test(`structured verdict rejects ${fixture.name} even with zero process exit`, (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'hichat-quality-verdict-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const source = { head: 'revision', sha256: 'source', files: [] };
+  const report = runChecks([{ id: fixture.id, cwd: '.', command: 'fake', args: [] }], {
+   root, snapshot: () => source, execute: () => ({ status: 0, stdout: fixture.stdout }),
+  });
+  assert.equal(report.success, false);
+  assert.equal(report.checks[0].status, 'failed');
+ });
+}
+
+test('passing tests retain explicitly reported optional skips', (t) => {
+ const root = mkdtempSync(join(tmpdir(), 'hichat-quality-verdict-'));
+ t.after(() => rmSync(root, { recursive: true, force: true }));
+ const source = { head: 'revision', sha256: 'source', files: [] };
+ for (const fixture of [
+  { id: 'client-test', stdout: clientResult({ numPendingTests: 1 }) },
+  { id: 'server', stdout: '{"Action":"pass","Test":"TestOne"}\n{"Action":"skip","Test":"TestOptional"}' },
+ ]) {
+  const report = runChecks([{ id: fixture.id, cwd: '.', command: 'fake', args: [] }], {
+   root, snapshot: () => source, execute: () => ({ status: 0, stdout: fixture.stdout }),
+  });
+  assert.equal(report.success, true);
+  assert.equal(report.checks[0].status, 'passed');
+ }
+});
