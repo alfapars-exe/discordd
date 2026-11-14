@@ -527,3 +527,12 @@ func TestServerConstructorDeclaresMembershipSnapshotReader(t *testing.T) {
 		t.Fatal("post-join snapshot reader must be explicit")
 	}
 }
+
+func TestLiveKitFactoryDeclaresDurableUsageCapabilities(t *testing.T) {
+	result := reflect.TypeOf(repository.NewSQLiteLiveKitRepo).Out(0)
+	for _, required := range []reflect.Type{reflect.TypeFor[repository.VoiceUsageRecorder](), reflect.TypeFor[repository.VoiceUsageQueue]()} {
+		if !result.Implements(required) {
+			t.Fatalf("LiveKit factory result %s hides %s", result, required)
+		}
+	}
+}

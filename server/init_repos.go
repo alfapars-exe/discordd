@@ -40,7 +40,7 @@ type Repositories struct {
 	Reaction                repository.ReactionRepository
 	ChannelPermission       repository.ChannelPermissionRepository
 	Friendship              repository.FriendshipRepository
-	LiveKit                 repository.LiveKitRepository
+	LiveKit                 repository.LiveKitStore
 	ResetToken              repository.PasswordResetRepository
 	MetricsHistory          repository.MetricsHistoryRepository
 	ServerMute              repository.ServerMuteRepository
