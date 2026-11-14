@@ -277,15 +277,11 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	blockService, dmSettingsService, notificationService := social.Block, social.DMSettings, social.Notification
 	emojiService, dmService, friendshipService := social.Emoji, social.DM, social.Friendship
 	groupDMService, dmUploadService, groupDMUploadService := social.GroupDM, social.DMUpload, social.GroupDMUpload
-	// Bookmarks (Faz C): saving a channel message is gated on the same
-	// per-channel read resolution the message list uses (channelPermService),
-	// a DM message on channel membership (repos.DM).
-	savedService := services.NewSavedService(repos.Saved, repos.Message, repos.Channel, repos.DM, channelPermService)
+	personal := initPersonalMessagingServices(personalMessagingDependencies{Repositories: repos, Permissions: channelPermService})
+	savedService, reminderService := personal.Saved, personal.Reminder
+	userNoteService, personalizationService := personal.UserNote, personal.Personalization
 	spamInboxService := services.NewSpamInboxService(repository.NewSpamInboxRepository(db), repos.Message, repos.Channel, repos.DM, repos.GroupDM, channelPermService, hub)
 	mediaLabelService := services.NewMediaLabelService(repository.NewMediaLabelRepository(db), spamInboxService, hub)
-	reminderService := services.NewReminderService(repos.Reminder, repos.Message, repos.Channel, repos.DM, channelPermService)
-	userNoteService := services.NewUserNoteService(repos.UserNote, repos.User)
-	personalizationService := services.NewPersonalizationService(repos.Preferences, repos.User, repos.Server, repos.Friendship)
 	reactionService := services.NewReactionService(repos.Reaction, repos.Message, repos.Channel, hub, channelPermService, repos.MemberTimeout,
 		services.ReactionNotificationDependencies{Notifications: repos.Notification, Preferences: repos.Preferences, Users: repos.User}, emojiService)
 	serverMuteService := services.NewServerMuteService(repos.ServerMute)
