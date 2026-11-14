@@ -1,5 +1,5 @@
 {
-  "source_head": "ae4175f3311eeb05649d0e004723c32111d851cc",
+  "source_head": "936c42596908f036f6f8e3635241ac9902b4624a",
   "pr": "https://github.com/alfapars-exe/discordd/pull/301",
   "before": {
     "commit": "469e67a2",
@@ -14,7 +14,7 @@
     "integrated_windows_linux_lint": "passed"
   },
   "ci": {
-    "status": "awaiting_current_source_results"
+    "status": "new_source_pending"
   },
   "limitations": [
     "Linux real subprocess cancellation test awaits CI execution",
@@ -22,7 +22,7 @@
     "Partial uploads restore resume remains open",
     "No release or installation acceptance"
   ],
-  "previous_source_head": "1b47c315898cc6642e5211a387bd141a1dc91e03",
+  "previous_source_head": "ae4175f3311eeb05649d0e004723c32111d851cc",
   "sonar_followup": {
     "previous_failure": "7.4% duplicated new lines and cognitive complexity in snapshot cycle and cancellation test",
     "change": "shared blocked-command fixture; extracted table subcase and snapshot/verified promotion steps; no exclusions or weakened assertions",
@@ -30,5 +30,19 @@
     "canonical_vet_build": "passed",
     "canonical_windows_linux_lint": "passed",
     "lifecycle_repetitions_both_trees": 20
+  },
+  "linux_process_followup": {
+    "ci_failure": {
+      "run": 43549219967,
+      "job": 132307706666,
+      "message": "owned helper did not start within 3 seconds"
+    },
+    "root_cause": "not proven; original self-reexec fixture passed once without race in WSL",
+    "change": "fixed /bin/sh fixture writes its PID then execs sleep; positional path argument; minimal PATH env; no provider credentials",
+    "unchanged_contract": "3 second readiness, 2 second cancellation completion, ESRCH for exact owned PID",
+    "wsl_linux_pass_repetitions": 20,
+    "ignored_cancellation_overlay": "failed at 2 second assertion; owned fixture self-exited at20.01 seconds; exit1",
+    "linux_crosscompile": "passed",
+    "linux_lint": "passed"
   }
 }

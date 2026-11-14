@@ -11,29 +11,20 @@ import (
 )
 
 // Exercise the real runner against an owned helper process, without invoking
-// hf/sqlite3 or inheriting provider credentials. The child self-exits as a
+// hf/sqlite3 or inheriting provider credentials. The fixture self-exits as a
 // cleanup fallback if cancellation regresses.
 func TestBackupCommandCancellationJoinsOwnedProcess(t *testing.T) {
-	const childFlag = "HICHAT_BACKUP_COMMAND_CHILD"
-	const markerFlag = "HICHAT_BACKUP_COMMAND_MARKER"
-	if os.Getenv(childFlag) == "1" {
-		if err := os.WriteFile(os.Getenv(markerFlag), []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		time.Sleep(20 * time.Second)
-		return
-	}
-	executable, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
-	}
 	dir := t.TempDir()
 	marker := filepath.Join(dir, "child.pid")
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	var runErr error
 	go func() {
-		_, runErr = defaultRunCmd(ctx, []string{childFlag + "=1", markerFlag + "=" + marker, "PATH=" + os.Getenv("PATH"), "TMPDIR=" + dir}, executable, "-test.run=^TestBackupCommandCancellationJoinsOwnedProcess$")
+		// Use a tiny fixed Linux fixture instead of starting another complete
+		// race/coverage-instrumented services test binary. exec preserves the
+		// marker PID, so cancellation must reap that exact owned process.
+		// The path is a positional argument; no user/path text enters shell code.
+		_, runErr = defaultRunCmd(ctx, []string{"PATH=/usr/bin:/bin"}, "/bin/sh", "-c", `printf '%s' "$$" > "$1"; exec sleep 20`, "backup-command-fixture", marker)
 		close(done)
 	}()
 	t.Cleanup(func() {
