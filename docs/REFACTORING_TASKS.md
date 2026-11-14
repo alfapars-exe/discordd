@@ -1506,3 +1506,7 @@ Terminal current-head receipt: PR29814a965ea completed36/36 SUCCESS. Exact-head 
 ### 2026-11-14 — Aktif süreç mTLS fixture düzeltmesi
 
 PR #298 `6162072e` koşusunda yeni süreç testi, repository işinin düz PostgreSQL bağlantısını TLS zorunlu fixture ile kullanması nedeniyle başarısız oldu. SQL kaynak taraması da doğrudan DDL `ExecContext(fmt.Sprintf(...))` çağrılarını engelledi. `2ac1f132` sabit DDL şablonlarını adlandırır ve mevcut sertifikalı E2E fixture’ını yalnız aktif süreç testine bağlar; TLS doğrulaması, fallback yasağı ve zorunlu PASS kapısı korunur. Yerel kaynak taraması 0 blok, vet başarılı, lint 0 sorun, runner 10 test başarılı. Windows süreç koşusu atlanır; yeni Linux CI 43530862476 sonucu bekleniyor. Gerçek süreç kabulü henüz kanıtlanmadı. Ayrıntı: `implementation/verification/refactor-active-process-mtls-correction-2026-11-14.json`.
+
+### 2026-11-14 — Aktif süreç WebSocket sözleşmesi düzeltmesi
+
+`2ac1f132` güncel güvenlik kontrolünden geçti; mTLS süreç fixture’ı giriş aşamalarını geçti fakat katılma olayı 46,50 saniyede zaman aşımına uğradı. Fixture yanlış `data` yük alanını kullanıyordu; üretim `ws.Event` sözleşmesi `d` kullanır. `7a5e44ba` gönderimde doğrudan `ws.Event`/`ws.VoiceJoinData` kullanır, alımda `d` okur ve kendi kullanıcı/kanal/join olay eşleşmesini korur. Yerel derleme (Windows POSIX atlaması), vet ve lint 0 sorun. Linux kabulü yeni kaynakta hâlâ bekleniyor. Önceki hata anlık görüntüsü: `implementation/verification/refactor-pr298-2ac-native-failure-2026-11-14.json`.

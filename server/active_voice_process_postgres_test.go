@@ -23,6 +23,7 @@ import (
 	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/models"
 	crypt "github.com/argeinfina/hichat/pkg/crypto"
+	"github.com/argeinfina/hichat/ws"
 	"github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
@@ -200,7 +201,7 @@ func joinActiveVoiceProcess(t *testing.T, baseURL string) *websocket.Conn {
 	t.Cleanup(func() { conn.Close() })
 	conn.SetReadDeadline(time.Now().Add(45 * time.Second))
 	readActiveVoiceEvent(t, conn, "ready")
-	if conn.WriteJSON(map[string]any{"op": "voice_join", "data": map[string]string{"channel_id": "active-voice"}}) != nil {
+	if conn.WriteJSON(ws.Event{Op: ws.OpVoiceJoin, Data: ws.VoiceJoinData{ChannelID: "active-voice"}}) != nil {
 		t.Fatal("voice join send failed")
 	}
 	readActiveVoiceEvent(t, conn, "voice_state_update")
@@ -216,10 +217,10 @@ func readActiveVoiceEvent(t *testing.T, conn *websocket.Conn, op string) {
 				UserID    string `json:"user_id"`
 				ChannelID string `json:"channel_id"`
 				Action    string `json:"action"`
-			} `json:"data"`
+			} `json:"d"`
 		}
 		if conn.ReadJSON(&event) != nil {
-			t.Fatal("expected voice lifecycle event missing")
+			t.Fatalf("expected voice lifecycle event missing: op=%s", op)
 		}
 		if event.Op != op {
 			continue
