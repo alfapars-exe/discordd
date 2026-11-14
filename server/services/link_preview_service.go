@@ -171,7 +171,22 @@ func (s *linkPreviewService) initialize() {
 		s.lifecycle, s.stop = context.WithCancel(context.Background())
 	})
 }
-func (s *linkPreviewService) Stop() { s.initialize(); s.stop() }
+func (s *linkPreviewService) Stop() {
+	s.initialize()
+	s.mu.Lock()
+	// Cancel admission under the same lock used to register accepted flights.
+	// Every concurrent stopper joins those workers before database teardown.
+	s.stop()
+	pending := make([]<-chan struct{}, 0, len(s.pending))
+	for _, flight := range s.pending {
+		pending = append(pending, flight.done)
+	}
+	s.mu.Unlock()
+	// Workers need mu to remove themselves and close done; never join locked.
+	for _, done := range pending {
+		<-done
+	}
+}
 
 func (s *linkPreviewService) GetPreview(ctx context.Context, rawURL string) (*models.LinkPreview, error) {
 	if ctx.Err() != nil {
