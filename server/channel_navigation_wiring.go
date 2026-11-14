@@ -31,7 +31,27 @@ type channelNavigationServices struct {
 // initChannelNavigationServices shares channel visibility/read providers while
 // keeping fresh publication authorization an explicit separate dependency.
 func initChannelNavigationServices(deps channelNavigationDependencies) channelNavigationServices {
+	for _, input := range []struct {
+		name  string
+		value any
+	}{
+		{"Repositories", deps.Repositories}, {"Hub", deps.Hub}, {"Permissions", deps.Permissions}, {"FreshPermissions", deps.FreshPermissions}, {"VoiceDeletion", deps.VoiceDeletion}, {"Audit", deps.Audit},
+	} {
+		if missingCompositionInput(input.value) {
+			panic("channel navigation requires " + input.name)
+		}
+	}
 	repos := deps.Repositories
+	for _, input := range []struct {
+		name  string
+		value any
+	}{
+		{"Channel", repos.Channel}, {"Category", repos.Category}, {"Notification", repos.Notification}, {"Message", repos.Message}, {"Pin", repos.Pin}, {"Search", repos.Search}, {"ReadState", repos.ReadState},
+	} {
+		if missingCompositionInput(input.value) {
+			panic("channel navigation requires repository " + input.name)
+		}
+	}
 	channel := services.NewChannelService(deps.VoiceDeletion, repos.Channel, repos.Category, deps.Hub, deps.Permissions, deps.Audit, repos.Notification, deps.FreshPermissions)
 	channel.SetUploadDir(deps.UploadDir)
 	return channelNavigationServices{
