@@ -231,3 +231,10 @@ func (m *MockDMRepo) AcceptPendingUnblocked(ctx context.Context, id string) (boo
 	err := m.UpdateChannelStatus(ctx, id, models.DMStatusAccepted)
 	return err == nil, err
 }
+
+// CreateChannelUnblocked explicitly adapts the ordinary creation fixture.
+// Guarded repository/concurrency tests provide their own real implementation.
+func (m *MockDMRepo) CreateChannelUnblocked(ctx context.Context, ch *models.DMChannel) (bool, error) {
+	err := m.CreateChannel(ctx, ch)
+	return err == nil, err
+}

@@ -664,3 +664,9 @@ func TestDMConstructorRequiresAtomicRequestStore(t *testing.T) {
 		t.Fatal("DM constructor hides required atomic request transitions")
 	}
 }
+
+func TestDMRequestStoreDeclaresGuardedChannelCreation(t *testing.T) {
+	if !reflect.TypeFor[repository.DMRequestStore]().Implements(reflect.TypeFor[repository.UnblockedDMChannelCreator]()) {
+		t.Fatal("DM request store hides guarded channel creation")
+	}
+}

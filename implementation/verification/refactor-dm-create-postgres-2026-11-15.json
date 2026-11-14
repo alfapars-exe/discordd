@@ -1,0 +1,38 @@
+{
+  "base_head": "ebfd1e3cabbddf9f0b1c4700f18c27ef2ab7e3ad",
+  "source_delta": "DMRequestStore guarded creation contract and direct service/fixture calls",
+  "tests": [
+    {
+      "name": "TestDMCreateUnblockedRejectsEitherBlockAndPreservesHistory",
+      "seconds": 1.24
+    },
+    {
+      "name": "TestDMChannelConcurrentBlockAfterPrecheckPreventsInsertAndEvent",
+      "seconds": 0.39
+    },
+    {
+      "name": "TestDMCreateUnblockedConcurrentDuplicateReturnsOneNewChannel",
+      "seconds": 0.53
+    },
+    {
+      "name": "TestDMCreateUnblockedAwaitsConcurrentBlockCommit",
+      "seconds": 0.63
+    },
+    {
+      "name": "TestAtomicBlockAwaitsConcurrentDMCreationCommit",
+      "seconds": 0.66
+    }
+  ],
+  "packages": [
+    {
+      "name": "github.com/argeinfina/hichat/services",
+      "seconds": 1.015
+    },
+    {
+      "name": "github.com/argeinfina/hichat/repository",
+      "seconds": 3.287
+    }
+  ],
+  "database": "PostgreSQL 18.6 dedicated loopback",
+  "limits": "sslmode=disable, non-race, no deployed-provider/device acceptance"
+}

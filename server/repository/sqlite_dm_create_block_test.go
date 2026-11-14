@@ -19,7 +19,7 @@ func TestDMCreateUnblockedRejectsEitherBlockAndPreservesHistory(t *testing.T) {
 			seedDMUsers(t, db)
 			ctx := context.Background()
 			repo := NewSQLiteDMRepo(wrapForRepo(db))
-			writer := repo.(UnblockedDMChannelCreator)
+			writer := repo
 			a, b := dmAlice, dmBob
 			if reverse {
 				a, b = b, a
@@ -57,7 +57,7 @@ func TestDMCreateUnblockedRejectsEitherBlockAndPreservesHistory(t *testing.T) {
 func TestDMCreateUnblockedConcurrentDuplicateReturnsOneNewChannel(t *testing.T) {
 	db := newTestDB(t)
 	seedDMUsers(t, db)
-	writer := NewSQLiteDMRepo(wrapForRepo(db)).(UnblockedDMChannelCreator)
+	writer := NewSQLiteDMRepo(wrapForRepo(db))
 	type outcome struct {
 		created bool
 		id      string
@@ -116,7 +116,7 @@ func TestDMCreateUnblockedAwaitsConcurrentBlockCommit(t *testing.T) {
 	}
 	done := make(chan error, 1)
 	go func() {
-		_, err := NewSQLiteDMRepo(wrapForRepo(db)).(UnblockedDMChannelCreator).CreateChannelUnblocked(ctx, &models.DMChannel{User1ID: dmAlice, User2ID: dmBob, Status: models.DMStatusAccepted})
+		_, err := NewSQLiteDMRepo(wrapForRepo(db)).CreateChannelUnblocked(ctx, &models.DMChannel{User1ID: dmAlice, User2ID: dmBob, Status: models.DMStatusAccepted})
 		done <- err
 	}()
 	select {

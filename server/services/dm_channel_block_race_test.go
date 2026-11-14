@@ -24,12 +24,7 @@ func (r dmCreateBlockBarrier) CreateChannel(ctx context.Context, ch *models.DMCh
 
 func (r dmCreateBlockBarrier) CreateChannelUnblocked(ctx context.Context, ch *models.DMChannel) (bool, error) {
 	r.before()
-	if writer, ok := r.DMRequestStore.(interface {
-		CreateChannelUnblocked(context.Context, *models.DMChannel) (bool, error)
-	}); ok {
-		return writer.CreateChannelUnblocked(ctx, ch)
-	}
-	return true, r.DMRequestStore.CreateChannel(ctx, ch)
+	return r.DMRequestStore.CreateChannelUnblocked(ctx, ch)
 }
 
 // A deterministic interleaving of two real requests: block commits after the
