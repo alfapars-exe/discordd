@@ -1615,3 +1615,10 @@ Backup PR301 source936c42596908f036f6f8e3635241ac9902b4624a subsequently complet
 ### 2026-11-14 — Prove diagnostics completion-log ownership
 
 Added a blocking completion logger regression: Stop must still wait after canceled send returns until its error log finishes, and exactly one cancellation completion log remains. A counterfactual overlay releasing worker ownership before logging failed with Stop escaped completion logging. Current canonical stop tests30 passed2.047s; complete handlers passed5.805s, logx cachedpass, full vet and lint0 passed. Follow-up c5eb283f is local only while PR303 source39a1476b CI remains active; no newer-source CI claim. This strengthens the send-plus-logging boundary without changing product behavior.
+
+
+### 2026-11-14 — Shared client callback CI terminal; music drain regression
+
+PR302 shared client callback sourceed53302ae2c5a58cf3596927979a5d48f4b21c10 completed36/36 successful checks; Server CI43550903641 terminalsuccess,31/31 jobs. Archived refactor-pr302-ed5-terminal-2026-11-14.json and updated PR description. Final combined-source/physical acceptance remains open.
+
+RF10 shutdown inspection found StopAll stops bot state/process cancellation but does not join accepted playback loops. Separate clean main-based music-worker-shutdown worktree reproduced this with actual Enqueue and blocked playTrackFn: TestMusicStopAllJoinsAcceptedPlaybackWorker fails StopAll returned while accepted playback worker was running. No provider calls. This is an unfixed local red regression, not published or integrated. Implement a terminal owner that serializes admission and worker registration, drains already-removed/replaced bots too, and joins outside bot/session/lifecycle locks; verify concurrent stop, late enqueue/resume, panic cleanup and in-flight creation/extraction rather than only counting current map entries. Existing integration shuttingDown fence must be preserved. Whole RF10 remains open.
