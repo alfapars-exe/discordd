@@ -227,7 +227,7 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	var musicBotService services.MusicBotRuntime
 	voiceService := services.NewVoiceService(
 		repos.Channel, repos.LiveKit, channelPermService, hub, hub, repos.Server, encryptionKey, repos.MemberTimeout, repos.Ban, auditLogService,
-		services.VoiceRuntimeDependencies{AppLogger: appLogService, Integrations: func(voice services.VoiceService) (services.VoiceEntranceHook, services.MusicBotChannelHook) {
+		services.VoiceRuntimeDependencies{FreshPermissions: channelPermService, AppLogger: appLogService, Integrations: func(voice services.VoiceService) (services.VoiceEntranceHook, services.MusicBotChannelHook) {
 			entranceService, musicBotService = initVoiceMediaServices(repos, hub, channelPermService,
 				voice, cfg.Upload.Dir, encryptionKey, appLogService)
 			return entranceService, musicBotService

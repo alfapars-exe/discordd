@@ -239,7 +239,7 @@ func TestVoiceConstructorRequiresRuntimeDependencyGroup(t *testing.T) {
 	if dependency.Kind() != reflect.Struct {
 		t.Fatalf("runtime dependencies are not a struct: %s", dependency)
 	}
-	for _, name := range []string{"Integrations", "AppLogger"} {
+	for _, name := range []string{"Integrations", "AppLogger", "FreshPermissions"} {
 		if _, ok := dependency.FieldByName(name); !ok {
 			t.Errorf("runtime dependencies omit %s", name)
 		}

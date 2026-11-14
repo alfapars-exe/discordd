@@ -9,7 +9,7 @@ import (
 )
 
 type permissionCacheStopOwner struct {
-	services.ChannelPermissionService
+	services.ChannelPermissionRuntime
 	calls int
 }
 

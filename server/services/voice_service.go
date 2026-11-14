@@ -183,6 +183,7 @@ type voiceService struct {
 	channelGetter    ChannelGetter
 	livekitGetter    LiveKitInstanceGetter
 	permResolver     ChannelPermResolver
+	freshPermissions FreshChannelPermResolver
 	hub              ws.Broadcaster
 	onlineChecker    OnlineUserChecker
 	afkTimeoutGetter AFKTimeoutGetter
@@ -222,8 +223,10 @@ type MemberTimeoutChecker interface {
 // VoiceRuntimeDependencies is selected explicitly by the composition owner.
 // Its zero value disables integrations and persistent app logging.
 type VoiceRuntimeDependencies struct {
-	Integrations func(VoiceService) (VoiceEntranceHook, MusicBotChannelHook)
-	AppLogger    VoiceAppLogger
+	// Nil explicitly retains the standalone cached-resolver path.
+	FreshPermissions FreshChannelPermResolver
+	Integrations     func(VoiceService) (VoiceEntranceHook, MusicBotChannelHook)
+	AppLogger        VoiceAppLogger
 }
 
 func NewVoiceService(
@@ -251,6 +254,7 @@ func NewVoiceService(
 		channelGetter:      channelGetter,
 		livekitGetter:      livekitGetter,
 		permResolver:       permResolver,
+		freshPermissions:   runtime.FreshPermissions,
 		hub:                hub,
 		onlineChecker:      onlineChecker,
 		afkTimeoutGetter:   afkTimeoutGetter,

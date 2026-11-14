@@ -92,8 +92,14 @@ type ChannelPermissionService interface {
 	InvalidateAll()
 }
 
+// FreshChannelPermResolver bypasses cached decisions for live voice checks.
+type FreshChannelPermResolver interface {
+	ResolveChannelPermissionsFresh(context.Context, string, string) (models.Permission, error)
+}
+
 // ChannelPermissionRuntime retains cleanup ownership at the composition root.
 type ChannelPermissionRuntime interface {
+	FreshChannelPermResolver
 	ChannelPermissionService
 	Stop()
 }

@@ -437,9 +437,7 @@ func voicePublishSources(perms models.Permission, muted bool) []livekit.TrackSou
 }
 
 func (s *voiceService) currentVoicePermissions(ctx context.Context, userID, channelID string) (models.Permission, error) {
-	if fresh, ok := s.permResolver.(interface {
-		ResolveChannelPermissionsFresh(context.Context, string, string) (models.Permission, error)
-	}); ok {
+	if fresh := s.freshPermissions; fresh != nil {
 		return fresh.ResolveChannelPermissionsFresh(ctx, userID, channelID)
 	}
 	return s.permResolver.ResolveChannelPermissions(ctx, userID, channelID)
