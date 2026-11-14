@@ -33,17 +33,9 @@ import (
 const activeProcessPassword = "ActiveSignalFixture-123!"
 const activeProcessKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
-// The child executes production main in a separate test executable/process.
-// This is instrumented lifecycle acceptance, not a release-artifact/device test.
+// Exercise a separately built production server, rather than invoking main
+// inside the test executable. Published installer/device acceptance is separate.
 func TestActiveVoiceProcessPostgresSignal(t *testing.T) {
-	if os.Getenv("HICHAT_ACTIVE_VOICE_PROCESS_CHILD") == "1" {
-		cfg, err := pgx.ParseConfig(os.Getenv("DATABASE_URL"))
-		if err != nil || (cfg.Host != "127.0.0.1" && cfg.Host != "localhost") || !strings.HasPrefix(cfg.Database, "hichat_owner_watch_") {
-			t.Fatal("owned child database required")
-		}
-		main()
-		return
-	}
 	if runtime.GOOS == "windows" {
 		t.Skip("requires POSIX SIGTERM and disposable PostgreSQL")
 	}
@@ -97,10 +89,16 @@ func startActiveVoiceProcess(t *testing.T, dsn string, port int) (*exec.Cmd, <-c
 	if err != nil {
 		t.Fatal("process log unavailable")
 	}
-	child := exec.Command(os.Args[0], "-test.run=^TestActiveVoiceProcessPostgresSignal$")
+	binary := os.Getenv("HICHAT_ACTIVE_VOICE_SERVER_BINARY")
+	info, err := os.Stat(binary)
+	if !filepath.IsAbs(binary) || err != nil || !info.Mode().IsRegular() {
+		log.Close()
+		t.Fatal("absolute production server binary required; build with go build before running native process acceptance")
+	}
+	child := exec.Command(binary)
 	child.Dir = dir
 	// Do not inherit HF/cloud/SMTP credentials or production service switches.
-	child.Env = []string{"PATH=" + os.Getenv("PATH"), "TMPDIR=" + dir, "HICHAT_ACTIVE_VOICE_PROCESS_CHILD=1", "DATABASE_URL=" + dsn, "SERVER_HOST=127.0.0.1", fmt.Sprintf("SERVER_PORT=%d", port), "JWT_SECRET=isolated-active-process-fixture-secret-not-production", "ENCRYPTION_KEY=" + activeProcessKey, "ENVIRONMENT=development", "LOG_LEVEL=info", "LOG_FORMAT=text", "UPLOAD_DIR=" + filepath.Join(dir, "uploads"), "DATA_EXPORT_DIR=" + filepath.Join(dir, "exports")}
+	child.Env = []string{"PATH=" + os.Getenv("PATH"), "TMPDIR=" + dir, "DATABASE_URL=" + dsn, "SERVER_HOST=127.0.0.1", fmt.Sprintf("SERVER_PORT=%d", port), "JWT_SECRET=isolated-active-process-fixture-secret-not-production", "ENCRYPTION_KEY=" + activeProcessKey, "ENVIRONMENT=development", "LOG_LEVEL=info", "LOG_FORMAT=text", "UPLOAD_DIR=" + filepath.Join(dir, "uploads"), "DATA_EXPORT_DIR=" + filepath.Join(dir, "exports")}
 	child.Stdout = log
 	child.Stderr = log
 	if err = child.Start(); err != nil {
