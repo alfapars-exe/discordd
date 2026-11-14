@@ -10,6 +10,7 @@ import (
 )
 
 type failingStartupHub struct {
+	services.AuthSessionDisconnecter
 	services.GameJoinConnectionGate
 	ws.EventPublisher
 	marker any

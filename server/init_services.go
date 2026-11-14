@@ -183,6 +183,7 @@ type RateLimiters struct {
 // services.NewMetricsCollector below) — nil-safe, so tests/callers that
 // don't care about readiness integration can pass nil.
 type serviceHub interface {
+	services.AuthSessionDisconnecter
 	services.GameJoinConnectionGate
 	ws.EventPublisher
 	gameActivityHubPresence
@@ -390,7 +391,7 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 		services.NewEveryoneCosmeticEntitlements(repos.Cosmetic, repos.Server), hub)
 	authService := services.NewAuthService(
 		repos.User, repos.Session, repos.ResetToken, hub, emailSender,
-		voiceService, cfg.JWT.Secret, cfg.JWT.AccessTokenExpiry, cfg.JWT.RefreshTokenExpiry, services.WithAuthOwnershipInvalidator(permInvalidator), services.WithAuthUserCacheInvalidator(authCache), services.WithAuthAppLogger(appLogService), services.WithMFA(mfaService), services.WithAuthSessions(repos.AuthSession), services.WithAccountLifecycle(repos.AccountLifecycle), services.WithAccountAnonymization(repos.AccountAnonymization, musicBotService), services.WithApplicationRemoval(repos.ApplicationRemoval), services.WithServerOwnership(repos.ServerOwnership),
+		voiceService, cfg.JWT.Secret, cfg.JWT.AccessTokenExpiry, cfg.JWT.RefreshTokenExpiry, services.WithAuthSessionDisconnecter(hub), services.WithAuthOwnershipInvalidator(permInvalidator), services.WithAuthUserCacheInvalidator(authCache), services.WithAuthAppLogger(appLogService), services.WithMFA(mfaService), services.WithAuthSessions(repos.AuthSession), services.WithAccountLifecycle(repos.AccountLifecycle), services.WithAccountAnonymization(repos.AccountAnonymization, musicBotService), services.WithApplicationRemoval(repos.ApplicationRemoval), services.WithServerOwnership(repos.ServerOwnership),
 	)
 	metricsCollector := services.NewMetricsCollector(
 		repos.LiveKit, repos.MetricsHistory,

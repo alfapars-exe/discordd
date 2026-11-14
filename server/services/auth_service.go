@@ -82,6 +82,7 @@ type AuthTokens struct {
 }
 
 type authService struct {
+	sessionDisconnecter      AuthSessionDisconnecter
 	authSessions             repository.AuthSessionRepository
 	accountLifecycle         repository.AccountLifecycleRepository
 	accountAnonymization     repository.AccountAnonymizationRepository

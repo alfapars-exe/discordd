@@ -16,6 +16,15 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// AuthSessionDisconnecter closes only sockets bound to the revoked session.
+type AuthSessionDisconnecter interface{ DisconnectSession(string, string) }
+
+// WithAuthSessionDisconnecter explicitly selects live session revocation.
+// Nil keeps standalone services independent of transport session state.
+func WithAuthSessionDisconnecter(disconnecter AuthSessionDisconnecter) AuthOption {
+	return func(s *authService) { s.sessionDisconnecter = disconnecter }
+}
+
 type AuthOption func(*authService)
 
 var ErrRefreshSuperseded = errors.New("refresh token was already rotated")
@@ -268,8 +277,8 @@ func (s *authService) EndSession(ctx context.Context, userID, id string) error {
 }
 
 func (s *authService) disconnectSession(userID, id string) {
-	if hub, ok := s.hub.(interface{ DisconnectSession(string, string) }); ok {
-		hub.DisconnectSession(userID, id)
+	if s.sessionDisconnecter != nil {
+		s.sessionDisconnecter.DisconnectSession(userID, id)
 	}
 }
 func (s *authService) RevokeSession(ctx context.Context, userID, current, target, password, code string) error {
