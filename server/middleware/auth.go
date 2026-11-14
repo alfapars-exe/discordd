@@ -171,7 +171,7 @@ func (m *AuthMiddleware) Require(next http.Handler) http.Handler {
 		// password change / logout-from-all-devices / ban paths should
 		// call AuthMiddleware.InvalidateUser to drop the cached row —
 		// AuthService does this via revokeAllSessions, wired to this
-		// middleware through AuthService.SetUserCacheInvalidator in
+		// the shared AuthUserCache owner during construction in
 		// main.go (AdminUserService's ban/delete path is wired the
 		// same way).
 		if claims.TokenVersion < user.TokenVersion {

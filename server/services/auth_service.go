@@ -61,14 +61,6 @@ type AuthService interface {
 	// attachment access on revocation. Pre-issued LiveKit JWTs are independently
 	// valid until voiceTokenTTL if presented directly to the SFU.
 	LogoutAllDevices(ctx context.Context, userID string) error
-
-	// SetUserCacheInvalidator wires AuthMiddleware's user-cache invalidator
-	// so a credential-lifecycle event (password change/reset, logout-all)
-	// drops the cached user row immediately instead of waiting out
-	// userCacheTTL. Mirrors AdminUserService.SetUserCacheInvalidator; see
-	// its doc comment for why this is a post-construction setter rather
-	// than a constructor argument.
-	SetUserCacheInvalidator(inv UserCacheInvalidator)
 }
 
 type AuthTokens struct {
@@ -111,7 +103,7 @@ type authService struct {
 	// userInvalidator drops the HTTP auth user-cache on a credential-
 	// lifecycle event. Optional (nil-safe): absent wiring, the change
 	// still lands within userCacheTTL — this just makes it immediate.
-	// Wired post-construction by main.go (see SetUserCacheInvalidator),
+	// Selected during construction with WithAuthUserCacheInvalidator,
 	// same pattern as adminUserService.userInvalidator.
 	userInvalidator UserCacheInvalidator
 
@@ -148,16 +140,13 @@ func WithAuthAppLogger(logger AuthAppLogger) AuthOption {
 	return func(s *authService) { s.appLogger = logger }
 }
 
-// SetUserCacheInvalidator wires the auth middleware's user-cache
-// invalidator. Called post-construction in main.go because the middleware
-// is built after the service layer (it depends on AuthService itself) —
-// identical reasoning to adminUserService.SetUserCacheInvalidator.
-func (s *authService) SetUserCacheInvalidator(inv UserCacheInvalidator) {
-	s.userInvalidator = inv
+// WithAuthUserCacheInvalidator binds the independently owned identity cache.
+// Nil explicitly selects an isolated service without cached HTTP identities.
+func WithAuthUserCacheInvalidator(inv UserCacheInvalidator) AuthOption {
+	return func(s *authService) { s.userInvalidator = inv }
 }
 
-// invalidateUserCache is nil-safe — a no-op until SetUserCacheInvalidator
-// has been called.
+// invalidateUserCache is nil-safe for explicitly standalone services.
 func (s *authService) invalidateUserCache(userID string) {
 	if s.userInvalidator != nil {
 		s.userInvalidator.InvalidateUser(userID)

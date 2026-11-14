@@ -80,8 +80,7 @@ func newRevokeHarness(userRepo *testutil.MockUserRepo, sessionRepo *testutil.Moc
 		},
 	}
 
-	svc := NewAuthService(userRepo, sessionRepo, resetRepo, hub, &testutil.MockEmailSender{}, spy.voiceKit, testJWTSecret, 15, 7)
-	svc.SetUserCacheInvalidator(spy.inval)
+	svc := NewAuthService(userRepo, sessionRepo, resetRepo, hub, &testutil.MockEmailSender{}, spy.voiceKit, testJWTSecret, 15, 7, WithAuthUserCacheInvalidator(spy.inval))
 	return svc, spy
 }
 

@@ -220,7 +220,7 @@ func main() {
 	// not here: it fans out to both channelPermService (available now) and
 	// permMw (middleware.PermissionMiddleware, only constructed inside
 	// initRoutes) via services.NewMultiInvalidator, so it needs permMw's
-	// late binding — same pattern as svcs.AdminUser.SetUserCacheInvalidator(authMw)
+	// late binding — same pattern as svcs.AdminUser.SetUserCacheInvalidator(svcs.AuthCache)
 	// below.
 
 	// 9d. voiceService's member-timeout checker (repos.MemberTimeout) is now
@@ -333,7 +333,7 @@ func main() {
 
 	// 12. HTTP router + routes
 	mux := http.NewServeMux()
-	authMw, permMw := initRoutes(mux, h, svcs.Auth, repos.User, repos.Role, repos.Server, limiters.DeviceEnum, limiters.Refresh, botService)
+	authMw, permMw := initRoutes(mux, h, svcs.Auth, repos.User, repos.Role, repos.Server, limiters.DeviceEnum, limiters.Refresh, botService, svcs.AuthCache)
 	defer authMw.Stop()
 	defer permMw.Stop()
 
@@ -352,16 +352,13 @@ func main() {
 	// platform ban / hard-delete / admin-status change drops the cached user
 	// row immediately, instead of letting a just-banned account keep making
 	// authenticated REST calls until the ~30s cache TTL expires (F-7).
-	svcs.AdminUser.SetUserCacheInvalidator(authMw)
+	svcs.AdminUser.SetUserCacheInvalidator(svcs.AuthCache)
 
-	// Same wiring for the auth service itself: ChangePassword, ResetPassword,
-	// and LogoutAllDevices all call revokeAllSessions, which drops the
-	// cached user row so a bumped token_version is enforced on the next
-	// HTTP request instead of up to ~30s later.
-	svcs.Auth.SetUserCacheInvalidator(authMw)
+	// Auth credential actions already share the identity-cache owner through
+	// constructor injection. Profile writers still bind that same owner here.
 	// Profile writes must also be visible to the next authenticated /users/me
 	// read, rather than returning the pre-save cached profile for 30 seconds.
-	svcs.Member.SetUserCacheInvalidator(authMw)
+	svcs.Member.SetUserCacheInvalidator(svcs.AuthCache)
 
 	// Wire the server-level permission cache (middleware/permission.go) into
 	// the same PermissionInvalidator fan-out as channelPermService's

@@ -41,7 +41,7 @@ func TestRouteInitializationOwnsCacheWorkersUntilSuccessfulReturn(t *testing.T) 
 			var caught any
 			func() {
 				defer func() { caught = recover() }()
-				initRoutes(&failingRouteRegistrar{remaining: position, marker: marker}, &Handlers{}, nil, nil, nil, nil, nil, nil, nil)
+				initRoutes(&failingRouteRegistrar{remaining: position, marker: marker}, &Handlers{}, nil, nil, nil, nil, nil, nil, nil, nil)
 			}()
 			if caught != marker {
 				t.Fatalf("registration panic changed: %v", caught)
@@ -53,7 +53,7 @@ func TestRouteInitializationOwnsCacheWorkersUntilSuccessfulReturn(t *testing.T) 
 	}
 	t.Run("successful_handoff", func(t *testing.T) {
 		before := routeCacheWorkerCount(t)
-		auth, perm := initRoutes(&recordingRegistrar{}, &Handlers{}, nil, nil, nil, nil, nil, nil, nil)
+		auth, perm := initRoutes(&recordingRegistrar{}, &Handlers{}, nil, nil, nil, nil, nil, nil, nil, nil)
 		t.Cleanup(auth.Stop)
 		t.Cleanup(perm.Stop)
 		if after := routeCacheWorkerCount(t); after != before+2 {

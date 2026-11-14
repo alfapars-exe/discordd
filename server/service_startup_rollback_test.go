@@ -66,8 +66,8 @@ func TestServiceInitializationTransfersLiveWorkersToSuccessfulCaller(t *testing.
 			owner.Stop()
 		}
 	})
-	if got := routeCacheWorkerCount(t); got != caches+2 {
-		t.Fatalf("successful initialization transferred %d cache workers, want 2", got-caches)
+	if got := routeCacheWorkerCount(t); got != caches+3 {
+		t.Fatalf("successful initialization transferred %d cache workers, want 3", got-caches)
 	}
 	if got := limiterWorkerCount(t); got != limitersBefore+18 {
 		t.Fatalf("successful initialization transferred %d limiter workers, want 18", got-limitersBefore)

@@ -6,6 +6,9 @@ func stopServiceCacheWorkers(svcs *Services) {
 	if svcs == nil {
 		return
 	}
+	if svcs.AuthCache != nil {
+		svcs.AuthCache.Close()
+	}
 	if svcs.ChannelPermission != nil {
 		svcs.ChannelPermission.Stop()
 	}

@@ -109,17 +109,15 @@ func (s *stubAuthService) ForgotPassword(_ context.Context, _ string) (int, erro
 	return 0, nil
 }
 func (s *stubAuthService) ResetPassword(_ context.Context, _, _ string) error { return nil }
-func (s *stubAuthService) SetAppLogger(_ services.AuthAppLogger)              {}
 
-// LogoutAllDevices / SetUserCacheInvalidator — added with the
+// LogoutAllDevices — added with the
 // session-lifecycle guard (H-06). These cookie/media-token tests don't
 // exercise either, so the stub is inert like ChangePassword/ChangeEmail
 // above.
-func (s *stubAuthService) LogoutAllDevices(_ context.Context, _ string) error      { return nil }
-func (s *stubAuthService) SetUserCacheInvalidator(_ services.UserCacheInvalidator) {}
+func (s *stubAuthService) LogoutAllDevices(_ context.Context, _ string) error { return nil }
 
 // SetVoiceDisconnecter — added with the security review 2026-08-01 voice-kick
-// fix (finding 3). Inert here for the same reason as SetUserCacheInvalidator
+// fix (finding 3). Inert here for these cookie-only tests
 // above: these tests never exercise revokeAllSessions.
 
 func newCookieTestHandler(svc services.AuthService) *AuthHandler {

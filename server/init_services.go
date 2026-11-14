@@ -8,6 +8,7 @@ import (
 
 	"github.com/argeinfina/hichat/config"
 	"github.com/argeinfina/hichat/database"
+	"github.com/argeinfina/hichat/middleware"
 	"github.com/argeinfina/hichat/pkg/crypto"
 	"github.com/argeinfina/hichat/pkg/email"
 	"github.com/argeinfina/hichat/pkg/ratelimit"
@@ -28,6 +29,7 @@ func (a gameActivityPresenceAdapter) IsVisibleOnline(_ context.Context, userID s
 
 // Services holds all service instances.
 type Services struct {
+	AuthCache               *middleware.AuthUserCache
 	Auth                    services.AuthService
 	MFA                     *services.MFAService
 	EmailVerification       *services.EmailVerificationService
@@ -198,6 +200,8 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 			}
 		}
 	}()
+	authCache := middleware.NewAuthUserCache()
+	rollback = append(rollback, authCache.Close)
 	// Order-sensitive services
 	channelPermService := services.NewChannelPermissionService(
 		repos.ChannelPermission, repos.Role, repos.Channel, hub,
@@ -382,7 +386,7 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 		services.NewEveryoneCosmeticEntitlements(repos.Cosmetic, repos.Server), hub)
 	authService := services.NewAuthService(
 		repos.User, repos.Session, repos.ResetToken, hub, emailSender,
-		voiceService, cfg.JWT.Secret, cfg.JWT.AccessTokenExpiry, cfg.JWT.RefreshTokenExpiry, services.WithAuthAppLogger(appLogService), services.WithMFA(mfaService), services.WithAuthSessions(repos.AuthSession), services.WithAccountLifecycle(repos.AccountLifecycle), services.WithAccountAnonymization(repos.AccountAnonymization, musicBotService), services.WithApplicationRemoval(repos.ApplicationRemoval), services.WithServerOwnership(repos.ServerOwnership),
+		voiceService, cfg.JWT.Secret, cfg.JWT.AccessTokenExpiry, cfg.JWT.RefreshTokenExpiry, services.WithAuthUserCacheInvalidator(authCache), services.WithAuthAppLogger(appLogService), services.WithMFA(mfaService), services.WithAuthSessions(repos.AuthSession), services.WithAccountLifecycle(repos.AccountLifecycle), services.WithAccountAnonymization(repos.AccountAnonymization, musicBotService), services.WithApplicationRemoval(repos.ApplicationRemoval), services.WithServerOwnership(repos.ServerOwnership),
 	)
 	metricsCollector := services.NewMetricsCollector(
 		repos.LiveKit, repos.MetricsHistory,
@@ -396,6 +400,7 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	wsTicketService := services.NewWSTicketService()
 	rollback = append(rollback, wsTicketService.Stop)
 	svcs := &Services{
+		AuthCache:               authCache,
 		Auth:                    authService,
 		MFA:                     mfaService,
 		Server:                  serverService,

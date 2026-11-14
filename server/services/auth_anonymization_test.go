@@ -16,7 +16,7 @@ func TestAccountAnonymizationRequiresPasswordFactorAndRevokes(t *testing.T) {
 	h, s, hub := boundAuthHarness(t)
 	invalidator := &adminInvalStub{}
 	voice := &testutil.MockVoiceDisconnecter{}
-	s.SetUserCacheInvalidator(invalidator)
+	s.userInvalidator = invalidator
 	s.voiceKit = voice
 	disconnected := ""
 	hub.DisconnectUserFn = func(id string) { disconnected = id }
@@ -57,7 +57,7 @@ func TestAccountAnonymizationFailureDoesNotRevoke(t *testing.T) {
 	invalidation := &adminInvalStub{}
 	voice := &testutil.MockVoiceDisconnecter{}
 	disconnects, observers := 0, 0
-	s.SetUserCacheInvalidator(invalidation)
+	s.userInvalidator = invalidation
 	s.voiceKit = voice
 	hub.DisconnectUserFn = func(string) { disconnects++ }
 	WithAccountAnonymization(repository.NewSQLiteAccountAnonymizationRepo(h.db.Conn), musicRequesterObserverFunc(func(string) { observers++ }))(s)
@@ -86,7 +86,7 @@ func TestMusicRequesterPrivacyObserverCannotDelaySecurityRevocation(t *testing.T
 			voice := &testutil.MockVoiceDisconnecter{}
 			ownership := &stubInvalidator{}
 			disconnected := ""
-			auth.SetUserCacheInvalidator(invalidation)
+			auth.userInvalidator = invalidation
 			auth.voiceKit = voice
 			auth.SetOwnershipInvalidator(ownership)
 			hub.DisconnectUserFn = func(id string) { disconnected = id }
