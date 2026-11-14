@@ -191,32 +191,7 @@ func registerHubCallbacks(
 
 	// ─── P2P Call Callbacks ───
 
-	hub.OnP2PCallInitiate(func(callerID string, data ws.P2PCallInitiateData) {
-		callType := models.P2PCallType(data.CallType)
-		if err := p2pCallService.InitiateCall(callerID, data.ReceiverID, callType); err != nil {
-			hubLogger.Error("p2p call initiate failed", "area", "p2p", "caller_id", callerID, "receiver_id", data.ReceiverID, "err", pkg.ErrText(err))
-		}
-	})
-	hub.OnP2PCallAccept(func(userID string, data ws.P2PCallAcceptData) {
-		if err := p2pCallService.AcceptCall(userID, data.CallID); err != nil {
-			hubLogger.Error("p2p call accept failed", "area", "p2p", "user_id", userID, "call_id", data.CallID, "err", pkg.ErrText(err))
-		}
-	})
-	hub.OnP2PCallDecline(func(userID string, data ws.P2PCallDeclineData) {
-		if err := p2pCallService.DeclineCall(userID, data.CallID); err != nil {
-			hubLogger.Error("p2p call decline failed", "area", "p2p", "user_id", userID, "call_id", data.CallID, "err", pkg.ErrText(err))
-		}
-	})
-	hub.OnP2PCallEnd(func(userID, callID string) {
-		if err := p2pCallService.EndCall(userID, callID); err != nil {
-			hubLogger.Error("p2p call end failed", "area", "p2p", "user_id", userID, "err", pkg.ErrText(err))
-		}
-	})
-	hub.OnP2PSignal(func(senderID string, data ws.P2PSignalData) {
-		if err := p2pCallService.RelaySignal(senderID, data.CallID, data); err != nil {
-			hubLogger.Error("p2p signal relay failed", "area", "p2p", "sender_id", senderID, "call_id", data.CallID, "err", pkg.ErrText(err))
-		}
-	})
+	registerP2PCallbacks(hub, p2pCallService)
 
 	// ─── Channel Typing Callback ───
 	// Validates BOTH the sender and each recipient have ReadMessages

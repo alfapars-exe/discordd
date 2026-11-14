@@ -2106,3 +2106,9 @@ The constructor contract regression failed first (six inputs rather than seven);
 Added a real SQLite composition test using initRepositories, initServices and the declared notifier runtime contract. A Hub wrapper provides a fixed visible-user input; the production repositories and notifier persist exactly one notice across repeated online calls. After resetting the epoch and committing a blocked friendship, another call adds no notice. Stop causes the next presence call to return context.Canceled. The test passed initially (1.105s) and across three consecutive executions (1.605s); scoped vet and diff checks passed. This is not a real socket/client or PostgreSQL acceptance claim.
 
 The five-package full test run against source 3f0c2470 passed: services 96.344s, middleware 2.043s, handlers 8.127s, ws 5.411s, root 15.232s. The new composition test was then verified separately as above. Complete callback registration/execution coverage and current aggregate Linux race CI remain open.
+
+### RF11 — P2P callback registration boundary and payload routing (2026-11-14)
+
+Extracted the five existing P2P registrations into registerP2PCallbacks with a narrow registrar interface; callback bodies and service calls are unchanged. Tests execute every captured callback for success and service-error cases, checking the exact actor, receiver, call type, call IDs and signal payload reaching the matching service method. Selected P2P callback/wiring/route tests passed (0.753s), build and scoped vet passed. Transport scheduling and physical media are separate; the complete Hub callback matrix remains open.
+
+Remote source 08cf44f2432722f166a85eb394bff38a2cd5fc63 completed run 43635956632 with all 36 PR checks successful. Receipt: implementation/verification/refactor-integration-08cf-terminal-2026-11-14.json. This does not prove later Hub/presence/P2P commits; the next aggregate requires its own CI.
