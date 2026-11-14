@@ -247,8 +247,8 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	p2pCallService := services.NewP2PCallService(repos.Friendship, repos.User, hub, emailDeliveryService, appLogService)
 	emailVerificationService := services.NewEmailVerificationService(repos.EmailVerification, emailSender)
 
-	channelService := services.NewChannelService(voiceService, repos.Channel, repos.Category, hub, channelPermService, auditLogService, repos.Notification)
-	threadService := services.NewThreadService(repos.Channel, repos.Message, channelPermService, hub)
+	channelService := services.NewChannelService(voiceService, repos.Channel, repos.Category, hub, channelPermService, auditLogService, repos.Notification, channelPermService)
+	threadService := services.NewThreadService(repos.Channel, repos.Message, channelPermService, hub, channelPermService)
 	// Enables best-effort on-disk cleanup of attachment files on delete (see
 	// services/upload_cleanup.go) without widening the constructor signature
 	// — uploadDir stays a setter (unlike auditLogger above) because it's a

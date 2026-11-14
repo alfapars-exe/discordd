@@ -73,7 +73,7 @@ func TestThreadSQLiteHTTPArchiveAccessAndReopen(t *testing.T) {
 			broadcasts++
 		}},
 	}
-	handler := NewThreadHandler(services.NewThreadService(channels, repository.NewSQLiteMessageRepo(q), permissions, hub))
+	handler := NewThreadHandler(services.NewThreadService(channels, repository.NewSQLiteMessageRepo(q), permissions, hub, permissions))
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /channels/{channelId}/threads", handler.Create)
 	mux.HandleFunc("GET /threads/{threadId}", handler.Get)

@@ -579,3 +579,20 @@ func TestGameJoinPolicyDeclaresFreshPermissionsAndVoiceAdmission(t *testing.T) {
 		t.Fatal("fresh permission provider must be explicit")
 	}
 }
+
+func TestChannelAndThreadConstructorsDeclareFreshPublicationPermissions(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		factory reflect.Type
+		inputs  int
+	}{{"channel", reflect.TypeOf(NewChannelService), 8}, {"thread", reflect.TypeOf(NewThreadService), 5}} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.factory.NumIn() != tc.inputs {
+				t.Fatalf("constructor inputs=%d want%d", tc.factory.NumIn(), tc.inputs)
+			}
+			if tc.factory.In(tc.inputs-1) != reflect.TypeFor[FreshChannelPermResolver]() {
+				t.Fatal("fresh publication permission source must be explicit")
+			}
+		})
+	}
+}

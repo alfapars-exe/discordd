@@ -50,11 +50,12 @@ type ChannelService interface {
 }
 
 type channelService struct {
-	channelRepo  repository.ChannelRepository
-	categoryRepo repository.CategoryRepository
-	hub          ws.BroadcastAndOnline
-	visChecker   ChannelVisibilityChecker
-	auditLogger  AuditWriter
+	freshPermissions FreshChannelPermResolver
+	channelRepo      repository.ChannelRepository
+	categoryRepo     repository.CategoryRepository
+	hub              ws.BroadcastAndOnline
+	visChecker       ChannelVisibilityChecker
+	auditLogger      AuditWriter
 	// notificationRepo is only used for the best-effort inbox cleanup in
 	// Delete (notifications.channel_id has no enforced FK on Turso).
 	notificationRepo repository.NotificationRepository
@@ -90,8 +91,10 @@ func NewChannelService(
 	visChecker ChannelVisibilityChecker,
 	auditLogger AuditWriter,
 	notificationRepo repository.NotificationRepository,
+	freshPermissions FreshChannelPermResolver,
 ) ChannelService {
 	return &channelService{
+		freshPermissions:     freshPermissions,
 		voiceDeletionHandler: voiceDeletionHandler,
 		channelRepo:          channelRepo,
 		categoryRepo:         categoryRepo,
@@ -311,7 +314,7 @@ func (s *channelService) Update(ctx context.Context, serverID, actorID, id strin
 		return nil, err
 	}
 
-	broadcastVisibleChannel(ctx, s.hub, s.visChecker, channel, ws.OpChannelUpdate)
+	broadcastVisibleChannel(ctx, s.hub, s.visChecker, s.freshPermissions, channel, ws.OpChannelUpdate)
 
 	// Only the rename branch is auditable here. Topic and category-move
 	// edits are too noisy (every drag-drop reorder would log) and there's
@@ -434,12 +437,18 @@ func (s *channelService) ReorderChannels(ctx context.Context, serverID string, r
 	return grouped, nil
 }
 
-func broadcastVisibleChannel(ctx context.Context, hub ws.BroadcastAndOnline, resolver ChannelPermResolver, channel *models.Channel, op string) {
+func broadcastVisibleChannel(ctx context.Context, hub ws.BroadcastAndOnline, resolver ChannelPermResolver, fresh FreshChannelPermResolver, channel *models.Channel, op string) {
 	online := hub.GetOnlineUserIDsForServer(channel.ServerID)
 	if len(online) == 0 {
 		return
 	}
-	perms, err := resolveFreshFanoutPermissions(ctx, resolver, channel.ID, online)
+	var perms map[string]models.Permission
+	var err error
+	if fresh != nil {
+		perms, err = fresh.ResolveChannelPermissionsBulkFresh(ctx, channel.ID, online)
+	} else {
+		perms, err = resolver.ResolveChannelPermissionsBulk(ctx, channel.ID, online)
+	}
 	if err != nil {
 		channelLogger.Error("channel event permission lookup failed", "channel_id", channel.ID, "error", pkg.ErrText(err))
 		return

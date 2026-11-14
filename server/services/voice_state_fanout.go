@@ -347,10 +347,3 @@ func (f *voiceStateFanout) dropped() uint64 {
 	}
 	return f.dropCount.Load()
 }
-
-func resolveFreshFanoutPermissions(ctx context.Context, resolver ChannelPermResolver, channelID string, recipients []string) (map[string]models.Permission, error) {
-	if cached, ok := resolver.(*cachingPermResolver); ok {
-		return cached.inner.ResolveChannelPermissionsBulk(ctx, channelID, recipients)
-	}
-	return resolver.ResolveChannelPermissionsBulk(ctx, channelID, recipients)
-}

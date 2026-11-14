@@ -50,7 +50,7 @@ func TestChannelDeleteCleansVoiceOnlyAfterRepositoryDeleteSucceeds(t *testing.T)
 				},
 			}
 			handler := &recordingVoiceChannelDeletionHandler{deleteComplete: &deleteComplete}
-			service := NewChannelService(handler, repo, nil, &testutil.MockBroadcastAndOnline{}, nil, nil, &testutil.MockNotificationRepo{}).(*channelService)
+			service := NewChannelService(handler, repo, nil, &testutil.MockBroadcastAndOnline{}, nil, nil, &testutil.MockNotificationRepo{}, nil).(*channelService)
 
 			err := service.Delete(context.Background(), "server-1", "actor-1", "voice-1")
 			if tc.deleteErr != nil && !errors.Is(err, tc.deleteErr) {
