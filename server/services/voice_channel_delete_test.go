@@ -71,11 +71,11 @@ func TestDeleteVoiceChannelClearsStateAndRejectsLateJoin(t *testing.T) {
 				return []string{"joining-user"}, nil
 			},
 		},
-		nil, nil, nil, nil,
+		nil, nil, nil, nil, nil,
 	).(*voiceService)
 	t.Cleanup(svc.ShutdownVoiceStateFanout)
 	musicHook := &deletionMusicBotHook{stopped: make(chan string, 1)}
-	svc.SetMusicBotHook(musicHook)
+	testVoiceState(svc).musicBotHook = musicHook
 	// Include an existing occupant, viewer bookkeeping, and a room key so this
 	// verifies the full in-memory cleanup path as well as the late-join fence.
 	svc.states["occupant"] = &models.VoiceState{
@@ -163,7 +163,7 @@ func TestJoinWebhookEvictsStaleTokenForDeletedChannel(t *testing.T) {
 		getter,
 		&testutil.MockChannelPermResolver{},
 		&voiceTestBroadcaster{&testutil.MockBroadcaster{}},
-		nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil,
 	).(*voiceService)
 	t.Cleanup(svc.ShutdownVoiceStateFanout)
 

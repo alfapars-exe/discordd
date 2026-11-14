@@ -239,7 +239,7 @@ func TestVoiceMaintenanceOrphanSweepJoinsMusicCleanup(t *testing.T) {
 	entered, release, done := make(chan struct{}), make(chan struct{}), make(chan struct{})
 	var releaseOnce sync.Once
 	t.Cleanup(func() { releaseOnce.Do(func() { close(release) }); <-done })
-	svc.SetMusicBotHook(&mockMusicBotHook{StopAllForChannelFn: func(string) { close(entered); <-release }})
+	testVoiceState(svc).musicBotHook = &mockMusicBotHook{StopAllForChannelFn: func(string) { close(entered); <-release }}
 	s.states["victim"] = &models.VoiceState{UserID: "victim", ChannelID: "ch1", ServerID: "srv1"}
 	s.offlineSince["victim"] = time.Now().Add(-orphanGracePeriod - time.Second)
 	go func() { s.sweepOrphanStates(); close(done) }()

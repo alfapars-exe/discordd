@@ -114,10 +114,7 @@ type VoiceService interface {
 type VoiceRuntime interface {
 	VoiceService
 	SetAppLogger(logger VoiceAppLogger)
-	SetMusicBotHook(hook MusicBotChannelHook)
-	// SetEntranceHook wires the entrance-sound trigger fired on a fresh
-	// voice join (see VoiceEntranceHook). Nil disables it.
-	SetEntranceHook(hook VoiceEntranceHook)
+
 	VoiceChannelDeletionHandler
 	StopMaintenance()
 	ShutdownUsageProducers()
@@ -234,6 +231,7 @@ func NewVoiceService(
 	timeoutChecker MemberTimeoutChecker,
 	banChecker BanChecker,
 	auditLogger AuditWriter,
+	integrations func(VoiceService) (VoiceEntranceHook, MusicBotChannelHook),
 ) VoiceRuntime {
 	service := &voiceService{
 		states:             make(map[string]*models.VoiceState),
@@ -255,6 +253,12 @@ func NewVoiceService(
 		banChecker:         banChecker,
 		auditLogger:        auditLogger,
 	}
+	// Build mutually dependent integrations against initialized voice state,
+	// before allocating workers or exposing the service to request handlers.
+	// Nil explicitly selects standalone voice without media hooks.
+	if integrations != nil {
+		service.entranceHook, service.musicBotHook = integrations(service)
+	}
 	service.voiceFanout = newVoiceStateFanout(service)
 	if cache, ok := permResolver.(*cachingPermResolver); ok {
 		cache.afterInvalidation = service.recheckVoiceAccess
@@ -268,16 +272,6 @@ func (s *voiceService) ShutdownVoiceStateFanout() {
 	if s.voiceFanout != nil {
 		s.voiceFanout.shutdown()
 	}
-}
-
-func (s *voiceService) SetMusicBotHook(hook MusicBotChannelHook) {
-	s.musicBotHook = hook
-}
-
-// SetEntranceHook is called once during wiring, before any WS client can
-// join a voice channel, so the field needs no lock (same as SetMusicBotHook).
-func (s *voiceService) SetEntranceHook(hook VoiceEntranceHook) {
-	s.entranceHook = hook
 }
 
 func (s *voiceService) SetAppLogger(logger VoiceAppLogger) {

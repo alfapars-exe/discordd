@@ -270,7 +270,7 @@ func TestVerifyCurrentScreenShareUsesLiveKitParticipantAndExactTrack(t *testing.
 		return models.PermViewChannel | models.PermConnectVoice | models.PermStream, nil
 	}}
 	servers := &testutil.MockServerRepo{IsMemberFn: func(context.Context, string, string) (bool, error) { return true, nil }}
-	service := NewVoiceService(channels, livekitGetter, permissions, nil, nil, servers, key, streamVerifierTimeoutChecker{}, streamVerifierBanChecker{}, nil).(*voiceService)
+	service := NewVoiceService(channels, livekitGetter, permissions, nil, nil, servers, key, streamVerifierTimeoutChecker{}, streamVerifierBanChecker{}, nil, nil).(*voiceService)
 	service.states["actor-1"] = &models.VoiceState{UserID: "actor-1", ServerID: "server-1", ChannelID: "channel-1"}
 
 	valid, err := service.VerifyCurrentScreenShare(context.Background(), "lk-current", "server-1", "channel-1", "actor-1", "TR_expected")

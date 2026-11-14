@@ -153,8 +153,38 @@ func TestVoiceRequestInterfaceExcludesCompositionSetters(t *testing.T) {
 		if _, ok := request.MethodByName(name); ok {
 			t.Errorf("request interface exposes %s", name)
 		}
-		if _, ok := owner.MethodByName(name); !ok {
-			t.Errorf("runtime owner omits %s", name)
+		if _, ok := owner.MethodByName(name); ok != (name == "SetAppLogger") {
+			t.Errorf("runtime composition method %s has unexpected presence", name)
 		}
+	}
+}
+
+func TestVoiceConstructorRequiresIntegrationFactory(t *testing.T) {
+	factory := reflect.TypeOf(NewVoiceService)
+	if factory.NumIn() != 11 {
+		t.Fatalf("voice constructor inputs=%d, want11", factory.NumIn())
+	}
+	if factory.In(10) != reflect.TypeFor[func(VoiceService) (VoiceEntranceHook, MusicBotChannelHook)]() {
+		t.Fatal("integration factory is not explicit")
+	}
+}
+
+func TestVoiceConstructorBindsIntegrationsBeforeWorkers(t *testing.T) {
+	entrance := newRecordingEntranceHook()
+	music := &mockMusicBotHook{}
+	calls := 0
+	service := NewVoiceService(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		func(voice VoiceService) (VoiceEntranceHook, MusicBotChannelHook) {
+			calls++
+			state := testVoiceState(voice)
+			if state.states == nil || state.voiceFanout != nil {
+				t.Fatal("factory must run after state init and before workers")
+			}
+			return entrance, music
+		})
+	t.Cleanup(service.ShutdownVoiceStateFanout)
+	state := testVoiceState(service)
+	if calls != 1 || state.entranceHook != entrance || state.musicBotHook != music || state.voiceFanout == nil {
+		t.Fatal("integrations not bound before constructor return")
 	}
 }

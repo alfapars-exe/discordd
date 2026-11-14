@@ -388,7 +388,7 @@ func TestVoiceUsageShutdownWaitsForEntranceHook(t *testing.T) {
 	entered, release := make(chan struct{}), make(chan struct{})
 	var once sync.Once
 	t.Cleanup(func() { once.Do(func() { close(release) }); s.ShutdownUsageProducers() })
-	s.SetEntranceHook(blockingUsageEntranceHook{entered: entered, release: release})
+	testVoiceState(s).entranceHook = blockingUsageEntranceHook{entered: entered, release: release}
 	if err := s.JoinChannel("victim", "victim", "Victim", "", "ch1", false, false); err != nil {
 		t.Fatal(err)
 	}

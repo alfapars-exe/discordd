@@ -134,10 +134,10 @@ func newTestVoiceService() (VoiceRuntime, *testutil.MockBroadcaster) {
 				return []string{"voice-test-member"}, nil
 			},
 		}, // afkTimeoutGetter — also backs the N-01 membership check
-		nil, // encryptionKey
-		nil, // timeoutChecker — nil here is intentional; see TestVoiceJoinChannel_NilTimeoutChecker_Allows. Production always passes repos.MemberTimeout.
-		nil, // banChecker — same rationale
-		nil, // auditLogger — same rationale
+		nil,      // encryptionKey
+		nil,      // timeoutChecker — nil here is intentional; see TestVoiceJoinChannel_NilTimeoutChecker_Allows. Production always passes repos.MemberTimeout.
+		nil,      // banChecker — same rationale
+		nil, nil, // auditLogger — same rationale
 	)
 	return svc, hub
 }
@@ -205,8 +205,8 @@ func newTestVoiceServiceWithTimeoutChecker(checker MemberTimeoutChecker) (VoiceR
 		},
 		nil, // encryptionKey
 		checker,
-		nil, // banChecker — not under test here
-		nil, // auditLogger — not under test here
+		nil,      // banChecker — not under test here
+		nil, nil, // auditLogger — not under test here
 	)
 	return svc, hub
 }
@@ -239,7 +239,7 @@ func newTestVoiceServiceWithModeration(timeoutChecker MemberTimeoutChecker, banC
 		nil, // encryptionKey
 		timeoutChecker,
 		banChecker,
-		nil, // auditLogger — not under test here
+		nil, nil, // auditLogger — not under test here
 	)
 	return svc, hub
 }
@@ -365,10 +365,10 @@ func newTestVoiceServiceWithChannelRepo(channelRepo ChannelGetter) (VoiceRuntime
 				return []string{"voice-test-member"}, nil
 			},
 		},
-		nil, // encryptionKey
-		nil, // timeoutChecker — not under test here
-		nil, // banChecker — not under test here
-		nil, // auditLogger — not under test here
+		nil,      // encryptionKey
+		nil,      // timeoutChecker — not under test here
+		nil,      // banChecker — not under test here
+		nil, nil, // auditLogger — not under test here
 	)
 	return svc, hub
 }
@@ -856,11 +856,11 @@ func TestJoinChannel_CrossChannelSwitch_StopsMusicBotWhenOldChannelEmpties(t *te
 	hub.BroadcastToServerFn = func(_ string, _ ws.Event) {}
 
 	stopped := make(chan string, 4)
-	svc.SetMusicBotHook(&mockMusicBotHook{
+	testVoiceState(svc).musicBotHook = &mockMusicBotHook{
 		StopAllForChannelFn: func(channelID string) {
 			stopped <- channelID
 		},
-	})
+	}
 
 	if err := svc.JoinChannel("u1", "alice", "Alice", "", "ch1", false, false); err != nil {
 		t.Fatalf("initial join failed: %v", err)
@@ -895,11 +895,11 @@ func TestJoinChannel_CrossChannelSwitch_DoesNotStopMusicBotWhenOldChannelStillOc
 	hub.BroadcastToServerFn = func(_ string, _ ws.Event) {}
 
 	stopped := make(chan string, 4)
-	svc.SetMusicBotHook(&mockMusicBotHook{
+	testVoiceState(svc).musicBotHook = &mockMusicBotHook{
 		StopAllForChannelFn: func(channelID string) {
 			stopped <- channelID
 		},
-	})
+	}
 
 	if err := svc.JoinChannel("u1", "alice", "Alice", "", "ch1", false, false); err != nil {
 		t.Fatalf("u1 initial join failed: %v", err)
@@ -1081,10 +1081,10 @@ func TestJoinChannel_SameChannelRejoin_TransientAuthError_PreservesLiveSession(t
 				return false, transientErr // rejoin: a transient DB hiccup, NOT a sentinel
 			},
 		},
-		nil, // encryptionKey
-		nil, // timeoutChecker
-		nil, // banChecker
-		nil, // auditLogger
+		nil,      // encryptionKey
+		nil,      // timeoutChecker
+		nil,      // banChecker
+		nil, nil, // auditLogger
 	)
 
 	if err := svc.JoinChannel("u1", "alice", "Alice", "", "ch1", false, false); err != nil {
@@ -1142,9 +1142,9 @@ func TestAdminDisconnectUser_StopsMusicBotWhenChannelEmpties(t *testing.T) {
 	hub.BroadcastToUserFn = func(_ string, _ ws.Event) {}
 
 	stopped := make(chan string, 4)
-	svc.SetMusicBotHook(&mockMusicBotHook{
+	testVoiceState(svc).musicBotHook = &mockMusicBotHook{
 		StopAllForChannelFn: func(channelID string) { stopped <- channelID },
-	})
+	}
 
 	if err := svc.JoinChannel("victim", "victim", "Victim", "", "ch1", false, false); err != nil {
 		t.Fatalf("initial join failed: %v", err)
@@ -1172,9 +1172,9 @@ func TestAdminDisconnectUser_DoesNotStopMusicBotWhenChannelStillOccupied(t *test
 	hub.BroadcastToUserFn = func(_ string, _ ws.Event) {}
 
 	stopped := make(chan string, 4)
-	svc.SetMusicBotHook(&mockMusicBotHook{
+	testVoiceState(svc).musicBotHook = &mockMusicBotHook{
 		StopAllForChannelFn: func(channelID string) { stopped <- channelID },
-	})
+	}
 
 	if err := svc.JoinChannel("victim", "victim", "Victim", "", "ch1", false, false); err != nil {
 		t.Fatalf("victim initial join failed: %v", err)
@@ -1268,10 +1268,10 @@ func newTestVoiceServiceWithLiveKitGetter(lkGetter LiveKitInstanceGetter) (Voice
 				return []string{"voice-test-member"}, nil
 			},
 		},
-		nil, // encryptionKey
-		nil, // timeoutChecker — not under test here
-		nil, // banChecker — not under test here
-		nil, // auditLogger — not under test here
+		nil,      // encryptionKey
+		nil,      // timeoutChecker — not under test here
+		nil,      // banChecker — not under test here
+		nil, nil, // auditLogger — not under test here
 	)
 	return svc, hub
 }
@@ -1474,9 +1474,9 @@ func TestMoveUser_StopsMusicBotWhenSourceChannelEmpties(t *testing.T) {
 	hub.BroadcastToUsersFn = func(_ []string, _ ws.Event) {}
 
 	stopped := make(chan string, 4)
-	svc.SetMusicBotHook(&mockMusicBotHook{
+	testVoiceState(svc).musicBotHook = &mockMusicBotHook{
 		StopAllForChannelFn: func(channelID string) { stopped <- channelID },
-	})
+	}
 
 	if err := svc.JoinChannel("victim", "victim", "Victim", "", "ch1", false, false); err != nil {
 		t.Fatalf("initial join failed: %v", err)
@@ -1506,9 +1506,9 @@ func TestMoveUser_DoesNotStopMusicBotWhenSourceChannelStillOccupied(t *testing.T
 	hub.BroadcastToUsersFn = func(_ []string, _ ws.Event) {}
 
 	stopped := make(chan string, 4)
-	svc.SetMusicBotHook(&mockMusicBotHook{
+	testVoiceState(svc).musicBotHook = &mockMusicBotHook{
 		StopAllForChannelFn: func(channelID string) { stopped <- channelID },
-	})
+	}
 
 	if err := svc.JoinChannel("victim", "victim", "Victim", "", "ch1", false, false); err != nil {
 		t.Fatalf("victim initial join failed: %v", err)
@@ -1630,9 +1630,9 @@ func TestOrphanSweep_StopsMusicBotWhenChannelEmpties(t *testing.T) {
 	hub.BroadcastToServerFn = func(_ string, _ ws.Event) {}
 
 	stopped := make(chan string, 4)
-	svc.SetMusicBotHook(&mockMusicBotHook{
+	testVoiceState(svc).musicBotHook = &mockMusicBotHook{
 		StopAllForChannelFn: func(channelID string) { stopped <- channelID },
-	})
+	}
 
 	vs, ok := svc.(*voiceService)
 	if !ok {
@@ -1684,17 +1684,17 @@ func TestOrphanSweep_DoesNotStopMusicBotWhenChannelStillOccupied(t *testing.T) {
 		&testutil.MockServerRepo{
 			IsMemberFn: func(_ context.Context, _, _ string) (bool, error) { return true, nil },
 		},
-		nil, // encryptionKey
-		nil, // timeoutChecker
-		nil, // banChecker
-		nil, // auditLogger
+		nil,      // encryptionKey
+		nil,      // timeoutChecker
+		nil,      // banChecker
+		nil, nil, // auditLogger
 	)
 	hub.BroadcastToServerFn = func(_ string, _ ws.Event) {}
 
 	stopped := make(chan string, 4)
-	svc.SetMusicBotHook(&mockMusicBotHook{
+	testVoiceState(svc).musicBotHook = &mockMusicBotHook{
 		StopAllForChannelFn: func(channelID string) { stopped <- channelID },
-	})
+	}
 
 	vs, ok := svc.(*voiceService)
 	if !ok {
@@ -1881,10 +1881,10 @@ func newAuthVoiceService(isMember bool, resolvePerms func(ctx context.Context, u
 				return []string{"voice-test-member"}, nil
 			},
 		},
-		nil, // encryptionKey
-		nil, // timeoutChecker — not under test here
-		nil, // banChecker — not under test here
-		nil, // auditLogger — not under test here
+		nil,      // encryptionKey
+		nil,      // timeoutChecker — not under test here
+		nil,      // banChecker — not under test here
+		nil, nil, // auditLogger — not under test here
 	)
 	return svc, hub
 }
@@ -2633,9 +2633,9 @@ func newTokenTestVoiceService(t *testing.T) VoiceRuntime {
 			IsMemberFn: func(_ context.Context, _, _ string) (bool, error) { return true, nil },
 		},
 		tokenTestEncryptionKey,
-		nil, // timeoutChecker
-		nil, // banChecker
-		nil, // auditLogger
+		nil,      // timeoutChecker
+		nil,      // banChecker
+		nil, nil, // auditLogger
 	)
 	return svc
 }
@@ -3154,9 +3154,9 @@ func newServerMuteNetworkTestVoiceService(t *testing.T, setupCalls chan string) 
 			IsMemberFn: func(_ context.Context, _, _ string) (bool, error) { return true, nil },
 		},
 		tokenTestEncryptionKey,
-		nil, // timeoutChecker
-		nil, // banChecker
-		nil, // auditLogger
+		nil,      // timeoutChecker
+		nil,      // banChecker
+		nil, nil, // auditLogger
 	)
 	return svc, hub
 }
@@ -3447,3 +3447,6 @@ func TestActiveVoiceAccessInvalidation(t *testing.T) {
 		t.Fatal("incorrect voice sessions after revocation")
 	}
 }
+
+// Test fixtures may seed private state before operations; production binds hooks only in the constructor.
+func testVoiceState(service VoiceService) *voiceService { return service.(*voiceService) }

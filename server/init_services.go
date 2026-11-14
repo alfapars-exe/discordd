@@ -213,8 +213,16 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	// wiring_test.go); a constructor parameter can't be forgotten without a
 	// compile error.
 	auditLogService := services.NewAuditLogService(repos.AuditLog, repos.User, repos.Role, hub, hub)
+	appLogService := services.NewAppLogService(repos.AppLog)
+	var entranceService services.EntranceService
+	var musicBotService services.MusicBotRuntime
 	voiceService := services.NewVoiceService(
 		repos.Channel, repos.LiveKit, channelPermService, hub, hub, repos.Server, encryptionKey, repos.MemberTimeout, repos.Ban, auditLogService,
+		func(voice services.VoiceService) (services.VoiceEntranceHook, services.MusicBotChannelHook) {
+			entranceService, musicBotService = initVoiceMediaServices(repos, hub, channelPermService,
+				voice, cfg.Upload.Dir, encryptionKey, appLogService)
+			return entranceService, musicBotService
+		},
 	)
 	rollback = append(rollback, voiceService.ShutdownVoiceStateFanout)
 
@@ -354,7 +362,6 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	gameJoinService := services.NewGameJoinService(gameActivityService, services.NewGameJoinPolicy(gameActivityPolicy, repos.Preferences, repos.Friendship, repos.User, repos.AccountLifecycle, repos.Server, repos.Ban, repos.Channel, channelPermService, voiceService))
 	hub.OnGameJoinOffer(gameJoinOfferCallback(gameJoinService))
 
-	appLogService := services.NewAppLogService(repos.AppLog)
 	clipRecordingService := services.NewClipRecordingService(voiceService, repos.Preferences, appLogService)
 	// auditLogService itself was constructed earlier (right after
 	// channelPermService above) so it could be passed as a constructor
@@ -370,8 +377,6 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	// Server stickers, and copying copyable emojis/stickers between servers.
 	stickerService := services.NewStickerService(repos.Sticker, hub, cfg.Upload.Dir)
 	expressionCloneService := services.NewExpressionCloneService(repos.Emoji, emojiService, repos.Sticker, stickerService, repos.Server, cfg.Upload.Dir)
-	entranceService, musicBotService := initVoiceMediaServices(repos, hub, channelPermService,
-		voiceService, cfg.Upload.Dir, encryptionKey, appLogService)
 	// Profile cosmetics (everyone mode: no shop, no premium tier).
 	cosmeticService := services.NewCosmeticService(repos.Cosmetic, repos.Server,
 		services.NewEveryoneCosmeticEntitlements(repos.Cosmetic, repos.Server), hub)
