@@ -3,8 +3,6 @@ package ws
 
 import (
 	"encoding/json"
-
-	"github.com/argeinfina/hichat/pkg/logx"
 )
 
 // ─── Voice Event Handlers ───
@@ -34,7 +32,7 @@ func (c *Client) handleVoiceJoin(event Event) {
 
 	if c.hub.onVoiceJoin != nil {
 		info := c.hub.getUserInfo(c.userID)
-		logx.Go("ws.voice_join", func() {
+		c.dispatchVoiceCallback("ws.voice_join", func() {
 			c.hub.onVoiceJoin(c.userID, info.Username, info.DisplayName, info.AvatarURL, data.ChannelID, data.IsMuted, data.IsDeafened)
 		})
 	}
@@ -42,13 +40,13 @@ func (c *Client) handleVoiceJoin(event Event) {
 
 func (c *Client) handleVoiceLeave() {
 	if c.hub.onVoiceLeave != nil {
-		logx.Go("ws.voice_leave", func() { c.hub.onVoiceLeave(c.userID) })
+		c.dispatchVoiceCallback("ws.voice_leave", func() { c.hub.onVoiceLeave(c.userID) })
 	}
 }
 
 func (c *Client) handleVoiceActivity() {
 	if c.hub.onVoiceActivity != nil {
-		logx.Go("ws.voice_activity", func() { c.hub.onVoiceActivity(c.userID) })
+		c.dispatchVoiceCallback("ws.voice_activity", func() { c.hub.onVoiceActivity(c.userID) })
 	}
 }
 
@@ -64,7 +62,7 @@ func (c *Client) handleVoiceStateUpdate(event Event) {
 	}
 
 	if c.hub.onVoiceStateUpdate != nil {
-		logx.Go("ws.voice_state_update", func() { c.hub.onVoiceStateUpdate(c.userID, data.IsMuted, data.IsDeafened, data.IsStreaming) })
+		c.dispatchVoiceCallback("ws.voice_state_update", func() { c.hub.onVoiceStateUpdate(c.userID, data.IsMuted, data.IsDeafened, data.IsStreaming) })
 	}
 }
 
@@ -93,7 +91,7 @@ func (c *Client) handleVoiceAdminStateUpdate(event Event) {
 	// stall inbound processing — the check is equally effective here, still
 	// ahead of the service call in the same goroutine.
 	if c.hub.onVoiceAdminStateUpdate != nil {
-		logx.Go("ws.voice_admin_state_update", func() {
+		c.dispatchVoiceCallback("ws.voice_admin_state_update", func() {
 			if !c.hub.authorizeVoiceModeration(c.userID, data.TargetUserID, "mute") {
 				dispatchLogger.Warn("voice_admin_state_update denied: insufficient perms",
 					"actor_id", c.userID, "target_id", data.TargetUserID)
@@ -122,7 +120,7 @@ func (c *Client) handleVoiceMoveUser(event Event) {
 
 	// Gate inside the goroutine — see handleVoiceAdminStateUpdate for why.
 	if c.hub.onVoiceMoveUser != nil {
-		logx.Go("ws.voice_move_user", func() {
+		c.dispatchVoiceCallback("ws.voice_move_user", func() {
 			if !c.hub.authorizeVoiceModeration(c.userID, data.TargetUserID, "move") {
 				dispatchLogger.Warn("voice_move_user denied: insufficient perms",
 					"actor_id", c.userID, "target_id", data.TargetUserID)
@@ -151,7 +149,7 @@ func (c *Client) handleVoiceDisconnectUser(event Event) {
 
 	// Gate inside the goroutine — see handleVoiceAdminStateUpdate for why.
 	if c.hub.onVoiceDisconnectUser != nil {
-		logx.Go("ws.voice_disconnect_user", func() {
+		c.dispatchVoiceCallback("ws.voice_disconnect_user", func() {
 			if !c.hub.authorizeVoiceModeration(c.userID, data.TargetUserID, "disconnect") {
 				dispatchLogger.Warn("voice_disconnect_user denied: insufficient perms",
 					"actor_id", c.userID, "target_id", data.TargetUserID)
@@ -179,6 +177,20 @@ func (c *Client) handleScreenShareWatch(event Event) {
 	}
 
 	if c.hub.onScreenShareWatch != nil {
-		logx.Go("ws.screen_share_watch", func() { c.hub.onScreenShareWatch(c.userID, data.StreamerUserID, data.Watching) })
+		c.dispatchVoiceCallback("ws.screen_share_watch", func() { c.hub.onScreenShareWatch(c.userID, data.StreamerUserID, data.Watching) })
 	}
+}
+
+// dispatchVoiceCallback shares Hub callback ownership and per-user ordering.
+// Reserve under Hub.mu so shutdown closes admission before joining workers.
+func (c *Client) dispatchVoiceCallback(name string, callback func()) {
+	h := c.hub
+	h.mu.Lock()
+	if h.shuttingDown {
+		h.mu.Unlock()
+		return
+	}
+	ticket := h.presenceCallbacks.reserve(c.userID, name)
+	h.mu.Unlock()
+	h.presenceCallbacks.submit(ticket, callback)
 }
