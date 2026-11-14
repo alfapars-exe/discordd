@@ -1938,3 +1938,8 @@ A new test composes actual AuthHandler with actual auth service and explicit fak
 ### RF07 — actual identifier case semantics across databases (2026-11-14)
 
 New repository contract verifies existing username case-insensitive lookup and exact stored-email lookup (different email casing is not found), using actual migrated SQLite and dedicated PostgreSQL18.6. Both pass with no skips. Recovery trims identifier boundaries in its existing model/service tests; this test prevents inventing incompatible email case-folding without reconciling registration/uniqueness. Dedicated loopback/non-TLS container stopped after verification. This is case-boundary storage evidence, not complete RF07 or physical provider acceptance.
+
+
+### RF09 — bounded service projection calls (2026-11-14)
+
+New service contract exercises0/1/1001 members. Exactly one scoped bulk call each for profiles, roles, nicknames and timeouts; per-user profile lookup fails the test. Output order and nickname projection remain. New contract plus existing bulk-timeout test pass, final new test and service vet pass. These are service-to-repository operation counts, not physical SQL counts; repository batch splitting, actual two-database parity and RF29 p95/wait evidence remain separate. RF09 remains open.
