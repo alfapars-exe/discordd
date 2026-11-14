@@ -272,35 +272,13 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	searchService := services.NewSearchService(repos.Search, repos.Channel, channelPermService)
 	readStateService := services.NewReadStateService(repos.ReadState, channelPermService)
 
-	// BlockService before DMService (DMService uses it as BlockChecker)
-
-	blockService := services.NewBlockService(gameActivityService, repos.Friendship, repos.User, hub)
-
-	// DMSettingsService before DMService (DMService uses it as DMSettingsUnhider)
-	dmSettingsService := services.NewDMSettingsService(repos.DMSettings, repos.DM, hub)
-
-	// Inbox notifications: the read/ack service here, the writers are the
-	// message/DM/friendship services below (each takes repos.Notification).
-	notificationService := services.NewNotificationService(repos.Notification, hub)
-
-	friendGraph, friendRequestPolicy := privacy.FriendGraph, privacy.FriendRequests
-	emojiService := services.NewEmojiService(repos.Emoji, repos.Server, hub, cfg.Upload.Dir)
-	dmService := services.NewDMService(
-		privacy.ServerDM,
-		repos.DM, repos.User, hub, blockService, friendGraph, dmSettingsService,
-		repos.DMRead, repos.Notification, repository.NewDMMessageTxRunner(db),
-		emailDeliveryService,
-		repos.Preferences, repos.Notification, emojiService, deliveryDB,
-	)
-	// Read friendship edges directly so DM construction does not depend on the
-	// friendship writer; auto-accept can then be a constructor dependency.
-	friendshipService := services.NewFriendshipService(gameActivityService, repos.Friendship, repos.User, repos.Notification, hub, emailDeliveryService, dmService, friendRequestPolicy)
-
-	groupDMService := services.NewGroupDMService(repos.GroupDM, repos.User, repos.Friendship, hub, cfg.LiveKit.URL, cfg.LiveKit.APIKey, cfg.LiveKit.APISecret, encryptionKey, cfg.Upload.Dir, repos.Notification, repos.Preferences, blockService, repos.GroupDM)
-
-	dmService.SetUploadDir(cfg.Upload.Dir)
-	dmUploadService := services.NewDMUploadService(repos.DM, cfg.Upload.Dir, cfg.Upload.MaxSize)
-	groupDMUploadService := services.NewGroupDMUploadService(repos.GroupDM, cfg.Upload.Dir, cfg.Upload.MaxSize)
+	social := initSocialMessagingServices(socialMessagingDependencies{
+		Database: db, DeliveryDB: deliveryDB, Repositories: repos, Hub: hub, Config: cfg,
+		Activity: gameActivityService, Privacy: privacy, Email: emailDeliveryService, EncryptionKey: encryptionKey,
+	})
+	blockService, dmSettingsService, notificationService := social.Block, social.DMSettings, social.Notification
+	emojiService, dmService, friendshipService := social.Emoji, social.DM, social.Friendship
+	groupDMService, dmUploadService, groupDMUploadService := social.GroupDM, social.DMUpload, social.GroupDMUpload
 	// Bookmarks (Faz C): saving a channel message is gated on the same
 	// per-channel read resolution the message list uses (channelPermService),
 	// a DM message on channel membership (repos.DM).
