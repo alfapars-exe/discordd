@@ -62,7 +62,7 @@ func TestServerConstructorRequiresMembershipVoiceCleanup(t *testing.T) {
 }
 
 func TestFriendshipConstructorRequiresExplicitEmailQueue(t *testing.T) {
-	required := reflect.TypeFor[EmailEnqueuer]()
+	required := reflect.TypeFor[ScheduledEmailEnqueuer]()
 	if got := reflect.TypeOf(NewFriendshipService).In(5); got != required {
 		t.Fatalf("friendship constructor dependency5=%s, want explicit %s", got, required)
 	}

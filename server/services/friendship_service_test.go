@@ -80,10 +80,10 @@ type friendSvcFixture struct {
 // newFriendSvcFixture wires two known users ("alice", "bob"); any other id
 // or username is unknown (pkg.ErrNotFound). The friendship repo starts
 // empty (every lookup → ErrNotFound) — tests set GetByPairFn/GetByIDFn.
-func newFriendSvcFixture(t *testing.T, queues ...EmailEnqueuer) *friendSvcFixture {
+func newFriendSvcFixture(t *testing.T, queues ...ScheduledEmailEnqueuer) *friendSvcFixture {
 	return newFriendSvcFixtureWithActivity(t, nil, queues...)
 }
-func newFriendSvcFixtureWithActivity(t *testing.T, activity GameActivityPrivacyInvalidator, queues ...EmailEnqueuer) *friendSvcFixture {
+func newFriendSvcFixtureWithActivity(t *testing.T, activity GameActivityPrivacyInvalidator, queues ...ScheduledEmailEnqueuer) *friendSvcFixture {
 	t.Helper()
 	f := &friendSvcFixture{
 		friends:  &testutil.MockFriendshipRepo{},
@@ -114,7 +114,7 @@ func newFriendSvcFixtureWithActivity(t *testing.T, activity GameActivityPrivacyI
 	f.hub.BroadcastToUserFn = func(userID string, e ws.Event) {
 		f.events = append(f.events, sentEvent{to: userID, ev: e})
 	}
-	var queue EmailEnqueuer
+	var queue ScheduledEmailEnqueuer
 	if len(queues) > 0 {
 		queue = queues[0]
 	}

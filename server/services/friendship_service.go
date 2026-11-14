@@ -50,7 +50,7 @@ type friendshipService struct {
 	hub           ws.Broadcaster
 	dmAcceptor    DMRequestAcceptor
 	requestPolicy FriendRequestPolicy
-	emailEnqueuer EmailEnqueuer
+	emailEnqueuer ScheduledEmailEnqueuer
 	gameActivity  GameActivityPrivacyInvalidator
 }
 
@@ -66,7 +66,7 @@ func NewFriendshipService(
 	userRepo repository.UserRepository,
 	notifRepo repository.NotificationRepository,
 	hub ws.Broadcaster,
-	emailEnqueuer EmailEnqueuer,
+	emailEnqueuer ScheduledEmailEnqueuer,
 	dmAcceptor DMRequestAcceptor,
 	policies ...FriendRequestPolicy,
 ) FriendshipService {
@@ -226,16 +226,9 @@ func (s *friendshipService) enqueueFriendshipEmail(targetID, friendshipID, event
 	if s.emailEnqueuer == nil {
 		return
 	}
-	contextual, ok := s.emailEnqueuer.(ScheduledEmailEnqueuer)
-	if !ok {
-		// Fail closed rather than create an unbound social email that cannot
-		// recheck whether the underlying friendship event is still current.
-		friendshipLogger.Error("friendship email enqueuer lacks event-context support", "event", event)
-		return
-	}
 	mailCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	if _, err := contextual.EnqueueWithOptions(
+	if _, err := s.emailEnqueuer.EnqueueWithOptions(
 		mailCtx,
 		targetID,
 		models.EmailCategorySocial,
