@@ -29,7 +29,7 @@ func (r *recordingRegistrar) HandleFunc(pattern string, _ func(http.ResponseWrit
 // to enumerate the route table.
 func captureRoutes() []string {
 	rec := &recordingRegistrar{}
-	authMw, permMw := initRoutes(rec, &Handlers{}, nil, nil, nil, nil, nil, nil, nil, nil)
+	authMw, permMw := initRoutes(rec, &Handlers{}, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	defer authMw.Stop()
 	defer permMw.Stop()
 	return rec.patterns

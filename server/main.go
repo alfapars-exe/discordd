@@ -216,13 +216,6 @@ func main() {
 	// forgets the wiring fails to compile instead of silently dropping every
 	// audit event. See wiring_test.go for the completeness check this enables.
 
-	// SetPermInvalidator wiring happens after initRoutes below (step 12),
-	// not here: it fans out to both channelPermService (available now) and
-	// permMw (middleware.PermissionMiddleware, only constructed inside
-	// initRoutes) via services.NewMultiInvalidator, so it needs permMw's
-	// late binding for route-owned permission caches
-	// below.
-
 	// 9d. voiceService's member-timeout checker (repos.MemberTimeout) is now
 	// wired through NewVoiceService's constructor (initServices), same as
 	// messageService/reactionService — no setter call needed here anymore.
@@ -333,7 +326,7 @@ func main() {
 
 	// 12. HTTP router + routes
 	mux := http.NewServeMux()
-	authMw, permMw := initRoutes(mux, h, svcs.Auth, repos.User, repos.Role, repos.Server, limiters.DeviceEnum, limiters.Refresh, botService, svcs.AuthCache)
+	authMw, permMw := initRoutes(mux, h, svcs.Auth, repos.User, repos.Role, repos.Server, limiters.DeviceEnum, limiters.Refresh, botService, svcs.AuthCache, svcs.PermissionCache)
 	defer authMw.Stop()
 	defer permMw.Stop()
 
@@ -350,22 +343,7 @@ func main() {
 
 	// Identity writers and middleware already share their constructor-owned cache.
 
-	// Wire the server-level permission cache (middleware/permission.go) into
-	// the same PermissionInvalidator fan-out as channelPermService's
-	// per-channel cache. permMw only exists after initRoutes runs, so this
-	// wiring can't happen inside initServices (services.NewMultiInvalidator
-	// is the composite; see permission.go's doc comment for what each call
-	// does). Wiring completes before the server accepts requests, so there
-	// is no window where a role/member write bypasses invalidation.
-	permInvalidator := services.NewMultiInvalidator(svcs.ChannelPermission, permMw)
-	if ownershipAuth, ok := svcs.Auth.(interface {
-		SetOwnershipInvalidator(services.PermissionInvalidator)
-	}); ok {
-		ownershipAuth.SetOwnershipInvalidator(permInvalidator)
-	}
-	svcs.Role.SetPermInvalidator(permInvalidator)
-	svcs.Member.SetPermInvalidator(permInvalidator)
-	svcs.Server.SetPermInvalidator(permInvalidator)
+	// Permission fan-out already owns both caches before route construction.
 
 	// 13. Static file serving
 	registerStaticAndUploads(mux, cfg)

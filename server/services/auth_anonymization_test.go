@@ -88,7 +88,7 @@ func TestMusicRequesterPrivacyObserverCannotDelaySecurityRevocation(t *testing.T
 			disconnected := ""
 			auth.userInvalidator = invalidation
 			auth.voiceKit = voice
-			auth.SetOwnershipInvalidator(ownership)
+			auth.ownershipInvalidator = ownership
 			hub.DisconnectUserFn = func(id string) { disconnected = id }
 			target := h.user.ID
 			if application {

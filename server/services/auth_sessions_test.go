@@ -71,12 +71,13 @@ type sessionCaptureHub struct {
 func (h *sessionCaptureHub) DisconnectSession(owner, id string) {
 	h.ended = append(h.ended, owner+":"+id)
 }
-func boundAuthHarness(t *testing.T) (*mfaHarness, *authService, *sessionCaptureHub) {
+func boundAuthHarness(t *testing.T, options ...AuthOption) (*mfaHarness, *authService, *sessionCaptureHub) {
 	t.Helper()
 	h := newMFAHarness(t)
 	users := repository.NewSQLiteUserRepo(h.db.Conn)
 	hub := &sessionCaptureHub{MockEventPublisher: &testutil.MockEventPublisher{}}
-	svc := NewAuthService(users, repository.NewSQLiteSessionRepo(h.db.Conn), nil, hub, nil, nil, testJWTSecret, 15, 7, WithAuthSessions(repository.NewSQLiteAuthSessionRepo(h.db.Conn)), WithMFA(h.svc)).(*authService)
+	options = append([]AuthOption{WithAuthSessions(repository.NewSQLiteAuthSessionRepo(h.db.Conn)), WithMFA(h.svc)}, options...)
+	svc := NewAuthService(users, repository.NewSQLiteSessionRepo(h.db.Conn), nil, hub, nil, nil, testJWTSecret, 15, 7, options...).(*authService)
 	return h, svc, hub
 }
 func sessionLogin(t *testing.T, s *authService, name string) *AuthTokens {

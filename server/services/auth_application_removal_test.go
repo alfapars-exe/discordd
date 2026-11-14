@@ -23,7 +23,7 @@ func TestApplicationRemovalFreshProofAndScopedRuntime(t *testing.T) {
 	inv := &stubInvalidator{}
 	users := &adminInvalStub{}
 	voice := &testutil.MockVoiceDisconnecter{}
-	s.SetOwnershipInvalidator(inv)
+	s.ownershipInvalidator = inv
 	s.userInvalidator = users
 	s.voiceKit = voice
 	s.applicationRemoval = repository.NewSQLiteApplicationRemovalRepo(h.db.Conn)
@@ -79,7 +79,7 @@ func TestApplicationRemovalFailureDoesNotDisconnect(t *testing.T) {
 			inv := &stubInvalidator{}
 			users := &adminInvalStub{}
 			voice := &testutil.MockVoiceDisconnecter{}
-			s.SetOwnershipInvalidator(inv)
+			s.ownershipInvalidator = inv
 			s.userInvalidator = users
 			s.voiceKit = voice
 			disconnects := 0

@@ -30,6 +30,7 @@ func (a gameActivityPresenceAdapter) IsVisibleOnline(_ context.Context, userID s
 // Services holds all service instances.
 type Services struct {
 	AuthCache               *middleware.AuthUserCache
+	PermissionCache         *middleware.PermissionCache
 	Auth                    services.AuthService
 	MFA                     *services.MFAService
 	EmailVerification       *services.EmailVerificationService
@@ -202,11 +203,14 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	}()
 	authCache := middleware.NewAuthUserCache()
 	rollback = append(rollback, authCache.Close)
+	permissionCache := middleware.NewPermissionCache()
+	rollback = append(rollback, permissionCache.Close)
 	// Order-sensitive services
 	channelPermService := services.NewChannelPermissionService(
 		repos.ChannelPermission, repos.Role, repos.Channel, hub,
 	)
 	rollback = append(rollback, channelPermService.Stop)
+	permInvalidator := services.NewMultiInvalidator(channelPermService, permissionCache)
 	serverEventService := services.NewServerEventService(repos.ServerEvent, repos.Server, repos.Role, repos.Channel, channelPermService)
 	// auditLogService is constructed here, right after channelPermService,
 	// so it can be passed as a constructor parameter (not a post-construction
@@ -274,15 +278,14 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	gameActivityService := services.NewGameActivityService(gameActivityPolicy, repos.Friendship, repos.Server, hub)
 	memberService := services.NewMemberService(gameActivityService, profileAudiencePolicy, repos.User, repos.Role, repos.Ban, repos.MemberTimeout, repos.Server, roleTransactions, hub, voiceService, auditLogService, authCache, profileUpdateNotifier)
 	roleService := services.NewRoleService(repos.Role, roleTransactions, hub, auditLogService)
-	// SetPermInvalidator for both is wired in main.go (after initRoutes),
-	// not here: it needs to fan out to middleware.PermissionMiddleware too,
-	// which is only constructed inside initRoutes. See main.go's comment
-	// near initRoutes for the full rationale.
 	serverService := services.NewServerService(repos.Preferences, gameActivityService,
 		db, repos.Server, repos.LiveKit, repos.Role, repos.Channel,
 		repos.Category, repos.User, repos.Ban, inviteService, hub, encryptionKey, auditLogService,
 		voiceService.DisconnectServerMember, roleTransactions,
 	)
+	roleService.SetPermInvalidator(permInvalidator)
+	memberService.SetPermInvalidator(permInvalidator)
+	serverService.SetPermInvalidator(permInvalidator)
 	serverService.SetUploadDir(cfg.Upload.Dir)
 
 	livekitAdminService := services.NewLiveKitAdminService(
@@ -386,7 +389,7 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 		services.NewEveryoneCosmeticEntitlements(repos.Cosmetic, repos.Server), hub)
 	authService := services.NewAuthService(
 		repos.User, repos.Session, repos.ResetToken, hub, emailSender,
-		voiceService, cfg.JWT.Secret, cfg.JWT.AccessTokenExpiry, cfg.JWT.RefreshTokenExpiry, services.WithAuthUserCacheInvalidator(authCache), services.WithAuthAppLogger(appLogService), services.WithMFA(mfaService), services.WithAuthSessions(repos.AuthSession), services.WithAccountLifecycle(repos.AccountLifecycle), services.WithAccountAnonymization(repos.AccountAnonymization, musicBotService), services.WithApplicationRemoval(repos.ApplicationRemoval), services.WithServerOwnership(repos.ServerOwnership),
+		voiceService, cfg.JWT.Secret, cfg.JWT.AccessTokenExpiry, cfg.JWT.RefreshTokenExpiry, services.WithAuthOwnershipInvalidator(permInvalidator), services.WithAuthUserCacheInvalidator(authCache), services.WithAuthAppLogger(appLogService), services.WithMFA(mfaService), services.WithAuthSessions(repos.AuthSession), services.WithAccountLifecycle(repos.AccountLifecycle), services.WithAccountAnonymization(repos.AccountAnonymization, musicBotService), services.WithApplicationRemoval(repos.ApplicationRemoval), services.WithServerOwnership(repos.ServerOwnership),
 	)
 	metricsCollector := services.NewMetricsCollector(
 		repos.LiveKit, repos.MetricsHistory,
@@ -400,6 +403,7 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	wsTicketService := services.NewWSTicketService()
 	rollback = append(rollback, wsTicketService.Stop)
 	svcs := &Services{
+		PermissionCache:         permissionCache,
 		AuthCache:               authCache,
 		Auth:                    authService,
 		MFA:                     mfaService,

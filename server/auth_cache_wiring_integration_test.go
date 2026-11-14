@@ -42,7 +42,7 @@ func TestAuthCacheProductionWiringRevokesPrimedIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	auth, permissions := initRoutes(&recordingRegistrar{}, &Handlers{}, bundle.Auth, repos.User, repos.Role, repos.Server, nil, nil, nil, bundle.AuthCache)
+	auth, permissions := initRoutes(&recordingRegistrar{}, &Handlers{}, bundle.Auth, repos.User, repos.Role, repos.Server, nil, nil, nil, bundle.AuthCache, bundle.PermissionCache)
 	t.Cleanup(permissions.Stop)
 	t.Cleanup(auth.Stop)
 	endpoint := auth.Require(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
