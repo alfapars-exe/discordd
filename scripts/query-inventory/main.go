@@ -36,7 +36,13 @@ type report struct {
 // shadowing cannot borrow another query. Mutable variables and imported constants
 // deliberately remain unresolved. Cycles and excessive nesting fail closed.
 func constantSQL(expr ast.Expr, seen map[*ast.Object]bool) (string, bool) {
-	if len(seen) > 64 {
+	budget := 4096
+	return resolveConstantSQL(expr, seen, 0, &budget)
+}
+
+func resolveConstantSQL(expr ast.Expr, seen map[*ast.Object]bool, depth int, budget *int) (string, bool) {
+	*budget--
+	if depth > 64 || *budget < 0 {
 		return "", false
 	}
 	switch value := expr.(type) {
@@ -47,14 +53,17 @@ func constantSQL(expr ast.Expr, seen map[*ast.Object]bool) (string, bool) {
 		text, err := strconv.Unquote(value.Value)
 		return text, err == nil
 	case *ast.ParenExpr:
-		return constantSQL(value.X, seen)
+		return resolveConstantSQL(value.X, seen, depth+1, budget)
 	case *ast.BinaryExpr:
 		if value.Op != token.ADD {
 			return "", false
 		}
-		left, a := constantSQL(value.X, seen)
-		right, b := constantSQL(value.Y, seen)
-		return left + right, a && b
+		left, a := resolveConstantSQL(value.X, seen, depth+1, budget)
+		right, b := resolveConstantSQL(value.Y, seen, depth+1, budget)
+		if !a || !b {
+			return "", false
+		}
+		return left + right, true
 	case *ast.Ident:
 		obj := value.Obj
 		if obj == nil || obj.Kind != ast.Con || seen[obj] {
@@ -68,7 +77,7 @@ func constantSQL(expr ast.Expr, seen map[*ast.Object]bool) (string, bool) {
 		defer delete(seen, obj)
 		for i, name := range declaration.Names {
 			if name.Name == value.Name {
-				return constantSQL(declaration.Values[i], seen)
+				return resolveConstantSQL(declaration.Values[i], seen, depth+1, budget)
 			}
 		}
 	}

@@ -1,0 +1,19 @@
+{
+  "source_parent": "c23c1e3a",
+  "finding": "Constant resolver limited identifier traversal but not parenthesized/binary expression recursion, despite documented excessive-nesting rejection.",
+  "regression": "70 nested parenthesized string expression was incorrectly accepted before fix.",
+  "fix": "Bound actual expression depth to64 and total visits to4096, preserving cycle rejection and returning no partial SQL on unsupported expressions.",
+  "validation": {
+    "tool_tests_passed": 4,
+    "test_exit": 0,
+    "inventory_exit": 0,
+    "counts_unchanged": [
+      659,
+      31,
+      273
+    ]
+  },
+  "limits": [
+    "Tooling only; not a product SQL defect or full RF05 completion"
+  ]
+}

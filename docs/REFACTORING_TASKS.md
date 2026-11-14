@@ -1888,3 +1888,8 @@ Shared dialect contracts now exercise role-style UPDATE RETURNING and cascade-st
 ### RF05 — query inventory resolves explicit constants (2026-11-14)
 
 Existing AST inventory now resolves same-file explicit string constants/constant concatenations through parser object bindings, preserving local shadowing and leaving mutable/dynamic SQL unresolved. Regression failed before implementation;3 tool contracts pass. Current candidate counts: 659 direct literals, 31 constants, 273 unresolved across 182 files. These are navigation candidates, not execution/coverage proof. Full fixture mapping remains open. Receipt: implementation/verification/refactor-rf05-query-constant-inventory-2026-11-14.json.
+
+
+### RF05 — bound query constant expression traversal (2026-11-14)
+
+A failing regression showed the new resolver bounded constant references but accepted excessive parenthesized nesting. Actual expression depth and total node visits are now bounded; unsupported branches return no partial SQL. Four tool tests pass and production inventory counts remain659 literals/31 constants/273 unresolved. This is tooling correctness, not a product SQL defect or RF05 closure. Receipt: implementation/verification/refactor-rf05-inventory-expression-bounds-2026-11-14.json.

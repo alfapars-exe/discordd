@@ -1,8 +1,11 @@
 package main
 
 import (
+	"go/ast"
+	"go/parser"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -71,5 +74,15 @@ func calls() {
 	}
 	if got.Calls[0].SQL != "SELECT ?" || got.Calls[1].SQL != "" || got.Calls[2].SQL != "DELETE FROM fixture WHERE id=?" || got.Calls[3].SQL != "" {
 		t.Fatalf("unsafe or incomplete constant resolution: %+v", got.Calls)
+	}
+}
+
+func TestConstantSQLRejectsExcessiveExpressionNesting(t *testing.T) {
+	expr, err := parser.ParseExpr(strings.Repeat("(", 70) + `"SELECT ?"` + strings.Repeat(")", 70))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := constantSQL(expr, make(map[*ast.Object]bool)); ok || got != "" {
+		t.Fatalf("deep expression accepted: %q, %v", got, ok)
 	}
 }
