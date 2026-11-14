@@ -61,6 +61,18 @@ func initSocialMessagingServices(deps socialMessagingDependencies) socialMessagi
 		panic("social messaging email provider is typed nil")
 	}
 	repos, cfg := deps.Repositories, deps.Config
+	for _, input := range []struct {
+		name  string
+		value any
+	}{
+		{"Friendship", repos.Friendship}, {"User", repos.User}, {"DMSettings", repos.DMSettings}, {"DM", repos.DM},
+		{"Notification", repos.Notification}, {"Emoji", repos.Emoji}, {"Server", repos.Server}, {"DMRead", repos.DMRead},
+		{"Preferences", repos.Preferences}, {"GroupDM", repos.GroupDM},
+	} {
+		if missingCompositionInput(input.value) {
+			panic("social messaging requires repository " + input.name)
+		}
+	}
 	block := services.NewBlockService(deps.Activity, repos.Friendship, repos.User, deps.Hub)
 	settings := services.NewDMSettingsService(repos.DMSettings, repos.DM, deps.Hub)
 	notifications := services.NewNotificationService(repos.Notification, deps.Hub)

@@ -78,3 +78,23 @@ func TestSocialMessagingRejectsTypedNilRequiredIntegration(t *testing.T) {
 		})
 	}
 }
+
+func TestSocialMessagingRejectsMissingRepositories(t *testing.T) {
+	base := socialMessagingFixture(t)
+	for _, field := range []string{"Friendship", "User", "DMSettings", "DM", "Notification", "Emoji", "Server", "DMRead", "Preferences", "GroupDM"} {
+		for _, typedNil := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/typedNil=%v", field, typedNil), func(t *testing.T) {
+				deps := base
+				repos := *base.Repositories
+				deps.Repositories = &repos
+				v := reflect.ValueOf(&repos).Elem().FieldByName(field)
+				if typedNil {
+					v.Set(reflect.Zero(v.Elem().Type()))
+				} else {
+					v.Set(reflect.Zero(v.Type()))
+				}
+				expectSocialPanic(t, deps, "social messaging requires repository "+field)
+			})
+		}
+	}
+}

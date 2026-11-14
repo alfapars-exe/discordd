@@ -1,0 +1,27 @@
+{
+  "scope": "RF11 social messaging required repositories",
+  "required": [
+    "Friendship",
+    "User",
+    "DMSettings",
+    "DM",
+    "Notification",
+    "Emoji",
+    "Server",
+    "DMRead",
+    "Preferences",
+    "GroupDM"
+  ],
+  "regression": "20 cases failed before validation: nil and typed nil for each repository.",
+  "implementation": "Validate all repository providers before constructing any social messaging services. Preserve lower-level constructors and optional email/delivery modes.",
+  "checks": {
+    "root": "PASS Test.*(SocialMessaging|FriendshipDMProduction|Startup|Rollback|Route|Callback), 3.028s",
+    "build": "PASS go build ./...",
+    "vet": "PASS go vet .",
+    "reviewed_sql_manifest": "PASS 50 exact records"
+  },
+  "limits": [
+    "Windows non-race targeted run; current remote CI source excludes this local commit.",
+    "RF11 other domains, optional inventory, complete resource lifecycle and RF01-RF30 acceptance remain open."
+  ]
+}
