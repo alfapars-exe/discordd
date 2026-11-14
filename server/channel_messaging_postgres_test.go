@@ -8,6 +8,7 @@ import (
 	"github.com/argeinfina/hichat/testutil"
 	"github.com/argeinfina/hichat/ws"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 	"os"
 	"testing"
 	"time"
@@ -36,7 +37,31 @@ func TestChannelMessagingPostgresCompositionSelectsDurablePublication(t *testing
 	if parsed.Host != "127.0.0.1" && parsed.Host != "localhost" {
 		t.Fatal("requires disposable loopback PostgreSQL")
 	}
-	db := database.PostgreSQLPool(parsed)
+	admin := stdlib.OpenDB(*parsed)
+	var publicBefore int
+	if err := admin.QueryRow("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name='user_roles'").Scan(&publicBefore); err != nil {
+		admin.Close()
+		t.Fatal("read public schema baseline")
+	}
+	if _, err := admin.Exec("CREATE SCHEMA hichat_messaging_wiring_fixture"); err != nil {
+		admin.Close()
+		t.Fatal("create isolated messaging fixture schema")
+	}
+	t.Cleanup(func() {
+		if _, err := admin.Exec("DROP SCHEMA hichat_messaging_wiring_fixture CASCADE"); err != nil {
+			t.Error("remove messaging fixture schema")
+		}
+		var publicAfter int
+		if err := admin.QueryRow("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name='user_roles'").Scan(&publicAfter); err != nil || publicAfter != publicBefore {
+			t.Error("messaging fixture changed public application tables")
+		}
+		if err := admin.Close(); err != nil {
+			t.Error("close fixture control pool")
+		}
+	})
+	scoped := parsed.Copy()
+	scoped.RuntimeParams["search_path"] = "hichat_messaging_wiring_fixture,public"
+	db := database.PostgreSQLPool(scoped)
 	t.Cleanup(func() { db.Close() })
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
