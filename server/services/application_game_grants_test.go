@@ -47,7 +47,7 @@ func TestGameGrantSendPreservesPrivacyAndAtomicRequestState(t *testing.T) {
 			payloads = append(payloads, string(b))
 		}
 	}}
-	svc := NewDMService(nil, dm, repository.NewSQLiteUserRepo(db.Conn), hub, block, friends, nil, repository.NewSQLiteDMReadRepo(db.Conn), repository.NewSQLiteNotificationRepo(db.Conn), repository.NewDMMessageTxRunner(db.Conn), nil, nil, nil)
+	svc := NewDMService(nil, dm, repository.NewSQLiteUserRepo(db.Conn), hub, block, friends, nil, repository.NewSQLiteDMReadRepo(db.Conn), repository.NewSQLiteNotificationRepo(db.Conn), repository.NewDMMessageTxRunner(db.Conn), nil, nil, nil, nil)
 	cipher, device := "opaque-ciphertext", "game-device"
 	send := func() (*models.DMMessage, error) {
 		return svc.SendMessage(ctx, "game", ch.ID, &models.CreateDMMessageRequest{EncryptionVersion: 1, Ciphertext: &cipher, SenderDeviceID: &device})

@@ -58,15 +58,12 @@ func channelReactionCase(resolver EmojiResolver) (ReactionService, *string) {
 }
 
 func dmReactionCase(resolver EmojiResolver) DMService {
-	f := newDMFixture()
+	f := newDMFixtureWithEmail(nil, nil, resolver)
 	f.repo.GetMessageByIDFn = func(_ context.Context, id string) (*models.DMMessage, error) {
 		return &models.DMMessage{ID: id, DMChannelID: "dm1"}, nil
 	}
 	f.repo.GetChannelByIDFn = func(_ context.Context, id string) (*models.DMChannel, error) {
 		return &models.DMChannel{ID: id, User1ID: reactMember, User2ID: reactNonMember}, nil
-	}
-	if resolver != nil {
-		f.svc.SetEmojiResolver(resolver)
 	}
 	return f.svc
 }

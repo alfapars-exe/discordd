@@ -60,7 +60,6 @@ type DMService interface {
 	SearchMessages(ctx context.Context, userID, channelID, query string, limit, offset int) (*models.DMSearchResult, error)
 	ToggleE2EE(ctx context.Context, userID, channelID string, enabled bool) (*models.DMChannel, error)
 	SetUploadDir(dir string)
-	SetEmojiResolver(r EmojiResolver)
 }
 
 // Optional extension preserves existing DMService implementations and callers.
@@ -99,7 +98,7 @@ type dmService struct {
 	// SetUploadDir in init_services.go.
 	uploadDir string
 	// emojiResolver validates custom-emoji reactions (reaction_emoji.go);
-	// nil rejects every custom emoji. Set via SetEmojiResolver.
+	// nil explicitly disables custom emoji reactions.
 	emojiResolver              EmojiResolver
 	communicationEmailEnqueuer ScheduledEmailEnqueuer
 }
@@ -118,8 +117,10 @@ func NewDMService(
 	communicationEmailEnqueuer ScheduledEmailEnqueuer,
 	reactionPreferences profilePreferenceReader,
 	reactionWriter repository.ReactionNotificationWriter,
+	emojiResolver EmojiResolver,
 ) DMService {
 	return &dmService{
+		emojiResolver:              emojiResolver,
 		reactionWriter:             reactionWriter,
 		reactionPreferences:        reactionPreferences,
 		communicationEmailEnqueuer: communicationEmailEnqueuer,

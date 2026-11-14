@@ -68,7 +68,7 @@ func TestDMUnreadCursorDeliveredToBothSessions(t *testing.T) {
 		}
 		sessions[ticket] = conn
 	}
-	service := services.NewDMService(nil, repo, nil, hub, nil, nil, nil, nil, nil, repository.NewDMMessageTxRunner(db.Conn), nil, nil, nil)
+	service := services.NewDMService(nil, repo, nil, hub, nil, nil, nil, nil, nil, repository.NewDMMessageTxRunner(db.Conn), nil, nil, nil, nil)
 	if _, err := service.MarkUnreadFrom(ctx, "reader", channel.ID, ids[1]); err != nil {
 		t.Fatal(err)
 	}

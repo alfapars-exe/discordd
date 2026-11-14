@@ -1963,3 +1963,8 @@ New member profile/role failure cases preserve wrapped causes, return no success
 ### RF11 — channel reaction emoji resolver constructor (2026-11-14)
 
 Reaction constructor now requires an explicit EmojiResolver argument. Production constructs the emoji service before reactions and injects it; channel ReactionService setter is removed. Nil explicitly disables custom emoji, preserving existing tests. Constructor regression failed with7 inputs before change; channel/DM custom emoji, removal-only, nil-resolver, notification and wiring selections across services/handlers/main pass afterward. Server build and targeted vet pass. Test fixtures inject during construction, while Unicode-only fixtures explicitly select nil. DM resolver setter remains separate open work; full RF11/current-source Linux race acceptance remain open.
+
+
+### RF11 — DM reaction emoji resolver constructor (2026-11-14)
+
+DM constructor now requires explicit EmojiResolver; all11 call sites updated. Production constructs shared emoji service before DM/channel reactions; both late setters are removed. Custom-emoji fixtures inject resolver at construction; other fixtures explicitly select nil. Constructor regression failed before change. Selected DM/reaction/privacy/wiring tests across services/handlers/ws/main, server build and targeted vet pass. The reviewed SQL fixture changed only by adding nil constructor argument; its exact SQL line/rule/reason/proof remain unchanged, only source hash updated after comparison. Manifest50 records valid and6 validator tests pass. Full RF11 and fresh source-bound Linux race/native/production CI remain required.

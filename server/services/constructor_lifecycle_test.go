@@ -98,7 +98,7 @@ func TestPrivateReactionConstructorsRequireWriterCapability(t *testing.T) {
 		t.Errorf("group notification input %s omits writer capability", group)
 	}
 	dm := reflect.TypeOf(NewDMService)
-	if dm.NumIn() != 13 {
+	if dm.NumIn() != 14 {
 		t.Fatalf("DM constructor has %d inputs, want explicit reaction writer", dm.NumIn())
 	}
 	if !dm.In(12).Implements(required) {
@@ -113,5 +113,15 @@ func TestReactionConstructorRequiresEmojiResolver(t *testing.T) {
 	}
 	if factory.In(7) != reflect.TypeFor[EmojiResolver]() {
 		t.Fatal("emoji resolver is not an explicit dependency")
+	}
+}
+
+func TestDMConstructorRequiresEmojiResolver(t *testing.T) {
+	factory := reflect.TypeOf(NewDMService)
+	if factory.NumIn() != 14 {
+		t.Fatalf("DM constructor inputs=%d, want14", factory.NumIn())
+	}
+	if factory.In(13) != reflect.TypeFor[EmojiResolver]() {
+		t.Fatal("DM emoji resolver is not explicit")
 	}
 }

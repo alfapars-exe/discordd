@@ -51,7 +51,11 @@ func newDMFixture() *dmTestFixture { return newDMFixtureWithPolicy(nil) }
 func newDMFixtureWithPolicy(policy ServerDMPolicy) *dmTestFixture {
 	return newDMFixtureWithEmail(policy, nil)
 }
-func newDMFixtureWithEmail(policy ServerDMPolicy, enqueuer ScheduledEmailEnqueuer) *dmTestFixture {
+func newDMFixtureWithEmail(policy ServerDMPolicy, enqueuer ScheduledEmailEnqueuer, resolvers ...EmojiResolver) *dmTestFixture {
+	var resolver EmojiResolver
+	if len(resolvers) > 0 {
+		resolver = resolvers[0]
+	}
 	f := &dmTestFixture{
 		repo:    &testutil.MockDMRepo{},
 		users:   &testutil.MockUserRepo{},
@@ -63,7 +67,7 @@ func newDMFixtureWithEmail(policy ServerDMPolicy, enqueuer ScheduledEmailEnqueue
 		notif:   &testutil.MockNotificationRepo{},
 	}
 	runner := passthroughDMTxRunner{repos: repository.DMTxRepos{DM: f.repo, DMRead: f.dmRead, Notification: f.notif}}
-	f.svc = NewDMService(policy, f.repo, f.users, f.hub, f.block, f.friends, f.unhide, f.dmRead, f.notif, runner, enqueuer, nil, nil)
+	f.svc = NewDMService(policy, f.repo, f.users, f.hub, f.block, f.friends, f.unhide, f.dmRead, f.notif, runner, enqueuer, nil, nil, resolver)
 	return f
 }
 

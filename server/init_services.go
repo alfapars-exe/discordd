@@ -301,12 +301,13 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	friendRequestPolicy := services.NewFriendRequestPolicy(
 		repos.Preferences, friendGraph.listFriendIDs, friendGraph.AreFriends, repos.Server,
 	)
+	emojiService := services.NewEmojiService(repos.Emoji, repos.Server, hub, cfg.Upload.Dir)
 	dmService := services.NewDMService(
 		services.NewServerDMPolicy(repos.Preferences, repos.Server),
 		repos.DM, repos.User, hub, blockService, friendGraph, dmSettingsService,
 		repos.DMRead, repos.Notification, repository.NewDMMessageTxRunner(db),
 		emailDeliveryService,
-		repos.Preferences, repos.Notification,
+		repos.Preferences, repos.Notification, emojiService,
 	)
 	// Read friendship edges directly so DM construction does not depend on the
 	// friendship writer; auto-accept can then be a constructor dependency.
@@ -329,7 +330,6 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	reminderService := services.NewReminderService(repos.Reminder, repos.Message, repos.Channel, repos.DM, channelPermService)
 	userNoteService := services.NewUserNoteService(repos.UserNote, repos.User)
 	personalizationService := services.NewPersonalizationService(repos.Preferences, repos.User, repos.Server, repos.Friendship)
-	emojiService := services.NewEmojiService(repos.Emoji, repos.Server, hub, cfg.Upload.Dir)
 	reactionService := services.NewReactionService(repos.Reaction, repos.Message, repos.Channel, hub, channelPermService, repos.MemberTimeout,
 		services.ReactionNotificationDependencies{Notifications: repos.Notification, Preferences: repos.Preferences, Users: repos.User}, emojiService)
 	serverMuteService := services.NewServerMuteService(repos.ServerMute)
@@ -369,8 +369,6 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	soundboardService := services.NewSoundboardService(
 		repos.Soundboard, repos.User, hub, voiceService, cfg.Upload.Dir, cfg.Upload.MaxSize,
 	)
-	// DM reactions share the emoji service constructed above for channel reactions.
-	dmService.SetEmojiResolver(emojiService)
 	// Server stickers, and copying copyable emojis/stickers between servers.
 	stickerService := services.NewStickerService(repos.Sticker, hub, cfg.Upload.Dir)
 	expressionCloneService := services.NewExpressionCloneService(repos.Emoji, emojiService, repos.Sticker, stickerService, repos.Server, cfg.Upload.Dir)
