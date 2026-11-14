@@ -36,6 +36,30 @@ type socialMessagingServices struct {
 // The graph reader breaks the construction cycle: friendship auto-accept uses
 // the same DM owner returned to HTTP and the separately started workers.
 func initSocialMessagingServices(deps socialMessagingDependencies) socialMessagingServices {
+	for _, input := range []struct {
+		name  string
+		value any
+	}{
+		{"Database", deps.Database}, {"Repositories", deps.Repositories}, {"Hub", deps.Hub}, {"Config", deps.Config}, {"Activity", deps.Activity},
+	} {
+		if missingCompositionInput(input.value) {
+			panic("social messaging requires " + input.name)
+		}
+	}
+	for _, input := range []struct {
+		name  string
+		value any
+	}{
+		{"ServerDM", deps.Privacy.ServerDM}, {"FriendRequests", deps.Privacy.FriendRequests}, {"FriendGraph", deps.Privacy.FriendGraph.reader},
+	} {
+		if missingCompositionInput(input.value) {
+			panic("social messaging requires policy " + input.name)
+		}
+	}
+	// A nil email provider disables email; typed nil cannot safely do so.
+	if deps.Email != nil && missingCompositionInput(deps.Email) {
+		panic("social messaging email provider is typed nil")
+	}
 	repos, cfg := deps.Repositories, deps.Config
 	block := services.NewBlockService(deps.Activity, repos.Friendship, repos.User, deps.Hub)
 	settings := services.NewDMSettingsService(repos.DMSettings, repos.DM, deps.Hub)
