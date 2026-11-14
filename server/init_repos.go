@@ -52,7 +52,7 @@ type Repositories struct {
 	GroupSession            repository.GroupSessionRepository
 	LinkPreview             repository.LinkPreviewRepository
 	Badge                   repository.BadgeRepository
-	Preferences             repository.PreferencesRepository
+	Preferences             repository.PreferencesStore
 	RoleMention             repository.RoleMentionRepository
 	AppLog                  repository.AppLogStore
 	AuditLog                repository.AuditLogRepository

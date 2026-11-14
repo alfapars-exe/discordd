@@ -618,3 +618,12 @@ func TestDMFactoryDeclaresDeliveryRuntime(t *testing.T) {
 		t.Fatalf("DM factory result %s hides delivery runtime", result)
 	}
 }
+
+func TestChannelNotificationConstructorDeclaresBatchPreferences(t *testing.T) {
+	if reflect.TypeOf(NewChannelMessageNotificationWorker).In(1) != reflect.TypeFor[repository.PreferencesBatchReader]() {
+		t.Fatal("notification worker hides required bounded preference reads")
+	}
+	if !reflect.TypeOf(repository.NewSQLitePreferencesRepo).Out(0).Implements(reflect.TypeFor[repository.PreferencesBatchReader]()) {
+		t.Fatal("preferences factory hides bounded reads")
+	}
+}

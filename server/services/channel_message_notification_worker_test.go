@@ -45,12 +45,6 @@ type channelNotificationPreferencesStub struct {
 	err  error
 }
 
-func (p *channelNotificationPreferencesStub) Get(context.Context, string) (*models.UserPreferences, error) {
-	return nil, nil
-}
-func (p *channelNotificationPreferencesStub) Upsert(context.Context, string, json.RawMessage) (*models.UserPreferences, error) {
-	return nil, nil
-}
 func (p *channelNotificationPreferencesStub) GetMany(context.Context, []string) (map[string]*models.UserPreferences, error) {
 	return p.rows, p.err
 }
