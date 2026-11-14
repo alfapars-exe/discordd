@@ -1903,3 +1903,8 @@ Unresolved PostgreSQL channel count/page expressions map to shared bound conditi
 ### RF05 — dynamic DM search result contract (2026-11-14)
 
 New real repository contract covers cross-channel count/page isolation, equal-content reverse append order, source sequence, beyond-end offset and empty/no-match queries. It passes on SQLite and dedicated PostgreSQL18.6 with no skips. Temporary container stopped. This verifies shared result invariants, not identical relevance/ILIKE semantics; full RF05 remains open. Receipt: implementation/verification/refactor-rf05-dm-search-contract-2026-11-14.json.
+
+
+### RF05 — mandatory named native contract gates (2026-11-14)
+
+The native runner already executes complete repository/database packages. It now additionally requires exact package/test PASS pairs for PostgreSQL dialect subtest and DM search contract, so missing/renamed tests or wrong-package events cannot silently satisfy the gate. Regression failed before fix;16 runner tests pass. Synthetic event tests prove gate behavior, not a fresh native suite execution. Full RF05 remains open. Receipt: implementation/verification/refactor-rf05-required-native-gates-2026-11-14.json.

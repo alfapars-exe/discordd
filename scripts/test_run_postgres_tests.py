@@ -99,6 +99,17 @@ class PostgreSQLRunnerTests(unittest.TestCase):
         events = [event for event in self.completed() if event.get("Test") != "TestPostgresVoiceUsageMigrationPreservesTotals"]
         self.assertEqual(self.execute(events), 1)
 
+    def test_sql_dialect_contracts_require_named_native_passes(self):
+        for package, name in [
+            ("database", "TestRepositoryDialectContracts/Postgres"),
+            ("repository", "TestDMSearchDialectContractChannelCountAndPages"),
+        ]:
+            full = "github.com/argeinfina/hichat/" + package
+            events = self.completed()
+            without = [event for event in events if not (event.get("Package") == full and event.get("Test") == name)]
+            self.assertEqual(self.execute(without), 1)
+            self.assertEqual(self.execute(without + [{"Action": "pass", "Package": "wrong/package", "Test": name}]), 1)
+
     def completed(self):
         return [
             {"Action": "pass", "Package": "github.com/argeinfina/hichat", "Test": "TestPurgeExpiredNotificationsPostgres"},
@@ -106,6 +117,8 @@ class PostgreSQLRunnerTests(unittest.TestCase):
             {"Action": "pass", "Package": "github.com/argeinfina/hichat"},
             {"Action": "pass", "Package": "github.com/argeinfina/hichat/repository"},
             {"Action": "pass", "Package": "github.com/argeinfina/hichat/database", "Test": "TestPostgresVoiceUsageMigrationPreservesTotals"},
+            {"Action": "pass", "Package": "github.com/argeinfina/hichat/database", "Test": "TestRepositoryDialectContracts/Postgres"},
+            {"Action": "pass", "Package": "github.com/argeinfina/hichat/repository", "Test": "TestDMSearchDialectContractChannelCountAndPages"},
             {"Action": "pass", "Package": "github.com/argeinfina/hichat/database"},
         ]
 

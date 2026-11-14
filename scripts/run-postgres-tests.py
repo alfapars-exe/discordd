@@ -13,6 +13,10 @@ REQUIRED_PACKAGES = {
     "github.com/argeinfina/hichat/repository",
     "github.com/argeinfina/hichat/database",
 }
+REQUIRED_DIALECT_TESTS = {
+    ("github.com/argeinfina/hichat/database", "TestRepositoryDialectContracts/Postgres"),
+    ("github.com/argeinfina/hichat/repository", "TestDMSearchDialectContractChannelCountAndPages"),
+}
 REDACTED_DATABASE = "[test-database]"
 REQUIRED_SERVER_POSTGRES_TEST = "TestPurgeExpiredNotificationsPostgres"
 REQUIRED_ACTIVE_PROCESS_TEST = "TestActiveVoiceProcessPostgresSignal"
@@ -59,6 +63,7 @@ def main():
     process = subprocess.Popen(command, cwd=root / "server", stdout=subprocess.PIPE, text=True)
     skipped = []
     completed = set()
+    dialect_passes = set()
     postgres_retention_passed = False
     active_process_passed = False
     usage_migration_passed = False
@@ -98,6 +103,8 @@ def main():
                 and event.get("Package") == "github.com/argeinfina/hichat/database"
                 and event.get("Test") == "TestPostgresVoiceUsageMigrationPreservesTotals"):
             usage_migration_passed = True
+        if event.get("Action") == "pass" and event.get("Test"):
+            dialect_passes.add((event.get("Package"), event.get("Test")))
         if event.get("Action") == "pass" and not event.get("Test"):
             completed.add(event.get("Package"))
         if event.get("Action") in {"pass", "fail", "skip"}:
@@ -120,6 +127,12 @@ def main():
         print(f"Required active process test did not pass: {REQUIRED_ACTIVE_PROCESS_TEST}", file=sys.stderr)
     if not usage_migration_passed:
         print("Required voice usage migration test did not pass", file=sys.stderr)
+    missing_dialects = REQUIRED_DIALECT_TESTS - dialect_passes
+    if missing_dialects:
+        print("Required PostgreSQL dialect contracts did not pass: " + ", ".join(
+            package + ":" + name for package, name in sorted(missing_dialects)), file=sys.stderr)
+    if missing_dialects:
+        return code or 1
     if code or skipped or missing_packages or not postgres_retention_passed or not active_process_passed or not usage_migration_passed or invalid_output or reported_failure:
         return code or 1
     # Delivery, authorization and collector lifecycle require real PostgreSQL waits.
