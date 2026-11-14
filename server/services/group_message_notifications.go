@@ -24,10 +24,10 @@ func (s *groupDMService) deliverGroupIncomingNotifications(ctx context.Context, 
 // Source reads/deletes may affect more than the bounded notification WS ID
 // budget. Refresh the owned feed; never claim every unrelated row was read.
 func (s *groupDMService) refreshGroupInbox(ctx context.Context, userID string) {
-	if s.reactionNotifications == nil {
+	if s.notifications == nil {
 		return
 	}
-	counts, err := NotificationUnreadSummary(ctx, s.reactionNotifications, userID)
+	counts, err := NotificationUnreadSummary(ctx, s.notifications, userID)
 	if err != nil {
 		groupDMLogger.Error("committed group inbox refresh skipped", "user_id", userID, "err", pkg.ErrText(err))
 		return

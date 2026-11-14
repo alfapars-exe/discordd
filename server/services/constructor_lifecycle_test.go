@@ -90,3 +90,18 @@ func TestReactionDependenciesRequireNotificationWriter(t *testing.T) {
 		t.Fatalf("reaction dependency %s can omit reaction writer capability", field.Type)
 	}
 }
+
+func TestPrivateReactionConstructorsRequireWriterCapability(t *testing.T) {
+	required := reflect.TypeFor[reactionNotificationCreator]()
+	group := reflect.TypeOf(NewGroupDMService).In(9)
+	if !group.Implements(required) {
+		t.Errorf("group notification input %s omits writer capability", group)
+	}
+	dm := reflect.TypeOf(NewDMService)
+	if dm.NumIn() != 13 {
+		t.Fatalf("DM constructor has %d inputs, want explicit reaction writer", dm.NumIn())
+	}
+	if !dm.In(12).Implements(required) {
+		t.Errorf("DM notification input %s omits writer capability", dm.In(12))
+	}
+}

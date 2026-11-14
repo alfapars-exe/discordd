@@ -23,7 +23,15 @@ func (f *groupIncomingFixture) DeliverCommittedGroupNotifications(_ context.Cont
 	return nil
 }
 
-type groupInboxSummaryFixture struct{ testutil.MockNotificationRepo }
+type groupInboxSummaryFixture struct {
+	testutil.MockNotificationRepo
+	t *testing.T
+}
+
+func (f *groupInboxSummaryFixture) CreateReactionIfAbsent(context.Context, *models.Notification, string) (bool, error) {
+	f.t.Fatal("unexpected reaction write during inbox refresh")
+	return false, nil
+}
 
 func (*groupInboxSummaryFixture) CountUnreadSummary(context.Context, string) (models.NotificationUnreadCounts, error) {
 	return models.NotificationUnreadCounts{UnreadCount: 11, BadgeUnreadCount: 2}, nil
@@ -42,7 +50,7 @@ func TestGroupIncomingNotificationPostcommitPushAndBoundedRefresh(t *testing.T) 
 		}
 		events = append(events, event)
 	}
-	svc := &groupDMService{groups: f, hub: hub, reactionNotifications: &groupInboxSummaryFixture{}}
+	svc := &groupDMService{groups: f, hub: hub, notifications: &groupInboxSummaryFixture{t: t}}
 	if err := svc.BroadcastMessage(ctx, &models.GroupDMMessage{GroupID: "group", ID: "message", UserID: "sender"}); err != nil {
 		t.Fatal(err)
 	}

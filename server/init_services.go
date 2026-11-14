@@ -306,7 +306,7 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 		repos.DM, repos.User, hub, blockService, friendGraph, dmSettingsService,
 		repos.DMRead, repos.Notification, repository.NewDMMessageTxRunner(db),
 		emailDeliveryService,
-		repos.Preferences,
+		repos.Preferences, repos.Notification,
 	)
 	// Read friendship edges directly so DM construction does not depend on the
 	// friendship writer; auto-accept can then be a constructor dependency.

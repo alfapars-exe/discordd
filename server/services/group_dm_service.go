@@ -53,18 +53,18 @@ type GroupDMService interface {
 }
 
 type groupDMService struct {
-	groups                repository.GroupDMRepository
-	users                 repository.UserRepository
-	friendships           repository.FriendshipRepository
-	hub                   ws.Broadcaster
-	liveKitURL            string
-	liveKitAPIKey         string
-	liveKitAPISecret      string
-	mediaKey              []byte
-	uploadDir             string
-	reactionNotifications repository.NotificationRepository
-	reactionPreferences   profilePreferenceReader
-	reactionBlocks        BlockChecker
+	groups              repository.GroupDMRepository
+	users               repository.UserRepository
+	friendships         repository.FriendshipRepository
+	hub                 ws.Broadcaster
+	liveKitURL          string
+	liveKitAPIKey       string
+	liveKitAPISecret    string
+	mediaKey            []byte
+	uploadDir           string
+	notifications       repository.NotificationStore
+	reactionPreferences profilePreferenceReader
+	reactionBlocks      BlockChecker
 }
 
 func NewGroupDMService(
@@ -75,23 +75,23 @@ func NewGroupDMService(
 	liveKitURL, liveKitAPIKey, liveKitAPISecret string,
 	mediaKey []byte,
 	uploadDir string,
-	notifications repository.NotificationRepository,
+	notifications repository.NotificationStore,
 	prefs profilePreferenceReader,
 	blocks BlockChecker,
 ) GroupDMService {
 	return &groupDMService{
-		groups:                groups,
-		users:                 users,
-		friendships:           friendships,
-		hub:                   hub,
-		liveKitURL:            liveKitURL,
-		liveKitAPIKey:         liveKitAPIKey,
-		liveKitAPISecret:      liveKitAPISecret,
-		mediaKey:              append([]byte(nil), mediaKey...),
-		uploadDir:             uploadDir,
-		reactionNotifications: notifications,
-		reactionPreferences:   prefs,
-		reactionBlocks:        blocks,
+		groups:              groups,
+		users:               users,
+		friendships:         friendships,
+		hub:                 hub,
+		liveKitURL:          liveKitURL,
+		liveKitAPIKey:       liveKitAPIKey,
+		liveKitAPISecret:    liveKitAPISecret,
+		mediaKey:            append([]byte(nil), mediaKey...),
+		uploadDir:           uploadDir,
+		notifications:       notifications,
+		reactionPreferences: prefs,
+		reactionBlocks:      blocks,
 	}
 }
 
@@ -686,7 +686,7 @@ func (s *groupDMService) ToggleReaction(ctx context.Context, groupID, messageID,
 	}
 	s.hub.BroadcastToUsers(ids, ws.Event{Op: ws.OpGroupDMReactionUpdate, Data: map[string]any{"group_id": groupID, "message_id": messageID, "reactions": r[messageID]}})
 	if added && message.UserID != userID && slices.Contains(ids, message.UserID) {
-		if creator, ok := s.reactionNotifications.(reactionNotificationCreator); ok {
+		if creator := s.notifications; creator != nil {
 			if s.reactionBlocks != nil {
 				blocked, err := s.reactionBlocks.IsBlocked(ctx, userID, message.UserID)
 				if err != nil || blocked {

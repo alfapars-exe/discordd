@@ -80,6 +80,7 @@ type FriendshipChecker interface {
 }
 
 type dmService struct {
+	reactionWriter      repository.ReactionNotificationWriter
 	deliveryDB          *sql.DB
 	deliveryHub         ws.Broadcaster
 	dmRepo              repository.DMRepository
@@ -116,8 +117,10 @@ func NewDMService(
 	txRunner repository.DMMessageTxRunner,
 	communicationEmailEnqueuer ScheduledEmailEnqueuer,
 	reactionPreferences profilePreferenceReader,
+	reactionWriter repository.ReactionNotificationWriter,
 ) DMService {
 	return &dmService{
+		reactionWriter:             reactionWriter,
 		reactionPreferences:        reactionPreferences,
 		communicationEmailEnqueuer: communicationEmailEnqueuer,
 		serverDMPolicy:             serverDMPolicy,

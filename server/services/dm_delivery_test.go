@@ -51,7 +51,7 @@ func dmOutboxFixture(t *testing.T) (*dmService, *sql.DB, *models.DMChannel, *dmE
 	}
 	captured := &dmEventCapture{}
 	hub := &testutil.MockBroadcaster{BroadcastToUserFn: captured.add}
-	service := NewDMService(nil, repo, repository.NewSQLiteUserRepo(db.Conn), hub, nil, nil, nil, repository.NewSQLiteDMReadRepo(db.Conn), repository.NewSQLiteNotificationRepo(db.Conn), repository.NewDMMessageTxRunner(db.Conn), nil, nil)
+	service := NewDMService(nil, repo, repository.NewSQLiteUserRepo(db.Conn), hub, nil, nil, nil, repository.NewSQLiteDMReadRepo(db.Conn), repository.NewSQLiteNotificationRepo(db.Conn), repository.NewDMMessageTxRunner(db.Conn), nil, nil, nil)
 	ConfigureDMDelivery(service, db.Conn)
 	return service.(*dmService), db.Conn, ch, captured
 }
