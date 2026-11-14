@@ -1,0 +1,35 @@
+{
+  "source_parent": "8bcee207",
+  "scope": "RF11 channel reaction notification dependency wiring",
+  "before": {
+    "test": "TestReactionConstructorRequiresNotificationDependencies",
+    "exit": 1,
+    "reason": "constructor had6 inputs without explicit notification dependency group"
+  },
+  "change": "ReactionNotificationDependencies groups notification repository, preference reader and user reader in required constructor argument; late SetNotificationDelivery removed. Production supplies collaborators; reaction-only fixtures explicitly use zero-value disabled group.",
+  "validation": [
+    {
+      "command": "go test ./services ./handlers . -run 'TestReaction|Test.*Reaction|TestFriendshipDMProduction|Test.*Wiring|TestServiceInitialization' -count=1 -timeout=3m",
+      "exit": 0,
+      "package_seconds": {
+        "services": 0.6,
+        "handlers_compile_only": 0.548,
+        "root": 1.634
+      },
+      "note": "handler package selected no tests"
+    },
+    {
+      "command": "go build ./...",
+      "exit": 0
+    },
+    {
+      "command": "go vet ./services ./handlers .",
+      "exit": 0
+    }
+  ],
+  "limits": [
+    "Existing optional reaction-notification writer capability gate unchanged; no blanket all-dependency validation claim",
+    "Existing preference/self/removal/dedupe behavior and notification assertions retained",
+    "Windows Go1.27.4 CGO0; fresh current-source Linux race/native/production CI required"
+  ]
+}

@@ -329,8 +329,8 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	reminderService := services.NewReminderService(repos.Reminder, repos.Message, repos.Channel, repos.DM, channelPermService)
 	userNoteService := services.NewUserNoteService(repos.UserNote, repos.User)
 	personalizationService := services.NewPersonalizationService(repos.Preferences, repos.User, repos.Server, repos.Friendship)
-	reactionService := services.NewReactionService(repos.Reaction, repos.Message, repos.Channel, hub, channelPermService, repos.MemberTimeout)
-	reactionService.SetNotificationDelivery(repos.Notification, repos.Preferences, repos.User)
+	reactionService := services.NewReactionService(repos.Reaction, repos.Message, repos.Channel, hub, channelPermService, repos.MemberTimeout,
+		services.ReactionNotificationDependencies{Notifications: repos.Notification, Preferences: repos.Preferences, Users: repos.User})
 	serverMuteService := services.NewServerMuteService(repos.ServerMute)
 	channelMuteService := services.NewChannelMuteService(repos.ChannelMute)
 	reportService := services.NewReportService(repos.Report, repos.User, messageService, dmService, repos.GroupDM)

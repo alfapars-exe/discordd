@@ -67,3 +67,19 @@ func TestFriendshipConstructorRequiresDMAutoAccept(t *testing.T) {
 		t.Fatalf("friendship constructor dependency6=%s, want explicit %s", got, required)
 	}
 }
+
+func TestReactionConstructorRequiresNotificationDependencies(t *testing.T) {
+	factory := reflect.TypeOf(NewReactionService)
+	if factory.NumIn() != 7 {
+		t.Fatalf("reaction constructor has %d inputs, want explicit notification dependency group", factory.NumIn())
+	}
+	dependency := factory.In(6)
+	if dependency.Kind() != reflect.Struct {
+		t.Fatalf("notification dependencies are not an explicit struct: %s", dependency)
+	}
+	for _, name := range []string{"Notifications", "Preferences", "Users"} {
+		if _, ok := dependency.FieldByName(name); !ok {
+			t.Errorf("notification dependency group omits %s", name)
+		}
+	}
+}

@@ -38,8 +38,12 @@ type reactionNotificationCreator interface {
 	CreateReactionIfAbsent(context.Context, *models.Notification, string) (bool, error)
 }
 
-func (s *reactionService) SetNotificationDelivery(repo repository.NotificationRepository, prefs profilePreferenceReader, users repository.UserRepository) {
-	s.notificationRepo, s.preferenceRepo, s.userRepo = repo, prefs, users
+// ReactionNotificationDependencies explicitly selects delivery collaborators.
+// The zero value disables notifications for isolated reaction-only callers.
+type ReactionNotificationDependencies struct {
+	Notifications repository.NotificationRepository
+	Preferences   profilePreferenceReader
+	Users         repository.UserRepository
 }
 
 func NewReactionService(
@@ -49,14 +53,18 @@ func NewReactionService(
 	hub ws.BroadcastAndOnline,
 	permResolver ChannelPermResolver,
 	timeoutChecker MemberTimeoutChecker,
+	notifications ReactionNotificationDependencies,
 ) *reactionService {
 	return &reactionService{
-		reactionRepo:   reactionRepo,
-		messageRepo:    messageRepo,
-		channelRepo:    channelRepo,
-		hub:            hub,
-		permResolver:   permResolver,
-		timeoutChecker: timeoutChecker,
+		notificationRepo: notifications.Notifications,
+		preferenceRepo:   notifications.Preferences,
+		userRepo:         notifications.Users,
+		reactionRepo:     reactionRepo,
+		messageRepo:      messageRepo,
+		channelRepo:      channelRepo,
+		hub:              hub,
+		permResolver:     permResolver,
+		timeoutChecker:   timeoutChecker,
 	}
 }
 

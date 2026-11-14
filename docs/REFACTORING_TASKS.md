@@ -1813,3 +1813,8 @@ DM only needs friendship edge reads, so it now consumes the existing repository 
 ### RF11 — real composed friendship/DM wiring (2026-11-14)
 
 A real file-backed SQLite fixture with embedded migrations now builds initRepositories and initServices directly, without service/repository doubles. Both explicit and mutual-request friendship acceptance change a preexisting pending DM to accepted. The first subsequent DM message is verified persisted with its author/content and the channel remains accepted, exercising the committed friendship reader and auto-accept dependency together. Targeted test and vet pass. All constructor-owned resources are closed before DB cleanup. This is in-process SQLite wiring proof, separate from HTTP/WS and native PostgreSQL. Receipt: implementation/verification/refactor-rf11-friendship-dm-composed-2026-11-14.json.
+
+
+### RF11 — reaction delivery dependency group (2026-11-14)
+
+Channel reaction constructor now explicitly takes ReactionNotificationDependencies (notification repository, preference reader, user reader); SetNotificationDelivery is removed. The constructor contract regression failed before the change. Existing preference-mode, self/removal and dedupe assertions use constructor wiring and pass with wiring/composed startup tests. Reaction-only fixtures explicitly choose a zero-value disabled group. Build and vet pass; handler package compiled but selected no tests in the targeted run. Existing optional writer capability gate is unchanged and remains an audit boundary. Receipt: implementation/verification/refactor-rf11-reaction-notification-constructor-2026-11-14.json.

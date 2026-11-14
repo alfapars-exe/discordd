@@ -18,7 +18,7 @@ func newTestReactionService(
 	permResolver ChannelPermResolver,
 	timeoutChecker MemberTimeoutChecker,
 ) ReactionService {
-	return NewReactionService(reactionRepo, msgRepo, chanRepo, hub, permResolver, timeoutChecker)
+	return NewReactionService(reactionRepo, msgRepo, chanRepo, hub, permResolver, timeoutChecker, ReactionNotificationDependencies{})
 }
 
 // readResolver grants ViewChannel+ReadMessages — the precondition ToggleReaction
