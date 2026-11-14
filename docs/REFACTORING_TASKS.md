@@ -2003,3 +2003,8 @@ VoiceRuntimeDependencies groups integration construction and app logger in the e
 ### RF11 — P2P logger constructor ownership (2026-11-14)
 
 P2P constructor now requires explicit P2PAppLogger; production injects existing appLogService and standalone tests select nil. Late setter and request-interface logger mutation removed. Constructor regression failed before change. Actual logger error path and explicit disabled mode pass, as do P2P service/WebSocket and composed root wiring selections. Handler package compiles with no selected tests. Server build, targeted vet and diff check pass. No changed P2P file has an exact-hit record. Full RF11/current-source CI remain open.
+
+
+### RF11 — auth logger selected by constructor option (2026-11-14)
+
+WithAuthAppLogger uses existing AuthOption composition to select optional persistent logger before return. Production supplies appLogService; explicit nil disables it. AuthService/concrete setter and main late binding removed. Request-interface regression failed before change. Actual auth warning path and disabled mode, recovery/handler and composed wiring selections pass; server build, targeted vet and diff check pass. No reviewed exact-hit source changed. Auth middleware cache invalidation still has a separate late construction dependency; whole RF11 and current-source CI remain open.

@@ -62,8 +62,6 @@ type AuthService interface {
 	// valid until voiceTokenTTL if presented directly to the SFU.
 	LogoutAllDevices(ctx context.Context, userID string) error
 
-	SetAppLogger(logger AuthAppLogger)
-
 	// SetUserCacheInvalidator wires AuthMiddleware's user-cache invalidator
 	// so a credential-lifecycle event (password change/reset, logout-all)
 	// drops the cached user row immediately instead of waiting out
@@ -144,8 +142,10 @@ type usedRefreshEntry struct {
 	expiresAt time.Time
 }
 
-func (s *authService) SetAppLogger(logger AuthAppLogger) {
-	s.appLogger = logger
+// WithAuthAppLogger selects optional persistent logging during construction.
+// Nil keeps logging disabled without a later mutable binding.
+func WithAuthAppLogger(logger AuthAppLogger) AuthOption {
+	return func(s *authService) { s.appLogger = logger }
 }
 
 // SetUserCacheInvalidator wires the auth middleware's user-cache

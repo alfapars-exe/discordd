@@ -294,3 +294,23 @@ func TestP2PConstructorLoggerAndExplicitDisabledMode(t *testing.T) {
 		t.Fatal("disabled logger not retained")
 	}
 }
+
+func TestAuthRequestInterfaceExcludesLoggerMutation(t *testing.T) {
+	if _, ok := reflect.TypeFor[AuthService]().MethodByName("SetAppLogger"); ok {
+		t.Fatal("auth request interface exposes logger mutation")
+	}
+}
+
+func TestAuthConstructorLoggerOptionAndDisabledMode(t *testing.T) {
+	logger := &constructorVoiceLogger{}
+	service := NewAuthService(nil, nil, nil, nil, nil, nil, "constructor-test-key", 15, 7, WithAuthAppLogger(logger)).(*authService)
+	service.logWarn(context.Background(), nil, "constructor logger fixture", nil)
+	if len(logger.levels) != 1 || logger.levels[0] != models.LogLevelWarn {
+		t.Fatal("auth constructor logger did not receive warning")
+	}
+	disabled := NewAuthService(nil, nil, nil, nil, nil, nil, "constructor-test-key", 15, 7, WithAuthAppLogger(nil)).(*authService)
+	disabled.logWarn(context.Background(), nil, "disabled logger fixture", nil)
+	if disabled.appLogger != nil {
+		t.Fatal("explicit disabled auth logger changed")
+	}
+}
