@@ -1913,3 +1913,8 @@ The native runner already executes complete repository/database packages. It now
 ### RF07 — recovery contract layer matrix (2026-11-14)
 
 Current-source selection passes8 top-level Go tests across services/handlers/models,11 client tests across4 files, plus2 SQLite auth-session atomic/replay/concurrent-proof tests. Evidence is mapped per layer rather than treating mocked handlers as composed HTTP acceptance. Provider failure/timeout, full registration/legacy login mapping, normalization/schema parity and physical provider acceptance remain explicit open rows. RF07 remains open. Receipt: implementation/verification/refactor-rf07-recovery-layer-matrix-2026-11-14.json.
+
+
+### RF07 — recovery provider and persistence failure contracts (2026-11-14)
+
+Two new service tests cover fake provider failure, cancellation during send, actual context deadline during send and persistence failure before send. Cause wrapping is preserved; sender receives normalized stored address and a proof matching the persisted SHA256 hash; storage failure prevents delivery. All pass without printing proof values. These are service/fake-provider contracts; public HTTP failure mapping and real delivery remain separate. RF07 remains open. Receipt: implementation/verification/refactor-rf07-provider-failure-contracts-2026-11-14.json.
