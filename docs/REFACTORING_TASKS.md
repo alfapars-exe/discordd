@@ -1943,3 +1943,8 @@ New repository contract verifies existing username case-insensitive lookup and e
 ### RF09 — bounded service projection calls (2026-11-14)
 
 New service contract exercises0/1/1001 members. Exactly one scoped bulk call each for profiles, roles, nicknames and timeouts; per-user profile lookup fails the test. Output order and nickname projection remain. New contract plus existing bulk-timeout test pass, final new test and service vet pass. These are service-to-repository operation counts, not physical SQL counts; repository batch splitting, actual two-database parity and RF29 p95/wait evidence remain separate. RF09 remains open.
+
+
+### RF09 — real SQL query counts and bounded profile measurement (2026-11-14)
+
+New forwarding TxQuerier counter records actual QueryContext executions against the migrated database. Public profile reads use0 queries for empty IDs and1 query for1/1001 requested IDs (only one existing user, remaining IDs absent). Server member projection uses one scoped query and returns the two expected members. Counter/parity tests pass on SQLite and dedicated PostgreSQL18.6,3 tests each/no skips; repository vet passes. Existing100-message/2-distinct-user fixture,1 warmup+30 samples: SQLite per-user p95=11.6743ms vs bulk524.9us; PostgreSQL105.6592ms vs1.0548ms. Pool wait0 in both paths. These are small sequential local fixture measurements, not capacity/concurrent load evidence or1001 actual members. Owned non-TLS loopback PostgreSQL stopped. Full RF09/RF29 population/load/error mapping remains open.
