@@ -13,13 +13,10 @@ import (
 
 func TestLeaveServerInvalidatesDepartingUserPermissions(t *testing.T) {
 	inv := &memberInvalidator{}
-	svc := &serverService{
-		serverRepo: &testutil.MockServerRepo{GetByIDFn: func(context.Context, string) (*models.Server, error) {
-			return &models.Server{OwnerID: "owner"}, nil
-		}},
-		hub: &testutil.MockEventPublisher{},
-	}
-	svc.SetPermInvalidator(inv)
+	h := newJoinServerHarnessWithPermInvalidator(inv)
+	h.serverRepo.GetByIDFn = func(context.Context, string) (*models.Server, error) { return &models.Server{OwnerID: "owner"}, nil }
+	svc := h.svc
+
 	if err := svc.LeaveServer(context.Background(), "server", "member"); err != nil {
 		t.Fatal(err)
 	}
@@ -29,11 +26,10 @@ func TestLeaveServerInvalidatesDepartingUserPermissions(t *testing.T) {
 }
 
 func TestLeaveServerRemovalFailurePreservesSession(t *testing.T) {
-	h := newJoinServerHarness(func(string, string) { t.Error("disconnected voice after failed removal") })
+	inv := &memberInvalidator{}
+	h := newJoinServerHarnessWithPermInvalidator(inv, func(string, string) { t.Error("disconnected voice after failed removal") })
 	writeErr := errors.New("membership write failed")
 	h.serverRepo.RemoveMemberFn = func(context.Context, string, string) error { return writeErr }
-	inv := &memberInvalidator{}
-	h.svc.SetPermInvalidator(inv)
 	h.hub.RemoveClientServerIDFn = func(string, string) { t.Error("removed live subscription after failed removal") }
 	h.hub.BroadcastToServerFn = func(string, ws.Event) { t.Error("announced departure after failed removal") }
 	if err := h.svc.LeaveServer(context.Background(), joinTestServerID, joinTestUserID); !errors.Is(err, writeErr) {
@@ -59,7 +55,7 @@ func TestPrivateChannelPermissionsAcrossLeaveAndRejoin(t *testing.T) {
 	}}
 	cache := NewChannelPermissionService(&testutil.MockChannelPermRepo{}, h.roleRepo, channels, h.hub)
 	t.Cleanup(cache.(*cachingPermResolver).permCache.Close)
-	h.svc.SetPermInvalidator(cache)
+	h.svc.(*serverService).permInvalidator = cache
 	check := func(want models.Permission) {
 		t.Helper()
 		got, err := cache.ResolveChannelPermissions(ctx, joinTestUserID, "private")

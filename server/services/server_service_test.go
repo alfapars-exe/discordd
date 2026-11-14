@@ -60,12 +60,15 @@ type joinServerHarness struct {
 // JoinServer touches after AddMember succeeds, so table-test cases only need
 // to override the field(s) that make that case interesting.
 func newJoinServerHarness(cleanup ...func(string, string)) *joinServerHarness {
-	return newJoinServerHarnessWithPolicies(nil, nil, cleanup...)
+	return newJoinServerHarnessWithPolicies(nil, nil, nil, cleanup...)
+}
+func newJoinServerHarnessWithPermInvalidator(inv PermissionInvalidator, cleanup ...func(string, string)) *joinServerHarness {
+	return newJoinServerHarnessWithPolicies(nil, nil, inv, cleanup...)
 }
 func newJoinServerHarnessWithActivity(activity GameActivityPrivacyInvalidator) *joinServerHarness {
-	return newJoinServerHarnessWithPolicies(nil, activity)
+	return newJoinServerHarnessWithPolicies(nil, activity, nil)
 }
-func newJoinServerHarnessWithPolicies(preferences repository.PreferencesRepository, activity GameActivityPrivacyInvalidator, cleanup ...func(string, string)) *joinServerHarness {
+func newJoinServerHarnessWithPolicies(preferences repository.PreferencesRepository, activity GameActivityPrivacyInvalidator, invalidator PermissionInvalidator, cleanup ...func(string, string)) *joinServerHarness {
 	h := &joinServerHarness{
 		serverRepo: &testutil.MockServerRepo{},
 		roleRepo:   &testutil.MockRoleRepo{},
@@ -101,14 +104,14 @@ func newJoinServerHarnessWithPolicies(preferences repository.PreferencesReposito
 		voiceCleanup = cleanup[0]
 	}
 	h.svc = NewServerService(preferences, activity, nil, h.serverRepo, nil, h.roleRepo, nil, nil, h.userRepo, h.banRepo, h.inviteSvc, h.hub, nil, nil, // encryptionKey, auditLogger — not under test here
-		voiceCleanup, passthroughMembershipTxRunner{server: h.serverRepo, role: h.roleRepo})
+		voiceCleanup, passthroughMembershipTxRunner{server: h.serverRepo, role: h.roleRepo}, invalidator)
 	return h
 }
 
 func TestJoinServer_ValidInvite_AddsMemberAndMarksUsed(t *testing.T) {
 	activity := &recordingGameActivityInvalidator{}
 	prefs := &preferencesRepoStub{}
-	h := newJoinServerHarnessWithPolicies(prefs, activity)
+	h := newJoinServerHarnessWithPolicies(prefs, activity, nil)
 
 	var addMemberCalled, markUsedCalled, assignRoleCalled bool
 	h.serverRepo.AddMemberFn = func(_ context.Context, serverID, userID string) error {
@@ -277,7 +280,7 @@ func TestJoinServer_AlreadyMember(t *testing.T) {
 // leave the invite's use slot untouched.
 func TestJoinServer_AddMemberFails(t *testing.T) {
 	activity := &recordingGameActivityInvalidator{}
-	h := newJoinServerHarnessWithPolicies(nil, activity)
+	h := newJoinServerHarnessWithPolicies(nil, activity, nil)
 	h.serverRepo.AddMemberFn = func(_ context.Context, _, _ string) error {
 		return errors.New("db error: add member failed")
 	}

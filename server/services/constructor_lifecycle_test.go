@@ -388,3 +388,16 @@ func TestMemberConstructorRequiresPermissionInvalidator(t *testing.T) {
 		t.Fatal("member request interface exposes permission wiring")
 	}
 }
+
+func TestServerConstructorRequiresPermissionInvalidator(t *testing.T) {
+	factory := reflect.TypeOf(NewServerService)
+	if factory.NumIn() != 17 {
+		t.Fatalf("server constructor inputs=%d, want17", factory.NumIn())
+	}
+	if factory.In(16) != reflect.TypeFor[PermissionInvalidator]() {
+		t.Fatal("server permission invalidator is not explicit")
+	}
+	if _, ok := reflect.TypeFor[ServerService]().MethodByName("SetPermInvalidator"); ok {
+		t.Fatal("server request interface exposes permission wiring")
+	}
+}
