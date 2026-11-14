@@ -27,12 +27,22 @@ func TestPostgresImportPreservesDataAndRejectsReuse(t *testing.T) {
 		t.Fatal("test database must be local")
 	}
 	admin := stdlib.OpenDB(*cfg)
-	defer admin.Close()
+	defer func() {
+		if err := admin.Close(); err != nil {
+			t.Errorf("close PostgreSQL fixture admin pool: %v", err)
+		}
+	}()
 	schema := fmt.Sprintf("hichat_import_%d", time.Now().UnixNano())
 	if _, err = admin.Exec("CREATE SCHEMA " + schema); err != nil {
 		t.Fatal(err)
 	}
-	defer admin.Exec("DROP SCHEMA " + schema + " CASCADE")
+	defer func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if _, err := admin.ExecContext(cleanupCtx, "DROP SCHEMA "+schema+" CASCADE"); err != nil {
+			t.Errorf("drop PostgreSQL fixture schema %s: %v", schema, err)
+		}
+	}()
 	cfg.RuntimeParams["search_path"] = schema + ",public"
 	target := PostgreSQLPool(cfg)
 	defer target.Close()
