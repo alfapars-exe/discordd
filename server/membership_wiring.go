@@ -34,6 +34,18 @@ type membershipServices struct {
 
 // initMembershipServices shares one transaction coordinator across membership and role writes.
 func initMembershipServices(deps membershipDependencies) membershipServices {
+	for _, input := range []struct {
+		name  string
+		value any
+	}{
+		{"Database", deps.Database}, {"Repositories", deps.Repositories}, {"Hub", deps.Hub}, {"Voice", deps.Voice},
+		{"Activity", deps.Activity}, {"Profiles", deps.Profiles}, {"Invites", deps.Invites}, {"Audit", deps.Audit},
+		{"UserCache", deps.UserCache}, {"Permissions", deps.Permissions}, {"ProfileUpdates", deps.ProfileUpdates},
+	} {
+		if missingCompositionInput(input.value) {
+			panic("membership requires " + input.name)
+		}
+	}
 	repos := deps.Repositories
 	transactions := repository.NewServerMembershipTxRunner(deps.Database)
 	members := services.NewMemberService(deps.Activity, deps.Profiles, repos.User, repos.Role, repos.Ban, repos.MemberTimeout, repos.Server, transactions, deps.Hub, deps.Voice, deps.Audit, deps.UserCache, deps.Permissions, deps.ProfileUpdates)
