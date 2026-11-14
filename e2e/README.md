@@ -70,3 +70,13 @@ the loopback-only server/proxy contract without opening a browser.
 The setup makes no calls to external services: LiveKit, Sentry, email, and
 third-party integrations are disabled for the Go process; the server's
 self-hosted LiveKit fixture values are inert `.invalid` / test-only values.
+
+The encrypted-history recovery scenario owns a separate run database and account
+identities because it changes the account key backup. Run it separately with
+`HICHAT_E2E_CRYPTO_RECOVERY=1 HICHAT_E2E_PRODUCTION_CLIENT=1 npx playwright test --project=chromium tests/crypto-recovery.spec.ts`
+(PowerShell: set those two environment variables before the command). The normal
+Chromium suite excludes this file. CI runs this profile against its owned mTLS
+PostgreSQL fixture. It checks ciphertext-only server storage, wrong-password
+rejection, restored identity fingerprint, and historical plaintext rendering from
+a fresh browser context, including a reload. Listing the test is not evidence
+that browser recovery passed.

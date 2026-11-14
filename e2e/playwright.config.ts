@@ -56,7 +56,8 @@ export const PENDING_NOTIFICATION_RECIPIENT_FILE = join(__dirname, ".tmp", "noti
 export default defineConfig({
   testDir: "./tests",
   // Recovery changes the shared disposable account password, so run it in its own database.
-  testMatch: process.env.HICHAT_E2E_RECOVERY_MAIL === "1" ? /recovery-mail\.spec\.ts/ : undefined,
+  testMatch: process.env.HICHAT_E2E_CRYPTO_RECOVERY === "1" ? /crypto-recovery\.spec\.ts/
+    : process.env.HICHAT_E2E_RECOVERY_MAIL === "1" ? /recovery-mail\.spec\.ts/ : undefined,
   outputDir: "./test-results",
   globalTeardown: "./scripts/cleanup-test-credentials.mjs",
 
@@ -96,7 +97,8 @@ export default defineConfig({
     },
     {
       name: "chromium",
-      testIgnore: process.env.HICHAT_E2E_RECOVERY_MAIL === "1" ? /auth\.setup\.ts/ : [/auth\.setup\.ts/, /recovery-mail\.spec\.ts/],
+      testIgnore: process.env.HICHAT_E2E_RECOVERY_MAIL === "1" || process.env.HICHAT_E2E_CRYPTO_RECOVERY === "1"
+        ? /auth\.setup\.ts/ : [/auth\.setup\.ts/, /recovery-mail\.spec\.ts/, /crypto-recovery\.spec\.ts/],
       dependencies: ["setup"],
       use: { ...devices["Desktop Chrome"] },
     },
