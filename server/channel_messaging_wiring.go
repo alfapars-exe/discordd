@@ -7,6 +7,7 @@ import (
 	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/services"
 	"github.com/argeinfina/hichat/ws"
+	"reflect"
 )
 
 type channelMessagingHub interface {
@@ -22,6 +23,18 @@ type channelMessagingServices struct {
 
 // initChannelMessagingServices binds the message write path and its publication mode.
 func initChannelMessagingServices(db *sql.DB, repos *Repositories, hub channelMessagingHub, cfg *config.Config, permissions services.ChannelPermResolver, audit services.AuditWriter) channelMessagingServices {
+	if repos == nil {
+		panic("channel messaging requires repositories")
+	}
+	if cfg == nil {
+		panic("channel messaging requires config")
+	}
+	if missingCompositionInput(hub) {
+		panic("channel messaging requires hub")
+	}
+	if missingCompositionInput(permissions) {
+		panic("channel messaging requires permissions")
+	}
 	var deliveryDB *sql.DB
 	if database.IsPostgres(db) {
 		deliveryDB = db
@@ -41,4 +54,18 @@ func initChannelMessagingServices(db *sql.DB, repos *Repositories, hub channelMe
 	}
 	uploadService := services.NewUploadService(repos.Attachment, cfg.Upload.Dir, cfg.Upload.MaxSize)
 	return channelMessagingServices{Message: messageService, Upload: uploadService, Notifications: channelMessageNotificationWorker, DeliveryDB: deliveryDB}
+}
+
+// Interface-typed dependencies can hold nil pointers at a composition boundary.
+func missingCompositionInput(value any) bool {
+	if value == nil {
+		return true
+	}
+	reflected := reflect.ValueOf(value)
+	switch reflected.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return reflected.IsNil()
+	default:
+		return false
+	}
 }
