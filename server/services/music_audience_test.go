@@ -227,7 +227,9 @@ func (p *musicAudienceFixturePerms) ResolveChannelPermissionsFresh(_ context.Con
 // Explicit trusted fixtures: production never gets an implicit allow audience.
 func configureMusicAudienceFixture(s *musicBotService, channel, server string) {
 	s.audience = MusicAudienceDependencies{Voice: &musicAudienceFixtureVoice{states: map[string]models.VoiceState{"listener": {UserID: "listener", ChannelID: channel, ServerID: server, JoinedAt: time.Unix(1, 0), ChannelGeneration: 1}}}, Members: &musicAudienceFixtureMembers{}}
-	s.perms = &musicAudienceFixturePerms{}
+	fresh := &musicAudienceFixturePerms{}
+	s.perms = fresh
+	s.audience.FreshPermissions = fresh
 	if s.channels == nil {
 		s.channels = &stubChannelGetter{channel: &models.Channel{ID: channel, ServerID: server, Type: models.ChannelTypeVoice}}
 	}
@@ -285,7 +287,7 @@ func TestMusicAudienceStateAndErrorsOnlyReachCurrentPermittedParticipants(t *tes
 			case "missing-dependencies":
 				s.audience = MusicAudienceDependencies{}
 			case "missing-fresh-resolver":
-				s.perms = &testutil.MockChannelPermResolver{}
+				s.audience.FreshPermissions = nil
 			case "channel-moved":
 				s.channels = &stubChannelGetter{channel: &models.Channel{ID: "ch", ServerID: "other", Type: models.ChannelTypeVoice}}
 			case "text-channel":
@@ -437,7 +439,9 @@ func TestMusicAudienceNonAdminRepositoryCallsAreFourNPlusOne(t *testing.T) {
 			var membershipCalls, outerChannelCalls, sends int
 			s.audience.Members = &testutil.MockServerRepo{IsMemberFn: func(context.Context, string, string) (bool, error) { membershipCalls++; return true, nil }}
 			counter := &bulkRepoCounter{}
-			s.perms = (permFixture{serverID: "srv", channelID: "ch", roles: roles}).newService(t, counter)
+			resolver := (permFixture{serverID: "srv", channelID: "ch", roles: roles}).newService(t, counter)
+			s.perms = resolver
+			s.audience.FreshPermissions = resolver
 			s.channels = &testutil.MockChannelRepo{GetByIDFn: func(context.Context, string) (*models.Channel, error) {
 				outerChannelCalls++
 				return &models.Channel{ID: "ch", ServerID: "srv", Type: models.ChannelTypeVoice}, nil

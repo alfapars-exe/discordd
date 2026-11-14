@@ -704,3 +704,9 @@ func TestBlockConstructorRequiresAtomicWriter(t *testing.T) {
 		t.Fatal("block constructor hides required atomic write")
 	}
 }
+
+func TestMusicAudienceDeclaresFreshPermissionSource(t *testing.T) {
+	if _, ok := reflect.TypeFor[MusicAudienceDependencies]().FieldByName("FreshPermissions"); !ok {
+		t.Fatal("music audience hides fresh permission source")
+	}
+}

@@ -230,7 +230,7 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	voiceService := services.NewVoiceService(
 		repos.Channel, repos.LiveKit, channelPermService, hub, hub, repos.Server, encryptionKey, repos.MemberTimeout, repos.Ban, auditLogService,
 		services.VoiceRuntimeDependencies{Fanout: services.VoiceFanoutDependencies{Online: hub, Members: repos.Server}, PermissionInvalidations: channelPermService, UsageCredit: services.NewDurableVoiceUsageCredit(repos.LiveKit), UsageRecovery: repos.LiveKit, VoiceAccess: repos.VoiceAccess, FreshPermissions: channelPermService, AppLogger: appLogService, Integrations: func(voice services.VoiceService) (services.VoiceEntranceHook, services.MusicBotChannelHook) {
-			entranceService, musicBotService = initVoiceMediaServices(repos, hub, channelPermService,
+			entranceService, musicBotService = initVoiceMediaServices(repos, hub, channelPermService, channelPermService,
 				voice, cfg.Upload.Dir, encryptionKey, appLogService)
 			return entranceService, musicBotService
 		}},
