@@ -35,7 +35,7 @@ type Repositories struct {
 	Search                  repository.SearchRepository
 	ReadState               repository.ReadStateRepository
 	Mention                 repository.MentionRepository
-	DM                      repository.DMRepository
+	DM                      repository.DMRequestStore
 	GroupDM                 repository.GroupDMStore
 	Reaction                repository.ReactionRepository
 	ChannelPermission       repository.ChannelPermissionRepository

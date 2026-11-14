@@ -75,3 +75,11 @@ type DMRepository interface {
 type PendingDMDecliner interface {
 	DeclinePending(context.Context, string, string) (changed bool, fileURLs, notificationIDs []string, err error)
 }
+
+// DMRequestStore retains atomic pending-request transitions at composition.
+// Read-only consumers may continue to require the narrower DMRepository.
+type DMRequestStore interface {
+	DMRepository
+	PendingDMAccepter
+	PendingDMDecliner
+}

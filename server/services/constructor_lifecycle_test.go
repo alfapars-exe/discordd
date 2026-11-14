@@ -651,3 +651,10 @@ func TestGameActivityPrivacyDeclaresSnapshotReader(t *testing.T) {
 		t.Fatal("membership audience source must be explicit")
 	}
 }
+
+func TestDMRepositoryFactoryDeclaresAtomicRequests(t *testing.T) {
+	result := reflect.TypeOf(repository.NewSQLiteDMRepo).Out(0)
+	if !result.Implements(reflect.TypeFor[repository.PendingDMAccepter]()) || !result.Implements(reflect.TypeFor[repository.PendingDMDecliner]()) {
+		t.Fatal("DM factory hides atomic request transitions")
+	}
+}
