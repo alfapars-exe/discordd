@@ -1,0 +1,241 @@
+{
+  "source": "8ec41413f7ac03f72a53a1c11010df76283d1cf2",
+  "jobs": [
+    {
+      "job": {
+        "completedAt": "2026-11-14T04:47:22Z",
+        "conclusion": "success",
+        "databaseId": 132333839905,
+        "name": "PostgreSQL repository and migration contracts",
+        "startedAt": "2026-11-14T04:37:43Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-14T04:37:45Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-14T04:37:44Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T04:38:01Z",
+            "conclusion": "success",
+            "name": "Initialize containers",
+            "number": 2,
+            "startedAt": "2026-11-14T04:37:45Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T04:38:04Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 3,
+            "startedAt": "2026-11-14T04:38:01Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T04:38:08Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 4,
+            "startedAt": "2026-11-14T04:38:04Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T04:38:09Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 5,
+            "startedAt": "2026-11-14T04:38:08Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T04:38:18Z",
+            "conclusion": "success",
+            "name": "Start active-process PostgreSQL with mutual TLS",
+            "number": 6,
+            "startedAt": "2026-11-14T04:38:09Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T04:39:04Z",
+            "conclusion": "success",
+            "name": "Build production server for active-process acceptance",
+            "number": 7,
+            "startedAt": "2026-11-14T04:38:18Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T04:44:28Z",
+            "conclusion": "success",
+            "name": "Execute server, repository, and database tests; reject required test skips",
+            "number": 8,
+            "startedAt": "2026-11-14T04:39:04Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T04:46:45Z",
+            "conclusion": "success",
+            "name": "Race-check role mutations, durable delivery and email queues against PostgreSQL",
+            "number": 9,
+            "startedAt": "2026-11-14T04:44:28Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T04:47:17Z",
+            "conclusion": "success",
+            "name": "Race-check active voice process SIGTERM against mutual TLS PostgreSQL",
+            "number": 10,
+            "startedAt": "2026-11-14T04:46:45Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T04:47:18Z",
+            "conclusion": "success",
+            "name": "Stop active-process PostgreSQL",
+            "number": 11,
+            "startedAt": "2026-11-14T04:47:17Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T04:47:18Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 19,
+            "startedAt": "2026-11-14T04:47:18Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T04:47:18Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 20,
+            "startedAt": "2026-11-14T04:47:18Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T04:47:18Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 21,
+            "startedAt": "2026-11-14T04:47:18Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T04:47:18Z",
+            "conclusion": "success",
+            "name": "Stop containers",
+            "number": 22,
+            "startedAt": "2026-11-14T04:47:18Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T04:47:19Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 23,
+            "startedAt": "2026-11-14T04:47:18Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/alfapars-exe/discordd/actions/runs/43557593050/job/132333839905"
+      },
+      "selected_log_lines": [
+        "2026-11-14T04:44:28.1448362Z --- PASS: TestPostgresMemberRoleReplacement (0.57s)",
+        "2026-11-14T04:44:28.1449114Z     --- PASS: TestPostgresMemberRoleReplacement/user_from_outside_the_server (0.00s)",
+        "2026-11-14T04:44:28.1449883Z     --- PASS: TestPostgresMemberRoleReplacement/second_write_fails (0.01s)",
+        "2026-11-14T04:44:28.1450702Z     --- PASS: TestPostgresMemberRoleReplacement/duplicates_retry_and_default_role (0.01s)",
+        "2026-11-14T04:44:28.1451778Z     --- PASS: TestPostgresMemberRoleReplacement/cannot_grant_owner_or_peer (0.00s)",
+        "2026-11-14T04:44:28.1452656Z     --- PASS: TestPostgresMemberRoleReplacement/target_now_holds_a_protected_role (0.01s)",
+        "2026-11-14T04:44:28.1453513Z     --- PASS: TestPostgresMemberRoleReplacement/valid_role_with_missing_role (0.00s)",
+        "2026-11-14T04:44:28.1454352Z     --- PASS: TestPostgresMemberRoleReplacement/deferred_error_at_commit (0.02s)",
+        "2026-11-14T04:44:28.1455213Z     --- PASS: TestPostgresMemberRoleReplacement/replacement_after_concurrent_grant (0.06s)",
+        "2026-11-14T04:44:28.1456022Z     --- PASS: TestPostgresMemberRoleReplacement/revoked_manager (0.02s)",
+        "2026-11-14T04:44:28.1461084Z --- PASS: TestPostgresMetricsCollectorCancellation (0.48s)",
+        "2026-11-14T04:44:28.1461853Z     --- PASS: TestPostgresMetricsCollectorCancellation/real_repository_lock_wait (0.01s)",
+        "2026-11-14T04:44:28.1462757Z     --- PASS: TestPostgresMetricsCollectorCancellation/real_repository_pool_wait (0.01s)",
+        "2026-11-14T04:44:28.1466718Z --- PASS: TestPostgresRolePatchConcurrentChanges (0.51s)",
+        "2026-11-14T04:44:28.1467397Z     --- PASS: TestPostgresRolePatchConcurrentChanges/revoke_then_rename (0.02s)",
+        "2026-11-14T04:44:28.1468315Z     --- PASS: TestPostgresRolePatchConcurrentChanges/rename_then_revoke (0.02s)",
+        "2026-11-14T04:44:28.1469270Z     --- PASS: TestPostgresRolePatchConcurrentChanges/owner_fields_and_scoped_role_lookup (0.01s)",
+        "2026-11-14T04:44:28.1470373Z     --- PASS: TestPostgresRolePatchConcurrentChanges/actor_loses_manage_roles_while_request_waits (0.01s)"
+      ]
+    },
+    {
+      "job": {
+        "completedAt": "2026-11-14T04:38:38Z",
+        "conclusion": "success",
+        "databaseId": 132333839721,
+        "name": "PostgreSQL client certificate reconnect",
+        "startedAt": "2026-11-14T04:37:43Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-14T04:37:44Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-14T04:37:43Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T04:37:47Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 2,
+            "startedAt": "2026-11-14T04:37:44Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T04:37:49Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 3,
+            "startedAt": "2026-11-14T04:37:47Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T04:38:35Z",
+            "conclusion": "success",
+            "name": "Provision isolated certificate-authenticated database",
+            "number": 4,
+            "startedAt": "2026-11-14T04:37:49Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T04:38:35Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 7,
+            "startedAt": "2026-11-14T04:38:35Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T04:38:35Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 8,
+            "startedAt": "2026-11-14T04:38:35Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T04:38:36Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 9,
+            "startedAt": "2026-11-14T04:38:35Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/alfapars-exe/discordd/actions/runs/43557593050/job/132333839721"
+      },
+      "selected_log_lines": [
+        "2026-11-14T04:38:34.0232780Z --- PASS: TestPostgresMetricsCollectorCancellation (0.36s)",
+        "2026-11-14T04:38:34.0233344Z     --- PASS: TestPostgresMetricsCollectorCancellation/real_repository_lock_wait (0.01s)",
+        "2026-11-14T04:38:34.0234060Z     --- PASS: TestPostgresMetricsCollectorCancellation/real_repository_pool_wait (0.01s)"
+      ]
+    }
+  ],
+  "separate_from": "Windows offline baseline Go1.27.4 CGO0 no race"
+}
