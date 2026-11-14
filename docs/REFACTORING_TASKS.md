@@ -1908,3 +1908,8 @@ New real repository contract covers cross-channel count/page isolation, equal-co
 ### RF05 — mandatory named native contract gates (2026-11-14)
 
 The native runner already executes complete repository/database packages. It now additionally requires exact package/test PASS pairs for PostgreSQL dialect subtest and DM search contract, so missing/renamed tests or wrong-package events cannot silently satisfy the gate. Regression failed before fix;16 runner tests pass. Synthetic event tests prove gate behavior, not a fresh native suite execution. Full RF05 remains open. Receipt: implementation/verification/refactor-rf05-required-native-gates-2026-11-14.json.
+
+
+### RF07 — recovery contract layer matrix (2026-11-14)
+
+Current-source selection passes8 top-level Go tests across services/handlers/models,11 client tests across4 files, plus2 SQLite auth-session atomic/replay/concurrent-proof tests. Evidence is mapped per layer rather than treating mocked handlers as composed HTTP acceptance. Provider failure/timeout, full registration/legacy login mapping, normalization/schema parity and physical provider acceptance remain explicit open rows. RF07 remains open. Receipt: implementation/verification/refactor-rf07-recovery-layer-matrix-2026-11-14.json.
