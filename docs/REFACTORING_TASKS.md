@@ -1883,3 +1883,8 @@ Current postgres_dialect has no regex/upsert text rewrite: native migration disp
 ### RF05 — mutation family result equivalence (2026-11-14)
 
 Shared dialect contracts now exercise role-style UPDATE RETURNING and cascade-style DELETE IN SELECT. Matching/missing updates, literal bound values, owner-mismatch zero effects, matching deletion and remaining rows are asserted before rollback. The same contract passed SQLite and dedicated PostgreSQL18.6 with zero skips. Owned temporary container stopped; dev containers untouched. Local loopback/non-TLS/non-race evidence does not replace CI race/TLS gates. Full family inventory remains open. Receipt: implementation/verification/refactor-rf05-mutation-equivalence-2026-11-14.json.
+
+
+### RF05 — query inventory resolves explicit constants (2026-11-14)
+
+Existing AST inventory now resolves same-file explicit string constants/constant concatenations through parser object bindings, preserving local shadowing and leaving mutable/dynamic SQL unresolved. Regression failed before implementation;3 tool contracts pass. Current candidate counts: 659 direct literals, 31 constants, 273 unresolved across 182 files. These are navigation candidates, not execution/coverage proof. Full fixture mapping remains open. Receipt: implementation/verification/refactor-rf05-query-constant-inventory-2026-11-14.json.

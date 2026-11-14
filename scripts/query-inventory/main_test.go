@@ -45,3 +45,31 @@ func TestInventoryRejectsMissingSource(t *testing.T) {
 		t.Fatal("missing repository directory produced a successful inventory")
 	}
 }
+
+func TestInventoryResolvesConstantsButNotMutableQueries(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "server", "repository")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	source := `package fixture
+const base = "SELECT "
+func calls() {
+ const query = base + "?"
+ db.Query(query)
+ var mutable = "SELECT ?"
+ db.Query(mutable)
+ { const query = "DELETE FROM fixture WHERE id=?"; db.Exec(query) }
+ db.Query("SELECT " + columns)
+}`
+	if err := os.WriteFile(filepath.Join(dir, "queries.go"), []byte(source), 0600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := inventory(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Calls[0].SQL != "SELECT ?" || got.Calls[1].SQL != "" || got.Calls[2].SQL != "DELETE FROM fixture WHERE id=?" || got.Calls[3].SQL != "" {
+		t.Fatalf("unsafe or incomplete constant resolution: %+v", got.Calls)
+	}
+}
