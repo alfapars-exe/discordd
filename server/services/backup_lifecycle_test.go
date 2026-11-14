@@ -22,13 +22,7 @@ func waitBackupLifecycleSignal(t *testing.T, ch <-chan struct{}, what string) {
 	}
 }
 
-func TestBackupStopJoinsCanceledUploadsRestore(t *testing.T) {
-	root := t.TempDir()
-	db := filepath.Join(root, "data.db")
-	if err := os.WriteFile(db, make([]byte, 8192), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	svc, fake := newTestBackupService(t, config.BackupConfig{Enabled: true, HFToken: "fixture-token", HFBucket: "fixture/bucket", DBPath: db, UploadDir: filepath.Join(root, "uploads")})
+func installBlockedBackupCommand(fake *fakeRunner) (<-chan struct{}, <-chan struct{}, func(), func()) {
 	entered, canceled, release, force := make(chan struct{}), make(chan struct{}), make(chan struct{}), make(chan struct{})
 	var enteredOnce, canceledOnce, releaseOnce, forceOnce sync.Once
 	fake.handler = func(ctx context.Context, _ fakeCall) ([]byte, error) {
@@ -42,11 +36,22 @@ func TestBackupStopJoinsCanceledUploadsRestore(t *testing.T) {
 		<-release
 		return nil, ctx.Err()
 	}
+	return entered, canceled, func() { releaseOnce.Do(func() { close(release) }) }, func() { forceOnce.Do(func() { close(force) }) }
+}
+
+func TestBackupStopJoinsCanceledUploadsRestore(t *testing.T) {
+	root := t.TempDir()
+	db := filepath.Join(root, "data.db")
+	if err := os.WriteFile(db, make([]byte, 8192), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	svc, fake := newTestBackupService(t, config.BackupConfig{Enabled: true, HFToken: "fixture-token", HFBucket: "fixture/bucket", DBPath: db, UploadDir: filepath.Join(root, "uploads")})
+	entered, canceled, releaseCommand, abortCommand := installBlockedBackupCommand(fake)
 	stopped := make(chan struct{})
 	launched := false
 	t.Cleanup(func() {
-		forceOnce.Do(func() { close(force) })
-		releaseOnce.Do(func() { close(release) })
+		abortCommand()
+		releaseCommand()
 		svc.Stop()
 		svc.waitForUploadsRestore()
 		if launched {
@@ -65,7 +70,7 @@ func TestBackupStopJoinsCanceledUploadsRestore(t *testing.T) {
 		t.Fatal("Stop returned before canceled uploads restore finished")
 	case <-time.After(25 * time.Millisecond):
 	}
-	releaseOnce.Do(func() { close(release) })
+	releaseCommand()
 	waitBackupLifecycleSignal(t, stopped, "Stop join")
 	if err := svc.Restore(context.Background()); !errors.Is(err, context.Canceled) {
 		t.Fatalf("Restore admitted after Stop: %v", err)
@@ -77,88 +82,21 @@ func TestBackupStopJoinsCanceledUploadsRestore(t *testing.T) {
 
 func TestBackupShutdownCancelsAndJoinsFinalCycle(t *testing.T) {
 	for _, mode := range []string{"first-caller", "second-caller"} {
-		t.Run(mode, func(t *testing.T) {
-			root := t.TempDir()
-			svc, fake := newTestBackupService(t, config.BackupConfig{Enabled: true, HFToken: "fixture-token", HFBucket: "fixture/bucket", DBPath: filepath.Join(root, "data.db"), WorkDir: filepath.Join(root, "work")})
-			entered, canceled, release, force, finished := make(chan struct{}), make(chan struct{}), make(chan struct{}), make(chan struct{}), make(chan struct{})
-			var enteredOnce, canceledOnce, finishedOnce, releaseOnce, forceOnce sync.Once
-			fake.handler = func(ctx context.Context, call fakeCall) ([]byte, error) {
-				defer finishedOnce.Do(func() { close(finished) })
-				if _, err := healthySQLite("ok\n")(ctx, call); err != nil {
-					return nil, err
-				}
-				enteredOnce.Do(func() { close(entered) })
-				select {
-				case <-ctx.Done():
-					canceledOnce.Do(func() { close(canceled) })
-				case <-force:
-					return nil, errors.New("fixture cleanup")
-				}
-				<-release
-				return nil, ctx.Err()
-			}
-			ctx, cancel := context.WithCancel(context.Background())
-			stopped := make(chan struct{})
-			secondStopped := make(chan struct{})
-			secondLaunched := false
-			t.Cleanup(func() {
-				cancel()
-				forceOnce.Do(func() { close(force) })
-				releaseOnce.Do(func() { close(release) })
-				waitBackupLifecycleSignal(t, finished, "final command exit")
-				svc.backupMu.Lock()
-				_, snapshotErr := os.Stat(filepath.Join(svc.cfg.WorkDir, "hichat-snapshot.db"))
-				svc.backupMu.Unlock()
-				if !errors.Is(snapshotErr, os.ErrNotExist) {
-					t.Errorf("canceled cycle retained raw snapshot: %v", snapshotErr)
-				}
-				svc.Stop()
-				waitBackupLifecycleSignal(t, stopped, "Shutdown return")
-				if secondLaunched {
-					waitBackupLifecycleSignal(t, secondStopped, "second Shutdown return")
-				}
-			})
-			go func() { svc.Shutdown(ctx); close(stopped) }()
-			waitBackupLifecycleSignal(t, entered, "final snapshot command entry")
-			if mode == "first-caller" {
-				cancel()
-			} else {
-				secondCtx, secondCancel := context.WithCancel(context.Background())
-				defer secondCancel()
-				secondLaunched = true
-				go func() { svc.Shutdown(secondCtx); close(secondStopped) }()
-				secondCancel()
-			}
-			waitBackupLifecycleSignal(t, canceled, "caller cancellation reaching final command")
-			if mode == "second-caller" && ctx.Err() != nil {
-				t.Fatal("second caller cancellation changed first caller context")
-			}
-			select {
-			case <-stopped:
-				t.Fatal("Shutdown returned before canceled final command finished")
-			case <-secondStopped:
-				t.Fatal("second Shutdown escaped final command join")
-			case <-time.After(25 * time.Millisecond):
-			}
-			releaseOnce.Do(func() { close(release) })
-			waitBackupLifecycleSignal(t, stopped, "final cycle join")
-			if secondLaunched {
-				waitBackupLifecycleSignal(t, secondStopped, "second final cycle join")
-			}
-			if got := len(fake.snapshot()); got != 1 {
-				t.Fatalf("commands continued after final cancellation: %d", got)
-			}
-
-		})
+		t.Run(mode, func(t *testing.T) { checkBackupFinalCycleCancellation(t, mode) })
 	}
 }
 
-func TestBackupPeriodicStartOnceAndStopJoin(t *testing.T) {
+func checkBackupFinalCycleCancellation(t *testing.T, mode string) {
+	t.Helper()
 	root := t.TempDir()
-	svc, fake := newTestBackupService(t, config.BackupConfig{Enabled: true, HFToken: "fixture-token", HFBucket: "fixture/bucket", DBPath: filepath.Join(root, "data.db"), WorkDir: filepath.Join(root, "work"), Interval: time.Hour})
-	entered, canceled, release, force := make(chan struct{}), make(chan struct{}), make(chan struct{}), make(chan struct{})
-	var enteredOnce, canceledOnce, releaseOnce, forceOnce sync.Once
-	fake.handler = func(ctx context.Context, _ fakeCall) ([]byte, error) {
+	svc, fake := newTestBackupService(t, config.BackupConfig{Enabled: true, HFToken: "fixture-token", HFBucket: "fixture/bucket", DBPath: filepath.Join(root, "data.db"), WorkDir: filepath.Join(root, "work")})
+	entered, canceled, release, force, finished := make(chan struct{}), make(chan struct{}), make(chan struct{}), make(chan struct{}), make(chan struct{})
+	var enteredOnce, canceledOnce, finishedOnce, releaseOnce, forceOnce sync.Once
+	fake.handler = func(ctx context.Context, call fakeCall) ([]byte, error) {
+		defer finishedOnce.Do(func() { close(finished) })
+		if _, err := healthySQLite("ok\n")(ctx, call); err != nil {
+			return nil, err
+		}
 		enteredOnce.Do(func() { close(entered) })
 		select {
 		case <-ctx.Done():
@@ -169,11 +107,68 @@ func TestBackupPeriodicStartOnceAndStopJoin(t *testing.T) {
 		<-release
 		return nil, ctx.Err()
 	}
+	ctx, cancel := context.WithCancel(context.Background())
+	stopped := make(chan struct{})
+	secondStopped := make(chan struct{})
+	secondLaunched := false
+	t.Cleanup(func() {
+		cancel()
+		forceOnce.Do(func() { close(force) })
+		releaseOnce.Do(func() { close(release) })
+		waitBackupLifecycleSignal(t, finished, "final command exit")
+		svc.backupMu.Lock()
+		_, snapshotErr := os.Stat(filepath.Join(svc.cfg.WorkDir, "hichat-snapshot.db"))
+		svc.backupMu.Unlock()
+		if !errors.Is(snapshotErr, os.ErrNotExist) {
+			t.Errorf("canceled cycle retained raw snapshot: %v", snapshotErr)
+		}
+		svc.Stop()
+		waitBackupLifecycleSignal(t, stopped, "Shutdown return")
+		if secondLaunched {
+			waitBackupLifecycleSignal(t, secondStopped, "second Shutdown return")
+		}
+	})
+	go func() { svc.Shutdown(ctx); close(stopped) }()
+	waitBackupLifecycleSignal(t, entered, "final snapshot command entry")
+	if mode == "first-caller" {
+		cancel()
+	} else {
+		secondCtx, secondCancel := context.WithCancel(context.Background())
+		defer secondCancel()
+		secondLaunched = true
+		go func() { svc.Shutdown(secondCtx); close(secondStopped) }()
+		secondCancel()
+	}
+	waitBackupLifecycleSignal(t, canceled, "caller cancellation reaching final command")
+	if mode == "second-caller" && ctx.Err() != nil {
+		t.Fatal("second caller cancellation changed first caller context")
+	}
+	select {
+	case <-stopped:
+		t.Fatal("Shutdown returned before canceled final command finished")
+	case <-secondStopped:
+		t.Fatal("second Shutdown escaped final command join")
+	case <-time.After(25 * time.Millisecond):
+	}
+	releaseOnce.Do(func() { close(release) })
+	waitBackupLifecycleSignal(t, stopped, "final cycle join")
+	if secondLaunched {
+		waitBackupLifecycleSignal(t, secondStopped, "second final cycle join")
+	}
+	if got := len(fake.snapshot()); got != 1 {
+		t.Fatalf("commands continued after final cancellation: %d", got)
+	}
+}
+
+func TestBackupPeriodicStartOnceAndStopJoin(t *testing.T) {
+	root := t.TempDir()
+	svc, fake := newTestBackupService(t, config.BackupConfig{Enabled: true, HFToken: "fixture-token", HFBucket: "fixture/bucket", DBPath: filepath.Join(root, "data.db"), WorkDir: filepath.Join(root, "work"), Interval: time.Hour})
+	entered, canceled, releaseCommand, abortCommand := installBlockedBackupCommand(fake)
 	stopped := make(chan struct{})
 	launched := false
 	t.Cleanup(func() {
-		forceOnce.Do(func() { close(force) })
-		releaseOnce.Do(func() { close(release) })
+		abortCommand()
+		releaseCommand()
 		svc.Stop()
 		if launched {
 			waitBackupLifecycleSignal(t, stopped, "periodic Stop return")
@@ -198,7 +193,7 @@ func TestBackupPeriodicStartOnceAndStopJoin(t *testing.T) {
 		t.Fatal("Stop escaped periodic cycle")
 	case <-time.After(25 * time.Millisecond):
 	}
-	releaseOnce.Do(func() { close(release) })
+	releaseCommand()
 	waitBackupLifecycleSignal(t, stopped, "periodic join")
 	svc.startPeriodic(0)
 	svc.runBackupCore(true)
