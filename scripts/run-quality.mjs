@@ -81,19 +81,35 @@ export function summarizeOutput(check, stdout) {
     const start = stdout.indexOf('{"numTotalTestSuites"');
     try {
       const report = JSON.parse(stdout.slice(start));
-      if (![report.numPassedTests, report.numFailedTests, report.numPendingTests].every(Number.isInteger)
+      if (![report.numPassedTests, report.numFailedTests, report.numPendingTests].every((count) => Number.isInteger(count) && count >= 0)
         || report.numPassedTests + report.numFailedTests + report.numPendingTests === 0) throw new Error('Empty test report');
-      return { passed: report.numPassedTests, failed: report.numFailedTests, skipped: report.numPendingTests };
+      const summary = { passed: report.numPassedTests, failed: report.numFailedTests, skipped: report.numPendingTests };
+      if (report.success === false || (report.numFailedTestSuites ?? 0) > 0) {
+        return { ...summary, reportError: 'Client report contains an unsuccessful test suite' };
+      }
+      return summary;
     } catch { return { reportError: 'Client JSON result unavailable; inspect command log' }; }
   }
   if (check.id === 'server') {
+    let packageFailed = false;
     const events = stdout.split('\n').flatMap((line) => {
-      try { const event = JSON.parse(line); return event.Test ? [event] : []; } catch { return []; }
+      try {
+        const event = JSON.parse(line);
+        if (event.Action === 'fail' && !event.Test) packageFailed = true;
+        return event.Test ? [event] : [];
+      } catch { return []; }
     });
-    if (!events.length) return { reportError: 'Go test result contains no executed tests' };
-    return Object.fromEntries(['pass', 'fail', 'skip'].map((action) => [action, events.filter((event) => event.Action === action).length]));
+    const summary = Object.fromEntries(['pass', 'fail', 'skip'].map((action) => [action, events.filter((event) => event.Action === action).length]));
+    if (summary.pass + summary.fail + summary.skip === 0) return { reportError: 'Go test result contains no completed tests' };
+    if (packageFailed) return { ...summary, reportError: 'Go package reported failure' };
+    return summary;
   }
   return null;
+}
+
+function structuredResultPassed(summary) {
+  if (summary === null) return true;
+  return !summary.reportError && (summary.passed ?? summary.pass) > 0 && (summary.failed ?? summary.fail) === 0;
 }
 
 export function runChecks(checks, { root = ROOT, output, execute = spawnSync, snapshot = sourceSnapshot } = {}) {
@@ -120,7 +136,7 @@ export function runChecks(checks, { root = ROOT, output, execute = spawnSync, sn
     const record = {
       id: check.id, required: check.required !== false, cwd: check.cwd,
       command: [check.command === process.execPath ? 'node' : check.command, ...check.args.map((arg) => arg.endsWith('npm-cli.js') ? '<npm-cli>' : arg)],
-      status: result.status === 0 && !result.error && !summary?.reportError ? 'passed' : 'failed',
+      status: result.status === 0 && !result.error && structuredResultPassed(summary) ? 'passed' : 'failed',
       exit_code: result.status, signal: result.signal ?? null,
       timed_out: result.error?.code === 'ETIMEDOUT',
       error_code: result.error?.code ?? null, duration_ms: Date.now() - started,
