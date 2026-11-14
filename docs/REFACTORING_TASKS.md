@@ -1793,3 +1793,8 @@ Auth no longer relies on post-construction SetVoiceDisconnecter. Constructor req
 ### RF11 — friend-request repository adapter separation (2026-11-14)
 
 Friend-ID projection and pair-status/error mapping moved unchanged out of initServices into a two-method repository adapter. Tests prove context/identity preservation, stable list order, empty-list and list-error handling, accepted-only edge mapping, wrapped NotFound as nonfriend, and propagation of other pair failures. Existing policy, wiring and initialization tests plus build and vet pass. No policy or wire behavior changed. Remaining post-construction observers/resolvers and full current-source race/CI acceptance remain open. Receipt: implementation/verification/refactor-rf11-friend-request-adapter-2026-11-14.json.
+
+
+### RF11 — membership voice cleanup dependency at construction (2026-11-14)
+
+ServerService now takes its membership voice cleanup callback at construction; production passes DisconnectServerMember and the later setter is removed. Constructor contract regression failed first. Leave/removal-failure/server-scoped voice/admitted-join/permission leave-rejoin tests keep their assertions and now inject cleanup in the harness constructor. Targeted services/main tests, build and vet pass. The livekit_integration-tagged fixture compiles with zero tests selected; this is not live media proof. Receipt: implementation/verification/refactor-rf11-membership-voice-constructor-2026-11-14.json.

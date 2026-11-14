@@ -59,13 +59,13 @@ type joinServerHarness struct {
 // newJoinServerHarness wires sensible happy-path defaults for every mock
 // JoinServer touches after AddMember succeeds, so table-test cases only need
 // to override the field(s) that make that case interesting.
-func newJoinServerHarness() *joinServerHarness {
-	return newJoinServerHarnessWithActivity(nil)
+func newJoinServerHarness(cleanup ...func(string, string)) *joinServerHarness {
+	return newJoinServerHarnessWithPolicies(nil, nil, cleanup...)
 }
 func newJoinServerHarnessWithActivity(activity GameActivityPrivacyInvalidator) *joinServerHarness {
 	return newJoinServerHarnessWithPolicies(nil, activity)
 }
-func newJoinServerHarnessWithPolicies(preferences repository.PreferencesRepository, activity GameActivityPrivacyInvalidator) *joinServerHarness {
+func newJoinServerHarnessWithPolicies(preferences repository.PreferencesRepository, activity GameActivityPrivacyInvalidator, cleanup ...func(string, string)) *joinServerHarness {
 	h := &joinServerHarness{
 		serverRepo: &testutil.MockServerRepo{},
 		roleRepo:   &testutil.MockRoleRepo{},
@@ -96,8 +96,12 @@ func newJoinServerHarnessWithPolicies(preferences repository.PreferencesReposito
 		return false, nil
 	}
 
+	var voiceCleanup func(string, string)
+	if len(cleanup) > 0 {
+		voiceCleanup = cleanup[0]
+	}
 	h.svc = NewServerService(preferences, activity, nil, h.serverRepo, nil, h.roleRepo, nil, nil, h.userRepo, h.banRepo, h.inviteSvc, h.hub, nil, nil, // encryptionKey, auditLogger — not under test here
-		passthroughMembershipTxRunner{server: h.serverRepo, role: h.roleRepo})
+		voiceCleanup, passthroughMembershipTxRunner{server: h.serverRepo, role: h.roleRepo})
 	return h
 }
 

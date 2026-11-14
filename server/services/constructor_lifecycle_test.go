@@ -46,3 +46,10 @@ func TestAuthConstructorRequiresVoiceRevocationDependency(t *testing.T) {
 		t.Fatalf("auth constructor dependency5=%s, want explicit %s", got, required)
 	}
 }
+
+func TestServerConstructorRequiresMembershipVoiceCleanup(t *testing.T) {
+	required := reflect.TypeFor[func(string, string)]()
+	if got := reflect.TypeOf(NewServerService).In(14); got != required {
+		t.Fatalf("server constructor dependency14=%s, want explicit %s", got, required)
+	}
+}

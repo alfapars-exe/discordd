@@ -35,8 +35,7 @@ func TestVoluntaryLeaveEvictsLiveKitParticipants(t *testing.T) {
 	v := voice.(*voiceService)
 	v.encryptionKey = tokenTestEncryptionKey
 	v.livekitGetter = &mockConfigurableLiveKitGetter{GetByServerIDFn: func(context.Context, string) (*models.LiveKitInstance, error) { return instance, nil }}
-	h := newJoinServerHarness()
-	h.svc.SetMembershipVoiceCleanup(v.DisconnectServerMember)
+	h := newJoinServerHarness(v.DisconnectServerMember)
 	if err := voice.JoinChannel(joinTestUserID, "reader", "Reader", "", channelID, false, false); err != nil {
 		t.Fatal(err)
 	}

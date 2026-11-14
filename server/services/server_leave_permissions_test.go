@@ -29,12 +29,11 @@ func TestLeaveServerInvalidatesDepartingUserPermissions(t *testing.T) {
 }
 
 func TestLeaveServerRemovalFailurePreservesSession(t *testing.T) {
-	h := newJoinServerHarness()
+	h := newJoinServerHarness(func(string, string) { t.Error("disconnected voice after failed removal") })
 	writeErr := errors.New("membership write failed")
 	h.serverRepo.RemoveMemberFn = func(context.Context, string, string) error { return writeErr }
 	inv := &memberInvalidator{}
 	h.svc.SetPermInvalidator(inv)
-	h.svc.SetMembershipVoiceCleanup(func(string, string) { t.Error("disconnected voice after failed removal") })
 	h.hub.RemoveClientServerIDFn = func(string, string) { t.Error("removed live subscription after failed removal") }
 	h.hub.BroadcastToServerFn = func(string, ws.Event) { t.Error("announced departure after failed removal") }
 	if err := h.svc.LeaveServer(context.Background(), joinTestServerID, joinTestUserID); !errors.Is(err, writeErr) {
@@ -82,11 +81,10 @@ func TestPrivateChannelPermissionsAcrossLeaveAndRejoin(t *testing.T) {
 func TestLeaveServerDisconnectsVoiceOnlyInDepartedServer(t *testing.T) {
 	for _, activeServer := range []string{joinTestServerID, "other-server"} {
 		t.Run(activeServer, func(t *testing.T) {
-			h := newJoinServerHarness()
 			voice, _ := newTestVoiceServiceWithChannelRepo(&testutil.MockChannelRepo{GetByIDFn: func(_ context.Context, id string) (*models.Channel, error) {
 				return &models.Channel{ID: id, ServerID: activeServer, Type: models.ChannelTypeVoice}, nil
 			}})
-			h.svc.SetMembershipVoiceCleanup(voice.DisconnectServerMember)
+			h := newJoinServerHarness(voice.DisconnectServerMember)
 			if err := voice.JoinChannel(joinTestUserID, "reader", "Reader", "", "voice", false, false); err != nil {
 				t.Fatal(err)
 			}
@@ -106,8 +104,7 @@ func TestLeaveServerFencesVoiceJoinAfterAdmission(t *testing.T) {
 			voice, _ := newTestVoiceServiceWithChannelRepo(&testutil.MockChannelRepo{GetByIDFn: func(context.Context, string) (*models.Channel, error) {
 				return &models.Channel{ID: "voice", ServerID: activeServer, Type: models.ChannelTypeVoice}, nil
 			}})
-			h := newJoinServerHarness()
-			h.svc.SetMembershipVoiceCleanup(voice.DisconnectServerMember)
+			h := newJoinServerHarness(voice.DisconnectServerMember)
 			admitted, resume := make(chan struct{}), make(chan struct{})
 			voice.(*voiceService).livekitGetter = &mockConfigurableLiveKitGetter{GetByServerIDFn: func(context.Context, string) (*models.LiveKitInstance, error) {
 				close(admitted)

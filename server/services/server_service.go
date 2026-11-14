@@ -27,7 +27,6 @@ type ServerService interface {
 	ReorderServers(ctx context.Context, userID string, req *models.ReorderServersRequest) ([]models.ServerListItem, error)
 	SetUploadDir(dir string)
 	SetPermInvalidator(inv PermissionInvalidator)
-	SetMembershipVoiceCleanup(cleanup func(serverID, userID string))
 }
 
 type serverService struct {
@@ -57,10 +56,6 @@ type serverService struct {
 	// upload_cleanup.go). Blank disables cleanup — set via SetUploadDir,
 	// wired in init_services.go.
 	uploadDir string
-}
-
-func (s *serverService) SetMembershipVoiceCleanup(cleanup func(serverID, userID string)) {
-	s.membershipVoiceCleanup = cleanup
 }
 
 func (s *serverService) SetPermInvalidator(inv PermissionInvalidator) {
@@ -99,23 +94,25 @@ func NewServerService(
 	hub ws.BroadcastAndManage,
 	encryptionKey []byte,
 	auditLogger AuditWriter,
+	membershipVoiceCleanup func(serverID, userID string),
 	membershipTxRunner repository.ServerMembershipTxRunner,
 ) ServerService {
 	return &serverService{
-		preferencesRepo:    preferencesRepo,
-		gameActivity:       gameActivity,
-		db:                 db,
-		serverRepo:         serverRepo,
-		livekitRepo:        livekitRepo,
-		roleRepo:           roleRepo,
-		channelRepo:        channelRepo,
-		categoryRepo:       categoryRepo,
-		userRepo:           userRepo,
-		banRepo:            banRepo,
-		inviteService:      inviteService,
-		hub:                hub,
-		encryptionKey:      encryptionKey,
-		auditLogger:        auditLogger,
-		membershipTxRunner: membershipTxRunner,
+		membershipVoiceCleanup: membershipVoiceCleanup,
+		preferencesRepo:        preferencesRepo,
+		gameActivity:           gameActivity,
+		db:                     db,
+		serverRepo:             serverRepo,
+		livekitRepo:            livekitRepo,
+		roleRepo:               roleRepo,
+		channelRepo:            channelRepo,
+		categoryRepo:           categoryRepo,
+		userRepo:               userRepo,
+		banRepo:                banRepo,
+		inviteService:          inviteService,
+		hub:                    hub,
+		encryptionKey:          encryptionKey,
+		auditLogger:            auditLogger,
+		membershipTxRunner:     membershipTxRunner,
 	}
 }

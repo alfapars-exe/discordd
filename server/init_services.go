@@ -269,10 +269,9 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	serverService := services.NewServerService(repos.Preferences, gameActivityService,
 		db, repos.Server, repos.LiveKit, repos.Role, repos.Channel,
 		repos.Category, repos.User, repos.Ban, inviteService, hub, encryptionKey, auditLogService,
-		roleTransactions,
+		voiceService.DisconnectServerMember, roleTransactions,
 	)
 	serverService.SetUploadDir(cfg.Upload.Dir)
-	serverService.SetMembershipVoiceCleanup(voiceService.DisconnectServerMember)
 
 	livekitAdminService := services.NewLiveKitAdminService(
 		repos.LiveKit, repos.Server, repos.User, repos.Channel,
