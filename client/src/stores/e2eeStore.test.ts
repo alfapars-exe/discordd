@@ -690,7 +690,7 @@ describe("e2eeStore", () => {
       vi.mocked(e2eeApi.downloadKeyBackup).mockResolvedValue({ success: false });
     });
 
-    it("does not refresh another session if ready notification replaces the auth generation", async () => {
+    it.each(["existing", "new", "restore"] as const)("does not refresh another session after ready replaces auth generation: %s", async mode => {
       historyMocks.selectedChannelId = "old-session-channel";
       vi.mocked(e2eeApi.listMyDevices).mockResolvedValue({ success: true, data: [] });
       let replaced = false;
@@ -700,8 +700,21 @@ describe("e2eeStore", () => {
           publishAuthGenerationChange(getAuthSessionSnapshot().generation + 1);
         }
       });
-      try { await useE2EEStore.getState().initialize("userA"); }
-      finally { unsubscribe(); }
+      try {
+        if (mode === "existing") await useE2EEStore.getState().initialize("userA");
+        else if (mode === "new") {
+          vi.mocked(deviceManager.registerNewDevice).mockResolvedValueOnce("new-device");
+          await useE2EEStore.getState().setupNewDevice("userA");
+        } else {
+          vi.mocked(e2eeApi.downloadKeyBackup).mockResolvedValueOnce({ success: true, data: {
+            id: "backup", user_id: "userA", version: 1, created_at: "", updated_at: "",
+            encrypted_data: "cipher", nonce: "nonce", salt: "salt", algorithm: "test",
+          } });
+          vi.mocked(keyBackup.restoreFromBackup).mockResolvedValueOnce(true);
+          vi.mocked(deviceManager.registerRestoredDevice).mockResolvedValueOnce("restored-device");
+          expect(await useE2EEStore.getState().restoreFromRecovery("fixture-password")).toBe(false);
+        }
+      } finally { unsubscribe(); }
       expect(replaced).toBe(true);
       expect(historyMocks.invalidate).not.toHaveBeenCalled();
       expect(historyMocks.invalidateDM).not.toHaveBeenCalled();

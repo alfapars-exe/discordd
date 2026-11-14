@@ -403,11 +403,15 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
         isGeneratingKeys: false,
       });
 
+      if (!isCurrent()) return;
       get().fetchDevices();
 
       // Invalidate message cache so messages get re-decrypted
+      if (!isCurrent()) return;
       useMessageStore.getState().invalidateFetchCache();
+      if (!isCurrent()) return;
       useDMStore.getState().invalidateFetchCache();
+      if (!isCurrent()) return;
 
       const activeChannelId = useChannelStore.getState().selectedChannelId;
       if (activeChannelId) {
@@ -473,19 +477,23 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
         isGeneratingKeys: false,
       });
 
+      if (!isCurrent()) return false;
       get().handlePrekeyLow();
       get().fetchDevices();
 
       // Invalidate cache — messages will now decrypt with restored keys
+      if (!isCurrent()) return false;
       useMessageStore.getState().invalidateFetchCache();
+      if (!isCurrent()) return false;
       useDMStore.getState().invalidateFetchCache();
+      if (!isCurrent()) return false;
 
       const activeChannelId = useChannelStore.getState().selectedChannelId;
       if (activeChannelId) {
         useMessageStore.getState().fetchMessages(activeChannelId);
       }
 
-      return true;
+      return isCurrent();
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Recovery failed";
