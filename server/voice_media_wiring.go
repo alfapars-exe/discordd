@@ -5,13 +5,21 @@ import (
 	"github.com/argeinfina/hichat/ws"
 )
 
-// initVoiceMediaServices owns the mutually dependent voice hooks as one
-// composition step. The voice constructor installs the returned hooks before
-// allocating its workers or exposing the service to request handlers.
-func initVoiceMediaServices(repos *Repositories, hub ws.Broadcaster,
-	permissions services.ChannelPermResolver, fresh services.MusicAudienceFreshPermissions, voice services.VoiceService,
-	uploadDir string, encryptionKey []byte, logger services.VoiceAppLogger,
-) (services.EntranceService, services.MusicBotRuntime) {
+type voiceMediaDependencies struct {
+	Repositories     *Repositories
+	Hub              ws.Broadcaster
+	Permissions      services.ChannelPermResolver
+	FreshPermissions services.MusicAudienceFreshPermissions
+	Voice            services.VoiceService
+	UploadDir        string
+	EncryptionKey    []byte
+	Logger           services.VoiceAppLogger
+}
+
+// initVoiceMediaServices binds media hooks before voice allocates its workers.
+func initVoiceMediaServices(deps voiceMediaDependencies) (services.EntranceService, services.MusicBotRuntime) {
+	repos, hub, permissions, fresh, voice := deps.Repositories, deps.Hub, deps.Permissions, deps.FreshPermissions, deps.Voice
+	uploadDir, encryptionKey, logger := deps.UploadDir, deps.EncryptionKey, deps.Logger
 	entrance := services.NewEntranceService(repos.Entrance, repos.Server, repos.Role, repos.Channel,
 		permissions, hub, voice, uploadDir)
 	music := services.NewMusicBotService(repos.Channel,
