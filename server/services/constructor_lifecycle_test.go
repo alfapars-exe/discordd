@@ -736,3 +736,9 @@ func TestMusicConstructorDeclaresDurableControl(t *testing.T) {
 		t.Fatal("music constructor hides durable control provider")
 	}
 }
+
+func TestServerDMPolicyDeclaresTransactionReaders(t *testing.T) {
+	if _, ok := reflect.TypeFor[ServerDMPolicy]().MethodByName("CanCreateWithReaders"); !ok {
+		t.Fatal("DM policy hides transaction reader rebinding")
+	}
+}

@@ -12,6 +12,8 @@ import (
 // one or more servers. Existing history is intentionally left reachable.
 type ServerDMPolicy interface {
 	CanCreate(context.Context, string, string) (bool, error)
+	// CanCreateWithReaders rechecks through the caller-owned transaction readers.
+	CanCreateWithReaders(context.Context, profilePreferenceReader, friendRequestServerReader, string, string) (bool, error)
 }
 
 type RepositoryServerDMPolicy struct {
@@ -88,4 +90,8 @@ func (p *RepositoryServerDMPolicy) CanCreate(ctx context.Context, senderID, targ
 	}
 	shared, allowed := sharedAllowedServer(senderServers, targetServers, prefs)
 	return !shared || allowed, nil
+}
+
+func (p *RepositoryServerDMPolicy) CanCreateWithReaders(ctx context.Context, prefs profilePreferenceReader, servers friendRequestServerReader, sender, target string) (bool, error) {
+	return NewServerDMPolicy(prefs, servers).CanCreate(ctx, sender, target)
 }

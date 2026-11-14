@@ -288,7 +288,7 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 		// Production policies must read preferences and history through this
 		// transaction. The preferences row lock matches the PostgreSQL updater;
 		// SQLite's channel write already holds the database writer lock.
-		if _, ok := s.serverDMPolicy.(*RepositoryServerDMPolicy); ok && serverDMNonFriend && r.Preferences != nil && r.Servers != nil {
+		if s.serverDMPolicy != nil && serverDMNonFriend && r.Preferences != nil && r.Servers != nil {
 			hasHistory, err := r.DM.HasMessages(ctx, channelID)
 			if err != nil {
 				return err
@@ -299,7 +299,7 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 						return err
 					}
 				}
-				allowed, err := NewServerDMPolicy(r.Preferences, r.Servers).CanCreate(ctx, userID, otherUserID)
+				allowed, err := s.serverDMPolicy.CanCreateWithReaders(ctx, r.Preferences, r.Servers, userID, otherUserID)
 				if err != nil {
 					return fmt.Errorf("failed to check server DM policy: %w", err)
 				}
