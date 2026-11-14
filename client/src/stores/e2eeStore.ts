@@ -286,6 +286,17 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
           legacyArchive: null,
         });
 
+        // A cold reload can fetch ciphertext before the local keys are
+        // ready. Discard that projection and reload under the verified keys.
+        if (!isCurrent()) return;
+        useMessageStore.getState().invalidateFetchCache();
+        if (!isCurrent()) return;
+        useDMStore.getState().invalidateFetchCache();
+        if (!isCurrent()) return;
+        const activeChannelId = useChannelStore.getState().selectedChannelId;
+        if (activeChannelId) useMessageStore.getState().fetchMessages(activeChannelId);
+        if (!isCurrent()) return;
+
         // Background: prekey check + device list + backup status + deferred recovery prompt
         get().handlePrekeyLow();
         get().fetchDevices();
