@@ -1833,3 +1833,8 @@ DM now receives its reaction writer as an explicit narrow constructor dependency
 ### Exact-hit review after DM constructor change (2026-11-14)
 
 Manifest validation rejected the changed dm_delivery_test.go source hash. Re-review against14d proves the only source change is an explicit nil reaction-writer argument; the reviewed SQL interval literal and bound message ID atline114 are unchanged. Exactly one file hash was updated; rule, line hash, reason, proof reference and50-record total remain unchanged. Manifest validation and6 validator tests pass. Full current-source security scan remains CI-owned. Receipt: implementation/verification/refactor-reviewed-dm-constructor-manifest-2026-11-14.json.
+
+
+### RF13 — channel notification choice omitted from offline cache (2026-11-14)
+
+Four real codec/store regressions failed: channelMessageNotifications true/false was absent from the known cache fields, leaving no acknowledged snapshot for offline startup. The existing boolean is now cacheable and type-checked.63 codec/store/notification-preference tests pass, including offline restore, account switch isolation and malformed value rejection. This behavior fix is separate from defaults/codec deduplication. No wire or storage key changed. Receipt: implementation/verification/refactor-rf13-channel-notice-cache-2026-11-14.json.

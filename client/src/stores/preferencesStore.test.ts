@@ -51,6 +51,19 @@ describe("account-scoped preference synchronization", () => {
     vi.useRealTimers();
   });
 
+  it.each([true, false])("restores channel message notification choice %s offline without leaking accounts", async value => {
+    await ready({ notifications: { channelMessageNotifications: value } });
+    expect(JSON.parse(localStorage.getItem(snapshotKey)!)).toEqual({ notifications: { channelMessageNotifications: value } });
+    state().reset();
+    state().bindAccount("alice");
+    mocks.get.mockRejectedValueOnce(new Error("offline"));
+    await state().fetchAndApply();
+    expect(state().data.notifications).toEqual({ channelMessageNotifications: value });
+    expect(state().syncError).toBe("preferences_load_failed");
+    state().bindAccount("bob");
+    expect(state().data).toEqual({});
+  });
+
   it("does not send or queue unauthenticated edits", async () => {
     state().set({ theme: "midnight" });
     await vi.advanceTimersByTimeAsync(1000);

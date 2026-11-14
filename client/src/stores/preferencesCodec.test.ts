@@ -20,3 +20,12 @@ describe("account appearance cache", () => {
     }
   });
 });
+
+describe("notification account cache", () => {
+  it.each(["true", 1, null, {}, []])("rejects malformed channel notification choice %j", value => {
+    expect(cacheable({ notifications: { channelMessageNotifications: value } })).toEqual({});
+  });
+  it.each([true, false])("preserves channel message notification opt-in %s", value => {
+    expect(cacheable({ notifications: { channelMessageNotifications: value } })).toEqual({ notifications: { channelMessageNotifications: value } });
+  });
+});
