@@ -21,6 +21,9 @@ function checkedList(selected) {
   assert.deepEqual(report.errors, []);
   return specs(report.suites);
 }
+const ciResult = list({ CI: "1" });
+assert.equal(ciResult.status, 0, ciResult.stderr);
+assert.equal(JSON.parse(ciResult.stdout).config.failOnFlakyTests, true, "CI must reject retry-only passes");
 const regular = checkedList({});
 const files = regular.map(spec => spec.file.replaceAll("\\", "/").split("/").at(-1));
 assert.ok(files.includes("offline-retry.spec.ts"));
