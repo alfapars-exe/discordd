@@ -277,13 +277,12 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	gameActivityPolicy := services.NewGameActivityPrivacyPolicy(repos.Preferences, repos.Friendship, repos.Server, gameActivityPresenceAdapter{hub: hub}, repos.Ban)
 	gameActivityService := services.NewGameActivityService(gameActivityPolicy, repos.Friendship, repos.Server, hub)
 	memberService := services.NewMemberService(gameActivityService, profileAudiencePolicy, repos.User, repos.Role, repos.Ban, repos.MemberTimeout, repos.Server, roleTransactions, hub, voiceService, auditLogService, authCache, profileUpdateNotifier)
-	roleService := services.NewRoleService(repos.Role, roleTransactions, hub, auditLogService)
+	roleService := services.NewRoleService(repos.Role, roleTransactions, hub, auditLogService, permInvalidator)
 	serverService := services.NewServerService(repos.Preferences, gameActivityService,
 		db, repos.Server, repos.LiveKit, repos.Role, repos.Channel,
 		repos.Category, repos.User, repos.Ban, inviteService, hub, encryptionKey, auditLogService,
 		voiceService.DisconnectServerMember, roleTransactions,
 	)
-	roleService.SetPermInvalidator(permInvalidator)
 	memberService.SetPermInvalidator(permInvalidator)
 	serverService.SetPermInvalidator(permInvalidator)
 	serverService.SetUploadDir(cfg.Upload.Dir)

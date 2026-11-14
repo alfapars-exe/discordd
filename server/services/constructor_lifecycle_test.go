@@ -362,3 +362,16 @@ func TestIdentityWritersRequireCacheInvalidator(t *testing.T) {
 		}
 	}
 }
+
+func TestRoleConstructorRequiresPermissionInvalidator(t *testing.T) {
+	factory := reflect.TypeOf(NewRoleService)
+	if factory.NumIn() != 5 {
+		t.Fatalf("role constructor inputs=%d, want5", factory.NumIn())
+	}
+	if factory.In(4) != reflect.TypeFor[PermissionInvalidator]() {
+		t.Fatal("role invalidator is not explicit")
+	}
+	if _, ok := reflect.TypeFor[RoleService]().MethodByName("SetPermInvalidator"); ok {
+		t.Fatal("role request interface exposes cache wiring")
+	}
+}
