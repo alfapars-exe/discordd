@@ -15,7 +15,6 @@ import (
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
-	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/pkg/ratelimit"
 	"github.com/argeinfina/hichat/services"
 )
@@ -26,7 +25,7 @@ import (
 // starve each other. uploadLimiter is a separate per-user cap that only
 // fires on multipart requests (20/min); text-only sends don't touch it.
 type MessageHandler struct {
-	messageService services.MessageService
+	messageService services.MessageRequestService
 	uploadService  services.UploadService
 	maxUploadSize  int64
 	messageLimiter *ratelimit.MessageRateLimiter
@@ -34,7 +33,7 @@ type MessageHandler struct {
 }
 
 func NewMessageHandler(
-	messageService services.MessageService,
+	messageService services.MessageRequestService,
 	uploadService services.UploadService,
 	maxUploadSize int64,
 	messageLimiter *ratelimit.MessageRateLimiter,
@@ -260,11 +259,7 @@ func (h *MessageHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.HasFiles {
-		if durable, ok := h.messageService.(interface {
-			KeepChannelSendAlive(context.Context, string) func()
-		}); ok {
-			defer durable.KeepChannelSendAlive(r.Context(), message.ID)()
-		}
+		defer h.messageService.KeepChannelSendAlive(r.Context(), message.ID)()
 	}
 
 	// Upload files after message creation. Failures used to be silently
@@ -329,22 +324,14 @@ func (h *MessageHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// goroutine only read it; adding a later mutation would be a data race).
 	message.ServerID = serverID
 
-	// Broadcast after uploads so all clients see attachments — but OFF the
-	// request goroutine: allowedViewers costs a channel fetch + bulk perms
-	// resolve (up to the 5s broadcast budget) against a small remote DB pool,
-	// and the 201 must not wait on it. The sender's own view doesn't depend
-	// on the echo either — the client inserts this response body directly.
-	if durable, ok := h.messageService.(interface {
-		CompleteChannelSend(context.Context, *models.Message) error
-	}); ok {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		if err := durable.CompleteChannelSend(ctx, message); err != nil {
-			slog.Error("channel send completion deferred to recovery")
-		}
-		cancel()
-	} else {
-		logx.Go("handlers.message.broadcast", func() { h.messageService.BroadcastCreate(message) })
+	// Finalize delivery after every attachment outcome is known. The service
+	// owns the durable outbox or standalone broadcast path; the handler never
+	// substitutes another path when completion is deferred to recovery.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	if err := h.messageService.CompleteChannelSend(ctx, message); err != nil {
+		slog.Error("channel send completion deferred to recovery")
 	}
+	cancel()
 
 	// If some attachments failed to upload, return a multi-status response
 	// (the message itself was created, but some files didn't make it). The
@@ -362,15 +349,12 @@ func (h *MessageHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *MessageHandler) attachmentOutcome(id string, index int, a *models.Attachment, failure string) {
-	if durable, ok := h.messageService.(interface {
-		AttachmentOutcome(context.Context, string, int, *models.Attachment, string) error
-	}); ok {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := durable.AttachmentOutcome(ctx, id, index, a, failure); err != nil {
-			slog.Error("channel attachment state persistence failed")
-		}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := h.messageService.AttachmentOutcome(ctx, id, index, a, failure); err != nil {
+		slog.Error("channel attachment state persistence failed")
 	}
+
 }
 
 func (h *MessageHandler) Events(w http.ResponseWriter, r *http.Request) {

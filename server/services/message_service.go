@@ -29,12 +29,18 @@ type MessageService interface {
 	SetUploadDir(dir string)
 }
 
-// MessageRuntime retains delivery completion and worker ownership at composition.
+// MessageRequestService declares persistence hooks used by HTTP sends.
 // Read-only consumers continue to depend on MessageService.
-type MessageRuntime interface {
+type MessageRequestService interface {
+	KeepChannelSendAlive(context.Context, string) func()
 	MessageService
 	CompleteChannelSend(context.Context, *models.Message) error
 	AttachmentOutcome(context.Context, string, int, *models.Attachment, string) error
+}
+
+// MessageRuntime retains worker ownership at composition.
+type MessageRuntime interface {
+	MessageRequestService
 	StartChannelDelivery(context.Context) func()
 }
 
