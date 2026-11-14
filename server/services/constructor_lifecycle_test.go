@@ -563,3 +563,19 @@ func TestVoiceFreshPermissionContractDeclaresBulkResolution(t *testing.T) {
 		t.Fatal("voice fresh permission contract hides bulk freshness")
 	}
 }
+
+func TestGameJoinPolicyDeclaresFreshPermissionsAndVoiceAdmission(t *testing.T) {
+	factory := reflect.TypeOf(NewGameJoinPolicy)
+	if factory.NumIn() != 11 {
+		t.Fatalf("game join policy inputs=%d want11", factory.NumIn())
+	}
+	voice := reflect.TypeFor[interface {
+		GameJoinVoiceAdmission(string, string, string, string) (func(func() error) error, error)
+	}]()
+	if !factory.In(9).Implements(voice) {
+		t.Fatal("voice admission must be explicit")
+	}
+	if factory.In(10) != reflect.TypeFor[FreshChannelPermResolver]() {
+		t.Fatal("fresh permission provider must be explicit")
+	}
+}

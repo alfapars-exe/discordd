@@ -369,7 +369,7 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	badgeService := services.NewBadgeService(repos.Badge, hub)
 
 	preferencesService := services.NewPreferencesService(repos.Preferences, profileAudiencePolicy, gameActivityService, hub)
-	gameJoinService := services.NewGameJoinService(gameActivityService, services.NewGameJoinPolicy(gameActivityPolicy, repos.Preferences, repos.Friendship, repos.User, repos.AccountLifecycle, repos.Server, repos.Ban, repos.Channel, channelPermService, voiceService), hub)
+	gameJoinService := services.NewGameJoinService(gameActivityService, services.NewGameJoinPolicy(gameActivityPolicy, repos.Preferences, repos.Friendship, repos.User, repos.AccountLifecycle, repos.Server, repos.Ban, repos.Channel, channelPermService, voiceService, channelPermService), hub)
 	hub.OnGameJoinOffer(gameJoinOfferCallback(gameJoinService))
 
 	clipRecordingService := services.NewClipRecordingService(voiceService, repos.Preferences, appLogService)

@@ -100,7 +100,7 @@ func TestGameJoinPolicyFreshConsentRelationshipsAndVoiceScope(t *testing.T) {
 				return v, nil
 			}}
 			voice := &voiceService{states: map[string]*models.VoiceState{"viewer": {UserID: "viewer", ServerID: "server", ChannelID: "channel", JoinedAt: time.Now()}, "host": {UserID: "host", ServerID: "server", ChannelID: "channel", JoinedAt: time.Now()}}}
-			p := NewGameJoinPolicy(activity, prefs, friends, users, lifecycle, servers, bans, channels, perms, voice)
+			p := NewGameJoinPolicy(activity, prefs, friends, users, lifecycle, servers, bans, channels, perms, voice, nil)
 			c := GameJoinContext{TargetUserID: "host", Context: "friend"}
 			if name == "allowed-voice" || name == "community" || name == "wrong-channel" || name == "missing-member" || name == "banned" || name == "no-view" || name == "no-connect" {
 				c.Context = "voice"

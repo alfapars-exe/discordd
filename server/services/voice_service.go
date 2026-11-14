@@ -113,6 +113,7 @@ type VoiceService interface {
 // VoiceRuntime is owned by the composition root; handlers use VoiceService.
 // These shutdown methods join distinct resources in the existing server order.
 type VoiceRuntime interface {
+	GameJoinVoiceAdmission
 	StartVoiceUsageDelivery(context.Context) func()
 	VoiceService
 
