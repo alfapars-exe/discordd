@@ -30,6 +30,8 @@ type NotificationRepository interface {
 	// returns how many rows changed.
 	MarkAllRead(ctx context.Context, userID string) (int64, error)
 	CountUnread(ctx context.Context, userID string) (int, error)
+	// CountUnreadSummary reads inbox and badge aggregates from one snapshot.
+	CountUnreadSummary(context.Context, string) (models.NotificationUnreadCounts, error)
 	// DeleteByMessageID removes every notification pointing at a deleted
 	// channel message (best-effort cleanup from the message delete paths).
 	DeleteByMessageID(ctx context.Context, messageID string) error

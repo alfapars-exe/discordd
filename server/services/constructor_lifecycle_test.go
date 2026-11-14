@@ -636,3 +636,12 @@ func TestNotificationFactoryDeclaresUnreadSummary(t *testing.T) {
 		t.Fatal("notification factory hides authoritative badge counts")
 	}
 }
+
+func TestNotificationRepositoryDeclaresAuthoritativeSummary(t *testing.T) {
+	required := reflect.TypeFor[interface {
+		CountUnreadSummary(context.Context, string) (models.NotificationUnreadCounts, error)
+	}]()
+	if !reflect.TypeFor[repository.NotificationRepository]().Implements(required) {
+		t.Fatal("notification repository hides required authoritative summary")
+	}
+}

@@ -7,18 +7,10 @@ import (
 	"github.com/argeinfina/hichat/repository"
 )
 
-type notificationSummaryReader interface {
-	CountUnreadSummary(context.Context, string) (models.NotificationUnreadCounts, error)
-}
-
-// Legacy test/adaptor repositories retain their existing count contract.
-// Production repositories supply the two aggregates atomically.
+// NotificationUnreadSummary preserves the shared call surface while requiring
+// authoritative aggregates from every notification repository.
 func NotificationUnreadSummary(ctx context.Context, repo repository.NotificationRepository, userID string) (models.NotificationUnreadCounts, error) {
-	if source, ok := repo.(notificationSummaryReader); ok {
-		return source.CountUnreadSummary(ctx, userID)
-	}
-	n, err := repo.CountUnread(ctx, userID)
-	return models.NotificationUnreadCounts{UnreadCount: n, BadgeUnreadCount: n}, err
+	return repo.CountUnreadSummary(ctx, userID)
 }
 
 func (s *notificationService) CountUnreadSummary(ctx context.Context, userID string) (models.NotificationUnreadCounts, error) {
