@@ -451,7 +451,7 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 		ExpressionClone:         expressionCloneService,
 		MusicBot:                musicBotService,
 		WSTicket:                wsTicketService,
-		Backup:                  services.NewBackupService(cfg.Backup),
+		Backup:                  services.NewBackupService(cfg.Backup, appLogService),
 		Notification:            notificationService,
 		Reminder:                reminderService,
 		ReminderWorker:          services.NewMessageReminderWorker(repos.Reminder, hub),

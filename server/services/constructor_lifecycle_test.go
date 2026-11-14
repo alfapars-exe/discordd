@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"github.com/argeinfina/hichat/config"
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/ws"
 	"reflect"
@@ -312,5 +313,32 @@ func TestAuthConstructorLoggerOptionAndDisabledMode(t *testing.T) {
 	disabled.logWarn(context.Background(), nil, "disabled logger fixture", nil)
 	if disabled.appLogger != nil {
 		t.Fatal("explicit disabled auth logger changed")
+	}
+}
+
+func TestBackupConstructorRequiresLogger(t *testing.T) {
+	factory := reflect.TypeOf(NewBackupService)
+	if factory.NumIn() != 2 {
+		t.Fatalf("backup constructor inputs=%d, want2", factory.NumIn())
+	}
+	if factory.In(1) != reflect.TypeFor[BackupAppLogger]() {
+		t.Fatal("backup logger is not explicit")
+	}
+}
+
+func TestBackupConstructorLoggingAndDisabledMode(t *testing.T) {
+	logger := &constructorVoiceLogger{}
+	service := NewBackupService(config.BackupConfig{}, logger)
+	t.Cleanup(service.Stop)
+	service.logInfo("constructor backup fixture", nil)
+	service.logError("constructor backup fixture", nil)
+	if len(logger.levels) != 2 || logger.levels[0] != models.LogLevelInfo || logger.levels[1] != models.LogLevelError {
+		t.Fatal("backup constructor logger not used")
+	}
+	disabled := NewBackupService(config.BackupConfig{}, nil)
+	t.Cleanup(disabled.Stop)
+	disabled.logInfo("disabled fixture", nil)
+	if disabled.appLogger != nil {
+		t.Fatal("disabled logger changed")
 	}
 }

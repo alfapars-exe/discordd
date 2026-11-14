@@ -127,10 +127,11 @@ type BackupService struct {
 
 // NewBackupService constructs a BackupService. Call Start() to begin the
 // background goroutine.
-func NewBackupService(cfg config.BackupConfig) *BackupService {
+func NewBackupService(cfg config.BackupConfig, logger BackupAppLogger) *BackupService {
 	svcCtx, svcCancel := context.WithCancel(context.Background())
 	return &BackupService{
-		cfg: cfg,
+		cfg:       cfg,
+		appLogger: logger,
 
 		runCmd:    defaultRunCmd,
 		svcCtx:    svcCtx,
@@ -148,12 +149,6 @@ func (b *BackupService) nowUTC() time.Time {
 		return b.now().UTC()
 	}
 	return time.Now().UTC()
-}
-
-// SetAppLogger wires the structured logger so backup events surface in
-// the admin panel alongside other lifecycle events.
-func (b *BackupService) SetAppLogger(l BackupAppLogger) {
-	b.appLogger = l
 }
 
 // Start launches the background goroutine that runs backups on the

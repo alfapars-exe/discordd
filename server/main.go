@@ -90,7 +90,7 @@ func main() {
 	//     BackupService is stateless. Holding two for ~10 seconds is
 	//     cheaper than threading a parameter through initServices.
 	{
-		boot := services.NewBackupService(cfg.Backup)
+		boot := services.NewBackupService(cfg.Backup, nil)
 		restoreCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		if err := boot.Restore(restoreCtx); err != nil {
 			bootLogger.Error("backup restore failed, continuing with whatever DB is on disk", "err", pkg.ErrText(err))
@@ -228,7 +228,6 @@ func main() {
 
 	// 9b. Wire structured app logger into Hub and services
 	hub.SetAppLogger(svcs.AppLog)
-	svcs.Backup.SetAppLogger(svcs.AppLog)
 
 	// 9c. Audit logger is no longer wired here via setter: voice/member/role/
 	// channel/server/message services all take it as a NewXService(...)

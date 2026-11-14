@@ -32,7 +32,7 @@ func newTestBackupService(t *testing.T, cfg config.BackupConfig) (*BackupService
 	if cfg.WorkDir == "" {
 		cfg.WorkDir = filepath.Join(t.TempDir(), "workdir")
 	}
-	svc := NewBackupService(cfg)
+	svc := NewBackupService(cfg, nil)
 	fake := &fakeRunner{}
 	svc.runCmd = fake.run
 	// Drain any async uploads-restore goroutine before the test's t.TempDir

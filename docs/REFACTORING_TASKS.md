@@ -2008,3 +2008,8 @@ P2P constructor now requires explicit P2PAppLogger; production injects existing 
 ### RF11 — auth logger selected by constructor option (2026-11-14)
 
 WithAuthAppLogger uses existing AuthOption composition to select optional persistent logger before return. Production supplies appLogService; explicit nil disables it. AuthService/concrete setter and main late binding removed. Request-interface regression failed before change. Actual auth warning path and disabled mode, recovery/handler and composed wiring selections pass; server build, targeted vet and diff check pass. No reviewed exact-hit source changed. Auth middleware cache invalidation still has a separate late construction dependency; whole RF11 and current-source CI remain open.
+
+
+### RF11 — backup logger constructor ownership (2026-11-14)
+
+Backup constructor now takes explicit optional logger. Long-lived production service receives appLogService; early pre-database restore and isolated test fixture explicitly select nil. Late setter/main binding removed. Required-parameter regression failed before change. Actual info/error logger and disabled mode, root wiring and all21 tests declared in backup_service_test.go pass (restore/snapshot/rotation/shutdown/cancellation). Server build, targeted vet and diff check pass. No external HF bucket or real backup restore claim; whole RF11 and current-source CI remain open.
