@@ -1558,3 +1558,7 @@ Eski kaynak Go overlay ile üç senaryoda FAIL verdi: 8 oturum varken medya baş
 ### 2026-11-14 — Terminal üretim binary kabulü ve kanal silme takibi
 
 `a9f00ad9` terminal PR 36/36 SUCCESS, Server CI 43535987403 31/31 SUCCESS; tam kaynak-bağlı kayıt `implementation/verification/refactor-pr298-a9f-terminal-2026-11-14.json`. Bundan sonra `15ee5781` kanal silme muhasebe sırası düzeltmesi PR #298’e gönderildi. Bu yeni kaynak önceki CI başarısını devralmaz; yeni zorunlu altı oturumlu PostgreSQL testi ve native race sonucu bekleniyor.
+
+### 2026-11-14 — Link preview worker join
+
+RF08 tekrar kontrolünde `linkPreviewService.Stop` yalnız cancel ediyor, kabul edilmiş repository worker’ını beklemiyordu. Bloke repository testinin eski kaynak overlay koşusu exit1: Stop dönerken worker hâlâ çalışıyor. `Stop` artık lifecycle iptalini ve pending done snapshot’ını kayıt mutex’i altında yapar; worker cleanup aynı mutex’e ihtiyaç duyduğu için kilit bırakıldıktan sonra bütün done kanallarını bekler. Eşzamanlı iki Stop, yeni admission reddi, caller completion ve tekrarlı Stop sınanır. Main tabanlı ayrı dal `4e3f0349`, draft PR #299. Hedefli testler 20 tekrar, tam servis paketi 91,150 saniye, tam vet/build ve lint0 başarılı. Birleşik ağaç hedefli20/vet/lint0 başarılı. Linux race ve bütün CI henüz bekleniyor. Kanıt `implementation/verification/refactor-link-preview-worker-shutdown-2026-11-14.json`. #298 veya primary dirty ağaç değişiklikleri bu küçük PR’a taşınmadı.
