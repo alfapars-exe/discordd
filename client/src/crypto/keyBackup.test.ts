@@ -169,9 +169,12 @@ describe("keyBackup — PBKDF2 iteration agility (audit 2026-05-27)", () => {
     expect(backup.encryptedData).toBeTruthy();
   });
 
-  it("round-trip: new backup created with 2M iter restores successfully", async () => {
+  it.each([
+    { kind: "group", channelId: "", dmChannelId: "group:g" },
+    { kind: "channel", channelId: "channel", dmChannelId: null },
+  ])("round-trip: $kind cache source identity and file keys survive the encrypted backup", async ({ kind, channelId, dmChannelId }) => {
     const password = "round-trip-test-password";
-    const cached={messageId:"group-version",channelId:"",dmChannelId:"group:g",content:"private",timestamp:1,encryptedSourceTag:"group-v1:hash",fileKeys:[{key:"key",iv:"iv",filename:"photo.png",mimeType:"image/png",originalSize:1,digest:"digest"}]};
+    const cached={messageId:`${kind}-version`,channelId,dmChannelId,content:"private",timestamp:1,encryptedSourceTag:`${kind}-v1:hash`,fileKeys:[{key:"key",iv:"iv",filename:"photo.png",mimeType:"image/png",originalSize:1,digest:"digest"}]};
     // The restore starts with an empty cache, so retaining these fields must
     // come from the encrypted backup rather than the existing-cache priority.
     vi.mocked(keyStorageMock.getAllCachedMessages).mockResolvedValueOnce([cached]).mockResolvedValueOnce([]);

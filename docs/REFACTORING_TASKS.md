@@ -1667,3 +1667,27 @@ Combined23d1796be815bd28032210e8750dfc2b3546e110 completed36/36 checks and31/31 
 Clean detached8ec baseline: server Go JSON4324 passed/84 skipped/0 failed in207.528s, welcome-bot20 passed/0 skipped/0 failed in10.358s. Includes subtests; Windows Go1.27.4, CGO0, no race, test provider env absent. Server source fingerprints remained identical; bot module additionally bound to clean Git tree. These local counts do not replace Linux race/native PostgreSQL CI. Baseline records preserve slow-test timing and explicit skipped profile boundaries; acceptance ledger unchanged.
 
 RF23 audit found required clean committed-source default absent despite byte-bound manifest. Six Git dirtiness/HEAD-change cases failed first. New publisher checks Git cleanliness before snapshot and clean/same HEAD afterward; mismatch aborts before backend pause or Space commit, without cleaning/staging caller work. Existing byte binding, digest, remote parent, managed deletion and exact deployed-commit handoff retained. Actual workflow EXPECTED_COMMIT consumes steps.source.outputs.deployed_commit. Source388a9fc8 published draft307;20 publication and35 canonical Python tests passed, guarded integration all44 Python tests passed. Fake API only; local SDK1.1.4, pinned CI SDK check pending. Port performed only after23d terminal. Next combined source requires fresh CI; no whole RF02/RF23/RF30 completion claim. Receipt refactor-publish-clean-source-2026-11-14.json.
+
+### RF04 ve RF28 kabul doğrulaması, 14 Kasım 2026
+
+RF04'te yalnız aynı havuz üzerinde ikinci migration çağrısı yerine bağlantıları
+kapatıp aynı PostgreSQL şemasını yeni havuzla açan kontrol eklendi. Yerel Windows
+Go 1.27.4 / PostgreSQL 18.6 koşusunda beş üst seviye migration/veri sözleşmesi
+atlamasız geçti. Ayrı verify-full mTLS fixture'ında sunucu sertifikasının yanlış
+kök ile ve istemci sertifikasının farklı kullanıcı kimliğiyle reddi doğrulandı.
+SQLite alt testleri, genel loopback PostgreSQL ve mTLS sonuçları ayrı tutuluyor.
+Kanıt: `implementation/verification/refactor-rf04-local-live-2026-11-14.json`.
+
+RF28 üretim Chromium paketinde iki oturumlu eşzamanlı gönderme/düzenleme/silme
+dahil 15/15 test geçti. Ayrı yedek/kurtarma senaryosu gerçek bir açık gösterdi:
+kimlik geri yükleniyor, fakat eski mesaj sender-key replay korumasında kalıyordu.
+Kaynak sürümüne bağlı kanal önbelleği eklendi; daha sonra WebSocket create/update
+yazmalarının bu etiketi ezdiği de iki regresyonla doğrulandı ve düzeltildi.
+Replay protokolü gevşetilmedi. Son birleşik yerel kripto/store/WS koşusunda
+196 test geçti; bunlar üretim tarayıcısı kabulünün yerine geçmez.
+
+Açık kalanlar: WebSocket düzeltmesiyle üretim kurtarma E2E'sinin tamamlanması,
+kaynak etiketsiz eski kanal yedeklerinin geçmiş uyumluluğu, güncel adayın tüm CI
+kontrolleri ve diğer RF kartlarının madde madde kabul denetimi. Eski KDF/format
+sabit fixture'larının anahtarları geri yüklemesi, eski geçmişin okunabildiği
+anlamına gelmiyor. 248 ürün davranışı topluca kabul edilmiş sayılmadı.
