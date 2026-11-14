@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"time"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
@@ -35,13 +34,8 @@ func logOnlineFriendFailure(userID string, err error) {
 	hubLogger.LogAttrs(context.Background(), level, "online friend notification failed", attrs...)
 }
 
-func notifyOnlineAfterPresence(notifier services.OnlineFriendNotifier, userID string) error {
-	if fresh, ok := notifier.(interface{ NotifyOnlinePresence(string) error }); ok {
-		return fresh.NotifyOnlinePresence(userID)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	return notifier.NotifyOnline(ctx, userID)
+func notifyOnlineAfterPresence(notifier services.OnlineFriendPresenceNotifier, userID string) error {
+	return notifier.NotifyOnlinePresence(userID)
 }
 
 // registerHubCallbacks wires Hub events to service layer logic.
@@ -77,7 +71,7 @@ func registerHubCallbacks(
 	serverRepo repository.ServerRepository,
 	channelPermResolver services.ChannelPermResolver,
 	gameActivity *services.GameActivityService,
-	onlineFriendNotifiers ...services.OnlineFriendNotifier,
+	onlineFriendNotifiers ...services.OnlineFriendPresenceNotifier,
 ) (stopPresenceDebounce func()) {
 	onlineFriendNotifier := firstOnlineFriendNotifier(onlineFriendNotifiers)
 	// presenceDebouncer delays the OFFLINE presence transition (DB write +
@@ -255,7 +249,7 @@ func registerHubCallbacks(
 // directly — needed for the presence-offline debounce tests in
 // presence_debounce_test.go, which assert on both this callback and
 // userFullyDisconnectedCallback sharing one debouncer instance.
-func userFirstConnectCallback(hub ws.EventPublisher, userRepo repository.UserRepository, debouncer *presenceOfflineDebouncer, onlineFriendNotifiers ...services.OnlineFriendNotifier) ws.UserConnectionCallback {
+func userFirstConnectCallback(hub ws.EventPublisher, userRepo repository.UserRepository, debouncer *presenceOfflineDebouncer, onlineFriendNotifiers ...services.OnlineFriendPresenceNotifier) ws.UserConnectionCallback {
 	return func(userID, _ string) {
 		// A fresh first-connection this soon after the user's last
 		// connection fully closed means they reconnected within
@@ -341,7 +335,7 @@ func userFullyDisconnectedCallback(
 	voiceService services.VoiceService,
 	p2pCallService services.P2PCallService,
 	debouncer *presenceOfflineDebouncer,
-	onlineFriendNotifiers ...services.OnlineFriendNotifier,
+	onlineFriendNotifiers ...services.OnlineFriendPresenceNotifier,
 ) ws.UserConnectionCallback {
 	return func(userID, _ string) {
 		// Hub connection lifecycle owns the invisible flag. Do not clear it
@@ -381,7 +375,7 @@ func userFullyDisconnectedCallback(
 // debounce interaction (schedule → cancel-on-reconnect → fire-time recheck)
 // is testable without constructing the voice/P2P service dependencies that
 // function ALSO drives synchronously (see presence_debounce_test.go).
-func scheduleOfflinePresenceTransition(debouncer *presenceOfflineDebouncer, hub ws.EventPublisher, userRepo repository.UserRepository, userID string, onlineFriendNotifiers ...services.OnlineFriendNotifier) {
+func scheduleOfflinePresenceTransition(debouncer *presenceOfflineDebouncer, hub ws.EventPublisher, userRepo repository.UserRepository, userID string, onlineFriendNotifiers ...services.OnlineFriendPresenceNotifier) {
 	debouncer.schedule(userID, func(gen uint64) {
 		offlinePresenceTransition(hub, userRepo, debouncer, userID, gen, onlineFriendNotifiers...)
 	})
@@ -396,7 +390,7 @@ func scheduleOfflinePresenceTransition(debouncer *presenceOfflineDebouncer, hub 
 // debouncer's own mutex, so in the normal path cancel() always wins if the
 // reconnect happened before the timer fired; this is defense-in-depth, not
 // the primary mechanism.
-func offlinePresenceTransition(hub ws.EventPublisher, userRepo repository.UserRepository, debouncer *presenceOfflineDebouncer, userID string, gen uint64, onlineFriendNotifiers ...services.OnlineFriendNotifier) {
+func offlinePresenceTransition(hub ws.EventPublisher, userRepo repository.UserRepository, debouncer *presenceOfflineDebouncer, userID string, gen uint64, onlineFriendNotifiers ...services.OnlineFriendPresenceNotifier) {
 	for _, connectedID := range hub.GetOnlineUserIDs() {
 		if connectedID == userID {
 			return
@@ -458,7 +452,7 @@ func offlinePresenceTransition(hub ws.EventPublisher, userRepo repository.UserRe
 	hubLogger.Info("user disconnected, DB set to offline", "area", "presence", "user_id", userID, "grace", presenceOfflineGrace.String())
 }
 
-func firstOnlineFriendNotifier(notifiers []services.OnlineFriendNotifier) services.OnlineFriendNotifier {
+func firstOnlineFriendNotifier(notifiers []services.OnlineFriendPresenceNotifier) services.OnlineFriendPresenceNotifier {
 	if len(notifiers) == 0 {
 		return nil
 	}
@@ -482,7 +476,7 @@ type presenceStatePublisher interface {
 	CommitPresenceVisibility(userID, status string) bool
 }
 
-func presenceUpdateCallback(hub presenceStatePublisher, userRepo repository.UserRepository, onlineFriendNotifiers ...services.OnlineFriendNotifier) ws.PresenceManualUpdateCallback {
+func presenceUpdateCallback(hub presenceStatePublisher, userRepo repository.UserRepository, onlineFriendNotifiers ...services.OnlineFriendPresenceNotifier) ws.PresenceManualUpdateCallback {
 	return func(userID string, status string, isAuto bool) {
 		// Auto updates include aggregate tab connect/disconnect and idle
 		// transitions. Do not let one of those clear a user's manually-set

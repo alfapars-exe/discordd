@@ -2088,3 +2088,9 @@ The boundary regression failed before implementation. Behavioral tests verify re
 ### RF11 — reject typed-nil Hub runtime integrations (2026-11-14)
 
 A follow-up negative regression demonstrated that an interface containing a nil logger or authorizer pointer passed the first runtime validation. Startup validation now checks nil-capable concrete implementations before publishing either dependency. Both typed-nil subcases failed before the correction; the regression also checks that rejected composition retains the installed logger and authorizer. Full `go test ./ws . -count=1` passed (5.464s/14.892s), followed by successful build and scoped vet. This closes the typed-nil gap in the new boundary, not the remaining project-wide dependency/callback audit.
+
+### RF11 — declared lifecycle-aware presence notification entry point (2026-11-14)
+
+Added the narrow `OnlineFriendPresenceNotifier` contract and included it in the factory runtime result. Presence callbacks now require this contract directly, removing capability discovery and its alternate background-context fallback. The concrete production notifier keeps its existing lifecycle-derived fresh five-second budget and shutdown cancellation. Callback spies now implement the same presence entry point as production. The factory contract regression failed first; the fresh-budget/shutdown test now calls through the declared factory result without a concrete assertion.
+
+Selected notifier/presence/wiring/startup tests passed (services 0.566s/root 0.867s), build and scoped vet passed, and the updated interface-only notifier tests passed again (0.576s). An unused time import exposed by removing the fallback was removed before successful validation. Full callback execution coverage and the notifier notification-repository capability assertion remain open RF11 work.

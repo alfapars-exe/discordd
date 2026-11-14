@@ -19,7 +19,7 @@ type onlineFriendNotifierSpy struct {
 	events  *[]string
 }
 
-func (s *onlineFriendNotifierSpy) NotifyOnline(_ context.Context, userID string) error {
+func (s *onlineFriendNotifierSpy) NotifyOnlinePresence(userID string) error {
 	s.online = append(s.online, userID)
 	if s.events != nil {
 		*s.events = append(*s.events, "notify")

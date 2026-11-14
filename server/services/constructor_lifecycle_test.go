@@ -425,3 +425,14 @@ func TestBotConstructorDeclaresRuntimeDependencies(t *testing.T) {
 		}
 	}
 }
+
+func TestOnlineFriendFactoryDeclaresPresenceLifecycleCapability(t *testing.T) {
+	result := reflect.TypeOf(NewOnlineFriendNotifier).Out(0)
+	required := reflect.TypeFor[interface {
+		NotifyOnlinePresence(string) error
+		ObserveOffline(string)
+	}]()
+	if !result.Implements(required) {
+		t.Fatalf("factory result %s hides presence lifecycle capability", result)
+	}
+}

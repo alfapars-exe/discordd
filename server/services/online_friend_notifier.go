@@ -68,10 +68,18 @@ type OnlineFriendNotifier interface {
 	ObserveOffline(string)
 }
 
+// OnlineFriendPresenceNotifier owns the bounded, lifecycle-aware presence
+// transition entry point. Callers invoke it only after committing presence.
+type OnlineFriendPresenceNotifier interface {
+	NotifyOnlinePresence(string) error
+	ObserveOffline(string)
+}
+
 // OnlineFriendNotifierRuntime gives the composition root explicit cleanup ownership.
 // Request consumers continue to use the narrower OnlineFriendNotifier interface.
 type OnlineFriendNotifierRuntime interface {
 	OnlineFriendNotifier
+	OnlineFriendPresenceNotifier
 	Stop()
 }
 

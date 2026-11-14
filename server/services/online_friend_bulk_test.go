@@ -61,7 +61,7 @@ func TestOnlineFriendFreshBudgetAndShutdownCancellation(t *testing.T) {
 		}
 		return nil, nil
 	}}
-	n := NewOnlineFriendNotifier(users, onlineFriendPrefsStub{}, &testutil.MockFriendshipRepo{}, guardedOnlineNotices(nil), onlineFriendPresenceStub{"actor"}, &testutil.MockEventPublisher{}).(*onlineFriendNotifier)
+	n := NewOnlineFriendNotifier(users, onlineFriendPrefsStub{}, &testutil.MockFriendshipRepo{}, guardedOnlineNotices(nil), onlineFriendPresenceStub{"actor"}, &testutil.MockEventPublisher{})
 	if err := n.NotifyOnlinePresence("actor"); err != nil {
 		t.Fatal(err)
 	}
