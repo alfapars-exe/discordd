@@ -5,10 +5,12 @@ import (
 	"testing"
 
 	"github.com/argeinfina/hichat/config"
+	"github.com/argeinfina/hichat/services"
 	"github.com/argeinfina/hichat/ws"
 )
 
 type failingStartupHub struct {
+	services.GameJoinConnectionGate
 	ws.EventPublisher
 	marker any
 }

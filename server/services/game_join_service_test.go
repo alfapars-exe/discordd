@@ -65,7 +65,7 @@ func joinFixture(t *testing.T) (*GameJoinService, *GameActivityService, *joinTes
 	h.live.Store(true)
 	a := NewGameActivityService(&activityPolicyStub{}, nil, nil, h)
 	p := &joinTestPolicy{}
-	s := NewGameJoinService(a, p)
+	s := NewGameJoinService(a, p, h)
 	game := ws.GameActivityClientGame{ID: "11111111-1111-4111-8111-111111111111", Name: "CS2", CanonicalGameID: models.CS2CanonicalGameID}
 	a.Connect("host", 1)
 	a.Update(context.Background(), "host", 1, 1, &game)
@@ -260,4 +260,34 @@ func TestGameJoinCompetingSourceNeverRevivesRetiredOfferOnFallback(t *testing.T)
 		t.Fatal("explicit fresh fallback offer denied")
 	}
 	joinMint(t, s)
+}
+
+func TestGameJoinUsesExplicitConnectionGateAndDisabledModeFailsClosed(t *testing.T) {
+	for _, disabled := range []bool{true, false} {
+		name := "denying gate"
+		if disabled {
+			name = "disabled gate"
+		}
+		t.Run(name, func(t *testing.T) {
+			_, activity, capableHub, policy, input := joinFixture(t)
+			if !capableHub.live.Load() {
+				t.Fatal("precondition: activity broadcaster must have live physical connection")
+			}
+			var gate GameJoinConnectionGate
+			if !disabled {
+				gate = &joinTestHub{}
+			}
+			service := NewGameJoinService(activity, policy, gate)
+			committed := false
+			if err := service.withHostLive("host", 1, func() error { committed = true; return nil }); !errors.Is(err, pkg.ErrForbidden) || committed {
+				t.Fatal("explicit gate allowed commit")
+			}
+			if err := service.validateHost(context.Background(), "host", 1); !errors.Is(err, pkg.ErrForbidden) {
+				t.Fatal("explicit gate allowed validation")
+			}
+			if state := service.SetOffer(context.Background(), "host", 1, input); state.Accepted {
+				t.Fatal("offer rediscovered live connection capability on activity broadcaster")
+			}
+		})
+	}
 }

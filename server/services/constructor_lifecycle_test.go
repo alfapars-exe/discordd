@@ -490,3 +490,18 @@ func TestGroupConstructorDeclaresPostcommitNotificationDelivery(t *testing.T) {
 		t.Fatal("group notification delivery must be explicit")
 	}
 }
+
+func TestGameJoinConstructorDeclaresPhysicalConnectionGate(t *testing.T) {
+	factory := reflect.TypeOf(NewGameJoinService)
+	if factory.NumIn() != 3 {
+		t.Fatalf("game join constructor inputs=%d want3", factory.NumIn())
+	}
+	required := reflect.TypeFor[interface {
+		WithGameActivityConnection(string, uint64, func() error) error
+		ValidateGameActivityConnection(context.Context, string, uint64) error
+		HasGameActivityConnection(string, uint64) bool
+	}]()
+	if !factory.In(2).Implements(required) {
+		t.Fatal("physical connection gate must be explicit")
+	}
+}
