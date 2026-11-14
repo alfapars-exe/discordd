@@ -1,9 +1,7 @@
 package main
 
 import (
-	"context"
 	"database/sql"
-	"errors"
 	"time"
 
 	"github.com/argeinfina/hichat/config"
@@ -15,16 +13,6 @@ import (
 	"github.com/argeinfina/hichat/services"
 	"github.com/argeinfina/hichat/ws"
 )
-
-type gameActivityHubPresence interface{ IsVisibleOnline(string) (bool, error) }
-type gameActivityPresenceAdapter struct{ hub gameActivityHubPresence }
-
-func (a gameActivityPresenceAdapter) IsVisibleOnline(_ context.Context, userID string) (bool, error) {
-	if a.hub == nil {
-		return false, errors.New("hub presence reader unavailable")
-	}
-	return a.hub.IsVisibleOnline(userID)
-}
 
 // Services holds all service instances.
 type Services struct {
@@ -263,8 +251,8 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	onlineFriendNotifier := services.NewOnlineFriendNotifier(repos.User, repos.Preferences, repos.Friendship, repos.Notification, hub, hub, repos.Notification)
 	rollback = append(rollback, onlineFriendNotifier.Stop)
 	roleTransactions := repository.NewServerMembershipTxRunner(db)
-	profileAudiencePolicy := services.NewProfileAudiencePolicy(repos.Preferences, repos.Friendship, repos.Server)
-	gameActivityPolicy := services.NewGameActivityPrivacyPolicy(repos.Preferences, repos.Friendship, repos.Server, repos.Server, gameActivityPresenceAdapter{hub: hub}, repos.Ban)
+	privacy := initPrivacyPolicies(repos, hub)
+	profileAudiencePolicy, gameActivityPolicy := privacy.Profile, privacy.GameActivity
 	gameActivityService := services.NewGameActivityService(gameActivityPolicy, repos.Friendship, repos.Server, hub, hub.GameActivityEpoch())
 	memberService := services.NewMemberService(gameActivityService, profileAudiencePolicy, repos.User, repos.Role, repos.Ban, repos.MemberTimeout, repos.Server, roleTransactions, hub, voiceService, auditLogService, authCache, permInvalidator, profileUpdateNotifier)
 	roleService := services.NewRoleService(repos.Role, roleTransactions, hub, auditLogService, permInvalidator)
@@ -299,13 +287,10 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	// message/DM/friendship services below (each takes repos.Notification).
 	notificationService := services.NewNotificationService(repos.Notification, hub)
 
-	friendGraph := friendRequestGraphAdapter{reader: repos.Friendship}
-	friendRequestPolicy := services.NewFriendRequestPolicy(
-		repos.Preferences, friendGraph.listFriendIDs, friendGraph.AreFriends, repos.Server,
-	)
+	friendGraph, friendRequestPolicy := privacy.FriendGraph, privacy.FriendRequests
 	emojiService := services.NewEmojiService(repos.Emoji, repos.Server, hub, cfg.Upload.Dir)
 	dmService := services.NewDMService(
-		services.NewServerDMPolicy(repos.Preferences, repos.Server),
+		privacy.ServerDM,
 		repos.DM, repos.User, hub, blockService, friendGraph, dmSettingsService,
 		repos.DMRead, repos.Notification, repository.NewDMMessageTxRunner(db),
 		emailDeliveryService,
