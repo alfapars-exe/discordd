@@ -221,7 +221,7 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	rollback = append(rollback, voiceService.ShutdownVoiceStateFanout)
 
 	// Email service (optional)
-	var emailSender email.EmailSender
+	var emailSender email.Provider
 	if cfg.Email.ResendAPIKey != "" && cfg.Email.FromEmail != "" && cfg.Email.AppURL != "" {
 		emailSender = email.NewResendSender(cfg.Email.ResendAPIKey, cfg.Email.FromEmail, cfg.Email.AppURL)
 		bootLogger.Info("email service enabled", "from", cfg.Email.FromEmail)
@@ -232,12 +232,10 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	// Remaining services (order-independent)
 	inviteService := services.NewInviteService(repos.Invite, repos.Server)
 	mfaService := services.NewMFAService(repos.MFA, repos.User, encryptionKey)
-	verificationSender, _ := emailSender.(email.VerificationSender)
-	categorySender, _ := emailSender.(email.CategorySender)
-	emailDeliveryService := services.NewEmailDeliveryService(repos.EmailDelivery, categorySender,
+	emailDeliveryService := services.NewEmailDeliveryService(repos.EmailDelivery, emailSender,
 		services.WithEmailUnsubscribe(repos.EmailUnsubscribe, cfg.Email.AppURL))
 	p2pCallService := services.NewP2PCallService(repos.Friendship, repos.User, hub, emailDeliveryService)
-	emailVerificationService := services.NewEmailVerificationService(repos.EmailVerification, verificationSender)
+	emailVerificationService := services.NewEmailVerificationService(repos.EmailVerification, emailSender)
 
 	channelService := services.NewChannelService(voiceService, repos.Channel, repos.Category, hub, channelPermService, auditLogService, repos.Notification)
 	threadService := services.NewThreadService(repos.Channel, repos.Message, channelPermService, hub)

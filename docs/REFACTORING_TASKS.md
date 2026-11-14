@@ -1773,3 +1773,8 @@ initServices now only binds gameJoinOfferCallback; JSON serialization,2048-byte 
 ### RF28 — smoke waits for actual signed-out readiness (2026-11-14)
 
 CI43574345347 passed offline retry (including201), DM history and role cases first try. Only Chromium login/recovery smoke was flaky: first password-field visibility used15s while screenshot showed the real server-waking screen. Its initial form readiness gate now matches the shared login helper at90s. Keyboard/recovery/focus/script-error assertions and strict flaky rejection remain. No fixed sleep or rate-limit bypass. Fresh full production CI required. Receipt: implementation/verification/refactor-rf28-smoke-auth-readiness-2026-11-14.json.
+
+
+### RF11 — configured email provider guarantees delivery capabilities (2026-11-14)
+
+NewResendSender previously returned only EmailSender; startup silently asserted VerificationSender and CategorySender, allowing an enabled provider to omit those capabilities without a build error. Declared-result regression failed for both missing interfaces. The factory now returns Provider embedding all three contracts; initServices retains it and passes narrow dependencies directly. Disabled configuration remains nil. Relevant provider/email/service/wiring/startup tests, build and vet passed; no actual provider mail was sent. Current-source production mail profile and Linux race remain CI gates. Receipt: implementation/verification/refactor-rf11-email-provider-contract-2026-11-14.json.

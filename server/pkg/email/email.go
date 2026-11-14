@@ -33,6 +33,14 @@ type CategorySender interface {
 	SendPreparedCategoryEmail(context.Context, string, models.EmailDeliveryPayload) (string, error)
 }
 
+// Provider is the complete configured delivery contract used by startup.
+// Individual services keep their narrower sender dependencies.
+type Provider interface {
+	EmailSender
+	VerificationSender
+	CategorySender
+}
+
 var ErrImmutableEmailPayload = errors.New("provider rejected immutable email payload")
 
 func (s *resendSender) CategoryFrom() string { return fmt.Sprintf("HiChat <%s>", s.fromEmail) }
@@ -53,7 +61,7 @@ type resendSender struct {
 	appURL    string
 }
 
-func NewResendSender(apiKey, fromEmail, appURL string) EmailSender {
+func NewResendSender(apiKey, fromEmail, appURL string) Provider {
 	return &resendSender{
 		client:    resend.NewCustomClient(&http.Client{Transport: idempotencyTransport{http.DefaultTransport}, Timeout: time.Minute}, strings.Trim(strings.TrimSpace(apiKey), "'")),
 		fromEmail: fromEmail,
