@@ -1534,3 +1534,7 @@ PR #298 `058b2117` terminal 36/36 SUCCESS; Server CI 43532722522 terminal 31/31 
 ### 2026-11-14 — Birleşik kaynakta eski inceleme hash’i
 
 Tam self-scan, mevcut DM delivery fixture incelemesinin dosya hash’i constructor refactor’ları sonrasında eskidiği için exit1 verdi. `server/services/dm_delivery_test.go:114` sorgusu yeniden incelendi: tek SQL sabiti içindeki sabit interval aritmetiği, mesaj kimliği bağlı argüman; satır hash’i değişmemiştir. Mevcut kaydın yalnız dosya hash’i güncellendi; yeni istisna yok (50 kayıt). Manifest doğrulaması başarılı, doğrulayıcının 6 testi başarılı. Yeni tam tarama çalışıyor; henüz başarı kanıtı değildir. Bu düzeltme birleşik ağaca özgüdür; kanonik PR manifest’i körlemesine değiştirilmedi.
+
+### 2026-11-14 — Ayrı üretim sunucu binary’siyle süreç kabulü hazırlığı
+
+Birleşik fixture artık test executable’ında `main()` çağırmaz; mutlak ve düzenli `HICHAT_ACTIVE_VOICE_SERVER_BINARY` dosyasını başlatır, eksikse başarısız olur. Normal CI önce `go build`, native race adımı önce `go build -race` ile aynı kaynakta ayrı sunucu üretir; parent ve server birlikte race ile çalışır. Login/WS/aktif SIGTERM/aynı DB ile restart/tam kredi satır eşitliği koşulları korunur. Windows test derlemesi POSIX atlaması, tam vet ve lint 0 sorun geçti; native yeni binary modu henüz çalıştırılmadı. Yayımlanmış binary/kurulum ve fiziksel medya kanıtı değildir. Mevcut `956c95ab` CI terminal olmadan kanonik dala gönderilmeyecek. Tam kaynak taraması, ayrıca düzeltilen mevcut DM review hash’iyle hâlen çalışıyor.
