@@ -2112,3 +2112,9 @@ The five-package full test run against source 3f0c2470 passed: services 96.344s,
 Extracted the five existing P2P registrations into registerP2PCallbacks with a narrow registrar interface; callback bodies and service calls are unchanged. Tests execute every captured callback for success and service-error cases, checking the exact actor, receiver, call type, call IDs and signal payload reaching the matching service method. Selected P2P callback/wiring/route tests passed (0.753s), build and scoped vet passed. Transport scheduling and physical media are separate; the complete Hub callback matrix remains open.
 
 Remote source 08cf44f2432722f166a85eb394bff38a2cd5fc63 completed run 43635956632 with all 36 PR checks successful. Receipt: implementation/verification/refactor-integration-08cf-terminal-2026-11-14.json. This does not prove later Hub/presence/P2P commits; the next aggregate requires its own CI.
+
+### RF11 — voice callback registration and bounded work (2026-11-14)
+
+Extracted eight voice callbacks behind voiceCallbackRegistrar. A comparison with the previous source confirmed the callback bodies match exactly. Executable registration tests check complete payload routing, including partial-update nil pointers, moderator/target/channel identities, screen-share watching and activity. Both success and service-error paths execute all callbacks. Failed join does not write activity; successful join shares one context across user/channel/server bookkeeping. Moderation and bookkeeping contexts carry the broadcast deadline and are canceled when callbacks return.
+
+Selected voice/P2P/wiring/route tests passed (0.773s), followed by successful build, root vet and diff checks. This verifies service routing, not socket scheduling, LiveKit or physical media. Game-activity and complete production callback composition acceptance remain open. CI 43637258866 is still in progress for the previous pushed source; no failing job observed.
