@@ -21,7 +21,7 @@ func TestGameGrantSendPreservesPrivacyAndAtomicRequestState(t *testing.T) {
 		INSERT INTO users(id,username,password_hash,is_bot,owner_user_id) VALUES('game','gamebot','x',1,'owner');`); err != nil {
 		t.Fatal(err)
 	}
-	bots := NewBotService(repository.NewBotRepository(db.Conn))
+	bots := NewBotService(repository.NewBotRepository(db.Conn), BotRuntimeDependencies{})
 	if _, err := bots.RegisterGameIdentity(ctx, "owner", "game"); err != nil {
 		t.Fatal(err)
 	}

@@ -413,3 +413,15 @@ func TestAppLogFactoryDeclaresSinkAndHealthCapabilities(t *testing.T) {
 		t.Fatalf("app log factory result %s omits sink/health", result)
 	}
 }
+
+func TestBotConstructorDeclaresRuntimeDependencies(t *testing.T) {
+	factory := reflect.TypeOf(NewBotService)
+	if factory.IsVariadic() || factory.NumIn() != 2 || factory.In(1).Kind() != reflect.Struct {
+		t.Fatal("bot runtime dependencies must be an explicit constructor struct")
+	}
+	for _, name := range []string{"Disconnecter", "Broadcaster", "Permissions", "Memberships"} {
+		if _, ok := factory.In(1).FieldByName(name); !ok {
+			t.Fatalf("missing runtime dependency %s", name)
+		}
+	}
+}

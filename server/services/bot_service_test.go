@@ -44,7 +44,7 @@ func TestBotService_CreateAndValidate(t *testing.T) {
 		t.Fatalf("seed owner: %v", err)
 	}
 
-	svc := NewBotService(repository.NewBotRepository(db.Conn))
+	svc := NewBotService(repository.NewBotRepository(db.Conn), BotRuntimeDependencies{})
 
 	bot, token, err := svc.CreateBot(ctx, "owner_1", models.CreateBotRequest{
 		Username: "weatherbot", DisplayName: "Weather",
@@ -99,7 +99,7 @@ func TestBotService_CreateRollsBackIdentityWhenInitialTokenFails(t *testing.T) {
 		 BEGIN SELECT RAISE(ABORT, 'fixture token failure'); END;`); err != nil {
 		t.Fatalf("seed fixture: %v", err)
 	}
-	svc := NewBotService(repository.NewBotRepository(db.Conn))
+	svc := NewBotService(repository.NewBotRepository(db.Conn), BotRuntimeDependencies{})
 	if _, token, err := svc.CreateBot(ctx, "owner_1", models.CreateBotRequest{Username: "atomicbot", DisplayName: "Atomic"}); err == nil || token != "" {
 		t.Fatalf("CreateBot = token %q, err %v; want no exposed credential and an error", token, err)
 	}
@@ -124,7 +124,7 @@ func TestBotService_RevokeIsolation_AcrossBots(t *testing.T) {
 	}
 
 	disconnects := &botDisconnectRecorder{}
-	svc := NewBotService(repository.NewBotRepository(db.Conn), disconnects)
+	svc := NewBotService(repository.NewBotRepository(db.Conn), BotRuntimeDependencies{Disconnecter: disconnects})
 
 	botA, tokenA, err := svc.CreateBot(ctx, "owner_1", models.CreateBotRequest{
 		Username: "botalpha", DisplayName: "Alpha",
@@ -176,7 +176,7 @@ func TestBotService_RevokeIsolation_AcrossOwners(t *testing.T) {
 	}
 
 	disconnects := &botDisconnectRecorder{}
-	svc := NewBotService(repository.NewBotRepository(db.Conn), disconnects)
+	svc := NewBotService(repository.NewBotRepository(db.Conn), BotRuntimeDependencies{Disconnecter: disconnects})
 
 	bot, token, err := svc.CreateBot(ctx, "owner_1", models.CreateBotRequest{
 		Username: "botcharlie", DisplayName: "Charlie",
@@ -209,7 +209,7 @@ func TestBotService_OwnershipTransferRequiresRecipientAndRotatesCredential(t *te
 		t.Fatal(err)
 	}
 	disconnects := &botDisconnectRecorder{}
-	svc := NewBotService(repository.NewBotRepository(db.Conn), disconnects)
+	svc := NewBotService(repository.NewBotRepository(db.Conn), BotRuntimeDependencies{Disconnecter: disconnects})
 	bot, oldToken, err := svc.CreateBot(ctx, "owner_1", models.CreateBotRequest{Username: "transferbot", DisplayName: "Transfer"})
 	if err != nil {
 		t.Fatal(err)

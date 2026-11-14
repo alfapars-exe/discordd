@@ -2068,3 +2068,7 @@ Server constructor now explicitly receives PermissionInvalidator;3 calls updated
 ### RF11 — app log factory declares sink/health runtime contract (2026-11-14)
 
 NewAppLogService now returns AppLogRuntime, retaining ConsumeRecord and Health alongside existing service lifecycle. Services keeps that declared runtime type; handlers retain narrow AppLogService. Main directly binds app sink and passes Health to runtime stats, removing capability assertions and silent zero-health fallback. Declared-result regression failed before change. Existing AppLog pipeline/health and root wiring/startup selections pass10.858/0.774s after removing a now-unused main import; build/vet/diff check pass. No reviewed exact-hit source changed. Current-source CI and full RF11 audit remain open.
+
+### RF11 — explicit bot runtime constructor dependencies (2026-11-14)
+
+Bot construction now declares disconnect, broadcast, membership and permission integrations in `BotRuntimeDependencies`. Production supplies each capability explicitly; standalone fixtures use explicit zero values. Removed the late permission setter and optional runtime type assertions. The constructor regression failed before the change. Existing bot/application scope, invocation, revocation and handler/wiring tests passed (services 3.698s, handlers 1.031s, root 0.855s). `go build ./...`, scoped `go vet` and diff checks passed. This is bounded RF11 evidence; full RF11 acceptance and current-head CI remain open.

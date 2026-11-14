@@ -173,7 +173,7 @@ func TestBotDownloadRealResolverRejectsRetiredCredentials(t *testing.T) {
 	if _, err := db.Conn.ExecContext(ctx, `INSERT INTO users(id,username,password_hash) VALUES('media-owner','mediaowner','x')`); err != nil {
 		t.Fatal(err)
 	}
-	bots := services.NewBotService(repository.NewBotRepository(db.Conn))
+	bots := services.NewBotService(repository.NewBotRepository(db.Conn), services.BotRuntimeDependencies{})
 	bot, token, err := bots.CreateBot(ctx, "media-owner", models.CreateBotRequest{Username: "mediabot", DisplayName: "Media bot"})
 	if err != nil {
 		t.Fatal(err)

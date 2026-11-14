@@ -46,8 +46,7 @@ func TestApplicationRegistryScopesInvocationAndRevocation(t *testing.T) {
 		t.Fatal(err)
 	}
 	runtime := &applicationRuntimeRecorder{}
-	svc := NewBotService(repository.NewBotRepository(db.Conn), runtime)
-	svc.SetApplicationPermissionResolver(applicationPermissionStub{permissions: models.PermViewChannel | models.PermReadMessages})
+	svc := NewBotService(repository.NewBotRepository(db.Conn), BotRuntimeDependencies{Disconnecter: runtime, Broadcaster: runtime, Memberships: runtime, Permissions: applicationPermissionStub{permissions: models.PermViewChannel | models.PermReadMessages}})
 	bot, _, err := svc.CreateBot(ctx, "owner", models.CreateBotRequest{Username: "actionbot", DisplayName: "Action Bot"})
 	if err != nil {
 		t.Fatal(err)
@@ -100,8 +99,7 @@ func TestApplicationRegistryReadScopeAndCompletionIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 	runtime := &applicationRuntimeRecorder{}
-	svc := NewBotService(repository.NewBotRepository(db.Conn), runtime)
-	svc.SetApplicationPermissionResolver(applicationPermissionStub{permissions: models.PermViewChannel | models.PermReadMessages})
+	svc := NewBotService(repository.NewBotRepository(db.Conn), BotRuntimeDependencies{Disconnecter: runtime, Broadcaster: runtime, Memberships: runtime, Permissions: applicationPermissionStub{permissions: models.PermViewChannel | models.PermReadMessages}})
 	bot, _, _ := svc.CreateBot(ctx, "owner", models.CreateBotRequest{Username: "readerbot", DisplayName: "Reader"})
 	otherBot, _, _ := svc.CreateBot(ctx, "other", models.CreateBotRequest{Username: "otherbot", DisplayName: "Other"})
 	manifest, err := svc.PutApplicationManifest(ctx, "owner", bot.ID, "", true, []models.ApplicationAction{{Name: "inspect", Label: "Inspect"}})

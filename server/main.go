@@ -308,8 +308,7 @@ func main() {
 	// owner-facing bot management endpoints (create/list/revoke), AND the
 	// read-only WS bot gateway (handler.go botValidator). Constructed before
 	// the handler layer so the WS handler can validate bot tokens.
-	botService := services.NewBotService(repository.NewBotRepository(db.Conn), hub)
-	botService.SetApplicationPermissionResolver(svcs.ChannelPermission)
+	botService := services.NewBotService(repository.NewBotRepository(db.Conn), services.BotRuntimeDependencies{Disconnecter: hub, Broadcaster: hub, Permissions: svcs.ChannelPermission, Memberships: hub})
 
 	// 11. Handler layer
 	h := initHandlers(svcs, repos, limiters, hub, cfg, encryptionKey, botService)
