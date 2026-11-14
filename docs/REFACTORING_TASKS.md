@@ -1958,3 +1958,8 @@ Large-population fixture now inserts1001 actual members and1001 unrelated users 
 ### RF09 — service bulk failure boundaries (2026-11-14)
 
 New member profile/role failure cases preserve wrapped causes, return no successful partial membership, and forbid later nickname/timeout enrichment or per-user fallback. Group history profile failure similarly propagates without per-user fallback. Existing bulk-author/missing-author contract remains. Four selected top-level tests pass, including0/1/1001 population and profile/role subcases; service vet passes. Non-fatal nickname/timeout behavior and API fields are unchanged. Full RF09/RF29 acceptance remains open.
+
+
+### RF11 — channel reaction emoji resolver constructor (2026-11-14)
+
+Reaction constructor now requires an explicit EmojiResolver argument. Production constructs the emoji service before reactions and injects it; channel ReactionService setter is removed. Nil explicitly disables custom emoji, preserving existing tests. Constructor regression failed with7 inputs before change; channel/DM custom emoji, removal-only, nil-resolver, notification and wiring selections across services/handlers/main pass afterward. Server build and targeted vet pass. Test fixtures inject during construction, while Unicode-only fixtures explicitly select nil. DM resolver setter remains separate open work; full RF11/current-source Linux race acceptance remain open.

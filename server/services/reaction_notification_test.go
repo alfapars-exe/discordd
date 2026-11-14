@@ -59,7 +59,7 @@ func TestReactionNotificationDelivery(t *testing.T) {
 				}},
 				&testutil.MockChannelRepo{GetByIDFn: func(context.Context, string) (*models.Channel, error) {
 					return &models.Channel{ID: "channel", ServerID: "server"}, nil
-				}}, hub, readResolver(), nil, ReactionNotificationDependencies{Notifications: repo, Preferences: reactionPrefsStub{tc.mode}},
+				}}, hub, readResolver(), nil, ReactionNotificationDependencies{Notifications: repo, Preferences: reactionPrefsStub{tc.mode}}, nil,
 			)
 			if err := svc.ToggleReaction(context.Background(), "server", "message", tc.actor, "👍"); err != nil {
 				t.Fatal(err)

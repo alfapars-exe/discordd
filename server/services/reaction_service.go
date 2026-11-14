@@ -16,7 +16,6 @@ var reactionLogger = logx.Component("service.reaction")
 
 type ReactionService interface {
 	ToggleReaction(ctx context.Context, serverID, messageID, userID, emoji string) error
-	SetEmojiResolver(r EmojiResolver)
 }
 
 type reactionService struct {
@@ -30,7 +29,7 @@ type reactionService struct {
 	notificationRepo repository.ReactionNotificationWriter
 	preferenceRepo   profilePreferenceReader
 	// emojiResolver validates custom-emoji reactions (reaction_emoji.go);
-	// nil rejects every custom emoji. Set via SetEmojiResolver.
+	// nil explicitly disables custom emoji reactions.
 	emojiResolver EmojiResolver
 }
 
@@ -52,8 +51,10 @@ func NewReactionService(
 	permResolver ChannelPermResolver,
 	timeoutChecker MemberTimeoutChecker,
 	notifications ReactionNotificationDependencies,
+	emojiResolver EmojiResolver,
 ) *reactionService {
 	return &reactionService{
+		emojiResolver:    emojiResolver,
 		notificationRepo: notifications.Notifications,
 		preferenceRepo:   notifications.Preferences,
 		userRepo:         notifications.Users,

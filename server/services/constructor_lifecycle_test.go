@@ -70,7 +70,7 @@ func TestFriendshipConstructorRequiresDMAutoAccept(t *testing.T) {
 
 func TestReactionConstructorRequiresNotificationDependencies(t *testing.T) {
 	factory := reflect.TypeOf(NewReactionService)
-	if factory.NumIn() != 7 {
+	if factory.NumIn() != 8 {
 		t.Fatalf("reaction constructor has %d inputs, want explicit notification dependency group", factory.NumIn())
 	}
 	dependency := factory.In(6)
@@ -103,5 +103,15 @@ func TestPrivateReactionConstructorsRequireWriterCapability(t *testing.T) {
 	}
 	if !dm.In(12).Implements(required) {
 		t.Errorf("DM notification input %s omits writer capability", dm.In(12))
+	}
+}
+
+func TestReactionConstructorRequiresEmojiResolver(t *testing.T) {
+	factory := reflect.TypeOf(NewReactionService)
+	if factory.NumIn() != 8 {
+		t.Fatalf("reaction constructor inputs=%d, want8", factory.NumIn())
+	}
+	if factory.In(7) != reflect.TypeFor[EmojiResolver]() {
+		t.Fatal("emoji resolver is not an explicit dependency")
 	}
 }

@@ -17,8 +17,13 @@ func newTestReactionService(
 	hub *testutil.MockBroadcastAndOnline,
 	permResolver ChannelPermResolver,
 	timeoutChecker MemberTimeoutChecker,
+	resolvers ...EmojiResolver,
 ) ReactionService {
-	return NewReactionService(reactionRepo, msgRepo, chanRepo, hub, permResolver, timeoutChecker, ReactionNotificationDependencies{})
+	var resolver EmojiResolver
+	if len(resolvers) > 0 {
+		resolver = resolvers[0]
+	}
+	return NewReactionService(reactionRepo, msgRepo, chanRepo, hub, permResolver, timeoutChecker, ReactionNotificationDependencies{}, resolver)
 }
 
 // readResolver grants ViewChannel+ReadMessages — the precondition ToggleReaction

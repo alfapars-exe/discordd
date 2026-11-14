@@ -72,9 +72,8 @@ func removeOnlyChannelService(store *reactionStore, perms models.Permission, eve
 		&testutil.MockChannelRepo{GetByIDFn: func(_ context.Context, _ string) (*models.Channel, error) {
 			return &models.Channel{ID: "ch1", ServerID: "srv1"}, nil
 		}},
-		hub, resolver, nil, ReactionNotificationDependencies{},
+		hub, resolver, nil, ReactionNotificationDependencies{}, newReactionResolver(),
 	)
-	svc.SetEmojiResolver(newReactionResolver())
 	return svc
 }
 

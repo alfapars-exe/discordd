@@ -52,11 +52,8 @@ func channelReactionCase(resolver EmojiResolver) (ReactionService, *string) {
 				return models.PermViewChannel | models.PermReadMessages, nil
 			},
 		},
-		nil,
+		nil, resolver,
 	)
-	if resolver != nil {
-		svc.SetEmojiResolver(resolver)
-	}
 	return svc, stored
 }
 
