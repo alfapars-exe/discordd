@@ -1,0 +1,25 @@
+{
+  "source_head": "882bd6c395e0adcefb9d509b73eb5757392ab66f",
+  "pr": "https://github.com/alfapars-exe/discordd/pull/302",
+  "before": {
+    "join_and_late_admission": "both failed on original source",
+    "same_actor_order": "old-source overlay failed: leave overtook earlier activity"
+  },
+  "after": {
+    "lifecycle_order_repetitions": 30,
+    "full_ws_repetitions": 3,
+    "full_ws_seconds": 11.342,
+    "canonical_vet_build": "passed",
+    "canonical_windows_linux_lint": "passed",
+    "integrated_voice_snapshot_registration_repetitions": 20,
+    "integrated_seconds": 5.824,
+    "integrated_vet_build_lint": "passed"
+  },
+  "ci": "pending",
+  "remaining": [
+    "Linux race and complete current-source CI",
+    "final combined-source CI",
+    "physical voice/LiveKit",
+    "P2P/typing callback ownership"
+  ]
+}
