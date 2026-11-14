@@ -1,25 +1,11 @@
+import { DEVICE_LOCAL_VOICE_SETTING_KEYS } from "./voicePreferenceScope";
 import { DEFAULT_NOTIFICATION_PREFERENCES, NOTIFICATION_BOOLEAN_FIELDS } from "../utils/notificationPreferenceDefaults";
 import { APPEARANCE_RANGES, APPEARANCE_STORAGE_KEYS } from "./appearancePreferences";
 
 export type PreferencesData = Record<string, unknown>;
 
 const MERGED_NAMESPACES = new Set(["voice_settings", "accessibility", "appearance", "sidebar_sections", "cosmetics_view", "entrance_sounds", "privacy", "notifications", "email_preferences", "locale"]);
-const DEVICE_FIELDS = new Set([
-  "inputDevice", "outputDevice", "cameraDevice", "muteHotkeyGlobal",
-  "voiceOverlayEnabled", "voiceOverlaySpeakingOpacity", "voiceOverlayIdleOpacity",
-  "voiceOverlayScale", "voiceOverlayPosition", "voiceOverlaySpeakingOnly", "voiceOverlayMode",
-  "voiceOverlayPinned",
-  "voiceOverlayQuickActions", "voiceOverlayClickableActions",
-  "voiceOverlayCompatibility", "voiceOverlayVideo", "voiceOverlayStreams", "voiceOverlayWelcome", "voiceOverlayGoLive",
-  "voiceOverlayActivity",
-  "voiceOverlayGameActivityNotifications", "voiceOverlayNowPlayingNotifications",
-  "voiceOverlayNotifications",
-  "voiceOverlayNotificationActions",
-  "voiceOverlayChat",
-  "voiceOverlayChatActions",
-  "voiceOverlayChatCompose",
-  "voiceOverlayAvatarSize", "voiceOverlayNameDisplay", "voiceOverlayMaxParticipants",
-]);
+const DEVICE_FIELDS = new Set(DEVICE_LOCAL_VOICE_SETTING_KEYS);
 const CACHE_FIELDS: Record<string, Set<string>> = {
   cosmetics_view: new Set(["plain"]),
   appearance: new Set(Object.keys(APPEARANCE_STORAGE_KEYS)),

@@ -1848,3 +1848,8 @@ After the separate channel-notice cache fix, NotificationPreferences and default
 ### RF13 — overlay device flags excluded from account patches (2026-11-14)
 
 Voice slice already classifies compatibility/video/streams/welcome/go-live overlay flags as device-local, but preferences sanitizer omitted those five exclusions. Six codec/store regressions failed: flags survived sanitize and actual account store.set data. The exclusion list is aligned;106 codec/store/consumer tests pass, including outgoing patch containing only masterVolume. This is an action/codec reproduction, not an observed production leak. Behavior fix precedes shared scope-list extraction. Receipt: implementation/verification/refactor-rf13-overlay-device-scope-2026-11-14.json.
+
+
+### RF13 — shared device-local voice field contract (2026-11-14)
+
+After the separate overlay exclusion behavior fix, codec and voice slice consume one store-free 30-key list. The slice type-checks keys against VoiceSettings. Actual setter/server-apply/account-reset tests retain device flags without account sync while account masterVolume applies. Seven files / 194 tests, targeted ESLint and production TypeScript/Vite build pass. Existing build warnings remain. Full RF13 and current-source CI acceptance remain open. Receipt: implementation/verification/refactor-rf13-shared-voice-device-scope-2026-11-14.json.

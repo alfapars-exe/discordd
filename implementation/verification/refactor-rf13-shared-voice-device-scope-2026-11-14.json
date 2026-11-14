@@ -1,0 +1,18 @@
+{
+  "source_parent": "9676ce96",
+  "scope": "RF13 shared device-local voice preference contract",
+  "change": "Codec and voice settings slice consume one store-free list of 30 device-only keys. Slice checks keys against keyof VoiceSettings. No key changes relative to the preceding behavior fix.",
+  "validation": {
+    "vitest_files": 7,
+    "vitest_passed": 194,
+    "vitest_exit": 0,
+    "eslint_exit": 0,
+    "production_build_exit": 0
+  },
+  "consumer_evidence": "Actual overlay setters do not sync. Server apply and account reset retain five device overlay flags and persisted settings; account masterVolume still applies.",
+  "limits": [
+    "No physical active voice session acceptance claimed",
+    "Full RF13 and current-source combined CI remain open"
+  ],
+  "build_warnings": "Existing vendor/WASM and large chunk warnings retained; no suppression added"
+}

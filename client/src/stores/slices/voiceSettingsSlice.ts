@@ -7,6 +7,7 @@
  */
 
 import type { StateCreator } from "zustand";
+import { DEVICE_LOCAL_VOICE_SETTING_KEYS } from "../voicePreferenceScope";
 import { usePreferencesStore } from "../preferencesStore";
 import type { VoiceStore } from "../voiceStore";
 
@@ -461,22 +462,7 @@ function persistNow(settings: VoiceSettings): void {
   }
 }
 
-const DEVICE_LOCAL_KEYS = new Set<keyof VoiceSettings>([
-  "inputDevice", "outputDevice", "cameraDevice", "muteHotkeyGlobal",
-  "voiceOverlayEnabled", "voiceOverlayMode", "voiceOverlaySpeakingOpacity", "voiceOverlayIdleOpacity",
-  "voiceOverlayScale", "voiceOverlayPosition", "voiceOverlaySpeakingOnly",
-  "voiceOverlayPinned",
-  "voiceOverlayQuickActions", "voiceOverlayClickableActions",
-  "voiceOverlayCompatibility",
-  "voiceOverlayActivity", "voiceOverlayVideo", "voiceOverlayStreams", "voiceOverlayWelcome", "voiceOverlayGoLive",
-  "voiceOverlayGameActivityNotifications", "voiceOverlayNowPlayingNotifications",
-  "voiceOverlayNotifications",
-  "voiceOverlayNotificationActions",
-  "voiceOverlayChat",
-  "voiceOverlayChatActions",
-  "voiceOverlayChatCompose",
-  "voiceOverlayAvatarSize", "voiceOverlayNameDisplay", "voiceOverlayMaxParticipants",
-]);
+const DEVICE_LOCAL_KEYS = new Set<keyof VoiceSettings>(DEVICE_LOCAL_VOICE_SETTING_KEYS);
 let observedSettings = loadSettings();
 
 /** Register edits immediately, before a concurrent hydration can apply. */

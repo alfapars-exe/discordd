@@ -62,6 +62,23 @@ afterEach(() => {
 });
 
 describe("account preference consumers", () => {
+  it("keeps device-only overlay flags local through server apply and account reset", async () => {
+    voice.getState().setVoiceOverlayCompatibility(true);
+    voice.getState().setVoiceOverlayVideo(true);
+    voice.getState().setVoiceOverlayStreams(true);
+    voice.getState().setVoiceOverlayWelcome(true);
+    voice.getState().setVoiceOverlayGoLive(true);
+    const local = { voiceOverlayCompatibility: true, voiceOverlayVideo: true, voiceOverlayStreams: true, voiceOverlayWelcome: true, voiceOverlayGoLive: true };
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(sendPreferences).not.toHaveBeenCalled();
+    voice.getState().applyFromServer({ voiceOverlayCompatibility: false, voiceOverlayVideo: false, voiceOverlayStreams: false, voiceOverlayWelcome: false, voiceOverlayGoLive: false, masterVolume: 88 });
+    expect(voice.getState()).toMatchObject({ ...local, masterVolume: 88 });
+    voice.getState().resetAccountPreferences();
+    expect(voice.getState()).toMatchObject(local);
+    expect(JSON.parse(localStorage.getItem("mqvi_voice_settings")!)).toMatchObject(local);
+    expect(sendPreferences).not.toHaveBeenCalled();
+  });
+
   it("resets every appearance value and cached preview without syncing or changing local transparency", async () => {
     settings.getState().applyFromServer("ocean");
     settings.getState().applyAppearanceFromServer({
