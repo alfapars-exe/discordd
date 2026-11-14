@@ -20,5 +20,18 @@
     "Not PostgreSQL TLS proof",
     "Full RF08 includes worker shutdown and refresh behavior; this test alone does not close the card",
     "Race validation requires Linux CI"
+  ],
+  "broader_verification": [
+    {
+      "command": "go test ./database -count=1 -timeout=3m",
+      "exit": 0,
+      "package_seconds": 36.764,
+      "note": "local default profile; native PostgreSQL opt-ins not asserted executed"
+    },
+    {
+      "command": "go test ./services -run 'TestAuth(Maintenance|Sweep|Refresh)' -count=1 -timeout=3m",
+      "exit": 0,
+      "package_seconds": 1.015
+    }
   ]
 }
