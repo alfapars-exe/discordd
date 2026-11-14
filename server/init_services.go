@@ -272,7 +272,7 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	profileAudiencePolicy := services.NewProfileAudiencePolicy(repos.Preferences, repos.Friendship, repos.Server)
 	gameActivityPolicy := services.NewGameActivityPrivacyPolicy(repos.Preferences, repos.Friendship, repos.Server, gameActivityPresenceAdapter{hub: hub}, repos.Ban)
 	gameActivityService := services.NewGameActivityService(gameActivityPolicy, repos.Friendship, repos.Server, hub)
-	memberService := services.NewMemberService(gameActivityService, profileAudiencePolicy, repos.User, repos.Role, repos.Ban, repos.MemberTimeout, repos.Server, roleTransactions, hub, voiceService, auditLogService, profileUpdateNotifier)
+	memberService := services.NewMemberService(gameActivityService, profileAudiencePolicy, repos.User, repos.Role, repos.Ban, repos.MemberTimeout, repos.Server, roleTransactions, hub, voiceService, auditLogService, authCache, profileUpdateNotifier)
 	roleService := services.NewRoleService(repos.Role, roleTransactions, hub, auditLogService)
 	// SetPermInvalidator for both is wired in main.go (after initRoutes),
 	// not here: it needs to fan out to middleware.PermissionMiddleware too,
@@ -353,7 +353,7 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	backupHMACKey := crypto.DeriveBackupHMACKey(encryptionKey)
 	e2eeService := services.NewE2EEService(repos.E2EEBackup, repos.GroupSession, repos.Device, repos.Server, hub, repos.Channel, channelPermService, backupHMACKey)
 
-	adminUserService := services.NewAdminUserService(repos.User, hub, voiceService, emailSender)
+	adminUserService := services.NewAdminUserService(repos.User, hub, voiceService, emailSender, authCache)
 	adminUserService.SetUploadDir(cfg.Upload.Dir)
 	adminServerService := services.NewAdminServerService(db, repos.Server, repos.User, hub, emailSender)
 	adminServerService.SetUploadDir(cfg.Upload.Dir)

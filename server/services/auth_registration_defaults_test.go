@@ -35,7 +35,7 @@ func TestRegisterDefaultsRemainValidForProfileSave(t *testing.T) {
 		}
 	}
 	bio := "Yerel kabul testi — HiChat."
-	profile := NewMemberService(nil, nil, users, nil, nil, nil, &testutil.MockServerRepo{}, nil, &testutil.MockEventPublisher{}, nil, nil)
+	profile := NewMemberService(nil, nil, users, nil, nil, nil, &testutil.MockServerRepo{}, nil, &testutil.MockEventPublisher{}, nil, nil, nil)
 	if _, err := profile.UpdateProfile(ctx, tokens.User.ID, &models.UpdateProfileRequest{
 		Bio: &bio, Language: &tokens.User.Language, DMPrivacy: &tokens.User.DMPrivacy,
 	}); err != nil {

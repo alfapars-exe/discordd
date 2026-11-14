@@ -60,6 +60,28 @@ func TestAuthCacheProductionWiringRevokesPrimedIdentity(t *testing.T) {
 		t.Fatal("identity was not primed in shared owner")
 	}
 	bundle.AuthCache.Set("unrelated", &models.User{ID: "unrelated"})
+	bio := "updated profile fixture"
+	if _, err := bundle.Member.UpdateProfile(ctx, user.ID, &models.UpdateProfileRequest{Bio: &bio}); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := bundle.AuthCache.Get(user.ID); ok {
+		t.Fatal("profile writer did not invalidate shared owner")
+	}
+	if status := request(); status != http.StatusNoContent {
+		t.Fatalf("profile refresh status=%d", status)
+	}
+	if err := bundle.AdminUser.SetPlatformAdmin(ctx, "fixture-admin", user.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := bundle.AuthCache.Get(user.ID); ok {
+		t.Fatal("admin writer did not invalidate shared owner")
+	}
+	if status := request(); status != http.StatusNoContent {
+		t.Fatalf("admin refresh status=%d", status)
+	}
+	if cached, ok := bundle.AuthCache.Get(user.ID); !ok || !cached.IsPlatformAdmin {
+		t.Fatal("admin flag not refreshed through middleware")
+	}
 	if err := bundle.Auth.LogoutAllDevices(ctx, user.ID); err != nil {
 		t.Fatal(err)
 	}

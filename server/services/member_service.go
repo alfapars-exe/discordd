@@ -51,7 +51,6 @@ type MemberService interface {
 	// role-assignment, kick, and ban operations drop the affected user's
 	// cached permissions immediately rather than after permCacheTTL.
 	SetPermInvalidator(inv PermissionInvalidator)
-	SetUserCacheInvalidator(inv UserCacheInvalidator)
 }
 
 // VoiceDisconnecter disconnects a user from voice on kick/ban (ISP).
@@ -80,12 +79,6 @@ type memberService struct {
 	profileAudienceInvalidator ProfileAudienceInvalidator
 	gameActivity               GameActivityPrivacyInvalidator
 	userInvalidator            UserCacheInvalidator
-}
-
-// SetUserCacheInvalidator keeps authenticated /users/me reads fresh after
-// profile writes, including avatar/banner uploads using the same service.
-func (s *memberService) SetUserCacheInvalidator(inv UserCacheInvalidator) {
-	s.userInvalidator = inv
 }
 
 func (s *memberService) SetPermInvalidator(inv PermissionInvalidator) {
@@ -129,9 +122,11 @@ func NewMemberService(
 	hub ws.BroadcastAndManage,
 	voiceKick VoiceDisconnecter,
 	auditLogger AuditWriter,
+	userInvalidator UserCacheInvalidator,
 	profileUpdates ...ProfileUpdateNotifier,
 ) MemberService {
 	s := &memberService{
+		userInvalidator:            userInvalidator,
 		gameActivity:               gameActivity,
 		profileAudienceInvalidator: profileAudienceInvalidator,
 		memberReader:               memberReader{userRepo: userRepo, roleRepo: roleRepo, serverRepo: serverRepo, timeoutRepo: timeoutRepo},

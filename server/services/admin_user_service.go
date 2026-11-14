@@ -33,7 +33,6 @@ type AdminUserService interface {
 	PlatformUnbanUser(ctx context.Context, adminUserID, targetUserID string) error
 	HardDeleteUser(ctx context.Context, adminUserID, targetUserID, reason string) error
 	SetPlatformAdmin(ctx context.Context, adminUserID, targetUserID string, isAdmin bool) error
-	SetUserCacheInvalidator(inv UserCacheInvalidator)
 	SetUploadDir(dir string)
 }
 
@@ -61,20 +60,15 @@ func NewAdminUserService(
 	hub ws.ClientManager,
 	voiceKit VoiceDisconnecter,
 	emailSender email.EmailSender,
+	userInvalidator UserCacheInvalidator,
 ) AdminUserService {
 	return &adminUserService{
-		userRepo:    userRepo,
-		hub:         hub,
-		voiceKit:    voiceKit,
-		emailSender: emailSender,
+		userInvalidator: userInvalidator,
+		userRepo:        userRepo,
+		hub:             hub,
+		voiceKit:        voiceKit,
+		emailSender:     emailSender,
 	}
-}
-
-// SetUserCacheInvalidator wires the auth middleware's user-cache invalidator.
-// Called post-construction in main.go because the middleware is built after
-// the service layer (it depends on the auth service).
-func (s *adminUserService) SetUserCacheInvalidator(inv UserCacheInvalidator) {
-	s.userInvalidator = inv
 }
 
 // invalidateUserCache is nil-safe — a no-op when the invalidator isn't wired.

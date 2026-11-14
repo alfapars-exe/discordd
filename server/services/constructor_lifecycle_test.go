@@ -342,3 +342,23 @@ func TestBackupConstructorLoggingAndDisabledMode(t *testing.T) {
 		t.Fatal("disabled logger changed")
 	}
 }
+
+func TestIdentityWritersRequireCacheInvalidator(t *testing.T) {
+	admin := reflect.TypeOf(NewAdminUserService)
+	if admin.NumIn() != 5 {
+		t.Errorf("admin constructor inputs=%d, want5", admin.NumIn())
+	} else if admin.In(4) != reflect.TypeFor[UserCacheInvalidator]() {
+		t.Error("admin invalidator is not explicit")
+	}
+	member := reflect.TypeOf(NewMemberService)
+	if member.NumIn() != 13 {
+		t.Errorf("member constructor inputs=%d, want13", member.NumIn())
+	} else if member.In(11) != reflect.TypeFor[UserCacheInvalidator]() {
+		t.Error("member invalidator is not explicit")
+	}
+	for _, request := range []reflect.Type{reflect.TypeFor[AdminUserService](), reflect.TypeFor[MemberService]()} {
+		if _, ok := request.MethodByName("SetUserCacheInvalidator"); ok {
+			t.Errorf("request interface %s exposes cache binding", request)
+		}
+	}
+}

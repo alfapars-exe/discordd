@@ -73,7 +73,7 @@ func newMemberHarnessWithPolicies(audience ProfileAudienceInvalidator, activity 
 	tx := roleTestTransaction{&repository.ServerMembershipTxRepos{Server: h.serverRepo, Role: h.roleRepo, User: h.userRepo, Timeout: h.timeoutRepo}}
 	h.svc = NewMemberService(activity, audience,
 		h.userRepo, h.roleRepo, h.banRepo, h.timeoutRepo,
-		h.serverRepo, tx, h.hub, h.voiceKick, nil, h.profileUpdates, // auditLogger — not under test here
+		h.serverRepo, tx, h.hub, h.voiceKick, nil, nil, h.profileUpdates, // auditLogger — not under test here
 	)
 	return h
 }

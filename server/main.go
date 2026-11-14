@@ -220,7 +220,7 @@ func main() {
 	// not here: it fans out to both channelPermService (available now) and
 	// permMw (middleware.PermissionMiddleware, only constructed inside
 	// initRoutes) via services.NewMultiInvalidator, so it needs permMw's
-	// late binding — same pattern as svcs.AdminUser.SetUserCacheInvalidator(svcs.AuthCache)
+	// late binding for route-owned permission caches
 	// below.
 
 	// 9d. voiceService's member-timeout checker (repos.MemberTimeout) is now
@@ -348,17 +348,7 @@ func main() {
 		logx.Fatal("boot", "music worker setup failed", err)
 	}
 
-	// Wire the auth user-cache invalidator into the admin user service so a
-	// platform ban / hard-delete / admin-status change drops the cached user
-	// row immediately, instead of letting a just-banned account keep making
-	// authenticated REST calls until the ~30s cache TTL expires (F-7).
-	svcs.AdminUser.SetUserCacheInvalidator(svcs.AuthCache)
-
-	// Auth credential actions already share the identity-cache owner through
-	// constructor injection. Profile writers still bind that same owner here.
-	// Profile writes must also be visible to the next authenticated /users/me
-	// read, rather than returning the pre-save cached profile for 30 seconds.
-	svcs.Member.SetUserCacheInvalidator(svcs.AuthCache)
+	// Identity writers and middleware already share their constructor-owned cache.
 
 	// Wire the server-level permission cache (middleware/permission.go) into
 	// the same PermissionInvalidator fan-out as channelPermService's

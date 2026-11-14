@@ -149,8 +149,7 @@ func (s *stubMemberService) SetNickname(context.Context, string, string, string,
 	return s.member, nil
 }
 
-func (s *stubMemberService) SetPermInvalidator(services.PermissionInvalidator)     {}
-func (s *stubMemberService) SetUserCacheInvalidator(services.UserCacheInvalidator) {}
+func (s *stubMemberService) SetPermInvalidator(services.PermissionInvalidator) {}
 
 var _ services.MemberService = (*stubMemberService)(nil)
 
@@ -476,7 +475,7 @@ func newRealMemberHandler(t *testing.T, current *models.User) (*MemberHandler, *
 		},
 	}
 	svc := services.NewMemberService(nil, nil, users, nil, nil, nil, &testutil.MockServerRepo{}, nil,
-		&testutil.MockEventPublisher{}, nil, nil)
+		&testutil.MockEventPublisher{}, nil, nil, nil)
 	return NewMemberHandler(svc), &written
 }
 
