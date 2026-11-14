@@ -1843,3 +1843,8 @@ Four real codec/store regressions failed: channelMessageNotifications true/false
 ### RF13 — notification defaults as pure shared contract (2026-11-14)
 
 After the separate channel-notice cache fix, NotificationPreferences and defaults moved byte-identically into a store-free module; existing notification utility imports remain compatible through re-exports. Codec cache-field and boolean lists now derive from those defaults. Round-trip tests cover every default and its boolean opposite, plus unknown-field exclusion.112 tests across6 preference/API/consumer files, production TypeScript+Vite build and targeted ESLint pass. No warning suppression changed; existing audio vendor/WASM and chunk-size warnings remain. Whole RF13 and current-source production acceptance remain open. Receipt: implementation/verification/refactor-rf13-pure-notification-defaults-2026-11-14.json.
+
+
+### RF13 — overlay device flags excluded from account patches (2026-11-14)
+
+Voice slice already classifies compatibility/video/streams/welcome/go-live overlay flags as device-local, but preferences sanitizer omitted those five exclusions. Six codec/store regressions failed: flags survived sanitize and actual account store.set data. The exclusion list is aligned;106 codec/store/consumer tests pass, including outgoing patch containing only masterVolume. This is an action/codec reproduction, not an observed production leak. Behavior fix precedes shared scope-list extraction. Receipt: implementation/verification/refactor-rf13-overlay-device-scope-2026-11-14.json.

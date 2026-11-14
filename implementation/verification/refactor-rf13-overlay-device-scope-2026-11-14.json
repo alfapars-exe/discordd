@@ -1,0 +1,32 @@
+{
+  "source_parent": "fc8d240f",
+  "scope": "RF13 device-only overlay flags excluded from account sync",
+  "before": {
+    "command": "npx vitest run src/stores/preferencesCodec.test.ts src/stores/preferencesStore.test.ts -t 'device-only overlay' --reporter=dot",
+    "failed": 6,
+    "deselected_by_filter": 61
+  },
+  "missing_device_fields": [
+    "voiceOverlayCompatibility",
+    "voiceOverlayVideo",
+    "voiceOverlayStreams",
+    "voiceOverlayWelcome",
+    "voiceOverlayGoLive"
+  ],
+  "change": "Align preferences sanitizer exclusion list with existing voice slice device-local classification",
+  "after": {
+    "command": "npx vitest run src/stores/preferencesCodec.test.ts src/stores/preferencesStore.test.ts src/stores/accountPreferenceConsumers.test.ts --reporter=dot",
+    "exit": 0,
+    "passed": 106
+  },
+  "assertions": [
+    "sanitize strips each missing device-only flag",
+    "store.set does not retain or PATCH those flags while ordinary masterVolume sync remains"
+  ],
+  "limits": [
+    "Reproduced through codec and actual preference store action, not a claim of observed production account leak",
+    "No device setting storage key or account wire field renamed",
+    "Behavior fix separate from following shared scope-list extraction",
+    "Current-source production/native verification remains required"
+  ]
+}

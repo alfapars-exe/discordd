@@ -1,7 +1,7 @@
 import { DEFAULT_NOTIFICATION_PREFERENCES } from "../utils/notificationPreferenceDefaults";
 import { describe, expect, it } from "vitest";
 import { APPEARANCE_DEFAULTS, APPEARANCE_RANGES } from "./appearancePreferences";
-import { cacheable, decodeLegacyAppearance } from "./preferencesCodec";
+import { cacheable, decodeLegacyAppearance, sanitize } from "./preferencesCodec";
 
 describe("account appearance cache", () => {
   it("round-trips all default fields through legacy storage and the account cache", () => {
@@ -37,4 +37,8 @@ it("round-trips every notification default and its boolean opposite from the pur
   )]) {
     expect(cacheable({ notifications: { ...values, unknownField: true, token: "private" } })).toEqual({ notifications: values });
   }
+});
+
+it.each(["voiceOverlayCompatibility", "voiceOverlayVideo", "voiceOverlayStreams", "voiceOverlayWelcome", "voiceOverlayGoLive"])("keeps device-only overlay flag %s out of account preferences", key => {
+  expect(sanitize({ voice_settings: { [key]: true, masterVolume: 65 } })).toEqual({ voice_settings: { masterVolume: 65 } });
 });

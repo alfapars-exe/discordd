@@ -10,6 +10,7 @@ const DEVICE_FIELDS = new Set([
   "voiceOverlayScale", "voiceOverlayPosition", "voiceOverlaySpeakingOnly", "voiceOverlayMode",
   "voiceOverlayPinned",
   "voiceOverlayQuickActions", "voiceOverlayClickableActions",
+  "voiceOverlayCompatibility", "voiceOverlayVideo", "voiceOverlayStreams", "voiceOverlayWelcome", "voiceOverlayGoLive",
   "voiceOverlayActivity",
   "voiceOverlayGameActivityNotifications", "voiceOverlayNowPlayingNotifications",
   "voiceOverlayNotifications",
