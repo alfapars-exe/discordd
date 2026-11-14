@@ -1808,3 +1808,8 @@ Friendship constructor now explicitly takes EmailEnqueuer before its existing po
 ### RF11 — friendship/DM construction cycle removed (2026-11-14)
 
 DM only needs friendship edge reads, so it now consumes the existing repository graph adapter rather than the friendship writer service. The same adapter is parity-tested against FriendshipService.AreFriends for accepted/pending/blocked/missing/error cases. DM is constructed first and injected as the explicit DMRequestAcceptor parameter of FriendshipService; the late setter and cycle are removed, without a mutable holder. Constructor contract regression failed before the change. Existing auto-accept/DM/policy/notification/wiring/startup assertions pass across3 packages, build and vet pass. No privacy policy or wire-field change. Fresh Linux race/native and production CI remain required. Receipt: implementation/verification/refactor-rf11-friendship-dm-cycle-2026-11-14.json.
+
+
+### RF11 — real composed friendship/DM wiring (2026-11-14)
+
+A real file-backed SQLite fixture with embedded migrations now builds initRepositories and initServices directly, without service/repository doubles. Both explicit and mutual-request friendship acceptance change a preexisting pending DM to accepted. The first subsequent DM message is verified persisted with its author/content and the channel remains accepted, exercising the committed friendship reader and auto-accept dependency together. Targeted test and vet pass. All constructor-owned resources are closed before DB cleanup. This is in-process SQLite wiring proof, separate from HTTP/WS and native PostgreSQL. Receipt: implementation/verification/refactor-rf11-friendship-dm-composed-2026-11-14.json.
