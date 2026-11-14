@@ -35,6 +35,17 @@ def stop_previous_backend(api, repo):
     raise SystemExit("Previous backend did not stop; no sources published")
 
 
+def clean_source_commit(expected=None):
+    # Check source provenance before and after snapshotting immutable upload bytes.
+    # Never clean, stage or commit the caller's working tree automatically.
+    if subprocess.check_output(["git", "status", "--porcelain=v1", "--untracked-files=all", "-z"]):
+        raise SystemExit("Source working tree is dirty; use a clean committed checkout; nothing published")
+    source = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    if expected is not None and source != expected:
+        raise SystemExit("Source HEAD changed while preparing the snapshot; nothing published")
+    return source
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--expected-head", default="", help="Reviewed Space commit; required when publishing")
@@ -50,7 +61,7 @@ def main():
     current = api.space_info(repo).sha
     if options.expected_head and current != options.expected_head:
         raise SystemExit("Space HEAD changed; review its new revision before publishing")
-    source = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    source = clean_source_commit()
     paths = subprocess.check_output(["git", "ls-files", "-z"]).decode().split("\0")
     local = {path: Path(path) for path in paths if managed(path)}
     remote = {entry.path: entry for entry in api.list_repo_tree(repo, repo_type="space", revision=current, recursive=True) if hasattr(entry, "blob_id") and managed(entry.path)}
@@ -70,6 +81,7 @@ def main():
             # Bind the operation to the bytes that were reviewed. A later
             # filesystem edit cannot change the content sent by this command.
             additions.append(CommitOperationAdd(path_in_repo=name, path_or_fileobj=data))
+    clean_source_commit(expected=source)
     removals = sorted(set(remote) - set(local))
     plan = {"manifest_version": 2, "source_commit": source, "source_files": source_files, "space_parent": current, "add_or_update": [op.path_in_repo for op in additions], "remove_managed_source": removals, "hub_may_update_lfs_metadata": True}
     plan_hash = hashlib.sha256(json.dumps(plan, sort_keys=True).encode()).hexdigest()

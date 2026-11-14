@@ -56,8 +56,53 @@ class PublishSafetyTests(unittest.TestCase):
         self.stack = contextlib.ExitStack()
         self.addCleanup(self.stack.close)
         self.stack.enter_context(patch.object(release, "HfApi", return_value=self.api))
-        self.stack.enter_context(patch.object(release.subprocess, "check_output", side_effect=lambda args, **kwargs: "source-commit\n" if args[1] == "rev-parse" else b"server/main.go\0"))
+        self.source_statuses = []
+        self.source_heads = []
+        self.stack.enter_context(patch.object(release.subprocess, "check_output", side_effect=self.source_git_output))
         self.stack.enter_context(patch.dict(os.environ, {"HF_TOKEN": "disposable-test-value"}))
+
+    def source_git_output(self, args, **kwargs):
+        if args[1] == "status":
+            return self.source_statuses.pop(0) if self.source_statuses else b""
+        if args[1] == "rev-parse":
+            return self.source_heads.pop(0) if self.source_heads else "source-commit\n"
+        if args[1] == "ls-files":
+            return b"server/main.go\0"
+        self.fail("Unexpected source Git command")
+
+    def test_dirty_tracked_staged_and_untracked_source_refuses_publish(self):
+        digest = self.preview_hash()
+        for status in [b" M server/main.go\0", b"M  server/main.go\0", b"?? server/new.go\0"]:
+            with self.subTest(status=status):
+                self.api.reset_mock()
+                self.source_statuses = [status]
+                with self.assertRaisesRegex(SystemExit, "dirty"):
+                    self.run_command("--publish", "--reviewed-plan-sha256", digest)
+                self.api.pause_space.assert_not_called()
+                self.api.create_commit.assert_not_called()
+                self.api.restart_space.assert_not_called()
+
+    def test_dirty_source_refuses_preview(self):
+        self.source_statuses = [b"?? server/new.go\0"]
+        with self.assertRaisesRegex(SystemExit, "dirty"):
+            self.run_command()
+        self.api.create_commit.assert_not_called()
+
+    def test_source_changes_during_snapshot_refuse_publish(self):
+        digest = self.preview_hash()
+        self.source_statuses = [b"", b" M server/main.go\0"]
+        with self.assertRaisesRegex(SystemExit, "dirty"):
+            self.run_command("--publish", "--reviewed-plan-sha256", digest)
+        self.api.pause_space.assert_not_called()
+        self.api.create_commit.assert_not_called()
+
+    def test_source_head_changes_during_snapshot_refuse_publish(self):
+        digest = self.preview_hash()
+        self.source_heads = ["source-commit\n", "changed-source\n"]
+        with self.assertRaisesRegex(SystemExit, "Source HEAD changed"):
+            self.run_command("--publish", "--reviewed-plan-sha256", digest)
+        self.api.pause_space.assert_not_called()
+        self.api.create_commit.assert_not_called()
 
     def test_verification_receives_exact_publish_result_commit(self):
         output = Path("github-output")
