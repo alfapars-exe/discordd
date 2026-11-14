@@ -2072,3 +2072,9 @@ NewAppLogService now returns AppLogRuntime, retaining ConsumeRecord and Health a
 ### RF11 — explicit bot runtime constructor dependencies (2026-11-14)
 
 Bot construction now declares disconnect, broadcast, membership and permission integrations in `BotRuntimeDependencies`. Production supplies each capability explicitly; standalone fixtures use explicit zero values. Removed the late permission setter and optional runtime type assertions. The constructor regression failed before the change. Existing bot/application scope, invocation, revocation and handler/wiring tests passed (services 3.698s, handlers 1.031s, root 0.855s). `go build ./...`, scoped `go vet` and diff checks passed. This is bounded RF11 evidence; full RF11 acceptance and current-head CI remain open.
+
+### RF11 — combined constructor verification and source-bound CI (2026-11-14)
+
+On `bcf04a08`, `go test ./services ./middleware ./handlers ./ws . -count=1` passed: services 95.950s, middleware 2.124s, handlers 7.471s, ws 5.480s, root 14.885s. This includes constructor, actual cache/friendship composition, startup rollback, shutdown ownership, route manifest and route gate tests present in those packages. Local Windows execution is not Linux race or physical-device proof.
+
+Remote source `f40043e96c8a95465d6d403c7b2b759d4ddcae5e` completed Server CI 43634600863 and all 36 PR checks successfully; receipt: `implementation/verification/refactor-integration-f400-terminal-2026-11-14.json`. Later constructor commits require their own CI. RF11 remains open: comprehensive callback wiring coverage and required/optional dependency classification must still be audited; Hub logger/moderation wiring remains post-service composition because of the service/Hub cycle. Existing name-based setter completeness tests are not execution proof for every callback.
