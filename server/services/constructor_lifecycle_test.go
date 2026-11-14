@@ -1,6 +1,7 @@
 package services
 
 import (
+	"github.com/argeinfina/hichat/ws"
 	"reflect"
 	"testing"
 )
@@ -123,5 +124,24 @@ func TestDMConstructorRequiresEmojiResolver(t *testing.T) {
 	}
 	if factory.In(13) != reflect.TypeFor[EmojiResolver]() {
 		t.Fatal("DM emoji resolver is not explicit")
+	}
+}
+
+func TestRecipientPrivateConstructorsRequireBroadcaster(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		factory reflect.Type
+		inputs  int
+	}{
+		{"spam inbox", reflect.TypeOf(NewSpamInboxService), 7},
+		{"media labels", reflect.TypeOf(NewMediaLabelService), 3},
+	} {
+		if tc.factory.NumIn() != tc.inputs {
+			t.Errorf("%s constructor inputs=%d, want%d", tc.name, tc.factory.NumIn(), tc.inputs)
+			continue
+		}
+		if tc.factory.In(tc.inputs-1) != reflect.TypeFor[ws.Broadcaster]() {
+			t.Errorf("%s broadcaster is not explicit", tc.name)
+		}
 	}
 }

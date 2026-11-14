@@ -323,10 +323,8 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	// per-channel read resolution the message list uses (channelPermService),
 	// a DM message on channel membership (repos.DM).
 	savedService := services.NewSavedService(repos.Saved, repos.Message, repos.Channel, repos.DM, channelPermService)
-	spamInboxService := services.NewSpamInboxService(repository.NewSpamInboxRepository(db), repos.Message, repos.Channel, repos.DM, repos.GroupDM, channelPermService)
-	spamInboxService.SetBroadcaster(hub)
-	mediaLabelService := services.NewMediaLabelService(repository.NewMediaLabelRepository(db), spamInboxService)
-	mediaLabelService.SetBroadcaster(hub)
+	spamInboxService := services.NewSpamInboxService(repository.NewSpamInboxRepository(db), repos.Message, repos.Channel, repos.DM, repos.GroupDM, channelPermService, hub)
+	mediaLabelService := services.NewMediaLabelService(repository.NewMediaLabelRepository(db), spamInboxService, hub)
 	reminderService := services.NewReminderService(repos.Reminder, repos.Message, repos.Channel, repos.DM, channelPermService)
 	userNoteService := services.NewUserNoteService(repos.UserNote, repos.User)
 	personalizationService := services.NewPersonalizationService(repos.Preferences, repos.User, repos.Server, repos.Friendship)
