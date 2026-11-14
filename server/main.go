@@ -238,7 +238,7 @@ func main() {
 		svcs.Voice.StopMaintenance()
 	}
 	defer stopVoiceMaintenance()
-	stopVoiceUsageDelivery := services.StartVoiceUsageDelivery(ownerCtx, svcs.Voice)
+	stopVoiceUsageDelivery := svcs.Voice.StartVoiceUsageDelivery(ownerCtx)
 	defer stopVoiceUsageDelivery()
 	stopVoiceUsageProducers := func() {
 		svcs.Voice.ShutdownUsageProducers()

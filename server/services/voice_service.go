@@ -113,6 +113,7 @@ type VoiceService interface {
 // VoiceRuntime is owned by the composition root; handlers use VoiceService.
 // These shutdown methods join distinct resources in the existing server order.
 type VoiceRuntime interface {
+	StartVoiceUsageDelivery(context.Context) func()
 	VoiceService
 
 	VoiceChannelDeletionHandler
@@ -161,6 +162,7 @@ type forceMoveGrant struct {
 const maxScreenShares = 0
 
 type voiceService struct {
+	usageRecovery      PendingVoiceUsageApplier
 	voiceAccess        repository.VoiceAccessReader
 	sessionsFinalized  bool // guarded by mu; no room keys may be created after terminal cleanup
 	sessionShutdown    sync.Once
@@ -225,6 +227,8 @@ type MemberTimeoutChecker interface {
 // VoiceRuntimeDependencies is selected explicitly by the composition owner.
 // Its zero value disables integrations and persistent app logging.
 type VoiceRuntimeDependencies struct {
+	// Nil disables the durable pending-usage recovery worker.
+	UsageRecovery PendingVoiceUsageApplier
 	// Nil explicitly selects the portable standalone admission/visibility path.
 	VoiceAccess repository.VoiceAccessReader
 	// Nil explicitly retains the standalone cached-resolver path.
@@ -247,6 +251,7 @@ func NewVoiceService(
 	runtime VoiceRuntimeDependencies,
 ) VoiceRuntime {
 	service := &voiceService{
+		usageRecovery:      runtime.UsageRecovery,
 		voiceAccess:        runtime.VoiceAccess,
 		states:             make(map[string]*models.VoiceState),
 		voiceEpoch:         uuid.NewString(),

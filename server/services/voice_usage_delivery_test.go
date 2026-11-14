@@ -27,7 +27,8 @@ func TestVoiceUsageDeliveryStopCancelsAndJoins(t *testing.T) {
 		<-release
 		return false, ctx.Err()
 	}}
-	s := &voiceService{livekitGetter: getter}
+	s := NewVoiceService(nil, getter, nil, nil, nil, nil, nil, nil, nil, nil, VoiceRuntimeDependencies{UsageRecovery: getter}).(*voiceService)
+	t.Cleanup(s.ShutdownVoiceStateFanout)
 	parent, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	stop := startVoiceUsageDelivery(parent, s, time.Millisecond)
@@ -65,7 +66,7 @@ func TestVoiceUsageDeliveryStopCancelsAndJoins(t *testing.T) {
 
 func TestVoiceUsageDeliveryBatchIsBounded(t *testing.T) {
 	calls := 0
-	s := &voiceService{livekitGetter: &pendingUsageGetter{apply: func(context.Context) (bool, error) { calls++; return true, nil }}}
+	s := &voiceService{usageRecovery: &pendingUsageGetter{apply: func(context.Context) (bool, error) { calls++; return true, nil }}}
 	s.deliverPendingVoiceUsage(context.Background())
 	if calls != 32 {
 		t.Fatalf("batch calls=%d, want32", calls)
@@ -75,5 +76,19 @@ func TestVoiceUsageDeliveryBatchIsBounded(t *testing.T) {
 	s.deliverPendingVoiceUsage(ctx)
 	if calls != 32 {
 		t.Fatal("cancelled batch called repository")
+	}
+}
+
+func TestVoiceUsageRecoveryExplicitDisabledModeDoesNotDiscoverQueue(t *testing.T) {
+	calls := 0
+	getter := &pendingUsageGetter{apply: func(context.Context) (bool, error) { calls++; return false, nil }}
+	service := NewVoiceService(nil, getter, nil, nil, nil, nil, nil, nil, nil, nil, VoiceRuntimeDependencies{}).(*voiceService)
+	t.Cleanup(service.ShutdownVoiceStateFanout)
+	stop := service.StartVoiceUsageDelivery(context.Background())
+	stop()
+	stop()
+	service.deliverPendingVoiceUsage(context.Background())
+	if calls != 0 {
+		t.Fatal("disabled recovery rediscovered livekit getter capability")
 	}
 }

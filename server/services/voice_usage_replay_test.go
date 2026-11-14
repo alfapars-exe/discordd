@@ -160,7 +160,7 @@ func TestVoiceUsagePostgresServiceHandoffSurvivesApplyFailure(t *testing.T) {
 	if _, err := db.ExecContext(ctx, `DROP TRIGGER reject_handoff_fixture ON livekit_monthly_usage`); err != nil {
 		t.Fatal(err)
 	}
-	recovered := &voiceService{livekitGetter: repository.NewSQLiteLiveKitRepo(db)}
+	recovered := &voiceService{usageRecovery: repository.NewSQLiteLiveKitRepo(db)}
 	stop := startVoiceUsageDelivery(ctx, recovered, time.Millisecond)
 	t.Cleanup(stop)
 	for {
@@ -253,7 +253,7 @@ func assertConcurrentUsageRecovery(t *testing.T, ctx context.Context, recovered 
 
 func assertOwnedPendingUsageRecovery(t *testing.T, ctx context.Context, db *sql.DB, repo repository.LiveKitRepository) {
 	t.Helper()
-	workerService := &voiceService{livekitGetter: repository.NewSQLiteLiveKitRepo(db)}
+	workerService := &voiceService{usageRecovery: repository.NewSQLiteLiveKitRepo(db)}
 	stopWorker := startVoiceUsageDelivery(ctx, workerService, time.Millisecond)
 	t.Cleanup(stopWorker)
 	for {
@@ -588,7 +588,7 @@ func TestVoiceUsagePostgresShutdownRecoversFailedApplication(t *testing.T) {
 		t.Fatal(err)
 	}
 	freshRepo := repository.NewSQLiteLiveKitRepo(db)
-	stop := startVoiceUsageDelivery(ctx, &voiceService{livekitGetter: freshRepo}, time.Millisecond)
+	stop := startVoiceUsageDelivery(ctx, &voiceService{usageRecovery: freshRepo}, time.Millisecond)
 	t.Cleanup(stop)
 	for {
 		var applied bool

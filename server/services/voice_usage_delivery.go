@@ -6,29 +6,28 @@ import (
 	"time"
 )
 
-type pendingVoiceUsageApplier interface {
+type PendingVoiceUsageApplier interface {
 	ApplyNextVoiceUsage(context.Context) (bool, error)
 }
 
 // StartVoiceUsageDelivery owns recovery of durable pending usage until Stop.
 // HTTP and WebSocket producers must drain before Stop and database shutdown.
-func StartVoiceUsageDelivery(parent context.Context, service VoiceService) func() {
-	return startVoiceUsageDelivery(parent, service, time.Second)
+func StartVoiceUsageDelivery(parent context.Context, service interface{ StartVoiceUsageDelivery(context.Context) func() }) func() {
+	return service.StartVoiceUsageDelivery(parent)
 }
-func startVoiceUsageDelivery(parent context.Context, service VoiceService, interval time.Duration) func() {
-	s, ok := service.(*voiceService)
-	if !ok {
-		return func() { /* Alternate voice implementation owns no worker here. */ }
-	}
-	if _, ok = s.livekitGetter.(pendingVoiceUsageApplier); !ok {
-		return func() { /* Legacy getter has no durable pending usage queue. */ }
+func (s *voiceService) StartVoiceUsageDelivery(parent context.Context) func() {
+	return startVoiceUsageDelivery(parent, s, time.Second)
+}
+func startVoiceUsageDelivery(parent context.Context, s *voiceService, interval time.Duration) func() {
+	if s.usageRecovery == nil {
+		return func() {}
 	}
 	s.usageWorker.startParent(parent, interval, s.deliverPendingVoiceUsage)
 	return s.usageWorker.stop
 }
 func (s *voiceService) deliverPendingVoiceUsage(parent context.Context) {
-	store, ok := s.livekitGetter.(pendingVoiceUsageApplier)
-	if !ok {
+	store := s.usageRecovery
+	if store == nil {
 		return
 	}
 	ctx, cancel := context.WithTimeout(parent, 10*time.Second)
