@@ -22,7 +22,7 @@ import (
 // that only fires on multipart requests (20/min); text-only DMs don't touch it.
 type DMHandler struct {
 	dmService       services.DMRequestService
-	dmUploadService services.DMUploadService
+	dmUploadService services.DMUploadRequestService
 	maxUploadSize   int64
 	messageLimiter  *ratelimit.MessageRateLimiter
 	uploadLimiter   *ratelimit.MessageRateLimiter
@@ -30,7 +30,7 @@ type DMHandler struct {
 
 func NewDMHandler(
 	dmService services.DMRequestService,
-	dmUploadService services.DMUploadService,
+	dmUploadService services.DMUploadRequestService,
 	maxUploadSize int64,
 	messageLimiter *ratelimit.MessageRateLimiter,
 	uploadLimiter *ratelimit.MessageRateLimiter,

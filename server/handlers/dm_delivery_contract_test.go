@@ -7,6 +7,7 @@ import (
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/services"
+	"mime/multipart"
 	"net/http/httptest"
 	"reflect"
 	"testing"
@@ -122,5 +123,15 @@ func TestDMReplayHTTPValidatesAndPreservesScope(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestDMHandlerDeclaresUploadStaging(t *testing.T) {
+	required := reflect.TypeFor[interface {
+		Stage(context.Context, multipart.File, *multipart.FileHeader, bool) (*models.DMAttachment, *models.DMUploadDigest, error)
+		Discard(*models.DMAttachment)
+	}]()
+	if !reflect.TypeOf(NewDMHandler).In(1).Implements(required) {
+		t.Fatal("DM HTTP upload dependency hides staging")
 	}
 }

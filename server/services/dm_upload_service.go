@@ -23,9 +23,16 @@ type DMUploadService interface {
 	Upload(ctx context.Context, dmMessageID string, file multipart.File, header *multipart.FileHeader, isEncrypted bool) (*models.DMAttachment, error)
 }
 
+// DMUploadRequestService declares staging and cleanup required by HTTP sends.
+type DMUploadRequestService interface {
+	DMUploadService
+	Stage(context.Context, multipart.File, *multipart.FileHeader, bool) (*models.DMAttachment, *models.DMUploadDigest, error)
+	Discard(*models.DMAttachment)
+}
+
 // DMUploadRuntime retains staging maintenance ownership at composition.
 type DMUploadRuntime interface {
-	DMUploadService
+	DMUploadRequestService
 	StartDMUploadCleanup(context.Context) func()
 }
 
