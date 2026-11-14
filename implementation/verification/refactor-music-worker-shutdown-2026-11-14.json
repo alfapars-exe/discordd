@@ -1,7 +1,7 @@
 {
   "source_head": "fe6852fdd11e070073e56b346856c8b44c4839c5",
   "branch": "fix/music-worker-shutdown",
-  "state": "pushed; draft PR not yet opened",
+  "state": "published_draft_ci_pending",
   "before": "actual Enqueue with blocked playback fails StopAll returned before accepted playback worker exited",
   "implementation": [
     "serialize terminal admission and work registration under service mutex",
@@ -17,15 +17,23 @@
     "initial_integrated_full": "failed existing late-admission sentinel assertion; fixed product error rather than weakening assertion",
     "post_compatibility_canonical_targeted_seconds": 2.675,
     "post_compatibility_integrated_targeted_seconds": 2.716,
-    "canonical_full_final": "running session40360",
-    "integrated_full_final": "running session1607",
+    "canonical_full_final": {
+      "status": "passed",
+      "services_seconds": 81.591,
+      "logx": "cached pass"
+    },
+    "integrated_full_final": {
+      "status": "passed",
+      "services_seconds": 82.588,
+      "logx": "cached pass"
+    },
     "canonical_vet_build_windows_linux_lint": "passed before sentinel compatibility follow-up",
     "integrated_vet_build_lint": "passed before sentinel compatibility follow-up"
   },
   "remaining": [
-    "complete current-source full services checks",
-    "Linux race and CI",
-    "late provider callbacks and real media/process acceptance",
+    "Linux race and complete current-source CI",
+    "real provider/media/process and physical-device acceptance",
     "global refactor and final combined acceptance"
-  ]
+  ],
+  "pr": "https://github.com/alfapars-exe/discordd/pull/304"
 }
