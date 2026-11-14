@@ -1542,3 +1542,7 @@ Birleşik fixture artık test executable’ında `main()` çağırmaz; mutlak ve
 ### 2026-11-14 — Restart kabulü normal/native race başarılı
 
 `956c95ab` native iş 132259056257 SUCCESS: normal süreç 4,21 saniye PASS, tam kredi satırı restart sonrası aynı (`retained_credit=true`), iki gözlemde credits1/pending0/applied1 ve usage2=ledger2. Ayrı native race adımı 17,227 saniye PASS. Tam kanıt `implementation/verification/refactor-pr298-956-native-restart-success-2026-11-14.json`. Tüm CI terminal değil; iki repository shard’ı sürüyor. Kanıt hâlâ üretim main’ini çağıran test executable’ı içindir; ayrı `go build` binary hazırlığı henüz native çalıştırılmadı.
+
+### 2026-11-14 — Terminal restart kaynağı
+
+`956c95ab` PR #298 terminal 36/36 SUCCESS, Server CI 43534190503 terminal 31/31 SUCCESS; kaynak-bağlı tam kayıt `implementation/verification/refactor-pr298-956-terminal-2026-11-14.json`. Ayrı üretim binary hazırlığı kanonik ağaçta da test derleme/vet/lint 0 sorun aldı, henüz push/native kabul yok. Birleşik tam taramada izlenmeyen coverage raporları üçüncü taraf innerHTML nedeniyle BLOK üretti; bu çıktılar korunuyor. CI temiz checkout kapsamını eşleyen `1dfb78e4` izlenen kaynak arşivinde tam tarama hâlen çalışıyor (exec session49944); manifest50 geçerli, sonuç bekleniyor. Bu ayrım ürün kodu hatasını gizleyen yeni exclude veya istisna eklemez.
