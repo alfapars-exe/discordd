@@ -222,6 +222,7 @@ type musicBotService struct {
 	sessions         MusicSessionStore
 	requesterPrivacy MusicRequesterPrivacyStore
 	legacyEnqueue    MusicLegacyEnqueueStore
+	controls         MusicControlStore
 	roomKeys         MusicRoomKeySource
 	audience         MusicAudienceDependencies
 
@@ -300,6 +301,7 @@ func NewMusicBotService(
 	roomKeys MusicRoomKeySource,
 	requesterPrivacy MusicRequesterPrivacyStore,
 	legacyEnqueue MusicLegacyEnqueueStore,
+	controls MusicControlStore,
 	audience ...MusicAudienceDependencies,
 ) MusicBotRuntime {
 	service := &musicBotService{
@@ -315,6 +317,7 @@ func NewMusicBotService(
 		sessions:         sessions,
 		requesterPrivacy: requesterPrivacy,
 		legacyEnqueue:    legacyEnqueue,
+		controls:         controls,
 		roomKeys:         roomKeys,
 		extractSem:       make(chan struct{}, maxConcurrentMusicExtractions),
 	}
@@ -922,7 +925,7 @@ func (s *musicBotService) rawMusicState(ctx context.Context, channelID string) (
 		restored, ok := s.restored[channelID]
 		s.mu.RUnlock()
 		if !ok {
-			if store, yes := s.sessions.(musicControlStore); yes {
+			if store := s.controls; store != nil {
 				head, err := store.MusicControlHead(ctx, channelID)
 				if err != nil {
 					return nil, err
@@ -1193,7 +1196,7 @@ func (s *musicBotService) getOrCreateBot(ctx context.Context, serverID, channelI
 		lifecycleLock := s.channelLifecycleLock(channelID)
 		lifecycleLock.Lock()
 		var head *models.MusicControlHead
-		if store, ok := s.sessions.(musicControlStore); ok {
+		if store := s.controls; store != nil {
 			head, err = store.MusicControlHead(ctx, channelID)
 			if err != nil {
 				lifecycleLock.Unlock()

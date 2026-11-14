@@ -109,7 +109,7 @@ func TestMusicYouTubeSearchLiveAcceptance(t *testing.T) {
 	svc := NewMusicBotService(
 		&stubChannelGetter{channel: &models.Channel{ID: channelID, ServerID: serverID, Type: models.ChannelTypeVoice}},
 		lk, nil, &testutil.MockBroadcaster{}, stubMusicUserGetter{}, key, nil, nil,
-		staticMusicRoomKey{passphrase: "music-live-smoke"}, nil, nil,
+		staticMusicRoomKey{passphrase: "music-live-smoke"}, nil, nil, nil,
 	)
 	defer svc.Stop(channelID)
 	enqueued, err := svc.Enqueue(ctx, musicSearchSmokeUserID, channelID, selected.URL)

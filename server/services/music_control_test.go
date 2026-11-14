@@ -33,6 +33,7 @@ func guardedMusicFixture(t *testing.T) (*musicBotService, musicControlStore) {
 	svc.sessions = store
 	svc.requesterPrivacy = store
 	svc.legacyEnqueue = store
+	svc.controls = store
 	svc.bots["ch"].currentTrack = &models.MusicTrack{QueueItemID: uuid.NewString(), DurationSeconds: 100, VideoID: "current"}
 	return svc, svc.sessions.(musicControlStore)
 }
@@ -212,7 +213,9 @@ func TestMusicControlTransientFailureHasNoSuccessReceipt(t *testing.T) {
 
 func TestMusicControlFailedReceiptDoesNotApplyPlaybackEffect(t *testing.T) {
 	svc, store := guardedMusicFixture(t)
-	svc.sessions = failedMusicCommandStore{svc.sessions, store}
+	fault := failedMusicCommandStore{svc.sessions, store}
+	svc.sessions = fault
+	svc.controls = fault
 	bot := svc.bots["ch"]
 	var cancellations atomic.Int32
 	bot.cancelFn = func() { cancellations.Add(1) }
@@ -268,6 +271,7 @@ func TestMusicControlAdoptionWinningAfterLegacyPrecheckRejectsEveryMutation(t *t
 				}
 			}
 			svc.sessions = wrapper
+			svc.controls = wrapper
 			var err error
 			switch action {
 			case "skip":
@@ -350,8 +354,25 @@ func (failedMusicHeadStore) MusicControlHead(context.Context, string) (*models.M
 func TestMusicControlInactiveStatePropagatesStoreFailure(t *testing.T) {
 	svc, store := guardedMusicFixture(t)
 	svc.bots = map[string]*botInstance{}
-	svc.sessions = failedMusicHeadStore{svc.sessions, store}
+	fault := failedMusicHeadStore{svc.sessions, store}
+	svc.sessions = fault
+	svc.controls = fault
 	if state, err := svc.GetStateWithError(context.Background(), "ch"); err == nil || state != nil {
 		t.Fatalf("store failure reported inactive success: %#v %v", state, err)
+	}
+}
+
+func TestMusicControlExplicitDisabledSelection(t *testing.T) {
+	capable := failedMusicHeadStore{}
+	service := &musicBotService{sessions: capable}
+	if err := service.CheckLegacyControl(context.Background(), "ch"); err != nil {
+		t.Fatalf("disabled control rediscovered: %v", err)
+	}
+	if _, err := service.controlStore(); err == nil {
+		t.Fatal("disabled protocol store reported available")
+	}
+	service.controls = capable
+	if err := service.CheckLegacyControl(context.Background(), "ch"); err == nil {
+		t.Fatal("explicit provider failure ignored")
 	}
 }

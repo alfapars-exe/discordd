@@ -72,7 +72,9 @@ func TestMusicRestoredQueueFailureAndAuthorizationPreserveState(t *testing.T) {
 			ctx := context.Background()
 			switch kind {
 			case "storage":
-				s.sessions = failedMusicCommandStore{MusicSessionStore: s.sessions, musicControlStore: store}
+				fault := failedMusicCommandStore{MusicSessionStore: s.sessions, musicControlStore: store}
+				s.sessions = fault
+				s.controls = fault
 			case "access":
 				checks := 0
 				ctx = WithMusicAccessCheck(ctx, func(context.Context) error {
@@ -101,6 +103,7 @@ func TestMusicRestoredQueueFailureAndAuthorizationPreserveState(t *testing.T) {
 			}
 			if kind == "storage" {
 				s.sessions = s.sessions.(failedMusicCommandStore).MusicSessionStore
+				s.controls = store
 				if _, err := s.ApplyMusicCommand(context.Background(), "actor", "ch", cmd); err != nil {
 					t.Fatalf("retry after storage recovery: %v", err)
 				}

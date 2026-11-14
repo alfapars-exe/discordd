@@ -730,3 +730,9 @@ func TestMusicConstructorDeclaresLegacyEnqueueWriter(t *testing.T) {
 		t.Fatal("music constructor hides legacy enqueue writer")
 	}
 }
+
+func TestMusicConstructorDeclaresDurableControl(t *testing.T) {
+	if reflect.TypeOf(NewMusicBotService).In(11) != reflect.TypeFor[MusicControlStore]() {
+		t.Fatal("music constructor hides durable control provider")
+	}
+}
