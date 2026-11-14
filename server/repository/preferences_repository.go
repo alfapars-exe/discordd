@@ -22,8 +22,14 @@ type PreferencesBatchReader interface {
 	GetMany(context.Context, []string) (map[string]*models.UserPreferences, error)
 }
 
+// StrictPreferencesBatchReader rejects malformed preferences for privacy decisions.
+type StrictPreferencesBatchReader interface {
+	GetManyStrict(context.Context, []string) (map[string]*models.UserPreferences, error)
+}
+
 // PreferencesStore retains bounded reads at the composition boundary.
 type PreferencesStore interface {
 	PreferencesRepository
 	PreferencesBatchReader
+	StrictPreferencesBatchReader
 }

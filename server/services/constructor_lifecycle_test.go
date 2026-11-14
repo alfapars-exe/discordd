@@ -742,3 +742,10 @@ func TestServerDMPolicyDeclaresTransactionReaders(t *testing.T) {
 		t.Fatal("DM policy hides transaction reader rebinding")
 	}
 }
+
+func TestProfileAudienceDeclaresStrictPreferenceReads(t *testing.T) {
+	required := reflect.TypeFor[profilePreferenceBatchReader]()
+	if !reflect.TypeOf(NewProfileAudiencePolicy).In(0).Implements(required) || !reflect.TypeOf(repository.NewSQLitePreferencesRepo).Out(0).Implements(required) {
+		t.Fatal("profile policy/factory hides strict bulk preferences")
+	}
+}

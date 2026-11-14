@@ -17,8 +17,11 @@ type profilePreferenceReader interface {
 	Get(context.Context, string) (*models.UserPreferences, error)
 }
 
-type profilePreferenceBatchReader interface {
-	GetManyStrict(context.Context, []string) (map[string]*models.UserPreferences, error)
+type profilePreferenceBatchReader = repository.StrictPreferencesBatchReader
+
+type profileAudiencePreferenceReader interface {
+	profilePreferenceReader
+	profilePreferenceBatchReader
 }
 
 type profileFriendshipReader interface {
@@ -61,12 +64,12 @@ type ProfileAudienceServicePolicy interface {
 }
 
 type profileAudiencePolicy struct {
-	prefs   profilePreferenceReader
+	prefs   profileAudiencePreferenceReader
 	friends profileFriendshipReader
 	servers profileServerReader
 }
 
-func NewProfileAudiencePolicy(prefs profilePreferenceReader, friends profileFriendshipReader, servers profileServerReader) ProfileAudienceServicePolicy {
+func NewProfileAudiencePolicy(prefs profileAudiencePreferenceReader, friends profileFriendshipReader, servers profileServerReader) ProfileAudienceServicePolicy {
 	return &profileAudiencePolicy{prefs: prefs, friends: friends, servers: servers}
 }
 
@@ -302,10 +305,6 @@ func (p *profileAudiencePolicy) CanViewInServerMany(ctx context.Context, viewerI
 	if p.prefs == nil || p.friends == nil || p.servers == nil {
 		return nil, errors.New("profile audience: required reader is unavailable")
 	}
-	batchPrefs, ok := p.prefs.(profilePreferenceBatchReader)
-	if !ok {
-		return nil, errors.New("profile audience: batch preference reader is unavailable")
-	}
 	viewerMember, err := p.servers.IsMember(ctx, serverID, viewerID)
 	if err != nil {
 		return nil, err
@@ -345,7 +344,7 @@ func (p *profileAudiencePolicy) CanViewInServerMany(ctx context.Context, viewerI
 		}
 		return result, nil
 	}
-	prefs, err := batchPrefs.GetManyStrict(ctx, targets)
+	prefs, err := p.prefs.GetManyStrict(ctx, targets)
 	if err != nil {
 		return nil, err
 	}
