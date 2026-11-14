@@ -1898,3 +1898,8 @@ A failing regression showed the new resolver bounded constant references but acc
 ### RF05 — dynamic channel search producer/test mapping (2026-11-14)
 
 Unresolved PostgreSQL channel count/page expressions map to shared bound conditions, optional explicit channel and dynamic allowed-channel IN list. Three actual repository tests pass on both SQLite and dedicated PostgreSQL18.6 with zero skips: count/data filtering and intersection, empty allow-list, stable equal-rank timestamp pagination. Source hashes and producer locations recorded. This proves those shared contracts, not identical relevance/ILIKE semantics or DM search coverage. Temporary container stopped. Full RF05 remains open. Receipt: implementation/verification/refactor-rf05-dynamic-channel-search-mapping-2026-11-14.json.
+
+
+### RF05 — dynamic DM search result contract (2026-11-14)
+
+New real repository contract covers cross-channel count/page isolation, equal-content reverse append order, source sequence, beyond-end offset and empty/no-match queries. It passes on SQLite and dedicated PostgreSQL18.6 with no skips. Temporary container stopped. This verifies shared result invariants, not identical relevance/ILIKE semantics; full RF05 remains open. Receipt: implementation/verification/refactor-rf05-dm-search-contract-2026-11-14.json.

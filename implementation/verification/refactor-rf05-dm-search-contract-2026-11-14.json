@@ -1,0 +1,21 @@
+{
+  "source_parent": "f7b318e6",
+  "family": "Dynamic DM search count/page producer postgres_search.go",
+  "test": "TestDMSearchDialectContractChannelCountAndPages",
+  "assertions": [
+    "Other DM channel excluded from count and page",
+    "Equal-content pages follow reverse append order with authoritative source sequence",
+    "Offset beyond end retains count and has no rows",
+    "Empty/missing term yields no rows and zero count"
+  ],
+  "validation": {
+    "sqlite_exit": 0,
+    "postgres18_6_exit": 0,
+    "skips": 0
+  },
+  "environment": "Owned temporary loopback PostgreSQL18.6 container stopped; sslmode=disable, Windows non-race.",
+  "limits": [
+    "Relevance/ILIKE semantic identity not asserted",
+    "Complete RF05 query-family coverage remains open"
+  ]
+}
