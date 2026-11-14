@@ -1,0 +1,21 @@
+{
+  "scope": "RF11 device and E2EE domain composition extraction",
+  "preserved": [
+    "DeviceTxRunner against the same SQL database",
+    "Shared device, membership, channel and permission providers",
+    "Backup integrity HKDF derivation from the same server master key",
+    "No new worker or shutdown ownership"
+  ],
+  "checks": {
+    "root": "PASS startup/rollback/routes/callbacks/real friendship-DM, 1.340s",
+    "services": "PASS Test.*(Device|E2EE|KeyBackup|GroupSession), 2.773s",
+    "build": "PASS go build ./...",
+    "vet": "PASS go vet .",
+    "reviewed_sql_manifest": "PASS 50 exact records"
+  },
+  "limits": [
+    "Required composition inputs and repository matrix still to implement",
+    "Service tests do not prove physical device interoperability",
+    "Current remote CI excludes this local extraction; RF11 and overall refactor remain open"
+  ]
+}

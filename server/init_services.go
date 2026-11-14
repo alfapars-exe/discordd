@@ -6,7 +6,6 @@ import (
 
 	"github.com/argeinfina/hichat/config"
 	"github.com/argeinfina/hichat/middleware"
-	"github.com/argeinfina/hichat/pkg/crypto"
 	"github.com/argeinfina/hichat/pkg/email"
 	"github.com/argeinfina/hichat/pkg/ratelimit"
 	"github.com/argeinfina/hichat/repository"
@@ -294,11 +293,10 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	reportService := services.NewReportService(repos.Report, repos.User, messageService, dmService, repos.GroupDM)
 	reportUploadService := services.NewReportUploadService(repos.Report, cfg.Upload.Dir, cfg.Upload.MaxSize)
 
-	deviceService := services.NewDeviceService(repos.Device, repository.NewDeviceTxRunner(db), hub, repos.Server)
-	// E2EE key-backup integrity MAC key (P0-BD-01): an HKDF subkey of the
-	// server master key, so a DB-only tamper of a stored backup is detectable.
-	backupHMACKey := crypto.DeriveBackupHMACKey(encryptionKey)
-	e2eeService := services.NewE2EEService(repos.E2EEBackup, repos.GroupSession, repos.Device, repos.Server, hub, repos.Channel, channelPermService, backupHMACKey)
+	deviceSecurity := initDeviceSecurityServices(deviceSecurityDependencies{
+		Database: db, Repositories: repos, Hub: hub, Permissions: channelPermService, EncryptionKey: encryptionKey,
+	})
+	deviceService, e2eeService := deviceSecurity.Device, deviceSecurity.E2EE
 
 	adminUserService := services.NewAdminUserService(repos.User, hub, voiceService, emailSender, authCache)
 	adminUserService.SetUploadDir(cfg.Upload.Dir)
