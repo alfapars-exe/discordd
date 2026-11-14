@@ -1691,3 +1691,16 @@ kaynak etiketsiz eski kanal yedeklerinin geçmiş uyumluluğu, güncel adayın t
 kontrolleri ve diğer RF kartlarının madde madde kabul denetimi. Eski KDF/format
 sabit fixture'larının anahtarları geri yüklemesi, eski geçmişin okunabildiği
 anlamına gelmiyor. 248 ürün davranışı topluca kabul edilmiş sayılmadı.
+
+14 Kasım devam doğrulaması: `c9ddad08` CI'ında 35/36 kontrol geçti. Üretim
+kurtarma testi yedek oluşturmayı, yanlış parola reddini, kimlik parmak izini ve
+ilk geçmiş mesajını doğruladı; yalnız yenileme sonrası aynı kanalda boş gövde
+kaldı. Mevcut anahtarlar hazır olduğunda erken geçmişi yenileyen yol eklendi.
+Oturum bu sırada değişirse yenileme çalışmıyor. Son yerel birleşik koşu 263/263.
+
+Kaynak etiketsiz eski kayıt için salt okunur imza/AEAD doğrulaması eklendi.
+Yükseltme yalnız aynı mesaj/kanal/zaman ve doğrulanmış aynı metin için geçerli;
+canlı replay durumu değiştirilmez. Düzenlenmiş eski kayıtlar, ekler ve eksik
+başlangıç anahtarı bu otomatik yolun dışında kalır. Üretim E2E artık hem yeni
+etiketli hem test fixture'ında etiketi kaldırılmış yedekle geri yükleme ve
+sayfa yenilemesini sınayacak. Bu iki yeni tarayıcı sonucu henüz bekleniyor.
