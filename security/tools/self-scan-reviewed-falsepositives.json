@@ -340,23 +340,23 @@
     {
       "rule": "go.sql-concat",
       "path": "server/services/channel_delivery.go",
-      "file_sha256": "853a5f2445706bd61a61eabfd27a94af6d180bd003a78752adfa5f4c3cc67a44",
+      "file_sha256": "c25d859eb2359348bdf6dedb354bff883f5954923912d695209b34fe77f78a54",
       "line_sha256": "b9e0dcf41d9c6f4062cda62024095077af22625d7f722a3e1b4a89c426369e0a",
       "reason": "The exact match contains fixed SQL arithmetic for attempt counts and lease timestamps, with no SQL string interpolation.",
-      "proof_ref": "server/services/channel_delivery.go:228"
+      "proof_ref": "server/services/channel_delivery.go:250"
     },
     {
       "rule": "go.sql-concat",
       "path": "server/services/channel_delivery.go",
-      "file_sha256": "853a5f2445706bd61a61eabfd27a94af6d180bd003a78752adfa5f4c3cc67a44",
+      "file_sha256": "c25d859eb2359348bdf6dedb354bff883f5954923912d695209b34fe77f78a54",
       "line_sha256": "11bc8e7a1de4aeca027449fff5f2c52dc0b81088401995e892fcac6344f7d84c",
       "reason": "The exact match contains fixed SQL arithmetic for attempt counts and lease timestamps, with no SQL string interpolation.",
-      "proof_ref": "server/services/channel_delivery.go:239"
+      "proof_ref": "server/services/channel_delivery.go:264"
     },
     {
       "rule": "go.sql-concat",
       "path": "server/services/channel_delivery_test.go",
-      "file_sha256": "070183bf69ad97c13fa1f3152e0b69c1afbcf84b33277c4f619967c74f4e1a3d",
+      "file_sha256": "2690a110c96ea50cdff384cfee7ea98e747a36ae9b7ffa360bdb03b2f33a6652",
       "line_sha256": "84d8756516bb6cfbe7e03f96c86374a4ef2a132cc82930355a342be08459a27d",
       "reason": "The schema name consists only of a compile-time prefix and locally generated Unix nanoseconds. Other matches are fixed SQL timestamp arithmetic without interpolation.",
       "proof_ref": "server/services/channel_delivery_test.go:46"
@@ -364,10 +364,10 @@
     {
       "rule": "go.sql-concat",
       "path": "server/services/channel_delivery_test.go",
-      "file_sha256": "070183bf69ad97c13fa1f3152e0b69c1afbcf84b33277c4f619967c74f4e1a3d",
+      "file_sha256": "2690a110c96ea50cdff384cfee7ea98e747a36ae9b7ffa360bdb03b2f33a6652",
       "line_sha256": "55e1564aa635586019b987571e673133701e754b8ae5c9d29dc72d9c4d73e489",
       "reason": "The schema name consists only of a compile-time prefix and locally generated Unix nanoseconds. Other matches are fixed SQL timestamp arithmetic without interpolation.",
-      "proof_ref": "server/services/channel_delivery_test.go:241"
+      "proof_ref": "server/services/channel_delivery_test.go:240"
     },
     {
       "rule": "go.sql-concat",

@@ -97,7 +97,7 @@ func newTestMessageService(
 		noopReadStateRepo{}, noopTimeoutRepo{},
 		runner, hub, permResolver,
 		nil, // auditLogger — not under test here
-		&testutil.MockNotificationRepo{},
+		&testutil.MockNotificationRepo{}, nil,
 	)
 }
 
@@ -898,7 +898,7 @@ func TestMessageCreate_TimedOutUserBlocked(t *testing.T) {
 			},
 		},
 		nil, // auditLogger — not under test here
-		&testutil.MockNotificationRepo{},
+		&testutil.MockNotificationRepo{}, nil,
 	)
 
 	req := &models.CreateMessageRequest{Content: "hello"}
@@ -953,7 +953,7 @@ func TestMessageCreate_DMChannelSkipsTimeoutCheck(t *testing.T) {
 			},
 		},
 		nil, // auditLogger — not under test here
-		&testutil.MockNotificationRepo{},
+		&testutil.MockNotificationRepo{}, nil,
 	)
 
 	req := &models.CreateMessageRequest{Content: "hello"}
@@ -1012,7 +1012,7 @@ func TestMessageUpdate_TimedOutUserBlocked(t *testing.T) {
 			},
 		},
 		nil, // auditLogger — not under test here
-		&testutil.MockNotificationRepo{},
+		&testutil.MockNotificationRepo{}, nil,
 	)
 
 	req := &models.UpdateMessageRequest{Content: "edited"}
@@ -1062,7 +1062,7 @@ func TestMessageUpdate_DMChannelSkipsTimeoutCheck(t *testing.T) {
 			},
 		},
 		nil, // auditLogger — not under test here
-		&testutil.MockNotificationRepo{},
+		&testutil.MockNotificationRepo{}, nil,
 	)
 
 	req := &models.UpdateMessageRequest{Content: "edited"}

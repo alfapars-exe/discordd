@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"database/sql"
 	"github.com/argeinfina/hichat/config"
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/repository"
@@ -452,5 +453,15 @@ func TestOnlineFriendConstructorDeclaresGuardedWriterAndCandidateReader(t *testi
 	output := reflect.TypeOf(repository.NewSQLiteNotificationRepo).Out(0)
 	if !output.Implements(factory.In(3)) || !output.Implements(factory.In(6)) {
 		t.Fatal("production notification factory hides presence capabilities")
+	}
+}
+
+func TestMessageConstructorDeclaresDurableDeliveryDatabase(t *testing.T) {
+	factory := reflect.TypeOf(NewMessageService)
+	if factory.NumIn() != 16 {
+		t.Fatalf("message constructor inputs=%d want16", factory.NumIn())
+	}
+	if factory.In(15) != reflect.TypeFor[*sql.DB]() {
+		t.Fatal("durable delivery database must be explicit")
 	}
 }

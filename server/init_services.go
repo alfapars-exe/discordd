@@ -253,18 +253,21 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	// before construction.
 	channelService.SetUploadDir(cfg.Upload.Dir)
 	categoryService := services.NewCategoryService(repos.Category, hub)
+	var deliveryDB *sql.DB
+	if database.IsPostgres(db) {
+		deliveryDB = db
+	}
 	messageService := services.NewMessageService(
 		repos.Message, repos.Attachment, repos.Channel, repos.User,
 		repos.Mention, repos.RoleMention, repos.Role, repos.Reaction, repos.ReadState,
 		repos.MemberTimeout, repository.NewMessageTxRunner(db), hub, channelPermService, auditLogService,
-		repos.Notification,
+		repos.Notification, deliveryDB,
 	)
 	channelMessageNotificationWorker := services.NewChannelMessageNotificationWorker(
 		repository.NewSQLiteChannelMessageNotificationQueue(db), repos.Preferences, repos.User, hub,
 	)
 	messageService.SetUploadDir(cfg.Upload.Dir)
 	if database.IsPostgres(db) {
-		services.ConfigureChannelDelivery(messageService, db)
 		channelMessageNotificationWorker.SetDurablePublication(true)
 		hub.SetDurableChannelSends(true)
 	}

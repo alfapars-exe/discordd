@@ -15,15 +15,6 @@ import (
 	"github.com/argeinfina/hichat/ws"
 )
 
-// ConfigureChannelDelivery enables the PostgreSQL durable path. Kept separate
-// from the constructor so legacy repository fixtures remain independently usable.
-func ConfigureChannelDelivery(service MessageService, db *sql.DB) {
-	if s, ok := service.(*messageService); ok {
-		s.deliveryDB = db
-		s.deliveryWake = make(chan struct{}, 1)
-	}
-}
-
 // Coalesced hints only: the committed outbox and periodic poll own delivery.
 func (s *messageService) wakeChannelDelivery() {
 	select {

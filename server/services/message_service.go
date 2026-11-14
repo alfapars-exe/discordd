@@ -89,8 +89,16 @@ func NewMessageService(
 	permResolver ChannelPermResolver,
 	auditLogger AuditWriter,
 	notificationRepo repository.NotificationRepository,
+	deliveryDB *sql.DB,
 ) MessageService {
+	// Nil deliberately keeps standalone/legacy fixtures on their direct path.
+	var wake chan struct{}
+	if deliveryDB != nil {
+		wake = make(chan struct{}, 1)
+	}
 	return &messageService{
+		deliveryDB:       deliveryDB,
+		deliveryWake:     wake,
 		messageRepo:      messageRepo,
 		attachmentRepo:   attachmentRepo,
 		channelRepo:      channelRepo,
