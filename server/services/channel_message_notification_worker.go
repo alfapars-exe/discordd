@@ -32,15 +32,9 @@ type ChannelMessageNotificationWorker struct {
 	hub                ws.Broadcaster
 }
 
-// PostgreSQL publication is recorded by the notification INSERT trigger in the
-// same transaction as CommitBatch; only legacy fixtures use direct fan-out.
-func (w *ChannelMessageNotificationWorker) SetDurablePublication(enabled bool) {
-	w.durablePublication = enabled
-}
-
 func NewChannelMessageNotificationWorker(queue repository.ChannelMessageNotificationQueue, prefs repository.PreferencesBatchReader,
-	users repository.UserRepository, hub ws.Broadcaster) *ChannelMessageNotificationWorker {
-	return &ChannelMessageNotificationWorker{queue: queue, prefs: prefs, users: users, hub: hub}
+	users repository.UserRepository, hub ws.Broadcaster, durablePublication bool) *ChannelMessageNotificationWorker {
+	return &ChannelMessageNotificationWorker{queue: queue, prefs: prefs, users: users, hub: hub, durablePublication: durablePublication}
 }
 
 // ProcessNextBatch performs at most one bounded page. Cursor advancement and

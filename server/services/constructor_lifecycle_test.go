@@ -784,3 +784,10 @@ func TestMusicPersistenceFieldsRetainNarrowContracts(t *testing.T) {
 		}
 	}
 }
+
+func TestChannelNotificationConstructorDeclaresPublicationMode(t *testing.T) {
+	factory := reflect.TypeOf(NewChannelMessageNotificationWorker)
+	if factory.NumIn() != 5 || factory.In(4).Kind() != reflect.Bool {
+		t.Fatal("notification publication mode must be selected at construction")
+	}
+}

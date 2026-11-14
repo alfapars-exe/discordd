@@ -267,11 +267,10 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 		repos.Notification, deliveryDB,
 	)
 	channelMessageNotificationWorker := services.NewChannelMessageNotificationWorker(
-		repository.NewSQLiteChannelMessageNotificationQueue(db), repos.Preferences, repos.User, hub,
+		repository.NewSQLiteChannelMessageNotificationQueue(db), repos.Preferences, repos.User, hub, database.IsPostgres(db),
 	)
 	messageService.SetUploadDir(cfg.Upload.Dir)
 	if database.IsPostgres(db) {
-		channelMessageNotificationWorker.SetDurablePublication(true)
 		hub.SetDurableChannelSends(true)
 	}
 	uploadService := services.NewUploadService(repos.Attachment, cfg.Upload.Dir, cfg.Upload.MaxSize)

@@ -15,6 +15,7 @@ type channelNotificationQueueStub struct {
 	ids          []string
 	suppressed   map[string]bool
 	committed    []*models.Notification
+	created      []*models.Notification
 	failCalls    int
 	commitCursor string
 	commitDone   bool
@@ -37,7 +38,7 @@ func (q *channelNotificationQueueStub) FailBatch(context.Context, *repository.Ch
 }
 func (q *channelNotificationQueueStub) CommitBatch(_ context.Context, _ *repository.ChannelMessageNotificationJob, cursor string, done bool, eligible []*models.Notification) ([]*models.Notification, bool, error) {
 	q.commitCursor, q.commitDone, q.committed = cursor, done, eligible
-	return nil, true, nil
+	return q.created, true, nil
 }
 
 type channelNotificationPreferencesStub struct {
@@ -58,7 +59,7 @@ func TestChannelMessageNotificationWorkerEnforcesOptInIgnoreAndMuteBeforeCommit(
 		"u-ignored": {Data: json.RawMessage(`{"notifications":{"channelMessageNotifications":true},"privacy":{"ignoredUsers":{"actor":true}}}`)},
 		"u-muted":   {Data: json.RawMessage(`{"notifications":{"channelMessageNotifications":true}}`)},
 	}}
-	worker := NewChannelMessageNotificationWorker(queue, prefs, nil, nil)
+	worker := NewChannelMessageNotificationWorker(queue, prefs, nil, nil, false)
 	processed, err := worker.ProcessNextBatch(context.Background())
 	if err != nil || !processed {
 		t.Fatalf("processed=%v err=%v", processed, err)
@@ -75,9 +76,20 @@ func TestChannelMessageNotificationWorkerSchedulesRetryOnBatchReadFailure(t *tes
 	job := &repository.ChannelMessageNotificationJob{MessageID: "message"}
 	queue := &channelNotificationQueueStub{job: job, ids: []string{"u-opt-in"}}
 	prefs := &channelNotificationPreferencesStub{err: errors.New("temporary preference read failure")}
-	worker := NewChannelMessageNotificationWorker(queue, prefs, nil, nil)
+	worker := NewChannelMessageNotificationWorker(queue, prefs, nil, nil, false)
 	processed, err := worker.ProcessNextBatch(context.Background())
 	if processed || err == nil || queue.failCalls != 1 {
 		t.Fatalf("processed=%v err=%v FailBatch calls=%d", processed, err, queue.failCalls)
+	}
+}
+
+func TestChannelMessageNotificationDurableModeSkipsDirectPublication(t *testing.T) {
+	queue := &channelNotificationQueueStub{job: &repository.ChannelMessageNotificationJob{MessageID: "m", ActorID: "actor"}, ids: []string{"reader"}, created: []*models.Notification{{ID: "n", UserID: "reader"}}}
+	prefs := &channelNotificationPreferencesStub{rows: map[string]*models.UserPreferences{"reader": {Data: json.RawMessage(`{"notifications":{"channelMessageNotifications":true}}`)}}}
+	// Nil direct publisher/actor reader deliberately fail if durable mode accesses them.
+	worker := NewChannelMessageNotificationWorker(queue, prefs, nil, nil, true)
+	processed, err := worker.ProcessNextBatch(context.Background())
+	if err != nil || !processed || len(queue.committed) != 1 {
+		t.Fatalf("processed=%v err=%v committed=%d", processed, err, len(queue.committed))
 	}
 }
