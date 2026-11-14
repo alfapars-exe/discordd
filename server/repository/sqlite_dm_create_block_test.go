@@ -27,7 +27,7 @@ func TestDMCreateUnblockedRejectsEitherBlockAndPreservesHistory(t *testing.T) {
 			now := time.Now().UTC()
 			friend := NewSQLiteFriendshipRepo(wrapForRepo(db))
 			block := &models.Friendship{ID: "block", UserID: a, FriendID: b, Status: models.FriendshipStatusBlocked, CreatedAt: now, UpdatedAt: now}
-			if _, err := friend.(AtomicBlockWriter).CreateBlockAtomic(ctx, block); err != nil {
+			if _, err := friend.CreateBlockAtomic(ctx, block); err != nil {
 				t.Fatal(err)
 			}
 			ch := &models.DMChannel{User1ID: dmAlice, User2ID: dmBob, Status: models.DMStatusAccepted}
@@ -43,7 +43,7 @@ func TestDMCreateUnblockedRejectsEitherBlockAndPreservesHistory(t *testing.T) {
 			if created, err := writer.CreateChannelUnblocked(ctx, ch); err != nil || !created {
 				t.Fatalf("unblocked created=%v err=%v", created, err)
 			}
-			if _, err := friend.(AtomicBlockWriter).CreateBlockAtomic(ctx, block); err != nil {
+			if _, err := friend.CreateBlockAtomic(ctx, block); err != nil {
 				t.Fatal(err)
 			}
 			other := &models.DMChannel{User1ID: dmAlice, User2ID: dmBob, Status: models.DMStatusAccepted}
@@ -160,7 +160,7 @@ func TestAtomicBlockAwaitsConcurrentDMCreationCommit(t *testing.T) {
 	done := make(chan error, 1)
 	go func() {
 		now := time.Now().UTC()
-		_, err := NewSQLiteFriendshipRepo(wrapForRepo(db)).(AtomicBlockWriter).CreateBlockAtomic(ctx, &models.Friendship{ID: "after-create", UserID: dmBob, FriendID: dmAlice, Status: models.FriendshipStatusBlocked, CreatedAt: now, UpdatedAt: now})
+		_, err := NewSQLiteFriendshipRepo(wrapForRepo(db)).CreateBlockAtomic(ctx, &models.Friendship{ID: "after-create", UserID: dmBob, FriendID: dmAlice, Status: models.FriendshipStatusBlocked, CreatedAt: now, UpdatedAt: now})
 		done <- err
 	}()
 	select {

@@ -2404,3 +2404,9 @@ Selected service/handler/root upload/attachment/startup tests passed (2.805s/0.5
 DMUploadRequestService declares Upload, Stage and Discard at the HTTP boundary; DMUploadRuntime retains this request contract plus worker ownership. DMHandler requires it directly, removing anonymous staging capability discovery and the runtime unavailable-staging branch. Production already supplied these methods. Factory/handler regression failed before implementation. Existing multipart tests retain authorization-before-staging, ordered attachment staging, partial-stage failure discard and unknown commit byte retention behavior.
 
 Selected service tests passed (4.672s). Removing the anonymous interface exposed an unused multipart import; corrected before rerunning handler/root tests (2.867s/3.753s), build and scoped vet, all passed. Fifty reviewed records validate unchanged; no public fields or SQL changed. No fresh PostgreSQL/device claim. CI 43647296875 on 8d74300c is live with seventeen completed jobs and no observed failure. RF11 current-source aggregate acceptance remains open.
+
+### RF11 — atomic friendship writer retained by factory (2026-11-15)
+
+NewSQLiteFriendshipRepo returns FriendshipStore, retaining AtomicBlockWriter at factory/composition boundaries. Repositories.Friendship preserves it. Ordinary consumers keep narrow FriendshipRepository. Factory regression failed first; repository block and guarded-DM tests now call the declared capability directly instead of asserting it. No SQL or mutation semantics changed.
+
+Selected services/repository/root block, guarded-DM and startup contracts passed (3.937s/8.193s/2.314s); build and scoped vet passed; all 50 reviewed records validate unchanged. This run has no configured PostgreSQL receipt. BlockService still discovers AtomicBlockWriter and retains its legacy multi-write fallback: constructor/fixture migration is required before that branch can be removed. RF11 remains open.

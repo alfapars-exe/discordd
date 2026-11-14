@@ -692,3 +692,9 @@ func TestDMUploadFactoryDeclaresCleanupOwner(t *testing.T) {
 		t.Fatal("DM upload factory hides cleanup owner")
 	}
 }
+
+func TestFriendshipFactoryDeclaresAtomicBlockWriter(t *testing.T) {
+	if !reflect.TypeOf(repository.NewSQLiteFriendshipRepo).Out(0).Implements(reflect.TypeFor[repository.AtomicBlockWriter]()) {
+		t.Fatal("friendship factory hides atomic block writer")
+	}
+}

@@ -39,7 +39,7 @@ type Repositories struct {
 	GroupDM                 repository.GroupDMStore
 	Reaction                repository.ReactionRepository
 	ChannelPermission       repository.ChannelPermissionRepository
-	Friendship              repository.FriendshipRepository
+	Friendship              repository.FriendshipStore
 	LiveKit                 repository.LiveKitStore
 	ResetToken              repository.PasswordResetRepository
 	MetricsHistory          repository.MetricsHistoryRepository
