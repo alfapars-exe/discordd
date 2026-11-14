@@ -44,7 +44,7 @@ func TestAppLogPartialFallbackCountsOnlyUnwrittenOccurrences(t *testing.T) {
 	}{{1, 6}, {2, 3}, {3, 1}, {4, 0}} {
 		t.Run(fmt.Sprintf("fail-at-%d", tc.failAt), func(t *testing.T) {
 			repo := &partialAppLogRepo{failAt: tc.failAt}
-			service := NewAppLogService(repo).(*appLogService)
+			service := NewAppLogService(repo, nil).(*appLogService)
 			var pending []pendingAppLog
 			for i, count := range []int{3, 2, 1} {
 				for range count {
@@ -90,7 +90,7 @@ func (r *batchAppLogRepo) InsertBatch(ctx context.Context, rows []models.AppLog)
 
 func TestAppLogPipelinePriorityGroupingAndOccurrenceTime(t *testing.T) {
 	repo := &batchAppLogRepo{}
-	svc := NewAppLogService(repo).(*appLogService)
+	svc := NewAppLogService(repo, repo).(*appLogService)
 	for i := 0; i < cap(svc.ch); i++ {
 		svc.Log(context.Background(), models.LogLevelInfo, models.LogCategoryClient, nil, nil, "telemetry", nil)
 	}
@@ -135,7 +135,7 @@ func TestAppLogPipelinePriorityGroupingAndOccurrenceTime(t *testing.T) {
 }
 
 func TestAppLogQueuesRemainBoundedAndErrorHasReservedCapacity(t *testing.T) {
-	s := NewAppLogService(&fakeAppLogRepo{}).(*appLogService)
+	s := NewAppLogService(&fakeAppLogRepo{}, nil).(*appLogService)
 	for i := 0; i < cap(s.ch)+10; i++ {
 		s.Log(context.Background(), models.LogLevelInfo, models.LogCategoryClient, nil, nil, "info", nil)
 	}
@@ -153,7 +153,7 @@ func TestAppLogQueuesRemainBoundedAndErrorHasReservedCapacity(t *testing.T) {
 
 func TestAppLogFailedStorageDoesNotBlockEnqueueOrShutdown(t *testing.T) {
 	r := &batchAppLogRepo{block: true}
-	s := NewAppLogService(r).(*appLogService)
+	s := NewAppLogService(r, r).(*appLogService)
 	start := time.Now()
 	for i := 0; i < 64; i++ {
 		s.Log(context.Background(), models.LogLevelError, models.LogCategoryGeneral, nil, nil, fmt.Sprint(i), nil)
@@ -174,7 +174,7 @@ func TestAppLogFailedStorageDoesNotBlockEnqueueOrShutdown(t *testing.T) {
 
 func TestAppLogConcurrentStopAndSizeLimit(t *testing.T) {
 	r := &batchAppLogRepo{}
-	s := NewAppLogService(r).(*appLogService)
+	s := NewAppLogService(r, r).(*appLogService)
 	s.Start()
 	var wg sync.WaitGroup
 	for i := 0; i < 8; i++ {
@@ -199,7 +199,7 @@ func TestAppLogConcurrentStopAndSizeLimit(t *testing.T) {
 
 func TestAppLogNoRetryOfFailedBatch(t *testing.T) {
 	r := &batchAppLogRepo{block: true}
-	s := NewAppLogService(r).(*appLogService)
+	s := NewAppLogService(r, r).(*appLogService)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	s.flush(ctx, []pendingAppLog{{entry: models.AppLog{Message: "fail", Level: models.LogLevelError, OccurrenceCount: 1}, metadata: map[string]string{}}})
@@ -209,7 +209,7 @@ func TestAppLogNoRetryOfFailedBatch(t *testing.T) {
 }
 
 func BenchmarkAppLogEnqueue(b *testing.B) {
-	s := NewAppLogService(&fakeAppLogRepo{}).(*appLogService)
+	s := NewAppLogService(&fakeAppLogRepo{}, nil).(*appLogService)
 	ctx := pkg.WithRequestID(context.Background(), "benchmark-request")
 	meta := map[string]string{"component": "http", "event_code": "HTTP_INTERNAL", "err": "connection unavailable"}
 	b.ReportAllocs()
@@ -223,7 +223,7 @@ func TestAppLogRequestLatencyUnderStorageFailure(t *testing.T) {
 	for _, mode := range []string{"disabled", "healthy", "unavailable"} {
 		t.Run(mode, func(t *testing.T) {
 			repo := &batchAppLogRepo{block: mode == "unavailable"}
-			svc := NewAppLogService(repo).(*appLogService)
+			svc := NewAppLogService(repo, repo).(*appLogService)
 			if repo.block {
 				repo.blocked = make(chan struct{})
 			}
@@ -267,5 +267,14 @@ func TestAppLogRequestLatencyUnderStorageFailure(t *testing.T) {
 				t.Fatalf("DB outage affected request latency: %s", p95)
 			}
 		})
+	}
+}
+
+func TestAppLogExplicitSingleWriterDoesNotDiscoverBatchCapability(t *testing.T) {
+	repo := &batchAppLogRepo{}
+	service := NewAppLogService(repo, nil).(*appLogService)
+	service.flush(context.Background(), []pendingAppLog{{entry: models.AppLog{Level: models.LogLevelError, Message: "single", OccurrenceCount: 1}, metadata: map[string]string{}}})
+	if repo.batchCalls != 0 || len(repo.inserts) != 1 {
+		t.Fatal("single writer rediscovered batch capability or lost row")
 	}
 }

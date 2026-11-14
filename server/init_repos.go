@@ -54,7 +54,7 @@ type Repositories struct {
 	Badge                   repository.BadgeRepository
 	Preferences             repository.PreferencesRepository
 	RoleMention             repository.RoleMentionRepository
-	AppLog                  repository.AppLogRepository
+	AppLog                  repository.AppLogStore
 	AuditLog                repository.AuditLogRepository
 	Feedback                repository.FeedbackRepository
 	Soundboard              repository.SoundboardRepository

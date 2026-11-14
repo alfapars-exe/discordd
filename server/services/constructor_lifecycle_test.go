@@ -536,3 +536,16 @@ func TestLiveKitFactoryDeclaresDurableUsageCapabilities(t *testing.T) {
 		}
 	}
 }
+
+func TestAppLogConstructorDeclaresOptionalBatchWriter(t *testing.T) {
+	factory := reflect.TypeOf(NewAppLogService)
+	if factory.NumIn() != 2 {
+		t.Fatalf("app log constructor inputs=%d want2", factory.NumIn())
+	}
+	required := reflect.TypeFor[interface {
+		InsertBatch(context.Context, []models.AppLog) (int64, error)
+	}]()
+	if !factory.In(1).Implements(required) {
+		t.Fatal("batch writer must be explicit")
+	}
+}

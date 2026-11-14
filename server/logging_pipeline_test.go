@@ -41,13 +41,11 @@ func TestBackendFailureReachesPersistentAdminLogsExactlyOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	svc := services.NewAppLogService(repository.NewSQLiteAppLogRepo(db.Conn))
+	repo := repository.NewSQLiteAppLogRepo(db.Conn)
+	svc := services.NewAppLogService(repo, repo)
 	svc.Start()
 	defer svc.Stop()
-	sink := svc.(interface {
-		ConsumeRecord(context.Context, slog.Record)
-	})
-	logx.SetAppSink(sink.ConsumeRecord)
+	logx.SetAppSink(svc.ConsumeRecord)
 	defer logx.SetAppSink(nil)
 	h := middleware.RequestLogger(slog.Default(), nil)(middleware.Recover(slog.Default())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		pkg.ErrorCtx(r.Context(), w, 500, "failed", errors.New("postgres://user:NEVER_LOG@host/database failed token=NEVER_LOG"))

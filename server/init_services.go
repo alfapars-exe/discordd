@@ -223,7 +223,7 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	// wiring_test.go); a constructor parameter can't be forgotten without a
 	// compile error.
 	auditLogService := services.NewAuditLogService(repos.AuditLog, repos.User, repos.Role, hub, hub)
-	appLogService := services.NewAppLogService(repos.AppLog)
+	appLogService := services.NewAppLogService(repos.AppLog, repos.AppLog)
 	var entranceService services.EntranceService
 	var musicBotService services.MusicBotRuntime
 	voiceService := services.NewVoiceService(

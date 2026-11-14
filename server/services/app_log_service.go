@@ -54,6 +54,7 @@ type pendingAppLog struct {
 	metadata map[string]string
 }
 type appLogService struct {
+	batchWriter                                                 repository.AppLogBatchWriter
 	repo                                                        repository.AppLogRepository
 	ch                                                          chan pendingAppLog
 	errors                                                      chan pendingAppLog
@@ -68,8 +69,8 @@ type appLogService struct {
 	stopDeadline                                                atomic.Int64
 }
 
-func NewAppLogService(repo repository.AppLogRepository) AppLogRuntime {
-	return &appLogService{repo: repo, ch: make(chan pendingAppLog, 256), errors: make(chan pendingAppLog, 512), done: make(chan struct{})}
+func NewAppLogService(repo repository.AppLogRepository, batchWriter repository.AppLogBatchWriter) AppLogRuntime {
+	return &appLogService{batchWriter: batchWriter, repo: repo, ch: make(chan pendingAppLog, 256), errors: make(chan pendingAppLog, 512), done: make(chan struct{})}
 }
 
 func (s *appLogService) Log(ctx context.Context, level models.LogLevel, category models.LogCategory, userID, serverID *string, message string, metadata map[string]string) {
@@ -323,9 +324,7 @@ func (s *appLogService) flush(parent context.Context, pending []pendingAppLog) {
 	var err error
 	var written int64
 	failedEvents := uint64(len(pending))
-	if batch, ok := s.repo.(interface {
-		InsertBatch(context.Context, []models.AppLog) (int64, error)
-	}); ok {
+	if batch := s.batchWriter; batch != nil {
 		written, err = batch.InsertBatch(ctx, rows)
 	} else {
 		for i := range rows {
