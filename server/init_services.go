@@ -228,11 +228,9 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 
 	// Remaining services (order-independent)
 	inviteService := services.NewInviteService(repos.Invite, repos.Server)
-	mfaService := services.NewMFAService(repos.MFA, repos.User, encryptionKey)
 	emailDeliveryService := services.NewEmailDeliveryService(repos.EmailDelivery, emailSender,
 		services.WithEmailUnsubscribe(repos.EmailUnsubscribe, cfg.Email.AppURL))
 	p2pCallService := services.NewP2PCallService(repos.Friendship, repos.User, hub, emailDeliveryService, appLogService)
-	emailVerificationService := services.NewEmailVerificationService(repos.EmailVerification, emailSender)
 
 	channelService := services.NewChannelService(voiceService, repos.Channel, repos.Category, hub, channelPermService, auditLogService, repos.Notification, channelPermService)
 	threadService := services.NewThreadService(repos.Channel, repos.Message, channelPermService, hub, channelPermService)
@@ -356,10 +354,13 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	// Profile cosmetics (everyone mode: no shop, no premium tier).
 	cosmeticService := services.NewCosmeticService(repos.Cosmetic, repos.Server,
 		services.NewEveryoneCosmeticEntitlements(repos.Cosmetic, repos.Server), hub)
-	authService := services.NewAuthService(
-		repos.User, repos.Session, repos.ResetToken, hub, emailSender,
-		voiceService, cfg.JWT.Secret, cfg.JWT.AccessTokenExpiry, cfg.JWT.RefreshTokenExpiry, services.WithAuthSessionDisconnecter(hub), services.WithAuthOwnershipInvalidator(permInvalidator), services.WithAuthUserCacheInvalidator(authCache), services.WithAuthAppLogger(appLogService), services.WithMFA(mfaService), services.WithAuthSessions(repos.AuthSession), services.WithAccountLifecycle(repos.AccountLifecycle), services.WithAccountAnonymization(repos.AccountAnonymization, musicBotService), services.WithApplicationRemoval(repos.ApplicationRemoval), services.WithServerOwnership(repos.ServerOwnership),
-	)
+	accountSecurity := initAccountSecurityServices(accountSecurityDependencies{
+		Repositories: repos, Hub: hub, Config: cfg, Voice: voiceService, Email: emailSender,
+		Permissions: permInvalidator, UserCache: authCache, Logger: appLogService,
+		MusicRetirement: musicBotService, EncryptionKey: encryptionKey,
+	})
+	authService, mfaService, emailVerificationService := accountSecurity.Auth, accountSecurity.MFA, accountSecurity.EmailVerification
+
 	metricsCollector := services.NewMetricsCollector(
 		repos.LiveKit, repos.MetricsHistory,
 		5*time.Minute,
