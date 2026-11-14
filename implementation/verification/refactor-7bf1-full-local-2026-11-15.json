@@ -1,0 +1,13 @@
+{
+  "source_head": "7bf12c4aa432f032c09938d6fa376da342a34ff7",
+  "command": "go test ./services ./handlers ./repository ./ws . -count=1",
+  "exit_code": 0,
+  "packages_seconds": {
+    "services": 98.738,
+    "handlers": 7.488,
+    "repository": 201.033,
+    "ws": 5.589,
+    "root": 15.526
+  },
+  "limits": "Windows non-race; no PostgreSQL environment. Server source remained unchanged throughout."
+}

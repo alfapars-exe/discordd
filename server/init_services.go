@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/argeinfina/hichat/config"
-	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/middleware"
 	"github.com/argeinfina/hichat/pkg/crypto"
 	"github.com/argeinfina/hichat/pkg/email"
@@ -256,24 +255,10 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	// before construction.
 	channelService.SetUploadDir(cfg.Upload.Dir)
 	categoryService := services.NewCategoryService(repos.Category, hub)
-	var deliveryDB *sql.DB
-	if database.IsPostgres(db) {
-		deliveryDB = db
-	}
-	messageService := services.NewMessageService(
-		repos.Message, repos.Attachment, repos.Channel, repos.User,
-		repos.Mention, repos.RoleMention, repos.Role, repos.Reaction, repos.ReadState,
-		repos.MemberTimeout, repository.NewMessageTxRunner(db), hub, channelPermService, auditLogService,
-		repos.Notification, deliveryDB,
-	)
-	channelMessageNotificationWorker := services.NewChannelMessageNotificationWorker(
-		repository.NewSQLiteChannelMessageNotificationQueue(db), repos.Preferences, repos.User, hub, database.IsPostgres(db),
-	)
-	messageService.SetUploadDir(cfg.Upload.Dir)
-	if database.IsPostgres(db) {
-		hub.SetDurableChannelSends(true)
-	}
-	uploadService := services.NewUploadService(repos.Attachment, cfg.Upload.Dir, cfg.Upload.MaxSize)
+	channelMessaging := initChannelMessagingServices(db, repos, hub, cfg, channelPermService, auditLogService)
+	messageService, uploadService := channelMessaging.Message, channelMessaging.Upload
+	channelMessageNotificationWorker, deliveryDB := channelMessaging.Notifications, channelMessaging.DeliveryDB
+
 	profileUpdateNotifier := services.NewProfileUpdateNotifier(repos.Preferences, repos.Friendship, repos.Notification, hub)
 	onlineFriendNotifier := services.NewOnlineFriendNotifier(repos.User, repos.Preferences, repos.Friendship, repos.Notification, hub, hub, repos.Notification)
 	rollback = append(rollback, onlineFriendNotifier.Stop)
