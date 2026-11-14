@@ -169,7 +169,7 @@ func initRoutes(
 	// Middleware. *services.BotService satisfies middleware.BotTokenValidator
 	// (ValidateBotToken), so the same instance powers token validation here and
 	// the owner-facing bot management handler below — one source of truth.
-	authMw := middleware.NewAuthMiddleware(authService, userRepo, botService)
+	authMw := middleware.NewAuthMiddleware(authService, userRepo, botService, nil)
 	permMw := middleware.NewPermissionMiddleware(roleRepo)
 	// Until registration succeeds, this initializer owns both cleanup workers.
 	// A registrar panic must propagate unchanged after releasing those workers.

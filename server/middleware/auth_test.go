@@ -32,7 +32,7 @@ func newTestAuthMiddleware(t testing.TB, userRepo *testutil.MockUserRepo) *AuthM
 	// nil bot validator: these tests cover the JWT/scope path only.
 	// Require checks botValidator != nil before consulting it, so nil is
 	// the correct "no bot support in this fixture" value, not a stub.
-	middleware := NewAuthMiddleware(svc, userRepo, nil)
+	middleware := NewAuthMiddleware(svc, userRepo, nil, nil)
 	t.Cleanup(middleware.Stop)
 	return middleware
 }

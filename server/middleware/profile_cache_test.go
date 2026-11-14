@@ -43,7 +43,7 @@ func TestProfileWriteImmediatelyRefreshesAuthenticatedMe(t *testing.T) {
 		return tokens
 	}
 	a, b := register("profile_cache_a"), register("profile_cache_b")
-	mw := NewAuthMiddleware(auth, users, nil)
+	mw := NewAuthMiddleware(auth, users, nil, nil)
 	t.Cleanup(mw.Stop)
 	member := services.NewMemberService(nil, nil, users, nil, nil, nil, &testutil.MockServerRepo{}, nil, hub, nil, nil)
 	member.SetUserCacheInvalidator(mw)

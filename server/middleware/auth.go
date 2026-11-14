@@ -9,7 +9,6 @@ import (
 	"github.com/argeinfina/hichat/handlers"
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
-	"github.com/argeinfina/hichat/pkg/cache"
 	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/services"
 )
@@ -38,15 +37,18 @@ type AuthMiddleware struct {
 	// shared across all middleware instances (only one is constructed in
 	// main.go) and read on every authenticated request. Invalidate on
 	// password change / user delete by calling InvalidateUser.
-	userCache *cache.TTLCache[string, *models.User]
+	userCache *AuthUserCache
 }
 
-func NewAuthMiddleware(authService services.AuthService, userRepo repository.UserRepository, botValidator BotTokenValidator) *AuthMiddleware {
+func NewAuthMiddleware(authService services.AuthService, userRepo repository.UserRepository, botValidator BotTokenValidator, userCache *AuthUserCache) *AuthMiddleware {
+	if userCache == nil {
+		userCache = NewAuthUserCache()
+	}
 	return &AuthMiddleware{
 		authService:  authService,
 		userRepo:     userRepo,
 		botValidator: botValidator,
-		userCache:    cache.New[string, *models.User](userCacheTTL, time.Minute),
+		userCache:    userCache,
 	}
 }
 
@@ -56,7 +58,7 @@ func NewAuthMiddleware(authService services.AuthService, userRepo repository.Use
 // session that just changed its credentials doesn't keep a stale cached
 // view for up to userCacheTTL.
 func (m *AuthMiddleware) InvalidateUser(userID string) {
-	m.userCache.Delete(userID)
+	m.userCache.InvalidateUser(userID)
 }
 
 // Require enforces a valid JWT token. Returns 401 if missing or invalid.

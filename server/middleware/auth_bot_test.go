@@ -34,7 +34,7 @@ func TestRequire_BotTokenSetsBotUser(t *testing.T) {
 	}
 	// authService is nil: the bot branch returns before any JWT validation,
 	// so the human path's authService is never touched on this request.
-	m := NewAuthMiddleware(nil, userRepo, fakeBotValidator{id: "bot_x"})
+	m := NewAuthMiddleware(nil, userRepo, fakeBotValidator{id: "bot_x"}, nil)
 	t.Cleanup(m.Stop)
 
 	var gotUser *models.User
@@ -72,7 +72,7 @@ func TestRequire_BannedBotRejected(t *testing.T) {
 			return &models.User{ID: id, Username: "weatherbot", IsBot: true, IsPlatformBanned: true}, nil
 		},
 	}
-	m := NewAuthMiddleware(nil, userRepo, fakeBotValidator{id: "bot_x"})
+	m := NewAuthMiddleware(nil, userRepo, fakeBotValidator{id: "bot_x"}, nil)
 	t.Cleanup(m.Stop)
 
 	handlerRan := false

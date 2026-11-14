@@ -2018,3 +2018,8 @@ Backup constructor now takes explicit optional logger. Long-lived production ser
 ### RF08/RF11 — remove unreachable PostgreSQL boot restore owner (2026-11-14)
 
 Current main requires PostgreSQL DATABASE_URL before boot restore. Config.Database.Path is DATABASE_URL and Backup.DBPath chooses the same nonempty DATABASE_URL; Restore returns immediately for remote DSNs. Therefore the temporary boot BackupService was an unreachable-work/no-op owner, not a demonstrated active orphan on the current product. Removed this obsolete boot block and corrected legacy Restore lifecycle documentation. Legacy Restore implementation remains; all21 backup file tests pass. Full root tests pass13.614s; config compiles with no test files. Server build/vet pass. Actual remote backup recovery, uploads behavior and remaining lifecycle audit are not claimed complete.
+
+
+### RF11 — independent auth identity cache owner (2026-11-14)
+
+AuthUserCache extracts TTL identity-cache ownership from AuthMiddleware. Middleware constructor explicitly accepts a shared owner or nil for a standalone owner;7 existing callers select standalone until root sharing is wired. Existing TTL, pointer projection and invalidation behavior remain. New shared-owner test proves invalidation across middleware instances; standalone isolation test prevents cross-owner identity reuse. Full middleware/cache/root tests pass2.043/0.320/14.315s, build and targeted vet pass. No exact-hit source changed. This is the ownership extraction step; service invalidator setter cycle remains open until the same owner is injected at composition.

@@ -11,7 +11,7 @@ func TestCacheBackedMiddlewareExposeIdempotentWorkerStop(t *testing.T) {
 		name   string
 		create func() any
 	}{
-		{"auth", func() any { return NewAuthMiddleware(nil, nil, nil) }},
+		{"auth", func() any { return NewAuthMiddleware(nil, nil, nil, nil) }},
 		{"permission", func() any { return NewPermissionMiddleware(nil) }},
 	} {
 		t.Run(fixture.name, func(t *testing.T) {
