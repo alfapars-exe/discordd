@@ -1853,3 +1853,8 @@ Voice slice already classifies compatibility/video/streams/welcome/go-live overl
 ### RF13 — shared device-local voice field contract (2026-11-14)
 
 After the separate overlay exclusion behavior fix, codec and voice slice consume one store-free 30-key list. The slice type-checks keys against VoiceSettings. Actual setter/server-apply/account-reset tests retain device flags without account sync while account masterVolume applies. Seven files / 194 tests, targeted ESLint and production TypeScript/Vite build pass. Existing build warnings remain. Full RF13 and current-source CI acceptance remain open. Receipt: implementation/verification/refactor-rf13-shared-voice-device-scope-2026-11-14.json.
+
+
+### RF13 — pure accessibility defaults contract (2026-11-14)
+
+Accessibility types/defaults moved unchanged to a store-free module. Existing style imports remain compatible through re-exports; DOM application stays separate. All 24 prior cache keys match defaults exactly; codec field and boolean lists now derive from that contract. Every default and boolean opposite round-trips with unknown fields excluded.133 tests across5 codec/store/consumer/DOM files, targeted ESLint, TypeScript/Vite build and diff check pass. Full RF13/current-source CI acceptance remain open. Receipt: implementation/verification/refactor-rf13-pure-accessibility-contract-2026-11-14.json.

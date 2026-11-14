@@ -1,3 +1,4 @@
+import { DEFAULT_ACCESSIBILITY, ACCESSIBILITY_BOOLEAN_FIELDS } from "../utils/accessibilityPreferenceDefaults";
 import { DEVICE_LOCAL_VOICE_SETTING_KEYS } from "./voicePreferenceScope";
 import { DEFAULT_NOTIFICATION_PREFERENCES, NOTIFICATION_BOOLEAN_FIELDS } from "../utils/notificationPreferenceDefaults";
 import { APPEARANCE_RANGES, APPEARANCE_STORAGE_KEYS } from "./appearancePreferences";
@@ -10,7 +11,7 @@ const CACHE_FIELDS: Record<string, Set<string>> = {
   cosmetics_view: new Set(["plain"]),
   appearance: new Set(Object.keys(APPEARANCE_STORAGE_KEYS)),
   entrance_sounds: new Set(["enabled", "volume"]),
-  accessibility: new Set(["chatFontSize", "alwaysUnderlineLinks", "showDisplayNameStyles", "density", "messageStyle", "messageGroupGapPx", "saturation", "saturateCustomColors", "highContrast", "syncHighContrast", "showSwitchIndicators", "roleColorMode", "officialMessageStyle", "reduceMotion", "syncReducedMotion", "disableAnimatedEmoji", "autoplayGifs", "stickerAnimation", "notificationSoundVolume", "ttsEnabled", "ttsRate", "notificationDuration", "showImageDescriptions", "legacyComposer"]),
+  accessibility: new Set(Object.keys(DEFAULT_ACCESSIBILITY)),
   voice_settings: new Set(["inputMode", "pttKey", "micSensitivity", "userVolumes", "masterVolume", "inputVolume", "soundsEnabled", "localMutedUsers", "noiseReduction", "noiseReductionEngine", "noiseSuppressionLevel", "deepfilterSuppression", "screenShareVolumes", "screenShareAudio", "screenShareQuality", "screenShareFps", "screenShareShowCursor", "screenShareLowLatency", "screenShareMode", "cameraQuality", "cameraFps", "micProfile", "muteHotkeyEnabled", "muteHotkey"]),
   privacy: new Set(["improvementTelemetry", "profileAudience", "shareProfileUpdates", "shareOnlineUpdates", "shareStreamUpdates", "shareGameActivity", "allowFriendsToJoinGame", "allowVoiceParticipantsToJoinGame", "gameActivityNewServerAudience", "gameActivityServerOverrides", "clipVoiceConsent", "experiencePersonalization", "friendRequests", "ignoredUsers", "personalizedFriendMessages", "spamFilter", "spamRestoredMessages", "serverDMDefault", "serverDMOverrides", "sensitiveMedia", "disturbingMedia"]),
   notifications: new Set(Object.keys(DEFAULT_NOTIFICATION_PREFERENCES)),
@@ -19,8 +20,9 @@ const CACHE_FIELDS: Record<string, Set<string>> = {
 };
 const UNSAFE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 const BOOLEAN_FIELDS = new Set([
-  "plain", "enabled", "blurEnabled", "wallpaperEnabled", "lightningEnabled", "neonEnabled", "alwaysUnderlineLinks", "showDisplayNameStyles", "saturateCustomColors", "highContrast", "syncHighContrast", "showSwitchIndicators", "reduceMotion", "syncReducedMotion", "disableAnimatedEmoji", "autoplayGifs", "ttsEnabled", "showImageDescriptions", "legacyComposer", "soundsEnabled", "noiseReduction", "screenShareAudio", "screenShareShowCursor", "screenShareLowLatency", "muteHotkeyEnabled", "voiceOverlayEnabled", "voiceOverlaySpeakingOnly", "voiceOverlayChat", "voiceOverlayChatActions", "voiceOverlayChatCompose", "improvementTelemetry", "shareProfileUpdates", "shareOnlineUpdates", "shareStreamUpdates", "clipVoiceConsent", "experiencePersonalization", "personalizedFriendMessages", "serverDMDefault", "communication", "social", "announcements", "tips", "recommendations", "marketingUnsubscribed",
+  "plain", "enabled", "blurEnabled", "wallpaperEnabled", "lightningEnabled", "neonEnabled", "soundsEnabled", "noiseReduction", "screenShareAudio", "screenShareShowCursor", "screenShareLowLatency", "muteHotkeyEnabled", "voiceOverlayEnabled", "voiceOverlaySpeakingOnly", "voiceOverlayChat", "voiceOverlayChatActions", "voiceOverlayChatCompose", "improvementTelemetry", "shareProfileUpdates", "shareOnlineUpdates", "shareStreamUpdates", "clipVoiceConsent", "experiencePersonalization", "personalizedFriendMessages", "serverDMDefault", "communication", "social", "announcements", "tips", "recommendations", "marketingUnsubscribed",
   ...NOTIFICATION_BOOLEAN_FIELDS,
+  ...ACCESSIBILITY_BOOLEAN_FIELDS,
 ]);
 const NUMBER_RANGES: Record<string, [number, number]> = {
   ...APPEARANCE_RANGES,

@@ -1,0 +1,19 @@
+{
+  "source_parent": "dc761439",
+  "scope": "RF13 pure accessibility defaults and cache field contract",
+  "preservation": "Type/default block unchanged from parent; all 24 prior cache keys match defaults exactly. Existing style module re-exports public types/defaults.",
+  "change": "Cache fields and boolean validation derive from store-free accessibility defaults. DOM application remains in styles module.",
+  "validation": {
+    "test_files": 5,
+    "tests_passed": 133,
+    "test_exit": 0,
+    "targeted_eslint_exit": 0,
+    "typescript_vite_build_exit": 0,
+    "diff_check_exit": 0
+  },
+  "limits": [
+    "Whole RF13 and current-source CI acceptance remain open",
+    "Physical active voice session not tested"
+  ],
+  "warnings": "Existing build vendor and chunk warnings retained"
+}

@@ -1,3 +1,4 @@
+import { DEFAULT_ACCESSIBILITY } from "../utils/accessibilityPreferenceDefaults";
 import { DEFAULT_NOTIFICATION_PREFERENCES } from "../utils/notificationPreferenceDefaults";
 import { describe, expect, it } from "vitest";
 import { APPEARANCE_DEFAULTS, APPEARANCE_RANGES } from "./appearancePreferences";
@@ -41,4 +42,12 @@ it("round-trips every notification default and its boolean opposite from the pur
 
 it.each(["voiceOverlayCompatibility", "voiceOverlayVideo", "voiceOverlayStreams", "voiceOverlayWelcome", "voiceOverlayGoLive"])("keeps device-only overlay flag %s out of account preferences", key => {
   expect(sanitize({ voice_settings: { [key]: true, masterVolume: 65 } })).toEqual({ voice_settings: { masterVolume: 65 } });
+});
+
+it("round-trips every accessibility default and boolean opposite from the pure contract", () => {
+  for (const values of [DEFAULT_ACCESSIBILITY, Object.fromEntries(
+    Object.entries(DEFAULT_ACCESSIBILITY).map(([key, value]) => [key, typeof value === "boolean" ? !value : value]),
+  )]) {
+    expect(cacheable({ accessibility: { ...values, unknownField: true } })).toEqual({ accessibility: values });
+  }
 });
