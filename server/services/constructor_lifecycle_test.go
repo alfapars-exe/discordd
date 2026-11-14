@@ -698,3 +698,9 @@ func TestFriendshipFactoryDeclaresAtomicBlockWriter(t *testing.T) {
 		t.Fatal("friendship factory hides atomic block writer")
 	}
 }
+
+func TestBlockConstructorRequiresAtomicWriter(t *testing.T) {
+	if reflect.TypeOf(NewBlockService).In(1) != reflect.TypeFor[repository.FriendshipStore]() {
+		t.Fatal("block constructor hides required atomic write")
+	}
+}
