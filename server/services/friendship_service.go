@@ -27,7 +27,6 @@ type FriendshipService interface {
 	ListFriends(ctx context.Context, userID string) ([]models.FriendshipWithUser, error)
 	ListRequests(ctx context.Context, userID string) (*FriendRequestsResponse, error)
 	SetDMAcceptor(acceptor DMRequestAcceptor)
-	SetEmailEnqueuer(enqueuer EmailEnqueuer)
 }
 
 // DMRequestAcceptor is a minimal ISP interface for auto-accepting pending DMs.
@@ -68,14 +67,16 @@ func NewFriendshipService(
 	userRepo repository.UserRepository,
 	notifRepo repository.NotificationRepository,
 	hub ws.Broadcaster,
+	emailEnqueuer EmailEnqueuer,
 	policies ...FriendRequestPolicy,
 ) FriendshipService {
 	service := &friendshipService{
-		gameActivity: gameActivity,
-		friendRepo:   friendRepo,
-		userRepo:     userRepo,
-		notifRepo:    notifRepo,
-		hub:          hub,
+		gameActivity:  gameActivity,
+		emailEnqueuer: emailEnqueuer,
+		friendRepo:    friendRepo,
+		userRepo:      userRepo,
+		notifRepo:     notifRepo,
+		hub:           hub,
 	}
 	if len(policies) > 0 {
 		service.requestPolicy = policies[0]
@@ -85,10 +86,6 @@ func NewFriendshipService(
 
 func (s *friendshipService) SetDMAcceptor(acceptor DMRequestAcceptor) {
 	s.dmAcceptor = acceptor
-}
-
-func (s *friendshipService) SetEmailEnqueuer(enqueuer EmailEnqueuer) {
-	s.emailEnqueuer = enqueuer
 }
 
 // AreFriends checks if two users have an accepted friendship. Satisfies FriendChecker ISP.

@@ -38,7 +38,6 @@ func (s *stubFriendshipService) ListRequests(context.Context, string) (*services
 	return nil, nil
 }
 func (s *stubFriendshipService) SetDMAcceptor(services.DMRequestAcceptor) {}
-func (s *stubFriendshipService) SetEmailEnqueuer(services.EmailEnqueuer)  {}
 
 var _ services.FriendshipService = (*stubFriendshipService)(nil)
 

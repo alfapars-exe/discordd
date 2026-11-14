@@ -1798,3 +1798,8 @@ Friend-ID projection and pair-status/error mapping moved unchanged out of initSe
 ### RF11 — membership voice cleanup dependency at construction (2026-11-14)
 
 ServerService now takes its membership voice cleanup callback at construction; production passes DisconnectServerMember and the later setter is removed. Constructor contract regression failed first. Leave/removal-failure/server-scoped voice/admitted-join/permission leave-rejoin tests keep their assertions and now inject cleanup in the harness constructor. Targeted services/main tests, build and vet pass. The livekit_integration-tagged fixture compiles with zero tests selected; this is not live media proof. Receipt: implementation/verification/refactor-rf11-membership-voice-constructor-2026-11-14.json.
+
+
+### RF11 — friendship email queue at construction (2026-11-14)
+
+Friendship constructor now explicitly takes EmailEnqueuer before its existing policy arguments; production injects the previously created delivery service and the late setter is removed. Declared-parameter regression failed before the change. Every affected social-email fixture now supplies the queue during construction, preserving policy-denial/no-enqueue, persistence-failure, best-effort provider error and content/dedupe assertions. Relevant services/handlers/main tests, build and vet pass. Isolated no-email fixtures explicitly select nil. DM auto-accept still has a cyclic construction dependency and remains a separate open RF11 item. Receipt: implementation/verification/refactor-rf11-friendship-email-constructor-2026-11-14.json.

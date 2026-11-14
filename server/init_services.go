@@ -301,8 +301,7 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	friendRequestPolicy := services.NewFriendRequestPolicy(
 		repos.Preferences, friendGraph.listFriendIDs, friendGraph.areFriends, repos.Server,
 	)
-	friendshipService := services.NewFriendshipService(gameActivityService, repos.Friendship, repos.User, repos.Notification, hub, friendRequestPolicy)
-	friendshipService.SetEmailEnqueuer(emailDeliveryService)
+	friendshipService := services.NewFriendshipService(gameActivityService, repos.Friendship, repos.User, repos.Notification, hub, emailDeliveryService, friendRequestPolicy)
 	dmService := services.NewDMService(
 		services.NewServerDMPolicy(repos.Preferences, repos.Server),
 		repos.DM, repos.User, hub, blockService, friendshipService, dmSettingsService,
