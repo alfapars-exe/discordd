@@ -250,18 +250,16 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	profileUpdateNotifier := services.NewProfileUpdateNotifier(repos.Preferences, repos.Friendship, repos.Notification, hub)
 	onlineFriendNotifier := services.NewOnlineFriendNotifier(repos.User, repos.Preferences, repos.Friendship, repos.Notification, hub, hub, repos.Notification)
 	rollback = append(rollback, onlineFriendNotifier.Stop)
-	roleTransactions := repository.NewServerMembershipTxRunner(db)
 	privacy := initPrivacyPolicies(repos, hub)
 	profileAudiencePolicy, gameActivityPolicy := privacy.Profile, privacy.GameActivity
 	gameActivityService := services.NewGameActivityService(gameActivityPolicy, repos.Friendship, repos.Server, hub, hub.GameActivityEpoch())
-	memberService := services.NewMemberService(gameActivityService, profileAudiencePolicy, repos.User, repos.Role, repos.Ban, repos.MemberTimeout, repos.Server, roleTransactions, hub, voiceService, auditLogService, authCache, permInvalidator, profileUpdateNotifier)
-	roleService := services.NewRoleService(repos.Role, roleTransactions, hub, auditLogService, permInvalidator)
-	serverService := services.NewServerService(repos.Preferences, gameActivityService,
-		db, repos.Server, repos.LiveKit, repos.Role, repos.Channel,
-		repos.Category, repos.User, repos.Ban, inviteService, hub, encryptionKey, auditLogService,
-		voiceService.DisconnectServerMember, roleTransactions, permInvalidator, repos.Server,
-	)
-	serverService.SetUploadDir(cfg.Upload.Dir)
+	membership := initMembershipServices(membershipDependencies{
+		Database: db, Repositories: repos, Hub: hub, Voice: voiceService,
+		Activity: gameActivityService, Profiles: profileAudiencePolicy, Invites: inviteService,
+		Audit: auditLogService, UserCache: authCache, Permissions: permInvalidator, ProfileUpdates: profileUpdateNotifier,
+		UploadDir: cfg.Upload.Dir, EncryptionKey: encryptionKey,
+	})
+	memberService, roleService, serverService := membership.Members, membership.Roles, membership.Servers
 
 	livekitAdminService := services.NewLiveKitAdminService(
 		repos.LiveKit, repos.Server, repos.User, repos.Channel,
