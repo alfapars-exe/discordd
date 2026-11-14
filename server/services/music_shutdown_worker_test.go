@@ -69,10 +69,10 @@ func checkMusicPlaybackShutdown(t *testing.T, removed bool) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("concurrent StopAll did not join")
 	}
-	if _, err := svc.Enqueue(context.Background(), "late", concTestChannel, concTestURL); !errors.Is(err, context.Canceled) {
+	if _, err := svc.Enqueue(context.Background(), "late", concTestChannel, concTestURL); !errors.Is(err, errBotStoppedExplicitly) {
 		t.Fatalf("late enqueue: %v", err)
 	}
-	if err := svc.Restore(context.Background(), concTestChannel); !errors.Is(err, context.Canceled) {
+	if err := svc.Restore(context.Background(), concTestChannel); !errors.Is(err, errBotStoppedExplicitly) {
 		t.Fatalf("late restore: %v", err)
 	}
 

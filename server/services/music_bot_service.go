@@ -336,7 +336,7 @@ func (s *musicBotService) Enqueue(ctx context.Context, userID, channelID, url st
 func (s *musicBotService) EnqueueWithResult(ctx context.Context, userID, channelID, url string) (MusicEnqueueResult, error) {
 	owned, finish, workAccepted := s.beginMusicWork(ctx)
 	if !workAccepted {
-		return MusicEnqueueResult{}, context.Canceled
+		return MusicEnqueueResult{}, errBotStoppedExplicitly
 	}
 	defer finish()
 	ctx = owned
@@ -1126,7 +1126,7 @@ func (s *musicBotService) rawMusicState(ctx context.Context, channelID string) (
 func (s *musicBotService) Restore(ctx context.Context, channelID string) error {
 	owned, finish, workAccepted := s.beginMusicWork(ctx)
 	if !workAccepted {
-		return context.Canceled
+		return errBotStoppedExplicitly
 	}
 	defer finish()
 	ctx = owned
@@ -1347,7 +1347,7 @@ func (s *musicBotService) persistMutation(bot *botInstance, rollback func()) err
 func (s *musicBotService) getOrCreateBot(ctx context.Context, serverID, channelID string) (*botInstance, error) {
 	owned, finish, workAccepted := s.beginMusicWork(ctx)
 	if !workAccepted {
-		return nil, context.Canceled
+		return nil, errBotStoppedExplicitly
 	}
 	defer finish()
 	ctx = owned
@@ -1377,7 +1377,7 @@ func (s *musicBotService) getOrCreateBot(ctx context.Context, serverID, channelI
 		if s.shuttingDown {
 			s.mu.Unlock()
 			lifecycleLock.Unlock()
-			return nil, context.Canceled
+			return nil, errBotStoppedExplicitly
 		}
 		if existing, ok := s.bots[channelID]; ok && !existing.stopping.Load() {
 			s.mu.Unlock()
