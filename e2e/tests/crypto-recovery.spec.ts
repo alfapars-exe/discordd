@@ -44,7 +44,12 @@ test("a fresh device restores its identity and encrypted history from a password
       new URL(response.url()).pathname === "/api/e2ee/key-backup" && response.request().method() === "PUT");
     await initialSettings.getByRole("button", { name: "Set Recovery Password", exact: true }).click();
     expect((await initialUpload).ok()).toBe(true);
-    await expect(initialSettings.getByRole("button", { name: "Change Recovery Password", exact: true })).toBeEnabled();
+    await expect(initialSettings.getByRole("button", { name: "Change Recovery Password", exact: true })).toBeVisible();
+    // Successful saving clears both fields; changing the password is then
+    // correctly disabled until the user supplies a new one.
+    await expect(initialSettings.locator("#recoveryPwd")).toHaveValue("");
+    await expect(initialSettings.locator("#recoveryPwdConfirm")).toHaveValue("");
+    await expect(original.getByRole("alert").filter({ hasText: "Recovery password set successfully" })).toBeVisible();
     await original.keyboard.press("Escape");
     await expect(initialSettings).toBeHidden();
     await fixtureApi(original, `/servers/${fixture.serverId}`, "PATCH", { e2ee_enabled: true });
