@@ -2380,3 +2380,9 @@ Selected services/repository/handlers/root DM and startup tests passed (5.031s/2
 DMRequestStore and DMTxRepos.DM retain DMSendReceipts. Removed preflight, transaction lookup and record-time capability assertions; the channel-lock guard remains mandatory before transactional idempotent work. Production uses the existing receipt implementation and write set. Receipt-disabled test mocks now return the same explicit bad-request sentinel rather than relying on a missing interface. No fake success/deduplication behavior was introduced.
 
 The constructor/transaction contract test initially indexed the wrong struct field; corrected to FieldByName("DM"). The initial combined run failed only that test; repository tests passed (25.825s). Corrected service/handler/root selection passed (4.778s/2.225s/2.468s), build and scoped vet passed. All 50 reviewed records validate unchanged. Fresh PostgreSQL idempotency and current-source aggregate acceptance remain open; no SQL/public fields changed.
+
+### RF11 — DM receipt PostgreSQL and terminal CI evidence (2026-11-15)
+
+At a1fdef9114dc44746ee05c903d089b18e6b1022d, dedicated PostgreSQL 18.6 passed all thirteen idempotent send/attachment/outbox tests (8.957s), zero skips/failures. Cases cover concurrent replay, request conflict/deletion, receipt/unread rollback, attachment ordering/unknown commit outcome/cleanup and outbox ordering/envelope/startup recovery. Receipt implementation/verification/refactor-dm-receipt-postgres-2026-11-15.json records exact tests and limits. Owned container removed.
+
+Remote 9b0e23a400d8403da5d9949c5523781750e06569 completed all 36 PR checks successfully, Server CI 43646214218; receipt implementation/verification/refactor-integration-9b0e-terminal-2026-11-15.json. Later commits require separate CI. A five-package broad Go run has been started with a1fdef91 source fixed; it is not yet a passing receipt. Full RF11/project acceptance remains open.

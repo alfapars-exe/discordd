@@ -1,0 +1,61 @@
+{
+  "head": "a1fdef9114dc44746ee05c903d089b18e6b1022d",
+  "database": "PostgreSQL 18.6 dedicated loopback container",
+  "tests": [
+    {
+      "name": "TestDMIdempotentAttachmentsConcurrentReplayKeepsOneOrderedSet",
+      "seconds": 0.71
+    },
+    {
+      "name": "TestDMIdempotentAttachmentsConflictDeletionAndFailedStage",
+      "seconds": 0.58
+    },
+    {
+      "name": "TestDMIdempotentAttachmentsUploadRetainsUnknownAutocommitBytes",
+      "seconds": 0.53
+    },
+    {
+      "name": "TestDMIdempotentAttachmentsRollbackAndRetry",
+      "seconds": 0.69
+    },
+    {
+      "name": "TestDMIdempotentAttachmentsCleanupPreservesCommittedFreshAndUnrelatedFiles",
+      "seconds": 0.6
+    },
+    {
+      "name": "TestDMOutboxCommitRecoveryReplayAndAuthorization",
+      "seconds": 0.65
+    },
+    {
+      "name": "TestDMOutboxRetryOrderingDeletionAndRetention",
+      "seconds": 0.7
+    },
+    {
+      "name": "TestDMOutboxTransactionRollbackAndChannelCascade",
+      "seconds": 0.62
+    },
+    {
+      "name": "TestDMOutboxRetainsInitialEnvelopeBeforeQueuedEditAndErasesDeletedSnapshots",
+      "seconds": 0.79
+    },
+    {
+      "name": "TestDMOutboxCompletionFailureRetriesWithoutAnotherMessage",
+      "seconds": 0.64
+    },
+    {
+      "name": "TestDMOutboxStartupRecoveryFailsClosed",
+      "seconds": 0.58
+    },
+    {
+      "name": "TestDMIdempotentSendConcurrentReplayConflictAndDeletion",
+      "seconds": 0.67
+    },
+    {
+      "name": "TestDMIdempotentSendRollsBackReceiptAndUnread",
+      "seconds": 0.6
+    }
+  ],
+  "package_seconds": 8.957,
+  "skipped": 0,
+  "limits": "sslmode=disable, Windows non-race; no provider/device/full-server acceptance."
+}
