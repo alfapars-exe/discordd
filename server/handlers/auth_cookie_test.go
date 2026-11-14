@@ -121,7 +121,6 @@ func (s *stubAuthService) SetUserCacheInvalidator(_ services.UserCacheInvalidato
 // SetVoiceDisconnecter — added with the security review 2026-08-01 voice-kick
 // fix (finding 3). Inert here for the same reason as SetUserCacheInvalidator
 // above: these tests never exercise revokeAllSessions.
-func (s *stubAuthService) SetVoiceDisconnecter(_ services.VoiceDisconnecter) {}
 
 func newCookieTestHandler(svc services.AuthService) *AuthHandler {
 	// All limiters nil — rate limiting is orthogonal to cookie attributes.

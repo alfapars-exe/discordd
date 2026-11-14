@@ -71,18 +71,6 @@ type AuthService interface {
 	// its doc comment for why this is a post-construction setter rather
 	// than a constructor argument.
 	SetUserCacheInvalidator(inv UserCacheInvalidator)
-
-	// SetVoiceDisconnecter wires the voice/screen-share kick used by
-	// revokeAllSessions — the same VoiceDisconnecter dependency
-	// AdminUserService takes as a constructor argument for its own ban/
-	// delete paths (services/admin_user_service.go). VoiceService already
-	// exists by the time AuthService is constructed in init_services.go, so
-	// nothing forces this to be a setter; it is one anyway, mirroring
-	// SetUserCacheInvalidator immediately above, so every optional
-	// post-construction AuthService dependency is wired the same way and a
-	// caller/test can opt in to only the one(s) it needs. Nil-safe: absent
-	// wiring, revokeAllSessions simply skips the voice disconnect.
-	SetVoiceDisconnecter(vd VoiceDisconnecter)
 }
 
 type AuthTokens struct {
@@ -130,8 +118,8 @@ type authService struct {
 	userInvalidator UserCacheInvalidator
 
 	// voiceKit disconnects a user's live voice/screen-share session as part
-	// of revokeAllSessions. Optional (nil-safe), wired post-construction —
-	// see SetVoiceDisconnecter. Same VoiceDisconnecter ISP interface
+	// of revokeAllSessions. Constructor-owned; nil explicitly means no media
+	// integration for isolated callers. Same VoiceDisconnecter ISP interface
 	// adminUserService.voiceKit uses (member_service.go).
 	voiceKit VoiceDisconnecter
 
@@ -176,15 +164,7 @@ func (s *authService) invalidateUserCache(userID string) {
 	}
 }
 
-// SetVoiceDisconnecter wires the voice/screen-share kick used by
-// revokeAllSessions. See the AuthService interface doc for why this is a
-// post-construction setter rather than a constructor argument.
-func (s *authService) SetVoiceDisconnecter(vd VoiceDisconnecter) {
-	s.voiceKit = vd
-}
-
-// disconnectVoice is nil-safe — a no-op until SetVoiceDisconnecter has been
-// called (main.go wires it once VoiceService exists).
+// disconnectVoice skips media cleanup for explicitly media-free callers.
 func (s *authService) disconnectVoice(userID string) {
 	if s.voiceKit != nil {
 		s.voiceKit.DisconnectUser(userID)
@@ -302,6 +282,7 @@ func NewAuthService(
 	resetRepo repository.PasswordResetRepository,
 	hub ws.EventPublisher,
 	emailSender email.EmailSender,
+	voiceKit VoiceDisconnecter,
 	jwtSecret string,
 	accessExpMinutes int,
 	refreshExpDays int,
@@ -313,6 +294,7 @@ func NewAuthService(
 		resetRepo:   resetRepo,
 		hub:         hub,
 		emailSender: emailSender,
+		voiceKit:    voiceKit,
 		jwtSecret:   []byte(jwtSecret),
 		accessExp:   time.Duration(accessExpMinutes) * time.Minute,
 		refreshExp:  time.Duration(refreshExpDays) * 24 * time.Hour,

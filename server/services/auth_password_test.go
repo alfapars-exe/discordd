@@ -22,7 +22,7 @@ func strptr(s string) *string { return &s }
 // newAuthServiceForReset builds the full service with caller-controlled reset
 // repo + email sender so the reset flow's collaborators are observable.
 func newAuthServiceForReset(userRepo *testutil.MockUserRepo, resetRepo *testutil.MockResetRepo, email *testutil.MockEmailSender) AuthService {
-	return NewAuthService(userRepo, &testutil.MockSessionRepo{}, resetRepo, &testutil.MockEventPublisher{}, email, testJWTSecret, 15, 7)
+	return NewAuthService(userRepo, &testutil.MockSessionRepo{}, resetRepo, &testutil.MockEventPublisher{}, email, nil, testJWTSecret, 15, 7)
 }
 
 func TestChangeEmail(t *testing.T) {

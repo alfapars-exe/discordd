@@ -1783,3 +1783,8 @@ NewResendSender previously returned only EmailSender; startup silently asserted 
 ### RF11 — optional email configuration matrix (2026-11-14)
 
 configuredEmailProvider now owns the unchanged three-field enablement predicate and provider setup outside initServices. All8 presence/absence combinations are tested:7 incomplete configurations remain nil and the complete provider preserves sender configuration. Relevant startup/wiring/email tests, build and vet pass. No external email was sent and no production configuration changed. Updated receipt: implementation/verification/refactor-rf11-email-provider-contract-2026-11-14.json.
+
+
+### RF11 — auth voice revocation dependency at construction (2026-11-14)
+
+Auth no longer relies on post-construction SetVoiceDisconnecter. Constructor requires an explicit VoiceDisconnecter argument; production passes the existing voice runtime, while isolated media-free callers explicitly pass nil. Declared-parameter regression failed before the change. Revocation spy harness now uses constructor injection, preserving its full fan-out assertions. Other concrete mutation fixtures keep their voice assertions; no acceptance test removed. Targeted auth/password/revocation/anonymization/application-removal/handler/middleware/wiring/startup tests passed in4 packages, build and vet passed, exact-hit manifest remains valid50. No HTTP/WS wire change or local race claim. Receipt: implementation/verification/refactor-rf11-auth-voice-constructor-2026-11-14.json.

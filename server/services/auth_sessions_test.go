@@ -76,7 +76,7 @@ func boundAuthHarness(t *testing.T) (*mfaHarness, *authService, *sessionCaptureH
 	h := newMFAHarness(t)
 	users := repository.NewSQLiteUserRepo(h.db.Conn)
 	hub := &sessionCaptureHub{MockEventPublisher: &testutil.MockEventPublisher{}}
-	svc := NewAuthService(users, repository.NewSQLiteSessionRepo(h.db.Conn), nil, hub, nil, testJWTSecret, 15, 7, WithAuthSessions(repository.NewSQLiteAuthSessionRepo(h.db.Conn)), WithMFA(h.svc)).(*authService)
+	svc := NewAuthService(users, repository.NewSQLiteSessionRepo(h.db.Conn), nil, hub, nil, nil, testJWTSecret, 15, 7, WithAuthSessions(repository.NewSQLiteAuthSessionRepo(h.db.Conn)), WithMFA(h.svc)).(*authService)
 	return h, svc, hub
 }
 func sessionLogin(t *testing.T, s *authService, name string) *AuthTokens {
@@ -194,7 +194,7 @@ func TestAuthSessionsRegistrationAtomicBindingAndUpgrade(t *testing.T) {
 	if err := s.ValidateSession(ctx, tokens.User.ID, tokens.SessionID); err != nil {
 		t.Fatal(err)
 	}
-	legacy := NewAuthService(repository.NewSQLiteUserRepo(h.db.Conn), repository.NewSQLiteSessionRepo(h.db.Conn), nil, nil, nil, testJWTSecret, 15, 7)
+	legacy := NewAuthService(repository.NewSQLiteUserRepo(h.db.Conn), repository.NewSQLiteSessionRepo(h.db.Conn), nil, nil, nil, nil, testJWTSecret, 15, 7)
 	old, err := legacy.Login(ctx, &models.LoginRequest{Username: h.user.Username, Password: "current-password"})
 	if err != nil {
 		t.Fatal(err)

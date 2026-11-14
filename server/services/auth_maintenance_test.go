@@ -9,7 +9,7 @@ import (
 )
 
 func TestAuthMaintenanceExplicitLifecycle(t *testing.T) {
-	s := NewAuthService(nil, nil, nil, nil, nil, "", 1, 1).(*authService)
+	s := NewAuthService(nil, nil, nil, nil, nil, nil, "", 1, 1).(*authService)
 	if s.refreshSweep != nil {
 		t.Fatal("constructor started background work")
 	}
@@ -46,7 +46,7 @@ func TestAuthMaintenanceExplicitLifecycle(t *testing.T) {
 }
 
 func TestAuthMaintenanceDurableSessionsDoNotStartLegacyWorker(t *testing.T) {
-	s := NewAuthService(nil, nil, nil, nil, nil, "", 1, 1, WithAuthSessions(repository.NewSQLiteAuthSessionRepo(nil))).(*authService)
+	s := NewAuthService(nil, nil, nil, nil, nil, nil, "", 1, 1, WithAuthSessions(repository.NewSQLiteAuthSessionRepo(nil))).(*authService)
 	stop := StartAuthMaintenance(context.Background(), s)
 	stop()
 	if s.refreshSweep != nil {

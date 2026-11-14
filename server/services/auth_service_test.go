@@ -27,7 +27,7 @@ func preHashPassword(t *testing.T, password string) string {
 }
 
 func newTestAuthService(userRepo *testutil.MockUserRepo, sessionRepo *testutil.MockSessionRepo) AuthService {
-	return NewAuthService(userRepo, sessionRepo, &testutil.MockResetRepo{}, &testutil.MockEventPublisher{}, &testutil.MockEmailSender{}, testJWTSecret, 15, 7)
+	return NewAuthService(userRepo, sessionRepo, &testutil.MockResetRepo{}, &testutil.MockEventPublisher{}, &testutil.MockEmailSender{}, nil, testJWTSecret, 15, 7)
 }
 
 // revokeSpy records everything revokeAllSessions fans out to — session
@@ -80,9 +80,8 @@ func newRevokeHarness(userRepo *testutil.MockUserRepo, sessionRepo *testutil.Moc
 		},
 	}
 
-	svc := NewAuthService(userRepo, sessionRepo, resetRepo, hub, &testutil.MockEmailSender{}, testJWTSecret, 15, 7)
+	svc := NewAuthService(userRepo, sessionRepo, resetRepo, hub, &testutil.MockEmailSender{}, spy.voiceKit, testJWTSecret, 15, 7)
 	svc.SetUserCacheInvalidator(spy.inval)
-	svc.SetVoiceDisconnecter(spy.voiceKit)
 	return svc, spy
 }
 

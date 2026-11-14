@@ -25,7 +25,7 @@ func newTestAuthMiddleware(t testing.TB, userRepo *testutil.MockUserRepo) *AuthM
 		&testutil.MockResetRepo{},
 		&testutil.MockEventPublisher{},
 		&testutil.MockEmailSender{},
-		testJWTSecret,
+		nil, testJWTSecret,
 		15,
 		7,
 	)

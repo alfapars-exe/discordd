@@ -39,3 +39,10 @@ func TestVoiceConstructorDeclaresAllShutdownOwners(t *testing.T) {
 		t.Fatalf("voice constructor result %s omits required lifecycle owners", result)
 	}
 }
+
+func TestAuthConstructorRequiresVoiceRevocationDependency(t *testing.T) {
+	required := reflect.TypeFor[VoiceDisconnecter]()
+	if got := reflect.TypeOf(NewAuthService).In(5); got != required {
+		t.Fatalf("auth constructor dependency5=%s, want explicit %s", got, required)
+	}
+}

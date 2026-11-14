@@ -414,13 +414,9 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	)
 	authService := services.NewAuthService(
 		repos.User, repos.Session, repos.ResetToken, hub, emailSender,
-		cfg.JWT.Secret, cfg.JWT.AccessTokenExpiry, cfg.JWT.RefreshTokenExpiry, services.WithMFA(mfaService), services.WithAuthSessions(repos.AuthSession), services.WithAccountLifecycle(repos.AccountLifecycle), services.WithAccountAnonymization(repos.AccountAnonymization, musicBotService), services.WithApplicationRemoval(repos.ApplicationRemoval), services.WithServerOwnership(repos.ServerOwnership),
+		voiceService, cfg.JWT.Secret, cfg.JWT.AccessTokenExpiry, cfg.JWT.RefreshTokenExpiry, services.WithMFA(mfaService), services.WithAuthSessions(repos.AuthSession), services.WithAccountLifecycle(repos.AccountLifecycle), services.WithAccountAnonymization(repos.AccountAnonymization, musicBotService), services.WithApplicationRemoval(repos.ApplicationRemoval), services.WithServerOwnership(repos.ServerOwnership),
 	)
-	// "Log out from all devices" / password change must also kick any live
-	// voice or screen-share session, mirroring adminUserService's ban/delete
-	// path (security review 2026-08-01, finding 3). voiceService already
-	// exists at this point (constructed above), so no ordering hazard.
-	authService.SetVoiceDisconnecter(voiceService)
+
 	// Wire the channel-empty hook — when the last human leaves, voice service
 	// asks music bot to stop so it doesn't keep playing to nobody.
 	voiceService.SetMusicBotHook(musicBotService)

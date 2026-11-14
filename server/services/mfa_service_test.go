@@ -43,7 +43,7 @@ func newMFAHarness(t *testing.T) *mfaHarness {
 	svc := NewMFAService(repository.NewSQLiteMFARepo(db.Conn), users, []byte(strings.Repeat("k", 32)))
 	h := &mfaHarness{db: db, svc: svc, user: user, now: 1800000000}
 	svc.now = func() time.Time { return time.Unix(h.now, 0) }
-	h.auth = NewAuthService(users, repository.NewSQLiteSessionRepo(db.Conn), nil, nil, nil, testJWTSecret, 15, 7, WithMFA(svc))
+	h.auth = NewAuthService(users, repository.NewSQLiteSessionRepo(db.Conn), nil, nil, nil, nil, testJWTSecret, 15, 7, WithMFA(svc))
 	return h
 }
 func (h *mfaHarness) enroll(t *testing.T) (*models.MFASetup, []string) {

@@ -31,7 +31,7 @@ func TestProfileWriteImmediatelyRefreshesAuthenticatedMe(t *testing.T) {
 	users := repository.NewSQLiteUserRepo(db.Conn)
 	hub := &testutil.MockEventPublisher{}
 	auth := services.NewAuthService(users, repository.NewSQLiteSessionRepo(db.Conn), nil, hub, nil,
-		testJWTSecret, 15, 7, services.WithAuthSessions(repository.NewSQLiteAuthSessionRepo(db.Conn)))
+		nil, testJWTSecret, 15, 7, services.WithAuthSessions(repository.NewSQLiteAuthSessionRepo(db.Conn)))
 	register := func(name string) *services.AuthTokens {
 		t.Helper()
 		tokens, err := auth.Register(context.Background(), &models.CreateUserRequest{

@@ -25,7 +25,7 @@ func TestApplicationRemovalFreshProofAndScopedRuntime(t *testing.T) {
 	voice := &testutil.MockVoiceDisconnecter{}
 	s.SetOwnershipInvalidator(inv)
 	s.SetUserCacheInvalidator(users)
-	s.SetVoiceDisconnecter(voice)
+	s.voiceKit = voice
 	s.applicationRemoval = repository.NewSQLiteApplicationRemovalRepo(h.db.Conn)
 	disconnected := ""
 	hub.DisconnectUserFn = func(id string) { disconnected = id }
@@ -81,7 +81,7 @@ func TestApplicationRemovalFailureDoesNotDisconnect(t *testing.T) {
 			voice := &testutil.MockVoiceDisconnecter{}
 			s.SetOwnershipInvalidator(inv)
 			s.SetUserCacheInvalidator(users)
-			s.SetVoiceDisconnecter(voice)
+			s.voiceKit = voice
 			disconnects := 0
 			observers := 0
 			s.musicRequesterRetirement = musicRequesterObserverFunc(func(string) { observers++ })
