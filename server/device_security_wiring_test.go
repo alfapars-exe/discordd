@@ -1,7 +1,12 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/crypto"
 	"github.com/argeinfina/hichat/ws"
 	"reflect"
 	"testing"
@@ -61,5 +66,58 @@ func TestDeviceSecurityValidCompositionRetainsOwners(t *testing.T) {
 	group := initDeviceSecurityServices(deviceSecurityFixture(t))
 	if group.Device == nil || group.E2EE == nil {
 		t.Fatal("missing device security owner")
+	}
+}
+
+func TestDeviceSecurityCompositionBackupIntegrityUsesMasterKey(t *testing.T) {
+	deps := deviceSecurityFixture(t)
+	deps.EncryptionKey = []byte("composition-master-key-0123456789")
+	group := initDeviceSecurityServices(deps)
+	ctx := context.Background()
+	user := &models.User{Username: "backup_wiring", PasswordHash: "fixture", Status: "offline"}
+	if err := deps.Repositories.User.Create(ctx, user); err != nil {
+		t.Fatal(err)
+	}
+	req := &models.CreateKeyBackupRequest{Version: 1, Algorithm: "aes-256-gcm", EncryptedData: "opaque-cipher", Nonce: "nonce", Salt: "salt"}
+	if err := group.E2EE.UpsertKeyBackup(ctx, user.ID, req); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := deps.Repositories.E2EEBackup.GetByUser(ctx, user.ID)
+	if err != nil || stored == nil || stored.BackupHMAC == "" {
+		t.Fatalf("stored backup=%+v err=%v", stored, err)
+	}
+	if !crypto.VerifyBackupHMAC(crypto.DeriveBackupHMACKey(deps.EncryptionKey), stored.BackupHMAC, user.ID, stored.Version, stored.Algorithm, stored.EncryptedData, stored.Nonce, stored.Salt) {
+		t.Fatal("persisted MAC does not use the backup HKDF subkey")
+	}
+	got, err := group.E2EE.GetKeyBackup(ctx, user.ID)
+	if err != nil || got == nil || got.EncryptedData != req.EncryptedData {
+		t.Fatalf("round trip=%+v err=%v", got, err)
+	}
+	wrong := deps
+	wrong.EncryptionKey = []byte("different-composition-master-key")
+	if _, err := initDeviceSecurityServices(wrong).E2EE.GetKeyBackup(ctx, user.ID); !errors.Is(err, pkg.ErrInternal) {
+		t.Fatalf("wrong master key accepted: %v", err)
+	}
+	originalMAC := stored.BackupHMAC
+	req.EncryptedData = "changed-opaque-cipher"
+	if err := deps.Repositories.E2EEBackup.Upsert(ctx, user.ID, req, originalMAC); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := group.E2EE.GetKeyBackup(ctx, user.ID); !errors.Is(err, pkg.ErrInternal) {
+		t.Fatalf("modified persisted cipher accepted: %v", err)
+	}
+	if err := group.E2EE.UpsertKeyBackup(ctx, user.ID, req); err != nil {
+		t.Fatal(err)
+	}
+	got, err = group.E2EE.GetKeyBackup(ctx, user.ID)
+	if err != nil || got == nil || got.EncryptedData != req.EncryptedData {
+		t.Fatalf("updated round trip=%+v err=%v", got, err)
+	}
+	if err := group.E2EE.DeleteKeyBackup(ctx, user.ID); err != nil {
+		t.Fatal(err)
+	}
+	got, err = group.E2EE.GetKeyBackup(ctx, user.ID)
+	if err != nil || got != nil {
+		t.Fatalf("deleted backup=%+v err=%v", got, err)
 	}
 }
