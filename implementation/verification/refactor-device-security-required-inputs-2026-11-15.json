@@ -1,0 +1,30 @@
+{
+  "scope": "RF11 device security required composition providers",
+  "required_integrations": [
+    "Database",
+    "Repositories",
+    "Hub",
+    "Permissions"
+  ],
+  "required_repositories": [
+    "Device",
+    "Server",
+    "E2EEBackup",
+    "GroupSession",
+    "Channel"
+  ],
+  "regression": "16 missing/typed-nil cases failed before implementation; 4 missing integration cases, 2 typed-nil integration cases and 10 repository cases.",
+  "implementation": "Validate providers before device transaction runner construction and backup MAC derivation. Keep lower-level constructor and encryption-key configuration semantics unchanged.",
+  "checks": {
+    "root": "PASS device/media composition, startup/rollback/routes/callbacks and real friendship-DM; 3.151s",
+    "services": "PASS device/E2EE/key-backup/group-session tests; 2.769s",
+    "build": "PASS go build ./...",
+    "vet": "PASS go vet .",
+    "reviewed_sql_manifest": "PASS 50 exact records"
+  },
+  "limits": [
+    "Presence validation does not prove database connectivity or that each repository belongs to the same database.",
+    "Physical device interoperability, full optional/resource lifecycle acceptance and overall refactor remain open.",
+    "Remote CI 43654234802 is live on 4408d2f2 and excludes local changes."
+  ]
+}

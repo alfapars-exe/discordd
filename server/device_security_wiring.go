@@ -23,7 +23,27 @@ type deviceSecurityServices struct {
 // initDeviceSecurityServices binds transactional device registration and key
 // distribution to the same membership, channel and permission providers.
 func initDeviceSecurityServices(deps deviceSecurityDependencies) deviceSecurityServices {
+	for _, input := range []struct {
+		name  string
+		value any
+	}{
+		{"Database", deps.Database}, {"Repositories", deps.Repositories}, {"Hub", deps.Hub}, {"Permissions", deps.Permissions},
+	} {
+		if missingCompositionInput(input.value) {
+			panic("device security requires " + input.name)
+		}
+	}
 	repos := deps.Repositories
+	for _, input := range []struct {
+		name  string
+		value any
+	}{
+		{"Device", repos.Device}, {"Server", repos.Server}, {"E2EEBackup", repos.E2EEBackup}, {"GroupSession", repos.GroupSession}, {"Channel", repos.Channel},
+	} {
+		if missingCompositionInput(input.value) {
+			panic("device security requires repository " + input.name)
+		}
+	}
 	device := services.NewDeviceService(repos.Device, repository.NewDeviceTxRunner(deps.Database), deps.Hub, repos.Server)
 	// Derive the backup integrity MAC key from the server master key, retaining
 	// the existing HKDF domain separation and opaque encrypted backup contract.
