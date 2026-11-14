@@ -44,3 +44,14 @@ type GroupDMRepository interface {
 	GetAttachmentByFileURL(ctx context.Context, fileURL string) (*models.GroupDMAttachment, error)
 	GetAttachmentFileURLsByGroup(ctx context.Context, groupID string) ([]string, error)
 }
+
+// GroupNotificationDelivery serializes committed metadata push with revocation.
+type GroupNotificationDelivery interface {
+	DeliverCommittedGroupNotifications(context.Context, string, string, func(*models.Notification)) error
+}
+
+// GroupDMStore retains production integrations at the factory boundary.
+type GroupDMStore interface {
+	GroupDMRepository
+	GroupNotificationDelivery
+}

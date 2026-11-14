@@ -61,7 +61,7 @@ func TestPrivateReactionNotificationGates(t *testing.T) {
 			blocks := reactionBlockStub{blocked: tc.blocked}
 			if !tc.pending {
 				repo := &reactionDeliveryRepo{created: true}
-				group := NewGroupDMService(reactionGroupStub{added: tc.added, authorMember: tc.authorMember}, nil, nil, hub, "", "", "", nil, "", repo, reactionPrefsStub{"direct"}, blocks)
+				group := NewGroupDMService(reactionGroupStub{added: tc.added, authorMember: tc.authorMember}, nil, nil, hub, "", "", "", nil, "", repo, reactionPrefsStub{"direct"}, blocks, nil)
 				if err := group.ToggleReaction(context.Background(), "group", "message", "actor", "👍"); err != nil {
 					t.Fatal(err)
 				}

@@ -53,18 +53,19 @@ type GroupDMService interface {
 }
 
 type groupDMService struct {
-	groups              repository.GroupDMRepository
-	users               repository.UserRepository
-	friendships         repository.FriendshipRepository
-	hub                 ws.Broadcaster
-	liveKitURL          string
-	liveKitAPIKey       string
-	liveKitAPISecret    string
-	mediaKey            []byte
-	uploadDir           string
-	notifications       repository.NotificationStore
-	reactionPreferences profilePreferenceReader
-	reactionBlocks      BlockChecker
+	groups               repository.GroupDMRepository
+	notificationDelivery repository.GroupNotificationDelivery
+	users                repository.UserRepository
+	friendships          repository.FriendshipRepository
+	hub                  ws.Broadcaster
+	liveKitURL           string
+	liveKitAPIKey        string
+	liveKitAPISecret     string
+	mediaKey             []byte
+	uploadDir            string
+	notifications        repository.NotificationStore
+	reactionPreferences  profilePreferenceReader
+	reactionBlocks       BlockChecker
 }
 
 func NewGroupDMService(
@@ -78,20 +79,22 @@ func NewGroupDMService(
 	notifications repository.NotificationStore,
 	prefs profilePreferenceReader,
 	blocks BlockChecker,
+	notificationDelivery repository.GroupNotificationDelivery,
 ) GroupDMService {
 	return &groupDMService{
-		groups:              groups,
-		users:               users,
-		friendships:         friendships,
-		hub:                 hub,
-		liveKitURL:          liveKitURL,
-		liveKitAPIKey:       liveKitAPIKey,
-		liveKitAPISecret:    liveKitAPISecret,
-		mediaKey:            append([]byte(nil), mediaKey...),
-		uploadDir:           uploadDir,
-		notifications:       notifications,
-		reactionPreferences: prefs,
-		reactionBlocks:      blocks,
+		groups:               groups,
+		notificationDelivery: notificationDelivery,
+		users:                users,
+		friendships:          friendships,
+		hub:                  hub,
+		liveKitURL:           liveKitURL,
+		liveKitAPIKey:        liveKitAPIKey,
+		liveKitAPISecret:     liveKitAPISecret,
+		mediaKey:             append([]byte(nil), mediaKey...),
+		uploadDir:            uploadDir,
+		notifications:        notifications,
+		reactionPreferences:  prefs,
+		reactionBlocks:       blocks,
 	}
 }
 

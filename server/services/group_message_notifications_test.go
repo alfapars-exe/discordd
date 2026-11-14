@@ -11,10 +11,12 @@ import (
 
 type groupIncomingFixture struct {
 	groupReadFixture
-	fail bool
+	fail          bool
+	deliveryCalls int
 }
 
 func (f *groupIncomingFixture) DeliverCommittedGroupNotifications(_ context.Context, g, m string, deliver func(*models.Notification)) error {
+	f.deliveryCalls++
 	if f.fail {
 		return errors.New("postcommit lookup unavailable")
 	}
@@ -50,7 +52,7 @@ func TestGroupIncomingNotificationPostcommitPushAndBoundedRefresh(t *testing.T) 
 		}
 		events = append(events, event)
 	}
-	svc := &groupDMService{groups: f, hub: hub, notifications: &groupInboxSummaryFixture{t: t}}
+	svc := NewGroupDMService(f, nil, nil, hub, "", "", "", nil, "", &groupInboxSummaryFixture{t: t}, nil, nil, f)
 	if err := svc.BroadcastMessage(ctx, &models.GroupDMMessage{GroupID: "group", ID: "message", UserID: "sender"}); err != nil {
 		t.Fatal(err)
 	}
@@ -79,5 +81,21 @@ func TestGroupIncomingNotificationPostcommitPushAndBoundedRefresh(t *testing.T) 
 		if event.Op == ws.OpNotificationCreate {
 			t.Fatal("fabricated notification on failed lookup")
 		}
+	}
+}
+
+func TestGroupIncomingNotificationExplicitlyDisabledDelivery(t *testing.T) {
+	fixture := &groupIncomingFixture{groupReadFixture: groupReadFixture{member: true}}
+	hub := &testutil.MockBroadcaster{BroadcastToUserFn: func(_ string, event ws.Event) {
+		if event.Op == ws.OpNotificationCreate {
+			t.Fatal("disabled integration pushed notification")
+		}
+	}}
+	service := NewGroupDMService(fixture, nil, nil, hub, "", "", "", nil, "", nil, nil, nil, nil)
+	if err := service.BroadcastMessage(context.Background(), &models.GroupDMMessage{GroupID: "group", ID: "message", UserID: "sender"}); err != nil {
+		t.Fatal(err)
+	}
+	if fixture.deliveryCalls != 0 {
+		t.Fatal("disabled integration rediscovered repository capability")
 	}
 }

@@ -14,7 +14,7 @@ import (
 
 type sqliteGroupDMRepo struct{ db database.TxQuerier }
 
-func NewSQLiteGroupDMRepo(db database.TxQuerier) GroupDMRepository { return &sqliteGroupDMRepo{db: db} }
+func NewSQLiteGroupDMRepo(db database.TxQuerier) GroupDMStore { return &sqliteGroupDMRepo{db: db} }
 
 // An omitted admission actor is reserved for trusted internal legacy/import callers.
 // Public services always supply the authenticated actor; HTTP never supplies this scope.

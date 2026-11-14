@@ -116,7 +116,7 @@
     {
       "rule": "go.sql-concat",
       "path": "server/repository/sqlite_group_dm.go",
-      "file_sha256": "a8149541f19a5a43e5f9f82a4f6b469de0d99c046eccff35fb9f696877faa739",
+      "file_sha256": "e34ca712afeba83abc146ad3cdf145f45b51ad5d5a705b352c2e2c919ff34502",
       "line_sha256": "7c8f35c7ab1143e7ce941b75912d6549057a6489e5b5ff88fc5186b31a600746",
       "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
       "proof_ref": "server/repository/sqlite_group_dm.go:397-399,416,424"
@@ -124,7 +124,7 @@
     {
       "rule": "go.sql-concat",
       "path": "server/repository/sqlite_group_dm.go",
-      "file_sha256": "a8149541f19a5a43e5f9f82a4f6b469de0d99c046eccff35fb9f696877faa739",
+      "file_sha256": "e34ca712afeba83abc146ad3cdf145f45b51ad5d5a705b352c2e2c919ff34502",
       "line_sha256": "947be30c7ec80d463d9bb7a1f6be1fa6fc2a38536edecc2adfb58ec5006e5fe0",
       "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
       "proof_ref": "server/repository/sqlite_group_dm.go:195"

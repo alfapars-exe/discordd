@@ -477,3 +477,16 @@ func TestMessageFactoryDeclaresDeliveryRuntime(t *testing.T) {
 		t.Fatalf("factory result %s hides delivery runtime", result)
 	}
 }
+
+func TestGroupConstructorDeclaresPostcommitNotificationDelivery(t *testing.T) {
+	factory := reflect.TypeOf(NewGroupDMService)
+	if factory.NumIn() != 13 {
+		t.Fatalf("group constructor inputs=%d want13", factory.NumIn())
+	}
+	required := reflect.TypeFor[interface {
+		DeliverCommittedGroupNotifications(context.Context, string, string, func(*models.Notification)) error
+	}]()
+	if !factory.In(12).Implements(required) {
+		t.Fatal("group notification delivery must be explicit")
+	}
+}
