@@ -228,7 +228,9 @@ type MemberTimeoutChecker interface {
 // VoiceRuntimeDependencies is selected explicitly by the composition owner.
 // Its zero value disables integrations and persistent app logging.
 type VoiceRuntimeDependencies struct {
-	UsageCredit VoiceUsageCredit
+	// Nil disables standalone permission-change subscriptions.
+	PermissionInvalidations PermissionInvalidationSource
+	UsageCredit             VoiceUsageCredit
 	// Nil disables the durable pending-usage recovery worker.
 	UsageRecovery PendingVoiceUsageApplier
 	// Nil explicitly selects the portable standalone admission/visibility path.
@@ -284,8 +286,8 @@ func NewVoiceService(
 		service.entranceHook, service.musicBotHook = runtime.Integrations(service)
 	}
 	service.voiceFanout = newVoiceStateFanout(service)
-	if cache, ok := permResolver.(*cachingPermResolver); ok {
-		cache.afterInvalidation = service.recheckVoiceAccess
+	if runtime.PermissionInvalidations != nil {
+		runtime.PermissionInvalidations.BindInvalidationCallback(service.recheckVoiceAccess)
 	}
 	return service
 }

@@ -97,8 +97,15 @@ type FreshChannelPermResolver interface {
 	ResolveChannelPermissionsFresh(context.Context, string, string) (models.Permission, error)
 }
 
+// PermissionInvalidationSource binds the active voice recheck before serving.
+// Binding is a startup-only composition operation.
+type PermissionInvalidationSource interface {
+	BindInvalidationCallback(func(userID, channelID string))
+}
+
 // ChannelPermissionRuntime retains cleanup ownership at the composition root.
 type ChannelPermissionRuntime interface {
+	PermissionInvalidationSource
 	FreshChannelPermResolver
 	ChannelPermissionService
 	Stop()

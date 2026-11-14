@@ -269,3 +269,9 @@ var _ ChannelPermissionService = (*cachingPermResolver)(nil)
 
 // Stop retires the owned cache worker after request handling has drained.
 func (s *cachingPermResolver) Stop() { s.permCache.Close() }
+
+// BindInvalidationCallback completes the permission/voice cycle at startup,
+// before request or event handling can invalidate the cache.
+func (c *cachingPermResolver) BindInvalidationCallback(callback func(string, string)) {
+	c.afterInvalidation = callback
+}
