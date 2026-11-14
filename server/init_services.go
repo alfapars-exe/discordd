@@ -42,7 +42,7 @@ type Services struct {
 	Category                services.CategoryService
 	Message                 services.MessageRuntime
 	Upload                  services.UploadService
-	DMUpload                services.DMUploadService
+	DMUpload                services.DMUploadRuntime
 	GroupDMUpload           services.GroupDMUploadService
 	Member                  services.MemberService
 	Role                    services.RoleService

@@ -685,3 +685,10 @@ func TestAuthFactoryDeclaresMaintenanceOwner(t *testing.T) {
 		t.Fatal("auth factory hides maintenance owner")
 	}
 }
+
+func TestDMUploadFactoryDeclaresCleanupOwner(t *testing.T) {
+	required := reflect.TypeFor[interface{ StartDMUploadCleanup(context.Context) func() }]()
+	if !reflect.TypeOf(NewDMUploadService).Out(0).Implements(required) {
+		t.Fatal("DM upload factory hides cleanup owner")
+	}
+}

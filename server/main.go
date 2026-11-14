@@ -289,7 +289,7 @@ func main() {
 		logx.Fatal("boot", "failed to initialize DM outbox", dmDeliveryErr)
 	}
 	defer stopDMDelivery()
-	stopDMUploadCleanup := services.StartDMUploadCleanup(ownerCtx, svcs.DMUpload)
+	stopDMUploadCleanup := svcs.DMUpload.StartDMUploadCleanup(ownerCtx)
 	defer stopDMUploadCleanup()
 
 	// 10h. Readiness checker — polls the deep dependency checks every 30s and

@@ -23,6 +23,12 @@ type DMUploadService interface {
 	Upload(ctx context.Context, dmMessageID string, file multipart.File, header *multipart.FileHeader, isEncrypted bool) (*models.DMAttachment, error)
 }
 
+// DMUploadRuntime retains staging maintenance ownership at composition.
+type DMUploadRuntime interface {
+	DMUploadService
+	StartDMUploadCleanup(context.Context) func()
+}
+
 type dmUploadService struct {
 	dmRepo    repository.DMRepository
 	uploadDir string
@@ -33,7 +39,7 @@ func NewDMUploadService(
 	dmRepo repository.DMRepository,
 	uploadDir string,
 	maxSize int64,
-) DMUploadService {
+) DMUploadRuntime {
 	return &dmUploadService{
 		dmRepo:    dmRepo,
 		uploadDir: uploadDir,
