@@ -38,13 +38,15 @@ func TestP2PSignalICEBounds(t *testing.T) {
 
 func TestP2PSignalHandlerUsesValidatedDTOAndAuthenticatedActor(t *testing.T) {
 	delivered := make(chan string, 1)
-	hub := &Hub{onP2PSignal: func(actor string, data P2PSignalData) {
+	hub := NewHub()
+	t.Cleanup(hub.Shutdown)
+	hub.OnP2PSignal(func(actor string, data P2PSignalData) {
 		if data.MediaProtocol != 1 || len(data.Sources) != 2 {
 			delivered <- "bad-fields"
 			return
 		}
 		delivered <- actor
-	}}
+	})
 	client := &Client{hub: hub, userID: "authenticated"}
 	invalid := validP2PDescription()
 	invalid.Sources[1].MID = "0"
