@@ -106,11 +106,15 @@ func TestMusicYouTubeSearchLiveAcceptance(t *testing.T) {
 	lk := &mockConfigurableLiveKitGetter{GetByServerIDFn: func(context.Context, string) (*models.LiveKitInstance, error) {
 		return &models.LiveKitInstance{URL: livekitURL, APIKey: apiKey, APISecret: apiSecret}, nil
 	}}
-	svc := NewMusicBotService(
-		&stubChannelGetter{channel: &models.Channel{ID: channelID, ServerID: serverID, Type: models.ChannelTypeVoice}},
-		lk, nil, &testutil.MockBroadcaster{}, stubMusicUserGetter{}, key, nil, nil,
-		staticMusicRoomKey{passphrase: "music-live-smoke"}, nil, nil, nil,
-	)
+	svc := NewMusicBotService(&stubChannelGetter{channel: &models.Channel{ID: channelID, ServerID: serverID, Type: models.ChannelTypeVoice}},
+		lk,
+		nil,
+		&testutil.MockBroadcaster{},
+		stubMusicUserGetter{},
+		key,
+		nil,
+		MusicPersistenceDependencies{Sessions: nil, RequesterPrivacy: nil, LegacyEnqueue: nil, Control: nil},
+		staticMusicRoomKey{passphrase: "music-live-smoke"})
 	defer svc.Stop(channelID)
 	enqueued, err := svc.Enqueue(ctx, musicSearchSmokeUserID, channelID, selected.URL)
 	if err != nil {

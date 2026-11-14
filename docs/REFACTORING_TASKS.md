@@ -2496,3 +2496,9 @@ ServerStore retains ProfileAudienceSharedServerReader at the factory boundary. P
 Selected service/handler/repository/root profile/shared-server/startup tests passed (1.450s/0.610s/5.394s/2.338s), build and scoped vet passed, all 50 manifest records validate unchanged. No SQL/public fields changed. A dedicated PostgreSQL profile follow-up is in progress; it is not yet a passing receipt. RF11 all-dependency/startup/shutdown/current-source aggregate/race acceptance remains open.
 
 PostgreSQL follow-up completed at af6a002f source: 15 top-level profile policy/projection/bulk block/shared-server/corrupt-preference tests passed with zero skips/failures. Receipt implementation/verification/refactor-profile-postgres-2026-11-15.json distinguishes policy fixtures from real repository queries. Owned container stopped/removed.
+
+### RF11 — grouped music persistence dependencies (2026-11-15)
+
+Grouped Sessions, RequesterPrivacy, LegacyEnqueue and Control into MusicPersistenceDependencies at the constructor boundary. Production and standalone fixtures now select named fields rather than adjacent positional providers. NewMusicBotService inputs reduced from thirteen to ten (including the audience variadic). Each capability keeps its narrow interface and explicit nil behavior; constructor still loads stored sessions through the selected Sessions provider. Grouping regression failed first. Added exact field-type contracts while preserving disabled-provider/failure behavior tests.
+
+Selected music/service/handler/root tests passed (37.385s/0.652s/2.789s), constructor/group field tests passed (0.599s); build and scoped vet passed. All 50 manifest records validate unchanged. No SQL/public payload/physical media claim. This addresses the small dependency-group part of RF11 for music only; full required-dependency validation, domain grouping and combined acceptance remain open.

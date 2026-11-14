@@ -14,8 +14,15 @@ func initVoiceMediaServices(repos *Repositories, hub ws.Broadcaster,
 ) (services.EntranceService, services.MusicBotRuntime) {
 	entrance := services.NewEntranceService(repos.Entrance, repos.Server, repos.Role, repos.Channel,
 		permissions, hub, voice, uploadDir)
-	music := services.NewMusicBotService(repos.Channel, repos.LiveKit, permissions, hub, repos.User,
-		encryptionKey, logger, repos.MusicSession, voice, repos.MusicSession, repos.MusicSession, repos.MusicSession,
+	music := services.NewMusicBotService(repos.Channel,
+		repos.LiveKit,
+		permissions,
+		hub,
+		repos.User,
+		encryptionKey,
+		logger,
+		services.MusicPersistenceDependencies{Sessions: repos.MusicSession, RequesterPrivacy: repos.MusicSession, LegacyEnqueue: repos.MusicSession, Control: repos.MusicSession},
+		voice,
 		services.MusicAudienceDependencies{Voice: voice, Members: repos.Server, FreshPermissions: fresh})
 	return entrance, music
 }

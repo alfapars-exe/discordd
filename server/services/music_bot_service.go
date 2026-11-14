@@ -287,6 +287,15 @@ type MusicBotRuntime interface {
 	MusicRequesterRetirementObserver
 }
 
+// MusicPersistenceDependencies selects persistence capabilities explicitly.
+// Nil optional providers preserve standalone behavior without discovery.
+type MusicPersistenceDependencies struct {
+	Sessions         MusicSessionStore
+	RequesterPrivacy MusicRequesterPrivacyStore
+	LegacyEnqueue    MusicLegacyEnqueueStore
+	Control          MusicControlStore
+}
+
 // NewMusicBotService — constructor. Pipeline subprocesses (yt-dlp, ffmpeg)
 // are launched lazily on first Enqueue per channel.
 func NewMusicBotService(
@@ -297,11 +306,8 @@ func NewMusicBotService(
 	users MusicBotUserGetter,
 	encryptionKey []byte,
 	appLogger VoiceAppLogger,
-	sessions MusicSessionStore,
+	persistence MusicPersistenceDependencies,
 	roomKeys MusicRoomKeySource,
-	requesterPrivacy MusicRequesterPrivacyStore,
-	legacyEnqueue MusicLegacyEnqueueStore,
-	controls MusicControlStore,
 	audience ...MusicAudienceDependencies,
 ) MusicBotRuntime {
 	service := &musicBotService{
@@ -314,18 +320,18 @@ func NewMusicBotService(
 		encryptionKey:    encryptionKey,
 		users:            users,
 		appLogger:        appLogger,
-		sessions:         sessions,
-		requesterPrivacy: requesterPrivacy,
-		legacyEnqueue:    legacyEnqueue,
-		controls:         controls,
+		sessions:         persistence.Sessions,
+		requesterPrivacy: persistence.RequesterPrivacy,
+		legacyEnqueue:    persistence.LegacyEnqueue,
+		controls:         persistence.Control,
 		roomKeys:         roomKeys,
 		extractSem:       make(chan struct{}, maxConcurrentMusicExtractions),
 	}
 	if len(audience) == 1 {
 		service.audience = audience[0]
 	}
-	if sessions != nil {
-		stored, err := sessions.List(context.Background())
+	if persistence.Sessions != nil {
+		stored, err := persistence.Sessions.List(context.Background())
 		if err != nil {
 			musicBotLogger.Error("load paused music sessions", "err", pkg.ErrText(err))
 		} else {

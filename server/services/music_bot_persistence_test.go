@@ -109,10 +109,15 @@ func TestStopDeleteFailureKeepsRestoredSessionForRetry(t *testing.T) {
 func TestRestoreAbortsWhenStopClearsSnapshottedRestoredSession(t *testing.T) {
 	session := models.MusicSession{ChannelID: "ch", ServerID: "srv", Revision: 5, Queue: []models.MusicTrack{{QueueItemID: "item", Title: "Track"}}}
 	store := &memoryMusicSessions{items: map[string]models.MusicSession{"ch": session}}
-	svc := NewMusicBotService(
-		&stubChannelGetter{channel: &models.Channel{ID: "ch", ServerID: "srv", Type: models.ChannelTypeVoice}},
-		nil, nil, &testutil.MockBroadcaster{}, stubMusicUserGetter{}, nil, nil, store, nil, nil, nil, nil,
-	).(*musicBotService)
+	svc := NewMusicBotService(&stubChannelGetter{channel: &models.Channel{ID: "ch", ServerID: "srv", Type: models.ChannelTypeVoice}},
+		nil,
+		nil,
+		&testutil.MockBroadcaster{},
+		stubMusicUserGetter{},
+		nil,
+		nil,
+		MusicPersistenceDependencies{Sessions: store, RequesterPrivacy: nil, LegacyEnqueue: nil, Control: nil},
+		nil).(*musicBotService)
 	snapshotTaken := make(chan struct{})
 	releaseRestore := make(chan struct{})
 	svc.restoreSnapshotFn = func() {
@@ -160,10 +165,15 @@ func TestFailedEnqueueKeepsRestoredQueuePausedAndRestorable(t *testing.T) {
 	store := &memoryMusicSessions{items: map[string]models.MusicSession{
 		"ch": {ChannelID: "ch", ServerID: "srv", Queue: []models.MusicTrack{oldTrack}, Revision: 7, RepeatMode: "all"},
 	}, failNext: 1}
-	svc := NewMusicBotService(
-		&stubChannelGetter{channel: &models.Channel{ID: "ch", ServerID: "srv", Type: models.ChannelTypeVoice}},
-		nil, nil, &testutil.MockBroadcaster{}, stubMusicUserGetter{}, nil, nil, store, nil, nil, nil, nil,
-	).(*musicBotService)
+	svc := NewMusicBotService(&stubChannelGetter{channel: &models.Channel{ID: "ch", ServerID: "srv", Type: models.ChannelTypeVoice}},
+		nil,
+		nil,
+		&testutil.MockBroadcaster{},
+		stubMusicUserGetter{},
+		nil,
+		nil,
+		MusicPersistenceDependencies{Sessions: store, RequesterPrivacy: nil, LegacyEnqueue: nil, Control: nil},
+		nil).(*musicBotService)
 	svc.connectBotFn = func(context.Context, *botInstance) error { return nil }
 	svc.extractTracksFn = func(context.Context, string, string, string) ([]models.MusicTrack, error) {
 		return []models.MusicTrack{{VideoID: "new", Title: "New"}}, nil
@@ -210,10 +220,15 @@ func TestFailedEnqueueKeepsRestoredQueuePausedAndRestorable(t *testing.T) {
 func TestStopSerializesRestoredDeleteAgainstConcurrentEnqueue(t *testing.T) {
 	base := &memoryMusicSessions{items: make(map[string]models.MusicSession)}
 	store := &blockingDeleteMusicSessions{memoryMusicSessions: base, started: make(chan struct{}), release: make(chan struct{})}
-	svc := NewMusicBotService(
-		&stubChannelGetter{channel: &models.Channel{ID: "ch", ServerID: "srv", Type: models.ChannelTypeVoice}},
-		nil, nil, &testutil.MockBroadcaster{}, stubMusicUserGetter{}, nil, nil, store, nil, nil, nil, nil,
-	).(*musicBotService)
+	svc := NewMusicBotService(&stubChannelGetter{channel: &models.Channel{ID: "ch", ServerID: "srv", Type: models.ChannelTypeVoice}},
+		nil,
+		nil,
+		&testutil.MockBroadcaster{},
+		stubMusicUserGetter{},
+		nil,
+		nil,
+		MusicPersistenceDependencies{Sessions: store, RequesterPrivacy: nil, LegacyEnqueue: nil, Control: nil},
+		nil).(*musicBotService)
 	svc.connectBotFn = func(context.Context, *botInstance) error { return nil }
 	svc.extractTracksFn = func(context.Context, string, string, string) ([]models.MusicTrack, error) {
 		return []models.MusicTrack{{VideoID: "video", Title: "Track"}}, nil
@@ -288,10 +303,15 @@ func TestEnqueueAppendsToRestoredPausedQueue(t *testing.T) {
 	store := &memoryMusicSessions{items: map[string]models.MusicSession{
 		"ch": {ChannelID: "ch", ServerID: "srv", Queue: []models.MusicTrack{oldTrack}, Revision: 7, RepeatMode: "all"},
 	}}
-	svc := NewMusicBotService(
-		&stubChannelGetter{channel: &models.Channel{ID: "ch", ServerID: "srv", Type: models.ChannelTypeVoice}},
-		nil, nil, &testutil.MockBroadcaster{}, stubMusicUserGetter{}, nil, nil, store, nil, nil, nil, nil,
-	).(*musicBotService)
+	svc := NewMusicBotService(&stubChannelGetter{channel: &models.Channel{ID: "ch", ServerID: "srv", Type: models.ChannelTypeVoice}},
+		nil,
+		nil,
+		&testutil.MockBroadcaster{},
+		stubMusicUserGetter{},
+		nil,
+		nil,
+		MusicPersistenceDependencies{Sessions: store, RequesterPrivacy: nil, LegacyEnqueue: nil, Control: nil},
+		nil).(*musicBotService)
 	svc.connectBotFn = func(context.Context, *botInstance) error { return nil }
 	svc.extractTracksFn = func(context.Context, string, string, string) ([]models.MusicTrack, error) {
 		return []models.MusicTrack{{VideoID: "new", Title: "New"}}, nil
@@ -334,7 +354,15 @@ func TestMusicSessionLoadsPausedWithoutConnecting(t *testing.T) {
 		ChannelID: "ch", ServerID: "srv", RepeatMode: "all", Revision: 9,
 		Queue: []models.MusicTrack{{QueueItemID: "00000000-0000-4000-8000-000000000001", Title: "Interrupted"}},
 	}}}
-	svc := NewMusicBotService(&stubChannelGetter{channel: &models.Channel{ID: "ch", ServerID: "srv", Type: models.ChannelTypeVoice}}, nil, nil, &testutil.MockBroadcaster{}, stubMusicUserGetter{}, nil, nil, store, nil, nil, nil, nil).(*musicBotService)
+	svc := NewMusicBotService(&stubChannelGetter{channel: &models.Channel{ID: "ch", ServerID: "srv", Type: models.ChannelTypeVoice}},
+		nil,
+		nil,
+		&testutil.MockBroadcaster{},
+		stubMusicUserGetter{},
+		nil,
+		nil,
+		MusicPersistenceDependencies{Sessions: store, RequesterPrivacy: nil, LegacyEnqueue: nil, Control: nil},
+		nil).(*musicBotService)
 	connected := 0
 	svc.connectBotFn = func(context.Context, *botInstance) error { connected++; return nil }
 	state := svc.GetState("ch")
@@ -345,10 +373,15 @@ func TestMusicSessionLoadsPausedWithoutConnecting(t *testing.T) {
 
 func TestEnqueueSaveFailureRollsBackAndRetryStartsPlayback(t *testing.T) {
 	store := &memoryMusicSessions{items: make(map[string]models.MusicSession), failNext: 1}
-	svc := NewMusicBotService(
-		&stubChannelGetter{channel: &models.Channel{ID: "ch", ServerID: "srv", Type: models.ChannelTypeVoice}},
-		nil, nil, &testutil.MockBroadcaster{}, stubMusicUserGetter{}, nil, nil, store, nil, nil, nil, nil,
-	).(*musicBotService)
+	svc := NewMusicBotService(&stubChannelGetter{channel: &models.Channel{ID: "ch", ServerID: "srv", Type: models.ChannelTypeVoice}},
+		nil,
+		nil,
+		&testutil.MockBroadcaster{},
+		stubMusicUserGetter{},
+		nil,
+		nil,
+		MusicPersistenceDependencies{Sessions: store, RequesterPrivacy: nil, LegacyEnqueue: nil, Control: nil},
+		nil).(*musicBotService)
 	svc.connectBotFn = func(context.Context, *botInstance) error { return nil }
 	svc.extractTracksFn = func(context.Context, string, string, string) ([]models.MusicTrack, error) {
 		return []models.MusicTrack{{VideoID: "video", Title: "Track"}}, nil
@@ -404,10 +437,15 @@ func TestEnqueueSaveFailureRollsBackAndRetryStartsPlayback(t *testing.T) {
 
 func TestEnqueueConnectPanicReleasesChannelLifecycleLock(t *testing.T) {
 	store := &memoryMusicSessions{items: make(map[string]models.MusicSession)}
-	svc := NewMusicBotService(
-		&stubChannelGetter{channel: &models.Channel{ID: "ch", ServerID: "srv", Type: models.ChannelTypeVoice}},
-		nil, nil, &testutil.MockBroadcaster{}, stubMusicUserGetter{}, nil, nil, store, nil, nil, nil, nil,
-	).(*musicBotService)
+	svc := NewMusicBotService(&stubChannelGetter{channel: &models.Channel{ID: "ch", ServerID: "srv", Type: models.ChannelTypeVoice}},
+		nil,
+		nil,
+		&testutil.MockBroadcaster{},
+		stubMusicUserGetter{},
+		nil,
+		nil,
+		MusicPersistenceDependencies{Sessions: store, RequesterPrivacy: nil, LegacyEnqueue: nil, Control: nil},
+		nil).(*musicBotService)
 	var attempts int
 	svc.connectBotFn = func(context.Context, *botInstance) error {
 		attempts++

@@ -720,19 +720,19 @@ func TestMusicSessionFactoryRetainsRuntimeCapabilities(t *testing.T) {
 
 func TestMusicConstructorDeclaresRequesterPrivacy(t *testing.T) {
 	factory := reflect.TypeOf(NewMusicBotService)
-	if factory.In(9) != reflect.TypeFor[MusicRequesterPrivacyStore]() {
+	if factory.In(7) != reflect.TypeFor[MusicPersistenceDependencies]() {
 		t.Fatal("music constructor hides requester privacy provider")
 	}
 }
 
 func TestMusicConstructorDeclaresLegacyEnqueueWriter(t *testing.T) {
-	if reflect.TypeOf(NewMusicBotService).In(10) != reflect.TypeFor[MusicLegacyEnqueueStore]() {
+	if reflect.TypeOf(NewMusicBotService).In(7) != reflect.TypeFor[MusicPersistenceDependencies]() {
 		t.Fatal("music constructor hides legacy enqueue writer")
 	}
 }
 
 func TestMusicConstructorDeclaresDurableControl(t *testing.T) {
-	if reflect.TypeOf(NewMusicBotService).In(11) != reflect.TypeFor[MusicControlStore]() {
+	if reflect.TypeOf(NewMusicBotService).In(7) != reflect.TypeFor[MusicPersistenceDependencies]() {
 		t.Fatal("music constructor hides durable control provider")
 	}
 }
@@ -761,5 +761,26 @@ func TestProfileAudienceDeclaresBulkSharedServers(t *testing.T) {
 	required := reflect.TypeFor[repository.ProfileAudienceSharedServerReader]()
 	if !reflect.TypeOf(NewProfileAudiencePolicy).In(2).Implements(required) || !reflect.TypeOf(repository.NewSQLiteServerRepo).Out(0).Implements(required) {
 		t.Fatal("profile policy/factory hides bulk shared-server reads")
+	}
+}
+
+func TestMusicConstructorGroupsPersistenceDependencies(t *testing.T) {
+	if reflect.TypeOf(NewMusicBotService).In(7).Name() != "MusicPersistenceDependencies" {
+		t.Fatal("music constructor persistence dependencies are scattered")
+	}
+}
+
+func TestMusicPersistenceFieldsRetainNarrowContracts(t *testing.T) {
+	group := reflect.TypeFor[MusicPersistenceDependencies]()
+	for name, want := range map[string]reflect.Type{
+		"Sessions":         reflect.TypeFor[MusicSessionStore](),
+		"RequesterPrivacy": reflect.TypeFor[MusicRequesterPrivacyStore](),
+		"LegacyEnqueue":    reflect.TypeFor[MusicLegacyEnqueueStore](),
+		"Control":          reflect.TypeFor[MusicControlStore](),
+	} {
+		field, ok := group.FieldByName(name)
+		if !ok || field.Type != want {
+			t.Fatalf("persistence %s contract changed", name)
+		}
 	}
 }
