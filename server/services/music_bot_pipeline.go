@@ -100,7 +100,7 @@ func (s *musicBotService) connectBotToRoom(ctx context.Context, bot *botInstance
 				// Preserve the interrupted track and pending queue. Rejoining and
 				// resuming is deliberately explicit: an unattended backend or
 				// LiveKit reconnect must never make the bot start playing again.
-				logx.Go("service.music_bot.disconnected", func() {
+				s.launchMusicWorker("service.music_bot.disconnected", func() {
 					s.StopAllForChannel(bot.channelID)
 					s.recoverDisconnectedBot(bot.channelID)
 				})
@@ -995,15 +995,17 @@ func (s *musicBotService) scheduleIdleLeaveLocked(bot *botInstance) {
 	bot.cancelIdleTimer()
 	gen := bot.idleGen
 	bot.idleTimer = time.AfterFunc(s.idleLeaveDelay(), func() {
-		bot.mu.Lock()
-		if gen != bot.idleGen || bot.loopRunning || len(bot.queue) > 0 || bot.stopFlag {
+		s.launchMusicWorker("service.music_bot.idle_leave", func() {
+			bot.mu.Lock()
+			if gen != bot.idleGen || bot.loopRunning || len(bot.queue) > 0 || bot.stopFlag {
+				bot.mu.Unlock()
+				return
+			}
+			bot.stopping.Store(true)
 			bot.mu.Unlock()
-			return
-		}
-		bot.stopping.Store(true)
-		bot.mu.Unlock()
-		musicBotLogger.Info("idle leave", "channel_id", bot.channelID)
-		s.stopBot(bot)
+			musicBotLogger.Info("idle leave", "channel_id", bot.channelID)
+			s.stopBot(bot)
+		})
 	})
 }
 

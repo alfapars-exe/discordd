@@ -200,6 +200,9 @@ type requesterMeta struct {
 }
 
 type musicBotService struct {
+	musicWork          sync.WaitGroup
+	musicWorkCtx       context.Context
+	musicWorkCancel    context.CancelFunc
 	shuttingDown       bool // guarded by mu
 	musicPublicationMu sync.RWMutex
 	mu                 sync.RWMutex
@@ -338,6 +341,12 @@ func (s *musicBotService) Enqueue(ctx context.Context, userID, channelID, url st
 // EnqueueWithResult returns accepted tracks plus an advisory only when
 // extraction observed evidence that playlist entries were skipped.
 func (s *musicBotService) EnqueueWithResult(ctx context.Context, userID, channelID, url string) (MusicEnqueueResult, error) {
+	owned, finish, workAccepted := s.beginMusicWork(ctx)
+	if !workAccepted {
+		return MusicEnqueueResult{}, errBotStoppedExplicitly
+	}
+	defer finish()
+	ctx = owned
 	if err := RecheckMusicAccess(ctx); err != nil {
 		return MusicEnqueueResult{}, err
 	}
@@ -538,7 +547,7 @@ func (s *musicBotService) EnqueueWithResult(ctx context.Context, userID, channel
 	musicBotLogger.Info("enqueue: appended to queue", "channel_id", channelID, "queue_len", queueLen, "started_loop", startLoop)
 
 	if startLoop {
-		logx.Go("service.music_bot.play_loop", func() { s.playLoop(bot) })
+		s.launchMusicWorker("service.music_bot.play_loop", func() { s.playLoop(bot) })
 	}
 
 	s.broadcastState(bot)
@@ -630,7 +639,7 @@ func (s *musicBotService) Pause(channelID string) error {
 		return nil
 	}
 	bot.isPaused = true
-	logx.Go("service.music_bot.broadcast_state", func() { s.broadcastState(bot) })
+	s.launchMusicWorker("service.music_bot.broadcast_state", func() { s.broadcastState(bot) })
 	return nil
 }
 
@@ -650,7 +659,7 @@ func (s *musicBotService) Resume(channelID string) error {
 		return nil
 	}
 	bot.isPaused = false
-	logx.Go("service.music_bot.broadcast_state", func() { s.broadcastState(bot) })
+	s.launchMusicWorker("service.music_bot.broadcast_state", func() { s.broadcastState(bot) })
 	return nil
 }
 
@@ -873,7 +882,12 @@ func (s *musicBotService) StopAll() {
 	for channelID := range s.bots {
 		channelIDs = append(channelIDs, channelID)
 	}
+	cancel := s.musicWorkCancel
 	s.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	defer s.musicWork.Wait()
 
 	if len(channelIDs) == 0 {
 		return
@@ -922,6 +936,12 @@ func (s *musicBotService) rawMusicState(ctx context.Context, channelID string) (
 }
 
 func (s *musicBotService) Restore(ctx context.Context, channelID string) error {
+	owned, finish, workAccepted := s.beginMusicWork(ctx)
+	if !workAccepted {
+		return errBotStoppedExplicitly
+	}
+	defer finish()
+	ctx = owned
 	if err := RecheckMusicAccess(ctx); err != nil {
 		return err
 	}
@@ -1000,7 +1020,7 @@ func (s *musicBotService) Restore(ctx context.Context, channelID string) error {
 	bot.sessionMu.Unlock()
 	lifecycleLock.Unlock()
 	if start {
-		logx.Go("service.music_bot.play_loop", func() { s.playLoop(bot) })
+		s.launchMusicWorker("service.music_bot.play_loop", func() { s.playLoop(bot) })
 	}
 	s.broadcastState(bot)
 	return nil
@@ -1156,6 +1176,12 @@ func (s *musicBotService) persistMutation(bot *botInstance, rollback func()) err
 // connecting (errBotStopping), the whole thing is retried once with a fresh
 // bot.
 func (s *musicBotService) getOrCreateBot(ctx context.Context, serverID, channelID string) (*botInstance, error) {
+	owned, finish, workAccepted := s.beginMusicWork(ctx)
+	if !workAccepted {
+		return nil, errBotStoppedExplicitly
+	}
+	defer finish()
+	ctx = owned
 	var err error
 	for attempt := 0; attempt < 2; attempt++ {
 		lifecycleLock := s.channelLifecycleLock(channelID)
@@ -1238,7 +1264,7 @@ func (s *musicBotService) getOrCreateBot(ctx context.Context, serverID, channelI
 		if cerr == nil {
 			lifecycleLock.Lock()
 			s.mu.Lock()
-			stillCurrent := s.bots[channelID] == bot && !bot.stopping.Load()
+			stillCurrent := s.bots[channelID] == bot && !bot.stopping.Load() && !s.shuttingDown
 			s.mu.Unlock()
 			lifecycleLock.Unlock()
 			if stillCurrent {
