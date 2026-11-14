@@ -188,3 +188,40 @@ func TestVoiceConstructorBindsIntegrationsBeforeWorkers(t *testing.T) {
 		t.Fatal("integrations not bound before constructor return")
 	}
 }
+
+func TestVoiceConstructorFactoryPanicPrecedesWorkerAllocation(t *testing.T) {
+	marker := new(int)
+	var captured *voiceService
+	var recovered any
+	func() {
+		defer func() { recovered = recover() }()
+		NewVoiceService(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+			func(voice VoiceService) (VoiceEntranceHook, MusicBotChannelHook) {
+				captured = testVoiceState(voice)
+				panic(marker)
+			})
+	}()
+	if recovered != marker || captured == nil || captured.states == nil || captured.voiceFanout != nil {
+		t.Fatal("factory panic must retain its value without allocating voice workers")
+	}
+}
+
+func TestVoiceConstructorExplicitDisabledIntegrations(t *testing.T) {
+	for _, useFactory := range []bool{false, true} {
+		calls := 0
+		var factory func(VoiceService) (VoiceEntranceHook, MusicBotChannelHook)
+		if useFactory {
+			factory = func(VoiceService) (VoiceEntranceHook, MusicBotChannelHook) { calls++; return nil, nil }
+		}
+		service := NewVoiceService(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, factory)
+		t.Cleanup(service.ShutdownVoiceStateFanout)
+		state := testVoiceState(service)
+		wantCalls := 0
+		if useFactory {
+			wantCalls = 1
+		}
+		if state.entranceHook != nil || state.musicBotHook != nil || state.voiceFanout == nil || calls != wantCalls {
+			t.Fatal("disabled integration contract changed")
+		}
+	}
+}
