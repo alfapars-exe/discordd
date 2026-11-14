@@ -1743,3 +1743,8 @@ Detailed b177 browser logs show 14 first-attempt passes plus 2 flaky cases (DM r
 ### RF08 — deterministic cancellation during refresh sweep (2026-11-14)
 
 The private sweep loop now accepts its tick channel; the existing owner still allocates/stops the hourly ticker, cancels once and joins done. A new test holds the replay-evidence mutex and uses an unbuffered tick rendezvous to establish an in-flight sweep before cancellation. The loop cannot report done until the mutex is released; afterward it exits and preserves live refresh evidence while removing the expired record. Existing owner start/duplicate-start/cancel/restart and refresh tests remain. Targeted suite passed locally, 0.504s; Linux race and current-source CI remain required. Receipt: implementation/verification/refactor-rf08-sweep-cancellation-2026-11-14.json.
+
+
+### RF28 — cold DM list lost during key readiness (2026-11-14)
+
+Strict CI43572875547 correctly failed the same two retry-only browser cases and retained diagnostics. The DM response contained the conversation but the DOM showed an empty list: refreshEncryptedHistory invalidated the outstanding metadata list together with encrypted history. New regression failed before the fix. E2EE key readiness now preserves that list request while still clearing/aborting message history; default invalidation semantics and stale-request tests remain. Two store files pass156 tests, TypeScript and ESLint pass. The account-switch screenshot showed the real server-waking phase; login helper now waits for the actual form (90s) before filling, without a fixed sleep. Fresh strict production CI remains required. Receipt: implementation/verification/refactor-rf28-dm-list-key-readiness-2026-11-14.json.

@@ -522,6 +522,9 @@ export async function loginAsCredentials(page: Page, account: TestAccount): Prom
   await forceEnglish(page);
   await page.goto("/login");
 
+  // Startup may honor a refresh Retry-After before deciding this browser is
+  // signed out. Wait for the real form rather than racing that wake-up phase.
+  await expect(page.getByLabel(/^Username/i)).toBeVisible({ timeout: 90_000 });
   await page.getByLabel(/^Username/i).fill(username);
   await page.getByLabel(/^Password/i).fill(password);
   const loginResponse = page.waitForResponse(response =>

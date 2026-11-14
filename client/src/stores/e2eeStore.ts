@@ -737,7 +737,7 @@ function refreshEncryptedHistory(isCurrent: () => boolean): boolean {
   if (!isCurrent()) return false;
   useMessageStore.getState().invalidateFetchCache();
   if (!isCurrent()) return false;
-  useDMStore.getState().invalidateFetchCache();
+  useDMStore.getState().invalidateFetchCache({ preserveChannelList: true });
   if (!isCurrent()) return false;
   const channelId = useChannelStore.getState().selectedChannelId;
   if (channelId) useMessageStore.getState().fetchMessages(channelId);

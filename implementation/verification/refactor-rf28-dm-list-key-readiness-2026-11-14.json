@@ -1,0 +1,31 @@
+{
+  "source_before": "a8c1f90a686594bfaf72542c00abe125604d382d",
+  "failed_run": 43572875547,
+  "failed_browser_job": 132380829410,
+  "evidence_directory": "G:/hichat-verification-overflow-20261114/a8c-flaky-browser",
+  "observed": [
+    "DM list HTTP response contains target channel while DOM shows empty conversation list",
+    "Role switch timeout screenshot shows server-waking screen rather than username form"
+  ],
+  "reproduction": {
+    "test": "keeps channel-list hydration alive when only encrypted history is invalidated",
+    "before": "1 failed; isLoading false when list request must remain active; 104 other tests deselected by -t filter",
+    "after": "156 passed across dmStore.test.ts and e2eeStore.test.ts"
+  },
+  "changes": [
+    "Key-readiness invalidation preserves DM channel-list request and loading state while clearing and aborting encrypted message history",
+    "Default invalidateFetchCache call still cancels list hydration; existing stale-request tests retained",
+    "Login helper explicitly waits for username form visibility up to90s to allow real startup Retry-After; no fixed sleep or outcome assertions removed"
+  ],
+  "validation": {
+    "vitest": "156 passed",
+    "typescript": "exit0",
+    "eslint": "exit0",
+    "e2e_isolation": "exit0; Windows symlink case skipped explicitly"
+  },
+  "limits": [
+    "Fresh strict production browser CI required",
+    "No claim that preserving metadata changes message decrypt/auth owner fences",
+    "Overall previous run may still have been finishing other jobs at capture; browser failure is terminal and explicit"
+  ]
+}

@@ -740,6 +740,7 @@ describe("e2eeStore", () => {
       await useE2EEStore.getState().initialize("userA");
       expect(historyMocks.invalidate).toHaveBeenCalledOnce();
       expect(historyMocks.invalidateDM).toHaveBeenCalledOnce();
+      expect(historyMocks.invalidateDM).toHaveBeenCalledWith({ preserveChannelList: true });
       expect(historyMocks.fetch).toHaveBeenCalledWith("early-channel");
     });
 

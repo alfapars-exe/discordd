@@ -839,3 +839,18 @@ it("does not restore a removed peer when My Notes is added during hydration", as
   await loading;
   expect(useDMStore.getState().channels).toEqual([notes]);
 });
+
+it("keeps channel-list hydration alive when only encrypted history is invalidated", async () => {
+  const pending = deferred<APIResponse<DMChannelWithUser[]>>();
+  vi.mocked(dmApi.listDMChannels).mockReturnValueOnce(pending.promise);
+  useDMStore.setState({ messagesByChannel: { [CH]: [makeDM("old-key-history")] }, isLoadingMessages: true });
+  const loading = useDMStore.getState().fetchChannels();
+  useDMStore.getState().invalidateFetchCache({ preserveChannelList: true });
+  expect(useDMStore.getState().isLoading).toBe(true);
+  expect(useDMStore.getState().messagesByChannel).toEqual({});
+  expect(useDMStore.getState().isLoadingMessages).toBe(false);
+  pending.resolve({ success: true, data: [listedDM(CH)] });
+  expect(await loading).toBe(true);
+  expect(useDMStore.getState().channels.map(channel => channel.id)).toEqual([CH]);
+  expect(useDMStore.getState().isLoading).toBe(false);
+});

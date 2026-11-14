@@ -208,7 +208,7 @@ type DMCoreState = {
   getMessagesForChannel: (channelId: string) => DMMessage[];
   getTypingUsers: (channelId: string) => string[];
   invalidateMessages: (channelId: string) => void;
-  invalidateFetchCache: () => void;
+  invalidateFetchCache: (options?: { preserveChannelList?: boolean }) => void;
 };
 
 export type DMStore = DMCoreState & DMSettingsSlice & DMWsSlice;
@@ -830,8 +830,10 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
     });
   },
 
-  invalidateFetchCache: () => {
-    dmChannelListRequest++;
+  invalidateFetchCache: (options) => {
+    // Key readiness invalidates decrypted message history, not channel metadata.
+    // Preserve an initial list request so cold startup cannot leave the sidebar empty.
+    if (!options?.preserveChannelList) dmChannelListRequest++;
     // Cancel any in-flight fetches; their late completion would re-populate
     // messagesByChannel with stale ciphertext encrypted against the
     // pre-restore E2EE state.
@@ -842,7 +844,13 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
     dmInflightNewerFetches.clear();
     dmAroundPending.clear();
     clearDetachedDMMessages();
-    set({ messagesByChannel: {}, hasMoreByChannel: {}, hasMoreAfterByChannel: {},isLoading:false,isLoadingMessages:false });
+    set({
+      messagesByChannel: {},
+      hasMoreByChannel: {},
+      hasMoreAfterByChannel: {},
+      ...(options?.preserveChannelList ? {} : { isLoading: false }),
+      isLoadingMessages: false,
+    });
   },
 }));
 
