@@ -1,7 +1,7 @@
 {
   "date": "2026-11-14",
   "pr": 300,
-  "canonical_source": "3e0b131c",
+  "canonical_source": "3e0b131cc03fb19253d78ac70f0c10b2c1f20f9e",
   "base": "7484408ab8dcff16ac17d6d784ab86f5ec6c22ff",
   "scope": "RequestGameActivitySnapshot reserves under Hub mutex, submits outside mutex through existing eight-worker/256-pending callback dispatcher; stop rejects new requests, cancels queued tickets and joins active callbacks; same-user FIFO with other-user progress",
   "negative_overlay": {
@@ -29,5 +29,6 @@
     "new-source Linux race and complete PR CI",
     "final combined-source acceptance",
     "provider/physical platform acceptance"
-  ]
+  ],
+  "server_ci_run": 43541778893
 }
