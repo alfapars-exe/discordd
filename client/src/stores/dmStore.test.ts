@@ -227,7 +227,7 @@ it.each(["account", "generation", "device"])("drops DM history fetched under an 
   expect(decryptDMMessages).not.toHaveBeenCalled();
   expect(ids()).toEqual([]);
 });
-it("keeps history cancellable while decryption is pending", async () => {
+it.each([false, true])("keeps history cancellable while decryption is pending (preserve list=%s)", async (preserveChannelList) => {
   const pending = deferred<DMMessage[]>();
   vi.mocked(dmApi.getDMMessages).mockResolvedValueOnce(page([makeDM("old")], false));
   vi.mocked(decryptDMMessages).mockReturnValueOnce(pending.promise);
@@ -235,7 +235,7 @@ it("keeps history cancellable while decryption is pending", async () => {
   await Promise.resolve();
   const guard = vi.mocked(decryptDMMessages).mock.calls[0][1];
   expect(guard?.()).toBe(true);
-  useDMStore.getState().invalidateFetchCache();
+  useDMStore.getState().invalidateFetchCache({ preserveChannelList });
   expect(guard?.()).toBe(false);
   pending.resolve([makeDM("old")]);
   await loading;
@@ -252,14 +252,14 @@ it("does not prepend an older page into a replaced history window", async () => 
   expect(decryptDMMessages).not.toHaveBeenCalled();
   expect(ids()).toEqual(["replacement"]);
 });
-it("does not let an invalidated newer-page request release its replacement lock", async () => {
+it.each([false, true])("does not let an invalidated newer-page request release its replacement lock (preserve list=%s)", async (preserveChannelList) => {
   const seed = () => useDMStore.setState({messagesByChannel:{[CH]:[makeDM("anchor")]},hasMoreAfterByChannel:{[CH]:true}});
   seed();
   const old = deferred<APIResponse<DMMessagePage>>();
   const replacement = deferred<APIResponse<DMMessagePage>>();
   vi.mocked(dmApi.getDMMessagesAfter).mockReturnValueOnce(old.promise).mockReturnValueOnce(replacement.promise);
   const first = useDMStore.getState().fetchNewerMessages(CH);
-  useDMStore.getState().invalidateFetchCache();
+  useDMStore.getState().invalidateFetchCache({ preserveChannelList });
   seed();
   const second = useDMStore.getState().fetchNewerMessages(CH);
   old.resolve(page([makeDM("stale")], false, false));
@@ -853,4 +853,17 @@ it("keeps channel-list hydration alive when only encrypted history is invalidate
   expect(await loading).toBe(true);
   expect(useDMStore.getState().channels.map(channel => channel.id)).toEqual([CH]);
   expect(useDMStore.getState().isLoading).toBe(false);
+});
+
+it.each(["account", "generation"])("still rejects an abandoned %s list after key readiness invalidation", async change => {
+  const pending = deferred<APIResponse<DMChannelWithUser[]>>();
+  vi.mocked(dmApi.listDMChannels).mockReturnValueOnce(pending.promise);
+  const loading = useDMStore.getState().fetchChannels();
+  useDMStore.getState().invalidateFetchCache({ preserveChannelList: true });
+  if (change === "account") hoisted.userId = "other";
+  else useComposerDraftStore.getState().reset();
+  useDMStore.setState({ channels: [listedDM("replacement-account")] });
+  pending.resolve({ success: true, data: [listedDM("abandoned")] });
+  expect(await loading).toBe(false);
+  expect(useDMStore.getState().channels.map(channel => channel.id)).toEqual(["replacement-account"]);
 });

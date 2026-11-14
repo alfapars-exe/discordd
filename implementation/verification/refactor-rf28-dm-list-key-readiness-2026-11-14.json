@@ -27,5 +27,16 @@
     "Fresh strict production browser CI required",
     "No claim that preserving metadata changes message decrypt/auth owner fences",
     "Overall previous run may still have been finishing other jobs at capture; browser failure is terminal and explicit"
-  ]
+  ],
+  "followup_safety_matrix": {
+    "source_parent": "0a5d936d",
+    "tests": [
+      "both default and preserve-list modes cancel pending decrypt guard",
+      "both modes prevent stale newer-page completion releasing replacement request lock",
+      "preserve-list mode still rejects response after account replacement",
+      "preserve-list mode still rejects response after composer/auth generation reset"
+    ],
+    "result": "160 passed across same two store files",
+    "duration_seconds": 6.97
+  }
 }
