@@ -181,6 +181,14 @@ jobs:
           HICHAT_TEST_POSTGRES_DSN: postgres://postgres@127.0.0.1:5432/hichat_test?sslmode=disable
         run: go test -race ./services ./repository ./database ./pkg/email -run '^(TestPostgresRole|TestPostgresMemberRoleReplacement|TestVoiceMaintenanceAFKPostgresCancellation|TestVoiceUsageCreditPostgres|TestVoiceUsagePostgres|TestPostgresVoiceUsageMigration|TestChannelDelivery|TestDMIdempotent|TestDMOutbox|TestDMMarkUnreadFrom|TestEmail)' -count=1 -timeout=5m
 
+      - name: Race-check active voice process SIGTERM against mutual TLS PostgreSQL
+        working-directory: server
+        env:
+          HICHAT_ACTIVE_VOICE_POSTGRES_DSN: ${{ env.HICHAT_E2E_POSTGRES_DSN }}
+        run: |
+          test -n "$HICHAT_ACTIVE_VOICE_POSTGRES_DSN"
+          go test -race . -run '^TestActiveVoiceProcessPostgresSignal$' -count=1 -timeout=2m
+
       - name: Stop active-process PostgreSQL
         if: always()
         run: |
