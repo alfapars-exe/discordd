@@ -1,5 +1,5 @@
 {
-  "source_head": "fe6852fdd11e070073e56b346856c8b44c4839c5",
+  "source_head": "fec953fe190b609d2c76be4606ba40d715fde8a4",
   "branch": "fix/music-worker-shutdown",
   "state": "published_draft_ci_pending",
   "before": "actual Enqueue with blocked playback fails StopAll returned before accepted playback worker exited",
@@ -38,7 +38,7 @@
   "pr": "https://github.com/alfapars-exe/discordd/pull/304",
   "panic_followup": {
     "local_head": "410bf58bca97af346130e09b07af5eb5344addf8",
-    "state": "local only; PR304 still fe6852fd",
+    "state": "published with fec953fe",
     "behavior": "connect panic reaches request recovery, bot removed, StopAll drains accepted producer",
     "counterfactual": "overlay removes Enqueue producer finish; test fails producer ownership leaked after connect panic at2.12s",
     "canonical_selected_repetitions": 20,
@@ -53,5 +53,21 @@
       "command_transport": "wsl --exec; initial shell-mediated regex invocation exit127 not counted",
       "log": "hichat-music-owner-wsl20.log"
     }
+  },
+  "previous_source_head": "fe6852fdd11e070073e56b346856c8b44c4839c5",
+  "guard_followup": {
+    "before": "actual Enqueue with hanging resolver fails shutdown cancellation; guard waits5.07s deadline",
+    "change": "URL guard retains5s deadline but derives from music lifetime; pipeline context also derives from lifetime; intentional owner cancellation produces no playback error",
+    "deadline_skip_stop_regression_repetitions": 2,
+    "deadline_skip_stop_seconds": 10.961,
+    "url_shutdown_repetitions": 30,
+    "url_shutdown_seconds": 0.551,
+    "integrated_lifecycle_repetitions": 20,
+    "integrated_seconds": 2.886,
+    "canonical_full_services_seconds": 102.753,
+    "integrated_full_services_seconds": 101.276,
+    "logx": "cached pass",
+    "canonical_vet_build_windows_linux_lint": "passed",
+    "ci": "pending current fec953fe; previous fe6852fd completed36/36"
   }
 }

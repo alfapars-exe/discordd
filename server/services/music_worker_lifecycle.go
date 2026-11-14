@@ -14,10 +14,7 @@ func (s *musicBotService) beginMusicWork(parent context.Context) (context.Contex
 		s.mu.Unlock()
 		return nil, nil, false
 	}
-	if s.musicWorkCancel == nil {
-		s.musicWorkCtx, s.musicWorkCancel = context.WithCancel(context.Background())
-	}
-	owner := s.musicWorkCtx
+	owner := s.musicLifetimeLocked()
 	s.musicWork.Add(1)
 	s.mu.Unlock()
 	ctx, cancel := context.WithCancel(parent)
@@ -31,4 +28,21 @@ func (s *musicBotService) launchMusicWorker(name string, work func()) {
 		return
 	}
 	go func() { defer finish(); logx.Run(name, work) }()
+}
+
+// musicLifetimeLocked requires s.mu; zero-value test fixtures initialize lazily.
+func (s *musicBotService) musicLifetimeLocked() context.Context {
+	if s.musicWorkCancel == nil {
+		s.musicWorkCtx, s.musicWorkCancel = context.WithCancel(context.Background())
+	}
+	if s.shuttingDown {
+		s.musicWorkCancel()
+	}
+	return s.musicWorkCtx
+}
+
+func (s *musicBotService) musicLifetimeContext() context.Context {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.musicLifetimeLocked()
 }

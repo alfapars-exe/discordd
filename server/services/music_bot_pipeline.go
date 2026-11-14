@@ -503,14 +503,16 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 	// ends up here. So this call site needs its own guard, independent of
 	// extractTracks's.
 	//
-	// Runs on its own bounded context, checked and released before
+	// Runs on its own bounded context, linked to terminal service cancellation,
+	// and checked and released before
 	// bot.cancelFn is ever set: at this point the stall watchdog doesn't
 	// exist yet (it's armed further down), so a guard tied to the pipeline's
 	// own un-timed context could block this goroutine on a wedged DNS
 	// resolver forever. Ordering it before the cancelFn assignment also
 	// means a rejection here never leaves bot.cancelFn pointing at a
 	// pipeline that was never started.
-	guardCtx, guardCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	lifetime := s.musicLifetimeContext()
+	guardCtx, guardCancel := context.WithTimeout(lifetime, 5*time.Second)
 	guardErr := validateMusicURLNetwork(guardCtx, track.URL)
 	// Read before guardCancel, which would turn the context's error into
 	// Canceled.
@@ -529,7 +531,7 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 	// *LocalSampleTrack is a non-nil interface value, and WriteSample on it
 	// panics.
 	bot.mu.Lock()
-	endedEarly := bot.killRequestedLocked()
+	endedEarly := bot.killRequestedLocked() || lifetime.Err() != nil
 	audio := bot.audioTrack
 	room := bot.lkRoom
 	bot.mu.Unlock()
@@ -552,7 +554,7 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 	}
 	var sink sampleWriter = audio
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(lifetime)
 	defer cancel()
 
 	bot.mu.Lock()

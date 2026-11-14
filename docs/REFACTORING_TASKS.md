@@ -1642,3 +1642,10 @@ Final fe6852fd canonical services81.591s and integrated services82.588s passed; 
 ### 2026-11-14 — Music producer panic cleanup proof
 
 Added actual Enqueue/connect-panic test: panic still reaches request recovery, bot map empties, and terminal StopAll drains registered producers. Removing Enqueue finish in a temporary source overlay fails ownership leaked after connect panic at2.12s. Positive panic/waiter/StopAll matrix20 passed2.979s canonical and3.893s integrated; Windows lint0 passed. Current Linux test binary executed under Ubuntu WSL with --exec passed20 (no race). Initial shell-mediated regex invocation exit127 is not accepted evidence. Local follow-up410bf58b is not yet pushed while PR304 sourcefe6852fd CI remains active. Receipt refactor-music-worker-shutdown-2026-11-14.json updated; current-follow-up full CI/real provider/media acceptance remain open.
+
+
+### 2026-11-14 — Playback guard cancellation and terminal source receipts
+
+Actual Enqueue with hanging DNS guard showed another owner gap: StopAll waited5.07s for independent guard deadline, rather than canceling it (regression failed at1s). Derive both the5s-bounded guard and pipeline context from music lifetime; keep timeout/security guard policy and unset-cancelFn rejection semantics, and treat service cancellation as intentional early exit. URL shutdown test30 passed0.551s with no music_bot_error; existing guard-deadline/Skip/Stop cases2 passed10.961s; integrated lifecycle20 passed2.886s. Full services102.753/101.276s passed, logx cachedpass; canonical vet/build and Windows/Linux lint0 passed. New fec953fe published to draft304 after previousfe6852fd completed36/36 checks (ServerCI43552868347); archive refactor-pr304-fe6-terminal-2026-11-14.json. Current fec953fe full CI/race pending, not inherited. Receipt refactor-music-worker-shutdown-2026-11-14.json updated.
+
+Diagnostics currentc5eb283fd4d5957940a33001f5e636a06df13aeb completed36/36 checks, ServerCI43552802835 terminalsuccess31/31. Archived refactor-pr303-c5e-terminal-2026-11-14.json and updated PR303 body. RF08/RF10, actual provider/device and final combined acceptance remain open.
