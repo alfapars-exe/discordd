@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"runtime"
 	"testing"
 
@@ -20,12 +21,13 @@ type failingStartupHub struct {
 func (h *failingStartupHub) OnGameJoinOffer(func(string, uint64, any) any) { panic(h.marker) }
 
 func TestServiceInitializationReleasesCacheWhenHubWiringPanics(t *testing.T) {
+	db, repos := startupServiceDependencies(t)
 	before := routeCacheWorkerCount(t)
 	marker := new(int)
 	var caught any
 	func() {
 		defer func() { caught = recover() }()
-		initServices(nil, startupPolicyRepositories(t), &failingStartupHub{marker: marker}, &config.Config{}, nil, nil)
+		initServices(db, repos, &failingStartupHub{marker: marker}, &config.Config{}, nil, nil)
 	}()
 	if caught != marker {
 		t.Fatalf("did not reach intended hub failure: %v", caught)
@@ -36,11 +38,12 @@ func TestServiceInitializationReleasesCacheWhenHubWiringPanics(t *testing.T) {
 }
 
 func TestServiceInitializationReleasesCacheOnEarlyConfigFailure(t *testing.T) {
+	db, repos := startupServiceDependencies(t)
 	before := routeCacheWorkerCount(t)
 	var caught any
 	func() {
 		defer func() { caught = recover() }()
-		initServices(nil, startupPolicyRepositories(t), nil, nil, nil, nil)
+		initServices(db, repos, nil, nil, nil, nil)
 	}()
 	if _, ok := caught.(runtime.Error); !ok {
 		t.Fatalf("did not reach configuration dereference failure: %v", caught)
@@ -54,8 +57,9 @@ func (h *failingStartupHub) IsVisibleOnline(string) (bool, error) { return false
 func (h *failingStartupHub) SetDurableChannelSends(bool)          {}
 
 func TestServiceInitializationTransfersLiveWorkersToSuccessfulCaller(t *testing.T) {
+	db, repos := startupServiceDependencies(t)
 	caches, limitersBefore := routeCacheWorkerCount(t), limiterWorkerCount(t)
-	svcs, limiters, metrics := initServices(nil, startupPolicyRepositories(t), ws.NewHub(), &config.Config{}, nil, nil)
+	svcs, limiters, metrics := initServices(db, repos, ws.NewHub(), &config.Config{}, nil, nil)
 	t.Cleanup(func() {
 		limiters.Stop()
 		stopServiceCacheWorkers(svcs)
@@ -91,6 +95,10 @@ func (*failingStartupHub) GameActivityEpoch() string { return "startup-fixture" 
 // Startup lifecycle fixtures retain real policy readers; their intended failure
 // remains the injected callback/config failure rather than missing policy input.
 func startupPolicyRepositories(t *testing.T) *Repositories {
+	_, repos := startupServiceDependencies(t)
+	return repos
+}
+func startupServiceDependencies(t *testing.T) (*sql.DB, *Repositories) {
 	db, _ := newCensusDB(t)
-	return initRepositories(db.Conn, repository.DataExportStorageOptions{UploadDir: t.TempDir(), ArchiveDir: t.TempDir()})
+	return db.Conn, initRepositories(db.Conn, repository.DataExportStorageOptions{UploadDir: t.TempDir(), ArchiveDir: t.TempDir()})
 }

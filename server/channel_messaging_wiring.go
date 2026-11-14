@@ -47,6 +47,9 @@ func initChannelMessagingServices(db *sql.DB, repos *Repositories, hub channelMe
 			panic("channel messaging requires repository " + input.name)
 		}
 	}
+	if db == nil {
+		panic("channel messaging requires transaction database")
+	}
 	var deliveryDB *sql.DB
 	if database.IsPostgres(db) {
 		deliveryDB = db

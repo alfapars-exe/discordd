@@ -48,8 +48,9 @@ func TestChannelMessagingRejectsMissingCompositionInputs(t *testing.T) {
 	}
 }
 
-func TestChannelMessagingStandaloneModeRetainsDeclaredOwners(t *testing.T) {
-	group := initChannelMessagingServices(nil, startupPolicyRepositories(t), ws.NewHub(), &config.Config{}, &testutil.MockChannelPermResolver{}, nil)
+func TestChannelMessagingSQLiteModeRetainsDeclaredOwners(t *testing.T) {
+	db, repos := startupServiceDependencies(t)
+	group := initChannelMessagingServices(db, repos, ws.NewHub(), &config.Config{}, &testutil.MockChannelPermResolver{}, nil)
 	if group.Message == nil || group.Upload == nil || group.Notifications == nil || group.DeliveryDB != nil {
 		t.Fatalf("standalone owners=%+v", group)
 	}
@@ -87,5 +88,17 @@ func TestChannelMessagingRejectsTypedNilMessageRepository(t *testing.T) {
 	}()
 	if fmt.Sprint(caught) != "channel messaging requires repository Message" {
 		t.Fatalf("typed nil repository accepted: %v", caught)
+	}
+}
+
+func TestChannelMessagingRejectsMissingTransactionDatabase(t *testing.T) {
+	repos := startupPolicyRepositories(t)
+	var caught any
+	func() {
+		defer func() { caught = recover() }()
+		initChannelMessagingServices(nil, repos, ws.NewHub(), &config.Config{}, &testutil.MockChannelPermResolver{}, nil)
+	}()
+	if fmt.Sprint(caught) != "channel messaging requires transaction database" {
+		t.Fatalf("missing database accepted: %v", caught)
 	}
 }
