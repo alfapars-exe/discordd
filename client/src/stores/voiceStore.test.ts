@@ -985,3 +985,26 @@ it("preserves active voice transport and media state during account preference h
   expect(send).not.toHaveBeenCalled();
   resetStore();
 });
+
+
+it("preserves voice session through the composed account preferences adapter", async () => {
+  const { applyAccountPreferences } = await import("./applyAccountPreferences");
+  resetStore();
+  const onLeave = vi.fn();
+  const send = vi.fn();
+  const session = {
+    currentVoiceChannelId: "adapter-channel", livekitToken: "adapter-token",
+    livekitUrl: "wss://voice.example.test", e2eePassphrase: "adapter-room-key",
+    isMuted: true, isDeafened: true, muteBeforeDeafen: true, isStreaming: true,
+    preMuteVolumes: { participant: 61 }, _onLeaveCallback: onLeave, _wsSend: send,
+  };
+  useVoiceStore.setState({ ...session, masterVolume: 21 });
+  applyAccountPreferences(() => ({ voice_settings: { masterVolume: 67 } }), true, true);
+  expect(useVoiceStore.getState()).toMatchObject({ ...session, masterVolume: 67 });
+  expect(onLeave).not.toHaveBeenCalled();
+  expect(send).not.toHaveBeenCalled();
+  // An invalidated account fence must not hydrate a previous owner's values.
+  applyAccountPreferences(() => null, false, true);
+  expect(useVoiceStore.getState()).toMatchObject({ ...session, masterVolume: 67 });
+  resetStore();
+});

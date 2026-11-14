@@ -1,0 +1,17 @@
+{
+  "source_parent": "deb0fb53",
+  "scope": "RF13 real account preference presentation adapter with composed voice store",
+  "validation": {
+    "files": 3,
+    "tests_passed": 124,
+    "vitest_exit": 0,
+    "eslint_exit": 0,
+    "typescript_build_exit": 0
+  },
+  "evidence": "Invokes actual applyAccountPreferences adapter imported by bootstrap against actual voiceStore. Reset/preserve and server apply retain seeded channel, LiveKit identity, encryption key, mute/deafen/stream state, restoration volumes and callbacks while masterVolume updates. Null account-fence read does not apply data. Existing preferenceStore and sync hook regressions also pass.",
+  "limits": [
+    "Bootstrap loader invocation itself is not exercised by this test",
+    "No physical LiveKit/media acceptance",
+    "Whole RF13 remains open"
+  ]
+}

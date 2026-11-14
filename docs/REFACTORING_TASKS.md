@@ -1868,3 +1868,8 @@ The previous 30 explicit current-field copies exactly matched the shared device 
 ### RF13 — composed voice store session-state preservation (2026-11-14)
 
 A full voiceStore regression seeds active transport/media state, then runs preference reset with session preservation and server hydration. Channel, URL/token, room key, mute/deafen/stream flags, restoration map and callback identity remain; account volumes change without leave/send callbacks.68 voice store tests, ESLint, TypeScript build and diff check pass. This is direct store-state evidence, not physical media or the complete bootstrap/account adapter path. Whole RF13 remains open. Receipt: implementation/verification/refactor-rf13-active-voice-state-2026-11-14.json.
+
+
+### RF13 — composed account adapter preserves voice state (2026-11-14)
+
+The real applyAccountPreferences adapter used by bootstrap now has a composed voiceStore test: reset/preserve plus account hydration retain transport/media state and callbacks while applying account volume. Null fenced reads do not hydrate data.124 tests across voiceStore/preferencesStore/sync hook, targeted ESLint and TypeScript build pass. Bootstrap loader invocation and physical media remain outside this test; whole RF13 remains open. Receipt: implementation/verification/refactor-rf13-composed-account-adapter-2026-11-14.json.
