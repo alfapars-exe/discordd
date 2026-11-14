@@ -1728,3 +1728,8 @@ Candidate eca7d4fc CI43570586532 failed in production Chromium: the second role 
 ### RF08 — Ping failure ownership acceptance (2026-11-14)
 
 Added a driver-level Ping failure fixture which opens a real database/sql connection before rejecting Ping. It verifies cause preservation, no returned owner, exactly one driver Close, zero pool connections and no reconnect through the failed pool. Existing migration-failure and successful ownership-transfer tests remain; the three constructor tests passed locally. This fills the missing Ping branch evidence and does not stand in for native PostgreSQL, race or whole worker-lifecycle acceptance. Receipt: implementation/verification/refactor-rf08-ping-cleanup-2026-11-14.json.
+
+
+### RF06 — verified legacy backup restore rehearsal (2026-11-14)
+
+TestLegacyRecoveryFromVerifiedBackup now creates a consistent SQLite VACUUM INTO snapshot of a verified migration144 fixture with user/server/channel/message data and an empty ledger. It rejects an unknown index added after the backup without stamping migration history, closes the edited DB, restores the snapshot into a separate owned file, then upgrades and reopens it through NewLegacy. User/message graph preservation, current migration ledger, absence of the unknown index, integrity_check and foreign_key_check are asserted on both opens. Targeted test passed (2.203s); combined legacy/rollback/initialization tests passed (6.350s). Receipt: implementation/verification/refactor-rf06-legacy-restore-rehearsal-2026-11-14.json. This is synthetic SQLite recovery evidence, not production backup availability or PostgreSQL import proof.
