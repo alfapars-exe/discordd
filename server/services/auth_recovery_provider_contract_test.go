@@ -84,3 +84,20 @@ func TestRecoveryStorageFailurePreventsProviderSend(t *testing.T) {
 		t.Fatalf("storage failure: cause preserved=%t sends=%d", errors.Is(err, failure), sent)
 	}
 }
+
+func TestRecoveryDisabledConfigurationIsRejectedBeforeLookup(t *testing.T) {
+	for _, missingSender := range []bool{true, false} {
+		lookedUp := false
+		users := &testutil.MockUserRepo{GetByEmailFn: func(context.Context, string) (*models.User, error) { lookedUp = true; return nil, pkg.ErrNotFound }}
+		var svc AuthService
+		if missingSender {
+			svc = NewAuthService(users, &testutil.MockSessionRepo{}, &testutil.MockResetRepo{}, &testutil.MockEventPublisher{}, nil, nil, testJWTSecret, 15, 7)
+		} else {
+			svc = NewAuthService(users, &testutil.MockSessionRepo{}, nil, &testutil.MockEventPublisher{}, &testutil.MockEmailSender{}, nil, testJWTSecret, 15, 7)
+		}
+		_, err := svc.ForgotPassword(context.Background(), "unknown-handle")
+		if !errors.Is(err, ErrPasswordRecoveryUnavailable) || !errors.Is(err, pkg.ErrBadRequest) || lookedUp {
+			t.Fatal("disabled recovery must reject uniformly before lookup")
+		}
+	}
+}

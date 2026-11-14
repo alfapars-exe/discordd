@@ -678,6 +678,9 @@ paths:
         accounts, accounts without an email address, and requests during
         cooldown receive the same success message as an accepted delivery
         request: "if the account exists, a reset link has been sent".
+        Account-specific lookup, persistence and delivery failures receive this
+        same response to avoid revealing account existence. Recovery disabled
+        server-wide remains a 400 response.
       tags: [Auth]
       security: []
       requestBody: { $ref: '#/components/requestBodies/ForgotPasswordRequestBody' }

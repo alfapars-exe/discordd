@@ -23,6 +23,9 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// ErrPasswordRecoveryUnavailable is server-wide and checked before account lookup.
+var ErrPasswordRecoveryUnavailable = fmt.Errorf("%w: password reset is not configured on this server", pkg.ErrBadRequest)
+
 // ChangePassword updates the user's password after verifying the current one.
 //
 // Verifying currentPassword (not just the JWT) protects against:
@@ -127,7 +130,7 @@ func (s *authService) ChangeEmail(ctx context.Context, userID, password, newEmai
 // Email enumeration protection: returns success even if email not found.
 func (s *authService) ForgotPassword(ctx context.Context, identifier string) (int, error) {
 	if s.emailSender == nil || s.resetRepo == nil {
-		return 0, fmt.Errorf("%w: password reset is not configured on this server", pkg.ErrBadRequest)
+		return 0, ErrPasswordRecoveryUnavailable
 	}
 
 	identifier = strings.TrimSpace(identifier)
