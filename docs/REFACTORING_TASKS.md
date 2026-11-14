@@ -1973,3 +1973,8 @@ DM constructor now requires explicit EmojiResolver; all11 call sites updated. Pr
 ### RF11 — recipient-private broadcaster construction (2026-11-14)
 
 SpamInboxService and MediaLabelService now require explicit broadcaster arguments;15 calls updated and late setters removed. Production injects hub; isolated fixtures explicitly select nil. Constructor regressions failed before change. Existing media-label tests and new spam-decision constructor test assert only owner delivery after persistence, preserving payload and rejecting public/server/multiple-owner broadcasts. Targeted services/handlers/main tests, server build and vet pass. No wire fields changed. Whole RF11/current-source native/race CI remain open.
+
+
+### RF11 — voice/media composition domain boundary (2026-11-14)
+
+Entrance/music construction and both voice hook bindings now live in initVoiceMediaServices, completing this mutually dependent composition before returning to startup. initServices receives both services and no longer interleaves these bindings with auth/cosmetics construction. Existing startup wiring/composed service tests, entrance fresh/rejoin/reject/switch/nil-hook and voice deletion regressions, build and root vet pass. This is a domain wiring extraction; the setter-based cycle remains explicitly open and is not represented as completed constructor migration. No media/provider acceptance claimed.

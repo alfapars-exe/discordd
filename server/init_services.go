@@ -370,26 +370,15 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	// Server stickers, and copying copyable emojis/stickers between servers.
 	stickerService := services.NewStickerService(repos.Sticker, hub, cfg.Upload.Dir)
 	expressionCloneService := services.NewExpressionCloneService(repos.Emoji, emojiService, repos.Sticker, stickerService, repos.Server, cfg.Upload.Dir)
-	// Entrance sounds: JoinChannel fires the hook on every fresh, authorized
-	// voice join; the service broadcasts only to that channel's participants.
-	entranceService := services.NewEntranceService(repos.Entrance, repos.Server, repos.Role, repos.Channel,
-		channelPermService, hub, voiceService, cfg.Upload.Dir)
-	voiceService.SetEntranceHook(entranceService)
+	entranceService, musicBotService := initVoiceMediaServices(repos, hub, channelPermService,
+		voiceService, cfg.Upload.Dir, encryptionKey, appLogService)
 	// Profile cosmetics (everyone mode: no shop, no premium tier).
 	cosmeticService := services.NewCosmeticService(repos.Cosmetic, repos.Server,
 		services.NewEveryoneCosmeticEntitlements(repos.Cosmetic, repos.Server), hub)
-	musicBotService := services.NewMusicBotService(
-		repos.Channel, repos.LiveKit, channelPermService, hub, repos.User, encryptionKey, appLogService, repos.MusicSession, voiceService,
-		services.MusicAudienceDependencies{Voice: voiceService, Members: repos.Server},
-	)
 	authService := services.NewAuthService(
 		repos.User, repos.Session, repos.ResetToken, hub, emailSender,
 		voiceService, cfg.JWT.Secret, cfg.JWT.AccessTokenExpiry, cfg.JWT.RefreshTokenExpiry, services.WithMFA(mfaService), services.WithAuthSessions(repos.AuthSession), services.WithAccountLifecycle(repos.AccountLifecycle), services.WithAccountAnonymization(repos.AccountAnonymization, musicBotService), services.WithApplicationRemoval(repos.ApplicationRemoval), services.WithServerOwnership(repos.ServerOwnership),
 	)
-
-	// Wire the channel-empty hook — when the last human leaves, voice service
-	// asks music bot to stop so it doesn't keep playing to nobody.
-	voiceService.SetMusicBotHook(musicBotService)
 	metricsCollector := services.NewMetricsCollector(
 		repos.LiveKit, repos.MetricsHistory,
 		5*time.Minute,
