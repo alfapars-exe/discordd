@@ -2314,3 +2314,9 @@ Selected service/repository/root preference, notification and startup contracts 
 ### RF11 — DM replay HTTP boundary evidence (2026-11-15)
 
 Added HTTP boundary cases for unauthenticated replay, missing/negative/malformed cursors, forbidden membership and successful page serialization. Tests assert no service access before authentication/cursor validation, and exact request context, user, channel and cursor forwarding on authorized-shaped requests. Handler authorization enforcement remains the real service's responsibility; the forbidden fixture verifies HTTP propagation rather than database authorization. Replay/completion/constructor handler tests passed (0.530s). Broad five-package Go run is still live and is not yet a passing receipt; current remote CI 43644930729 has twelve completed jobs without observed failure.
+
+### RF11 — notification HTTP aggregate contract (2026-11-15)
+
+NotificationRuntime retains CountUnreadSummary at factory/composition/HTTP boundaries. Count handler now calls the declared aggregate method directly; removed service capability discovery and its implicit equal-count fallback. Production already provided the aggregate method, so response fields and behavior remain unchanged. The legacy handler fixture explicitly adapts its count into equal fields instead of making production discover that choice. Factory regression failed first. Repository-side summary capability discovery remains separate open work across inbox, DM and group notification writers.
+
+Selected notification/service/handler/startup tests passed (0.748s/0.645s/3.199s), build and scoped vet passed; all 50 reviewed records validate unchanged. The broader five-package process remains live (repository test process observed), not a passing receipt. Remote CI 43644930729 for e5a1c4a7 has sixteen completed jobs without observed failure; later local commits require separate CI.

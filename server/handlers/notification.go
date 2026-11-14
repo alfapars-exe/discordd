@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"net/http"
 	"strconv"
 
@@ -13,10 +12,10 @@ import (
 // NotificationHandler serves the caller's inbox (GET/ack only — rows are
 // written by the message/DM/friendship services).
 type NotificationHandler struct {
-	notificationService services.NotificationService
+	notificationService services.NotificationRuntime
 }
 
-func NewNotificationHandler(notificationService services.NotificationService) *NotificationHandler {
+func NewNotificationHandler(notificationService services.NotificationRuntime) *NotificationHandler {
 	return &NotificationHandler{notificationService: notificationService}
 }
 
@@ -60,23 +59,12 @@ func (h *NotificationHandler) Count(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if source, ok := h.notificationService.(interface {
-		CountUnreadSummary(context.Context, string) (models.NotificationUnreadCounts, error)
-	}); ok {
-		counts, err := source.CountUnreadSummary(r.Context(), user.ID)
-		if err != nil {
-			pkg.Error(w, err)
-			return
-		}
-		pkg.JSON(w, http.StatusOK, counts)
-		return
-	}
-	n, err := h.notificationService.CountUnread(r.Context(), user.ID)
+	counts, err := h.notificationService.CountUnreadSummary(r.Context(), user.ID)
 	if err != nil {
 		pkg.Error(w, err)
 		return
 	}
-	pkg.JSON(w, http.StatusOK, models.NotificationUnreadCounts{UnreadCount: n, BadgeUnreadCount: n})
+	pkg.JSON(w, http.StatusOK, counts)
 }
 
 // MarkAllRead handles POST /api/users/me/notifications/read-all

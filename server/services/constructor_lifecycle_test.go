@@ -627,3 +627,12 @@ func TestChannelNotificationConstructorDeclaresBatchPreferences(t *testing.T) {
 		t.Fatal("preferences factory hides bounded reads")
 	}
 }
+
+func TestNotificationFactoryDeclaresUnreadSummary(t *testing.T) {
+	required := reflect.TypeFor[interface {
+		CountUnreadSummary(context.Context, string) (models.NotificationUnreadCounts, error)
+	}]()
+	if !reflect.TypeOf(NewNotificationService).Out(0).Implements(required) {
+		t.Fatal("notification factory hides authoritative badge counts")
+	}
+}

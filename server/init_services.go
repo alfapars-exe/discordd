@@ -86,7 +86,7 @@ type Services struct {
 	MusicBot                services.MusicBotRuntime
 	WSTicket                services.WSTicketRuntime
 	Backup                  *services.BackupService
-	Notification            services.NotificationService
+	Notification            services.NotificationRuntime
 	Reminder                services.ReminderService
 	ReminderWorker          *services.MessageReminderWorker
 	Saved                   services.SavedService
