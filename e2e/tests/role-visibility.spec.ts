@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { fixtureApi as api, dismissOnboardingOverlays, loginAsNotificationOwner, loginAsNotificationRecipient, readChannelNotificationFixture } from "./helpers";
+import { fixtureApi as api, dismissOnboardingOverlays, loginAsNotificationOwner, loginAsNotificationRecipient, readChannelNotificationFixture, resetChannelNotificationFixture } from "./helpers";
 
 function receivedMessageIDs(page: Page) {
   const ids = new Set<string>();
@@ -16,13 +16,13 @@ test("a parent permission revocation blocks warm thread history and WebSocket de
   const member = await browser.newPage();
   const ownerMessages = receivedMessageIDs(owner);
   const memberMessages = receivedMessageIDs(member);
-  const fixture = readChannelNotificationFixture();
-  const root = "/servers/" + fixture.serverId;
-  const send = (channelID: string, content: string) =>
-    api<{ id: string }>(owner, root + "/channels/" + channelID + "/messages", "POST", { content });
-
   try {
     await loginAsNotificationOwner(owner);
+    await resetChannelNotificationFixture(owner);
+    const fixture = readChannelNotificationFixture();
+    const root = "/servers/" + fixture.serverId;
+    const send = (channelID: string, content: string) =>
+      api<{ id: string }>(owner, root + "/channels/" + channelID + "/messages", "POST", { content });
     await loginAsNotificationRecipient(member);
     const roles = await api<{ id: string; is_default: boolean }[]>(owner, root + "/roles");
     const everyone = roles.find(role => role.is_default);
@@ -56,101 +56,104 @@ test("a parent permission revocation blocks warm thread history and WebSocket de
 test("channel tree follows role grants and revocations in two authenticated sessions", async ({ browser }) => {
   const owner = await browser.newPage();
   const member = await browser.newPage();
-  const memberMessages = receivedMessageIDs(member);
-  const ownerMessages = receivedMessageIDs(owner);
-  function channelUpdateTopics(page: Page) {
-    const topics: string[] = [];
-    page.on("websocket", socket => socket.on("framereceived", ({ payload }) => {
-      try {
-        const event = JSON.parse(String(payload));
-        if (event.op === "channel_update" && typeof event.d?.topic === "string") topics.push(event.d.topic);
-      } catch { /* Binary frames and unrelated protocols carry no channel update here. */ }
-    }));
-    return topics;
-  }
-  const ownerTopics = channelUpdateTopics(owner);
-  const memberTopics = channelUpdateTopics(member);
-  const fixture = readChannelNotificationFixture();
-  const root = "/servers/" + fixture.serverId;
-  await loginAsNotificationOwner(owner);
-  await loginAsNotificationRecipient(member);
-  const user = await api<{ id: string }>(member, "/users/me");
-  const roles = await api<{ id: string; is_default: boolean }[]>(owner, root + "/roles");
-  const everyone = roles.find(role => role.is_default)!;
-  const extra = await api<{ id: string }>(owner, root + "/roles", "POST", { name: "Visibility test", color: "#888888", permissions: 0 });
-  const voiceName = "fixture-voice-private-" + Date.now();
-  const voice = await api<{ id: string }>(owner, root + "/channels", "POST", { name: voiceName, type: "voice" });
-  const ids = [fixture.privateChannelId, voice.id];
-  const names = ["fixture-private", voiceName];
-  const view = 4096;
-  await api(owner, root + "/channels/" + voice.id + "/permissions/" + everyone.id, "PUT", { deny: view, allow: 0 });
-  for (const id of ids) {
-    await api(owner, root + "/channels/" + id + "/permissions/" + extra.id, "PUT", { allow: view, deny: 0 });
-  }
-  async function open(page: Page) {
-    await page.locator("nav.server-rail").getByRole("button", { name: new RegExp(fixture.serverName) }).click();
-    await expect(page.locator("button.ch-tree-item").filter({hasText:"general"}).first()).toBeVisible();
-  }
-  async function check(page: Page, visible: boolean) {
-    const groups = await api<{ channels: { id: string }[] }[]>(page, root + "/channels");
-    const listed = groups.flatMap(group => group.channels.map(channel => channel.id));
-    for (const [i, id] of ids.entries()) {
-      expect(listed.includes(id)).toBe(visible);
-      await expect(page.getByRole("complementary").getByRole("button", {name: new RegExp(names[i] + "$")})).toHaveCount(visible ? 1 : 0);
+  try {
+    const memberMessages = receivedMessageIDs(member);
+    const ownerMessages = receivedMessageIDs(owner);
+    function channelUpdateTopics(page: Page) {
+      const topics: string[] = [];
+      page.on("websocket", socket => socket.on("framereceived", ({ payload }) => {
+        try {
+          const event = JSON.parse(String(payload));
+          if (event.op === "channel_update" && typeof event.d?.topic === "string") topics.push(event.d.topic);
+        } catch { /* Binary frames and unrelated protocols carry no channel update here. */ }
+      }));
+      return topics;
     }
-  }
-  await open(owner);
-  await open(member);
-  await check(owner, true);
-  await check(member, false);
-  const secret = "private topic " + Date.now();
-  const barrier = "public topic " + Date.now();
-  await api(owner, root + "/channels/" + fixture.privateChannelId, "PATCH", {topic: secret});
-  await expect.poll(() => ownerTopics.includes(secret)).toBe(true);
-  await api(owner, root + "/channels/" + fixture.channelId, "PATCH", {topic: barrier});
-  await expect.poll(() => memberTopics.includes(barrier)).toBe(true);
-  expect(memberTopics).not.toContain(secret);
-  await api(owner, root + "/channels/" + fixture.privateChannelId + "/messages");
-  await expect(api(member, root + "/channels/" + fixture.privateChannelId + "/messages")).rejects.toThrow(/HTTP 403/);
-  const assignments = root + "/members/" + user.id + "/roles";
-  await api(owner, assignments, "PATCH", { role_ids: [everyone.id, extra.id] });
-  await check(member, true);
-  await api(owner, assignments, "PATCH", { role_ids: [everyone.id] });
-  await check(member, false);
+    const ownerTopics = channelUpdateTopics(owner);
+    const memberTopics = channelUpdateTopics(member);
+    await loginAsNotificationOwner(owner);
+    await resetChannelNotificationFixture(owner);
+    const fixture = readChannelNotificationFixture();
+    const root = "/servers/" + fixture.serverId;
+    await loginAsNotificationRecipient(member);
+    const user = await api<{ id: string }>(member, "/users/me");
+    const roles = await api<{ id: string; is_default: boolean }[]>(owner, root + "/roles");
+    const everyone = roles.find(role => role.is_default)!;
+    const extra = await api<{ id: string }>(owner, root + "/roles", "POST", { name: "Visibility test", color: "#888888", permissions: 0 });
+    const voiceName = "fixture-voice-private-" + Date.now();
+    const voice = await api<{ id: string }>(owner, root + "/channels", "POST", { name: voiceName, type: "voice" });
+    const ids = [fixture.privateChannelId, voice.id];
+    const names = ["fixture-private", voiceName];
+    const view = 4096;
+    await api(owner, root + "/channels/" + voice.id + "/permissions/" + everyone.id, "PUT", { deny: view, allow: 0 });
+    for (const id of ids) {
+      await api(owner, root + "/channels/" + id + "/permissions/" + extra.id, "PUT", { allow: view, deny: 0 });
+    }
+    async function open(page: Page) {
+      await page.locator("nav.server-rail").getByRole("button", { name: new RegExp(fixture.serverName) }).click();
+      await expect(page.locator("button.ch-tree-item").filter({hasText:"general"}).first()).toBeVisible();
+    }
+    async function check(page: Page, visible: boolean) {
+      const groups = await api<{ channels: { id: string }[] }[]>(page, root + "/channels");
+      const listed = groups.flatMap(group => group.channels.map(channel => channel.id));
+      for (const [i, id] of ids.entries()) {
+        expect(listed.includes(id)).toBe(visible);
+        await expect(page.getByRole("complementary").getByRole("button", {name: new RegExp(names[i] + "$")})).toHaveCount(visible ? 1 : 0);
+      }
+    }
+    await open(owner);
+    await open(member);
+    await check(owner, true);
+    await check(member, false);
+    const secret = "private topic " + Date.now();
+    const barrier = "public topic " + Date.now();
+    await api(owner, root + "/channels/" + fixture.privateChannelId, "PATCH", {topic: secret});
+    await expect.poll(() => ownerTopics.includes(secret)).toBe(true);
+    await api(owner, root + "/channels/" + fixture.channelId, "PATCH", {topic: barrier});
+    await expect.poll(() => memberTopics.includes(barrier)).toBe(true);
+    expect(memberTopics).not.toContain(secret);
+    await api(owner, root + "/channels/" + fixture.privateChannelId + "/messages");
+    await expect(api(member, root + "/channels/" + fixture.privateChannelId + "/messages")).rejects.toThrow(/HTTP 403/);
+    const assignments = root + "/members/" + user.id + "/roles";
+    await api(owner, assignments, "PATCH", { role_ids: [everyone.id, extra.id] });
+    await check(member, true);
+    await api(owner, assignments, "PATCH", { role_ids: [everyone.id] });
+    await check(member, false);
 
-  const privateHistory = root + "/channels/" + fixture.privateChannelId + "/messages";
-  const invite = await api<{ code: string }>(owner, root + "/invites", "POST", { max_uses: 1, expires_in: 30, channel_id: fixture.channelId });
-  await api(owner, assignments, "PATCH", { role_ids: [everyone.id, extra.id] });
-  const readMessages = 2048;
-  await api(owner, root + "/channels/" + fixture.privateChannelId + "/permissions/" + extra.id, "PUT", {
-    allow: view | readMessages, deny: 0,
-  });
-  const warm = await api<{ id: string }>(owner, privateHistory, "POST", { content: "Before leaving" });
-  await expect.poll(() => memberMessages.has(warm.id)).toBe(true);
-  const history = await api<{ messages: { id: string }[] }>(member, privateHistory);
-  expect(history.messages.map(message => message.id)).toContain(warm.id);
-  await api(member, root + "/leave", "POST");
-  await api(member, "/servers/join", "POST", { invite_code: invite.code });
-  await expect(api(member, privateHistory)).rejects.toThrow(/HTTP 403/);
-  const privateMessage = await api<{ id: string }>(owner, privateHistory, "POST", { content: "After rejoining" });
-  await expect.poll(() => ownerMessages.has(privateMessage.id)).toBe(true);
-  const publicMessage = await api<{ id: string }>(owner, root + "/channels/" + fixture.channelId + "/messages", "POST", {
-    content: "Rejoin delivery barrier",
-  });
-  await expect.poll(() => memberMessages.has(publicMessage.id)).toBe(true);
-  expect(memberMessages.has(privateMessage.id)).toBe(false);
-  await member.reload();
-  await dismissOnboardingOverlays(member);
-  await open(member);
-  await check(member, false);
-  // Reuse the owner's browser storage and the application's logout flow.
-  await owner.getByRole("button", { name: "Settings", exact: true }).click();
-  await owner.getByRole("dialog", { name: "Settings" })
-    .getByRole("button", { name: "Log Out", exact: true }).click();
-  await expect(owner).toHaveURL(/\/login/);
-  await loginAsNotificationRecipient(owner);
-  await open(owner);
-  await check(owner, false);
-  await owner.close();
-  await member.close();
+    const privateHistory = root + "/channels/" + fixture.privateChannelId + "/messages";
+    const invite = await api<{ code: string }>(owner, root + "/invites", "POST", { max_uses: 1, expires_in: 30, channel_id: fixture.channelId });
+    await api(owner, assignments, "PATCH", { role_ids: [everyone.id, extra.id] });
+    const readMessages = 2048;
+    await api(owner, root + "/channels/" + fixture.privateChannelId + "/permissions/" + extra.id, "PUT", {
+      allow: view | readMessages, deny: 0,
+    });
+    const warm = await api<{ id: string }>(owner, privateHistory, "POST", { content: "Before leaving" });
+    await expect.poll(() => memberMessages.has(warm.id)).toBe(true);
+    const history = await api<{ messages: { id: string }[] }>(member, privateHistory);
+    expect(history.messages.map(message => message.id)).toContain(warm.id);
+    await api(member, root + "/leave", "POST");
+    await api(member, "/servers/join", "POST", { invite_code: invite.code });
+    await expect(api(member, privateHistory)).rejects.toThrow(/HTTP 403/);
+    const privateMessage = await api<{ id: string }>(owner, privateHistory, "POST", { content: "After rejoining" });
+    await expect.poll(() => ownerMessages.has(privateMessage.id)).toBe(true);
+    const publicMessage = await api<{ id: string }>(owner, root + "/channels/" + fixture.channelId + "/messages", "POST", {
+      content: "Rejoin delivery barrier",
+    });
+    await expect.poll(() => memberMessages.has(publicMessage.id)).toBe(true);
+    expect(memberMessages.has(privateMessage.id)).toBe(false);
+    await member.reload();
+    await dismissOnboardingOverlays(member);
+    await open(member);
+    await check(member, false);
+    // Reuse the owner's browser storage and the application's logout flow.
+    await owner.getByRole("button", { name: "Settings", exact: true }).click();
+    await owner.getByRole("dialog", { name: "Settings" })
+      .getByRole("button", { name: "Log Out", exact: true }).click();
+    await expect(owner).toHaveURL(/\/login/);
+    await loginAsNotificationRecipient(owner);
+    await open(owner);
+    await check(owner, false);
+  } finally {
+    await Promise.all([owner.close(), member.close()]);
+  }
 });
