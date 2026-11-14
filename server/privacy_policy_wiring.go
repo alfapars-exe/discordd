@@ -26,6 +26,19 @@ type privacyPolicies struct {
 
 // initPrivacyPolicies binds account and relationship policy readers as one domain.
 func initPrivacyPolicies(repos *Repositories, presence gameActivityHubPresence) privacyPolicies {
+	if repos == nil {
+		panic("privacy policies require repositories")
+	}
+	for _, input := range []struct {
+		name  string
+		value any
+	}{
+		{"preferences", repos.Preferences}, {"friendship", repos.Friendship}, {"server", repos.Server}, {"bans", repos.Ban}, {"presence", presence},
+	} {
+		if missingCompositionInput(input.value) {
+			panic("privacy policies require " + input.name)
+		}
+	}
 	graph := friendRequestGraphAdapter{reader: repos.Friendship}
 	return privacyPolicies{
 		Profile:        services.NewProfileAudiencePolicy(repos.Preferences, repos.Friendship, repos.Server),

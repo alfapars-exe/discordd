@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
@@ -50,5 +51,47 @@ func TestPrivacyPolicyCompositionReadsCurrentRepositoryPreferences(t *testing.T)
 		if err != nil || dm != allowed {
 			t.Fatalf("DM=%v want=%v err=%v", dm, allowed, err)
 		}
+	}
+}
+
+type nilPrivacyPreferences struct{ repository.PreferencesStore }
+
+func TestPrivacyPolicyCompositionRejectsMissingReaders(t *testing.T) {
+	db, _ := newCensusDB(t)
+	base := initRepositories(db.Conn, repository.DataExportStorageOptions{UploadDir: t.TempDir(), ArchiveDir: t.TempDir()})
+	for _, name := range []string{"repositories", "preferences", "typed nil preferences", "friendship", "server", "bans", "presence", "typed nil presence"} {
+		t.Run(name, func(t *testing.T) {
+			copy := *base
+			repos := &copy
+			var presence gameActivityHubPresence = ws.NewHub()
+			want := name
+			switch name {
+			case "repositories":
+				repos = nil
+			case "preferences":
+				repos.Preferences = nil
+			case "typed nil preferences":
+				var value *nilPrivacyPreferences
+				repos.Preferences = value
+				want = "preferences"
+			case "friendship":
+				repos.Friendship = nil
+			case "server":
+				repos.Server = nil
+			case "bans":
+				repos.Ban = nil
+			case "presence":
+				presence = nil
+			case "typed nil presence":
+				var value *ws.Hub
+				presence = value
+				want = "presence"
+			}
+			var caught any
+			func() { defer func() { caught = recover() }(); initPrivacyPolicies(repos, presence) }()
+			if fmt.Sprint(caught) != "privacy policies require "+want {
+				t.Fatalf("panic=%v want missing %s", caught, want)
+			}
+		})
 	}
 }

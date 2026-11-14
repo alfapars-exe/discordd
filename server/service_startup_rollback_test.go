@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/argeinfina/hichat/config"
+	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/services"
 	"github.com/argeinfina/hichat/ws"
 )
@@ -24,7 +25,7 @@ func TestServiceInitializationReleasesCacheWhenHubWiringPanics(t *testing.T) {
 	var caught any
 	func() {
 		defer func() { caught = recover() }()
-		initServices(nil, &Repositories{}, &failingStartupHub{marker: marker}, &config.Config{}, nil, nil)
+		initServices(nil, startupPolicyRepositories(t), &failingStartupHub{marker: marker}, &config.Config{}, nil, nil)
 	}()
 	if caught != marker {
 		t.Fatalf("did not reach intended hub failure: %v", caught)
@@ -39,7 +40,7 @@ func TestServiceInitializationReleasesCacheOnEarlyConfigFailure(t *testing.T) {
 	var caught any
 	func() {
 		defer func() { caught = recover() }()
-		initServices(nil, &Repositories{}, nil, nil, nil, nil)
+		initServices(nil, startupPolicyRepositories(t), nil, nil, nil, nil)
 	}()
 	if _, ok := caught.(runtime.Error); !ok {
 		t.Fatalf("did not reach configuration dereference failure: %v", caught)
@@ -54,7 +55,7 @@ func (h *failingStartupHub) SetDurableChannelSends(bool)          {}
 
 func TestServiceInitializationTransfersLiveWorkersToSuccessfulCaller(t *testing.T) {
 	caches, limitersBefore := routeCacheWorkerCount(t), limiterWorkerCount(t)
-	svcs, limiters, metrics := initServices(nil, &Repositories{}, ws.NewHub(), &config.Config{}, nil, nil)
+	svcs, limiters, metrics := initServices(nil, startupPolicyRepositories(t), ws.NewHub(), &config.Config{}, nil, nil)
 	t.Cleanup(func() {
 		limiters.Stop()
 		stopServiceCacheWorkers(svcs)
@@ -86,3 +87,10 @@ func TestServiceInitializationTransfersLiveWorkersToSuccessfulCaller(t *testing.
 }
 
 func (*failingStartupHub) GameActivityEpoch() string { return "startup-fixture" }
+
+// Startup lifecycle fixtures retain real policy readers; their intended failure
+// remains the injected callback/config failure rather than missing policy input.
+func startupPolicyRepositories(t *testing.T) *Repositories {
+	db, _ := newCensusDB(t)
+	return initRepositories(db.Conn, repository.DataExportStorageOptions{UploadDir: t.TempDir(), ArchiveDir: t.TempDir()})
+}
