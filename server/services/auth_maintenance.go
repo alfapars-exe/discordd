@@ -28,20 +28,26 @@ func (s *authService) startRefreshSweep(parent context.Context) func() {
 				close(worker.done)
 				s.refreshSweepMu.Unlock()
 			}()
-			for {
-				select {
-				case now := <-ticker.C:
-					s.sweepUsedRefresh(now)
-				case <-ctx.Done():
-					return
-				}
-			}
+			s.runRefreshSweep(ctx, ticker.C)
 		}()
 	}
 	s.refreshSweepMu.Unlock()
 	return func() {
 		worker.cancel()
 		<-worker.done
+	}
+}
+
+// The owner controls ticker and cancellation lifetime. Accepting ticks here
+// lets lifecycle tests exercise cancellation during a sweep without wall time.
+func (s *authService) runRefreshSweep(ctx context.Context, ticks <-chan time.Time) {
+	for {
+		select {
+		case now := <-ticks:
+			s.sweepUsedRefresh(now)
+		case <-ctx.Done():
+			return
+		}
 	}
 }
 

@@ -1738,3 +1738,8 @@ TestLegacyRecoveryFromVerifiedBackup now creates a consistent SQLite VACUUM INTO
 ### RF03/RF28 — retry-only success is not stable acceptance (2026-11-14)
 
 Detailed b177 browser logs show 14 first-attempt passes plus 2 flaky cases (DM reply navigation sidebar locator; reused-browser login username field). The job was successful under the previous policy; no stable-browser completion claim follows. Crypto3, preference2, WebKit1 and mail2 passed. New CLI configuration regression initially failed because failOnFlakyTests was false; CI now enables it and isolation/profile guards pass. Browser artifact upload now runs regardless of job result so a strict flaky failure retains its diagnostics. Do not remove retries or assertions to hide the two open failures. Receipts: refactor-rf28-b177-production-browser-2026-11-14.json and refactor-rf03-browser-flaky-gate-2026-11-14.json.
+
+
+### RF08 — deterministic cancellation during refresh sweep (2026-11-14)
+
+The private sweep loop now accepts its tick channel; the existing owner still allocates/stops the hourly ticker, cancels once and joins done. A new test holds the replay-evidence mutex and uses an unbuffered tick rendezvous to establish an in-flight sweep before cancellation. The loop cannot report done until the mutex is released; afterward it exits and preserves live refresh evidence while removing the expired record. Existing owner start/duplicate-start/cancel/restart and refresh tests remain. Targeted suite passed locally, 0.504s; Linux race and current-source CI remain required. Receipt: implementation/verification/refactor-rf08-sweep-cancellation-2026-11-14.json.
