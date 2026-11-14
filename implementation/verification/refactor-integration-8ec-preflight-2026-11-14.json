@@ -1,0 +1,55 @@
+{
+  "source": "8ec41413f7ac03f72a53a1c11010df76283d1cf2",
+  "pr": "https://github.com/alfapars-exe/discordd/pull/305",
+  "scope": "frozen tracked source; untracked artifacts preserved",
+  "node": "v26.13.1",
+  "npm": "11.20.0",
+  "typescript": {
+    "exit": 0
+  },
+  "client_lint": {
+    "exit": 0,
+    "errors": 0,
+    "warnings": 2
+  },
+  "vitest": {
+    "numTotalTests": 4825,
+    "numPassedTests": 4824,
+    "numFailedTests": 0,
+    "numPendingTests": 1,
+    "success": true
+  },
+  "vitest_report_sha256": "25f1a70a95ab4827080ae9b08018bb8c45cdadc608e372f6dda248397744ee3c",
+  "coverage": {
+    "lines": 67.53,
+    "branches": 64.04,
+    "statements": 66.59,
+    "functions": 61.01,
+    "output_directory": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-integration-8ec-client-coverage"
+  },
+  "guardrail_sync": {
+    "exit": 0
+  },
+  "self_scan": {
+    "status": "passed",
+    "session_id": 36394,
+    "archive": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-integrated-ci-preflight-te7nv5yk\\source",
+    "reviewed_source_records": 50,
+    "exit": 0,
+    "block_matches": 0,
+    "review_rows": 434,
+    "report_sha256": "1441d74f609df05dca30ce72179aabd9fdf43f7d13d984ed447c7b9f52c1d9ed"
+  },
+  "ci": {
+    "status": "passed",
+    "source": "8ec41413f7ac03f72a53a1c11010df76283d1cf2",
+    "pr_checks_passed": 36,
+    "server_jobs_passed": 31,
+    "server_run_id": 43557593050
+  },
+  "client_production_build": {
+    "exit": 0,
+    "log": "hichat-integration-8ec-client-build.log",
+    "artifact": "hichat-integration-8ec-dist"
+  }
+}

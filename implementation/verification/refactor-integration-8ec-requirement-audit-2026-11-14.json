@@ -1,0 +1,532 @@
+{
+  "source": "8ec41413f7ac03f72a53a1c11010df76283d1cf2",
+  "pr": "https://github.com/alfapars-exe/discordd/pull/305",
+  "objective": "Tüm projedeki teknik borçlar, refactor bitene kadar devam et.",
+  "requirements_source": "docs/REFACTORING_TASKS.md",
+  "cards": [
+    {
+      "id": "RF01",
+      "title": "Geçersiz UTF-8 build engeli",
+      "requirements": {
+        "Module": "`client/src/components/voice/VoiceProvider.tsx`; `client/src/components/dm/GroupDMCall.tsx`",
+        "Dependencies": "Yok. RF02 kanıt kaydı paralel yapılabilir.",
+        "Tests": "UTF-8 strict decode taraması; client typecheck ve production build. Düşük etkili metin düzeltmesi için implementation'ı tekrar eden unit test yazılmaz.",
+        "Acceptance Criteria": "İki dosya geçerli UTF-8; taranan kaynak kümesinde geçersiz byte kalmıyor; build bir sonraki gerçek hataya kadar ilerlerse o hata ayrı kaydediliyor. Build ancak komut sıfır exit code ile biterse başarılı işaretlenir."
+      },
+      "status": "verified_for_frozen_source",
+      "evidence": {
+        "strict_utf8_files": {
+          "client/src/components/voice/VoiceProvider.tsx": true,
+          "client/src/components/dm/GroupDMCall.tsx": true
+        },
+        "ci_encoding_lines": [
+          "2026-11-14T04:38:04.3448061Z UTF-8: 3228 source files checked, 0 invalid"
+        ],
+        "ci_encoding_job": 132333839900,
+        "ci_production_build_job": {
+          "id": 132333839946,
+          "run_id": 43557593050,
+          "workflow_name": "Server CI",
+          "head_branch": "verify/refactor-integration",
+          "run_url": "https://api.github.com/repos/alfapars-exe/discordd/actions/runs/43557593050",
+          "run_attempt": 1,
+          "node_id": "CR_kwDOSTBJ_88AAAAez7YmSg",
+          "head_sha": "8ec41413f7ac03f72a53a1c11010df76283d1cf2",
+          "url": "https://api.github.com/repos/alfapars-exe/discordd/actions/jobs/132333839946",
+          "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43557593050/job/132333839946",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-11-14T04:37:41Z",
+          "started_at": "2026-11-14T04:37:42Z",
+          "completed_at": "2026-11-14T04:45:02Z",
+          "name": "Client lint, type, test & build",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-11-14T04:37:43Z",
+              "completed_at": "2026-11-14T04:37:45Z"
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2,
+              "started_at": "2026-11-14T04:37:45Z",
+              "completed_at": "2026-11-14T04:37:52Z"
+            },
+            {
+              "name": "Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3,
+              "started_at": "2026-11-14T04:37:52Z",
+              "completed_at": "2026-11-14T04:37:58Z"
+            },
+            {
+              "name": "Install deps",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4,
+              "started_at": "2026-11-14T04:37:58Z",
+              "completed_at": "2026-11-14T04:38:33Z"
+            },
+            {
+              "name": "ESLint",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5,
+              "started_at": "2026-11-14T04:38:33Z",
+              "completed_at": "2026-11-14T04:39:06Z"
+            },
+            {
+              "name": "Vitest",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6,
+              "started_at": "2026-11-14T04:39:06Z",
+              "completed_at": "2026-11-14T04:42:47Z"
+            },
+            {
+              "name": "Upload client statement and branch coverage",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7,
+              "started_at": "2026-11-14T04:42:47Z",
+              "completed_at": "2026-11-14T04:42:49Z"
+            },
+            {
+              "name": "Build",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 8,
+              "started_at": "2026-11-14T04:42:49Z",
+              "completed_at": "2026-11-14T04:43:12Z"
+            },
+            {
+              "name": "Verify packaged audio engines",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9,
+              "started_at": "2026-11-14T04:43:12Z",
+              "completed_at": "2026-11-14T04:43:15Z"
+            },
+            {
+              "name": "Microphone worklet CSP packaging",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 10,
+              "started_at": "2026-11-14T04:43:15Z",
+              "completed_at": "2026-11-14T04:43:16Z"
+            },
+            {
+              "name": "Production client image and Nginx CSP",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 11,
+              "started_at": "2026-11-14T04:43:16Z",
+              "completed_at": "2026-11-14T04:44:59Z"
+            },
+            {
+              "name": "Post Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 21,
+              "started_at": "2026-11-14T04:44:59Z",
+              "completed_at": "2026-11-14T04:45:00Z"
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 22,
+              "started_at": "2026-11-14T04:45:00Z",
+              "completed_at": "2026-11-14T04:45:01Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 23,
+              "started_at": "2026-11-14T04:45:01Z",
+              "completed_at": "2026-11-14T04:45:01Z"
+            }
+          ],
+          "check_run_url": "https://api.github.com/repos/alfapars-exe/discordd/check-runs/132333839946",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "runner_id": 1000031264,
+          "runner_name": "GitHub Actions 1000031264",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions"
+        },
+        "local_production_build": {
+          "exit": 0,
+          "log": "hichat-integration-8ec-client-build.log",
+          "artifact": "hichat-integration-8ec-dist"
+        }
+      }
+    },
+    {
+      "id": "RF02",
+      "title": "Sabit baseline ve kabul envanteri",
+      "requirements": {
+        "Module": "Depo genelinde test/build komutları; `implementation/coverage.json:11`; `scripts/check-implementation-coverage.mjs`",
+        "Dependencies": "Yok.",
+        "Tests": "Go, Electron, client, lint, typecheck, production build, E2E, acceptance checker; önce iki UserBar suite'i ve aynı mock'u paylaşan tüketiciler, ardından tam client suite. Ortam gerektiren PostgreSQL/native/live servis testleri ayrı profile ayrılır.",
+        "Acceptance Criteria": "Her kontrol passed/failed/skipped/not-run/blocked durumlarından biriyle ve gerekçesiyle kayıtlı; ilk tam suite başarısızlığı ile yeni revizyonun hedefli başarısı ayrılmış; yeni tam suite sonucu olmadan global yeşil iddiası yok. Mevcut düzeltme tekrar uygulanmamış, suite skip veya assertion silerek hata gizlenmemiş. 248 bekleyen madde sırf kod/test bulunduğu için accepted yapılmamış; bu ilgisiz ürün maddelerini uygulamak seçili refactoring PR'larının ön koşulu değil."
+      },
+      "status": "baseline_evidence_review_in_progress",
+      "evidence": {
+        "ledger_structure_exit": 0,
+        "ledger_summary": [
+          "Coverage structure: VALID",
+          "References: 33/33; behaviors: 261",
+          "Statuses: existing=34, missing=6, implemented_unverified=208, accepted=2, excluded=11",
+          "Acceptance complete: NO"
+        ],
+        "remaining": "per-command runtime/test/skip counts and original baseline comparison still require scope review"
+      }
+    },
+    {
+      "id": "RF03",
+      "title": "Test profilleri, coverage ve CI görünürlüğü",
+      "requirements": {
+        "Module": "`client/vitest.config.ts`; `client/package.json`; `package.json`; `.github/workflows/server-ci.yml`; `.github/workflows/build-desktop.yml`",
+        "Dependencies": "RF02",
+        "Tests": "Aggregate script için child failure/timeout/skip/boş rapor fixture'ları; tüm mevcut script testleri; audio entegrasyon profilinin gerekli artifact/süreç ön koşullarını doğrulama.",
+        "Acceptance Criteria": "Kritik suite başarısızlığı aggregate sonucu başarısız yapıyor; raporda file/line/branch coverage ile acceptance ledger ayrı; exclude yalnız generated/vendor/platform tanımıyla gerekçeli; zorunlu test atlaması gerekli job'ı yeşile çevirmiyor."
+      },
+      "status": "implementation_gap_reproduced_in_frozen_source",
+      "evidence": {
+        "gap": "structured zero-exit client/server reports with only skips, failed tests/suites, negative counts or no completed Go tests were accepted",
+        "original_tests": {
+          "total": 17,
+          "passed": 8,
+          "failed": 9
+        },
+        "followup_source": "cc932e8a228598f623eaace9cb0569d50b097586",
+        "followup_pr": "https://github.com/alfapars-exe/discordd/pull/306",
+        "followup_tests": {
+          "passed": 50,
+          "failed": 0,
+          "skipped": 0
+        },
+        "included_in_candidate305": false,
+        "remaining": "review all RF03 requirements and integrate/verify follow-up after current candidate CI is terminal"
+      },
+      "followup_progress": {
+        "guarded_port": true,
+        "integrated_tooling_tests_passed": 50,
+        "next_combined_ci": "pending"
+      }
+    },
+    {
+      "id": "RF04",
+      "title": "Gerçek PostgreSQL test hattı",
+      "requirements": {
+        "Module": "`server/database/postgres_test.go`; `server/database/postgres_tls_integration_test.go`; `.github/workflows/server-ci.yml`",
+        "Dependencies": "RF02",
+        "Tests": "Temiz DB migration, tekrar açma, repository CRUD/transaction rollback, bulk sorgu, timestamp/JSON/boolean davranışı; TLS positive/negative fixture'ları.",
+        "Acceptance Criteria": "CI çıktısında PostgreSQL testleri gerçekten executed; DSN yokluğu zorunlu job'da fail; bağlantı/fixture cleanup kanıtlı; desteklenen DB yollarının biri diğerinin sonucu gibi raporlanmıyor."
+      },
+      "status": "not_yet_audited_requirement_by_requirement"
+    },
+    {
+      "id": "RF05",
+      "title": "SQL dialect dönüşüm güvenliği",
+      "requirements": {
+        "Module": "`server/database/postgres_dialect.go:230–298`; `server/database/postgres_dialect_test.go`",
+        "Dependencies": "RF04",
+        "Tests": "Gerçek SQLite/PostgreSQL sonuç eşdeğerliği; tırnaklı `?`, yorum/string içinde anahtar kelimeler, çok satırlı SQL, NULL, conflict target, parametre sayısı, timestamp sınırları ve rollback.",
+        "Acceptance Criteria": "Kullanılan dönüşüm ailelerinin her biri pozitif/negatif fixture ile kapsanmış; aynı mantıksal veriyle sonuçlar eşdeğer; SQL injection açığı bulunduğu iddia edilmeden semantik risk açık belgelenmiş."
+      },
+      "status": "not_yet_audited_requirement_by_requirement"
+    },
+    {
+      "id": "RF06",
+      "title": "Eski şema migration kabulü",
+      "requirements": {
+        "Module": "`server/database/database.go:244–264`; SQLite/PostgreSQL migration dizinleri",
+        "Dependencies": "RF04",
+        "Tests": "Boş DB; doğru legacy DB; yalnız users tablosu; eksik kolon/indeks; boş/yarım migration ledger; yarıda hata/transaction rollback; aynı upgrade'i ikinci kez çalıştırma; backup restore provası.",
+        "Acceptance Criteria": "Doğrulanmamış şema bütün migration'ları applied yapamıyor; desteklenen legacy fixture kayıpsız açılıyor; bilinmeyen şema fail-closed; recovery adımları test artifact'iyle belgeli."
+      },
+      "status": "not_yet_audited_requirement_by_requirement"
+    },
+    {
+      "id": "RF07",
+      "title": "Auth ve recovery sözleşmeleri",
+      "requirements": {
+        "Module": "`server/services/auth_password.go`; `server/services/auth_service.go:297`; `server/models/password_reset.go`; auth handler/model testleri",
+        "Dependencies": "RF02",
+        "Tests": "Username/email identifier, trim/case sınırları, bilinmeyen kullanıcı, e-postasız legacy kullanıcı, tek kullanımlık/expired token, eşzamanlı reset, provider hata/timeout, session invalidation, e-posta removal reddi, yeni kayıt validasyonu. Mail sağlayıcısını fake et; gerçek gönderim ayrı kabul.",
+        "Acceptance Criteria": "Matrisin her satırı ilgili katmanda test veya açık runtime kapısı taşır; mevcut HTTP/status/error sözleşmesi korunur; gizli token/şifre test loglarına çıkmaz; legacy erişim korunur."
+      },
+      "status": "not_yet_audited_requirement_by_requirement"
+    },
+    {
+      "id": "RF08",
+      "title": "Backend kaynak yaşam döngüsü",
+      "requirements": {
+        "Module": "`server/services/auth_service.go:326–335`; `server/database/database.go:183–190`",
+        "Dependencies": "RF07",
+        "Tests": "Tekrarlı create/close, çift close, iptal sırasında sweep, expired/live refresh kayıtları, Ping ve migration hata enjeksiyonu, constructor failure sonrası açık connection/goroutine bırakmama.",
+        "Acceptance Criteria": "Her background worker'ın tek stop sahibi var; kapanış beklenebilir ve idempotent; startup hata dalları connection sızdırmıyor; refresh davranış testleri değişmeden geçiyor."
+      },
+      "status": "not_yet_audited_requirement_by_requirement"
+    },
+    {
+      "id": "RF09",
+      "title": "Üye/grup sorgularının veri kapsamı",
+      "requirements": {
+        "Module": "`server/services/member_service.go:135–188`; `server/services/group_dm_service.go:135`, `:222`, `:466`",
+        "Dependencies": "RF04",
+        "Tests": "0/1/çok üye, başka sunucudaki çok kullanıcı, silinmiş kişi, rol/nickname/timeout, hata propagation; sorgu sayacı ile N büyürken sabit sayıda bulk query; gerçek iki DB.",
+        "Acceptance Criteria": "İlgisiz bütün kullanıcılar yüklenmiyor; üye sayısına bağlı query fan-out kaldırılıyor; response contract eşdeğer; p95/DB wait etkisi RF29 ölçümüne ekleniyor."
+      },
+      "status": "not_yet_audited_requirement_by_requirement"
+    },
+    {
+      "id": "RF10",
+      "title": "Music bot concurrency ve cleanup",
+      "requirements": {
+        "Module": "`server/services/music_bot_service.go:103`, `:195`, `:267` ve ilişkili handler/provider yolları",
+        "Dependencies": "RF08, RF04",
+        "Tests": "Eşzamanlı play/stop/skip, provider timeout/hata, stale completion, bağlantı kopması, shutdown, çift stop; deterministic fake provider/saat; Linux Go race job'ı ve gerçek provider ayrı smoke.",
+        "Acceptance Criteria": "Her session kaynakları tek owner tarafından kapatılıyor; stale iş yeni session'a event yazmıyor; başarısız playback başarılı gösterilmiyor; race/cleanup testleri ve mevcut API regresyonları geçiyor."
+      },
+      "status": "not_yet_audited_requirement_by_requirement"
+    },
+    {
+      "id": "RF11",
+      "title": "Zorunlu servis wiring sözleşmeleri",
+      "requirements": {
+        "Module": "`server/init_services.go:179` ve `server/wiring_test.go`",
+        "Dependencies": "RF08",
+        "Tests": "Missing-required-dependency, disabled optional provider, bütün callback wiring, startup/shutdown ve route manifest regresyonları; mevcut wiring testleri genişletilir.",
+        "Acceptance Criteria": "Zorunlu bağlantı eksikliği constructor/build/başlangıç doğrulamasında bulunuyor; opsiyonel özelliğin kapalı olması deterministik; initServices iş mantığı içermiyor."
+      },
+      "status": "not_yet_audited_requirement_by_requirement"
+    },
+    {
+      "id": "RF12",
+      "title": "Ekran paylaşımı ve mikrofon testi",
+      "requirements": {
+        "Module": "`client/src/hooks/useScreenShareToggle.ts:286–736`; `client/src/hooks/useMicTest.ts:57–58`, `:84`; ses pipeline ve sink adapter'ları",
+        "Dependencies": "RF01, RF03",
+        "Tests": "İzin reddi, kullanıcının picker cancel'i, publish failure, track ended, hızlı toggle/restart, route değişimi, missing sink/default fallback, engine fallback, unmount ve kaynak cleanup. Unit ve gerçek iki cihaz ses kabulü ayrı.",
+        "Acceptance Criteria": "Doğrudan hook/controller testleri deterministik; stale start publish yapamıyor; track/context/worker/IPC lease sahipliği ve cleanup assertion'ları korunmuş; mic test ile gerçek çağrı ayar matrisi aynı; gerçek ses duyulurluğu ayrıca kaydediliyor. RF02'de izlenen suite'ler bu işi yeşil göstermek için atlanmıyor."
+      },
+      "status": "not_yet_audited_requirement_by_requirement"
+    },
+    {
+      "id": "RF13",
+      "title": "Preferences bağımlılıkları ve ortak alan eşlemesi",
+      "requirements": {
+        "Module": "`client/src/stores/preferencesStore.ts:294–310`; settings/sidebar/voice/accessibility/timeFormat store'ları; `client/vite.config.ts:148–150`",
+        "Dependencies": "RF03, RF07",
+        "Tests": "A→B geçişi, stale response, offline merge/retry, expected_user_id mismatch, bozuk/eksik/eski değerler, yeni alan default'u, reload ve voice-session preservation.",
+        "Acceptance Criteria": "Hesap izolasyonu/pending state korunuyor; yeni alan tek sözleşmeden türetiliyor; döngü kaldırılan yol için özel bundle warning suppression gerekmiyor; wire/storage alan adları değişmiyor."
+      },
+      "status": "not_yet_audited_requirement_by_requirement"
+    },
+    {
+      "id": "RF14",
+      "title": "P2P ve WebSocket transport lifecycle",
+      "requirements": {
+        "Module": "`client/src/stores/p2pCallStore.ts:136–209`; `client/src/hooks/useWebSocket.ts`; `client/src/webrtc/`",
+        "Dependencies": "RF12",
+        "Tests": "Reconnect backoff, offline/online, logout/relogin, stale signal, negotiation çakışması, ended track, hangup sırasında pending start, tekrarlı dispose; mevcut P2P ses/camera/screen regresyonları.",
+        "Acceptance Criteria": "Hesap/çağrı değişince eski listener/peer/timer kalmıyor; sonraki oturum öncekinin event'ini uygulamıyor; mevcut signaling ve medya davranışı aynı."
+      },
+      "status": "not_yet_audited_requirement_by_requirement"
+    },
+    {
+      "id": "RF15",
+      "title": "Mesaj geçmişinde saf ortak işlemler",
+      "requirements": {
+        "Module": "`client/src/stores/messageStore.ts:285`; `client/src/stores/dmStore.ts:296` ve history/update yolları",
+        "Dependencies": "RF07, RF03",
+        "Tests": "Duplicate/out-of-order event, pagination overlap, edit/delete sırasında history fetch, aynı timestamp, optimistic failure/retry, account/channel değişiminde stale response.",
+        "Acceptance Criteria": "İki store aynı ortak fixture'ları kullanıyor; domain özel yetki/şifreleme branch'leri birleştirilmiyor; kullanıcı mesaj kaybı/çift render görmüyor; API formatları değişmiyor."
+      },
+      "status": "not_yet_audited_requirement_by_requirement"
+    },
+    {
+      "id": "RF16",
+      "title": "Crypto storage/backup sınırları",
+      "requirements": {
+        "Module": "`client/src/crypto/keyStorage.ts` (1.125 satır); `client/src/crypto/keyBackup.ts:325`, `:754`",
+        "Dependencies": "RF07, RF03",
+        "Tests": "Legacy/current backup round-trip, yanlış passphrase, bozuk/truncated/veri tipi yanlış payload, unknown version, account mismatch, storage hata/transaction rollback, import sırasında cancel ve yeniden deneme.",
+        "Acceptance Criteria": "Mevcut saklanmış örnekler byte/semantik uyumlu okunuyor; bozuk veri anlaşılır typed error ile reddediliyor; anahtarlar loglanmıyor; hesap sınırı testleri geçiyor; herhangi bir format migration'ı ayrı plana bırakılmış."
+      },
+      "status": "not_yet_audited_requirement_by_requirement"
+    },
+    {
+      "id": "RF17",
+      "title": "Decrypted cache arama maliyeti",
+      "requirements": {
+        "Module": "`client/src/crypto/keyStorage.ts:878`, `:913`",
+        "Dependencies": "RF16",
+        "Tests": "Hesap izolasyonu, empty/çok sonuç, unicode arama, cancellation, pagination ve aynı sonuç sırası; ölçüm koşulları sabit performans fixture'ı.",
+        "Acceptance Criteria": "Önce/sonra veri kümesi ve ölçüm aynı; sonuç eşdeğer; büyük cache işlemi bounded ve iptal edilebilir; ölçüm kazancı yoksa gereksiz indeks/abstraction eklenmiyor."
+      },
+      "status": "not_yet_audited_requirement_by_requirement"
+    },
+    {
+      "id": "RF18",
+      "title": "Electron ekran seçicisi sahipliği",
+      "requirements": {
+        "Module": "`electron/screen-picker.ts:180–202`",
+        "Dependencies": "RF03",
+        "Tests": "İki paralel istek, cancel, destroy, navigation, stale result, geç refresh, kaynak kalmaması, query failure; fake Electron event emitter.",
+        "Acceptance Criteria": "Bir sonuç iki isteği tamamlamıyor; her istek bir callback ile sonlanıyor; owner kaybında listener'lar temiz; güvenilmeyen sender seçimi tamamlayamıyor; mevcut UI payload'ı aynı."
+      },
+      "status": "not_yet_audited_requirement_by_requirement"
+    },
+    {
+      "id": "RF19",
+      "title": "Updater ve preload abonelik lifecycle",
+      "requirements": {
+        "Module": "`electron/preload.ts:431–474`; `electron/auto-updater.ts:65–119`, `:223–266`; `client/src/hooks/useUpdateChecker.ts:47–88`",
+        "Dependencies": "RF18",
+        "Tests": "Çok abone/bir unmount, StrictMode remount, çift dispose, offline/no-update/download failure/retry, downloaded sonrası tekrar hata, tray/kapalı pencere, tekrar setup ve tek install çağrısı.",
+        "Acceptance Criteria": "Remount listener sayısını büyütmüyor; kardeş abone kaldırılmıyor; prelaunch→runtime geçişinde eski handler kalmıyor; aynı indirme yalnız bir install başlatıyor; cihaz upgrade smoke ayrı RF30 kanıtı."
+      },
+      "status": "not_yet_audited_requirement_by_requirement"
+    },
+    {
+      "id": "RF20",
+      "title": "IPC ve overlay sorumlulukları",
+      "requirements": {
+        "Module": "`electron/ipc-handlers.ts:107–543`; `electron/voice-overlay.ts:16–87`, `:188`, `:248`, `:308`, `:364`",
+        "Dependencies": "RF18, RF19",
+        "Tests": "IPC kanal/tip/payload/allowed sender envanteri; reload/crash, stale load, pending chat timeout, account switch, multiple displays/geometry; mevcut overlay-window/contract testleri.",
+        "Acceptance Criteria": "Registrar wiring yapıyor, domain logic kendi modülünde; her kaynak tek cleanup sahibi; IPC sözleşmesi aynı; kapanan overlay'de önceki oturum verisi yeniden gösterilemiyor."
+      },
+      "status": "not_yet_audited_requirement_by_requirement"
+    },
+    {
+      "id": "RF21",
+      "title": "Windows helper protokolü ve kaynak sahipliği",
+      "requirements": {
+        "Module": "`native/audio-capture.cpp:208–459`, `:345–399`; `native/game-window.cpp:148–181`; `electron/audio-capture.test.ts:39–213`",
+        "Dependencies": "RF18, RF12",
+        "Tests": "Header/PCM split, stdout pipe closure, stdin EOF, parent exit, startup timeout, format fallback, tekrarlı start/stop, missing helper, device hotplug; gerçek loopback ile mikrofon/sistem sesi ayrımı.",
+        "Acceptance Criteria": "Orphan helper yok; test döngülerinde handle/child sayısı kalıcı artmıyor; protokol byte uyumu geçiyor; fiziksel duyulurluk ve kendi uygulama sesinin dışlanması artifact'li cihaz testinde doğrulanıyor."
+      },
+      "status": "not_yet_audited_requirement_by_requirement"
+    },
+    {
+      "id": "RF22",
+      "title": "Android/iOS native kabul sınırları",
+      "requirements": {
+        "Module": "`client/android/app/src/androidTest/java/com/getcapacitor/myapp/ExampleInstrumentedTest.java:24`; `client/android/app/build.gradle:5–8`; `client/ios/App/App/` native voice/screenshare plugin'leri",
+        "Dependencies": "RF12",
+        "Tests": "Permission allow/deny/revoke, background/foreground, interruption, Bluetooth/wired route, ekran paylaşımı başlat/durdur, process restart, native callback sırası; iOS broadcast extension lifecycle.",
+        "Acceptance Criteria": "Paket kimliği testi gerçek app ile uyumlu; Android/iOS test hedefleri çalışıyor veya açık ortam blokajı kayıtlı; fiziksel cihaz gerektiren kabul simulator başarısıyla kapatılmıyor."
+      },
+      "status": "not_yet_audited_requirement_by_requirement"
+    },
+    {
+      "id": "RF23",
+      "title": "İçeriğe bağlı yayın manifesti",
+      "requirements": {
+        "Module": "`scripts/publish-hf-space.py:40–58`, `:63–70`; `scripts/test_publish_hf_space.py`",
+        "Dependencies": "RF02",
+        "Tests": "Aynı yol farklı içerik, preview sonrası değişiklik, hash sonrası değişiklik, dirty source, eksik LFS, değişmiş remote HEAD, unmanaged user data ve idempotent no-op. Tamamen fake API ile.",
+        "Acceptance Criteria": "İçerik değişirse reviewed digest geçersiz; uyuşmazlıkta create_commit hiç çağrılmıyor; yayınlanan byte'lar manifest hash'iyle aynı; exact deployed commit sonraki readiness doğrulamasına aktarılıyor."
+      },
+      "status": "not_yet_audited_requirement_by_requirement"
+    },
+    {
+      "id": "RF24",
+      "title": "Mevcut log altyapısında standart hata akışı",
+      "requirements": {
+        "Module": "`server/pkg/logx/`; `server/middleware/request_logger.go`; `server/pkg/response.go`; `server/services/app_log_service.go`; `ERROR_MANAGEMENT.md`",
+        "Dependencies": "RF02; mevcut logging değişikliğinin sahibiyle dosya kapsamı eşlemesi",
+        "Tests": "Aynı olayın tek emit'i, wrapped error/status mapping, panic redaction, client log input limits, queue saturation/drop, provider failure, log sink yavaşlığı; mevcut pipeline regresyonları.",
+        "Acceptance Criteria": "Yeni rakip logger yok; loglar secret/PCM/mesaj içeriği taşımıyor; hata kimliği response/log boyunca korele; backpressure request'i sınırsız bekletmiyor; mevcut dirty testler kaybolmuyor."
+      },
+      "status": "not_yet_audited_requirement_by_requirement"
+    },
+    {
+      "id": "RF25",
+      "title": "Locale ve erişilebilirlik kapsamı",
+      "requirements": {
+        "Module": "`client/src/i18n/localeParity.test.ts:14–37`, `:73–86`; `client/src/i18n/locales/`; kritik dialog/settings/voice UI'ları",
+        "Dependencies": "RF03",
+        "Tests": "Tüm namespace key parity, dinamik hata kodu karşılıkları, missing key render, keyboard-only dialog aç/kapat, focus restore/trap, accessible name, zoom/reduced-motion; gerçek ekran okuyucu smoke ayrı.",
+        "Acceptance Criteria": "Yeni namespace otomatik teste giriyor; gerekçesiz locale allowlist yok; kritik eylemler klavye ile çalışıyor ve adı okunuyor; otomatik kontrol gerçek ekran okuyucu kabulü diye sunulmuyor."
+      },
+      "status": "not_yet_audited_requirement_by_requirement"
+    },
+    {
+      "id": "RF26",
+      "title": "Kod kalite standardını kontrollü uygulama",
+      "requirements": {
+        "Module": "`client/eslint.config.js`; TS config'leri; `.golangci.yml`; `electron/system-audio-ipc.ts:3`; `electron/auto-updater.ts:8–12`, `:26–42`; kaynak encoding ve lockfile'lar",
+        "Dependencies": "RF02",
+        "Tests": "UTF-8 checker fixture'ları; lint/typecheck/Go static checks; dokunulan domain testleri; dependency silinirse package/install/build ve platform smoke.",
+        "Acceptance Criteria": "Yalnız ilgili PR dosyaları formatlanmış; magic value yalnız anlamlı domain kuralıysa isimli sabit; yanıltıcı yorumlar kaldırılmış/güncellenmiş; kullanılmayan kod iddiasının import/runtime kanıtı var; lockfile değişikliği ayrı gerekçeli."
+      },
+      "status": "not_yet_audited_requirement_by_requirement"
+    },
+    {
+      "id": "RF27",
+      "title": "Welcome bot hata sınırları",
+      "requirements": {
+        "Module": "`bots/welcome-bot/main.go:58`, `:101–111`; bağımsız `bots/welcome-bot/go.mod`",
+        "Dependencies": "RF02",
+        "Tests": "Kısa/geçersiz URL, malformed payload, başka server, 401/403/429/500, HTTP timeout, gateway disconnect, display-name fallback; httptest ve fake gateway.",
+        "Acceptance Criteria": "Config hatası panic yerine anlaşılır hata; ağ işlemleri bounded; başarısız status başarı logu üretmiyor; bağımsız Go modülü test profiline dahil."
+      },
+      "status": "not_yet_audited_requirement_by_requirement"
+    },
+    {
+      "id": "RF28",
+      "title": "Çok kullanıcılı üretim E2E matrisi",
+      "requirements": {
+        "Module": "`e2e/playwright.config.ts:49–86`; `e2e/tests/golden-path.spec.ts:27`; `e2e/tests/regressions.spec.ts:33`, `:74`, `:120`",
+        "Dependencies": "RF01, RF07, RF03",
+        "Tests": "A/B account switch, logout/revocation, role change ve erişim kaybı, concurrent message/edit/delete, offline retry, upload failure draft preservation, E2EE backup/recovery, production asset load. Audio gerçek cihaz testleri RF21/RF30'da kalır.",
+        "Acceptance Criteria": "Her test kendi sunucu/channel/veri bağlamını oluşturuyor; ortak fixture yalnız kimlik setup amacıyla; assertion sonuç davranışını ölçüyor; sabit sleep yerine observable wait; production profile gerçekten build artifact'i kullanıyor."
+      },
+      "status": "not_yet_audited_requirement_by_requirement"
+    },
+    {
+      "id": "RF29",
+      "title": "Ölçümlü performans ve kaynak bütçeleri",
+      "requirements": {
+        "Module": "`loadtest/`; `server/services/member_service.go:135`; `server/services/group_dm_service.go:466`; `client/src/crypto/keyStorage.ts:878`; WS/voice/native lifecycle yolları",
+        "Dependencies": "RF09, RF17",
+        "Tests": "Aynı makine ve veriyle önce/sonra tekrarlar; boş/normal/büyük veri; yavaş consumer/provider; connection churn; bounded soak sonrasında kaynak taban seviyeye dönüş.",
+        "Acceptance Criteria": "Ölçüm koşulları/artifact'leri yeniden üretilebilir; kritik query count üye sayısıyla artmıyor; p95/CPU/heap kötüleşmesi gerekçesiz kabul edilmiyor; ölçüm varyansı raporlanıyor; kazanımı olmayan optimizasyon uygulanmıyor."
+      },
+      "status": "not_yet_audited_requirement_by_requirement"
+    },
+    {
+      "id": "RF30",
+      "title": "Runtime kabulü ve kapanış",
+      "requirements": {
+        "Module": "`implementation/coverage.json:11`; `scripts/verify-windows-upgrade.ps1:90–108`; altı refactoring belgesi; platform/deployment smoke yolları",
+        "Dependencies": "Teslimat kapsamına alınan RF01–RF29 görevlerinin kabulü. Kapsam dışı işler isim ve gerekçeyle kalır; bütün backlog'un tek release'te tamamlanması şart değildir.",
+        "Tests": "Önceki installer→yenisi/profile preservation, login/logout/remember me, update/restart, overlay/DPI/çoklu ekran, bağımsız iki cihaz ses/camera/share, hotplug/uzun çağrı, gerçek DB migration/restore, readiness ve hata/latency gözlemi.",
+        "Acceptance Criteria": "Her kapsamdaki iş için test artifact'i ve sahibi var; build/runtime/ürün kabulü ayrı durumlar; çözülmemiş riskler ve platform blokajları açık; API/WS/IPC/storage biçimleri korunmuş veya ayrı onaylı migration planına bağlı; 248 kabul maddesi otomatik topluca kapatılmamış."
+      },
+      "status": "not_yet_audited_requirement_by_requirement"
+    }
+  ],
+  "goal_completion": "unproven; remaining cards require individual audit, combined CI still running, physical/provider acceptance remains separate",
+  "combined_ci": {
+    "status": "passed",
+    "checks": 36,
+    "server_jobs": 31,
+    "run": 43557593050
+  }
+}
