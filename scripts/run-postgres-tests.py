@@ -27,6 +27,7 @@ REQUIRED_SERVICE_POSTGRES_TESTS = (
     "TestVoiceUsagePostgresShutdownFinalizesActiveSession",
     "TestVoiceUsagePostgresShutdownCreditsBeforeMediaWait",
     "TestVoiceUsagePostgresShutdownHandsOffAllBeforeMedia",
+    "TestVoiceUsagePostgresChannelDeletionHandsOffAllBeforeMedia",
     "TestVoiceUsagePostgresShutdownRecoversFailedApplication",
     "TestVoiceUsagePostgresShutdownJoinsPermissionRecheck",
     "TestVoiceUsagePostgresLateMemberRevocationPreservesCredit",
