@@ -49,7 +49,7 @@ test("a fresh device restores its identity and encrypted history from a password
     // correctly disabled until the user supplies a new one.
     await expect(initialSettings.locator("#recoveryPwd")).toHaveValue("");
     await expect(initialSettings.locator("#recoveryPwdConfirm")).toHaveValue("");
-    await expect(original.getByRole("alert").filter({ hasText: "Recovery password set successfully" })).toBeVisible();
+    await expect(original.getByRole("status").filter({ hasText: "Recovery password set successfully" })).toBeVisible();
     await original.keyboard.press("Escape");
     await expect(initialSettings).toBeHidden();
     await fixtureApi(original, `/servers/${fixture.serverId}`, "PATCH", { e2ee_enabled: true });
@@ -76,7 +76,7 @@ test("a fresh device restores its identity and encrypted history from a password
       new URL(response.url()).pathname === "/api/e2ee/key-backup" && response.request().method() === "PUT");
     await settings.getByRole("button", { name: "Change Recovery Password", exact: true }).click();
     expect((await uploaded).ok()).toBe(true);
-    await expect(original.getByRole("alert").filter({ hasText: "Recovery password set successfully" })).toBeVisible();
+    await expect(original.getByRole("status").filter({ hasText: "Recovery password set successfully" })).toBeVisible();
     await originalContext.close();
 
     // A new browser context has no cookies, IndexedDB keys, or message cache.
@@ -90,7 +90,7 @@ test("a fresh device restores its identity and encrypted history from a password
     await expect(recovery).toBeVisible();
     await recovery.getByPlaceholder("Enter recovery password", { exact: true }).fill(password);
     await recovery.getByRole("button", { name: "Restore Keys", exact: true }).click();
-    await expect(restored.getByRole("alert").filter({ hasText: "Keys restored successfully" })).toBeVisible();
+    await expect(restored.getByRole("status").filter({ hasText: "Keys restored successfully" })).toBeVisible();
     await expect(recovery).toBeHidden();
     const restoredSettings = await encryptionSettings(restored);
     await expect(restoredSettings.locator(".e2ee-fingerprint")).toHaveText(fingerprint);
