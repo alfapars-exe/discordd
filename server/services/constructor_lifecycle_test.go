@@ -60,3 +60,10 @@ func TestFriendshipConstructorRequiresExplicitEmailQueue(t *testing.T) {
 		t.Fatalf("friendship constructor dependency5=%s, want explicit %s", got, required)
 	}
 }
+
+func TestFriendshipConstructorRequiresDMAutoAccept(t *testing.T) {
+	required := reflect.TypeFor[DMRequestAcceptor]()
+	if got := reflect.TypeOf(NewFriendshipService).In(6); got != required {
+		t.Fatalf("friendship constructor dependency6=%s, want explicit %s", got, required)
+	}
+}

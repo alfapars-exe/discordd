@@ -37,7 +37,6 @@ func (s *stubFriendshipService) ListFriends(context.Context, string) ([]models.F
 func (s *stubFriendshipService) ListRequests(context.Context, string) (*services.FriendRequestsResponse, error) {
 	return nil, nil
 }
-func (s *stubFriendshipService) SetDMAcceptor(services.DMRequestAcceptor) {}
 
 var _ services.FriendshipService = (*stubFriendshipService)(nil)
 

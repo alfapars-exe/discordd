@@ -1803,3 +1803,8 @@ ServerService now takes its membership voice cleanup callback at construction; p
 ### RF11 — friendship email queue at construction (2026-11-14)
 
 Friendship constructor now explicitly takes EmailEnqueuer before its existing policy arguments; production injects the previously created delivery service and the late setter is removed. Declared-parameter regression failed before the change. Every affected social-email fixture now supplies the queue during construction, preserving policy-denial/no-enqueue, persistence-failure, best-effort provider error and content/dedupe assertions. Relevant services/handlers/main tests, build and vet pass. Isolated no-email fixtures explicitly select nil. DM auto-accept still has a cyclic construction dependency and remains a separate open RF11 item. Receipt: implementation/verification/refactor-rf11-friendship-email-constructor-2026-11-14.json.
+
+
+### RF11 — friendship/DM construction cycle removed (2026-11-14)
+
+DM only needs friendship edge reads, so it now consumes the existing repository graph adapter rather than the friendship writer service. The same adapter is parity-tested against FriendshipService.AreFriends for accepted/pending/blocked/missing/error cases. DM is constructed first and injected as the explicit DMRequestAcceptor parameter of FriendshipService; the late setter and cycle are removed, without a mutable holder. Constructor contract regression failed before the change. Existing auto-accept/DM/policy/notification/wiring/startup assertions pass across3 packages, build and vet pass. No privacy policy or wire-field change. Fresh Linux race/native and production CI remain required. Receipt: implementation/verification/refactor-rf11-friendship-dm-cycle-2026-11-14.json.

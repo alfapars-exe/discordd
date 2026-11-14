@@ -118,8 +118,7 @@ func newFriendSvcFixtureWithActivity(t *testing.T, activity GameActivityPrivacyI
 	if len(queues) > 0 {
 		queue = queues[0]
 	}
-	f.svc = NewFriendshipService(activity, f.friends, f.users, f.notif, f.hub, queue)
-	f.svc.SetDMAcceptor(f.acceptor)
+	f.svc = NewFriendshipService(activity, f.friends, f.users, f.notif, f.hub, queue, f.acceptor)
 	return f
 }
 
@@ -167,7 +166,7 @@ func TestFriendshipSendRequest_Rejections(t *testing.T) {
 		enqueuer := &stubEmailEnqueuer{}
 		f := newFriendSvcFixture(t, enqueuer)
 		policy := &stubFriendRequestPolicy{allowed: false}
-		f.svc = NewFriendshipService(nil, f.friends, f.users, f.notif, f.hub, enqueuer, policy)
+		f.svc = NewFriendshipService(nil, f.friends, f.users, f.notif, f.hub, enqueuer, f.acceptor, policy)
 		_, err := f.svc.SendRequest(context.Background(), "alice", sendReq("bob"))
 		if !errors.Is(err, pkg.ErrForbidden) {
 			t.Fatalf("err = %v, want ErrForbidden", err)

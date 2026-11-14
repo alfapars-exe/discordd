@@ -9,6 +9,7 @@ import (
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/services"
 	"github.com/argeinfina/hichat/testutil"
 )
 
@@ -58,7 +59,12 @@ func TestFriendRequestGraphAdapterUsesOnlyAcceptedEdgesAndPropagatesFailures(t *
 				}
 				return &models.Friendship{Status: tc.status}, tc.err
 			}}
-			accepted, err := (friendRequestGraphAdapter{reader}).areFriends(ctx, "sender", "candidate")
+			accepted, err := (friendRequestGraphAdapter{reader}).AreFriends(ctx, "sender", "candidate")
+			existingService := services.NewFriendshipService(nil, reader, nil, nil, nil, nil, nil)
+			existingAccepted, existingErr := existingService.AreFriends(ctx, "sender", "candidate")
+			if accepted != existingAccepted || !errors.Is(err, existingErr) {
+				t.Fatalf("adapter differs from friendship service: %t/%v versus %t/%v", accepted, err, existingAccepted, existingErr)
+			}
 			if accepted != tc.want {
 				t.Fatalf("accepted=%t want=%t", accepted, tc.want)
 			}

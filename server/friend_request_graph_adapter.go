@@ -26,7 +26,7 @@ func (a friendRequestGraphAdapter) listFriendIDs(ctx context.Context, userID str
 	}
 	return ids, nil
 }
-func (a friendRequestGraphAdapter) areFriends(ctx context.Context, userA, userB string) (bool, error) {
+func (a friendRequestGraphAdapter) AreFriends(ctx context.Context, userA, userB string) (bool, error) {
 	friendship, err := a.reader.GetByPair(ctx, userA, userB)
 	if err != nil {
 		if errors.Is(err, pkg.ErrNotFound) {

@@ -299,22 +299,23 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 
 	friendGraph := friendRequestGraphAdapter{reader: repos.Friendship}
 	friendRequestPolicy := services.NewFriendRequestPolicy(
-		repos.Preferences, friendGraph.listFriendIDs, friendGraph.areFriends, repos.Server,
+		repos.Preferences, friendGraph.listFriendIDs, friendGraph.AreFriends, repos.Server,
 	)
-	friendshipService := services.NewFriendshipService(gameActivityService, repos.Friendship, repos.User, repos.Notification, hub, emailDeliveryService, friendRequestPolicy)
 	dmService := services.NewDMService(
 		services.NewServerDMPolicy(repos.Preferences, repos.Server),
-		repos.DM, repos.User, hub, blockService, friendshipService, dmSettingsService,
+		repos.DM, repos.User, hub, blockService, friendGraph, dmSettingsService,
 		repos.DMRead, repos.Notification, repository.NewDMMessageTxRunner(db),
 		emailDeliveryService,
 		repos.Preferences,
 	)
+	// Read friendship edges directly so DM construction does not depend on the
+	// friendship writer; auto-accept can then be a constructor dependency.
+	friendshipService := services.NewFriendshipService(gameActivityService, repos.Friendship, repos.User, repos.Notification, hub, emailDeliveryService, dmService, friendRequestPolicy)
 	services.ConfigureDMDelivery(dmService, db)
 
 	groupDMService := services.NewGroupDMService(repos.GroupDM, repos.User, repos.Friendship, hub, cfg.LiveKit.URL, cfg.LiveKit.APIKey, cfg.LiveKit.APISecret, encryptionKey, cfg.Upload.Dir, repos.Notification, repos.Preferences, blockService)
 
 	dmService.SetUploadDir(cfg.Upload.Dir)
-	friendshipService.SetDMAcceptor(dmService) // auto-accept pending DMs when friendship is accepted
 	dmUploadService := services.NewDMUploadService(repos.DM, cfg.Upload.Dir, cfg.Upload.MaxSize)
 	groupDMUploadService := services.NewGroupDMUploadService(repos.GroupDM, cfg.Upload.Dir, cfg.Upload.MaxSize)
 	// Bookmarks (Faz C): saving a channel message is gated on the same
