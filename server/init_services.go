@@ -1,10 +1,8 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"time"
 
@@ -388,21 +386,7 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 
 	preferencesService := services.NewPreferencesService(repos.Preferences, profileAudiencePolicy, gameActivityService, hub)
 	gameJoinService := services.NewGameJoinService(gameActivityService, services.NewGameJoinPolicy(gameActivityPolicy, repos.Preferences, repos.Friendship, repos.User, repos.AccountLifecycle, repos.Server, repos.Ban, repos.Channel, channelPermService, voiceService))
-	hub.OnGameJoinOffer(func(user string, connection uint64, data any) any {
-		raw, err := json.Marshal(data)
-		if err != nil || len(raw) > 2048 {
-			return nil
-		}
-		decoder := json.NewDecoder(bytes.NewReader(raw))
-		decoder.DisallowUnknownFields()
-		var input services.GameJoinOfferInput
-		if decoder.Decode(&input) != nil {
-			return nil
-		}
-		ctx, cancel := services.BroadcastContext()
-		defer cancel()
-		return gameJoinService.SetOffer(ctx, user, connection, input)
-	})
+	hub.OnGameJoinOffer(gameJoinOfferCallback(gameJoinService))
 
 	appLogService := services.NewAppLogService(repos.AppLog)
 	clipRecordingService := services.NewClipRecordingService(voiceService, repos.Preferences, appLogService)

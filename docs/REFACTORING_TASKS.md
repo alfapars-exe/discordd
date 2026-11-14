@@ -1763,3 +1763,8 @@ Strict CI43573607343 passed the previous DM and account-switch cases first try, 
 ### RF11 — voice constructor retains all shutdown owners (2026-11-14)
 
 The declared Voice constructor result previously exposed request/channel-deletion methods but omitted StopMaintenance, ShutdownUsageProducers, ShutdownVoiceSessions and ShutdownVoiceStateFanout. The new declared-result regression failed before the change. Named VoiceRuntime and Services now retain those lifecycle guarantees; startup rollback and main shutdown use direct calls in the existing call/defer order. Relevant voice lifecycle/accounting/channel, wiring and initialization tests pass in services and main; build and vet pass. This is compile-time ownership and fixture proof, not physical media or Linux race acceptance. Receipt: implementation/verification/refactor-rf11-voice-runtime-ownership-2026-11-14.json.
+
+
+### RF11 — game-join transport adapter separation (2026-11-14)
+
+initServices now only binds gameJoinOfferCallback; JSON serialization,2048-byte limit, strict typed decoding and bounded context ownership moved unchanged into a dedicated transport adapter. Tests verify DTO/actor/physical-connection and response preservation, deadline and post-call cancellation, and seven invalid payload categories without service dispatch. Existing GameJoin service/wiring/initialization tests plus build and vet pass. No domain authorization or wire fields changed. Whole RF11 and Linux race/current CI acceptance remain open. Receipt: implementation/verification/refactor-rf11-game-join-adapter-2026-11-14.json.
