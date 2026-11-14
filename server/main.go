@@ -274,7 +274,7 @@ func main() {
 	// so both tables grew without bound). The same pass runs a read-only
 	// orphan census; it logs a warning per affected table and deletes nothing.
 	stopMaintenance := startMaintenanceSweeper(repos.Session, repos.LinkPreview, db.Conn, time.Hour, repos.DataExport)
-	stopAuthMaintenance := services.StartAuthMaintenance(context.Background(), svcs.Auth)
+	stopAuthMaintenance := svcs.Auth.StartAuthMaintenance(context.Background())
 	defer stopAuthMaintenance()
 	stopAccountAssetCleanup := svcs.AccountAssetCleanup.Start(context.Background())
 	stopMessageReminders := svcs.ReminderWorker.Start(context.Background())

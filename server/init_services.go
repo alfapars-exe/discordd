@@ -31,7 +31,7 @@ func (a gameActivityPresenceAdapter) IsVisibleOnline(_ context.Context, userID s
 type Services struct {
 	AuthCache               *middleware.AuthUserCache
 	PermissionCache         *middleware.PermissionCache
-	Auth                    services.AuthService
+	Auth                    services.AuthRuntime
 	MFA                     *services.MFAService
 	EmailVerification       *services.EmailVerificationService
 	EmailCampaign           services.EmailCampaignService

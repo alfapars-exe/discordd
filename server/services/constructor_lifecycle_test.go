@@ -678,3 +678,10 @@ func TestDMRequestStoresDeclareSendReceipts(t *testing.T) {
 		t.Fatal("DM request/transaction store hides send receipts")
 	}
 }
+
+func TestAuthFactoryDeclaresMaintenanceOwner(t *testing.T) {
+	required := reflect.TypeFor[interface{ StartAuthMaintenance(context.Context) func() }]()
+	if !reflect.TypeOf(NewAuthService).Out(0).Implements(required) {
+		t.Fatal("auth factory hides maintenance owner")
+	}
+}

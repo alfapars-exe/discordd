@@ -63,6 +63,12 @@ type AuthService interface {
 	LogoutAllDevices(ctx context.Context, userID string) error
 }
 
+// AuthRuntime retains maintenance ownership at the composition boundary.
+type AuthRuntime interface {
+	AuthService
+	StartAuthMaintenance(context.Context) func()
+}
+
 type AuthTokens struct {
 	SessionID   string `json:"-"`
 	AccessToken string `json:"access_token"`
@@ -277,7 +283,7 @@ func NewAuthService(
 	accessExpMinutes int,
 	refreshExpDays int,
 	options ...AuthOption,
-) AuthService {
+) AuthRuntime {
 	s := &authService{
 		userRepo:    userRepo,
 		sessionRepo: sessionRepo,
@@ -299,9 +305,12 @@ func NewAuthService(
 // StartAuthMaintenance owns the legacy refresh-cache worker independently of
 // request handling. Durable sessions do not use this cache and need no worker.
 // Constructors and short-lived test services never start background work.
-func StartAuthMaintenance(ctx context.Context, service AuthService) func() {
-	s, ok := service.(*authService)
-	if !ok || s.authSessions != nil {
+func StartAuthMaintenance(ctx context.Context, service interface{ StartAuthMaintenance(context.Context) func() }) func() {
+	return service.StartAuthMaintenance(ctx)
+}
+
+func (s *authService) StartAuthMaintenance(ctx context.Context) func() {
+	if s.authSessions != nil {
 		return func() {}
 	}
 	return s.startRefreshSweep(ctx)
