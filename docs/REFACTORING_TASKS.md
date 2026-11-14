@@ -1514,3 +1514,7 @@ PR #298 `6162072e` koşusunda yeni süreç testi, repository işinin düz Postgr
 ### 2026-11-14 — Aktif süreç native race kapısı hazırlığı
 
 Birleşik CI işine yalnız `TestActiveVoiceProcessPostgresSignal` için ayrı `go test -race .` adımı eklendi. Normal zorunlu test koşusundan sonra, aynı sahipli mTLS fixture ile çalışır; bağlantı değişkeninin boş olması shell kapısıyla reddedilir. Windows yerel koşusu bu kabulü sağlayamaz. Kanonik PR’a aktarım, halen çalışan `7a5e44ba` normal süreç sonucundan sonra yapılacak; bu hazırlık çalıştırılmış race kanıtı değildir.
+
+### 2026-11-14 — Gerçek Linux aktif süreç SIGTERM kabulü
+
+PR #298 `7a5e44ba` native PostgreSQL işi 132251172133 SUCCESS. Zorunlu aktif süreç testi 3,12 saniyede PASS: normal giriş/tek kullanımlık WS ticket ve üretim `d` sözleşmesiyle katılım; sinyal öncesi açık soket ve sıfır kredi; SIGTERM sonrası başarılı/graceful süreç çıkışı. Sonuç: kredi 1, pending 0, applied 1, aggregate 2 saniye = ledger 2 saniye. Aynı işte seçili repository/service/database race adımı da geçti; aktif süreç bu kaynakta race ile çalışmadı. `058b2117` ayrı aktif süreç race adımını PR’a gönderir; yeni CI bekleniyor. Kanıt: `implementation/verification/refactor-pr298-7a5-native-process-success-2026-11-14.json`. Bu araçlı test executable kanıtıdır; yayın binary’si, LiveKit/cihaz, pre-enqueue crash kabulü değildir.
