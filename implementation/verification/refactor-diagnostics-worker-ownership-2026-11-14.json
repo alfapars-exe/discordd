@@ -30,6 +30,9 @@
     "canonical_seconds": 2.047,
     "canonical_full_handlers_seconds": 5.805,
     "canonical_full_logx": "cached pass",
-    "canonical_vet_lint": "passed"
+    "canonical_vet_lint": "passed",
+    "integrated_stop_repetitions": 30,
+    "integrated_seconds": 2.56,
+    "integrated_logx_filter": "no matching TestRun cases; not counted as additional logx verification"
   }
 }
