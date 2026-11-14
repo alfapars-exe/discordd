@@ -1863,3 +1863,8 @@ Accessibility types/defaults moved unchanged to a store-free module. Existing st
 ### RF13 — account reset projects the shared device scope (2026-11-14)
 
 The previous 30 explicit current-field copies exactly matched the shared device scope. Reset now projects that same list, preventing a third scope declaration from drifting. Seeded slice tests retain all device fields and persisted values under both preservation modes, while preMuteVolumes is retained only when requested.129 tests across5 consumer/voice files, targeted ESLint, TypeScript build and diff check pass. This is state-level evidence, not physical active-session acceptance; whole RF13 remains open. Receipt: implementation/verification/refactor-rf13-device-reset-projection-2026-11-14.json.
+
+
+### RF13 — composed voice store session-state preservation (2026-11-14)
+
+A full voiceStore regression seeds active transport/media state, then runs preference reset with session preservation and server hydration. Channel, URL/token, room key, mute/deafen/stream flags, restoration map and callback identity remain; account volumes change without leave/send callbacks.68 voice store tests, ESLint, TypeScript build and diff check pass. This is direct store-state evidence, not physical media or the complete bootstrap/account adapter path. Whole RF13 remains open. Receipt: implementation/verification/refactor-rf13-active-voice-state-2026-11-14.json.

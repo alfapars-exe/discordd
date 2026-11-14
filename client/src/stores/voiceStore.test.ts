@@ -961,3 +961,27 @@ it("retains manual intent on same-account call/channel and preference resets",()
  useVoiceStore.getState().leaveVoiceChannel();useVoiceStore.getState().resetAccountPreferences();
  expect(useVoiceStore.getState()).toMatchObject({isMuted:true,isDeafened:true,muteBeforeDeafen:true});useVoiceStore.getState().toggleDeafen();expect(useVoiceStore.getState().isMuted).toBe(true);
 });
+
+
+it("preserves active voice transport and media state during account preference hydration", () => {
+  resetStore();
+  const onLeave = vi.fn();
+  const send = vi.fn();
+  const session = {
+    currentVoiceChannelId: "active-channel", livekitUrl: "wss://voice.example.test",
+    livekitToken: "active-token", e2eePassphrase: "active-room-key",
+    isMuted: true, isDeafened: true, muteBeforeDeafen: true, isStreaming: true,
+    preMuteVolumes: { participant: 73 }, _onLeaveCallback: onLeave, _wsSend: send,
+  };
+  useVoiceStore.setState({ ...session, masterVolume: 42 });
+  useVoiceStore.getState().resetAccountPreferences(true);
+  expect(useVoiceStore.getState()).toMatchObject(session);
+  expect(useVoiceStore.getState().masterVolume).toBe(DEFAULT_SETTINGS.masterVolume);
+  useVoiceStore.getState().applyFromServer({ masterVolume: 64, inputVolume: 125 });
+  expect(useVoiceStore.getState()).toMatchObject({ ...session, masterVolume: 64, inputVolume: 125 });
+  expect(useVoiceStore.getState()._onLeaveCallback).toBe(onLeave);
+  expect(useVoiceStore.getState()._wsSend).toBe(send);
+  expect(onLeave).not.toHaveBeenCalled();
+  expect(send).not.toHaveBeenCalled();
+  resetStore();
+});
