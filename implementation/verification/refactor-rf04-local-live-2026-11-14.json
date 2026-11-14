@@ -1,0 +1,46 @@
+{
+  "source": "4a082335a84f9a1615b54001e6a413f11f6d2217",
+  "platform": "Windows amd64, Go 1.27.4, CGO=0; no race",
+  "postgres": "18.6 pinned Docker Linux image",
+  "tls": {
+    "profile": "verify-full mutual TLS, isolated fixture",
+    "pass_lines": [
+      "--- PASS: TestOpenPostgresInlinePEMReconnect (0.07s)",
+      "    --- PASS: TestOpenPostgresInlinePEMReconnect/rejects_untrusted_server_chain (0.02s)",
+      "    --- PASS: TestOpenPostgresInlinePEMReconnect/rejects_client_identity_mismatch (0.01s)",
+      "--- PASS: TestPostgresMetricsCollectorCancellation (0.83s)",
+      "    --- PASS: TestPostgresMetricsCollectorCancellation/real_repository_lock_wait (0.08s)",
+      "    --- PASS: TestPostgresMetricsCollectorCancellation/real_repository_pool_wait (0.00s)"
+    ],
+    "skip_lines": []
+  },
+  "native_contracts": {
+    "profile": "Separate owned loopback PostgreSQL, sslmode=disable. Dialect parent also explicitly runs its SQLite subtests; these are listed separately, not PostgreSQL evidence.",
+    "required_top_level": 5,
+    "pass_lines": [
+      "--- PASS: TestChannelDeliveryMigrationPreservesPopulatedDatabase (0.54s)",
+      "--- PASS: TestPostgresNativeMigrationAllowsJSONOperator (0.01s)",
+      "--- PASS: TestRepositoryDialectContracts (0.02s)",
+      "    --- PASS: TestRepositoryDialectContracts/SQLite (0.00s)",
+      "        --- PASS: TestRepositoryDialectContracts/SQLite/forward_tuple_cursor (0.00s)",
+      "        --- PASS: TestRepositoryDialectContracts/SQLite/backward_tuple_cursor (0.00s)",
+      "        --- PASS: TestRepositoryDialectContracts/SQLite/bound_dynamic_list (0.00s)",
+      "        --- PASS: TestRepositoryDialectContracts/SQLite/nullable_left_join (0.00s)",
+      "        --- PASS: TestRepositoryDialectContracts/SQLite/empty_cursor_result (0.00s)",
+      "    --- PASS: TestRepositoryDialectContracts/Postgres (0.02s)",
+      "        --- PASS: TestRepositoryDialectContracts/Postgres/forward_tuple_cursor (0.00s)",
+      "        --- PASS: TestRepositoryDialectContracts/Postgres/backward_tuple_cursor (0.00s)",
+      "        --- PASS: TestRepositoryDialectContracts/Postgres/bound_dynamic_list (0.00s)",
+      "        --- PASS: TestRepositoryDialectContracts/Postgres/nullable_left_join (0.00s)",
+      "        --- PASS: TestRepositoryDialectContracts/Postgres/empty_cursor_result (0.00s)",
+      "--- PASS: TestPostgresImportPreservesDataAndRejectsReuse (2.11s)",
+      "--- PASS: TestPostgresThreadTypeMigrationPreservesData (0.56s)"
+    ],
+    "skip_lines": []
+  },
+  "cleanup": "Both runners completed cleanup; docker ps -a filters showed no hichat-pg-tls-test or hichat-rf04-native containers.",
+  "limits": [
+    "Current Linux CI source c805 does not contain these follow-up changes.",
+    "No production database, deployment or physical device acceptance."
+  ]
+}
