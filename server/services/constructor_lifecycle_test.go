@@ -1,6 +1,8 @@
 package services
 
 import (
+	"context"
+	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/ws"
 	"reflect"
 	"testing"
@@ -153,7 +155,7 @@ func TestVoiceRequestInterfaceExcludesCompositionSetters(t *testing.T) {
 		if _, ok := request.MethodByName(name); ok {
 			t.Errorf("request interface exposes %s", name)
 		}
-		if _, ok := owner.MethodByName(name); ok != (name == "SetAppLogger") {
+		if _, ok := owner.MethodByName(name); ok {
 			t.Errorf("runtime composition method %s has unexpected presence", name)
 		}
 	}
@@ -164,7 +166,8 @@ func TestVoiceConstructorRequiresIntegrationFactory(t *testing.T) {
 	if factory.NumIn() != 11 {
 		t.Fatalf("voice constructor inputs=%d, want11", factory.NumIn())
 	}
-	if factory.In(10) != reflect.TypeFor[func(VoiceService) (VoiceEntranceHook, MusicBotChannelHook)]() {
+	field, ok := factory.In(10).FieldByName("Integrations")
+	if !ok || field.Type != reflect.TypeFor[func(VoiceService) (VoiceEntranceHook, MusicBotChannelHook)]() {
 		t.Fatal("integration factory is not explicit")
 	}
 }
@@ -174,14 +177,14 @@ func TestVoiceConstructorBindsIntegrationsBeforeWorkers(t *testing.T) {
 	music := &mockMusicBotHook{}
 	calls := 0
 	service := NewVoiceService(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
-		func(voice VoiceService) (VoiceEntranceHook, MusicBotChannelHook) {
+		VoiceRuntimeDependencies{Integrations: func(voice VoiceService) (VoiceEntranceHook, MusicBotChannelHook) {
 			calls++
 			state := testVoiceState(voice)
 			if state.states == nil || state.voiceFanout != nil {
 				t.Fatal("factory must run after state init and before workers")
 			}
 			return entrance, music
-		})
+		}})
 	t.Cleanup(service.ShutdownVoiceStateFanout)
 	state := testVoiceState(service)
 	if calls != 1 || state.entranceHook != entrance || state.musicBotHook != music || state.voiceFanout == nil {
@@ -196,10 +199,10 @@ func TestVoiceConstructorFactoryPanicPrecedesWorkerAllocation(t *testing.T) {
 	func() {
 		defer func() { recovered = recover() }()
 		NewVoiceService(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
-			func(voice VoiceService) (VoiceEntranceHook, MusicBotChannelHook) {
+			VoiceRuntimeDependencies{Integrations: func(voice VoiceService) (VoiceEntranceHook, MusicBotChannelHook) {
 				captured = testVoiceState(voice)
 				panic(marker)
-			})
+			}})
 	}()
 	if recovered != marker || captured == nil || captured.states == nil || captured.voiceFanout != nil {
 		t.Fatal("factory panic must retain its value without allocating voice workers")
@@ -213,7 +216,7 @@ func TestVoiceConstructorExplicitDisabledIntegrations(t *testing.T) {
 		if useFactory {
 			factory = func(VoiceService) (VoiceEntranceHook, MusicBotChannelHook) { calls++; return nil, nil }
 		}
-		service := NewVoiceService(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, factory)
+		service := NewVoiceService(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, VoiceRuntimeDependencies{Integrations: factory})
 		t.Cleanup(service.ShutdownVoiceStateFanout)
 		state := testVoiceState(service)
 		wantCalls := 0
@@ -223,5 +226,44 @@ func TestVoiceConstructorExplicitDisabledIntegrations(t *testing.T) {
 		if state.entranceHook != nil || state.musicBotHook != nil || state.voiceFanout == nil || calls != wantCalls {
 			t.Fatal("disabled integration contract changed")
 		}
+	}
+}
+
+func TestVoiceConstructorRequiresRuntimeDependencyGroup(t *testing.T) {
+	factory := reflect.TypeOf(NewVoiceService)
+	dependency := factory.In(factory.NumIn() - 1)
+	if dependency.Kind() != reflect.Struct {
+		t.Fatalf("runtime dependencies are not a struct: %s", dependency)
+	}
+	for _, name := range []string{"Integrations", "AppLogger"} {
+		if _, ok := dependency.FieldByName(name); !ok {
+			t.Errorf("runtime dependencies omit %s", name)
+		}
+	}
+}
+
+type constructorVoiceLogger struct{ levels []models.LogLevel }
+
+func (l *constructorVoiceLogger) Log(_ context.Context, level models.LogLevel, _ models.LogCategory, _, _ *string, _ string, _ map[string]string) {
+	l.levels = append(l.levels, level)
+}
+
+func TestVoiceConstructorLoggerIsReadyBeforeIntegrationFactory(t *testing.T) {
+	logger := &constructorVoiceLogger{}
+	service := NewVoiceService(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, VoiceRuntimeDependencies{
+		AppLogger: logger,
+		Integrations: func(voice VoiceService) (VoiceEntranceHook, MusicBotChannelHook) {
+			state := testVoiceState(voice)
+			if state.appLogger != logger {
+				t.Fatal("logger not installed before integration factory")
+			}
+			state.logInfo(models.LogCategoryVoice, nil, "constructor fixture", nil)
+			return nil, nil
+		},
+	})
+	t.Cleanup(service.ShutdownVoiceStateFanout)
+	testVoiceState(service).logError(models.LogCategoryVoice, nil, "runtime fixture", nil)
+	if len(logger.levels) != 2 || logger.levels[0] != models.LogLevelInfo || logger.levels[1] != models.LogLevelError {
+		t.Fatal("constructor logger did not retain both logging paths")
 	}
 }

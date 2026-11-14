@@ -71,7 +71,7 @@ func TestDeleteVoiceChannelClearsStateAndRejectsLateJoin(t *testing.T) {
 				return []string{"joining-user"}, nil
 			},
 		},
-		nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, VoiceRuntimeDependencies{},
 	).(*voiceService)
 	t.Cleanup(svc.ShutdownVoiceStateFanout)
 	musicHook := &deletionMusicBotHook{stopped: make(chan string, 1)}
@@ -163,7 +163,7 @@ func TestJoinWebhookEvictsStaleTokenForDeletedChannel(t *testing.T) {
 		getter,
 		&testutil.MockChannelPermResolver{},
 		&voiceTestBroadcaster{&testutil.MockBroadcaster{}},
-		nil, nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, VoiceRuntimeDependencies{},
 	).(*voiceService)
 	t.Cleanup(svc.ShutdownVoiceStateFanout)
 

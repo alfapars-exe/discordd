@@ -1993,3 +1993,8 @@ NewVoiceService now requires an explicit integration factory argument. It initia
 ### RF11 — voice integration startup failure/disabled matrix (2026-11-14)
 
 Additional constructor tests prove factory panic identity propagates with initialized state but no allocated voice fanout worker. Nil factory and explicit nil/nil returned hooks are deterministic standalone modes; factory call count and worker creation remain explicit. Constructor/interface/root wiring/composed startup selections and service/root vet pass. This verifies voice-owned worker allocation order, not cleanup of arbitrary resources a future external factory might allocate before panicking. Full RF11 dependency audit remains open. Also restored254 content-identical formatting-only files after normalized index comparison; meaningful commits and unrelated untracked artifacts preserved.
+
+
+### RF11 — voice runtime dependency group owns logger (2026-11-14)
+
+VoiceRuntimeDependencies groups integration construction and app logger in the explicit final constructor argument. Production passes logger before integrations run; zero value selects standalone/no persistent logging. Voice SetAppLogger is removed from runtime/concrete service and main late wiring. Seventeen constructor calls updated to explicit groups. Required-group regression failed before change. Logger-ready-before-factory and actual info/error logging test passes, alongside constructor disabled/panic/hook/root wiring selections. Server build, targeted vet and diff check pass. No changed file has an exact-hit record. Full RF11 audit and source-bound CI remain open.

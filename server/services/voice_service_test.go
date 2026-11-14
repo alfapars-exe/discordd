@@ -134,10 +134,10 @@ func newTestVoiceService() (VoiceRuntime, *testutil.MockBroadcaster) {
 				return []string{"voice-test-member"}, nil
 			},
 		}, // afkTimeoutGetter — also backs the N-01 membership check
-		nil,      // encryptionKey
-		nil,      // timeoutChecker — nil here is intentional; see TestVoiceJoinChannel_NilTimeoutChecker_Allows. Production always passes repos.MemberTimeout.
-		nil,      // banChecker — same rationale
-		nil, nil, // auditLogger — same rationale
+		nil,                             // encryptionKey
+		nil,                             // timeoutChecker — nil here is intentional; see TestVoiceJoinChannel_NilTimeoutChecker_Allows. Production always passes repos.MemberTimeout.
+		nil,                             // banChecker — same rationale
+		nil, VoiceRuntimeDependencies{}, // auditLogger — same rationale
 	)
 	return svc, hub
 }
@@ -205,8 +205,8 @@ func newTestVoiceServiceWithTimeoutChecker(checker MemberTimeoutChecker) (VoiceR
 		},
 		nil, // encryptionKey
 		checker,
-		nil,      // banChecker — not under test here
-		nil, nil, // auditLogger — not under test here
+		nil,                             // banChecker — not under test here
+		nil, VoiceRuntimeDependencies{}, // auditLogger — not under test here
 	)
 	return svc, hub
 }
@@ -239,7 +239,7 @@ func newTestVoiceServiceWithModeration(timeoutChecker MemberTimeoutChecker, banC
 		nil, // encryptionKey
 		timeoutChecker,
 		banChecker,
-		nil, nil, // auditLogger — not under test here
+		nil, VoiceRuntimeDependencies{}, // auditLogger — not under test here
 	)
 	return svc, hub
 }
@@ -365,10 +365,10 @@ func newTestVoiceServiceWithChannelRepo(channelRepo ChannelGetter) (VoiceRuntime
 				return []string{"voice-test-member"}, nil
 			},
 		},
-		nil,      // encryptionKey
-		nil,      // timeoutChecker — not under test here
-		nil,      // banChecker — not under test here
-		nil, nil, // auditLogger — not under test here
+		nil,                             // encryptionKey
+		nil,                             // timeoutChecker — not under test here
+		nil,                             // banChecker — not under test here
+		nil, VoiceRuntimeDependencies{}, // auditLogger — not under test here
 	)
 	return svc, hub
 }
@@ -1081,10 +1081,10 @@ func TestJoinChannel_SameChannelRejoin_TransientAuthError_PreservesLiveSession(t
 				return false, transientErr // rejoin: a transient DB hiccup, NOT a sentinel
 			},
 		},
-		nil,      // encryptionKey
-		nil,      // timeoutChecker
-		nil,      // banChecker
-		nil, nil, // auditLogger
+		nil,                             // encryptionKey
+		nil,                             // timeoutChecker
+		nil,                             // banChecker
+		nil, VoiceRuntimeDependencies{}, // auditLogger
 	)
 
 	if err := svc.JoinChannel("u1", "alice", "Alice", "", "ch1", false, false); err != nil {
@@ -1268,10 +1268,10 @@ func newTestVoiceServiceWithLiveKitGetter(lkGetter LiveKitInstanceGetter) (Voice
 				return []string{"voice-test-member"}, nil
 			},
 		},
-		nil,      // encryptionKey
-		nil,      // timeoutChecker — not under test here
-		nil,      // banChecker — not under test here
-		nil, nil, // auditLogger — not under test here
+		nil,                             // encryptionKey
+		nil,                             // timeoutChecker — not under test here
+		nil,                             // banChecker — not under test here
+		nil, VoiceRuntimeDependencies{}, // auditLogger — not under test here
 	)
 	return svc, hub
 }
@@ -1684,10 +1684,10 @@ func TestOrphanSweep_DoesNotStopMusicBotWhenChannelStillOccupied(t *testing.T) {
 		&testutil.MockServerRepo{
 			IsMemberFn: func(_ context.Context, _, _ string) (bool, error) { return true, nil },
 		},
-		nil,      // encryptionKey
-		nil,      // timeoutChecker
-		nil,      // banChecker
-		nil, nil, // auditLogger
+		nil,                             // encryptionKey
+		nil,                             // timeoutChecker
+		nil,                             // banChecker
+		nil, VoiceRuntimeDependencies{}, // auditLogger
 	)
 	hub.BroadcastToServerFn = func(_ string, _ ws.Event) {}
 
@@ -1881,10 +1881,10 @@ func newAuthVoiceService(isMember bool, resolvePerms func(ctx context.Context, u
 				return []string{"voice-test-member"}, nil
 			},
 		},
-		nil,      // encryptionKey
-		nil,      // timeoutChecker — not under test here
-		nil,      // banChecker — not under test here
-		nil, nil, // auditLogger — not under test here
+		nil,                             // encryptionKey
+		nil,                             // timeoutChecker — not under test here
+		nil,                             // banChecker — not under test here
+		nil, VoiceRuntimeDependencies{}, // auditLogger — not under test here
 	)
 	return svc, hub
 }
@@ -2633,9 +2633,9 @@ func newTokenTestVoiceService(t *testing.T) VoiceRuntime {
 			IsMemberFn: func(_ context.Context, _, _ string) (bool, error) { return true, nil },
 		},
 		tokenTestEncryptionKey,
-		nil,      // timeoutChecker
-		nil,      // banChecker
-		nil, nil, // auditLogger
+		nil,                             // timeoutChecker
+		nil,                             // banChecker
+		nil, VoiceRuntimeDependencies{}, // auditLogger
 	)
 	return svc
 }
@@ -3154,9 +3154,9 @@ func newServerMuteNetworkTestVoiceService(t *testing.T, setupCalls chan string) 
 			IsMemberFn: func(_ context.Context, _, _ string) (bool, error) { return true, nil },
 		},
 		tokenTestEncryptionKey,
-		nil,      // timeoutChecker
-		nil,      // banChecker
-		nil, nil, // auditLogger
+		nil,                             // timeoutChecker
+		nil,                             // banChecker
+		nil, VoiceRuntimeDependencies{}, // auditLogger
 	)
 	return svc, hub
 }

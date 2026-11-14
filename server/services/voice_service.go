@@ -113,7 +113,6 @@ type VoiceService interface {
 // These shutdown methods join distinct resources in the existing server order.
 type VoiceRuntime interface {
 	VoiceService
-	SetAppLogger(logger VoiceAppLogger)
 
 	VoiceChannelDeletionHandler
 	StopMaintenance()
@@ -220,6 +219,13 @@ type MemberTimeoutChecker interface {
 	IsActive(ctx context.Context, serverID, userID string) (bool, error)
 }
 
+// VoiceRuntimeDependencies is selected explicitly by the composition owner.
+// Its zero value disables integrations and persistent app logging.
+type VoiceRuntimeDependencies struct {
+	Integrations func(VoiceService) (VoiceEntranceHook, MusicBotChannelHook)
+	AppLogger    VoiceAppLogger
+}
+
 func NewVoiceService(
 	channelGetter ChannelGetter,
 	livekitGetter LiveKitInstanceGetter,
@@ -231,7 +237,7 @@ func NewVoiceService(
 	timeoutChecker MemberTimeoutChecker,
 	banChecker BanChecker,
 	auditLogger AuditWriter,
-	integrations func(VoiceService) (VoiceEntranceHook, MusicBotChannelHook),
+	runtime VoiceRuntimeDependencies,
 ) VoiceRuntime {
 	service := &voiceService{
 		states:             make(map[string]*models.VoiceState),
@@ -252,12 +258,13 @@ func NewVoiceService(
 		timeoutChecker:     timeoutChecker,
 		banChecker:         banChecker,
 		auditLogger:        auditLogger,
+		appLogger:          runtime.AppLogger,
 	}
 	// Build mutually dependent integrations against initialized voice state,
 	// before allocating workers or exposing the service to request handlers.
 	// Nil explicitly selects standalone voice without media hooks.
-	if integrations != nil {
-		service.entranceHook, service.musicBotHook = integrations(service)
+	if runtime.Integrations != nil {
+		service.entranceHook, service.musicBotHook = runtime.Integrations(service)
 	}
 	service.voiceFanout = newVoiceStateFanout(service)
 	if cache, ok := permResolver.(*cachingPermResolver); ok {
@@ -272,10 +279,6 @@ func (s *voiceService) ShutdownVoiceStateFanout() {
 	if s.voiceFanout != nil {
 		s.voiceFanout.shutdown()
 	}
-}
-
-func (s *voiceService) SetAppLogger(logger VoiceAppLogger) {
-	s.appLogger = logger
 }
 
 // audit emits an audit log event if an audit logger is wired. Nil-safe.
