@@ -20,7 +20,15 @@ test("an offline send preserves its draft and retries online without duplicates"
     await page.context().setOffline(false);
   }
   await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(true);
-  await composer(page).press("Enter");
+  // navigator.onLine only reports connectivity. The real send button also
+  // waits for the composer/permission gates, unlike Enter on the textarea.
+  const [sent] = await Promise.all([
+    page.waitForResponse(response =>
+      response.request().method() === "POST"
+      && /^\/api\/servers\/[^/]+\/channels\/[^/]+\/messages$/.test(new URL(response.url()).pathname)),
+    page.getByRole("button", { name: "Send Message", exact: true }).click(),
+  ]);
+  expect(sent.status()).toBe(201);
   await expect(composer(page)).toHaveValue("");
   await expect(rows()).toHaveCount(1);
   await page.reload();

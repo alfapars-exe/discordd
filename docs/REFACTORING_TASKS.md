@@ -1753,3 +1753,8 @@ Strict CI43572875547 correctly failed the same two retry-only browser cases and 
 ### RF11 — required preview/notifier cleanup contracts (2026-11-14)
 
 Link-preview and online-friend constructors previously returned interfaces omitting Stop, so startup rollback and shutdown treated actual owned-resource cleanup as optional capability assertions. A declared-result contract test failed for both factories before the change. Constructors and Services now retain runtime interfaces embedding the unchanged request interfaces plus Stop; rollback and shutdown register/call cleanup directly. Relevant service, wiring, startup/lifecycle/rollback tests passed, as did go build ./... and go vet ./services . on Windows. Linux race/current-source CI remain required; other RF11 contracts are not automatically closed. Receipt: implementation/verification/refactor-rf11-required-preview-notifier-ownership-2026-11-14.json.
+
+
+### RF28 — explicit online retry dispatch proof (2026-11-14)
+
+Strict CI43573607343 passed the previous DM and account-switch cases first try, but offline retry was flaky: second Enter left the draft unchanged. ReadOnly=false alone did not resolve this. The retry now uses actual Send Message button actionability, which includes composer/send-permission gates, and additionally requires the real POST response status201. All draft, count and reload assertions remain. navigator.onLine alone is not a send-ready signal. The exact transient gate is not independently proven by the snapshot; no product root-cause closure claim. Profile/isolation checks pass; fresh strict production CI required. Receipt: implementation/verification/refactor-rf28-offline-dispatch-proof-2026-11-14.json.
