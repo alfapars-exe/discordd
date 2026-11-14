@@ -132,7 +132,14 @@ func TestGameActivityWebSocketTwoViewersOptOutAndPhysicalDisconnect(t *testing.T
 	hub.OnGameActivityDisconnect(func(userID string, connectionID uint64) {
 		activity.Disconnect(activityCtx, userID, connectionID)
 	})
-	hub.OnGameActivitySnapshot(func(userID string) { activity.Snapshot(activityCtx, userID) })
+	// ready precedes the asynchronous initial snapshot. Complete all four
+	// initial snapshots before publishing, so they cannot enqueue duplicate A
+	// after this test has moved on to expecting B.
+	snapshotDone := make(chan string, 4)
+	hub.OnGameActivitySnapshot(func(userID string) {
+		activity.Snapshot(activityCtx, userID)
+		snapshotDone <- userID
+	})
 	hub.OnGameActivityPresenceChange(func(userID string) { activity.PolicyChanged(activityCtx, userID) })
 
 	users := gameActivityE2EUsers{}
@@ -164,6 +171,20 @@ func TestGameActivityWebSocketTwoViewersOptOutAndPhysicalDisconnect(t *testing.T
 		t.Fatalf("denied viewer epoch = %q, want %q", got, epoch)
 	}
 
+	snapshots := map[string]int{}
+	for i := 0; i < 4; i++ {
+		select {
+		case user := <-snapshotDone:
+			snapshots[user]++
+		case <-time.After(5 * time.Second):
+			t.Fatal("initial game activity snapshots did not finish")
+		}
+	}
+	if snapshots["publisher"] != 2 || snapshots["allowed"] != 1 || snapshots["denied"] != 1 {
+		t.Fatalf("unexpected initial snapshots: %v", snapshots)
+	}
+	deniedEvents := watchUnexpectedWebSocketEvent(t, denied)
+
 	gameA := ws.GameActivityClientGame{ID: "11111111-1111-4111-8111-111111111111", Name: "Game A"}
 	gameB := ws.GameActivityClientGame{ID: "22222222-2222-4222-8222-222222222222", Name: "Game B"}
 	if err := publisher1.WriteJSON(ws.Event{Op: ws.OpGameActivityUpdate, Data: map[string]any{
@@ -174,7 +195,7 @@ func TestGameActivityWebSocketTwoViewersOptOutAndPhysicalDisconnect(t *testing.T
 	writeGameActivityUpdate(t, publisher1, gameA)
 	assertGameActivity(t, publisher1, "publisher", "", gameA.ID, epoch)
 	assertGameActivity(t, allowed, "publisher", "", gameA.ID, epoch)
-	assertNoWebSocketEvent(t, denied)
+	assertNoWebSocketEvent(t, deniedEvents)
 
 	writeGameActivityUpdate(t, publisher2, gameB)
 	assertGameActivity(t, publisher1, "publisher", "", gameB.ID, epoch)
@@ -185,7 +206,7 @@ func TestGameActivityWebSocketTwoViewersOptOutAndPhysicalDisconnect(t *testing.T
 	_ = publisher2.Close()
 	assertGameActivity(t, publisher1, "publisher", "", gameA.ID, epoch)
 	assertGameActivity(t, allowed, "publisher", "", gameA.ID, epoch)
-	assertNoWebSocketEvent(t, denied)
+	assertNoWebSocketEvent(t, deniedEvents)
 
 	// Simulate a committed preference opt-out. The policy hook must clear
 	// existing grants to the owner and the accepted friend immediately.
@@ -193,7 +214,7 @@ func TestGameActivityWebSocketTwoViewersOptOutAndPhysicalDisconnect(t *testing.T
 	activity.PolicyChanged(context.Background(), "publisher")
 	assertGameActivity(t, publisher1, "publisher", "", "", epoch)
 	assertGameActivity(t, allowed, "publisher", "", "", epoch)
-	assertNoWebSocketEvent(t, denied)
+	assertNoWebSocketEvent(t, deniedEvents)
 }
 
 type e2eVisiblePresence struct{ hub *ws.Hub }
@@ -278,15 +299,29 @@ func assertGameActivity(t *testing.T, conn *websocket.Conn, targetID, serverID, 
 	}
 }
 
-func assertNoWebSocketEvent(t *testing.T, conn *websocket.Conn) {
+// A Gorilla read timeout permanently poisons later reads. Keep one live
+// reader across all negative assertions, and close/join it during cleanup.
+func watchUnexpectedWebSocketEvent(t *testing.T, conn *websocket.Conn) <-chan error {
 	t.Helper()
-	conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
-	_, _, err := conn.ReadMessage()
-	if netErr, ok := err.(interface{ Timeout() bool }); !ok || !netErr.Timeout() {
-		t.Fatalf("expected no websocket event, got error %v", err)
+	if err := conn.SetReadDeadline(time.Time{}); err != nil {
+		t.Fatal(err)
 	}
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	events := make(chan error, 1)
+	done := make(chan struct{})
+	go func() { defer close(done); _, _, err := conn.ReadMessage(); events <- err }()
+	t.Cleanup(func() { conn.Close(); <-done })
+	return events
 }
+
+func assertNoWebSocketEvent(t *testing.T, events <-chan error) {
+	t.Helper()
+	select {
+	case err := <-events:
+		t.Fatalf("expected healthy websocket without event, got read result %v", err)
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
 func TestLegacyTicketReadyWaitsForHubRegistration(t *testing.T) {
 	hub := ws.NewHub()
 	users := gameActivityE2EUsers{"viewer": {ID: "viewer", Username: "Viewer", PrefStatus: models.UserStatusOnline}}
