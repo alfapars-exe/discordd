@@ -51,7 +51,7 @@ type Services struct {
 	Pin                     services.PinService
 	Search                  services.SearchService
 	ReadState               services.ReadStateService
-	DM                      services.DMService
+	DM                      services.DMRuntime
 	GroupDM                 services.GroupDMService
 	Reaction                services.ReactionService
 	ChannelPermission       services.ChannelPermissionRuntime

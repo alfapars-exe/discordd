@@ -606,3 +606,15 @@ func TestDMConstructorDeclaresDurableDeliveryDatabase(t *testing.T) {
 		t.Fatal("DM delivery database must be explicit")
 	}
 }
+
+func TestDMFactoryDeclaresDeliveryRuntime(t *testing.T) {
+	result := reflect.TypeOf(NewDMService).Out(0)
+	required := reflect.TypeFor[interface {
+		StartDMDelivery(context.Context) (func(), error)
+		FinalizeDMCreate(context.Context, *models.DMMessage) error
+		GetDMEvents(context.Context, string, string, int64) (*DMEventPage, error)
+	}]()
+	if !result.Implements(required) {
+		t.Fatalf("DM factory result %s hides delivery runtime", result)
+	}
+}

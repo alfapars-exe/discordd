@@ -37,9 +37,14 @@ func (h dmDurableHub) BroadcastToUser(user string, event ws.Event) {
 
 // StartDMDelivery runs only after backend ownership acquisition and before HTTP serving.
 // Acknowledgment means dispatch to the hub, not a physical device receipt.
-func StartDMDelivery(parent context.Context, service DMService) (func(), error) {
-	s, ok := service.(*dmService)
-	if !ok || s.deliveryDB == nil {
+func StartDMDelivery(parent context.Context, service interface {
+	StartDMDelivery(context.Context) (func(), error)
+}) (func(), error) {
+	return service.StartDMDelivery(parent)
+}
+
+func (s *dmService) StartDMDelivery(parent context.Context) (func(), error) {
+	if s.deliveryDB == nil {
 		return func() {}, nil
 	}
 	ctx, cancel := context.WithCancel(parent)

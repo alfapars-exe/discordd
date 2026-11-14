@@ -284,7 +284,7 @@ func main() {
 	stopEmailDelivery := svcs.EmailDelivery.Start(context.Background())
 	stopChannelDelivery := svcs.Message.StartChannelDelivery(context.Background())
 	defer stopChannelDelivery()
-	stopDMDelivery, dmDeliveryErr := services.StartDMDelivery(ownerCtx, svcs.DM)
+	stopDMDelivery, dmDeliveryErr := svcs.DM.StartDMDelivery(ownerCtx)
 	if dmDeliveryErr != nil {
 		logx.Fatal("boot", "failed to initialize DM outbox", dmDeliveryErr)
 	}

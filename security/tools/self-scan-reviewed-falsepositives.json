@@ -372,7 +372,7 @@
     {
       "rule": "go.sql-concat",
       "path": "server/services/dm_delivery.go",
-      "file_sha256": "459770537b7fc82ea8ae04860573a3a681c3b80bbaa17a72116b9970e605c5ff",
+      "file_sha256": "0eb53f0bd618a4d8133c492d0433a3d62678d723387d076ab54fdeb98bcc4f9d",
       "line_sha256": "35d61981a49cecfec2795904654d63c4055fc0a7131ce795cd098299b16dd681",
       "reason": "The plus signs are fixed PostgreSQL timestamp and attempt arithmetic inside a single SQL literal. No SQL string concatenation occurs; the retry event ID remains a bound argument.",
       "proof_ref": "server/services/dm_delivery.go:142,152;server/services/dm_delivery_test.go:TestDMOutboxRetryOrderingDeletionAndRetention"
@@ -380,7 +380,7 @@
     {
       "rule": "go.sql-concat",
       "path": "server/services/dm_delivery.go",
-      "file_sha256": "459770537b7fc82ea8ae04860573a3a681c3b80bbaa17a72116b9970e605c5ff",
+      "file_sha256": "0eb53f0bd618a4d8133c492d0433a3d62678d723387d076ab54fdeb98bcc4f9d",
       "line_sha256": "b0c9f492f92a7d02eafb57e17a8d7db5f096e1f1c04dab7f625b21dea03e7220",
       "reason": "The plus signs are fixed PostgreSQL timestamp and attempt arithmetic inside a single SQL literal. No SQL string concatenation occurs; the retry event ID remains a bound argument.",
       "proof_ref": "server/services/dm_delivery.go:142,152;server/services/dm_delivery_test.go:TestDMOutboxRetryOrderingDeletionAndRetention"

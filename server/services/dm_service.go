@@ -78,6 +78,15 @@ type FriendshipChecker interface {
 	AreFriends(ctx context.Context, userA, userB string) (bool, error)
 }
 
+// DMRuntime retains delivery completion, replay and worker ownership at composition.
+// Ordinary domain consumers can continue to accept DMService.
+type DMRuntime interface {
+	DMService
+	StartDMDelivery(context.Context) (func(), error)
+	FinalizeDMCreate(context.Context, *models.DMMessage) error
+	GetDMEvents(context.Context, string, string, int64) (*DMEventPage, error)
+}
+
 type dmService struct {
 	reactionWriter      repository.ReactionNotificationWriter
 	deliveryDB          *sql.DB
@@ -119,7 +128,7 @@ func NewDMService(
 	reactionWriter repository.ReactionNotificationWriter,
 	emojiResolver EmojiResolver,
 	deliveryDB *sql.DB,
-) DMService {
+) DMRuntime {
 	var deliveryHub ws.Broadcaster
 	if deliveryDB != nil {
 		deliveryHub = hub

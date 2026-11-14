@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"database/sql"
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/testutil"
@@ -38,4 +39,14 @@ func TestDMConstructorSelectsDurableOrDirectPublicationBeforeUse(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDMFactoryStandaloneWorkerReturnsReusableNoopCleanup(t *testing.T) {
+	service := NewDMService(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	stop, err := service.StartDMDelivery(context.Background())
+	if err != nil || stop == nil {
+		t.Fatalf("standalone worker start: %v", err)
+	}
+	stop()
+	stop()
 }
