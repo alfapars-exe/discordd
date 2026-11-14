@@ -1538,3 +1538,7 @@ Tam self-scan, mevcut DM delivery fixture incelemesinin dosya hash’i construct
 ### 2026-11-14 — Ayrı üretim sunucu binary’siyle süreç kabulü hazırlığı
 
 Birleşik fixture artık test executable’ında `main()` çağırmaz; mutlak ve düzenli `HICHAT_ACTIVE_VOICE_SERVER_BINARY` dosyasını başlatır, eksikse başarısız olur. Normal CI önce `go build`, native race adımı önce `go build -race` ile aynı kaynakta ayrı sunucu üretir; parent ve server birlikte race ile çalışır. Login/WS/aktif SIGTERM/aynı DB ile restart/tam kredi satır eşitliği koşulları korunur. Windows test derlemesi POSIX atlaması, tam vet ve lint 0 sorun geçti; native yeni binary modu henüz çalıştırılmadı. Yayımlanmış binary/kurulum ve fiziksel medya kanıtı değildir. Mevcut `956c95ab` CI terminal olmadan kanonik dala gönderilmeyecek. Tam kaynak taraması, ayrıca düzeltilen mevcut DM review hash’iyle hâlen çalışıyor.
+
+### 2026-11-14 — Restart kabulü normal/native race başarılı
+
+`956c95ab` native iş 132259056257 SUCCESS: normal süreç 4,21 saniye PASS, tam kredi satırı restart sonrası aynı (`retained_credit=true`), iki gözlemde credits1/pending0/applied1 ve usage2=ledger2. Ayrı native race adımı 17,227 saniye PASS. Tam kanıt `implementation/verification/refactor-pr298-956-native-restart-success-2026-11-14.json`. Tüm CI terminal değil; iki repository shard’ı sürüyor. Kanıt hâlâ üretim main’ini çağıran test executable’ı içindir; ayrı `go build` binary hazırlığı henüz native çalıştırılmadı.
