@@ -202,8 +202,13 @@ func main() {
 
 	logx.SetAppSink(svcs.AppLog.ConsumeRecord)
 
-	// 9b. Wire structured app logger into Hub and services
-	hub.SetAppLogger(svcs.AppLog)
+	// 9b. Complete the Hub/service cycle before callbacks or Run can dispatch.
+	if err := hub.ConfigureRuntime(ws.RuntimeDependencies{
+		AppLogger:            svcs.AppLog,
+		VoiceAdminAuthorizer: newVoiceAdminAuthorizer(svcs.Voice, svcs.ChannelPermission),
+	}); err != nil {
+		logx.Fatal("boot", "invalid hub runtime dependencies", err)
+	}
 
 	// 9c. Audit logger is no longer wired here via setter: voice/member/role/
 	// channel/server/message services all take it as a NewXService(...)
@@ -217,12 +222,6 @@ func main() {
 
 	// 10. Hub callbacks (must be after services, before hub.Run)
 	stopPresenceDebounce := registerHubCallbacks(hub, repos.User, repos.DM, svcs.Voice, svcs.P2PCall, repos.Channel, repos.Server, svcs.ChannelPermission, svcs.GameActivity, svcs.OnlineFriendNotifier)
-
-	// 10a. WS-layer defense-in-depth authorizer for voice moderation events
-	// (admin mute/deafen, move, disconnect) — see voice_authorizer.go and
-	// ws/hub_callbacks.go's VoiceAdminAuthorizer doc comment. Without this,
-	// authorizeVoiceModeration always returns true (fail-open).
-	hub.SetVoiceAdminAuthorizer(newVoiceAdminAuthorizer(svcs.Voice, svcs.ChannelPermission))
 
 	// hub.Run is the single goroutine processing every WS register/unregister
 	// for the whole server — a panic here would otherwise crash the entire

@@ -118,11 +118,11 @@ type Hub struct {
 	// Screen share viewer tracking — set in main.go
 	onScreenShareWatch ScreenShareWatchCallback
 
-	// Structured app logger — set in main.go
+	// Structured app logger — bound before Run via ConfigureRuntime.
 	appLogger AppLogger
 
 	// Defense-in-depth check for voice moderation events delivered over WS.
-	// Nil-safe — when absent, legacy single-layer behaviour applies. Set in main.go.
+	// Standalone hubs omit this; production binds it via ConfigureRuntime.
 	voiceAdminAuthz VoiceAdminAuthorizer
 
 	// ─── Runtime op counters (P3.10) — surfaced via Stats() into

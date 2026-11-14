@@ -133,11 +133,6 @@ func (h *Hub) OnGameActivityUpdate(cb GameActivityUpdateCallback) { h.onGameActi
 
 func (h *Hub) GameActivityEpoch() string { return h.gameActivityEpoch }
 
-// SetAppLogger sets the structured app logger for WS events.
-func (h *Hub) SetAppLogger(logger AppLogger) {
-	h.appLogger = logger
-}
-
 // logEvent is a helper that safely logs via appLogger if set.
 //
 // context.Background(): logEvent's callers are WS hub event handlers, not
@@ -217,12 +212,6 @@ func (h *Hub) OnDMTyping(cb DMTypingCallback) {
 
 func (h *Hub) OnScreenShareWatch(cb ScreenShareWatchCallback) {
 	h.onScreenShareWatch = cb
-}
-
-// SetVoiceAdminAuthorizer wires the WS-layer defense-in-depth check for
-// voice moderation events. Nil-safe (legacy behavior if absent).
-func (h *Hub) SetVoiceAdminAuthorizer(a VoiceAdminAuthorizer) {
-	h.voiceAdminAuthz = a
 }
 
 // authorizeVoiceModeration returns true if the action is allowed (or no
