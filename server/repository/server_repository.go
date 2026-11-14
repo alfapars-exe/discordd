@@ -82,3 +82,18 @@ type GameActivityMembershipSnapshotRepository interface {
 type ProfileAudienceSharedServerReader interface {
 	ListSmallSharedServerUserIDs(ctx context.Context, viewerID string, targetIDs []string, maxMembers int) (map[string]bool, error)
 }
+
+// GameActivityMembershipCounter serializes the join-time audience decision.
+type GameActivityMembershipCounter interface {
+	LockAndCountMembersForGameActivityJoin(context.Context, string) (int, error)
+}
+type GameActivityMembershipWriter interface {
+	AddMemberWithGameActivityAudience(context.Context, string, string, bool) error
+}
+
+// ServerStore retains transaction integration capabilities at the factory.
+type ServerStore interface {
+	ServerRepository
+	GameActivityMembershipSnapshotRepository
+	GameActivityMembershipCounter
+}

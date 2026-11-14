@@ -40,10 +40,14 @@ func (s *activityJoinServerStub) AddMemberWithGameActivityAudience(_ context.Con
 	return nil
 }
 
-type activityJoinTxRunner struct{ server repository.ServerRepository }
+type activityJoinTxRunner struct {
+	server  repository.ServerRepository
+	counter repository.GameActivityMembershipCounter
+	writer  repository.GameActivityMembershipWriter
+}
 
 func (r activityJoinTxRunner) InTx(ctx context.Context, fn func(*repository.ServerMembershipTxRepos) error) error {
-	return fn(&repository.ServerMembershipTxRepos{Server: r.server})
+	return fn(&repository.ServerMembershipTxRepos{Server: r.server, GameActivityCounter: r.counter, GameActivityWriter: r.writer})
 }
 
 func TestJoinServerTxLocksEveryAudienceAndFailsOnLockError(t *testing.T) {
@@ -60,7 +64,7 @@ func TestJoinServerTxLocksEveryAudienceAndFailsOnLockError(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			server := &activityJoinServerStub{count: tc.count}
-			svc := &serverService{membershipTxRunner: activityJoinTxRunner{server: server}}
+			svc := &serverService{membershipTxRunner: activityJoinTxRunner{server: server, counter: server, writer: server}}
 			if err := svc.joinServerTx(context.Background(), "server", "user", "", tc.audience); err != nil {
 				t.Fatal(err)
 			}
@@ -72,7 +76,7 @@ func TestJoinServerTxLocksEveryAudienceAndFailsOnLockError(t *testing.T) {
 
 	t.Run("lock error aborts all join before insert", func(t *testing.T) {
 		server := &activityJoinServerStub{lockErr: errors.New("lock failed")}
-		svc := &serverService{membershipTxRunner: activityJoinTxRunner{server: server}}
+		svc := &serverService{membershipTxRunner: activityJoinTxRunner{server: server, counter: server, writer: server}}
 		if err := svc.joinServerTx(context.Background(), "server", "user", "", gameActivityAudienceAll); err == nil {
 			t.Fatal("expected lock error")
 		}
@@ -91,7 +95,7 @@ func TestJoinServerTxLocksEveryAudienceAndFailsOnLockError(t *testing.T) {
 	} {
 		t.Run("optional lock absent/"+string(tc.audience), func(t *testing.T) {
 			server := &activityJoinServerWithoutLockStub{}
-			svc := &serverService{membershipTxRunner: activityJoinTxRunner{server: server}}
+			svc := &serverService{membershipTxRunner: activityJoinTxRunner{server: server, writer: server}}
 			if err := svc.joinServerTx(context.Background(), "server", "user", "", tc.audience); err != nil {
 				t.Fatal(err)
 			}

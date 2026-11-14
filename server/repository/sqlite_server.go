@@ -19,13 +19,13 @@ type sqliteServerRepo struct {
 	postgres bool
 }
 
-func NewSQLiteServerRepo(db database.TxQuerier) ServerRepository {
+func NewSQLiteServerRepo(db database.TxQuerier) ServerStore {
 	return NewSQLiteServerRepoWithDialect(db, database.IsPostgres(db))
 }
 
 // NewSQLiteServerRepoWithDialect preserves the parent database dialect when
 // db is a *sql.Tx, which intentionally cannot reveal its driver.
-func NewSQLiteServerRepoWithDialect(db database.TxQuerier, postgres bool) ServerRepository {
+func NewSQLiteServerRepoWithDialect(db database.TxQuerier, postgres bool) ServerStore {
 	return &sqliteServerRepo{db: db, postgres: postgres}
 }
 

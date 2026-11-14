@@ -505,3 +505,12 @@ func TestGameJoinConstructorDeclaresPhysicalConnectionGate(t *testing.T) {
 		t.Fatal("physical connection gate must be explicit")
 	}
 }
+
+func TestMembershipTransactionDeclaresPrivacySnapshotDependencies(t *testing.T) {
+	repos := reflect.TypeFor[repository.ServerMembershipTxRepos]()
+	for _, name := range []string{"GameActivityCounter", "GameActivityWriter"} {
+		if _, ok := repos.FieldByName(name); !ok {
+			t.Fatalf("transaction bundle hides %s", name)
+		}
+	}
+}

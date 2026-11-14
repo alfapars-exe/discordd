@@ -29,9 +29,7 @@ func (s *serverService) joinServerTx(ctx context.Context, serverID, userID, defa
 		// cannot race past a concurrent `small` join's count decision. Count is
 		// only used for `small`; without the optional capability, ordinary
 		// `all`/`none` joins remain compatible while `small` fails closed.
-		if counter, ok := r.Server.(interface {
-			LockAndCountMembersForGameActivityJoin(context.Context, string) (int, error)
-		}); ok {
+		if counter := r.GameActivityCounter; counter != nil {
 			count, err := counter.LockAndCountMembersForGameActivityJoin(ctx, serverID)
 			if err != nil {
 				return fmt.Errorf("failed to lock server for game activity audience snapshot: %w", err)
@@ -41,9 +39,7 @@ func (s *serverService) joinServerTx(ctx context.Context, serverID, userID, defa
 			}
 		}
 		var addErr error
-		if snapshotWriter, ok := r.Server.(interface {
-			AddMemberWithGameActivityAudience(context.Context, string, string, bool) error
-		}); ok {
+		if snapshotWriter := r.GameActivityWriter; snapshotWriter != nil {
 			addErr = snapshotWriter.AddMemberWithGameActivityAudience(ctx, serverID, userID, gameActivityAllowed)
 		} else {
 			addErr = r.Server.AddMember(ctx, serverID, userID)
