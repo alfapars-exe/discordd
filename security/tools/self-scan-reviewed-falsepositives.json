@@ -12,10 +12,10 @@
     {
       "rule": "go.sql-concat",
       "path": "server/database/postgres_import_test.go",
-      "file_sha256": "f04d434f933b457f9b697940a3453130ed983a87c58be795ba6fb1be27d7bd8c",
-      "line_sha256": "fb9879437de4b36ace22b67076b4aba070f0d691abc561263c44310bda9993da",
-      "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
-      "proof_ref": "server/database/postgres_import.go:33-45,58-68,98-128,150-180,268;server/database/postgres_import_test.go:48-78,146-164"
+      "file_sha256": "fdb2e39bda818ccd8c8778b849cb1a03e943cd13cd76c02ee4da7d5df734db88",
+      "line_sha256": "8684182e49de5f5be5b5cc4151fdee010eabc218d00d94adde30fe681a6fb13f",
+      "reason": "Disposable loopback-only PostgreSQL fixture. The schema name uses only the fixed hichat_import_ prefix and locally generated Unix nanoseconds; no external identifier is accepted. Checked cleanup drops only that generated schema with a bounded context.",
+      "proof_ref": "server/database/postgres_import_test.go:42;implementation/verification/refactor-rf04-local-live-2026-11-14.json"
     },
     {
       "rule": "go.sql-concat",
@@ -284,10 +284,10 @@
     {
       "rule": "go.sql-concat",
       "path": "server/database/postgres_thread_migration_test.go",
-      "file_sha256": "5b37bc150c27dd8e6040d4911c19f950bed8a8b862d651ac7f5a4da5eaea5bfe",
-      "line_sha256": "fb9879437de4b36ace22b67076b4aba070f0d691abc561263c44310bda9993da",
-      "reason": "Disposable local-only PostgreSQL fixture: schema is derived solely from the fixed hichat_threads_ prefix and time.Now().UnixNano(), never from request data. Cleanup drops only that generated schema; the test refuses non-loopback database hosts.",
-      "proof_ref": "server/database/postgres_thread_migration_test.go:14-32"
+      "file_sha256": "1ad7371b5f28a3bed0523a315c5f8337d4f54159a7cf411ebc7718fe9be8b83b",
+      "line_sha256": "8684182e49de5f5be5b5cc4151fdee010eabc218d00d94adde30fe681a6fb13f",
+      "reason": "Disposable loopback-only PostgreSQL fixture. The schema name uses only the fixed hichat_threads_ prefix and locally generated Unix nanoseconds; no external identifier is accepted. Checked cleanup drops only that generated schema with a bounded context.",
+      "proof_ref": "server/database/postgres_thread_migration_test.go:39;implementation/verification/refactor-rf04-local-live-2026-11-14.json"
     },
     {
       "rule": "go.sql-concat",
@@ -316,10 +316,10 @@
     {
       "rule": "go.sql-concat",
       "path": "server/database/migration_049_channel_delivery_test.go",
-      "file_sha256": "a3bd7e99ce01526342c1227831d642f3737b38cc80a491c722ef4f8239b51374",
-      "line_sha256": "6949d373514f31eda57eaa757a9cb796401bfebb5a5240ae2ec5c5ae9ffd3306",
-      "reason": "The schema name consists only of a compile-time prefix and locally generated Unix nanoseconds; no external identifier is accepted.",
-      "proof_ref": "server/database/migration_049_channel_delivery_test.go:36"
+      "file_sha256": "0884f596ba45af413b83ed21392724562376758757bf00fccd261a5cfc26fa5d",
+      "line_sha256": "8684182e49de5f5be5b5cc4151fdee010eabc218d00d94adde30fe681a6fb13f",
+      "reason": "Disposable loopback-only PostgreSQL fixture. The schema name uses only the fixed hichat_upgrade_ prefix and locally generated Unix nanoseconds; no external identifier is accepted. Checked cleanup drops only that generated schema with a bounded context.",
+      "proof_ref": "server/database/migration_049_channel_delivery_test.go:47;implementation/verification/refactor-rf04-local-live-2026-11-14.json"
     },
     {
       "rule": "go.sql-concat",
