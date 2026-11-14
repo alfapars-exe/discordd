@@ -544,6 +544,7 @@ func main() {
 		_ = srv.Close()
 	}
 
+	h.Diagnostics.Stop()
 	logx.SetAppSink(nil)
 	svcs.AppLog.Stop()
 	svcs.AuditLog.Stop()
