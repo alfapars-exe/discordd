@@ -544,6 +544,9 @@ func main() {
 		_ = srv.Close()
 	}
 
+	// Background backup work can log while cancellation unwinds. Join it
+	// before log sinks close; Shutdown below takes the post-drain DB snapshot.
+	svcs.Backup.Stop()
 	logx.SetAppSink(nil)
 	svcs.AppLog.Stop()
 	svcs.AuditLog.Stop()

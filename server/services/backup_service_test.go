@@ -537,7 +537,7 @@ func TestSnapshotSQLite_RedactsAuthTokenInError(t *testing.T) {
 		},
 	}
 
-	err := svc.snapshotSQLite(filepath.Join(t.TempDir(), "snap.db"))
+	err := svc.snapshotSQLite(context.Background(), filepath.Join(t.TempDir(), "snap.db"))
 	if err == nil {
 		t.Fatal("expected snapshotSQLite to surface the sqlite3 failure, got nil")
 	}
