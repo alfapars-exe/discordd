@@ -37,6 +37,20 @@ type accountSecurityServices struct {
 // initAccountSecurityServices binds identity, session and account-security providers.
 // Constructors do not start the separately owned maintenance workers.
 func initAccountSecurityServices(deps accountSecurityDependencies) accountSecurityServices {
+	for _, input := range []struct {
+		name  string
+		value any
+	}{
+		{"Repositories", deps.Repositories}, {"Hub", deps.Hub}, {"Config", deps.Config}, {"Voice", deps.Voice},
+		{"Permissions", deps.Permissions}, {"UserCache", deps.UserCache}, {"Logger", deps.Logger}, {"MusicRetirement", deps.MusicRetirement},
+	} {
+		if missingCompositionInput(input.value) {
+			panic("account security requires " + input.name)
+		}
+	}
+	if deps.Email != nil && missingCompositionInput(deps.Email) {
+		panic("account security email provider is typed nil")
+	}
 	repos, cfg := deps.Repositories, deps.Config
 	mfa := services.NewMFAService(repos.MFA, repos.User, deps.EncryptionKey)
 	verification := services.NewEmailVerificationService(repos.EmailVerification, deps.Email)
