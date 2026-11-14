@@ -74,7 +74,7 @@ func TestVoiceAccessErrorsNeverFallBackAndVisibilityIsScoped(t *testing.T) {
 			t.Fatal("visibility recipients lost")
 		}
 	}
-	service := NewVoiceService(base, nil, &voicePermissionChoice{}, hub, nil, fanoutTestMembers{ids: []string{"member"}}, nil, nil, nil, nil, VoiceRuntimeDependencies{VoiceAccess: access}).(*voiceService)
+	service := NewVoiceService(base, nil, &voicePermissionChoice{}, hub, nil, fanoutTestMembers{ids: []string{"member"}}, nil, nil, nil, nil, VoiceRuntimeDependencies{VoiceAccess: access, Fanout: VoiceFanoutDependencies{Online: hub, Members: fanoutTestMembers{ids: []string{"member"}}}}).(*voiceService)
 	t.Cleanup(service.ShutdownVoiceStateFanout)
 	if _, _, err := service.loadVoiceChannel(context.Background(), "user", "channel"); !errors.Is(err, access.err) {
 		t.Fatal("admission error lost")

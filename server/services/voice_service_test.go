@@ -134,10 +134,10 @@ func newTestVoiceService() (VoiceRuntime, *testutil.MockBroadcaster) {
 				return []string{"voice-test-member"}, nil
 			},
 		}, // afkTimeoutGetter — also backs the N-01 membership check
-		nil,                             // encryptionKey
-		nil,                             // timeoutChecker — nil here is intentional; see TestVoiceJoinChannel_NilTimeoutChecker_Allows. Production always passes repos.MemberTimeout.
-		nil,                             // banChecker — same rationale
-		nil, VoiceRuntimeDependencies{}, // auditLogger — same rationale
+		nil,                                                            // encryptionKey
+		nil,                                                            // timeoutChecker — nil here is intentional; see TestVoiceJoinChannel_NilTimeoutChecker_Allows. Production always passes repos.MemberTimeout.
+		nil,                                                            // banChecker — same rationale
+		nil, VoiceRuntimeDependencies{Fanout: voiceFixtureFanout(hub)}, // auditLogger — same rationale
 	)
 	return svc, hub
 }
@@ -205,8 +205,8 @@ func newTestVoiceServiceWithTimeoutChecker(checker MemberTimeoutChecker) (VoiceR
 		},
 		nil, // encryptionKey
 		checker,
-		nil,                             // banChecker — not under test here
-		nil, VoiceRuntimeDependencies{}, // auditLogger — not under test here
+		nil,                                                            // banChecker — not under test here
+		nil, VoiceRuntimeDependencies{Fanout: voiceFixtureFanout(hub)}, // auditLogger — not under test here
 	)
 	return svc, hub
 }
@@ -239,7 +239,7 @@ func newTestVoiceServiceWithModeration(timeoutChecker MemberTimeoutChecker, banC
 		nil, // encryptionKey
 		timeoutChecker,
 		banChecker,
-		nil, VoiceRuntimeDependencies{}, // auditLogger — not under test here
+		nil, VoiceRuntimeDependencies{Fanout: voiceFixtureFanout(hub)}, // auditLogger — not under test here
 	)
 	return svc, hub
 }
@@ -365,10 +365,10 @@ func newTestVoiceServiceWithChannelRepo(channelRepo ChannelGetter) (VoiceRuntime
 				return []string{"voice-test-member"}, nil
 			},
 		},
-		nil,                             // encryptionKey
-		nil,                             // timeoutChecker — not under test here
-		nil,                             // banChecker — not under test here
-		nil, VoiceRuntimeDependencies{}, // auditLogger — not under test here
+		nil,                                                            // encryptionKey
+		nil,                                                            // timeoutChecker — not under test here
+		nil,                                                            // banChecker — not under test here
+		nil, VoiceRuntimeDependencies{Fanout: voiceFixtureFanout(hub)}, // auditLogger — not under test here
 	)
 	return svc, hub
 }
@@ -1081,10 +1081,10 @@ func TestJoinChannel_SameChannelRejoin_TransientAuthError_PreservesLiveSession(t
 				return false, transientErr // rejoin: a transient DB hiccup, NOT a sentinel
 			},
 		},
-		nil,                             // encryptionKey
-		nil,                             // timeoutChecker
-		nil,                             // banChecker
-		nil, VoiceRuntimeDependencies{}, // auditLogger
+		nil,                                                            // encryptionKey
+		nil,                                                            // timeoutChecker
+		nil,                                                            // banChecker
+		nil, VoiceRuntimeDependencies{Fanout: voiceFixtureFanout(hub)}, // auditLogger
 	)
 
 	if err := svc.JoinChannel("u1", "alice", "Alice", "", "ch1", false, false); err != nil {
@@ -1246,7 +1246,7 @@ func (m *mockConfigurableLiveKitGetter) MigrateOneServer(ctx context.Context, se
 // mockConfigurableLiveKitGetter).
 func newTestVoiceServiceWithLiveKitGetter(lkGetter LiveKitInstanceGetter, credit ...VoiceUsageCredit) (VoiceRuntime, *testutil.MockBroadcaster) {
 	hub := &testutil.MockBroadcaster{}
-	runtime := VoiceRuntimeDependencies{}
+	runtime := VoiceRuntimeDependencies{Fanout: voiceFixtureFanout(hub)}
 	if len(credit) > 0 {
 		runtime.UsageCredit = credit[0]
 	}
@@ -1688,10 +1688,10 @@ func TestOrphanSweep_DoesNotStopMusicBotWhenChannelStillOccupied(t *testing.T) {
 		&testutil.MockServerRepo{
 			IsMemberFn: func(_ context.Context, _, _ string) (bool, error) { return true, nil },
 		},
-		nil,                             // encryptionKey
-		nil,                             // timeoutChecker
-		nil,                             // banChecker
-		nil, VoiceRuntimeDependencies{}, // auditLogger
+		nil,                                                            // encryptionKey
+		nil,                                                            // timeoutChecker
+		nil,                                                            // banChecker
+		nil, VoiceRuntimeDependencies{Fanout: voiceFixtureFanout(hub)}, // auditLogger
 	)
 	hub.BroadcastToServerFn = func(_ string, _ ws.Event) {}
 
@@ -1885,10 +1885,10 @@ func newAuthVoiceService(isMember bool, resolvePerms func(ctx context.Context, u
 				return []string{"voice-test-member"}, nil
 			},
 		},
-		nil,                             // encryptionKey
-		nil,                             // timeoutChecker — not under test here
-		nil,                             // banChecker — not under test here
-		nil, VoiceRuntimeDependencies{}, // auditLogger — not under test here
+		nil,                                                            // encryptionKey
+		nil,                                                            // timeoutChecker — not under test here
+		nil,                                                            // banChecker — not under test here
+		nil, VoiceRuntimeDependencies{Fanout: voiceFixtureFanout(hub)}, // auditLogger — not under test here
 	)
 	return svc, hub
 }
@@ -2637,9 +2637,9 @@ func newTokenTestVoiceService(t *testing.T) VoiceRuntime {
 			IsMemberFn: func(_ context.Context, _, _ string) (bool, error) { return true, nil },
 		},
 		tokenTestEncryptionKey,
-		nil,                             // timeoutChecker
-		nil,                             // banChecker
-		nil, VoiceRuntimeDependencies{}, // auditLogger
+		nil,                                                            // timeoutChecker
+		nil,                                                            // banChecker
+		nil, VoiceRuntimeDependencies{Fanout: voiceFixtureFanout(hub)}, // auditLogger
 	)
 	return svc
 }
@@ -3158,9 +3158,9 @@ func newServerMuteNetworkTestVoiceService(t *testing.T, setupCalls chan string) 
 			IsMemberFn: func(_ context.Context, _, _ string) (bool, error) { return true, nil },
 		},
 		tokenTestEncryptionKey,
-		nil,                             // timeoutChecker
-		nil,                             // banChecker
-		nil, VoiceRuntimeDependencies{}, // auditLogger
+		nil,                                                            // timeoutChecker
+		nil,                                                            // banChecker
+		nil, VoiceRuntimeDependencies{Fanout: voiceFixtureFanout(hub)}, // auditLogger
 	)
 	return svc, hub
 }
@@ -3454,3 +3454,7 @@ func TestActiveVoiceAccessInvalidation(t *testing.T) {
 
 // Test fixtures may seed private state before operations; production binds hooks only in the constructor.
 func testVoiceState(service VoiceService) *voiceService { return service.(*voiceService) }
+
+func voiceFixtureFanout(hub *testutil.MockBroadcaster) VoiceFanoutDependencies {
+	return VoiceFanoutDependencies{Online: &voiceTestBroadcaster{hub}, Members: fanoutTestMembers{ids: []string{"voice-test-member"}}}
+}

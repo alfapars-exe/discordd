@@ -162,6 +162,7 @@ type forceMoveGrant struct {
 const maxScreenShares = 0
 
 type voiceService struct {
+	fanoutAudience     VoiceFanoutDependencies
 	usageCredit        VoiceUsageCredit
 	usageRecovery      PendingVoiceUsageApplier
 	voiceAccess        repository.VoiceAccessReader
@@ -228,6 +229,7 @@ type MemberTimeoutChecker interface {
 // VoiceRuntimeDependencies is selected explicitly by the composition owner.
 // Its zero value disables integrations and persistent app logging.
 type VoiceRuntimeDependencies struct {
+	Fanout VoiceFanoutDependencies
 	// Nil disables standalone permission-change subscriptions.
 	PermissionInvalidations PermissionInvalidationSource
 	UsageCredit             VoiceUsageCredit
@@ -255,6 +257,7 @@ func NewVoiceService(
 	runtime VoiceRuntimeDependencies,
 ) VoiceRuntime {
 	service := &voiceService{
+		fanoutAudience:     runtime.Fanout,
 		usageCredit:        runtime.UsageCredit,
 		usageRecovery:      runtime.UsageRecovery,
 		voiceAccess:        runtime.VoiceAccess,

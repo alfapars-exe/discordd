@@ -18,8 +18,19 @@ const (
 	voiceStateFanoutIdle       = time.Second
 )
 
-type voiceStateFanoutMembership interface {
+type VoiceFanoutMembership interface {
 	ListMemberIDs(ctx context.Context, serverID string) ([]string, error)
+}
+
+type VoiceFanoutOnlineUsers interface {
+	GetOnlineUserIDsForServer(string) []string
+}
+
+// VoiceFanoutDependencies selects audience inputs explicitly. Missing inputs
+// keep event delivery disabled rather than discovering other service methods.
+type VoiceFanoutDependencies struct {
+	Online  VoiceFanoutOnlineUsers
+	Members VoiceFanoutMembership
 }
 
 type voiceStateFanoutEvent struct {
@@ -188,8 +199,8 @@ func (f *voiceStateFanout) deliver(batch []voiceStateFanoutEvent, membersByServe
 	item := batch[0]
 	resolutionStart := time.Now()
 	s := f.service
-	provider, ok := s.hub.(ws.UserStateProvider)
-	if !ok || provider == nil || s.permResolver == nil {
+	provider := s.fanoutAudience.Online
+	if provider == nil || s.permResolver == nil {
 		f.dropCount.Add(uint64(len(batch)))
 		voiceLogger.Warn("voice state fanout unavailable; event dropped", "server_id", item.serverID, "channel_id", item.channelID)
 		return
@@ -199,8 +210,8 @@ func (f *voiceStateFanout) deliver(batch []voiceStateFanoutEvent, membersByServe
 		voiceLogger.Warn("voice state fanout channel resolver unavailable; event dropped", "server_id", item.serverID, "channel_id", item.channelID)
 		return
 	}
-	members, ok := s.afkTimeoutGetter.(voiceStateFanoutMembership)
-	if !ok || members == nil {
+	members := s.fanoutAudience.Members
+	if members == nil {
 		f.dropCount.Add(uint64(len(batch)))
 		voiceLogger.Warn("voice state fanout membership resolver unavailable; event dropped", "server_id", item.serverID)
 		return
