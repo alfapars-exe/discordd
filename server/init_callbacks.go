@@ -61,8 +61,20 @@ func notifyOnlineAfterPresence(notifier services.OnlineFriendPresenceNotifier, u
 // below rather than written inline, because the Hub stores callbacks in
 // unexported fields — a test cannot retrieve them after registration, so
 // they have to be constructible on their own to be testable.
+type hubCallbackRegistrar interface {
+	presenceStatePublisher
+	voiceCallbackRegistrar
+	p2pCallbackRegistrar
+	gameActivityCallbackRegistrar
+	OnUserFirstConnect(ws.UserConnectionCallback)
+	OnUserFullyDisconnected(ws.UserConnectionCallback)
+	OnPresenceManualUpdate(ws.PresenceManualUpdateCallback)
+	OnChannelTyping(ws.ChannelTypingCallback)
+	OnDMTyping(ws.DMTypingCallback)
+}
+
 func registerHubCallbacks(
-	hub *ws.Hub,
+	hub hubCallbackRegistrar,
 	userRepo repository.UserRepository,
 	dmRepo repository.DMRepository,
 	voiceService services.VoiceService,
@@ -517,7 +529,7 @@ func channelTypingCallback(hub ws.BroadcastAndOnline, channelRepo repository.Cha
 // dmTypingCallback relays a DM typing indicator to the conversation's other
 // member. Fires on every keystroke burst, so the channel lookup is bounded —
 // an unbounded one would let a wedged DB accumulate goroutines fast.
-func dmTypingCallback(hub *ws.Hub, dmRepo repository.DMRepository) ws.DMTypingCallback {
+func dmTypingCallback(hub ws.Broadcaster, dmRepo repository.DMRepository) ws.DMTypingCallback {
 	return func(senderUserID, senderUsername, dmChannelID string) {
 		ctx, cancel := services.BroadcastContext()
 		defer cancel()
