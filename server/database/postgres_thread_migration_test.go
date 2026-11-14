@@ -42,7 +42,11 @@ func TestPostgresThreadTypeMigrationPreservesData(t *testing.T) {
 	}()
 	cfg.RuntimeParams["search_path"] = schema + ",public"
 	db := PostgreSQLPool(cfg)
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close PostgreSQL fixture pool: %v", err)
+		}
+	}()
 	ctx := context.Background()
 	if err := MigratePostgres(ctx, db); err != nil {
 		t.Fatal(err)
@@ -71,6 +75,16 @@ func TestPostgresThreadTypeMigrationPreservesData(t *testing.T) {
 	}
 	if _, err := db.ExecContext(ctx, `INSERT INTO channels(id,name,type,server_id,parent_channel_id,starter_message_id) VALUES('thread','topic','thread','s','c','m')`); err != nil {
 		t.Fatal(err)
+	}
+	// A second migration call on the same pool does not prove restart safety.
+	// Close all fixture connections, reopen the persisted schema, then rerun
+	// startup migrations before checking the retained data and constraints.
+	if err := db.Close(); err != nil {
+		t.Fatalf("close before PostgreSQL reopen: %v", err)
+	}
+	db = PostgreSQLPool(cfg)
+	if err := MigratePostgres(ctx, db); err != nil {
+		t.Fatalf("startup after PostgreSQL reopen: %v", err)
 	}
 	var content, attachment, parent string
 	if err := db.QueryRowContext(ctx, `SELECT m.content,a.file_url,t.parent_channel_id FROM messages m JOIN attachments a ON a.message_id=m.id JOIN channels t ON t.starter_message_id=m.id WHERE t.id='thread'`).Scan(&content, &attachment, &parent); err != nil || content != "preserved" || attachment != "/proof" || parent != "c" {
