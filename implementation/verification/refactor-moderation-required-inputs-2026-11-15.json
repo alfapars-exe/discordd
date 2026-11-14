@@ -1,0 +1,38 @@
+{
+  "scope": "RF11 moderation composition required providers",
+  "integrations": [
+    "Database",
+    "Repositories",
+    "Hub",
+    "Permissions",
+    "Messages",
+    "DMs",
+    "Emoji"
+  ],
+  "repositories": [
+    "Message",
+    "Channel",
+    "DM",
+    "GroupDM",
+    "Reaction",
+    "MemberTimeout",
+    "Notification",
+    "Preferences",
+    "User",
+    "Report"
+  ],
+  "regression": "32 invalid-provider cases failed before validation: seven missing integrations, five typed-nil interface integrations and twenty nil/typed-nil repository cases.",
+  "implementation": "Validate all required providers before repository adapters and service owners are constructed; preserve same report readers and reaction notification/emoji providers.",
+  "checks": {
+    "root": "PASS moderation/channel matrices, ServiceInitialization/routes/callbacks/permission/auth-cache/real friendship-DM, 4.884s",
+    "services": "PASS spam-inbox/media-label/reaction/report tests, 0.675s",
+    "build": "PASS go build ./...",
+    "vet": "PASS go vet .",
+    "reviewed_sql_manifest": "PASS 50 exact records"
+  },
+  "limits": [
+    "Presence checks do not prove every runtime authorization branch or database/provider identity.",
+    "Other domains, optional integration/lifecycle matrix, combined race and RF01-RF30 acceptance remain open.",
+    "Current remote 0eb3744f CI live without observed failures; local changes excluded."
+  ]
+}

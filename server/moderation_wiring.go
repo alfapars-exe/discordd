@@ -37,7 +37,28 @@ type moderationServices struct {
 // initModerationServices keeps report evidence behind the same channel/DM
 // readers used by ordinary requests, and shares the spam inbox with labels.
 func initModerationServices(deps moderationDependencies) moderationServices {
+	for _, input := range []struct {
+		name  string
+		value any
+	}{
+		{"Database", deps.Database}, {"Repositories", deps.Repositories}, {"Hub", deps.Hub}, {"Permissions", deps.Permissions}, {"Messages", deps.Messages}, {"DMs", deps.DMs}, {"Emoji", deps.Emoji},
+	} {
+		if missingCompositionInput(input.value) {
+			panic("moderation requires " + input.name)
+		}
+	}
 	repos := deps.Repositories
+	for _, input := range []struct {
+		name  string
+		value any
+	}{
+		{"Message", repos.Message}, {"Channel", repos.Channel}, {"DM", repos.DM}, {"GroupDM", repos.GroupDM}, {"Reaction", repos.Reaction},
+		{"MemberTimeout", repos.MemberTimeout}, {"Notification", repos.Notification}, {"Preferences", repos.Preferences}, {"User", repos.User}, {"Report", repos.Report},
+	} {
+		if missingCompositionInput(input.value) {
+			panic("moderation requires repository " + input.name)
+		}
+	}
 	spam := services.NewSpamInboxService(repository.NewSpamInboxRepository(deps.Database), repos.Message, repos.Channel, repos.DM, repos.GroupDM, deps.Permissions, deps.Hub)
 	labels := services.NewMediaLabelService(repository.NewMediaLabelRepository(deps.Database), spam, deps.Hub)
 	reaction := services.NewReactionService(repos.Reaction, repos.Message, repos.Channel, deps.Hub, deps.Permissions, repos.MemberTimeout,
