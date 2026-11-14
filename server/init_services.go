@@ -8,7 +8,6 @@ import (
 	"github.com/argeinfina/hichat/middleware"
 	"github.com/argeinfina/hichat/pkg/email"
 	"github.com/argeinfina/hichat/pkg/ratelimit"
-	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/services"
 	"github.com/argeinfina/hichat/ws"
 )
@@ -269,14 +268,14 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	personal := initPersonalMessagingServices(personalMessagingDependencies{Repositories: repos, Permissions: channelPermService})
 	savedService, reminderService := personal.Saved, personal.Reminder
 	userNoteService, personalizationService := personal.UserNote, personal.Personalization
-	spamInboxService := services.NewSpamInboxService(repository.NewSpamInboxRepository(db), repos.Message, repos.Channel, repos.DM, repos.GroupDM, channelPermService, hub)
-	mediaLabelService := services.NewMediaLabelService(repository.NewMediaLabelRepository(db), spamInboxService, hub)
-	reactionService := services.NewReactionService(repos.Reaction, repos.Message, repos.Channel, hub, channelPermService, repos.MemberTimeout,
-		services.ReactionNotificationDependencies{Notifications: repos.Notification, Preferences: repos.Preferences, Users: repos.User}, emojiService)
+	moderation := initModerationServices(moderationDependencies{
+		Database: db, Repositories: repos, Hub: hub, Permissions: channelPermService,
+		Messages: messageService, DMs: dmService, Emoji: emojiService, UploadDir: cfg.Upload.Dir, MaxUploadSize: cfg.Upload.MaxSize,
+	})
+	spamInboxService, mediaLabelService, reactionService := moderation.SpamInbox, moderation.MediaLabel, moderation.Reaction
+	reportService, reportUploadService := moderation.Report, moderation.ReportUpload
 	serverMuteService := services.NewServerMuteService(repos.ServerMute)
 	channelMuteService := services.NewChannelMuteService(repos.ChannelMute)
-	reportService := services.NewReportService(repos.Report, repos.User, messageService, dmService, repos.GroupDM)
-	reportUploadService := services.NewReportUploadService(repos.Report, cfg.Upload.Dir, cfg.Upload.MaxSize)
 
 	deviceSecurity := initDeviceSecurityServices(deviceSecurityDependencies{
 		Database: db, Repositories: repos, Hub: hub, Permissions: channelPermService, EncryptionKey: encryptionKey,
