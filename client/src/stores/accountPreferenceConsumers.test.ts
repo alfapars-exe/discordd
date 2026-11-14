@@ -1,3 +1,4 @@
+import { DEVICE_LOCAL_VOICE_SETTING_KEYS } from "./voicePreferenceScope";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createStore, type StateCreator, type StoreApi } from "zustand/vanilla";
 import type { VoiceSettings, VoiceSettingsSlice } from "./slices/voiceSettingsSlice";
@@ -62,6 +63,20 @@ afterEach(() => {
 });
 
 describe("account preference consumers", () => {
+  it.each([false, true])("retains every device field on account reset with preserveSessionState=%s", preserveSessionState => {
+    const deviceValues = Object.fromEntries(DEVICE_LOCAL_VOICE_SETTING_KEYS.map(key => {
+      const value = defaults[key];
+      return [key, typeof value === "boolean" ? !value : typeof value === "number" ? value + 1 : `local-${key}`];
+    }));
+    const sessionVolumes = { alice: 73 };
+    voice.setState({ ...deviceValues, masterVolume: 42, preMuteVolumes: sessionVolumes });
+    voice.getState().resetAccountPreferences(preserveSessionState);
+    expect(voice.getState()).toMatchObject({ ...deviceValues, masterVolume: defaults.masterVolume });
+    expect(voice.getState().preMuteVolumes).toEqual(preserveSessionState ? sessionVolumes : {});
+    expect(JSON.parse(localStorage.getItem("mqvi_voice_settings")!)).toMatchObject(deviceValues);
+    expect(sendPreferences).not.toHaveBeenCalled();
+  });
+
   it("keeps device-only overlay flags local through server apply and account reset", async () => {
     voice.getState().setVoiceOverlayCompatibility(true);
     voice.getState().setVoiceOverlayVideo(true);

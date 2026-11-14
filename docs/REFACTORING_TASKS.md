@@ -1858,3 +1858,8 @@ After the separate overlay exclusion behavior fix, codec and voice slice consume
 ### RF13 — pure accessibility defaults contract (2026-11-14)
 
 Accessibility types/defaults moved unchanged to a store-free module. Existing style imports remain compatible through re-exports; DOM application stays separate. All 24 prior cache keys match defaults exactly; codec field and boolean lists now derive from that contract. Every default and boolean opposite round-trips with unknown fields excluded.133 tests across5 codec/store/consumer/DOM files, targeted ESLint, TypeScript/Vite build and diff check pass. Full RF13/current-source CI acceptance remain open. Receipt: implementation/verification/refactor-rf13-pure-accessibility-contract-2026-11-14.json.
+
+
+### RF13 — account reset projects the shared device scope (2026-11-14)
+
+The previous 30 explicit current-field copies exactly matched the shared device scope. Reset now projects that same list, preventing a third scope declaration from drifting. Seeded slice tests retain all device fields and persisted values under both preservation modes, while preMuteVolumes is retained only when requested.129 tests across5 consumer/voice files, targeted ESLint, TypeScript build and diff check pass. This is state-level evidence, not physical active-session acceptance; whole RF13 remains open. Receipt: implementation/verification/refactor-rf13-device-reset-projection-2026-11-14.json.
