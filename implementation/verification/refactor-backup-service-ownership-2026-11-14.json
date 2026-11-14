@@ -1,5 +1,5 @@
 {
-  "source_head": "1b47c315898cc6642e5211a387bd141a1dc91e03",
+  "source_head": "ae4175f3311eeb05649d0e004723c32111d851cc",
   "pr": "https://github.com/alfapars-exe/discordd/pull/301",
   "before": {
     "commit": "469e67a2",
@@ -14,13 +14,21 @@
     "integrated_windows_linux_lint": "passed"
   },
   "ci": {
-    "server_run": 43548854216,
-    "status": "in_progress"
+    "status": "awaiting_current_source_results"
   },
   "limitations": [
     "Linux real subprocess cancellation test awaits CI execution",
     "No live HF backup/restore acceptance",
     "Partial uploads restore resume remains open",
     "No release or installation acceptance"
-  ]
+  ],
+  "previous_source_head": "1b47c315898cc6642e5211a387bd141a1dc91e03",
+  "sonar_followup": {
+    "previous_failure": "7.4% duplicated new lines and cognitive complexity in snapshot cycle and cancellation test",
+    "change": "shared blocked-command fixture; extracted table subcase and snapshot/verified promotion steps; no exclusions or weakened assertions",
+    "canonical_full_services_seconds": 84.756,
+    "canonical_vet_build": "passed",
+    "canonical_windows_linux_lint": "passed",
+    "lifecycle_repetitions_both_trees": 20
+  }
 }
