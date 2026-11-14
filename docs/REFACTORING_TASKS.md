@@ -2508,3 +2508,9 @@ Selected music/service/handler/root tests passed (37.385s/0.652s/2.789s), constr
 ChannelMessageNotificationWorker constructor now requires the durable-publication boolean; production selects PostgreSQL mode before the worker is returned. Removed SetDurablePublication and its post-construction call. Existing standalone fixtures explicitly select direct publication. Constructor regression failed first. New behavior case returns a committed notification with nil direct publisher/actor reader and verifies durable mode completes without accessing either; committed inserts remain selected normally.
 
 Selected worker/startup/root contracts passed (services 0.615s/root 2.400s); handlers compiled but the selection matched no handler tests. Updated durable/constructor cases passed (0.612s). Build and scoped vet passed; all 50 reviewed records validate unchanged. No SQL/public event change. This is not a fresh PostgreSQL receipt or full RF11 acceptance; required dependency/startup/shutdown audit remains open.
+
+### Combined RF11 validation and mobile dependency retry (2026-11-15)
+
+A broad five-package local Go run started with server source fixed at 7bf12c4aa432f032c09938d6fa376da342a34ff7; it is still live, not a passing receipt. No source edits are made during it.
+
+Remote 33ef783e Server CI 43649647075 completed successfully, but PR rollup is 35/36 because Linux mobile job 132615035293 failed Gradle dependency resolution against Maven Central (HTTP 429 for multiple POMs). Mobile workflow 43649647034 was terminal failure before retry. Retried only the failed job via GitHub job rerun API; accepted and confirmed queued. Evidence implementation/verification/refactor-33ef-mobile-retry-2026-11-15.json is explicitly pending, not green. No source change or skipped test masks this failure.
