@@ -17,7 +17,26 @@ type personalMessagingServices struct {
 // messages and reminders; DM access continues to use membership repositories.
 // Reminder worker startup remains separately owned by the process lifecycle.
 func initPersonalMessagingServices(deps personalMessagingDependencies) personalMessagingServices {
+	for _, input := range []struct {
+		name  string
+		value any
+	}{{"Repositories", deps.Repositories}, {"Permissions", deps.Permissions}} {
+		if missingCompositionInput(input.value) {
+			panic("personal messaging requires " + input.name)
+		}
+	}
 	repos := deps.Repositories
+	for _, input := range []struct {
+		name  string
+		value any
+	}{
+		{"Saved", repos.Saved}, {"Message", repos.Message}, {"Channel", repos.Channel}, {"DM", repos.DM}, {"Reminder", repos.Reminder},
+		{"UserNote", repos.UserNote}, {"User", repos.User}, {"Preferences", repos.Preferences}, {"Server", repos.Server}, {"Friendship", repos.Friendship},
+	} {
+		if missingCompositionInput(input.value) {
+			panic("personal messaging requires repository " + input.name)
+		}
+	}
 	return personalMessagingServices{
 		Saved:           services.NewSavedService(repos.Saved, repos.Message, repos.Channel, repos.DM, deps.Permissions),
 		Reminder:        services.NewReminderService(repos.Reminder, repos.Message, repos.Channel, repos.DM, deps.Permissions),
