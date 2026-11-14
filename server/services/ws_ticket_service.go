@@ -66,6 +66,12 @@ type WSTicketService interface {
 	Consume(ticket string) (userID string, tokenVersion int, err error)
 }
 
+// WSTicketRuntime retains cleanup ownership at the composition root.
+type WSTicketRuntime interface {
+	WSTicketService
+	Stop()
+}
+
 // ticketRecord is the value stored per ticket: the userID it was minted for
 // and the token_version the user carried at mint time.
 type ticketRecord struct {
@@ -84,7 +90,7 @@ type wsTicketService struct {
 // behind a sticky-session LB are unaffected, but a round-robin LB
 // would require sharing the store (Redis, etc.) — left for a future
 // rev when the deployment shape actually demands it.
-func NewWSTicketService() WSTicketService {
+func NewWSTicketService() WSTicketRuntime {
 	return &wsTicketService{
 		store: cache.New[string, ticketRecord](wsTicketTTL, wsTicketCleanup),
 	}

@@ -6,9 +6,10 @@ func stopServiceCacheWorkers(svcs *Services) {
 	if svcs == nil {
 		return
 	}
-	for _, service := range []any{svcs.ChannelPermission, svcs.WSTicket} {
-		if owner, ok := service.(interface{ Stop() }); ok {
-			owner.Stop()
-		}
+	if svcs.ChannelPermission != nil {
+		svcs.ChannelPermission.Stop()
+	}
+	if svcs.WSTicket != nil {
+		svcs.WSTicket.Stop()
 	}
 }

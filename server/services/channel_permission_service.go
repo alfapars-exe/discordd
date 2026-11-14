@@ -92,6 +92,12 @@ type ChannelPermissionService interface {
 	InvalidateAll()
 }
 
+// ChannelPermissionRuntime retains cleanup ownership at the composition root.
+type ChannelPermissionRuntime interface {
+	ChannelPermissionService
+	Stop()
+}
+
 // PermissionInvalidator is the cache-invalidation slice of
 // ChannelPermissionService, exposed as its own interface so
 // RoleService / MemberService can depend on the smallest possible
@@ -144,7 +150,7 @@ func NewChannelPermissionService(
 	roleRepo repository.RoleRepository,
 	channelGetter ChannelGetter,
 	hub ws.Broadcaster,
-) ChannelPermissionService {
+) ChannelPermissionRuntime {
 	inner := newUncachedChannelPermService(permRepo, roleRepo, channelGetter, hub)
 	return newCachingPermResolver(inner)
 }

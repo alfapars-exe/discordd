@@ -35,5 +35,15 @@
     "Windows Go1.27.4 CGO0; Linux race/native tests remain CI gates",
     "No changed provider/network policy or notification semantics",
     "RF11 remaining service contracts and full startup/shutdown acceptance still require audit"
-  ]
+  ],
+  "cache_owner_followup": {
+    "before": "Declared constructor-result tests fail for ChannelPermissionService and WSTicketService: missing Stop",
+    "change": "Runtime constructor and Services bundle interfaces require Stop; rollback and cache shutdown use direct calls. Nil and partial bundles retained; old no-Stop fake replaced by explicit partial-owner call assertions.",
+    "command": "go test ./services . -run 'TestResourceOwning|TestServiceCache|Test.*Wiring|Test.*Startup|Test.*Lifecycle|Test.*Initialization|Test.*Ticket|Test.*Perm.*Cache' -count=1 -timeout=3m",
+    "exit": 0,
+    "services_seconds": 1.785,
+    "root_seconds": 0.736,
+    "build": "go build ./... exit0",
+    "vet": "go vet ./services . exit0"
+  }
 }

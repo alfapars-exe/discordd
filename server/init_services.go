@@ -55,7 +55,7 @@ type Services struct {
 	DM                      services.DMService
 	GroupDM                 services.GroupDMService
 	Reaction                services.ReactionService
-	ChannelPermission       services.ChannelPermissionService
+	ChannelPermission       services.ChannelPermissionRuntime
 	Friendship              services.FriendshipService
 	LiveKitAdmin            services.LiveKitAdminService
 	P2PCall                 services.P2PCallService
@@ -85,7 +85,7 @@ type Services struct {
 	Cosmetic                services.CosmeticService
 	ExpressionClone         services.ExpressionCloneService
 	MusicBot                services.MusicBotRuntime
-	WSTicket                services.WSTicketService
+	WSTicket                services.WSTicketRuntime
 	Backup                  *services.BackupService
 	Notification            services.NotificationService
 	Reminder                services.ReminderService
@@ -206,7 +206,7 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	channelPermService := services.NewChannelPermissionService(
 		repos.ChannelPermission, repos.Role, repos.Channel, hub,
 	)
-	rollback = append(rollback, channelPermService.(interface{ Stop() }).Stop)
+	rollback = append(rollback, channelPermService.Stop)
 	serverEventService := services.NewServerEventService(repos.ServerEvent, repos.Server, repos.Role, repos.Channel, channelPermService)
 	// auditLogService is constructed here, right after channelPermService,
 	// so it can be passed as a constructor parameter (not a post-construction
@@ -461,7 +461,7 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	)
 
 	wsTicketService := services.NewWSTicketService()
-	rollback = append(rollback, wsTicketService.(interface{ Stop() }).Stop)
+	rollback = append(rollback, wsTicketService.Stop)
 	svcs := &Services{
 		Auth:                    authService,
 		MFA:                     mfaService,

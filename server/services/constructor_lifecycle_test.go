@@ -13,6 +13,8 @@ func TestResourceOwningConstructorsDeclareStop(t *testing.T) {
 		name string
 		fn   any
 	}{
+		{"channel permissions", NewChannelPermissionService},
+		{"websocket tickets", NewWSTicketService},
 		{"link preview", NewLinkPreviewService},
 		{"online friend notifier", NewOnlineFriendNotifier},
 	} {

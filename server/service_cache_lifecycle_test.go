@@ -30,9 +30,12 @@ func TestServiceCacheShutdownVisitsBothOwnersAndToleratesAbsentServices(t *testi
 	}
 	stopServiceCacheWorkers(nil)
 	stopServiceCacheWorkers(&Services{})
-	stopServiceCacheWorkers(&Services{ChannelPermission: &struct {
-		services.ChannelPermissionService
-	}{}, WSTicket: &struct{ services.WSTicketService }{}})
+	// A partial bundle may omit either resource; a present resource must own Stop.
+	stopServiceCacheWorkers(&Services{ChannelPermission: permissions})
+	stopServiceCacheWorkers(&Services{WSTicket: tickets})
+	if permissions.calls != 2 || tickets.calls != 2 {
+		t.Fatalf("partial bundle owners stopped %d/%d times", permissions.calls, tickets.calls)
+	}
 }
 
 func TestMainRegistersCacheCleanupAfterServiceAcquisition(t *testing.T) {
