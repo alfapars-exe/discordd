@@ -78,7 +78,17 @@ type BackupAppLogger interface {
 type BackupService struct {
 	cfg       config.BackupConfig
 	appLogger BackupAppLogger
-	stop      chan struct{}
+
+	// lifecycleMu serializes background admission with Stop. Accepted work is
+	// counted before launch, so Stop cannot race an Add after an empty Wait.
+	lifecycleMu      sync.Mutex
+	stopping         bool
+	periodicStarted  bool
+	activeOperations int
+	operationsDone   chan struct{}
+	shutdownOnce     sync.Once
+	shutdownDone     chan struct{}
+	shutdownCancel   context.CancelFunc
 	// runCmd is the subprocess indirection — defaults to defaultRunCmd
 	// in production, swapped to a fake in tests. Exposed on the struct
 	// (not a package var) so multiple BackupService instances in the
@@ -89,19 +99,11 @@ type BackupService struct {
 	// is observable: tests await it (via waitForUploadsRestore) before
 	// asserting on recorded subprocess calls, otherwise the assertion races
 	// the goroutine. Stop() cancels the goroutine via svcCtx; callers that
-	// also need to *wait* for it to unwind use waitForUploadsRestore.
+	// also need to observe restore completion can use waitForUploadsRestore.
 	uploadsRestoreWG sync.WaitGroup
 
-	// svcCtx bounds every background operation the service owns — today
-	// just the async uploads restore. Stop() cancels it, so shutdown no
-	// longer leaves a detached multi-GB download running against a process
-	// that is trying to exit (it used to hang off its own 60-minute
-	// context with no link to b.stop, so the only thing that ended it was
-	// the timeout).
-	//
-	// Deliberately NOT used by the backup cycle: Shutdown() calls Stop()
-	// first and *then* runs the final DB backup, so binding cycle work to
-	// svcCtx would cancel the very upload that shutdown exists to perform.
+	// svcCtx cancels periodic/manual cycles and restore operations on Stop.
+	// Shutdown uses a separate caller context after this background owner drains.
 	svcCtx    context.Context
 	svcCancel context.CancelFunc
 
@@ -128,8 +130,8 @@ type BackupService struct {
 func NewBackupService(cfg config.BackupConfig) *BackupService {
 	svcCtx, svcCancel := context.WithCancel(context.Background())
 	return &BackupService{
-		cfg:       cfg,
-		stop:      make(chan struct{}),
+		cfg: cfg,
+
 		runCmd:    defaultRunCmd,
 		svcCtx:    svcCtx,
 		svcCancel: svcCancel,
@@ -161,74 +163,73 @@ func (b *BackupService) SetAppLogger(l BackupAppLogger) {
 //   - Wait 5 minutes after boot before the first run — gives the DB
 //     time to apply pending migrations, lets the app settle, and avoids
 //     compounding load with cold-start traffic spikes.
-//   - Then run on cfg.Interval (default 24h).
+//   - Then run on cfg.Interval.
 //   - Each run is best-effort: failures are logged but never block the
 //     next cycle.
-func (b *BackupService) Start() {
+func (b *BackupService) Start() { b.startPeriodic(5 * time.Minute) }
+
+func (b *BackupService) startPeriodic(initialDelay time.Duration) {
 	if !b.cfg.Enabled {
 		backupLogger.Info("disabled (HF_TOKEN not set)")
 		return
 	}
+	b.lifecycleMu.Lock()
+	b.initializeLifecycleLocked()
+	if b.stopping || b.periodicStarted {
+		b.lifecycleMu.Unlock()
+		return
+	}
+	b.periodicStarted = true
+	b.activeOperations++
+	ctx := b.svcCtx
+	b.lifecycleMu.Unlock()
 	backupLogger.Info("enabled", "bucket", b.cfg.HFBucket, "interval", b.cfg.Interval)
-
-	go func() {
-		// Initial delay: let migrations + warm caches settle before the
-		// first heavy I/O cycle.
+	logx.Go("backup.periodic", func() {
+		defer b.finishBackupOperation()
+		initial := time.NewTimer(initialDelay)
+		defer initial.Stop()
 		select {
-		case <-time.After(5 * time.Minute):
-		case <-b.stop:
+		case <-initial.C:
+		case <-ctx.Done():
 			return
 		}
-		b.runBackup()
-
+		b.runBackupContext(ctx, false)
 		ticker := time.NewTicker(b.cfg.Interval)
 		defer ticker.Stop()
 		for {
 			select {
-			case <-ticker.C:
-				b.runBackup()
-			case <-b.stop:
+			case <-ctx.Done():
 				return
+			case <-ticker.C:
+				b.runBackupContext(ctx, false)
 			}
 		}
-	}()
+	})
 }
 
-// Stop signals the background goroutine to exit and cancels the service's
-// background work (the async uploads restore). Safe to call multiple times
-// — context.CancelFunc is idempotent.
+// Stop closes background admission, cancels accepted work and joins it.
+// Repeated/concurrent calls join the same terminal run. The explicit final
+// database cycle is separately owned by Shutdown and uses its caller context.
 func (b *BackupService) Stop() {
-	select {
-	case <-b.stop:
-		// already closed
-	default:
-		close(b.stop)
+	b.lifecycleMu.Lock()
+	b.initializeLifecycleLocked()
+	if !b.stopping {
+		b.stopping = true
+		if b.activeOperations == 0 {
+			close(b.operationsDone)
+		}
 	}
-	if b.svcCancel != nil {
-		b.svcCancel()
-	}
+	cancel, done := b.svcCancel, b.operationsDone
+	b.lifecycleMu.Unlock()
+	cancel()
+	<-done
 }
 
-// Shutdown stops the periodic ticker, then runs ONE final best-effort,
-// DB-only backup so data written since the last cycle reaches the bucket
-// before the ephemeral HF container is destroyed. This is what closes the
-// data-loss window on graceful (SIGTERM) restarts — e.g. fresh Denetim/audit
-// rows the async writer just drained into the local DB would otherwise never
-// be uploaded and would vanish on the next boot's restore.
-//
-// No-op when disabled (no HF_TOKEN) or on a remote libSQL/Turso DSN (already
-// durable upstream). The final cycle is DB-only: the DB carries the at-risk
-// data and is tiny, while the uploads mirror can be large and is reconciled
-// by the next boot's restore + periodic cycle — so it must not starve the
-// critical DB upload inside HF's limited shutdown grace window.
-//
-// The backup runs in a goroutine bounded by ctx: if the (single-flight)
-// cycle can't finish before the caller's deadline we log and return so
-// process teardown isn't blocked past HF's grace window. MUST be called AFTER
-// the audit/app-log services' Stop() has drained their buffers into the DB,
-// so the snapshot captures those rows.
+// Shutdown drains background work, then owns one final DB-only cycle after
+// app/audit writers drain. Any caller cancellation cancels the shared final
+// operation; every caller joins it before dependencies can be closed.
 func (b *BackupService) Shutdown(ctx context.Context) {
-	b.Stop() // halt the periodic ticker first so it can't race this cycle
+	b.Stop()
 	if !b.cfg.Enabled {
 		backupLogger.Info("shutdown backup skipped: disabled (HF_TOKEN not set)")
 		return
@@ -237,18 +238,23 @@ func (b *BackupService) Shutdown(ctx context.Context) {
 		backupLogger.Info("shutdown backup skipped: remote DSN, already persistent")
 		return
 	}
-
-	backupLogger.Info("shutdown backup: final DB snapshot before exit")
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		b.runBackupCore(true /* dbOnly */)
-	}()
+	b.shutdownOnce.Do(func() {
+		b.shutdownDone = make(chan struct{})
+		var work context.Context
+		work, b.shutdownCancel = context.WithCancel(ctx)
+		backupLogger.Info("shutdown backup: final DB snapshot before exit")
+		logx.Go("backup.final", func() { defer close(b.shutdownDone); defer b.shutdownCancel(); b.runBackupContext(work, true) })
+	})
 	select {
-	case <-done:
-		backupLogger.Info("shutdown backup complete")
+	case <-b.shutdownDone:
 	case <-ctx.Done():
-		backupLogger.Warn("shutdown backup did not finish before deadline, process exiting", "err", pkg.ErrText(ctx.Err()))
+		b.shutdownCancel()
+		<-b.shutdownDone
+	}
+	if ctx.Err() != nil {
+		backupLogger.Warn("shutdown context canceled; backup worker joined", "err", pkg.ErrText(ctx.Err()))
+	} else {
+		backupLogger.Info("shutdown backup worker joined")
 	}
 }
 
