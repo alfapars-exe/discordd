@@ -24,7 +24,10 @@ async function edit(page: Page, before: string, after: string) {
   const message = row(page, before);
   await message.hover();
   await message.getByRole("button", { name: "Edit Message", exact: true }).click();
-  const input = message.locator("textarea.msg-edit-textarea");
+  // Filling the editor replaces the original text, so a locator filtered by
+  // that text no longer matches. Only this page has one active message editor.
+  const input = messageList(page).locator("textarea.msg-edit-textarea");
+  await expect(input).toHaveCount(1);
   await input.fill(after);
   await input.press("Enter");
   await expect(row(page, after)).toHaveCount(1);
