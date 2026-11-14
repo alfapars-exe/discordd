@@ -33,6 +33,35 @@ describe("channel history cache", () => {
     vi.mocked(storage.getCachedDecryptedMessage).mockResolvedValue(await channelMessageCacheEntry(source, { content: "text" }));
     expect(await readChannelMessageCache({ ...source, attachments: [{ id: "attachment" }] } as Message, () => true)).toBeNull();
   });
+  it("upgrades an eligible old cache only after its plaintext is independently verified", async () => {
+    const entry = { ...await channelMessageCacheEntry(source, { content: "original" }), encryptedSourceTag: undefined };
+    vi.mocked(storage.getCachedDecryptedMessage).mockResolvedValue(entry);
+    const verify = vi.fn(async () => ({ content: "original" }));
+    expect(await readChannelMessageCache(source, () => true, verify)).toEqual({ content: "original" });
+    expect(verify).toHaveBeenCalledOnce();
+    expect(storage.cacheDecryptedMessage).toHaveBeenCalledWith(expect.objectContaining({ encryptedSourceTag: expect.stringMatching(/^channel-v1:/) }), expect.any(Function));
+  });
+  it.each([
+    { edited_at: "2026-11-14T01:00:00Z" }, { created_at: "2026-11-15T00:00:00Z" },
+    { user_id: "different-sender" }, { attachments: [{ id: "file" }] },
+  ])("does not upgrade an ineligible legacy source: %j", async change => {
+    vi.mocked(storage.getCachedDecryptedMessage).mockResolvedValue({ ...await channelMessageCacheEntry(source, { content: "original" }), encryptedSourceTag: undefined });
+    const verify = vi.fn(async () => ({ content: "original" }));
+    expect(await readChannelMessageCache({ ...source, ...change } as Message, () => true, verify)).toBeNull();
+    expect(verify).not.toHaveBeenCalled();
+    expect(storage.cacheDecryptedMessage).not.toHaveBeenCalled();
+  });
+  it("rejects legacy cached text that differs from the authenticated frame", async () => {
+    vi.mocked(storage.getCachedDecryptedMessage).mockResolvedValue({ ...await channelMessageCacheEntry(source, { content: "old" }), encryptedSourceTag: undefined });
+    expect(await readChannelMessageCache(source, () => true, async () => ({ content: "different" }))).toBeNull();
+    expect(storage.cacheDecryptedMessage).not.toHaveBeenCalled();
+  });
+  it("drops a legacy verification completed after account replacement", async () => {
+    let current = true;
+    vi.mocked(storage.getCachedDecryptedMessage).mockResolvedValue({ ...await channelMessageCacheEntry(source, { content: "old" }), encryptedSourceTag: undefined });
+    expect(await readChannelMessageCache(source, () => current, async () => { current = false; return { content: "old" }; })).toBeNull();
+    expect(storage.cacheDecryptedMessage).not.toHaveBeenCalled();
+  });
   it("does not expose a cache result after an account change during the read", async () => {
     let current = true;
     const entry = await channelMessageCacheEntry(source, { content: "private" });

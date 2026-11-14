@@ -1278,6 +1278,19 @@ describe("channelEncryption — decryptChannelMessages", () => {
     expect(e2eeApi.fetchGroupSessions).not.toHaveBeenCalled();
   });
 
+  it("verifies legacy cached plaintext against the signed frame without resetting replay state", async () => {
+    const encrypted = await aliceSends("legacy history");
+    switchTo(BOB);
+    const message = e2eeMsg("legacy-history", encrypted);
+    await decryptChannelMessages([message]);
+    const legacy = { ...h.cached[0], encryptedSourceTag: undefined };
+    vi.mocked(keyStorage.getCachedDecryptedMessage).mockResolvedValueOnce(legacy);
+    const before = JSON.stringify([...h.bob.senderKeys]);
+    expect((await decryptChannelMessages([message]))[0].content).toBe("legacy history");
+    expect(JSON.stringify([...h.bob.senderKeys])).toBe(before);
+    await expect(receiverReads(BOB, encrypted)).rejects.toThrow(/Replay detected/);
+  });
+
   it("reads an accepted history frame from its bound cache while live replay stays rejected", async () => {
     const encrypted = await aliceSends("restored history");
     switchTo(BOB);

@@ -28,13 +28,29 @@ export async function cacheChannelMessage(message: Message, payload: E2EEPayload
   await storage.cacheDecryptedMessage(entry, isCurrent);
 }
 
-export async function readChannelMessageCache(message: Message, isCurrent: () => boolean): Promise<E2EEPayload | null> {
+export async function readChannelMessageCache(
+  message: Message, isCurrent: () => boolean,
+  verifyLegacy?: () => Promise<E2EEPayload | null>,
+): Promise<E2EEPayload | null> {
   if (!isCurrent()) return null;
   const cached = await storage.getCachedDecryptedMessage(message.id);
   if (!isCurrent() || !cached || cached.messageId !== message.id || cached.channelId !== message.channel_id
     || cached.dmChannelId !== null || typeof cached.content !== "string") return null;
   const tag = await channelMessageCacheTag(message);
-  if (!isCurrent() || cached.encryptedSourceTag !== tag) return null;
+  if (!isCurrent()) return null;
+  if (cached.encryptedSourceTag !== tag) {
+    const legacy = cached.encryptedSourceTag === undefined && !message.edited_at
+      && !message.attachments?.length && !cached.fileKeys?.length
+      && cached.timestamp === new Date(message.created_at).getTime()
+      && (!cached.senderUserId || cached.senderUserId === message.user_id);
+    if (!legacy || !verifyLegacy) return null;
+    // An old cache entry alone cannot authenticate the source. Require the
+    // signed ciphertext to open independently and match its original text.
+    const verified = await verifyLegacy();
+    if (!isCurrent() || !verified || verified.content !== cached.content || verified.file_keys?.length) return null;
+    await cacheChannelMessage(message, verified, isCurrent).catch(() => {});
+    return isCurrent() ? { content: verified.content } : null;
+  }
   for (const [position, attachment] of (message.attachments ?? []).entries()) {
     const index = groupAttachmentKeyIndex(attachment, position);
     if (index === undefined || !Array.isArray(cached.fileKeys) || !cached.fileKeys[index]) return null;

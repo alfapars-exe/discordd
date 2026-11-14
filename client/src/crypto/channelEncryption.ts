@@ -819,7 +819,14 @@ export async function decryptChannelMessages(
       try {
         // Reading history must not replay an accepted frame through the
         // ratchet. Reuse only a cache entry for this exact encrypted source.
-        const cached = await readChannelMessageCache(msg, isCurrent);
+        const cached = await readChannelMessageCache(msg, isCurrent, async () => {
+          // This path is eligible only for an unedited, text-only legacy
+          // cache record. Do not install distributions or mutate replay state.
+          const plaintext = await senderKeyProtocol.decryptGroupHistory(
+            msg.channel_id, msg.user_id, msg.sender_device_id!, JSON.parse(msg.ciphertext!) as SenderKeyMessage, isCurrent,
+          );
+          return isCurrent() ? decodePayload(plaintext) : null;
+        });
         if (!isCurrent()) return staleProjection();
         if (cached) {
           result.push({ ...msg, content: cached.content, e2ee_file_keys: cached.file_keys });
