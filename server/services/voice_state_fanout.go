@@ -278,7 +278,7 @@ func (f *voiceStateFanout) deliver(batch []voiceStateFanoutEvent, membersByServe
 	if len(recipients) == 0 {
 		return
 	}
-	permissions, err := resolveFreshFanoutPermissions(ctx, s.permResolver, item.channelID, recipients)
+	permissions, err := s.currentVoiceBulkPermissions(ctx, item.channelID, recipients)
 	if err != nil {
 		f.dropCount.Add(uint64(len(batch)))
 		voiceLogger.Warn("voice state fanout permission resolution failed; event dropped", "server_id", item.serverID, "channel_id", item.channelID)
@@ -313,11 +313,11 @@ func (f *voiceStateFanout) publishVisible(batch []voiceStateFanoutEvent, visible
 // different app instance cannot invalidate this process's permission cache,
 // so this publication boundary must read current role/override rows instead
 // of accepting a cached grant for up to permCacheTTL.
-func resolveFreshFanoutPermissions(ctx context.Context, resolver ChannelPermResolver, channelID string, recipients []string) (map[string]models.Permission, error) {
-	if cached, ok := resolver.(*cachingPermResolver); ok {
-		return cached.inner.ResolveChannelPermissionsBulk(ctx, channelID, recipients)
+func (s *voiceService) currentVoiceBulkPermissions(ctx context.Context, channelID string, recipients []string) (map[string]models.Permission, error) {
+	if s.freshPermissions != nil {
+		return s.freshPermissions.ResolveChannelPermissionsBulkFresh(ctx, channelID, recipients)
 	}
-	return resolver.ResolveChannelPermissionsBulk(ctx, channelID, recipients)
+	return s.permResolver.ResolveChannelPermissionsBulk(ctx, channelID, recipients)
 }
 
 func (f *voiceStateFanout) shutdown() {
@@ -346,4 +346,11 @@ func (f *voiceStateFanout) dropped() uint64 {
 		return 0
 	}
 	return f.dropCount.Load()
+}
+
+func resolveFreshFanoutPermissions(ctx context.Context, resolver ChannelPermResolver, channelID string, recipients []string) (map[string]models.Permission, error) {
+	if cached, ok := resolver.(*cachingPermResolver); ok {
+		return cached.inner.ResolveChannelPermissionsBulk(ctx, channelID, recipients)
+	}
+	return resolver.ResolveChannelPermissionsBulk(ctx, channelID, recipients)
 }

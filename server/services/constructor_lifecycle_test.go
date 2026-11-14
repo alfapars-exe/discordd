@@ -556,3 +556,10 @@ func TestGameActivityConstructorDeclaresEpochSource(t *testing.T) {
 		t.Fatal("activity epoch must be an explicit constructor value")
 	}
 }
+
+func TestVoiceFreshPermissionContractDeclaresBulkResolution(t *testing.T) {
+	field, _ := reflect.TypeFor[VoiceRuntimeDependencies]().FieldByName("FreshPermissions")
+	if _, ok := field.Type.MethodByName("ResolveChannelPermissionsBulkFresh"); !ok {
+		t.Fatal("voice fresh permission contract hides bulk freshness")
+	}
+}

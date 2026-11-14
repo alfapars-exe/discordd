@@ -903,7 +903,7 @@ func (s *voiceService) recheckVoiceAccess(userID, channelID string) {
 			ids = append(ids, item.id)
 		}
 		ctx, cancel := BroadcastContext()
-		perms, err := resolveFreshFanoutPermissions(ctx, s.permResolver, channel, ids)
+		perms, err := s.currentVoiceBulkPermissions(ctx, channel, ids)
 		cancel()
 		if err != nil {
 			voiceLogger.Error("voice permission recheck failed", "channel_id", channel, "err", pkg.ErrText(err))

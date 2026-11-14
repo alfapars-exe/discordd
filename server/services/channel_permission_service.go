@@ -94,6 +94,7 @@ type ChannelPermissionService interface {
 
 // FreshChannelPermResolver bypasses cached decisions for live voice checks.
 type FreshChannelPermResolver interface {
+	ResolveChannelPermissionsBulkFresh(context.Context, string, []string) (map[string]models.Permission, error)
 	ResolveChannelPermissionsFresh(context.Context, string, string) (models.Permission, error)
 }
 

@@ -275,3 +275,9 @@ func (s *cachingPermResolver) Stop() { s.permCache.Close() }
 func (c *cachingPermResolver) BindInvalidationCallback(callback func(string, string)) {
 	c.afterInvalidation = callback
 }
+
+// ResolveChannelPermissionsBulkFresh reads the current permission rows without
+// accepting cached positive grants. This preserves the voice publication path.
+func (c *cachingPermResolver) ResolveChannelPermissionsBulkFresh(ctx context.Context, channel string, users []string) (map[string]models.Permission, error) {
+	return c.inner.ResolveChannelPermissionsBulk(ctx, channel, users)
+}

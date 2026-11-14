@@ -45,11 +45,7 @@ func (s *voiceService) VerifyCurrentScreenShare(ctx context.Context, issuerInsta
 	if !member {
 		return false, nil
 	}
-	resolver := s.permResolver
-	if cached, ok := resolver.(*cachingPermResolver); ok {
-		resolver = cached.inner
-	}
-	permissions, err := resolver.ResolveChannelPermissions(ctx, actorID, channelID)
+	permissions, err := s.currentVoicePermissions(ctx, actorID, channelID)
 	if err != nil {
 		return false, fmt.Errorf("resolve actor voice permissions: %w", err)
 	}

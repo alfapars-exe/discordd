@@ -20,7 +20,7 @@ func newTestChannelPermService(
 	roleRepo *testutil.MockRoleRepo,
 	channelRepo *testutil.MockChannelRepo,
 	hub *testutil.MockBroadcaster,
-) ChannelPermissionService {
+) ChannelPermissionRuntime {
 	t.Helper()
 	service := NewChannelPermissionService(permRepo, roleRepo, channelRepo, hub).(*cachingPermResolver)
 	t.Cleanup(service.permCache.Close)
@@ -737,7 +737,7 @@ type permFixture struct {
 // newService wires the fixture into a real channelPermService (not a mock —
 // the point is to exercise the production resolution code) with every repo
 // call counted.
-func (f permFixture) newService(t testing.TB, c *bulkRepoCounter) ChannelPermissionService {
+func (f permFixture) newService(t testing.TB, c *bulkRepoCounter) ChannelPermissionRuntime {
 	channelRepo := &testutil.MockChannelRepo{
 		GetByIDFn: func(_ context.Context, _ string) (*models.Channel, error) {
 			c.channelByID++

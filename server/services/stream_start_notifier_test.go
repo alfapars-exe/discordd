@@ -333,6 +333,7 @@ func TestVerifyCurrentScreenShareUsesLiveKitParticipantAndExactTrack(t *testing.
 	}
 	rolePermissions = models.PermViewChannel | models.PermConnectVoice // Stream was revoked elsewhere after cache fill.
 	service.permResolver = cachedPermissions
+	service.freshPermissions = cachedPermissions
 	lookupsBeforeRevokedCheck := len(identities)
 	valid, err = service.VerifyCurrentScreenShare(context.Background(), "lk-current", "server-1", "channel-1", "actor-1", "TR_expected")
 	if err != nil || valid {
@@ -342,6 +343,7 @@ func TestVerifyCurrentScreenShareUsesLiveKitParticipantAndExactTrack(t *testing.
 		t.Fatalf("provider was queried after fresh permission revocation: identities=%v", identities)
 	}
 	service.permResolver = permissions
+	service.freshPermissions = nil
 	service.timeoutChecker = streamVerifierTimeoutChecker{active: true}
 	valid, err = service.VerifyCurrentScreenShare(context.Background(), "lk-current", "server-1", "channel-1", "actor-1", "TR_expected")
 	if err != nil || valid {
