@@ -1,0 +1,30 @@
+{
+  "regression_source": "45b68ed21f7bc9f386be80434add70f78589172a",
+  "production_regression": {
+    "profile": "real Go server + built Vite bundle + owned verify-full mTLS PostgreSQL + independent original/restored Chromium contexts",
+    "result": "Backup upload, wrong password rejection, successful restore and equal identity fingerprint passed; historical plaintext assertion failed.",
+    "diagnostic": "Restored history crypto rejection: Replay detected",
+    "log": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-local-crypto-history-diagnostic.log"
+  },
+  "change": "Bind channel plaintext cache to message/channel/sender/device/ciphertext/metadata; persist that source tag and file keys on send and successful history decryption. Read matching cache before historical decryption, leaving live sender-key replay protection unchanged.",
+  "local_checks": {
+    "tests": 134,
+    "failures": 0,
+    "typescript": "passed",
+    "changed_files_eslint": "passed",
+    "negative_cases": [
+      "changed encrypted source",
+      "different channel or DM scope",
+      "unversioned cache",
+      "missing attachment keys",
+      "account change during read or write",
+      "live replay still rejected"
+    ]
+  },
+  "remaining": [
+    "Run production backup/restore E2E with the fix.",
+    "Legacy backups without source tags are not reused as trusted channel history; compatibility remains open.",
+    "Current GitHub CI does not yet contain this follow-up."
+  ],
+  "temporary_storage": "Reproducible 8ec source ZIP and expanded archive moved intact to G:/hichat-verification-overflow-20261114; original self-scan log retained."
+}

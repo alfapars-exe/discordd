@@ -1,3 +1,4 @@
+import { cacheChannelMessage } from "../crypto/channelMessageCache";
 /**
  * Message Store — Channel message state management.
  */
@@ -25,7 +26,6 @@ import {
   SuppressedRosterError,
 } from "../crypto/channelEncryption";
 import { encodePayload } from "../crypto/e2eePayload";
-import * as keyStorage from "../crypto/keyStorage";
 import type { Message, ReactionGroup, Server } from "../types";
 import { DEFAULT_MESSAGE_LIMIT } from "../utils/constants";
 import {
@@ -746,17 +746,12 @@ export const useMessageStore = create<MessageState>((set, get) => {
               // permanently unreadable, so overlay the plaintext we just
               // encrypted. handleMessageCreate dedupes by id either way.
               get().handleMessageCreate({ ...created, content, e2ee_file_keys: fileMetas }, session);
-              if (content) {
+              if (content || fileMetas?.length) {
                 // Sender-key ratchets can't re-decrypt our own past messages
                 // on refetch — persist the plaintext like the echo path does.
                 if (!isCurrentSession()) return false;
-                keyStorage.cacheDecryptedMessage({
-                  messageId: created.id,
-                  channelId,
-                  dmChannelId: null,
-                  content,
-                  timestamp: new Date(created.created_at).getTime(),
-                }, isCurrentSession).catch(() => {});
+                await cacheChannelMessage({ ...created, channel_id: channelId }, { content, file_keys: fileMetas }, isCurrentSession).catch(() => {});
+                if (!isCurrentSession()) return false;
               }
             }
           }
