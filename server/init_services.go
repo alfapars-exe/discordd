@@ -220,14 +220,7 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	)
 	rollback = append(rollback, voiceService.ShutdownVoiceStateFanout)
 
-	// Email service (optional)
-	var emailSender email.Provider
-	if cfg.Email.ResendAPIKey != "" && cfg.Email.FromEmail != "" && cfg.Email.AppURL != "" {
-		emailSender = email.NewResendSender(cfg.Email.ResendAPIKey, cfg.Email.FromEmail, cfg.Email.AppURL)
-		bootLogger.Info("email service enabled", "from", cfg.Email.FromEmail)
-	} else {
-		bootLogger.Info("email service disabled (RESEND_API_KEY, RESEND_FROM or APP_URL not set)")
-	}
+	emailSender := configuredEmailProvider(cfg.Email)
 
 	// Remaining services (order-independent)
 	inviteService := services.NewInviteService(repos.Invite, repos.Server)

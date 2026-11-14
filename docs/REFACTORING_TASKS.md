@@ -1778,3 +1778,8 @@ CI43574345347 passed offline retry (including201), DM history and role cases fir
 ### RF11 — configured email provider guarantees delivery capabilities (2026-11-14)
 
 NewResendSender previously returned only EmailSender; startup silently asserted VerificationSender and CategorySender, allowing an enabled provider to omit those capabilities without a build error. Declared-result regression failed for both missing interfaces. The factory now returns Provider embedding all three contracts; initServices retains it and passes narrow dependencies directly. Disabled configuration remains nil. Relevant provider/email/service/wiring/startup tests, build and vet passed; no actual provider mail was sent. Current-source production mail profile and Linux race remain CI gates. Receipt: implementation/verification/refactor-rf11-email-provider-contract-2026-11-14.json.
+
+
+### RF11 — optional email configuration matrix (2026-11-14)
+
+configuredEmailProvider now owns the unchanged three-field enablement predicate and provider setup outside initServices. All8 presence/absence combinations are tested:7 incomplete configurations remain nil and the complete provider preserves sender configuration. Relevant startup/wiring/email tests, build and vet pass. No external email was sent and no production configuration changed. Updated receipt: implementation/verification/refactor-rf11-email-provider-contract-2026-11-14.json.
