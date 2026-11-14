@@ -230,15 +230,12 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 		services.WithEmailUnsubscribe(repos.EmailUnsubscribe, cfg.Email.AppURL))
 	p2pCallService := services.NewP2PCallService(repos.Friendship, repos.User, hub, emailDeliveryService, appLogService)
 
-	channelService := services.NewChannelService(voiceService, repos.Channel, repos.Category, hub, channelPermService, auditLogService, repos.Notification, channelPermService)
-	threadService := services.NewThreadService(repos.Channel, repos.Message, channelPermService, hub, channelPermService)
-	// Enables best-effort on-disk cleanup of attachment files on delete (see
-	// services/upload_cleanup.go) without widening the constructor signature
-	// — uploadDir stays a setter (unlike auditLogger above) because it's a
-	// plain config string, not a dependency other services also need wired
-	// before construction.
-	channelService.SetUploadDir(cfg.Upload.Dir)
-	categoryService := services.NewCategoryService(repos.Category, hub)
+	channels := initChannelNavigationServices(channelNavigationDependencies{
+		Repositories: repos, Hub: hub, Permissions: channelPermService, FreshPermissions: channelPermService,
+		VoiceDeletion: voiceService, Audit: auditLogService, UploadDir: cfg.Upload.Dir,
+	})
+	channelService, threadService, categoryService := channels.Channel, channels.Thread, channels.Category
+	pinService, searchService, readStateService := channels.Pin, channels.Search, channels.ReadState
 	channelMessaging := initChannelMessagingServices(db, repos, hub, cfg, channelPermService, auditLogService)
 	messageService, uploadService := channelMessaging.Message, channelMessaging.Upload
 	channelMessageNotificationWorker, deliveryDB := channelMessaging.Notifications, channelMessaging.DeliveryDB
@@ -261,14 +258,6 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 		repos.LiveKit, repos.Server, repos.User, repos.Channel,
 		voiceService, encryptionKey, cfg.HetznerAPIToken, cfg.AllowLiveKitInstanceCreation,
 	)
-	pinService := services.NewPinService(repos.Pin, repos.Message, repos.Channel, hub, channelPermService)
-	// H-05: search results are scoped to the channels the caller may
-	// actually read, so it needs both the server's channel list
-	// (repos.Channel) and the per-channel permission resolver
-	// (channelPermService) — same combination ChannelService.GetAllGrouped
-	// already uses for sidebar visibility.
-	searchService := services.NewSearchService(repos.Search, repos.Channel, channelPermService)
-	readStateService := services.NewReadStateService(repos.ReadState, channelPermService)
 
 	social := initSocialMessagingServices(socialMessagingDependencies{
 		Database: db, DeliveryDB: deliveryDB, Repositories: repos, Hub: hub, Config: cfg,
