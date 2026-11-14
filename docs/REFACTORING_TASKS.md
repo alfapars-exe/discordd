@@ -1510,3 +1510,7 @@ PR #298 `6162072e` koşusunda yeni süreç testi, repository işinin düz Postgr
 ### 2026-11-14 — Aktif süreç WebSocket sözleşmesi düzeltmesi
 
 `2ac1f132` güncel güvenlik kontrolünden geçti; mTLS süreç fixture’ı giriş aşamalarını geçti fakat katılma olayı 46,50 saniyede zaman aşımına uğradı. Fixture yanlış `data` yük alanını kullanıyordu; üretim `ws.Event` sözleşmesi `d` kullanır. `7a5e44ba` gönderimde doğrudan `ws.Event`/`ws.VoiceJoinData` kullanır, alımda `d` okur ve kendi kullanıcı/kanal/join olay eşleşmesini korur. Yerel derleme (Windows POSIX atlaması), vet ve lint 0 sorun. Linux kabulü yeni kaynakta hâlâ bekleniyor. Önceki hata anlık görüntüsü: `implementation/verification/refactor-pr298-2ac-native-failure-2026-11-14.json`.
+
+### 2026-11-14 — Aktif süreç native race kapısı hazırlığı
+
+Birleşik CI işine yalnız `TestActiveVoiceProcessPostgresSignal` için ayrı `go test -race .` adımı eklendi. Normal zorunlu test koşusundan sonra, aynı sahipli mTLS fixture ile çalışır; bağlantı değişkeninin boş olması shell kapısıyla reddedilir. Windows yerel koşusu bu kabulü sağlayamaz. Kanonik PR’a aktarım, halen çalışan `7a5e44ba` normal süreç sonucundan sonra yapılacak; bu hazırlık çalıştırılmış race kanıtı değildir.
