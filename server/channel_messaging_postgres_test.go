@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"github.com/argeinfina/hichat/config"
 	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/repository"
@@ -25,7 +26,11 @@ func (h *messagingModeHub) SetDurableChannelSends(enabled bool) {
 	h.enabled = enabled
 	h.Hub.SetDurableChannelSends(enabled)
 }
-func TestChannelMessagingPostgresCompositionSelectsDurablePublication(t *testing.T) {
+
+// compositionPostgresDB is sequential: each caller owns and drops the fixture
+// schema before the next test; public application tables remain untouched.
+func compositionPostgresDB(t *testing.T) *sql.DB {
+	t.Helper()
 	dsn := os.Getenv("HICHAT_TEST_POSTGRES_DSN")
 	if dsn == "" {
 		t.Skip("requires disposable loopback PostgreSQL")
@@ -68,6 +73,10 @@ func TestChannelMessagingPostgresCompositionSelectsDurablePublication(t *testing
 	if err := database.MigratePostgres(ctx, db); err != nil {
 		t.Fatal("migrate PostgreSQL fixture")
 	}
+	return db
+}
+func TestChannelMessagingPostgresCompositionSelectsDurablePublication(t *testing.T) {
+	db := compositionPostgresDB(t)
 	repos := initRepositories(db, repository.DataExportStorageOptions{UploadDir: t.TempDir(), ArchiveDir: t.TempDir()})
 	hub := &messagingModeHub{Hub: ws.NewHub()}
 	group := initChannelMessagingServices(db, repos, hub, &config.Config{}, &testutil.MockChannelPermResolver{}, nil)

@@ -1,0 +1,18 @@
+{
+  "scope": "RF11 device-security composition PostgreSQL integration",
+  "fixture": "Dedicated owned PostgreSQL 18.6 loopback container, isolated schema; sslmode=disable fixture only, production mTLS unchanged.",
+  "changes": "Share existing sequential isolated composition fixture and run identical backup integrity assertions through SQLite and PostgreSQL production repositories.",
+  "checks": {
+    "postgres": "PASS channel messaging and device backup composition each repeated twice, 4 PASS 0 SKIP, 3.176s",
+    "schema": "Each caller drops owned schema and verifies public user_roles table presence unchanged",
+    "root": "PASS device/media/startup/rollback/routes/callback/real friendship-DM, 3.322s; PostgreSQL test skips without DSN in ordinary local run",
+    "vet": "PASS go vet .",
+    "reviewed_sql_manifest": "PASS 50 exact records",
+    "ci_inclusion": "scripts/run-postgres-tests.py executes full root package with HICHAT_TEST_POSTGRES_DSN; new test included without changing workflow"
+  },
+  "cleanup": "Owned hichat-device-wiring-20261115 container removed; other containers untouched.",
+  "limits": [
+    "Non-race Windows fixture; physical E2EE acceptance and current-source CI separate.",
+    "Overall refactor remains open."
+  ]
+}

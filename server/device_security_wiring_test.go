@@ -7,6 +7,7 @@ import (
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/pkg/crypto"
+	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
 	"reflect"
 	"testing"
@@ -70,7 +71,15 @@ func TestDeviceSecurityValidCompositionRetainsOwners(t *testing.T) {
 }
 
 func TestDeviceSecurityCompositionBackupIntegrityUsesMasterKey(t *testing.T) {
-	deps := deviceSecurityFixture(t)
+	assertDeviceSecurityBackupIntegrity(t, deviceSecurityFixture(t))
+}
+func TestDeviceSecurityPostgresCompositionBackupIntegrityUsesMasterKey(t *testing.T) {
+	db := compositionPostgresDB(t)
+	deps := deviceSecurityDependencies{Database: db, Repositories: initRepositories(db, repository.DataExportStorageOptions{UploadDir: t.TempDir(), ArchiveDir: t.TempDir()}), Hub: ws.NewHub(), Permissions: &voiceMediaFixtureProviders{}}
+	assertDeviceSecurityBackupIntegrity(t, deps)
+}
+func assertDeviceSecurityBackupIntegrity(t *testing.T, deps deviceSecurityDependencies) {
+	t.Helper()
 	deps.EncryptionKey = []byte("composition-master-key-0123456789")
 	group := initDeviceSecurityServices(deps)
 	ctx := context.Background()
