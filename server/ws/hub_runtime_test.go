@@ -2,9 +2,10 @@ package ws
 
 import (
 	"context"
-	"github.com/argeinfina/hichat/models"
 	"reflect"
 	"testing"
+
+	"github.com/argeinfina/hichat/models"
 )
 
 func TestHubDeclaresValidatedRuntimeComposition(t *testing.T) {
@@ -52,5 +53,34 @@ func TestHubRuntimeValidationIsAtomicAndDispatchesInstalledDependencies(t *testi
 	authorizer.allowed = true
 	if !h.authorizeVoiceModeration("actor", "target", "move") {
 		t.Fatal("installed authorizer result lost")
+	}
+}
+
+func TestHubRuntimeRejectsTypedNilBeforeReplacingDependencies(t *testing.T) {
+	h := NewHub()
+	t.Cleanup(h.Shutdown)
+	logger := &runtimeLoggerRecorder{}
+	authorizer := &runtimeAuthorizerRecorder{}
+	if err := h.ConfigureRuntime(RuntimeDependencies{AppLogger: logger, VoiceAdminAuthorizer: authorizer}); err != nil {
+		t.Fatal(err)
+	}
+	var missingLogger *runtimeLoggerRecorder
+	var missingAuthorizer *runtimeAuthorizerRecorder
+	for name, deps := range map[string]RuntimeDependencies{
+		"logger":     {AppLogger: missingLogger, VoiceAdminAuthorizer: authorizer},
+		"authorizer": {AppLogger: logger, VoiceAdminAuthorizer: missingAuthorizer},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := h.ConfigureRuntime(deps); err == nil {
+				t.Fatal("accepted typed nil runtime dependency")
+			}
+			h.logEvent(models.LogLevelInfo, models.LogCategoryAuth, nil, "retained runtime", nil)
+			if h.authorizeVoiceModeration("actor", "target", "mute") {
+				t.Fatal("installed deny result lost")
+			}
+		})
+	}
+	if logger.calls != 2 || authorizer.calls != 2 {
+		t.Fatal("invalid dependency changed active runtime")
 	}
 }
