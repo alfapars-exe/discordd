@@ -108,11 +108,7 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 			return nil, err
 		}
 		requestHash = fmt.Sprintf("%x", sha256.Sum256(encoded))
-		receipts, ok := s.dmRepo.(repository.DMSendReceipts)
-		if !ok {
-			return nil, fmt.Errorf("%w: dm_send_receipts_unavailable", pkg.ErrBadRequest)
-		}
-		previous, err := receipts.FindDMSend(ctx, channelID, userID, req.ClientMessageID, requestHash)
+		previous, err := s.dmRepo.FindDMSend(ctx, channelID, userID, req.ClientMessageID, requestHash)
 		if err != nil || previous != nil {
 			return previous, err
 		}
@@ -264,11 +260,10 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 			}
 		}
 		if req.ClientMessageID != "" {
-			receipts, ok := r.DM.(repository.DMSendReceipts)
-			if !ok || r.LockChannel == nil {
+			if r.LockChannel == nil {
 				return fmt.Errorf("%w: dm_send_receipts_unavailable", pkg.ErrBadRequest)
 			}
-			previous, err := receipts.FindDMSend(ctx, channelID, userID, req.ClientMessageID, requestHash)
+			previous, err := r.DM.FindDMSend(ctx, channelID, userID, req.ClientMessageID, requestHash)
 			if err != nil {
 				return err
 			}
@@ -344,7 +339,7 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 			}
 		}
 		if req.ClientMessageID != "" {
-			if err := r.DM.(repository.DMSendReceipts).RecordDMSend(ctx, channelID, userID, req.ClientMessageID, requestHash, msg.ID); err != nil {
+			if err := r.DM.RecordDMSend(ctx, channelID, userID, req.ClientMessageID, requestHash, msg.ID); err != nil {
 				return err
 			}
 		}

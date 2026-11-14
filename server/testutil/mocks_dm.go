@@ -2,6 +2,8 @@ package testutil
 
 import (
 	"context"
+	"fmt"
+	"github.com/argeinfina/hichat/pkg"
 
 	"github.com/argeinfina/hichat/models"
 )
@@ -237,4 +239,12 @@ func (m *MockDMRepo) AcceptPendingUnblocked(ctx context.Context, id string) (boo
 func (m *MockDMRepo) CreateChannelUnblocked(ctx context.Context, ch *models.DMChannel) (bool, error) {
 	err := m.CreateChannel(ctx, ch)
 	return err == nil, err
+}
+
+// Receipt-disabled fixtures fail explicitly; real idempotency tests use the DB.
+func (m *MockDMRepo) FindDMSend(context.Context, string, string, string, string) (*models.DMMessage, error) {
+	return nil, fmt.Errorf("%w: dm_send_receipts_unavailable", pkg.ErrBadRequest)
+}
+func (m *MockDMRepo) RecordDMSend(context.Context, string, string, string, string, string) error {
+	return fmt.Errorf("%w: dm_send_receipts_unavailable", pkg.ErrBadRequest)
 }

@@ -670,3 +670,11 @@ func TestDMRequestStoreDeclaresGuardedChannelCreation(t *testing.T) {
 		t.Fatal("DM request store hides guarded channel creation")
 	}
 }
+
+func TestDMRequestStoresDeclareSendReceipts(t *testing.T) {
+	required := reflect.TypeFor[repository.DMSendReceipts]()
+	field, ok := reflect.TypeFor[repository.DMTxRepos]().FieldByName("DM")
+	if !ok || !reflect.TypeFor[repository.DMRequestStore]().Implements(required) || !field.Type.Implements(required) {
+		t.Fatal("DM request/transaction store hides send receipts")
+	}
+}

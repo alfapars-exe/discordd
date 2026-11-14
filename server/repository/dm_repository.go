@@ -83,4 +83,5 @@ type DMRequestStore interface {
 	PendingDMAccepter
 	PendingDMDecliner
 	UnblockedDMChannelCreator
+	DMSendReceipts
 }
