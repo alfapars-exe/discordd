@@ -42,6 +42,11 @@ type profileServerReader interface {
 	ListMemberIDs(context.Context, string) ([]string, error)
 }
 
+type profileAudienceServerReader interface {
+	profileServerReader
+	repository.ProfileAudienceSharedServerReader
+}
+
 // ProfileAudiencePolicy enforces the target user's account-scoped profile
 // audience. It is deliberately server-side; hiding controls in the client is
 // not an authorization boundary.
@@ -71,10 +76,10 @@ type ProfileAudienceServicePolicy interface {
 type profileAudiencePolicy struct {
 	prefs   profileAudiencePreferenceReader
 	friends profileAudienceFriendshipReader
-	servers profileServerReader
+	servers profileAudienceServerReader
 }
 
-func NewProfileAudiencePolicy(prefs profileAudiencePreferenceReader, friends profileAudienceFriendshipReader, servers profileServerReader) ProfileAudienceServicePolicy {
+func NewProfileAudiencePolicy(prefs profileAudiencePreferenceReader, friends profileAudienceFriendshipReader, servers profileAudienceServerReader) ProfileAudienceServicePolicy {
 	return &profileAudiencePolicy{prefs: prefs, friends: friends, servers: servers}
 }
 
@@ -379,11 +384,7 @@ func (p *profileAudiencePolicy) CanViewInServerMany(ctx context.Context, viewerI
 	}
 	smallSharedServers := map[string]bool{}
 	if needsSmallServerCount {
-		batchServers, ok := p.servers.(repository.ProfileAudienceSharedServerReader)
-		if !ok {
-			return nil, errors.New("profile audience: batch shared-server reader is unavailable")
-		}
-		smallSharedServers, err = batchServers.ListSmallSharedServerUserIDs(ctx, viewerID, targets, smallProfileAudienceServerMax)
+		smallSharedServers, err = p.servers.ListSmallSharedServerUserIDs(ctx, viewerID, targets, smallProfileAudienceServerMax)
 		if err != nil {
 			return nil, err
 		}

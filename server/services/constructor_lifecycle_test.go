@@ -756,3 +756,10 @@ func TestProfileAudienceDeclaresBulkBlocks(t *testing.T) {
 		t.Fatal("profile policy/factory hides bulk block reads")
 	}
 }
+
+func TestProfileAudienceDeclaresBulkSharedServers(t *testing.T) {
+	required := reflect.TypeFor[repository.ProfileAudienceSharedServerReader]()
+	if !reflect.TypeOf(NewProfileAudiencePolicy).In(2).Implements(required) || !reflect.TypeOf(repository.NewSQLiteServerRepo).Out(0).Implements(required) {
+		t.Fatal("profile policy/factory hides bulk shared-server reads")
+	}
+}

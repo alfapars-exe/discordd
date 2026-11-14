@@ -96,6 +96,7 @@ type ServerStore interface {
 	ServerRepository
 	GameActivityMembershipSnapshotRepository
 	GameActivityMembershipCounter
+	ProfileAudienceSharedServerReader
 }
 
 type GameActivityMembershipReader interface {
