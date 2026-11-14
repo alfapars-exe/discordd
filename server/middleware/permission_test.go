@@ -28,7 +28,7 @@ func TestPermissionCache_HitMissAndInvalidation(t *testing.T) {
 			}, nil
 		},
 	}
-	mw := NewPermissionMiddleware(repo)
+	mw := NewPermissionMiddleware(repo, nil)
 	t.Cleanup(mw.Stop)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 
@@ -74,7 +74,7 @@ func TestPermissionCache_ServerInvalidationIsScoped(t *testing.T) {
 			return []models.Role{{Permissions: models.PermViewChannel}}, nil
 		},
 	}
-	mw := NewPermissionMiddleware(repo)
+	mw := NewPermissionMiddleware(repo, nil)
 	t.Cleanup(mw.Stop)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 
@@ -111,7 +111,7 @@ func TestRolePermissionHTTPAllowAndDeny(t *testing.T) {
 				}
 				return nil, nil
 			}}
-			middleware := NewPermissionMiddleware(repo)
+			middleware := NewPermissionMiddleware(repo, nil)
 			t.Cleanup(middleware.Stop)
 			gate := middleware.Require(bit, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) }))
 			for user, want := range map[string]int{"allowed": 204, "denied": 403} {

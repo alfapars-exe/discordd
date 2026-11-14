@@ -12,7 +12,7 @@ func TestCacheBackedMiddlewareExposeIdempotentWorkerStop(t *testing.T) {
 		create func() any
 	}{
 		{"auth", func() any { return NewAuthMiddleware(nil, nil, nil, nil) }},
-		{"permission", func() any { return NewPermissionMiddleware(nil) }},
+		{"permission", func() any { return NewPermissionMiddleware(nil, nil) }},
 	} {
 		t.Run(fixture.name, func(t *testing.T) {
 			testutil.AssertConcurrentWorkerStop(t, fixture.create())
