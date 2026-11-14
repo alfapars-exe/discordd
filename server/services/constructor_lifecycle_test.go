@@ -645,3 +645,9 @@ func TestNotificationRepositoryDeclaresAuthoritativeSummary(t *testing.T) {
 		t.Fatal("notification repository hides required authoritative summary")
 	}
 }
+
+func TestGameActivityPrivacyDeclaresSnapshotReader(t *testing.T) {
+	if reflect.TypeOf(NewGameActivityPrivacyPolicy).In(3) != reflect.TypeFor[gameActivityMembershipAudienceReader]() {
+		t.Fatal("membership audience source must be explicit")
+	}
+}

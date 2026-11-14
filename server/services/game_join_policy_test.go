@@ -81,7 +81,7 @@ func TestGameJoinPolicyFreshConsentRelationshipsAndVoiceScope(t *testing.T) {
 			if name == "preferences-error" {
 				prefs.fail = true
 			}
-			activity := NewGameActivityPrivacyPolicy(prefs, friends, servers, gameActivityPresenceStub{visible: name != "invisible"}, bans)
+			activity := NewGameActivityPrivacyPolicy(prefs, friends, servers, nil, gameActivityPresenceStub{visible: name != "invisible"}, bans)
 			channels := &testutil.MockChannelRepo{GetByIDFn: func(context.Context, string) (*models.Channel, error) {
 				server := "server"
 				if name == "wrong-channel" {
