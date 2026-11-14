@@ -27,6 +27,10 @@ test("a fresh device restores its identity and encrypted history from a password
   try {
     const original = await originalContext.newPage();
     await loginAsNotificationOwner(original);
+    // A retry reuses this run's disposable identity. Remove only its backup
+    // before the fixture reset reloads the app, so prior attempts cannot turn
+    // the initial set-password step into a change/restore flow.
+    await fixtureApi(original, "/e2ee/key-backup", "DELETE");
     await resetChannelNotificationFixture(original);
     const fixture = readChannelNotificationFixture();
     // Establish the backup before enabling encryption so a first-use prompt
