@@ -44,3 +44,33 @@ func TestVoiceActivityCallbackRejectsAfterHubShutdown(t *testing.T) {
 	case <-time.After(25 * time.Millisecond):
 	}
 }
+
+func TestVoiceCallbacksPreserveActorOrderAndOtherUserProgress(t *testing.T) {
+	h := NewHub()
+	first, leave, other := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	release := make(chan struct{})
+	h.OnVoiceActivity(func(user string) {
+		if user == "other" {
+			close(other)
+			return
+		}
+		close(first)
+		<-release
+	})
+	h.OnVoiceLeave(func(string) { close(leave) })
+	var once sync.Once
+	t.Cleanup(func() { once.Do(func() { close(release) }); h.Shutdown() })
+	actor := &Client{hub: h, userID: "speaker"}
+	actor.handleVoiceActivity()
+	waitSignal(t, first, "first activity entry")
+	actor.handleVoiceLeave()
+	(&Client{hub: h, userID: "other"}).handleVoiceActivity()
+	waitSignal(t, other, "other speaker progress")
+	select {
+	case <-leave:
+		t.Fatal("leave overtook earlier activity from the same user")
+	case <-time.After(25 * time.Millisecond):
+	}
+	once.Do(func() { close(release) })
+	waitSignal(t, leave, "ordered voice leave")
+}

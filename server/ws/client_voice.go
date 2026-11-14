@@ -85,11 +85,9 @@ func (c *Client) handleVoiceAdminStateUpdate(event Event) {
 	// Defense-in-depth: reject at the WS layer if the actor isn't allowed
 	// to moderate the target. The service callback enforces this too, but
 	// failing closed here means a forgotten check in the service can't
-	// degrade into a moderation bypass. The gate runs INSIDE the goroutine:
-	// handlers dispatch synchronously on this client's read pump, and the
-	// authorizer's DB-backed resolve (up to 5 s on a wedged DB) must not
-	// stall inbound processing — the check is equally effective here, still
-	// ahead of the service call in the same goroutine.
+	// degrade into a moderation bypass. Resolve authorization in the owned
+	// callback before invoking the service. The bounded dispatcher can apply
+	// backpressure at admission instead of creating unlimited goroutines.
 	if c.hub.onVoiceAdminStateUpdate != nil {
 		c.dispatchVoiceCallback("ws.voice_admin_state_update", func() {
 			if !c.hub.authorizeVoiceModeration(c.userID, data.TargetUserID, "mute") {
@@ -118,7 +116,7 @@ func (c *Client) handleVoiceMoveUser(event Event) {
 		return
 	}
 
-	// Gate inside the goroutine — see handleVoiceAdminStateUpdate for why.
+	// Authorize in the owned callback before invoking the service.
 	if c.hub.onVoiceMoveUser != nil {
 		c.dispatchVoiceCallback("ws.voice_move_user", func() {
 			if !c.hub.authorizeVoiceModeration(c.userID, data.TargetUserID, "move") {
@@ -147,7 +145,7 @@ func (c *Client) handleVoiceDisconnectUser(event Event) {
 		return
 	}
 
-	// Gate inside the goroutine — see handleVoiceAdminStateUpdate for why.
+	// Authorize in the owned callback before invoking the service.
 	if c.hub.onVoiceDisconnectUser != nil {
 		c.dispatchVoiceCallback("ws.voice_disconnect_user", func() {
 			if !c.hub.authorizeVoiceModeration(c.userID, data.TargetUserID, "disconnect") {
