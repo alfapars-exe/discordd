@@ -1530,3 +1530,7 @@ PR #298 `058b2117` native PostgreSQL işi 132254279430 SUCCESS. Zorunlu normal s
 ### 2026-11-14 — Terminal aktif süreç race teslimatı ve restart takibi
 
 PR #298 `058b2117` terminal 36/36 SUCCESS; Server CI 43532722522 terminal 31/31 SUCCESS. Tam kanıt `implementation/verification/refactor-pr298-058-terminal-2026-11-14.json`. Böylece normal ve race aktif süreç kabulü aynı kaynak için tüm CI ile birlikte kaydedildi. Ardından hazır restart testi `956c95ab` uzak dala gönderildi; bu yeni kaynak önceki başarıyı devralmaz. Yeni Linux normal/race restart sonucu bekleniyor; yerel kanonik vet/lint ve Windows derlemesi geçti.
+
+### 2026-11-14 — Birleşik kaynakta eski inceleme hash’i
+
+Tam self-scan, mevcut DM delivery fixture incelemesinin dosya hash’i constructor refactor’ları sonrasında eskidiği için exit1 verdi. `server/services/dm_delivery_test.go:114` sorgusu yeniden incelendi: tek SQL sabiti içindeki sabit interval aritmetiği, mesaj kimliği bağlı argüman; satır hash’i değişmemiştir. Mevcut kaydın yalnız dosya hash’i güncellendi; yeni istisna yok (50 kayıt). Manifest doğrulaması başarılı, doğrulayıcının 6 testi başarılı. Yeni tam tarama çalışıyor; henüz başarı kanıtı değildir. Bu düzeltme birleşik ağaca özgüdür; kanonik PR manifest’i körlemesine değiştirilmedi.
