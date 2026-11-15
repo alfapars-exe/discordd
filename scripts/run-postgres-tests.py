@@ -17,6 +17,7 @@ REQUIRED_DIALECT_TESTS = {
     ("github.com/argeinfina/hichat/database", "TestRepositoryDialectContracts/Postgres"),
     ("github.com/argeinfina/hichat/repository", "TestDMSearchDialectContractChannelCountAndPages"),
     ("github.com/argeinfina/hichat/repository", "TestChannelPositionsPreparedTransactionContract"),
+    ("github.com/argeinfina/hichat/repository", "TestChannelNotificationOptInRequiresJSONBoolean"),
 }
 REDACTED_DATABASE = "[test-database]"
 REQUIRED_SERVER_POSTGRES_TEST = "TestPurgeExpiredNotificationsPostgres"

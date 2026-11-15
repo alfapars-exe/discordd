@@ -104,6 +104,7 @@ class PostgreSQLRunnerTests(unittest.TestCase):
             ("database", "TestRepositoryDialectContracts/Postgres"),
             ("repository", "TestDMSearchDialectContractChannelCountAndPages"),
             ("repository", "TestChannelPositionsPreparedTransactionContract"),
+            ("repository", "TestChannelNotificationOptInRequiresJSONBoolean"),
         ]:
             full = "github.com/argeinfina/hichat/" + package
             events = self.completed()
@@ -121,6 +122,7 @@ class PostgreSQLRunnerTests(unittest.TestCase):
             {"Action": "pass", "Package": "github.com/argeinfina/hichat/database", "Test": "TestRepositoryDialectContracts/Postgres"},
             {"Action": "pass", "Package": "github.com/argeinfina/hichat/repository", "Test": "TestDMSearchDialectContractChannelCountAndPages"},
             {"Action": "pass", "Package": "github.com/argeinfina/hichat/repository", "Test": "TestChannelPositionsPreparedTransactionContract"},
+            {"Action": "pass", "Package": "github.com/argeinfina/hichat/repository", "Test": "TestChannelNotificationOptInRequiresJSONBoolean"},
             {"Action": "pass", "Package": "github.com/argeinfina/hichat/database"},
         ]
 
