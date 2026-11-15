@@ -135,14 +135,8 @@ func (s *friendshipService) SendRequest(ctx context.Context, senderID string, re
 		}
 	}
 
-	if s.requestPolicy != nil {
-		allowed, err := s.requestPolicy.CanSend(ctx, senderID, target.ID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to evaluate friend request policy: %w", err)
-		}
-		if !allowed {
-			return nil, fmt.Errorf("%w: this user is not accepting friend requests from you", pkg.ErrForbidden)
-		}
+	if err := s.checkRequestPolicy(ctx, senderID, target.ID); err != nil {
+		return nil, err
 	}
 
 	now := time.Now().UTC()
@@ -212,6 +206,22 @@ func (s *friendshipService) SendRequest(ctx context.Context, senderID string, re
 	}
 
 	return result, nil
+}
+
+// Existing relationships are resolved before this gate: mutual requests keep
+// their auto-accept semantics and blocked relationships remain undisclosed.
+func (s *friendshipService) checkRequestPolicy(ctx context.Context, senderID, targetID string) error {
+	if s.requestPolicy == nil {
+		return nil
+	}
+	allowed, err := s.requestPolicy.CanSend(ctx, senderID, targetID)
+	if err != nil {
+		return fmt.Errorf("failed to evaluate friend request policy: %w", err)
+	}
+	if !allowed {
+		return fmt.Errorf("%w: this user is not accepting friend requests from you", pkg.ErrForbidden)
+	}
+	return nil
 }
 
 func (s *friendshipService) enqueueFriendRequestEmail(targetID, friendshipID string) {
