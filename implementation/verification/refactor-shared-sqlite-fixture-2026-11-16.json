@@ -1,0 +1,25 @@
+{
+  "source": "fbbdcef1",
+  "scope": "Shared immutable SQLite bootstrap bytes for services, repository and census test fixtures",
+  "invariants": [
+    "Each case owns a private file, production-initialized connection pool and cleanup",
+    "Repository PostgreSQL selection and custom cold migration tests unchanged",
+    "Database migration tests stay cold"
+  ],
+  "local": {
+    "go": "1.27.4 windows CGO_ENABLED=0",
+    "testPassRecords": 1393,
+    "testSkipRecords": 35,
+    "failed": 0,
+    "rawPath": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-shared-fixture-full.jsonl",
+    "sha256": "2abe34cad3c3f8e9c62ad9d260362a6e7f1e606af4d8b588a3441cb37781a37b",
+    "vet": "PASS internal/testfixture repository services root",
+    "build": "PASS ./..."
+  },
+  "pending": [
+    "Linux race (session 7100)",
+    "Same-test Linux before/after samples",
+    "New-source CI/PostgreSQL/Sonar",
+    "Full RF01–RF30 acceptance"
+  ]
+}
