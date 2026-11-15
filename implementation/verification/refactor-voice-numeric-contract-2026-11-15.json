@@ -1,0 +1,57 @@
+{
+  "sourceRevision": "db47c0ea",
+  "regressionCommit": "a1c8e483",
+  "behaviorFixCommit": "fc8c9726",
+  "scope": "RF13 four account numeric voice fields:micSensitivity,masterVolume,inputVolume,deepfilterSuppression. Shared bounds for UI controls,setters and cache;ignore non-finite edits,clamp finite out-of-range values. Valid existing ranges and wire/storage names unchanged.",
+  "baseline": {
+    "source": "59e2f186",
+    "result": "15failed5passed of20cases:non-finite edits accepted by all4setters;finite out-of-range edits accepted by3setters. Deepfilter already clamped finite values.",
+    "log": "TEMP/hichat-voice-numeric-red.log"
+  },
+  "validation": {
+    "afterBehaviorFix": "100tests3filesPASS3.48s;TEMP/hichat-voice-numeric-green.log",
+    "afterSharedBounds": "197tests5filesPASS4.16s;TEMP/hichat-voice-numeric-shared.log",
+    "build": "PASS actualtsc-b/Vite1.71s;TEMP/hichat-voice-numeric-build.log",
+    "fullClientCoverage": "PASS500files5379passed1skipped;TEMP/hichat-voice-numeric-coverage.log",
+    "coverageTotal": {
+      "lines": {
+        "total": 38530,
+        "covered": 26556,
+        "skipped": 0,
+        "pct": 68.92
+      },
+      "statements": {
+        "total": 52775,
+        "covered": 35818,
+        "skipped": 0,
+        "pct": 67.86
+      },
+      "functions": {
+        "total": 12329,
+        "covered": 7653,
+        "skipped": 0,
+        "pct": 62.07
+      },
+      "branches": {
+        "total": 39954,
+        "covered": 25933,
+        "skipped": 0,
+        "pct": 64.9
+      },
+      "branchesTrue": {
+        "total": 0,
+        "covered": 0,
+        "skipped": 0,
+        "pct": 100
+      }
+    },
+    "lint": "PASS0errors2existingwarnings;TEMP/hichat-voice-numeric-lint.log",
+    "scan": "RUNNING immutabledb47c0ea;TEMP/hichat-voice-numeric-final-scan.log"
+  },
+  "limits": "No physical-media acceptance claimed. Peer-volume maps and device-local overlay numeric settings are separate contracts;this change covers the four named account scalar fields.",
+  "remaining": [
+    "Final immutable source scan",
+    "New-head CI/Sonar after push;legacy import17issue remains unverified for new source",
+    "RF13 and whole-project runtime/platform/physical acceptance remain open"
+  ]
+}

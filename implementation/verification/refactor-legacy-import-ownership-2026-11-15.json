@@ -23,7 +23,7 @@
     "build": "PASS actualtsc-b/Vite1.73s;TEMP/hichat-legacy-eligibility-build.log",
     "fullClientCoverage": "PASS499files5359passed1skipped;TEMP/hichat-legacy-eligibility-coverage.log",
     "lint": "PASS0errors2existingwarnings;TEMP/hichat-legacy-eligibility-lint.log",
-    "selfScan": "RUNNING immutableab3a28e7;TEMP/hichat-legacy-eligibility-final-scan.log",
+    "selfScan": "PASS immutableab3a28e7:51exactrecords,478reviewlines,0blockingpatterns. Final combined db47c0ea scan running.",
     "coverageTotal": {
       "lines": {
         "total": 38525,
@@ -81,10 +81,11 @@
         "skipped": 0,
         "pct": 88.67
       }
-    }
+    },
+    "combinedClient": "db47c0ea fullclient5379passed1skipped,build/lintPASS;preferencesStore.ts unchanged fromab3a28e7"
   },
   "remaining": [
-    "Final immutableab3a28e7 source scan",
+    "Final combined immutabledb47c0ea scan",
     "Previous-head terminal CI;new-head CI/Sonar after push,no exact after complexity score claimed",
     "Full RF13 and RF01-RF30 runtime/platform/physical acceptance remain open"
   ]

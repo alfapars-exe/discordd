@@ -92,10 +92,16 @@
         "skipped": 0,
         "pct": 83.33
       }
+    },
+    "ci": {
+      "revision": "49c36d999c0156f1d78c0b152e1327584bb48fcb",
+      "checks": 36,
+      "success": 36,
+      "runtimeEquivalence": "git diff 7a857281..49c36d99 -- client server electron e2e is empty",
+      "receipt": "refactor-49c36-terminal-ci-2026-11-15.json"
     }
   },
   "remaining": [
-    "New-head CI after push",
     "RF15 full history/read/permission/encryption runtime acceptance;RF01-RF30 remain open"
   ]
 }

@@ -3474,3 +3474,12 @@ ab3a28e7, hazırlık ve eşzamanlı refresh sonrasında mevcut scope'un hâlâ a
 Değişiklik öncesinde 79 tercih store testi geçti (3,86 saniye). Sonrasında tercih store'u, observer hata ve destination scope dosyalarında 116 test geçti (4,39 saniye). Gerçek TypeScript/Vite build başarılı (Vite 1,73 saniye). Tam istemci coverage, lint ve değişmez kaynak taraması sürüyor. Sonar'ın önceki kaynakta açık olan 17 karmaşıklık bulgusu yeni head analiz edilmeden kapanmış sayılmıyor; son puan iddia edilmiyor. Receipt: `implementation/verification/refactor-legacy-import-ownership-2026-11-15.json`. RF13 ve genel RF01–RF30 kabulü açık.
 
 ab3a28e7 tam istemci koşusu 499 dosyada 5.359 başarılı/1 atlanan testle geçti; satır %68,91, dal %64,90. Lint 0 hata ve mevcut 2 uyarıyla geçti. Son kaynak taraması ve yeni head CI/Sonar kabulü açık.
+
+
+### RF13 — Ses sayısal alanlarında ortak sınırlar ve sonlu giriş doğrulaması (2026-11-15)
+
+Dört hesap alanı incelendi: micSensitivity, masterVolume, inputVolume, deepfilterSuppression. a1c8e483 regresyonunda 20 senaryodan 15'i önceki kaynakta başarısız oldu: dört setter sonlu olmayan değerleri state'e yazıyordu; üç setter sonlu sınır dışı değerleri de kabul ediyordu. Deepfilter sonlu değerleri zaten sınıra çekiyordu. fc8c9726 davranışı düzeltir; 100 test geçti (3,48 saniye). db47c0ea, sınırları store dışındaki ses sözleşmesine taşır; UI, setter ve cache aynı sınırları kullanır. Sonlu olmayan düzenlemeler yok sayılır; sonlu sınır dışı değerler sınıra çekilir. Geçerli aralıklar ve wire/storage alanları korunur.
+
+Ortaklaştırma sonrasında beş dosyada 197 test geçti (4,16 saniye). Gerçek TypeScript/Vite build başarılı (Vite 1,71 saniye). Tam istemci koşusu 500 dosyada 5.379 başarılı/1 atlanan test verdi; satır %68,92, dal %64,90. Lint 0 hata ve mevcut 2 uyarıyla geçti. Son db47c0ea arşiv taraması sürüyor. Bu kaynak legacy aktarım refactor'ını da içerir. Fiziksel ses kabulü iddia edilmiyor; peer-volume map'leri ve cihaz yerel overlay sayıları ayrı sözleşmelerdir. Receipt: `implementation/verification/refactor-voice-numeric-contract-2026-11-15.json`.
+
+ab3a28e7 legacy kaynak taraması 51 doğrulanmış kayıt, 478 inceleme satırı ve 0 engelleyici desenle geçti. Yeni birleşik kaynak taraması ayrıca tamamlanacak. Gönderilmiş 49c36d99 CI'ı 36/36 başarılı; 7a857281 geçmiş ürün kaynağı ile client/server/electron/e2e farkı boş. Arşiv: `implementation/verification/refactor-49c36-terminal-ci-2026-11-15.json`. Bu sonuç yeni legacy/ses kaynağının CI kabulü değildir. Genel hedef açık.
