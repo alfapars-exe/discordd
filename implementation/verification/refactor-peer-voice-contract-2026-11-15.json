@@ -153,8 +153,14 @@
     "selfScan": "PASS immutable6adfca62:51exact reviewed-source records,480reviewlines,0blockingpatterns. Pattern scan is not proof of absence of vulnerabilities. TEMP/hichat-peer-contract-final-scan.log",
     "newReviewHits": "Two added __proto__ pattern hits reviewed:voicePreferenceMaps.ts reserved-key rejection constants and peer-volume.test.ts negative id fixture. Neither performs prototype writes."
   },
+  "ci": {
+    "revision": "d510e47385a3159f2266912d8bc6688aee9bbe87",
+    "checks": 36,
+    "success": 36,
+    "runtimeEquivalence": "git diff 6adfca62..d510e473 -- client server electron e2e is empty",
+    "receipt": "refactor-d510-terminal-ci-2026-11-15.json"
+  },
   "remaining": [
-    "New-head CI after push",
     "Separate retrySync17complexity issue remains open;legacy attribution corrected",
     "Whole RF13/RF12 and RF01-RF30 runtime/platform/physical acceptance remain open"
   ]

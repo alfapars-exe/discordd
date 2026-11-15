@@ -3501,3 +3501,15 @@ Son db47c0ea birleşik kaynak taraması tamamlandı: 51 doğrulanmış kaynak ka
 6adfca62 yalnız map’in kendi kayıtlarını okuyan yardımcıları mute/restore, outbound silme patch’i, UI, LiveKit hook’u, private/P2P playback ve soundboard yollarında kullanır. Açık 0 ve false değerleri korunur. Geçerli kendi kayıtlarının kazanç hesabı/deafen kararları korunur. Yeni store/helper/hook matrisinde 52 test geçti. Son tam istemci koşusu 503 dosyada 5.431 başarılı/1 atlanan test verdi; satır %69,08, dal %64,96. Gerçek TypeScript/Vite build başarılı (Vite 3,64 saniye), lint 0 hata ve mevcut 2 uyarıyla geçti. Son değişmez kaynak taraması sürüyor. Fiziksel ses kabulü ve tam runtime/platform kabulü iddia edilmiyor. Receipt: `implementation/verification/refactor-peer-voice-contract-2026-11-15.json`.
 
 Son 6adfca62 arşiv taraması tamamlandı: 51 doğrulanmış kaynak kaydı, 480 inceleme satırı, 0 engelleyici desen eşleşmesi. İki yeni __proto__ eşleşmesi, reddedilen anahtar adlarını tutan doğrulama kümesi ve negatif test verisidir; kaynaklar incelendi, prototype yazımı yapılmıyor. Desen taraması güvenlik açığı yokluğunu kanıtlamaz. Yeni peer sözleşmesi gönderimden sonra CI ile ayrıca doğrulanacak. Genel hedef ve retrySync bulgusu açık.
+
+### RF13/RF26 — retrySync yayını sonrasında scope sahipliği ve faz ayrımı (2026-11-15)
+
+82c69604/fcf54995 fixture’ı d510e473 kaynağında iki senkron owner/backend geçişini başarısız gösterdi; iki mikro-görev geçişi kontrol olarak geçti. Kanonik kırmızı koşu 2 başarısız/81 başarılıdır. Eski retry saved bildiriminden sonra yeni binding için GET başlatıyordu. API/dependent store’lar mock, preferences store aksiyonları gerçek; gerçek HTTP veya veri sızıntısı iddiası yok. Negative control sonunda aday dosya baytları finally içinde geri yüklendi.
+
+4ddd4463, saved yayını sonrasında scope’u tekrar doğrular. b1b8dad9 başlatma ve tamamlama fazlarını ayırır; start helper aynı applyData Promise’ini doğrudan döndürür ve yeni async sınırı eklemez. Completion helper yayından önce ve sonra sahipliği kontrol eder. 1225afe7 hata ve sync durumu seçimini açık koşullara ayırır; hata önceliği ve inFlight/pending/saved sırası korunur.
+
+120 hedefli test geçti. Son kaynakta 503 dosyada 5.435 başarılı/1 atlanan test (123,06 saniye); satır %69,09, dal %64,96. preferencesStore satır %98,56, dal %88,78. Gerçek TypeScript/Vite build ve lint (0 hata, mevcut 2 uyarı) başarılı. Son değişmez kaynak taraması sürüyor. Önceki S3776 ve iki S3358 kaydı yeni head analiz edilmeden kapanmış sayılmıyor. Receipt: `implementation/verification/refactor-preference-retry-ownership-2026-11-15.json`.
+
+Gönderilmiş d510e473 PR305 CI’ı 36/36 terminal başarılı; 6adfca62 ile client/server/electron/e2e farkı boş. Peer sözleşmesi CI kanıtı `refactor-d510-terminal-ci-2026-11-15.json` içindedir. Bu sonuç yeni retry kaynağının CI kabulü değildir. Genel hedef açık.
+
+Son 1225afe7 değişmez kaynak taraması 51 doğrulanmış kayıt, 480 inceleme satırı ve 0 engelleyici desenle tamamlandı. Desen taraması güvenlik açığı yokluğunu kanıtlamaz. Retry kaynak paketi gönderimden sonra yeni CI/Sonar ile doğrulanacak; genel RF01–RF30 hedefi açık.
