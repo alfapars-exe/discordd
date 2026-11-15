@@ -10,6 +10,7 @@
  * State is persisted to both localStorage (immediate) and server preferences (durable).
  */
 
+import { completePreferenceMutation } from "./preferenceMutation";
 import { create } from "zustand";
 import { usePreferencesStore } from "./preferencesStore";
 import { capturePreferenceScope } from "./preferenceScope";
@@ -104,12 +105,13 @@ export const useSidebarStore = create<SidebarState>((set, get) => {
     // Do not perform cross-store work inside a Zustand updater: preference
     // observers can replace this binding before the updater returns.
     persistSidebar(next);
-    set(next);
-    if (!isCurrent()) return;
-    const latest = get();
-    const owned = sections ? Object.fromEntries(Object.entries(sections).filter(([key, value]) => latest.expandedSections[key] === value)) : undefined;
-    const expanded = latest.isExpanded === isExpanded ? isExpanded : undefined;
-    if (owned && Object.keys(owned).length || expanded !== undefined) syncToServer(owned, expanded);
+    completePreferenceMutation(() => set(next), () => {
+      if (!isCurrent()) return;
+      const latest = get();
+      const owned = sections ? Object.fromEntries(Object.entries(sections).filter(([key, value]) => latest.expandedSections[key] === value)) : undefined;
+      const expanded = latest.isExpanded === isExpanded ? isExpanded : undefined;
+      if (owned && Object.keys(owned).length || expanded !== undefined) syncToServer(owned, expanded);
+    });
   }
   return {
     isExpanded: initial.isExpanded,

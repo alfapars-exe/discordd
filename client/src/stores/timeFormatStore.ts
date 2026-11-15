@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { completePreferenceMutation } from "./preferenceMutation";
 import { usePreferencesStore } from "./preferencesStore";
 import { capturePreferenceScope } from "./preferenceScope";
 
@@ -21,25 +22,28 @@ export const useTimeFormatStore = create<TimeFormatState>((set, get) => ({
   timeFormat: initial(),
   setTimeFormat: (timeFormat) => {
     const isCurrent = capturePreferenceScope();
-    set({ timeFormat });
-    if (!isCurrent()) return;
-    const latest = get().timeFormat;
-    try { localStorage.setItem(STORAGE_KEY, latest); } catch { /* best effort */ }
-    if (latest === timeFormat) usePreferencesStore.getState().set({ locale: { timeFormat } });
+    completePreferenceMutation(() => set({ timeFormat }), () => {
+      if (!isCurrent()) return;
+      const latest = get().timeFormat;
+      try { localStorage.setItem(STORAGE_KEY, latest); } catch { /* best effort */ }
+      if (latest === timeFormat) usePreferencesStore.getState().set({ locale: { timeFormat } });
+    });
   },
   applyFromServer: (value) => {
     const candidate = value && typeof value === "object" ? (value as { timeFormat?: unknown }).timeFormat : undefined;
     if (!valid(candidate)) return;
     const isCurrent = capturePreferenceScope();
-    set({ timeFormat: candidate });
-    if (!isCurrent()) return;
-    try { localStorage.setItem(STORAGE_KEY, get().timeFormat); } catch { /* best effort */ }
+    completePreferenceMutation(() => set({ timeFormat: candidate }), () => {
+      if (!isCurrent()) return;
+      try { localStorage.setItem(STORAGE_KEY, get().timeFormat); } catch { /* best effort */ }
+    });
   },
   resetAccountPreferences: () => {
     const isCurrent = capturePreferenceScope();
-    set({ timeFormat: "auto" });
-    if (!isCurrent()) return;
-    try { localStorage.setItem(STORAGE_KEY, get().timeFormat); } catch { /* best effort */ }
+    completePreferenceMutation(() => set({ timeFormat: "auto" }), () => {
+      if (!isCurrent()) return;
+      try { localStorage.setItem(STORAGE_KEY, get().timeFormat); } catch { /* best effort */ }
+    });
   },
 }));
 

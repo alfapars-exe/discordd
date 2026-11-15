@@ -1,4 +1,5 @@
 /** Account-scoped preferences sync; queued edits survive failed requests. */
+import { completePreferenceMutation } from "./preferenceMutation";
 import { create } from "zustand";
 import * as preferencesApi from "../api/preferences";
 import { loadPreferencePresenter } from "./preferencePresenter";
@@ -328,14 +329,16 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   set: (partial) => {
     // Unauthenticated changes stay device-local in their owning stores.
     if (!cacheKey) return;
+    const version = getPreferenceScopeGeneration();
     const patch = sanitize(partial);
     if (!nonempty(patch)) return;
     pending = merge(pending, patch);
     if (fetchPromise) fetchEdits = merge(fetchEdits, patch);
     const data = merge(get().data, patch);
-    set({ data, syncStatus: writePromise ? "saving" : "pending", syncError: null, hasPendingChanges: true, legacyImportAvailable: canImportLegacy(data, get().isLoaded) });
-    persistPending();
-    schedule();
+    completePreferenceMutation(
+      () => set({ data, syncStatus: writePromise ? "saving" : "pending", syncError: null, hasPendingChanges: true, legacyImportAvailable: canImportLegacy(data, get().isLoaded) }),
+      () => { if (current(version)) { persistPending(); schedule(); } },
+    );
   },
   get: <T = unknown>(key: string): T | undefined => get().data[key] as T | undefined,
   reset: () => {

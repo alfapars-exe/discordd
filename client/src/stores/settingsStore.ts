@@ -6,6 +6,7 @@
  * override once fetched.
  */
 
+import { completePreferenceMutation } from "./preferenceMutation";
 import { create } from "zustand";
 import { type ThemeId, DEFAULT_THEME, THEMES, applyTheme } from "../styles/themes";
 import { usePreferencesStore } from "./preferencesStore";
@@ -408,9 +409,10 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     } catch {
       /* localStorage full or inaccessible */
     }
-    set({ themeId: id });
-    // Sync to server
-    if (isCurrent() && useSettingsStore.getState().themeId === id) usePreferencesStore.getState().set({ theme: id });
+    completePreferenceMutation(
+      () => set({ themeId: id }),
+      () => { if (isCurrent() && useSettingsStore.getState().themeId === id) usePreferencesStore.getState().set({ theme: id }); },
+    );
   },
 
   setBlurEnabled: (enabled) => {
@@ -420,8 +422,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     } catch {
       /* localStorage full or inaccessible */
     }
-    set({ blurEnabled: enabled });
-    syncAppearance({ blurEnabled: enabled }, isCurrent);
+    completePreferenceMutation(() => set({ blurEnabled: enabled }), () => syncAppearance({ blurEnabled: enabled }, isCurrent));
   },
 
   setBlurStrength: (px) => {
@@ -432,8 +433,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     } catch {
       /* localStorage full or inaccessible */
     }
-    set({ blurStrength: clamped });
-    syncAppearance({ blurStrength: clamped }, isCurrent);
+    completePreferenceMutation(() => set({ blurStrength: clamped }), () => syncAppearance({ blurStrength: clamped }, isCurrent));
   },
 
   setWallpaperEnabled: (enabled) => {
@@ -443,8 +443,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     } catch {
       /* localStorage full or inaccessible */
     }
-    set({ wallpaperEnabled: enabled });
-    syncAppearance({ wallpaperEnabled: enabled }, isCurrent);
+    completePreferenceMutation(() => set({ wallpaperEnabled: enabled }), () => syncAppearance({ wallpaperEnabled: enabled }, isCurrent));
   },
 
   setTransparentBackground: (enabled) => {
@@ -469,8 +468,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     } catch {
       /* localStorage full or inaccessible */
     }
-    set({ lightningEnabled: enabled });
-    syncAppearance({ lightningEnabled: enabled }, isCurrent);
+    completePreferenceMutation(() => set({ lightningEnabled: enabled }), () => syncAppearance({ lightningEnabled: enabled }, isCurrent));
   },
 
   setLightningBlur: (px) => {
@@ -482,8 +480,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       /* localStorage full or inaccessible */
     }
     applyLightningBlur(clamped);
-    set({ lightningBlur: clamped });
-    syncAppearance({ lightningBlur: clamped }, isCurrent);
+    completePreferenceMutation(() => set({ lightningBlur: clamped }), () => syncAppearance({ lightningBlur: clamped }, isCurrent));
   },
 
   setNeonEnabled: (enabled) => {
@@ -497,8 +494,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     // Reads the current intensity from the store rather than receiving it
     // as an argument — keeps the call sites symmetrical with lightning.
     applyNeonStyles(enabled, useSettingsStore.getState().neonIntensity);
-    set({ neonEnabled: enabled });
-    syncAppearance({ neonEnabled: enabled }, isCurrent);
+    completePreferenceMutation(() => set({ neonEnabled: enabled }), () => syncAppearance({ neonEnabled: enabled }, isCurrent));
   },
 
   setNeonIntensity: (pct) => {
@@ -510,8 +506,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       /* localStorage full or inaccessible */
     }
     applyNeonStyles(useSettingsStore.getState().neonEnabled, clamped);
-    set({ neonIntensity: clamped });
-    syncAppearance({ neonIntensity: clamped }, isCurrent);
+    completePreferenceMutation(() => set({ neonIntensity: clamped }), () => syncAppearance({ neonIntensity: clamped }, isCurrent));
   },
 
   setUiScale: (pct) => {
@@ -523,8 +518,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       /* localStorage full or inaccessible */
     }
     applyUiScale(clamped);
-    set({ uiScale: clamped });
-    syncAppearance({ uiScale: clamped }, isCurrent);
+    completePreferenceMutation(() => set({ uiScale: clamped }), () => syncAppearance({ uiScale: clamped }, isCurrent));
   },
 
   setAvatarAnimation: (mode) => {
@@ -534,8 +528,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     } catch {
       /* localStorage full or inaccessible */
     }
-    set({ avatarAnimation: mode });
-    syncAppearance({ avatarAnimation: mode }, isCurrent);
+    completePreferenceMutation(() => set({ avatarAnimation: mode }), () => syncAppearance({ avatarAnimation: mode }, isCurrent));
   },
 
   setPendingWallpaperPreviewUrl: (url) => set({ pendingWallpaperPreviewUrl: url }),

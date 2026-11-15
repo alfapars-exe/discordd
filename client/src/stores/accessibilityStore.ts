@@ -24,6 +24,7 @@
  *      themeId / blur today.
  */
 
+import { completePreferenceMutation } from "./preferenceMutation";
 import { create } from "zustand";
 
 import {
@@ -146,18 +147,19 @@ function commit(
   const safe = sanitizeAccessibilityPreferences(partial);
   if (Object.keys(safe).length === 0) return;
   const isCurrent = capturePreferenceScope();
-  set(safe);
-  if (!isCurrent()) return;
-  const next = get();
-  applyAccessibility(next);
-  persist(next);
-  // The preferences store batches outgoing writes; one set() per setter
-  // is fine. Server stores under a single "accessibility" namespace so
-  // existing readers don't have to know the shape.
-  // Subscribers may have changed another field, or replaced this field,
-  // without changing accounts. Queue only leaves this setter still owns.
-  const owned = Object.fromEntries(Object.entries(safe).filter(([key, value]) => Object.is(next[key as keyof AccessibilityState], value)));
-  if (Object.keys(owned).length) usePreferencesStore.getState().set({ accessibility: owned });
+  completePreferenceMutation(() => set(safe), () => {
+    if (!isCurrent()) return;
+    const next = get();
+    applyAccessibility(next);
+    persist(next);
+    // The preferences store batches outgoing writes; one set() per setter
+    // is fine. Server stores under a single "accessibility" namespace so
+    // existing readers don't have to know the shape.
+    // Subscribers may have changed another field, or replaced this field,
+    // without changing accounts. Queue only leaves this setter still owns.
+    const owned = Object.fromEntries(Object.entries(safe).filter(([key, value]) => Object.is(next[key as keyof AccessibilityState], value)));
+    if (Object.keys(owned).length) usePreferencesStore.getState().set({ accessibility: owned });
+  });
 }
 
 export const useAccessibilityStore = create<AccessibilityStore>((set, get) => ({
@@ -198,21 +200,23 @@ export const useAccessibilityStore = create<AccessibilityStore>((set, get) => ({
     // Hydration updates the local cache without echoing a write to the server.
     const safe = sanitizeAccessibilityPreferences(partial);
     const isCurrent = capturePreferenceScope();
-    set(safe);
-    if (!isCurrent()) return;
-    const next = get();
-    applyAccessibility(next);
-    persist(next);
+    completePreferenceMutation(() => set(safe), () => {
+      if (!isCurrent()) return;
+      const next = get();
+      applyAccessibility(next);
+      persist(next);
+    });
   },
 
   reset: () => commit(set, get as never, { ...DEFAULT_ACCESSIBILITY }),
   resetAccountPreferences: () => {
     const isCurrent = capturePreferenceScope();
-    set({ ...DEFAULT_ACCESSIBILITY });
-    if (!isCurrent()) return;
-    const next = get();
-    applyAccessibility(next);
-    persist(next);
+    completePreferenceMutation(() => set({ ...DEFAULT_ACCESSIBILITY }), () => {
+      if (!isCurrent()) return;
+      const next = get();
+      applyAccessibility(next);
+      persist(next);
+    });
   },
 }));
 
