@@ -1,4 +1,4 @@
-import { clampVoicePeerVolume, isVoicePeerKey } from "../voicePreferenceMaps";
+import { clampVoicePeerVolume, isVoicePeerKey, ownVoicePeerValue, voicePeerVolume } from "../voicePreferenceMaps";
 /**
  * voiceSettingsSlice — persisted voice settings (input mode, PTT, volumes, devices, etc.)
  *
@@ -186,7 +186,9 @@ function syncChangedSettings(settings: VoiceSettings): void {
       const after = value as Record<string, number | boolean>;
       const changed: Record<string, number | boolean> = {};
       for (const id of new Set([...Object.keys(before), ...Object.keys(after)])) {
-        if (before[id] !== after[id]) changed[id] = after[id] ?? (key === "localMutedUsers" ? false : 100);
+        const previous = ownVoicePeerValue(before, id);
+        const next = ownVoicePeerValue(after, id);
+        if (previous !== next) changed[id] = next ?? (key === "localMutedUsers" ? false : 100);
       }
       patch[key] = changed;
     } else {
@@ -549,10 +551,10 @@ export const createVoiceSettingsSlice: StateCreator<
     toggleLocalMute: (userId: string) => {
       if (!isVoicePeerKey(userId)) return;
       const { localMutedUsers, preMuteVolumes, userVolumes } = get();
-      const isCurrentlyMuted = localMutedUsers[userId] ?? false;
+      const isCurrentlyMuted = ownVoicePeerValue(localMutedUsers, userId) ?? false;
 
       if (isCurrentlyMuted) {
-        const restoredVolume = preMuteVolumes[userId] ?? 100;
+        const restoredVolume = ownVoicePeerValue(preMuteVolumes, userId) ?? 100;
         const newLocalMuted = { ...localMutedUsers };
         delete newLocalMuted[userId];
         const newPreMute = { ...preMuteVolumes };
@@ -565,7 +567,7 @@ export const createVoiceSettingsSlice: StateCreator<
           userVolumes: newVolumes,
         });
       } else {
-        const currentVolume = userVolumes[userId] ?? 100;
+        const currentVolume = voicePeerVolume(userVolumes, userId);
         const newLocalMuted = { ...localMutedUsers, [userId]: true };
         const newPreMute = { ...preMuteVolumes, [userId]: currentVolume };
         const newVolumes = { ...userVolumes, [userId]: 0 };

@@ -28,3 +28,11 @@ export function sanitizeVoicePeerMap(field: VoicePeerMap, value: unknown): Recor
   }
   return Object.fromEntries(entries);
 }
+
+/** Dictionary fallback must not treat Object.prototype members as preferences. */
+export function ownVoicePeerValue<T>(record: Readonly<Record<string, T>>, id: string): T | undefined {
+  return Object.hasOwn(record, id) ? record[id] : undefined;
+}
+export function voicePeerVolume(record: Readonly<Record<string, number>>, id: string): number {
+  return ownVoicePeerValue(record, id) ?? 100;
+}

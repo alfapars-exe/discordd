@@ -1,4 +1,4 @@
-import { VOICE_PEER_VOLUME_RANGE } from "../../stores/voicePreferenceMaps";
+import { VOICE_PEER_VOLUME_RANGE, voicePeerVolume } from "../../stores/voicePreferenceMaps";
 /**
  * ScreenShareContextMenu — Independent volume control for screen share audio.
  *
@@ -42,7 +42,7 @@ function ScreenShareContextMenu({
 
   const screenShareVolumes = useVoiceStore((s) => s.screenShareVolumes);
   const setScreenShareVolume = useVoiceStore((s) => s.setScreenShareVolume);
-  const currentVolume = screenShareVolumes[userId] ?? 100;
+  const currentVolume = voicePeerVolume(screenShareVolumes, userId);
   const [preMuteVolume, setPreMuteVolume] = useState(currentVolume || 100);
 
   // Close on outside click or Escape

@@ -1,4 +1,4 @@
-import { VOICE_PEER_VOLUME_RANGE } from "../../stores/voicePreferenceMaps";
+import { VOICE_PEER_VOLUME_RANGE, ownVoicePeerValue, voicePeerVolume } from "../../stores/voicePreferenceMaps";
 /**
  * VoiceUserContextMenu — Right-click menu for voice sidebar users.
  * Rendered via portal to document.body to escape sidebar overflow:hidden.
@@ -133,8 +133,8 @@ function VoiceUserContextMenu({
 
   const [showMoveMenu, setShowMoveMenu] = useState(false);
 
-  const isLocallyMuted = localMutedUsers[userId] ?? false;
-  const currentVolume = userVolumes[userId] ?? 100;
+  const isLocallyMuted = ownVoicePeerValue(localMutedUsers, userId) ?? false;
+  const currentVolume = voicePeerVolume(userVolumes, userId);
   const [preMuteVolume, setPreMuteVolume] = useState(currentVolume || 100);
   const isServerMuted = targetVoiceState?.is_server_muted ?? false;
   const isServerDeafened = targetVoiceState?.is_server_deafened ?? false;

@@ -1,3 +1,4 @@
+import { voicePeerVolume } from "../stores/voicePreferenceMaps";
 /**
  * useVolumeSync — apply per-user, screen-share, and master volume settings
  * to LiveKit RemoteParticipants and keep them in sync as state or
@@ -77,11 +78,11 @@ export function useVolumeSync(room: Room): void {
     room.remoteParticipants.forEach((participant) => {
       const masterFactor = masterVolume / 100;
 
-      const micVol = userVolumes[participant.identity] ?? 100;
+      const micVol = voicePeerVolume(userVolumes, participant.identity);
       const effectiveMic = effectiveDeafened ? 0 : (micVol / 100) * masterFactor;
       participant.setVolume(effectiveMic, Track.Source.Microphone);
 
-      const ssVol = screenShareVolumes[participant.identity] ?? 100;
+      const ssVol = voicePeerVolume(screenShareVolumes, participant.identity);
       const effectiveSS = effectiveDeafened ? 0 : (ssVol / 100) * masterFactor;
       participant.setVolume(effectiveSS, Track.Source.ScreenShareAudio);
     });
@@ -101,11 +102,11 @@ export function useVolumeSync(room: Room): void {
       const masterFactor = master / 100;
       const fullyDeaf = deaf || srvDeaf;
 
-      const micVol = vols[participant.identity] ?? 100;
+      const micVol = voicePeerVolume(vols, participant.identity);
       const effectiveMic = fullyDeaf ? 0 : (micVol / 100) * masterFactor;
       participant.setVolume(effectiveMic, Track.Source.Microphone);
 
-      const ssVol = ssVols[participant.identity] ?? 100;
+      const ssVol = voicePeerVolume(ssVols, participant.identity);
       const effectiveSS = fullyDeaf ? 0 : (ssVol / 100) * masterFactor;
       participant.setVolume(effectiveSS, Track.Source.ScreenShareAudio);
     },
