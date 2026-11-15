@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { createServer } from "../../client/node_modules/vite/dist/node/index.js";
 import { verifySearchDeletionDrain } from "./search-deletion-drain-contract.mjs";
+import { verifySearchDeletionSpool } from "./search-deletion-spool-contract.mjs";
 
 const root = fileURLToPath(new URL("../../client/", import.meta.url));
 const server = await createServer({ root, configFile: false, logLevel: "error", server: { host: "127.0.0.1", port: 0 } });
@@ -17,6 +18,19 @@ try {
     await context.route("**/staging.html", route => route.fulfill({ contentType: "text/html", body: "<title>Search staging contracts</title>" }));
     await page.goto(new URL("staging.html", server.resolvedUrls.local[0]).href);
     console.log("Runtime", process.version, process.platform, "Chromium", browser.version());
+    let spoolDeadline;
+    try {
+      const spool = await Promise.race([
+        page.evaluate(verifySearchDeletionSpool),
+        new Promise((_, reject) => { spoolDeadline = setTimeout(() => reject(new Error("Native deletion spool deadline exceeded")), 30_000); }),
+      ]);
+      assert.equal(spool.uniqueIds, 1001);
+      assert.ok(spool.maxBatch <= 128);
+      assert.equal(spool.boundedQueuedWriters, 16);
+      assert.equal(spool.backpressureNotified, true);
+      for (const key of ["cancelledWithoutLoss", "consumerRetry", "quotaNotified", "transactionAbortNotified", "resetFenced", "resetMetadataCleared", "staleConsumerRejected", "successorPreserved", "retiredGenerationRejected", "retiredOwnerRejected"]) assert.equal(spool[key], true);
+      console.log(JSON.stringify(spool));
+    } finally { clearTimeout(spoolDeadline); }
     let drainDeadline;
     try {
       const drain = await Promise.race([
