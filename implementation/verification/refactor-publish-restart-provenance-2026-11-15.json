@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-15",
+  "base": "5b8af746",
+  "sources": {
+    "scripts/publish-hf-space.py": "b2d2d6c0e3f685cf502858b48c512a81ba476bd5429981359d0a396948afadcf",
+    "scripts/test_publish_hf_space.py": "df7de43c1b280b92d98ac2254ef5ebfd2c73a3ba3b5ffc4a6ea8d4bcc7cc7835"
+  },
+  "before": "restart-failure regression errored because published commit output was absent",
+  "fix": "Record exact create_commit result before restart; output-write failure still attempts runtime restart and preserves primary exception",
+  "validation": {
+    "command": "python -m unittest discover -s scripts -p test_*hf*.py",
+    "result": "24tests passed",
+    "externalWrites": "none; fake HfApi only"
+  },
+  "limits": [
+    "real publish/readiness not performed",
+    "remote c69db795 has an unrelated Go worker-profile fixture failure under investigation",
+    "RF23 final deployment acceptance remains open"
+  ]
+}

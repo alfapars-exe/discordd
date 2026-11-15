@@ -98,9 +98,19 @@ def main():
         return
     stop_previous_backend(api, repo)
     result = api.create_commit(repo, repo_type="space", parent_commit=current, operations=operations, commit_message=f"Deploy HiChat {source[:12]}")
+    try:
+        # The source commit already exists even if runtime restart fails.
+        record_deployed_commit(result.oid)
+    except Exception:
+        # Output persistence must not strand an already published Space paused.
+        # Keep the output error primary if restarting also fails.
+        try:
+            api.restart_space(repo)
+        except Exception:
+            pass
+        raise
     api.restart_space(repo)
     print(json.dumps({"status": "published", "commit": result.oid, "url": result.commit_url}))
-    record_deployed_commit(result.oid)
 
 
 if __name__ == "__main__":

@@ -110,6 +110,29 @@ class PublishSafetyTests(unittest.TestCase):
             release.record_deployed_commit("a" * 40)
         self.assertEqual(output.read_text(encoding="utf-8"), "deployed_commit=" + "a" * 40 + "\n")
 
+    def test_restart_failure_still_records_the_exact_published_commit(self):
+        digest = self.preview_hash()
+        output = Path("github-output")
+        failure = RuntimeError("restart unavailable")
+        self.api.restart_space.side_effect = failure
+        with patch.dict(os.environ, {"GITHUB_OUTPUT": str(output)}):
+            with self.assertRaises(RuntimeError) as raised:
+                self.run_command("--publish", "--reviewed-plan-sha256", digest)
+        self.assertIs(raised.exception, failure)
+        self.assertEqual(output.read_text(encoding="utf-8"), "deployed_commit=new\n")
+        self.api.create_commit.assert_called_once()
+
+    def test_output_failure_still_attempts_restart_and_preserves_primary_error(self):
+        digest = self.preview_hash()
+        failure = OSError("output unavailable")
+        self.api.restart_space.side_effect = RuntimeError("restart unavailable")
+        with patch.object(release, "record_deployed_commit", side_effect=failure):
+            with self.assertRaises(OSError) as raised:
+                self.run_command("--publish", "--reviewed-plan-sha256", digest)
+        self.assertIs(raised.exception, failure)
+        self.api.create_commit.assert_called_once()
+        self.api.restart_space.assert_called_once()
+
     def run_command(self, *args):
         output = io.StringIO()
         with patch("sys.argv", ["publish-hf-space.py", "--expected-head", "reviewed-parent", *args]), contextlib.redirect_stdout(output):

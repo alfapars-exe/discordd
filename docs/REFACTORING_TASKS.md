@@ -2925,3 +2925,8 @@ A fail-first component test exposed the separate titlebar update button ignoring
 ### RF19 — shared subscription ownership and titlebar rollback (2026-11-15)
 
 Two fail-first titlebar component tests exposed retained maximize callbacks after update-subscription failure and skipped update disposal after maximize cleanup threw. Extracted the already tested useUpdateChecker rollback/disposal behavior into store-free ownSubscriptions, then applied it to both consumers. Separate refactor and titlebar fix commits preserve review boundaries. Six suites/95tests,npx tsc -b,changed-file lint,Vite build pass,including existing StrictMode/legacy-disposer/two-consumer/error-preservation coverage. Receipt:implementation/verification/refactor-titlebar-subscription-owner-2026-11-15.json. Previous5,023-test full run is prior-source evidence;native packaged acceptance remains open. Local changes held while c69db795 remote CI runs without cancellation.
+
+
+### RF23 — preserve exact publish provenance through restart failure (2026-11-15)
+
+A fail-first fake-API regression exposed missing deployed_commit output when source publication succeeded but runtime restart failed. The exact create_commit result is now recorded before restart. If output persistence itself fails, restart is still attempted and the primary output error survives a secondary restart failure. HF publish/manifest suites24passed;no external publication or service mutation performed. Receipt:implementation/verification/refactor-publish-restart-provenance-2026-11-15.json. Final deployment/readiness acceptance remains open. Remote c69db795 Go base CI separately failed a route fixture worker-profile snapshot;investigation continues without a blind rerun.
