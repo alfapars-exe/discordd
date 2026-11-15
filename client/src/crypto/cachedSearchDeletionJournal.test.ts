@@ -265,3 +265,32 @@ it("propagates consumer failure after closing the committed batch", async () => 
  expect(await db.get("metadata", key)).toBeUndefined();
  expect(await db.get("metadata", "consumer-committed")).toBe(true);
 });
+
+it.each([
+ ["channel", "messageCache"], ["dm", "messageCache"],
+ ["channel", "metadata"], ["dm", "metadata"],
+] as const)("rolls back %s eviction when ownership retires at the %s response", async (kind, boundary) => {
+ const scope = { channelId: kind === "channel" ? "room" : "", dmChannelId: kind === "dm" ? "room" : null };
+ const row = { ...scope, messageId: "retired-mid-eviction", content: "retained", timestamp: 1 };
+ await storage.cacheDecryptedMessage(row);
+ const key = cachedSearchDeletionKey(kind, "room", row.messageId);
+ const original = IDBObjectStore.prototype.get;
+ let current = true;
+ const hook = vi.spyOn(IDBObjectStore.prototype, "get").mockImplementation(function (this: IDBObjectStore, requested) {
+  const request = original.call(this, requested);
+  if (this.name === boundary && requested === (boundary === "metadata" ? key : row.messageId)) {
+   request.addEventListener("success", () => { current = false; }, { once: true });
+  }
+  return request;
+ });
+ try {
+  const deleting = kind === "channel"
+   ? storage.deleteCachedChannelMessage(row.messageId, "room", () => current)
+   : storage.deleteCachedDMMessage(row.messageId, "room", () => current);
+  expect(await deleting).toBe(false);
+ } finally { hook.mockRestore(); }
+ expect(current).toBe(false);
+ const db = await getDB();
+ expect(await db.get("messageCache", row.messageId)).toEqual(row);
+ expect(await db.get("metadata", key)).toMatchObject({ messageId: row.messageId });
+});
