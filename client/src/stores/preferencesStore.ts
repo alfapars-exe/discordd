@@ -367,6 +367,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
       if (!current(version)) return;
       presentationRetry = null;
       set({ syncStatus: get().isLoaded ? nonempty(pending) ? "pending" : "saved" : "idle", syncError: null });
+      if (!current(version)) return;
     }
     if (!get().isLoaded || get().syncError === "preferences_load_failed") await get().fetchAndApply();
     if (current(version)) await flush();
