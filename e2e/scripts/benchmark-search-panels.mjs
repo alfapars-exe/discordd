@@ -18,7 +18,15 @@ if(assertPendingBudget&&!pendingOnly)throw Error("Pending panel budget requires 
 const variants=process.argv.includes("--after-only")?["after"]:["before","after"];
 const repetitions=quick?1:9,assets=new Map();
 if(pendingOnly&&(!process.argv.includes("--after-only")||failureOnly||resetOnly))throw Error("Pending frontier probe requires --after-only and no other probe mode");
-const baseline="eb0a31cc40b244c3beb9b74a78e50d83dea83f19";
+const sourceBaselineArg=process.argv.find(arg=>arg.startsWith("--source-baseline="));
+const sourceBaseline=sourceBaselineArg?.slice("--source-baseline=".length);
+if(sourceBaselineArg!==undefined){
+ assert.match(sourceBaseline??"",/^[0-9a-f]{40}$/, "Source baseline requires an immutable full commit SHA");
+ assert.ok(!process.argv.includes("--after-only")&&!pendingOnly&&!failureOnly&&!resetOnly,"Source comparison requires both normal benchmark variants");
+}
+const baseline=sourceBaseline??"eb0a31cc40b244c3beb9b74a78e50d83dea83f19";
+const overridePaths=["client/src/components/chat/SearchPanel.tsx","client/src/components/dm/DMSearchPanel.tsx","client/src/crypto/cachedSearchPage.ts",
+ ...(sourceBaseline?["client/src/crypto/keyStorage.ts","client/src/crypto/cachedSearchSnapshot.ts"]:[])];
 const gitExecutable=(process.platform==="win32"?["C:/Program Files/Git/cmd/git.exe"]:["/usr/bin/git","/usr/local/bin/git"]).find(existsSync);
 assert.ok(gitExecutable,"Benchmark requires Git installed at a fixed supported path");
 const stores=`import {create} from "zustand";
@@ -51,7 +59,7 @@ const entry=`import React from "react";import {createRoot}from "react-dom/client
  };`;
 for(const variant of variants){
  const overrides=new Map(),usedOverrides=new Set();
- if(variant==="before")for(const path of ["client/src/components/chat/SearchPanel.tsx","client/src/components/dm/DMSearchPanel.tsx","client/src/crypto/cachedSearchPage.ts"])
+ if(variant==="before")for(const path of overridePaths)
   overrides.set(fileURLToPath(new URL("../../"+path,import.meta.url)).replaceAll("\\","/"),execFileSync(gitExecutable,["show",baseline+":"+path],{cwd:repo,encoding:"utf8"}));
  const plugin={name:"controlled-panel-providers",enforce:"pre",resolveId(source){
   if(source==="virtual:panel-entry")return "\0panel-entry.js";
@@ -72,7 +80,7 @@ for(const variant of variants){
   if(id==="\0panel-cache.js")return 'export*from "/src/crypto/keyStorage.ts";import{searchCachedMessageRefs as channel,searchCachedDMMessageRefs as dm}from "/src/crypto/keyStorage.ts";function check(){if(globalThis.__panelFailNext){globalThis.__panelFailNext=false;throw Error("Injected scan failure");}}export async function searchCachedMessageRefs(...args){check();return channel(...args);}export async function searchCachedDMMessageRefs(...args){check();return dm(...args);}';
  }};
  const result=await build({root,configFile:false,logLevel:"error",base:"/"+variant+"/",plugins:[plugin,react()],define:{"process.env.NODE_ENV":JSON.stringify("production")},build:{write:false,minify:true,rollupOptions:{input:"virtual:panel-entry",output:{entryFileNames:"benchmark.js"}}}});
- if(variant==="before")assert.equal(usedOverrides.size,3,"Historical panel/helper overrides must all be applied");
+ if(variant==="before")assert.equal(usedOverrides.size,overridePaths.length,"Historical source overrides must all be applied");
  for(const output of (Array.isArray(result)?result[0]:result).output)assets.set(variant+"/"+output.fileName,output.type==="chunk"?output.code:output.source);
 }
 const entryPages=new Map(variants.map(variant=>[variant+"/",'<div id="root"></div><script type="module" src="/'+variant+'/benchmark.js"></script>']));
@@ -97,7 +105,7 @@ async function measureUI(page,event,expected,action){
 try{
  console.log("Runtime",process.version,process.platform,"Chromium",browser.version(),"baseline",baseline);
  for(const variant of variants){const context=await browser.newContext(),page=await context.newPage(),cdp=await context.newCDPSession(page);const errors=[];page.on("pageerror",error=>errors.push(error.message));
- try{await page.goto(`http://127.0.0.1:${server.address().port}/${variant}/`);await page.waitForFunction(()=>Boolean(globalThis.panelBench));console.log(JSON.stringify({variant,react:await page.evaluate(()=>globalThis.panelBench.react),productionBuild:true,historicalOverrides:variant==="before"?3:0}));
+ try{await page.goto(`http://127.0.0.1:${server.address().port}/${variant}/`);await page.waitForFunction(()=>Boolean(globalThis.panelBench));console.log(JSON.stringify({variant,react:await page.evaluate(()=>globalThis.panelBench.react),productionBuild:true,historicalOverrides:variant==="before"?overridePaths.length:0}));
  for(const kind of ["channel","dm"]){
  if(pendingOnly){
   const matches=await page.evaluate(async kind=>{const matches=await globalThis.panelBench.seed(kind,1000);globalThis.panelBench.holdIndex();await globalThis.panelBench.mount(kind);return matches;},kind);
@@ -173,8 +181,9 @@ try{
  // must not leave a query-sized frontier or queued React updates behind.
  await page.evaluate(()=>globalThis.panelBench.unmount());await page.evaluate(kind=>globalThis.panelBench.mount(kind,true),kind);
  await page.getByRole("textbox").fill("failed search");
- await page.waitForFunction(expected=>document.querySelector(".search-empty")?.textContent===expected,variant==="after"?"searchFailed":"noSearchResults");
- if(variant==="after")assert.equal(await page.getByRole("alert").textContent(),"searchFailed");
+ const expectsSearchFailure=variant==="after"||sourceBaseline!==undefined;
+ await page.waitForFunction(expected=>document.querySelector(".search-empty")?.textContent===expected,expectsSearchFailure?"searchFailed":"noSearchResults");
+ if(expectsSearchFailure)assert.equal(await page.getByRole("alert").textContent(),"searchFailed");
  await page.evaluate(kind=>globalThis.panelBench.deletes(kind,0,10),kind);await cdp.send("HeapProfiler.collectGarbage");const idle=await cdp.send("Runtime.getHeapUsage"),growth=[];
  let start=10;for(const end of [1000,5000,10000]){await page.evaluate(({kind,start,end})=>globalThis.panelBench.deletes(kind,start,end),{kind,start,end});await cdp.send("HeapProfiler.collectGarbage");const heap=await cdp.send("Runtime.getHeapUsage");growth.push({events:end,retainedGrowthBytes:heap.usedSize-idle.usedSize});start=end;}
  console.log(JSON.stringify({variant,kind,failedSearchFrontier:growth}));if(process.argv.includes("--assert-idle-budget")&&variant==="after")assert.ok(growth.at(-1).retainedGrowthBytes<256*1024,"Failed idle search retained more than256KiB after10000 missing deletions");await page.evaluate(()=>globalThis.panelBench.unmount());
