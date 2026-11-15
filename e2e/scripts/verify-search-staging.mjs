@@ -26,6 +26,10 @@ try {
       assert.equal(drain.results.length, 2);
       assert.equal(drain.cancelled, true);
       assert.equal(drain.retiredOwnerRejected, true);
+      assert.equal(drain.failedEvictionHiddenAfterReopen, true);
+      assert.equal(drain.retryCommitted, true);
+      assert.equal(drain.journalWriteDuringCoherentRead, true);
+      assert.equal(drain.queuedEvictionReleased, true);
       console.log(JSON.stringify(drain));
     } finally { clearTimeout(drainDeadline); }
     for (const mode of ["channel", "dm", "mixed", "quota", "cancel"]) {
