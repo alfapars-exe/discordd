@@ -1,0 +1,24 @@
+{
+  "scope": "RF11 domain-position startup failure cleanup matrix",
+  "test": "TestServiceInitializationUnwindsCacheOwnersAcrossDomainFailures",
+  "faults": [
+    "DMSettings",
+    "GroupDM",
+    "Saved",
+    "E2EEBackup",
+    "Feedback",
+    "Cosmetic",
+    "MFA"
+  ],
+  "method": "Use real migrated SQLite repositories; remove one domain input at a time, run actual initServices with valid config/hub, preserve exact domain validation panic and compare before/after cache-worker counts. Unexpected successful bundles explicitly cleaned up.",
+  "checks": {
+    "initialization_suite": "PASS three repetitions, 1.217s",
+    "cleanup_followup": "PASS one repetition after unexpected-success cleanup hardening, 1.021s",
+    "vet": "PASS go vet ."
+  },
+  "limits": [
+    "Cache-worker evidence across seven domain positions; does not prove every possible acquisition failure or all non-cache resources.",
+    "No product behavior changed. Linux race/current-head CI for latest test remains separate.",
+    "RF11 and full RF01-RF30 acceptance remain open."
+  ]
+}

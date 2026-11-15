@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"reflect"
 	"testing"
 
 	"github.com/argeinfina/hichat/config"
@@ -100,4 +101,39 @@ func startupPolicyRepositories(t *testing.T) *Repositories {
 func startupServiceDependencies(t *testing.T) (*sql.DB, *Repositories) {
 	db, _ := newCensusDB(t)
 	return db.Conn, initRepositories(db.Conn, repository.DataExportStorageOptions{UploadDir: t.TempDir(), ArchiveDir: t.TempDir()})
+}
+
+func TestServiceInitializationUnwindsCacheOwnersAcrossDomainFailures(t *testing.T) {
+	db, base := startupServiceDependencies(t)
+	for _, scenario := range []struct{ field, want string }{
+		{"DMSettings", "social messaging requires repository DMSettings"},
+		{"GroupDM", "social messaging requires repository GroupDM"},
+		{"Saved", "personal messaging requires repository Saved"},
+		{"E2EEBackup", "device security requires repository E2EEBackup"},
+		{"Feedback", "operations requires repository Feedback"},
+		{"Cosmetic", "expression assets requires repository Cosmetic"},
+		{"MFA", "account security requires repository MFA"},
+	} {
+		t.Run(scenario.field, func(t *testing.T) {
+			repos := *base
+			value := reflect.ValueOf(&repos).Elem().FieldByName(scenario.field)
+			value.Set(reflect.Zero(value.Type()))
+			cfg := &config.Config{}
+			cfg.Upload.Dir = t.TempDir()
+			before := routeCacheWorkerCount(t)
+			var caught any
+			func() {
+				defer func() { caught = recover() }()
+				s, l, m := initServices(db, &repos, ws.NewHub(), cfg, nil, nil)
+				m.Stop()
+				stopRootFixture(s, l)
+			}()
+			if caught != scenario.want {
+				t.Fatalf("panic=%v want %s", caught, scenario.want)
+			}
+			if after := routeCacheWorkerCount(t); after != before {
+				t.Fatalf("domain failure retained cache workers: before=%d after=%d", before, after)
+			}
+		})
+	}
 }
