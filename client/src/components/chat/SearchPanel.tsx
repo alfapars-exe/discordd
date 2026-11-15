@@ -216,8 +216,10 @@ function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId,
     const pending = deletedIds.current;
     if (pending.has(id)) return true;
     pending.add(id);
-    // Hide a live deletion immediately, even before IndexedDB commits.
-    setResults(prev => prev && ({ ...prev, messages: prev.messages.filter(message => message.id !== id) }));
+    // Visible results hide deletions immediately. During a search the spinner
+    // hides this page; tombstones reconcile the incoming page without retaining
+    // a React state updater for every event received while the index is pending.
+    if (!searching.current) setResults(prev => prev && ({ ...prev, messages: prev.messages.filter(message => message.id !== id) }));
     if (!snapshot) return true;
     void snapshot.remove(id).then(change => {
       if (snapshot !== localMatches.current || !pending.has(id)) return;
