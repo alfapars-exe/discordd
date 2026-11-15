@@ -1,0 +1,107 @@
+{
+  "sourceCommit": "21744ef88fad4054c5ad0ebb5ea2140faa1a2daa",
+  "date": "2026-11-15",
+  "runtime": "Runtime v26.13.1 win32 Chromium 156.0.8078.4",
+  "results": [
+    {
+      "mode": "native-deletion-spool",
+      "uniqueIds": 1001,
+      "maxBatch": 128,
+      "cancelledWithoutLoss": true,
+      "consumerRetry": true,
+      "quotaNotified": true,
+      "transactionAbortNotified": true,
+      "resetFenced": true,
+      "boundedQueuedWriters": 16,
+      "backpressureNotified": true,
+      "resetMetadataCleared": true,
+      "staleConsumerRejected": true,
+      "successorPreserved": true,
+      "retiredGenerationRejected": true,
+      "retiredOwnerRejected": true
+    },
+    {
+      "mode": "accepted-deletion-drain",
+      "results": [
+        {
+          "kind": "channel",
+          "heldBeforeCleanup": true,
+          "ids": [
+            "channel-3",
+            "channel-1"
+          ],
+          "total": 2
+        },
+        {
+          "kind": "dm",
+          "heldBeforeCleanup": true,
+          "ids": [
+            "dm-3",
+            "dm-1"
+          ],
+          "total": 2
+        }
+      ],
+      "cancelled": true,
+      "retiredOwnerRejected": true,
+      "failedEvictionHiddenAfterReopen": true,
+      "retryCommitted": true,
+      "journalWriteDuringCoherentRead": true,
+      "queuedEvictionReleased": true
+    },
+    {
+      "mode": "channel",
+      "records": 1201,
+      "exactPages": 15,
+      "failureWrites": 0,
+      "atomicRemovalAndCancellation": true,
+      "indexDisposed": true
+    },
+    {
+      "mode": "dm",
+      "records": 1201,
+      "exactPages": 15,
+      "failureWrites": 0,
+      "atomicRemovalAndCancellation": true,
+      "indexDisposed": true
+    },
+    {
+      "mode": "mixed",
+      "records": 1201,
+      "exactPages": 15,
+      "failureWrites": 0,
+      "atomicRemovalAndCancellation": true,
+      "indexDisposed": true
+    },
+    {
+      "mode": "quota",
+      "records": 1201,
+      "exactPages": 15,
+      "failureName": "QuotaExceededError",
+      "failureWrites": 300,
+      "writerReleased": true,
+      "atomicRemovalAndCancellation": true,
+      "indexDisposed": true
+    },
+    {
+      "mode": "cancel",
+      "records": 1201,
+      "exactPages": 15,
+      "failureName": "AbortError",
+      "failureWrites": 301,
+      "writerReleased": true,
+      "atomicRemovalAndCancellation": true,
+      "indexDisposed": true
+    }
+  ],
+  "log": "TEMP/hichat-native-spool-fault-matrix-final.log",
+  "syntaxChecks": "node --check PASS for both changed MJS modules",
+  "scope": "Native Chromium/IndexedDB API failure injection, real queued transaction backpressure, owner/generation/reset disposal and acknowledged batch contracts. Controlled fixture; no real account DBs or physical quota exhaustion.",
+  "remaining": [
+    "Immutable expanded self-scan terminal result",
+    "Prior7cf2dfc7 terminal CI before push",
+    "New-head CI",
+    "Native/physical peak and whole producer pipeline budgets",
+    "Project RF01-RF30 acceptance"
+  ]
+}
