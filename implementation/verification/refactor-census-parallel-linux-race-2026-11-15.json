@@ -1,0 +1,17 @@
+{
+  "source": "d3d886510d5702198cb4278a90b03d9e8fc3989d",
+  "method": "Same immutable source as audit drain verification; Linux amd64 Go1.27.4 CGO1 read-only archive",
+  "command": "go test -race . -run ^TestCensusFixtures -count=3 -shuffle=on -timeout=5m",
+  "result": "PASS exit 0, 12.832s, no race report",
+  "scope": [
+    "Distinct fixture paths and migration ledger presence",
+    "Schema mutation isolation for existing and future clones",
+    "User row isolation for existing and future clones",
+    "Eight parallel independent fixtures use same unique username, repeated three times"
+  ],
+  "cleanup": "Owned --rm fixture container completed and removed.",
+  "limits": [
+    "Targeted fixture race only; complete final-source PostgreSQL/runtime/physical acceptance separate.",
+    "Remote CI source 350485eb excludes latest local test and receipts; overall refactor open."
+  ]
+}
