@@ -1,0 +1,80 @@
+{
+  "runtimeSource": "0ae393e1",
+  "finalSource": "336fb196",
+  "regressionCommit": "65f6a166",
+  "behaviorFixCommit": "0c05343a",
+  "scope": "RF13 accessibility preset correctness and shared store-free options/numeric bounds across UI,setters,hydration and account cache. Wire/storage names unchanged.",
+  "red": "4unsupported duration cases4/6/19/3.5 failed against original store;12oldtests passed;TEMP/hichat-accessibility-duration-red.log",
+  "green": "35testsPASS after behavior fix;146targeted testsPASS after runtime contract extraction,4.48s",
+  "validation": {
+    "fullClient": "495files5330passed1skipped121.04s on0ae393e1",
+    "coverageTotal": {
+      "lines": {
+        "total": 38506,
+        "covered": 26518,
+        "skipped": 0,
+        "pct": 68.86
+      },
+      "statements": {
+        "total": 52752,
+        "covered": 35777,
+        "skipped": 0,
+        "pct": 67.82
+      },
+      "functions": {
+        "total": 12321,
+        "covered": 7640,
+        "skipped": 0,
+        "pct": 62
+      },
+      "branches": {
+        "total": 39973,
+        "covered": 25934,
+        "skipped": 0,
+        "pct": 64.87
+      },
+      "branchesTrue": {
+        "total": 0,
+        "covered": 0,
+        "skipped": 0,
+        "pct": 100
+      }
+    },
+    "coverageAccessibilityStore": {
+      "lines": {
+        "total": 93,
+        "covered": 74,
+        "skipped": 0,
+        "pct": 79.56
+      },
+      "functions": {
+        "total": 43,
+        "covered": 26,
+        "skipped": 0,
+        "pct": 60.46
+      },
+      "statements": {
+        "total": 117,
+        "covered": 95,
+        "skipped": 0,
+        "pct": 81.19
+      },
+      "branches": {
+        "total": 75,
+        "covered": 63,
+        "skipped": 0,
+        "pct": 84
+      }
+    },
+    "lint": "Fullclient0errors2existingwarnings on0ae393e1;5touchedfiles targetedlintPASS aftertype-only336fb196",
+    "runtimeBuild": "Actualtsc-b/VitePASS1.69s",
+    "typeOnlyFollowup": "336fb196 changes erased types only;TypeScript transpileModule output compared byte-for-byte identical for all3changedfiles against0ae393e1",
+    "finalTypeBuild": "Actual npm run build(tsc-b plusVite)PASS;Vite1.64s;TEMP/hichat-accessibility-contract-types-build.log",
+    "immutableSelfScan": "Both immutable0ae393e1 andfinal336fb196 scans RUNNING;neither accepted yet"
+  },
+  "remaining": [
+    "Immutable finalsource scan",
+    "New-headCI afterpush",
+    "RF13 final runtime/account/platform acceptance;RF01-RF30 stillopen"
+  ]
+}

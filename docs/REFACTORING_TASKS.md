@@ -3407,3 +3407,12 @@ Sonar PR305 a1e85a84: owner-watch testinin45karmaşıklık bulgusuAaHYWqzUd7dyvm
 a1e85a84 terminalCI36/36SUCCESS,Server43744006265/Frontend43744006273/Mobile43744006264;receipt:implementation/verification/refactor-a1e85-terminal-ci-2026-11-15.json. ÖncekiASTrefactor SonarFIXED doğrulandı. Sonraki silme/DM/tercih kaynaklarının yeniheadCI kabulü henüz yok;tarama sonrasında gönderilecek.
 
 Final7c604780immutable self-scanPASS:51exactrecords/478reviewlines/0blockingpatterns. Bu desen taraması güvenlik açığı yokluğunu kanıtlamaz. Önceki a1e85a84CI36/36terminalSUCCESS kaydı ayrı tutuldu; yeni sourceCI/Sonar gönderimden sonra doğrulanacak.
+
+
+### RF13 — bildirim süresi doğrulaması ve ortak erişilebilirlik sözleşmesi (2026-11-15)
+
+65f6a166 eski storeda4/6/19/3.5sürelerinin reload sırasında kabulünü dört başarısız testle gösterdi(12eskitestPASS). 0c05343a yalnız3/5/10/15/20presetlerini hydrationda kabul eder;35testPASS. 0ae393e1 beşsayısalalanın sınırlarını ve durationseçeneklerini store-free varsayımlar modülüne taşır;UI,setterclamp,hydrationreject ve hesapcacheaynısözleşmeyi kullanır. 146hedeflitestPASS4.48s;tamclient495dosya5330PASS1skip121.04s;line68.86%/branch64.87%;gerçekbuildPASS1.69s;lint0hata2mevcutuyarı. 336fb196 action/UI/state durationtipini de ortak seçeneklerden türetir;üçdosyanın TypeScript-emittedJS çıktısı0ae393e1ilebaytbaytaynı,hedeflilintPASS. Son tipbuild ve finalkaynak taramasıbekleniyor. Receipt:implementation/verification/refactor-accessibility-contract-2026-11-15.json.
+
+19795967Sonar:önceki silmetesti28,DMroster20,preferencewrite25 karmaşıklıkbulgularıCLOSED/FIXED. Preferenceimport17bulgusu ve genelRFkabulü açık. 19795967terminalCIhalenbekleniyor;yeni yerel erişilebilirlik değişikliklerinin CIkanıtıdeğil.
+
+336fb196 gerçektipbuildPASS(Vite1.64s). Final immutable336fb196 taramasıayrıca başlatıldı;0ae taramasıfinalkaynakkanıtıolarakkullanılmayacak. Yerel ürün/adaptor değişiklikleri sonraki pushöncesindetarama ve öncekiCIterminalsonucunu bekliyor.

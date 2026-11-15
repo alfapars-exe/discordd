@@ -13,5 +13,16 @@
   "remaining": [
     "New-head CI/Sonar",
     "RF01-RF30 full acceptance and supported platform/physical/runtime matrix"
-  ]
+  ],
+  "sonarConfirmation": {
+    "revision": "197959671b555404b07a50c1fcaa76d528b56b70",
+    "issue": {
+      "key": "AaHdPnO0xOErB7BtYU18",
+      "component": "alfapars-exe_discordd:server/services/dm_device_roster.go",
+      "message": "Refactor this method to reduce its Cognitive Complexity from 20 to the 15 allowed.",
+      "status": "CLOSED",
+      "resolution": "FIXED"
+    },
+    "scope": "Original issue resolved;not whole-project acceptance or an exact after complexity score."
+  }
 }

@@ -81,5 +81,16 @@
     "New-head CI and Sonar confirmation;no exact after complexity claimed",
     "RF13 final account/offline/runtime acceptance",
     "Whole-project RF01-RF30 acceptance"
-  ]
+  ],
+  "sonarConfirmation": {
+    "revision": "197959671b555404b07a50c1fcaa76d528b56b70",
+    "issue": {
+      "key": "AaHe-pzEMioAmihIyi9v",
+      "component": "alfapars-exe_discordd:client/src/stores/preferencesStore.ts",
+      "message": "Refactor this function to reduce its Cognitive Complexity from 25 to the 15 allowed.",
+      "status": "CLOSED",
+      "resolution": "FIXED"
+    },
+    "scope": "Original issue resolved;not whole-project acceptance or an exact after complexity score."
+  }
 }
