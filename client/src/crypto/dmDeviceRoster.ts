@@ -8,8 +8,14 @@ import type { PreKeyBundleResponse } from "../types";
 export type DMEncryptionTarget = (PreKeyBundleResponse & { roster_revision?: string }) |
   { device_id: string; established_session: true };
 type Reference = { device_id: string; key_revision: string };
-type Roster = { version: number; members: { user_id: string; devices: Reference[] }[] };
+type Roster = { version: number; key_epoch?: number; members: { user_id: string; devices: Reference[] }[] };
 export type DMRosterOptions = { channelId: string; isCurrent: () => boolean };
+export type GroupDMRosterOptions = { groupId: string; keyEpoch: number; isCurrent: () => boolean };
+type RosterProtocol = {
+  capability: "dm_device_roster_version" | "group_dm_device_roster_version";
+  endpoint: string;
+  keyEpoch?: number;
+};
 
 // Only public revision receipts are retained. Never retain a prekey bundle or
 // reuse a one-time prekey. Old scopes cannot authorize new-account work.
@@ -28,19 +34,38 @@ export async function deviceRosterRevision(bundle: PreKeyBundleResponse): Promis
 export async function prepareDMDeviceRoster(
   currentUser: string, peer: string, localDevice: string, options: DMRosterOptions,
 ) {
+  return prepareDeviceRoster(currentUser, [currentUser, peer], localDevice, options.isCurrent, {
+    capability: "dm_device_roster_version", endpoint: `/dms/${options.channelId}/device-roster`,
+  });
+}
+
+export async function prepareGroupDMDeviceRoster(
+  currentUser: string, memberUsers: readonly string[], localDevice: string, options: GroupDMRosterOptions,
+) {
+  if (!Number.isSafeInteger(options.keyEpoch) || options.keyEpoch < 1 || !memberUsers.includes(currentUser) ||
+      new Set(memberUsers).size !== memberUsers.length || memberUsers.length > 10) throw new Error("DM_ROSTER_INVALID");
+  return prepareDeviceRoster(currentUser, memberUsers, localDevice, options.isCurrent, {
+    capability: "group_dm_device_roster_version", endpoint: `/group-dms/${options.groupId}/device-roster`, keyEpoch: options.keyEpoch,
+  });
+}
+
+async function prepareDeviceRoster(
+  currentUser: string, memberUsers: readonly string[], localDevice: string, isCurrent: () => boolean, protocol: RosterProtocol,
+) {
   const scope = getAuthSessionSnapshot();
   const authCurrent = () => {
     const now = getAuthSessionSnapshot();
     return now.ownerId === scope.ownerId && now.generation === scope.generation;
   };
-  const current = () => authCurrent() && options.isCurrent();
+  const current = () => authCurrent() && isCurrent();
   const assertCurrent = () => { if (!current()) throw new Error("e2ee_account_scope_changed"); };
   assertCurrent();
   if (scope.ownerId && scope.ownerId !== currentUser) throw new Error("e2ee_account_scope_changed");
   const scopeKey = JSON.stringify([scope.ownerId, scope.generation, SERVER_URL]);
-  let capability = capabilities.get(scopeKey);
+  const capabilityKey = JSON.stringify([scopeKey, protocol.capability]);
+  let capability = capabilities.get(capabilityKey);
   if (!capability || capability.expires <= Date.now()) {
-    const result = apiClient<{ dm_device_roster_version?: number }>("/dms/send-capabilities", {
+    const result = apiClient<Partial<Record<RosterProtocol["capability"], number>>>("/dms/send-capabilities", {
       isCurrent: authCurrent, timeoutMs: 10000, cache: "no-store",
     }).then(response => {
       if (!authCurrent()) throw new Error("e2ee_account_scope_changed");
@@ -48,38 +73,39 @@ export async function prepareDMDeviceRoster(
         if (response.status === 404) return false;
         throw new Error("DM_CAPABILITIES_UNAVAILABLE");
       }
-      const version = response.data?.dm_device_roster_version;
+      const version = response.data?.[protocol.capability];
       if (version === undefined) return false; // Existing server, legacy protocol.
       if (version !== 1) throw new Error("DM_ROSTER_VERSION_UNSUPPORTED");
       return true;
     });
     capability = { expires: Date.now() + 60000, result };
-    capabilities.set(scopeKey, capability);
+    capabilities.set(capabilityKey, capability);
     if (capabilities.size > MAX_CAPABILITY_SCOPES) capabilities.delete(capabilities.keys().next().value!);
     // A failed request must not pin a transient failure for the next send.
-    void result.catch(() => { if (capabilities.get(scopeKey) === capability) capabilities.delete(scopeKey); });
+    void result.catch(() => { if (capabilities.get(capabilityKey) === capability) capabilities.delete(capabilityKey); });
   }
   const supported = await capability.result;
   assertCurrent();
   if (!supported) return null;
-  const response = await apiClient<Roster>(`/dms/${options.channelId}/device-roster`, {
+  const response = await apiClient<Roster>(protocol.endpoint, {
     isCurrent: current, timeoutMs: 10000, cache: "no-store",
   });
   assertCurrent();
   if (!response.success || !response.data) throw new Error("DM_ROSTER_UNAVAILABLE");
   const roster = response.data;
-  const expected = new Set([currentUser, peer]);
+  if (protocol.keyEpoch !== undefined && roster.key_epoch !== protocol.keyEpoch) throw new Error("GROUP_ROSTER_EPOCH_CHANGED");
+  const expected = new Set(memberUsers);
   if (roster.version !== 1 || !Array.isArray(roster.members) || roster.members.length !== expected.size) {
     throw new Error("DM_ROSTER_INVALID");
   }
   const members = new Map<string, Reference[]>();
   for (const member of roster.members) {
-    if (!expected.has(member.user_id) || members.has(member.user_id) || !Array.isArray(member.devices)) {
+    if (!member || !expected.has(member.user_id) || members.has(member.user_id) || !Array.isArray(member.devices)) {
       throw new Error("DM_ROSTER_INVALID");
     }
     const seen = new Set<string>();
     for (const ref of member.devices) {
-      if (typeof ref.device_id !== "string" || !ref.device_id || seen.has(ref.device_id) ||
+      if (!ref || typeof ref.device_id !== "string" || !ref.device_id || seen.has(ref.device_id) ||
           typeof ref.key_revision !== "string" || !/^[a-f0-9]{64}$/.test(ref.key_revision)) throw new Error("DM_ROSTER_INVALID");
       seen.add(ref.device_id);
     }

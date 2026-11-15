@@ -1895,12 +1895,13 @@ paths:
                     properties:
                       data:
                         type: object
-                        required: [text_idempotency_version, multipart_idempotency_version, max_upload_file_bytes, dm_device_roster_version]
+                        required: [text_idempotency_version, multipart_idempotency_version, max_upload_file_bytes, dm_device_roster_version, group_dm_device_roster_version]
                         properties:
                           text_idempotency_version: { type: integer, const: 1 }
                           multipart_idempotency_version: { type: integer, const: 1 }
                           max_upload_file_bytes: { type: integer, format: int64 }
                           dm_device_roster_version: { type: integer, const: 1 }
+                          group_dm_device_roster_version: { type: integer, const: 1 }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
   /api/dms/{channelId}/device-roster:
     get:

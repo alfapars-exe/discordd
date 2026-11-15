@@ -250,7 +250,7 @@ func (h *DMHandler) SendIdempotentMessage(w http.ResponseWriter, r *http.Request
 }
 
 func (h *DMHandler) SendCapabilities(w http.ResponseWriter, r *http.Request) {
-	pkg.JSON(w, http.StatusOK, map[string]any{"text_idempotency_version": 1, "multipart_idempotency_version": 1, "dm_device_roster_version": 1, "max_upload_file_bytes": h.maxUploadSize})
+	pkg.JSON(w, http.StatusOK, map[string]any{"text_idempotency_version": 1, "multipart_idempotency_version": 1, "dm_device_roster_version": 1, "group_dm_device_roster_version": 1, "max_upload_file_bytes": h.maxUploadSize})
 }
 
 func (h *DMHandler) GetEvents(w http.ResponseWriter, r *http.Request) {

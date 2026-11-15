@@ -3,7 +3,7 @@ import { getAuthSessionSnapshot, publishAuthGenerationChange, publishAuthOwnerCh
 import { apiClient } from "../api/client";
 import * as e2eeApi from "../api/e2ee";
 import { deviceRosterRevision, prepareDMDeviceRoster } from "./dmDeviceRoster";
-import { encryptDMMessage, markSelfFanoutNeedsReset } from "./dmEncryption";
+import { encryptDMMessage, encryptGroupDMMessage, markSelfFanoutNeedsReset } from "./dmEncryption";
 import * as signalProtocol from "./signalProtocol";
 import { useE2EEStore } from "../stores/e2eeStore";
 import type { PreKeyBundleResponse } from "../types";
@@ -11,7 +11,7 @@ import type { PreKeyBundleResponse } from "../types";
 const h = vi.hoisted(() => ({
   sessions: new Set<string>(), pins: new Map<string, string>(), metadata: new Map<string, unknown>(), alerts: vi.fn(), peerDevices: ["peer-device"], ownDevices: ["local"],
   identity: "aGVsbG8=", denied: false, version: 1 as number | undefined,
-  pause: null as Promise<void> | null,
+  pause: null as Promise<void> | null, groupMembers: ["me", "peer", "third"], groupEpoch: 7, groupVersion: 1 as number | undefined,
 }));
 function bundle(device: string): PreKeyBundleResponse {
   return { device_id: device, identity_key: h.identity, signing_key: "c2lnbg==", registration_id: 7,
@@ -45,18 +45,18 @@ vi.mock("../stores/e2eeStore", () => ({ useE2EEStore: { getState: () => ({
 }) } }));
 vi.mock("../stores/composerDraftStore", () => ({ useComposerDraftStore: { getState: () => ({ generation: 0 }) } }));
 vi.mock("../api/e2ee", () => ({ fetchPreKeyBundles: vi.fn(async (user: string) => ({
-  success: true, data: (user === "me" ? h.ownDevices : h.peerDevices).map(bundle),
+  success: true, data: (user === "me" ? h.ownDevices : user === "third" ? ["third-device"] : h.peerDevices).map(bundle),
 })) }));
 vi.mock("../api/client", () => ({ apiClient: vi.fn(async (endpoint: string) => {
-  if (endpoint.endsWith("send-capabilities")) return { success: true, data: { dm_device_roster_version: h.version } };
+  if (endpoint.endsWith("send-capabilities")) return { success: true, data: { dm_device_roster_version: h.version, group_dm_device_roster_version: h.groupVersion } };
   if (h.pause) await h.pause;
   if (h.denied) return { success: false, status: 403 };
-  const members = await Promise.all(["me", "peer"].map(async user => ({ user_id: user,
-    devices: await Promise.all((user === "me" ? h.ownDevices : h.peerDevices).map(async device => ({
+  const members = await Promise.all((endpoint.includes("group-dms") ? h.groupMembers : ["me", "peer"]).map(async user => ({ user_id: user,
+    devices: await Promise.all((user === "me" ? h.ownDevices : user === "third" ? ["third-device"] : h.peerDevices).map(async device => ({
       device_id: device, key_revision: await deviceRosterRevision(bundle(device)),
     }))),
   })));
-  return { success: true, data: { version: 1, members } };
+  return { success: true, data: { version: 1, members, ...(endpoint.includes("group-dms") ? { key_epoch: h.groupEpoch } : {}) } };
 }) }));
 
 beforeEach(() => {
@@ -64,6 +64,7 @@ beforeEach(() => {
   publishAuthOwnerChange("me");
   publishAuthGenerationChange(getAuthSessionSnapshot().generation + 1);
   h.sessions.clear(); h.pins.clear(); h.metadata.clear(); h.peerDevices = ["peer-device"]; h.ownDevices = ["local"];
+  h.groupMembers = ["me", "peer", "third"]; h.groupEpoch = 7; h.groupVersion = 1;
   h.identity = "aGVsbG8="; h.denied = false; h.version = 1; h.pause = null;
 });
 const prepare = (isCurrent = () => true) => prepareDMDeviceRoster("me", "peer", "local", { channelId: "dm", isCurrent });
@@ -216,4 +217,59 @@ it("does not reuse a cached bundle if an established session disappears", async 
   await encrypt();
   expect(e2eeApi.fetchPreKeyBundles).toHaveBeenCalledTimes(2);
   expect(signalProtocol.processPreKeyBundle).toHaveBeenCalledTimes(2);
+});
+
+const groupOptions = () => ({ groupId: "group", keyEpoch: 7, isCurrent: () => true });
+it("uses 26 fresh group rosters and one initial bundle fetch per peer", async () => {
+  for (let i = 0; i < 26; i++) {
+    const envelopes = await encryptGroupDMMessage("me", ["me", "peer", "third"], "local", "message", groupOptions());
+    expect(envelopes.map(item => item.recipient_device_id)).toEqual(["peer-device", "third-device"]);
+  }
+  expect(e2eeApi.fetchPreKeyBundles).toHaveBeenCalledTimes(2);
+  expect(vi.mocked(e2eeApi.fetchPreKeyBundles).mock.calls.map(([user]) => user)).toEqual(["peer", "third"]);
+  expect(signalProtocol.processPreKeyBundle).toHaveBeenCalledTimes(2);
+  expect(signalProtocol.encryptMessage).toHaveBeenCalledTimes(52);
+  expect(vi.mocked(apiClient).mock.calls.filter(([path]) => path === "/group-dms/group/device-roster")).toHaveLength(26);
+});
+it.each([
+  ["changed epoch", () => { h.groupEpoch = 8; }],
+  ["removed member", () => { h.groupMembers = ["me", "peer"]; }],
+  ["added member", () => { h.groupMembers.push("fourth"); }],
+  ["duplicate member", () => { h.groupMembers = ["me", "peer", "peer"]; }],
+  ["denied membership", () => { h.denied = true; }],
+] as const)("rejects %s before encrypting to a stale group snapshot", async (_name, change) => {
+  change();
+  await expect(encryptGroupDMMessage("me", ["me", "peer", "third"], "local", "message", groupOptions())).rejects.toThrow();
+  expect(signalProtocol.encryptMessage).not.toHaveBeenCalled();
+  expect(e2eeApi.fetchPreKeyBundles).not.toHaveBeenCalled();
+});
+it("uses legacy group encryption only when group roster capability is absent", async () => {
+  h.groupVersion = undefined;
+  await encryptGroupDMMessage("me", ["me", "peer", "third"], "local", "message", groupOptions());
+  expect(e2eeApi.fetchPreKeyBundles).toHaveBeenCalledTimes(3);
+  expect(vi.mocked(apiClient).mock.calls.filter(([path]) => path.endsWith("device-roster"))).toHaveLength(0);
+});
+it("rejects an account switch during a pending group roster read", async () => {
+  let release!: () => void;
+  h.pause = new Promise<void>(resolve => { release = resolve; });
+  const pending = encryptGroupDMMessage("me", ["me", "peer", "third"], "local", "message", groupOptions());
+  const result = expect(pending).rejects.toThrow("e2ee_account_scope_changed");
+  await vi.waitFor(() => expect(vi.mocked(apiClient).mock.calls.some(([path]) => path === "/group-dms/group/device-roster")).toBe(true));
+  publishAuthOwnerChange("different-account"); release();
+  await result;
+  expect(signalProtocol.encryptMessage).not.toHaveBeenCalled();
+});
+
+it("fails closed on an explicitly unsupported group roster protocol", async () => {
+  h.groupVersion = 2;
+  await expect(encryptGroupDMMessage("me", ["me", "peer", "third"], "local", "message", groupOptions())).rejects.toThrow("DM_ROSTER_VERSION_UNSUPPORTED");
+  expect(e2eeApi.fetchPreKeyBundles).not.toHaveBeenCalled();
+});
+it("excludes a revoked peer device on the next group send", async () => {
+  h.peerDevices = ["peer-device", "revoked-device"];
+  await encryptGroupDMMessage("me", ["me", "peer", "third"], "local", "message", groupOptions());
+  h.peerDevices = ["peer-device"];
+  const envelopes = await encryptGroupDMMessage("me", ["me", "peer", "third"], "local", "message", groupOptions());
+  expect(envelopes.map(item => item.recipient_device_id)).toEqual(["peer-device", "third-device"]);
+  expect(e2eeApi.fetchPreKeyBundles).toHaveBeenCalledTimes(2);
 });

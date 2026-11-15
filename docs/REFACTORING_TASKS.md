@@ -2768,3 +2768,10 @@ The client capability is deliberately not advertised before group encryption con
 
 
 Roster follow-up race proof: immutable server source 3df659dc passed DM/group roster handler and service regressions under Linux Go1.27.4 CGO race, ten repetitions (3.419s/3.286s). Owned --rm container completed and is absent. This covers metadata/access/epoch tests, not full transport concurrency or whole-package race acceptance. Receipt: refactor-roster-linux-race-2026-11-15.json.
+
+
+### Group-DM key budget — stable client integration (2026-11-15)
+
+Group send/edit now consumes the fresh roster, checks the exact member set and group key_epoch, and reuses verified Signal ratchets through the shared DM encryption path. Missing old-server capability retains legacy behavior; explicit unsupported version/access failure never reuses a stale roster. No bundle or one-time-prekey cache was introduced. New regressions failed first; 156 selected tests passed after implementation. Full coverage: 478 files, 4,937 passed / 1 skipped (119.49s), 67.76% lines / 64.23% branches; roster module 95.45% / 87.64%. TypeScript, lint (0 errors/2 existing warnings), targeted Go capability/roster tests, vet/build, OpenAPI and reviewed manifest passed.
+
+Production real Go + owned PostgreSQL18.6 mTLS browser profile passed3/3 (2.8m). In addition to channel/DM recovery pagination, it sent26 actual group ciphertext messages, verified26 fresh group roster reads and exactly one initial prekey request each for peer and sibling owner after reload, and proved last-message plaintext on the peer browser after reload. Session refresh400 and one canceled timeouts-read diagnostic remain visible. Owned PG container/image removed. This supersedes the group stable-path per-message budget gap; it does not prove the complete ten-member/native/device lifecycle matrix, group backup restore or whole-project completion. Matching-ID memory bounds remain open. Source-bound receipt: refactor-group-roster-client-2026-11-15.json. Prior17f324b6 finished36/36 CI checks (archived separately); current bytes still need CI.

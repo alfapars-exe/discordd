@@ -16,7 +16,7 @@
 
 import * as signalProtocol from "./signalProtocol";
 import { getAuthSessionSnapshot } from "../api/authSessionEvents";
-import { prepareDMDeviceRoster, type DMDeviceRosterContext, type DMEncryptionTarget, type DMRosterOptions } from "./dmDeviceRoster";
+import { prepareDMDeviceRoster, prepareGroupDMDeviceRoster, type GroupDMRosterOptions, type DMDeviceRosterContext, type DMEncryptionTarget, type DMRosterOptions } from "./dmDeviceRoster";
 import * as e2eeApi from "../api/e2ee";
 import { logToServer } from "../api/clientLog";
 import * as keyStorage from "./keyStorage";
@@ -265,14 +265,28 @@ export async function encryptGroupDMMessage(
   currentUserId: string,
   memberUserIds: readonly string[],
   localDeviceId: string,
-  plaintext: string
+  plaintext: string,
+  options?: GroupDMRosterOptions,
 ): Promise<EncryptedEnvelope[]> {
+  const scope = getAuthSessionSnapshot();
+  const roster = options ? await prepareGroupDMDeviceRoster(currentUserId, memberUserIds, localDeviceId, options) : null;
+  const assertCurrent = () => {
+    if (!options) return;
+    const now = getAuthSessionSnapshot();
+    if (now.ownerId !== scope.ownerId || now.generation !== scope.generation || !options.isCurrent()) {
+      throw new Error("e2ee_account_scope_changed");
+    }
+    roster?.assertCurrent();
+  };
+  assertCurrent();
   const envelopes: EncryptedEnvelope[] = [];
   const recipients = [...new Set(memberUserIds)].filter((id) => id !== currentUserId);
   for (const recipientUserId of recipients) {
-    envelopes.push(...await encryptForRecipientDevices(recipientUserId, localDeviceId, plaintext));
+    envelopes.push(...await encryptForRecipientDevices(recipientUserId, localDeviceId, plaintext, roster, assertCurrent));
+    assertCurrent();
   }
-  envelopes.push(...await encryptForSelfFanout(currentUserId, localDeviceId, plaintext, true));
+  envelopes.push(...await encryptForSelfFanout(currentUserId, localDeviceId, plaintext, true, roster, assertCurrent));
+  assertCurrent();
   return envelopes;
 }
 

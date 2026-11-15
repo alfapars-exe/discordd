@@ -1,0 +1,59 @@
+{
+  "baseCommit": "8a54e1db849aafe5a82d4b544d09cbe21d0cf3cc",
+  "scope": "Stable group send/edit uses fresh epoch/member-bound device roster and verified established Signal sessions",
+  "capability": "Additive group_dm_device_roster_version:1 on existing /api/dms/send-capabilities; absent on old server => legacy path; unsupported declared version/access failure never downgrades",
+  "regressions": {
+    "before": "New tests: 7 failed,18 passed; one rejected assertion surfaced as unhandled when the old implementation never read a roster. This is a failed baseline, not acceptance.",
+    "after": "156 selected DM/group crypto/store tests passed (7.55s), including 26 sends with two initial peer bundles, changed epoch/members, duplicate members, denied membership, account switch, missing/unsupported capability and revoked device",
+    "fixtureCorrection": "A broad test-string edit temporarily changed the existing duplicate-device fixture to two distinct IDs; restored duplicate IDs and reran the selected suite successfully."
+  },
+  "verification": {
+    "tsc": "tsc -b client passed",
+    "vitest": "478 files; 4937 passed,1 skipped; 119.49s",
+    "coverage": {
+      "statements": 66.79,
+      "branches": 64.23,
+      "functions": 61.17,
+      "lines": 67.76,
+      "rosterLines": 95.45,
+      "rosterBranches": 87.64
+    },
+    "lint": "0 errors,2 existing TanStack warnings",
+    "go": "Targeted capability and DM/group roster handler/service tests .633/.555s; vet handlers/services and build ./... passed",
+    "manifest": "50 exact reviewed source records valid",
+    "openapi": "YAML parsed; additive group capability required and version1 documented",
+    "browser": "3/3 production Chromium crypto-recovery profile passed in2.8m against real Go and owned PostgreSQL18.6 verify-full mTLS",
+    "browserAssertions": [
+      "26 actual encrypted channel sends and 26 DM sends; exact25/1 accented uppercase search pages before/after key recovery+reload",
+      "26 actual encrypted group sends through real store/UI; encryption_version1,expected epoch,ciphertext excludes plaintext,own sent plaintext visible",
+      "26 fresh group roster reads; exactly one peer prekey GET and one sibling-owner prekey GET after reload clears in-memory revision receipts",
+      "Peer browser reload and group history decrypts last actual group message"
+    ],
+    "diagnostics": "Session refresh400 warnings and one context-canceled active-timeouts request logged; profile passed. No key429 observed.",
+    "cleanup": "Owned PG container hichat-e2e-pg-92a76922c4b912bb and unique fixture image removed after terminal exit0"
+  },
+  "normalizedLFSourceSha256": {
+    "client/src/crypto/dmDeviceRoster.ts": "efa46f0f70be58336896492129844ed138d4892cc2ac2458421391a97bbac008",
+    "client/src/crypto/dmDeviceRoster.test.ts": "57908f8e149f52a6dea6461e355b107acdb9e194f79e1d0581882237bdfa417a",
+    "client/src/crypto/dmEncryption.ts": "3ed930437fb80a7632502e772e28f362793eef0733b3acb4115d7c4df148e59c",
+    "client/src/stores/groupDMStore.ts": "3f20698763e569279b10a043cd4a27cb215e2c68865a5db67264d62f11703afb",
+    "e2e/tests/crypto-recovery.spec.ts": "5c23554e519d96d9c258deca43d94fd1d86a34eb3c62652545deb45ed00092bb",
+    "server/handlers/dm.go": "ff5689b9136c5c00d6a2f05817198bef0a760352b71ee35a190208d762396348",
+    "server/handlers/dm_device_roster_test.go": "5d46279920008cee6fd7425fdca362297178a02be58cc1096ffaeb518be54d0f",
+    "server/openapi.yaml": "dc66f1e883d6622619af8fc8c5c94a77d4a4a19bd6f980a87b1bcb41bccfbfda"
+  },
+  "logSha256": {
+    "hichat-group-roster-client-red.log": "216e18cde52d912afb13b37e209f4cc6e8768fbbba91fd1c2a0bfcc5b363f11f",
+    "hichat-group-roster-client-final.log": "2f8e68b847203f4410672363748bae7fdcb5b774a080808ecbdf929d23565d7b",
+    "hichat-group-roster-full-coverage.log": "658a6e1cf2d8cfa39417062208ff02ae22e24e1c464b4f2b1769795defb3bd40",
+    "hichat-group-roster-lint.log": "b51344ffc39e8ec9a8569b51c5ae7b28aa35df7af955a93bafae4f7a267c30fa",
+    "hichat-group-roster-browser.log": "60645c6ced71604d8070b6e974d9b04dda8f7bf9eb1149225c6b87c7de5e0fd8"
+  },
+  "remaining": [
+    "Matching-ID search snapshot remains unbounded; RF17 not complete",
+    "Group browser acceptance covers two accounts with sibling-owner fanout; ten-member/native/all-device lifecycle matrix not fully proved",
+    "Roster read does not reserve device/membership state; existing send-commit epoch fence still required",
+    "Broader physical media, platform, transport soak and whole-project acceptance remain open",
+    "Current source CI pending; prior17f324b6 CI passed36/36 and is archived separately"
+  ]
+}

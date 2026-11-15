@@ -212,6 +212,60 @@ for (const cacheFormat of ["source-tagged", "legacy-unversioned"] as const) {
         await expectEncryptedSearchPages(original, query, messages.toReversed());
         dmSearch = { peerName, query, messages };
 
+        // Exercise actual group-store encryption after the DM established peer
+        // and sibling-owner ratchets. Group sends must not spend more prekeys.
+        const friends = await fixtureApi<{ user_id: string }[]>(original, "/friends");
+        if (!friends.some(friend => friend.user_id === peerUser.id)) {
+          const request = await fixtureApi<{ id: string; status: string }>(original, "/friends/requests", "POST", { username: peerUser.username });
+          if (request.status === "pending") await fixtureApi(peer, `/friends/requests/${request.id}/accept`, "POST");
+        }
+        const groupName = `Encrypted group ${randomBytes(6).toString("hex")}`;
+        const group = await fixtureApi<{ id: string; key_epoch: number }>(original, "/group-dms", "POST", { name: groupName, user_ids: [peerUser.id] });
+        await original.reload();
+        await dismissOnboardingOverlays(original);
+        await original.locator("nav.server-rail").getByRole("button", { name: "Friends", exact: true }).click();
+        await original.locator(".ch-tree-group-dm").filter({ hasText: groupName }).click();
+        const groupInput = original.getByPlaceholder(`Message ${groupName}`, { exact: true });
+        await expect(groupInput).toBeVisible();
+        const groupRosters: string[] = [], groupPrekeys: string[] = [];
+        const observeGroupKeys = (request: Request) => {
+          const path = new URL(request.url()).pathname;
+          if (path === `/api/group-dms/${group.id}/device-roster`) groupRosters.push(path);
+          if (/^\/api\/users\/[^/]+\/prekey-bundles$/.test(path)) groupPrekeys.push(path);
+        };
+        original.on("request", observeGroupKeys);
+        let lastGroupMessage = { id: "", content: "" };
+        for (let index = 0; index < 26; index++) {
+          if (index) await original.waitForTimeout(550);
+          const content = `encrypted-group-Été-${String(index).padStart(2, "0")}`;
+          await groupInput.fill(content);
+          const [response] = await Promise.all([
+            original.waitForResponse(response => new URL(response.url()).pathname === `/api/group-dms/${group.id}/messages` && response.request().method() === "POST"),
+            original.locator(".group-dm-composer").getByRole("button", { name: "Send", exact: true }).click(),
+          ]);
+          expect(response.status()).toBe(201);
+          const body = await response.json() as { data: { id: string; encryption_version: number; key_epoch: number; ciphertext: string } };
+          expect(body.data.encryption_version).toBe(1);
+          expect(body.data.key_epoch).toBe(group.key_epoch);
+          expect(body.data.ciphertext).not.toContain(content);
+          await expect(original.locator(`[data-group-message-id="${body.data.id}"]`)).toContainText(content);
+          await expect(groupInput).toHaveValue("");
+          lastGroupMessage = { id: body.data.id, content };
+        }
+        original.off("request", observeGroupKeys);
+        expect(groupRosters).toHaveLength(26);
+        // Reload clears the in-memory revision receipts, so each target is
+        // checked against one fresh bundle. Subsequent sends reuse the ratchet.
+        expect(groupPrekeys.sort()).toEqual([
+          `/api/users/${peerUser.id}/prekey-bundles`,
+          `/api/users/${ownerUser.id}/prekey-bundles`,
+        ].sort());
+        await peer.reload();
+        await dismissOnboardingOverlays(peer);
+        await peer.locator("nav.server-rail").getByRole("button", { name: "Friends", exact: true }).click();
+        await peer.locator(".ch-tree-group-dm").filter({ hasText: groupName }).click();
+        await expect(peer.locator(`[data-group-message-id="${lastGroupMessage.id}"]`)).toContainText(lastGroupMessage.content);
+
       }
 
       const settings = await encryptionSettings(original);

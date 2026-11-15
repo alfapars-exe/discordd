@@ -399,7 +399,7 @@ export const useGroupDMStore = create<GroupDMState>((set, get) => ({
         const draftRevision=useComposerDraftStore.getState().drafts[composerKey(currentUserId,"group",groupId)]?.revision??0;
         const encrypted=files?.length?await encryptFilesForE2EE(files):undefined;
         if(!isCurrent())return false;
-        const ciphertext=JSON.stringify(await encryptGroupDMMessage(currentUserId,group.members.map(member=>member.id),localDeviceId,encodePayload(content,encrypted?.metas)));
+        const ciphertext=JSON.stringify(await encryptGroupDMMessage(currentUserId,group.members.map(member=>member.id),localDeviceId,encodePayload(content,encrypted?.metas),{groupId,keyEpoch:group.key_epoch,isCurrent}));
         if(!isCurrent())return false;
         const account=captureAccount(),lifetime=groupLifetimes.get(groupId);
         const ownerCurrent=()=>sendSessionCurrent()&&account()&&groupLifetimes.get(groupId)===lifetime&&get().groups.some(g=>g.id===groupId);
@@ -584,7 +584,7 @@ export const useGroupDMStore = create<GroupDMState>((set, get) => ({
     if(!content||!group||!currentUserId||!localDeviceId||!isCurrent()||!original||original.user_id!==currentUserId||original.content===null)return false;
     set({error:null});
     try{
-      const ciphertext=JSON.stringify(await encryptGroupDMMessage(currentUserId,group.members.map((m)=>m.id),localDeviceId,encodePayload(content,original.e2ee_file_keys)));
+      const ciphertext=JSON.stringify(await encryptGroupDMMessage(currentUserId,group.members.map((m)=>m.id),localDeviceId,encodePayload(content,original.e2ee_file_keys),{groupId,keyEpoch:group.key_epoch,isCurrent}));
       if(!isCurrent())return false;
       const res=await api.editGroupDMMessage(groupId,messageId,{ciphertext,sender_device_id:localDeviceId,e2ee_metadata:JSON.stringify({key_epoch:group.key_epoch}),key_epoch:group.key_epoch},{isCurrent,timeoutMs:30_000});
       if(!isCurrent())return false;
