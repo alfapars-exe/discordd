@@ -91,6 +91,20 @@ korunarak gösterilir.
   rezerv vardır; rezerv her 5 saniyede bir token yeniler. INFO bu rezervi
   tüketemez. 10 dakika kullanılmayan kullanıcı bucket'ları temizlenir.
 
+## Uygulama günlüğünde bağımlılık panic'leri
+
+Eski kayıt temizliği ve her yazım girişimi mevcut `logx.Run` ile korunur. Hatalı
+bakım işi sonlanır; yazıcı yeni olayları işlemeye devam eder. Başarısız yazım
+girişimi bir kez `WriteFailures` sayacına eklenir. Tekil yazımda başarıyla dönen
+kayıtların gruplanmış olayları `FailedEvents` sayacından çıkarılır; sonucu
+doğrulanamayan kalan olaylar bu sayaca eklenir. Toplu yazım panic'inde bütün
+girişimin sonucu belirsiz sayılır. Bu sayaç kesin veri kaybı ölçümü değildir.
+Panic'ten önce depoya yazılmış olabilecek kayıtlar otomatik yeniden denenmez.
+
+Panic tanısı yalnız bir kez `app_log.write` veya `app_log.purge` bileşeniyle
+üretilir. Mevcut pipeline bu bileşenleri uygulama günlüğü sink'ine yönlendirmez;
+depolama hatası aynı kuyruğa geri beslenmez. Dış log/Sentry akışı devam eder.
+
 ## Audit kuyruğu ve kapanış
 
 Audit `Write` çağrısı kullanıcı veya audit deposuna erişmez; olayın kimlik ve

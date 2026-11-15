@@ -1,0 +1,76 @@
+{
+  "source_commit": "7f05f531f30c2d2f0b991dcf54936636e024fb7b",
+  "source_sha256": {
+    "server/services/app_log_service.go": "a2e8c73191702825db8000bbd051bbce111676f8adceb077681c2b3166a245b7",
+    "server/services/app_log_pipeline_test.go": "5d08ede6e5ae7ebdd499ee89a3b5e7e28c6073f527c4dcb9f333378cfdc13783",
+    "server/pkg/logx/pipeline_test.go": "4d916a7bc12e762890e1f2b658cb79857055778fe710cd8e4a7da61edfd9ac4c",
+    "ERROR_MANAGEMENT.md": "74b880de3f11ba97e3100f30f64686f20080d0e76b56d78ed5bb5affb9d0739d"
+  },
+  "red_proof": {
+    "log": "hichat-app-log-panic-red.log",
+    "stages": [
+      "startup purge",
+      "batch insert",
+      "fallback insert"
+    ],
+    "result": "all3 panic paths terminated writer and stranded healthy queued work"
+  },
+  "behavior": [
+    "Each write attempt and maintenance purge guarded with existing logx.Run",
+    "Writer survives and processes queued and future events after dependency panic",
+    "One write failure counted per panicking attempt; completed fallback rows excluded from unconfirmed-event count",
+    "No automatic retry after possibly committed side effect",
+    "app_log.write and app_log.purge report once and are excluded from application sink to prevent feedback recursion",
+    "Pipeline regression confirms single diagnostic, no sink forwarding and no panic-value secret"
+  ],
+  "checks": {
+    "windows_before_partial_panic_case": {
+      "log": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-app-log-panic-green.log",
+      "root_pass_records": 16,
+      "subcase_pass_records": 10,
+      "results": [
+        "ok  \tgithub.com/argeinfina/hichat/services\t10.865s"
+      ]
+    },
+    "windows_final_targets": {
+      "log": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-app-log-panic-final-targets.log",
+      "root_pass_records": 3,
+      "subcase_pass_records": 4,
+      "results": [
+        "ok  \tgithub.com/argeinfina/hichat/pkg/logx\t1.438s",
+        "ok  \tgithub.com/argeinfina/hichat/services\t0.666s"
+      ]
+    },
+    "linux_race_final": {
+      "log": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-app-log-panic-linux-race.log",
+      "root_pass_records": 57,
+      "subcase_pass_records": 42,
+      "results": [
+        "ok  \tgithub.com/argeinfina/hichat/pkg/logx\t5.543s",
+        "ok  \tgithub.com/argeinfina/hichat/services\t55.679s"
+      ]
+    },
+    "root_wiring": {
+      "log": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-app-log-panic-root.log",
+      "root_pass_records": 0,
+      "subcase_pass_records": 0,
+      "results": [
+        "ok  \tgithub.com/argeinfina/hichat\t6.772s"
+      ]
+    }
+  },
+  "linux": {
+    "go": "1.27.4",
+    "cgo": 1,
+    "race": true,
+    "repetitions": 3,
+    "immutable_source": true,
+    "owned_container_removed": true
+  },
+  "limits": [
+    "FailedEvents counts unconfirmed outcomes, not proven lost rows, for ambiguous side effects",
+    "Normal shutdown context-cooperation requirements unchanged",
+    "Full services/repository/native/physical acceptance remains open",
+    "Local commits await terminal c853ee50 CI before next delivery"
+  ]
+}
