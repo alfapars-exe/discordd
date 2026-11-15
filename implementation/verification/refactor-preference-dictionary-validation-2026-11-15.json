@@ -9,7 +9,7 @@
     "function": "validField",
     "complexity": 24,
     "threshold": 15,
-    "after": "Not yet analyzed; no resolution or after score claimed"
+    "after": "Original issue CLOSED/FIXED after98118271 delivery; checked2026-11-16. Source API matches all164 local code lines plus one empty EOF line. No exact after complexity score claimed."
   },
   "behavior": "Move dictionary cases unchanged to validDictionaryField after a shared object guard. Preserve scalar validation precedence, all dictionary field names and limits, peer-map sanitization, empty dictionary reset values, whole-field rejection and valid neighboring leaves. No new public exports or wire/storage names.",
   "characterization": {
@@ -30,5 +30,6 @@
     "immutableScan": "PASS immutable10a2101d exit0:51 exact reviewed-source records,480reviewlines,0blockingpatterns; TEMP/hichat-preference-dictionaries-scan.log. Pattern scan does not prove absence of vulnerabilities.",
     "archiveCheck": "Git archive and expanded source each contain4793 files. Runtime codec SHA256 equals working source. New test text equals archive after LF/CRLF normalization; working file has LF, Git archive CRLF. No logic difference or byte-identical test claim."
   },
-  "remaining": ["New-source CI and Sonar", "Final RF13 field-contract inventory and account/offline/platform acceptance", "Whole-project RF01-RF30 acceptance"]
+  "ci": { "revision": "98118271bb00221acb9402382f62ffe72b802d07", "result": "36/36 terminalSUCCESS", "serverRun": 43760659938, "serverConclusion": "success", "rawChecks": "refactor-9811-terminal-ci-2026-11-16.json" },
+  "remaining": ["Final RF13 field-contract inventory and account/offline/platform acceptance", "Whole-project RF01-RF30 acceptance"]
 }
