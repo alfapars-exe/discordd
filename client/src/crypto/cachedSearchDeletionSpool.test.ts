@@ -39,6 +39,29 @@ it("cancels a drain without losing its unacknowledged IDs", async () => {
   expect(seen).toEqual(["kept"]);
 });
 
+it("serializes all queued consumers behind an unfinished drain", async () => {
+  const frontier = (await pool()).create(vi.fn());
+  frontier.append("first");
+  let release!: () => void, entered!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const started = new Promise<void>(resolve => { entered = resolve; });
+  const first = frontier.drain(async () => { entered(); await gate; throw new Error("retry"); });
+  const failed = expect(first).rejects.toThrow("retry");
+  await started;
+  const seen: string[] = [];
+  let active = 0, peak = 0;
+  const consume = async (ids: readonly string[]) => {
+    active++; peak = Math.max(peak, active);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    seen.push(...ids); active--;
+  };
+  const second = frontier.drain(consume), third = frontier.drain(consume);
+  release();
+  await Promise.all([failed, second, third]);
+  expect(peak).toBe(1);
+  expect(seen).toEqual(["first"]);
+});
+
 it.each(["owner", "generation"] as const)("retires its pool and pending frontier on %s replacement", async boundary => {
   const writer = await pool(), frontier = writer.create(vi.fn()); frontier.append("retired");
   if (boundary === "owner") publishAuthOwnerChange("replacement"); else publishAuthGenerationChange(getAuthSessionSnapshot().generation + 1);
