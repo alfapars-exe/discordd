@@ -5,6 +5,7 @@ import { getAuthSessionSnapshot, publishAuthGenerationChange, publishAuthOwnerCh
 import * as storage from "./keyStorage";
 import { getDB } from "./keyDatabase";
 import { createCachedSearchSnapshot, type CachedSearchSnapshot } from "./cachedSearchSnapshot";
+import * as deletionJournal from "./cachedSearchDeletionJournal";
 import { cachedSearchDeletionKey, scanPendingCachedSearchDeletions } from "./cachedSearchDeletionJournal";
 
 const live: CachedSearchSnapshot[] = [];
@@ -127,22 +128,51 @@ it("does not write an intent when the deletion context is already retired", asyn
   expect((await storage.getCachedDecryptedMessage("retained"))?.content).toBe("cached");
 });
 
+function deletionGate() {
+ let release!: () => void;
+ const promise = new Promise<void>(resolve => { release = resolve; });
+ return { promise, release };
+}
+
+// Both durable intents must commit before the older eviction starts. The
+// second eviction then waits until the first has queued its source read.
+function orderConcurrentDeletionIntents(firstEviction: Promise<void>) {
+ const firstIntent = deletionGate(), secondIntent = deletionGate();
+ const original = deletionJournal.rememberCachedSearchDeletion;
+ let calls = 0;
+ const hook = vi.spyOn(deletionJournal, "rememberCachedSearchDeletion").mockImplementation(async (...args) => {
+  const order = ++calls;
+  const token = await original(...args);
+  if (order === 1) { firstIntent.release(); await secondIntent.promise; }
+  else { secondIntent.release(); await firstEviction; }
+  return token;
+ });
+ return { firstIntent: firstIntent.promise, hook };
+}
+
 it.each(["channel", "dm"] as const)("keeps the newer %s intent when an older concurrent eviction commits", async kind => {
   const scope = { channelId: kind === "channel" ? "room" : "", dmChannelId: kind === "dm" ? "room" : null };
   const row = { ...scope, messageId: "concurrent", content: "stale plaintext", timestamp: 1 };
   await storage.cacheDecryptedMessage(row);
   const original = IDBObjectStore.prototype.get, failure = new DOMException("Second cleanup failed", "UnknownError");
   let reads = 0;
+  const firstEviction = deletionGate();
+  const ordered = orderConcurrentDeletionIntents(firstEviction.promise);
   const hook = vi.spyOn(IDBObjectStore.prototype, "get").mockImplementation(function (this: IDBObjectStore, key) {
-    if (this.name === "messageCache" && ++reads === 2) throw failure;
+    if (this.name === "messageCache") {
+      firstEviction.release();
+      if (++reads === 2) throw failure;
+    }
     return original.call(this, key);
   });
   const remove = () => kind === "channel" ? storage.deleteCachedChannelMessage("concurrent", "room", () => true) : storage.deleteCachedDMMessage("concurrent", "room", () => true);
   try {
-    const results = await Promise.allSettled([remove(), remove()]);
+    const first = remove();
+    await ordered.firstIntent;
+    const results = await Promise.allSettled([first, remove()]);
     expect(results[0]).toEqual({ status: "fulfilled", value: true });
     expect(results[1]).toEqual({ status: "rejected", reason: failure });
-  } finally { hook.mockRestore(); }
+  } finally { hook.mockRestore(); ordered.hook.mockRestore(); }
   expect(await (await getDB()).get("metadata", cachedSearchDeletionKey(kind, "room", "concurrent"))).toMatchObject({ messageId: "concurrent" });
   await storage.cacheDecryptedMessage(row);
   expect(await storage.getCachedDecryptedMessage("concurrent")).toBeNull();
