@@ -1,0 +1,26 @@
+{
+  "date": "2026-11-15",
+  "base": "20ff5fa6",
+  "sources": {
+    "electron/runtime-updater.ts": "4088a3fa453c2b9b03bf776270699453fed5addd1f50f583b3f92ba4211bb7f3",
+    "electron/runtime-updater.test.ts": "fabb044a06a315477730f0cf13a2ab1d669a571b0d642883d867ef6c93e4b89d"
+  },
+  "before": "two new lifecycle tests failed in the full Electron run",
+  "change": "Dispose acquired subscriptions on updater setup failure; remove owned subscriptions even when poller cleanup throws; preserve original acquisition error and sibling listeners",
+  "validation": {
+    "command": "npm run electron:test",
+    "result": "402passed;1skipped;403total",
+    "compilation": "complete Electron TypeScript compilation passed as part of canonical test runner",
+    "regressions": [
+      "poller acquisition throw",
+      "poller cleanup throw and idempotent retry",
+      "partial subscription acquisition failure",
+      "queued callback cannot deliver after failed cleanup"
+    ]
+  },
+  "limits": [
+    "not an asynchronous installer-failure fix",
+    "real/native installer and prelaunch integration acceptance remain open",
+    "held locally until remote c2baaec1 CI terminates"
+  ]
+}

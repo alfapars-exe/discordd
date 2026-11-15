@@ -18,23 +18,32 @@ export function startRuntimeUpdater(operations: RuntimeUpdaterOperations): () =>
   const downloaded = (info: UpdateDownloadedEvent) => { if (!disposed) operations.downloaded(info); };
   const failed = (error: Error) => { if (!disposed) operations.failed(error); };
   const { updater } = operations;
-  updater.on("update-available", available);
-  updater.on("download-progress", progress);
-  updater.on("update-downloaded", downloaded);
-  updater.on("error", failed);
   const check = () => {
     if (disposed) return;
     void updater.checkForUpdates().catch(() => undefined);
   };
-  check();
-  const stopPolling = operations.startPolling(check);
-  return () => {
+  let stopPolling: (() => void) | undefined;
+  const dispose = () => {
     if (disposed) return;
     disposed = true;
-    stopPolling();
-    updater.removeListener("update-available", available);
-    updater.removeListener("download-progress", progress);
-    updater.removeListener("update-downloaded", downloaded);
-    updater.removeListener("error", failed);
+    try { stopPolling?.(); }
+    finally {
+      updater.removeListener("update-available", available);
+      updater.removeListener("download-progress", progress);
+      updater.removeListener("update-downloaded", downloaded);
+      updater.removeListener("error", failed);
+    }
   };
+  try {
+    updater.on("update-available", available);
+    updater.on("download-progress", progress);
+    updater.on("update-downloaded", downloaded);
+    updater.on("error", failed);
+    check();
+    stopPolling = operations.startPolling(check);
+    return dispose;
+  } catch (error) {
+    try { dispose(); } catch { /* Preserve the acquisition failure. */ }
+    throw error;
+  }
 }
