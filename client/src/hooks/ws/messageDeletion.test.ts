@@ -6,7 +6,7 @@ import { useDMStore } from "../../stores/dmStore";
 import { useReadStateStore } from "../../stores/readStateStore";
 import { useAuthStore } from "../../stores/authStore";
 import { publishAuthOwnerChange } from "../../api/authSessionEvents";
-import { deleteCachedChannelMessage, deleteCachedDMMessage } from "../../crypto/keyStorage";
+import { deleteCachedChannelMessage, deleteCachedDMMessage, cacheDecryptedMessage, getCachedDecryptedMessage, closeDB } from "../../crypto/keyStorage";
 import type { WSMessage } from "../../types";
 
 vi.mock("../../crypto/keyStorage", async importOriginal => ({
@@ -16,7 +16,9 @@ vi.mock("../../crypto/keyStorage", async importOriginal => ({
 }));
 
 const stops: (() => void)[] = [];
-beforeEach(() => {
+beforeEach(async () => {
+  await closeDB();
+  globalThis.indexedDB = new FakeIDBFactory();
   vi.clearAllMocks();
   vi.mocked(deleteCachedChannelMessage).mockReset().mockResolvedValue(true);
   vi.mocked(deleteCachedDMMessage).mockReset().mockResolvedValue(true);
@@ -28,7 +30,7 @@ beforeEach(() => {
   useDMStore.setState({ lastDeletedDM: null, dmUnreadCounts: {}, messagesByChannel: {},
     handleDMMessageDelete: value => useDMStore.setState({ lastDeletedDM: value }) });
 });
-afterEach(() => { for (const stop of stops.splice(0)) stop(); vi.restoreAllMocks(); });
+afterEach(async () => { for (const stop of stops.splice(0)) stop(); vi.restoreAllMocks(); await closeDB(); });
 
 for (const kind of ["channel", "dm"] as const) {
   const event = { op: kind === "channel" ? "message_delete" : "dm_message_delete",
@@ -84,4 +86,71 @@ for (const kind of ["channel", "dm"] as const) {
     expect(warn).toHaveBeenCalledExactlyOnceWith(kind === "channel"
       ? "[ws] Channel deleted-message cache cleanup failed" : "[ws] DM deleted-message cache cleanup failed");
   });
+
+  it(`${kind}: skips an obsolete connection before publishing deletion`, async () => {
+    const published = vi.fn(); observeDeletion(published);
+    const result = kind === "channel" ? handleChannelEvent(event, () => false) : handleDMEvent(event, () => false);
+    await expect(result).resolves.toBe(true);
+    expect(published).not.toHaveBeenCalled();
+    expect(cleanup()).not.toHaveBeenCalled();
+  });
+
+  it(`${kind}: retains both notification failures after completing cache cleanup`, async () => {
+    const unreadFailure = new Error("unread failure"), deletionFailure = new Error("deletion failure");
+    if (kind === "channel") {
+      useMessageStore.setState({ messagesByChannel: { room: [{ id: "deleted", user_id: "peer" } as never] } });
+      useReadStateStore.setState({ unreadCounts: { room: 3 }, decrementUnread: () => { throw unreadFailure; } });
+    } else {
+      useDMStore.setState({ dmUnreadCounts: { room: 3 }, messagesByChannel: { room: [{ id: "deleted", user_id: "peer" } as never] },
+        decrementDMUnread: () => { throw unreadFailure; } });
+    }
+    observeDeletion(() => { throw deletionFailure; });
+    await expect(deliver()).rejects.toMatchObject({
+      name: "AggregateError", errors: [unreadFailure, deletionFailure], cause: deletionFailure,
+    });
+    expect(cleanup()).toHaveBeenCalledOnce();
+  });
+
+  it(`${kind}: removes actual cached plaintext despite a committed store observer failure`, async () => {
+    const storage = await vi.importActual<typeof import("../../crypto/keyStorage")>("../../crypto/keyStorage");
+    if (kind === "channel") vi.mocked(deleteCachedChannelMessage).mockImplementation(storage.deleteCachedChannelMessage);
+    else vi.mocked(deleteCachedDMMessage).mockImplementation(storage.deleteCachedDMMessage);
+    const row = { messageId: "deleted", channelId: kind === "channel" ? "room" : "",
+      dmChannelId: kind === "dm" ? "room" : null, content: "deleted plaintext", timestamp: 10 };
+    const retained = { ...row, messageId: "retained", content: "unrelated plaintext" };
+    await cacheDecryptedMessage(row); await cacheDecryptedMessage(retained);
+    const failure = new Error("committed notification failed");
+    observeDeletion(() => { throw failure; });
+    await expect(deliver()).rejects.toBe(failure);
+    expect(await getCachedDecryptedMessage("deleted")).toBeNull();
+    expect(await getCachedDecryptedMessage("retained")).toEqual(retained);
+  });
+
+  it(`${kind}: does not guess an unread decrement for an unloaded deletion`, async () => {
+    const decrement = vi.fn();
+    if (kind === "channel") useReadStateStore.setState({ unreadCounts: { room: 3 }, decrementUnread: decrement });
+    else useDMStore.setState({ dmUnreadCounts: { room: 3 }, decrementDMUnread: decrement });
+    await deliver();
+    expect(decrement).not.toHaveBeenCalled();
+  });
+
+  it(`${kind}: does not decrement unread again when notification failure causes redelivery`, async () => {
+    const decrement = vi.fn(), failure = new Error("first publication failed");
+    if (kind === "channel") {
+      useReadStateStore.setState({ unreadCounts: { room: 3 }, decrementUnread: decrement });
+      useMessageStore.setState({ messagesByChannel: { room: [{ id: "deleted", user_id: "peer" } as never] },
+        handleMessageDelete: value => useMessageStore.setState({ lastDeleted: value, messagesByChannel: {} }) });
+    } else {
+      useDMStore.setState({ dmUnreadCounts: { room: 3 }, decrementDMUnread: decrement,
+        messagesByChannel: { room: [{ id: "deleted", user_id: "peer" } as never] },
+        handleDMMessageDelete: value => useDMStore.setState({ lastDeletedDM: value, messagesByChannel: {} }) });
+    }
+    const listener = vi.fn().mockImplementationOnce(() => { throw failure; });
+    observeDeletion(listener);
+    await expect(deliver()).rejects.toBe(failure);
+    await expect(deliver()).resolves.toBe(true);
+    expect(decrement).toHaveBeenCalledOnce();
+  });
 }
+import "fake-indexeddb/auto";
+import { IDBFactory as FakeIDBFactory } from "fake-indexeddb";
