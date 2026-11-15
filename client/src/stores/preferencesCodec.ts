@@ -81,33 +81,36 @@ export function merge(base: PreferencesData, patch: PreferencesData): Preference
   return result;
 }
 export function nonempty(value: PreferencesData): boolean { return Object.keys(value).length > 0; }
+function validDictionaryField(key: string, value: PreferencesData): boolean {
+  if (key === "friendRequests") {
+    const entries = Object.entries(value);
+    return entries.length <= 3 && entries.every(([name, enabled]) => ["everyone", "mutual", "server"].includes(name) && typeof enabled === "boolean");
+  }
+  if (key === "spamRestoredMessages") {
+    const entries = Object.entries(value);
+    return entries.length <= 1024 && entries.every(([id, revision]) => id.length > 0 && id.length <= 128 && typeof revision === "string" && revision.length <= 64);
+  }
+  if (key === "ignoredUsers") {
+    const entries = Object.entries(value);
+    return entries.length <= 1024 && entries.every(([id, ignored]) => id.length > 0 && id.length <= 128 && typeof ignored === "boolean");
+  }
+  if (key === "serverDMOverrides" || key === "gameActivityServerOverrides") {
+    const entries = Object.entries(value);
+    const maxIdLength = key === "gameActivityServerOverrides" ? 256 : 128;
+    return entries.length <= 1024 && entries.every(([id, enabled]) => id.length > 0 && id.length <= maxIdLength && typeof enabled === "boolean");
+  }
+  if (key === "sensitiveMedia" || key === "disturbingMedia") {
+    const entries = Object.entries(value);
+    return entries.length <= 3 && entries.every(([scope, mode]) => ["friendDMs", "otherDMs", "channels"].includes(scope) && ["show", "blur", "block"].includes(mode as string));
+  }
+  return isVoicePeerMap(key);
+}
 function validField(key: string, value: unknown): boolean {
   if (BOOLEAN_FIELDS.has(key) || key === "shareGameActivity" || key === "allowFriendsToJoinGame" || key === "allowVoiceParticipantsToJoinGame") return typeof value === "boolean";
   if (NUMBER_RANGES[key]) return typeof value === "number" && Number.isFinite(value) && value >= NUMBER_RANGES[key][0] && value <= NUMBER_RANGES[key][1];
   if (ENUM_FIELDS[key]) return ENUM_FIELDS[key].includes(value as string | number);
   if (key === "pttKey" || key === "muteHotkey") return typeof value === "string" && value.length <= 64;
-  if (key === "friendRequests" && object(value)) {
-    const entries = Object.entries(value);
-    return entries.length <= 3 && entries.every(([name, enabled]) => ["everyone", "mutual", "server"].includes(name) && typeof enabled === "boolean");
-  }
-  if (key === "spamRestoredMessages" && object(value)) {
-    const entries = Object.entries(value);
-    return entries.length <= 1024 && entries.every(([id, revision]) => id.length > 0 && id.length <= 128 && typeof revision === "string" && revision.length <= 64);
-  }
-  if (key === "ignoredUsers" && object(value)) {
-    const entries = Object.entries(value);
-    return entries.length <= 1024 && entries.every(([id, ignored]) => id.length > 0 && id.length <= 128 && typeof ignored === "boolean");
-  }
-  if ((key === "serverDMOverrides" || key === "gameActivityServerOverrides") && object(value)) {
-    const entries = Object.entries(value);
-    const maxIdLength = key === "gameActivityServerOverrides" ? 256 : 128;
-    return entries.length <= 1024 && entries.every(([id, enabled]) => id.length > 0 && id.length <= maxIdLength && typeof enabled === "boolean");
-  }
-  if ((key === "sensitiveMedia" || key === "disturbingMedia") && object(value)) {
-    const entries = Object.entries(value);
-    return entries.length <= 3 && entries.every(([scope, mode]) => ["friendDMs", "otherDMs", "channels"].includes(scope) && ["show", "blur", "block"].includes(mode as string));
-  }
-  return isVoicePeerMap(key) && object(value);
+  return object(value) && validDictionaryField(key, value);
 }
 function cachedGIFs(raw: unknown[]): PreferencesData[] {
   const seen = new Set<string>();
