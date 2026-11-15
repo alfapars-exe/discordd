@@ -3465,3 +3465,12 @@ Tam istemci coverage, lint ve değişmez kaynak taraması sürüyor. Receipt: `i
 caac0d77 PR305 terminal CI 36/36 başarılı. Timer ürün kaynağı fec8b107 ile client/server/electron/e2e farkı boş; bu aradaki değişiklikler teslim kanıtlarıdır. Arşiv: `implementation/verification/refactor-caac0-terminal-ci-2026-11-15.json`. Bu sonuç sonraki 7a857281 geçmiş düzeltmesinin yeni head kabulü değildir. Genel çalışma zamanı/platform/fiziksel kabul açık.
 
 Son 7a857281 arşiv taraması tamamlandı: 51 doğrulanmış kaynak kaydı, 478 inceleme satırı, 0 engelleyici desen eşleşmesi. Desen taraması güvenlik açığı yokluğunu kanıtlamaz. Önceki caac0d77 CI 36/36 başarılı; yeni geçmiş kaynağı gönderimden sonra ayrıca doğrulanacak.
+
+
+### RF13/RF26 — Legacy tercih aktarımının uygunluk ve retry sahipliği (2026-11-15)
+
+ab3a28e7, hazırlık ve eşzamanlı refresh sonrasında mevcut scope'un hâlâ aktarım yapabildiğini doğrulayan `canImportLegacyForCurrentScope` işlevini ayırır. Aktarım kuyruğa alındıktan sonra yerel uygulama hata verirse retry/error durumunu yalnız hâlâ geçerli binding'in yazmasını `retainLegacyPresentationRetry` yönetir. İlk teklif kontrolü, önce durable queue sonra marker yazılması, hesap uyuşmazlığının reddi ve hesap değişiminde eski işin yeni state'e yazmaması korunur. Store aksiyonları ve wire/storage alanları değişmedi. Bu bir davranış hatası düzeltmesi değil, mevcut akışın ayrıştırılmasıdır.
+
+Değişiklik öncesinde 79 tercih store testi geçti (3,86 saniye). Sonrasında tercih store'u, observer hata ve destination scope dosyalarında 116 test geçti (4,39 saniye). Gerçek TypeScript/Vite build başarılı (Vite 1,73 saniye). Tam istemci coverage, lint ve değişmez kaynak taraması sürüyor. Sonar'ın önceki kaynakta açık olan 17 karmaşıklık bulgusu yeni head analiz edilmeden kapanmış sayılmıyor; son puan iddia edilmiyor. Receipt: `implementation/verification/refactor-legacy-import-ownership-2026-11-15.json`. RF13 ve genel RF01–RF30 kabulü açık.
+
+ab3a28e7 tam istemci koşusu 499 dosyada 5.359 başarılı/1 atlanan testle geçti; satır %68,91, dal %64,90. Lint 0 hata ve mevcut 2 uyarıyla geçti. Son kaynak taraması ve yeni head CI/Sonar kabulü açık.

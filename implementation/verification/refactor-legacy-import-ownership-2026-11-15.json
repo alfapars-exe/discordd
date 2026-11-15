@@ -1,0 +1,91 @@
+{
+  "sourceRevision": "ab3a28e7",
+  "scope": "RF13/RF26 separate current-scope legacy import eligibility from recovery of queued imports after presentation failure. Public actions,wire/storage keys and durable-queue-before-marker ordering unchanged.",
+  "baseline": {
+    "source": "49c36d99",
+    "tests": "79 preference store tests PASS3.86s",
+    "log": "TEMP/hichat-legacy-eligibility-before.log",
+    "sonarIssue": {
+      "key": "AaHe-pzEMioAmihIyi9w",
+      "rule": "typescript:S3776",
+      "complexity": 17,
+      "limit": 15,
+      "status": "OPEN on previous analyzed source"
+    }
+  },
+  "change": {
+    "eligibility": "After preparation/joined refresh,recheck scope,loaded state,account mismatch and legacy import eligibility in a named function. Initial offer guard retained.",
+    "recovery": "Only the current binding and an already queued patch may retain a presentation retry/error. Account replacement and failed queue persistence remain untouched."
+  },
+  "validation": {
+    "targeted": "116 tests across preferencesStore,preferenceNotificationFailure,preferenceDestinationScope PASS4.39s",
+    "targetedLog": "TEMP/hichat-legacy-eligibility-after.log",
+    "build": "PASS actualtsc-b/Vite1.73s;TEMP/hichat-legacy-eligibility-build.log",
+    "fullClientCoverage": "PASS499files5359passed1skipped;TEMP/hichat-legacy-eligibility-coverage.log",
+    "lint": "PASS0errors2existingwarnings;TEMP/hichat-legacy-eligibility-lint.log",
+    "selfScan": "RUNNING immutableab3a28e7;TEMP/hichat-legacy-eligibility-final-scan.log",
+    "coverageTotal": {
+      "lines": {
+        "total": 38525,
+        "covered": 26551,
+        "skipped": 0,
+        "pct": 68.91
+      },
+      "statements": {
+        "total": 52768,
+        "covered": 35812,
+        "skipped": 0,
+        "pct": 67.86
+      },
+      "functions": {
+        "total": 12327,
+        "covered": 7651,
+        "skipped": 0,
+        "pct": 62.06
+      },
+      "branches": {
+        "total": 39950,
+        "covered": 25930,
+        "skipped": 0,
+        "pct": 64.9
+      },
+      "branchesTrue": {
+        "total": 0,
+        "covered": 0,
+        "skipped": 0,
+        "pct": 100
+      }
+    },
+    "coveragePreferencesStore": {
+      "lines": {
+        "total": 267,
+        "covered": 263,
+        "skipped": 0,
+        "pct": 98.5
+      },
+      "functions": {
+        "total": 38,
+        "covered": 37,
+        "skipped": 0,
+        "pct": 97.36
+      },
+      "statements": {
+        "total": 343,
+        "covered": 324,
+        "skipped": 0,
+        "pct": 94.46
+      },
+      "branches": {
+        "total": 212,
+        "covered": 188,
+        "skipped": 0,
+        "pct": 88.67
+      }
+    }
+  },
+  "remaining": [
+    "Final immutableab3a28e7 source scan",
+    "Previous-head terminal CI;new-head CI/Sonar after push,no exact after complexity score claimed",
+    "Full RF13 and RF01-RF30 runtime/platform/physical acceptance remain open"
+  ]
+}
