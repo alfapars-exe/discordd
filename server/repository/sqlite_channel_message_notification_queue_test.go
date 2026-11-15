@@ -32,6 +32,12 @@ func TestChannelMessageNotificationRetryBackoffDoesNotStarveReadyJobs(t *testing
 	if err := queue.Enqueue(ctx, first.ID, "srv-1", msgChannel, msgAuthor); err != nil {
 		t.Fatal(err)
 	}
+	// NextBatch is a read, not a claim: the second job remains eligible.
+	// Set an explicit earlier scheduling position for the retried first job;
+	// Enqueue timestamps can tie within the same millisecond.
+	if _, err := db.Conn.Exec(`UPDATE channel_message_notification_jobs SET last_batch_at='1999-01-01 00:00:00',created_at='1999-01-01 00:00:00' WHERE message_id=?`, first.ID); err != nil {
+		t.Fatal(err)
+	}
 	job, _, err := queue.NextBatch(ctx, ChannelMessageNotificationBatchSize)
 	if err != nil || job == nil || job.MessageID != first.ID {
 		t.Fatalf("first job: %#v %v", job, err)

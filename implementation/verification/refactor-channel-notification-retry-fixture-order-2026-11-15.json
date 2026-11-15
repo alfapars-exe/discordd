@@ -1,0 +1,17 @@
+{
+  "trigger": "Broad Go run f5d6b01b failed repository TestChannelMessageNotificationRetryBackoffDoesNotStarveReadyJobs; other four packages passed.",
+  "reproduction": "Unmodified retry test in 30-repeat run reproduced same false retry-selection failure multiple times. Initial edit attempt used wrong relative path and did not change source; that unchanged run is the before evidence.",
+  "cause": "NextBatch does not claim/consume second ready job. Same-millisecond last_batch_at/created_at can tie; message_id tie breaker need not select first job after first retry becomes due. Test assumed an earlier scheduling position it had not established.",
+  "change": "Give first fixture job explicit earlier last_batch_at/created_at before first selection; preserve backoff/attempt/cursor assertions. No product queue SQL or behavior changed.",
+  "checks": {
+    "retry_repeated": "PASS 30 repeats, 10.776s",
+    "queue_suite": "PASS TestChannelMessageNotification prefix, 1.999s",
+    "vet": "PASS go vet ./repository",
+    "reviewed_manifest": "PASS 50 exact records"
+  },
+  "limits": [
+    "Earlier broad run remains failed; full updated-source validation still required.",
+    "SQLite scheduling fixture correction, not PostgreSQL or production capacity proof.",
+    "Overall refactor acceptance incomplete."
+  ]
+}
