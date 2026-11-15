@@ -7,7 +7,7 @@ import { APPEARANCE_RANGES, APPEARANCE_STORAGE_KEYS } from "./appearancePreferen
 export type PreferencesData = Record<string, unknown>;
 
 const MERGED_NAMESPACES = new Set(["voice_settings", "accessibility", "appearance", "sidebar_sections", "cosmetics_view", "entrance_sounds", "privacy", "notifications", "email_preferences", "locale"]);
-const DEVICE_FIELDS = new Set(DEVICE_LOCAL_VOICE_SETTING_KEYS);
+const DEVICE_FIELDS = new Set<string>(DEVICE_LOCAL_VOICE_SETTING_KEYS);
 const CACHE_FIELDS: Record<string, Set<string>> = {
   cosmetics_view: new Set(["plain"]),
   appearance: new Set(Object.keys(APPEARANCE_STORAGE_KEYS)),
