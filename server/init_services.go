@@ -286,14 +286,13 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	rollback = append(rollback, linkPreviewService.Stop)
 	badgeService := services.NewBadgeService(repos.Badge, hub)
 
-	preferencesService := services.NewPreferencesService(repos.Preferences, profileAudiencePolicy, gameActivityService, hub)
-	gameJoinService := services.NewGameJoinService(gameActivityService, services.NewGameJoinPolicy(gameActivityPolicy, repos.Preferences, repos.Friendship, repos.User, repos.AccountLifecycle, repos.Server, repos.Ban, repos.Channel, channelPermService, voiceService, channelPermService), hub)
+	activityFeatures := initActivityFeatureServices(activityFeatureDependencies{
+		Repositories: repos, Hub: hub, Profiles: profileAudiencePolicy, Activity: gameActivityService,
+		Policy: gameActivityPolicy, Permissions: channelPermService, FreshPermissions: channelPermService,
+		Voice: voiceService, Logger: appLogService,
+	})
+	preferencesService, gameJoinService, clipRecordingService := activityFeatures.Preferences, activityFeatures.GameJoin, activityFeatures.ClipRecording
 	hub.OnGameJoinOffer(gameJoinOfferCallback(gameJoinService))
-
-	clipRecordingService := services.NewClipRecordingService(voiceService, repos.Preferences, appLogService)
-	// auditLogService itself was constructed earlier (right after
-	// channelPermService above) so it could be passed as a constructor
-	// parameter to voice/channel/message/member/role/server services.
 
 	operations := initOperationalServices(operationalDependencies{
 		Repositories: repos, Config: cfg, ScreenShares: voiceService, Reachability: reachabilityReporter,
