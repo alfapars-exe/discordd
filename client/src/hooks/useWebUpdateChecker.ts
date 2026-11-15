@@ -27,12 +27,20 @@ export function useWebUpdateChecker(): boolean {
 
   useEffect(() => {
     let cancelled = false;
+    let inFlight = false;
+    const controller = new AbortController();
     let timer: number | undefined;
 
     async function check() {
-      if (cancelled) return;
+      if (cancelled || inFlight || document.visibilityState !== "visible") return;
+      inFlight = true;
       try {
-        const res = await apiClient<{ version: string }>("/version");
+        const res = await apiClient<{ version: string }>("/version", {
+          signal: controller.signal,
+          // A stuck request must release the single-request slot by the next
+          // polling interval; API lifetime also bounds refresh/retry/body reads.
+          timeoutMs: POLL_INTERVAL_MS,
+        });
         if (cancelled) return;
         if (!res.success || !res.data?.version) return;
         const v = res.data.version;
@@ -43,6 +51,8 @@ export function useWebUpdateChecker(): boolean {
         }
       } catch {
         // Network blip — try again on the next tick.
+      } finally {
+        inFlight = false;
       }
     }
 
@@ -61,9 +71,9 @@ export function useWebUpdateChecker(): boolean {
     }
 
     function onVisibility() {
+      schedule();
       if (document.visibilityState === "visible") {
         check();
-        schedule();
       }
     }
 
@@ -73,6 +83,7 @@ export function useWebUpdateChecker(): boolean {
 
     return () => {
       cancelled = true;
+      controller.abort();
       window.clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
