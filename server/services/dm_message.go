@@ -176,7 +176,12 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 			if recipient == nil {
 				return nil, fmt.Errorf("%w: DM recipient not found", pkg.ErrNotFound)
 			}
-			if recipient != nil && recipient.DMPrivacy == "message_request" {
+			// AcceptPendingUnblocked retains the member initiator as the receipt
+			// of explicit acceptance. An accepted request does not require the
+			// recipient to send a reply before the initiator can continue.
+			requestWasAccepted := channel.InitiatedBy != nil &&
+				(*channel.InitiatedBy == channel.User1ID || *channel.InitiatedBy == channel.User2ID)
+			if recipient != nil && recipient.DMPrivacy == "message_request" && !requestWasAccepted {
 				friends, err := s.friendChecker.AreFriends(ctx, userID, otherUserID)
 				if err != nil {
 					return nil, fmt.Errorf("failed to check friendship: %w", err)
