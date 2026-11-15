@@ -6,6 +6,8 @@ import { capturePreferenceScope } from "./preferenceScope";
 export function startPreferenceTask(run: () => Promise<unknown>, report: () => void): void {
   const isCurrent = capturePreferenceScope();
   const reportCurrent = () => { if (isCurrent()) report(); };
-  try { void Promise.resolve(run()).catch(reportCurrent); }
-  catch { reportCurrent(); }
+  let task: Promise<unknown>;
+  try { task = run(); }
+  catch { reportCurrent(); return; }
+  void Promise.resolve(task).catch(reportCurrent);
 }
