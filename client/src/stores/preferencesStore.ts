@@ -173,6 +173,24 @@ async function applyData(version: number, reset = false, preserveSessionState = 
     if (current(version)) throw new PreferencePresentationError({ reset, preserveSessionState }, error);
   }
 }
+function startPreferencePresentationRetry(version: number): Promise<void> {
+  const plan = presentationRetry ?? { reset: false, preserveSessionState: false, preparation: false };
+  const applying = applyData(version, plan.reset, plan.preserveSessionState);
+  // Replace failed initial preparation and return the original promise so
+  // extracting this phase does not introduce another microtask boundary.
+  if (plan.preparation) preparation = applying;
+  return applying;
+}
+
+function completePreferencePresentationRetry(version: number): boolean {
+  if (!current(version)) return false;
+  presentationRetry = null;
+  const state = usePreferencesStore.getState();
+  usePreferencesStore.setState({ syncStatus: state.isLoaded ? nonempty(pending) ? "pending" : "saved" : "idle", syncError: null });
+  // A saved observer can replace the binding before publication returns.
+  return current(version);
+}
+
 function schedule(): void {
   clearTimer();
   const version = getPreferenceScopeGeneration();
@@ -354,20 +372,13 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     const version = getPreferenceScopeGeneration();
     clearTimer();
     if (get().syncError === "preferences_apply_failed") {
-      const plan = presentationRetry ?? { reset: false, preserveSessionState: false, preparation: false };
       try {
-        const applying = applyData(version, plan.reset, plan.preserveSessionState);
-        // A failed initial presenter must be replaced, not awaited forever.
-        if (plan.preparation) preparation = applying;
-        await applying;
+        await startPreferencePresentationRetry(version);
       } catch {
         if (current(version)) set({ syncStatus: "error", syncError: "preferences_apply_failed" });
         return;
       }
-      if (!current(version)) return;
-      presentationRetry = null;
-      set({ syncStatus: get().isLoaded ? nonempty(pending) ? "pending" : "saved" : "idle", syncError: null });
-      if (!current(version)) return;
+      if (!completePreferencePresentationRetry(version)) return;
     }
     if (!get().isLoaded || get().syncError === "preferences_load_failed") await get().fetchAndApply();
     if (current(version)) await flush();

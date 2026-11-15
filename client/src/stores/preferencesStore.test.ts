@@ -120,11 +120,11 @@ describe("account-scoped preference synchronization", () => {
   });
 
   it.each([
-    { boundary: "owner", publication: "sync" },
-    { boundary: "backend", publication: "sync" },
-    { boundary: "owner", publication: "microtask" },
-    { boundary: "backend", publication: "microtask" },
-  ] as const)("retires a presentation retry after $boundary replacement during $publication publication", async ({ boundary, publication }) => {
+    { boundary: "owner", publication: "sync", owner: "bob", backend: undefined },
+    { boundary: "backend", publication: "sync", owner: "alice", backend: "https://two.example" },
+    { boundary: "owner", publication: "microtask", owner: "bob", backend: undefined },
+    { boundary: "backend", publication: "microtask", owner: "alice", backend: "https://two.example" },
+  ] as const)("retires a presentation retry after $boundary replacement during $publication publication", async ({ publication, owner, backend }) => {
     await ready();
     const { applyAccountPreferences } = await import("./applyAccountPreferences");
     bindPreferencePresenter(async () => { throw new Error("presentation unavailable"); });
@@ -139,7 +139,7 @@ describe("account-scoped preference synchronization", () => {
         if (next.syncStatus !== "saved") return;
         stop();
         const replace = () => {
-          state().bindAccount(boundary === "owner" ? "bob" : "alice", boundary === "backend" ? "https://two.example" : undefined);
+          state().bindAccount(owner, backend);
           state().set({ theme: "replacement-pending" });
         };
         if (publication === "sync") replace();
@@ -149,7 +149,7 @@ describe("account-scoped preference synchronization", () => {
       await settle();
       expect(mocks.get).not.toHaveBeenCalled();
       expect(mocks.update).toHaveBeenCalledTimes(1);
-      expect(state().accountId).toBe(boundary === "owner" ? "bob" : "alice");
+      expect(state().accountId).toBe(owner);
       expect(state().data).toEqual({ theme: "replacement-pending" });
       expect(state().isLoaded).toBe(false);
       expect(state().syncStatus).toBe("pending");
