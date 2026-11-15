@@ -82,7 +82,7 @@ patterns:
     exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
   - rule_name: 'Set-Cookie ham header'
     reminder: '[İnfina §0.10] BLOK — Set-Cookie ham header: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: Merkezî cookie helper (httpOnly/secure/sameSite varsayılan). Bkz. G2.3. BLOK desenleri pre-commit self-scan''de build''i kırar.'
-    regex: 'setHeader\(\s*[''\"]Set-Cookie'
+    regex: 'setHeader\(\s*[''"]Set-Cookie'
     paths: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx', '**/*.mjs', '**/*.cjs']
     exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
   - rule_name: 'Web storage''da hassas veri'

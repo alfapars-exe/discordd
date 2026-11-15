@@ -98,7 +98,7 @@ incele_sh() { local d="$1" p="$2"
 blok "SQLi template literal"        '\.query\(\s*`[^`]*\$\{'
 blok "SQLi string concat"           '\.query\([A-Za-z_]+\s*\+'
 blok "jwt.decode"                   'jwt\.decode\('
-blok "Set-Cookie ham header"        "setHeader\(\s*['\"]Set-Cookie"
+blok_reviewed_js "Set-Cookie ham header" "js.fixture-cookie-proxy" 'setHeader\(\s*['\''"]Set-Cookie'
 blok "document.cookie yazımı"       'document\.cookie\s*='
 blok "err response'a sızıyor"       'json\([^)]*\berr(or)?\.(message|stack)'
 blok "Ham err nesnesi yanıtta"      'json\([^)]*[:({,]\s*err\b'

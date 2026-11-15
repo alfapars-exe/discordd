@@ -144,6 +144,32 @@ class SelfScanReviewedFPTests(unittest.TestCase):
         self.assertNotIn("unsafe.mjs", result.stdout)
         self.assertNotIn("unsafe.cjs", result.stdout)
 
+    def test_cookie_proxy_review_is_bound_to_exact_path_and_unchanged_source(self) -> None:
+        rel = "migration/scripts/fixture-cookie.mjs"
+        source = "response.setHeader('Set-Cookie', incoming.headers['set-cookie']);\n"
+        path = self.root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(source, encoding="utf-8")
+        self.entries.append(reviewed_entry(
+            self.root, "js.fixture-cookie-proxy", rel, source.rstrip(),
+            "Disposable loopback fixture forwards fixed upstream session cookies unchanged.",
+            "test_cookie_proxy_review_is_bound_to_exact_path_and_unchanged_source",
+        ))
+        self.write_manifest()
+        allowed = self.scan()
+        self.assertEqual(allowed.returncode, 0, allowed.stdout + allowed.stderr)
+        copy = self.root / "client/src/unreviewed.cjs"
+        copy.write_text(source, encoding="utf-8")
+        denied = self.scan()
+        self.assertEqual(denied.returncode, 1, denied.stdout + denied.stderr)
+        self.assertIn("unreviewed.cjs", denied.stdout)
+        self.assertIn("❌ BLOK: Set-Cookie ham header", denied.stdout)
+        copy.unlink()
+        path.write_text(source + "// changed transport\n", encoding="utf-8")
+        stale = self.scan()
+        self.assertEqual(stale.returncode, 1, stale.stdout + stale.stderr)
+        self.assertIn("stale source hash", stale.stderr)
+
     def test_unexpected_token_storage_sql_and_sha1_remain_blocking(self) -> None:
         (self.root / "client/src/unsafe.ts").write_text(
             'localStorage.setItem("auth-token", token);\n', encoding="utf-8"

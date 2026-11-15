@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fail-closed exact-source review support for self-scan false positives.
 
-This is only for the four narrowly reviewed self-scan rule families listed
+This is only for the narrowly reviewed self-scan rule families listed
 below. It is not a Checkmarx suppression/acceptance record and cannot suppress
 unlisted paths, rules, or changed source. CI and local runs use Python 3 from
 PATH; Windows Git Bash users may set SELF_SCAN_PYTHON to the Python executable.
@@ -26,6 +26,7 @@ for _stream in (sys.stdout, sys.stderr):
 
 
 RULE_PATTERNS = {
+    "js.fixture-cookie-proxy": re.compile(r"setHeader\(\s*['\"]Set-Cookie"),
     "js.innerhtml-assignment": re.compile(r"\.(innerHTML|outerHTML)\s*="),
     "js.webstorage-sensitive-key": re.compile(
         r"(localStorage|sessionStorage)\.setItem\([^)]*(session|token|user|auth|password)"

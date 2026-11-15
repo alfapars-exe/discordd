@@ -400,6 +400,14 @@
       "line_sha256": "ef4236201d83d38461fe8ebef9c181a3c3813f0526d007a9924729378239aafe",
       "reason": "All four callers supply a literal row-lock query. The only suffix is the constant NOWAIT clause. Server, user and role IDs are bound arguments in both the immediate attempt and its retry.",
       "proof_ref": "server/repository/sqlite_role.go:33-40,251,325-328,340;server/repository/server_membership_tx.go:63-70"
+    },
+    {
+      "rule": "js.fixture-cookie-proxy",
+      "path": "migration/scripts/qa-http.mjs",
+      "file_sha256": "a3dad3f14d62d6111ccd2e2d8441d6b27c5eb3d38a4f7b577595e9d9910dac54",
+      "line_sha256": "19a257a57b16d059ddc3debc92fe482af20e1303dab698f5b355964cc4b18311",
+      "reason": "Disposable QA-only fixture forwards cookies unchanged from the fixed loopback Go upstream (127.0.0.1:19090), rejects redirects, and never constructs a production session cookie. proof-server.mjs binds only loopback and fixes destination; no general cookie-writing exception.",
+      "proof_ref": "migration/scripts/qa-http.test.mjs::fixture responses reject redirects and preserve only session cookies; migration/scripts/proof-server.mjs"
     }
   ]
 }
