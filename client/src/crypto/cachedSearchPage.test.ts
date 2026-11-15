@@ -39,3 +39,39 @@ it("rechecks deletion tombstones after the final asynchronous index read",async(
  const page=await readCachedSearchPage(index,0,25,record=>matches(record)&&!hidden.has(record.messageId),()=>true);
  expect(page?.messages[0].messageId).toBe("25");expect(page?.total).toBe(26);expect(page?.messages).toHaveLength(25);
 });
+
+it("rejects a cache record returned for another message ID", async () => {
+ const index = await snapshot(3);
+ const original = storage.getCachedDecryptedMessage;
+ vi.spyOn(storage, "getCachedDecryptedMessage").mockImplementationOnce(async () => original("00"));
+ const page = await readCachedSearchPage(index, 0, 25, matches, () => true);
+ expect(page?.messages.map(record => record.messageId)).toEqual(["01", "00"]);
+ expect(page?.total).toBe(2);
+});
+it("stops after ownership is lost during stale hit removal", async () => {
+ const index = await snapshot(3);
+ let current = true;
+ const original = index.remove.bind(index);
+ const remove = vi.spyOn(index, "remove").mockImplementation(async (...args) => {
+  await original(...args); current = false;
+ });
+ vi.spyOn(storage, "getCachedDecryptedMessage").mockResolvedValue(null);
+ expect(await readCachedSearchPage(index, 0, 25, matches, () => current)).toBeNull();
+ expect(remove).toHaveBeenCalledTimes(1);
+ expect((await index.page(0, 25)).total).toBe(2);
+});
+it("does not read an index window for an already stale owner", async () => {
+ const index = await snapshot(1);
+ const page = vi.spyOn(index, "page");
+ const hydrate = vi.spyOn(storage, "getCachedDecryptedMessage");
+ expect(await readCachedSearchPage(index, 0, 25, matches, () => false)).toBeNull();
+ expect(page).not.toHaveBeenCalled(); expect(hydrate).not.toHaveBeenCalled();
+});
+it("propagates a hydration failure without mutating the index", async () => {
+ const index = await snapshot(2);
+ const failure = new Error("cache-read-failed");
+ vi.spyOn(storage, "getCachedDecryptedMessage").mockRejectedValueOnce(failure);
+ const remove = vi.spyOn(index, "remove");
+ await expect(readCachedSearchPage(index, 0, 25, matches, () => true)).rejects.toBe(failure);
+ expect(remove).not.toHaveBeenCalled(); expect((await index.page(0, 25)).total).toBe(2);
+});
