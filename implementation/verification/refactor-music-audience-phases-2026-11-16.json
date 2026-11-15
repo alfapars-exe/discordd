@@ -44,7 +44,7 @@
     "equivalence": "Scenario bodies equal cb516f2f after indentation normalization,excluding added t.Helper. SHA256 matrix67c6da8800cce098e1aec78de864b405b1c63214bb371647ffdb908169bd3e6c; partial074f610076506903c7d51ffbfea8fec902c5d21dcfe7098b2f8dba6120c3179b. TEMP/hichat-verify-music-test-helper-bodies.py.",
     "validation": "Same targeted selection PASS5.920s; Go vet PASS; LinuxGo1.26.11CGO1race20repeatsPASS3.363s. TEMP/hichat-music-audience-test-helpers.log; TEMP/hichat-music-audience-test-helpers-race.log.",
     "sonarAfter": "bd8b9652 analysis:CLOSED/FIXED for both exact test issue keys; no open issues returned for the test file. Source API matches all110 code lines plus one empty EOF line. No exact after complexity score claimed.",
-    "remaining": "Complete required bd8b9652CI"
+    "remaining": "Required bd8b9652CI completed36/36SUCCESS; broaderRF10 acceptance remains open"
   },
   "fixtureCPUProfile": {
     "sourceRevision": "bd8b9652aef14a5888125a08fc65f5ae19828188",
@@ -60,5 +60,6 @@
     "interpretation": "One instrumented diagnostic sample,not production latency or a performance gain claim. Repeated schema fixture initialization is a concrete RF03/RF04 test-profile followup; no fixture optimization implemented."
   },
   "runtimeCI": { "revision": "cb516f2f67558d10802de34ebfac8793c9e55cce", "result": "36/36 terminalSUCCESS including8servicesrace shards", "serverRun": 43762840813, "serverConclusion": "success", "rawChecks": "refactor-cb51-terminal-ci-2026-11-16.json", "scope": "Runtime995d4bf5 accepted in requiredshardedCI. Latest3a23a1ec test-helper source still requires its ownCI/Sonar." },
-  "remaining": ["Complete bd8b9652CI; production and two exact test Sonar keys now CLOSED/FIXED", "MusicAudienceFreshPermissions interface naming issue S8196 remains separate", "Complete RF10 concurrency/runtime/provider acceptance", "Whole-project RF01-RF30 acceptance"]
+  "finalCI": { "revision": "bd8b9652aef14a5888125a08fc65f5ae19828188", "result": "36/36 terminalSUCCESS", "serverRun": 43764312293, "rawChecks": "refactor-bd8b-terminal-ci-2026-11-16.json" },
+  "remaining": ["MusicAudienceFreshPermissions interface naming issue S8196 remains separate", "Complete RF10 concurrency/runtime/provider acceptance", "Whole-project RF01-RF30 acceptance"]
 }

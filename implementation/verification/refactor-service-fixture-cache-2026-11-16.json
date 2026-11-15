@@ -1,0 +1,41 @@
+{
+  "scope": "RF03/RF04/RF26 service SQLite fixture initialization,not production database caching",
+  "baselineRevision": "3a23a1ecdaac8287de4f86c9fd782ad30e9d1e76",
+  "contractCommit": "6c86fdde5b3fd46d7b830362289850d9fb279658",
+  "sharedColdCommit": "7cb6a33c97e08d7eca3eaa727012e7f80a9ad2fa",
+  "sourceRevision": "fb6e5a624e7bcfefbdea426802dac0a7e877cb14",
+  "changes": {
+    "inventory": "All7 direct service-test SQLite full-schema creation sites: bot,e2ee,MFA,email delivery,digest,event email,stream notification. All originally used EmbeddedMigrations/NewLegacy; required PostgreSQL fixtures remain unchanged.",
+    "factory": "Prepare a separate fully migrated bootstrap database before case data exists;close last pool/checkpointWAL;retain only immutable bytes. Every fixture copies bytes to its own t.TempDir file and reopens through production NewLegacy,including connection DSN PRAGMAs,pool configuration and migration-ledger checks.",
+    "ownership": "No cached mutable path,connection,user/session rows or live service. sync.Once coordinates parallel initialization. First initializer test cleanup cannot invalidate later copies. Each pool still has its own t.Cleanup.",
+    "sourceBoundary": "Runtime server/client/Electron/e2e sources and SQL migration files unchanged. All8 changed source paths sincebd8b9652 are server/services/*_test.go."
+  },
+  "contracts": {
+    "scope": "4 top-level tests/14records including8parallel cases and2initializer cleanup subcases; no wall-clock assertion",
+    "parity": "Independent cold production database reference: complete sqlite_schema SQL and ordered migration filenames match; real FK rejection,WAL,5000msbusy timeout and4-connection pool preserved.",
+    "isolation": "First fixture row/schema/ledger mutations and FK setting cannot affect second/later copies;same primary key/username succeeds in8parallel independent files;first initializer cleanup precedes later successful open.",
+    "cold": "PASS6.599s;TEMP/hichat-service-fixture-contract-before.log",
+    "cached": "PASS2.170s;TEMP/hichat-service-fixture-contract-after.log",
+    "sharedColdSelected": "63passed0skipped0failed20.072s;TEMP/hichat-service-fixture-shared-cold-contracts.jsonl"
+  },
+  "validation": {
+    "windowsBefore": "Go1.27.4CGO0:1946passed inclsubtests,41skipped,0failed92.127s;TEMP/hichat-service-fixture-shared-cold-full.jsonl",
+    "windowsAfter": "Same1946passed,41skipped,0failed55.593s;TEMP/hichat-service-fixture-warm-full.jsonl. These are validation runs,not a controlled full-suite latency ratio.",
+    "linuxFullRaceAfter": "Go1.26.11linux/amd64CGO1:1959passed inclsubtests,40skipped,0failed371.503s under same10m package budget. TEMP/hichat-refactor-go-linux-cache/service-fixture-full-after-race.jsonl",
+    "linuxFixtureRace": "Allfixturecontracts3repeatsPASS126.716s;TEMP/hichat-service-fixture-full-after-race.log",
+    "priorUnshardedFailure": "995d4bf5 fullLinuxrace had failed at default10m with994passed/19skipped before package timeout;partial run is not a full-suite speed ratio baseline.",
+    "vetAndBuild": "PASS go vet ./services and go build ./...",
+    "immutableScan": "PASSfb6e5a62 exit0:51exact reviewed-source records,482reviewlines,0blockingpatterns;TEMP/hichat-service-fixture-scan.log. Pattern scan does not prove absence of vulnerabilities.",
+    "newReviewHits": "2test-only variable-file operations reviewed: WriteFile uses private t.TempDir plus literal .db names from7trusted callsites/contracts;ReadFile uses private t.TempDir plus fixed service-schema-template.db. No user-controlled path or production route."
+  },
+  "benchmark": {
+    "receipt": "refactor-service-fixture-benchmark-2026-11-16.json",
+    "method": "Same8 unchanged access-revocation scenarios;LinuxGo1.26.11CGO1race;1warmup+9samples;exact ordered8case passes validated in every iteration;90pass records eachside,0skips/failures;rawSHA256 retained",
+    "beforeMedianSeconds": 57.49,
+    "afterMedianSeconds": 1.49,
+    "beforeWarmupSeconds": 56.28,
+    "afterWarmupSeconds": 8.48,
+    "scope": "Observed local test execution,including fixture setup/cleanup;not production latency or capacity. Workstation not CPU-pinned;short Windows contract run overlapped baseline;all samples retained."
+  },
+  "remaining": ["NewsourceCI/PostgreSQL/Sonar gates", "Other package fixture profiles and final combined-source test budgets", "WholeRF03/RF04/RF01-RF30 and required runtime/platform/physical acceptance"]
+}
