@@ -58,6 +58,20 @@ it("does not acknowledge an ID appended while an empty read completes", async ()
   expect(seen).toEqual(["initial", "late"]);
 });
 
+it.each(["abort", "owner", "generation"] as const)("honors %s between writer flush and the empty-frontier fast path", async boundary => {
+  const frontier = (await pool()).create(vi.fn());
+  await frontier.drain(async () => {});
+  const controller = new AbortController();
+  const finishing = frontier.drain(async () => {}, controller.signal);
+  queueMicrotask(() => {
+    if (boundary === "abort") controller.abort();
+    else if (boundary === "owner") publishAuthOwnerChange("fastpath-replacement");
+    else publishAuthGenerationChange(getAuthSessionSnapshot().generation + 1);
+  });
+  if (boundary === "abort") await expect(finishing).rejects.toMatchObject({ name: "AbortError" });
+  else await expect(finishing).rejects.toThrow("search_spool_disposed");
+});
+
 it("retains an unacknowledged batch when the consumer fails and includes late earlier keys", async () => {
   const frontier = (await pool()).create(vi.fn());
   for (let i = 0; i < 130; i++) frontier.append(`initial-${i}`);
