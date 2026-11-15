@@ -11,6 +11,25 @@ import (
 	"time"
 )
 
+func TestBackendOwnerWatchNaturalCompletionReleasesContext(t *testing.T) {
+	parent, cancelParent := context.WithCancel(context.Background())
+	defer cancelParent()
+	observed := make(chan context.Context, 1)
+	stop := startBackendOwnerWatch(parent, func(ctx context.Context) { observed <- ctx })
+	t.Cleanup(stop)
+	ctx := <-observed
+	select {
+	case <-ctx.Done():
+	case <-time.After(time.Second):
+		t.Fatal("completed watch retained its child context until explicit stop")
+	}
+	if parent.Err() != nil {
+		t.Fatal("natural completion cancelled the caller context")
+	}
+	stop()
+	stop()
+}
+
 func TestBackendOwnerWatchStopCancelsAndJoinsBeforeConnectionClose(t *testing.T) {
 	parent, cancelParent := context.WithCancel(context.Background())
 	started, cancelled, release, exited := make(chan struct{}), make(chan struct{}), make(chan struct{}), make(chan struct{})
