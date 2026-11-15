@@ -214,6 +214,7 @@ function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId,
     // Do not accumulate tombstones or enqueue no-op React updates indefinitely.
     if (!snapshot && !searching.current && debounceRef.current === null) return true;
     const pending = deletedIds.current;
+    if (pending.has(id)) return true;
     pending.add(id);
     // Hide a live deletion immediately, even before IndexedDB commits.
     setResults(prev => prev && ({ ...prev, messages: prev.messages.filter(message => message.id !== id) }));
