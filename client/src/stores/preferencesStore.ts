@@ -162,7 +162,15 @@ async function applyData(version: number, reset = false, preserveSessionState = 
 }
 function schedule(): void {
   clearTimer();
-  timer = setTimeout(() => { timer = null; void flush(); }, DEBOUNCE_MS);
+  const version = getPreferenceScopeGeneration();
+  const scheduled = setTimeout(() => {
+    if (!current(version) || timer !== scheduled) return;
+    timer = null;
+    void flush().catch(() => {
+      if (current(version)) console.error("[preferences] background_flush_failed");
+    });
+  }, DEBOUNCE_MS);
+  timer = scheduled;
 }
 
 async function flush(): Promise<void> {
@@ -224,10 +232,13 @@ async function flush(): Promise<void> {
   // retries join it; a replacement binding can retire it before any work runs.
   const task = Promise.resolve().then(run);
   writePromise = task;
-  await task;
-  if (!current(version)) return;
-  if (writePromise === task) writePromise = null;
-  if (nonempty(pending) && usePreferencesStore.getState().syncStatus !== "error") schedule();
+  try { await task; }
+  finally {
+    if (current(version) && writePromise === task) {
+      writePromise = null;
+      if (nonempty(pending) && usePreferencesStore.getState().syncStatus !== "error") schedule();
+    }
+  }
 }
 
 export const usePreferencesStore = create<PreferencesState>((set, get) => ({
@@ -298,11 +309,14 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     };
     const task = run();
     fetchPromise = task;
-    await task;
-    if (!current(version)) return;
-    if (fetchPromise === task) fetchPromise = null;
-    fetchEdits = {}; fetchAcknowledged = {};
-    if (get().syncStatus !== "error" && nonempty(pending)) schedule();
+    try { await task; }
+    finally {
+      if (current(version) && fetchPromise === task) {
+        fetchPromise = null;
+        fetchEdits = {}; fetchAcknowledged = {};
+        if (get().syncStatus !== "error" && nonempty(pending)) schedule();
+      }
+    }
   },
   retrySync: async () => {
     const version = getPreferenceScopeGeneration();
