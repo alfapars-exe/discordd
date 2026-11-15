@@ -3263,3 +3263,16 @@ A coherent source read can block queued deletion writes;starting a replacement q
 Ego/native Chromium156 IndexedDB probe passed channel and DM pending-delete hold,exact2remaining IDs/order,query abort and retired-owner rejection. Tiny native module fixture only;not full UI/performance/physical proof. Exact fixtureDBs cleaned,browser taskspace closed,owned local server stopped. Immutable dabef3 self-scanPASS0blocking/50reviewed records/448review lines. Active distinct-ID frontier remains unbounded. Durable failure journal,cross-tab ordering,source-write/live-receive budgets,backpressure,large/mixed/native/physical/project acceptance remain open. No cap/discard/restart introduced and RF17 not complete.
 
 Priore18ec1b7 completed36/36SUCCESS and all3workflowsSUCCESS. Terminal snapshot:implementation/verification/refactor-e18-terminal-ci-2026-11-15.json. New deletion-drain changes need independent new-head CI;PR305 stays draft.
+
+
+### RF15/RF17 — accepted HTTP DM deletion drain and permanent native gate (2026-11-15)
+
+HTTP deletion path bypassed shared completion:store observer failure skipped plaintext eviction and observers could start a query before accepted cleanup was tracked. Initial3cases failed(109passed). Complete shared helper moved from hooks/ws into utils in pure refactor8850108a;HTTP adoptionfd417eb5 separate from tests4b7a4a26/633ac390. Five suites176passed3.95s,including concurrent deletion drain,account/generation/device replacement and actual keyStorage/fake-indexeddb eviction without WS echo. Final old-source replay7failed129passed includes stricter no-cleanup-attempt controls;not seven independent bugs. Candidate restored byte-for-byte. Existing boolean/best-effort warning policy retained.
+
+Frozen fd417eb5 full492files5270passed1skipped115.32s;statement67.56/branch64.75/function61.86/line68.60%;actual tsc-b/VitePASS3.08s;changed lintPASS. Native gate21acfa5e changes only e2e scripts;client tree identical. Receipt:implementation/verification/refactor-http-dm-deletion-drain-2026-11-15.json includes normalized module coverage. Permanent accepted-deletion-drain fixture now called by existing required staging CI step before unchanged five native modes. Full Node26.13.1/Chromium156.0.8078.4 staging verifier passed all6modes,1201records/15exact pages in existing modes,quota/cancel writer release and atomic removal preserved. Same new function passed interactively via ego-browser/nativeIDB. Tiny module fixture does not prove actual HTTP transport/full UI/physical behavior. Source21ac self-scan and prior5ec terminalCI pending.
+
+Active pending-ID frontier remains unbounded;durable failure journal,cross-tab ordering,source-writer/backpressure budgets,large/native/physical/project acceptance remain open. PR305 stays draft;no RF17 completion claim.
+
+Immutable final-source21acfa5e self-scanPASS:50reviewed records valid,0blocking matches,448review lines. Full native staging gate6modesPASS without changing legacy assertions. Prior5ec serverCI has only repository shard0/8 still live;hold delivery for terminal snapshot.
+
+Prior5ec62501 completed36/36SUCCESS and all3workflowsSUCCESS. Snapshot:implementation/verification/refactor-5ec-terminal-ci-2026-11-15.json. Deliver HTTP DM completion and permanent native staging contract after pinned local proof;new-headCI remains required,PR305 stays draft.
