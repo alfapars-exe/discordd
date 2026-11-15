@@ -139,6 +139,11 @@ korur; `cause` tamamlama sırasında yakalanan hataya bağlanır. Hesap/sunucu n
 geçersizleşen işlem, yeni bağlamın önbelleğini veya kuyruğunu değiştiremez.
 Sunucudan uygulama ve sıfırlama yolları önbelleği tamamlar; sunucuya geri yazmaz.
 
+Doğrulanmış GET/PATCH sonucu, yükleme/kayıt bildirimi yayımlanmadan önce hesap
+önbelleğine alınır; kabul edilmiş PATCH kuyruktan çıkarılır. Yazıcı tutamacı,
+aboneler çalışmadan ayrılır. İç içe yeniden denemeler aynı yazıcıya katılır;
+hesabı değişmiş bekleyen yazıcı yeni bağlamın durumunu tüketmeden durur.
+
 Yerel depolama yazımı mevcut en iyi çaba davranışını sürdürür. Kota veya erişim
 engeli durumunda bellek kuyruğu yetkilidir; kalıcı teslim garantisi verilmez.
 Hata veren abonenin ardından atlanan diğer abonelerin bildirimi ve asenkron
