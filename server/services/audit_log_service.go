@@ -15,6 +15,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
@@ -56,9 +57,12 @@ type auditLogService struct {
 	hub       ws.Broadcaster
 	hubOnline ws.UserStateProvider
 
-	ch     chan models.AuditLog
-	cancel context.CancelFunc
-	done   chan struct{}
+	lifecycleMu sync.Mutex
+	started     bool
+	stopped     bool
+	ch          chan models.AuditLog
+	cancel      context.CancelFunc
+	done        chan struct{}
 }
 
 // NewAuditLogService constructs the service. Call Start() to begin
@@ -93,6 +97,12 @@ func canViewAudit(perms models.Permission) bool {
 }
 
 func (s *auditLogService) Write(entry models.AuditLog) {
+	s.lifecycleMu.Lock()
+	stopped := s.stopped
+	s.lifecycleMu.Unlock()
+	if stopped {
+		return
+	}
 	// Default metadata to "{}" so the wire shape is consistent for clients
 	// that always JSON.parse it.
 	if entry.Metadata == "" {
@@ -108,6 +118,11 @@ func (s *auditLogService) Write(entry models.AuditLog) {
 		entry.TargetSnapshot = s.userSnapshot(ctx, *entry.TargetUserID)
 	}
 
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if s.stopped {
+		return
+	}
 	select {
 	case s.ch <- entry:
 	default:
@@ -192,6 +207,17 @@ func (s *auditLogService) allowedViewers(ctx context.Context, serverID string) [
 }
 
 func (s *auditLogService) Start() {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if s.started || s.stopped {
+		return
+	}
+	s.startWriterLocked()
+}
+
+// startWriterLocked registers exactly one writer before releasing lifecycleMu.
+func (s *auditLogService) startWriterLocked() {
+	s.started = true
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel
 
@@ -212,9 +238,15 @@ func (s *auditLogService) Start() {
 }
 
 func (s *auditLogService) Stop() {
-	if s.cancel != nil {
-		s.cancel()
+	s.lifecycleMu.Lock()
+	s.stopped = true
+	// Even a constructor-only owner must flush entries accepted before Stop.
+	if !s.started {
+		s.startWriterLocked()
 	}
+	cancel := s.cancel
+	s.lifecycleMu.Unlock()
+	cancel()
 	<-s.done
 	auditLogger.Info("audit log service stopped")
 }
