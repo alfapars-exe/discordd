@@ -173,6 +173,37 @@ function schedule(): void {
   timer = scheduled;
 }
 
+function validatePreferenceResponse(
+  response: Awaited<ReturnType<typeof preferencesApi.updatePreferences>>,
+  accountId: string | null,
+  failure: "preferences_save_failed" | "preferences_load_failed",
+): void {
+  if (response.code === "PREFERENCES_ACCOUNT_MISMATCH" || (response.data?.user_id && response.data.user_id !== accountId)) {
+    throw new Error("preferences_account_mismatch");
+  }
+  if (!response.success) throw new Error(failure);
+}
+
+function handlePreferenceWriteFailure(version: number, sent: PreferencesData, accepted: boolean, error: unknown): void {
+  if (!current(version)) return;
+  clearTimer();
+  if (accepted) {
+    // The server already committed this patch. A local presenter failure
+    // must not turn it back into an outbound edit or overwrite newer data
+    // on retry. Keep only edits queued after the acknowledged request.
+    presentationRetry = { ...(error instanceof PreferencePresentationError ? error.plan : { reset: false, preserveSessionState: false }), preparation: false };
+    usePreferencesStore.setState({ syncStatus: "error", syncError: "preferences_apply_failed", hasPendingChanges: nonempty(pending) });
+    return;
+  }
+  pending = merge(sent, pending);
+  inFlight = {};
+  persistPending();
+  if (error instanceof PreferencePresentationError) presentationRetry = { ...error.plan, preparation: false };
+  const syncError = error instanceof PreferencePresentationError ? "preferences_apply_failed" :
+    error instanceof Error && error.message === "preferences_account_mismatch" ? "preferences_account_mismatch" : "preferences_save_failed";
+  usePreferencesStore.setState({ syncStatus: "error", syncError, hasPendingChanges: true });
+}
+
 async function flush(): Promise<void> {
   if (!cacheKey) return;
   if (writePromise) return writePromise;
@@ -194,8 +225,7 @@ async function flush(): Promise<void> {
       if (!current(version)) return;
       const res = await preferencesApi.updatePreferences(sent, requestContext(version));
       if (!current(version)) return;
-      if (res.code === "PREFERENCES_ACCOUNT_MISMATCH" || (res.data?.user_id && res.data.user_id !== usePreferencesStore.getState().accountId)) throw new Error("preferences_account_mismatch");
-      if (!res.success) throw new Error("preferences_save_failed");
+      validatePreferenceResponse(res, usePreferencesStore.getState().accountId, "preferences_save_failed");
       accepted = true;
       inFlight = {};
       const returned = sanitize(res.data?.data);
@@ -209,23 +239,7 @@ async function flush(): Promise<void> {
       usePreferencesStore.setState({ data, syncStatus: nonempty(pending) ? "pending" : "saved", syncError: null, hasPendingChanges: nonempty(pending), legacyImportAvailable: canImportLegacy(data, true) });
       await applyData(version);
     } catch (error) {
-      if (!current(version)) return;
-      clearTimer();
-      if (accepted) {
-        // The server already committed this patch. A local presenter failure
-        // must not turn it back into an outbound edit or overwrite newer data
-        // on retry. Keep only edits queued after the acknowledged request.
-        presentationRetry = { ...(error instanceof PreferencePresentationError ? error.plan : { reset: false, preserveSessionState: false }), preparation: false };
-        usePreferencesStore.setState({ syncStatus: "error", syncError: "preferences_apply_failed", hasPendingChanges: nonempty(pending) });
-        return;
-      }
-      pending = merge(sent, pending);
-      inFlight = {};
-      persistPending();
-      if (error instanceof PreferencePresentationError) presentationRetry = { ...error.plan, preparation: false };
-      const syncError = error instanceof PreferencePresentationError ? "preferences_apply_failed" :
-        error instanceof Error && error.message === "preferences_account_mismatch" ? "preferences_account_mismatch" : "preferences_save_failed";
-      usePreferencesStore.setState({ syncStatus: "error", syncError, hasPendingChanges: true });
+      handlePreferenceWriteFailure(version, sent, accepted, error);
     }
   };
   // Reserve the writer before run notifies synchronous observers. Reentrant
@@ -284,8 +298,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
         set({ syncStatus: "loading", syncError: null });
         const res = await preferencesApi.getPreferences(requestContext(version));
         if (!current(version)) return;
-        if (res.code === "PREFERENCES_ACCOUNT_MISMATCH" || (res.data?.user_id && res.data.user_id !== get().accountId)) throw new Error("preferences_account_mismatch");
-        if (!res.success) throw new Error("preferences_load_failed");
+        validatePreferenceResponse(res, get().accountId, "preferences_load_failed");
         acknowledged = merge(sanitize(res.data?.data), fetchAcknowledged);
         const data = merge(acknowledged, merge(fetchEdits, pending));
         persistCache(snapshotKey, acknowledged);
