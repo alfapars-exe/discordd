@@ -98,8 +98,7 @@
   "syntaxChecks": "node --check PASS for both changed MJS modules",
   "scope": "Native Chromium/IndexedDB API failure injection, real queued transaction backpressure, owner/generation/reset disposal and acknowledged batch contracts. Controlled fixture; no real account DBs or physical quota exhaustion.",
   "remaining": [
-    "Final3ba4e14b immutable expanded scan terminal result",
-    "Push and new-head CI",
+    "New-head CI after push",
     "Final repeated latency comparison and whole producer pipeline/native/physical budgets",
     "Project RF01-RF30 acceptance"
   ],
@@ -228,7 +227,7 @@
       "TEMP/hichat-spool-fastpath-boundaries-green.log",
       "TEMP/hichat-spool-fastpath-native-final.log"
     ],
-    "finalGates": "Coverage/build/lint/native7modes/50kbudgetPASS;expanded immutable3ba4e14b scan running. Prior7cf2dfc7CI36/36SUCCESS archived.",
+    "finalGates": "PASS:coverage/build/lint/native7modes/50kbudget/immutable expanded self-scan. Prior7cf2dfc7CI36/36SUCCESS archived.",
     "build": "PASS, Vite2.99s",
     "changedFilesLint": "PASS",
     "nativeBudget": {
@@ -329,7 +328,19 @@
           "pct": 100
         }
       },
-      "log": "TEMP/hichat-spool-fastpath-final-coverage.log"
+      "log": "TEMP/hichat-spool-fastpath-final-coverage.log",
+      "files": 495,
+      "passed": 5310,
+      "skipped": 1,
+      "seconds": 124.75
+    },
+    "finalImmutableScan": {
+      "sourceCommit": "3ba4e14b",
+      "exitCode": 0,
+      "blockingMatches": 0,
+      "reviewedSourceRecords": 51,
+      "reviewLines": 478,
+      "log": "TEMP/hichat-spool-fastpath-final-scan.log"
     }
   },
   "priorCI": {
