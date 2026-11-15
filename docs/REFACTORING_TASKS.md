@@ -3362,3 +3362,12 @@ a1a2191a aynı yedi native sözleşmeyi Chromium varsayılanı korunarak --brows
 HiChat modüllerini kullanmayan ham IndexedDB kontrolünde100isteklik transaction:WebKit put1536ms/delete1531ms;Chromium put3ms/delete2.9ms. Tekil yerel kontrol bu istek maliyetinin HiChat olmadan da bulunduğunu gösterir;başka OS/engine/cihaz için kabul kanıtı değildir. Chromium7modPASS;Linux/WebKit CI ve fiziksel Apple/native/tüm-hat bütçeleri açık. Receipt:implementation/verification/refactor-webkit-native-matrix-2026-11-15.json. Son kaynak85a9412c taraması sürüyor;gönderim ve yeni-headCI henüz tamamlanmadı. Genel RF01-RF30 hedefi açık.
 
 Final85a9412c expanded immutable self-scanPASS:0blocking/51valid source records/478review lines. Storeline84.12%/branch68.82%;wholeclientline68.85%/branch64.87%. Final5316client tests,production3/3,original-store UI negative control,Chromium7native modes,Git-fixture5tests,legacyquick,build/lint allrecorded. Push includes fixes for both99584d45failed checks;new-headPlaywright/Sonar/Linux-WebKit outcomes remain required. No full project completion claim.
+
+
+### RF11/RF14 — gözlemci doğal tamamlanınca alt context'i bırakma (2026-11-15)
+
+7b64b60b regresyonu mevcut kodda başarısız oldu: ownership observer normal döndüğünde child context, dışarıdan stop çağrılana kadar açık kalıyordu. 4ec27326 iptali gözlemci goroutine'inde erteler; child kaynakları done yayımlanmadan önce bırakılır. Stop hâlâ tamamlanmayı bekler, yinelenen/eşzamanlı çağrıları kabul eder ve çağıranın context'ini iptal etmez.
+
+Beş hedefli test Windows'ta20tekrar ve Linux/Go1.26.11CGO1race altında20tekrarPASS(3.546s). Ana Go paketiPASS7.344s,vetPASS;değişen startBackendOwnerWatch fonksiyonunun statement kapsamı%100. Bu hedefli kapsam tüm projenin kapsamı değildir. Kaynak ve host modül önbelleği Linux konteynerine salt okunur bağlandı;yalnız konteynere ait önbellek yazıldı ve --rm ile temizlendi. Immutable4ec27326 self-scanPASS:0blocking/51valid source records/478review lines. Receipt:implementation/verification/refactor-owner-watch-completion-2026-11-15.json.
+
+Önceki42de5382 CI'ında Linux/WebKit native sözleşmeleri ve production encrypted recovery adımıSUCCESS;SonarCloudSUCCESS. Böylece99584d45'in iki ayrı hatası için yeni kaynakta olumlu kapı kanıtı var;whole-run terminal sonucu henüz bekleniyor. Yerel Windows/WebKit istek hızı sınırı ve fiziksel/tüm-hat/RF01-RF30 kabulü açık kalıyor. Önceki koşu tamamlanmadan yeni push ile iptal edilmeyecek.
