@@ -3448,3 +3448,5 @@ Dört dosyada 177 hedefli test geçti (3,95 saniye). Dokuz gerçek-store ve beş
 fec8b107 tam istemci doğrulaması: 498 dosyada 5.345 başarılı, 1 atlanan test. Satır kapsamı %68,91, dal kapsamı %64,89. Lint 0 hata ve mevcut 2 uyarıyla geçti. Son değişmez kaynak taraması ve önceki head CI terminal sonucu bekleniyor.
 
 Son fec8b107 arşiv taraması tamamlandı: 51 doğrulanmış kaynak kaydı, 478 inceleme satırı, 0 engelleyici desen eşleşmesi. Bu desen taraması güvenlik açığı yokluğunu kanıtlamaz. Yeni gönderim, önceki 9a965a09 CI terminal sonucunu bekliyor; çalışan koşular iptal edilmiyor.
+
+9a965a09 PR305 terminal CI 36/36 başarılı. Arşiv: `implementation/verification/refactor-9a965-terminal-ci-2026-11-15.json`. Yeni fec8b107 timer kaynağının CI kabulü gönderimden sonra ayrıca doğrulanacak. Genel RF01–RF30 hedefi açık.
