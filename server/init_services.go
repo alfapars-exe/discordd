@@ -188,16 +188,10 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 			}
 		}
 	}()
-	authCache := middleware.NewAuthUserCache()
-	rollback = append(rollback, authCache.Close)
-	permissionCache := middleware.NewPermissionCache()
-	rollback = append(rollback, permissionCache.Close)
-	// Order-sensitive services
-	channelPermService := services.NewChannelPermissionService(
-		repos.ChannelPermission, repos.Role, repos.Channel, hub,
-	)
-	rollback = append(rollback, channelPermService.Stop)
-	permInvalidator := services.NewMultiInvalidator(channelPermService, permissionCache)
+	permissions := initPermissionFoundation(permissionFoundationDependencies{Repositories: repos, Hub: hub})
+	rollback = append(rollback, permissions.Stop)
+	authCache, permissionCache := permissions.Auth, permissions.Server
+	channelPermService, permInvalidator := permissions.Channel, permissions.Invalidator
 	serverEventService := services.NewServerEventService(repos.ServerEvent, repos.Server, repos.Role, repos.Channel, channelPermService)
 	logging := initLoggingServices(loggingDependencies{Repositories: repos, Hub: hub})
 	auditLogService, appLogService := logging.Audit, logging.App
