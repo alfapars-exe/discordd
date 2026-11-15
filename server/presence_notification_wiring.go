@@ -17,7 +17,23 @@ type presenceNotificationServices struct {
 // initPresenceNotificationServices shares profile/friend privacy readers and
 // notification writers. The returned online owner must be stopped by the caller.
 func initPresenceNotificationServices(deps presenceNotificationDependencies) presenceNotificationServices {
+	for _, input := range []struct {
+		name  string
+		value any
+	}{{"Repositories", deps.Repositories}, {"Hub", deps.Hub}} {
+		if missingCompositionInput(input.value) {
+			panic("presence notifications requires " + input.name)
+		}
+	}
 	repos := deps.Repositories
+	for _, input := range []struct {
+		name  string
+		value any
+	}{{"Preferences", repos.Preferences}, {"Friendship", repos.Friendship}, {"Notification", repos.Notification}, {"User", repos.User}} {
+		if missingCompositionInput(input.value) {
+			panic("presence notifications requires repository " + input.name)
+		}
+	}
 	profile := services.NewProfileUpdateNotifier(repos.Preferences, repos.Friendship, repos.Notification, deps.Hub)
 	online := services.NewOnlineFriendNotifier(repos.User, repos.Preferences, repos.Friendship, repos.Notification, deps.Hub, deps.Hub, repos.Notification)
 	return presenceNotificationServices{ProfileUpdates: profile, OnlineFriends: online}
