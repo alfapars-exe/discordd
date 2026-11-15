@@ -3450,3 +3450,14 @@ fec8b107 tam istemci doğrulaması: 498 dosyada 5.345 başarılı, 1 atlanan tes
 Son fec8b107 arşiv taraması tamamlandı: 51 doğrulanmış kaynak kaydı, 478 inceleme satırı, 0 engelleyici desen eşleşmesi. Bu desen taraması güvenlik açığı yokluğunu kanıtlamaz. Yeni gönderim, önceki 9a965a09 CI terminal sonucunu bekliyor; çalışan koşular iptal edilmiyor.
 
 9a965a09 PR305 terminal CI 36/36 başarılı. Arşiv: `implementation/verification/refactor-9a965-terminal-ci-2026-11-15.json`. Yeni fec8b107 timer kaynağının CI kabulü gönderimden sonra ayrıca doğrulanacak. Genel RF01–RF30 hedefi açık.
+
+
+### RF15 — Ortak kanal/DM geçmişi fixture'ları ve çakışan eski sayfa düzeltmesi (2026-11-15)
+
+748ecd2c, iki gerçek Zustand store'una aynı yedi senaryoyu uygular: bekleyen REST snapshot'ı sırasında canlı create/edit/reaction/delete; yinelenen replay ve snapshot çakışması; eski hesap yanıtı; geç tamamlanan iptal edilmiş istek; yabancı konuşma satırı; eski sayfa çakışması; ileri sayfa sonunda bekletilmiş canlı olayların birleştirilmesi. Her fetch API mock'una ulaştığını doğrular. Son kimlikler, içerik, tepkiler, before/after cursor'ları ve ilgili read cursor davranışı denetlenir. API/şifre çözme mock; gerçek auth generation ve DM olay sürüm gözlemcisi kullanılır. Bu matris gerçek HTTP/WebSocket, şifreleme veya izin kabulü değildir. İleri sayfada kanalın view üzerinden read yayınlaması ile DM'nin açık read çağrısı ayrı tutulur.
+
+caac0d77 kaynağında 14 senaryonun yalnız kanal eski-sayfa çakışması başarısız oldu: yüklü düzenleme eski içerikle değişiyordu. c0d5e3a0, yüklü kopyayı koruyarak düzeltir; üç dosyada 177 test geçti (3,76 saniye). Ardından 7a857281, DM'deki saf yeni-kimlik seçimini `unseenMessages` adıyla ortak yardımcıya taşır ve kanal eski sayfasında da kullanır. Domain sıralaması, erişim ve şifreleme kararları taşınmaz. Güçlendirilmiş fixture, yüklü tepkileri ve gelen sayfa içi duplicate'leri de doğrular. Beş dosyada 191 test geçti (4,25 saniye); gerçek TypeScript/Vite build başarılı (Vite 1,62 saniye).
+
+Tam istemci coverage, lint ve değişmez kaynak taraması sürüyor. Receipt: `implementation/verification/refactor-history-shared-contract-2026-11-15.json`. Ortak fixture maddesi için bu kapsam somut kanıttır; RF15'in tüm izin/şifreleme/read runtime kabulünü veya genel RF01–RF30 hedefini kapatmaz. Performans iyileşmesi iddia edilmiyor.
+
+7a857281 tam istemci koşusu 499 dosyada 5.359 başarılı ve 1 atlanan testle tamamlandı. Satır kapsamı %68,91, dal kapsamı %64,90. Lint 0 hata ve mevcut 2 uyarıyla geçti. Son kaynak taraması ve CI kabulü açık. Günlük: TEMP/hichat-history-contract-coverage.log.
