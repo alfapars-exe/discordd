@@ -39,7 +39,7 @@
         "status": "OPEN"
       }
     ],
-    "after": "Not yet analyzed;no after complexity score or resolution claimed."
+    "after": "PR305 Sonar issues API: all three original keys CLOSED/FIXED. Source-lines API contains startPreferencePresentationRetry, completePreferencePresentationRetry and loadedPreferenceSyncStatus from published7666100f. No exact after complexity score claimed."
   },
   "changes": {
     "scopeFence": "Check scope after saved publication;retired retry cannot initiate fetch/flush for replacement binding.",
@@ -115,7 +115,7 @@
     "selfScan": "PASS immutable1225afe7:51exact reviewed-source records,480reviewlines,0blockingpatterns. Pattern scan is not proof of absence of vulnerabilities. TEMP/hichat-preference-retry-final-scan.log"
   },
   "remaining": [
-    "New-head CI/Sonar closure of original issue keys",
+    "Full7666100f CI remains in progress;Sonar original issue closure verified separately",
     "Whole RF13/RF26 and RF01–RF30 runtime/platform/physical acceptance remain open"
   ]
 }

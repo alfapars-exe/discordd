@@ -1,0 +1,25 @@
+{
+  "sourceRevision": "ca5ff3e0",
+  "baselineRevision": "7666100f",
+  "scope": "RF13/RF26 account cache namespace validation extraction",
+  "sonarBefore": {
+    "key": "AaHggMHYGiVmDmX-KOBu",
+    "rule": "typescript:S3776",
+    "function": "cacheable",
+    "complexity": 17,
+    "threshold": 15,
+    "after": "Not yet analyzed; no resolution or after score claimed"
+  },
+  "behavior": "Move namespace field selection and peer-map sanitization into cachedNamespace. Preserve namespace iteration order, accessibility codec, empty namespace omission and final sanitize. Public exports and accepted cache fields unchanged.",
+  "validation": {
+    "targetedBefore": "106 tests across4files PASS4.78s",
+    "targetedAfter": "Same106 tests across4files PASS4.54s",
+    "additional": "132tests across4files PASS3.55s: preferenceDestinationScope, preferenceNotificationFailure, accessibilityStore, voiceStore",
+    "fullClient": "503files5435passed1skipped120.48s; TEMP/hichat-cache-namespace-coverage.log",
+    "coverage": { "lines": 69.09, "branches": 64.96, "statements": 68.01, "functions": 62.25 },
+    "build": "PASS tsc -b and Vite3.31s; TEMP/hichat-cache-namespace-build.log",
+    "lint": "PASS eslint src/stores/preferencesCodec.ts",
+    "immutableScan": "PASS immutable ca5ff3e0 exit0:51 exact reviewed-source records,0blockingpatterns; TEMP/hichat-cache-namespace-scan.log. Pattern scan does not prove absence of vulnerabilities."
+  },
+  "remaining": ["New-source CI and Sonar", "Whole-project runtime, platform and physical acceptance"]
+}

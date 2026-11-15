@@ -3513,3 +3513,9 @@ Son 6adfca62 arşiv taraması tamamlandı: 51 doğrulanmış kaynak kaydı, 480 
 Gönderilmiş d510e473 PR305 CI’ı 36/36 terminal başarılı; 6adfca62 ile client/server/electron/e2e farkı boş. Peer sözleşmesi CI kanıtı `refactor-d510-terminal-ci-2026-11-15.json` içindedir. Bu sonuç yeni retry kaynağının CI kabulü değildir. Genel hedef açık.
 
 Son 1225afe7 değişmez kaynak taraması 51 doğrulanmış kayıt, 480 inceleme satırı ve 0 engelleyici desenle tamamlandı. Desen taraması güvenlik açığı yokluğunu kanıtlamaz. Retry kaynak paketi gönderimden sonra yeni CI/Sonar ile doğrulanacak; genel RF01–RF30 hedefi açık.
+
+7666100f gönderimi sonrasında PR305 Sonar issues API, özgün AaHfLfsHL2JGjhmu0CHH, AaHe-pzEMioAmihIyi9w ve AaHe-pzEMioAmihIyi9x kayıtlarının üçünü de CLOSED/FIXED gösterdi. Kaynak API’sinde startPreferencePresentationRetry, completePreferencePresentationRetry ve loadedPreferenceSyncStatus ayrımları görüldü. Tam CI sürüyor; bu kanıt tüm kontrollerin tamamlandığı anlamına gelmez.
+
+### RF13/RF26 — cache namespace doğrulama ayrımı (2026-11-15)
+
+Sonar AaHggMHYGiVmDmX-KOBu kaydı cacheable için 17 karmaşıklık bildiriyor. Namespace alan seçimi, erişilebilirlik codec çağrısı ve peer map temizliği aynı sırayla cachedNamespace içine taşındı. Üst düzey alanlar, boş namespace atlama ve son sanitize çağrısı korunur. Aynı 106 test/4 dosya önce ve sonra başarılı; ek hesap sahipliği, bildirim, erişilebilirlik ve voice store koşusunda 132 test/4 dosya başarılı. ca5ff3e0 tam istemci koşusunda 503 dosya/5.435 test başarılı, 1 test atlandı (120,48 saniye); satır %69,09, dal %64,96. TypeScript/Vite üretim build (3,31 saniye) ve değişen dosyanın ESLint kontrolü başarılı. Değişmez ca5ff3e0 taraması 51 kaynak kaydı ve 0 engelleyici desenle exit0 tamamlandı. Desen taraması güvenlik açığı yokluğunu kanıtlamaz. Sonar sonrası karmaşıklık puanı henüz ölçülmedi; yeni kaynak CI kabulü açık. Kanıt: refactor-cache-namespace-validation-2026-11-15.json.
