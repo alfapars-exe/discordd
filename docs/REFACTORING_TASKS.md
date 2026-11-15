@@ -2720,3 +2720,8 @@ Fixed client source 13525faa passed 477 files: 4,908 passed, 1 skipped (120.53s)
 ### RF17 — stale hydration cannot prune successor IDs (2026-11-15)
 
 A temporal UI regression now keeps an old content read pending while a newer query installs 30 hits, including the shared ID on page two. Resolving the old read as missing must preserve that ID and the new total. 85 targeted tests passed. Removing only the shared helper post-await ownership check made this regression fail; the exact original helper bytes were restored in finally. This confirms the regression detects successor-snapshot corruption rather than only stale visible results. Product source was not changed. Receipt: refactor-rf17-query-snapshot-fence-2026-11-15.json.
+
+
+### RF17 — DM live deletion fills the visible page (2026-11-15)
+
+A failing 26-hit regression showed that deleting a visible DM result left the first page short while an off-page match remained. DM local-hit removal now refills affected pages from the existing snapshot, clamps the offset and uses the same path for navigation-reported missing messages. Full scanning is not repeated; off-page removal avoids unnecessary refill. 86 targeted tests passed, including double-delete and pending-read fencing. Previous full coverage remains source-bound and does not certify this new behavior. Matching-ID memory bounds and overall RF17 remain open. Receipt: refactor-rf17-dm-live-page-refill-2026-11-15.json.

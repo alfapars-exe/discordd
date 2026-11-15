@@ -236,3 +236,24 @@ it("keeps a newer query snapshot intact when an older content read rejects its s
   expect(screen.getByText("new match 1")).toBeInTheDocument();
   expect(screen.getByText("30", { selector: ".search-count" })).toBeInTheDocument();
 });
+
+it("fills the visible DM page after a live deletion without repeating the search scan", async () => {
+  vi.useFakeTimers();
+  useDMStore.setState(state => ({ channels: state.channels.map(c => ({ ...c, e2ee_enabled: true })) }));
+  useE2EEStore.setState({ initStatus: "ready" });
+  const rows = Array.from({ length: 26 }, (_, i) => ({
+    messageId: `live-${i}`, channelId: "", dmChannelId: "dm", content: `live match ${i}`,
+    timestamp: i, sourceSequence: String(i + 1),
+  }));
+  vi.mocked(searchCachedDMMessageRefs).mockResolvedValueOnce(rows.map(({ messageId, timestamp, sourceSequence }) => ({ messageId, timestamp, sourceSequence })));
+  vi.mocked(getCachedDecryptedMessage).mockImplementation(async id => rows.find(row => row.messageId === id) ?? null);
+  render(<DMSearchPanel channelId="dm" onClose={() => {}} />);
+  fireEvent.change(screen.getByRole("textbox"), { target: { value: "live match" } });
+  await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+  expect(screen.queryByText("live match 0")).not.toBeInTheDocument();
+  await act(async () => useDMStore.setState({ lastDeletedDM: { id: "live-25", dm_channel_id: "dm" } }));
+  expect(screen.getByText("live match 0")).toBeInTheDocument();
+  expect(screen.queryByText("live match 25")).not.toBeInTheDocument();
+  expect(screen.getByText("25", { selector: ".search-count" })).toBeInTheDocument();
+  expect(searchCachedDMMessageRefs).toHaveBeenCalledTimes(1);
+});

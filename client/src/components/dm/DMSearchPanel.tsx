@@ -185,6 +185,24 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted }: DMSearchPanelPro
     doSearch(query, newOffset);
   }
 
+  const removeLocalMatch = useCallback((id: string) => {
+    deletedIds.current.add(id);
+    const ids = localMatches.current;
+    if (!ids) return false;
+    const position = ids.indexOf(id);
+    if (position < 0) return false;
+    ids.splice(position, 1);
+    const total = ids.length;
+    setResults(prev => prev && ({ messages: prev.messages.filter(message => message.id !== id), totalCount: total }));
+    if (position < offset + LIMIT) {
+      const lastOffset = Math.max(0, Math.floor((total - 1) / LIMIT) * LIMIT);
+      const nextOffset = Math.min(offset, lastOffset);
+      setOffset(nextOffset);
+      void doSearch(query, nextOffset);
+    }
+    return true;
+  }, [doSearch, offset, query]);
+
   const { openAtDMMessage } = useOpenAtMessage();
 
   // Live deletion while the panel is open: results are a snapshot, so a
@@ -197,11 +215,9 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted }: DMSearchPanelPro
     const unsubscribe = useDMStore.subscribe((state, prev) => {
       const deleted = state.lastDeletedDM;
       if (!deleted || deleted === prev.lastDeletedDM || deleted.dm_channel_id !== channelId) return;
-      deletedIds.current.add(deleted.id);
-      const index = localMatches.current?.indexOf(deleted.id) ?? -1;
-      if (index >= 0) localMatches.current!.splice(index, 1);
+      if (removeLocalMatch(deleted.id)) return;
       setResults((prevResults) => {
-        if (!prevResults || (index < 0 && !prevResults.messages.some((m) => m.id === deleted.id))) {
+        if (!prevResults || !prevResults.messages.some((m) => m.id === deleted.id)) {
           return prevResults;
         }
         return {
@@ -213,7 +229,7 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted }: DMSearchPanelPro
     });
 
     return () => unsubscribe();
-  }, [channelId]);
+  }, [channelId, removeLocalMatch]);
 
   /** Scroll to message on result click. Inside the loaded window this is
    *  a plain scroll; outside it, fetch a window around the message. Results
@@ -232,9 +248,7 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted }: DMSearchPanelPro
       onClose();
       return;
     }
-    deletedIds.current.add(msg.id);
-    const index = localMatches.current?.indexOf(msg.id) ?? -1;
-    if (index >= 0) localMatches.current!.splice(index, 1);
+    if (removeLocalMatch(msg.id)) return;
     setResults((prev) =>
       prev?.messages.some((m) => m.id === msg.id)
         ? {
