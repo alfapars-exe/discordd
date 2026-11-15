@@ -2950,3 +2950,8 @@ Following the validated c69 route-profile CI failure,a root fixture audit found 
 ### RF23 — idempotent no-op publication and named contract audit (2026-11-15)
 
 Added the missing explicit no-op acceptance:two consecutive unchanged publish invocations produce already_current with the exact reviewed remote commit;both provenance output calls match,and pause/create_commit/restart are never invoked. HF source/manifest suite27passed. Source-bound requirement-to-test mapping covers dirty source,snapshot provenance,content binding,remote parent,unmanaged data,LFS,exact commit,failure recovery and no-op behavior:implementation/verification/refactor-publish-contract-map-2026-11-15.json. Mapping names are checked against actual test definitions. API and Git responses are controlled mocks;real provider/readiness/Windows update gates remain open. RF23 is not closed. Local commit held while dfcd853d CI runs.
+
+
+### RF19/RF03 — frozen combined client verification after titlebar ownership fixes (2026-11-15)
+
+Source54cb7d40 remains unchanged during full validation:485files/5,026passed/1skipped,116.57s;stmt67.09%,branch64.41%,function61.40%,line68.11%. General npm lint0errors/2existing TanStack warnings;actual npx tsc -b and Vite production build pass. Changed-module coverage:useUpdateChecker100line/100branch;useWebUpdateChecker100/94.73;ownSubscriptions100/75;CustomTitleBar80/66.66. Source input aggregate,client tree,full/changed-module metrics:implementation/verification/refactor-titlebar-owner-combined-client-2026-11-15.json. No coverage percentage is used to claim physical/native/full RF19 acceptance. Current remote CI continues;pending local Go-fixture and publication changes require independent new-head gates.
