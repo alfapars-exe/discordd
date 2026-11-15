@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -27,16 +25,7 @@ import (
 // the production SQL actually says.
 func newE2EETestDB(t *testing.T) *database.DB {
 	t.Helper()
-	migrationsFS, err := fs.Sub(database.EmbeddedMigrations, "migrations")
-	if err != nil {
-		t.Fatalf("fs.Sub: %v", err)
-	}
-	db, err := database.NewLegacy(filepath.Join(t.TempDir(), "e2ee_test.db"), migrationsFS)
-	if err != nil {
-		t.Fatalf("database.New: %v", err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
-	return db
+	return newServiceFixtureDB(t, "e2ee_test.db")
 }
 
 // seedE2EEFixture creates a server, a channel, and two member users so

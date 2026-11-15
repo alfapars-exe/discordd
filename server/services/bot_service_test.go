@@ -3,8 +3,6 @@ package services
 import (
 	"context"
 	"errors"
-	"io/fs"
-	"path/filepath"
 	"testing"
 
 	"github.com/argeinfina/hichat/database"
@@ -22,16 +20,7 @@ func (r *botDisconnectRecorder) DisconnectUser(id string) { r.ids = append(r.ids
 // the BotService runs against the real schema with FKs enforced.
 func newBotTestDB(t *testing.T) *database.DB {
 	t.Helper()
-	migrationsFS, err := fs.Sub(database.EmbeddedMigrations, "migrations")
-	if err != nil {
-		t.Fatalf("fs.Sub: %v", err)
-	}
-	db, err := database.NewLegacy(filepath.Join(t.TempDir(), "bot_test.db"), migrationsFS)
-	if err != nil {
-		t.Fatalf("database.New: %v", err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
-	return db
+	return newServiceFixtureDB(t, "bot_test.db")
 }
 
 func TestBotService_CreateAndValidate(t *testing.T) {

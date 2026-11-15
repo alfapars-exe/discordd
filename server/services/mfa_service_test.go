@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io/fs"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -26,15 +24,7 @@ type mfaHarness struct {
 
 func newMFAHarness(t *testing.T) *mfaHarness {
 	t.Helper()
-	migrations, err := fs.Sub(database.EmbeddedMigrations, "migrations")
-	if err != nil {
-		t.Fatal(err)
-	}
-	db, err := database.NewLegacy(filepath.Join(t.TempDir(), "mfa.db"), migrations)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
+	db := newServiceFixtureDB(t, "mfa.db")
 	users := repository.NewSQLiteUserRepo(db.Conn)
 	user := &models.User{Username: "mfa_test", PasswordHash: preHashPassword(t, "current-password"), Status: models.UserStatusOffline}
 	if err := users.Create(context.Background(), user); err != nil {

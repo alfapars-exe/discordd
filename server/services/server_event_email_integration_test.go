@@ -2,8 +2,6 @@ package services
 
 import (
 	"context"
-	"io/fs"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -17,15 +15,7 @@ import (
 func TestServerEventEmailWorkerToSenderSQLiteIntegration(t *testing.T) {
 	for _, withdraw := range []bool{false, true} {
 		t.Run(map[bool]string{false: "eligible", true: "withdrawn_before_send"}[withdraw], func(t *testing.T) {
-			migrations, err := fs.Sub(database.EmbeddedMigrations, "migrations")
-			if err != nil {
-				t.Fatal(err)
-			}
-			db, err := database.NewLegacy(filepath.Join(t.TempDir(), "event_email.db"), migrations)
-			if err != nil {
-				t.Fatal(err)
-			}
-			t.Cleanup(func() { _ = db.Close() })
+			db := newServiceFixtureDB(t, "event_email.db")
 			ctx := context.Background()
 			for _, query := range []string{
 				`INSERT INTO users(id,username,password_hash,email,email_verified_at) VALUES('event-user','event-user','x','event@example.test',1)`,
