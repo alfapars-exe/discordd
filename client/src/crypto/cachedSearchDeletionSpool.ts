@@ -125,6 +125,7 @@ export async function openCachedSearchDeletionPool(): Promise<SearchDeletionPool
           const run = async () => {
             for (;;) {
               await flush(signal);
+              check(signal);
               if (drainedRevision === revision) return;
               const readRevision = revision;
               const ids = await transaction("readonly", async tx => {

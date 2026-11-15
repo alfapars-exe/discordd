@@ -32,6 +32,10 @@ export async function verifySearchDeletionSpool() {
     try { await frontier.drain(async () => { throw new Error("Settled frontier repeated a row"); }); }
     finally { IDBObjectStore.prototype.getAllKeys = getKeys; }
     check(emptyReads === 0, "Settled pagination reopened native frontier read");
+    const fastController = new AbortController();
+    const fastDrain = frontier.drain(async () => {}, fastController.signal);
+    queueMicrotask(() => fastController.abort());
+    check((await rejected(fastDrain)).name === "AbortError", "Settled native drain ignored late abort");
     frontier.append("race-initial");
     IDBObjectStore.prototype.getAllKeys = function (...args) {
       const request = getKeys.apply(this, args);
@@ -131,7 +135,7 @@ export async function verifySearchDeletionSpool() {
     await rejected(ownerFrontier.drain(async () => {}));
     check(notifications === 0, "Retirement notified a stale query");
     return { mode: "native-deletion-spool", uniqueIds: seen.size, maxBatch, cancelledWithoutLoss: true,
-      settledEmptyReads: emptyReads, emptyReadRaceReconciled: true,
+      settledEmptyReads: emptyReads, settledAbortRejected: true, emptyReadRaceReconciled: true,
       consumerRetry: true, quotaNotified: true, transactionAbortNotified: true, resetFenced: true,
       boundedQueuedWriters: accepted, backpressureNotified: true,
       resetMetadataCleared: true, staleConsumerRejected: true, successorPreserved: true,

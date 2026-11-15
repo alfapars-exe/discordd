@@ -29,6 +29,7 @@ try {
       assert.equal(spool.boundedQueuedWriters, 16);
       assert.equal(spool.backpressureNotified, true);
       assert.equal(spool.settledEmptyReads, 0);
+      assert.equal(spool.settledAbortRejected, true);
       assert.equal(spool.emptyReadRaceReconciled, true);
       for (const key of ["cancelledWithoutLoss", "consumerRetry", "quotaNotified", "transactionAbortNotified", "resetFenced", "resetMetadataCleared", "staleConsumerRejected", "successorPreserved", "retiredGenerationRejected", "retiredOwnerRejected"]) assert.equal(spool[key], true);
       console.log(JSON.stringify(spool));
