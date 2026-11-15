@@ -81,6 +81,7 @@ vi.mock("./keyStorage", () => {
 
 import { createBackup, restoreFromBackup } from "./keyBackup";
 import * as keyStorageMock from "./keyStorage";
+import { cachedSearchDeletionKey } from "./cachedSearchDeletionJournal";
 
 it("restores a serialized ratchet session through the encrypted backup round trip", async () => {
   vi.clearAllMocks();
@@ -565,6 +566,18 @@ describe("keyBackup — a failed restore rolls the metadata store back", () => {
     dmChannelId: null,
     content: "already decrypted",
     timestamp: 1_700_000_000_000,
+  });
+
+  it("preserves pending deletions when restoring an older backup and does not reimport their plaintext", async () => {
+    const deleted = cachedMessage(), kept = { ...cachedMessage(), messageId: "kept" };
+    vi.mocked(keyStorageMock.getAllCachedMessages).mockResolvedValueOnce([deleted, kept]);
+    const backup = await createBackup("pw");
+    vi.mocked(keyStorageMock.getAllCachedMessages).mockResolvedValue([kept]);
+    const key = cachedSearchDeletionKey("channel", deleted.channelId, deleted.messageId);
+    metadataStore.set(key, { messageId: deleted.messageId });
+    expect(await restoreFromBackup(backup, "pw")).toBe(true);
+    expect(metadataStore.get(key)).toEqual({ messageId: deleted.messageId });
+    expect(vi.mocked(keyStorageMock.cacheDecryptedMessages).mock.calls.at(-1)?.[0]).toEqual([kept]);
   });
 
   beforeEach(() => {
