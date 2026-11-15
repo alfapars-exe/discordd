@@ -75,6 +75,20 @@ func TestChannelNotificationSuppressionHandlesIgnoreMapShapes(t *testing.T) {
 			if got, ok := suppressed["u-no-view"]; !ok || got {
 				t.Errorf("unrelated recipient suppressed=%v present=%v", got, ok)
 			}
+			// Commit rechecks the same stored policy after the worker's page read.
+			// Both dialects must interpret only actual objects as ignore maps.
+			execSeed(t, db, []seedStmt{
+				{`INSERT INTO roles(id,name,server_id,permissions) VALUES('reader','Reader','srv-1',6144)`, nil},
+				{`INSERT INTO user_roles(user_id,role_id,server_id) VALUES(?,'reader','srv-1')`, []any{msgSecondUser}},
+			})
+			created, committed, err := queue.CommitBatch(ctx, job, ids[len(ids)-1], true, []*models.Notification{{UserID: msgSecondUser}})
+			wantCreated := 1
+			if test.want {
+				wantCreated = 0
+			}
+			if err != nil || !committed || len(created) != wantCreated {
+				t.Fatalf("commit ignore-map shape: created=%v committed=%v err=%v want=%d", created, committed, err, wantCreated)
+			}
 		})
 	}
 }
