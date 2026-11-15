@@ -25,6 +25,7 @@ import (
 var groupDMLogger = logx.Component("service.group_dm")
 
 type GroupDMService interface {
+	GroupDMDeviceRosterAccess
 	SetMuted(context.Context, string, string, bool, ...int64) (*models.GroupDMReadState, error)
 	SetMessagePinned(context.Context, string, string, string, bool) error
 	ListPinnedMessages(context.Context, string, string) ([]models.GroupDMMessage, error)

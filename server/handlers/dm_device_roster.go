@@ -41,12 +41,21 @@ func (h *DMDeviceRosterHandler) Get(w http.ResponseWriter, r *http.Request) {
 		pkg.Error(w, err)
 		return
 	}
-	result := models.DMDeviceRoster{Version: 1, Members: make([]models.DMDeviceRosterMember, 0, len(members))}
+	result, err := readDeviceRoster(r.Context(), h.devices, members)
+	if err != nil {
+		pkg.Error(w, err)
+		return
+	}
+	pkg.JSON(w, http.StatusOK, result)
+}
+
+// readDeviceRoster collects metadata completely before callers write a response.
+func readDeviceRoster(ctx context.Context, lister dmRosterDeviceLister, members []string) (*models.DMDeviceRoster, error) {
+	result := &models.DMDeviceRoster{Version: 1, Members: make([]models.DMDeviceRosterMember, 0, len(members))}
 	for _, member := range members {
-		devices, err := h.devices.ListDevices(r.Context(), member)
+		devices, err := lister.ListDevices(ctx, member)
 		if err != nil {
-			pkg.Error(w, fmt.Errorf("failed to read conversation device roster: %w", err))
-			return
+			return nil, fmt.Errorf("failed to read conversation device roster: %w", err)
 		}
 		references := make([]models.DMDeviceRosterReference, 0, len(devices))
 		for _, device := range devices {
@@ -60,5 +69,5 @@ func (h *DMDeviceRosterHandler) Get(w http.ResponseWriter, r *http.Request) {
 		sort.Slice(references, func(i, j int) bool { return references[i].DeviceID < references[j].DeviceID })
 		result.Members = append(result.Members, models.DMDeviceRosterMember{UserID: member, Devices: references})
 	}
-	pkg.JSON(w, http.StatusOK, result)
+	return result, nil
 }

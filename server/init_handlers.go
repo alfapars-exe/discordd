@@ -30,6 +30,7 @@ type Handlers struct {
 	ReadState             *handlers.ReadStateHandler
 	DM                    *handlers.DMHandler
 	DMDeviceRoster        *handlers.DMDeviceRosterHandler
+	GroupDMDeviceRoster   *handlers.GroupDMDeviceRosterHandler
 	GroupDM               *handlers.GroupDMHandler
 	Reaction              *handlers.ReactionHandler
 	ChannelPermission     *handlers.ChannelPermissionHandler
@@ -127,6 +128,7 @@ func initHandlers(svcs *Services, repos *Repositories, limiters *RateLimiters, h
 		Gif:                   handlers.NewGifHandler(cfg.Klipy.APIKey),
 		Device:                handlers.NewDeviceHandler(svcs.Device),
 		DMDeviceRoster:        handlers.NewDMDeviceRosterHandler(svcs.DM, svcs.Device),
+		GroupDMDeviceRoster:   handlers.NewGroupDMDeviceRosterHandler(svcs.GroupDM, svcs.Device),
 		E2EE:                  handlers.NewE2EEHandler(svcs.E2EE, limiters.GroupSession),
 		LinkPreview:           handlers.NewLinkPreviewHandler(svcs.LinkPreview),
 		Badge:                 handlers.NewBadgeHandler(svcs.Badge, cfg.Upload.Dir),

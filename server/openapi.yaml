@@ -224,6 +224,39 @@ security:
   - bearerAuth: []
   - botAuth: []
 paths:
+  /api/group-dms/{groupId}/device-roster:
+    get:
+      operationId: groupDMDeviceRoster
+      summary: Read current group member device references without consuming prekeys.
+      description: >-
+        Requires current group membership. Returns the encryption key epoch and
+        current member device IDs with public identity revisions. No key material
+        or prekeys are exposed. A changed membership epoch during the read fails.
+        The send commit still enforces the epoch; this read does not reserve membership.
+      tags: [Messages]
+      parameters:
+        - in: path
+          name: groupId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Fresh group device references.
+          headers:
+            Cache-Control:
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/GroupDMDeviceRoster' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409':
+          description: Group membership epoch changed during the read.
   /api/group-dms/{groupId}/messages:
     get:
       operationId: groupDMListMessages
@@ -6866,6 +6899,40 @@ components:
           type: array
           minItems: 1
           maxItems: 2
+          items:
+            type: object
+            additionalProperties: false
+            required: [user_id, devices]
+            properties:
+              user_id: { type: string }
+              devices:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: [device_id, key_revision]
+                  properties:
+                    device_id: { type: string }
+                    key_revision:
+                      type: string
+                      pattern: '^[0-9a-f]{64}$'
+                      description: >-
+                        SHA256 of UTF-8 domain prefix hichat-device-roster-v1
+                        followed by a zero byte and compact JSON array
+                        [identity_key, signing_key-or-null, registration_id].
+                        Signed/one-time prekey rotation does not change this
+                        revision; an established ratchet remains usable.
+    GroupDMDeviceRoster:
+      type: object
+      additionalProperties: false
+      required: [version, key_epoch, members]
+      properties:
+        key_epoch: { type: integer, format: int64 }
+        version: { type: integer, const: 1 }
+        members:
+          type: array
+          minItems: 1
+          maxItems: 10
           items:
             type: object
             additionalProperties: false

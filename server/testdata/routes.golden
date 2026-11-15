@@ -102,6 +102,7 @@ POST /api/dms/{channelId}/unread
 PATCH /api/group-dms/{groupId}/settings
 GET /api/group-dms
 POST /api/group-dms
+GET /api/group-dms/{groupId}/device-roster
 GET /api/group-dms/{groupId}
 PATCH /api/group-dms/{groupId}
 POST /api/group-dms/{groupId}/members

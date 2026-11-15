@@ -2758,3 +2758,10 @@ Fresh authorized roster reads now precede every stable DM encryption. Bounded re
 Full Vitest coverage: 478 files, 4,927 passed / 1 skipped (120.85s), 67.73% lines / 64.21% branches. New roster module: 93.9% lines / 82.89% branches. Lint: zero errors, two existing warnings. Broad Go handlers/services, vet/build, OpenAPI parse and 50-record manifest passed. Production Go + owned PostgreSQL18.6 mTLS browser profile passed 3/3 (3.0m), including 26 encrypted channel and 26 DM sends and exact 25/1 search pages before/after key recovery/reload. Counts prove 26 fresh roster reads and one prekey fetch each for peer and sibling owner device. An initial one-total-fetch assertion failed on this two-target fixture and was replaced with exact per-user paths. Session-refresh 400 diagnostics remain visible. Owned fixture container/image removed.
 
 This supersedes the stable-DM budget and encrypted-DM browser gaps recorded above. Group-DM legacy budget, unbounded matching-ID snapshots, Linux race/current CI and whole-project acceptance remain open. Receipt: refactor-dm-roster-client-2026-11-15.json.
+
+
+### Group-DM key budget — roster backend boundary (2026-11-15)
+
+Added current-member-only GET /api/group-dms/{groupId}/device-roster, returning key_epoch and public device references without key/prekey material. Membership is checked before and after member-ID read; an epoch change rejects a mixed snapshot. Shared metadata encoding keeps DM and group wire revisions identical and prevents partial device-read responses. Six service cases cover removal/epoch changes/errors and repeat revocation; handler cases cover three members, unauthenticated/nonmember denial and partial failure. Existing DM roster tests passed. Full root passed (6.352s); vet/build, OpenAPI and 50-record manifest passed. Route golden changed by exactly one line.
+
+The client capability is deliberately not advertised before group encryption consumes this contract. Group session reuse, exact member/epoch checks, real browser budget acceptance and whole-project completion remain open. Source-bound receipt: refactor-group-device-roster-backend-2026-11-15.json.
