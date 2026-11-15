@@ -1002,9 +1002,21 @@
     "failureLog": "TEMP/hichat-source-overlay-failure.log"
   },
   "remaining": [
-    "Immutable expanded c474a647 scan terminal result",
-    "Prior9fcc5c26 CI terminal archive before push",
-    "Push and new-head CI",
+    "New-head CI after push",
     "RF01-RF30 acceptance,source-read latency and native/physical/whole-pipeline budgets"
-  ]
+  ],
+  "immutableScan": {
+    "sourceRevision": "c474a647",
+    "exitCode": 0,
+    "blockingMatches": 0,
+    "reviewedSourceRecords": 51,
+    "reviewLines": 478,
+    "log": "TEMP/hichat-source-overlay-final-scan.log"
+  },
+  "priorCI": {
+    "sourceRevision": "9fcc5c26ca943db787f0977f81bdba557bbed602",
+    "checks": 36,
+    "success": 36,
+    "archive": "refactor-9fcc-terminal-ci-2026-11-15.json"
+  }
 }
