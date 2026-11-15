@@ -43,7 +43,7 @@ func TestServiceInitializationReleasesCacheOnEarlyConfigFailure(t *testing.T) {
 	var caught any
 	func() {
 		defer func() { caught = recover() }()
-		initServices(db, repos, nil, nil, nil, nil)
+		initServices(db, repos, ws.NewHub(), nil, nil, nil)
 	}()
 	if _, ok := caught.(runtime.Error); !ok {
 		t.Fatalf("did not reach configuration dereference failure: %v", caught)
