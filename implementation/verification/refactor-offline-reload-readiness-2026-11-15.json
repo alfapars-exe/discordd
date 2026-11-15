@@ -1,0 +1,46 @@
+{
+  "sourceRevision": "da5a2e8b6317617077bbf53ea892e8fa4e6e819f",
+  "clientGitTree": "3e4638b2884ad1cd7cfd7a7f5af9a10e03fb1fe4",
+  "runtime": {
+    "node": "26.13.1",
+    "go": "1.27.4 windows/amd64",
+    "client": "production tsc-b/Vite bundle",
+    "browser": "Playwright Chromium",
+    "database": "disposable PostgreSQL18.6 with verified mutual TLS"
+  },
+  "priorFailedRun": 43710267873,
+  "change": "Existing expectSignedInShell boot readiness is awaited after reload before the unchanged15s exact-one-message assertion. No retry policy,auth throttling,or message assertion budget change.",
+  "proof": {
+    "independentOfflineRepeats": {
+      "setupPassed": 1,
+      "scenarioPassed": 3,
+      "summary": "4passed(1.4m)",
+      "automaticRetries": 0
+    },
+    "fullChromium": {
+      "passed": 18,
+      "summary": "18passed(2.4m)",
+      "automaticRetries": 0,
+      "offlineScenarioSeconds": 39.1,
+      "naturallyObservedRefresh": {
+        "status": 429,
+        "retryAfterSeconds": 17
+      },
+      "messageAssertions": "201,visible exactly once,draft cleared,and persisted exactly once after reload."
+    }
+  },
+  "logs": {
+    "hichat-8b0-offline-ready-repeat.log": {
+      "sha256": "4e297dc76d659ff9d4d92b416e136e370260cda9dfdc9a41477c2b0a2a5b4fcf"
+    },
+    "hichat-8b0-chromium-production-final.log": {
+      "sha256": "175e481b958baa54dd541c00f8003b9ded372e091f721ed35d010a94d3ed08f3"
+    }
+  },
+  "fixtureCleanup": "Owned PostgreSQL container and volumes removed after image-name verification;owned image removed. Existing development services untouched.",
+  "limits": [
+    "Refresh400/401diagnostics remain visible;not a clean-console claim.",
+    "Browser proofs do not close native/physical/media/provider acceptance or the whole-project goal.",
+    "New-head remote CI remains required;prior8b0 delivery remains failed."
+  ]
+}
