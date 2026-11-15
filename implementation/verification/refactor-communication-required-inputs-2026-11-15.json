@@ -1,0 +1,28 @@
+{
+  "scope": "RF11 communication provider validation",
+  "integrations": [
+    "Repositories",
+    "Hub",
+    "Logger"
+  ],
+  "repositories": [
+    "EmailDelivery",
+    "EmailUnsubscribe",
+    "Friendship",
+    "User"
+  ],
+  "regression": "14 invalid-provider cases failed before implementation: three missing integrations, two typed-nil interface integrations, eight nil/typed-nil repositories and typed-nil optional sender.",
+  "optional_sender": "Nil selects disabled external sender while retaining queue/P2P owners; typed nil rejected.",
+  "checks": {
+    "root": "PASS communication matrix, ServiceInitialization/routes/callbacks/permission/auth-cache/real friendship-DM, 5.588s",
+    "services": "PASS P2P/email tests, 2.406s",
+    "build": "PASS go build ./...",
+    "vet": "PASS go vet .",
+    "reviewed_manifest": "PASS 50 exact records"
+  },
+  "limits": [
+    "Disabled construction test proves owner presence; existing delivery tests separately cover queue/provider behavior.",
+    "Remaining composition and full optional/lifecycle acceptance plus RF01-RF30 remain open.",
+    "Remote source 79afb1e9 CI is separate from local changes."
+  ]
+}
