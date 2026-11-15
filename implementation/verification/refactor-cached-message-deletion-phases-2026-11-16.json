@@ -96,5 +96,16 @@
     "log": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-message-deletion-18744b6c-scan.log",
     "sha256": "1a1fe3c1e0fe50311b8956da99ef19bfa09a4ebc15bcc52d09cd1882b032875c",
     "limit": "Runtime module source unchanged since archive; final four ownership tests/docs were added later. Pattern scan is not vulnerability absence proof."
+  },
+  "sonar": {
+    "originalIssue": "AaHfuK2q4B142AX0cP6A",
+    "status": "CLOSED",
+    "resolution": "FIXED",
+    "newModuleIssueCount": 0,
+    "issueSearchTotal": 497,
+    "issueSearchPageSize": 500,
+    "analyzedCodeLines": 66,
+    "sourceMismatches": 0,
+    "extraEmptyEOF": 1
   }
 }
