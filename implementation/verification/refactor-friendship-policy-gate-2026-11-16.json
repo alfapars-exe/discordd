@@ -21,10 +21,18 @@
     },
     "vet": "PASS ./services",
     "build": "PASS ./...",
-    "linuxRace": "RUNNING session63225; readonly cc9760ea source; Go1.26.11 CGO1; TestFriendship count20"
+    "linuxRace": {
+      "source": "cc9760ea",
+      "go": "1.26.11 Linux CGO1",
+      "command": "go test -mod=readonly -race ./services -run ^TestFriendship -count=20 -timeout=15m -json",
+      "passRecords": 960,
+      "skipRecords": 0,
+      "failRecords": 0,
+      "seconds": 4.256,
+      "same48TestRecordsEachRepeat": true
+    }
   },
   "pending": [
-    "Linux targeted race terminal result",
     "Immutable source scan",
     "New-source CI/Sonar/PostgreSQL/combined acceptance"
   ],
@@ -40,6 +48,10 @@
     "full": {
       "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-friendship-policy-full.jsonl",
       "sha256": "db92d9854e27941ba1473c410ad847091ced9a298e020e0b673b6b4b53280141"
+    },
+    "linuxRace": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-refactor-go-linux-cache\\friendship-policy-race.jsonl",
+      "sha256": "4d0f8582d44db1ff890d36fe824a79e537c5795447b58885a2af0858b38a6b2e"
     }
   }
 }
