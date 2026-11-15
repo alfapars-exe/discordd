@@ -56,7 +56,9 @@ export function sanitizeAccessibilityPreferences(value: unknown): Partial<Access
     if (!Object.prototype.hasOwnProperty.call(source, key)) continue;
     const item = source[key];
     const limits = NUMBER_LIMITS[key];
-    if (limits) {
+    if (key === "notificationDuration") {
+      if ([3, 5, 10, 15, 20].includes(item as number)) valid[key] = item;
+    } else if (limits) {
       if (typeof item === "number" && Number.isFinite(item) && item >= limits[0] && item <= limits[1]) valid[key] = item;
     } else if (key === "density") {
       if (item === "compact" || item === "default" || item === "cozy") valid[key] = item;
