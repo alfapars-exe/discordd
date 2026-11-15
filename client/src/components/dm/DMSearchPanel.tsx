@@ -73,6 +73,7 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted }: DMSearchPanelPro
     localSearch.current?.abort();
     searchSeqRef.current++;
     const snapshot = localMatches.current; localMatches.current = null;
+    deletedIds.current.clear();
     void snapshot?.dispose().catch(() => {});
     if (debounceRef.current) clearTimeout(debounceRef.current);
   }, []);
@@ -151,6 +152,7 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted }: DMSearchPanelPro
         } catch {
           if (seq !== searchSeqRef.current) return;
           const failed = localMatches.current; localMatches.current = null;
+          deletedIds.current.clear(); deletedIds.current = new Set();
           void failed?.dispose().catch(() => {});
           setResults({ messages: [], totalCount: 0 });
         }
@@ -175,13 +177,14 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted }: DMSearchPanelPro
   function handleInputChange(value: string) {
     const previous = localMatches.current; localMatches.current = null;
     void previous?.dispose().catch(() => {});
-    deletedIds.current = new Set();
+    deletedIds.current.clear(); deletedIds.current = new Set();
     searchSeqRef.current++;
     localSearch.current?.abort();
     setQuery(value);
+    if (!value.trim()) { searching.current = false; setIsSearching(false); setResults(null); }
     setOffset(0); queryOffset.current = 0;
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => { doSearch(value, 0); }, DEBOUNCE_MS);
+    debounceRef.current = setTimeout(() => { debounceRef.current = null; void doSearch(value, 0); }, DEBOUNCE_MS);
   }
 
   /** Next page */
@@ -199,12 +202,16 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted }: DMSearchPanelPro
   }
 
   const removeLocalMatch = useCallback((id: string) => {
-    if (!encrypted || !query.trim()) return false;
+    if (!encrypted) return false;
+    if (!query.trim()) return true;
+    const snapshot = localMatches.current;
+    // A failed/finished query has no index or pending scan to reconcile.
+    // Do not accumulate tombstones or enqueue no-op React updates indefinitely.
+    if (!snapshot && !searching.current && debounceRef.current === null) return true;
     const pending = deletedIds.current;
     pending.add(id);
     // Hide a live deletion immediately, even before IndexedDB commits.
     setResults(prev => prev && ({ ...prev, messages: prev.messages.filter(message => message.id !== id) }));
-    const snapshot = localMatches.current;
     if (!snapshot) return true;
     void snapshot.remove(id).then(change => {
       if (snapshot !== localMatches.current || !pending.has(id)) return;
@@ -222,6 +229,7 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted }: DMSearchPanelPro
     }).catch(() => {
       if (snapshot !== localMatches.current) return;
       localMatches.current = null; searchSeqRef.current++; localSearch.current?.abort();
+      deletedIds.current.clear(); deletedIds.current = new Set();
       void snapshot.dispose().catch(() => {});
       setResults({ messages: [], totalCount: 0 });
       searching.current = false; setIsSearching(false);

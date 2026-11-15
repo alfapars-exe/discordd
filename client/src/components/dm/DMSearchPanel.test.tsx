@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { getAuthSessionOwner, publishAuthOwnerChange } from "../../api/authSessionEvents";
+import { getAuthSessionOwner, publishAuthOwnerChange, getAuthSessionSnapshot, publishAuthGenerationChange } from "../../api/authSessionEvents";
 import DMSearchPanel from "./DMSearchPanel";
 import { useDMStore } from "../../stores/dmStore";
 import { useE2EEStore } from "../../stores/e2eeStore";
@@ -264,7 +264,7 @@ it("fills the visible DM page after a live deletion without repeating the search
   expect(snapshotReferences).toHaveBeenCalledTimes(1);
 });
 
-it("clears visible encrypted results and disposes the index on a cache reset", async () => {
+it.each(["cache reset","session replacement","device replacement","input clear"] as const)("clears visible encrypted results and disposes the index on %s", async mode => {
   vi.useFakeTimers();
   useDMStore.setState(state => ({ channels: state.channels.map(c => ({ ...c, e2ee_enabled: true })) }));
   useE2EEStore.setState({ initStatus: "ready" });
@@ -277,10 +277,19 @@ it("clears visible encrypted results and disposes the index on a cache reset", a
   const {createCachedSearchSnapshot}=await import("../../crypto/cachedSearchSnapshot");
   const index=await vi.mocked(createCachedSearchSnapshot).mock.results.at(-1)!.value;
   const {notifyCachedSearchReset}=await import("../../crypto/cachedSearchEpoch");
-  act(()=>notifyCachedSearchReset("fixture-source"));
-  expect(screen.queryByText("owned private match")).not.toBeInTheDocument();
-  expect(screen.getByRole("textbox")).toHaveValue("");
-  await expect(index.page(0,25)).rejects.toThrow("disposed");
+  const generation=getAuthSessionSnapshot().generation,device=useE2EEStore.getState().localDeviceId;
+  try {
+    if(mode==="session replacement")act(()=>publishAuthGenerationChange(generation+1));
+    else if(mode==="device replacement")act(()=>useE2EEStore.setState({localDeviceId:"replacement-device"}));
+    else if(mode==="input clear")fireEvent.change(screen.getByRole("textbox"),{target:{value:""}});
+    else act(()=>notifyCachedSearchReset("fixture-source"));
+    expect(screen.queryByText("owned private match")).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox")).toHaveValue("");
+    await expect(index.page(0,25)).rejects.toThrow("disposed");
+  } finally {
+    if(mode==="session replacement")act(()=>publishAuthGenerationChange(generation));
+    if(mode==="device replacement")act(()=>useE2EEStore.setState({localDeviceId:device}));
+  }
 });
 
 it("keeps counts monotonic when off-page deletion commits return out of order", async () => {

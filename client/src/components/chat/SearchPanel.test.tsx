@@ -77,7 +77,7 @@ vi.mock("../shared/Avatar", () => ({
   default: () => null,
 }));
 
-import { getAuthSessionOwner, publishAuthOwnerChange } from "../../api/authSessionEvents";
+import { getAuthSessionOwner, publishAuthOwnerChange, getAuthSessionSnapshot, publishAuthGenerationChange } from "../../api/authSessionEvents";
 import SearchPanel from "./SearchPanel";
 import { searchMessages } from "../../api/search";
 import { getCachedDecryptedMessage } from "../../crypto/keyStorage";
@@ -395,7 +395,7 @@ describe("SearchPanel — result click", () => {
   });
 });
 
-it("clears visible encrypted results and disposes the index on a cache reset", async () => {
+it.each(["cache reset","session replacement","device replacement","input clear"] as const)("clears visible encrypted results and disposes the index on %s", async mode => {
   vi.useFakeTimers();
   useServerStore.setState(state => ({ activeServerId: "srv-1", activeServer: { ...state.activeServer!, id: "srv-1", e2ee_enabled: true } }));
   useE2EEStore.setState({ initStatus: "ready" });
@@ -408,8 +408,17 @@ it("clears visible encrypted results and disposes the index on a cache reset", a
   const {createCachedSearchSnapshot}=await import("../../crypto/cachedSearchSnapshot");
   const index=await vi.mocked(createCachedSearchSnapshot).mock.results.at(-1)!.value;
   const {notifyCachedSearchReset}=await import("../../crypto/cachedSearchEpoch");
-  act(()=>notifyCachedSearchReset("fixture-source"));
-  expect(screen.queryByText("owned private match")).not.toBeInTheDocument();
-  expect(screen.getByRole("textbox")).toHaveValue("");
-  await expect(index.page(0,25)).rejects.toThrow("disposed");
+  const generation=getAuthSessionSnapshot().generation,device=useE2EEStore.getState().localDeviceId;
+  try {
+    if(mode==="session replacement")act(()=>publishAuthGenerationChange(generation+1));
+    else if(mode==="device replacement")act(()=>useE2EEStore.setState({localDeviceId:"replacement-device"}));
+    else if(mode==="input clear")fireEvent.change(screen.getByRole("textbox"),{target:{value:""}});
+    else act(()=>notifyCachedSearchReset("fixture-source"));
+    expect(screen.queryByText("owned private match")).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox")).toHaveValue("");
+    await expect(index.page(0,25)).rejects.toThrow("disposed");
+  } finally {
+    if(mode==="session replacement")act(()=>publishAuthGenerationChange(generation));
+    if(mode==="device replacement")act(()=>useE2EEStore.setState({localDeviceId:device}));
+  }
 });
