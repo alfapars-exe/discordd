@@ -65,22 +65,31 @@ func (s *dmService) GetDeviceRosterMembers(ctx context.Context, userID, channelI
 	if recipient.DMPrivacy == "friends_only" && !friends {
 		return nil, fmt.Errorf("%w: recipient only accepts friends", pkg.ErrForbidden)
 	}
-	// Match the send gate: opening an empty DM must not retain access after
-	// shared-server permissions change. Established history keeps send semantics.
-	if s.serverDMPolicy != nil && !friends {
-		history, err := s.dmRepo.HasMessages(ctx, channelID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to check DM roster history: %w", err)
-		}
-		if !history {
-			allowed, err := s.serverDMPolicy.CanCreate(ctx, userID, other)
-			if err != nil {
-				return nil, err
-			}
-			if !allowed {
-				return nil, fmt.Errorf("%w: shared-server DM permission denied", pkg.ErrForbidden)
-			}
-		}
+	if err := s.verifyDMRosterServerAccess(ctx, userID, other, channelID, friends); err != nil {
+		return nil, err
 	}
 	return []string{channel.User1ID, channel.User2ID}, nil
+}
+
+// Match the send gate: opening an empty DM must not retain access after
+// shared-server permissions change. Established history keeps send semantics.
+func (s *dmService) verifyDMRosterServerAccess(ctx context.Context, userID, other, channelID string, friends bool) error {
+	if s.serverDMPolicy == nil || friends {
+		return nil
+	}
+	history, err := s.dmRepo.HasMessages(ctx, channelID)
+	if err != nil {
+		return fmt.Errorf("failed to check DM roster history: %w", err)
+	}
+	if history {
+		return nil
+	}
+	allowed, err := s.serverDMPolicy.CanCreate(ctx, userID, other)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return fmt.Errorf("%w: shared-server DM permission denied", pkg.ErrForbidden)
+	}
+	return nil
 }
