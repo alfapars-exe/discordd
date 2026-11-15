@@ -1,0 +1,30 @@
+{
+  "source": "f5d32ee32718aa0ad623825638352adafc2bc6fa",
+  "scope": "RF11 prerequisite for safe logging composition rollback",
+  "evidence": [
+    {
+      "file": "server/services/audit_log_service.go",
+      "symbol": "NewAuditLogService",
+      "observation": "Allocates open done channel; no worker started."
+    },
+    {
+      "file": "server/services/audit_log_service.go",
+      "symbol": "Stop",
+      "observation": "Calls cancel only if nonnil, then unconditionally receives from done; constructor-only owner has no closer."
+    },
+    {
+      "file": "server/services/audit_log_service.go",
+      "symbol": "Start",
+      "observation": "Assigns cancel and launches writer on every call; multiple writers defer close of same done channel."
+    }
+  ],
+  "status": "Source-level lifecycle concern; executable regression still required. Not yet a fixed behavior or incident claim.",
+  "next": [
+    "Write bounded Stop-before-Start regression that can clean up the old implementation after observing failure",
+    "Verify repeated/concurrent Start and terminal Stop ownership",
+    "Preserve accepted audit drain semantics and avoid duplicate writers",
+    "Only then add logging composition/rollback ownership"
+  ],
+  "current_verification": "Broad Windows Go run session 61409 live on fixed source; do not mutate server code before terminal result.",
+  "limits": "This finding does not prove an exposed request-triggerable failure; startup/lifecycle contract concern."
+}
