@@ -30,6 +30,16 @@ it.each(["channel", "dm"] as const)("paginates %s references without exposing al
   }
   expect(await snapshot.page(9999,25)).toEqual({ids:expected.slice(275),offset:275,total:300});
 });
+it.each(["channel", "dm"] as const)("preserves every %s page across a large staging boundary and final tail", async kind => {
+  const rows = Array.from({length:1201},(_,i)=>row(String(i).padStart(4,"0"),i,String(9007199254740992n+BigInt(1201-i))));
+  await cacheDecryptedMessages(rows);
+  const snapshot = await create(kind);
+  const expected = kind === "channel" ? [...rows].reverse().map(item=>item.messageId) : rows.map(item=>item.messageId);
+  for (const offset of [0,1000,1024,1200]) {
+    expect(await snapshot.page(offset,25)).toEqual({ids:expected.slice(offset,offset+25),offset,total:1201});
+  }
+});
+
 it("preserves mixed legacy slots and exact BIGINT/timestamp ties", async () => {
   const rows = [row("a",1,"9007199254740993"),row("b",2),row("c",3,"9007199254740992"),row("d",3,"9007199254740994"),row("e",3)];
   await cacheDecryptedMessages(rows);
