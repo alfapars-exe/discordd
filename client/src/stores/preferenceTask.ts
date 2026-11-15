@@ -6,8 +6,8 @@ import { capturePreferenceScope } from "./preferenceScope";
 export function startPreferenceTask(run: () => Promise<unknown>, report: () => void): void {
   const isCurrent = capturePreferenceScope();
   const reportCurrent = () => { if (isCurrent()) report(); };
-  let task: Promise<unknown>;
-  try { task = run(); }
-  catch { reportCurrent(); return; }
-  void Promise.resolve(task).catch(reportCurrent);
+  // Async invocation keeps factory execution immediate while converting both
+  // factory throws and rejected work into the same observed rejection path.
+  const invoke = async () => { await run(); };
+  void invoke().catch(reportCurrent);
 }
