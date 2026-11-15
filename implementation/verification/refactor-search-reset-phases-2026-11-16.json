@@ -69,6 +69,10 @@
     "syncGreen": {
       "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-reset-sync-green.log",
       "sha256": "243d4e4dd62c459da486cec172621af243b63fd49d9817aa6197cbe6c472b698"
+    },
+    "finalFull": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-reset-sync-full.log",
+      "sha256": "4fdb6b4e9e8458cd19caaf716b558af7e0e3d8e24a487b9f70c6fd9f5c1b375f"
     }
   },
   "pending": [
@@ -82,8 +86,16 @@
     "problem": "A synchronous disposer throw escaped the map before allSettled observed it, skipping later disposers and resetSource",
     "fix": "Async callback wrapper converts synchronous throws to settled rejections, retaining callback invocation order",
     "targetedGreen": 68,
-    "finalFull": "RUNNING session40305",
-    "lintBuild": "RUNNING session27327",
-    "sourceScanScope": "Existing d91d3601 scan excludes this follow-up fix; no final fix scan acceptance claimed"
+    "finalFull": "5532 passed / 1 skipped / 0 failed; 505 files",
+    "lintBuild": "PASS zero lint errors / 2 existing warnings; TypeScript + Vite build 3.44s",
+    "sourceScanScope": "Final ac22b02f source scan running session91651"
+  },
+  "phaseScan": {
+    "source": "d91d3601",
+    "result": "PASS",
+    "reviewedExactSourceRecords": 51,
+    "reviewLines": 480,
+    "blockingPatternHits": 0,
+    "limit": "Includes phase extraction; excludes subsequent synchronous-disposer fix"
   }
 }

@@ -3615,3 +3615,5 @@ Reset için databases() API olmayan browser ve başlangıçta retired owner sın
 1dbb9750 journal teslimi terminal36/36CI SUCCESS; PostgreSQL, tam Playwright ve sekiz race parçası dahil. refactor-1dbb-terminal-ci-2026-11-16.json ham kontrolleri tutar. Önceki pending-panel timeout tekrarlanmadı; kök neden kapatılmadı.
 
 Reset ek davranış düzeltmesi: 77700924 senkron dispose callback throw durumunda diğer cleanup ve source resetin atlandığını gösteren RED regresyon ekler. 3e31c6a4 map callbackini async sararak sync throwu allSettled reddine dönüştürür; callback çağrı sırası korunur. Sonrasında68ilgili testPASS. Ayrıştırma ve davranış düzeltmesi ayrı commitlerdir. Son full40305 ve lint/build27327 çalışıyor. d91d3601 taraması bu ek fixi kapsamaz; son kaynak CI/tarama açık.
+
+Sync disposer fix son tam doğrulama505dosya/5.532başarılı/1atlanan/0başarısız; lint0hata/2mevcutuyarı; TypeScript+Vite build PASS(3,44s). Ayrıştırma d91d3601 taraması51exact/480review/0blocking PASS; sonraki sync-fix ac22b02f taraması91651 sürüyor. Yeni head CI/Sonar açık; önceki journalCI36/36 bunun yerine sayılmadı.
