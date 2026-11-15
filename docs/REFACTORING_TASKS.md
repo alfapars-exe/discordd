@@ -2725,3 +2725,8 @@ A temporal UI regression now keeps an old content read pending while a newer que
 ### RF17 — DM live deletion fills the visible page (2026-11-15)
 
 A failing 26-hit regression showed that deleting a visible DM result left the first page short while an off-page match remained. DM local-hit removal now refills affected pages from the existing snapshot, clamps the offset and uses the same path for navigation-reported missing messages. Full scanning is not repeated; off-page removal avoids unnecessary refill. 86 targeted tests passed, including double-delete and pending-read fencing. Previous full coverage remains source-bound and does not certify this new behavior. Matching-ID memory bounds and overall RF17 remain open. Receipt: refactor-rf17-dm-live-page-refill-2026-11-15.json.
+
+
+### Combined production Chromium acceptance (2026-11-15)
+
+Source 833888a6 (client product 3c22ae60, server 4ad77d3e) passed 16/16 production Chromium scenarios in 2.8m against real Go and dedicated PostgreSQL 18.6 with verify-full mTLS. This includes two-session parent-thread revocation over HTTP/WebSocket, channel role visibility, concurrent message mutations and out-of-window channel/DM replies. Isolation/profile checks passed with the Windows file-symlink case skipped. Refresh-response diagnostics included a Retry-After 30 wait; the suite completed successfully and they are not silently counted as clean application logs. Owned API/Vite listeners exited; the dedicated PostgreSQL container and fixture image were removed. This does not certify all search paths, physical media or whole-project acceptance. Receipt: refactor-8338-production-chromium-2026-11-15.json.
