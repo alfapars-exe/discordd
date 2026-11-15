@@ -100,3 +100,50 @@ func TestAuditConcurrentStartStopOwnsOneWriterAndDrainsOnce(t *testing.T) {
 		t.Fatal("terminal writer accepted new work")
 	}
 }
+
+type auditBlockedPersistence struct {
+	auditLifecycleRepo
+	entered     chan struct{}
+	release     chan struct{}
+	enteredOnce sync.Once
+}
+
+func (r *auditBlockedPersistence) Insert(ctx context.Context, entry *models.AuditLog) error {
+	r.enteredOnce.Do(func() { close(r.entered) })
+	<-r.release
+	return r.auditLifecycleRepo.Insert(ctx, entry)
+}
+func TestAuditStopJoinsActivePersistenceAndQueuedDrain(t *testing.T) {
+	repo := &auditBlockedPersistence{entered: make(chan struct{}), release: make(chan struct{})}
+	hub := ws.NewHub()
+	s := NewAuditLogService(repo, nil, nil, hub, hub)
+	var release sync.Once
+	unblock := func() { release.Do(func() { close(repo.release) }) }
+	t.Cleanup(func() { unblock(); s.Stop() })
+	s.Start()
+	s.Write(models.AuditLog{ServerID: "active"})
+	select {
+	case <-repo.entered:
+	case <-time.After(time.Second):
+		t.Fatal("writer did not enter persistence")
+	}
+	s.Write(models.AuditLog{ServerID: "queued"})
+	stopped := make(chan struct{})
+	go func() { s.Stop(); close(stopped) }()
+	select {
+	case <-stopped:
+		t.Fatal("Stop returned with persistence still active")
+	case <-time.After(50 * time.Millisecond):
+	}
+	unblock()
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("Stop did not join persistence/drain")
+	}
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	if len(repo.entries) != 2 || repo.entries[0].ServerID != "active" || repo.entries[1].ServerID != "queued" {
+		t.Fatalf("drained entries=%+v", repo.entries)
+	}
+}

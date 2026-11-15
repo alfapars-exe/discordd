@@ -1,0 +1,15 @@
+{
+  "scope": "RF11 audit resource shutdown join acceptance",
+  "test": "TestAuditStopJoinsActivePersistenceAndQueuedDrain",
+  "method": "Controlled repository blocks first Insert while a second event is queued. Start Stop asynchronously; verify no early return while repository is blocked; release and join; assert active then queued event persisted exactly once.",
+  "checks": {
+    "audit_lifecycle": "PASS all four audit lifecycle tests ten repetitions, 1.167s",
+    "vet": "PASS go vet ./services",
+    "reviewed_manifest": "PASS 50 exact records"
+  },
+  "limits": [
+    "Controlled repository join proof; not real PostgreSQL cancellation or bounded persistence shutdown.",
+    "Existing behavior verified; no product code changed.",
+    "New-source Linux race and current CI remain separate; overall refactor incomplete."
+  ]
+}
