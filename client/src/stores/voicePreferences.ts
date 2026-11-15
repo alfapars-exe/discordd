@@ -307,3 +307,12 @@ export const DEFAULT_SETTINGS: VoiceSettings = {
   voiceOverlayMaxParticipants: 25,
 };
 
+
+/** Persist only the declared preference contract, excluding runtime state and
+ * actions from the voice store. Nested preference maps retain their identity.
+ */
+export function projectVoiceSettings(settings: VoiceSettings): VoiceSettings {
+  return Object.fromEntries(
+    (Object.keys(DEFAULT_SETTINGS) as (keyof VoiceSettings)[]).map(key => [key, settings[key]]),
+  ) as VoiceSettings;
+}

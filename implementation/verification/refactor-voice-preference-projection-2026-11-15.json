@@ -1,0 +1,23 @@
+{
+  "date": "2026-11-15",
+  "base": "bf1e48da705936cc86a8c65d5651ede9185f1e22",
+  "sources": {
+    "client/src/stores/voicePreferences.ts": "07c30f3312fb775493f66618246f461595b9003b4d22f4408580e8243b290f83",
+    "client/src/stores/slices/voiceSettingsSlice.ts": "844b2156564f2c489256a194cacb93ba4fda1217b98e9a4d08abc65bfc84f948",
+    "client/src/stores/accountPreferenceConsumers.test.ts": "45d9d8173c262149f9b9994d1bd91d3354a6cdbd5eade1b111a0aba797fe441a"
+  },
+  "change": "Derive persisted voice snapshot from shared defaults rather than a second explicit54-field projection",
+  "validation": {
+    "before": "consumer44tests passed with full-persistence case",
+    "after": "four targeted suites182tests passed",
+    "typescript": "tsc --noEmit passed",
+    "lint": "three changed modules passed",
+    "build": "Vite production build passed;existing chunk-size warnings remain",
+    "projection": "54keys and property order exactly match previous explicit projection"
+  },
+  "limits": [
+    "previous full4993passed/1skipped run belongs to bf1e48da source, not this change",
+    "new-head CI pending",
+    "physical voice/media and remaining RF13 acceptance open"
+  ]
+}

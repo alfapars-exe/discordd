@@ -11,7 +11,7 @@ import { DEVICE_LOCAL_VOICE_SETTING_KEYS } from "../voicePreferenceScope";
 import { usePreferencesStore } from "../preferencesStore";
 import type { VoiceStore } from "../voiceStore";
 
-import { DEFAULT_SETTINGS, type InputMode, type ScreenShareQuality, type ScreenShareFps, type CameraQuality, type CameraFps, type VoiceOverlayPosition, type MicProfile, type NoiseSuppressionLevel, type NoiseReductionEngine, type VoiceSettings, type ScreenShareMode } from "../voicePreferences";
+import { DEFAULT_SETTINGS, projectVoiceSettings as currentSettings, type InputMode, type ScreenShareQuality, type ScreenShareFps, type CameraQuality, type CameraFps, type VoiceOverlayPosition, type MicProfile, type NoiseSuppressionLevel, type NoiseReductionEngine, type VoiceSettings, type ScreenShareMode } from "../voicePreferences";
 export { DEFAULT_SETTINGS } from "../voicePreferences";
 export type { InputMode, ScreenShareQuality, ScreenShareFps, CameraQuality, CameraFps, VoiceOverlayPosition, MicProfile, NoiseSuppressionLevel, NoiseReductionEngine, VoiceSettings, ScreenShareMode } from "../voicePreferences";
 
@@ -234,65 +234,6 @@ if (typeof window !== "undefined") {
   window.addEventListener("beforeunload", flushPendingVoiceSettingsSave);
 }
 
-/** Extract settings-shaped subset from the current store state. */
-function currentSettings(s: VoiceSettings): VoiceSettings {
-  return {
-    inputMode: s.inputMode,
-    pttKey: s.pttKey,
-    micSensitivity: s.micSensitivity,
-    userVolumes: s.userVolumes,
-    inputDevice: s.inputDevice,
-    outputDevice: s.outputDevice,
-    masterVolume: s.masterVolume,
-    inputVolume: s.inputVolume,
-    soundsEnabled: s.soundsEnabled,
-    localMutedUsers: s.localMutedUsers,
-    noiseReduction: s.noiseReduction,
-    noiseReductionEngine: s.noiseReductionEngine,
-    noiseSuppressionLevel: s.noiseSuppressionLevel,
-    deepfilterSuppression: s.deepfilterSuppression,
-    screenShareVolumes: s.screenShareVolumes,
-    screenShareAudio: s.screenShareAudio,
-    screenShareQuality: s.screenShareQuality,
-    screenShareFps: s.screenShareFps,
-    screenShareShowCursor: s.screenShareShowCursor,
-    screenShareLowLatency: s.screenShareLowLatency,
-    screenShareMode: s.screenShareMode,
-    cameraQuality: s.cameraQuality,
-    cameraFps: s.cameraFps,
-    cameraDevice: s.cameraDevice,
-    micProfile: s.micProfile,
-    muteHotkeyEnabled: s.muteHotkeyEnabled,
-    muteHotkey: s.muteHotkey,
-    muteHotkeyGlobal: s.muteHotkeyGlobal,
-    voiceOverlayEnabled: s.voiceOverlayEnabled,
-    voiceOverlayMode: s.voiceOverlayMode,
-    voiceOverlaySpeakingOpacity: s.voiceOverlaySpeakingOpacity,
-    voiceOverlayIdleOpacity: s.voiceOverlayIdleOpacity,
-    voiceOverlayScale: s.voiceOverlayScale,
-    voiceOverlayPosition: s.voiceOverlayPosition,
-    voiceOverlayPinned: s.voiceOverlayPinned,
-    voiceOverlayQuickActions: s.voiceOverlayQuickActions,
-    voiceOverlayClickableActions: s.voiceOverlayClickableActions,
-    voiceOverlayCompatibility: s.voiceOverlayCompatibility,
-    voiceOverlayActivity: s.voiceOverlayActivity,
-    voiceOverlayVideo: s.voiceOverlayVideo,
-    voiceOverlayStreams: s.voiceOverlayStreams,
-    voiceOverlayWelcome: s.voiceOverlayWelcome,
-    voiceOverlayGoLive: s.voiceOverlayGoLive,
-    voiceOverlayGameActivityNotifications: s.voiceOverlayGameActivityNotifications,
-    voiceOverlayNowPlayingNotifications: s.voiceOverlayNowPlayingNotifications,
-    voiceOverlayNotifications: s.voiceOverlayNotifications,
-    voiceOverlayNotificationActions: s.voiceOverlayNotificationActions,
-    voiceOverlayChat: s.voiceOverlayChat,
-    voiceOverlayChatActions: s.voiceOverlayChatActions,
-    voiceOverlayChatCompose: s.voiceOverlayChatCompose,
-    voiceOverlaySpeakingOnly: s.voiceOverlaySpeakingOnly,
-    voiceOverlayAvatarSize: s.voiceOverlayAvatarSize,
-    voiceOverlayNameDisplay: s.voiceOverlayNameDisplay,
-    voiceOverlayMaxParticipants: s.voiceOverlayMaxParticipants,
-  };
-}
 
 export type VoiceSettingsSlice = VoiceSettings & {
   /** Pre-mute volume values for local mute restore */
