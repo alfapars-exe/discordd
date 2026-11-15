@@ -155,7 +155,7 @@ describe("account-scoped preference synchronization", () => {
       for(const reset of mocks.resets)reset.mockClear();
       bindPreferencePresenter(async()=>applyAccountPreferences);
       await state().retrySync();
-      expect(mocks.resets[0]).toHaveBeenCalledExactlyOnceWith(true);
+      expect(mocks.resets[0]).toHaveBeenCalledExactlyOnceWith(true,expect.any(Function));
       expect(mocks.resets[1]).toHaveBeenCalledExactlyOnceWith();
       expect(mocks.resets[2]).toHaveBeenCalledExactlyOnceWith(true);
       expect(mocks.resets[3]).toHaveBeenCalledExactlyOnceWith();
@@ -364,7 +364,7 @@ describe("account-scoped preference synchronization", () => {
     expect(mocks.accessibility).toHaveBeenLastCalledWith({ chatFontSize: 22, density: "cozy" });
     expect(mocks.appearance).toHaveBeenLastCalledWith({ uiScale: 120 });
     for (const reset of mocks.resets) expect(reset).toHaveBeenCalledTimes(2);
-    expect(mocks.resets[0]).toHaveBeenLastCalledWith(true);
+    expect(mocks.resets[0]).toHaveBeenLastCalledWith(true,expect.any(Function));
     expect(mocks.resets[2]).toHaveBeenLastCalledWith(true);
   });
 
@@ -715,12 +715,12 @@ describe("account-scoped preference synchronization", () => {
     await state().fetchAndApply();
     expect(state().data).toEqual({ appearance: { neonEnabled: true } });
     expect(JSON.parse(localStorage.getItem(snapshotKey)!)).toEqual({ appearance: { neonEnabled: true } });
-    expect(mocks.resets[0]).toHaveBeenLastCalledWith(true);
+    expect(mocks.resets[0]).toHaveBeenLastCalledWith(true,expect.any(Function));
     expect(mocks.resets[2]).toHaveBeenLastCalledWith(true);
     state().reset();
     state().bindAccount("alice");
     await settle();
-    expect(mocks.resets[0]).toHaveBeenLastCalledWith();
+    expect(mocks.resets[0]).toHaveBeenLastCalledWith(false,expect.any(Function));
     expect(mocks.resets[2]).toHaveBeenLastCalledWith();
   });
 
