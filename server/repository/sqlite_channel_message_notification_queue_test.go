@@ -84,6 +84,22 @@ func TestChannelNotificationOptInRequiresJSONBoolean(t *testing.T) {
 			if got := countRows(t, db, `SELECT COUNT(*) FROM notifications WHERE message_id=?`, message.ID); got != 0 {
 				t.Errorf("invalid opt-in received notifications: %d", got)
 			}
+			// One malformed member must not poison delivery to another member
+			// who has a valid opt-in and current channel read permission.
+			if _, err := db.Conn.ExecContext(ctx, `UPDATE user_preferences SET data=? WHERE user_id=?`, valid, msgSecondUser); err != nil {
+				t.Fatal(err)
+			}
+			if err := queue.Enqueue(ctx, message.ID, "srv-1", msgChannel, msgAuthor); err != nil {
+				t.Fatal(err)
+			}
+			job, ids, err = queue.NextBatch(ctx, ChannelMessageNotificationBatchSize)
+			if err != nil || job == nil || len(ids) != 1 || ids[0] != msgSecondUser {
+				t.Fatalf("mixed preference page: job=%v ids=%v err=%v", job, ids, err)
+			}
+			created, committed, err = queue.CommitBatch(ctx, job, ids[0], true, []*models.Notification{{UserID: msgSecondUser}})
+			if err != nil || !committed || len(created) != 1 || created[0].UserID != msgSecondUser {
+				t.Fatalf("valid recipient lost beside malformed preference: created=%v committed=%v err=%v", created, committed, err)
+			}
 		})
 	}
 }
