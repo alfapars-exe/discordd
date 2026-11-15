@@ -199,16 +199,9 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	rollback = append(rollback, channelPermService.Stop)
 	permInvalidator := services.NewMultiInvalidator(channelPermService, permissionCache)
 	serverEventService := services.NewServerEventService(repos.ServerEvent, repos.Server, repos.Role, repos.Channel, channelPermService)
-	// auditLogService is constructed here, right after channelPermService,
-	// so it can be passed as a constructor parameter (not a post-construction
-	// setter) to every service that emits moderation audit events below —
-	// voiceService immediately after this, plus channelService/memberService/
-	// roleService/serverService/messageService further down. A setter that
-	// nothing calls compiles fine and silently drops every audit event (see
-	// wiring_test.go); a constructor parameter can't be forgotten without a
-	// compile error.
-	auditLogService := services.NewAuditLogService(repos.AuditLog, repos.User, repos.Role, hub, hub)
-	appLogService := services.NewAppLogService(repos.AppLog, repos.AppLog)
+	logging := initLoggingServices(loggingDependencies{Repositories: repos, Hub: hub})
+	auditLogService, appLogService := logging.Audit, logging.App
+	rollback = append(rollback, appLogService.Stop, auditLogService.Stop)
 	var entranceService services.EntranceService
 	var musicBotService services.MusicBotRuntime
 	voiceService := services.NewVoiceService(
