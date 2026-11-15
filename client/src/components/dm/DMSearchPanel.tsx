@@ -105,12 +105,33 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted }: DMSearchPanelPro
               id: record.messageId, created_at: new Date(record.timestamp).toISOString(), source_sequence: record.sourceSequence,
             }))).reverse().map(row => row.id);
           }
-          const ids = localMatches.current.slice(searchOffset, searchOffset + LIMIT);
-          const records = await Promise.all(ids.map(id => getCachedDecryptedMessage(id)));
           const lowerTerm = term.toLowerCase();
-          const paged = records.filter((row): row is CachedDecryptedMessage => row !== null &&
-            row.dmChannelId === channelId && row.content.toLowerCase().includes(lowerTerm) &&
-            !deletedIds.current.has(row.messageId));
+          const loaded = new Map<string, CachedDecryptedMessage>();
+          let paged: CachedDecryptedMessage[];
+          for (;;) {
+            const ids = localMatches.current.slice(searchOffset, searchOffset + LIMIT);
+            const windowIds = new Set(ids);
+            for (const id of loaded.keys()) if (!windowIds.has(id)) loaded.delete(id);
+            const pending = ids.filter(id => !loaded.has(id));
+            if (!pending.length) {
+              paged = ids.map(id => loaded.get(id)!);
+              break;
+            }
+            const records = await Promise.all(pending.map(id => getCachedDecryptedMessage(id)));
+            // A different query/account must not mutate its successor's snapshot.
+            if (seq !== searchSeqRef.current) return;
+            const rejected = new Set<string>();
+            records.forEach((row, index) => {
+              const id = pending[index];
+              if (row && row.messageId === id && row.dmChannelId === channelId &&
+                  row.content.toLowerCase().includes(lowerTerm) && !deletedIds.current.has(id)) {
+                loaded.set(id, row);
+              } else {
+                rejected.add(id);
+              }
+            });
+            if (rejected.size) localMatches.current = localMatches.current.filter(id => !rejected.has(id));
+          }
           if (seq !== searchSeqRef.current) return;
           const total = localMatches.current.length;
 

@@ -2675,3 +2675,8 @@ The benchmark now supports --dm. Chromium 156.0.8078.4, one warmup and three mea
 ### RF17 — compact DM first-page integration (2026-11-15)
 
 DMSearchPanel now scans compact ordering references and loads at most 25 full records for the first page as well as subsequent pages. Tests use reference-only responses and verify account switches during pending content reads. Three targeted files passed 76 tests; TypeScript and targeted ESLint passed. Real Chromium IndexedDB comparison verified exact source order/content at 1k/10k/50k. Compact first-page medians were 20.8/213.7/1081.4 ms; no first-query speed improvement is claimed. Full matched plaintext is no longer accumulated, but matching reference/ID count still grows and no heap bound is proved. RF17 remains open. Receipt: refactor-rf17-compact-dm-first-page-2026-11-15.json.
+
+
+### RF17 — stale DM matches and page refill (2026-11-15)
+
+A new regression demonstrated stale totals and incomplete pages when a reference disappeared or its content stopped matching before hydration. DM search now prunes rejected references and refills the current window in batches of at most 25, checking request ownership before each post-await snapshot mutation. A pending-read deletion test also proves the deleted result does not return. 78 targeted tests, TypeScript and ESLint passed. This supersedes the earlier total-read bound: normal pages need at most 25 reads, but rejected hits can require extra batches. At most 25 valid content records are retained for the selected window; the matching-ID snapshot and first-query bound remain open. Receipt: refactor-rf17-dm-page-refill-2026-11-15.json.
