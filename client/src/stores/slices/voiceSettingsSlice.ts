@@ -384,7 +384,8 @@ export const createVoiceSettingsSlice: StateCreator<
     },
 
     setMicSensitivity: (value) => {
-      set({ micSensitivity: value });
+      if (!Number.isFinite(value)) return;
+      set({ micSensitivity: Math.max(0, Math.min(100, value)) });
       saveSettings(currentSettings(get()));
     },
 
@@ -409,12 +410,14 @@ export const createVoiceSettingsSlice: StateCreator<
     },
 
     setMasterVolume: (value) => {
-      set({ masterVolume: value });
+      if (!Number.isFinite(value)) return;
+      set({ masterVolume: Math.max(0, Math.min(100, value)) });
       saveSettings(currentSettings(get()));
     },
 
     setInputVolume: (value) => {
-      set({ inputVolume: value });
+      if (!Number.isFinite(value)) return;
+      set({ inputVolume: Math.max(0, Math.min(200, value)) });
       saveSettings(currentSettings(get()));
     },
 
@@ -542,6 +545,7 @@ export const createVoiceSettingsSlice: StateCreator<
     },
 
     setDeepfilterSuppression: (value) => {
+      if (!Number.isFinite(value)) return;
       // Clamp to 0-100 — this is a strength %, mapped to DeepFilterNet3's
       // dB attenuation limit downstream (strengthToAttenLimDb), not raw dB.
       const clamped = Math.max(0, Math.min(100, value));
