@@ -35,12 +35,80 @@
     "TEMP/hichat-search-spool-native.log"
   ],
   "remaining": [
-    "Full client coverage on final source",
     "Native spool acquisition/quota/backpressure fault matrix",
     "Source-pinned nine-repeat latency comparison",
     "Physical/native memory and whole live-receive/source-writer budgets",
     "Cross-tab and all producer ordering",
-    "Final immutable self-scan and new-head CI",
-    "Project RF01-RF30 acceptance remains open"
-  ]
+    "Project RF01-RF30 acceptance remains open",
+    "New-head CI and scanner .mjs/.cjs coverage"
+  ],
+  "followup": {
+    "sourceCommit": "41c770e5",
+    "regressionCommit": "f714bc54",
+    "regression": "Three queued consumers overlapped after predecessor failure; peak2 instead of1. Reserve tail before yielding.",
+    "redLog": "TEMP/hichat-spool-drain-serialization-red.log",
+    "targeted": "4 files, 51 passed",
+    "coverage": {
+      "files": 495,
+      "passed": 5305,
+      "skipped": 1,
+      "seconds": 120.68,
+      "total": {
+        "lines": {
+          "total": 38495,
+          "covered": 26496,
+          "skipped": 0,
+          "pct": 68.82
+        },
+        "statements": {
+          "total": 52738,
+          "covered": 35747,
+          "skipped": 0,
+          "pct": 67.78
+        },
+        "functions": {
+          "total": 12318,
+          "covered": 7632,
+          "skipped": 0,
+          "pct": 61.95
+        },
+        "branches": {
+          "total": 39969,
+          "covered": 25917,
+          "skipped": 0,
+          "pct": 64.84
+        },
+        "branchesTrue": {
+          "total": 0,
+          "covered": 0,
+          "skipped": 0,
+          "pct": 100
+        }
+      }
+    },
+    "build": "PASS",
+    "changedFilesLint": "PASS",
+    "nativeBudget": {
+      "channelRetainedGrowthBytes": 28688,
+      "dmRetainedGrowthBytes": 68644,
+      "events": 50000,
+      "correctPage": true,
+      "matches": 267
+    },
+    "logs": [
+      "TEMP/hichat-spool-41c770e5-coverage.log",
+      "TEMP/hichat-spool-41c770e5-build.log",
+      "TEMP/hichat-spool-41c770e5-lint.log",
+      "TEMP/hichat-spool-41c770e5-budget.log"
+    ],
+    "selfScan": {
+      "sourceCommit": "41c770e5",
+      "exitCode": 0,
+      "blockingMatches": 0,
+      "reviewLines": 448,
+      "reviewedSourceRecords": 50,
+      "log": "TEMP/hichat-spool-41c770e5-selfscan.log",
+      "limitation": "Existing scanner excludes .mjs/.cjs; this result does not prove those scripts covered."
+    }
+  }
 }
