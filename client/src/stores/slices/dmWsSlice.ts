@@ -72,6 +72,11 @@ export function clearDetachedDMMessages(channelId?: string): void {
   else {detachedDMMessages.delete(channelId);historyBuffers.delete(channelId);}
 }
 
+let clearTypingTimers: (channelId?: string) => void = () => {};
+export function clearDMTypingTimers(channelId?: string): void {
+  clearTypingTimers(channelId);
+}
+
 export type DMWsSlice = {
   /** Last WS-deleted DM message ref. Snapshot consumers (DM search panel
    *  results) subscribe to this narrow field to drop rows that no longer
@@ -99,7 +104,10 @@ export const createDMWsSlice: StateCreator<
   [],
   [],
   DMWsSlice
-> = (set, get) => ({
+> = (set, get) => {
+  const handleTyping = createTypingHandler(set);
+  clearTypingTimers = handleTyping.clear;
+  return ({
   lastDeletedDM: null,
 
   handleDMChannelCreate: (channel) => {
@@ -208,7 +216,7 @@ export const createDMWsSlice: StateCreator<
     }));
   },
 
-  handleDMTypingStart: createTypingHandler(set),
+  handleDMTypingStart: handleTyping,
 
   handleDMMessagePin: (data) => {
     bufferDMMetadata(data.dm_channel_id,data.message.id,{is_pinned:true});
@@ -348,3 +356,4 @@ export const createDMWsSlice: StateCreator<
     });
   },
 });
+};

@@ -36,6 +36,7 @@ import {
 } from "./slices/dmSettingsSlice";
 import {
   createDMWsSlice,
+  clearDMTypingTimers,
   takeDetachedDMMessages,
   clearDetachedDMMessages,
   beginDMHistoryBuffer,
@@ -54,6 +55,7 @@ type DMSendContext = { ownerId: string; authGeneration: number; isCurrent?: () =
 const initialDMAuthScope = getAuthSessionSnapshot();
 
 function clearDMAuthScope(scope: DMAuthScope): void {
+  clearDMTypingTimers();
   dmChannelListRequest++;
   dmChannelMetadataRevision++;
   for (const controller of dmInflightFetches.values()) controller.abort();

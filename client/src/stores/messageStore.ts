@@ -233,11 +233,14 @@ function sendSessionStillCurrent(session: MessageSession): boolean {
     && useComposerDraftStore.getState().generation === session.draftGeneration;
 }
 
+let clearMessageTypingTimers: (channelId?: string) => void = () => {};
+
 function clearMessageCaches(ownerId: string | null, authGeneration: number): void {
   const current = useMessageStore.getState();
   const loading = ownerId === current.ownerId && authGeneration === current.authGeneration
     ? Object.fromEntries([...inflightFetches.keys()].map((id) => [id, false]))
     : {};
+  clearMessageTypingTimers();
   clearChannelSendIntents();
   for (const controller of inflightFetches.values()) controller.abort();
   for (const controller of aroundPending.values()) controller.abort();
@@ -289,6 +292,7 @@ function unwrapSentMessage(data: unknown): Message | null {
 
 export const useMessageStore = create<MessageState>((set, get) => {
   const handleTyping = createTypingHandler(set);
+  clearMessageTypingTimers = handleTyping.clear;
   return ({
   ownerId: getAuthSessionOwner(),
   authGeneration: getAuthGeneration(),
@@ -311,6 +315,7 @@ export const useMessageStore = create<MessageState>((set, get) => {
   },
 
   evictChannelHistory: (channelId) => {
+    clearMessageTypingTimers(channelId);
     revokeHistoryAccess(channelId);
     abortChannelFetch(channelId);
     cancelPages(channelId);
