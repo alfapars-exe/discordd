@@ -1,4 +1,5 @@
-import { DEFAULT_ACCESSIBILITY, ACCESSIBILITY_BOOLEAN_FIELDS, ACCESSIBILITY_NUMBER_RANGES, NOTIFICATION_DURATION_OPTIONS } from "../utils/accessibilityPreferenceDefaults";
+import { sanitizeAccessibilityPreferences } from "../utils/accessibilityPreferenceCodec";
+import { DEFAULT_ACCESSIBILITY } from "../utils/accessibilityPreferenceDefaults";
 import { DEVICE_LOCAL_VOICE_SETTING_KEYS } from "./voicePreferenceScope";
 import { DEFAULT_SETTINGS as DEFAULT_VOICE_SETTINGS } from "./voicePreferences";
 import { DEFAULT_NOTIFICATION_PREFERENCES, NOTIFICATION_BOOLEAN_FIELDS } from "../utils/notificationPreferenceDefaults";
@@ -23,26 +24,22 @@ const UNSAFE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 const BOOLEAN_FIELDS = new Set([
   "plain", "enabled", "blurEnabled", "wallpaperEnabled", "lightningEnabled", "neonEnabled", "soundsEnabled", "noiseReduction", "screenShareAudio", "screenShareShowCursor", "screenShareLowLatency", "muteHotkeyEnabled", "voiceOverlayEnabled", "voiceOverlaySpeakingOnly", "voiceOverlayChat", "voiceOverlayChatActions", "voiceOverlayChatCompose", "improvementTelemetry", "shareProfileUpdates", "shareOnlineUpdates", "shareStreamUpdates", "clipVoiceConsent", "experiencePersonalization", "personalizedFriendMessages", "serverDMDefault", "communication", "social", "announcements", "tips", "recommendations", "marketingUnsubscribed",
   ...NOTIFICATION_BOOLEAN_FIELDS,
-  ...ACCESSIBILITY_BOOLEAN_FIELDS,
 ]);
 const NUMBER_RANGES: Record<string, [number, number]> = {
   ...APPEARANCE_RANGES,
-  ...ACCESSIBILITY_NUMBER_RANGES,
   micSensitivity: [0, 100], masterVolume: [0, 100], inputVolume: [0, 200], deepfilterSuppression: [0, 100], volume: [0, 100], voiceOverlaySpeakingOpacity: [20, 100], voiceOverlayIdleOpacity: [0, 100], voiceOverlayScale: [75, 150],
 };
 const ENUM_FIELDS: Record<string, readonly (string | number)[]> = {
-  avatarAnimation: ["hover", "always"], density: ["compact", "default", "cozy"], messageStyle: ["default", "compact"],
+  avatarAnimation: ["hover", "always"],
   inputMode: ["voice_activity", "push_to_talk"], noiseReductionEngine: ["rnnoise", "krisp", "webrtc", "deepfilter", "gtcrn", "dtln", "speex"],
   noiseSuppressionLevel: ["low", "medium", "high", "maximum"], screenShareQuality: ["720p", "1080p", "1440p", "native"],
   screenShareFps: [30, 60, 120, -1], screenShareMode: ["motion", "detail"], cameraQuality: ["360p", "720p", "1080p"],
   cameraFps: [15, 30], micProfile: ["konusma", "muzik"],
   profileAudience: ["all_servers", "small_servers", "friends_only"],
   gameActivityNewServerAudience: ["all", "small", "none"],
-  reactionMode: ["all", "direct", "none"], soundPack: ["classic", "soft", "minimal"], desktopDelaySeconds: [0, 3, 5, 10], notificationDuration: NOTIFICATION_DURATION_OPTIONS, stickerAnimation: ["always", "interaction", "never"],
+  reactionMode: ["all", "direct", "none"], soundPack: ["classic", "soft", "minimal"], desktopDelaySeconds: [0, 3, 5, 10],
   timeFormat: ["auto", "12", "24"],
   voiceOverlayPosition: ["top-left", "bottom-left", "top-right", "bottom-right"],
-  roleColorMode: ["names", "dots", "hidden"],
-  officialMessageStyle: ["default", "subtle", "prominent"],
   spamFilter: ["all", "nonfriends", "off"],
 };
 export function object(value: unknown): value is PreferencesData {
@@ -134,7 +131,9 @@ export function cacheable(data: PreferencesData): PreferencesData {
   for (const [namespace, fields] of Object.entries(CACHE_FIELDS)) {
     const value = data[namespace];
     if (!object(value)) continue;
-    const allowed = Object.fromEntries(Object.entries(value).filter(([k, v]) => fields.has(k) && validField(k, v)));
+    const allowed: PreferencesData = namespace === "accessibility"
+      ? { ...sanitizeAccessibilityPreferences(value) }
+      : Object.fromEntries(Object.entries(value).filter(([k, v]) => fields.has(k) && validField(k, v)));
     for (const key of ["userVolumes", "screenShareVolumes", "localMutedUsers"]) {
       if (object(allowed[key])) allowed[key] = Object.fromEntries(Object.entries(allowed[key]).filter(([k, v]) => k.length <= 128 && (key === "localMutedUsers" ? typeof v === "boolean" : typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 200)));
     }

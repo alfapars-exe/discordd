@@ -1,3 +1,5 @@
+import { sanitizeAccessibilityPreferences } from "../utils/accessibilityPreferenceCodec";
+export { sanitizeAccessibilityPreferences } from "../utils/accessibilityPreferenceCodec";
 import { ACCESSIBILITY_NUMBER_RANGES, NOTIFICATION_DURATION_OPTIONS, type NotificationDuration } from "../utils/accessibilityPreferenceDefaults";
 /**
  * accessibilityStore — user-facing accessibility preferences.
@@ -42,38 +44,6 @@ import { usePreferencesStore } from "./preferencesStore";
 import { capturePreferenceScope } from "./preferenceScope";
 
 const STORAGE_KEY = "tayfa.accessibility.v1";
-
-const NUMBER_LIMITS: Partial<Record<keyof AccessibilityState, readonly [number, number]>> = ACCESSIBILITY_NUMBER_RANGES;
-
-/** Stored JSON is untrusted; accept only current fields with their runtime types. */
-export function sanitizeAccessibilityPreferences(value: unknown): Partial<AccessibilityState> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-  const source = value as Record<string, unknown>;
-  const valid: Record<string, unknown> = {};
-  for (const key of Object.keys(DEFAULT_ACCESSIBILITY) as (keyof AccessibilityState)[]) {
-    if (!Object.prototype.hasOwnProperty.call(source, key)) continue;
-    const item = source[key];
-    const limits = NUMBER_LIMITS[key];
-    if (key === "notificationDuration") {
-      if (NOTIFICATION_DURATION_OPTIONS.some(duration => duration === item)) valid[key] = item;
-    } else if (limits) {
-      if (typeof item === "number" && Number.isFinite(item) && item >= limits[0] && item <= limits[1]) valid[key] = item;
-    } else if (key === "density") {
-      if (item === "compact" || item === "default" || item === "cozy") valid[key] = item;
-    } else if (key === "messageStyle") {
-      if (item === "default" || item === "compact") valid[key] = item;
-    } else if (key === "stickerAnimation") {
-      if (item === "always" || item === "interaction" || item === "never") valid[key] = item;
-    } else if (key === "roleColorMode") {
-      if (item === "names" || item === "dots" || item === "hidden") valid[key] = item;
-    } else if (key === "officialMessageStyle") {
-      if (item === "default" || item === "subtle" || item === "prominent") valid[key] = item;
-    } else if (typeof item === "boolean") {
-      valid[key] = item;
-    }
-  }
-  return valid as Partial<AccessibilityState>;
-}
 
 function loadPersisted(): AccessibilityState {
   try {
