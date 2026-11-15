@@ -2695,3 +2695,8 @@ A failing regression showed that removing the last hit on page two stranded the 
 ### RF17 — compact channel first-page scan (2026-11-15)
 
 Encrypted channel search now scans only timestamp/ID references and hydrates first-page content with the same stale-hit-aware helper as subsequent pages and DM search. Existing full-message cache APIs remain available. 83 targeted tests passed, including compact reference content exclusion, channel isolation and cancellation. Real Chromium IndexedDB exact content/order comparisons passed at 1k/10k/50k; compact first-page medians were 19.5/213.8/1053.4 ms. No significant first-query speed improvement or heap bound is claimed. Full matching-ID memory remains open. Receipt: refactor-rf17-compact-channel-first-page-2026-11-15.json.
+
+
+### Combined search source validation (2026-11-15)
+
+Client product source a347a8ca passed all 477 test files: 4,907 passed, 1 skipped (135.55s). npm run build passed; existing large-chunk warnings remain and thresholds were not changed. Source remained unchanged through docs-only 5cb415ba. Earlier remote 8c4e6f90 completed 36/36 successful checks; its archived receipt is distinct from newly running 5cb415ba CI. RF17 still requires matching-ID/first-query bounds and final acceptance. Receipt: refactor-a347-client-full-build-2026-11-15.json.
