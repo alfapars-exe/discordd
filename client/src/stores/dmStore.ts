@@ -14,6 +14,7 @@ import {useComposerDraftStore} from "./composerDraftStore";
 import {cacheDMMessage} from "../crypto/dmMessageCache";
 import {captureDMHistoryVersion,captureDMReceipt,observeDMMessage} from "../crypto/dmMessageVersions";
 import {deleteCachedDMMessage} from "../crypto/keyStorage";
+import { completeMessageDeletion } from "../utils/completeMessageDeletion";
 import {groupAttachmentKeyIndex} from "../utils/groupAttachmentKeys";
 import { registerSpamBatch } from "../utils/registerSpamMessage";
 import {
@@ -734,9 +735,16 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
       if(!channelId)return true; // Older servers can omit scope for an unloaded message.
       if(original&&channelId!==original.dm_channel_id)return false;
       const deletionCurrent=observeDMMessage(channelId,messageId,true);
-      get().handleDMMessageDelete({id:messageId,dm_channel_id:channelId});
-      try{await deleteCachedDMMessage(messageId,channelId,()=>current()&&deletionCurrent());}
-      catch{if(current())console.warn("[dmStore] deleted-message cache cleanup failed");}
+      const cleanupCurrent=()=>current()&&deletionCurrent();
+      await completeMessageDeletion(
+        [()=>get().handleDMMessageDelete({id:messageId,dm_channel_id:channelId})],
+        async()=>{
+          try{await deleteCachedDMMessage(messageId,channelId,cleanupCurrent);}
+          catch{if(cleanupCurrent())console.warn("[dmStore] deleted-message cache cleanup failed");}
+        },
+        cleanupCurrent,
+        {kind:"dm",channelId},
+      );
       return current();
     }catch{return false;}
   },
