@@ -1,0 +1,150 @@
+{
+  "baseCommit": "d7243938788b939e01fac1448cd0d85c23d21227",
+  "scope": "Bounded streaming-reference primitive for a future disk-backed encrypted search snapshot; not yet used by panels",
+  "design": "At most128 references per consumer batch; source readonly transaction kept coherent while a separate IndexedDB database commits bounded writes; getKey keepalive retains one request and never clones plaintext",
+  "compatibility": "Key database v1/schema untouched: v2 is reserved by device-handoff retirement. No backup/store schema changes. Existing full-result APIs and panels unchanged.",
+  "verification": {
+    "unit": "8 tests passed: channel/DM1000 exact metadata rows and128 bound; real-IDB sidecar consumer; source edit blocked until coherent scan ends; cancellation; account switch; consumer failure releases source writes; foreign/nonmatch filtering",
+    "related": "4 files90 tests passed: scanner,keyStorage,deviceHandoff,legacyKeyArchive (6.48s)",
+    "coverage": "Scanner targeted coverage100% lines,93.75% branches,100% functions,98.21% statements",
+    "tsc": "tsc -b passed",
+    "lint": "Targeted ESLint passed",
+    "chromium": "156.0.8078.4; real IndexedDB source and sidecar; one warmup+nine repetitions per kind/size; exact counts, source BIGINT precision and absence of plaintext checked",
+    "node": "v26.13.1",
+    "sequentialSidecarWrites": [
+      {
+        "kind": "channel",
+        "size": 1000,
+        "matches": 267,
+        "peakBatch": 128,
+        "medianMs": 55.5,
+        "repetitions": 9,
+        "scope": "Real IndexedDB scan and sidecar metadata writes; one warmup. Not sorted page hydration, panel heap, transient peak or completed RF17 acceptance."
+      },
+      {
+        "kind": "channel",
+        "size": 10000,
+        "matches": 2667,
+        "peakBatch": 128,
+        "medianMs": 593.3000000119209,
+        "repetitions": 9,
+        "scope": "Real IndexedDB scan and sidecar metadata writes; one warmup. Not sorted page hydration, panel heap, transient peak or completed RF17 acceptance."
+      },
+      {
+        "kind": "channel",
+        "size": 50000,
+        "matches": 13333,
+        "peakBatch": 128,
+        "medianMs": 3294.5,
+        "repetitions": 9,
+        "scope": "Real IndexedDB scan and sidecar metadata writes; one warmup. Not sorted page hydration, panel heap, transient peak or completed RF17 acceptance."
+      },
+      {
+        "kind": "dm",
+        "size": 1000,
+        "matches": 267,
+        "peakBatch": 128,
+        "medianMs": 57.80000001192093,
+        "repetitions": 9,
+        "scope": "Real IndexedDB scan and sidecar metadata writes; one warmup. Not sorted page hydration, panel heap, transient peak or completed RF17 acceptance."
+      },
+      {
+        "kind": "dm",
+        "size": 10000,
+        "matches": 2667,
+        "peakBatch": 128,
+        "medianMs": 585.5,
+        "repetitions": 9,
+        "scope": "Real IndexedDB scan and sidecar metadata writes; one warmup. Not sorted page hydration, panel heap, transient peak or completed RF17 acceptance."
+      },
+      {
+        "kind": "dm",
+        "size": 50000,
+        "matches": 13333,
+        "peakBatch": 128,
+        "medianMs": 3154.2000000178814,
+        "repetitions": 9,
+        "scope": "Real IndexedDB scan and sidecar metadata writes; one warmup. Not sorted page hydration, panel heap, transient peak or completed RF17 acceptance."
+      }
+    ],
+    "batchedSidecarWrites": [
+      {
+        "kind": "channel",
+        "size": 1000,
+        "matches": 267,
+        "peakBatch": 128,
+        "medianMs": 25.099999994039536,
+        "repetitions": 9,
+        "scope": "Real IndexedDB scan and sidecar metadata writes; one warmup. Not sorted page hydration, panel heap, transient peak or completed RF17 acceptance."
+      },
+      {
+        "kind": "channel",
+        "size": 10000,
+        "matches": 2667,
+        "peakBatch": 128,
+        "medianMs": 308.90000000596046,
+        "repetitions": 9,
+        "scope": "Real IndexedDB scan and sidecar metadata writes; one warmup. Not sorted page hydration, panel heap, transient peak or completed RF17 acceptance."
+      },
+      {
+        "kind": "channel",
+        "size": 50000,
+        "matches": 13333,
+        "peakBatch": 128,
+        "medianMs": 1733.5,
+        "repetitions": 9,
+        "scope": "Real IndexedDB scan and sidecar metadata writes; one warmup. Not sorted page hydration, panel heap, transient peak or completed RF17 acceptance."
+      },
+      {
+        "kind": "dm",
+        "size": 1000,
+        "matches": 267,
+        "peakBatch": 128,
+        "medianMs": 33.60000002384186,
+        "repetitions": 9,
+        "scope": "Real IndexedDB scan and sidecar metadata writes; one warmup. Not sorted page hydration, panel heap, transient peak or completed RF17 acceptance."
+      },
+      {
+        "kind": "dm",
+        "size": 10000,
+        "matches": 2667,
+        "peakBatch": 128,
+        "medianMs": 306.5,
+        "repetitions": 9,
+        "scope": "Real IndexedDB scan and sidecar metadata writes; one warmup. Not sorted page hydration, panel heap, transient peak or completed RF17 acceptance."
+      },
+      {
+        "kind": "dm",
+        "size": 50000,
+        "matches": 13333,
+        "peakBatch": 128,
+        "medianMs": 1703,
+        "repetitions": 9,
+        "scope": "Real IndexedDB scan and sidecar metadata writes; one warmup. Not sorted page hydration, panel heap, transient peak or completed RF17 acceptance."
+      }
+    ],
+    "cleanup": "Benchmark Chromium and Vite closed in finally; sessions exit0"
+  },
+  "normalizedLFSourceSha256": {
+    "client/src/crypto/cachedSearchScan.ts": "23363d310d82bece4d88939fa791b495f3276b2283183adf7cd10294d7504b88",
+    "client/src/crypto/cachedSearchScan.test.ts": "dcdf711a04e236d55651904fdf8c5e8e5c05443a19987e82c3c1fc0f63cec6d3",
+    "e2e/scripts/benchmark-search-stream.mjs": "e1aa9e08892d2a8d7d45410bc028de1eb79f3162f0da6ec8a2d05f6f0c811efe"
+  },
+  "logSha256": {
+    "hichat-search-stream-tests.log": "8a3f2f7b8bd3dd1182d58b1fc471670379bc0b25231921108ebcc77bce83a06a",
+    "hichat-search-stream-coverage.log": "320cd72f626c43c6bc7b3439df6a09293ea67eae89c554cc0db19cdeb6603d8a",
+    "hichat-search-stream-storage-contracts.log": "f89e15a50cb5866664af6aaa0ca22902540d0f28633e660682a5f440cd78a84d",
+    "hichat-search-stream-chromium.log": "8c0c679e8686d50cdeb175ceca6d171cc40fb2a030a380fbcd55ea29f6e4a6de",
+    "hichat-search-stream-batched-chromium.log": "eea8f2a7916f3b38d5fd523e4e9698aca0e81b453cdf935c967df020ccee791f"
+  },
+  "remaining": [
+    "Implement account/backend scoped temporary ordered index with exact mixed DM sequence/legacy-slot ordering",
+    "Implement bounded snapshot page/count/delete API and explicit disposal/expiry",
+    "Connect both panels preserving stale-hit refill, live deletion, account/permission and late-query fences",
+    "Panels still retain all matching IDs; no whole-panel or first-query heap bound claimed",
+    "Current50k scan+sidecar writes ~1.7s; not a speedup claim against old plain scan; source cache writes stay blocked while consumer runs",
+    "Measure final first/next/previous latency and heap against previous API and real browser search/recovery acceptance",
+    "New source CI pending; d7243938 prior group change passed36/36, archived separately",
+    "Whole-project acceptance remains open"
+  ]
+}
