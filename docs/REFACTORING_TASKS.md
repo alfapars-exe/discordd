@@ -3617,3 +3617,9 @@ Reset için databases() API olmayan browser ve başlangıçta retired owner sın
 Reset ek davranış düzeltmesi: 77700924 senkron dispose callback throw durumunda diğer cleanup ve source resetin atlandığını gösteren RED regresyon ekler. 3e31c6a4 map callbackini async sararak sync throwu allSettled reddine dönüştürür; callback çağrı sırası korunur. Sonrasında68ilgili testPASS. Ayrıştırma ve davranış düzeltmesi ayrı commitlerdir. Son full40305 ve lint/build27327 çalışıyor. d91d3601 taraması bu ek fixi kapsamaz; son kaynak CI/tarama açık.
 
 Sync disposer fix son tam doğrulama505dosya/5.532başarılı/1atlanan/0başarısız; lint0hata/2mevcutuyarı; TypeScript+Vite build PASS(3,44s). Ayrıştırma d91d3601 taraması51exact/480review/0blocking PASS; sonraki sync-fix ac22b02f taraması91651 sürüyor. Yeni head CI/Sonar açık; önceki journalCI36/36 bunun yerine sayılmadı.
+
+Reset sync-disposer düzeltmesi ac22b02f değişmez kaynak taraması51exact/480review/0blocking PASS. e4ffe714 yeni CI çalışıyor; nihai kabul henüz değil.
+
+### RF17/RF26 — scoped mesaj cache silmesinin ayrılması (2026-11-16)
+
+2863f403 keyStorage içindeki scoped deletion gövdesini cachedMessageDeletion modülüne taşır; public channel/DM API imzaları ve dönüşleri aynı kalır. 35de691d kalıcı intent koordinasyonu, atomic eviction ve matching-record read/owner-check/delete adımlarını ayırır. Journal commit önce; metadata hatasında best-effort eviction, yeni token koruması, owner iptali/rollback ve AggregateError sırası korunur. Transaction yaratımı hata handler dışında kalır. Mevcut accountScope/keyStorage/journal testleri önce92PASS ve sonra92PASS; TypeScript PASS. Full52156, lint/build62003, kapsam37452 çalışıyor. Yeni kaynak CI/Sonar/tarama ve native transaction kabulü açık. Receipt refactor-cached-message-deletion-phases-2026-11-16.json.

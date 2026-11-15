@@ -1,0 +1,38 @@
+{
+  "moduleExtraction": "2863f403",
+  "phaseExtraction": "35de691d",
+  "originalSonarIssue": "AaHfuK2q4B142AX0cP6A",
+  "originalCognitiveComplexity": 21,
+  "publicAPI": "deleteCachedDMMessage and deleteCachedChannelMessage remain in keyStorage with unchanged arguments/results",
+  "change": "Dedicated cachedMessageDeletion module owns durable intent preparation, atomic eviction, and matching-record deletion",
+  "invariants": [
+    "Journal intent commits before source eviction",
+    "Journal failure still permits best-effort source cleanup",
+    "Retire only the exact write token; preserve a newer accepted deletion",
+    "Owner guards, transaction abort and AggregateError failure ordering retained",
+    "Database transaction creation remains outside the transaction error handler"
+  ],
+  "validation": {
+    "targetedBefore": 92,
+    "targetedAfter": 92,
+    "typecheck": "PASS",
+    "fullClient": "RUNNING session52156",
+    "lintBuild": "RUNNING session62003",
+    "coverage": "RUNNING session37452"
+  },
+  "pending": [
+    "Full client, lint/build and coverage terminal results",
+    "Source-bound scan/Sonar/CI",
+    "Native IndexedDB transaction and deletion-drain acceptance"
+  ],
+  "evidence": {
+    "before": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-message-deletion-before.log",
+      "sha256": "8a883126a25134b864b51596d02943f6294d0c8f91f46da93039b5c2a48a2137"
+    },
+    "after": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-message-deletion-after.log",
+      "sha256": "a1df8e4d9acd5ff48a58c53c0400f9932f2df5fb6cd51582905d00112262ae59"
+    }
+  }
+}

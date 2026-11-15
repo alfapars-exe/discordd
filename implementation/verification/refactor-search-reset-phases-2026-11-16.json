@@ -88,7 +88,7 @@
     "targetedGreen": 68,
     "finalFull": "5532 passed / 1 skipped / 0 failed; 505 files",
     "lintBuild": "PASS zero lint errors / 2 existing warnings; TypeScript + Vite build 3.44s",
-    "sourceScanScope": "Final ac22b02f source scan running session91651"
+    "sourceScanScope": "ac22b02f immutable source scan PASS: 51 exact records, 480 review lines, 0 blocking patterns"
   },
   "phaseScan": {
     "source": "d91d3601",
@@ -97,5 +97,12 @@
     "reviewLines": 480,
     "blockingPatternHits": 0,
     "limit": "Includes phase extraction; excludes subsequent synchronous-disposer fix"
+  },
+  "finalScan": {
+    "source": "ac22b02f",
+    "result": "PASS",
+    "sha256": "df7ab3e2e2808cb612ac4962eedcaacf7866cb5c1b54ca18eec344dd7768bbc5",
+    "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-reset-disposer-ac22b02f-scan.log",
+    "limit": "Pattern scan does not prove vulnerability absence"
   }
 }
