@@ -164,6 +164,23 @@ describe("account-scoped preference synchronization", () => {
     }finally{bindPreferencePresenter(async()=>applyAccountPreferences);}
   });
 
+  it("stops an old presenter when a destination subscriber synchronously binds another account",async()=>{
+    await ready();
+    mocks.theme.mockImplementationOnce(()=>{
+      state().bindAccount("bob");state().set({appearance:{uiScale:150}});
+    });
+    try {
+      mocks.get.mockResolvedValueOnce(ok({theme:"alice-remote",appearance:{uiScale:130},voice_settings:{masterVolume:45}}));
+      await state().fetchAndApply();await settle();
+      expect(state().accountId).toBe("bob");
+      expect(state().data).toEqual({appearance:{uiScale:150}});
+      expect(state().hasPendingChanges).toBe(true);
+      expect(mocks.appearance).not.toHaveBeenCalledWith({uiScale:130});
+      expect(mocks.voice).not.toHaveBeenCalledWith({masterVolume:45});
+      expect(mocks.appearance).toHaveBeenLastCalledWith({uiScale:150});
+    }finally{mocks.theme.mockReset();}
+  });
+
   it("fences an old account while the production presenter is still loading", async () => {
     const { applyAccountPreferences } = await import("./applyAccountPreferences");
     const loading = deferred<typeof applyAccountPreferences>();

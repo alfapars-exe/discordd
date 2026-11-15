@@ -1007,6 +1007,7 @@ it("preserves voice session through the production bootstrap preference loader",
   expect(send).not.toHaveBeenCalled();
   // An invalidated account fence must not hydrate a previous owner's values.
   applyAccountPreferences(() => null, false, true);
+  applyAccountPreferences(() => null, true, true);
   expect(useVoiceStore.getState()).toMatchObject({ ...session, masterVolume: 67 });
   resetStore();
 });
