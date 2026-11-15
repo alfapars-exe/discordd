@@ -76,7 +76,6 @@
     }
   },
   "pending": [
-    "Source-bound scan/Sonar/CI",
     "RF17 whole-pipeline/first-query/native acceptance",
     "Separate production pending-panel CI timeout root cause remains open"
   ],
@@ -104,5 +103,18 @@
     "sha256": "df7ab3e2e2808cb612ac4962eedcaacf7866cb5c1b54ca18eec344dd7768bbc5",
     "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-reset-disposer-ac22b02f-scan.log",
     "limit": "Pattern scan does not prove vulnerability absence"
+  },
+  "sonar": {
+    "issue": "AaHf5GEnvoWSTACzSfgD",
+    "status": "CLOSED",
+    "resolution": "FIXED",
+    "sourceMismatches": 0,
+    "analysisSourceMatchedLocal": true
+  },
+  "ci": {
+    "head": "e4ffe714",
+    "checks": "36/36 SUCCESS",
+    "serverRun": 43775697503,
+    "receipt": "refactor-e4ff-terminal-ci-2026-11-16.json"
   }
 }

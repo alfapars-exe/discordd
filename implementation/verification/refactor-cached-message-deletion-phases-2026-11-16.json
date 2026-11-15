@@ -26,12 +26,31 @@
       "scope": "Measured before the subsequent removal of the useless initial assignment; not a final-source coverage claim"
     },
     "finalTargeted": 92,
-    "fullRunScope": "Full suite preceded final useless-assignment cleanup; final targeted run 92 passes follows cleanup."
+    "fullRunScope": "Full suite preceded final useless-assignment cleanup; final targeted run 92 passes follows cleanup.",
+    "finalTypecheck": "PASS",
+    "finalGlobalLint": "PASS 0 errors / 2 existing warnings",
+    "ownerBoundaryContracts": {
+      "commit": "f6d6e764",
+      "cases": 4,
+      "baselineSource": "e4ffe714:keyStorage.ts",
+      "baselineTotal": 96,
+      "candidateTotal": 96,
+      "assertions": "Late owner retirement at messageCache/metadata response preserves source row and committed intent for channel/DM",
+      "sourceRestoredAndGitDiffEmpty": true
+    },
+    "finalCoverage": {
+      "lines": 100,
+      "functions": 100,
+      "statements": 98.03,
+      "branches": 96.96
+    },
+    "finalFullWithOwnerCases": "RUNNING session60510",
+    "finalBuild": "RUNNING session67443"
   },
   "pending": [
     "Source-bound scan/Sonar/CI",
     "Native IndexedDB transaction and deletion-drain acceptance",
-    "Final global lint and TypeScript terminal results"
+    "Final full suite and final build terminal results"
   ],
   "evidence": {
     "before": {
@@ -49,6 +68,14 @@
     "finalTargeted": {
       "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-message-deletion-final-target.log",
       "sha256": "a2635a6705782be4fb71245960d3955316f123a49942aab2277756d90649050f"
+    },
+    "ownerBefore": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-message-deletion-owner-before.log",
+      "sha256": "1b38f45891f76cedf7d3215e84e6a5fdb20cabf474d2f39a3cc9d8f62c5c991f"
+    },
+    "ownerAfter": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-message-deletion-owner-after.log",
+      "sha256": "9843787ec97f6649e30946a6d891a1c921d0fcd15d67b0c51ae6c70ee49d89de"
     }
   }
 }
