@@ -224,9 +224,10 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 
 	// Remaining services (order-independent)
 	inviteService := services.NewInviteService(repos.Invite, repos.Server)
-	emailDeliveryService := services.NewEmailDeliveryService(repos.EmailDelivery, emailSender,
-		services.WithEmailUnsubscribe(repos.EmailUnsubscribe, cfg.Email.AppURL))
-	p2pCallService := services.NewP2PCallService(repos.Friendship, repos.User, hub, emailDeliveryService, appLogService)
+	communication := initCommunicationServices(communicationDependencies{
+		Repositories: repos, Hub: hub, Sender: emailSender, Logger: appLogService, AppURL: cfg.Email.AppURL,
+	})
+	emailDeliveryService, p2pCallService := communication.EmailDelivery, communication.P2PCall
 
 	channels := initChannelNavigationServices(channelNavigationDependencies{
 		Repositories: repos, Hub: hub, Permissions: channelPermService, FreshPermissions: channelPermService,

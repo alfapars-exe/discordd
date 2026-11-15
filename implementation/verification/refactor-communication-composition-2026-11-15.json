@@ -1,0 +1,27 @@
+{
+  "scope": "RF11 durable email/P2P composition extraction",
+  "owners": [
+    "EmailDelivery",
+    "P2PCall"
+  ],
+  "preserved": [
+    "Configured category email sender",
+    "Email delivery/unsubscribe repositories and application URL",
+    "Same durable delivery owner passed to P2P and returned for DM/friendship enqueue and worker ownership",
+    "Same friendship/user/hub/logger providers",
+    "No worker start or callback registration moved into helper"
+  ],
+  "checks": {
+    "root": "PASS ServiceInitialization/routes/callbacks/permission/auth-cache/real friendship-DM, 3.022s",
+    "services": "PASS P2P/email tests, 2.436s",
+    "build": "PASS go build ./...",
+    "vet": "PASS go vet .",
+    "reviewed_manifest": "PASS 50 exact records"
+  },
+  "remaining": [
+    "Required composition and optional disabled sender matrix",
+    "Remaining presence/cache/logging composition and full lifecycle acceptance",
+    "Full RF01-RF30 completion unproven"
+  ],
+  "remote_ci": "43656873218 source 79afb1e9 live without observed failures; local changes excluded."
+}
