@@ -15,6 +15,10 @@ const resetOnly=process.argv.includes("--reset-windows-only");
 const pendingOnly=process.argv.includes("--pending-frontier-only");
 const assertPendingBudget=process.argv.includes("--assert-pending-panel-budget");
 if(assertPendingBudget&&!pendingOnly)throw Error("Pending panel budget requires --pending-frontier-only");
+const assertActivePendingBudget=process.argv.includes("--assert-active-pending-panel-budget");
+if(assertActivePendingBudget&&!pendingOnly)throw Error("Active pending budget requires --pending-frontier-only");
+const pendingEvents=assertActivePendingBudget?[1000,5000,10000,50000]:[1000,5000,10000];
+const activePendingFailures=[];
 const variants=process.argv.includes("--after-only")?["after"]:["before","after"];
 const repetitions=quick?1:9,assets=new Map();
 if(pendingOnly&&(!process.argv.includes("--after-only")||failureOnly||resetOnly))throw Error("Pending frontier probe requires --after-only and no other probe mode");
@@ -116,7 +120,7 @@ try{
    await page.evaluate(kind=>globalThis.panelBench.deletes(kind,0,10),kind);
    await cdp.send("HeapProfiler.collectGarbage");const base=await cdp.send("Runtime.getHeapUsage");
    let start=10;
-   for(const end of [1000,5000,10000]){
+   for(const end of pendingEvents){
     await page.evaluate(({kind,start,end})=>globalThis.panelBench.deletes(kind,start,end),{kind,start,end});
     await cdp.send("HeapProfiler.collectGarbage");const heap=await cdp.send("Runtime.getHeapUsage");
     growth.push({events:end,retainedGrowthBytes:heap.usedSize-base.usedSize});start=end;
@@ -130,7 +134,8 @@ try{
   assert.deepEqual(await page.locator(".search-result-content").allTextContents(),expected.slice(0,25));
   await page.evaluate(()=>globalThis.panelBench.unmount());
   await cdp.send("HeapProfiler.collectGarbage");const disposedHeap=await cdp.send("Runtime.getHeapUsage");
-  console.log(JSON.stringify({variant,kind,pendingSearchFrontier:growth,releaseToObservedResultsMs,settledHeapBytes:settledHeap.usedSize,disposedHeapBytes:disposedHeap.usedSize,matches,correctPage:true,indexDisposalDrained:true,scope:"Single diagnostic run of actual production React panel/native IndexedDB;ready snapshot handoff deliberately gated before adoption;10000distinct missing-ID store events;post-GC JS heap deltas while gated;release-to-observed DOM includes Playwright polling,excludes later assertions/disposal;controlled providers,not full WS/cache writer pipeline or a physical memory bound."}));
+  console.log(JSON.stringify({variant,kind,pendingSearchFrontier:growth,releaseToObservedResultsMs,settledHeapBytes:settledHeap.usedSize,disposedHeapBytes:disposedHeap.usedSize,matches,correctPage:true,indexDisposalDrained:true,scope:`Single diagnostic run of actual production React panel/native IndexedDB;ready snapshot handoff deliberately gated before adoption;${pendingEvents.at(-1)}distinct missing-ID store events;post-GC JS heap deltas while gated;release-to-observed DOM includes Playwright polling,excludes later assertions/disposal;controlled providers,not full WS/cache writer pipeline or a physical memory bound.`}));
+  if(assertActivePendingBudget&&growth.at(-1).retainedGrowthBytes>=512*1024)activePendingFailures.push({kind,retainedGrowthBytes:growth.at(-1).retainedGrowthBytes});
   if(assertPendingBudget)assert.ok(settledHeap.usedSize-disposedHeap.usedSize<512*1024,"Settled search panel retains more than512KiB above its disposed baseline after10000missing deletions");
   continue;
  }
@@ -190,4 +195,5 @@ try{
  }
  assert.deepEqual(errors,[]);
  }finally{await context.close();}}
+ assert.deepEqual(activePendingFailures,[],"Active pending panel retains more than512KiB after50000 distinct deletions");
 }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
