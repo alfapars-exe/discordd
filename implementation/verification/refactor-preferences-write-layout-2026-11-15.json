@@ -8,8 +8,66 @@
   "validation": {
     "build": "npm run build (tsc -b plus Vite)PASS;Vite1.78s",
     "lint": "PASS0errors2existingwarnings",
-    "fullClientCoverage": "RUNNING,not accepted",
-    "immutableSelfScan": "RUNNING,not accepted"
+    "fullClientCoverage": "PASS495files,5316tests,1skip;123.23s",
+    "immutableSelfScan": "RUNNING,not accepted",
+    "coverageTotal": {
+      "lines": {
+        "total": 38502,
+        "covered": 26511,
+        "skipped": 0,
+        "pct": 68.85
+      },
+      "statements": {
+        "total": 52746,
+        "covered": 35767,
+        "skipped": 0,
+        "pct": 67.8
+      },
+      "functions": {
+        "total": 12320,
+        "covered": 7636,
+        "skipped": 0,
+        "pct": 61.98
+      },
+      "branches": {
+        "total": 39969,
+        "covered": 25929,
+        "skipped": 0,
+        "pct": 64.87
+      },
+      "branchesTrue": {
+        "total": 0,
+        "covered": 0,
+        "skipped": 0,
+        "pct": 100
+      }
+    },
+    "coveragePreferencesStore": {
+      "lines": {
+        "total": 263,
+        "covered": 259,
+        "skipped": 0,
+        "pct": 98.47
+      },
+      "functions": {
+        "total": 36,
+        "covered": 35,
+        "skipped": 0,
+        "pct": 97.22
+      },
+      "statements": {
+        "total": 337,
+        "covered": 319,
+        "skipped": 0,
+        "pct": 94.65
+      },
+      "branches": {
+        "total": 211,
+        "covered": 188,
+        "skipped": 0,
+        "pct": 89.09
+      }
+    }
   },
   "logs": {
     "before": "TEMP/hichat-preferences-write-layout-before.log",

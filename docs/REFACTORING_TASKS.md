@@ -3401,3 +3401,5 @@ Sonar PR305 a1e85a84: owner-watch testinin45karmaşıklık bulgusuAaHYWqzUd7dyvm
 ### RF13/RF26 — tercih yazımı yanıt/hata sınırlarının ayrılması (2026-11-15)
 
 7c604780 GET/PATCH yanıtı hesap eşleşmesi doğrulamasını validatePreferenceResponse içinde birleştirir;onaylanmış yazımın yerel uygulama hatası ile henüz onaylanmamış yazımın kuyruğa dönüşünü handlePreferenceWriteFailure ayırır. Generation denetimi, güncel pending önceliği, kabul edilen PATCHin yeniden gönderilmemesi ve observer hatası davranışı korunur. Mevcut79test önce3.91s/sonra4.24sPASS;gerçek tsc-b/VitebuildPASS1.78s;lint0hata2mevcutuyarı. Fullclientcoverage/immutablescan sürüyor;yeniheadCI/Sonar doğrulanmadı. Receipt:implementation/verification/refactor-preferences-write-layout-2026-11-15.json.
+
+7c604780 tamclientcoveragePASS495dosya5316test1atlanan123.23s;wholeclientline68.85%/branch64.87%;preferencesStoreline98.47%/branch89.09%. Gerçekbuild/lintPASS;tarama/yeniheadSonarCI bekleniyor.
