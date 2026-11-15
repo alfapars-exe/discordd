@@ -96,3 +96,22 @@ it("rejects an initially retired owner before disposing resources or resetting d
  expect(await indexedDB.databases()).toEqual([]);
  expect(isCachedSearchResetting(name)).toBe(false);
 });
+
+it("settles every resource even when one disposer throws before returning a promise", async () => {
+ await seedIndex();
+ const order: string[] = [];
+ unregister.push(registerCachedSearchResource(name, () => {
+  order.push("sync-failure");
+  throw new Error("disposer-threw-before-promise");
+ }));
+ unregister.push(registerCachedSearchResource(name, async () => {
+  order.push("other-start");
+  await Promise.resolve();
+  order.push("other-finished");
+ }));
+ const reset = vi.fn(async () => { order.push("reset"); return 42; });
+ expect(await withResetCachedSearchSnapshots(source, reset)).toBe(42);
+ expect(order).toEqual(["sync-failure", "other-start", "other-finished", "reset"]);
+ expect(await indexCounts()).toEqual([0, 0]);
+ expect(isCachedSearchResetting(name)).toBe(false);
+});
