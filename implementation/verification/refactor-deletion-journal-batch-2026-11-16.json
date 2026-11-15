@@ -62,5 +62,15 @@
     "status": "CLOSED",
     "resolution": "FIXED",
     "analyzedSourceMatched": true
+  },
+  "selfScan": {
+    "source": "1dbb9750",
+    "result": "PASS",
+    "reviewedExactSourceRecords": 51,
+    "reviewLines": 480,
+    "blockingPatternHits": 0,
+    "log": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-journal-1dbb9750-scan.log",
+    "sha256": "7c38f186e7d8179f745a771e922fef16bb76d5680582ec67805b7445a1484ff1",
+    "limit": "Pattern scan does not establish vulnerability absence"
   }
 }
