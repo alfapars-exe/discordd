@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createStore, type StateCreator } from "zustand/vanilla";
+import { DEFAULT_SETTINGS } from "../voicePreferences";
 import { createVoiceSettingsSlice, flushPendingVoiceSettingsSave, loadSettings, type VoiceSettingsSlice } from "./voiceSettingsSlice";
 
 const { sync } = vi.hoisted(() => ({ sync: vi.fn() }));
@@ -14,6 +15,28 @@ beforeEach(() => {
 afterEach(() => {
   flushPendingVoiceSettingsSave();
   vi.useRealTimers();
+});
+
+it.each([
+  { masterVolume: "loud" }, { inputMode: "invalid" },
+  { soundsEnabled: "false" }, { micSensitivity: 999 },
+  { userVolumes: [50] },
+])("repairs malformed account preferences in the local voice cache: %j", malformed => {
+  localStorage.setItem("mqvi_voice_settings", JSON.stringify({ ...malformed, inputVolume: 125, inputDevice: "local-mic" }));
+  const settings = loadSettings();
+  expect(settings).toMatchObject({ masterVolume: DEFAULT_SETTINGS.masterVolume,
+    inputMode: DEFAULT_SETTINGS.inputMode, soundsEnabled: DEFAULT_SETTINGS.soundsEnabled,
+    micSensitivity: DEFAULT_SETTINGS.micSensitivity, inputVolume: 125, inputDevice: "local-mic" });
+  expect(settings.userVolumes).toEqual({});
+  expect(sync).not.toHaveBeenCalled();
+});
+
+it("does not import unknown runtime fields from local preference storage", () => {
+  localStorage.setItem("mqvi_voice_settings", JSON.stringify({ preMuteVolumes: { peer: 90 }, unknownField: true, inputDevice: "local-mic" }));
+  const settings = loadSettings();
+  expect(settings).not.toHaveProperty("preMuteVolumes");
+  expect(settings).not.toHaveProperty("unknownField");
+  expect(settings.inputDevice).toBe("local-mic");
 });
 
 describe("noise engine preference migration", () => {

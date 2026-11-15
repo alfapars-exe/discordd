@@ -2865,3 +2865,8 @@ Fail-first tests showed malformed scalar server values reaching live voice state
 ### RF13 — apply the shared preference snapshot without another field list (2026-11-15)
 
 Replaced the manual server-apply field projection with Zustand merge of the already validated preference-only snapshot. A before/after integration case covers every account default/boolean opposite, device camera/global-hotkey retention against foreign values, exact persistence, no outbound echo and runtime/action reference identity. Before54consumer tests and after192tests/four suites pass. npx tsc -b,changed ESLint,Vite production build pass. Receipt:implementation/verification/refactor-voice-preference-apply-2026-11-15.json. Existing5,003-test coverage remains prior-source evidence; new-head CI and full RF13/physical acceptance remain open.
+
+
+### RF13 — validate legacy local voice account leaves (2026-11-15)
+
+Six fail-first cases exposed malformed account values and unknown/runtime fields entering voice preferences from localStorage. loadSettings now validates account leaves with the shared codec, retains only declared device-local fields for the existing migrations, and still persists krisp/dpdfnet migration to rnnoise. Six suites/216tests,npx tsc -b,changed-file lint and Vite production build pass. Receipt:implementation/verification/refactor-voice-local-validation-2026-11-15.json. Held locally while remote c2baaec1 CI is active to avoid repeatedly cancelling validation. Full current-source/physical voice/RF13 acceptance remain open.

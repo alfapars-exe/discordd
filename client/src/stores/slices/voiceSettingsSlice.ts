@@ -71,10 +71,16 @@ export function loadSettings(): VoiceSettings {
     // string's index properties over DEFAULT_SETTINGS and pollute the
     // store with garbage.
     const parsedRaw = JSON.parse(raw);
-    const parsed: Partial<VoiceSettings> =
+    const stored: Record<string, unknown> =
       parsedRaw && typeof parsedRaw === "object" && !Array.isArray(parsedRaw)
-        ? (parsedRaw as Partial<VoiceSettings>)
+        ? parsedRaw
         : {};
+    // Apply the same account-leaf validation used for server hydration. Keep
+    // only declared local fields for the existing device/overlay migrations.
+    const parsed: Partial<VoiceSettings> = {
+      ...(cacheable(sanitize({ voice_settings: stored })).voice_settings as Partial<VoiceSettings> | undefined),
+      ...Object.fromEntries(DEVICE_LOCAL_VOICE_SETTING_KEYS.filter(key => Object.hasOwn(stored, key)).map(key => [key, stored[key]])),
+    };
     const merged: VoiceSettings = { ...DEFAULT_SETTINGS, ...parsed };
     if (typeof merged.cameraDevice !== "string") merged.cameraDevice = "";
     if (typeof merged.voiceOverlayEnabled !== "boolean") merged.voiceOverlayEnabled = false;
@@ -141,7 +147,7 @@ export function loadSettings(): VoiceSettings {
     } catch { /* localStorage unavailable */ }
 
     // Hidden paid and obsolete engines migrate to the free default.
-    if (REMOVED_ENGINES.has(merged.noiseReductionEngine as string)) {
+    if (typeof stored.noiseReductionEngine === "string" && REMOVED_ENGINES.has(stored.noiseReductionEngine)) {
       merged.noiseReductionEngine = "rnnoise";
       persistNow(merged);
     }
