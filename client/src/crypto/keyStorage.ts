@@ -25,6 +25,7 @@
  * XSS defense and does not establish that OS full-disk encryption is enabled.
  */
 
+import { CACHED_SEARCH_EPOCH_KEY } from "./cachedSearchEpoch";
 import { getDB, guardedPut } from "./keyDatabase";
 export { KEY_DATABASE_STORES, getAccountDatabaseName, upgradeKeyDatabase, openScopedKeyDatabase, closeDB } from "./keyDatabase";
 import type {
@@ -39,6 +40,7 @@ import type {
   RegistrationData,
 } from "./types";
 import {
+  getAuthSessionSnapshot,
   subscribeAuthGenerationChanges,
   subscribeAuthOwnerChanges,
 } from "../api/authSessionEvents";
@@ -815,9 +817,9 @@ export async function getAllMetadata(): Promise<Array<[string, unknown]>> {
 
   let cursor = await tx.store.openCursor();
   while (cursor) {
-    // setMetadata is the only writer and its key parameter is `string`, so a
-    // non-string key cannot exist here — and could not be written back either.
-    if (typeof cursor.key === "string") {
+    // Portable metadata excludes the derived reset fence. Replaying an old
+    // fence during rollback must never revive an old search index.
+    if (typeof cursor.key === "string" && cursor.key !== CACHED_SEARCH_EPOCH_KEY) {
       entries.push([cursor.key, cursor.value]);
     }
     cursor = await cursor.continue();
@@ -839,7 +841,10 @@ export async function getAllMetadata(): Promise<Array<[string, unknown]>> {
  * they can restore from backup on a new device.
  */
 export async function clearAllE2EEData(options?: { resetSelfFanout: true }): Promise<void> {
+  const scope = getAuthSessionSnapshot();
+  const isCurrent = () => { const now = getAuthSessionSnapshot(); return now.ownerId === scope.ownerId && now.generation === scope.generation; };
   const db = await getDB();
+  if (!isCurrent()) throw new Error("e2ee_account_scope_changed");
 
   const storeNames = [
     "identity",
@@ -854,18 +859,23 @@ export async function clearAllE2EEData(options?: { resetSelfFanout: true }): Pro
     "metadata",
   ] as const;
 
-  const tx = db.transaction(storeNames, "readwrite");
-  try {
-    for (const storeName of storeNames) {
-      await tx.objectStore(storeName).clear();
+  const { withResetCachedSearchSnapshots } = await import("./cachedSearchSnapshot");
+  if (!isCurrent()) throw new Error("e2ee_account_scope_changed");
+  await withResetCachedSearchSnapshots(db.name, async () => {
+    const tx = db.transaction(storeNames, "readwrite");
+    try {
+      for (const storeName of storeNames) {
+        await tx.objectStore(storeName).clear();
+      }
+      if (options?.resetSelfFanout) await tx.objectStore("metadata").put(true, "self_fanout_reset");
+      await tx.objectStore("metadata").put(crypto.randomUUID(), CACHED_SEARCH_EPOCH_KEY);
+      await tx.done;
+    } catch (error) {
+      try { tx.abort(); } catch { /* An IndexedDB request may already have aborted it. */ }
+      await tx.done.catch(() => {});
+      throw error;
     }
-    if (options?.resetSelfFanout) await tx.objectStore("metadata").put(true, "self_fanout_reset");
-    await tx.done;
-  } catch (error) {
-    try { tx.abort(); } catch { /* An IndexedDB request may already have aborted it. */ }
-    await tx.done.catch(() => {});
-    throw error;
-  }
+  }, isCurrent);
 }
 
 /**

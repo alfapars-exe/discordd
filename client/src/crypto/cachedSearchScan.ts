@@ -1,5 +1,6 @@
 import { getAuthSessionSnapshot } from "../api/authSessionEvents";
 import { getDB } from "./keyDatabase";
+import { getCachedSearchEpoch } from "./cachedSearchEpoch";
 import type { CachedDecryptedMessage } from "./types";
 
 export const SEARCH_REFERENCE_BATCH_SIZE = 128;
@@ -38,6 +39,7 @@ export async function scanCachedSearchReferences(
   query: string,
   consume: (batch: readonly CachedSearchReference[]) => Promise<void>,
   signal?: AbortSignal,
+  onEpoch?: (epoch: string) => void,
 ): Promise<number> {
   const scope = getAuthSessionSnapshot();
   const assertCurrent = () => {
@@ -45,6 +47,10 @@ export async function scanCachedSearchReferences(
     const now = getAuthSessionSnapshot();
     if (scope.ownerId !== now.ownerId || scope.generation !== now.generation) throw new Error("e2ee_account_scope_changed");
   };
+  assertCurrent();
+  // Optimistic epoch checks avoid locking metadata for a long message scan.
+  // Reset writes rotate the nonce atomically with clearing the source stores.
+  const epoch = await getCachedSearchEpoch();
   assertCurrent();
   const db = await getDB();
   assertCurrent();
@@ -58,7 +64,9 @@ export async function scanCachedSearchReferences(
   let count = 0;
   const lowerQuery = query.toLowerCase();
   try {
-    let cursor = await tx.store.index(kind === "dm" ? "byDMChannel" : "byChannel").openCursor(channelId);
+    assertCurrent(); onEpoch?.(epoch);
+    const reader = { store: tx.store };
+    let cursor = await reader.store.index(kind === "dm" ? "byDMChannel" : "byChannel").openCursor(channelId);
     while (cursor) {
       assertCurrent();
       const row = cursor.value as CachedDecryptedMessage;
@@ -71,14 +79,17 @@ export async function scanCachedSearchReferences(
       if (batch.length === SEARCH_REFERENCE_BATCH_SIZE) {
         const ready = batch;
         batch = [];
-        await keepReadAlive(tx, () => { assertCurrent(); return consume(ready); });
+        await keepReadAlive(reader, () => { assertCurrent(); return consume(ready); });
         assertCurrent();
       }
       cursor = await cursor.continue();
     }
-    if (batch.length) await keepReadAlive(tx, () => { assertCurrent(); return consume(batch); });
+    if (batch.length) await keepReadAlive(reader, () => { assertCurrent(); return consume(batch); });
     assertCurrent();
     await completed;
+    const finalEpoch = await getCachedSearchEpoch();
+    assertCurrent();
+    if (epoch !== finalEpoch) throw new Error("search_cache_epoch_changed");
     return count;
   } catch (error) {
     abort();

@@ -3,6 +3,7 @@ import { getAuthSessionSnapshot, subscribeAuthGenerationChanges, subscribeAuthOw
 import { SERVER_URL } from "../utils/constants";
 import { dmSourceSequence } from "../utils/dmSourceOrder";
 import { getAccountDatabaseName } from "./keyDatabase";
+import { getCachedSearchEpoch } from "./cachedSearchEpoch";
 import { scanCachedSearchReferences } from "./cachedSearchScan";
 
 export const SEARCH_SNAPSHOT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -18,6 +19,56 @@ async function deleteSnapshot(tx: Transaction<"readwrite">, id: string) {
   await Promise.all([tx.objectStore("refs").delete(prefixRange(id)), tx.objectStore("snapshots").delete(id)]);
 }
 
+const activeSnapshots = new Map<string, Set<() => Promise<void>>>();
+const resets = new Map<string, number>();
+async function openSearchDatabase(name: string): Promise<IDBPDatabase> {
+  return openDB(name, 1, { upgrade(db) {
+    const refs = db.createObjectStore("refs", { keyPath: ["snapshotId", "messageId"] });
+    refs.createIndex("time", ["snapshotId", "time", "messageId"]);
+    refs.createIndex("sequence", ["snapshotId", "sequence", "timestamp", "messageId"]);
+    refs.createIndex("rank", ["snapshotId", "rank"], { unique: true });
+    db.createObjectStore("snapshots", { keyPath: "id" }).createIndex("expires", "expiresAt");
+  } });
+}
+
+/** Fence local creation for the whole reset, cancel owned work, then clear
+ * abandoned/cross-tab indexes too. A source epoch is the cross-tab read fence.
+ */
+export async function withResetCachedSearchSnapshots<T>(sourceName: string, resetSource: () => Promise<T>, isCurrent: () => boolean = () => true): Promise<T> {
+  if (!isCurrent()) throw new Error("e2ee_account_scope_changed");
+  const name = `${sourceName}.search.v1`;
+  resets.set(name, (resets.get(name) ?? 0) + 1);
+  let failed = false, failure: unknown, result: T | undefined;
+  try {
+    // A final store clear retries cleanup even if one disposed handle failed.
+    await Promise.allSettled([...(activeSnapshots.get(name) ?? [])].map(dispose => dispose()));
+    if (!isCurrent()) throw new Error("e2ee_account_scope_changed");
+    result = await resetSource();
+  } catch (error) { failed = true; failure = error; }
+  try {
+    // Avoid creating a derived database for accounts that never searched.
+    if (isCurrent() && (typeof indexedDB.databases !== "function" || (await indexedDB.databases()).some(db => db.name === name))) {
+      const db = await openSearchDatabase(name);
+      try {
+        if (isCurrent()) {
+          const tx = db.transaction(["refs", "snapshots"], "readwrite");
+          void tx.done.catch(() => {});
+          try { await Promise.all([tx.objectStore("refs").clear(), tx.objectStore("snapshots").clear()]); await tx.done; }
+          catch (error) { try { tx.abort(); } catch { /* Already complete. */ } await tx.done.catch(() => {}); throw error; }
+        }
+      } finally { db.close(); }
+    }
+  } catch (error) {
+    if (!failed) { failed = true; failure = error; }
+    else console.warn("[e2ee] search index cleanup failed after an unsuccessful key reset");
+  } finally {
+    const remaining = (resets.get(name) ?? 1) - 1;
+    if (remaining) resets.set(name, remaining); else resets.delete(name);
+  }
+  if (failed) throw failure;
+  return result as T;
+}
+
 /** Account/backend-scoped, disposable ordering index. Only public message IDs
  * and ordering metadata are written; query text and plaintext are never stored.
  * Keep this separate from the v1 key DB: its v2 is a retirement barrier.
@@ -29,23 +80,21 @@ export async function createCachedSearchSnapshot(kind: "channel" | "dm", channel
   signal?.throwIfAborted(); assertScope();
   const name = `${await getAccountDatabaseName(scope.ownerId ?? "", SERVER_URL)}.search.v1`;
   signal?.throwIfAborted(); assertScope();
-  const db: IDBPDatabase = await openDB(name, 1, { upgrade(db) {
-    const refs = db.createObjectStore("refs", { keyPath: ["snapshotId", "messageId"] });
-    refs.createIndex("time", ["snapshotId", "time", "messageId"]);
-    refs.createIndex("sequence", ["snapshotId", "sequence", "timestamp", "messageId"]);
-    refs.createIndex("rank", ["snapshotId", "rank"], { unique: true });
-    db.createObjectStore("snapshots", { keyPath: "id" }).createIndex("expires", "expiresAt");
-  } });
+  if (resets.has(name)) throw new Error("search_snapshot_resetting");
+  const db = await openSearchDatabase(name);
   const id = crypto.randomUUID();
   const controller = new AbortController();
   const active = new Set<Transaction>();
   let disposed = false, closing: Promise<void> | undefined;
+  let sourceEpoch: string | null = null, sourceComplete = false;
   let stopOwner = () => {}, stopGeneration = () => {};
   const dispose = (): Promise<void> => {
     if (closing) return closing;
     disposed = true; controller.abort();
     for (const tx of active) { try { tx.abort(); } catch { /* Already complete. */ } }
     stopOwner(); stopGeneration();
+    const owned = activeSnapshots.get(name); owned?.delete(dispose);
+    if (!owned?.size) activeSnapshots.delete(name);
     closing = (async () => {
       const tx = db.transaction(["refs", "snapshots"], "readwrite");
       void tx.done.catch(() => {});
@@ -55,13 +104,25 @@ export async function createCachedSearchSnapshot(kind: "channel" | "dm", channel
     })();
     return closing;
   };
-  const assertCurrent = () => { assertScope(); if (disposed) throw new Error("search_snapshot_disposed"); };
+  const assertCurrent = () => {
+    assertScope();
+    if (disposed) throw new Error("search_snapshot_disposed");
+    if (resets.has(name)) throw new Error("search_snapshot_resetting");
+  };
+  const owned = activeSnapshots.get(name) ?? new Set<() => Promise<void>>();
+  owned.add(dispose); activeSnapshots.set(name, owned);
+  const assertEpoch = async () => {
+    if (!sourceComplete) return;
+    const currentEpoch = await getCachedSearchEpoch(); assertCurrent();
+    if (currentEpoch !== sourceEpoch) { await dispose(); throw new Error("search_snapshot_cache_reset"); }
+  };
   const ownerChanged = () => { if (!scopeCurrent()) void dispose().catch(() => { /* Expiry sweep retries abandoned cleanup. */ }); };
   stopOwner = subscribeAuthOwnerChanges(ownerChanged); stopGeneration = subscribeAuthGenerationChanges(ownerChanged);
   const cancelCreation = () => { controller.abort(signal?.reason); };
   signal?.addEventListener("abort", cancelCreation, { once: true });
 
   async function transaction<T, M extends Mode>(stores: string[], mode: M, run: (tx: Transaction<M>) => Promise<T>, operationSignal?: AbortSignal): Promise<T> {
+    assertCurrent(); operationSignal?.throwIfAborted(); await assertEpoch();
     assertCurrent(); operationSignal?.throwIfAborted();
     const tx = db.transaction(stores, mode); active.add(tx);
     void tx.done.catch(() => {});
@@ -70,7 +131,7 @@ export async function createCachedSearchSnapshot(kind: "channel" | "dm", channel
     try {
       const result = await run(tx);
       assertCurrent(); operationSignal?.throwIfAborted();
-      await tx.done; assertCurrent(); operationSignal?.throwIfAborted(); return result;
+      await tx.done; assertCurrent(); operationSignal?.throwIfAborted(); await assertEpoch(); operationSignal?.throwIfAborted(); return result;
     } catch (error) { abort(); await tx.done.catch(() => {}); throw error; }
     finally { active.delete(tx); operationSignal?.removeEventListener("abort", abort); }
   }
@@ -99,7 +160,8 @@ export async function createCachedSearchSnapshot(kind: "channel" | "dm", channel
             ...(sequence === null ? {} : { sequence: String(sequence).padStart(19, "0") }) } satisfies Reference);
         }));
       }, controller.signal);
-    }, controller.signal);
+    }, controller.signal, epoch => { sourceEpoch = epoch; });
+    sourceComplete = true;
     // Pure legacy and pure authoritative histories already have an ordered
     // index. Materialize ranks only for mixed histories, preserving legacy slots.
     const mixed = kind === "dm" && legacyCount > 0 && sequencedCount > 0;

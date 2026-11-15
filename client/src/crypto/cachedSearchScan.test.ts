@@ -5,6 +5,8 @@ import { afterEach, beforeEach, expect, it } from "vitest";
 import { publishAuthGenerationChange, publishAuthOwnerChange } from "../api/authSessionEvents";
 import { cacheDecryptedMessage, cacheDecryptedMessages, closeDB } from "./keyStorage";
 import { scanCachedSearchReferences, SEARCH_REFERENCE_BATCH_SIZE } from "./cachedSearchScan";
+import { getDB } from "./keyDatabase";
+import { CACHED_SEARCH_EPOCH_KEY } from "./cachedSearchEpoch";
 import type { CachedDecryptedMessage } from "./types";
 
 let generation = 0;
@@ -82,4 +84,24 @@ it("ignores nonmatching and foreign-conversation cache records", async () => {
   let calls = 0;
   expect(await scanCachedSearchReferences("dm", "dm", "ÉTÉ", async () => { calls++; })).toBe(0);
   expect(calls).toBe(0);
+});
+
+it("does not hold a metadata lock while streaming message references", async () => {
+  await cacheDecryptedMessages(Array.from({length:260},(_,i)=>row(i)));
+  let wrote=false;
+  expect(await scanCachedSearchReferences("dm","dm","ÉTÉ",async()=>{
+    if(wrote)return;const db=await getDB();await db.put("metadata","completed","unrelated-state");wrote=true;
+  })).toBe(260);
+  expect(wrote).toBe(true);
+});
+it("rejects a source reset that commits immediately after its read transaction", async () => {
+  await cacheDecryptedMessages(Array.from({length:260},(_,i)=>row(i)));
+  let reset:Promise<void>|undefined;
+  const pending=scanCachedSearchReferences("dm","dm","ÉTÉ",async()=>{
+    if(reset)return;
+    reset=(async()=>{const db=await getDB(),tx=db.transaction(["messageCache","metadata"],"readwrite");
+      await tx.objectStore("messageCache").clear();await tx.objectStore("metadata").put(crypto.randomUUID(),CACHED_SEARCH_EPOCH_KEY);await tx.done;
+    })();
+  });
+  await expect(pending).rejects.toThrow("search_cache_epoch_changed");await reset;
 });

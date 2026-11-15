@@ -5,8 +5,10 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { publishAuthGenerationChange, publishAuthOwnerChange } from "../api/authSessionEvents";
 import { SERVER_URL } from "../utils/constants";
 import { sortDMBySource } from "../utils/dmSourceOrder";
-import { cacheDecryptedMessages, closeDB, getAccountDatabaseName } from "./keyStorage";
-import { createCachedSearchSnapshot, SEARCH_SNAPSHOT_MAX_AGE_MS, type CachedSearchSnapshot } from "./cachedSearchSnapshot";
+import { cacheDecryptedMessages, clearAllE2EEData, closeDB, getAccountDatabaseName, getAllMetadata } from "./keyStorage";
+import { createCachedSearchSnapshot, SEARCH_SNAPSHOT_MAX_AGE_MS, type CachedSearchSnapshot, withResetCachedSearchSnapshots } from "./cachedSearchSnapshot";
+import { getDB } from "./keyDatabase";
+import { CACHED_SEARCH_EPOCH_KEY, getCachedSearchEpoch } from "./cachedSearchEpoch";
 import type { CachedDecryptedMessage } from "./types";
 let generation = 0;
 const live: CachedSearchSnapshot[] = [];
@@ -126,4 +128,46 @@ it("rolls back both deletion and total count when an in-flight removal is cancel
   });
   try {await expect(snapshot.remove("a",controller.signal)).rejects.toThrow();}finally{spy.mockRestore();}
   expect(await snapshot.page(0,25)).toEqual({ids:["b","a"],offset:0,total:2});
+});
+
+it("invalidates and physically clears snapshots when all encryption data is reset", async () => {
+  await cacheDecryptedMessages([row("a",1)]);const snapshot=await create();
+  await clearAllE2EEData();
+  await expect(snapshot.page(0,25)).rejects.toThrow();
+  await assertNoLeakedIndex();
+});
+it("cancels a snapshot that is still staging when encryption data is reset", async () => {
+  await cacheDecryptedMessages(Array.from({length:300},(_,i)=>row(String(i).padStart(4,"0"),i)));
+  let staged!:()=>void;const started=new Promise<void>(resolve=>{staged=resolve;});
+  const original=IDBObjectStore.prototype.put;
+  const spy=vi.spyOn(IDBObjectStore.prototype,"put").mockImplementation(function(this:IDBObjectStore,...args:Parameters<IDBObjectStore["put"]>){
+    const request=original.apply(this,args);if(this.name==="refs")staged();return request;
+  });
+  const pending=createCachedSearchSnapshot("dm","dm","ÉTÉ").then(snapshot=>{live.push(snapshot);return true;},()=>false);
+  try {await started;await clearAllE2EEData();expect(await pending).toBe(false);}finally{spy.mockRestore();}
+  await assertNoLeakedIndex();
+});
+
+it("rejects a snapshot after a reset committed by another tab", async () => {
+  await cacheDecryptedMessages([row("a",1)]);const snapshot=await create();
+  const source=await getDB(),tx=source.transaction(["messageCache","metadata"],"readwrite");
+  await tx.objectStore("messageCache").clear();
+  await tx.objectStore("metadata").put(crypto.randomUUID(),CACHED_SEARCH_EPOCH_KEY);await tx.done;
+  await expect(snapshot.page(0,25)).rejects.toThrow("search_snapshot_cache_reset");
+  await assertNoLeakedIndex();
+});
+it("does not make the source reset fence portable or revive it on a later reset", async () => {
+  await clearAllE2EEData();const first=await getCachedSearchEpoch();
+  expect(first).not.toBe("initial");expect((await getAllMetadata()).some(([key])=>key===CACHED_SEARCH_EPOCH_KEY)).toBe(false);
+  await clearAllE2EEData();expect(await getCachedSearchEpoch()).not.toBe(first);
+});
+it("keeps new query creation blocked until all concurrent local resets finish", async () => {
+  const source=await getDB();
+  let releaseFirst!:()=>void,releaseSecond!:()=>void,enteredFirst!:()=>void,enteredSecond!:()=>void;
+  const firstReady=new Promise<void>(resolve=>{enteredFirst=resolve;}),secondReady=new Promise<void>(resolve=>{enteredSecond=resolve;});
+  const first=withResetCachedSearchSnapshots(source.name,async()=>{enteredFirst();await new Promise<void>(resolve=>{releaseFirst=resolve;});});
+  const second=withResetCachedSearchSnapshots(source.name,async()=>{enteredSecond();await new Promise<void>(resolve=>{releaseSecond=resolve;});});
+  await Promise.all([firstReady,secondReady]);releaseFirst();await first;
+  await expect(createCachedSearchSnapshot("dm","dm","ÉTÉ")).rejects.toThrow("search_snapshot_resetting");
+  releaseSecond();await second;const snapshot=await create();expect((await snapshot.page(0,25)).total).toBe(0);
 });

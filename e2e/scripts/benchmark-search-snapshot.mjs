@@ -9,8 +9,8 @@ await server.listen();
 try {
  const browser=await chromium.launch();
  try {
-  const page=await browser.newPage(),cdp=await page.context().newCDPSession(page);
-  await page.route("**/benchmark.html",route=>route.fulfill({contentType:"text/html",body:"<title>Search snapshot benchmark</title>"}));
+  const context=await browser.newContext(),page=await context.newPage(),cdp=await context.newCDPSession(page);
+  await page.context().route("**/benchmark.html",route=>route.fulfill({contentType:"text/html",body:"<title>Search snapshot benchmark</title>"}));
   await page.goto(new URL("benchmark.html",server.resolvedUrls.local[0]).href);
   console.log("Runtime",process.version,process.platform,"Chromium",browser.version());
   for(const kind of ["channel","dm"])for(const size of [1000,10000,50000]){
@@ -62,5 +62,33 @@ try {
    const median=key=>samples.map(sample=>sample[key]).sort((a,b)=>a-b)[4];
    console.log(JSON.stringify({kind,size,matches,repetitions:9,buildMedianMs:median("buildMs"),firstPageMedianMs:median("firstPageMs"),nextPageMedianMs:median("nextPageMs"),previousPageMedianMs:median("previousPageMs"),retainedDeltaMedianBytes:median("retainedDeltaBytes"),maxPageIds:Math.max(...samples.map(sample=>sample.maxPageIds)),scope:"Disk ordering snapshot API and25-ID windows, one warmup. Post-GC retained handle heap only; excludes transient peak, full panels and IndexedDB disk usage. Source cache writes wait during scan."}));
   }
+  // A second JS realm shares IndexedDB but has no first-page handle registry.
+  // Its reset must invalidate the first page through the durable source epoch.
+  await page.evaluate(async()=>{
+   const {createCachedSearchSnapshot}=await import("/src/crypto/cachedSearchSnapshot.ts");
+   Reflect.set(globalThis,"__crossTabSnapshot",await createCachedSearchSnapshot("dm","target","ÉTÉ"));
+  });
+  const resetPage=await page.context().newPage();
+  try {
+   await resetPage.goto(new URL("benchmark.html",server.resolvedUrls.local[0]).href);
+   await resetPage.evaluate(async()=>{
+    const {publishAuthOwnerChange}=await import("/src/api/authSessionEvents.ts");
+    const {clearAllE2EEData,getAllMetadata}=await import("/src/crypto/keyStorage.ts");
+    const {CACHED_SEARCH_EPOCH_KEY}=await import("/src/crypto/cachedSearchEpoch.ts");
+    publishAuthOwnerChange("snapshot-benchmark");await clearAllE2EEData();
+    if((await getAllMetadata()).some(([key])=>key===CACHED_SEARCH_EPOCH_KEY))throw new Error("Reset fence became portable");
+   });
+   const reset=await page.evaluate(async()=>{
+    const snapshot=Reflect.get(globalThis,"__crossTabSnapshot");let rejected=false;
+    try{await snapshot.page(0,25);}catch{rejected=true;}
+    await snapshot.dispose();Reflect.deleteProperty(globalThis,"__crossTabSnapshot");
+    const {openDB}=await import("/node_modules/idb/build/index.js");
+    const {getAccountDatabaseName}=await import("/src/crypto/keyDatabase.ts");
+    const {SERVER_URL}=await import("/src/utils/constants.ts");
+    const db=await openDB(`${await getAccountDatabaseName("snapshot-benchmark",SERVER_URL)}.search.v1`,1);
+    try{return {rejected,refs:await db.count("refs"),snapshots:await db.count("snapshots")};}finally{db.close();}
+   });
+   assert.deepEqual(reset,{rejected:true,refs:0,snapshots:0});console.log(JSON.stringify({crossTabReset:reset}));
+  }finally{await resetPage.close();}
  }finally{await browser.close();}
 }finally{await server.close();}
