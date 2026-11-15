@@ -108,14 +108,23 @@ func (s *auditLogService) Write(entry models.AuditLog) {
 	if entry.Metadata == "" {
 		entry.Metadata = "{}"
 	}
-	// Fill snapshots from current user records if the caller didn't.
-	// Doing it here (vs in every call site) keeps the call-site one-liner.
-	ctx := context.Background()
-	if entry.ActorSnapshot == nil && entry.ActorUserID != nil {
-		entry.ActorSnapshot = s.userSnapshot(ctx, *entry.ActorUserID)
+	// The queue owns pointer-valued fields after this call returns. Callers may
+	// reuse their input values while the asynchronous writer is still pending.
+	if entry.ActorUserID != nil {
+		value := *entry.ActorUserID
+		entry.ActorUserID = &value
 	}
-	if entry.TargetSnapshot == nil && entry.TargetUserID != nil {
-		entry.TargetSnapshot = s.userSnapshot(ctx, *entry.TargetUserID)
+	if entry.TargetUserID != nil {
+		value := *entry.TargetUserID
+		entry.TargetUserID = &value
+	}
+	if entry.ActorSnapshot != nil {
+		value := *entry.ActorSnapshot
+		entry.ActorSnapshot = &value
+	}
+	if entry.TargetSnapshot != nil {
+		value := *entry.TargetSnapshot
+		entry.TargetSnapshot = &value
 	}
 
 	s.lifecycleMu.Lock()
@@ -265,6 +274,17 @@ func (s *auditLogService) drain() {
 }
 
 func (s *auditLogService) persistAndBroadcast(ctx context.Context, entry models.AuditLog) {
+	// Enrich only accepted events on the writer, so moderation requests never
+	// wait on user storage. Explicit caller snapshots retain event-time values;
+	// otherwise this freezes the best available identity at persistence time.
+	snapshotCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	if entry.ActorSnapshot == nil && entry.ActorUserID != nil {
+		entry.ActorSnapshot = s.userSnapshot(snapshotCtx, *entry.ActorUserID)
+	}
+	if entry.TargetSnapshot == nil && entry.TargetUserID != nil {
+		entry.TargetSnapshot = s.userSnapshot(snapshotCtx, *entry.TargetUserID)
+	}
+	cancel()
 
 	if err := s.repo.Insert(ctx, &entry); err != nil {
 		auditLogger.Error("failed to insert audit entry",

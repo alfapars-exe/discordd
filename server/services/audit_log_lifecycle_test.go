@@ -3,12 +3,13 @@ package services
 import (
 	"context"
 	"fmt"
-	"github.com/argeinfina/hichat/models"
-	"github.com/argeinfina/hichat/repository"
-	"github.com/argeinfina/hichat/ws"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/repository"
+	"github.com/argeinfina/hichat/ws"
 )
 
 type auditLifecycleRepo struct {
@@ -215,5 +216,53 @@ func TestAuditWriteOwnsProvidedSnapshotAndIdentityValues(t *testing.T) {
 	e := repo.entries[0]
 	if *e.ActorUserID != "actor-before" || *e.TargetUserID != "target-before" || e.ActorSnapshot.Username != "actor-name-before" || e.TargetSnapshot.Username != "target-name-before" || e.Metadata != "{}" {
 		t.Fatalf("queued audit entry changed with caller values: %+v actor=%+v target=%+v", e, e.ActorSnapshot, e.TargetSnapshot)
+	}
+}
+
+func TestAuditDroppedAndStoppedEventsDoNotReadUsers(t *testing.T) {
+	s, repo := auditLifecycleFixture() // nil user repository detects any lookup.
+	for range cap(s.ch) {
+		s.Write(models.AuditLog{})
+	}
+	actor := "dropped-actor"
+	s.Write(models.AuditLog{ActorUserID: &actor})
+	s.Stop()
+	s.Write(models.AuditLog{ActorUserID: &actor})
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	if len(repo.entries) != cap(s.ch) {
+		t.Fatalf("persisted=%d want=%d", len(repo.entries), cap(s.ch))
+	}
+}
+
+type auditNotifyingPersistence struct {
+	auditLifecycleRepo
+	persisted chan struct{}
+}
+
+func (r *auditNotifyingPersistence) Insert(ctx context.Context, entry *models.AuditLog) error {
+	err := r.auditLifecycleRepo.Insert(ctx, entry)
+	close(r.persisted)
+	return err
+}
+func TestAuditSnapshotDeadlineStillPersistsIdentityFallback(t *testing.T) {
+	repo := &auditNotifyingPersistence{persisted: make(chan struct{})}
+	users := &auditBlockingUserLookup{entered: make(chan struct{}), release: make(chan struct{})}
+	hub := ws.NewHub()
+	s := NewAuditLogService(repo, users, nil, hub, hub)
+	t.Cleanup(func() { close(users.release); s.Stop() })
+	s.Start()
+	actor := "snapshot-unavailable"
+	s.Write(models.AuditLog{ActorUserID: &actor})
+	select {
+	case <-repo.persisted:
+	case <-time.After(3 * time.Second):
+		t.Fatal("snapshot storage stall prevented audit persistence")
+	}
+	s.Stop()
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	if len(repo.entries) != 1 || repo.entries[0].ActorSnapshot != nil || *repo.entries[0].ActorUserID != actor {
+		t.Fatalf("identity fallback lost: %+v", repo.entries)
 	}
 }
