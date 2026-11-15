@@ -12,8 +12,12 @@ const root=fileURLToPath(new URL("../../client/",import.meta.url));
 const repo=fileURLToPath(new URL("../../",import.meta.url));
 const quick=process.argv.includes("--quick"),failureOnly=process.argv.includes("--failure-only");
 const resetOnly=process.argv.includes("--reset-windows-only");
+const pendingOnly=process.argv.includes("--pending-frontier-only");
+const assertPendingBudget=process.argv.includes("--assert-pending-panel-budget");
+if(assertPendingBudget&&!pendingOnly)throw Error("Pending panel budget requires --pending-frontier-only");
 const variants=process.argv.includes("--after-only")?["after"]:["before","after"];
 const repetitions=quick?1:9,assets=new Map();
+if(pendingOnly&&(!process.argv.includes("--after-only")||failureOnly||resetOnly))throw Error("Pending frontier probe requires --after-only and no other probe mode");
 const baseline="eb0a31cc40b244c3beb9b74a78e50d83dea83f19";
 const gitExecutable=(process.platform==="win32"?["C:/Program Files/Git/cmd/git.exe"]:["/usr/bin/git","/usr/local/bin/git"]).find(existsSync);
 assert.ok(gitExecutable,"Benchmark requires Git installed at a fixed supported path");
@@ -39,6 +43,8 @@ const entry=`import React from "react";import {createRoot}from "react-dom/client
  async reset(){await clearAllE2EEData();},
  async unmount(){flushSync(()=>root.render(null));await drain();await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));},
  async mount(kind,fail=false){globalThis.__panelFailNext=fail;flushSync(()=>root.render(React.createElement(kind==="dm"?DM:Channel,{channelId:"target",onClose:()=>{}})));},
+ holdIndex(){globalThis.__panelIndexHandoffReady=false;globalThis.__panelIndexGate=new Promise(resolve=>{globalThis.__panelReleaseIndex=resolve;});},
+ releaseIndex(){globalThis.__panelReleasedAt=performance.now();globalThis.__panelReleaseIndex?.();Reflect.deleteProperty(globalThis,"__panelIndexGate");Reflect.deleteProperty(globalThis,"__panelReleaseIndex");},
  async seed(kind,size){const db=await openScopedKeyDatabase("panel-benchmark",SERVER_URL),tx=db.transaction("messageCache","readwrite");await tx.store.clear();let matches=0;
  for(let i=0;i<size;i++){const target=i%5!==0,match=i%3===0;if(target&&match)matches++;const id=String(i).padStart(5,"0");void tx.store.put({messageId:id,channelId:kind==="channel"?(target?"target":"other"):"",dmChannelId:kind==="dm"?(target?"target":"other"):null,timestamp:kind==="dm"?size-i:i,sourceSequence:String(9007199254740992n+BigInt(i)),content:match?"Été "+id:"other"});}await tx.done;return matches;},
  async deletes(kind,start,end){const store=kind==="dm"?useDMStore:useMessageStore;for(let i=start;i<end;i++)store.setState(kind==="dm"?{lastDeletedDM:{id:"missing-"+i,dm_channel_id:"target"}}:{lastDeleted:{id:"missing-"+i,channel_id:"target"}});await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));}
@@ -62,7 +68,7 @@ for(const variant of variants){
   if(id==="\0panel-hooks.js")return hooks;
   if(id==="\0panel-i18n.js")return translations;
   if(id==="\0panel-api.js")return 'export async function searchMessages(){throw Error("Unexpected REST search");}';
-  if(id==="\0panel-index.js")return 'import{createCachedSearchSnapshot as real}from "/src/crypto/cachedSearchSnapshot.ts";export async function createCachedSearchSnapshot(...args){if(globalThis.__panelFailNext){globalThis.__panelFailNext=false;throw Error("Injected index failure");}return real(...args);}';
+  if(id==="\0panel-index.js")return 'import{createCachedSearchSnapshot as real}from "/src/crypto/cachedSearchSnapshot.ts";export async function createCachedSearchSnapshot(...args){if(globalThis.__panelFailNext){globalThis.__panelFailNext=false;throw Error("Injected index failure");}const gate=globalThis.__panelIndexGate;if(!gate)return real(...args);const snapshot=await real(...args);globalThis.__panelIndexHandoffReady=true;await gate;return snapshot;}';
   if(id==="\0panel-cache.js")return 'export*from "/src/crypto/keyStorage.ts";import{searchCachedMessageRefs as channel,searchCachedDMMessageRefs as dm}from "/src/crypto/keyStorage.ts";function check(){if(globalThis.__panelFailNext){globalThis.__panelFailNext=false;throw Error("Injected scan failure");}}export async function searchCachedMessageRefs(...args){check();return channel(...args);}export async function searchCachedDMMessageRefs(...args){check();return dm(...args);}';
  }};
  const result=await build({root,configFile:false,logLevel:"error",base:"/"+variant+"/",plugins:[plugin,react()],define:{"process.env.NODE_ENV":JSON.stringify("production")},build:{write:false,minify:true,rollupOptions:{input:"virtual:panel-entry",output:{entryFileNames:"benchmark.js"}}}});
@@ -93,6 +99,33 @@ try{
  for(const variant of variants){const context=await browser.newContext(),page=await context.newPage(),cdp=await context.newCDPSession(page);const errors=[];page.on("pageerror",error=>errors.push(error.message));
  try{await page.goto(`http://127.0.0.1:${server.address().port}/${variant}/`);await page.waitForFunction(()=>Boolean(globalThis.panelBench));console.log(JSON.stringify({variant,react:await page.evaluate(()=>globalThis.panelBench.react),productionBuild:true,historicalOverrides:variant==="before"?3:0}));
  for(const kind of ["channel","dm"]){
+ if(pendingOnly){
+  const matches=await page.evaluate(async kind=>{const matches=await globalThis.panelBench.seed(kind,1000);globalThis.panelBench.holdIndex();await globalThis.panelBench.mount(kind);return matches;},kind);
+  const growth=[];
+  try{
+   await page.getByRole("textbox").fill("ÉTÉ");
+   await page.waitForFunction(()=>globalThis.__panelIndexHandoffReady===true);
+   await page.evaluate(kind=>globalThis.panelBench.deletes(kind,0,10),kind);
+   await cdp.send("HeapProfiler.collectGarbage");const base=await cdp.send("Runtime.getHeapUsage");
+   let start=10;
+   for(const end of [1000,5000,10000]){
+    await page.evaluate(({kind,start,end})=>globalThis.panelBench.deletes(kind,start,end),{kind,start,end});
+    await cdp.send("HeapProfiler.collectGarbage");const heap=await cdp.send("Runtime.getHeapUsage");
+    growth.push({events:end,retainedGrowthBytes:heap.usedSize-base.usedSize});start=end;
+   }
+  }finally{await page.evaluate(()=>globalThis.panelBench.releaseIndex());}
+  await page.waitForFunction(()=>document.querySelectorAll(".search-result-content").length===25,undefined,{timeout:120000});
+  const releaseToObservedResultsMs=await page.evaluate(()=>performance.now()-globalThis.__panelReleasedAt);
+  await cdp.send("HeapProfiler.collectGarbage");const settledHeap=await cdp.send("Runtime.getHeapUsage");
+  assert.equal(await page.locator(".search-count").textContent(),String(matches));
+  const expected=[];for(let i=999;i>=0;i--)if(i%5!==0&&i%3===0)expected.push("Été "+String(i).padStart(5,"0"));
+  assert.deepEqual(await page.locator(".search-result-content").allTextContents(),expected.slice(0,25));
+  await page.evaluate(()=>globalThis.panelBench.unmount());
+  await cdp.send("HeapProfiler.collectGarbage");const disposedHeap=await cdp.send("Runtime.getHeapUsage");
+  console.log(JSON.stringify({variant,kind,pendingSearchFrontier:growth,releaseToObservedResultsMs,settledHeapBytes:settledHeap.usedSize,disposedHeapBytes:disposedHeap.usedSize,matches,correctPage:true,indexDisposalDrained:true,scope:"Single diagnostic run of actual production React panel/native IndexedDB;ready snapshot handoff deliberately gated before adoption;10000distinct missing-ID store events;post-GC JS heap deltas while gated;release-to-observed DOM includes Playwright polling,excludes later assertions/disposal;controlled providers,not full WS/cache writer pipeline or a physical memory bound."}));
+  if(assertPendingBudget)assert.ok(settledHeap.usedSize-disposedHeap.usedSize<512*1024,"Settled search panel retains more than512KiB above its disposed baseline after10000missing deletions");
+  continue;
+ }
  if(resetOnly){
   assert.equal(variant,"after","Cross-window reset probe requires --after-only");
   await page.evaluate(({kind})=>globalThis.panelBench.seed(kind,1000),{kind});
