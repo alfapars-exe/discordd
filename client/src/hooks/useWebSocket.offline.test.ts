@@ -34,6 +34,7 @@ import { useWebSocket } from "./useWebSocket";
 import { handleChannelEvent } from "./ws/channelEventHandlers";
 import { handleDMEvent } from "./ws/dmEventHandlers";
 import { handleSystemEvent } from "./ws/systemEventHandlers";
+import { logToServer } from "../api/clientLog";
 const revocation = vi.hoisted(() => ({
   session: "session-a", owner: "u1" as string | null, generation: 1,
   ownerListeners: new Set<(owner: string | null) => void>(),
@@ -71,8 +72,12 @@ vi.mock("../utils/nativePlugins", () => ({
 }));
 
 // Channel history repair is a collaborator of the socket lifecycle tested here.
+const historyRepair=vi.hoisted(()=>({
+  messagesByChannel:{} as Record<string,{server_id?:string}[]>,
+  fetchMessages:vi.fn(async()=>{}),
+}));
 vi.mock("../stores/messageStore", () => ({
-  useMessageStore: { getState: () => ({ messagesByChannel: {}, fetchMessages: vi.fn() }) },
+  useMessageStore: { getState: () => historyRepair },
 }));
 
 vi.mock("../stores/p2pCallStore", () => ({
@@ -229,6 +234,7 @@ describe("useWebSocket offline/online handling", () => {
     vi.mocked(handleChannelEvent).mockClear();
     vi.mocked(handleDMEvent).mockClear();
     vi.mocked(handleSystemEvent).mockClear();
+    historyRepair.messagesByChannel={};historyRepair.fetchMessages.mockReset().mockResolvedValue();
     FakeWebSocket.instances = [];
     globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
     listeners = spyOnWindowListeners();
@@ -650,6 +656,45 @@ describe("useWebSocket offline/online handling", () => {
       view.unmount();
       expect(vi.getTimerCount()).toBe(0);
     } finally { view.unmount(); warning.mockRestore(); vi.useRealTimers(); }
+  });
+
+  it.each(["active", "offline", "account", "unmount"] as const)("observes rejected dispatch without leaking retired work (%s)", async boundary => {
+    const view=await mountHook();
+    try {
+      const socket=lastSocket();
+      let reject!: (error:Error)=>void;
+      vi.mocked(handleChannelEvent).mockImplementationOnce(()=>new Promise((_resolve,fail)=>{reject=fail;}));
+      await act(async()=>socket.onmessage?.({data:JSON.stringify({op:"message_delete",d:{channel_id:"private-channel",id:"private-id",content:"private plaintext"}})} as MessageEvent));
+      if(boundary==="offline")act(()=>window.dispatchEvent(new Event("offline")));
+      if(boundary==="account")await act(async()=>changeAuth("u2"));
+      if(boundary==="unmount")view.unmount();
+      await act(async()=>{reject(new Error("private plaintext and token"));await Promise.resolve();await Promise.resolve();});
+      const reports=vi.mocked(logToServer).mock.calls.filter(call=>call[1]==="ws_event_dispatch_failed");
+      expect(reports).toEqual(boundary==="active"?[["error","ws_event_dispatch_failed",{op:"message_delete"}]]:[]);
+      if(boundary==="active"){
+        vi.mocked(handleChannelEvent).mockResolvedValueOnce(true);
+        await act(async()=>socket.onmessage?.({data:JSON.stringify({op:"message_delete",d:{channel_id:"private-channel",id:"next"}})} as MessageEvent));
+        expect(handleChannelEvent).toHaveBeenCalledTimes(2);
+      }
+    }finally{view.unmount();}
+  });
+
+  it.each(["active", "offline", "account", "unmount"] as const)("observes background history repair rejection (%s)", async boundary => {
+    const view=await mountHook();
+    try {
+      historyRepair.messagesByChannel={"private-channel":[{server_id:"private-server"}]};
+      let reject!: (error:Error)=>void;
+      historyRepair.fetchMessages.mockImplementationOnce(()=>new Promise((_resolve,fail)=>{reject=fail;}));
+      const socket=lastSocket();
+      await act(async()=>socket.onmessage?.({data:JSON.stringify({op:"ready",d:{}})} as MessageEvent));
+      expect(historyRepair.fetchMessages).toHaveBeenCalledTimes(1);
+      if(boundary==="offline")act(()=>window.dispatchEvent(new Event("offline")));
+      if(boundary==="account")await act(async()=>changeAuth("u2"));
+      if(boundary==="unmount")view.unmount();
+      await act(async()=>{reject(new Error("private repair error"));await Promise.resolve();await Promise.resolve();});
+      const reports=vi.mocked(logToServer).mock.calls.filter(call=>call[1]==="ws_channel_resync_failed");
+      expect(reports).toEqual(boundary==="active"?[["error","ws_channel_resync_failed"]]:[]);
+    }finally{view.unmount();}
   });
 
 });
