@@ -13,6 +13,7 @@ vi.mock("./sidebarStore", () => ({ useSidebarStore: { getState: () => ({ applyFr
 vi.mock("./voiceStore", () => ({ useVoiceStore: { getState: () => ({ applyFromServer: mocks.voice, resetAccountPreferences: mocks.resets[2] }) } }));
 vi.mock("./accessibilityStore", () => ({ useAccessibilityStore: { getState: () => ({ applyFromServer: mocks.accessibility, resetAccountPreferences: mocks.resets[3] }) } }));
 import { usePreferencesStore } from "./preferencesStore";
+import { bindPreferencePresenter } from "./preferencePresenter";
 
 type Response = APIResponse<UserPreferencesResponse>;
 function ok(data: Record<string, unknown> = {}, user_id = "alice"): Response {
@@ -49,6 +50,33 @@ describe("account-scoped preference synchronization", () => {
     state().reset();
     await settle();
     vi.useRealTimers();
+  });
+
+  it("fences an old account while the production presenter is still loading", async () => {
+    const { applyAccountPreferences } = await import("./applyAccountPreferences");
+    const loading = deferred<typeof applyAccountPreferences>();
+    bindPreferencePresenter(() => loading.promise);
+    try {
+      state().bindAccount("alice");
+      state().set({ theme: "alice-pending" });
+      const oldFetch = state().fetchAndApply();
+      state().bindAccount("bob");
+      state().set({ theme: "bob-pending" });
+      loading.resolve(applyAccountPreferences);
+      await oldFetch;
+      await settle();
+      expect(mocks.get).not.toHaveBeenCalled();
+      expect(mocks.theme).not.toHaveBeenCalledWith("alice-pending");
+      expect(mocks.theme).toHaveBeenLastCalledWith("bob-pending");
+      for (const reset of mocks.resets) expect(reset).toHaveBeenCalledTimes(1);
+      expect(state().accountId).toBe("bob");
+      expect(state().data.theme).toBe("bob-pending");
+      expect(state().hasPendingChanges).toBe(true);
+      expect(JSON.parse(localStorage.getItem(pendingKey)!)).toMatchObject({ theme: "alice-pending" });
+    } finally {
+      loading.resolve(applyAccountPreferences);
+      bindPreferencePresenter(async () => applyAccountPreferences);
+    }
   });
 
   it.each([true, false])("restores channel message notification choice %s offline without leaking accounts", async value => {
