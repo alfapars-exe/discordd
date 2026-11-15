@@ -27,7 +27,7 @@
 
 import { CACHED_SEARCH_EPOCH_KEY, notifyCachedSearchReset } from "./cachedSearchEpoch";
 import { getDB, guardedPut } from "./keyDatabase";
-import { cachedMessageDeletionKey, cachedSearchDeletionKey, rememberCachedSearchDeletion, isPendingCachedSearchDeletion } from "./cachedSearchDeletionJournal";
+import { cachedMessageDeletionKey, cachedSearchDeletionKey, rememberCachedSearchDeletion, isPendingCachedSearchDeletion, PENDING_CACHED_SEARCH_DELETION_PREFIX } from "./cachedSearchDeletionJournal";
 export { KEY_DATABASE_STORES, getAccountDatabaseName, upgradeKeyDatabase, openScopedKeyDatabase, closeDB } from "./keyDatabase";
 import type {
   StoredIdentityKeyPair,
@@ -705,10 +705,13 @@ export async function getAllCachedMessages(): Promise<CachedDecryptedMessage[]> 
   const tx = db.transaction(["messageCache", "metadata"], "readonly");
   void tx.done.catch(() => {});
   const rows = await tx.objectStore("messageCache").getAll() as CachedDecryptedMessage[];
-  const visible: CachedDecryptedMessage[] = [];
-  for (const row of rows) if (!isPendingCachedSearchDeletion(await tx.objectStore("metadata").get(cachedMessageDeletionKey(row)), row.messageId)) visible.push(row);
+  // The API already returns the full backup cache. Read the pending-intent
+  // range instead of issuing one metadata request per cached message.
+  const pending = new Map<string, unknown>();
+  let cursor = await tx.objectStore("metadata").openCursor(IDBKeyRange.bound(PENDING_CACHED_SEARCH_DELETION_PREFIX, PENDING_CACHED_SEARCH_DELETION_PREFIX + "\uffff", false, true));
+  while (cursor) { pending.set(cursor.key as string, cursor.value); cursor = await cursor.continue(); }
   await tx.done;
-  return visible;
+  return rows.filter(row => !isPendingCachedSearchDeletion(pending.get(cachedMessageDeletionKey(row)), row.messageId));
 }
 
 /**
