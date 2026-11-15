@@ -1,0 +1,85 @@
+{
+  "sourceRevision": "42103dc12192ecd9e86291c2b95397b257fd690d",
+  "scope": "Legacy preference import ownership, recovery and UI attempt lifecycle",
+  "regression": {
+    "initial": {
+      "failed": 7,
+      "passed": 82,
+      "unhandledErrors": 1,
+      "log": "hichat-preferences-legacy-import-lifecycle-red.log"
+    },
+    "joinedAccountMismatch": {
+      "failed": 1,
+      "passed": 92,
+      "log": "hichat-preferences-legacy-mismatch-red.log"
+    }
+  },
+  "targeted": {
+    "files": 7,
+    "passed": 283,
+    "seconds": 4.46,
+    "log": "hichat-preferences-legacy-import-final-targeted.log"
+  },
+  "fullClient": {
+    "files": 489,
+    "passed": 5229,
+    "skipped": 1,
+    "seconds": 113.92,
+    "coverage": {
+      "lines": {
+        "total": 38229,
+        "covered": 26199,
+        "skipped": 0,
+        "pct": 68.53
+      },
+      "statements": {
+        "total": 52314,
+        "covered": 35308,
+        "skipped": 0,
+        "pct": 67.49
+      },
+      "functions": {
+        "total": 12217,
+        "covered": 7548,
+        "skipped": 0,
+        "pct": 61.78
+      },
+      "branches": {
+        "total": 39799,
+        "covered": 25753,
+        "skipped": 0,
+        "pct": 64.7
+      },
+      "branchesTrue": {
+        "total": 0,
+        "covered": 0,
+        "skipped": 0,
+        "pct": 100
+      }
+    },
+    "log": "hichat-preferences-legacy-import-coverage.log"
+  },
+  "changedModules": {},
+  "build": {
+    "command": "npm run build (tsc -b and Vite)",
+    "result": "PASS",
+    "seconds": 3.28,
+    "log": "hichat-preferences-legacy-import-build.log"
+  },
+  "lint": {
+    "result": "PASS",
+    "scope": "Changed store, UI and tests",
+    "log": "hichat-preferences-legacy-import-lint.log"
+  },
+  "behavior": [
+    "Capture imported marker key before publishing queued data; retired completion cannot mark replacement account.",
+    "Persist recovery queue before marker and observers; local apply failure retains pending data and explicit retry recovers.",
+    "Joined account mismatch blocks import without clearing warning or assigning backup.",
+    "UI observes rejection, prevents duplicate current-scope imports and ignores retired/unmounted completion."
+  ],
+  "limits": [
+    "Persistent error-status observers can still throw; UI catches unexpected rejection.",
+    "Controlled collaborator tests do not close complete acquisition or native/physical acceptance.",
+    "Full project refactor and PR305 acceptance remain open."
+  ]
+}

@@ -170,3 +170,6 @@ de çalıştırılabilir. Üretim veritabanı test hedefi olarak kullanılmaz.
 Yerel test/derleme sonucu canlı kabul yerine geçmez. Dağıtım sonrasında readiness,
 gerçek önizleme önbellek kullanımı, müzik zaman aşımı davranışı, DB bekleme süresi,
 istek gecikmesi ve yönetici ekranındaki kayıtlar ayrıca kontrol edilmelidir.
+
+
+Legacy preference import captures the binding and imported-marker key before observer publication. Recovery data is persisted before assignment; queued local-apply failures remain retryable. Joined account mismatch prevents backup assignment. The UI owns each import attempt by binding and identity, observes rejection, prevents duplicate active attempts and ignores retired or unmounted completion. Persistent failing error observers and broader acquisition/native cases remain open.
