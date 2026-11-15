@@ -4,14 +4,7 @@
   "baseline": {
     "source": "49c36d99",
     "tests": "79 preference store tests PASS3.86s",
-    "log": "TEMP/hichat-legacy-eligibility-before.log",
-    "sonarIssue": {
-      "key": "AaHe-pzEMioAmihIyi9w",
-      "rule": "typescript:S3776",
-      "complexity": 17,
-      "limit": 15,
-      "status": "OPEN on previous analyzed source"
-    }
+    "log": "TEMP/hichat-legacy-eligibility-before.log"
   },
   "change": {
     "eligibility": "After preparation/joined refresh,recheck scope,loaded state,account mismatch and legacy import eligibility in a named function. Initial offer guard retained.",
@@ -83,10 +76,27 @@
       }
     },
     "combinedClient": "db47c0ea fullclient5379passed1skipped,build/lintPASS;preferencesStore.ts unchanged fromab3a28e7",
-    "finalCombinedScan": "PASS immutabledb47c0ea:51exact reviewed-source records,478reviewlines,0blockingpatterns. Pattern scan is not proof of absence of vulnerabilities. TEMP/hichat-voice-numeric-final-scan.log"
+    "finalCombinedScan": "PASS immutabledb47c0ea:51exact reviewed-source records,478reviewlines,0blockingpatterns. Pattern scan is not proof of absence of vulnerabilities. TEMP/hichat-voice-numeric-final-scan.log",
+    "ci": {
+      "revision": "606a9b3e21aa272eba07be1bcf0aae7ab94cb6c3",
+      "checks": 36,
+      "success": 36,
+      "receipt": "refactor-606a-terminal-ci-2026-11-15.json"
+    }
   },
   "remaining": [
-    "New-head CI/Sonar after push;legacy import17issue remains unverified for new source",
     "RF13 and whole-project runtime/platform/physical acceptance remain open"
-  ]
+  ],
+  "scopeCorrection": {
+    "issue": {
+      "key": "AaHe-pzEMioAmihIyi9w",
+      "rule": "typescript:S3776",
+      "complexity": 17,
+      "limit": 15,
+      "status": "OPEN on previous analyzed source",
+      "actualFunction": "retrySync",
+      "actualSourceLine": "606a9b3e:client/src/stores/preferencesStore.ts:353;verified against Git and Sonar sources API"
+    },
+    "explanation": "Earlier records incorrectly associated the17complexity issue with legacy import. It belongs to retrySync. Legacy extraction is an independently verified refactor and did not resolve that issue."
+  }
 }
