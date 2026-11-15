@@ -1,8 +1,8 @@
-import { expect, test, type Page, type Request } from "@playwright/test";
+import { expect, test, type Page, type Request, type BrowserContext } from "@playwright/test";
 import { randomBytes, webcrypto } from "node:crypto";
 import {
   composer, dismissOnboardingOverlays, fixtureApi, loginAsNotificationOwner,
-  messageList, readChannelNotificationFixture, resetChannelNotificationFixture,
+  messageList, readChannelNotificationFixture, resetChannelNotificationFixture, loginAsNotificationRecipient,
 } from "./helpers";
 
 async function encryptionSettings(page: Page) {
@@ -19,11 +19,31 @@ async function openChannel(page: Page, serverName: string) {
   await expect(composer(page)).toBeVisible();
 }
 
+async function sendEncryptedFixtureMessage(page: Page, endpoint: string, content: string, waitForDraftClear = true) {
+  await page.bringToFront();
+  const input = page.getByRole("textbox", { name: /^Message [#@]/i });
+  await input.fill(content);
+  const send = page.getByRole("button", { name: "Send Message", exact: true });
+  await expect(send).toBeEnabled();
+  const [response] = await Promise.all([
+    page.waitForResponse(response => new URL(response.url()).pathname === endpoint && response.request().method() === "POST"),
+    send.click(),
+  ]);
+  const body = await response.json();
+  expect(response.status(), typeof body.error === "string" ? body.error : "Encrypted fixture send rejected").toBe(201);
+  const message = body.data;
+  expect(message.encryption_version).toBe(1);
+  expect(JSON.stringify(message)).not.toContain(content);
+  await expect(page.locator(`#msg-${message.id}`)).toContainText(content);
+  if (waitForDraftClear) await expect(input).toHaveValue("");
+  return message;
+}
+
 async function expectEncryptedSearchPages(page: Page, query: string, newestFirst: string[]) {
   const remoteSearches: string[] = [];
   const observe = (request: Request) => {
     const pathname = new URL(request.url()).pathname;
-    if (/^\/api\/servers\/[^/]+\/search$/.test(pathname)) remoteSearches.push(pathname);
+    if (/^\/api\/(?:servers|dms)\/[^/]+\/search$/.test(pathname)) remoteSearches.push(pathname);
   };
   page.on("request", observe);
   try {
@@ -42,6 +62,12 @@ async function expectEncryptedSearchPages(page: Page, query: string, newestFirst
   } finally {
     page.off("request", observe);
   }
+}
+
+async function openDM(page: Page, peerName: string) {
+  await page.locator("nav.server-rail").getByRole("button", { name: "Friends", exact: true }).click();
+  await page.getByRole("complementary").getByRole("button").filter({ hasText: peerName }).first().click();
+  await expect(page.getByPlaceholder(/^Message @/i)).toBeVisible();
 }
 
 // Independent fixture preparation: emulate a v1 writer that encrypted the
@@ -74,8 +100,26 @@ for (const cacheFormat of ["source-tagged", "legacy-unversioned"] as const) {
     test.setTimeout(180_000);
     const originalContext = await browser.newContext();
     const restoredContext = await browser.newContext();
+    let peerContext: BrowserContext | undefined;
+    let dmSearch: { peerName: string; query: string; messages: string[] } | undefined;
     try {
       const original = await originalContext.newPage();
+      original.on("console", event => {
+        if (event.type() !== "error") return;
+        const category = event.text().match(/^\[[^\]]+\][^:{]*/);
+        if (category) {
+          const code = event.text().match(/e2ee_[a-z_]+|RECIPIENT_NO_KEYS|SELF_FANOUT_UNAVAILABLE|InvalidStateError|TransactionInactiveError|AbortError|Failed to fetch recipient prekey bundles/);
+          console.error("Encrypted fixture browser category:", category[0].slice(0, 120), code?.[0] || "unclassified");
+        }
+      });
+      original.on("response", response => {
+        const pathname = new URL(response.url()).pathname;
+        if (!response.ok() && (pathname.startsWith("/api/e2ee/") || /^\/api\/users\/[^/]+\/(?:devices|prekey-bundles)$/.test(pathname))) {
+          console.error("Encrypted fixture API rejection:", {
+            route: pathname.replace(/^\/api\/users\/[^/]+\//, "/api/users/:id/"), status: response.status(),
+          });
+        }
+      });
       await loginAsNotificationOwner(original);
       // A retry reuses this run's disposable identity. Remove only its backup
       // before the fixture reset reloads the app, so prior attempts cannot turn
@@ -107,17 +151,8 @@ for (const cacheFormat of ["source-tagged", "legacy-unversioned"] as const) {
       await dismissOnboardingOverlays(original);
       await openChannel(original, fixture.serverName);
       const plaintext = `encrypted-history-\u00c9t\u00e9-${randomBytes(12).toString("hex")}`;
-      const committed = original.waitForResponse(response =>
-        new URL(response.url()).pathname === `/api/servers/${fixture.serverId}/channels/${fixture.channelId}/messages`
-        && response.request().method() === "POST");
-      await composer(original).fill(plaintext);
-      await composer(original).press("Enter");
-      const response = await committed;
-      expect(response.status()).toBe(201);
-      const message = (await response.json()).data;
-      expect(message.encryption_version).toBe(1);
-      expect(JSON.stringify(message)).not.toContain(plaintext);
-      await expect(messageList(original).getByRole("article").filter({ hasText: plaintext })).toHaveCount(1);
+      const message = await sendEncryptedFixtureMessage(original,
+        `/api/servers/${fixture.serverId}/channels/${fixture.channelId}/messages`, plaintext);
 
       const searchMessages = [plaintext];
       if (cacheFormat === "source-tagged") {
@@ -126,21 +161,57 @@ for (const cacheFormat of ["source-tagged", "legacy-unversioned"] as const) {
         for (let index = 1; index < 26; index++) {
           await original.waitForTimeout(550);
           const content = `${plaintext} ${String(index).padStart(2, "0")}`;
-          const sent = original.waitForResponse(response =>
-            new URL(response.url()).pathname === `/api/servers/${fixture.serverId}/channels/${fixture.channelId}/messages`
-            && response.request().method() === "POST");
-          await composer(original).fill(content);
-          await composer(original).press("Enter");
-          const committed = await sent;
-          expect(committed.status()).toBe(201);
-          const encrypted = (await committed.json()).data;
-          expect(encrypted.encryption_version).toBe(1);
-          expect(JSON.stringify(encrypted)).not.toContain(content);
-          await expect(original.locator(`#msg-${encrypted.id}`)).toBeVisible();
-          await expect(original.locator(`#msg-${encrypted.id}`)).toContainText(content);
+          await sendEncryptedFixtureMessage(original,
+            `/api/servers/${fixture.serverId}/channels/${fixture.channelId}/messages`, content);
           searchMessages.push(content);
         }
         await expectEncryptedSearchPages(original, plaintext, searchMessages.toReversed());
+        peerContext = await browser.newContext();
+        const peer = await peerContext.newPage();
+        await loginAsNotificationRecipient(peer);
+        const ownerUser = await fixtureApi<{ id: string }>(original, "/users/me");
+        const peerUser = await fixtureApi<{ id: string; username: string; display_name?: string }>(peer, "/users/me");
+        const dm = await fixtureApi<{ id: string; e2ee_enabled: boolean }>(original, "/dms", "POST", { user_id: peerUser.id });
+        if (!dm.e2ee_enabled) await fixtureApi(original, `/dms/channels/${dm.id}/e2ee`, "PATCH", { enabled: true });
+        await original.reload();
+        await dismissOnboardingOverlays(original);
+        const peerName = peerUser.display_name || peerUser.username;
+        await openDM(original, peerName);
+        const query = `encrypted-dm-\u00c9t\u00e9-${randomBytes(12).toString("hex")}`;
+        const messages: string[] = [];
+        const dmKeyRequests: string[] = [];
+        const dmRosterRequests: string[] = [];
+        const observeDMKeys = (request: Request) => {
+          const pathname = new URL(request.url()).pathname;
+          if (/^\/api\/users\/[^/]+\/prekey-bundles$/.test(pathname)) dmKeyRequests.push(pathname);
+          if (pathname === `/api/dms/${dm.id}/device-roster`) dmRosterRequests.push(pathname);
+        };
+        original.on("request", observeDMKeys);
+        for (let index = 0; index < 26; index++) {
+          if (index) await original.waitForTimeout(550);
+          const content = `${query} ${String(index).padStart(2, "0")}`;
+          await sendEncryptedFixtureMessage(original, `/api/dms/${dm.id}/messages`, content, index !== 0);
+          messages.push(content);
+          if (index === 0) {
+            const channels = await fixtureApi<{ id: string; status: string }[]>(peer, "/dms");
+            if (channels.find(channel => channel.id === dm.id)?.status === "pending") {
+              await fixtureApi(peer, `/dms/channels/${dm.id}/accept`, "POST");
+            }
+            await expect(original.getByPlaceholder(/^Message @/i)).toBeVisible();
+            await expect(original.getByPlaceholder(/^Message @/i)).toHaveValue("");
+          }
+        }
+        original.off("request", observeDMKeys);
+        expect(dmRosterRequests).toHaveLength(26);
+        // Setup has already registered another owner device. Establish the
+        // recipient and self-fanout sessions once each, then reuse their ratchets.
+        expect(dmKeyRequests.sort()).toEqual([
+          `/api/users/${peerUser.id}/prekey-bundles`,
+          `/api/users/${ownerUser.id}/prekey-bundles`,
+        ].sort());
+        await expectEncryptedSearchPages(original, query, messages.toReversed());
+        dmSearch = { peerName, query, messages };
+
       }
 
       const settings = await encryptionSettings(original);
@@ -184,9 +255,12 @@ for (const cacheFormat of ["source-tagged", "legacy-unversioned"] as const) {
       await expect(restored.locator(`#msg-${message.id}`)).toContainText(plaintext);
       if (cacheFormat === "source-tagged") {
         await expectEncryptedSearchPages(restored, plaintext, searchMessages.toReversed());
+        if (!dmSearch) throw new Error("Missing encrypted DM fixture");
+        await openDM(restored, dmSearch.peerName);
+        await expectEncryptedSearchPages(restored, dmSearch.query, dmSearch.messages.toReversed());
       }
     } finally {
-      await Promise.all([originalContext.close(), restoredContext.close()]);
+      await Promise.all([originalContext.close(), restoredContext.close(), peerContext?.close()]);
     }
   });
 }

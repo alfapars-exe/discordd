@@ -295,6 +295,7 @@ async function doRefresh(generation: number): Promise<boolean> {
 }
 
 type RequestOptions = {
+  cache?: RequestCache;
   /** Cold session restore can refresh the HttpOnly cookie before a predictable 401. */
   refreshIfMissing?: boolean;
   /** Credential login must not use a prior session to retry a factor challenge. */
@@ -395,7 +396,7 @@ export async function apiClient<T>(
   endpoint: string,
   options: RequestOptions = {}
 ): Promise<APIResponse<T>> {
-  const { method = "GET", body, headers: extraHeaders, timeoutMs, signal, isCurrent } = options;
+  const { method = "GET", body, headers: extraHeaders, timeoutMs, signal, isCurrent, cache } = options;
   const cancelled = () => signal?.aborted || (isCurrent && !isCurrent());
   const cancellation = (): APIResponse<T> => ({ success: false, error: "request_cancelled" });
   if (cancelled()) return cancellation();
@@ -443,6 +444,7 @@ export async function apiClient<T>(
       // CORS already restricts allowed origins so this isn't a CSRF vector.
       credentials: "include",
       signal: lifetime.signal,
+      ...(cache ? { cache } : {}),
     };
 
     if (body) {

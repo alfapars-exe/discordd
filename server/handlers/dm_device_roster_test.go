@@ -143,3 +143,24 @@ func TestDMDeviceRosterHandlerReadsCurrentDeviceReferences(t *testing.T) {
 		t.Fatal("changed identity retained its old revision")
 	}
 }
+
+func TestDMSendCapabilitiesAdvertisesRosterVersion(t *testing.T) {
+	h := &DMHandler{maxUploadSize: 12345}
+	req := httptest.NewRequest(http.MethodGet, "/api/dms/send-capabilities", nil)
+	rec := httptest.NewRecorder()
+	h.SendCapabilities(rec, req)
+	var body struct {
+		Data struct {
+			Text      int   `json:"text_idempotency_version"`
+			Multipart int   `json:"multipart_idempotency_version"`
+			Max       int64 `json:"max_upload_file_bytes"`
+			Roster    int   `json:"dm_device_roster_version"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != 200 || body.Data.Text != 1 || body.Data.Multipart != 1 || body.Data.Max != 12345 || body.Data.Roster != 1 {
+		t.Fatalf("capabilities=%+v status=%d", body, rec.Code)
+	}
+}

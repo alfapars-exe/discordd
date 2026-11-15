@@ -1841,6 +1841,34 @@ paths:
         '200': { $ref: '#/components/responses/StubOK' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/dms/send-capabilities:
+    get:
+      operationId: dmSendCapabilities
+      summary: Discover supported DM send and device-roster protocol versions.
+      description: >-
+        Existing clients ignore the additive dm_device_roster_version field.
+        A client uses the legacy prekey path when an older server omits it;
+        a declared unsupported version is not an authorization downgrade.
+      tags: [Messages]
+      responses:
+        '200':
+          description: Supported DM protocol versions and upload limit.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [text_idempotency_version, multipart_idempotency_version, max_upload_file_bytes, dm_device_roster_version]
+                        properties:
+                          text_idempotency_version: { type: integer, const: 1 }
+                          multipart_idempotency_version: { type: integer, const: 1 }
+                          max_upload_file_bytes: { type: integer, format: int64 }
+                          dm_device_roster_version: { type: integer, const: 1 }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
   /api/dms/{channelId}/device-roster:
     get:
       operationId: dmDeviceRoster

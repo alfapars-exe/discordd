@@ -612,7 +612,7 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
             currentUserId,
             channel.other_user.id,
             e2eeState.localDeviceId,
-            plaintext
+            plaintext, { channelId, isCurrent }
           );
           if(!isCurrent())return false;
 
@@ -701,7 +701,7 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
       useToastStore.getState().addToast("error",i18n.t("e2ee:encryptionFailed"));return false;
     }
     try{
-      const envelopes=await encryptDMMessage(owner,channel.other_user.id,device,encodePayload(content,payload.file_keys));
+      const envelopes=await encryptDMMessage(owner,channel.other_user.id,device,encodePayload(content,payload.file_keys),{channelId:channel.id,isCurrent:current});
       if(!current())return false;
       const ciphertext=JSON.stringify(envelopes),metadata=JSON.stringify({client_send_id:crypto.randomUUID()});
       cacheEditPlaintext(messageId,payload,{ciphertext,metadata});

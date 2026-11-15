@@ -15,6 +15,8 @@
  */
 
 import * as signalProtocol from "./signalProtocol";
+import { getAuthSessionSnapshot } from "../api/authSessionEvents";
+import { prepareDMDeviceRoster, type DMDeviceRosterContext, type DMEncryptionTarget, type DMRosterOptions } from "./dmDeviceRoster";
 import * as e2eeApi from "../api/e2ee";
 import { logToServer } from "../api/clientLog";
 import * as keyStorage from "./keyStorage";
@@ -25,7 +27,7 @@ import { decodePayload, type E2EEPayload } from "./e2eePayload";
 import { useE2EEStore } from "../stores/e2eeStore";
 import {useComposerDraftStore} from "../stores/composerDraftStore";
 import {cacheDMMessage,readDMMessageCache} from "./dmMessageCache";
-import type { EncryptedEnvelope, PreKeyBundleResponse, DMMessage, GroupDMMessage } from "../types";
+import type { EncryptedEnvelope, DMMessage, GroupDMMessage } from "../types";
 import type { SignalWireMessage } from "./types";
 
 // ──────────────────────────────────
@@ -204,8 +206,20 @@ export async function encryptDMMessage(
   currentUserId: string,
   recipientUserId: string,
   localDeviceId: string,
-  plaintext: string
+  plaintext: string,
+  options?: DMRosterOptions,
 ): Promise<EncryptedEnvelope[]> {
+  const scope = getAuthSessionSnapshot();
+  const assertCurrent = () => {
+    if (!options) return;
+    const now = getAuthSessionSnapshot();
+    if (now.ownerId !== scope.ownerId || now.generation !== scope.generation || !options.isCurrent()) {
+      throw new Error("e2ee_account_scope_changed");
+    }
+  };
+  assertCurrent();
+  const roster = options ? await prepareDMDeviceRoster(currentUserId, recipientUserId, localDeviceId, options) : null;
+  assertCurrent();
   const envelopes: EncryptedEnvelope[] = [];
 
   // Self-DM ("My Notes": a DM channel whose other_user is the sender). The
@@ -226,7 +240,7 @@ export async function encryptDMMessage(
       ...(await encryptForRecipientDevices(
         recipientUserId,
         localDeviceId,
-        plaintext
+        plaintext, roster, assertCurrent
       ))
     );
   }
@@ -236,7 +250,7 @@ export async function encryptDMMessage(
       currentUserId,
       localDeviceId,
       plaintext,
-      recipientUserId === currentUserId
+      recipientUserId === currentUserId, roster, assertCurrent
     ))
   );
 
@@ -270,18 +284,27 @@ export async function encryptGroupDMMessage(
 async function encryptForRecipientDevices(
   recipientUserId: string,
   localDeviceId: string,
-  plaintext: string
+  plaintext: string,
+  roster?: DMDeviceRosterContext | null,
+  assertCurrent: () => void = () => {},
 ): Promise<EncryptedEnvelope[]> {
   const envelopes: EncryptedEnvelope[] = [];
 
   // Fetch all recipient device bundles
-  const recipientBundles = await e2eeApi.fetchPreKeyBundles(recipientUserId);
+  assertCurrent();
+  const recipientBundles = roster ? { success: true, data: await roster.targets(recipientUserId) } : await e2eeApi.fetchPreKeyBundles(recipientUserId);
+  assertCurrent();
   if (!recipientBundles.success || !recipientBundles.data) {
     throw new Error("Failed to fetch recipient prekey bundles");
   }
 
   // Recipient has no devices/keys — hasn't set up E2EE yet
   if (recipientBundles.data.length === 0) {
+    if (roster && (await keyStorage.getTrustedDeviceIdsForUser(recipientUserId)).size > 0) {
+      assertCurrent();
+      throw new Error("DM_RECIPIENT_DEVICES_REVOKED");
+    }
+    assertCurrent();
     throw new Error("RECIPIENT_NO_KEYS");
   }
 
@@ -294,6 +317,7 @@ async function encryptForRecipientDevices(
   // "newly added" — a guaranteed false positive.
   const knownDeviceIds =
     await keyStorage.getTrustedDeviceIdsForUser(recipientUserId);
+  assertCurrent();
 
   // Encrypt for each recipient device. Legacy devices (no signing_key)
   // are flagged in the e2eeStore so the UI can render an "incompatible
@@ -325,7 +349,7 @@ async function encryptForRecipientDevices(
         recipientUserId,
         bundle,
         localDeviceId,
-        plaintext,
+        plaintext, roster, assertCurrent,
       );
       envelopes.push(envelope);
     } catch (err) {
@@ -362,7 +386,9 @@ async function encryptForSelfFanout(
   currentUserId: string,
   localDeviceId: string,
   plaintext: string,
-  selfFanoutRequired: boolean
+  selfFanoutRequired: boolean,
+  roster?: DMDeviceRosterContext | null,
+  assertCurrent: () => void = () => {},
 ): Promise<EncryptedEnvelope[]> {
   // Self-fanout: encrypt for sender's other devices.
   //
@@ -385,10 +411,13 @@ async function encryptForSelfFanout(
   // block is serialized; encrypting for recipient devices
   // (encryptForRecipientDevices) stays parallel-friendly.
   return withSelfFanoutLock(async () => {
+    assertCurrent();
     const produced: EncryptedEnvelope[] = [];
     const needsReset =
       (await keyStorage.getMetadata<boolean>("self_fanout_reset")) === true;
-    const selfBundles = await e2eeApi.fetchPreKeyBundles(currentUserId);
+    assertCurrent();
+    const selfBundles = roster ? { success: true, data: await roster.targets(currentUserId, needsReset, localDeviceId) } : await e2eeApi.fetchPreKeyBundles(currentUserId);
+    assertCurrent();
     if (selfFanoutRequired && !(selfBundles.success && selfBundles.data)) {
       // Reset flag untouched: no handshake happened, the next send retries it.
       throw new Error("SELF_FANOUT_UNAVAILABLE");
@@ -403,6 +432,7 @@ async function encryptForSelfFanout(
       // after the first as injected.
       const knownSelfDeviceIds =
         await keyStorage.getTrustedDeviceIdsForUser(currentUserId);
+      assertCurrent();
 
       for (const bundle of selfBundles.data) {
         // Skip own device. Must come BEFORE the call below: the local device
@@ -416,7 +446,7 @@ async function encryptForSelfFanout(
           localDeviceId,
           plaintext,
           knownSelfDeviceIds,
-          needsReset
+          needsReset, roster, assertCurrent
         );
         produced.push(envelope);
       }
@@ -424,7 +454,9 @@ async function encryptForSelfFanout(
         // Clear the flag — we've done the expensive handshake for every
         // self-device. Subsequent sends use the established Double Ratchet
         // session, getting forward secrecy without per-message cost.
+        assertCurrent();
         await keyStorage.setMetadata("self_fanout_reset", false);
+        assertCurrent();
       }
     }
     return produced;
@@ -485,11 +517,13 @@ export class LegacyDeviceError extends Error {
  */
 async function encryptForOwnDevice(
   currentUserId: string,
-  bundle: PreKeyBundleResponse,
+  bundle: DMEncryptionTarget,
   localDeviceId: string,
   plaintext: string,
   knownSelfDeviceIds: ReadonlySet<string>,
-  needsReset: boolean
+  needsReset: boolean,
+  roster?: DMDeviceRosterContext | null,
+  assertCurrent: () => void = () => {},
 ): Promise<EncryptedEnvelope> {
   // A device the server lists under OUR OWN account that this device has
   // never pinned. Linking a second device is a user action — but the
@@ -515,15 +549,17 @@ async function encryptForOwnDevice(
     });
   }
 
+  assertCurrent();
   if (needsReset) {
     await keyStorage.deleteSession(currentUserId, bundle.device_id);
+    assertCurrent();
   }
 
   const envelope = await encryptForDevice(
     currentUserId,
     bundle,
     localDeviceId,
-    plaintext
+    plaintext, roster, assertCurrent
   );
   return envelope;
 }
@@ -531,10 +567,18 @@ async function encryptForOwnDevice(
 /** Encrypt for a single device. Establishes X3DH session if none exists. */
 async function encryptForDevice(
   userId: string,
-  bundle: PreKeyBundleResponse,
+  bundle: DMEncryptionTarget,
   senderDeviceId: string,
-  plaintext: string
+  plaintext: string,
+  roster?: DMDeviceRosterContext | null,
+  assertCurrent: () => void = () => {},
 ): Promise<EncryptedEnvelope> {
+  assertCurrent();
+  if ("established_session" in bundle) {
+    // Missing sessions fail in the protocol layer; a receipt can never be
+    // repurposed as a prekey bundle or trigger an unverified handshake.
+    return encryptEstablishedSession(userId, bundle.device_id, senderDeviceId, plaintext, assertCurrent);
+  }
   // Establish session if needed (X3DH key agreement).
   //
   // A dedicated signing_key is required for prekey-signature verification.
@@ -545,7 +589,14 @@ async function encryptForDevice(
   // session with a bundle that doesn't carry a real signing key; the
   // remote device must re-register (signalProtocol.generateAllKeys now
   // always produces one).
-  if (!(await signalProtocol.hasSessionFor(userId, bundle.device_id))) {
+  const hasSession = await signalProtocol.hasSessionFor(userId, bundle.device_id);
+  assertCurrent();
+  const trust = roster && hasSession ? await keyStorage.getTrustedIdentity(userId, bundle.device_id) : null;
+  assertCurrent();
+  const identity = roster && hasSession ? signalProtocol.fromBase64(bundle.identity_key) : null;
+  const changedIdentity = roster && hasSession && (!trust || !identity ||
+    trust.identityKey.length !== identity.length || trust.identityKey.some((byte, index) => byte !== identity[index]));
+  if (!hasSession || changedIdentity) {
     if (!bundle.signing_key) {
       throw new LegacyDeviceError(userId, bundle.device_id);
     }
@@ -559,18 +610,27 @@ async function encryptForDevice(
       oneTimePrekey: bundle.one_time_prekey ?? undefined,
       registrationId: bundle.registration_id,
     });
+    assertCurrent();
   }
 
+  const envelope = await encryptEstablishedSession(userId, bundle.device_id, senderDeviceId, plaintext, assertCurrent);
+  if (roster && bundle.roster_revision) roster.remember(userId, bundle.device_id, bundle.roster_revision);
+  return envelope;
+}
+
+async function encryptEstablishedSession(userId: string, deviceId: string, senderDeviceId: string, plaintext: string, assertCurrent: () => void): Promise<EncryptedEnvelope> {
+  assertCurrent();
   // Encrypt with Double Ratchet
   const wireMessage = await signalProtocol.encryptMessage(
     userId,
-    bundle.device_id,
+    deviceId,
     plaintext
   );
+  assertCurrent();
 
   return {
     sender_device_id: senderDeviceId,
-    recipient_device_id: bundle.device_id,
+    recipient_device_id: deviceId,
     message_type: wireMessage.type,
     // Full SignalWireMessage stored as JSON (header + ciphertext + preKeyInfo)
     ciphertext: JSON.stringify(wireMessage),
