@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { build } from "../../client/node_modules/vite/dist/node/index.js";
 import react from "../../client/node_modules/@vitejs/plugin-react/dist/index.js";
 import { chromium } from "playwright";
+import { searchSourceBaseline } from "./search-source-baseline.mjs";
 
 const root=fileURLToPath(new URL("../../client/",import.meta.url));
 const repo=fileURLToPath(new URL("../../",import.meta.url));
@@ -33,6 +34,9 @@ const overridePaths=["client/src/components/chat/SearchPanel.tsx","client/src/co
  ...(sourceBaseline?["client/src/crypto/keyStorage.ts","client/src/crypto/cachedSearchSnapshot.ts"]:[])];
 const gitExecutable=(process.platform==="win32"?["C:/Program Files/Git/cmd/git.exe"]:["/usr/bin/git","/usr/local/bin/git"]).find(existsSync);
 assert.ok(gitExecutable,"Benchmark requires Git installed at a fixed supported path");
+const historicalSource=sourceBaseline?searchSourceBaseline(gitExecutable,repo,baseline,overridePaths):null;
+const sourceHead=execFileSync(gitExecutable,["rev-parse","HEAD"],{cwd:repo,encoding:"utf8"}).trim();
+const usedHistoricalPaths=new Set();
 const stores=`import {create} from "zustand";
  export const useServerStore=create(()=>({activeServerId:"server",activeServer:{id:"server",e2ee_enabled:true}}));
  export const useMessageStore=create(()=>({messagesByChannel:{},lastDeleted:null}));
@@ -63,8 +67,8 @@ const entry=`import React from "react";import {createRoot}from "react-dom/client
  };`;
 for(const variant of variants){
  const overrides=new Map(),usedOverrides=new Set();
- if(variant==="before")for(const path of overridePaths)
-  overrides.set(fileURLToPath(new URL("../../"+path,import.meta.url)).replaceAll("\\","/"),execFileSync(gitExecutable,["show",baseline+":"+path],{cwd:repo,encoding:"utf8"}));
+ if(variant==="before")for(const [path,content] of historicalSource?.overrides??overridePaths.map(path=>[path,execFileSync(gitExecutable,["show",baseline+":"+path],{cwd:repo,encoding:"utf8"})]))
+  overrides.set(fileURLToPath(new URL("../../"+path,import.meta.url)).replaceAll("\\","/"),content);
  const plugin={name:"controlled-panel-providers",enforce:"pre",resolveId(source){
   if(source==="virtual:panel-entry")return "\0panel-entry.js";
   if(source==="virtual:panel-stores"||/\/stores\/(serverStore|messageStore|dmStore|e2eeStore|settingsStore)$/.test(source))return "\0panel-stores.js";
@@ -74,7 +78,11 @@ for(const variant of variants){
   if(source.endsWith("/crypto/cachedSearchSnapshot"))return "\0panel-index.js";
   if(source.endsWith("/crypto/keyStorage"))return "\0panel-cache.js";
  },load(id){
-  const original=overrides.get(id.replaceAll("\\","/").split("?")[0]);if(original){usedOverrides.add(id.split("?")[0]);return original;}
+  const normalized=id.replaceAll("\\","/").split("?")[0];
+  const repoRoot=repo.replaceAll("\\","/");
+  const relative=normalized.startsWith(repoRoot)?normalized.slice(repoRoot.length):null;
+  if(variant==="before"&&relative)historicalSource?.assertHistoricalPath(relative);
+  const original=overrides.get(normalized);if(original!==undefined){usedOverrides.add(normalized);if(relative)usedHistoricalPaths.add(relative);return original;}
   if(id==="\0panel-entry.js")return entry;
   if(id==="\0panel-stores.js")return stores;
   if(id==="\0panel-hooks.js")return hooks;
@@ -84,7 +92,7 @@ for(const variant of variants){
   if(id==="\0panel-cache.js")return 'export*from "/src/crypto/keyStorage.ts";import{searchCachedMessageRefs as channel,searchCachedDMMessageRefs as dm}from "/src/crypto/keyStorage.ts";function check(){if(globalThis.__panelFailNext){globalThis.__panelFailNext=false;throw Error("Injected scan failure");}}export async function searchCachedMessageRefs(...args){check();return channel(...args);}export async function searchCachedDMMessageRefs(...args){check();return dm(...args);}';
  }};
  const result=await build({root,configFile:false,logLevel:"error",base:"/"+variant+"/",plugins:[plugin,react()],define:{"process.env.NODE_ENV":JSON.stringify("production")},build:{write:false,minify:true,rollupOptions:{input:"virtual:panel-entry",output:{entryFileNames:"benchmark.js"}}}});
- if(variant==="before")assert.equal(usedOverrides.size,overridePaths.length,"Historical source overrides must all be applied");
+ if(variant==="before")for(const path of overridePaths)assert.ok(usedHistoricalPaths.has(path),`Required historical source override was not applied: ${path}`);
  for(const output of (Array.isArray(result)?result[0]:result).output)assets.set(variant+"/"+output.fileName,output.type==="chunk"?output.code:output.source);
 }
 const entryPages=new Map(variants.map(variant=>[variant+"/",'<div id="root"></div><script type="module" src="/'+variant+'/benchmark.js"></script>']));
@@ -109,7 +117,7 @@ async function measureUI(page,event,expected,action){
 try{
  console.log("Runtime",process.version,process.platform,"Chromium",browser.version(),"baseline",baseline);
  for(const variant of variants){const context=await browser.newContext(),page=await context.newPage(),cdp=await context.newCDPSession(page);const errors=[];page.on("pageerror",error=>errors.push(error.message));
- try{await page.goto(`http://127.0.0.1:${server.address().port}/${variant}/`);await page.waitForFunction(()=>Boolean(globalThis.panelBench));console.log(JSON.stringify({variant,react:await page.evaluate(()=>globalThis.panelBench.react),productionBuild:true,historicalOverrides:variant==="before"?overridePaths.length:0}));
+ try{await page.goto(`http://127.0.0.1:${server.address().port}/${variant}/`);await page.waitForFunction(()=>Boolean(globalThis.panelBench));console.log(JSON.stringify({variant,react:await page.evaluate(()=>globalThis.panelBench.react),productionBuild:true,sourceHead,historicalOverrides:variant==="before"?usedHistoricalPaths.size:0,historicalSources:variant==="before"?[...usedHistoricalPaths].sort():[]}));
  for(const kind of ["channel","dm"]){
  if(pendingOnly){
   const matches=await page.evaluate(async kind=>{const matches=await globalThis.panelBench.seed(kind,1000);globalThis.panelBench.holdIndex();await globalThis.panelBench.mount(kind);return matches;},kind);
