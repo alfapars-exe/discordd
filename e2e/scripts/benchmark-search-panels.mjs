@@ -106,6 +106,21 @@ function compareSourcePaths(left, right) {
  return 0;
 }
 const median=(rows,key)=>rows.map(row=>row[key]).sort((a,b)=>a-b)[Math.floor(rows.length/2)];
+async function waitForPendingPanel(page, { variant, kind, errors }) {
+ try {
+  await page.waitForFunction(()=>document.querySelectorAll(".search-result-content").length===25,undefined,{timeout:120000});
+ } catch (error) {
+  const state = await page.evaluate(() => ({
+   handoffReady: globalThis.__panelIndexHandoffReady,
+   results: document.querySelectorAll(".search-result-content").length,
+   count: document.querySelector(".search-count")?.textContent,
+   panelText: document.querySelector(".search-panel")?.textContent?.slice(0,1000),
+   releasedAt: globalThis.__panelReleasedAt,
+  })).catch(failure => ({ diagnosticFailure: failure.message }));
+  console.error(JSON.stringify({ mode:"pending-frontier-timeout", variant, kind, errors, state }));
+  throw error;
+ }
+}
 async function measureUI(page,event,expected,action){
  await page.evaluate(({event,expected})=>{
   Reflect.deleteProperty(globalThis,"__panelDuration");let start;
@@ -139,7 +154,7 @@ try{
     growth.push({events:end,retainedGrowthBytes:heap.usedSize-base.usedSize});start=end;
    }
   }finally{await page.evaluate(()=>globalThis.panelBench.releaseIndex());}
-  await page.waitForFunction(()=>document.querySelectorAll(".search-result-content").length===25,undefined,{timeout:120000});
+  await waitForPendingPanel(page, { variant, kind, errors });
   const releaseToObservedResultsMs=await page.evaluate(()=>performance.now()-globalThis.__panelReleasedAt);
   await cdp.send("HeapProfiler.collectGarbage");const settledHeap=await cdp.send("Runtime.getHeapUsage");
   assert.equal(await page.locator(".search-count").textContent(),String(matches));
