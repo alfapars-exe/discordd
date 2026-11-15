@@ -150,10 +150,10 @@
     },
     "build": "PASS actualtsc-b/Vite3.64s;TEMP/hichat-peer-contract-final-build.log",
     "lint": "PASS0errors2existingwarnings;TEMP/hichat-peer-contract-final-lint.log",
-    "selfScan": "RUNNING immutable6adfca62;TEMP/hichat-peer-contract-final-scan.log"
+    "selfScan": "PASS immutable6adfca62:51exact reviewed-source records,480reviewlines,0blockingpatterns. Pattern scan is not proof of absence of vulnerabilities. TEMP/hichat-peer-contract-final-scan.log",
+    "newReviewHits": "Two added __proto__ pattern hits reviewed:voicePreferenceMaps.ts reserved-key rejection constants and peer-volume.test.ts negative id fixture. Neither performs prototype writes."
   },
   "remaining": [
-    "Final immutable source scan",
     "New-head CI after push",
     "Separate retrySync17complexity issue remains open;legacy attribution corrected",
     "Whole RF13/RF12 and RF01-RF30 runtime/platform/physical acceptance remain open"
