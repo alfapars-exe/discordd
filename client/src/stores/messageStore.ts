@@ -456,13 +456,18 @@ export const useMessageStore = create<MessageState>((set, get) => {
       if (!ownsRequest()) return;
       const accessCurrent = captureHistoryAccess(channelId);
       void registerSpamBatch(changes.apply(decrypted), "channel", channelId, () => isCurrent() && accessCurrent());
-      set((state) => ({
-        messagesByChannel: {
-          ...state.messagesByChannel,
-          [channelId]: changes.apply([...decrypted, ...(state.messagesByChannel[channelId] ?? [])]),
-        },
-        hasMoreByChannel: { ...state.hasMoreByChannel, [channelId]: page.has_more },
-      }));
+      set((state) => {
+        const loaded = state.messagesByChannel[channelId] ?? [];
+        const loadedIds = new Set(loaded.map(message => message.id));
+        const older = decrypted.filter(message => !loadedIds.has(message.id));
+        return {
+          messagesByChannel: {
+            ...state.messagesByChannel,
+            [channelId]: changes.apply([...older, ...loaded]),
+          },
+          hasMoreByChannel: { ...state.hasMoreByChannel, [channelId]: page.has_more },
+        };
+      });
     } finally {
       if (inflightOlderFetches.get(channelId)?.token === token) {
         inflightOlderFetches.delete(channelId);
