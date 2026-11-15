@@ -31,12 +31,19 @@
     "finalSource": "5ba8a9b3",
     "finalLog": "TEMP/hichat-module-scan-final.log",
     "finalHandle": 40910,
-    "status": "in progress; require terminal exit and review before push"
+    "status": "PASS: terminal log confirms0blocking/51reviewed source records/478review lines",
+    "initialResult": "Terminal FAIL: Set-Cookie raw-header rule matched qa-http.mjs;477 review lines. Wrapper shell exit0 came from final Get-Content, not scanner success; script terminal log is authoritative.",
+    "finalResult": {
+      "blockingMatches": 0,
+      "reviewedSourceRecords": 51,
+      "reviewLines": 478,
+      "newModuleReviewLines": 30
+    },
+    "reviewQueue": "Includes vendored ONNX runtime fetch/message patterns, owned audio probes and fixture scripts; review-only hits remain visible. Not a claim of complete vulnerability audit."
   },
   "remaining": [
-    "Terminal immutable expanded scan",
-    "Prior 41e0fdae CI terminal archive",
-    "Push and new-head CI",
+    "Prior41e0fdae CI terminal archive before pushing (cancel-in-progress=true)",
+    "New-head CI after push",
     "RF01-RF30 project acceptance"
   ]
 }
