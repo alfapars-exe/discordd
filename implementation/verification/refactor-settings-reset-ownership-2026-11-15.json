@@ -1,0 +1,46 @@
+{
+  "scope": "Nested settings reset ownership at theme/appearance/preview boundaries. Other adapters and old calls without an explicit fence retain existing behavior.",
+  "sourceRevision": "1c57ab0c8bc83d088aba996bd9fb3aea45547b46",
+  "red": {
+    "log": "hichat-settings-reset-ownership-red.log",
+    "failed": 3,
+    "passed": 14,
+    "behavior": "Ignoring caller retirement reset an already-retired appearance or overwrote replacement UI scale/preview after a synchronous real Zustand subscriber ran."
+  },
+  "targeted": {
+    "files": 4,
+    "passed": 157,
+    "seconds": 3.81,
+    "log": "hichat-settings-reset-ownership-targeted.log"
+  },
+  "behavior": [
+    "Optional isCurrent callback preserves existing one-argument reset calls.",
+    "Check before theme reset,appearance reset,and preview clearing;do not continue after captured owner retirement.",
+    "Presenter forwards its captured account fence into the nested settings reset.",
+    "Real Zustand subscribe tests assert in-memory UI scale,localStorage,CSS variable,and replacement wallpaper preview.",
+    "Real presenter/settings integration verifies the fence is actually forwarded."
+  ],
+  "sha256": {
+    "client/src/stores/settingsStore.ts": "b1325b9f5d47c4f965f6c263784598f9c9dd23f297b1a3dca74e3441035f0203",
+    "client/src/stores/settingsStore.test.ts": "e36e7c474679e34e996ad73392f11cb9eb48abfbe5f17edbea8f710f68914e24",
+    "client/src/stores/applyAccountPreferences.ts": "938316f87d728f362463e8004ef41ddea6f4e82df54975457578715d42756c4a",
+    "client/src/stores/preferencesStore.test.ts": "e3a973297a93e65dcf35f5c2209b290255b19022c055ba96ae8d6f2687cfd9cc"
+  },
+  "limits": [
+    "Controlled ownership predicate and synchronous subscribers;not full browser authentication/native platform acceptance.",
+    "Other adapter methods that mutate/persist after notifying subscribers remain separate review scope.",
+    "Full RF13/offline/native/physical and project acceptance remain open."
+  ],
+  "fullClientCoverage": {
+    "files": 486,
+    "passed": 5089,
+    "skipped": 1,
+    "statementPercent": 67.37,
+    "branchPercent": 64.59,
+    "functionPercent": 61.56,
+    "linePercent": 68.43,
+    "log": "hichat-settings-reset-ownership-coverage.log"
+  },
+  "build": "actual tsc-b/VitePASS3.66s; existing chunk warning",
+  "lint": "changed settings/presenter/orchestration tests lintPASS"
+}
