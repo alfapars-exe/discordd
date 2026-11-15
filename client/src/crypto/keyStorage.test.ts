@@ -483,7 +483,7 @@ describe("keyStorage — deleteAllSenderKeysForChannel prefix scoping", () => {
 // ──────────────────────────────────
 
 describe("keyStorage — searchCachedMessages (byChannel index + cursor)", () => {
-  it.each([keyStorage.searchCachedMessages, keyStorage.searchCachedDMMessages])(
+  it.each([keyStorage.searchCachedMessages, keyStorage.searchCachedDMMessages, keyStorage.searchCachedDMMessageRefs])(
     "stops advancing an abandoned search cursor",
     async (search) => {
       await keyStorage.cacheDecryptedMessages(["a", "b", "c"].map(messageId =>
@@ -566,6 +566,26 @@ describe("keyStorage — searchCachedDMMessages (byDMChannel index + cursor)", (
 
     const hits = await keyStorage.searchCachedDMMessages("dm1", "secret");
     expect(hits.map((m) => m.messageId)).toEqual(["d1"]);
+  });
+});
+
+describe("keyStorage — compact DM search references", () => {
+  it("returns ordering metadata without retaining matched plaintext", async () => {
+    await keyStorage.cacheDecryptedMessages([
+      makeCachedMessage({ messageId: "match", dmChannelId: "target", content: "Été " + "private".repeat(1000), timestamp: 42, sourceSequence: "9223372036854775807" }),
+      makeCachedMessage({ messageId: "foreign", dmChannelId: "other", content: "Été" }),
+      makeCachedMessage({ messageId: "miss", dmChannelId: "target", content: "winter" }),
+    ]);
+    expect(await keyStorage.searchCachedDMMessageRefs("target", "ÉTÉ")).toEqual([
+      { messageId: "match", timestamp: 42, sourceSequence: "9223372036854775807" },
+    ]);
+  });
+
+  it("rejects a cancelled reference scan before opening its cursor", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(keyStorage.searchCachedDMMessageRefs("target", "query", controller.signal))
+      .rejects.toMatchObject({ name: "AbortError" });
   });
 });
 

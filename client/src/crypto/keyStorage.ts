@@ -633,23 +633,24 @@ export async function cacheDecryptedMessages(
   }
 }
 
-async function searchMessageIndex(
+async function searchMessageIndex<T>(
   indexName: "byChannel" | "byDMChannel",
   channelId: string,
   query: string,
+  project: (message: CachedDecryptedMessage) => T,
   signal?: AbortSignal
-): Promise<CachedDecryptedMessage[]> {
+): Promise<T[]> {
   signal?.throwIfAborted();
   const db = await getDB();
   signal?.throwIfAborted();
   const index = db.transaction("messageCache", "readonly").store.index(indexName);
-  const results: CachedDecryptedMessage[] = [];
+  const results: T[] = [];
   const lowerQuery = query.toLowerCase();
   let cursor = await index.openCursor(channelId);
   while (cursor) {
     signal?.throwIfAborted();
     const message = cursor.value as CachedDecryptedMessage;
-    if (message.content.toLowerCase().includes(lowerQuery)) results.push(message);
+    if (message.content.toLowerCase().includes(lowerQuery)) results.push(project(message));
     cursor = await cursor.continue();
   }
   signal?.throwIfAborted();
@@ -657,7 +658,7 @@ async function searchMessageIndex(
 }
 
 export function searchCachedMessages(channelId: string, query: string, signal?: AbortSignal) {
-  return searchMessageIndex("byChannel", channelId, query, signal);
+  return searchMessageIndex("byChannel", channelId, query, message => message, signal);
 }
 
 /**
@@ -673,7 +674,19 @@ export async function getAllCachedMessages(): Promise<CachedDecryptedMessage[]> 
  * Client-side message search for a DM channel.
  */
 export function searchCachedDMMessages(dmChannelId: string, query: string, signal?: AbortSignal) {
-  return searchMessageIndex("byDMChannel", dmChannelId, query, signal);
+  return searchMessageIndex("byDMChannel", dmChannelId, query, message => message, signal);
+}
+
+/** Ordering metadata only: matched plaintext is released as the cursor advances.
+ * The number of references still grows with matches; this is not a bounded
+ * complete-search snapshot. Existing full-message callers retain their API.
+ */
+export function searchCachedDMMessageRefs(dmChannelId: string, query: string, signal?: AbortSignal) {
+  return searchMessageIndex("byDMChannel", dmChannelId, query, message => ({
+    messageId: message.messageId,
+    timestamp: message.timestamp,
+    sourceSequence: message.sourceSequence,
+  }), signal);
 }
 
 // ──────────────────────────────────
