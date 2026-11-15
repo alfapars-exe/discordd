@@ -31,9 +31,9 @@ export function sanitizeAccessibilityPreferences(value: unknown): Partial<Access
   const source = value as Record<string, unknown>;
   const valid: Record<string, unknown> = {};
   for (const key of Object.keys(DEFAULT_ACCESSIBILITY) as (keyof AccessibilityState)[]) {
-    if (Object.prototype.hasOwnProperty.call(source, key) && validField(key, source[key])) {
-      valid[key] = source[key];
-    }
+    if (!Object.prototype.hasOwnProperty.call(source, key)) continue;
+    const item = source[key];
+    if (validField(key, item)) valid[key] = item;
   }
   return valid as Partial<AccessibilityState>;
 }
