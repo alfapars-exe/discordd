@@ -54,6 +54,7 @@ it("preserves both failures if destination and preference observers throw",()=>{
   try{useTimeFormatStore.getState().setTimeFormat("24");}catch(error){thrown=error;}
   expect(thrown).toBeInstanceOf(AggregateError);
   expect((thrown as AggregateError).errors).toEqual([first,second]);
+  expect((thrown as AggregateError).cause).toBe(second);
   expect(pending()).toContainEqual({locale:{timeFormat:"24"}});
  }finally{stopFirst();stopSecond();}
 });

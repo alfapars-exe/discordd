@@ -7,7 +7,7 @@ export function completePreferenceMutation(update: () => void, complete: () => v
   try { update(); } catch (error) { failed = true; failure = error; }
   try { complete(); }
   catch (error) {
-    if (failed) throw new AggregateError([failure, error], "preference_notification_and_completion_failed");
+    if (failed) throw new AggregateError([failure, error], "preference_notification_and_completion_failed", { cause: error });
     throw error;
   }
   if (failed) throw failure;
