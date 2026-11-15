@@ -103,6 +103,7 @@ class PostgreSQLRunnerTests(unittest.TestCase):
         for package, name in [
             ("database", "TestRepositoryDialectContracts/Postgres"),
             ("repository", "TestDMSearchDialectContractChannelCountAndPages"),
+            ("repository", "TestChannelPositionsPreparedTransactionContract"),
         ]:
             full = "github.com/argeinfina/hichat/" + package
             events = self.completed()
@@ -119,6 +120,7 @@ class PostgreSQLRunnerTests(unittest.TestCase):
             {"Action": "pass", "Package": "github.com/argeinfina/hichat/database", "Test": "TestPostgresVoiceUsageMigrationPreservesTotals"},
             {"Action": "pass", "Package": "github.com/argeinfina/hichat/database", "Test": "TestRepositoryDialectContracts/Postgres"},
             {"Action": "pass", "Package": "github.com/argeinfina/hichat/repository", "Test": "TestDMSearchDialectContractChannelCountAndPages"},
+            {"Action": "pass", "Package": "github.com/argeinfina/hichat/repository", "Test": "TestChannelPositionsPreparedTransactionContract"},
             {"Action": "pass", "Package": "github.com/argeinfina/hichat/database"},
         ]
 
