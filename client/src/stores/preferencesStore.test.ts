@@ -404,6 +404,26 @@ describe("account-scoped preference synchronization", () => {
     expect(localStorage.getItem(legacyImportKey)).toBeNull();expect(localStorage.getItem(pendingKey)).toBeNull();
   });
 
+  it("does not overwrite a binding selected by a reset observer", async () => {
+    await ready();
+    state().set({ theme: "alice-queued" });
+    let stop = () => {};
+    stop = usePreferencesStore.subscribe(next => {
+      if (next.accountId !== null) return;
+      stop();
+      state().bindAccount("carol");
+      state().set({ theme: "carol-queued" });
+    });
+    try {
+      state().bindAccount("bob");
+      await settle();
+      expect(state().accountId).toBe("carol");
+      expect(state().data).toEqual({ theme: "carol-queued" });
+      expect(JSON.parse(localStorage.getItem(pendingKey)!)).toEqual({ theme: "alice-queued" });
+      expect(mocks.theme).toHaveBeenLastCalledWith("carol-queued");
+    } finally { stop(); }
+  });
+
   it.each(["owner", "backend"] as const)("prepares only the surviving binding after a bound observer replaces %s", async boundary => {
     const { applyAccountPreferences } = await import("./applyAccountPreferences");
     const loading = deferred<typeof applyAccountPreferences>();
