@@ -8,7 +8,7 @@ function fixture() {
   const updater = Object.assign(new EventEmitter(), { checkForUpdates: async () => null });
   const sibling = () => {};
   for (const event of events) updater.on(event, sibling);
-  const operations = { updater: updater as unknown as Parameters<typeof startRuntimeUpdater>[0]["updater"], available: () => {}, progress: () => {}, downloaded: () => {}, failed: () => {},
+  const operations: Parameters<typeof startRuntimeUpdater>[0] = { updater: updater as unknown as Parameters<typeof startRuntimeUpdater>[0]["updater"], available: () => {}, progress: () => {}, downloaded: () => {}, failed: () => {},
     startPolling: () => () => {} };
   return { updater, sibling, operations };
 }
@@ -19,6 +19,45 @@ test("failed poller acquisition retires updater subscriptions and preserves sibl
   operations.startPolling = () => { throw failure; };
   assert.throws(() => startRuntimeUpdater(operations), error => error === failure);
   for (const event of events) assert.deepEqual(updater.listeners(event), [sibling], event);
+});
+
+test("synchronous polling failures are reported without escaping the timer and can recover", () => {
+  const { updater, operations } = fixture();
+  const failure = new Error("synchronous SDK check failure");
+  const failures: Error[] = [];
+  let poll!: () => void, shouldFail = false, checks = 0;
+  updater.checkForUpdates = () => {
+    checks++;
+    if (shouldFail) throw failure;
+    return Promise.resolve(null);
+  };
+  operations.failed = error => { failures.push(error); };
+  operations.startPolling = check => { poll = check; return () => {}; };
+  const dispose = startRuntimeUpdater(operations);
+  try {
+    shouldFail = true;
+    assert.doesNotThrow(poll);
+    assert.deepEqual(failures, [failure]);
+    shouldFail = false; poll();
+    assert.equal(checks, 3);
+    dispose(); poll();
+    assert.equal(checks, 3);
+  } finally { dispose(); }
+});
+
+test("SDK error events and rejected checks produce one failure notification", async () => {
+  const { updater, operations } = fixture();
+  const failure = new Error("offline"), failures: Error[] = [];
+  operations.failed = error => { failures.push(error); };
+  updater.checkForUpdates = () => {
+    updater.emit("error", failure);
+    return Promise.reject(failure);
+  };
+  const dispose = startRuntimeUpdater(operations);
+  try {
+    await new Promise<void>(resolve => setImmediate(resolve));
+    assert.deepEqual(failures, [failure]);
+  } finally { dispose(); }
 });
 
 test("failed poller cleanup still retires updater subscriptions once", () => {

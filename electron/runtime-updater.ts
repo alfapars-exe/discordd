@@ -20,7 +20,13 @@ export function startRuntimeUpdater(operations: RuntimeUpdaterOperations): () =>
   const { updater } = operations;
   const check = () => {
     if (disposed) return;
-    void updater.checkForUpdates().catch(() => undefined);
+    try {
+      // The SDK reports rejected checks through its error event. A synchronous
+      // failure has no rejected promise to observe and must not escape a timer.
+      void updater.checkForUpdates().catch(() => undefined);
+    } catch (error) {
+      failed(error instanceof Error ? error : new Error("Update check failed"));
+    }
   };
   let stopPolling: (() => void) | undefined;
   const dispose = () => {

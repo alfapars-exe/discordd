@@ -2885,3 +2885,8 @@ Two fail-first full-Electron regressions exposed listeners left behind after pol
 ### RF19/RF11 — retry application updater setup after acquisition failure (2026-11-15)
 
 Two fail-first application-entry regressions showed prelaunchChecked remaining true after poller acquisition or shutdown registration failed, permanently suppressing another setup attempt. setupAutoUpdater keeps its reentrant guard but now resets it and disposes an acquired runtime on failure, preserving the original error. Tests verify no leftover timer/listeners, one successful retry and shutdown cleanup. Full canonical Electron compilation/tests:404passed/1skipped. Receipt:implementation/verification/refactor-updater-startup-retry-2026-11-15.json. Remote c2baaec1 currently30success/4repository-shards pending/no failures; local fixes held until it terminates. Native asynchronous installer/physical upgrade and full RF19 acceptance remain open.
+
+
+### RF19 — contain synchronous runtime check errors (2026-11-15)
+
+Installed electron-updater checkForUpdates is not an async function; its synchronous preflight/logger path can throw before returning a Promise. A fail-first poll callback test demonstrated the exception escaping the timer. The owner now forwards synchronous exceptions through the existing failed callback, while preserving SDK error-event handling of rejected promises. Regressions prove retry recovery, no checks after disposal and exactly one report for an SDK error-event+rejection. Complete Electron compile/tests:406passed/1skipped. Receipt:implementation/verification/refactor-updater-sync-poll-2026-11-15.json. Remote c2baaec1 currently32success/2repository-shards pending/no failure; native installer/physical upgrade and complete RF19 acceptance remain open.
