@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { composer, messageList, openFreshChannel } from "./helpers";
+import { composer, expectSignedInShell, messageList, openFreshChannel } from "./helpers";
 
 test("an offline send preserves its draft and retries online without duplicates", async ({ page }) => {
   await openFreshChannel(page);
@@ -32,5 +32,8 @@ test("an offline send preserves its draft and retries online without duplicates"
   await expect(composer(page)).toHaveValue("");
   await expect(rows()).toHaveCount(1);
   await page.reload();
+  // A fresh document must restore its cookie session, including any server
+  // Retry-After. Keep that boot budget separate from history correctness.
+  await expectSignedInShell(page);
   await expect(rows()).toHaveCount(1);
 });
