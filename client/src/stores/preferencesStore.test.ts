@@ -119,6 +119,34 @@ describe("account-scoped preference synchronization", () => {
     }finally{loader.resolve(applyAccountPreferences);bindPreferencePresenter(async()=>applyAccountPreferences);}
   });
 
+  it.each(["owner", "backend"] as const)("retires a presentation retry when its saved observer replaces the %s", async boundary => {
+    await ready();
+    const { applyAccountPreferences } = await import("./applyAccountPreferences");
+    bindPreferencePresenter(async () => { throw new Error("presentation unavailable"); });
+    let stop = () => {};
+    try {
+      state().set({ theme: "alice-accepted" });
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(state().syncError).toBe("preferences_apply_failed");
+      bindPreferencePresenter(async () => applyAccountPreferences);
+      mocks.get.mockClear();
+      stop = usePreferencesStore.subscribe(next => {
+        if (next.syncStatus !== "saved") return;
+        stop();
+        state().bindAccount(boundary === "owner" ? "bob" : "alice", boundary === "backend" ? "https://two.example" : undefined);
+        state().set({ theme: "replacement-pending" });
+      });
+      await state().retrySync();
+      await settle();
+      expect(mocks.get).not.toHaveBeenCalled();
+      expect(mocks.update).toHaveBeenCalledTimes(1);
+      expect(state().accountId).toBe(boundary === "owner" ? "bob" : "alice");
+      expect(state().data).toEqual({ theme: "replacement-pending" });
+      expect(state().isLoaded).toBe(false);
+      expect(state().syncStatus).toBe("pending");
+    } finally { stop(); bindPreferencePresenter(async () => applyAccountPreferences); }
+  });
+
   it.each(["loader","application"] as const)("recovers failed initial preference presentation without rebinding (%s)",async phase=>{
     const {applyAccountPreferences}=await import("./applyAccountPreferences");
     bindPreferencePresenter(async()=>{
