@@ -7,6 +7,8 @@ import { cacheDecryptedMessage, cacheDecryptedMessages, closeDB } from "./keySto
 import { scanCachedSearchReferences, SEARCH_REFERENCE_BATCH_SIZE } from "./cachedSearchScan";
 import { getDB } from "./keyDatabase";
 import { CACHED_SEARCH_EPOCH_KEY } from "./cachedSearchEpoch";
+import { reserveCachedMessageDeletion } from "./cachedMessageDeletions";
+import { deleteCachedChannelMessage, deleteCachedDMMessage } from "./keyStorage";
 import type { CachedDecryptedMessage } from "./types";
 
 let generation = 0;
@@ -18,6 +20,20 @@ afterEach(async () => { await closeDB(); });
 const row = (index: number): CachedDecryptedMessage => ({
   messageId: `message-${String(index).padStart(4, "0")}`, channelId: "channel", dmChannelId: "dm",
   timestamp: index, content: "Été private plaintext", sourceSequence: String(9007199254740992n + BigInt(index)),
+});
+it.each(["channel", "dm"] as const)("starts %s source reads after accepted deletion cleanup settles", async kind => {
+  const message = { ...row(0), channelId: kind === "channel" ? "channel" : "", dmChannelId: kind === "channel" ? null : "dm" };
+  await cacheDecryptedMessage(message);
+  const channel = kind === "channel" ? "channel" : "dm";
+  const finish = reserveCachedMessageDeletion(kind, channel);
+  const scan = scanCachedSearchReferences(kind, channel, "ÉTÉ", async () => {});
+  try {
+    // Give an unguarded read the opportunity to observe the still-cached row.
+    await new Promise(resolve => setTimeout(resolve, 20));
+    if (kind === "channel") await deleteCachedChannelMessage(message.messageId, channel, () => true);
+    else await deleteCachedDMMessage(message.messageId, channel, () => true);
+  } finally { finish(); }
+  expect(await scan).toBe(0);
 });
 it.each(["channel", "dm"] as const)("streams %s matches with bounded batches and no plaintext", async kind => {
   await cacheDecryptedMessages(Array.from({ length: 1000 }, (_, i) => row(i)));

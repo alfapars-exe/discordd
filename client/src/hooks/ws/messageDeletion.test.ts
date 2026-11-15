@@ -8,6 +8,7 @@ import { useAuthStore } from "../../stores/authStore";
 import { publishAuthOwnerChange } from "../../api/authSessionEvents";
 import { deleteCachedChannelMessage, deleteCachedDMMessage, cacheDecryptedMessage, getCachedDecryptedMessage, closeDB } from "../../crypto/keyStorage";
 import type { WSMessage } from "../../types";
+import { waitForCachedMessageDeletions } from "../../crypto/cachedMessageDeletions";
 
 vi.mock("../../crypto/keyStorage", async importOriginal => ({
   ...await importOriginal<typeof import("../../crypto/keyStorage")>(),
@@ -43,12 +44,26 @@ for (const kind of ["channel", "dm"] as const) {
       : useDMStore.subscribe((next, previous) => { if (next.lastDeletedDM !== previous.lastDeletedDM) callback(); }));
   };
 
+  it(`${kind}: reserves cleanup before store observers can start a replacement query`, async () => {
+    let release!: (value: boolean) => void;
+    cleanup().mockReturnValueOnce(new Promise(resolve => { release = resolve; }));
+    const started = vi.fn(); let query: Promise<void> | undefined;
+    observeDeletion(() => { query = waitForCachedMessageDeletions(kind, "room").then(started); });
+    const deletion = deliver();
+    await Promise.resolve(); await Promise.resolve();
+    const premature = started.mock.calls.length;
+    release(true); await deletion; await query;
+    expect(premature).toBe(0);
+    expect(started).toHaveBeenCalledOnce();
+  });
+
   it(`${kind}: cleans cache after a committed deletion observer throws, preserving the failure`, async () => {
     const failure = new Error("deletion observer");
     observeDeletion(() => { throw failure; });
     await expect(deliver()).rejects.toBe(failure);
     expect(cleanup()).toHaveBeenCalledExactlyOnceWith("deleted", "room", expect.any(Function));
     expect(cleanup().mock.calls[0][2]()).toBe(true);
+    await waitForCachedMessageDeletions(kind, "room");
   });
 
   it(`${kind}: does not clean a replacement account after an observer retires ownership`, async () => {
