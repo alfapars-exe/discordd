@@ -13,6 +13,7 @@ function harness(packaged = true) {
   let checks = 0, downloaded = 0;
   const network = { failed: false };
   const installation = { failed: false };
+  const startup = { failed: false };
   const requestUpdateInstallation = createUpdateInstallationGate();
   const updater = Object.assign(new EventEmitter(), {
     checkForUpdates: async () => { checks++; if (network.failed) throw new Error("offline"); },
@@ -30,7 +31,7 @@ function harness(packaged = true) {
   const exports = {} as typeof import("./auto-updater");
   vm.runInNewContext(readFileSync(path.join(__dirname, "auto-updater.js"), "utf8"), {
     exports, __dirname, console,
-    setInterval: (callback: () => void, delay: number) => { assert.equal(delay, 300_000); timers.add(callback); return callback; },
+    setInterval: (callback: () => void, delay: number) => { if (startup.failed) throw new Error("poller unavailable"); assert.equal(delay, 300_000); timers.add(callback); return callback; },
     clearInterval: (callback: () => void) => { timers.delete(callback); },
     require: (name: string) => {
       if (name === "electron") return { app, Notification: FakeNotification };
@@ -43,8 +44,37 @@ function harness(packaged = true) {
       throw new Error(`Unexpected updater dependency: ${name}`);
     },
   });
-  return { api: exports, updater, app, sent, tray, installed, timers, notifications, network, installation, checks: () => checks, downloaded: () => downloaded };
+  return { api: exports, updater, app, sent, tray, installed, timers, notifications, network, installation, startup, checks: () => checks, downloaded: () => downloaded };
 }
+
+test("failed runtime setup allows retry without leaving an initialized marker", () => {
+  const h = harness(); h.startup.failed = true;
+  assert.throws(() => h.api.setupAutoUpdater(), /poller unavailable/);
+  assert.equal(h.api.wasPrelaunchChecked(), false);
+  assert.equal(h.timers.size, 0);
+  assert.equal(h.updater.eventNames().length, 0);
+  h.startup.failed = false;
+  h.api.setupAutoUpdater(); h.api.setupAutoUpdater();
+  assert.equal(h.api.wasPrelaunchChecked(), true);
+  assert.equal(h.timers.size, 1);
+  assert.equal(h.updater.listenerCount("update-available"), 1);
+  h.app.emit("will-quit");
+  assert.equal(h.timers.size, 0);
+});
+
+test("failed shutdown registration releases the newly acquired runtime", () => {
+  const h = harness(), original = h.app.once;
+  const failure = new Error("shutdown registration failed");
+  h.app.once = () => { throw failure; };
+  assert.throws(() => h.api.setupAutoUpdater(), error => error === failure);
+  assert.equal(h.api.wasPrelaunchChecked(), false);
+  assert.equal(h.timers.size, 0);
+  assert.equal(h.updater.eventNames().length, 0);
+  h.app.once = original;
+  h.api.setupAutoUpdater();
+  assert.equal(h.timers.size, 1);
+  h.app.emit("will-quit");
+});
 
 test("repeated updater setup owns one subscription set, poller and downloaded notification", () => {
   const h = harness();

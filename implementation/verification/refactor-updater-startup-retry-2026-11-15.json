@@ -1,0 +1,25 @@
+{
+  "date": "2026-11-15",
+  "base": "70fa2ccd",
+  "sources": {
+    "electron/auto-updater.ts": "69910036f756b70295daeea7d7d0f689c9413e427303aba901a4ae338361938f",
+    "electron/auto-updater.test.ts": "d3726dce105c46e6874a49ade7f0061117d2c92d8738325b87434a1f71f7c4ab"
+  },
+  "before": "two startup retry/registration regressions failed: initialized marker remained true",
+  "fix": "Keep reentrant setup guard; reset marker and dispose acquired runtime on setup/shutdown-registration failure; preserve original error",
+  "validation": {
+    "command": "npm run electron:test",
+    "result": "404passed;1skipped;405total",
+    "compilation": "canonical runner compiled all Electron TypeScript"
+  },
+  "invariants": [
+    "poller failure leaves no updater subscriptions or initialized marker",
+    "successful retry owns exactly one poller/subscription set",
+    "shutdown-registration failure releases acquired runtime",
+    "retry is possible and later shutdown retires owned timer"
+  ],
+  "limits": [
+    "not native installer/physical upgrade acceptance",
+    "remote c2baaec1 CI still running; local changes not pushed yet"
+  ]
+}

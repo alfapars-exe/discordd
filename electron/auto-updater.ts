@@ -52,44 +52,51 @@ export function wasPrelaunchChecked(): boolean {
 export function setupAutoUpdater(): void {
   if (!app.isPackaged || prelaunchChecked) return;
   prelaunchChecked = true;
-  autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = true;
+  let dispose: (() => void) | undefined;
+  try {
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
 
-  const dispose = startRuntimeUpdater({
-    updater: autoUpdater,
-    available: info => {
-      getMainWindow()?.webContents.send("update-available", info);
-    },
-    progress: progress => {
-      getMainWindow()?.webContents.send("update-progress", progress);
-    },
-    downloaded: info => {
-      getMainWindow()?.webContents.send("update-downloaded", info);
-      setTrayUpdateReady(info.version);
-      // Let the close button quit for installation instead of hiding to tray.
-      setUpdateDownloaded();
-      try {
-        const notification = new Notification({
-          title: "HiChat! — Güncelleme Hazır",
-          body: `v${info.version} indirildi. Yeniden başlatmak için tıklayın.`,
-          icon: path.join(__dirname, "../icons/hlogo.png"),
-        });
-        notification.on("click", () => {
-          requestUpdateInstallation(() => autoUpdater.quitAndInstall(true, true), autoUpdater);
-        });
-        notification.show();
-      } catch (err) {
-        // Renderer and tray still surface the ready update if the OS denies a toast.
-        console.warn("[auto-updater] notification failed:", err);
-      }
-    },
-    failed: err => {
-      getMainWindow()?.webContents.send("update-error", err.message);
-    },
-    startPolling: check => {
-      const interval = setInterval(check, RUNTIME_CHECK_MS);
-      return () => clearInterval(interval);
-    },
-  });
-  app.once("will-quit", dispose);
+    dispose = startRuntimeUpdater({
+      updater: autoUpdater,
+      available: info => {
+        getMainWindow()?.webContents.send("update-available", info);
+      },
+      progress: progress => {
+        getMainWindow()?.webContents.send("update-progress", progress);
+      },
+      downloaded: info => {
+        getMainWindow()?.webContents.send("update-downloaded", info);
+        setTrayUpdateReady(info.version);
+        // Let the close button quit for installation instead of hiding to tray.
+        setUpdateDownloaded();
+        try {
+          const notification = new Notification({
+            title: "HiChat! — Güncelleme Hazır",
+            body: `v${info.version} indirildi. Yeniden başlatmak için tıklayın.`,
+            icon: path.join(__dirname, "../icons/hlogo.png"),
+          });
+          notification.on("click", () => {
+            requestUpdateInstallation(() => autoUpdater.quitAndInstall(true, true), autoUpdater);
+          });
+          notification.show();
+        } catch (err) {
+          // Renderer and tray still surface the ready update if the OS denies a toast.
+          console.warn("[auto-updater] notification failed:", err);
+        }
+      },
+      failed: err => {
+        getMainWindow()?.webContents.send("update-error", err.message);
+      },
+      startPolling: check => {
+        const interval = setInterval(check, RUNTIME_CHECK_MS);
+        return () => clearInterval(interval);
+      },
+    });
+    app.once("will-quit", dispose);
+  } catch (error) {
+    prelaunchChecked = false;
+    try { dispose?.(); } catch { /* Preserve the original setup failure. */ }
+    throw error;
+  }
 }
