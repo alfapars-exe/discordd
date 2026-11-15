@@ -40,6 +40,27 @@ it.each(["channel", "dm"] as const)("preserves every %s page across a large stag
   }
 });
 
+it("preserves a large mixed DM history across staging boundaries", async () => {
+  const rows=Array.from({length:1201},(_,i)=>row(String(i).padStart(4,"0"),i,i%5===0?undefined:String(9007199254740992n+BigInt(1201-i))));
+  await cacheDecryptedMessages(rows);const snapshot=await create();
+  const expected=sortDMBySource(rows.map(item=>({id:item.messageId,created_at:new Date(item.timestamp).toISOString(),source_sequence:item.sourceSequence}))).reverse().map(item=>item.id);
+  for(const offset of [0,1000,1024,1200])expect(await snapshot.page(offset,25)).toEqual({ids:expected.slice(offset,offset+25),offset,total:1201});
+// The isolated 1,201-row fake IndexedDB rank fixture takes about 6.4s.
+},20_000);
+
+it("cleans a synchronous quota failure during a large staged write and can retry", async () => {
+  await cacheDecryptedMessages(Array.from({length:1201},(_,i)=>row(String(i).padStart(4,"0"),i)));
+  const original=IDBObjectStore.prototype.put;let writes=0;
+  const spy=vi.spyOn(IDBObjectStore.prototype,"put").mockImplementation(function(this:IDBObjectStore,...args:Parameters<IDBObjectStore["put"]>){
+    if(this.name==="refs"&&++writes===300)throw new DOMException("synthetic quota failure","QuotaExceededError");
+    return original.apply(this,args);
+  });
+  try{await expect(createCachedSearchSnapshot("dm","dm","ÉTÉ")).rejects.toMatchObject({name:"QuotaExceededError"});}
+  finally{spy.mockRestore();}
+  await assertNoLeakedIndex();
+  const recovered=await create();expect((await recovered.page(1200,25)).ids).toEqual(["0000"]);
+});
+
 it("preserves mixed legacy slots and exact BIGINT/timestamp ties", async () => {
   const rows = [row("a",1,"9007199254740993"),row("b",2),row("c",3,"9007199254740992"),row("d",3,"9007199254740994"),row("e",3)];
   await cacheDecryptedMessages(rows);
