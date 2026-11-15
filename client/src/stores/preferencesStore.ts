@@ -168,11 +168,13 @@ async function flush(): Promise<void> {
     const sent = inFlight;
     usePreferencesStore.setState({ syncStatus: "saving", syncError: null, hasPendingChanges: true });
     persistPending();
+    let accepted = false;
     try {
       const res = await preferencesApi.updatePreferences(sent, requestContext(version));
       if (!current(version)) return;
       if (res.code === "PREFERENCES_ACCOUNT_MISMATCH" || (res.data?.user_id && res.data.user_id !== usePreferencesStore.getState().accountId)) throw new Error("preferences_account_mismatch");
       if (!res.success) throw new Error("preferences_save_failed");
+      accepted = true;
       inFlight = {};
       const returned = sanitize(res.data?.data);
       acknowledged = merge(merge(acknowledged, sent), returned);
@@ -185,6 +187,13 @@ async function flush(): Promise<void> {
     } catch (error) {
       if (!current(version)) return;
       clearTimer();
+      if (accepted) {
+        // The server already committed this patch. A local presenter failure
+        // must not turn it back into an outbound edit or overwrite newer data
+        // on retry. Keep only edits queued after the acknowledged request.
+        usePreferencesStore.setState({ syncStatus: "error", syncError: "preferences_apply_failed", hasPendingChanges: nonempty(pending) });
+        return;
+      }
       pending = merge(sent, pending);
       inFlight = {};
       usePreferencesStore.setState({ syncStatus: "error", syncError: error instanceof Error && error.message === "preferences_account_mismatch" ? "preferences_account_mismatch" : "preferences_save_failed", hasPendingChanges: true });
@@ -265,6 +274,15 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   retrySync: async () => {
     const version = epoch;
     clearTimer();
+    if (get().syncError === "preferences_apply_failed") {
+      try { await applyData(version); }
+      catch {
+        if (current(version)) set({ syncStatus: "error", syncError: "preferences_apply_failed" });
+        return;
+      }
+      if (!current(version)) return;
+      set({ syncStatus: nonempty(pending) ? "pending" : "saved", syncError: null });
+    }
     if (!get().isLoaded || get().syncError === "preferences_load_failed") await get().fetchAndApply();
     if (current(version)) await flush();
   },

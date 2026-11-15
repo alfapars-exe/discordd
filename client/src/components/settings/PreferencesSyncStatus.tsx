@@ -13,11 +13,12 @@ export default function PreferencesSyncStatus() {
   const importLegacy = usePreferencesStore((s) => s.importLegacyPreferences);
   const [importError, setImportError] = useState(false);
   const accountChanged = status === "error" && syncError === "preferences_account_mismatch";
+  const statusKey = accountChanged ? "accountChanged" : status === "error" && syncError === "preferences_apply_failed" ? "applyError" : status;
   if (status === "idle" && !legacyAvailable) return null;
   return (
     <>
       {status !== "idle" && <div className={`preferences-sync preferences-sync--${status}`} role="status" aria-live="polite">
-        <span>{t(`preferencesSync.${accountChanged ? "accountChanged" : status}`)}</span>
+        <span>{t(`preferencesSync.${statusKey}`)}</span>
         {status === "error" && <button type="button" onClick={() => void retry()}>
           {t("preferencesSync.retry")}
         </button>}

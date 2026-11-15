@@ -265,6 +265,7 @@
     "securityDescription": "E-posta ve parola ayarlarını yönet."
   },
   "preferencesSync": {
+    "applyError": "Bazı ayarlar bu cihazda uygulanamadı. Yeniden deneyin.",
     "loading": "Hesap ayarları yükleniyor…",
     "pending": "Ayar değişiklikleri kaydedilmeyi bekliyor…",
     "saving": "Hesap ayarları kaydediliyor…",
