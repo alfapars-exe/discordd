@@ -5,6 +5,9 @@ test("notification fixture reset recovers after its previous server was already 
   await loginAsNotificationOwner(page);
   const before = readChannelNotificationFixture();
   await api(page, "/servers/" + before.serverId, "DELETE");
+  const remaining = await api<{ id: string }[] | null>(page, "/servers");
+  expect(remaining === null || Array.isArray(remaining)).toBe(true);
+  expect((remaining ?? []).some(server => server.id === before.serverId)).toBe(false);
   await resetChannelNotificationFixture(page);
   const after = readChannelNotificationFixture();
   expect(after.serverId).not.toBe(before.serverId);

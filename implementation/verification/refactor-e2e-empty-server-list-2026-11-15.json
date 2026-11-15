@@ -1,0 +1,24 @@
+{
+  "date": "2026-11-15",
+  "base": "aeab8b52",
+  "sources": {
+    "e2e/tests/helpers.ts": "2ad0c639a98db7115ad244586b046b7b02b5022ba3727eae0fd93f63ed780ac6",
+    "e2e/tests/role-visibility.spec.ts": "93df7318c948958c99427aec4f4782ede8e84f70b40eaa61dc2d71fcf04185cf",
+    "e2e/scripts/test-playwright-profiles.mjs": "ec573180f246a3d57b0d7c746b1998b5d710050ac64fdd153c01f3851ebb937a",
+    ".github/workflows/server-ci.yml": "b02dbf37f4d33bc3f7f4a6e3d1bdf503a6088baa5ac3e64c48bd9224dbb01538"
+  },
+  "before": "focused fresh-account production run2passed/3failed;deleted last server yields authenticated successful data:null list that old cleanup rejected as403",
+  "fix": "Treat successful authenticated null list as empty while preserving identity/ownership guards and rejecting missing/malformed/failed lists;assert deleted ID absent for either valid empty-list representation",
+  "validation": {
+    "productionBrowser": "same focused real-Go/verify-full mTLS PostgreSQL production profile5/5passed1.2m after fix",
+    "isolation": "npm run test:isolation passes;profile discovery requires exactly5setup/notification/role scenarios and correct files",
+    "workflow": "YAML parsed;new mandatory scoped production command/environment match validated run"
+  },
+  "ciChange": "run focused notification/role profile in its own fresh run database after full Chromium suite;prevents prior unrelated servers from masking null-list edge",
+  "limits": [
+    "existing API null representation preserved;no production HTTP wire change",
+    "not full Chromium rerun after this helper-only correction",
+    "400/401 refresh diagnostics remain visible;not a clean-log claim",
+    "new HEAD needs independent CI;physical acceptance remains open"
+  ]
+}

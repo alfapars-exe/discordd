@@ -447,8 +447,9 @@ export async function resetChannelNotificationFixture(page: Page): Promise<void>
       // accept absence after an authenticated,successful server-list response.
       const listResponse = await fetch("/api/servers", { credentials: "omit", headers: authHeaders });
       if (listResponse.ok) {
-        const list = await listResponse.json() as { success?: boolean; data?: { id?: string }[] };
-        if (list.success === true && Array.isArray(list.data) && !list.data.some(item => item?.id === serverId)) return 404;
+        const list = await listResponse.json() as { success?: boolean; data?: { id?: string }[] | null };
+        // The unchanged list API serializes an empty repository slice as null.
+        if (list.success === true && (list.data === null || (Array.isArray(list.data) && !list.data.some(item => item?.id === serverId)))) return 404;
       }
     }
     if (!serverResponse.ok) return serverResponse.status;

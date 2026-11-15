@@ -503,6 +503,13 @@ jobs:
           HICHAT_E2E_PRODUCTION_CLIENT: "1"
           CGO_ENABLED: "0"
 
+      - name: Verify empty-account role and notification fixtures in a fresh database
+        run: node node_modules/@playwright/test/cli.js test --project=chromium tests/channel-notifications.spec.ts tests/role-visibility.spec.ts
+        working-directory: e2e
+        env:
+          HICHAT_E2E_PRODUCTION_CLIENT: "1"
+          CGO_ENABLED: "0"
+
       - name: Recover encrypted history in a fresh production database
         run: node node_modules/@playwright/test/cli.js test --project=chromium tests/crypto-recovery.spec.ts
         working-directory: e2e
