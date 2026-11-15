@@ -24,7 +24,10 @@
       "statements": 92,
       "command": "vitest run src/crypto/cachedSearchPage.test.ts --coverage --coverage.include=src/crypto/cachedSearchPage.ts",
       "limit": "Nine real IndexedDB-backed page tests; whole search pipeline/native budgets remain open."
-    }
+    },
+    "finalTargetedWithRevalidationOwnerCase": 33,
+    "extraOwnerCase": "Owner changes in a microtask after loaded-row revalidation: null result, no index removal, same total",
+    "fullSuiteScope": "Full 5518-pass run preceded this final additional test; final targeted run has 33 passes."
   },
   "evidence": {
     "hichat-search-page-before.log": {

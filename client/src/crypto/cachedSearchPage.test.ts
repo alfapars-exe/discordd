@@ -75,3 +75,16 @@ it("propagates a hydration failure without mutating the index", async () => {
  await expect(readCachedSearchPage(index, 0, 25, matches, () => true)).rejects.toBe(failure);
  expect(remove).not.toHaveBeenCalled(); expect((await index.page(0, 25)).total).toBe(2);
 });
+
+it("abandons a page when ownership changes after loaded-row revalidation", async () => {
+ const index = await snapshot(1);
+ let current = true, reads = 0;
+ const remove = vi.spyOn(index, "remove");
+ const page = await readCachedSearchPage(index, 0, 25, record => {
+  if (++reads === 2) queueMicrotask(() => { current = false; });
+  return matches(record);
+ }, () => current);
+ expect(page).toBeNull();
+ expect(remove).not.toHaveBeenCalled();
+ expect((await index.page(0, 25)).total).toBe(1);
+});
