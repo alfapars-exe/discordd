@@ -8,7 +8,7 @@
     "function": "cacheable",
     "complexity": 17,
     "threshold": 15,
-    "after": "Not yet analyzed; no resolution or after score claimed"
+    "after": "PR305 issues API CLOSED/FIXED after fe263e69 delivery. Source API matches all161 local code lines; one additional empty EOF line. No exact after complexity score claimed."
   },
   "behavior": "Move namespace field selection and peer-map sanitization into cachedNamespace. Preserve namespace iteration order, accessibility codec, empty namespace omission and final sanitize. Public exports and accepted cache fields unchanged.",
   "validation": {
@@ -21,5 +21,5 @@
     "lint": "PASS eslint src/stores/preferencesCodec.ts",
     "immutableScan": "PASS immutable ca5ff3e0 exit0:51 exact reviewed-source records,0blockingpatterns; TEMP/hichat-cache-namespace-scan.log. Pattern scan does not prove absence of vulnerabilities."
   },
-  "remaining": ["New-source CI and Sonar", "Whole-project runtime, platform and physical acceptance"]
+  "remaining": ["Full fe263e69 CI still in progress; Sonar closure independently verified", "Whole-project runtime, platform and physical acceptance"]
 }

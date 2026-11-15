@@ -1,0 +1,40 @@
+{
+  "baselineRevision": "fe263e69",
+  "characterizationCommit": "68e8c050",
+  "sourceRevision": "53aa0766485157adebeb0b5328011d7cd49b87e5",
+  "scope": "RF13/RF26 account preference destination reset and value presentation phases",
+  "sonarBefore": {
+    "key": "AaHe-pxIMioAmihIyi9u",
+    "rule": "typescript:S3776",
+    "function": "applyAccountPreferences",
+    "complexity": 29,
+    "threshold": 15,
+    "after": "Not yet analyzed; no resolution or after score claimed"
+  },
+  "changes": {
+    "phases": "Separate resetPreferenceDestinations and applyPreferenceValues; isolate sidebar payload normalization.",
+    "ownership": "Preserve per-destination scope reads, same-account latest-value reads, settings internal reset fence and immediate return when reset scope retires.",
+    "ordering": "Capture all five store snapshots in the original order before any destination action. Reset and value application remain synchronous; no async boundary or added scope read.",
+    "failure": "Preserve exceptions from destination actions and scope reader; do not continue to later destinations.",
+    "session": "Preserve settings boolean/fence arguments and voice reset zero-argument versus true-argument contract. Public presenter signature unchanged."
+  },
+  "validation": {
+    "characterization": "14 additional cases pass on original source; these characterize preserved behavior, not a pre-existing bug fix. Destination actions mocked in direct presenter fixture; separate real-store ownership tests retained.",
+    "before": "233 tests across6files PASS4.93s; TEMP/hichat-account-presentation-phases-before.log",
+    "after": "Same233 tests across6files PASS4.67s; TEMP/hichat-account-presentation-phases-after.log",
+    "build": "PASS actual tsc -b and Vite3.76s; TEMP/hichat-account-presentation-phases-build.log",
+    "lint": "PASS0errors2existingTanStackwarnings; TEMP/hichat-account-presentation-phases-lint.log",
+    "fullClient": "503files5449passed1skipped124.95s; TEMP/hichat-account-presentation-phases-coverage.log",
+    "coverageTotal": { "lines": 69.09, "branches": 64.97, "statements": 68.01, "functions": 62.26 },
+    "coverageChangedModule": { "lines": 100, "branches": 95.65, "statements": 100, "functions": 100 },
+    "immutableScan": "PASS immutable53aa0766 exit0:51 exact reviewed-source records,480reviewlines,0blockingpatterns; TEMP/hichat-account-presentation-scan.log. Pattern scan does not prove absence of vulnerabilities."
+  },
+  "acceptanceMapping": {
+    "bootstrap": "client/src/main.tsx imports bootstrapPreferences; bootstrapPreferences explicitly binds the lazy presenter. Current vite.config.ts has no preferences warning suppression.",
+    "accountAndPending": "preferencesStore.test.ts covers late hydration, old writes, backend/user-scoped recoverable edits, failed initial fetch followed by retry, and GET identity mismatch preserving pending edits. API mocked; not browser/server acceptance.",
+    "sameAccountSession": "voiceStore.test.ts: preserves voice session through the production bootstrap preference loader. Actual bootstrap/presenter/voice store, synthetic session and transport callbacks; not physical audio acceptance.",
+    "nestedDestinationOwnership": "settingsStore.test.ts exercises real presenter fence inside a nested theme reset; preferenceDestinationScope.test.ts exercises real accessibility/time-format state, DOM and storage during owner/backend replacement.",
+    "notComplete": "This mapping covers the changed presenter path. Full field-contract inventory, account/offline/native flows and whole-project acceptance remain open."
+  },
+  "remaining": ["New-source CI and Sonar", "Final RF13 account/offline/session mapping and full runtime/platform acceptance", "Whole-project RF01-RF30 acceptance"]
+}
