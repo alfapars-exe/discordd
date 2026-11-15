@@ -138,6 +138,19 @@ function canImportLegacy(data: PreferencesData, loaded: boolean): boolean {
   return nonempty(legacyImportPatch(data));
 }
 function current(version: number): boolean { return getPreferenceScopeGeneration() === version && cacheKey !== null; }
+function canImportLegacyForCurrentScope(version: number): boolean {
+  if (!current(version)) return false;
+  const state = usePreferencesStore.getState();
+  return state.isLoaded && state.syncError !== "preferences_account_mismatch" && canImportLegacy(state.data, true);
+}
+
+function retainLegacyPresentationRetry(version: number, queued: boolean, error: unknown): void {
+  if (!current(version) || !queued) return;
+  clearTimer();
+  presentationRetry = { ...(error instanceof PreferencePresentationError ? error.plan : { reset: false, preserveSessionState: false }), preparation: false };
+  usePreferencesStore.setState({ syncStatus: "error", syncError: "preferences_apply_failed", hasPendingChanges: nonempty(inFlight) || nonempty(pending) });
+}
+
 function clearTimer(): void { if (timer) clearTimeout(timer); timer = null; }
 function requestContext(version: number) {
   return {
@@ -366,7 +379,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
       await preparation;
       if (!current(version)) return false;
       if (fetchPromise) await fetchPromise;
-      if (!current(version) || !get().isLoaded || get().syncError === "preferences_account_mismatch" || !canImportLegacy(get().data, true)) return false;
+      if (!canImportLegacyForCurrentScope(version)) return false;
       const patch = legacyImportPatch(get().data);
       // Record assignment only after the recovery queue is durable, but before
       // observers can replace the account/marker key during publication.
@@ -379,11 +392,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
       await applyData(version);
       return current(version);
     } catch (error) {
-      if (current(version) && queued) {
-        clearTimer();
-        presentationRetry = { ...(error instanceof PreferencePresentationError ? error.plan : { reset: false, preserveSessionState: false }), preparation: false };
-        set({ syncStatus: "error", syncError: "preferences_apply_failed", hasPendingChanges: nonempty(inFlight) || nonempty(pending) });
-      }
+      retainLegacyPresentationRetry(version, queued, error);
       return false;
     }
   },
