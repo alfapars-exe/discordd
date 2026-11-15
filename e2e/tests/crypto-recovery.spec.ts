@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Request, type BrowserContext } from "@playwright/test";
+import { expect, test, type Page, type Request, type Route, type BrowserContext } from "@playwright/test";
 import { randomBytes, webcrypto } from "node:crypto";
 import {
   composer, dismissOnboardingOverlays, fixtureApi, loginAsNotificationOwner,
@@ -101,6 +101,7 @@ for (const cacheFormat of ["source-tagged", "legacy-unversioned"] as const) {
     const originalContext = await browser.newContext();
     const restoredContext = await browser.newContext();
     let peerContext: BrowserContext | undefined;
+    let releaseBackupLookup: (() => Promise<void>) | undefined;
     let dmSearch: { peerName: string; query: string; messages: string[] } | undefined;
     try {
       const original = await originalContext.newPage();
@@ -127,6 +128,16 @@ for (const cacheFormat of ["source-tagged", "legacy-unversioned"] as const) {
       await fixtureApi(original, "/e2ee/key-backup", "DELETE");
       await resetChannelNotificationFixture(original);
       const fixture = readChannelNotificationFixture();
+      // The second cache format can inherit encrypted DMs from the first.
+      // After explicitly deleting this fixture's backup, decline its valid
+      // setup offer through the UI before testing the settings entry point.
+      const existingDMs = await fixtureApi<{ e2ee_enabled: boolean }[] | null>(original, "/dms");
+      if (existingDMs?.some(channel => channel.e2ee_enabled)) {
+        const title = original.getByText("Protect Your Encrypted Messages", { exact: true });
+        await expect(title).toBeVisible();
+        await original.locator(".modal-backdrop").filter({ has: title }).click({ position: { x: 5, y: 5 } });
+        await expect(title).toBeHidden();
+      }
       // Establish the backup before enabling encryption so a first-use prompt
       // cannot intercept channel navigation. Refresh it after sending history.
       const password = `Q!${randomBytes(24).toString("hex")}`;
@@ -173,8 +184,28 @@ for (const cacheFormat of ["source-tagged", "legacy-unversioned"] as const) {
         const peerUser = await fixtureApi<{ id: string; username: string; display_name?: string }>(peer, "/users/me");
         const dm = await fixtureApi<{ id: string; e2ee_enabled: boolean }>(original, "/dms", "POST", { user_id: peerUser.id });
         if (!dm.e2ee_enabled) await fixtureApi(original, `/dms/channels/${dm.id}/e2ee`, "PATCH", { enabled: true });
+        // Keep backup existence unknown through real encrypted DM activity.
+        // Neither WS-ready nor the deferred prompt may interpret it as absence.
+        let release!: () => void, heldLookups = 0;
+        const heldLookup = new Promise<void>(resolve => { release = resolve; });
+        const activeLookups = new Set<Promise<void>>();
+        const holdLookup = (route: Route) => {
+          const task = (async () => {
+            if (route.request().method() === "GET") { heldLookups++; await heldLookup; }
+            await route.continue();
+          })();
+          activeLookups.add(task);
+          void task.then(() => activeLookups.delete(task), () => activeLookups.delete(task));
+          return task;
+        };
+        await original.route("**/api/e2ee/key-backup", holdLookup);
+        releaseBackupLookup = async () => {
+          release(); await Promise.all([...activeLookups]);
+          await original.unroute("**/api/e2ee/key-backup", holdLookup);
+        };
         await original.reload();
         await dismissOnboardingOverlays(original);
+        await expect.poll(() => heldLookups).toBeGreaterThan(0);
         const peerName = peerUser.display_name || peerUser.username;
         await openDM(original, peerName);
         const query = `encrypted-dm-\u00c9t\u00e9-${randomBytes(12).toString("hex")}`;
@@ -211,6 +242,13 @@ for (const cacheFormat of ["source-tagged", "legacy-unversioned"] as const) {
         ].sort());
         await expectEncryptedSearchPages(original, query, messages.toReversed());
         dmSearch = { peerName, query, messages };
+        await expect(original.getByText("Protect Your Encrypted Messages", { exact: true })).toBeHidden();
+        const [backupStatus] = await Promise.all([
+          original.waitForResponse(response => new URL(response.url()).pathname === "/api/e2ee/key-backup" && response.request().method() === "GET"),
+          releaseBackupLookup(),
+        ]);
+        expect(backupStatus.ok()).toBe(true);
+        releaseBackupLookup = undefined;
 
         // Exercise actual group-store encryption after the DM established peer
         // and sibling-owner ratchets. Group sends must not spend more prekeys.
@@ -314,6 +352,7 @@ for (const cacheFormat of ["source-tagged", "legacy-unversioned"] as const) {
         await expectEncryptedSearchPages(restored, dmSearch.query, dmSearch.messages.toReversed());
       }
     } finally {
+      await releaseBackupLookup?.();
       await Promise.all([originalContext.close(), restoredContext.close(), peerContext?.close()]);
     }
   });

@@ -79,6 +79,9 @@ function resetStore() {
     localDeviceId: null,
     devices: [],
     hasRecoveryBackup: false,
+    recoveryBackupChecked: false,
+    showRecoveryPrompt: false,
+    recoveryPromptDismissed: false,
     decryptionErrors: [],
     isGeneratingKeys: false,
     initError: null,
@@ -97,7 +100,7 @@ describe("e2eeStore", () => {
   });
 
   describe("new-device backup recovery offer", () => {
-    it.each(["backup", "absent", "error"] as const)("does not interpret pending backup lookup as absence: %s", async mode => {
+    it.each(["backup", "absent", "error", "uploaded", "owner", "generation"] as const)("does not interpret pending backup lookup as absence: %s", async mode => {
       historyMocks.encryptedDM = true;
       vi.mocked(keyStorage.hasLocalKeys).mockResolvedValue(true);
       vi.mocked(keyStorage.getRegistrationData).mockResolvedValue({ registrationId: 1, deviceId: "verified-device", userId: "userA", createdAt: 0 });
@@ -110,13 +113,18 @@ describe("e2eeStore", () => {
       expect(useE2EEStore.getState().initStatus).toBe("ready");
       useE2EEStore.getState().checkAndPromptRecovery();
       const shownWhilePending = useE2EEStore.getState().showRecoveryPrompt;
-      finish(mode === "error" ? { success: false, error: "timeout" } : { success: true, data: mode === "backup" ? {
+      if (mode === "uploaded") { stageSuccessfulBackup(); await useE2EEStore.getState().setRecoveryPassword(STRONG_PASSPHRASE); }
+      if (mode === "owner") publishAuthOwnerChange("recovery-status-replacement");
+      if (mode === "generation") publishAuthGenerationChange(getAuthSessionSnapshot().generation + 1);
+      finish(mode === "error" ? { success: false, error: "timeout" } : { success: true, data: mode === "backup" || mode === "owner" || mode === "generation" ? {
         id: "backup", user_id: "userA", version: 1, created_at: "", updated_at: "", encrypted_data: "cipher", nonce: "nonce", salt: "salt", algorithm: "test",
       } : null });
       await Promise.resolve(); await Promise.resolve();
       useE2EEStore.getState().checkAndPromptRecovery();
       expect(shownWhilePending).toBe(false);
       expect(useE2EEStore.getState().showRecoveryPrompt).toBe(mode === "absent");
+      expect(useE2EEStore.getState().hasRecoveryBackup).toBe(mode === "backup" || mode === "uploaded");
+      expect(useE2EEStore.getState().recoveryBackupChecked).toBe(!["error", "owner", "generation"].includes(mode));
     });
     it("does not offer restoration when fresh-device registration fails", async () => {
       vi.mocked(keyStorage.hasLocalKeys).mockResolvedValueOnce(false);
