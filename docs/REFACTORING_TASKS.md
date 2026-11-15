@@ -2910,3 +2910,8 @@ Three fail-first cases exposed initial hidden-tab polling, overlapping checks du
 ### RF19/RF03 — actual API lifetime integration and frozen combined client coverage (2026-11-15)
 
 Added React web-update hook tests using the actual apiClient/request-lifetime implementation, with only fetch transport stubbed. Stalled headers and stalled JSON body both expire at the total deadline; the next request establishes a baseline and a later redeploy is detected. Five targeted suites92passed; frozen combined client coverage484files/5,023passed/1skipped,stmt67.06%,branch64.40%,function61.34%,line68.07%,113.66s. Actual tsc -b and new-test lint pass. Receipt:implementation/verification/refactor-web-update-http-lifetime-2026-11-15.json. These are transport-boundary integration tests, not live-browser/network soak. Remote8efdfddc has33successful checks and one running repository shard; local commits remain held for terminal validation. Full RF19/whole-project acceptance remains open.
+
+
+### RF03/RF30 — terminal8efdfddc CI before updater hook delivery (2026-11-15)
+
+Remote8efdfddcf642d337f6d6d9970c79e35ae3c7c0bc completed36/36 checks SUCCESS, including repository/service race shards,PostgreSQL active-process mTLS shutdown,combined coverage,Playwright,actual client type/lint/test/build,native/artifacts and Sonar/security gates. Immutable snapshot:implementation/verification/refactor-8efdf-terminal-ci-2026-11-15.json. Deferred dd473128/5f9685d7/97990e8f are delivered only after terminal completion. Their local combined client coverage is5,023passed/1skipped,line68.07%;new remote HEAD requires independent CI. RF19 full/native and whole-project acceptance remain open;PR305 stays draft.
