@@ -22,6 +22,42 @@ it("spools distinct deletions and drains only bounded, deduplicated batches", as
   expect(notify).not.toHaveBeenCalled();
 });
 
+it("does not reread an empty frontier on ordinary search pagination", async () => {
+  const frontier = (await pool()).create(vi.fn());
+  const reads = vi.spyOn(IDBObjectStore.prototype, "getAllKeys");
+  const consume = vi.fn(async () => {});
+  await frontier.drain(consume);
+  await frontier.drain(consume);
+  expect(reads).not.toHaveBeenCalled();
+  frontier.append("one");
+  await frontier.drain(consume);
+  expect(consume).toHaveBeenCalledExactlyOnceWith(["one"]);
+  reads.mockClear();
+  await frontier.drain(consume);
+  expect(reads).not.toHaveBeenCalled();
+  frontier.append("two");
+  await frontier.drain(consume);
+  expect(consume).toHaveBeenLastCalledWith(["two"]);
+});
+
+it("does not acknowledge an ID appended while an empty read completes", async () => {
+  const frontier = (await pool()).create(vi.fn());
+  frontier.append("initial");
+  const original = IDBObjectStore.prototype.getAllKeys;
+  let injected = false;
+  vi.spyOn(IDBObjectStore.prototype, "getAllKeys").mockImplementation(function (this: IDBObjectStore, ...args) {
+    const request = original.apply(this, args);
+    if (this.name === "refs") request.addEventListener("success", () => {
+      if (!injected && request.result.length === 0) { injected = true; frontier.append("late"); }
+    });
+    return request;
+  });
+  const seen: string[] = [];
+  await frontier.drain(async ids => { seen.push(...ids); });
+  expect(injected).toBe(true);
+  expect(seen).toEqual(["initial", "late"]);
+});
+
 it("retains an unacknowledged batch when the consumer fails and includes late earlier keys", async () => {
   const frontier = (await pool()).create(vi.fn());
   for (let i = 0; i < 130; i++) frontier.append(`initial-${i}`);
