@@ -22,8 +22,8 @@
       "lines": 100
     },
     "lint": "PASS zero errors / two existing warnings",
-    "fullClient": "RUNNING session39199",
-    "build": "RUNNING session91610"
+    "fullClient": "5529 passed / 1 skipped / 0 failed; 505 files",
+    "build": "PASS TypeScript + Vite (1.71s)"
   },
   "evidence": {
     "before": {
@@ -37,10 +37,13 @@
     "coverage": {
       "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-reset-coverage.log",
       "sha256": "66053a8289e5c62f0b2cade504caf8b252bf6f4dddca76a4f8f1ac753f2584f9"
+    },
+    "fullClient": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-reset-full.log",
+      "sha256": "f610ffd4b51c2b917b99cf44bb83f6538508ac78531b3a002bea43dca838fd6f"
     }
   },
   "pending": [
-    "Full client and build terminal results",
     "Source-bound scan/Sonar/CI",
     "RF17 whole-pipeline/first-query/native acceptance",
     "Separate production pending-panel CI timeout root cause remains open"
