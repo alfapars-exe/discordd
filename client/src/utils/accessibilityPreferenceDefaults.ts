@@ -6,6 +6,7 @@ export type RoleColorMode = "names" | "dots" | "hidden";
 export type OfficialMessageStyle = "default" | "subtle" | "prominent";
 
 export const NOTIFICATION_DURATION_OPTIONS = [3, 5, 10, 15, 20] as const;
+export type NotificationDuration = (typeof NOTIFICATION_DURATION_OPTIONS)[number];
 
 export type AccessibilityState = {
   // ─── Text Readability ────────────────────────────────────────────────
@@ -54,7 +55,7 @@ export type AccessibilityState = {
   /** Browser speech synthesis rate (0.5-2.0). */
   ttsRate: number;
   /** Minimum lifetime for eligible app-created OS notifications. */
-  notificationDuration: (typeof NOTIFICATION_DURATION_OPTIONS)[number];
+  notificationDuration: NotificationDuration;
   showImageDescriptions: boolean;
   legacyComposer: boolean;
 };

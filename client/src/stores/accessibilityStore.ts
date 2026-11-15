@@ -1,4 +1,4 @@
-import { ACCESSIBILITY_NUMBER_RANGES, NOTIFICATION_DURATION_OPTIONS } from "../utils/accessibilityPreferenceDefaults";
+import { ACCESSIBILITY_NUMBER_RANGES, NOTIFICATION_DURATION_OPTIONS, type NotificationDuration } from "../utils/accessibilityPreferenceDefaults";
 /**
  * accessibilityStore — user-facing accessibility preferences.
  *
@@ -123,7 +123,7 @@ type AccessibilityStore = AccessibilityState & {
   setNotificationSoundVolume: (pct: number) => void;
   setTtsEnabled: (enabled: boolean) => void;
   setTtsRate: (rate: number) => void;
-  setNotificationDuration: (seconds: 3 | 5 | 10 | 15 | 20) => void;
+  setNotificationDuration: (seconds: NotificationDuration) => void;
   setShowImageDescriptions: (enabled: boolean) => void;
   setLegacyComposer: (enabled: boolean) => void;
   // ─── Bulk hydration from server ─────────────────────────────────────

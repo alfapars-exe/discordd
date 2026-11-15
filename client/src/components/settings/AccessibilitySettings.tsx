@@ -1,4 +1,4 @@
-import { ACCESSIBILITY_NUMBER_RANGES, NOTIFICATION_DURATION_OPTIONS } from "../../utils/accessibilityPreferenceDefaults";
+import { ACCESSIBILITY_NUMBER_RANGES, NOTIFICATION_DURATION_OPTIONS, type NotificationDuration } from "../../utils/accessibilityPreferenceDefaults";
 /**
  * AccessibilitySettings — five-section settings panel covering text
  * readability, visual density, color contrast, reduced motion, and
@@ -364,7 +364,7 @@ function AccessibilitySettings() {
         <div className="vs-slider-row">
           <div className="vs-label">{t("acc.notificationDuration")}</div>
           <div className="vs-desc">{t("acc.notificationDurationDesc")}</div>
-          <select className="vs-select" value={notificationDuration} onChange={(e) => setNotificationDuration(Number(e.target.value) as 3 | 5 | 10 | 15 | 20)}>
+          <select className="vs-select" value={notificationDuration} onChange={(e) => setNotificationDuration(Number(e.target.value) as NotificationDuration)}>
             {NOTIFICATION_DURATION_OPTIONS.map((seconds) => <option key={seconds} value={seconds}>{seconds} sn</option>)}
           </select>
         </div>
