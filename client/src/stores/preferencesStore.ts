@@ -45,7 +45,8 @@ let fetchPromise: Promise<void> | null = null;
 let writePromise: Promise<void> | null = null;
 type PresentationPlan = { reset: boolean; preserveSessionState: boolean };
 class PreferencePresentationError extends Error {
-  constructor(readonly plan: PresentationPlan) { super("preferences_apply_failed"); }
+  readonly plan: PresentationPlan;
+  constructor(plan: PresentationPlan) { super("preferences_apply_failed"); this.plan = plan; }
 }
 let presentationRetry: (PresentationPlan & { preparation: boolean }) | null = null;
 let preparation: Promise<void> = Promise.resolve();
