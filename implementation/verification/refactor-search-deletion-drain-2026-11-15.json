@@ -1,0 +1,210 @@
+{
+  "sourceRevision": "dabef3dadffcbc02e7851a1c24740151ef608a18",
+  "logicRevision": "3f99c605",
+  "testsRevision": "e3df9d52",
+  "regression": {
+    "baselineRevision": "e18ec1b7",
+    "failed": 4,
+    "passed": 31,
+    "log": "hichat-cache-deletion-barrier-red.log",
+    "method": "Prior source scan and completion helper replayed, then candidate bytes restored in finally; new reservation utility present to isolate missing integration."
+  },
+  "targeted": {
+    "files": 8,
+    "passed": 114,
+    "seconds": 4.53,
+    "log": "hichat-cache-deletion-barrier-final-targeted.log"
+  },
+  "fullClient": {
+    "sourceRevision": "3f99c605",
+    "files": 492,
+    "passed": 5263,
+    "skipped": 1,
+    "seconds": 118.66,
+    "coverage": {
+      "lines": {
+        "total": 38280,
+        "covered": 26260,
+        "skipped": 0,
+        "pct": 68.59
+      },
+      "statements": {
+        "total": 52391,
+        "covered": 35395,
+        "skipped": 0,
+        "pct": 67.55
+      },
+      "functions": {
+        "total": 12236,
+        "covered": 7568,
+        "skipped": 0,
+        "pct": 61.85
+      },
+      "branches": {
+        "total": 39828,
+        "covered": 25787,
+        "skipped": 0,
+        "pct": 64.74
+      },
+      "branchesTrue": {
+        "total": 0,
+        "covered": 0,
+        "skipped": 0,
+        "pct": 100
+      }
+    },
+    "log": "hichat-cache-deletion-barrier-full.log",
+    "followUp": "dabef3da moves ESM imports before declarations and removes trailing blank line only. Targeted114,lint and actual build repeated afterward; no claim that earlier line maps represent moved import positions."
+  },
+  "changedModules": {
+    "sourceRevision": "3f99c605",
+    "records": {
+      "C:/Users/PARS/Desktop/PROJELER/HiChat/refactor-integration/client/src/crypto/cachedMessageDeletions.ts": {
+        "lines": {
+          "total": 32,
+          "covered": 32,
+          "skipped": 0,
+          "pct": 100
+        },
+        "functions": {
+          "total": 11,
+          "covered": 11,
+          "skipped": 0,
+          "pct": 100
+        },
+        "statements": {
+          "total": 50,
+          "covered": 49,
+          "skipped": 0,
+          "pct": 98
+        },
+        "branches": {
+          "total": 14,
+          "covered": 13,
+          "skipped": 0,
+          "pct": 92.85
+        }
+      },
+      "C:/Users/PARS/Desktop/PROJELER/HiChat/refactor-integration/client/src/crypto/cachedSearchScan.ts": {
+        "lines": {
+          "total": 16,
+          "covered": 16,
+          "skipped": 0,
+          "pct": 100
+        },
+        "functions": {
+          "total": 2,
+          "covered": 2,
+          "skipped": 0,
+          "pct": 100
+        },
+        "statements": {
+          "total": 20,
+          "covered": 19,
+          "skipped": 0,
+          "pct": 95
+        },
+        "branches": {
+          "total": 8,
+          "covered": 7,
+          "skipped": 0,
+          "pct": 87.5
+        }
+      },
+      "C:/Users/PARS/Desktop/PROJELER/HiChat/refactor-integration/client/src/hooks/ws/completeMessageDeletion.ts": {
+        "lines": {
+          "total": 12,
+          "covered": 12,
+          "skipped": 0,
+          "pct": 100
+        },
+        "functions": {
+          "total": 1,
+          "covered": 1,
+          "skipped": 0,
+          "pct": 100
+        },
+        "statements": {
+          "total": 18,
+          "covered": 16,
+          "skipped": 0,
+          "pct": 88.88
+        },
+        "branches": {
+          "total": 8,
+          "covered": 7,
+          "skipped": 0,
+          "pct": 87.5
+        }
+      }
+    }
+  },
+  "build": {
+    "result": "PASS",
+    "command": "npm run build (tsc -b and Vite)",
+    "seconds": 1.74,
+    "log": "hichat-cache-deletion-barrier-final-build.log"
+  },
+  "lint": {
+    "result": "PASS",
+    "log": "hichat-cache-deletion-barrier-final-lint.log"
+  },
+  "nativeProbe": {
+    "sourceRevision": "dabef3dadffcbc02e7851a1c24740151ef608a18",
+    "result": "PASS",
+    "tool": "ego-browser skill2.2.1, isolated local Vite origin and native Chromium IndexedDB",
+    "log": "hichat-drain-probe-native.log",
+    "script": "hichat-drain-probe-native.mjs",
+    "scriptSha256": "88c9138959a47bca35c743c6bf4b53c7eed927e42b855578fac6ef0392694196",
+    "observed": {
+      "runtime": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+      "results": [
+        {
+          "kind": "channel",
+          "heldBeforeCleanup": true,
+          "ids": [
+            "channel-3",
+            "channel-1"
+          ],
+          "total": 2
+        },
+        {
+          "kind": "dm",
+          "heldBeforeCleanup": true,
+          "ids": [
+            "dm-3",
+            "dm-1"
+          ],
+          "total": 2
+        },
+        {
+          "cancelled": true,
+          "retiredOwnerRejected": true
+        }
+      ]
+    },
+    "cleanup": "Only exact random fixture account DB and sidecar DB deleted; taskspace25 finished without retained tabs. Fixture stop HTTP endpoint returned404; uniquely verified owned Node process136796 stopped and exec47891 terminal. No profile/global storage cleared."
+  },
+  "selfScan": {
+    "sourceRevision": "dabef3dadffcbc02e7851a1c24740151ef608a18",
+    "result": "PASS",
+    "blockingMatches": 0,
+    "reviewedRecords": 50,
+    "reviewLines": 448,
+    "log": "hichat-dabe-selfscan.log",
+    "method": "Immutable git archive, correct Git Bash/native Python path conversion."
+  },
+  "behavior": [
+    "Reserve accepted local channel/DM deletion before synchronous store publication; release in finally even when notification throws.",
+    "New coherent source scans await matching accepted local deletions. Other kind/channel does not block.",
+    "Counters and cancellable waiter sets retain no message IDs; abort removes waiter. Reentrant new busy intervals are rechecked.",
+    "Owner/generation retirement wakes and rejects old query; old completion cannot release new reservation."
+  ],
+  "limits": [
+    "This drains already accepted local WS deletions to settlement, not guaranteed cache-write success. Existing best-effort cleanup errors remain.",
+    "No durable deletion journal, cross-tab mutation barrier, complete source-writer serialization or global WS backpressure introduced.",
+    "Active scan distinct pending-ID Set remains unbounded; no arbitrary cap/discard/restart or active memory improvement claim.",
+    "Native probe tests source modules with tiny fixtures, not full rendered app, physical devices or nine-sample performance acceptance.",
+    "Full project/RF17/native/physical acceptance and independent final-head CI remain open."
+  ]
+}
