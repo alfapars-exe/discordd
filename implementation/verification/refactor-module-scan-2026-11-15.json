@@ -1,0 +1,42 @@
+{
+  "sourceCommit": "5ba8a9b3",
+  "date": "2026-11-15",
+  "scope": "Add .mjs/.cjs to existing JS/TS self-scan and generated editor paths; keep rule severities and existing output/dependency exclusions.",
+  "regression": {
+    "commit": "390a6b93",
+    "log": "TEMP/hichat-module-scan-red.log",
+    "result": "FAIL: unsafe ESM/CJS were not scanned"
+  },
+  "tests": {
+    "python": "13 passed,71.290s",
+    "log": "TEMP/hichat-module-scan-reviewed-tests.log",
+    "nodeFixture": "3 passed",
+    "generatorDrift": "PASS"
+  },
+  "review": {
+    "rule": "js.fixture-cookie-proxy",
+    "path": "migration/scripts/qa-http.mjs",
+    "boundTo": "Exact file/line SHA256; unlisted copy and source mutations block",
+    "reason": "Disposable QA transport forwards session cookies unchanged from fixed loopback Go upstream; redirects rejected; proof host is loopback-only.",
+    "proof": [
+      "migration/scripts/qa-http.test.mjs",
+      "migration/scripts/proof-server.mjs"
+    ],
+    "records": 51
+  },
+  "fullScan": {
+    "initialSource": "adf06e89",
+    "initialLog": "TEMP/hichat-module-scan-full.log",
+    "initialHandle": 62178,
+    "finalSource": "5ba8a9b3",
+    "finalLog": "TEMP/hichat-module-scan-final.log",
+    "finalHandle": 40910,
+    "status": "in progress; require terminal exit and review before push"
+  },
+  "remaining": [
+    "Terminal immutable expanded scan",
+    "Prior 41e0fdae CI terminal archive",
+    "Push and new-head CI",
+    "RF01-RF30 project acceptance"
+  ]
+}
