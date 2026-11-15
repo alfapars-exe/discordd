@@ -411,3 +411,6 @@ export const HKDF_INFO = {
   MESSAGE_KEY: "mqvi-e2ee-mk",
   SENDER_KEY: "mqvi-e2ee-sk",
 } as const;
+
+/** Public ordering metadata streamed from the account-scoped cache. */
+export type CachedSearchReference = Pick<CachedDecryptedMessage, "messageId" | "timestamp" | "sourceSequence">;

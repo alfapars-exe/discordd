@@ -105,3 +105,12 @@ it("rejects a source reset that commits immediately after its read transaction",
   });
   await expect(pending).rejects.toThrow("search_cache_epoch_changed");await reset;
 });
+
+it("aborts the native reader on same-account session replacement", async () => {
+  await cacheDecryptedMessages(Array.from({length:260},(_,i)=>row(i)));
+  let batches=0;
+  await expect(scanCachedSearchReferences("dm","dm","ÉTÉ",async()=>{
+    batches++;publishAuthGenerationChange(++generation);
+  })).rejects.toThrow("e2ee_account_scope_changed");
+  expect(batches).toBe(1);
+});

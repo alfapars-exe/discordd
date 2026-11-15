@@ -1,7 +1,9 @@
 /** Account/backend-scoped IndexedDB lifecycle and transaction guards. */
-import { openDB, type IDBPDatabase } from "idb";
+import { openDB, unwrap, type IDBPDatabase } from "idb";
 import { SERVER_URL } from "../utils/constants";
 import { getAuthSessionSnapshot, subscribeAuthGenerationChanges, subscribeAuthOwnerChanges } from "../api/authSessionEvents";
+
+import type { CachedDecryptedMessage, CachedSearchReference } from "./types";
 
 type GuardedTransaction = { abort: () => void; done: Promise<unknown> };
 
@@ -254,4 +256,107 @@ export async function closeDB(): Promise<void> {
     entry.db?.close();
     void entry.promise.then((db) => db.close(), () => {});
   }
+}
+
+
+export const CACHED_SEARCH_REFERENCE_BATCH_SIZE = 128;
+
+/** Native cursor loop avoids allocating scoped Promise/proxy chains per row.
+ * Raw database/cursor handles never leave this module. The only exposed values
+ * are bounded public reference batches; owner/backend/session changes abort
+ * the read before another batch can reach its consumer.
+ */
+export async function scanScopedCachedMessageReferences(
+  indexName: "byChannel" | "byDMChannel",
+  channelId: string,
+  query: string,
+  consume: (batch: readonly CachedSearchReference[]) => Promise<void>,
+  signal?: AbortSignal,
+): Promise<number> {
+  signal?.throwIfAborted();
+  const captured = captureScope(), dbName = await scopedIdbName(captured);
+  const scope: AuthScope = { ...captured, dbName };
+  await getDB(); assertScope(scope); signal?.throwIfAborted();
+  const entry = dbEntries.get(dbName);
+  if (!entry?.db || entry.scope.ownerId !== scope.ownerId || entry.scope.backendUrl !== scope.backendUrl ||
+      entry.scope.generation !== scope.generation) throw new Error("e2ee_account_scope_changed");
+  const tx = unwrap(entry.db).transaction("messageCache", "readonly");
+  const store = tx.objectStore("messageCache");
+  const lowerQuery = query.toLowerCase();
+  return new Promise<number>((resolve, reject) => {
+    let closed = false, count = 0;
+    let batch: CachedSearchReference[] = [];
+    let stopOwner = () => {}, stopGeneration = () => {};
+    const check = () => { signal?.throwIfAborted(); assertScope(scope); };
+    const cleanup = () => { stopOwner(); stopGeneration(); signal?.removeEventListener("abort", onScopeChange); };
+    const fail = (error: unknown) => {
+      if (closed) return;
+      closed = true; cleanup();
+      try { tx.abort(); } catch { /* Already complete. */ }
+      reject(error);
+    };
+    const onScopeChange = () => { try { check(); } catch (error) { fail(error); } };
+    stopOwner = subscribeAuthOwnerChanges(onScopeChange); stopGeneration = subscribeAuthGenerationChanges(onScopeChange);
+    signal?.addEventListener("abort", onScopeChange, { once: true });
+    tx.onabort = () => {
+      try { check(); } catch (error) { fail(error); return; }
+      fail(tx.error ?? new DOMException("Cache scan aborted", "AbortError"));
+    };
+    tx.onerror = () => fail(tx.error ?? new Error("search_cache_read_failed"));
+    tx.oncomplete = () => {
+      if (closed) return;
+      try { check(); } catch (error) { fail(error); return; }
+      closed = true; cleanup(); resolve(count);
+    };
+    const deliver = (ready: readonly CachedSearchReference[], resume: () => void) => {
+      let settled = false, failed = false, problem: unknown;
+      void Promise.resolve().then(() => { check(); return consume(ready); }).then(
+        () => { settled = true; },
+        error => { failed = true; problem = error; settled = true; },
+      );
+      // Resume only from a native source request's active transaction task,
+      // including when the sidecar commit settled in a different event task.
+      const keepAlive = () => {
+        if (closed) return;
+        try {
+          check();
+          const request = store.getKey("__search_snapshot_keepalive__");
+          request.onerror = () => fail(request.error);
+          request.onsuccess = () => {
+            if (closed) return;
+            try {
+              check();
+              if (!settled) keepAlive();
+              else if (failed) fail(problem);
+              else resume();
+            } catch (error) { fail(error); }
+          };
+        } catch (error) { fail(error); }
+      };
+      keepAlive();
+    };
+    try {
+      check();
+      const request = store.index(indexName).openCursor(channelId);
+      request.onerror = () => fail(request.error);
+      request.onsuccess = () => {
+        if (closed) return;
+        try {
+          check();
+          const cursor = request.result;
+          if (!cursor) {
+            if (batch.length) { const ready = batch; batch = []; deliver(ready, () => {}); }
+            return;
+          }
+          const row = cursor.value as CachedDecryptedMessage;
+          if ((indexName === "byDMChannel" ? row.dmChannelId : row.channelId) === channelId && row.content.toLowerCase().includes(lowerQuery)) {
+            batch.push({ messageId: row.messageId, timestamp: row.timestamp, sourceSequence: row.sourceSequence }); count++;
+          }
+          if (batch.length === CACHED_SEARCH_REFERENCE_BATCH_SIZE) {
+            const ready = batch; batch = []; deliver(ready, () => cursor.continue());
+          } else cursor.continue();
+        } catch (error) { fail(error); }
+      };
+    } catch (error) { fail(error); }
+  });
 }

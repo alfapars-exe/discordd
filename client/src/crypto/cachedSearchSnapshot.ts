@@ -1,4 +1,4 @@
-import { openDB, type IDBPDatabase, type IDBPTransaction } from "idb";
+import { openDB, unwrap, type IDBPDatabase, type IDBPTransaction } from "idb";
 import { getAuthSessionSnapshot, subscribeAuthGenerationChanges, subscribeAuthOwnerChanges } from "../api/authSessionEvents";
 import { SERVER_URL } from "../utils/constants";
 import { dmSourceSequence } from "../utils/dmSourceOrder";
@@ -14,6 +14,24 @@ type Mode = "readonly" | "readwrite";
 type Transaction<M extends Mode = Mode> = IDBPTransaction<unknown, string[], M>;
 // UUID snapshot IDs have a fixed length; no other snapshot can share this prefix.
 const prefixRange = (id: string) => IDBKeyRange.bound([id], [id + "\x00"], false, true);
+
+/** One completion promise per bounded batch; native request errors are all
+ * observed, including synchronous cancellation midway through queueing puts.
+ */
+function putReferenceBatch(store: IDBObjectStore, records: readonly Reference[]): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let remaining = records.length;
+    if (!remaining) { resolve(); return; }
+    const success = () => { if (--remaining === 0) resolve(); };
+    const failure = (event: Event) => reject((event.target as IDBRequest).error ?? new Error("search_index_write_failed"));
+    try {
+      for (const record of records) {
+        const request = store.put(record);
+        request.onsuccess = success; request.onerror = failure;
+      }
+    } catch (error) { reject(error); }
+  });
+}
 
 async function deleteSnapshot(tx: Transaction<"readwrite">, id: string) {
   await Promise.all([tx.objectStore("refs").delete(prefixRange(id)), tx.objectStore("snapshots").delete(id)]);
@@ -151,14 +169,16 @@ export async function createCachedSearchSnapshot(kind: "channel" | "dm", channel
     let sequencedCount = 0, legacyCount = 0;
     const total = await scanCachedSearchReferences(kind, channelId, query, async batch => {
       await transaction(["refs"], "readwrite", async tx => {
-        await Promise.all(batch.map(async ref => {
+        // Validate/project the entire small batch before queueing any writes.
+        const records = batch.map(ref => {
           if (!Number.isFinite(ref.timestamp)) throw new Error("search_snapshot_invalid_timestamp");
           const sequence = kind === "dm" ? dmSourceSequence(ref.sourceSequence) : null;
           if (sequence === null) legacyCount++; else sequencedCount++;
-          return tx.objectStore("refs").put({ snapshotId: id, messageId: ref.messageId, timestamp: ref.timestamp,
+          return { snapshotId: id, messageId: ref.messageId, timestamp: ref.timestamp,
             time: kind === "channel" ? -ref.timestamp : ref.timestamp,
-            ...(sequence === null ? {} : { sequence: String(sequence).padStart(19, "0") }) } satisfies Reference);
-        }));
+            ...(sequence === null ? {} : { sequence: String(sequence).padStart(19, "0") }) } satisfies Reference;
+        });
+        await putReferenceBatch(unwrap(tx.objectStore("refs")), records);
       }, controller.signal);
     }, controller.signal, epoch => { sourceEpoch = epoch; });
     sourceComplete = true;
