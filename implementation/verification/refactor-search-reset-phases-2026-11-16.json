@@ -23,7 +23,19 @@
     },
     "lint": "PASS zero errors / two existing warnings",
     "fullClient": "5529 passed / 1 skipped / 0 failed; 505 files",
-    "build": "PASS TypeScript + Vite (1.71s)"
+    "build": "PASS TypeScript + Vite (1.71s)",
+    "extendedCharacterization": {
+      "resetCases": 9,
+      "baselineSource": "1dbb9750:client/src/crypto/cachedSearchDatabase.ts",
+      "baselineWithSnapshotTests": 32,
+      "candidateRelatedTests": 67,
+      "sourceRestoredAndGitDiffEmpty": true,
+      "extraCases": [
+        "IndexedDB databases() unavailable",
+        "Initially retired owner invokes neither disposer nor reset source"
+      ]
+    },
+    "fullSuiteScope": "5529-pass full suite preceded the final two added compatibility/ownership tests; final related run is 67 passes."
   },
   "evidence": {
     "before": {
@@ -41,6 +53,14 @@
     "fullClient": {
       "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-reset-full.log",
       "sha256": "f610ffd4b51c2b917b99cf44bb83f6538508ac78531b3a002bea43dca838fd6f"
+    },
+    "extendedBaseline": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-reset-nine-baseline.log",
+      "sha256": "85f6a643904f7dbc38013505b75c70b18022e309f483d1746e3e7bdf8c39d21b"
+    },
+    "finalTarget": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-reset-final-target.log",
+      "sha256": "6b2f334483363763fb218f00fa74a8eec597321e30ba1a02110ccffcfa7c08d8"
     }
   },
   "pending": [

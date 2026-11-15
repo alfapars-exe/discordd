@@ -77,3 +77,22 @@ it("rejects an owner retired by resource disposal before invoking source reset",
  expect(await indexCounts()).toEqual([1, 1]);
  expect(isCachedSearchResetting(name)).toBe(false);
 });
+
+it("clears an existing index when database enumeration is unavailable", async () => {
+ await seedIndex();
+ // Older IndexedDB implementations do not expose databases(). This factory
+ // belongs only to this test and is replaced by beforeEach.
+ Object.defineProperty(indexedDB, "databases", { value: undefined, configurable: true });
+ expect(await withResetCachedSearchSnapshots(source, async () => 42)).toBe(42);
+ expect(await indexCounts()).toEqual([0, 0]);
+ expect(isCachedSearchResetting(name)).toBe(false);
+});
+it("rejects an initially retired owner before disposing resources or resetting data", async () => {
+ const dispose = vi.fn(async () => {}), reset = vi.fn(async () => 42);
+ unregister.push(registerCachedSearchResource(name, dispose));
+ await expect(withResetCachedSearchSnapshots(source, reset, () => false)).rejects.toThrow("e2ee_account_scope_changed");
+ expect(dispose).not.toHaveBeenCalled();
+ expect(reset).not.toHaveBeenCalled();
+ expect(await indexedDB.databases()).toEqual([]);
+ expect(isCachedSearchResetting(name)).toBe(false);
+});
