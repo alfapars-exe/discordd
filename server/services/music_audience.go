@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/ws"
 )
@@ -39,6 +40,34 @@ func (p musicPublisher) ownsDelivery(current *botInstance) bool {
 	return current == p.bot && (p.fatal || !p.bot.stopping.Load())
 }
 
+func musicAudienceRecipientCurrent(ctx context.Context, expected models.VoiceState, voice MusicAudienceVoice, members MusicAudienceMembership, fresh MusicAudienceFreshPermissions) bool {
+	member, err := members.IsMember(ctx, expected.ServerID, expected.UserID)
+	if err != nil || !member {
+		return false
+	}
+	permission, err := fresh.ResolveChannelPermissionsFresh(ctx, expected.UserID, expected.ChannelID)
+	if err != nil || !permission.Has(models.PermViewChannel) {
+		return false
+	}
+	current := voice.GetUserVoiceState(expected.UserID)
+	return current != nil && current.ServerID == expected.ServerID && current.ChannelID == expected.ChannelID && current.JoinedAt.Equal(expected.JoinedAt) && current.ChannelGeneration == expected.ChannelGeneration && ctx.Err() == nil
+}
+
+func (s *musicBotService) enqueueMusicAudienceRecipient(channelID, userID string, event ws.Event, publisher *musicPublisher) bool {
+	if publisher != nil {
+		s.mu.RLock()
+		if !publisher.ownsDelivery(s.bots[channelID]) {
+			s.mu.RUnlock()
+			return false
+		}
+		s.hub.BroadcastToUsers([]string{userID}, event)
+		s.mu.RUnlock()
+	} else {
+		s.hub.BroadcastToUsers([]string{userID}, event)
+	}
+	return true
+}
+
 func (s *musicBotService) broadcastMusicAudience(serverID, channelID string, event ws.Event, publisher *musicPublisher) bool {
 	voice, members := s.audience.Voice, s.audience.Members
 	fresh := s.audience.FreshPermissions
@@ -63,31 +92,14 @@ func (s *musicBotService) broadcastMusicAudience(serverID, channelID string, eve
 			continue
 		}
 		seen[expected.UserID] = true
-		member, err := members.IsMember(ctx, serverID, expected.UserID)
-		if err != nil || !member {
-			continue
-		}
-		permission, err := fresh.ResolveChannelPermissionsFresh(ctx, expected.UserID, channelID)
-		if err != nil || !permission.Has(models.PermViewChannel) {
-			continue
-		}
-		current := voice.GetUserVoiceState(expected.UserID)
-		if current == nil || current.ServerID != serverID || current.ChannelID != channelID || !current.JoinedAt.Equal(expected.JoinedAt) || current.ChannelGeneration != expected.ChannelGeneration || ctx.Err() != nil {
+		if !musicAudienceRecipientCurrent(ctx, expected, voice, members, fresh) {
 			continue
 		}
 		// Authorize once immediately before this recipient's enqueue; no
 		// preliminary database read is reused. A later recipient's lookup
 		// cannot retroactively recall an already authorized enqueued event.
-		if publisher != nil {
-			s.mu.RLock()
-			if !publisher.ownsDelivery(s.bots[channelID]) {
-				s.mu.RUnlock()
-				return sent
-			}
-			s.hub.BroadcastToUsers([]string{expected.UserID}, event)
-			s.mu.RUnlock()
-		} else {
-			s.hub.BroadcastToUsers([]string{expected.UserID}, event)
+		if !s.enqueueMusicAudienceRecipient(channelID, expected.UserID, event, publisher) {
+			return sent
 		}
 		sent = true
 	}
