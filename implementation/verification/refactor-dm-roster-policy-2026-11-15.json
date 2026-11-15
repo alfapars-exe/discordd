@@ -1,0 +1,16 @@
+{
+  "sourceRevision": "05649379",
+  "scope": "RF26: extract shared-server authorization for DM device roster;retain membership,status,encryption,admin,block,friend and recipient privacy ordering. No HTTP/event contract changes.",
+  "baseline": "Existing access/revocation tests PASS0.616s;added history error no-member characterization then PASS0.595s before product extraction. This is refactoring,not a newly reproduced product bug.",
+  "validation": {
+    "targeted": "3 top-level tests incl11-case access matrix,revocation sequence,history error;20repeats PASS0.567s",
+    "vet": "go vet ./services PASS",
+    "fullServices": "ok  \tgithub.com/argeinfina/hichat/services\t96.520s",
+    "fullServicesLog": "TEMP/hichat-roster-policy-services.log",
+    "selfScan": "RUNNING on immutable05649379 archive;not yet accepted"
+  },
+  "remaining": [
+    "New-head CI/Sonar",
+    "RF01-RF30 full acceptance and supported platform/physical/runtime matrix"
+  ]
+}

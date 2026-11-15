@@ -3389,3 +3389,10 @@ Linux608d3414 race terminalPASS3.598s,beşhedeflitest20tekrar,Go1.26.11linuxCGO1
 server_delete_event_test.go içinde owner/admin alt testleri, kurulum SQL döngüsü ve senaryo gövdesi ayrıldı. Başarısız transaction olay/activity üretmez; başarılı transaction sonrası DB kaydı yoktur, tek doğru olay gelir ve owner activity invalidation korunur. Önce tek koşuPASS1.322s;sonra20tekrarPASS13.847s;services vetPASS. Ürün kodu değişmedi. Receipt:implementation/verification/refactor-server-delete-test-layout-2026-11-15.json. Fullservices/yeniheadCI/Sonar henüz doğrulanmadı.
 
 Sunucu silme test ayrıştırması sonrası tam services paketiPASS: ok  	github.com/argeinfina/hichat/services	94.840s. Günlük:TEMP/hichat-delete-layout-services.log. Yerel sonkaynakfb5fabc3;gönderilmişa1e85a84CI halençalışıyor,iptaledilmedi.
+
+Sonar PR305 a1e85a84: owner-watch testinin45karmaşıklık bulgusuAaHYWqzUd7dyvm3wYSoy CLOSED/FIXED;SonarCloud checkSUCCESS. Sonraki yerel silme/DM refactor kaynakları henüz gönderilmedi;onların Sonar kabulü değildir.
+
+
+### RF26 — DM cihaz listesi ortak sunucu erişim kontrolü (2026-11-15)
+
+05649379, boş konuşmada ortak sunucu iznini doğrulayan bloğu verifyDMRosterServerAccess metoduna taşır. Arkadaşlık/yapılandırılmamış policy ve mevcut geçmiş erken dönüşleri, hata sarma, ret mesajları, platform-admin ve diğer kontrollerin sırası korunur. Önce geçmiş sorgusu hata verdiğinde üye kimliği dönmediğini sabitleyen test eski kaynaktaPASS0.595s. Sonra üçhedeflitest(11durumlu matris dahil)20tekrarPASS0.567s,vetPASS,tamservices ok  	github.com/argeinfina/hichat/services	96.520s. Immutabletarama ve yeniheadCI/Sonar henüz tamamlanmadı. Receipt:implementation/verification/refactor-dm-roster-policy-2026-11-15.json. Genelhedef açık.
