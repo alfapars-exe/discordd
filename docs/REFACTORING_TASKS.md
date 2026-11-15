@@ -2990,3 +2990,8 @@ Actual SQLite/PG fail-first tests exposed numeric1 opt-in on both backends,strin
 ### RF28/RF03 — empty-account nullable server list and dedicated CI gate (2026-11-15)
 
 Focused fresh-account production verification first failed3role cases because historical GET/servers returns data:null after the last server is removed;the earlier broad suite had other servers and masked that fixture branch. Cleanup now accepts null only from a successful authenticated list after verified owner identity,with all existing403/name/owner guards retained. Regression explicitly checks valid list/null shape and deleted-ID absence. Corrected focused notification/role profile5/5passed1.2m on real Go/mTLS PostgreSQL;API wire unchanged. New separate CI step runs this exact fresh-database profile after broad Chromium;discovery guard requires its5scenarios and expected3files. Isolation contracts and YAML command/environment checks pass. Receipt:implementation/verification/refactor-e2e-empty-server-list-2026-11-15.json. This is focused software acceptance,not full current-source Chromium/native/physical completion;400/401 diagnostics remain observed.
+
+
+### RF03/RF30 — terminal61807544 and strict JSON delivery (2026-11-15)
+
+Remote618075446ceb012ccddb5fb3115d9fa298a296ef completed36/36SUCCESS;all checks terminal. Snapshot:implementation/verification/refactor-618075-terminal-ci-2026-11-15.json. The pending strict notification boolean fix,mandatory native contract and fresh-account nullable server-list fixture profile now require their own new-head CI. Previous green checks are not evidence for this delivery. PR305 remains draft;full RF05 and project/platform acceptance remain open.
