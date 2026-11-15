@@ -393,12 +393,16 @@ export const createVoiceSettingsSlice: StateCreator<
     setMicSensitivity: (value) => setNumericPreference("micSensitivity", value),
 
     setUserVolume: (userId, volume) => {
-      set({ userVolumes: { ...get().userVolumes, [userId]: volume } });
+      if (typeof userId !== "string" || !userId || userId.length > 128 || ["__proto__", "constructor", "prototype"].includes(userId)) return;
+      if (!Number.isFinite(volume)) return;
+      set({ userVolumes: { ...get().userVolumes, [userId]: Math.max(0, Math.min(200, volume)) } });
       saveSettings(currentSettings(get()));
     },
 
     setScreenShareVolume: (userId, volume) => {
-      set({ screenShareVolumes: { ...get().screenShareVolumes, [userId]: volume } });
+      if (typeof userId !== "string" || !userId || userId.length > 128 || ["__proto__", "constructor", "prototype"].includes(userId)) return;
+      if (!Number.isFinite(volume)) return;
+      set({ screenShareVolumes: { ...get().screenShareVolumes, [userId]: Math.max(0, Math.min(200, volume)) } });
       saveSettings(currentSettings(get()));
     },
 
@@ -543,6 +547,7 @@ export const createVoiceSettingsSlice: StateCreator<
     setDeepfilterSuppression: (value) => setNumericPreference("deepfilterSuppression", value),
 
     toggleLocalMute: (userId: string) => {
+      if (typeof userId !== "string" || !userId || userId.length > 128 || ["__proto__", "constructor", "prototype"].includes(userId)) return;
       const { localMutedUsers, preMuteVolumes, userVolumes } = get();
       const isCurrentlyMuted = localMutedUsers[userId] ?? false;
 

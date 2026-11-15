@@ -136,7 +136,7 @@ export function cacheable(data: PreferencesData): PreferencesData {
       ? { ...sanitizeAccessibilityPreferences(value) }
       : Object.fromEntries(Object.entries(value).filter(([k, v]) => fields.has(k) && validField(k, v)));
     for (const key of ["userVolumes", "screenShareVolumes", "localMutedUsers"]) {
-      if (object(allowed[key])) allowed[key] = Object.fromEntries(Object.entries(allowed[key]).filter(([k, v]) => k.length <= 128 && (key === "localMutedUsers" ? typeof v === "boolean" : typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 200)));
+      if (object(allowed[key])) allowed[key] = Object.fromEntries(Object.entries(allowed[key]).filter(([k, v]) => k.length > 0 && k.length <= 128 && (key === "localMutedUsers" ? typeof v === "boolean" : typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 200)));
     }
     if (nonempty(allowed)) out[namespace] = allowed;
   }
