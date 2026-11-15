@@ -343,6 +343,67 @@ describe("account-scoped preference synchronization", () => {
     }finally{stop();}
   });
 
+  it("marks only the importing account when a pending observer replaces its binding",async()=>{
+    localStorage.setItem("mqvi_ui_scale","140");await ready();
+    let stop=()=>{};
+    stop=usePreferencesStore.subscribe(next=>{
+      if(next.syncStatus!=="pending"||(next.data.appearance as {uiScale?:number})?.uiScale!==140)return;
+      stop();state().bindAccount("bob");
+    });
+    try{
+      expect(await state().importLegacyPreferences()).toBe(false);
+      expect(localStorage.getItem(legacyImportKey)).toBe("1");
+      const bobMarker="hichat.preferences.legacy-imported.v1:https%3A%2F%2Fone.example:bob";
+      expect(localStorage.getItem(bobMarker)).toBeNull();
+      mocks.get.mockResolvedValueOnce(ok({},"bob"));await state().fetchAndApply();
+      expect(state().legacyImportAvailable).toBe(true);
+      expect(JSON.parse(localStorage.getItem(pendingKey)!)).toEqual({appearance:{uiScale:140}});
+    }finally{stop();}
+  });
+  it.each(["presenter","observer"] as const)("retains imported queue and offers local retry after %s failure",async phase=>{
+    localStorage.setItem("mqvi_ui_scale","140");await ready();
+    const {applyAccountPreferences}=await import("./applyAccountPreferences");let stop=()=>{};
+    if(phase==="presenter")bindPreferencePresenter(async()=>{throw new Error("presenter unavailable");});
+    else stop=usePreferencesStore.subscribe(next=>{if(next.syncStatus==="pending"){stop();throw new Error("pending observer failed");}});
+    try{
+      await expect(state().importLegacyPreferences()).resolves.toBe(false);
+      expect(localStorage.getItem(legacyImportKey)).toBe("1");
+      expect(JSON.parse(localStorage.getItem(pendingKey)!)).toEqual({appearance:{uiScale:140}});
+      expect(state().syncError).toBe("preferences_apply_failed");
+      expect(state().hasPendingChanges).toBe(true);
+      bindPreferencePresenter(async()=>applyAccountPreferences);await state().retrySync();
+      expect(mocks.update).toHaveBeenCalledTimes(1);
+      expect(mocks.update.mock.calls[0][0]).toEqual({appearance:{uiScale:140}});
+      expect(state().syncStatus).toBe("saved");
+    }finally{stop();bindPreferencePresenter(async()=>applyAccountPreferences);}
+  });
+
+  it("returns a failed import when the refresh it joined rejects,without assigning its backup",async()=>{
+    localStorage.setItem("mqvi_ui_scale","140");await ready();
+    const response=deferred<Response>();mocks.get.mockReturnValueOnce(response.promise);
+    let stop=()=>{};const failure=new Error("refresh error observer failed");
+    stop=usePreferencesStore.subscribe(next=>{if(next.syncStatus==="error"){stop();throw failure;}});
+    try{
+      const refresh=state().fetchAndApply();const rejected=expect(refresh).rejects.toBe(failure);
+      const importing=state().importLegacyPreferences();await settle();
+      response.reject(new Error("offline"));await rejected;
+      await expect(importing).resolves.toBe(false);
+      expect(localStorage.getItem(legacyImportKey)).toBeNull();
+      expect(localStorage.getItem(pendingKey)).toBeNull();
+      expect(state().syncError).toBe("preferences_load_failed");
+    }finally{stop();response.resolve(ok());}
+  });
+  it("does not assign legacy data after a joined refresh reports account mismatch",async()=>{
+    localStorage.setItem("mqvi_ui_scale","140");await ready();
+    const response=deferred<Response>();mocks.get.mockReturnValueOnce(response.promise);
+    const refresh=state().fetchAndApply(),importing=state().importLegacyPreferences();await settle();
+    response.resolve({success:false,code:"PREFERENCES_ACCOUNT_MISMATCH"});
+    await refresh;expect(await importing).toBe(false);
+    expect(state().syncError).toBe("preferences_account_mismatch");
+    expect(state().data).toEqual({});expect(state().hasPendingChanges).toBe(false);
+    expect(localStorage.getItem(legacyImportKey)).toBeNull();expect(localStorage.getItem(pendingKey)).toBeNull();
+  });
+
   it("fences an old account while the production presenter is still loading", async () => {
     const { applyAccountPreferences } = await import("./applyAccountPreferences");
     const loading = deferred<typeof applyAccountPreferences>();
