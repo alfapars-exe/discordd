@@ -17,7 +17,12 @@ func TestBackendOwnerWatchNaturalCompletionReleasesContext(t *testing.T) {
 	observed := make(chan context.Context, 1)
 	stop := startBackendOwnerWatch(parent, func(ctx context.Context) { observed <- ctx })
 	t.Cleanup(stop)
-	ctx := <-observed
+	var ctx context.Context
+	select {
+	case ctx = <-observed:
+	case <-time.After(time.Second):
+		t.Fatal("watch did not start")
+	}
 	select {
 	case <-ctx.Done():
 	case <-time.After(time.Second):
@@ -123,60 +128,85 @@ func TestMainDefersWatchJoinBeforeOwnershipConnectionClose(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	matches := func(call *ast.CallExpr, receiver, name string) bool {
-		selector, ok := call.Fun.(*ast.SelectorExpr)
-		if !ok || selector.Sel.Name != name {
-			return false
-		}
-		identifier, ok := selector.X.(*ast.Ident)
-		return ok && identifier.Name == receiver
+	layout := inspectOwnerWatchLayout(file)
+	if !layout.connectionClose.IsValid() || layout.watchDefers != 1 || layout.watchCleanup < layout.connectionClose {
+		t.Fatal("main must register watch cleanup after connection close so LIFO joins watch first")
 	}
-	var connectionClose, watchCleanup, explicitJoin, poolClose token.Pos
-	var watchDefers int
-	var ownedContext, bypass bool
+	if !layout.explicitJoin.IsValid() || !layout.poolClose.IsValid() || layout.explicitJoin > layout.poolClose {
+		t.Fatal("ownership watch must join before the database pool closes")
+	}
+	if !layout.ownedContext || layout.directStart {
+		t.Fatal("ownership observer bypasses its owned child context")
+	}
+}
+
+type ownerWatchLayout struct {
+	connectionClose, watchCleanup, explicitJoin, poolClose token.Pos
+	watchDefers                                            int
+	ownedContext, directStart                              bool
+}
+
+func ownerWatchCallMatches(call *ast.CallExpr, receiver, name string) bool {
+	selector, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok || selector.Sel.Name != name {
+		return false
+	}
+	identifier, ok := selector.X.(*ast.Ident)
+	return ok && identifier.Name == receiver
+}
+
+func inspectOwnerWatchLayout(file *ast.File) ownerWatchLayout {
+	var layout ownerWatchLayout
 	ast.Inspect(file, func(node ast.Node) bool {
 		switch value := node.(type) {
 		case *ast.DeferStmt:
-			if name, ok := value.Call.Fun.(*ast.Ident); ok && name.Name == "stopOwnerWatch" {
-				watchCleanup = value.Pos()
-				watchDefers++
-			}
-			if function, ok := value.Call.Fun.(*ast.FuncLit); ok {
-				ast.Inspect(function.Body, func(child ast.Node) bool {
-					if call, ok := child.(*ast.CallExpr); ok && matches(call, "owner", "Close") {
-						connectionClose = value.Pos()
-					}
-					return true
-				})
-			}
+			layout.observeDefer(value)
 		case *ast.ExprStmt:
-			if call, ok := value.X.(*ast.CallExpr); ok {
-				if name, ok := call.Fun.(*ast.Ident); ok && name.Name == "stopOwnerWatch" {
-					explicitJoin = value.Pos()
-				}
-			}
+			layout.observeExpression(value)
 		case *ast.CallExpr:
-			if matches(value, "db", "Close") {
-				poolClose = value.Pos()
-			}
-			if matches(value, "database", "WatchBackendOwner") && len(value.Args) > 0 {
-				context, ok := value.Args[0].(*ast.Ident)
-				ownedContext = ok && context.Name == "watchCtx"
-			}
+			layout.observeCall(value)
 		case *ast.GoStmt:
-			if matches(value.Call, "database", "WatchBackendOwner") {
-				bypass = true
-			}
+			layout.directStart = layout.directStart || ownerWatchCallMatches(value.Call, "database", "WatchBackendOwner")
 		}
 		return true
 	})
-	if !connectionClose.IsValid() || watchDefers != 1 || watchCleanup < connectionClose {
-		t.Fatal("main must register watch cleanup after connection close so LIFO joins watch first")
+	return layout
+}
+
+func (layout *ownerWatchLayout) observeDefer(statement *ast.DeferStmt) {
+	if name, ok := statement.Call.Fun.(*ast.Ident); ok && name.Name == "stopOwnerWatch" {
+		layout.watchCleanup = statement.Pos()
+		layout.watchDefers++
 	}
-	if !explicitJoin.IsValid() || !poolClose.IsValid() || explicitJoin > poolClose {
-		t.Fatal("ownership watch must join before the database pool closes")
+	function, ok := statement.Call.Fun.(*ast.FuncLit)
+	if !ok {
+		return
 	}
-	if !ownedContext || bypass {
-		t.Fatal("ownership observer bypasses its owned child context")
+	ast.Inspect(function.Body, func(child ast.Node) bool {
+		if call, ok := child.(*ast.CallExpr); ok && ownerWatchCallMatches(call, "owner", "Close") {
+			layout.connectionClose = statement.Pos()
+		}
+		return true
+	})
+}
+
+func (layout *ownerWatchLayout) observeExpression(statement *ast.ExprStmt) {
+	call, ok := statement.X.(*ast.CallExpr)
+	if !ok {
+		return
 	}
+	if name, ok := call.Fun.(*ast.Ident); ok && name.Name == "stopOwnerWatch" {
+		layout.explicitJoin = statement.Pos()
+	}
+}
+
+func (layout *ownerWatchLayout) observeCall(call *ast.CallExpr) {
+	if ownerWatchCallMatches(call, "db", "Close") {
+		layout.poolClose = call.Pos()
+	}
+	if !ownerWatchCallMatches(call, "database", "WatchBackendOwner") || len(call.Args) == 0 {
+		return
+	}
+	argument, ok := call.Args[0].(*ast.Ident)
+	layout.ownedContext = ok && argument.Name == "watchCtx"
 }
