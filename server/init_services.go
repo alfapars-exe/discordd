@@ -300,15 +300,12 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	feedbackService := services.NewFeedbackService(repos.Feedback)
 	feedbackService.SetUploadDir(cfg.Upload.Dir)
 	feedbackUploadService := services.NewFeedbackUploadService(repos.Feedback, cfg.Upload.Dir, cfg.Upload.MaxSize)
-	soundboardService := services.NewSoundboardService(
-		repos.Soundboard, repos.User, hub, voiceService, cfg.Upload.Dir, cfg.Upload.MaxSize,
-	)
-	// Server stickers, and copying copyable emojis/stickers between servers.
-	stickerService := services.NewStickerService(repos.Sticker, hub, cfg.Upload.Dir)
-	expressionCloneService := services.NewExpressionCloneService(repos.Emoji, emojiService, repos.Sticker, stickerService, repos.Server, cfg.Upload.Dir)
-	// Profile cosmetics (everyone mode: no shop, no premium tier).
-	cosmeticService := services.NewCosmeticService(repos.Cosmetic, repos.Server,
-		services.NewEveryoneCosmeticEntitlements(repos.Cosmetic, repos.Server), hub)
+	expressions := initExpressionAssetServices(expressionAssetDependencies{
+		Repositories: repos, Hub: hub, Voice: voiceService, Emoji: emojiService,
+		UploadDir: cfg.Upload.Dir, MaxUploadSize: cfg.Upload.MaxSize,
+	})
+	soundboardService, stickerService := expressions.Soundboard, expressions.Sticker
+	expressionCloneService, cosmeticService := expressions.Clone, expressions.Cosmetic
 	accountSecurity := initAccountSecurityServices(accountSecurityDependencies{
 		Repositories: repos, Hub: hub, Config: cfg, Voice: voiceService, Email: emailSender,
 		Permissions: permInvalidator, UserCache: authCache, Logger: appLogService,
