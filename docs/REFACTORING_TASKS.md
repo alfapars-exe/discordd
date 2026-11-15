@@ -3228,3 +3228,14 @@ Tests c060b976 and product 42103dc1 separate. Reentrant binding replacement prev
 Prior7cc CI completed with security failure: reviewed false-positive manifest entry31 had stale authStore source hash after background-entry changes. Approved storage line and line hash unchanged; enum validation and callers re-reviewed; source digest refreshed in1ec947bb without changing rules or waiver scope. Helper6testsPASS; corrected full local scan still required. Terminal check snapshot:implementation/verification/refactor-7cc-terminal-ci-failure-2026-11-15.json. PR305 stays draft.
 
 Terminal7cc totals34/36SUCCESS: Security scan stale manifest plus SonarCloud typescript:S4822 in preferenceTask.ts. Synchronous factory invocation and asynchronous rejection observation now occupy separate statements; invocation timing and scope policy preserved. New direct controls cover current/retired factory throws and asynchronous rejection. Four suites63passed3.41s. No Sonar suppression or gate reduction.
+
+
+### RF11/RF13 — binding preparation and reset notification ownership (2026-11-15)
+
+Three fail-first cases(75passed) showed bound-notification replacement duplicated preparation and throwing notification skipped committed cached presentation. Preparation is now reserved before publication. A separate fail-first reset-observer case showed resumed outer bind overwrote a newly selected account; generation check now retires that outer bind. Owner and same-owner backend replacement retain only surviving presentation; old pending cache remains. Tests acc2beaa/ad4670ae and product7c7a46e8/ca96d2c5 separate. Six final suites145passed8.68s.
+
+08a2 CI retained Sonar typescript:S4822 at synchronous factory call; earlier separation did not satisfy the analyzer. 8cf7db71 uses immediately invoked async wrapper, preserving immediate work invocation and observing both factory throws and rejected work through one rejection path. Factory-error diagnostic now runs via microtask; current/retired tests and existing entry suites63passed3.07s. No rule suppression. Independent final-head CI required.
+
+Frozen ca96d2c5 full490files5236passed1skipped116.04s; statement67.49/branch64.71/function61.78/line68.53%; actual tsc-b/VitePASS3.04s; changed-files lintPASS. Receipt:implementation/verification/refactor-preferences-binding-preparation-2026-11-15.json includes module coverage. Intermediate full run not used for final-source proof. Immutable final-source self-scan and prior08a2 terminal CI still pending. PR305 and whole RF11/RF13/project/native/physical acceptance remain open.
+
+Final immutable ca96d2c5 self-scan PASS:50 exact reviewed source records valid,0blocking matches,448review lines. Log:hichat-ca96-selfscan.log. No self-scan rule or waiver scope reduced. Prior08a2 CI has only repository shard6/8 live;Sonar failure still requires independent new-head proof.

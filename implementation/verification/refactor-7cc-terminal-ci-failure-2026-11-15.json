@@ -370,7 +370,14 @@
     "job": 132815693246,
     "reason": "Reviewed-hit manifest stale source hash for authStore.ts entry31. Approved enum-only storage line unchanged; source digest refreshed after review in 1ec947bb.",
     "localHelperTests": 6,
-    "fullLocalScan": "Corrected invocation running against immutable 1ec947bb source; manifest50records valid, final result pending."
+    "fullLocalScan": {
+      "sourceRevision": "1ec947bb",
+      "result": "PASS",
+      "blockingMatches": 0,
+      "reviewLines": 448,
+      "log": "hichat-7cc-selfscan-corrected.log",
+      "method": "Immutable tracked-source archive, native Python with Git Bash path conversion enabled."
+    }
   },
   "sonar": {
     "rule": "typescript:S4822",
@@ -386,6 +393,7 @@
       "typecheck": "PASS npx tsc -b"
     },
     "newControls": "Immediate factory throw, retired factory throw and current/retired async rejection.",
-    "sourceRevision": "7cec24e0"
+    "sourceRevision": "7cec24e0",
+    "subsequentCI": "08a2aad5 retained S4822 at the factory call; 8cf7db71 replaces synchronous try with immediate async invocation and observes its rejection. Independent CI remains required."
   }
 }

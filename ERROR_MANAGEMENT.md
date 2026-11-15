@@ -173,3 +173,5 @@ istek gecikmesi ve yönetici ekranındaki kayıtlar ayrıca kontrol edilmelidir.
 
 
 Legacy preference import captures the binding and imported-marker key before observer publication. Recovery data is persisted before assignment; queued local-apply failures remain retryable. Joined account mismatch prevents backup assignment. The UI owns each import attempt by binding and identity, observes rejection, prevents duplicate active attempts and ignores retired or unmounted completion. Persistent failing error observers and broader acquisition/native cases remain open.
+
+Hesap tercihleri bağlanırken sunum hazırlığı, bağlama bildirimi yayımlanmadan önce o nesle ayrılır. Bildirim hata fırlatsa da kaydedilmiş hesabın sunumu hazırlanır; bildirim yeni bir bağlama oluşturursa eski hazırlık bunu ezmez. Sıfırlama bildirimi sırasında yeni bir nesil oluştuğunda dıştaki eski bind çağrısı durur. Ayrık tercih işleri hemen çağrılan async sarmalayıcıyla senkron fabrika hatalarını ve Promise retlerini tek gözlemlenen ret yoluna dönüştürür; tanı bildirimi yalnız hâlâ geçerli nesle aittir.

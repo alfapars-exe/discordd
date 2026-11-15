@@ -1,0 +1,103 @@
+{
+  "sourceRevision": "ca96d2c5cd59a2607e99b0dc3f2e2d2abb258071",
+  "scope": "RF11/RF13 binding preparation ownership and detached factory failure observation",
+  "testsCommits": [
+    "acc2beaa",
+    "ad4670ae"
+  ],
+  "productCommits": [
+    "7c7a46e8",
+    "ca96d2c5",
+    "8cf7db71"
+  ],
+  "regression": [
+    {
+      "log": "hichat-preferences-bind-preparation-red.log",
+      "failed": 3,
+      "passed": 75,
+      "behavior": "Bound notification replacement duplicated preparation; throwing notification skipped committed cache presentation."
+    },
+    {
+      "log": "hichat-preferences-reset-binding-red.log",
+      "failed": 1,
+      "skipped": 78,
+      "behavior": "Outer bind overwrote account selected by a reset observer."
+    }
+  ],
+  "targeted": {
+    "files": 6,
+    "passed": 145,
+    "seconds": 8.68,
+    "log": "hichat-preferences-binding-final-targeted.log"
+  },
+  "detachedFactory": {
+    "files": 4,
+    "passed": 63,
+    "seconds": 3.07,
+    "log": "hichat-preference-task-invoke-tests.log",
+    "behavior": "Immediate factory invocation; synchronous failure and async rejection observed through async invocation; retired failures do not report into replacement. Factory-failure diagnostics now occur through the rejection microtask."
+  },
+  "fullClient": {
+    "files": 490,
+    "passed": 5236,
+    "skipped": 1,
+    "seconds": 116.04,
+    "coverage": {
+      "lines": {
+        "total": 38231,
+        "covered": 26202,
+        "skipped": 0,
+        "pct": 68.53
+      },
+      "statements": {
+        "total": 52317,
+        "covered": 35313,
+        "skipped": 0,
+        "pct": 67.49
+      },
+      "functions": {
+        "total": 12218,
+        "covered": 7549,
+        "skipped": 0,
+        "pct": 61.78
+      },
+      "branches": {
+        "total": 39801,
+        "covered": 25756,
+        "skipped": 0,
+        "pct": 64.71
+      },
+      "branchesTrue": {
+        "total": 0,
+        "covered": 0,
+        "skipped": 0,
+        "pct": 100
+      }
+    },
+    "log": "hichat-preferences-binding-final-full.log"
+  },
+  "changedModules": {},
+  "build": {
+    "command": "npm run build (tsc -b and Vite)",
+    "result": "PASS",
+    "seconds": 3.04,
+    "log": "hichat-preferences-binding-final-build.log"
+  },
+  "lint": {
+    "result": "PASS",
+    "scope": "Changed stores and tests"
+  },
+  "selfScan": {
+    "sourceRevision": "ca96d2c5cd59a2607e99b0dc3f2e2d2abb258071",
+    "status": "PASS",
+    "log": "hichat-ca96-selfscan.log",
+    "method": "Immutable git archive; helper validates50 exact source records.",
+    "blockingMatches": 0,
+    "reviewLines": 448
+  },
+  "limits": [
+    "Prior08a2 CI still live; Sonar S4822 failure persists there, so async invocation needs independent new-head CI.",
+    "A prior full client run was intermediate because reset regression was added during it; only final frozen ca96 run above is acceptance evidence.",
+    "Persistent observer failures and whole acquisition/native/physical/project acceptance remain open."
+  ]
+}
