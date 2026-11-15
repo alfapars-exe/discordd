@@ -30,6 +30,9 @@ jobs:
           cache: true
           cache-dependency-path: server/go.sum
 
+      - name: Validate workflow syntax and expression contexts
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -shellcheck= -pyflakes=
+
       - name: Repository query inventory contracts
         run: go test ./scripts/query-inventory/main.go ./scripts/query-inventory/main_test.go
 
