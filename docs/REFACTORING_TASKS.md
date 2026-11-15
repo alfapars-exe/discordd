@@ -3514,7 +3514,7 @@ Gönderilmiş d510e473 PR305 CI’ı 36/36 terminal başarılı; 6adfca62 ile cl
 
 Son 1225afe7 değişmez kaynak taraması 51 doğrulanmış kayıt, 480 inceleme satırı ve 0 engelleyici desenle tamamlandı. Desen taraması güvenlik açığı yokluğunu kanıtlamaz. Retry kaynak paketi gönderimden sonra yeni CI/Sonar ile doğrulanacak; genel RF01–RF30 hedefi açık.
 
-7666100f gönderimi sonrasında PR305 Sonar issues API, özgün AaHfLfsHL2JGjhmu0CHH, AaHe-pzEMioAmihIyi9w ve AaHe-pzEMioAmihIyi9x kayıtlarının üçünü de CLOSED/FIXED gösterdi. Kaynak API’sinde startPreferencePresentationRetry, completePreferencePresentationRetry ve loadedPreferenceSyncStatus ayrımları görüldü. Tam CI sürüyor; bu kanıt tüm kontrollerin tamamlandığı anlamına gelmez.
+7666100f gönderimi sonrasında PR305 Sonar issues API, özgün AaHfLfsHL2JGjhmu0CHH, AaHe-pzEMioAmihIyi9w ve AaHe-pzEMioAmihIyi9x kayıtlarının üçünü de CLOSED/FIXED gösterdi. Kaynak API’sindeki 457 kod satırı yerel kaynakla eşleşir; ek 458. satır boş EOF gösterimidir. 7666100f terminal CI 36/36 SUCCESS; Server CI 43756633148 completed/success. Ham kontroller refactor-7666-terminal-ci-2026-11-15.json içinde saklandı. Bu sonuç sonraki cache ayrıştırmasının CI kabulü değildir; genel hedef açık.
 
 ### RF13/RF26 — cache namespace doğrulama ayrımı (2026-11-15)
 

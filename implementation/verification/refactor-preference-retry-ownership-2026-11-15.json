@@ -115,7 +115,7 @@
     "selfScan": "PASS immutable1225afe7:51exact reviewed-source records,480reviewlines,0blockingpatterns. Pattern scan is not proof of absence of vulnerabilities. TEMP/hichat-preference-retry-final-scan.log"
   },
   "remaining": [
-    "Full7666100f CI remains in progress;Sonar original issue closure verified separately",
+    "7666100f CI terminal36/36SUCCESS; raw checks in refactor-7666-terminal-ci-2026-11-15.json. Whole RF13 acceptance remains open",
     "Whole RF13/RF26 and RF01–RF30 runtime/platform/physical acceptance remain open"
   ]
 }
