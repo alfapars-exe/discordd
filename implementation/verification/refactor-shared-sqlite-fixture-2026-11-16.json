@@ -14,7 +14,14 @@
     "rawPath": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-shared-fixture-full.jsonl",
     "sha256": "2abe34cad3c3f8e9c62ad9d260362a6e7f1e606af4d8b588a3441cb37781a37b",
     "vet": "PASS internal/testfixture repository services root",
-    "build": "PASS ./..."
+    "build": "PASS ./...",
+    "fixtureCoverage": {
+      "statementsPercent": 76.7,
+      "OpenPercent": 100,
+      "OpenWithPathPercent": 73.7,
+      "sqliteSchemaBytesPercent": 75,
+      "note": "Normal migrated schema, connection settings, mutation and parallel isolation covered; constructor and filesystem fatal error branches not fault injected."
+    }
   },
   "pending": [
     "Linux race (session 7100)",
