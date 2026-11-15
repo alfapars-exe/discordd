@@ -12,6 +12,7 @@
 
 import { create } from "zustand";
 import { usePreferencesStore } from "./preferencesStore";
+import { capturePreferenceScope } from "./preferenceScope";
 
 const SIDEBAR_STORAGE_KEY = "mqvi_sidebar";
 
@@ -92,76 +93,43 @@ type SidebarState = {
 
 const initial = loadPersistedSidebar();
 
-export const useSidebarStore = create<SidebarState>((set, get) => ({
-  isExpanded: initial.isExpanded,
-  expandedSections: initial.expandedSections,
-
-  toggleSidebar: () => {
-    set((state) => {
-      const next = !state.isExpanded;
-      persistSidebar({ isExpanded: next, expandedSections: state.expandedSections });
-      syncToServer(undefined, next);
-      return { isExpanded: next };
-    });
-  },
-
-  expandSidebar: () => {
-    set((state) => {
-      if (state.isExpanded) return state;
-      persistSidebar({ isExpanded: true, expandedSections: state.expandedSections });
-      syncToServer(undefined, true);
-      return { isExpanded: true };
-    });
-  },
-
-  collapseSidebar: () => {
-    set((state) => {
-      if (!state.isExpanded) return state;
-      persistSidebar({ isExpanded: false, expandedSections: state.expandedSections });
-      syncToServer(undefined, false);
-      return { isExpanded: false };
-    });
-  },
-
-  toggleSection: (sectionKey) => {
-    set((state) => {
-      const current = state.expandedSections[sectionKey] ?? true;
-      const next = {
-        ...state.expandedSections,
-        [sectionKey]: !current,
-      };
-      persistSidebar({ isExpanded: state.isExpanded, expandedSections: next });
-      syncToServer({ [sectionKey]: !current });
-      return { expandedSections: next };
-    });
-  },
-
-  expandSection: (sectionKey) => {
-    set((state) => {
-      if (state.expandedSections[sectionKey]) return state;
-      const next = {
-        ...state.expandedSections,
-        [sectionKey]: true,
-      };
-      persistSidebar({ isExpanded: state.isExpanded, expandedSections: next });
-      syncToServer({ [sectionKey]: true });
-      return { expandedSections: next };
-    });
-  },
-
-  isSectionExpanded: (sectionKey) => {
-    return get().expandedSections[sectionKey] ?? true;
-  },
-
-  applyFromServer: (sections, isExpanded?: boolean) => {
-    const merged = { ...get().expandedSections, ...sections };
-    const expanded = typeof isExpanded === "boolean" ? isExpanded : get().isExpanded;
-    persistSidebar({ isExpanded: expanded, expandedSections: merged });
-    set({ expandedSections: merged, isExpanded: expanded });
-  },
-  resetAccountPreferences: () => {
-    const defaults = { isExpanded: true, expandedSections: { friends: true, dms: true, server: true } };
-    persistSidebar(defaults);
-    set(defaults);
-  },
-}));
+export const useSidebarStore = create<SidebarState>((set, get) => {
+  function commit(sections?: Record<string, boolean>, isExpanded?: boolean) {
+    const isCurrent = capturePreferenceScope();
+    const current = get();
+    const next = {
+      isExpanded: isExpanded ?? current.isExpanded,
+      expandedSections: sections ? { ...current.expandedSections, ...sections } : current.expandedSections,
+    };
+    // Do not perform cross-store work inside a Zustand updater: preference
+    // observers can replace this binding before the updater returns.
+    persistSidebar(next);
+    set(next);
+    if (!isCurrent()) return;
+    const latest = get();
+    const owned = sections ? Object.fromEntries(Object.entries(sections).filter(([key, value]) => latest.expandedSections[key] === value)) : undefined;
+    const expanded = latest.isExpanded === isExpanded ? isExpanded : undefined;
+    if (owned && Object.keys(owned).length || expanded !== undefined) syncToServer(owned, expanded);
+  }
+  return {
+    isExpanded: initial.isExpanded,
+    expandedSections: initial.expandedSections,
+    toggleSidebar: () => commit(undefined, !get().isExpanded),
+    expandSidebar: () => { if (!get().isExpanded) commit(undefined, true); },
+    collapseSidebar: () => { if (get().isExpanded) commit(undefined, false); },
+    toggleSection: sectionKey => commit({ [sectionKey]: !(get().expandedSections[sectionKey] ?? true) }),
+    expandSection: sectionKey => { if (!get().expandedSections[sectionKey]) commit({ [sectionKey]: true }); },
+    isSectionExpanded: sectionKey => get().expandedSections[sectionKey] ?? true,
+    applyFromServer: (sections, isExpanded?: boolean) => {
+      const merged = { ...get().expandedSections, ...sections };
+      const expanded = typeof isExpanded === "boolean" ? isExpanded : get().isExpanded;
+      persistSidebar({ isExpanded: expanded, expandedSections: merged });
+      set({ expandedSections: merged, isExpanded: expanded });
+    },
+    resetAccountPreferences: () => {
+      const defaults = { isExpanded: true, expandedSections: { friends: true, dms: true, server: true } };
+      persistSidebar(defaults);
+      set(defaults);
+    },
+  };
+});
