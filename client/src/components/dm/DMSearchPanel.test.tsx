@@ -189,3 +189,23 @@ it("does not restore a DM deleted while its first-page cache read is pending", a
   expect(screen.queryByText("private deleted result")).not.toBeInTheDocument();
   expect(screen.getByText("noSearchResults")).toBeInTheDocument();
 });
+
+it("returns to the last populated page when the final page's only hit disappears", async () => {
+  vi.useFakeTimers();
+  useDMStore.setState(state => ({ channels: state.channels.map(c => ({ ...c, e2ee_enabled: true })) }));
+  useE2EEStore.setState({ initStatus: "ready" });
+  const rows = Array.from({ length: 26 }, (_, index) => ({
+    messageId: `last-${index}`, channelId: "", dmChannelId: "dm", content: `match ${index}`,
+    timestamp: index, sourceSequence: String(index + 1),
+  }));
+  vi.mocked(searchCachedDMMessageRefs).mockResolvedValueOnce(rows.map(({ messageId, timestamp, sourceSequence }) => ({ messageId, timestamp, sourceSequence })));
+  vi.mocked(getCachedDecryptedMessage).mockImplementation(async id => id === "last-0" ? null : rows.find(row => row.messageId === id) ?? null);
+  render(<DMSearchPanel channelId="dm" onClose={() => {}} />);
+  fireEvent.change(screen.getByRole("textbox"), { target: { value: "match" } });
+  await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+  await act(async () => { fireEvent.click(screen.getByText("searchNext")); });
+  expect(screen.getByText("match 25")).toBeInTheDocument();
+  expect(screen.getByText("match 1")).toBeInTheDocument();
+  expect(screen.getByText("25", { selector: ".search-count" })).toBeInTheDocument();
+  expect(screen.queryByText("noSearchResults")).not.toBeInTheDocument();
+});

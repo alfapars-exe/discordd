@@ -108,7 +108,8 @@ function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId,
               row => row.channelId === channelId && row.content.toLowerCase().includes(lowerTerm) && !deletedIds.current.has(row.messageId),
               () => seq === searchSeqRef.current);
             if (!page) return;
-            paged = page;
+            if (page.offset !== searchOffset) setOffset(page.offset);
+            paged = page.messages;
           } else {
             const cached = await searchCachedMessages(channelId, term, controller.signal);
             if (seq !== searchSeqRef.current) return;

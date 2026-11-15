@@ -2685,3 +2685,8 @@ A new regression demonstrated stale totals and incomplete pages when a reference
 ### RF17 — shared channel/DM stale-hit hydration (2026-11-15)
 
 The same stale-count/incomplete-page regression failed in encrypted channel pagination. Channel subsequent pages and all DM pages now share readCachedSearchPage, preserving request ownership checks and page-sized batches while pruning missing/changed/foreign hits. Three targeted files passed 79 tests; TypeScript and targeted ESLint passed. Channel first-query full-message retention, full matching-ID bounds, and overall RF17 remain open. Receipt: refactor-rf17-shared-page-hydration-2026-11-15.json.
+
+
+### RF17 — last populated page recovery (2026-11-15)
+
+A failing regression showed that removing the last hit on page two stranded the panel on an empty page despite valid first-page matches. Shared hydration now returns a clamped offset with its messages, and both panels update pagination accordingly. Explicit channel and DM tests passed: 81 targeted tests total. The previous fixed source 480c7bff passed all 477 client files (4,903 passed, 1 skipped; 114.42s); that full-suite result predates this offset fix. Initial-query and matching-ID memory bounds remain open. Receipt: refactor-rf17-last-page-recovery-2026-11-15.json.

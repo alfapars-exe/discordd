@@ -10,14 +10,16 @@ export async function readCachedSearchPage(
   limit: number,
   matches: (row: CachedDecryptedMessage) => boolean,
   isCurrent: () => boolean,
-): Promise<CachedDecryptedMessage[] | null> {
+): Promise<{ messages: CachedDecryptedMessage[]; offset: number } | null> {
   const loaded = new Map<string, CachedDecryptedMessage>();
   while (isCurrent() && snapshot.current) {
+    const lastOffset = Math.max(0, Math.floor((snapshot.current.length - 1) / limit) * limit);
+    offset = Math.min(offset, lastOffset);
     const ids = snapshot.current.slice(offset, offset + limit);
     const windowIds = new Set(ids);
     for (const id of loaded.keys()) if (!windowIds.has(id)) loaded.delete(id);
     const pending = ids.filter(id => !loaded.has(id));
-    if (!pending.length) return ids.map(id => loaded.get(id)!);
+    if (!pending.length) return { messages: ids.map(id => loaded.get(id)!), offset };
     const records = await Promise.all(pending.map(id => getCachedDecryptedMessage(id)));
     if (!isCurrent()) return null;
     const rejected = new Set<string>();

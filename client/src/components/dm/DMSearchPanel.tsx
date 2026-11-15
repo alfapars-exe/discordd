@@ -106,10 +106,12 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted }: DMSearchPanelPro
             }))).reverse().map(row => row.id);
           }
           const lowerTerm = term.toLowerCase();
-          const paged = await readCachedSearchPage(localMatches, searchOffset, LIMIT,
+          const page = await readCachedSearchPage(localMatches, searchOffset, LIMIT,
             row => row.dmChannelId === channelId && row.content.toLowerCase().includes(lowerTerm) && !deletedIds.current.has(row.messageId),
             () => seq === searchSeqRef.current);
-          if (!paged || seq !== searchSeqRef.current) return;
+          if (!page || seq !== searchSeqRef.current) return;
+          if (page.offset !== searchOffset) setOffset(page.offset);
+          const paged = page.messages;
           const total = localMatches.current.length;
 
           // CachedDecryptedMessage -> DMMessage minimal format

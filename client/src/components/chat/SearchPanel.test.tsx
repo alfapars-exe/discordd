@@ -238,6 +238,25 @@ describe("SearchPanel — result races", () => {
     expect(screen.getByText("surviving row")).toBeInTheDocument();
   });
 
+  it("returns to a populated channel page after the final hit disappears", async () => {
+    useServerStore.setState({ activeServer: { ...useServerStore.getState().activeServer!, e2ee_enabled: true } });
+    useE2EEStore.setState({ initStatus: "ready" });
+    const rows = Array.from({ length: 26 }, (_, i) => ({
+      messageId: `last-${i}`, channelId: "ch-1", dmChannelId: null, content: `match ${i}`, timestamp: i,
+    }));
+    vi.mocked(searchCachedMessages).mockResolvedValueOnce(rows);
+    vi.mocked(getCachedDecryptedMessage).mockImplementation(async id => id === "last-0" ? null : rows.find(row => row.messageId === id) ?? null);
+    render(<SearchPanel channelId="ch-1" onClose={() => {}} />);
+    typeQuery("match");
+    await act(async () => {});
+    fireEvent.click(screen.getByRole("button", { name: "searchNext" }));
+    await act(async () => {});
+    expect(screen.getByText("25", { selector: ".search-count" })).toBeInTheDocument();
+    expect(screen.getByText("match 25")).toBeInTheDocument();
+    expect(screen.getByText("match 1")).toBeInTheDocument();
+    expect(screen.queryByText("noSearchResults")).not.toBeInTheDocument();
+  });
+
   it("prunes stale channel matches and fills the next page", async () => {
     useServerStore.setState({ activeServer: { ...useServerStore.getState().activeServer!, e2ee_enabled: true } });
     useE2EEStore.setState({ initStatus: "ready" });
