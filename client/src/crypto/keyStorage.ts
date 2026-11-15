@@ -27,6 +27,7 @@
 
 import { CACHED_SEARCH_EPOCH_KEY, notifyCachedSearchReset } from "./cachedSearchEpoch";
 import { getDB, guardedPut } from "./keyDatabase";
+import { cachedMessageDeletionKey, cachedSearchDeletionKey, rememberCachedSearchDeletion, isPendingCachedSearchDeletion } from "./cachedSearchDeletionJournal";
 export { KEY_DATABASE_STORES, getAccountDatabaseName, upgradeKeyDatabase, openScopedKeyDatabase, closeDB } from "./keyDatabase";
 import type {
   StoredIdentityKeyPair,
@@ -549,7 +550,12 @@ export async function getCachedDecryptedMessage(
   messageId: string
 ): Promise<CachedDecryptedMessage | null> {
   const db = await getDB();
-  const result = await db.get("messageCache", messageId);
+  const tx = db.transaction(["messageCache", "metadata"], "readonly");
+  void tx.done.catch(() => {});
+  const result = await tx.objectStore("messageCache").get(messageId) as CachedDecryptedMessage | undefined;
+  const deleted = result && await tx.objectStore("metadata").get(cachedMessageDeletionKey(result));
+  await tx.done;
+  if (result && isPendingCachedSearchDeletion(deleted, result.messageId)) return null;
   return (result as CachedDecryptedMessage) ?? null;
 }
 
@@ -569,23 +575,39 @@ async function deleteScopedCachedMessage(
   if (!isCurrent()) return false;
   const db=await getDB();
   if (!isCurrent()) return false;
-  const tx=db.transaction("messageCache","readwrite");
+  const journalKey = cachedSearchDeletionKey(dmChannelId === null ? "channel" : "dm", dmChannelId ?? channelId, messageId);
+  let journalFailed = false, journalFailure: unknown;
+  let writeToken: string | undefined;
+  try { writeToken = await rememberCachedSearchDeletion(db, journalKey, messageId, isCurrent); }
+  catch (error) { journalFailed = true; journalFailure = error; }
+  if (!isCurrent()) return false;
+  // Metadata failure must not prevent the old best-effort physical cleanup.
+  const tx=db.transaction(journalFailed ? ["messageCache"] : ["messageCache", "metadata"],"readwrite");
+  const cache = tx.objectStore("messageCache"), metadata = journalFailed ? null : tx.objectStore("metadata");
+  let removed = false;
   try {
-    const record=await tx.store.get(messageId) as CachedDecryptedMessage|undefined;
+    const record=await cache.get(messageId) as CachedDecryptedMessage|undefined;
     if (!isCurrent()) {tx.abort();await tx.done.catch(()=>{});return false;}
-    if (!record || record.messageId !== messageId || record.channelId !== channelId || record.dmChannelId !== dmChannelId) {
-      await tx.done;return false;
+    if (record?.messageId === messageId && record.channelId === channelId && record.dmChannelId === dmChannelId) {
+      await cache.delete(messageId);
+      removed = true;
     }
-    await tx.store.delete(messageId);
+    if (metadata) {
+      const intent = await metadata.get(journalKey) as { writeToken?: unknown } | undefined;
+      // Another accepted deletion may have replaced this intent while this
+      // eviction waited for a coherent source reader. Retire only our write.
+      if (intent?.writeToken === writeToken) await metadata.delete(journalKey);
+    }
     if (!isCurrent()) {tx.abort();await tx.done.catch(()=>{});return false;}
     await tx.done;
-    return true;
   } catch(error) {
     try {tx.abort();} catch {/* The transaction may already have completed. */}
     await tx.done.catch(()=>{});
     if (!isCurrent()) return false;
+    if (journalFailed) throw new AggregateError([journalFailure, error], "cached_deletion_journal_and_eviction_failed", { cause: error });
     throw error;
   }
+  return removed;
 }
 
 /**
@@ -645,17 +667,20 @@ async function searchMessageIndex<T>(
   signal?.throwIfAborted();
   const db = await getDB();
   signal?.throwIfAborted();
-  const index = db.transaction("messageCache", "readonly").store.index(indexName);
+  const tx = db.transaction(["messageCache", "metadata"], "readonly");
+  void tx.done.catch(() => {});
+  const index = tx.objectStore("messageCache").index(indexName);
   const results: T[] = [];
   const lowerQuery = query.toLowerCase();
   let cursor = await index.openCursor(channelId);
   while (cursor) {
     signal?.throwIfAborted();
     const message = cursor.value as CachedDecryptedMessage;
-    if (message.content.toLowerCase().includes(lowerQuery)) results.push(project(message));
+    if (message.content.toLowerCase().includes(lowerQuery) && !isPendingCachedSearchDeletion(await tx.objectStore("metadata").get(cachedMessageDeletionKey(message)), message.messageId)) results.push(project(message));
     cursor = await cursor.continue();
   }
   signal?.throwIfAborted();
+  await tx.done;
   return results;
 }
 
@@ -677,7 +702,13 @@ export function searchCachedMessageRefs(channelId: string, query: string, signal
  */
 export async function getAllCachedMessages(): Promise<CachedDecryptedMessage[]> {
   const db = await getDB();
-  return (await db.getAll("messageCache")) as CachedDecryptedMessage[];
+  const tx = db.transaction(["messageCache", "metadata"], "readonly");
+  void tx.done.catch(() => {});
+  const rows = await tx.objectStore("messageCache").getAll() as CachedDecryptedMessage[];
+  const visible: CachedDecryptedMessage[] = [];
+  for (const row of rows) if (!isPendingCachedSearchDeletion(await tx.objectStore("metadata").get(cachedMessageDeletionKey(row)), row.messageId)) visible.push(row);
+  await tx.done;
+  return visible;
 }
 
 /**

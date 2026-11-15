@@ -5,6 +5,7 @@ import { dmSourceSequence } from "../utils/dmSourceOrder";
 import { getAccountDatabaseName } from "./keyDatabase";
 import { getCachedSearchEpoch } from "./cachedSearchEpoch";
 import { scanCachedSearchReferences } from "./cachedSearchScan";
+import { scanPendingCachedSearchDeletions } from "./cachedSearchDeletionJournal";
 
 export const SEARCH_SNAPSHOT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const REFERENCE_WRITE_BATCH_SIZE = 1024;
@@ -167,7 +168,6 @@ export async function createCachedSearchSnapshot(kind: "channel" | "dm", channel
       while (expired) { await deleteSnapshot(tx, (expired.value as Header).id); expired = await expired.continue(); }
       await tx.objectStore("snapshots").put({ id, expiresAt: Date.now() + SEARCH_SNAPSHOT_MAX_AGE_MS, total: 0, ready: false, orderIndex: "time" } satisfies Header);
     }, controller.signal);
-    let sequencedCount = 0, legacyCount = 0;
     let pendingReferences: Reference[] = [];
     const flushReferences = async () => {
       if (!pendingReferences.length) return;
@@ -177,14 +177,13 @@ export async function createCachedSearchSnapshot(kind: "channel" | "dm", channel
         await putReferenceBatch(unwrap(tx.objectStore("refs")), records);
       }, controller.signal);
     };
-    const total = await scanCachedSearchReferences(kind, channelId, query, async batch => {
+    await scanCachedSearchReferences(kind, channelId, query, async batch => {
       assertCurrent(); controller.signal.throwIfAborted();
       // Keep the coherent source scan's small delivery batches while amortizing
       // disposable sidecar commits with a separately bounded metadata buffer.
       const records = batch.map(ref => {
         if (!Number.isFinite(ref.timestamp)) throw new Error("search_snapshot_invalid_timestamp");
         const sequence = kind === "dm" ? dmSourceSequence(ref.sourceSequence) : null;
-        if (sequence === null) legacyCount++; else sequencedCount++;
         return { snapshotId: id, messageId: ref.messageId, timestamp: ref.timestamp,
           time: kind === "channel" ? -ref.timestamp : ref.timestamp,
           ...(sequence === null ? {} : { sequence: String(sequence).padStart(19, "0") }) } satisfies Reference;
@@ -196,11 +195,18 @@ export async function createCachedSearchSnapshot(kind: "channel" | "dm", channel
     }, controller.signal, epoch => { sourceEpoch = epoch; });
     await flushReferences();
     sourceComplete = true;
+    await scanPendingCachedSearchDeletions(kind, channelId, async ids => {
+      await transaction(["refs"], "readwrite", async tx => {
+        await Promise.all(ids.map(async messageId => tx.objectStore("refs").delete([id, messageId])));
+      }, controller.signal);
+    }, controller.signal);
     // Pure legacy and pure authoritative histories already have an ordered
     // index. Materialize ranks only for mixed histories, preserving legacy slots.
-    const mixed = kind === "dm" && legacyCount > 0 && sequencedCount > 0;
     await transaction(["refs", "snapshots"], "readwrite", async tx => {
       const refs = tx.objectStore("refs");
+      const total = await refs.count(prefixRange(id));
+      const sequencedCount = kind === "dm" ? await refs.index("sequence").count(prefixRange(id)) : 0;
+      const mixed = sequencedCount > 0 && sequencedCount < total;
       if (mixed) {
         let baseline = await refs.index("time").openCursor(prefixRange(id), "prev");
         let sequenced = await refs.index("sequence").openCursor(prefixRange(id), "prev");
