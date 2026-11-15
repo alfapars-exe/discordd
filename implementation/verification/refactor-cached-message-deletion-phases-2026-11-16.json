@@ -107,5 +107,18 @@
     "analyzedCodeLines": 66,
     "sourceMismatches": 0,
     "extraEmptyEOF": 1
+  },
+  "nativeCIObservation": {
+    "head": "2b418de1",
+    "run": 43776829922,
+    "job": 133004893175,
+    "completedSteps": [
+      "Verify native IndexedDB search staging contracts",
+      "Verify WebKit IndexedDB search staging contracts",
+      "Verify production search panel retention and ordering",
+      "Verify production search failure state and idle retention"
+    ],
+    "conclusion": "All listed steps SUCCESS; whole job still running at observation",
+    "limit": "Supported CI browser contracts; physical platform budgets and earlier intermittent pending-panel timeout root cause remain open"
   }
 }
