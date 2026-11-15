@@ -52,9 +52,8 @@
     }
   },
   "pending": [
-    "Source-bound Sonar analysis",
     "RF17 first-query budget, native/platform and whole-pipeline acceptance",
-    "79f600db CI (Server run 43773318456)"
+    "79f600db CI failed Playwright pending-panel DM timeout; remediation/diagnostics open"
   ],
   "note": "Test mock return type corrected after initial tsc failure; final target and build passed.",
   "negativeControl": {
@@ -76,5 +75,13 @@
     "logPath": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-page-f80d3c32-scan.log",
     "logSHA256": "4ce757293c0e5434c8ee2195b8dfe8278437f708065fd9300c5728793c16ada5",
     "limit": "Final additional ownership test and documentation were added after this archive; runtime page source is byte-identical. Pattern scan is not a vulnerability absence proof."
+  },
+  "sonar": {
+    "issue": "AaHdtCMB07pFJPuubXuL",
+    "status": "CLOSED",
+    "resolution": "FIXED",
+    "analyzedCodeLines": 76,
+    "sourceMismatches": 0,
+    "extraEmptyEOF": 1
   }
 }
