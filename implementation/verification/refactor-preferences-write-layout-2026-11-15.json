@@ -9,7 +9,7 @@
     "build": "npm run build (tsc -b plus Vite)PASS;Vite1.78s",
     "lint": "PASS0errors2existingwarnings",
     "fullClientCoverage": "PASS495files,5316tests,1skip;123.23s",
-    "immutableSelfScan": "RUNNING,not accepted",
+    "immutableSelfScan": "PASS on immutable7c604780;51exact source records,478review lines,0blocking patterns. Pattern scan is not proof of absence of vulnerabilities.",
     "coverageTotal": {
       "lines": {
         "total": 38502,

@@ -3403,3 +3403,7 @@ Sonar PR305 a1e85a84: owner-watch testinin45karmaşıklık bulgusuAaHYWqzUd7dyvm
 7c604780 GET/PATCH yanıtı hesap eşleşmesi doğrulamasını validatePreferenceResponse içinde birleştirir;onaylanmış yazımın yerel uygulama hatası ile henüz onaylanmamış yazımın kuyruğa dönüşünü handlePreferenceWriteFailure ayırır. Generation denetimi, güncel pending önceliği, kabul edilen PATCHin yeniden gönderilmemesi ve observer hatası davranışı korunur. Mevcut79test önce3.91s/sonra4.24sPASS;gerçek tsc-b/VitebuildPASS1.78s;lint0hata2mevcutuyarı. Fullclientcoverage/immutablescan sürüyor;yeniheadCI/Sonar doğrulanmadı. Receipt:implementation/verification/refactor-preferences-write-layout-2026-11-15.json.
 
 7c604780 tamclientcoveragePASS495dosya5316test1atlanan123.23s;wholeclientline68.85%/branch64.87%;preferencesStoreline98.47%/branch89.09%. Gerçekbuild/lintPASS;tarama/yeniheadSonarCI bekleniyor.
+
+a1e85a84 terminalCI36/36SUCCESS,Server43744006265/Frontend43744006273/Mobile43744006264;receipt:implementation/verification/refactor-a1e85-terminal-ci-2026-11-15.json. ÖncekiASTrefactor SonarFIXED doğrulandı. Sonraki silme/DM/tercih kaynaklarının yeniheadCI kabulü henüz yok;tarama sonrasında gönderilecek.
+
+Final7c604780immutable self-scanPASS:51exactrecords/478reviewlines/0blockingpatterns. Bu desen taraması güvenlik açığı yokluğunu kanıtlamaz. Önceki a1e85a84CI36/36terminalSUCCESS kaydı ayrı tutuldu; yeni sourceCI/Sonar gönderimden sonra doğrulanacak.
