@@ -121,6 +121,16 @@ function cachedGIFs(raw: unknown[]): PreferencesData[] {
   }).slice(0, 50);
 }
 
+function cachedNamespace(namespace: string, fields: ReadonlySet<string>, value: PreferencesData): PreferencesData {
+  const allowed: PreferencesData = namespace === "accessibility"
+    ? { ...sanitizeAccessibilityPreferences(value) }
+    : Object.fromEntries(Object.entries(value).filter(([key, item]) => fields.has(key) && validField(key, item)));
+  for (const key of VOICE_PEER_MAP_KEYS) {
+    if (object(allowed[key])) allowed[key] = sanitizeVoicePeerMap(key, allowed[key]);
+  }
+  return allowed;
+}
+
 /** Only known, non-secret preference fields may survive in an account cache. */
 export function cacheable(data: PreferencesData): PreferencesData {
   const out: PreferencesData = {};
@@ -133,12 +143,7 @@ export function cacheable(data: PreferencesData): PreferencesData {
   for (const [namespace, fields] of Object.entries(CACHE_FIELDS)) {
     const value = data[namespace];
     if (!object(value)) continue;
-    const allowed: PreferencesData = namespace === "accessibility"
-      ? { ...sanitizeAccessibilityPreferences(value) }
-      : Object.fromEntries(Object.entries(value).filter(([k, v]) => fields.has(k) && validField(k, v)));
-    for (const key of VOICE_PEER_MAP_KEYS) {
-      if (object(allowed[key])) allowed[key] = sanitizeVoicePeerMap(key, allowed[key]);
-    }
+    const allowed = cachedNamespace(namespace, fields, value);
     if (nonempty(allowed)) out[namespace] = allowed;
   }
   return sanitize(out);
