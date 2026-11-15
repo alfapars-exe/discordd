@@ -1,0 +1,48 @@
+{
+  "source": "d4ba80b2",
+  "characterization": "7ffa09c7",
+  "sonarIssue": "AaHf5GEnvoWSTACzSfgD",
+  "originalCognitiveComplexity": 21,
+  "change": "Separate existing derived-database lookup and atomic index-store clearing from reset failure precedence/fence orchestration",
+  "preserved": [
+    "No derived database for accounts that never searched",
+    "Async disposer rejection does not stop source reset or final store clear",
+    "Original source error, including undefined, wins over a cleanup error",
+    "Cleanup transaction rollback, database close and reset counter release",
+    "No index mutation after owner retirement"
+  ],
+  "validation": {
+    "beforeCharacterization": 7,
+    "afterRelatedTests": 65,
+    "typecheck": "PASS",
+    "targetedCoverage": {
+      "statements": 98.38,
+      "branches": 90.32,
+      "functions": 100,
+      "lines": 100
+    },
+    "lint": "PASS zero errors / two existing warnings",
+    "fullClient": "RUNNING session39199",
+    "build": "RUNNING session91610"
+  },
+  "evidence": {
+    "before": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-reset-before.log",
+      "sha256": "100f2dc80a0c9114100e96fd4b78760cf57d0d38022a3d61d628c4bb4f5f2cf5"
+    },
+    "after": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-reset-after.log",
+      "sha256": "252d4dd9cecb52ea01b254bf0eb629014236b686a9cee6622ff1bec54d4d4ea6"
+    },
+    "coverage": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-reset-coverage.log",
+      "sha256": "66053a8289e5c62f0b2cade504caf8b252bf6f4dddca76a4f8f1ac753f2584f9"
+    }
+  },
+  "pending": [
+    "Full client and build terminal results",
+    "Source-bound scan/Sonar/CI",
+    "RF17 whole-pipeline/first-query/native acceptance",
+    "Separate production pending-panel CI timeout root cause remains open"
+  ]
+}

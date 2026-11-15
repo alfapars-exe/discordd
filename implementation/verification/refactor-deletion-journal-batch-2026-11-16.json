@@ -48,5 +48,11 @@
       "diagnosticChange": "Future timeout reports handoffReady, result count, count text, panel text, releasedAt and captured page errors; original 120s limit and thrown error preserved",
       "cleanup": "Task browser space closed; diagnostic server stopped"
     }
+  },
+  "sonar": {
+    "issue": "AaHfuK4y4B142AX0cP6F",
+    "status": "CLOSED",
+    "resolution": "FIXED",
+    "analyzedSourceMatched": true
   }
 }
