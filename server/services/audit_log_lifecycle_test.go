@@ -266,3 +266,56 @@ func TestAuditSnapshotDeadlineStillPersistsIdentityFallback(t *testing.T) {
 		t.Fatalf("identity fallback lost: %+v", repo.entries)
 	}
 }
+
+// Cooperative storage stalls must consume one total shutdown budget, rather
+// than a fresh timeout for each queued event or an unbounded Background context.
+type auditContextBlockedPersistence struct {
+	auditLifecycleRepo
+	entered chan context.Context
+	release chan struct{}
+}
+
+func (r *auditContextBlockedPersistence) Insert(ctx context.Context, entry *models.AuditLog) error {
+	r.entered <- ctx
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-r.release:
+		return r.auditLifecycleRepo.Insert(ctx, entry)
+	}
+}
+func TestAuditShutdownBoundsWholeBacklogAndJoinsWriter(t *testing.T) {
+	repo := &auditContextBlockedPersistence{entered: make(chan context.Context, 8), release: make(chan struct{})}
+	hub := ws.NewHub()
+	s := NewAuditLogService(repo, nil, nil, hub, hub).(*auditLogService)
+	t.Cleanup(func() { close(repo.release); s.Stop() })
+	for range 4 {
+		s.Write(models.AuditLog{})
+	}
+	stopped := make(chan struct{})
+	go func() { s.Stop(); close(stopped) }()
+	select {
+	case <-stopped:
+	case <-time.After(6 * time.Second):
+		t.Fatal("audit shutdown did not bound stalled backlog")
+	}
+	select {
+	case <-s.done:
+	default:
+		t.Fatal("Stop returned without joining the writer")
+	}
+	if len(s.ch) != 0 {
+		t.Fatalf("shutdown retained %d abandoned entries", len(s.ch))
+	}
+	contexts := len(repo.entered)
+	if contexts != 1 {
+		t.Fatalf("stalled backlog started %d storage calls, want only the first within total budget", contexts)
+	}
+	ctx := <-repo.entered
+	if _, ok := ctx.Deadline(); !ok {
+		t.Fatal("drain storage call has no deadline")
+	}
+	if ctx.Err() != context.DeadlineExceeded {
+		t.Fatalf("storage did not observe deadline: %v", ctx.Err())
+	}
+}
