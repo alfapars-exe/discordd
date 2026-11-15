@@ -569,4 +569,23 @@ describe("useWebSocket offline/online handling", () => {
     expect(FakeWebSocket.instances).toHaveLength(2);
   });
 
+  it("releases a pending token refresh retry timer on unmount", async () => {
+    vi.useFakeTimers();
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const view = await mountHook();
+    try {
+      const socket = lastSocket();
+      socket.send.mockImplementation((data: string) => {
+        if (JSON.parse(data).op === "heartbeat") socket.onmessage?.({ data: JSON.stringify({ op: "heartbeat_ack" }) } as MessageEvent);
+      });
+      act(() => socket.onopen?.());
+      revocation.ensureFreshToken.mockRejectedValueOnce(new Error("synthetic refresh failure"));
+      await act(async () => { await vi.advanceTimersByTimeAsync(600_000); });
+      expect(revocation.ensureFreshToken).toHaveBeenCalledTimes(2);
+      expect(vi.getTimerCount()).toBeGreaterThan(0);
+      view.unmount();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { view.unmount(); warning.mockRestore(); vi.useRealTimers(); }
+  });
+
 });
