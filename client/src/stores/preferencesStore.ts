@@ -186,7 +186,9 @@ function completePreferencePresentationRetry(version: number): boolean {
   if (!current(version)) return false;
   presentationRetry = null;
   const state = usePreferencesStore.getState();
-  usePreferencesStore.setState({ syncStatus: state.isLoaded ? nonempty(pending) ? "pending" : "saved" : "idle", syncError: null });
+  let syncStatus: SyncStatus = "idle";
+  if (state.isLoaded) syncStatus = nonempty(pending) ? "pending" : "saved";
+  usePreferencesStore.setState({ syncStatus, syncError: null });
   // A saved observer can replace the binding before publication returns.
   return current(version);
 }
@@ -230,9 +232,16 @@ function handlePreferenceWriteFailure(version: number, sent: PreferencesData, ac
   inFlight = {};
   persistPending();
   if (error instanceof PreferencePresentationError) presentationRetry = { ...error.plan, preparation: false };
-  const syncError = error instanceof PreferencePresentationError ? "preferences_apply_failed" :
-    error instanceof Error && error.message === "preferences_account_mismatch" ? "preferences_account_mismatch" : "preferences_save_failed";
+  let syncError = "preferences_save_failed";
+  if (error instanceof PreferencePresentationError) syncError = "preferences_apply_failed";
+  else if (error instanceof Error && error.message === "preferences_account_mismatch") syncError = "preferences_account_mismatch";
   usePreferencesStore.setState({ syncStatus: "error", syncError, hasPendingChanges: true });
+}
+
+function loadedPreferenceSyncStatus(): SyncStatus {
+  if (nonempty(inFlight)) return "saving";
+  if (nonempty(pending)) return "pending";
+  return "saved";
 }
 
 async function flush(): Promise<void> {
@@ -336,7 +345,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
         try {
           set({
             data, isLoaded: true,
-            syncStatus: nonempty(inFlight) ? "saving" : nonempty(pending) ? "pending" : "saved",
+            syncStatus: loadedPreferenceSyncStatus(),
             syncError: null, hasPendingChanges: nonempty(inFlight) || nonempty(pending),
             legacyImportAvailable: canImportLegacy(data, true),
           });
