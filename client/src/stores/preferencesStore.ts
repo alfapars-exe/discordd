@@ -256,11 +256,13 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     // Rewrite migrated legacy engines in both account caches, including offline starts.
     persistCache(snapshotKey, acknowledged);
     persistPending();
-    set({ accountId: userId, data: merge(acknowledged, pending), hasPendingChanges: nonempty(pending), syncStatus: nonempty(pending) ? "pending" : "idle", legacyImportAvailable: false });
+    // Reserve preparation before publication: an observer may throw or bind
+    // another account, whose preparation must not be replaced on return.
     preparation = applyData(getPreferenceScopeGeneration(), true);
     // bindAccount is synchronous; callers may not fetch until the next render.
     // Observe preparation failures immediately while fetch still receives them.
     void preparation.catch(() => {});
+    set({ accountId: userId, data: merge(acknowledged, pending), hasPendingChanges: nonempty(pending), syncStatus: nonempty(pending) ? "pending" : "idle", legacyImportAvailable: false });
   },
   fetchAndApply: async () => {
     if (!cacheKey) return;
