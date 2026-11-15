@@ -181,3 +181,19 @@ it("observes cancellation after a bounded journal batch consumer", async () => {
   const controller = new AbortController();
   await expect(scanPendingCachedSearchDeletions("dm", "room", async () => { controller.abort(); }, controller.signal)).rejects.toMatchObject({ name: "AbortError" });
 });
+
+it("does not add a metadata point request per cached row during backup collection", async () => {
+  await failedCleanup("channel");
+  await storage.cacheDecryptedMessages(Array.from({ length: 1000 }, (_, i) => ({ messageId: `bulk-${i}`, channelId: "room", dmChannelId: null, content: "cached", timestamp: i })));
+  const original = IDBObjectStore.prototype.get;
+  let metadataReads = 0;
+  const hook = vi.spyOn(IDBObjectStore.prototype, "get").mockImplementation(function (this: IDBObjectStore, key) {
+    if (this.name === "metadata") metadataReads++;
+    return original.call(this, key);
+  });
+  try {
+    const rows = await storage.getAllCachedMessages();
+    expect(rows).toHaveLength(1001); expect(rows.some(row => row.messageId === "deleted")).toBe(false);
+    expect(metadataReads).toBeLessThanOrEqual(2);
+  } finally { hook.mockRestore(); }
+});
