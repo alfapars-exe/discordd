@@ -117,7 +117,7 @@ async function measureUI(page,event,expected,action){
 try{
  console.log("Runtime",process.version,process.platform,"Chromium",browser.version(),"baseline",baseline);
  for(const variant of variants){const context=await browser.newContext(),page=await context.newPage(),cdp=await context.newCDPSession(page);const errors=[];page.on("pageerror",error=>errors.push(error.message));
- try{await page.goto(`http://127.0.0.1:${server.address().port}/${variant}/`);await page.waitForFunction(()=>Boolean(globalThis.panelBench));console.log(JSON.stringify({variant,react:await page.evaluate(()=>globalThis.panelBench.react),productionBuild:true,sourceHead,historicalOverrides:variant==="before"?usedHistoricalPaths.size:0,historicalSources:variant==="before"?[...usedHistoricalPaths].sort():[]}));
+ try{await page.goto(`http://127.0.0.1:${server.address().port}/${variant}/`);await page.waitForFunction(()=>Boolean(globalThis.panelBench));console.log(JSON.stringify({variant,react:await page.evaluate(()=>globalThis.panelBench.react),productionBuild:true,sourceHead,historicalOverrides:variant==="before"?usedHistoricalPaths.size:0,historicalSources:variant==="before"?[...usedHistoricalPaths].sort((left,right)=>left<right?-1:left>right?1:0):[]}));
  for(const kind of ["channel","dm"]){
  if(pendingOnly){
   const matches=await page.evaluate(async kind=>{const matches=await globalThis.panelBench.seed(kind,1000);globalThis.panelBench.holdIndex();await globalThis.panelBench.mount(kind);return matches;},kind);
