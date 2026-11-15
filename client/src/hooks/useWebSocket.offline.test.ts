@@ -483,4 +483,46 @@ describe("useWebSocket offline/online handling", () => {
     expect(FakeWebSocket.instances.length).toBe(socketsAtUnmount);
     expect(result.current.connectionStatus).toBe("connecting");
   });
+  it("ignores retired socket frames and close callbacks after offline", async () => {
+    const { result } = await mountHook();
+    const retired = lastSocket();
+    act(() => { window.dispatchEvent(new Event("offline")); });
+    await act(async () => {
+      retired.onmessage?.({ data: JSON.stringify({ op: "message_create", d: { id: "retired" } }) } as MessageEvent);
+      retired.onclose?.({ code: 1006, reason: "", wasClean: false } as CloseEvent);
+    });
+    expect(handleChannelEvent).not.toHaveBeenCalled();
+    expect(result.current.connectionStatus).toBe("offline");
+    expect(result.current.reconnectAttempt).toBe(0);
+  });
+
+  it("retires an in-flight token lookup on offline and reconnects only after online", async () => {
+    let resolveOld!: (token: string) => void;
+    revocation.ensureFreshToken.mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve; }));
+    const { result } = await mountHook();
+    expect(FakeWebSocket.instances).toHaveLength(0);
+    act(() => { window.dispatchEvent(new Event("offline")); });
+    resolveOld("retired-offline-token");
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(FakeWebSocket.instances).toHaveLength(0);
+    expect(result.current.connectionStatus).toBe("offline");
+    await act(async () => { window.dispatchEvent(new Event("online")); await Promise.resolve(); await Promise.resolve(); });
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    expect(lastSocket().url).not.toContain("retired-offline-token");
+  });
+
+  it("keeps only the latest overlapping reconnect attempt for the same account", async () => {
+    await mountHook();
+    let resolveOld!: (token: string) => void;
+    revocation.ensureFreshToken.mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve; }));
+    await act(async () => { window.dispatchEvent(new Event("online")); await Promise.resolve(); });
+    await act(async () => { window.dispatchEvent(new Event("online")); await Promise.resolve(); await Promise.resolve(); });
+    expect(FakeWebSocket.instances).toHaveLength(2);
+    const current = lastSocket();
+    resolveOld("superseded-token");
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(FakeWebSocket.instances).toHaveLength(2);
+    expect(current.closeCount).toBe(0);
+  });
+
 });
