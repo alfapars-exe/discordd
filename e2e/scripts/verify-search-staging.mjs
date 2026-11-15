@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { createServer } from "../../client/node_modules/vite/dist/node/index.js";
+import { verifySearchDeletionDrain } from "./search-deletion-drain-contract.mjs";
 
 const root = fileURLToPath(new URL("../../client/", import.meta.url));
 const server = await createServer({ root, configFile: false, logLevel: "error", server: { host: "127.0.0.1", port: 0 } });
@@ -16,6 +17,17 @@ try {
     await context.route("**/staging.html", route => route.fulfill({ contentType: "text/html", body: "<title>Search staging contracts</title>" }));
     await page.goto(new URL("staging.html", server.resolvedUrls.local[0]).href);
     console.log("Runtime", process.version, process.platform, "Chromium", browser.version());
+    let drainDeadline;
+    try {
+      const drain = await Promise.race([
+        page.evaluate(verifySearchDeletionDrain),
+        new Promise((_, reject) => { drainDeadline = setTimeout(() => reject(new Error("Native deletion drain deadline exceeded")), 30_000); }),
+      ]);
+      assert.equal(drain.results.length, 2);
+      assert.equal(drain.cancelled, true);
+      assert.equal(drain.retiredOwnerRejected, true);
+      console.log(JSON.stringify(drain));
+    } finally { clearTimeout(drainDeadline); }
     for (const mode of ["channel", "dm", "mixed", "quota", "cancel"]) {
       let deadline;
       try {
