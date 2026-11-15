@@ -82,11 +82,11 @@
         "pct": 88.67
       }
     },
-    "combinedClient": "db47c0ea fullclient5379passed1skipped,build/lintPASS;preferencesStore.ts unchanged fromab3a28e7"
+    "combinedClient": "db47c0ea fullclient5379passed1skipped,build/lintPASS;preferencesStore.ts unchanged fromab3a28e7",
+    "finalCombinedScan": "PASS immutabledb47c0ea:51exact reviewed-source records,478reviewlines,0blockingpatterns. Pattern scan is not proof of absence of vulnerabilities. TEMP/hichat-voice-numeric-final-scan.log"
   },
   "remaining": [
-    "Final combined immutabledb47c0ea scan",
-    "Previous-head terminal CI;new-head CI/Sonar after push,no exact after complexity score claimed",
-    "Full RF13 and RF01-RF30 runtime/platform/physical acceptance remain open"
+    "New-head CI/Sonar after push;legacy import17issue remains unverified for new source",
+    "RF13 and whole-project runtime/platform/physical acceptance remain open"
   ]
 }

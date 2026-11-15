@@ -46,11 +46,11 @@
       }
     },
     "lint": "PASS0errors2existingwarnings;TEMP/hichat-voice-numeric-lint.log",
-    "scan": "RUNNING immutabledb47c0ea;TEMP/hichat-voice-numeric-final-scan.log"
+    "scan": "PASS immutabledb47c0ea:51exact reviewed-source records,478reviewlines,0blockingpatterns. Pattern scan is not proof of absence of vulnerabilities. TEMP/hichat-voice-numeric-final-scan.log",
+    "finalCombinedScan": "PASS immutabledb47c0ea:51exact reviewed-source records,478reviewlines,0blockingpatterns. Pattern scan is not proof of absence of vulnerabilities. TEMP/hichat-voice-numeric-final-scan.log"
   },
   "limits": "No physical-media acceptance claimed. Peer-volume maps and device-local overlay numeric settings are separate contracts;this change covers the four named account scalar fields.",
   "remaining": [
-    "Final immutable source scan",
     "New-head CI/Sonar after push;legacy import17issue remains unverified for new source",
     "RF13 and whole-project runtime/platform/physical acceptance remain open"
   ]
