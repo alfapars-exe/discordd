@@ -1,0 +1,94 @@
+{
+  "sourceRevision": "fec8b107",
+  "scope": "RF14/RF15 typing timer ownership in channel and DM stores. Existing store actions and five-second renewal semantics preserved.",
+  "regressionCommits": [
+    "5e008384",
+    "858413e4"
+  ],
+  "baseline": {
+    "source": "9a965a09",
+    "canonicalFixture": "Real stores, real clearTokens() auth-generation transition and publishAuthOwnerChange; six failing ownership/reentrant cases, two passing replacement-expiry cases.",
+    "log": "TEMP/hichat-typing-ownership-coherent-red.log",
+    "method": "Only four owned candidate product files temporarily restored from pinned baseline; candidate bytes restored in finally before green tests. Dirty main tree untouched.",
+    "initialProbe": "Initial raw-generation publisher fixture was corrected to keep API generation and event stream coherent; canonical red/green evidence uses clearTokens().",
+    "impact": "Canceled account work repopulated an old channel key with an empty array after five seconds; no private-content disclosure demonstrated."
+  },
+  "change": {
+    "handler": "Reserve entry before synchronous state publication. Expose clear(channelId?) to owning stores. Clear pending/installed timers on reset. Skip already-queued callbacks whose entry was retired. Remove completed entry before notifying expiry subscribers so successor timers remain owned.",
+    "channel": "Account/generation/cache reset clears all owned timers; evictChannelHistory clears the revoked channel only.",
+    "dm": "Account/generation reset explicitly clears the singleton DM slice timer owner.",
+    "renewal": "Per-channel/user timers retain five-second renewal; JSON tuple keys avoid ambiguous concatenation; unrelated channels remain active.",
+    "observerFailure": "Committed update still receives its owned expiry when an observer throws; original error propagates."
+  },
+  "validation": {
+    "targeted": "177 tests across four files PASS,3.95s;includes nine real-store ownership/revocation cases and five helper lifecycle cases.",
+    "targetedLog": "TEMP/hichat-typing-ownership-matrix.log",
+    "build": "PASS actual npm run build (tsc -b,Vite);Vite1.65s;TEMP/hichat-typing-ownership-final-build.log",
+    "fullClientCoverage": "PASS498files5345passed1skipped;TEMP/hichat-typing-ownership-coverage.log",
+    "lint": "PASS0errors2existingwarnings;TEMP/hichat-typing-ownership-lint.log",
+    "selfScan": "RUNNING on immutable fec8b107 archive;TEMP/hichat-typing-owner-final-scan.log",
+    "coverageTotal": {
+      "lines": {
+        "total": 38518,
+        "covered": 26543,
+        "skipped": 0,
+        "pct": 68.91
+      },
+      "statements": {
+        "total": 52760,
+        "covered": 35800,
+        "skipped": 0,
+        "pct": 67.85
+      },
+      "functions": {
+        "total": 12325,
+        "covered": 7648,
+        "skipped": 0,
+        "pct": 62.05
+      },
+      "branches": {
+        "total": 39949,
+        "covered": 25925,
+        "skipped": 0,
+        "pct": 64.89
+      },
+      "branchesTrue": {
+        "total": 0,
+        "covered": 0,
+        "skipped": 0,
+        "pct": 100
+      }
+    },
+    "coverageMessageUtils": {
+      "lines": {
+        "total": 56,
+        "covered": 48,
+        "skipped": 0,
+        "pct": 85.71
+      },
+      "functions": {
+        "total": 17,
+        "covered": 15,
+        "skipped": 0,
+        "pct": 88.23
+      },
+      "statements": {
+        "total": 68,
+        "covered": 58,
+        "skipped": 0,
+        "pct": 85.29
+      },
+      "branches": {
+        "total": 34,
+        "covered": 28,
+        "skipped": 0,
+        "pct": 82.35
+      }
+    }
+  },
+  "remaining": [
+    "Final immutable fec8b107 source scan",
+    "Terminal prior-head CI before next push;new-head CI after push",
+    "Full RF14/RF15 and RF01-RF30 runtime/platform/physical acceptance remain open"
+  ]
+}

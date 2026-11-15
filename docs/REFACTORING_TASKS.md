@@ -3435,3 +3435,14 @@ Codec ayrıştırmasının 71d22b48 revizyonunda tam istemci koşusu 5.330 başa
 Son 597313df kaynak taraması tamamlandı: 51 doğrulanmış kaynak kaydı, 478 inceleme satırı, 0 engelleyici desen eşleşmesi. Desen taraması güvenlik açığı yokluğunu kanıtlamaz. 19795967 önceki CI'ı 36/36 terminal başarılı; yeni gönderim bu sonucu kendi CI kabulü olarak kullanmayacak.
 
 RF14/RF15 incelemesinde iki gerçek store ile geçici ortak fixture çalıştırıldı. Kanal ve DM yazıyor göstergelerinde hesap değişimi durumu temizledikten beş saniye sonra eski timer `old-channel: []` kaydını yeniden oluşturdu; iki test de bu son assertion'da başarısız oldu. Geçici dosya finally içinde kaldırıldı. Günlük: TEMP/hichat-typing-owner-probe.log. Bu gözlem özel içerik sızıntısı kanıtı değildir; eski işin yeni hesap durumunu değiştirmesi ve timer sahipliği sorunudur. Kalıcı regresyon ve düzeltme sonraki kaynakta ele alınacak.
+
+
+### RF14/RF15 — Kanal ve DM yazıyor göstergesinde timer sahipliği (2026-11-15)
+
+fec8b107, hesap/generation reset'inden sonra eski timer'ın temizlenmiş store durumuna `old-channel: []` yazmasını engeller. İki gerçek store'un ortak fixture'ında gerçek `clearTokens()` geçişi kullanıldı; API generation değeri ile yayınlanan olay tutarlı kaldı. Sabit 9a965a09 kaynakta altı sahiplik/yeniden giriş testi başarısız, iki yenileme testi başarılıydı. Dört aday ürün dosyası baseline testi boyunca geçici olarak eski kaynağa döndürüldü ve finally içinde aday baytları geri yüklendi. İlk ham generation publisher fixture'ı kanonik kabul kanıtı yerine kullanılmıyor.
+
+Handler state bildiriminden önce bir timer kaydı ayırır. Reset bu kaydı ve kurulmuş timer'ı iptal eder; bildirim sırasında reset olursa dönüşte yeni timer kurulmaz. Sıraya girmiş eski callback kayıt sahipliğini yeniden kontrol eder. Tamamlanan kayıt, expiry bildirimi öncesinde silinir; böylece abonenin kurduğu ardıl timer silinmez. Observer hata verirse commit edilmiş güncellemenin expiry'si korunur ve hata çağırana iletilir. Kanal erişimi kaldırılınca yalnız ilgili kanal temizlenir; ilgisiz kanalın expiry'si ve beş saniyelik yenileme davranışı korunur.
+
+Dört dosyada 177 hedefli test geçti (3,95 saniye). Dokuz gerçek-store ve beş yardımcı yaşam döngüsü senaryosu dahil. Gerçek TypeScript/Vite build başarılı (Vite 1,65 saniye). Tam istemci coverage, lint ve değişmez kaynak taraması sürüyor. Receipt: `implementation/verification/refactor-typing-ownership-2026-11-15.json`. Genel RF14/RF15 ve proje kabulü açık; özel içerik sızıntısı iddiası yok.
+
+fec8b107 tam istemci doğrulaması: 498 dosyada 5.345 başarılı, 1 atlanan test. Satır kapsamı %68,91, dal kapsamı %64,89. Lint 0 hata ve mevcut 2 uyarıyla geçti. Son değişmez kaynak taraması ve önceki head CI terminal sonucu bekleniyor.
