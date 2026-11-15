@@ -3084,3 +3084,8 @@ Large fake-IDB fixtures timed out under coverage;the4new cases moved to a requir
 ### RF03/RF30 — terminal25cf and next measured delivery (2026-11-15)
 
 25cf99446755936896b5a6b8efbdc5cb5b6773e4 completed36/36checks and all3workflow runsSUCCESS,including actual Node22Windows/Linux packaging and the mandatory workflow expression gate. Snapshot:implementation/verification/refactor-25cf-terminal-ci-2026-11-15.json. Search coalescing/native-tier changes require independent new-head CI;prior green is not reused. PR305 stays draft;full project/native/physical acceptance remains open.
+
+
+### RF17 — coalesce repeated pending search deletions (2026-11-15)
+
+Fail-first real React panel tests delivered1000same-ID delete store updates while the first index removal was gated;both panels called remove1000times.9db4763d checks the existing pending-ID set before queueing duplicate work. Both panels now call remove once,hide the row immediately and update total once after commit;pending state is released normally. Targeted37testsPASS3.50s;frozen full485files5050passed1skipped113.65s,line68.35/branch64.52/statement67.28/function61.49%;general lint0errors2existing warnings;actual tsc-b/VitePASS1.69s. Receipt:implementation/verification/refactor-search-pending-delete-dedup-2026-11-15.json. Delayed/spied removal collaborator,not measured native heap/latency proof. Distinct-ID active-staging frontier remains unbounded and explicitly open;completed IDs are not retained indefinitely. b24 native storage CI step passed;overall Server CI still live. Held locally pending terminal prior-head evidence;full RF17/project/platform acceptance remains open.
