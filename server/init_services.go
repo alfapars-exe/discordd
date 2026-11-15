@@ -177,6 +177,7 @@ type serviceHub interface {
 }
 
 func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.Config, encryptionKey []byte, reachabilityReporter services.LiveKitReachabilityReporter) (*Services, *RateLimiters, services.MetricsCollector) {
+	validateRootRepositoryProviders(repos)
 	// Own service cache/context resources until the complete bundle is returned.
 	// Do not recover here: initialization panics must retain their original value.
 	transferred := false
