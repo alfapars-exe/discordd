@@ -1,0 +1,178 @@
+{
+  "sourceRevision": "36aafd3cd325aaed43ff680d53a06de89747b661",
+  "scope": "RF15/RF17 deletion publication failure isolation and scoped cache cleanup; bounded pending-ID frontier remains open",
+  "regression": {
+    "baselineRevision": "c282eafa",
+    "failed": 13,
+    "passed": 5,
+    "log": "hichat-message-deletion-baseline-complete.log",
+    "method": "Original channel/DM handler source read from git; candidate bytes restored in finally. Eighteen final tests with actual Zustand subscription failures, scoped cache spies and actual storage functions backed by fake-indexeddb."
+  },
+  "targeted": {
+    "files": 7,
+    "passed": 156,
+    "seconds": 4.22,
+    "log": "hichat-message-deletion-final-targeted.log"
+  },
+  "storage": {
+    "files": 2,
+    "passed": 74,
+    "seconds": 3.39,
+    "log": "hichat-message-deletion-storage.log",
+    "note": "Earlier14-case deletion suite plus keyStorage tests; final18-case suite included in targeted156."
+  },
+  "behavior": [
+    "Continue remaining synchronous deletion effects after unread/deletion notification failure, then await scoped cache cleanup.",
+    "Recheck session ownership before each publication and cleanup; obsolete DM connection rejected before deletion version mutation.",
+    "Retain original notification failure, or AggregateError preserving both failures and cause, for delivery failure handling.",
+    "Keep existing best-effort cache-error warning policy and static diagnostics.",
+    "Channel unread count decrements only for loaded peer messages; notification-triggered redelivery does not decrement again."
+  ],
+  "fullClient": {
+    "status": "PASS",
+    "log": "hichat-message-deletion-full.log",
+    "files": 491,
+    "passed": 5254,
+    "skipped": 1,
+    "seconds": 117.84,
+    "coverage": {
+      "lines": {
+        "total": 38243,
+        "covered": 26223,
+        "skipped": 0,
+        "pct": 68.56
+      },
+      "statements": {
+        "total": 52336,
+        "covered": 35341,
+        "skipped": 0,
+        "pct": 67.52
+      },
+      "functions": {
+        "total": 12225,
+        "covered": 7557,
+        "skipped": 0,
+        "pct": 61.81
+      },
+      "branches": {
+        "total": 39814,
+        "covered": 25774,
+        "skipped": 0,
+        "pct": 64.73
+      },
+      "branchesTrue": {
+        "total": 0,
+        "covered": 0,
+        "skipped": 0,
+        "pct": 100
+      }
+    }
+  },
+  "build": {
+    "status": "PASS",
+    "log": "hichat-message-deletion-final-build.log",
+    "command": "npm run build (tsc -b and Vite)",
+    "seconds": 3.17
+  },
+  "lint": {
+    "status": "PASS",
+    "log": "hichat-message-deletion-final-lint.log"
+  },
+  "selfScan": {
+    "status": "PASS",
+    "log": "hichat-36aa-selfscan.log",
+    "sourceRevision": "36aafd3cd325aaed43ff680d53a06de89747b661",
+    "method": "Immutable tracked-source git archive.",
+    "blockingMatches": 0,
+    "reviewLines": 448,
+    "reviewedRecords": 50
+  },
+  "limits": [
+    "Actual storage functions tested with fake-indexeddb, not native browser failure timing or physical storage.",
+    "Cache cleanup failure remains best effort; no durable deletion journal or mutation drain barrier added.",
+    "Search pending distinct-ID frontier remains unbounded; no IDs discarded, search restarted, budget raised or memory improvement claimed.",
+    "Zustand observer failure may prevent later observers from receiving the same publication; this change completes owned store/cache phases, not subscriber delivery.",
+    "Whole RF15/RF17/native/physical/project acceptance and new-head CI remain open.",
+    "Completion helper line coverage100%, branch87.5%; defensive helper-level cleanup rejection capture is not directly injected (callers retain existing best-effort warning policy)."
+  ],
+  "changedModules": {
+    "C:/Users/PARS/Desktop/PROJELER/HiChat/refactor-integration/client/src/hooks/ws/channelEventHandlers.ts": {
+      "lines": {
+        "total": 186,
+        "covered": 152,
+        "skipped": 0,
+        "pct": 81.72
+      },
+      "functions": {
+        "total": 24,
+        "covered": 16,
+        "skipped": 0,
+        "pct": 66.66
+      },
+      "statements": {
+        "total": 233,
+        "covered": 172,
+        "skipped": 0,
+        "pct": 73.81
+      },
+      "branches": {
+        "total": 250,
+        "covered": 176,
+        "skipped": 0,
+        "pct": 70.4
+      }
+    },
+    "C:/Users/PARS/Desktop/PROJELER/HiChat/refactor-integration/client/src/hooks/ws/completeMessageDeletion.ts": {
+      "lines": {
+        "total": 9,
+        "covered": 9,
+        "skipped": 0,
+        "pct": 100
+      },
+      "functions": {
+        "total": 1,
+        "covered": 1,
+        "skipped": 0,
+        "pct": 100
+      },
+      "statements": {
+        "total": 15,
+        "covered": 13,
+        "skipped": 0,
+        "pct": 86.66
+      },
+      "branches": {
+        "total": 8,
+        "covered": 7,
+        "skipped": 0,
+        "pct": 87.5
+      }
+    },
+    "C:/Users/PARS/Desktop/PROJELER/HiChat/refactor-integration/client/src/hooks/ws/dmEventHandlers.ts": {
+      "lines": {
+        "total": 211,
+        "covered": 148,
+        "skipped": 0,
+        "pct": 70.14
+      },
+      "functions": {
+        "total": 38,
+        "covered": 27,
+        "skipped": 0,
+        "pct": 71.05
+      },
+      "statements": {
+        "total": 280,
+        "covered": 191,
+        "skipped": 0,
+        "pct": 68.21
+      },
+      "branches": {
+        "total": 288,
+        "covered": 206,
+        "skipped": 0,
+        "pct": 71.52
+      }
+    }
+  }
+}

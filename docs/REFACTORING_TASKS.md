@@ -3241,3 +3241,16 @@ Frozen ca96d2c5 full490files5236passed1skipped116.04s; statement67.49/branch64.7
 Final immutable ca96d2c5 self-scan PASS:50 exact reviewed source records valid,0blocking matches,448review lines. Log:hichat-ca96-selfscan.log. No self-scan rule or waiver scope reduced. Prior08a2 CI has only repository shard6/8 live;Sonar failure still requires independent new-head proof.
 
 Prior08a2aad5 completed35/36checks:all3GitHubworkflowsSUCCESS,including security scan and Playwright;external Sonar S4822 aloneFAIL. Snapshot:implementation/verification/refactor-08a-terminal-ci-2026-11-15.json. Deliver frozen ca96 binding fixes and async-invocation Sonar remediation;independent new-headCI required,PR305 remains draft.
+
+
+### RF15/RF17 — deletion effects after observer failures (2026-11-15)
+
+RF17 bounded pending-ID work exposed a prerequisite: unread/store notification exceptions skipped decrypted-cache cleanup. Final18cases against original c282 handlers failed13/passed5; candidate restored exactly in finally. New deletion completion runs synchronous phases in order, rechecking ownership, then awaits cache cleanup even after publication failure. Original failure retained; multiple failures aggregate with cause. Obsolete DM connection rejected before version mutation. Channel unread now requires a loaded peer message, preventing duplicate decrement after observer-triggered redelivery. Tests c1f11de9/c2117c14 and product36aafd3c separate. Seven suites156passed4.22s; actual storage/fake-indexeddb integration confirms deleted row absent and unrelated row preserved. Receipt:implementation/verification/refactor-message-deletion-completion-2026-11-15.json. Final full suite/build/self-scan running.
+
+No bounded-memory claim: distinct pending-ID frontier remains unbounded; no arbitrary cap/discard/restart introduced. Durable mutation barrier/journal, cache-write failure recovery, later Zustand subscriber delivery, native browser failure timing and physical/platform/project acceptance remain open. Existing best-effort cache warning policy unchanged. Priorc282 SonarSUCCESS;whole CI still live. PR305 stays draft.
+
+Frozen36aafd3c full491files5254passed1skipped117.84s;statement67.52/branch64.73/function61.81/line68.56%;actual tsc-b/VitePASS3.17s;changed lintPASS. Changed-module V8 coverage copied into receipt. Immutable source self-scan and priorc282 terminalCI still pending;new-headCI required. No whole-project/native/physical closure.
+
+Coverage receipt correction: legacy-import and binding-preparation receipts had empty changedModules because suffix extraction did not normalize Windows separators. Earlier aggregate metrics/logs remain valid; earlier per-module snapshots were not captured and are not reconstructed. Receipts now explicitly mark that gap and attach separately labelled follow-up module coverage from frozen36aafd3c. Current deletion receipt normalizes separators and includes actual module records.
+
+Immutable36aafd3c self-scanPASS:50exact reviewed source records valid,0blocking matches,448review lines. Priorc282 completed36/36SUCCESS and all3workflowsSUCCESS,including Sonar;terminal snapshot:implementation/verification/refactor-c282-terminal-ci-2026-11-15.json. Deliver new deletion source after independent frozen local proof;new-headCI remains required. PR305 and whole project/native/physical acceptance remain open.

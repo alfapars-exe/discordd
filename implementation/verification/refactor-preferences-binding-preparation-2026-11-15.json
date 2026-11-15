@@ -76,7 +76,10 @@
     },
     "log": "hichat-preferences-binding-final-full.log"
   },
-  "changedModules": {},
+  "changedModules": {
+    "status": "Original per-module snapshot not captured",
+    "reason": "Receipt extraction used forward-slash suffixes against Windows backslash coverage keys; original full-run summary has since been overwritten. Original aggregate coverage/log remains valid."
+  },
   "build": {
     "command": "npm run build (tsc -b and Vite)",
     "result": "PASS",
@@ -99,5 +102,65 @@
     "Prior08a2 CI still live; Sonar S4822 failure persists there, so async invocation needs independent new-head CI.",
     "A prior full client run was intermediate because reset regression was added during it; only final frozen ca96 run above is acceptance evidence.",
     "Persistent observer failures and whole acquisition/native/physical/project acceptance remain open."
-  ]
+  ],
+  "followUpModuleCoverage": {
+    "sourceRevision": "36aafd3cd325aaed43ff680d53a06de89747b661",
+    "testRun": "491files5254passed1skipped",
+    "log": "hichat-message-deletion-full.log",
+    "scope": "Follow-up coverage, not a reconstruction of the earlier source/test run.",
+    "modules": {
+      "C:/Users/PARS/Desktop/PROJELER/HiChat/refactor-integration/client/src/stores/preferenceTask.ts": {
+        "lines": {
+          "total": 4,
+          "covered": 4,
+          "skipped": 0,
+          "pct": 100
+        },
+        "functions": {
+          "total": 3,
+          "covered": 3,
+          "skipped": 0,
+          "pct": 100
+        },
+        "statements": {
+          "total": 7,
+          "covered": 7,
+          "skipped": 0,
+          "pct": 100
+        },
+        "branches": {
+          "total": 2,
+          "covered": 2,
+          "skipped": 0,
+          "pct": 100
+        }
+      },
+      "C:/Users/PARS/Desktop/PROJELER/HiChat/refactor-integration/client/src/stores/preferencesStore.ts": {
+        "lines": {
+          "total": 261,
+          "covered": 257,
+          "skipped": 0,
+          "pct": 98.46
+        },
+        "functions": {
+          "total": 34,
+          "covered": 33,
+          "skipped": 0,
+          "pct": 97.05
+        },
+        "statements": {
+          "total": 338,
+          "covered": 320,
+          "skipped": 0,
+          "pct": 94.67
+        },
+        "branches": {
+          "total": 218,
+          "covered": 195,
+          "skipped": 0,
+          "pct": 89.44
+        }
+      }
+    }
+  }
 }
