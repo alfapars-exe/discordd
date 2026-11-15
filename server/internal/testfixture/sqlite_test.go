@@ -1,4 +1,4 @@
-package services
+package testfixture
 
 import (
 	"context"
@@ -78,9 +78,9 @@ func assertServiceFixtureConnection(t *testing.T, db *database.DB) {
 }
 
 func TestServiceFixtureSchemaAndConnectionParity(t *testing.T) {
-	var factory serviceFixtureFactory
+	var factory SQLite
 	cold := coldServiceFixtureReference(t)
-	first, second := factory.open(t, "first.db"), factory.open(t, "second.db")
+	first, second := factory.Open(t, "first.db"), factory.Open(t, "second.db")
 	if first.Conn == second.Conn || first.Conn == cold.Conn {
 		t.Fatal("fixtures share a connection pool")
 	}
@@ -104,20 +104,20 @@ func assertServiceFixtureUnchanged(t *testing.T, db *database.DB, ledger []strin
 }
 
 func TestServiceFixtureRowsSchemaAndLedgerStayIsolated(t *testing.T) {
-	var factory serviceFixtureFactory
-	first, second := factory.open(t, "first.db"), factory.open(t, "second.db")
+	var factory SQLite
+	first, second := factory.Open(t, "first.db"), factory.Open(t, "second.db")
 	ledger := serviceFixtureStrings(t, second, serviceFixtureLedgerQuery)
 	_, err := first.Conn.Exec(`CREATE TABLE fixture_only_marker(value TEXT); INSERT INTO users(id,username,password_hash) VALUES('fixture-only-user','fixture_only','x'); DELETE FROM schema_migrations WHERE filename=(SELECT MIN(filename) FROM schema_migrations); PRAGMA foreign_keys=OFF`)
 	if err != nil {
 		t.Fatal(err)
 	}
 	assertServiceFixtureUnchanged(t, second, ledger)
-	assertServiceFixtureUnchanged(t, factory.open(t, "later.db"), ledger)
+	assertServiceFixtureUnchanged(t, factory.Open(t, "later.db"), ledger)
 }
 
-func assertServiceFixtureOwnParallelRow(t *testing.T, factory *serviceFixtureFactory) {
+func assertServiceFixtureOwnParallelRow(t *testing.T, factory *SQLite) {
 	t.Helper()
-	db := factory.open(t, "parallel.db")
+	db := factory.Open(t, "parallel.db")
 	if _, err := db.Conn.Exec(`INSERT INTO users(id,username,password_hash) VALUES('parallel-user','same_name_in_independent_fixtures','x')`); err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +128,7 @@ func assertServiceFixtureOwnParallelRow(t *testing.T, factory *serviceFixtureFac
 }
 
 func TestServiceFixtureParallelCopiesStayIsolated(t *testing.T) {
-	var factory serviceFixtureFactory
+	var factory SQLite
 	for _, name := range []string{"a", "b", "c", "d", "e", "f", "g", "h"} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -138,9 +138,9 @@ func TestServiceFixtureParallelCopiesStayIsolated(t *testing.T) {
 }
 
 func TestServiceFixtureInitializerCleanupPreservesLaterCopies(t *testing.T) {
-	var factory serviceFixtureFactory
-	t.Run("initializer", func(t *testing.T) { factory.open(t, "initializer.db") })
+	var factory SQLite
+	t.Run("initializer", func(t *testing.T) { factory.Open(t, "initializer.db") })
 	t.Run("after-owner-cleanup", func(t *testing.T) {
-		assertServiceFixtureConnection(t, factory.open(t, "later.db"))
+		assertServiceFixtureConnection(t, factory.Open(t, "later.db"))
 	})
 }
