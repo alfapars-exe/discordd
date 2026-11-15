@@ -209,3 +209,30 @@ it("returns to the last populated page when the final page's only hit disappears
   expect(screen.getByText("25", { selector: ".search-count" })).toBeInTheDocument();
   expect(screen.queryByText("noSearchResults")).not.toBeInTheDocument();
 });
+
+it("keeps a newer query snapshot intact when an older content read rejects its shared ID", async () => {
+  vi.useFakeTimers();
+  useDMStore.setState(state => ({ channels: state.channels.map(c => ({ ...c, e2ee_enabled: true })) }));
+  useE2EEStore.setState({ initStatus: "ready" });
+  const rows = Array.from({ length: 30 }, (_, i) => ({
+    messageId: i === 0 ? "shared-id" : `new-${i + 1}`, channelId: "", dmChannelId: "dm",
+    content: `new match ${i + 1}`, timestamp: i, sourceSequence: String(i + 1),
+  }));
+  vi.mocked(searchCachedDMMessageRefs)
+    .mockResolvedValueOnce([{ messageId: "shared-id", timestamp: 0, sourceSequence: undefined }])
+    .mockResolvedValueOnce(rows.map(({ messageId, timestamp, sourceSequence }) => ({ messageId, timestamp, sourceSequence })));
+  let finishOld!: (row: Awaited<ReturnType<typeof getCachedDecryptedMessage>>) => void;
+  vi.mocked(getCachedDecryptedMessage)
+    .mockImplementation(async id => rows.find(row => row.messageId === id) ?? null)
+    .mockReturnValueOnce(new Promise(resolve => { finishOld = resolve; }));
+  render(<DMSearchPanel channelId="dm" onClose={() => {}} />);
+  fireEvent.change(screen.getByRole("textbox"), { target: { value: "old" } });
+  await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+  fireEvent.change(screen.getByRole("textbox"), { target: { value: "new match" } });
+  await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+  expect(screen.getByText("new match 30")).toBeInTheDocument();
+  await act(async () => finishOld(null));
+  await act(async () => { fireEvent.click(screen.getByText("searchNext")); });
+  expect(screen.getByText("new match 1")).toBeInTheDocument();
+  expect(screen.getByText("30", { selector: ".search-count" })).toBeInTheDocument();
+});

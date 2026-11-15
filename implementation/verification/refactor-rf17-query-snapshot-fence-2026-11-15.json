@@ -1,0 +1,14 @@
+{
+  "productSource": "13525faa",
+  "contract": "A stale content read must not prune IDs from the newer query snapshot, including IDs shared by both queries.",
+  "fixture": "Old query waits on shared-id; newer query installs 30 hits with shared-id on page two; old read returns null; page two must retain shared-id and total 30.",
+  "verification": {
+    "targeted": "85 passed across DM/channel/keyStorage",
+    "mutation": "Removing only the post-await isCurrent guard makes the named regression fail; original helper bytes restored in finally and equality asserted."
+  },
+  "limits": [
+    "Mutation probe validates one temporal guard; not complete concurrency acceptance",
+    "First-query matching-ID memory remains unbounded",
+    "macOS retry still in progress"
+  ]
+}
