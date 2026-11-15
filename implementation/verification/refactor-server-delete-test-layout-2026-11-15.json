@@ -1,0 +1,10 @@
+{
+  "scope": "RF26 test-only extraction: server deletion committed-event regression",
+  "validation": {
+    "before": "go test ./services -run ^TestServerDeleteEventFollowsCommit$ -count=1 PASS1.322s",
+    "after": "same test-count20 PASS13.847s;owner andadmin subtests retained",
+    "vet": "go vet ./services PASS",
+    "review": "Ignore-whitespace diff inspected: all guard SQL,event count/postcommit database assertions,failed-delete activity assertion and successful-owner invalidation assertion retained. New helpers call t.Helper. No product source changed."
+  },
+  "pending": "New-source CI/Sonar and full services run pending;not project acceptance."
+}

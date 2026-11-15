@@ -6,7 +6,7 @@
     "targeted": "5 tests,20 repeats,PASS 0.683s",
     "vet": "PASS",
     "equivalence": "Six original/new AST collector comparisons on identical mutated ASTs: valid accepted; missing defer,missing join,wrong context,direct goroutine,double defer rejected. Temporary test removed. PASS 0.623s.",
-    "linuxRace": "RUNNING; not accepted until terminal result",
+    "linuxRace": "PASS 3.598s;5 targeted tests20repeats;CGO1,Go1.26.11linux/amd64;source and host cache read-only;task-specific module/build cache reused;container auto-removed",
     "scan": "Immutable 608d3414 archive: 0 blocking matches;478 review lines. This pattern scan is not proof of absence of vulnerabilities."
   },
   "evidenceLogs": [

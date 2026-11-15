@@ -3380,3 +3380,10 @@ Beş hedefli test Windows'ta20tekrar ve Linux/Go1.26.11CGO1race altında20tekrar
 608d3414 yalnız test kodunu ayrıştırır; eski üç kabul koşulu ve hata mesajları korunur. Altı aynı-AST eski/yeni karşılaştırması geçti: geçerli kaynak kabul, eksik defer/join, yanlış context, doğrudan goroutine ve çift defer ret. Ana paket PASS6.472s, beş hedefli test20tekrar PASS0.683s, vet PASS. Immutable kaynak taraması0blocking/478review satırı; bu desen taraması güvenlik açığı yokluğu kanıtı değildir. Linux race halen çalışıyor; yeni-head Sonar sonucu ve karmaşıklık puanı doğrulanmadı. Receipt: implementation/verification/refactor-owner-watch-ast-2026-11-15.json.
 
 Önceki228a00bb PR305 terminal CI36/36SUCCESS: implementation/verification/refactor-228a-terminal-ci-2026-11-15.json. Genel proje/fiziksel/platform kabulü açık.
+
+Linux608d3414 race terminalPASS3.598s,beşhedeflitest20tekrar,Go1.26.11linuxCGO1. İlk derleme/indirme hazırlığı test süresine dahil değildir. a1e85a84 GitHub PR305head olarak doğrulandı;Server43744006265,Frontend43744006273,Mobile43744006264 çalışıyor. Yeni-head Sonar ve terminalCI bekleniyor.
+
+
+### RF26 — sunucu silme regresyonunun okunabilirliği (2026-11-15)
+
+server_delete_event_test.go içinde owner/admin alt testleri, kurulum SQL döngüsü ve senaryo gövdesi ayrıldı. Başarısız transaction olay/activity üretmez; başarılı transaction sonrası DB kaydı yoktur, tek doğru olay gelir ve owner activity invalidation korunur. Önce tek koşuPASS1.322s;sonra20tekrarPASS13.847s;services vetPASS. Ürün kodu değişmedi. Receipt:implementation/verification/refactor-server-delete-test-layout-2026-11-15.json. Fullservices/yeniheadCI/Sonar henüz doğrulanmadı.
