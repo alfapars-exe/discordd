@@ -3387,3 +3387,5 @@ Linux608d3414 race terminalPASS3.598s,beşhedeflitest20tekrar,Go1.26.11linuxCGO1
 ### RF26 — sunucu silme regresyonunun okunabilirliği (2026-11-15)
 
 server_delete_event_test.go içinde owner/admin alt testleri, kurulum SQL döngüsü ve senaryo gövdesi ayrıldı. Başarısız transaction olay/activity üretmez; başarılı transaction sonrası DB kaydı yoktur, tek doğru olay gelir ve owner activity invalidation korunur. Önce tek koşuPASS1.322s;sonra20tekrarPASS13.847s;services vetPASS. Ürün kodu değişmedi. Receipt:implementation/verification/refactor-server-delete-test-layout-2026-11-15.json. Fullservices/yeniheadCI/Sonar henüz doğrulanmadı.
+
+Sunucu silme test ayrıştırması sonrası tam services paketiPASS: ok  	github.com/argeinfina/hichat/services	94.840s. Günlük:TEMP/hichat-delete-layout-services.log. Yerel sonkaynakfb5fabc3;gönderilmişa1e85a84CI halençalışıyor,iptaledilmedi.
