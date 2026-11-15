@@ -291,6 +291,58 @@ describe("account-scoped preference synchronization", () => {
     }finally{stop();write.resolve({success:true});}
   });
 
+  it.each(["fetch","write"] as const)("releases the %s handle when its error notification rejects",async phase=>{
+    if(phase==="write")await ready();else state().bindAccount("alice");
+    state().set({theme:"recoverable"});
+    if(phase==="fetch")mocks.get.mockRejectedValueOnce(new Error("offline"));
+    else mocks.update.mockRejectedValueOnce(new Error("offline"));
+    const failure=new Error("error observer failed");let stop=()=>{};
+    stop=usePreferencesStore.subscribe(next=>{if(next.syncStatus==="error"){stop();throw failure;}});
+    try{
+      await expect(phase==="fetch"?state().fetchAndApply():state().retrySync()).rejects.toBe(failure);
+      expect(JSON.parse(localStorage.getItem(pendingKey)!)).toEqual({theme:"recoverable"});
+      await state().retrySync();
+      expect(state().syncStatus).toBe("saved");
+      expect(state().hasPendingChanges).toBe(false);
+      expect(localStorage.getItem(pendingKey)).toBeNull();
+      expect(mocks.update).toHaveBeenCalledTimes(phase==="write"?2:1);
+    }finally{stop();}
+  });
+  it("observes a detached flush rejection and leaves its persisted patch retryable",async()=>{
+    await ready();mocks.update.mockRejectedValueOnce(new Error("offline"));
+    const diagnostic=vi.spyOn(console,"error").mockImplementation(()=>{});
+    let stop=()=>{};
+    stop=usePreferencesStore.subscribe(next=>{if(next.syncStatus==="error"){stop();throw new Error("private observer detail");}});
+    try{
+      state().set({theme:"recoverable"});await vi.advanceTimersByTimeAsync(1000);
+      expect(diagnostic).toHaveBeenCalledExactlyOnceWith("[preferences] background_flush_failed");
+      expect(JSON.parse(localStorage.getItem(pendingKey)!)).toEqual({theme:"recoverable"});
+      await state().retrySync();expect(state().syncStatus).toBe("saved");
+    }finally{stop();diagnostic.mockRestore();}
+  });
+
+  it.each(["fetch","write"] as const)("keeps replacement-account work intact when retired %s cleanup rejects",async phase=>{
+    if(phase==="write")await ready();else state().bindAccount("alice");
+    state().set({theme:"alice-recoverable"});
+    if(phase==="fetch")mocks.get.mockRejectedValueOnce(new Error("offline"));
+    else mocks.update.mockRejectedValueOnce(new Error("offline"));
+    const failure=new Error("retired observer failed");let stop=()=>{},replacement:Promise<void>=Promise.resolve();
+    stop=usePreferencesStore.subscribe(next=>{
+      if(next.syncStatus!=="error")return;
+      stop();state().bindAccount("bob");state().set({theme:"bob-pending"});
+      mocks.get.mockResolvedValue(ok({},"bob"));replacement=state().retrySync();
+      throw failure;
+    });
+    try{
+      await expect(phase==="fetch"?state().fetchAndApply():state().retrySync()).rejects.toBe(failure);
+      await replacement;
+      expect(state().accountId).toBe("bob");expect(state().syncStatus).toBe("saved");
+      expect(state().data).toEqual({theme:"bob-pending"});expect(state().hasPendingChanges).toBe(false);
+      expect(JSON.parse(localStorage.getItem(pendingKey)!)).toEqual({theme:"alice-recoverable"});
+      expect(mocks.update.mock.calls.at(-1)![0]).toEqual({theme:"bob-pending"});
+    }finally{stop();}
+  });
+
   it("fences an old account while the production presenter is still loading", async () => {
     const { applyAccountPreferences } = await import("./applyAccountPreferences");
     const loading = deferred<typeof applyAccountPreferences>();
