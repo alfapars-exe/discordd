@@ -308,3 +308,33 @@ it("keeps counts monotonic when off-page deletion commits return out of order", 
  await act(async()=>first());expect(screen.getByText("28",{selector:".search-count"})).toBeInTheDocument();
  expect(snapshotReferences).toHaveBeenCalledTimes(1);
 });
+
+it("coalesces repeated deletion events while one index removal is pending", async () => {
+  vi.useFakeTimers();
+  useDMStore.setState(state=>({channels:state.channels.map(item=>({...item,e2ee_enabled:true}))}));
+  useE2EEStore.setState({initStatus:"ready"});
+  const rows=Array.from({length:2},(_,i)=>({messageId:`duplicate-${i}`,timestamp:i,channelId:"",dmChannelId:"dm",content:`duplicate match ${i}`}));
+  snapshotReferences.mockResolvedValueOnce(rows);
+  vi.mocked(getCachedDecryptedMessage).mockImplementation(async id=>rows.find(item=>item.messageId===id)??null);
+  const view=render(<DMSearchPanel channelId="dm" onClose={()=>{}}/>);
+  let release!:()=>void;
+  const gate=new Promise<void>(resolve=>{release=resolve;});
+  try {
+    fireEvent.change(screen.getByRole("textbox"),{target:{value:"duplicate match"}});
+    await act(async()=>{await vi.advanceTimersByTimeAsync(300);});
+    expect(screen.getByText("2",{selector:".search-count"})).toBeInTheDocument();
+    const {createCachedSearchSnapshot}=await import("../../crypto/cachedSearchSnapshot");
+    const index=await vi.mocked(createCachedSearchSnapshot).mock.results.at(-1)!.value;
+    const original=index.remove.bind(index);
+    const remove=vi.spyOn(index,"remove").mockImplementation(async(...args)=>{await gate;return original(...args);});
+    await act(async()=>{for(let i=0;i<1000;i++){useDMStore.setState({lastDeletedDM:{id:"duplicate-0",dm_channel_id:"dm"}});}});
+    expect(screen.queryByText("duplicate match 0")).not.toBeInTheDocument();
+    expect(remove).toHaveBeenCalledTimes(1);
+    await act(async()=>release());
+    expect(screen.getByText("1",{selector:".search-count"})).toBeInTheDocument();
+    expect(screen.getByText("duplicate match 1")).toBeInTheDocument();
+  } finally {
+    await act(async()=>release());
+    view.unmount();vi.restoreAllMocks();vi.useRealTimers();
+  }
+});
