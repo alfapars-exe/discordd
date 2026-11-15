@@ -31,7 +31,29 @@ type administrationServices struct {
 // initAdministrationServices shares account invalidation, voice revocation and
 // configured administrative integrations without starting background workers.
 func initAdministrationServices(deps administrationDependencies) administrationServices {
+	for _, input := range []struct {
+		name  string
+		value any
+	}{
+		{"Database", deps.Database}, {"Repositories", deps.Repositories}, {"Hub", deps.Hub}, {"Voice", deps.Voice}, {"UserCache", deps.UserCache}, {"Config", deps.Config},
+	} {
+		if missingCompositionInput(input.value) {
+			panic("administration requires " + input.name)
+		}
+	}
+	// A nil interface explicitly disables administrative email delivery.
+	if deps.Email != nil && missingCompositionInput(deps.Email) {
+		panic("administration email provider is typed nil")
+	}
 	repos, cfg := deps.Repositories, deps.Config
+	for _, input := range []struct {
+		name  string
+		value any
+	}{{"User", repos.User}, {"Server", repos.Server}, {"LiveKit", repos.LiveKit}, {"Channel", repos.Channel}} {
+		if missingCompositionInput(input.value) {
+			panic("administration requires repository " + input.name)
+		}
+	}
 	user := services.NewAdminUserService(repos.User, deps.Hub, deps.Voice, deps.Email, deps.UserCache)
 	user.SetUploadDir(cfg.Upload.Dir)
 	server := services.NewAdminServerService(deps.Database, repos.Server, repos.User, deps.Hub, deps.Email)
