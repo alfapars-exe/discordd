@@ -8,6 +8,7 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
+import { StrictMode } from "react";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 
 import {
@@ -52,18 +53,12 @@ function flushAnimationFrame() {
   );
 }
 
-function renderProbe(initialContent: string | null, saveEdit: (c: string) => unknown) {
+function renderProbe(initialContent: string | null, saveEdit: (c: string) => unknown, strict = false) {
   // `expose` runs every render, so `latest` always holds the current bag.
   const holder: { latest: UseMessageEditingResult | null } = { latest: null };
-  render(
-    <Probe
-      initialContent={initialContent}
-      saveEdit={saveEdit}
-      expose={(result) => {
-        holder.latest = result;
-      }}
-    />,
-  );
+  const probe = <Probe initialContent={initialContent} saveEdit={saveEdit}
+    expose={(result) => { holder.latest = result; }} />;
+  render(strict ? <StrictMode>{probe}</StrictMode> : probe);
   return holder;
 }
 
@@ -157,6 +152,27 @@ describe("useMessageEditing — QA bug #5 (edit caret + leading whitespace)", ()
     await act(async () => { finishOld(); await pending; });
     expect(holder.latest?.isEditing).toBe(true);
     expect(holder.latest?.editContent).toBe("replacement draft");
+  });
+
+  it.each([
+    { type: "user" as const, strict: false },
+    { type: "role" as const, strict: false },
+    { type: "user" as const, strict: true },
+    { type: "role" as const, strict: true },
+  ])("preserves active $type mention tokens and trailing draft (StrictMode=$strict)", async ({ type, strict }) => {
+    const save = vi.fn();
+    const holder = renderProbe("original", save, strict);
+    act(() => holder.latest?.startEdit());
+    const textarea = screen.getByLabelText<HTMLTextAreaElement>("edit-message");
+    fireEvent.change(textarea, { target: { value: "before @a trailing", selectionStart: 9 } });
+    act(() => holder.latest?.onMentionSelect({ id: "selected-id", name: "A+B [team]", type }));
+    expect(textarea.value).toBe("before @A+B [team]  trailing");
+    expect(textarea.selectionStart).toBe("before @A+B [team] ".length);
+    expect(textarea.selectionEnd).toBe(textarea.selectionStart);
+    await act(async () => { await holder.latest?.saveAndExit(); });
+    const token = type === "role" ? "<@&selected-id>" : "<@selected-id>";
+    expect(save).toHaveBeenCalledExactlyOnceWith(`before ${token}  trailing`);
+    expect(holder.latest?.isEditing).toBe(false);
   });
 
 });

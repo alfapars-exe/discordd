@@ -55,6 +55,8 @@ export function useMessageEditing(args: UseMessageEditingArgs): UseMessageEditin
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(initialContent ?? "");
   const [editMentionQuery, setEditMentionQuery] = useState<string | null>(null);
+  const [mentionCaret, setMentionCaret] = useState<{ position: number } | null>(null);
+  const editGenerationRef = useRef(0);
 
   const editMentionStartRef = useRef<number>(-1);
   const editMentionSelectionsRef = useRef<MentionSelection[]>([]);
@@ -72,12 +74,29 @@ export function useMessageEditing(args: UseMessageEditingArgs): UseMessageEditin
     ta.setSelectionRange(end, end);
   }, [isEditing]);
 
+  useLayoutEffect(() => {
+    if (!isEditing || !mentionCaret) return;
+    const ta = editTextareaRef.current;
+    if (!ta) return;
+    ta.focus();
+    ta.setSelectionRange(mentionCaret.position, mentionCaret.position);
+  }, [isEditing, mentionCaret]);
+
   const startEdit = useCallback(() => {
+    editGenerationRef.current++;
+    editMentionSelectionsRef.current = [];
+    editMentionStartRef.current = -1;
+    setEditMentionQuery(null);
+    setMentionCaret(null);
     setEditContent(initialContent ?? "");
     setIsEditing(true);
   }, [initialContent]);
 
   const cancel = useCallback(() => {
+    editGenerationRef.current++;
+    editMentionSelectionsRef.current = [];
+    editMentionStartRef.current = -1;
+    setMentionCaret(null);
     setEditContent(initialContent ?? "");
     setEditMentionQuery(null);
     setIsEditing(false);
@@ -121,23 +140,14 @@ export function useMessageEditing(args: UseMessageEditingArgs): UseMessageEditin
 
     editMentionSelectionsRef.current.push(mention);
 
+    const cursorPos = editTextareaRef.current?.selectionStart;
+    const displayText = `@${mention.name}`;
+    setMentionCaret({ position: start + displayText.length + 1 });
     setEditContent((current) => {
-      const cursorPos = editTextareaRef.current?.selectionStart ?? current.length;
       const before = current.slice(0, start);
-      const after = current.slice(cursorPos);
-      const displayText = `@${mention.name}`;
+      const after = current.slice(cursorPos ?? current.length);
       const newContent = `${before}${displayText} ${after}`;
 
-      // Reposition the cursor after the inserted mention + space — done
-      // inside requestAnimationFrame so React has flushed the new value.
-      requestAnimationFrame(() => {
-        if (editTextareaRef.current) {
-          const pos = start + displayText.length + 1;
-          editTextareaRef.current.selectionStart = pos;
-          editTextareaRef.current.selectionEnd = pos;
-          editTextareaRef.current.focus();
-        }
-      });
 
       return newContent;
     });
@@ -164,11 +174,17 @@ export function useMessageEditing(args: UseMessageEditingArgs): UseMessageEditin
     // trimEnd only — trim() also stripped leading whitespace, which the
     // user may have typed intentionally (e.g. indented continuation,
     // leading bullet, or a space after a mention prefix).
+    const generation = editGenerationRef.current;
     const tokenized = tokenize(editContent.trimEnd());
     if (tokenized && tokenized !== (initialContent ?? "")) {
       await saveEdit(tokenized);
     }
+    if (editGenerationRef.current !== generation) return;
+    editGenerationRef.current++;
     editMentionSelectionsRef.current = [];
+    editMentionStartRef.current = -1;
+    setEditMentionQuery(null);
+    setMentionCaret(null);
     setIsEditing(false);
   }, [editContent, initialContent, saveEdit, tokenize]);
 
