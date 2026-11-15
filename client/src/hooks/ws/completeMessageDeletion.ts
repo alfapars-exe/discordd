@@ -1,3 +1,5 @@
+import { reserveCachedMessageDeletion } from "../../crypto/cachedMessageDeletions";
+
 /** Notification failure must not skip the remaining owned deletion effects.
  * Run synchronous publications in order, then await scoped cache cleanup.
  * Retain failures for delivery retry without touching a replacement session.
@@ -24,5 +26,3 @@ export async function completeMessageDeletion(
     }
   } finally { finish(); }
 }
-import { reserveCachedMessageDeletion } from "../../crypto/cachedMessageDeletions";
-

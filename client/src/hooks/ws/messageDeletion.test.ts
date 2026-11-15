@@ -1,3 +1,6 @@
+import "fake-indexeddb/auto";
+import { IDBFactory as FakeIDBFactory } from "fake-indexeddb";
+
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { handleChannelEvent } from "./channelEventHandlers";
 import { handleDMEvent } from "./dmEventHandlers";
@@ -167,5 +170,3 @@ for (const kind of ["channel", "dm"] as const) {
     expect(decrement).toHaveBeenCalledOnce();
   });
 }
-import "fake-indexeddb/auto";
-import { IDBFactory as FakeIDBFactory } from "fake-indexeddb";
