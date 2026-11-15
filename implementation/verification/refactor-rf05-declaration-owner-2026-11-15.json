@@ -1,0 +1,28 @@
+{
+  "date": "2026-11-15",
+  "base": "b1a9fb3b",
+  "sources": {
+    "scripts/query-inventory/main.go": "4644223604673c6fba18711f23812cdc2afcfc4287d335c0555c32f2174a09ac",
+    "scripts/query-inventory/main_test.go": "2834b976b09edceed943225de8a81d0eeff8d33922e3ea1da5164a5d600ba87d"
+  },
+  "before": "new lexical ownership test failed because call records had no declaration owner",
+  "change": "add enclosing_function,receiver syntax and declaration_line;package initializers stay unowned and nested closures map to outer declaration",
+  "validation": {
+    "toolTests": "5passed",
+    "vet": "file-based go vet passed",
+    "productionInventory": {
+      "parsed_files": 182,
+      "literal_calls": 659,
+      "constant_calls": 31,
+      "unresolved_calls": 273
+    },
+    "unresolvedDeclarations": 254
+  },
+  "ciGate": ".github/workflows/server-ci.yml existing query-inventory test step",
+  "index": "refactor-rf05-declaration-index-2026-11-15.json",
+  "limits": [
+    "method-name and lexical receiver syntax only;not verified DB receiver types",
+    "nested closures are attributed to outer declarations,not call-graph execution",
+    "full fixture/query-family/dialect equivalence mapping remains open"
+  ]
+}

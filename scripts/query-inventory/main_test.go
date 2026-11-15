@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"go/ast"
 	"go/parser"
 	"os"
@@ -8,6 +9,52 @@ import (
 	"strings"
 	"testing"
 )
+
+func TestInventoryIdentifiesDeclarationOwnersIncludingNestedClosures(t *testing.T) {
+	root := t.TempDir()
+	directory := filepath.Join(root, "server", "repository")
+	if err := os.MkdirAll(directory, 0700); err != nil {
+		t.Fatal(err)
+	}
+	source := `package fixture
+var global = db.Query("SELECT global")
+type repo struct{}
+func (r *repo) Find() {
+ db.Query(query)
+ consume(func(){ db.Exec("DELETE FROM example") })
+}
+func Other(){ db.Query("SELECT other") }
+`
+	if err := os.WriteFile(filepath.Join(directory, "queries.go"), []byte(source), 0600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := inventory(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(got.Calls)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var calls []map[string]any
+	if err := json.Unmarshal(encoded, &calls); err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) != 4 {
+		t.Fatalf("calls=%v", calls)
+	}
+	if calls[0]["enclosing_function"] != nil {
+		t.Fatalf("global initializer acquired a function: %v", calls[0])
+	}
+	for _, index := range []int{1, 2} {
+		if calls[index]["enclosing_function"] != "Find" || calls[index]["receiver"] != "*repo" || calls[index]["declaration_line"] != float64(4) {
+			t.Fatalf("method/closure declaration ownership lost: %v", calls[index])
+		}
+	}
+	if calls[3]["enclosing_function"] != "Other" || calls[3]["receiver"] != nil {
+		t.Fatalf("function owner=%v", calls[3])
+	}
+}
 
 func TestInventorySeparatesLiteralAndUnresolvedCallSites(t *testing.T) {
 	root := t.TempDir()

@@ -3,10 +3,12 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"go/ast"
+	"go/format"
 	"go/parser"
 	"go/token"
 	"io/fs"
@@ -17,11 +19,14 @@ import (
 )
 
 type callSite struct {
-	File       string `json:"file"`
-	Line       int    `json:"line"`
-	Method     string `json:"method"`
-	Expression string `json:"expression_kind"`
-	SQL        string `json:"literal_sql,omitempty"`
+	File            string `json:"file"`
+	Line            int    `json:"line"`
+	Method          string `json:"method"`
+	Expression      string `json:"expression_kind"`
+	SQL             string `json:"literal_sql,omitempty"`
+	Function        string `json:"enclosing_function,omitempty"`
+	Receiver        string `json:"receiver,omitempty"`
+	DeclarationLine int    `json:"declaration_line,omitempty"`
 }
 type report struct {
 	Scope      string     `json:"scope"`
@@ -100,6 +105,14 @@ func inventory(root string) (report, error) {
 			return err
 		}
 		result.Files++
+		// Ownership is lexical, not receiver typing or execution proof. Nested
+		// function literals remain attributed to their enclosing declaration.
+		var functions []*ast.FuncDecl
+		for _, declaration := range file.Decls {
+			if function, ok := declaration.(*ast.FuncDecl); ok {
+				functions = append(functions, function)
+			}
+		}
 		ast.Inspect(file, func(node ast.Node) bool {
 			call, ok := node.(*ast.CallExpr)
 			if !ok {
@@ -125,6 +138,20 @@ func inventory(root string) (report, error) {
 				rel = path
 			}
 			site := callSite{File: filepath.ToSlash(rel), Line: positions.Position(call.Pos()).Line, Method: method.Sel.Name, Expression: fmt.Sprintf("%T", call.Args[index])}
+			for _, function := range functions {
+				if call.Pos() < function.Pos() || call.End() > function.End() {
+					continue
+				}
+				site.Function = function.Name.Name
+				site.DeclarationLine = positions.Position(function.Pos()).Line
+				if function.Recv != nil && len(function.Recv.List) > 0 {
+					var receiver bytes.Buffer
+					if err := format.Node(&receiver, positions, function.Recv.List[0].Type); err == nil {
+						site.Receiver = receiver.String()
+					}
+				}
+				break
+			}
 			if value, ok := constantSQL(call.Args[index], make(map[*ast.Object]bool)); ok {
 				site.SQL = value
 				if _, direct := call.Args[index].(*ast.BasicLit); direct {
