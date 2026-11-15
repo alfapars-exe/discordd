@@ -117,4 +117,46 @@ describe("useMessageEditing — QA bug #5 (edit caret + leading whitespace)", ()
     expect(saveEdit).toHaveBeenCalledWith("   indented reply");
     expect(holder.latest?.isEditing).toBe(false);
   });
+  it("does not carry selected mentions from a cancelled edit into the next draft", async () => {
+    const save = vi.fn();
+    const holder = renderProbe("original", save);
+    act(() => holder.latest?.startEdit());
+    fireEvent.change(screen.getByLabelText("edit-message"), { target: { value: "@Ali", selectionStart: 4 } });
+    act(() => holder.latest?.onMentionSelect({ id: "alice-id", name: "Alice", type: "user" }));
+    act(() => holder.latest?.cancel());
+    act(() => holder.latest?.startEdit());
+    fireEvent.change(screen.getByLabelText("edit-message"), { target: { value: "@Alice is plain text" } });
+    await act(async () => { await holder.latest?.saveAndExit(); });
+    expect(save).toHaveBeenCalledWith("@Alice is plain text");
+  });
+
+  it("does not overwrite a new user selection after inserting a mention", async () => {
+    const holder = renderProbe("original", vi.fn());
+    act(() => holder.latest?.startEdit());
+    const textarea = screen.getByLabelText<HTMLTextAreaElement>("edit-message");
+    fireEvent.change(textarea, { target: { value: "@Ali", selectionStart: 4 } });
+    act(() => holder.latest?.onMentionSelect({ id: "alice-id", name: "Alice", type: "user" }));
+    expect(textarea.value).toBe("@Alice ");
+    textarea.setSelectionRange(0, textarea.value.length);
+    await flushAnimationFrame();
+    expect(textarea.selectionStart).toBe(0);
+    expect(textarea.selectionEnd).toBe(textarea.value.length);
+  });
+
+  it("does not let an older save completion close a replacement edit session", async () => {
+    let finishOld!: () => void;
+    const save = vi.fn(() => new Promise<void>(resolve => { finishOld = resolve; }));
+    const holder = renderProbe("original", save);
+    act(() => holder.latest?.startEdit());
+    fireEvent.change(screen.getByLabelText("edit-message"), { target: { value: "old pending edit" } });
+    let pending: Promise<void> | undefined;
+    act(() => { pending = holder.latest?.saveAndExit(); });
+    act(() => holder.latest?.cancel());
+    act(() => holder.latest?.startEdit());
+    fireEvent.change(screen.getByLabelText("edit-message"), { target: { value: "replacement draft" } });
+    await act(async () => { finishOld(); await pending; });
+    expect(holder.latest?.isEditing).toBe(true);
+    expect(holder.latest?.editContent).toBe("replacement draft");
+  });
+
 });
