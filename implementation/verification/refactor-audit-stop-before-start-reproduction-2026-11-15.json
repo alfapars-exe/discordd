@@ -1,0 +1,13 @@
+{
+  "source": "f5d32ee32718aa0ad623825638352adafc2bc6fa",
+  "method": "Standalone temporary Go main built against unchanged services package; constructor with no writes, Stop in goroutine, 200ms bounded observation.",
+  "result": "FAIL reproduced: Stop before Start did not return.",
+  "cleanup": "After observation called Start then Stop to close writer and joined first Stop goroutine; process exited 1 as expected. No worker left running.",
+  "probe_log": "hichat-audit-stop-probe.log in local TEMP",
+  "limits": [
+    "Stop-before-start executable reproduction only; repeated/concurrent Start concern still requires regression.",
+    "200ms is bounded liveness observation, not a latency guarantee.",
+    "Full fixed-source Go session 61409 remains live; product source unchanged."
+  ],
+  "next": "Add regression suite and implement serialized terminal lifecycle after broad run finishes; preserve queued audit drain and admission semantics."
+}
