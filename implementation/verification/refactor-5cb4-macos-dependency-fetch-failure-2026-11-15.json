@@ -1,0 +1,10 @@
+{
+  "source": "5cb415ba803a7114b938f846772db97f80714dd7",
+  "run": 43663517047,
+  "job": 132657793601,
+  "conclusion": "FAILURE",
+  "observed": "xcodebuild package resolution failed fetching public protobuf/abseil/livekit submodules: could not read Username for https://github.com; terminal prompts disabled; exit 74.",
+  "scope": "Dependency retrieval failed before native compilation; underlying authentication/network cause not established.",
+  "rerunAttempt": "POST job rerun rejected HTTP 403 because containing workflow still running; Android job 132657793397 confirmed in_progress. Retry after terminal workflow state.",
+  "jobUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43663517047/job/132657793601"
+}

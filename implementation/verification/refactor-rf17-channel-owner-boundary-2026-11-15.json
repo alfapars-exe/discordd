@@ -1,0 +1,10 @@
+{
+  "scope": "RF17 channel search account boundary",
+  "regression": "With unchanged server/channel state, publishing a new account owner left the old search input/results and pending response active. Regression failed before fix.",
+  "change": "Channel SearchPanel subscribes to auth owner changes and includes owner in its existing keyed scope, matching DM behavior. Existing unmount cleanup aborts/increments request sequence.",
+  "tests": "84 passed across channel/DM/keyStorage",
+  "limits": [
+    "Full RF17 and memory bounds remain open",
+    "Current CI is separate from this unpushed product change"
+  ]
+}

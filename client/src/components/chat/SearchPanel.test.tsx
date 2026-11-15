@@ -72,6 +72,7 @@ vi.mock("../shared/Avatar", () => ({
   default: () => null,
 }));
 
+import { getAuthSessionOwner, publishAuthOwnerChange } from "../../api/authSessionEvents";
 import SearchPanel from "./SearchPanel";
 import { searchMessages } from "../../api/search";
 import { getCachedDecryptedMessage, searchCachedMessageRefs } from "../../crypto/keyStorage";
@@ -150,6 +151,24 @@ describe("SearchPanel — result races", () => {
     typeQuery("private search");
     await act(async () => {});
     expect(searchMessages).not.toHaveBeenCalled();
+  });
+
+  it("clears an old account search before server state finishes resetting", async () => {
+    const owner = getAuthSessionOwner();
+    const pending = deferred<APIResponse<SearchResult>>();
+    vi.mocked(searchMessages).mockResolvedValueOnce(ok([makeMessage("old", "old account visible")])).mockReturnValueOnce(pending.promise);
+    render(<SearchPanel channelId="ch-1" onClose={() => {}} />);
+    try {
+      typeQuery("first");
+      await act(async () => {});
+      expect(screen.getByText("old account visible")).toBeInTheDocument();
+      typeQuery("pending");
+      act(() => publishAuthOwnerChange("channel-search-next-owner"));
+      expect(screen.getByPlaceholderText("searchPlaceholder")).toHaveValue("");
+      expect(screen.queryByText("old account visible")).not.toBeInTheDocument();
+      await act(async () => pending.resolve(ok([makeMessage("late", "old account late")])));
+      expect(screen.queryByText("old account late")).not.toBeInTheDocument();
+    } finally { act(() => publishAuthOwnerChange(owner)); }
   });
 
   it("ignores an older response that resolves after a newer one", async () => {

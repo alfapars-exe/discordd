@@ -1,7 +1,8 @@
 /** SearchPanel — Message search with debounced input and pagination. */
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
+import { getAuthSessionOwner, subscribeAuthOwnerChanges } from "../../api/authSessionEvents";
 import { searchMessages } from "../../api/search";
 import { searchCachedMessageRefs } from "../../crypto/keyStorage";
 import { readCachedSearchPage } from "../../crypto/cachedSearchPage";
@@ -30,7 +31,8 @@ function SearchPanel(props: SearchPanelProps) {
   const activeServerId = useServerStore((s) => s.activeServerId);
   const serverE2eeEnabled = useServerStore((s) => s.activeServer?.e2ee_enabled ?? false);
   const keysReady = useE2EEStore((s) => s.initStatus === "ready");
-  const scope = JSON.stringify([activeServerId, props.channelId, serverE2eeEnabled, serverE2eeEnabled && keysReady]);
+  const owner = useSyncExternalStore(subscribeAuthOwnerChanges, getAuthSessionOwner);
+  const scope = JSON.stringify([owner, activeServerId, props.channelId, serverE2eeEnabled, serverE2eeEnabled && keysReady]);
   return <ScopedSearchPanel key={scope} {...props} activeServerId={activeServerId} serverE2eeEnabled={serverE2eeEnabled} />;
 }
 

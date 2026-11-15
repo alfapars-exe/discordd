@@ -2705,3 +2705,8 @@ Client product source a347a8ca passed all 477 test files: 4,907 passed, 1 skippe
 ### RF17 — retained search result heap baseline (2026-11-15)
 
 The existing Chromium benchmark now accepts --heap (and --dm --heap). Each fixture warms both APIs, then records three paired retained-result deltas after explicit garbage collection via CDP. At 50k cached records / 13,333 matches, full versus compact median retained deltas were 1,461,204 versus 593,560 bytes for channels and 1,717,140 versus 902,856 bytes for DM. Exact result/order checks still passed. This measures retained API result objects with small synthetic content, not peak memory, the full panel, or capacity. Compact reference/ID memory still scales with matches; no bounded-memory acceptance is claimed. Raw baseline/retained/delta samples and runtime are in refactor-rf17-retained-heap-2026-11-15.json.
+
+
+### RF17 — channel account ownership boundary (2026-11-15)
+
+A failing regression showed that channel search retained the old query/results when account ownership changed before server state reset. The keyed panel scope now includes the auth owner, preserving existing unmount cancellation and stale-response fencing. 84 targeted tests passed. CI source 5cb415ba separately failed macOS dependency retrieval before native compilation (public Swift package submodules requested GitHub authentication); underlying cause is not established. A failed-job rerun was rejected while Android kept the workflow running; retry remains pending. Source-bound observations are in the matching RF17 owner-boundary and macOS dependency-fetch receipts.
