@@ -253,11 +253,6 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	})
 	memberService, roleService, serverService := membership.Members, membership.Roles, membership.Servers
 
-	livekitAdminService := services.NewLiveKitAdminService(
-		repos.LiveKit, repos.Server, repos.User, repos.Channel,
-		voiceService, encryptionKey, cfg.HetznerAPIToken, cfg.AllowLiveKitInstanceCreation,
-	)
-
 	social := initSocialMessagingServices(socialMessagingDependencies{
 		Database: db, DeliveryDB: deliveryDB, Repositories: repos, Hub: hub, Config: cfg,
 		Activity: gameActivityService, Privacy: privacy, Email: emailDeliveryService, EncryptionKey: encryptionKey,
@@ -282,10 +277,11 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	})
 	deviceService, e2eeService := deviceSecurity.Device, deviceSecurity.E2EE
 
-	adminUserService := services.NewAdminUserService(repos.User, hub, voiceService, emailSender, authCache)
-	adminUserService.SetUploadDir(cfg.Upload.Dir)
-	adminServerService := services.NewAdminServerService(db, repos.Server, repos.User, hub, emailSender)
-	adminServerService.SetUploadDir(cfg.Upload.Dir)
+	administration := initAdministrationServices(administrationDependencies{
+		Database: db, Repositories: repos, Hub: hub, Voice: voiceService, Email: emailSender,
+		UserCache: authCache, Config: cfg, EncryptionKey: encryptionKey,
+	})
+	adminUserService, adminServerService, livekitAdminService := administration.User, administration.Server, administration.LiveKit
 
 	linkPreviewService := services.NewLinkPreviewService(repos.LinkPreview)
 	rollback = append(rollback, linkPreviewService.Stop)
