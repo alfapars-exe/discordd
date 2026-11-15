@@ -16,7 +16,15 @@
     "lintErrors": 0,
     "lintWarnings": 2,
     "typeAndBuild": "PASS",
-    "warningNote": "Existing TanStack incompatible-library warnings and Vite chunk size advisory"
+    "warningNote": "Existing TanStack incompatible-library warnings and Vite chunk size advisory",
+    "targetedCoverage": {
+      "lines": 100,
+      "functions": 100,
+      "branches": 87.87,
+      "statements": 92,
+      "command": "vitest run src/crypto/cachedSearchPage.test.ts --coverage --coverage.include=src/crypto/cachedSearchPage.ts",
+      "limit": "Nine real IndexedDB-backed page tests; whole search pipeline/native budgets remain open."
+    }
   },
   "evidence": {
     "hichat-search-page-before.log": {

@@ -42,3 +42,10 @@
 Bu tablo tam kabul sertifikası değildir. Görev kartlarının bütün Acceptance Criteria maddeleri tek tek kanıtlanmadan bir satır kapatılmaz. Mevcut 248 ürün kabul maddesi kanıtsız kapatılmaz veya refactor hedefinden sessizce çıkarılmaz. Fiziksel cihaz ya da üretim erişimi gerektiren işler, kaynak testleriyle tamamlanmış sayılmaz.
 
 CI anlık görüntüleri [verification dizininde](../implementation/verification/refactor-pr-snapshot-2026-11-13.json) commit kimliklerine bağlıdır; yeni push sonrasında önceki başarı güncel head'in sonucu değildir. Yinelenen #270 kapatılmıştır; LiveKit silme temizliğinin kanonik PR'ı [#222](https://github.com/alfapars-exe/discordd/pull/222)'dir.
+
+
+## 16 Kasım ek doğrulaması
+
+RF03/RF04/RF26: fbbdcef1 ortak SQLite test desteği servis, repository ve census fixture'larını birleştirir. Tam Linux race 1.394 başarılı/34 atlanan/0 başarısız; immutable-source tarama 51 exact kayıt, 480 inceleme satırı ve 0 engelleyici desen. PostgreSQL seçimi ve soğuk migration testleri korunur; yeni CI PostgreSQL sözleşme koşusu sürmektedir. Değişmeyen transaction testinde aynı Linux Go/CGO/race ortamında bir ısınma+dokuz örnek medyanı 8,73 → 0,13 saniye. Bu test hazırlığı ölçümüdür. Kanıt: refactor-shared-sqlite-fixture-2026-11-16.json.
+
+RF17/RF26: 6e69da33 arama sayfasının pencere, yeniden doğrulama ve hydration adımlarını ayırır; dört karakterizasyon önce mevcut kaynakta geçti. Hedefli32, tam istemci5.518 başarılı/1 atlanan; type/build ve lint0hata/2mevcutuyarı. Sayfa kapsamı %100 satır/fonksiyon, %87,87 dal. Sonar43 kaydı yeni analizle henüz doğrulanmadı. Kaynak taraması ve son head CI açık; bu kanıtlar first-query bütçesi veya fiziksel/native kabulün yerine geçmez. Kanıt: refactor-search-page-phases-2026-11-16.json.
