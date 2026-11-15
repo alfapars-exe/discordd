@@ -64,6 +64,24 @@ afterEach(() => {
 });
 
 describe("account preference consumers", () => {
+  it("applies the complete account contract while retaining runtime identity, actions and local devices", () => {
+    const deviceFields = new Set<string>(DEVICE_LOCAL_VOICE_SETTING_KEYS);
+    const local = Object.fromEntries(DEVICE_LOCAL_VOICE_SETTING_KEYS.map(key => [key,
+      typeof defaults[key] === "boolean" ? !defaults[key] : defaults[key],
+    ]));
+    const runtime = { runtimePeer: 73 };
+    voice.setState({ ...local, cameraDevice: "local-camera", muteHotkeyGlobal: true, preMuteVolumes: runtime });
+    const action = voice.getState().setMasterVolume;
+    const account = Object.fromEntries(Object.entries(defaults).filter(([key]) => !deviceFields.has(key))
+      .map(([key, value]) => [key, typeof value === "boolean" ? !value : value]));
+    voice.getState().applyFromServer({ ...account, cameraDevice: "foreign-camera", muteHotkeyGlobal: false });
+    const expected = { ...defaults, ...local, ...account, cameraDevice: "local-camera", muteHotkeyGlobal: true };
+    expect(voice.getState()).toMatchObject(expected);
+    expect(voice.getState().preMuteVolumes).toBe(runtime);
+    expect(voice.getState().setMasterVolume).toBe(action);
+    expect(JSON.parse(localStorage.getItem("mqvi_voice_settings")!)).toEqual(expected);
+    expect(sendPreferences).not.toHaveBeenCalled();
+  });
   it.each(["krisp", "dpdfnet"])("migrates legacy server engine %s after validation", engine => {
     voice.setState({ noiseReductionEngine: "webrtc" });
     voice.getState().applyFromServer({ noiseReductionEngine: engine });
