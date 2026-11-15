@@ -2,6 +2,7 @@
 import { useReducer, useEffect, useCallback } from "react";
 import { isElectron } from "../utils/constants";
 import { initialUpdateCheckerState, updateCheckerState, type UpdateInfo } from "../utils/updateCheckerState";
+import { ownSubscriptions } from "../utils/ownSubscriptions";
 
 const DISMISS_SNOOZE_MS = 30 * 60 * 1000;
 type UpdateChecker = {
@@ -17,29 +18,15 @@ export function useUpdateChecker(): UpdateChecker {
   useEffect(() => {
     if (!isElectron()) return;
     const api = window.electronAPI!;
-    let stops: (void | (() => void))[] = [];
-    const dispose = () => {
-      const owned = stops; stops = [];
-      let failed = false, failure: unknown;
-      for (const stop of owned) {
-        try { stop?.(); }
-        catch (error) { if (!failed) { failed = true; failure = error; } }
-      }
-      if (failed) throw failure;
-    };
-    try {
-      stops.push(api.onUpdateAvailable(info => dispatch({ type: "available", version: info.version })));
-      stops.push(api.onUpdateProgress(info => dispatch({ type: "progress", percent: info.percent })));
-      stops.push(api.onUpdateDownloaded(info => dispatch({ type: "downloaded", version: info?.version ?? "" })));
-      stops.push(api.onUpdateError(message => {
+    return ownSubscriptions([
+      () => api.onUpdateAvailable(info => dispatch({ type: "available", version: info.version })),
+      () => api.onUpdateProgress(info => dispatch({ type: "progress", percent: info.percent })),
+      () => api.onUpdateDownloaded(info => dispatch({ type: "downloaded", version: info?.version ?? "" })),
+      () => api.onUpdateError(message => {
         console.warn("[updater] Update check failed:", message);
         dispatch({ type: "error" });
-      }));
-    } catch (error) {
-      try { dispose(); } catch { /* Preserve the original subscription failure. */ }
-      throw error;
-    }
-    return dispose;
+      }),
+    ]);
   }, []);
 
   const token = state.snoozeToken;
