@@ -1,0 +1,45 @@
+{
+  "date": "2026-11-15",
+  "productSource": "b17a14875f73ae9570d9a51750dc37a617152a46",
+  "harnessSha256": "b09825bfb1df53d1077fd27325879e38ae4f39a7477bec05938a2711d222273a",
+  "sourceSha256": {
+    "client/src/crypto/cachedSearchEpoch.ts": "769f797e87b7e7b6bea5bd3701fe89e032a13aa3da4968388cb7faa940592c34",
+    "client/src/components/chat/SearchPanel.tsx": "428c453d712a23117673be2425378cf1e43fc258f6515b89eeb9cbc9be72a68f",
+    "client/src/components/dm/DMSearchPanel.tsx": "b8a55aebc4e68d505007a6930b2870717bdfce9dc512197f7b39dd47817ca189",
+    "client/src/crypto/cachedSearchSnapshot.ts": "0efc5c5ea5be50260bb726f05aa333255e08efd1681c67014ba2ed7314b21b88"
+  },
+  "command": "node e2e/scripts/benchmark-search-panels.mjs --after-only --reset-windows-only",
+  "exitCode": 0,
+  "runtime": "Runtime v26.13.1 win32 Chromium 156.0.8078.4 baseline eb0a31cc40b244c3beb9b74a78e50d83dea83f19",
+  "results": [
+    {
+      "variant": "after",
+      "react": "19.3.1",
+      "productionBuild": true,
+      "historicalOverrides": 0
+    },
+    {
+      "variant": "after",
+      "kind": "channel",
+      "crossWindowReset": true,
+      "visibleResults": 0,
+      "inputCleared": true,
+      "indexDisposalDrained": true,
+      "scope": "Actual production React panel with real source/derived IndexedDB and BroadcastChannel; controlled stores/i18n/navigation,not packaged-platform acceptance."
+    },
+    {
+      "variant": "after",
+      "kind": "dm",
+      "crossWindowReset": true,
+      "visibleResults": 0,
+      "inputCleared": true,
+      "indexDisposalDrained": true,
+      "scope": "Actual production React panel with real source/derived IndexedDB and BroadcastChannel; controlled stores/i18n/navigation,not packaged-platform acceptance."
+    }
+  ],
+  "limits": [
+    "controlled providers; not full application or packaged desktop/mobile",
+    "no first-query/source-writer performance improvement claimed",
+    "prior nine-repeat benchmarks retain original harness hashes"
+  ]
+}

@@ -11,6 +11,7 @@ import { chromium } from "playwright";
 const root=fileURLToPath(new URL("../../client/",import.meta.url));
 const repo=fileURLToPath(new URL("../../",import.meta.url));
 const quick=process.argv.includes("--quick"),failureOnly=process.argv.includes("--failure-only");
+const resetOnly=process.argv.includes("--reset-windows-only");
 const variants=process.argv.includes("--after-only")?["after"]:["before","after"];
 const repetitions=quick?1:9,assets=new Map();
 const baseline="eb0a31cc40b244c3beb9b74a78e50d83dea83f19";
@@ -28,13 +29,14 @@ const entry=`import React from "react";import {createRoot}from "react-dom/client
  import Channel from "/src/components/chat/SearchPanel.tsx";import DM from "/src/components/dm/DMSearchPanel.tsx";
  import{useMessageStore,useDMStore}from "virtual:panel-stores";
  import{publishAuthOwnerChange}from "/src/api/authSessionEvents.ts";
- import{openScopedKeyDatabase,getAccountDatabaseName}from "/src/crypto/keyStorage.ts";
+ import{openScopedKeyDatabase,getAccountDatabaseName,clearAllE2EEData}from "/src/crypto/keyStorage.ts";
  import{SERVER_URL}from "/src/utils/constants.ts";import{openDB}from "idb";
  const root=createRoot(document.getElementById("root"));publishAuthOwnerChange("panel-benchmark");
  async function drain(){const name=(await getAccountDatabaseName("panel-benchmark",SERVER_URL))+".search.v1";
  if(!(await indexedDB.databases()).some(db=>db.name===name))return;
  const db=await openDB(name,1);try{const end=Date.now()+30000;while(await db.count("refs")||await db.count("snapshots")){if(Date.now()>end)throw Error("Index disposal did not drain");await new Promise(resolve=>setTimeout(resolve,1));}}finally{db.close();}}
  globalThis.panelBench={react:React.version,
+ async reset(){await clearAllE2EEData();},
  async unmount(){flushSync(()=>root.render(null));await drain();await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));},
  async mount(kind,fail=false){globalThis.__panelFailNext=fail;flushSync(()=>root.render(React.createElement(kind==="dm"?DM:Channel,{channelId:"target",onClose:()=>{}})));},
  async seed(kind,size){const db=await openScopedKeyDatabase("panel-benchmark",SERVER_URL),tx=db.transaction("messageCache","readwrite");await tx.store.clear();let matches=0;
@@ -91,6 +93,25 @@ try{
  for(const variant of variants){const context=await browser.newContext(),page=await context.newPage(),cdp=await context.newCDPSession(page);const errors=[];page.on("pageerror",error=>errors.push(error.message));
  try{await page.goto(`http://127.0.0.1:${server.address().port}/${variant}/`);await page.waitForFunction(()=>Boolean(globalThis.panelBench));console.log(JSON.stringify({variant,react:await page.evaluate(()=>globalThis.panelBench.react),productionBuild:true,historicalOverrides:variant==="before"?3:0}));
  for(const kind of ["channel","dm"]){
+ if(resetOnly){
+  assert.equal(variant,"after","Cross-window reset probe requires --after-only");
+  await page.evaluate(({kind})=>globalThis.panelBench.seed(kind,1000),{kind});
+  await page.evaluate(kind=>globalThis.panelBench.mount(kind),kind);
+  await page.getByRole("textbox").fill("ÉTÉ");
+  await page.waitForFunction(()=>document.querySelectorAll(".search-result-item").length===25);
+  const sender=await context.newPage();
+  sender.on("pageerror",error=>errors.push(error.message));
+  try{
+   await sender.goto(`http://127.0.0.1:${server.address().port}/${variant}/`);
+   await sender.waitForFunction(()=>Boolean(globalThis.panelBench));
+   await sender.evaluate(()=>globalThis.panelBench.reset());
+   await page.waitForFunction(()=>document.querySelector("input")?.value===""&&document.querySelectorAll(".search-result-item").length===0);
+   assert.equal(await page.locator(".search-result-content").count(),0);
+   await page.evaluate(()=>globalThis.panelBench.unmount());
+   console.log(JSON.stringify({variant,kind,crossWindowReset:true,visibleResults:0,inputCleared:true,indexDisposalDrained:true,scope:"Actual production React panel with real source/derived IndexedDB and BroadcastChannel; controlled stores/i18n/navigation,not packaged-platform acceptance."}));
+  }finally{await sender.close();}
+  continue;
+ }
  if(!failureOnly)for(const size of quick?[1000]:[1000,10000,50000]){
   const matches=await page.evaluate(({kind,size})=>globalThis.panelBench.seed(kind,size),{kind,size});
   const expected=[];for(let i=size-1;i>=0;i--)if(i%5!==0&&i%3===0)expected.push("Été "+String(i).padStart(5,"0"));
