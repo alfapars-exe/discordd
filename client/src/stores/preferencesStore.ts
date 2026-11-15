@@ -47,7 +47,7 @@ let writePromise: Promise<void> | null = null;
 type PresentationPlan = { reset: boolean; preserveSessionState: boolean };
 class PreferencePresentationError extends Error {
   readonly plan: PresentationPlan;
-  constructor(plan: PresentationPlan) { super("preferences_apply_failed"); this.plan = plan; }
+  constructor(plan: PresentationPlan, cause?: unknown) { super("preferences_apply_failed", { cause }); this.plan = plan; }
 }
 let presentationRetry: (PresentationPlan & { preparation: boolean }) | null = null;
 let preparation: Promise<void> = Promise.resolve();
@@ -156,8 +156,8 @@ async function applyData(version: number, reset = false, preserveSessionState = 
       reset,
       preserveSessionState,
     );
-  } catch {
-    if (current(version)) throw new PreferencePresentationError({ reset, preserveSessionState });
+  } catch (error) {
+    if (current(version)) throw new PreferencePresentationError({ reset, preserveSessionState }, error);
   }
 }
 function schedule(): void {
@@ -173,14 +173,17 @@ async function flush(): Promise<void> {
   if (!current(version) || !usePreferencesStore.getState().isLoaded || !nonempty(pending)) return;
   if (writePromise) return writePromise;
   const run = async () => {
+    if (!current(version)) return;
     clearTimer();
     inFlight = pending;
     pending = {};
     const sent = inFlight;
-    usePreferencesStore.setState({ syncStatus: "saving", syncError: null, hasPendingChanges: true });
-    persistPending();
     let accepted = false;
     try {
+      persistPending();
+      try { usePreferencesStore.setState({ syncStatus: "saving", syncError: null, hasPendingChanges: true }); }
+      catch (error) { throw new PreferencePresentationError({ reset: false, preserveSessionState: false }, error); }
+      if (!current(version)) return;
       const res = await preferencesApi.updatePreferences(sent, requestContext(version));
       if (!current(version)) return;
       if (res.code === "PREFERENCES_ACCOUNT_MISMATCH" || (res.data?.user_id && res.data.user_id !== usePreferencesStore.getState().accountId)) throw new Error("preferences_account_mismatch");
@@ -191,9 +194,11 @@ async function flush(): Promise<void> {
       acknowledged = merge(merge(acknowledged, sent), returned);
       if (fetchPromise) fetchAcknowledged = merge(fetchAcknowledged, merge(sent, returned));
       const data = merge(merge(usePreferencesStore.getState().data, returned), pending);
-      usePreferencesStore.setState({ data, syncStatus: nonempty(pending) ? "pending" : "saved", syncError: null, hasPendingChanges: nonempty(pending), legacyImportAvailable: canImportLegacy(data, true) });
+      // Record the validated acknowledgment before observers can throw or
+      // replace the binding. Its accepted patch must not survive in the queue.
       persistCache(snapshotKey, acknowledged);
       persistPending();
+      usePreferencesStore.setState({ data, syncStatus: nonempty(pending) ? "pending" : "saved", syncError: null, hasPendingChanges: nonempty(pending), legacyImportAvailable: canImportLegacy(data, true) });
       await applyData(version);
     } catch (error) {
       if (!current(version)) return;
@@ -208,11 +213,16 @@ async function flush(): Promise<void> {
       }
       pending = merge(sent, pending);
       inFlight = {};
-      usePreferencesStore.setState({ syncStatus: "error", syncError: error instanceof Error && error.message === "preferences_account_mismatch" ? "preferences_account_mismatch" : "preferences_save_failed", hasPendingChanges: true });
       persistPending();
+      if (error instanceof PreferencePresentationError) presentationRetry = { ...error.plan, preparation: false };
+      const syncError = error instanceof PreferencePresentationError ? "preferences_apply_failed" :
+        error instanceof Error && error.message === "preferences_account_mismatch" ? "preferences_account_mismatch" : "preferences_save_failed";
+      usePreferencesStore.setState({ syncStatus: "error", syncError, hasPendingChanges: true });
     }
   };
-  const task = run();
+  // Reserve the writer before run notifies synchronous observers. Reentrant
+  // retries join it; a replacement binding can retire it before any work runs.
+  const task = Promise.resolve().then(run);
   writePromise = task;
   await task;
   if (!current(version)) return;
@@ -261,13 +271,17 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
         if (!res.success) throw new Error("preferences_load_failed");
         acknowledged = merge(sanitize(res.data?.data), fetchAcknowledged);
         const data = merge(acknowledged, merge(fetchEdits, pending));
-        set({
-          data, isLoaded: true,
-          syncStatus: nonempty(inFlight) ? "saving" : nonempty(pending) ? "pending" : "saved",
-          syncError: null, hasPendingChanges: nonempty(inFlight) || nonempty(pending),
-          legacyImportAvailable: canImportLegacy(data, true),
-        });
         persistCache(snapshotKey, acknowledged);
+        try {
+          set({
+            data, isLoaded: true,
+            syncStatus: nonempty(inFlight) ? "saving" : nonempty(pending) ? "pending" : "saved",
+            syncError: null, hasPendingChanges: nonempty(inFlight) || nonempty(pending),
+            legacyImportAvailable: canImportLegacy(data, true),
+          });
+        } catch (error) {
+          throw new PreferencePresentationError({ reset: true, preserveSessionState: true }, error);
+        }
         // A fresh authoritative GET may remove cached leaves; reset before applying its latest pending overlay.
         await applyData(version, true, true);
       } catch (error) {
