@@ -119,7 +119,12 @@ describe("account-scoped preference synchronization", () => {
     }finally{loader.resolve(applyAccountPreferences);bindPreferencePresenter(async()=>applyAccountPreferences);}
   });
 
-  it.each(["owner", "backend"] as const)("retires a presentation retry when its saved observer replaces the %s", async boundary => {
+  it.each([
+    { boundary: "owner", publication: "sync" },
+    { boundary: "backend", publication: "sync" },
+    { boundary: "owner", publication: "microtask" },
+    { boundary: "backend", publication: "microtask" },
+  ] as const)("retires a presentation retry after $boundary replacement during $publication publication", async ({ boundary, publication }) => {
     await ready();
     const { applyAccountPreferences } = await import("./applyAccountPreferences");
     bindPreferencePresenter(async () => { throw new Error("presentation unavailable"); });
@@ -133,8 +138,12 @@ describe("account-scoped preference synchronization", () => {
       stop = usePreferencesStore.subscribe(next => {
         if (next.syncStatus !== "saved") return;
         stop();
-        state().bindAccount(boundary === "owner" ? "bob" : "alice", boundary === "backend" ? "https://two.example" : undefined);
-        state().set({ theme: "replacement-pending" });
+        const replace = () => {
+          state().bindAccount(boundary === "owner" ? "bob" : "alice", boundary === "backend" ? "https://two.example" : undefined);
+          state().set({ theme: "replacement-pending" });
+        };
+        if (publication === "sync") replace();
+        else void Promise.resolve().then(replace);
       });
       await state().retrySync();
       await settle();
