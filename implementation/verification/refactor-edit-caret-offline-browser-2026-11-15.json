@@ -1,0 +1,124 @@
+{
+  "source_commit": "4ee84fa36f78582c4dd79f333cd71d3795c81e3f",
+  "client_git_tree": "249e6205a44d6f612b68a805a6500cf056ac9b73",
+  "server_git_tree": "575fd7acdb2b21d02a489fe10395e95e1b92762d",
+  "source_sha256": {
+    "client/src/hooks/useMessageEditing.ts": "21a0956491200c198c0e0d719fb4c674b228a226287580e163525297c6628b08",
+    "client/src/hooks/useMessageEditing.test.tsx": "d48dbe2aac7c577f364bc746c16d6a5114cc1e0ab01f17836bcae4d78f4afb61",
+    "e2e/tests/concurrent-message-mutations.spec.ts": "c3bd84ac8570172b74f324fd050922f4d3c68bd89c8ff004380ca4e80b008d0b"
+  },
+  "before": [
+    "Real production browser case failed before reconnection:edited content became original+replacement",
+    "Unit regression proves delayed initial caret frame overwrites a user select-all"
+  ],
+  "fix": "Initial focus/caret placed in layout effect after conditional textarea ref commit, before user input;no delayed initial frame",
+  "checks": {
+    "targeted": "34passed:31socket+3editing",
+    "focused_production_browser": "3/3passed59.2s",
+    "full_production_chromium": "18/18passed3.1m;real Go/verify-full client-certificate PostgreSQL18.6",
+    "full_client_coverage": "485files;5041passed;1skipped;116.73s",
+    "coverage": {
+      "lines": {
+        "total": 38056,
+        "covered": 25975,
+        "skipped": 0,
+        "pct": 68.25
+      },
+      "statements": {
+        "total": 52021,
+        "covered": 34961,
+        "skipped": 0,
+        "pct": 67.2
+      },
+      "functions": {
+        "total": 12149,
+        "covered": 7467,
+        "skipped": 0,
+        "pct": 61.46
+      },
+      "branches": {
+        "total": 39623,
+        "covered": 25550,
+        "skipped": 0,
+        "pct": 64.48
+      },
+      "branchesTrue": {
+        "total": 0,
+        "covered": 0,
+        "skipped": 0,
+        "pct": 100
+      }
+    },
+    "changed_module_coverage": {
+      "C:\\Users\\PARS\\Desktop\\PROJELER\\HiChat\\refactor-integration\\client\\src\\hooks\\useMessageEditing.ts": {
+        "lines": {
+          "total": 78,
+          "covered": 42,
+          "skipped": 0,
+          "pct": 53.84
+        },
+        "functions": {
+          "total": 12,
+          "covered": 6,
+          "skipped": 0,
+          "pct": 50
+        },
+        "statements": {
+          "total": 81,
+          "covered": 43,
+          "skipped": 0,
+          "pct": 53.08
+        },
+        "branches": {
+          "total": 37,
+          "covered": 13,
+          "skipped": 0,
+          "pct": 35.13
+        }
+      }
+    },
+    "general_lint": "0errors2existing TanStack warnings",
+    "changed_files_lint": "PASS",
+    "production_build": "actual tsc-b/Vite PASS1.64s;existing chunk warning",
+    "isolation_contracts": "PASS;Windows file-symlink subcase unavailable"
+  },
+  "new_browser_acceptance": [
+    "Actual member WebSocket close observed after browser context offline",
+    "Owner edits/deletes/sends while peer remains stale offline",
+    "Replacement member socket observed;updated/missed messages appear once and deleted/original content disappears",
+    "Post-reconnect live send received once;reload agrees with persisted state"
+  ],
+  "logs": {
+    "browser_before": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-ws-offline-convergence-browser.log",
+      "sha256": "5a528522315ee9915f315725eb8eebe9a262db63e5554627a8eccbb08d318e6a"
+    },
+    "browser_focused_after": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-ws-offline-convergence-browser-fixed.log",
+      "sha256": "d4403895fc0bbe8f56acf0215510e2e3955b5ef39a1d50179af40236fa4c889f"
+    },
+    "browser_full_after": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-edit-selection-race-production-full.log",
+      "sha256": "230baa6c89aa6b1de95a0f8c35cbbb658add2b973599adf4f8613e8de9260c18"
+    },
+    "unit_red": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-edit-selection-race-red.log",
+      "sha256": "82d687330ebe37ea09ba6d5035ed7ba7ab655796eea20b57876dbf27f50c6eee"
+    },
+    "unit_after": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-edit-selection-race-green.log",
+      "sha256": "c6d90710077aed90721faf485f23764094ed1d2cc21ee189290af64938930a19"
+    },
+    "client_full": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-edit-selection-race-full-coverage.log",
+      "sha256": "fcb7f22a1f4f70debc995f03ebea4e510fd69f02f3f5cbb8f4a878caed56ddf1"
+    }
+  },
+  "cleanup": "All owned Playwright processes terminal;dedicated PG container,image,anonymous data volume removed;dev containers untouched",
+  "limits": [
+    "Loaded small channel window only;no deep-history/read-cursor/DM/native/physical soak completion",
+    "400/401 refresh diagnostics remain visible;not a clean-console claim",
+    "WebKit-named smoke ran in selected Chromium project,not real WebKit",
+    "Full RF14/RF15/project/native acceptance remains open"
+  ]
+}
