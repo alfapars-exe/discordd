@@ -96,9 +96,28 @@ try {
               };
               for (let offset = 0; offset < rows.length; offset += 128) await checkPage(offset, 128);
               for (const offset of [0, 1000, 1024, 1200]) await checkPage(offset, 25);
+              const controller = new AbortController();
+              const originalDelete = IDBObjectStore.prototype.delete;
+              IDBObjectStore.prototype.delete = function (...args) {
+                const request = originalDelete.apply(this, args);
+                if (this.name === "refs") controller.abort();
+                return request;
+              };
+              let canceled = false;
+              try { await snapshot.removeMany(expected.slice(0, 2), controller.signal); }
+              catch (error) { if (error.name !== "AbortError") throw error; canceled = true; }
+              finally { IDBObjectStore.prototype.delete = originalDelete; }
+              if (!canceled) throw new Error("Removal cancellation was ignored");
+              await checkPage(0, 25);
+              const deleted = await snapshot.removeMany([expected[0], "absent-id", expected[1], expected[0]]);
+              const remaining = await snapshot.page(0, 25);
+              if (deleted.removed !== 2 || deleted.total !== rows.length - 2 || remaining.total !== rows.length - 2 ||
+                  JSON.stringify(remaining.ids) !== JSON.stringify(expected.slice(2, 27))) {
+                throw new Error("Incorrect atomic batch removal or total");
+              }
             } finally { await snapshot.dispose(); }
             await assertEmpty();
-            return { mode, records: rows.length, exactPages, failureName, failureWrites: writes, writerReleased, indexDisposed: true };
+            return { mode, records: rows.length, exactPages, failureName, failureWrites: writes, writerReleased, atomicRemovalAndCancellation: true, indexDisposed: true };
           }, mode),
           new Promise((_, reject) => { deadline = setTimeout(() => reject(new Error(`Native staging deadline exceeded: ${mode}`)), 30_000); }),
         ]);

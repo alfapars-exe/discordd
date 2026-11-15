@@ -171,3 +171,37 @@ it("keeps new query creation blocked until all concurrent local resets finish", 
   await expect(createCachedSearchSnapshot("dm","dm","ÉTÉ")).rejects.toThrow("search_snapshot_resetting");
   releaseSecond();await second;const snapshot=await create();expect((await snapshot.page(0,25)).total).toBe(0);
 });
+
+it.each(["channel", "dm"] as const)("atomically removes a bounded batch from %s with duplicates and missing IDs", async kind => {
+  await cacheDecryptedMessages([row("a",1,"3"),row("b",2),row("c",3,"2"),row("d",4,"4")]);
+  const snapshot=await create(kind), other=await create(kind);
+  const expected=(await snapshot.page(0,25)).ids;
+  expect(await snapshot.removeMany(["a","missing","c","a"])).toEqual({removed:2,total:2});
+  expect(await snapshot.page(0,25)).toEqual({ids:expected.filter(id=>id!=="a"&&id!=="c"),offset:0,total:2});
+  expect((await other.page(0,25)).ids).toEqual(expected);
+  expect(await snapshot.removeMany(["a","missing"])).toEqual({removed:0,total:2});
+  await expect(snapshot.removeMany(Array.from({length:129},(_,i)=>String(i)))).rejects.toThrow("search_snapshot_invalid_removal_batch");
+});
+it("rolls back an entire removal batch when cancellation interrupts its writes", async () => {
+  await cacheDecryptedMessages([row("a",1),row("b",2),row("c",3)]);
+  const snapshot=await create(), before=await snapshot.page(0,25), controller=new AbortController();
+  const original=IDBObjectStore.prototype.delete;
+  const hook=vi.spyOn(IDBObjectStore.prototype,"delete").mockImplementation(function(this:IDBObjectStore,...args:Parameters<typeof original>){
+    const result=original.apply(this,args);
+    if(this.name==="refs")controller.abort();
+    return result;
+  });
+  await expect(snapshot.removeMany(["a","b"],controller.signal)).rejects.toMatchObject({name:"AbortError"});
+  hook.mockRestore();
+  expect(await snapshot.page(0,25)).toEqual(before);
+  expect(await snapshot.removeMany(["a","b"])).toEqual({removed:2,total:1});
+});
+
+it("owns the bounded removal input before yielding to epoch validation", async () => {
+  await cacheDecryptedMessages([row("a",1),row("b",2)]);
+  const snapshot=await create(), batch=["a"];
+  const removing=snapshot.removeMany(batch);
+  batch.push("b",...Array.from({length:129},(_,i)=>String(i)));
+  expect(await removing).toEqual({removed:1,total:1});
+  expect((await snapshot.page(0,25)).ids).toEqual(["b"]);
+});
