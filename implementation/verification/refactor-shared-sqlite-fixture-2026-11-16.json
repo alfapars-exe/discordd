@@ -24,7 +24,6 @@
     }
   },
   "pending": [
-    "Linux race (session 7100)",
     "New-source CI/PostgreSQL/Sonar",
     "Full RF01–RF30 acceptance"
   ],
@@ -70,5 +69,28 @@
         "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-refactor-go-linux-cache\\repository-fixture-after-race.jsonl"
       }
     }
+  },
+  "linuxRace": {
+    "source": "fbbdcef1",
+    "go": "1.26.11 Linux CGO1",
+    "command": "go test -mod=readonly -race ./internal/testfixture ./repository . -count=1 -timeout=15m -json",
+    "passRecords": 1394,
+    "skipRecords": 34,
+    "failRecords": 0,
+    "packageSeconds": {
+      "internal/testfixture": 40.19,
+      "root": 36.92,
+      "repository": 213.383
+    },
+    "rawPath": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-refactor-go-linux-cache\\shared-fixture-full-race.jsonl",
+    "sha256": "bc7194e5b72843f1c8a8224443900aa5843eb09bb025c85e0f781e8d294c8d4a"
+  },
+  "selfScan": {
+    "source": "fbbdcef1",
+    "reviewedExactSourceRecords": 51,
+    "reviewLines": 480,
+    "blockingPatternHits": 0,
+    "result": "PASS",
+    "limit": "Pattern scan does not prove absence of vulnerabilities"
   }
 }

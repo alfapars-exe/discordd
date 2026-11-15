@@ -53,7 +53,7 @@ it("stops after ownership is lost during stale hit removal", async () => {
  let current = true;
  const original = index.remove.bind(index);
  const remove = vi.spyOn(index, "remove").mockImplementation(async (...args) => {
-  await original(...args); current = false;
+  const result = await original(...args); current = false; return result;
  });
  vi.spyOn(storage, "getCachedDecryptedMessage").mockResolvedValue(null);
  expect(await readCachedSearchPage(index, 0, 25, matches, () => current)).toBeNull();

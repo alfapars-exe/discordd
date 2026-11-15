@@ -1,0 +1,49 @@
+{
+  "source": "6e69da33",
+  "characterizationCommit": "ac22bc5d",
+  "sonarIssue": "AaHdtCMB07pFJPuubXuL",
+  "originalCognitiveComplexity": 43,
+  "changes": [
+    "Separate window retention, loaded tombstone revalidation, owned deletion and pending hydration",
+    "Preserve parallel hydration, stable index order, page refill and offset/total contracts",
+    "Recheck ownership after the newly asynchronous revalidation phase"
+  ],
+  "validation": {
+    "beforeCharacterization": 9,
+    "afterTargeted": 32,
+    "fullClientPass": 5518,
+    "fullClientSkip": 1,
+    "lintErrors": 0,
+    "lintWarnings": 2,
+    "typeAndBuild": "PASS",
+    "warningNote": "Existing TanStack incompatible-library warnings and Vite chunk size advisory"
+  },
+  "evidence": {
+    "hichat-search-page-before.log": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-page-before.log",
+      "sha256": "52649f6fe7a83e1f9c8e26246a1ed8df543fe8dffc6ad81f37137a75e226a799"
+    },
+    "hichat-search-page-final-target.log": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-page-final-target.log",
+      "sha256": "aa4b82b8ebd907c3730bb3b5bbc65896860f194e8116eeb71c4ed96402d300f0"
+    },
+    "hichat-search-page-full.log": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-page-full.log",
+      "sha256": "2dd975308e2e61dbd0875e9b00f34b8ae8017ed36196a2d2ba8adaf15c6629a6"
+    },
+    "hichat-search-page-lint.log": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-page-lint.log",
+      "sha256": "b51344ffc39e8ec9a8569b51c5ae7b28aa35df7af955a93bafae4f7a267c30fa"
+    },
+    "hichat-search-page-build.log": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-page-build.log",
+      "sha256": "215d4dbd091e2677002161bbdab324c7d33e124e283a02e6224c3c1e95d7d408"
+    }
+  },
+  "pending": [
+    "Source-bound Sonar analysis",
+    "New head CI and source scan",
+    "RF17 first-query budget, native/platform and whole-pipeline acceptance"
+  ],
+  "note": "Test mock return type corrected after initial tsc failure; final target and build passed."
+}
