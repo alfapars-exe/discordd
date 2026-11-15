@@ -1,0 +1,38 @@
+{
+  "scope": "RF11 activity feature composition validation",
+  "integrations": [
+    "Repositories",
+    "Hub",
+    "Profiles",
+    "Activity",
+    "Policy",
+    "Permissions",
+    "FreshPermissions",
+    "Voice",
+    "Logger"
+  ],
+  "repositories": [
+    "Preferences",
+    "Friendship",
+    "User",
+    "AccountLifecycle",
+    "Server",
+    "Ban",
+    "Channel"
+  ],
+  "regression": "30 invalid-provider cases failed before validation: 9 missing integrations, 7 typed-nil interface integrations and 14 nil/typed-nil repositories.",
+  "implementation": "Reject invalid providers before constructing preference invalidation, game join and clip consent owners; retain explicit fresh permissions and voice admission.",
+  "checks": {
+    "valid": "Three owners retained",
+    "root": "PASS activity matrix, ServiceInitialization/routes/callbacks/permission/auth-cache/real friendship-DM, 4.474s",
+    "services": "PASS game-join/clip/preferences tests, 0.619s",
+    "build": "PASS go build ./...",
+    "vet": "PASS go vet .",
+    "reviewed_manifest": "PASS 50 exact records"
+  },
+  "limits": [
+    "Presence validation is not full runtime provider identity, physical consent or game launch proof.",
+    "Remaining process groups, complete optional/lifecycle matrix and RF01-RF30 acceptance open.",
+    "Remote 43656873218 source 79afb1e9 live without observed failures; local changes excluded."
+  ]
+}

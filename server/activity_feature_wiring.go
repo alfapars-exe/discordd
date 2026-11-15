@@ -33,7 +33,28 @@ type activityFeatureServices struct {
 // initActivityFeatureServices shares privacy changes, game admission and clip
 // consent providers. Callback registration remains explicit in the caller.
 func initActivityFeatureServices(deps activityFeatureDependencies) activityFeatureServices {
+	for _, input := range []struct {
+		name  string
+		value any
+	}{
+		{"Repositories", deps.Repositories}, {"Hub", deps.Hub}, {"Profiles", deps.Profiles}, {"Activity", deps.Activity}, {"Policy", deps.Policy},
+		{"Permissions", deps.Permissions}, {"FreshPermissions", deps.FreshPermissions}, {"Voice", deps.Voice}, {"Logger", deps.Logger},
+	} {
+		if missingCompositionInput(input.value) {
+			panic("activity features requires " + input.name)
+		}
+	}
 	repos := deps.Repositories
+	for _, input := range []struct {
+		name  string
+		value any
+	}{
+		{"Preferences", repos.Preferences}, {"Friendship", repos.Friendship}, {"User", repos.User}, {"AccountLifecycle", repos.AccountLifecycle}, {"Server", repos.Server}, {"Ban", repos.Ban}, {"Channel", repos.Channel},
+	} {
+		if missingCompositionInput(input.value) {
+			panic("activity features requires repository " + input.name)
+		}
+	}
 	preferences := services.NewPreferencesService(repos.Preferences, deps.Profiles, deps.Activity, deps.Hub)
 	policy := services.NewGameJoinPolicy(deps.Policy, repos.Preferences, repos.Friendship, repos.User, repos.AccountLifecycle, repos.Server, repos.Ban, repos.Channel, deps.Permissions, deps.Voice, deps.FreshPermissions)
 	join := services.NewGameJoinService(deps.Activity, policy, deps.Hub)
