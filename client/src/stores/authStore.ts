@@ -4,6 +4,7 @@
 
 import { create } from "zustand";
 import { publishAuthOwnerChange } from "../api/authSessionEvents";
+import { startPreferenceTask } from "./preferenceTask";
 import * as authApi from "../api/auth";
 import { rememberStartupUser, clearStartupCache } from "../utils/startupCache";
 import { setTokens, clearTokens } from "../api/client";
@@ -128,6 +129,12 @@ type AuthState = {
   setManualStatus: (status: UserStatus) => void;
 };
 
+function hydratePreferences(source: "registration" | "login" | "restore") {
+  startPreferenceTask(() => usePreferencesStore.getState().fetchAndApply(), () => {
+    void logToServer("error", "preferences_background_failed", { source });
+  });
+}
+
 function establishSession(tokens: AuthTokens, previous: User | null, set: (state: Partial<AuthState>) => void) {
   const { user } = tokens;
   authSessionEpoch++;
@@ -168,7 +175,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     if (res.success && res.data) {
       establishSession(res.data, get().user, set);
-      usePreferencesStore.getState().fetchAndApply();
+      hydratePreferences("registration");
       return true;
     }
 
@@ -186,7 +193,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       establishSession(res.data, get().user, set);
       logToServer("info", "auth_login", { userId: res.data.user.id });
       // Fetch server-side preferences and apply to stores
-      usePreferencesStore.getState().fetchAndApply();
+      hydratePreferences("login");
       return true;
     }
 
@@ -265,7 +272,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         usePreferencesStore.getState().bindAccount(user.id);
         syncLanguageFromUser(user);
         set({ user, manualStatus: manualStatusForUser(user), isInitialized: true, initPhase: "idle" });
-        usePreferencesStore.getState().fetchAndApply();
+        hydratePreferences("restore");
       };
 
       const res = await authApi.getMe();
