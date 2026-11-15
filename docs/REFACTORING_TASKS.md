@@ -2915,3 +2915,8 @@ Added React web-update hook tests using the actual apiClient/request-lifetime im
 ### RF03/RF30 — terminal8efdfddc CI before updater hook delivery (2026-11-15)
 
 Remote8efdfddcf642d337f6d6d9970c79e35ae3c7c0bc completed36/36 checks SUCCESS, including repository/service race shards,PostgreSQL active-process mTLS shutdown,combined coverage,Playwright,actual client type/lint/test/build,native/artifacts and Sonar/security gates. Immutable snapshot:implementation/verification/refactor-8efdf-terminal-ci-2026-11-15.json. Deferred dd473128/5f9685d7/97990e8f are delivered only after terminal completion. Their local combined client coverage is5,023passed/1skipped,line68.07%;new remote HEAD requires independent CI. RF19 full/native and whole-project acceptance remain open;PR305 stays draft.
+
+
+### RF19 — titlebar installation IPC rejection (2026-11-15)
+
+A fail-first component test exposed the separate titlebar update button ignoring a rejected installUpdate Promise. The button now observes rejection using the existing updater warning behavior, remains ready and permits another attempt. Three suites/24tests,npx tsc -b,changed lint,Vite production build pass. Receipt:implementation/verification/refactor-titlebar-install-rejection-2026-11-15.json. This is IPC-request failure coverage, not native installer/physical upgrade acceptance. Earlier combined5,023-test coverage remains prior-source evidence. Local commit held while newly delivered c69db795 CI runs;its predecessor8efdfddc terminal36/36 is archived separately.

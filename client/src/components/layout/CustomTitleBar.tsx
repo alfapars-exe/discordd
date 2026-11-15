@@ -41,7 +41,9 @@ function CustomTitleBar() {
   }
 
   function handleUpdate() {
-    window.electronAPI?.installUpdate();
+    void window.electronAPI?.installUpdate().catch(() => {
+      console.warn("[updater] Install request failed");
+    });
   }
 
   return (
