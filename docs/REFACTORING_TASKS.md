@@ -3416,3 +3416,15 @@ Final7c604780immutable self-scanPASS:51exactrecords/478reviewlines/0blockingpatt
 19795967Sonar:önceki silmetesti28,DMroster20,preferencewrite25 karmaşıklıkbulgularıCLOSED/FIXED. Preferenceimport17bulgusu ve genelRFkabulü açık. 19795967terminalCIhalenbekleniyor;yeni yerel erişilebilirlik değişikliklerinin CIkanıtıdeğil.
 
 336fb196 gerçektipbuildPASS(Vite1.64s). Final immutable336fb196 taramasıayrıca başlatıldı;0ae taramasıfinalkaynakkanıtıolarakkullanılmayacak. Yerel ürün/adaptor değişiklikleri sonraki pushöncesindetarama ve öncekiCIterminalsonucunu bekliyor.
+
+
+### RF13 — Yerel hydration ve hesap cache'i için ortak erişilebilirlik codec'i (2026-11-15)
+
+71d22b48 revizyonunda erişilebilirlik doğrulaması, store ve DOM bağımlılığı olmayan `accessibilityPreferenceCodec.ts` dosyasına taşındı. Yerel hydration ve hesap cache'i aynı doğrulamayı çağırıyor. Store'un eski `sanitizeAccessibilityPreferences` export'u korunuyor. Genel hesap codec'indeki yinelenen erişilebilirlik enum, boolean ve sayısal alan kontrolleri kaldırıldı; diğer namespace'ler korunuyor.
+
+Beş dosyada 146 hedefli test 4,82 saniyede geçti. Gerçek TypeScript/Vite build'i başarılı (Vite 1,68 saniye). Yeni çalışma zamanı kaynağı üzerinde tam istemci coverage, lint ve değişmez arşiv taraması sürüyor. Önceki 0ae393e1 kaynağının 5.330 başarılı testi yeni codec'in tam koşusu yerine sayılmıyor. Sonraki gönderimden önce bu sonuçlar ve 19795967 CI'ının terminal durumu doğrulanacak. Genel RF13 ve RF01–RF30 kabulü açık.
+
+
+Codec ayrıştırmasının 71d22b48 revizyonunda tam istemci koşusu 5.330 başarılı/1 atlanan testle geçti (126,06 saniye; satır %68,85, dal %64,86). Ancak incelemede alanın iki kez okunduğu görüldü. 94406dd5 regresyonu, getter'ın doğrulamada 18, atamada 400 döndürmesiyle bu yeni hatayı gösterdi. 597313df önceki tek-okuma davranışını korur; altı dosyada 147 hedefli test geçti (4,63 saniye). Bu, henüz gönderilmemiş refactor'da yakalanıp düzeltilen bir hatadır. Önceki yeşil suite bu durumu kapsamıyordu. Son kaynak için tam coverage, build, lint ve değişmez arşiv taraması tekrar çalışıyor.
+
+0ae393e1 ve 336fb196 arşiv taramaları 0 engelleyici desen, 51 doğrulanmış kaynak kaydı ve 478 inceleme satırıyla tamamlandı. Bunlar son 597313df kaynağının taraması sayılmıyor. Gönderilmiş 19795967 PR305 CI'ı 36/36 başarılı tamamlandı; `refactor-197959-terminal-ci-2026-11-15.json` kaydı ayrı revizyona bağlıdır. Yeni yerel kaynak için gönderim ve yeni CI kabulü açık.

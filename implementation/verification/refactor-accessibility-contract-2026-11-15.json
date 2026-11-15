@@ -1,6 +1,6 @@
 {
   "runtimeSource": "0ae393e1",
-  "finalSource": "336fb196",
+  "finalSource": "597313df",
   "regressionCommit": "65f6a166",
   "behaviorFixCommit": "0c05343a",
   "scope": "RF13 accessibility preset correctness and shared store-free options/numeric bounds across UI,setters,hydration and account cache. Wire/storage names unchanged.",
@@ -73,8 +73,36 @@
     "immutableSelfScan": "Both immutable0ae393e1 andfinal336fb196 scans RUNNING;neither accepted yet"
   },
   "remaining": [
-    "Immutable finalsource scan",
+    "Final597313df fullclientcoverage andimmutable scan",
     "New-headCI afterpush",
     "RF13 final runtime/account/platform acceptance;RF01-RF30 stillopen"
-  ]
+  ],
+  "priorRuntimeSource": "0ae393e1",
+  "pureCodecExtraction": {
+    "source": "71d22b48",
+    "scope": "Store/DOM-free sanitizer shared by local hydration and account cache;existing store re-export preserved. Remove duplicated accessibility enum/boolean/range checks from generic account codec.",
+    "targeted": "146tests5filesPASS4.82s",
+    "build": "Actualnpmrunbuild(tsc-b,Vite)PASS1.68s",
+    "fullClientCoverage": "71d22b48:495files5330passed1skipped126.06s;line68.85%,branch64.86%. This did not cover changing accessors and does not replace final597313df validation.",
+    "lint": "71d22b48:fullclientPASS0errors2existingwarnings",
+    "immutableScan": "RUNNING on71d22b48;TEMP/hichat-accessibility-codec-final-scan.log"
+  },
+  "accessorCorrection": {
+    "regressionCommit": "94406dd5",
+    "fixCommit": "597313df",
+    "red": "One failing regression against71d22b48:accessor returned18forvalidation then400forassignment;priorpre-extraction sanitizer readonce. TEMP/hichat-accessibility-codec-accessor-red.log",
+    "green": "147tests6filesPASS4.63s;TEMP/hichat-accessibility-codec-accessor-green.log",
+    "scope": "Corrects a regression caught locally during unpublished extraction;not a newly discovered pre-existing production bug."
+  },
+  "finalValidation": {
+    "fullClientCoverage": "RUNNING;TEMP/hichat-accessibility-codec-final-coverage.log",
+    "build": "PASS actualtsc-b/Vite4.43s;TEMP/hichat-accessibility-codec-final-build.log",
+    "lint": "PASS changedpurecodec andregressiontest0errors;previous71d22b48 fullclientlint0errors2existingwarnings",
+    "scan": "RUNNING immutable597313df;TEMP/hichat-accessibility-codec-delivery-scan.log"
+  },
+  "priorScans": {
+    "0ae393e1": "PASS0blocking/51exactrecords/478reviewlines",
+    "336fb196": "PASS0blocking/51exactrecords/478reviewlines",
+    "71d22b48": "RUNNING;not final597313df acceptance"
+  }
 }
