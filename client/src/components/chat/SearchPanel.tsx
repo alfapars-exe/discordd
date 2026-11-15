@@ -3,7 +3,8 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { searchMessages } from "../../api/search";
-import { getCachedDecryptedMessage, searchCachedMessages } from "../../crypto/keyStorage";
+import { searchCachedMessages } from "../../crypto/keyStorage";
+import { readCachedSearchPage } from "../../crypto/cachedSearchPage";
 import type { CachedDecryptedMessage } from "../../crypto/types";
 import { useServerStore } from "../../stores/serverStore";
 import { useE2EEStore } from "../../stores/e2eeStore";
@@ -102,11 +103,12 @@ function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId,
           const term = searchQuery.trim();
           let paged: CachedDecryptedMessage[];
           if (localMatches.current) {
-            const ids = localMatches.current.slice(searchOffset, searchOffset + limit);
-            const rows = await Promise.all(ids.map(getCachedDecryptedMessage));
             const lowerTerm = term.toLowerCase();
-            paged = rows.filter((row): row is CachedDecryptedMessage => row !== null && row.channelId === channelId &&
-              row.content.toLowerCase().includes(lowerTerm) && !deletedIds.current.has(row.messageId));
+            const page = await readCachedSearchPage(localMatches, searchOffset, limit,
+              row => row.channelId === channelId && row.content.toLowerCase().includes(lowerTerm) && !deletedIds.current.has(row.messageId),
+              () => seq === searchSeqRef.current);
+            if (!page) return;
+            paged = page;
           } else {
             const cached = await searchCachedMessages(channelId, term, controller.signal);
             if (seq !== searchSeqRef.current) return;

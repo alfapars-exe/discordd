@@ -2680,3 +2680,8 @@ DMSearchPanel now scans compact ordering references and loads at most 25 full re
 ### RF17 — stale DM matches and page refill (2026-11-15)
 
 A new regression demonstrated stale totals and incomplete pages when a reference disappeared or its content stopped matching before hydration. DM search now prunes rejected references and refills the current window in batches of at most 25, checking request ownership before each post-await snapshot mutation. A pending-read deletion test also proves the deleted result does not return. 78 targeted tests, TypeScript and ESLint passed. This supersedes the earlier total-read bound: normal pages need at most 25 reads, but rejected hits can require extra batches. At most 25 valid content records are retained for the selected window; the matching-ID snapshot and first-query bound remain open. Receipt: refactor-rf17-dm-page-refill-2026-11-15.json.
+
+
+### RF17 — shared channel/DM stale-hit hydration (2026-11-15)
+
+The same stale-count/incomplete-page regression failed in encrypted channel pagination. Channel subsequent pages and all DM pages now share readCachedSearchPage, preserving request ownership checks and page-sized batches while pruning missing/changed/foreign hits. Three targeted files passed 79 tests; TypeScript and targeted ESLint passed. Channel first-query full-message retention, full matching-ID bounds, and overall RF17 remain open. Receipt: refactor-rf17-shared-page-hydration-2026-11-15.json.

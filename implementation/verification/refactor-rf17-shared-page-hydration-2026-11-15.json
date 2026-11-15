@@ -1,0 +1,15 @@
+{
+  "scope": "RF17 shared stale-hit page hydration for channel and DM search",
+  "regression": "Channel next page retained total 52 and omitted trailing valid matches after missing/edited-away records. New UI regression failed before fix.",
+  "change": "Extract readCachedSearchPage; hydrate in batches bounded by page size, prune rejected IDs, refill window, check ownership before post-await mutation. DM uses same helper.",
+  "verification": {
+    "targeted": "79 passed across SearchPanel, DMSearchPanel and keyStorage",
+    "typescript": "passed",
+    "eslint": "passed"
+  },
+  "limits": [
+    "Channel initial query still accumulates complete matched messages",
+    "Full ID snapshot remains unbounded",
+    "Full client suite pending separately; no completion claimed"
+  ]
+}

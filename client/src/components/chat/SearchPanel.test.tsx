@@ -238,6 +238,29 @@ describe("SearchPanel — result races", () => {
     expect(screen.getByText("surviving row")).toBeInTheDocument();
   });
 
+  it("prunes stale channel matches and fills the next page", async () => {
+    useServerStore.setState({ activeServer: { ...useServerStore.getState().activeServer!, e2ee_enabled: true } });
+    useE2EEStore.setState({ initStatus: "ready" });
+    const rows = Array.from({ length: 52 }, (_, i) => ({
+      messageId: `refill-${i}`, channelId: "ch-1", dmChannelId: null, content: `match ${i}`, timestamp: i,
+    }));
+    vi.mocked(searchCachedMessages).mockResolvedValueOnce(rows);
+    vi.mocked(getCachedDecryptedMessage).mockImplementation(async id => {
+      if (id === "refill-26") return null;
+      const row = rows.find(row => row.messageId === id);
+      return row ? { ...row, content: id === "refill-25" ? "edited away" : row.content } : null;
+    });
+    render(<SearchPanel channelId="ch-1" onClose={() => {}} />);
+    typeQuery("match");
+    await act(async () => {});
+    fireEvent.click(screen.getByRole("button", { name: "searchNext" }));
+    await act(async () => {});
+    expect(screen.getByText("50", { selector: ".search-count" })).toBeInTheDocument();
+    expect(screen.getByText("match 24")).toBeInTheDocument();
+    expect(screen.getByText("match 0")).toBeInTheDocument();
+    expect(screen.queryByText("edited away")).not.toBeInTheDocument();
+  });
+
   it("keeps a deleted result off subsequent local search pages", async () => {
     useServerStore.setState({ activeServer: { ...useServerStore.getState().activeServer!, e2ee_enabled: true } });
     useE2EEStore.setState({ initStatus: "ready" });

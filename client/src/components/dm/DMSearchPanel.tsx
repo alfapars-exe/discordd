@@ -7,8 +7,8 @@ import { useDMStore } from "../../stores/dmStore";
 import { useE2EEStore } from "../../stores/e2eeStore";
 import { useOpenAtMessage } from "../../hooks/useOpenAtMessage";
 import { getAuthSessionOwner, subscribeAuthOwnerChanges } from "../../api/authSessionEvents";
-import type { CachedDecryptedMessage } from "../../crypto/types";
-import { getCachedDecryptedMessage, searchCachedDMMessageRefs } from "../../crypto/keyStorage";
+import { readCachedSearchPage } from "../../crypto/cachedSearchPage";
+import { searchCachedDMMessageRefs } from "../../crypto/keyStorage";
 import Avatar from "../shared/Avatar";
 import SpamPreview from "../chat/SpamPreview";
 import GameMessageOrigin from "../chat/GameMessageOrigin";
@@ -106,33 +106,10 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted }: DMSearchPanelPro
             }))).reverse().map(row => row.id);
           }
           const lowerTerm = term.toLowerCase();
-          const loaded = new Map<string, CachedDecryptedMessage>();
-          let paged: CachedDecryptedMessage[];
-          for (;;) {
-            const ids = localMatches.current.slice(searchOffset, searchOffset + LIMIT);
-            const windowIds = new Set(ids);
-            for (const id of loaded.keys()) if (!windowIds.has(id)) loaded.delete(id);
-            const pending = ids.filter(id => !loaded.has(id));
-            if (!pending.length) {
-              paged = ids.map(id => loaded.get(id)!);
-              break;
-            }
-            const records = await Promise.all(pending.map(id => getCachedDecryptedMessage(id)));
-            // A different query/account must not mutate its successor's snapshot.
-            if (seq !== searchSeqRef.current) return;
-            const rejected = new Set<string>();
-            records.forEach((row, index) => {
-              const id = pending[index];
-              if (row && row.messageId === id && row.dmChannelId === channelId &&
-                  row.content.toLowerCase().includes(lowerTerm) && !deletedIds.current.has(id)) {
-                loaded.set(id, row);
-              } else {
-                rejected.add(id);
-              }
-            });
-            if (rejected.size) localMatches.current = localMatches.current.filter(id => !rejected.has(id));
-          }
-          if (seq !== searchSeqRef.current) return;
+          const paged = await readCachedSearchPage(localMatches, searchOffset, LIMIT,
+            row => row.dmChannelId === channelId && row.content.toLowerCase().includes(lowerTerm) && !deletedIds.current.has(row.messageId),
+            () => seq === searchSeqRef.current);
+          if (!paged || seq !== searchSeqRef.current) return;
           const total = localMatches.current.length;
 
           // CachedDecryptedMessage -> DMMessage minimal format
