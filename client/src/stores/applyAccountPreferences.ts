@@ -20,7 +20,7 @@ export function applyAccountPreferences(
     // Destination actions notify synchronous subscribers. Recheck ownership
     // between adapters: a subscriber may bind a different account mid-apply.
     if (!readCurrent()) return;
-    settings.resetAccountPreferences(...args);
+    settings.resetAccountPreferences(preserveSessionState, () => readCurrent() !== null);
     if (!readCurrent()) return;
     sidebar.resetAccountPreferences();
     if (!readCurrent()) return;

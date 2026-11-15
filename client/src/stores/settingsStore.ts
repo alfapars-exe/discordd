@@ -336,7 +336,7 @@ type SettingsState = {
   /** Apply theme from server preferences (no re-sync to server) */
   applyFromServer: (themeId: string) => void;
   applyAppearanceFromServer: (partial: Record<string, unknown>) => void;
-  resetAccountPreferences: (preserveSessionState?: boolean) => void;
+  resetAccountPreferences: (preserveSessionState?: boolean, isCurrent?: () => boolean) => void;
 };
 
 export type { SettingsTab };
@@ -572,9 +572,14 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     } catch { /* Cache is best effort; server preferences remain authoritative. */ }
     set(next);
   },
-  resetAccountPreferences: (preserveSessionState = false) => {
+  resetAccountPreferences: (preserveSessionState = false, isCurrent = () => true) => {
+    if (!isCurrent()) return;
     useSettingsStore.getState().applyFromServer(DEFAULT_THEME);
+    // Both actions notify synchronous subscribers; their owner can retire
+    // before the next reset or before clearing a replacement preview.
+    if (!isCurrent()) return;
     useSettingsStore.getState().applyAppearanceFromServer(APPEARANCE_DEFAULTS);
+    if (!isCurrent()) return;
     if (!preserveSessionState) set({ pendingWallpaperPreviewUrl: null });
   },
 }));
