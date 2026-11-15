@@ -404,6 +404,50 @@ describe("account-scoped preference synchronization", () => {
     expect(localStorage.getItem(legacyImportKey)).toBeNull();expect(localStorage.getItem(pendingKey)).toBeNull();
   });
 
+  it.each(["owner", "backend"] as const)("prepares only the surviving binding after a bound observer replaces %s", async boundary => {
+    const { applyAccountPreferences } = await import("./applyAccountPreferences");
+    const loading = deferred<typeof applyAccountPreferences>();
+    bindPreferencePresenter(() => loading.promise);
+    let stop = () => {};
+    stop = usePreferencesStore.subscribe(next => {
+      if (next.accountId !== "alice") return;
+      stop();
+      state().bindAccount(boundary === "owner" ? "bob" : "alice", "https://two.example");
+      state().set({ theme: "survivor" });
+    });
+    try {
+      state().bindAccount("alice");
+      loading.resolve(applyAccountPreferences);
+      await settle();
+      for (const reset of mocks.resets) expect(reset).toHaveBeenCalledTimes(1);
+      expect(mocks.theme).toHaveBeenLastCalledWith("survivor");
+      expect(mocks.get).not.toHaveBeenCalled();
+      expect(state().accountId).toBe(boundary === "owner" ? "bob" : "alice");
+    } finally {
+      stop(); loading.resolve(applyAccountPreferences);
+      bindPreferencePresenter(async () => applyAccountPreferences);
+    }
+  });
+
+  it("prepares committed binding data even if its bound observer throws", async () => {
+    const { applyAccountPreferences } = await import("./applyAccountPreferences");
+    bindPreferencePresenter(async () => applyAccountPreferences);
+    localStorage.setItem(snapshotKey, JSON.stringify({ theme: "cached-owner" }));
+    const failure = new Error("bound observer failed");
+    let stop = () => {};
+    stop = usePreferencesStore.subscribe(next => {
+      if (next.accountId === "alice") { stop(); throw failure; }
+    });
+    try {
+      expect(() => state().bindAccount("alice")).toThrow(failure);
+      await settle();
+      for (const reset of mocks.resets) expect(reset).toHaveBeenCalledTimes(1);
+      expect(mocks.theme).toHaveBeenLastCalledWith("cached-owner");
+      expect(state().accountId).toBe("alice");
+      expect(mocks.get).not.toHaveBeenCalled();
+    } finally { stop(); }
+  });
+
   it("fences an old account while the production presenter is still loading", async () => {
     const { applyAccountPreferences } = await import("./applyAccountPreferences");
     const loading = deferred<typeof applyAccountPreferences>();
