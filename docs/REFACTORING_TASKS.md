@@ -2995,3 +2995,8 @@ Focused fresh-account production verification first failed3role cases because hi
 ### RF03/RF30 — terminal61807544 and strict JSON delivery (2026-11-15)
 
 Remote618075446ceb012ccddb5fb3115d9fa298a296ef completed36/36SUCCESS;all checks terminal. Snapshot:implementation/verification/refactor-618075-terminal-ci-2026-11-15.json. The pending strict notification boolean fix,mandatory native contract and fresh-account nullable server-list fixture profile now require their own new-head CI. Previous green checks are not evidence for this delivery. PR305 remains draft;full RF05 and project/platform acceptance remain open.
+
+
+### RF05 — SQLite ignore-map container parity (2026-11-15)
+
+Fail-first production repository tests exposed two SQLite defects:plain-string ignoredUsers aborts SuppressedRecipients with malformed JSON;an encoded object string is decoded again and incorrectly suppresses the actor. Both SQLite suppression/commit predicates now accept only actual JSON object containers,matching PG extraction. Nine shapes cover raw/encoded strings,number,boolean,array,null,empty object and true/false actor entries. Final selected queue family SQLite7root+18subcasesPASS8.041s;immutable1fbd2878 LinuxGo1.27.4/CGO1 mTLS PostgreSQL race7root+18subcasesPASS15.192s,zero skips/no race report. Required native named gate added after red missing-contract regression;16runner tests pass. Receipt:implementation/verification/refactor-notification-ignore-map-shapes-2026-11-15.json. Worker typed validation and map-value semantics unchanged. Owned fixture/container/image/volume cleaned. Held locally while7ebe019d CI runs;full RF05/project/native acceptance remains open.
