@@ -1,0 +1,157 @@
+{
+  "sourceRevision": "081a4a8a9d06feb6217aca6f0d6bd2450f83a203",
+  "scope": "Owned detached preference task observation for registration/login/restore,focus/online,and own-user preferences_changed.",
+  "baseline": {
+    "log": "hichat-preferences-background-entry-red-final.log",
+    "failed": 6,
+    "passed": 54,
+    "source": "Three original production entry files read from HEAD650c8211 for baseline,then candidate files restored in finally;corrected complete preference data mock."
+  },
+  "targeted": {
+    "passed": 147,
+    "files": 6,
+    "seconds": 4.35,
+    "log": "hichat-preferences-background-entry-green-final.log"
+  },
+  "behavior": [
+    "Store-free runner captures preference binding before invoking task and observes rejected work.",
+    "Current binding reports static preferences_background_failed plus a fixed source label;no user/preference/error contents.",
+    "Retired binding failures are observed without reporting into the replacement binding.",
+    "Authentication remains successful when auxiliary preference hydration fails.",
+    "Immediate invocation/order is preserved;no new polling/retry or preference API changes.",
+    "Logger injection avoids importing UI stores/loggers from the runner and introducing a preferences import cycle."
+  ],
+  "sha256": {
+    "client/src/stores/preferenceTask.ts": "db3bbc0ce38a610f6e22c9dd285110f4b214b40ebe643f3ae8d6873535e5b3b9",
+    "client/src/stores/authStore.ts": "e628a97a4c4c4288d0749b2f3e15766ff39c3ddbfb2f3ae29d77ed4b200da754",
+    "client/src/hooks/usePreferencesSync.ts": "e1772c2be2ad151d11aa2c034e46f011c92cb43869fb20bc27d4d2c6e9f988ca",
+    "client/src/hooks/ws/systemEventHandlers.ts": "a9eb34d2e634691bf9143408a7692179d91297062c233e41302411abf7ecd3e5",
+    "client/src/stores/authStore.test.ts": "851ec821ea5f6d8f7c3c00e7a43f53b9442c8c7e1ebb9ec8a77e04f845a7e9d6",
+    "client/src/hooks/usePreferencesSync.test.ts": "fa87bdb37f9824edba031f9e92b97217303db6be780ca45b3ed6609868331685",
+    "client/src/hooks/ws/systemEventHandlers.test.ts": "f80f506904dc28c8fc0322d8309cd2f8b4bc968af7697ce4368abb3edc66124c"
+  },
+  "limits": [
+    "Real auth/hook/system lifecycle with controlled preference/API collaborators;not full browser login/native-provider acceptance.",
+    "Skipped observer notification and legacy-import/other error paths remain separate review scope.",
+    "Whole RF11/RF13/project/native/physical acceptance and active search unique-ID frontier remain open."
+  ],
+  "fullClientCoverage": {
+    "files": 489,
+    "passed": 5218,
+    "skipped": 1,
+    "seconds": 114.74,
+    "statementPercent": 67.47,
+    "branchPercent": 64.69,
+    "functionPercent": 61.77,
+    "linePercent": 68.5,
+    "log": "hichat-preferences-background-entry-coverage.log"
+  },
+  "changedModuleCoverage": {
+    "usePreferencesSync.ts": {
+      "lines": {
+        "total": 26,
+        "covered": 26,
+        "skipped": 0,
+        "pct": 100
+      },
+      "functions": {
+        "total": 12,
+        "covered": 12,
+        "skipped": 0,
+        "pct": 100
+      },
+      "statements": {
+        "total": 30,
+        "covered": 30,
+        "skipped": 0,
+        "pct": 100
+      },
+      "branches": {
+        "total": 10,
+        "covered": 10,
+        "skipped": 0,
+        "pct": 100
+      }
+    },
+    "systemEventHandlers.ts": {
+      "lines": {
+        "total": 293,
+        "covered": 147,
+        "skipped": 0,
+        "pct": 50.17
+      },
+      "functions": {
+        "total": 31,
+        "covered": 13,
+        "skipped": 0,
+        "pct": 41.93
+      },
+      "statements": {
+        "total": 336,
+        "covered": 163,
+        "skipped": 0,
+        "pct": 48.51
+      },
+      "branches": {
+        "total": 275,
+        "covered": 107,
+        "skipped": 0,
+        "pct": 38.9
+      }
+    },
+    "authStore.ts": {
+      "lines": {
+        "total": 141,
+        "covered": 136,
+        "skipped": 0,
+        "pct": 96.45
+      },
+      "functions": {
+        "total": 30,
+        "covered": 29,
+        "skipped": 0,
+        "pct": 96.66
+      },
+      "statements": {
+        "total": 165,
+        "covered": 157,
+        "skipped": 0,
+        "pct": 95.15
+      },
+      "branches": {
+        "total": 106,
+        "covered": 91,
+        "skipped": 0,
+        "pct": 85.84
+      }
+    },
+    "preferenceTask.ts": {
+      "lines": {
+        "total": 4,
+        "covered": 3,
+        "skipped": 0,
+        "pct": 75
+      },
+      "functions": {
+        "total": 2,
+        "covered": 2,
+        "skipped": 0,
+        "pct": 100
+      },
+      "statements": {
+        "total": 7,
+        "covered": 6,
+        "skipped": 0,
+        "pct": 85.71
+      },
+      "branches": {
+        "total": 2,
+        "covered": 2,
+        "skipped": 0,
+        "pct": 100
+      }
+    }
+  },
+  "build": "actual tsc-b/VitePASS3.13s;existing chunk warning",
+  "lint": "changed runner/auth/hook/system sources and testsPASS"
+}

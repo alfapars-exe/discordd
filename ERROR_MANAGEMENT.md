@@ -149,6 +149,11 @@ serbest bırakır. Eski hesap işleminin temizliği yeni hesabın işini değiş
 Zamanlayıcı ve yeniden deneme düğmesi reddedilmeleri hesap kapsamıyla gözler;
 tanı kaydı yalnız sabit olay kodunu taşır, tercih veya hata içeriğini taşımaz.
 
+Kayıt, giriş, oturum geri yükleme, odaklanma/çevrimiçi olayları ve kullanıcının
+`preferences_changed` olayı, sahipsiz tercih görevlerini `startPreferenceTask`
+ile gözler. Görevin başladığı bağlam geçerliyse sabit kaynak etiketiyle tanı
+üretilir. Tercih yükleme hatası başarılı kimlik doğrulamayı geri almaz.
+
 Yerel depolama yazımı mevcut en iyi çaba davranışını sürdürür. Kota veya erişim
 engeli durumunda bellek kuyruğu yetkilidir; kalıcı teslim garantisi verilmez.
 Hata veren abonenin ardından atlanan diğer abonelerin bildirimi ve asenkron
