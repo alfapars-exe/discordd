@@ -14,6 +14,7 @@ import (
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/repository"
 )
 
 type batchAppLogRepo struct {
@@ -276,5 +277,93 @@ func TestAppLogExplicitSingleWriterDoesNotDiscoverBatchCapability(t *testing.T) 
 	service.flush(context.Background(), []pendingAppLog{{entry: models.AppLog{Level: models.LogLevelError, Message: "single", OccurrenceCount: 1}, metadata: map[string]string{}}})
 	if repo.batchCalls != 0 || len(repo.inserts) != 1 {
 		t.Fatal("single writer rediscovered batch capability or lost row")
+	}
+}
+
+type panicAppLogRepo struct {
+	fakeAppLogRepo
+	stage  string
+	failed bool
+	saved  chan struct{}
+}
+
+func (r *panicAppLogRepo) DeleteBefore(context.Context, string) (int64, error) {
+	if r.stage == "purge" && !r.failed {
+		r.failed = true
+		panic("synthetic purge failure")
+	}
+	return 0, nil
+}
+func (r *panicAppLogRepo) Insert(ctx context.Context, row *models.AppLog) error {
+	if r.stage == "fallback" && !r.failed {
+		r.failed = true
+		panic("synthetic insert failure")
+	}
+	err := r.fakeAppLogRepo.Insert(ctx, row)
+	r.saved <- struct{}{}
+	return err
+}
+func (r *panicAppLogRepo) InsertBatch(ctx context.Context, rows []models.AppLog) (int64, error) {
+	if !r.failed {
+		r.failed = true
+		panic("synthetic batch failure")
+	}
+	for i := range rows {
+		if err := r.Insert(ctx, &rows[i]); err != nil {
+			return 0, err
+		}
+	}
+	return int64(len(rows)), nil
+}
+func TestAppLogDependencyPanicDoesNotStrandWriterOrHideFailedEvents(t *testing.T) {
+	for _, stage := range []string{"purge", "batch", "fallback"} {
+		t.Run(stage, func(t *testing.T) {
+			repo := &panicAppLogRepo{stage: stage, saved: make(chan struct{}, 256)}
+			var writer repository.AppLogBatchWriter
+			if stage == "batch" {
+				writer = repo
+			}
+			s := NewAppLogService(repo, writer).(*appLogService)
+			t.Cleanup(s.Stop)
+			for i := range 128 {
+				s.Log(context.Background(), models.LogLevelInfo, models.LogCategoryGeneral, nil, nil, fmt.Sprintf("queued-%d", i), nil)
+			}
+			s.Start()
+			await := func(count int) {
+				t.Helper()
+				timer := time.NewTimer(2 * time.Second)
+				defer timer.Stop()
+				for range count {
+					select {
+					case <-repo.saved:
+					case <-s.done:
+						t.Fatal("dependency panic terminated app-log writer")
+					case <-timer.C:
+						t.Fatal("healthy app-log work stranded after dependency panic")
+					}
+				}
+			}
+			want := 64
+			if stage == "purge" {
+				want = 128
+			}
+			await(want)
+			for i := range 64 {
+				s.Log(context.Background(), models.LogLevelInfo, models.LogCategoryGeneral, nil, nil, fmt.Sprintf("future-%d", i), nil)
+			}
+			await(64)
+			s.Stop()
+			if repo.count() != want+64 {
+				t.Fatalf("persisted=%d want=%d", repo.count(), want+64)
+			}
+			h := s.Health()
+			if stage == "purge" {
+				if h.WriteFailures != 0 || h.FailedEvents != 0 {
+					t.Fatalf("purge mislabeled as failed write: %+v", h)
+				}
+			} else if h.WriteFailures != 1 || h.FailedEvents != 64 {
+				t.Fatalf("failed batch accounting: %+v", h)
+			}
+		})
 	}
 }
