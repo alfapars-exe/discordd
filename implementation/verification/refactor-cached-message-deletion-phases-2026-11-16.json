@@ -16,14 +16,22 @@
     "targetedBefore": 92,
     "targetedAfter": 92,
     "typecheck": "PASS",
-    "fullClient": "RUNNING session52156",
-    "lintBuild": "RUNNING session62003",
-    "coverage": "RUNNING session37452"
+    "fullClient": "5532 passed / 1 skipped / 0 failed; 505 files, 123.58s",
+    "lintBuild": "Initial global lint: 1 new useless-assignment error / 2 existing warnings; build PASS 2.66s. Useless initial assignment removed; final global lint running.",
+    "coverage": {
+      "lines": 100,
+      "statements": 84.9,
+      "branches": 87.87,
+      "functions": 66.66,
+      "scope": "Measured before the subsequent removal of the useless initial assignment; not a final-source coverage claim"
+    },
+    "finalTargeted": 92,
+    "fullRunScope": "Full suite preceded final useless-assignment cleanup; final targeted run 92 passes follows cleanup."
   },
   "pending": [
-    "Full client, lint/build and coverage terminal results",
     "Source-bound scan/Sonar/CI",
-    "Native IndexedDB transaction and deletion-drain acceptance"
+    "Native IndexedDB transaction and deletion-drain acceptance",
+    "Final global lint and TypeScript terminal results"
   ],
   "evidence": {
     "before": {
@@ -33,6 +41,14 @@
     "after": {
       "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-message-deletion-after.log",
       "sha256": "a1df8e4d9acd5ff48a58c53c0400f9932f2df5fb6cd51582905d00112262ae59"
+    },
+    "full": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-message-deletion-full.log",
+      "sha256": "601822569b6e791567075cb3f7f5874febb779c3d15344c248a314df6233846f"
+    },
+    "finalTargeted": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-message-deletion-final-target.log",
+      "sha256": "a2635a6705782be4fb71245960d3955316f123a49942aab2277756d90649050f"
     }
   }
 }
