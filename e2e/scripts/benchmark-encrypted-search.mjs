@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { createServer } from "../../client/node_modules/vite/dist/node/index.js";
 
+const dm = process.argv.includes("--dm");
 const root = fileURLToPath(new URL("../../client/", import.meta.url));
 const server = await createServer({ root, configFile: false, logLevel: "error", server: { host: "127.0.0.1", port: 0 } });
 await server.listen();
@@ -14,20 +15,23 @@ try {
     await page.goto(new URL("benchmark.html", server.resolvedUrls.local[0]).href);
     console.log("Chromium", browser.version());
     for (const size of [1000, 10000, 50000]) {
-      const report = await page.evaluate(async size => {
+      const report = await page.evaluate(async ({ size, dm }) => {
         const { publishAuthOwnerChange } = await import("/src/api/authSessionEvents.ts");
-        const { getCachedDecryptedMessage, openScopedKeyDatabase, searchCachedMessages } = await import("/src/crypto/keyStorage.ts");
+        const { getCachedDecryptedMessage, openScopedKeyDatabase, searchCachedMessages, searchCachedDMMessages } = await import("/src/crypto/keyStorage.ts");
+        const { sortDMBySource } = await import("/src/utils/dmSourceOrder.ts");
+        const search = dm ? searchCachedDMMessages : searchCachedMessages;
         const { SERVER_URL } = await import("/src/utils/constants.ts");
-        publishAuthOwnerChange("bench");
-        const db = await openScopedKeyDatabase("bench", SERVER_URL);
+        publishAuthOwnerChange(dm ? "bench-dm" : "bench");
+        const db = await openScopedKeyDatabase(dm ? "bench-dm" : "bench", SERVER_URL);
         const tx = db.transaction("messageCache", "readwrite");
+        await tx.store.clear();
         const expected = [];
         for (let i = 0; i < size; i++) {
           const id = String(i).padStart(5, "0");
           const channelId = i % 5 === 0 ? "other" : "target";
           const content = i % 3 === 0 ? "Été" : "Winter";
           if (channelId === "target" && content === "Été") expected.push(id);
-          void tx.store.put({ messageId: id, channelId, dmChannelId: null, content, timestamp: i });
+          void tx.store.put({ messageId: id, channelId: dm ? null : channelId, dmChannelId: dm ? channelId : null, content, timestamp: dm ? size - i : i, sourceSequence: dm ? String(i + 1) : undefined });
         }
         await tx.done;
         const samples = [];
@@ -36,20 +40,22 @@ try {
         const expectedPage = expected.toReversed().slice(25, 50);
         for (let i = 0; i < 4; i++) {
           const start = performance.now();
-          const rows = await searchCachedMessages("target", "ÉTÉ");
+          const rows = await search("target", "ÉTÉ");
           const elapsed = performance.now() - start;
           if (rows.length !== expected.length || rows.some((r, j) => r.messageId !== expected[j] || r.content !== "Été")) {
             throw new Error("Incorrect match contents or order");
           }
           if (i > 0) samples.push(elapsed);
           const sortStart = performance.now();
-          const sorted = rows.sort((a, b) => b.timestamp - a.timestamp);
+          const sorted = dm
+            ? sortDMBySource(rows.map(record => ({ id: record.messageId, created_at: new Date(record.timestamp).toISOString(), source_sequence: record.sourceSequence, record }))).reverse().map(item => item.record)
+            : rows.sort((a, b) => b.timestamp - a.timestamp);
           const oldPage = sorted.slice(25, 50);
           const oldElapsed = elapsed + performance.now() - sortStart;
           const ids = sorted.map(row => row.messageId);
           const pageStart = performance.now();
           const page = (await Promise.all(ids.slice(25, 50).map(getCachedDecryptedMessage)))
-            .filter(row => row?.channelId === "target" && row.content.toLowerCase().includes("été"));
+            .filter(row => (dm ? row?.dmChannelId : row?.channelId) === "target" && row.content.toLowerCase().includes("été"));
           const pageElapsed = performance.now() - pageStart;
           for (const result of [oldPage, page]) {
             if (result.length !== 25 || result.some((r, j) => r.messageId !== expectedPage[j] || r.content !== "Été")) {
@@ -61,8 +67,8 @@ try {
             indexedPageMs.push(pageElapsed);
           }
         }
-        return { size, matches: expected.length, samplesMs: samples, previousPageMs, indexedPageMs };
-      }, size);
+        return { mode: dm ? "dm" : "channel", size, matches: expected.length, samplesMs: samples, previousPageMs, indexedPageMs };
+      }, { size, dm });
       assert.equal(report.samplesMs.length, 3);
       console.log(JSON.stringify(report));
     }

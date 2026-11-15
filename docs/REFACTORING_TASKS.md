@@ -2665,3 +2665,8 @@ The existing composed voice-store preference test now resolves the real presente
 ### RF17 — encrypted DM pagination snapshot (2026-11-15)
 
 Encrypted DM search now reuses matching IDs after its first query and reads at most 25 cache records for each subsequent page. Source sequence ordering remains intact; account changes remount the search scope and discard pending old-owner results. Off-page deletion removes the matching ID and updates the count. The old implementation failed the repeated-scan regression; the changed implementation passed 17 DM/channel panel tests and targeted ESLint. First-query scanning, all-match ID memory, and the DM-specific 1k/10k/50k IndexedDB benchmark remain open. Receipt: refactor-rf17-dm-pagination-contract-2026-11-15.json.
+
+
+### RF17 — DM IndexedDB comparison (2026-11-15)
+
+The benchmark now supports --dm. Chromium 156.0.8078.4, one warmup and three measured repetitions verified accented-query matches and exact second-page content/IDs/order while timestamps oppose server source sequence. For 1k/10k/50k records, second-page medians changed from 23.7/225.6/1078.6 ms (rescan and source sort) to 2.3/2.7/2.5 ms (25 ID lookups). First-query medians remain 23.1/221.1/1061.0 ms. These are storage/page-selection measurements, not rendering or heap measurements. First-query bounds and complete RF17 remain open. Receipt: refactor-rf17-dm-indexeddb-benchmark-2026-11-15.json.
