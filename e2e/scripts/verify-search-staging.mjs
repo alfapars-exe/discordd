@@ -49,7 +49,9 @@ try {
               } finally { index.close(); }
             };
             let writes = 0, failureName;
-            if (mode === "quota" || mode === "cancel") {
+            let writerReleased;
+            const exerciseFailure = async () => {
+              if (!["quota", "cancel"].includes(mode)) return;
               const original = IDBObjectStore.prototype.put;
               const controller = new AbortController();
               IDBObjectStore.prototype.put = function (...args) {
@@ -64,24 +66,39 @@ try {
                 unexpected = await createCachedSearchSnapshot(kind, kind, "ÉTÉ", controller.signal);
               } catch (error) {
                 failureName = error.name;
-                if (mode === "quota" && failureName !== "QuotaExceededError") throw error;
-                if (mode === "cancel" && !controller.signal.aborted) throw error;
+                const expectedQuota = mode !== "quota" || failureName === "QuotaExceededError";
+                const expectedCancel = mode !== "cancel" || controller.signal.aborted;
+                if (!expectedQuota || !expectedCancel) throw error;
               } finally { IDBObjectStore.prototype.put = original; }
               if (unexpected) { await unexpected.dispose(); throw new Error("Injected staging failure was ignored"); }
               if (!failureName) throw new Error("Staging rejection was not observed");
               await assertEmpty();
-            }
+              // A failed sidecar consumer must release its coherent source
+              // reader so subsequent cache writes can acquire the store.
+              const probe = db.transaction("messageCache", "readwrite");
+              await Promise.all([
+                probe.store.put({ ...rows[0], messageId: "staging-writer-probe", content: "other" }),
+                probe.store.delete("staging-writer-probe"),
+              ]);
+              await probe.done;
+              writerReleased = true;
+            };
+            await exerciseFailure();
             const snapshot = await createCachedSearchSnapshot(kind, kind, "ÉTÉ");
+            let exactPages = 0;
             try {
-              for (const offset of [0, 1000, 1024, 1200]) {
-                const actual = await snapshot.page(offset, 25);
-                if (actual.total !== rows.length || actual.offset !== offset || JSON.stringify(actual.ids) !== JSON.stringify(expected.slice(offset, offset + 25))) {
+              const checkPage = async (offset, limit) => {
+                const actual = await snapshot.page(offset, limit);
+                if (actual.total !== rows.length || actual.offset !== offset || JSON.stringify(actual.ids) !== JSON.stringify(expected.slice(offset, offset + limit))) {
                   throw new Error(`Incorrect ${mode} staging page at ${offset}`);
                 }
-              }
+                exactPages++;
+              };
+              for (let offset = 0; offset < rows.length; offset += 128) await checkPage(offset, 128);
+              for (const offset of [0, 1000, 1024, 1200]) await checkPage(offset, 25);
             } finally { await snapshot.dispose(); }
             await assertEmpty();
-            return { mode, records: rows.length, exactPages: 4, failureName, failureWrites: writes, indexDisposed: true };
+            return { mode, records: rows.length, exactPages, failureName, failureWrites: writes, writerReleased, indexDisposed: true };
           }, mode),
           new Promise((_, reject) => { deadline = setTimeout(() => reject(new Error(`Native staging deadline exceeded: ${mode}`)), 30_000); }),
         ]);
