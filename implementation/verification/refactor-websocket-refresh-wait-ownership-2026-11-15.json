@@ -1,0 +1,96 @@
+{
+  "source_commit": "6e5814f40a2fdc14cfff248c326a7942c38d27b6",
+  "client_git_tree": "3e33a7f458f939b7982f610ffbcafe6280219319",
+  "source_sha256": {
+    "client/src/hooks/useWebSocket.ts": "f1d2ea22e3cab45b549bbcfe1afe4cf85e7b89a2e83137cea28049a8602e577d",
+    "client/src/hooks/useWebSocket.offline.test.ts": "2bde44da20ff930d76741d769792e50b14f345a5118541e67c307bcb4604271f"
+  },
+  "red_proof": "hichat-ws-refresh-wait-red.log:unmount retains orphan10s token refresh retry timer",
+  "behavior": [
+    "Retry wait cancelers owned by hook and removed when fired or released",
+    "Unmount,offline,close,account change and replacement connection release waits",
+    "Close retires transport before resolving cancelled wait continuations",
+    "Late retired refresh rejection creates no new timer or retry log",
+    "Normal10s cadence and nine refresh attempts retained"
+  ],
+  "checks": {
+    "targeted": "31passed",
+    "targeted_module_coverage_command": "FAIL:all31tests passed but59.57branch percentage below63global threshold when selecting one module;threshold unchanged",
+    "full_coverage": "485files;5040passed;1skipped;112.83s;PASS including unchanged global thresholds",
+    "coverage": {
+      "lines": {
+        "total": 38057,
+        "covered": 25976,
+        "skipped": 0,
+        "pct": 68.25
+      },
+      "statements": {
+        "total": 52022,
+        "covered": 34962,
+        "skipped": 0,
+        "pct": 67.2
+      },
+      "functions": {
+        "total": 12150,
+        "covered": 7468,
+        "skipped": 0,
+        "pct": 61.46
+      },
+      "branches": {
+        "total": 39623,
+        "covered": 25550,
+        "skipped": 0,
+        "pct": 64.48
+      },
+      "branchesTrue": {
+        "total": 0,
+        "covered": 0,
+        "skipped": 0,
+        "pct": 100
+      }
+    },
+    "changed_module_coverage": {
+      "C:\\Users\\PARS\\Desktop\\PROJELER\\HiChat\\refactor-integration\\client\\src\\hooks\\useWebSocket.ts": {
+        "lines": {
+          "total": 280,
+          "covered": 226,
+          "skipped": 0,
+          "pct": 80.71
+        },
+        "functions": {
+          "total": 47,
+          "covered": 31,
+          "skipped": 0,
+          "pct": 65.95
+        },
+        "statements": {
+          "total": 323,
+          "covered": 240,
+          "skipped": 0,
+          "pct": 74.3
+        },
+        "branches": {
+          "total": 188,
+          "covered": 112,
+          "skipped": 0,
+          "pct": 59.57
+        }
+      }
+    },
+    "changed_files_lint": "PASS",
+    "general_lint": "0errors;2existing TanStack warnings",
+    "production_build": "actual tsc -b and Vite PASS3.13s;existing chunk warning"
+  },
+  "logs": {
+    "red": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-ws-refresh-wait-red.log",
+    "targeted_coverage_failed": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-ws-refresh-wait-coverage.log",
+    "full_coverage": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-ws-refresh-wait-full-coverage.log",
+    "build": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-ws-refresh-wait-build.log",
+    "lint": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-ws-refresh-wait-full-lint.log"
+  },
+  "limits": [
+    "Fake socket/virtual time collaborators;real browser/native long-session acceptance remains open",
+    "Full project/RF14 acceptance not closed",
+    "Local pending source requires new remote CI after293f terminal result"
+  ]
+}

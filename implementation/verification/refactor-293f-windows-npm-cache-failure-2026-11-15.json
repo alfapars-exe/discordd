@@ -1,0 +1,33 @@
+{
+  "failed_head": "293f8d4990269b556c897277c15fa3a704fbf1de",
+  "failed_job": {
+    "__typename": "CheckRun",
+    "completedAt": "2026-11-15T09:10:50Z",
+    "conclusion": "FAILURE",
+    "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43697929095/job/132762485227",
+    "name": "package (windows-latest)",
+    "startedAt": "2026-11-15T09:10:20Z",
+    "status": "COMPLETED",
+    "workflowName": "Private frontend artifacts"
+  },
+  "all_checks_terminal_at_observation": false,
+  "failure_log": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-293f-windows-package-failed.log",
+  "observed_error": "npm ci --ignore-scripts before packaging:default C:/npm/cache/_cacache rename EEXIST/ENOENT",
+  "cause_limit": "Exact cause of default cache inconsistency not established",
+  "fix": "Fresh cache namespace under runner.temp/run_id/run_attempt/matrix index,shared by unchanged sequential root/client installs;no force/delete/retry",
+  "workflow_sha256": "26021b1fb453a90b605f1aa7ea01acc6a1a62838fe409f1aef28fd6c30a904de",
+  "yaml_validation": "PASS:job env inherited by both unchanged install commands",
+  "local_install_proof": {
+    "fixture": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-npm-ci-293f-20261115",
+    "cache": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-npm-ci-293f-20261115/cache",
+    "root": "PASS",
+    "client": "PASS",
+    "node": "v26.13.1",
+    "npm": "11.20.0"
+  },
+  "cleanup": "Owned temporary install fixture retained:automatic approval review rejected recursive deletion with blocked by policy;no alternate deletion attempted",
+  "limits": [
+    "Local proof Node26.13.1/npm11.20;CI uses Node22 so new remote Windows artifact job must verify actual resolution",
+    "Other293fchecks still observed independently;no blind rerun requested"
+  ]
+}

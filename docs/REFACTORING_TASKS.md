@@ -3033,3 +3033,12 @@ Three fail-first real-hook regressions exposed offline retired frames/close call
 ### RF03/RF30 — terminalc853ee50 and next lifecycle delivery (2026-11-15)
 
 Remotec853ee50bfe79d241779aaa6787017e193335f24 completed36/36SUCCESS. Snapshot:implementation/verification/refactor-c853-terminal-ci-2026-11-15.json. Pending per-event audit panic containment,application-log panic/accounting protection and WebSocket attempt retirement have source-bound local proofs;this delivery requires independent new-head CI. Prior success is not reused for this source. PR305 stays draft;full RF14/RF24/project/platform acceptance remains open.
+
+
+### RF14 — own token-refresh retry waits (2026-11-15)
+
+Fail-first real hook test found an orphan10s retry timeout after unmount. dce7429f owns wait cancelers,releases timer and Promise on teardown/offline/close/account/reconnect,and fences late rejected refreshes before logging/acquiring another timer. Close retires transport before releasing waiters.31hook tests pass including all5boundaries,late reject,10s cadence and nine-attempt exhaustion. A selected-module coverage command failed the unchanged global63branch threshold at59.57%;the subsequent full485file corpus passed5040tests1skip112.83s with line68.25/branch64.48/statement67.20/function61.46%. General lint0errors2existing warnings;actual tsc-b/Vite buildPASS3.13s. Receipt:implementation/verification/refactor-websocket-refresh-wait-ownership-2026-11-15.json. Fake socket/virtual time only;whole RF14/native/long-session acceptance remains open.
+
+### RF03 — inspect293f Windows npm cache failure before correction (2026-11-15)
+
+Remote293f Windows artifact job132762485227 failed before packaging in root npm ci:default C:/npm/cache content rename EEXIST/ENOENT. Exact cache inconsistency cause is not proven. New job env isolates both unchanged sequential installs under runner.temp/run/attempt/matrix index. YAML inheritance validated;actual fresh-cache root and client npm ci both pass locally on Node26.13.1/npm11.20,not proof for CI Node22. Receipt:implementation/verification/refactor-293f-windows-npm-cache-failure-2026-11-15.json. Temporary install tree retained because automatic approval rejected recursive deletion with blocked by policy;no alternative deletion attempted. Failed CI was not blindly rerun;other293f checks remain independently observed before next delivery.
