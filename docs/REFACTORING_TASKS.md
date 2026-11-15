@@ -3461,3 +3461,5 @@ caac0d77 kaynağında 14 senaryonun yalnız kanal eski-sayfa çakışması başa
 Tam istemci coverage, lint ve değişmez kaynak taraması sürüyor. Receipt: `implementation/verification/refactor-history-shared-contract-2026-11-15.json`. Ortak fixture maddesi için bu kapsam somut kanıttır; RF15'in tüm izin/şifreleme/read runtime kabulünü veya genel RF01–RF30 hedefini kapatmaz. Performans iyileşmesi iddia edilmiyor.
 
 7a857281 tam istemci koşusu 499 dosyada 5.359 başarılı ve 1 atlanan testle tamamlandı. Satır kapsamı %68,91, dal kapsamı %64,90. Lint 0 hata ve mevcut 2 uyarıyla geçti. Son kaynak taraması ve CI kabulü açık. Günlük: TEMP/hichat-history-contract-coverage.log.
+
+caac0d77 PR305 terminal CI 36/36 başarılı. Timer ürün kaynağı fec8b107 ile client/server/electron/e2e farkı boş; bu aradaki değişiklikler teslim kanıtlarıdır. Arşiv: `implementation/verification/refactor-caac0-terminal-ci-2026-11-15.json`. Bu sonuç sonraki 7a857281 geçmiş düzeltmesinin yeni head kabulü değildir. Genel çalışma zamanı/platform/fiziksel kabul açık.

@@ -84,10 +84,16 @@
         "skipped": 0,
         "pct": 82.35
       }
+    },
+    "ci": {
+      "revision": "caac0d7767711f1b2486e81d6c45a30e7b8599a7",
+      "checks": 36,
+      "success": 36,
+      "runtimeEquivalence": "git diff fec8b107..caac0d77 -- client server electron e2e is empty",
+      "receipt": "refactor-caac0-terminal-ci-2026-11-15.json"
     }
   },
   "remaining": [
-    "Terminal prior-head CI before next push;new-head CI after push",
     "Full RF14/RF15 and RF01-RF30 runtime/platform/physical acceptance remain open"
   ]
 }
