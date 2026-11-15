@@ -147,3 +147,73 @@ func TestAuditStopJoinsActivePersistenceAndQueuedDrain(t *testing.T) {
 		t.Fatalf("drained entries=%+v", repo.entries)
 	}
 }
+
+// Snapshot enrichment belongs to the writer, never the moderation request.
+type auditBlockingUserLookup struct {
+	repository.UserRepository
+	entered chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func (u *auditBlockingUserLookup) GetByID(ctx context.Context, id string) (*models.User, error) {
+	u.once.Do(func() { close(u.entered) })
+	select {
+	case <-u.release:
+		return &models.User{ID: id, Username: "snapshot-user"}, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+func TestAuditWriteDoesNotWaitForSnapshotLookup(t *testing.T) {
+	repo := &auditLifecycleRepo{}
+	users := &auditBlockingUserLookup{entered: make(chan struct{}), release: make(chan struct{})}
+	hub := ws.NewHub()
+	s := NewAuditLogService(repo, users, nil, hub, hub)
+	var release sync.Once
+	unblock := func() { release.Do(func() { close(users.release) }) }
+	t.Cleanup(func() { unblock(); s.Stop() })
+	s.Start()
+	actor := "actor"
+	written := make(chan struct{})
+	go func() { s.Write(models.AuditLog{ActorUserID: &actor}); close(written) }()
+	select {
+	case <-users.entered:
+	case <-time.After(time.Second):
+		t.Fatal("snapshot lookup never started")
+	}
+	select {
+	case <-written:
+	case <-time.After(100 * time.Millisecond):
+		unblock()
+		<-written
+		t.Fatal("audit Write blocked the request on a user lookup")
+	}
+	unblock()
+	s.Stop()
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	if len(repo.entries) != 1 || repo.entries[0].ActorSnapshot == nil || repo.entries[0].ActorSnapshot.Username != "snapshot-user" {
+		t.Fatalf("snapshot not persisted: %+v", repo.entries)
+	}
+}
+
+func TestAuditWriteOwnsProvidedSnapshotAndIdentityValues(t *testing.T) {
+	s, repo := auditLifecycleFixture()
+	actor, target := "actor-before", "target-before"
+	actorSnapshot := &models.UserSnapshot{ID: actor, Username: "actor-name-before"}
+	targetSnapshot := &models.UserSnapshot{ID: target, Username: "target-name-before"}
+	s.Write(models.AuditLog{ActorUserID: &actor, TargetUserID: &target, ActorSnapshot: actorSnapshot, TargetSnapshot: targetSnapshot})
+	actor, target = "actor-after", "target-after"
+	actorSnapshot.Username, targetSnapshot.Username = "actor-name-after", "target-name-after"
+	s.Stop()
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	if len(repo.entries) != 1 {
+		t.Fatalf("persisted=%d", len(repo.entries))
+	}
+	e := repo.entries[0]
+	if *e.ActorUserID != "actor-before" || *e.TargetUserID != "target-before" || e.ActorSnapshot.Username != "actor-name-before" || e.TargetSnapshot.Username != "target-name-before" || e.Metadata != "{}" {
+		t.Fatalf("queued audit entry changed with caller values: %+v actor=%+v target=%+v", e, e.ActorSnapshot, e.TargetSnapshot)
+	}
+}
