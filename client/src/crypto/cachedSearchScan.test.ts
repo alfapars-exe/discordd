@@ -114,3 +114,49 @@ it("aborts the native reader on same-account session replacement", async () => {
   })).rejects.toThrow("e2ee_account_scope_changed");
   expect(batches).toBe(1);
 });
+
+// Cancellation must release the source lock without waiting for a stalled
+// sidecar consumer, including when that consumer eventually rejects.
+it.each(["cancel", "session"] as const)("releases queued cache writes on %s while the consumer is stalled", async reason => {
+  await cacheDecryptedMessages(Array.from({ length: 260 }, (_, i) => row(i)));
+  const controller = new AbortController();
+  let entered!: () => void, rejectConsumer!: (error: Error) => void;
+  const started = new Promise<void>(resolve => { entered = resolve; });
+  const stalled = new Promise<void>((_, reject) => { rejectConsumer = reject; });
+  let batches = 0;
+  const scan = scanCachedSearchReferences("dm", "dm", "ÉTÉ", () => {
+    batches++; entered(); return stalled;
+  }, controller.signal);
+  const rejected = expect(scan).rejects.toThrow(reason === "cancel" ? /abort/i : "e2ee_account_scope_changed");
+  await started;
+  const db = await getDB();
+  const tx = db.transaction("messageCache", "readwrite");
+  const write = tx.store.put(row(300));
+  let committed = false;
+  const completion = tx.done.then(() => { committed = true; });
+  // Session replacement also fences queued writes made by the old session.
+  const written = Promise.allSettled([write, completion]);
+  try {
+    await new Promise(resolve => setTimeout(resolve, 10));
+    expect(committed).toBe(false);
+    if (reason === "cancel") controller.abort();
+    else publishAuthGenerationChange(++generation);
+    await rejected;
+    const outcomes = await written;
+    if (reason === "cancel") {
+      expect(outcomes.every(result => result.status === "fulfilled")).toBe(true);
+      expect(committed).toBe(true);
+    } else {
+      expect(outcomes.every(result => result.status === "rejected")).toBe(true);
+      expect(committed).toBe(false);
+      // Fresh-session writes must no longer wait on the abandoned reader.
+      await cacheDecryptedMessage(row(301));
+    }
+    expect(batches).toBe(1);
+    rejectConsumer(new Error("late sidecar failure"));
+    await new Promise(resolve => setTimeout(resolve, 0));
+  } finally {
+    controller.abort(); rejectConsumer(new Error("test cleanup"));
+    await Promise.allSettled([scan, write, completion]);
+  }
+});

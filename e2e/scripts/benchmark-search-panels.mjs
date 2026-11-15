@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createServer } from "node:http";
-import { setTimeout as delay } from "node:timers/promises";
+import { existsSync } from "node:fs";
+import { setInterval as sampleInterval } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { build } from "../../client/node_modules/vite/dist/node/index.js";
 import react from "../../client/node_modules/@vitejs/plugin-react/dist/index.js";
@@ -13,6 +14,8 @@ const quick=process.argv.includes("--quick"),failureOnly=process.argv.includes("
 const variants=process.argv.includes("--after-only")?["after"]:["before","after"];
 const repetitions=quick?1:9,assets=new Map();
 const baseline="eb0a31cc40b244c3beb9b74a78e50d83dea83f19";
+const gitExecutable=(process.platform==="win32"?["C:/Program Files/Git/cmd/git.exe"]:["/usr/bin/git","/usr/local/bin/git"]).find(existsSync);
+assert.ok(gitExecutable,"Benchmark requires Git installed at a fixed supported path");
 const stores=`import {create} from "zustand";
  export const useServerStore=create(()=>({activeServerId:"server",activeServer:{id:"server",e2ee_enabled:true}}));
  export const useMessageStore=create(()=>({messagesByChannel:{},lastDeleted:null}));
@@ -41,7 +44,7 @@ const entry=`import React from "react";import {createRoot}from "react-dom/client
 for(const variant of variants){
  const overrides=new Map(),usedOverrides=new Set();
  if(variant==="before")for(const path of ["client/src/components/chat/SearchPanel.tsx","client/src/components/dm/DMSearchPanel.tsx","client/src/crypto/cachedSearchPage.ts"])
-  overrides.set(fileURLToPath(new URL("../../"+path,import.meta.url)).replaceAll("\\","/"),execFileSync("git",["show",baseline+":"+path],{cwd:repo,encoding:"utf8"}));
+  overrides.set(fileURLToPath(new URL("../../"+path,import.meta.url)).replaceAll("\\","/"),execFileSync(gitExecutable,["show",baseline+":"+path],{cwd:repo,encoding:"utf8"}));
  const plugin={name:"controlled-panel-providers",enforce:"pre",resolveId(source){
   if(source==="virtual:panel-entry")return "\0panel-entry.js";
   if(source==="virtual:panel-stores"||/\/stores\/(serverStore|messageStore|dmStore|e2eeStore|settingsStore)$/.test(source))return "\0panel-stores.js";
@@ -64,7 +67,8 @@ for(const variant of variants){
  if(variant==="before")assert.equal(usedOverrides.size,3,"Historical panel/helper overrides must all be applied");
  for(const output of (Array.isArray(result)?result[0]:result).output)assets.set(variant+"/"+output.fileName,output.type==="chunk"?output.code:output.source);
 }
-const server=createServer((req,res)=>{const path=new URL(req.url,"http://localhost").pathname.slice(1);if(variants.some(variant=>path===variant+"/")){res.setHeader("Content-Type","text/html");res.end('<div id="root"></div><script type="module" src="/'+path+'benchmark.js"></script>');return;}
+const entryPages=new Map(variants.map(variant=>[variant+"/",'<div id="root"></div><script type="module" src="/'+variant+'/benchmark.js"></script>']));
+const server=createServer((req,res)=>{const path=new URL(req.url,"http://localhost").pathname.slice(1),entryPage=entryPages.get(path);if(entryPage!==undefined){res.setHeader("Content-Type","text/html");res.end(entryPage);return;}
  const body=assets.get(path);if(body===undefined){res.statusCode=404;res.end();return;}res.setHeader("Content-Type",path.endsWith(".js")?"text/javascript":"application/octet-stream");res.end(body);});
 await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
 const browser=await chromium.launch();
@@ -93,8 +97,9 @@ try{
   const samples=[];
   for(let repetition=0;repetition<=repetitions;repetition++){
    await page.evaluate(()=>globalThis.panelBench.unmount());await cdp.send("HeapProfiler.collectGarbage");const baselineHeap=await cdp.send("Runtime.getHeapUsage");
-   let peak=baselineHeap.usedSize,stop=false,samplingError;
-   const sampler=(async()=>{while(!stop){const heap=await cdp.send("Runtime.getHeapUsage");peak=Math.max(peak,heap.usedSize);await delay(25);}})().catch(error=>{samplingError=error;});
+   let peak=baselineHeap.usedSize,samplingError;
+   const sampling=new AbortController();
+   const sampler=(async()=>{for await(const tick of sampleInterval(25,undefined,{signal:sampling.signal})){void tick;const heap=await cdp.send("Runtime.getHeapUsage");peak=Math.max(peak,heap.usedSize);}})().catch(error=>{if(error.name!=="AbortError")samplingError=error;});
    let firstMs,nextMs,previousMs;
    try{await page.evaluate(kind=>globalThis.panelBench.mount(kind),kind);
     firstMs=await measureUI(page,"input",expected.slice(0,25),()=>page.getByRole("textbox").fill("ÉTÉ"));
@@ -102,7 +107,7 @@ try{
     nextMs=await measureUI(page,"click",expected.slice(25,50),()=>page.getByRole("button",{name:"searchNext",exact:true}).click());
     previousMs=await measureUI(page,"click",expected.slice(0,25),()=>page.getByRole("button",{name:"searchPrev",exact:true}).click());
     assert.equal(await page.locator(".search-result-item").count(),25);
-   }finally{stop=true;await sampler;}
+   }finally{sampling.abort();await sampler;}
    if(samplingError)throw samplingError;
    await cdp.send("HeapProfiler.collectGarbage");const retained=await cdp.send("Runtime.getHeapUsage");
    if(repetition)samples.push({firstMs,nextMs,previousMs,retainedBytes:retained.usedSize-baselineHeap.usedSize,sampledPeakBytes:peak-baselineHeap.usedSize});
