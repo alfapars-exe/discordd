@@ -4,6 +4,7 @@ import { chromium } from "playwright";
 import { createServer } from "../../client/node_modules/vite/dist/node/index.js";
 
 const dm = process.argv.includes("--dm");
+const measureHeap = process.argv.includes("--heap");
 const root = fileURLToPath(new URL("../../client/", import.meta.url));
 const server = await createServer({ root, configFile: false, logLevel: "error", server: { host: "127.0.0.1", port: 0 } });
 await server.listen();
@@ -11,6 +12,7 @@ try {
   const browser = await chromium.launch();
   try {
     const page = await browser.newPage();
+    const cdp = measureHeap ? await page.context().newCDPSession(page) : null;
     await page.route("**/benchmark.html", route => route.fulfill({ contentType: "text/html", body: "<title>Search benchmark</title>" }));
     await page.goto(new URL("benchmark.html", server.resolvedUrls.local[0]).href);
     console.log("Chromium", browser.version());
@@ -87,6 +89,36 @@ try {
         return { mode: dm ? "dm" : "channel", size, matches: expected.length, samplesMs: samples, previousPageMs, indexedPageMs, compactFirstPageMs };
       }, { size, dm });
       assert.equal(report.samplesMs.length, 3);
+      if (cdp) {
+        const heap = [];
+        // Warm both module/API paths before taking retained-heap baselines.
+        for (let repetition = -1; repetition < 3; repetition++) {
+          for (const compact of [false, true]) {
+            await page.evaluate(() => Reflect.deleteProperty(globalThis, "__hichatSearchHeapRows"));
+            await cdp.send("HeapProfiler.collectGarbage");
+            const baseline = await cdp.send("Runtime.getHeapUsage");
+            const count = await page.evaluate(async ({ dm, compact }) => {
+              const storage = await import("/src/crypto/keyStorage.ts");
+              const search = dm
+                ? (compact ? storage.searchCachedDMMessageRefs : storage.searchCachedDMMessages)
+                : (compact ? storage.searchCachedMessageRefs : storage.searchCachedMessages);
+              const rows = await search("target", "ÉTÉ");
+              if (compact && rows.some(row => "content" in row)) throw new Error("Compact heap sample contains plaintext");
+              Reflect.set(globalThis, "__hichatSearchHeapRows", rows);
+              return rows.length;
+            }, { dm, compact });
+            assert.equal(count, report.matches);
+            await cdp.send("HeapProfiler.collectGarbage");
+            const retained = await cdp.send("Runtime.getHeapUsage");
+            if (repetition >= 0) heap.push({ repetition, compact, count,
+              baselineBytes: baseline.usedSize, retainedBytes: retained.usedSize,
+              deltaBytes: retained.usedSize - baseline.usedSize });
+          }
+        }
+        await page.evaluate(() => Reflect.deleteProperty(globalThis, "__hichatSearchHeapRows"));
+        report.retainedHeap = heap;
+        report.heapScope = "Post-GC retained search result objects; excludes transient peak, renderer, IndexedDB disk usage and full panel state.";
+      }
       console.log(JSON.stringify(report));
     }
   } finally {

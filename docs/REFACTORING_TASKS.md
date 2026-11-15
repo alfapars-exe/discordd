@@ -2700,3 +2700,8 @@ Encrypted channel search now scans only timestamp/ID references and hydrates fir
 ### Combined search source validation (2026-11-15)
 
 Client product source a347a8ca passed all 477 test files: 4,907 passed, 1 skipped (135.55s). npm run build passed; existing large-chunk warnings remain and thresholds were not changed. Source remained unchanged through docs-only 5cb415ba. Earlier remote 8c4e6f90 completed 36/36 successful checks; its archived receipt is distinct from newly running 5cb415ba CI. RF17 still requires matching-ID/first-query bounds and final acceptance. Receipt: refactor-a347-client-full-build-2026-11-15.json.
+
+
+### RF17 — retained search result heap baseline (2026-11-15)
+
+The existing Chromium benchmark now accepts --heap (and --dm --heap). Each fixture warms both APIs, then records three paired retained-result deltas after explicit garbage collection via CDP. At 50k cached records / 13,333 matches, full versus compact median retained deltas were 1,461,204 versus 593,560 bytes for channels and 1,717,140 versus 902,856 bytes for DM. Exact result/order checks still passed. This measures retained API result objects with small synthetic content, not peak memory, the full panel, or capacity. Compact reference/ID memory still scales with matches; no bounded-memory acceptance is claimed. Raw baseline/retained/delta samples and runtime are in refactor-rf17-retained-heap-2026-11-15.json.
