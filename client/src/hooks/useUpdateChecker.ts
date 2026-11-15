@@ -17,16 +17,29 @@ export function useUpdateChecker(): UpdateChecker {
   useEffect(() => {
     if (!isElectron()) return;
     const api = window.electronAPI!;
-    const stopAvailable = api.onUpdateAvailable(info => dispatch({ type: "available", version: info.version }));
-    const stopProgress = api.onUpdateProgress(info => dispatch({ type: "progress", percent: info.percent }));
-    const stopDownloaded = api.onUpdateDownloaded(info => dispatch({ type: "downloaded", version: info?.version ?? "" }));
-    const stopError = api.onUpdateError(message => {
-      console.warn("[updater] Update check failed:", message);
-      dispatch({ type: "error" });
-    });
-    return () => {
-      stopAvailable?.(); stopProgress?.(); stopDownloaded?.(); stopError?.();
+    let stops: (void | (() => void))[] = [];
+    const dispose = () => {
+      const owned = stops; stops = [];
+      let failed = false, failure: unknown;
+      for (const stop of owned) {
+        try { stop?.(); }
+        catch (error) { if (!failed) { failed = true; failure = error; } }
+      }
+      if (failed) throw failure;
     };
+    try {
+      stops.push(api.onUpdateAvailable(info => dispatch({ type: "available", version: info.version })));
+      stops.push(api.onUpdateProgress(info => dispatch({ type: "progress", percent: info.percent })));
+      stops.push(api.onUpdateDownloaded(info => dispatch({ type: "downloaded", version: info?.version ?? "" })));
+      stops.push(api.onUpdateError(message => {
+        console.warn("[updater] Update check failed:", message);
+        dispatch({ type: "error" });
+      }));
+    } catch (error) {
+      try { dispose(); } catch { /* Preserve the original subscription failure. */ }
+      throw error;
+    }
+    return dispose;
   }, []);
 
   const token = state.snoozeToken;

@@ -2895,3 +2895,8 @@ Installed electron-updater checkForUpdates is not an async function; its synchro
 ### RF03/RF30 — immutable c2baaec1 terminal CI and deferred local delivery (2026-11-15)
 
 Remote c2baaec19c2a963e4e9efed6a5e5afb298d78fbd completed all36/36 checks SUCCESS, including all repository/service race shards, combined Go coverage, actual client type/lint/test/build, PostgreSQL, Playwright, security/Sonar, native and artifact gates. Snapshot:implementation/verification/refactor-c2baa-terminal-ci-2026-11-15.json. Only after observing terminal completion are the five deferred local commits (local voice cache validation/device types and updater lifecycle/startup/polling recovery) delivered. This36/36 result belongs to c2baaec1, not the new delivery HEAD; its CI must run independently. Whole-project/physical acceptance remains open; PR305 stays draft.
+
+
+### RF19 — React updater bridge acquisition/cleanup ownership (2026-11-15)
+
+Two fail-first hook tests exposed retained earlier subscriptions after a later acquisition failed and skipped remaining disposers after one cleanup threw. useUpdateChecker now records each acquired disposer, retires them once, attempts remaining cleanup despite failure and preserves the primary subscription error during rollback. Additional tests cover simultaneous primary/secondary failure and two live consumers: unmounting one retains the sibling and delivers downloaded state. Hook/state suites23passed;npx tsc -b,changed lint,Vite build pass. Receipt:implementation/verification/refactor-updater-hook-ownership-2026-11-15.json. Existing full5,014-test coverage remains previous-source evidence; native installed-app and full RF19 acceptance stay open. Local commit held while remote8efdfddc CI runs without cancellation.

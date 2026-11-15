@@ -35,6 +35,54 @@ function updaterHarness(strict = false) {
   };
 }
 
+it("releases earlier subscriptions when a later bridge subscription fails", () => {
+  const h = updaterHarness(); h.view.unmount();
+  const failure = new Error("bridge subscription failed");
+  window.electronAPI!.onUpdateProgress = () => { throw failure; };
+  expect(() => renderHook(useUpdateChecker)).toThrow(failure);
+  expect(h.listenerCounts()).toEqual([0, 0, 0, 0]);
+});
+
+it("releases sibling subscriptions even when an owned disposer throws", () => {
+  const h = updaterHarness(); h.view.unmount();
+  const api = window.electronAPI!, subscribe = api.onUpdateAvailable;
+  const failure = new Error("bridge cleanup failed");
+  api.onUpdateAvailable = callback => {
+    const stop = subscribe(callback);
+    return () => { stop?.(); throw failure; };
+  };
+  const view = renderHook(useUpdateChecker);
+  expect(() => view.unmount()).toThrow(failure);
+  expect(h.listenerCounts()).toEqual([0, 0, 0, 0]);
+});
+
+it("preserves subscription failure when rollback cleanup also fails", () => {
+  const h = updaterHarness(); h.view.unmount();
+  const api = window.electronAPI!, subscribe = api.onUpdateAvailable;
+  const failure = new Error("primary subscription failure");
+  api.onUpdateAvailable = callback => {
+    const stop = subscribe(callback);
+    return () => { stop?.(); throw new Error("secondary cleanup failure"); };
+  };
+  api.onUpdateProgress = () => { throw failure; };
+  expect(() => renderHook(useUpdateChecker)).toThrow(failure);
+  expect(h.listenerCounts()).toEqual([0, 0, 0, 0]);
+});
+
+it("unmounting one consumer leaves its sibling subscribed and receiving updates", () => {
+  const h = updaterHarness();
+  const sibling = renderHook(useUpdateChecker);
+  try {
+    expect(h.listenerCounts()).toEqual([2, 2, 2, 2]);
+    h.view.unmount();
+    expect(h.listenerCounts()).toEqual([1, 1, 1, 1]);
+    h.downloaded("2.0.0");
+    expect(sibling.result.current.status).toBe("ready");
+    expect(sibling.result.current.update).toEqual({ version: "2.0.0" });
+  } finally { sibling.unmount(); h.view.unmount(); }
+  expect(h.listenerCounts()).toEqual([0, 0, 0, 0]);
+});
+
 it("handles a rejected install IPC request without losing ready state or preventing retry", async () => {
   const h = updaterHarness(); h.downloaded("2.0.0");
   const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
