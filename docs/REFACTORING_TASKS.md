@@ -3430,3 +3430,8 @@ Codec ayrıştırmasının 71d22b48 revizyonunda tam istemci koşusu 5.330 başa
 0ae393e1 ve 336fb196 arşiv taramaları 0 engelleyici desen, 51 doğrulanmış kaynak kaydı ve 478 inceleme satırıyla tamamlandı. Bunlar son 597313df kaynağının taraması sayılmıyor. Gönderilmiş 19795967 PR305 CI'ı 36/36 başarılı tamamlandı; `refactor-197959-terminal-ci-2026-11-15.json` kaydı ayrı revizyona bağlıdır. Yeni yerel kaynak için gönderim ve yeni CI kabulü açık.
 
 597313df son istemci doğrulaması: 496 dosyada 5.331 başarılı ve 1 atlanan test. Satır kapsamı %68,86, dal kapsamı %64,86. Gerçek build ve hedefli lint başarılı; son değişmez kaynak taraması sürüyor. Günlük: TEMP/hichat-accessibility-codec-final-coverage.log.
+
+
+Son 597313df kaynak taraması tamamlandı: 51 doğrulanmış kaynak kaydı, 478 inceleme satırı, 0 engelleyici desen eşleşmesi. Desen taraması güvenlik açığı yokluğunu kanıtlamaz. 19795967 önceki CI'ı 36/36 terminal başarılı; yeni gönderim bu sonucu kendi CI kabulü olarak kullanmayacak.
+
+RF14/RF15 incelemesinde iki gerçek store ile geçici ortak fixture çalıştırıldı. Kanal ve DM yazıyor göstergelerinde hesap değişimi durumu temizledikten beş saniye sonra eski timer `old-channel: []` kaydını yeniden oluşturdu; iki test de bu son assertion'da başarısız oldu. Geçici dosya finally içinde kaldırıldı. Günlük: TEMP/hichat-typing-owner-probe.log. Bu gözlem özel içerik sızıntısı kanıtı değildir; eski işin yeni hesap durumunu değiştirmesi ve timer sahipliği sorunudur. Kalıcı regresyon ve düzeltme sonraki kaynakta ele alınacak.

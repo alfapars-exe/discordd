@@ -73,7 +73,6 @@
     "immutableSelfScan": "Both immutable0ae393e1 andfinal336fb196 scans RUNNING;neither accepted yet"
   },
   "remaining": [
-    "Final597313df immutable scan",
     "New-headCI afterpush",
     "RF13 final runtime/account/platform acceptance;RF01-RF30 stillopen"
   ],
@@ -98,7 +97,7 @@
     "fullClientCoverage": "PASS496files5331passed1skipped;TEMP/hichat-accessibility-codec-final-coverage.log",
     "build": "PASS actualtsc-b/Vite4.43s;TEMP/hichat-accessibility-codec-final-build.log",
     "lint": "PASS changedpurecodec andregressiontest0errors;previous71d22b48 fullclientlint0errors2existingwarnings",
-    "scan": "RUNNING immutable597313df;TEMP/hichat-accessibility-codec-delivery-scan.log",
+    "scan": "PASS immutable597313df:51exact source records,478reviewlines,0blockingpatterns. Pattern scan is not absence-of-vulnerability proof;TEMP/hichat-accessibility-codec-delivery-scan.log",
     "coverageTotal": {
       "lines": {
         "total": 38498,
@@ -215,6 +214,6 @@
   "priorScans": {
     "0ae393e1": "PASS0blocking/51exactrecords/478reviewlines",
     "336fb196": "PASS0blocking/51exactrecords/478reviewlines",
-    "71d22b48": "RUNNING;not final597313df acceptance"
+    "71d22b48": "PASS0blocking/51exactrecords/478reviewlines;superseded by597313df"
   }
 }
