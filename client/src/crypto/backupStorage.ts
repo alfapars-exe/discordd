@@ -4,6 +4,7 @@ import { toBase64, fromBase64 } from "./signalProtocol";
 import { serializeBackupSessionState, decodeBackupSessionState } from "./backupSessionCodec";
 import { BACKUP_VERSION, type BackupContents } from "./backupContentsCodec";
 import { assertCurrent, isCurrent, awaitScoped, type AuthScope } from "./backupAuthScope";
+import { cachedMessageDeletionKey, PENDING_CACHED_SEARCH_DELETION_PREFIX } from "./cachedSearchDeletionJournal";
 
 /**
  * Decodes a sender key's iteration-0 anchor from a backup, preserving absence.
@@ -168,6 +169,12 @@ export async function importBackupContents(contents: BackupContents, scope: Auth
     // Clear crypto keys (including messageCache — will be re-written below)
     await awaitScoped(scope, () => keyStorage.clearAllE2EEData({ resetSelfFanout: true }));
 
+    // A recovery file predating a confirmed deletion must not revive its
+    // cached plaintext. Preserve this account's outstanding deletion intents.
+    const pendingDeletions = snapshot.metadata.filter(([key]) => key.startsWith(PENDING_CACHED_SEARCH_DELETION_PREFIX));
+    for (const [key, value] of pendingDeletions) await awaitScoped(scope, () => keyStorage.setMetadata(key, value));
+    const pendingDeletionKeys = new Set(pendingDeletions.map(([key]) => key));
+
     // Identity key pair
     await awaitScoped(scope, () => keyStorage.saveIdentityKeyPair({
       publicKey: fromBase64(contents.identity.publicKey),
@@ -281,11 +288,11 @@ export async function importBackupContents(contents: BackupContents, scope: Auth
 
     // Merge existing cache + backup cache (existing takes priority)
     const existingIds = new Set(existingCache.map((m) => m.messageId));
-    const mergedCache = [...existingCache];
+    const mergedCache = existingCache.filter(message => !pendingDeletionKeys.has(cachedMessageDeletionKey(message)));
 
     if (contents.messageCache) {
       for (const m of contents.messageCache) {
-        if (!existingIds.has(m.messageId)) {
+        if (!existingIds.has(m.messageId) && !pendingDeletionKeys.has(cachedMessageDeletionKey(m))) {
           mergedCache.push({
             messageId: m.messageId,
             channelId: m.channelId,
