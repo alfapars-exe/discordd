@@ -1,0 +1,46 @@
+{
+  "sourceCommit": "300f6fb3",
+  "date": "2026-11-15",
+  "regressionBaseline": {
+    "commit": "a853bf0b",
+    "channelRetainedGrowthBytes": 2027808,
+    "dmRetainedGrowthBytes": 2031516,
+    "log": "TEMP/hichat-search-frontier-50k-red.log"
+  },
+  "nativePendingFrontier": {
+    "events": 50000,
+    "channelRetainedGrowthBytes": 52000,
+    "dmRetainedGrowthBytes": 104888,
+    "budgetBytes": 524288,
+    "matches": 267,
+    "correctPage": true,
+    "indexDisposalDrained": true,
+    "log": "TEMP/hichat-search-frontier-50k-spool.log",
+    "scope": "Single production React/native IndexedDB diagnostic; stalled ready-index adoption; post-GC JS growth, not physical/native peak or full WebSocket pipeline."
+  },
+  "validation": {
+    "targeted": "5 files, 72 passed before final UI regression; final UI 3 files, 43 passed",
+    "full": "495 files, 5303 passed, 1 skipped; 110.36s; before last UI-only regression/assertion",
+    "typecheck": "tsc -b PASS",
+    "build": "PASS, Vite 3.55s",
+    "lint": "0 errors, 2 existing warnings",
+    "native": "6 modes PASS"
+  },
+  "logs": [
+    "TEMP/hichat-search-spool-integration.log",
+    "TEMP/hichat-search-spool-ui-final.log",
+    "TEMP/hichat-search-spool-full.log",
+    "TEMP/hichat-search-spool-build.log",
+    "TEMP/hichat-search-spool-lint.log",
+    "TEMP/hichat-search-spool-native.log"
+  ],
+  "remaining": [
+    "Full client coverage on final source",
+    "Native spool acquisition/quota/backpressure fault matrix",
+    "Source-pinned nine-repeat latency comparison",
+    "Physical/native memory and whole live-receive/source-writer budgets",
+    "Cross-tab and all producer ordering",
+    "Final immutable self-scan and new-head CI",
+    "Project RF01-RF30 acceptance remains open"
+  ]
+}

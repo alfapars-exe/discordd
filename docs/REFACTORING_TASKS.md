@@ -3293,3 +3293,12 @@ Active per-panel distinct-ID Set remains unbounded. Both journal+eviction failur
 Prior2aa1d8be completed36/36SUCCESS and all3workflowsSUCCESS. Terminal snapshot:implementation/verification/refactor-2aa-terminal-ci-2026-11-15.json. New source needs independent final-head CI.
 
 Final immutable1a0faba3 self-scanPASS:50exact reviewed source records valid,0blocking matches,448review lines. Gate extension limit(.mjs/.cjs) explicitly retained as RF23/RF30 follow-up. Full493files5293passed1skipped/native6modes/lint/actualbuild allPASS. Deliver journal/recovery/source-benchmark changes after prior2aa36/36SUCCESS;new-headCI remains required. No active-frontier/whole-project/native-physical completion claim.
+
+
+### RF17 — native pending deletion spool (2026-11-15)
+
+Source300f6fb3 replaces both active panel deleted-ID Sets with per-query native IndexedDB metadata spools using the existing derived v1 schema. Acknowledged batches contain at most128IDs; transactions close before snapshot removal. Incoming events allocate no per-ID JavaScript Promise/listener/collection entry. Revision checks rehydrate a page if deletion arrives during reads. Storage failure/backpressure fails the current query explicitly; no successful result silently drops deletions. The pool is prepared before admitting source search, retires with owner/generation/reset/unmount, and closes late acquisitions. Plaintext search never acquires it.
+
+Committed regressiona853bf0b exposed50k active frontier growth:channel2,027,808bytes,DM2,031,516bytes. Same local diagnostic after fix:52,000/104,888bytes,below existing512KiB budget;267matches/exact25rows/order/disposal preserved. RequiredCI now asserts active50k budget alongside settled-disposal budget. This is one post-GC productionReact/nativeIDB diagnostic,not nine-repeat latency or native/physical/wholeWS peak proof.
+
+Targeted72passed; final additional UI regression43passed across3files. Full495files5303passed1skipped110.36s before last UI-only regression/assertion; actualtsc-b/buildPASS3.55s;lint0errors2existingwarnings;native6modesPASS. Receipt:implementation/verification/refactor-search-pending-spool-2026-11-15.json. Prior pushed48c64047 CI verified36/36SUCCESS. Finalcoverage,immutable self-scan,source-pinned repeated latency,native storage fault matrix,source-writer/live-receive/platform/physical and projectacceptance remain open. RF17 and PR305 remain unfinished.
