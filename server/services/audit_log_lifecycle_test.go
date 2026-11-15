@@ -366,3 +366,91 @@ func TestAuditShutdownCancelsActiveWriteAndUsesFreshDrainContext(t *testing.T) {
 		t.Fatal("fresh drain context has no deadline")
 	}
 }
+
+type auditPanickingPersistence struct {
+	auditLifecycleRepo
+	panicOnInsert bool
+	persisted     chan string
+}
+
+func (r *auditPanickingPersistence) Insert(ctx context.Context, entry *models.AuditLog) error {
+	if r.panicOnInsert && entry.ServerID == "bad" {
+		panic("synthetic audit storage failure")
+	}
+	err := r.auditLifecycleRepo.Insert(ctx, entry)
+	r.persisted <- entry.ServerID
+	return err
+}
+
+type auditPanickingUsers struct{ repository.UserRepository }
+
+func (auditPanickingUsers) GetByID(context.Context, string) (*models.User, error) {
+	panic("synthetic audit lookup failure")
+}
+func TestAuditFailedEventDoesNotStrandAcceptedOrFutureWork(t *testing.T) {
+	for _, stage := range []string{"insert", "snapshot"} {
+		t.Run(stage, func(t *testing.T) {
+			repo := &auditPanickingPersistence{panicOnInsert: stage == "insert", persisted: make(chan string, 2)}
+			hub := ws.NewHub()
+			s := NewAuditLogService(repo, auditPanickingUsers{}, nil, hub, hub).(*auditLogService)
+			t.Cleanup(s.Stop)
+			bad := models.AuditLog{ServerID: "bad"}
+			if stage == "snapshot" {
+				actor := "bad-actor"
+				bad.ActorUserID = &actor
+			}
+			s.Write(bad)
+			s.Write(models.AuditLog{ServerID: "already-accepted"})
+			s.Start()
+			await := func(want string) {
+				t.Helper()
+				select {
+				case got := <-repo.persisted:
+					if got != want {
+						t.Fatalf("persisted=%q want=%q", got, want)
+					}
+				case <-s.done:
+					t.Fatal("one failed event terminated the audit writer")
+				case <-time.After(time.Second):
+					t.Fatal("healthy audit event stranded after panic")
+				}
+			}
+			await("already-accepted")
+			s.Write(models.AuditLog{ServerID: "future"})
+			await("future")
+			s.Stop()
+			if len(s.ch) != 0 {
+				t.Fatalf("retained queued entries=%d", len(s.ch))
+			}
+		})
+	}
+}
+
+func TestAuditShutdownContinuesAfterFailedEvent(t *testing.T) {
+	for _, stage := range []string{"insert", "snapshot"} {
+		t.Run(stage, func(t *testing.T) {
+			repo := &auditPanickingPersistence{panicOnInsert: stage == "insert", persisted: make(chan string, 2)}
+			hub := ws.NewHub()
+			s := NewAuditLogService(repo, auditPanickingUsers{}, nil, hub, hub).(*auditLogService)
+			bad := models.AuditLog{ServerID: "bad"}
+			if stage == "snapshot" {
+				actor := "bad-actor"
+				bad.ActorUserID = &actor
+			}
+			s.Write(bad)
+			s.Write(models.AuditLog{ServerID: "accepted-before-stop"})
+			s.Stop()
+			select {
+			case got := <-repo.persisted:
+				if got != "accepted-before-stop" {
+					t.Fatalf("persisted=%q", got)
+				}
+			default:
+				t.Fatal("failed event abandoned healthy shutdown backlog")
+			}
+			if len(s.ch) != 0 {
+				t.Fatalf("shutdown retained %d entries", len(s.ch))
+			}
+		})
+	}
+}
