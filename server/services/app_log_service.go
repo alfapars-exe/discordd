@@ -324,21 +324,34 @@ func (s *appLogService) flush(parent context.Context, pending []pendingAppLog) {
 	var err error
 	var written int64
 	failedEvents := uint64(len(pending))
-	if batch := s.batchWriter; batch != nil {
-		written, err = batch.InsertBatch(ctx, rows)
-	} else {
-		for i := range rows {
-			if err = s.repo.Insert(ctx, &rows[i]); err != nil {
-				break
-			}
-			written++
-			// A fallback Insert commits independently. Its grouped occurrences
-			// must not be counted as lost if a later row fails.
-			if occurrences := rows[i].OccurrenceCount; occurrences > 0 {
-				failedEvents -= min(failedEvents, uint64(occurrences))
+	completed := false
+	// The app_log component prefix prevents a storage panic report from being
+	// enqueued into this same sink. Existing partial-write counters stay owned
+	// by this attempt, and a possibly committed row is never retried.
+	logx.Run("app_log.write", func() {
+		if batch := s.batchWriter; batch != nil {
+			written, err = batch.InsertBatch(ctx, rows)
+		} else {
+			for i := range rows {
+				if err = s.repo.Insert(ctx, &rows[i]); err != nil {
+					break
+				}
+				written++
+				// A fallback Insert commits independently. Its grouped occurrences
+				// must not be counted as lost if a later row fails.
+				if occurrences := rows[i].OccurrenceCount; occurrences > 0 {
+					failedEvents -= min(failedEvents, uint64(occurrences))
+				}
 			}
 		}
+		completed = true
+	})
+	if !completed {
+		s.writeFailures.Add(1)
+		s.failedEvents.Add(failedEvents)
+		return // logx.Run already emitted the single panic diagnostic.
 	}
+
 	if err != nil {
 		s.writeFailures.Add(1)
 		s.failedEvents.Add(failedEvents)
@@ -351,6 +364,10 @@ func (s *appLogService) flush(parent context.Context, pending []pendingAppLog) {
 	s.lastSuccess.Store(time.Now().UnixNano())
 }
 func (s *appLogService) purge(parent context.Context) {
+	logx.Run("app_log.purge", func() { s.purgeExpired(parent) })
+}
+
+func (s *appLogService) purgeExpired(parent context.Context) {
 	ctx, cancel := context.WithTimeout(parent, 2*time.Second)
 	defer cancel()
 	cutoff := time.Now().AddDate(0, 0, -appLogRetentionDays).UTC().Format("2006-01-02 15:04:05")

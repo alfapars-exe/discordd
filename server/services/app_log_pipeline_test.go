@@ -367,3 +367,52 @@ func TestAppLogDependencyPanicDoesNotStrandWriterOrHideFailedEvents(t *testing.T
 		})
 	}
 }
+
+type panicPartialAppLogRepo struct {
+	fakeAppLogRepo
+	calls, failAt int
+}
+
+func (r *panicPartialAppLogRepo) Insert(ctx context.Context, row *models.AppLog) error {
+	r.calls++
+	if r.calls == r.failAt {
+		panic("synthetic partial write panic")
+	}
+	return r.fakeAppLogRepo.Insert(ctx, row)
+}
+func TestAppLogPartialPanicCountsOnlyUnconfirmedOccurrences(t *testing.T) {
+	for _, tc := range []struct {
+		failAt int
+		failed uint64
+	}{{1, 6}, {2, 3}, {3, 1}, {4, 0}} {
+		t.Run(fmt.Sprint(tc.failAt), func(t *testing.T) {
+			repo := &panicPartialAppLogRepo{failAt: tc.failAt}
+			s := NewAppLogService(repo, nil).(*appLogService)
+			var pending []pendingAppLog
+			for i, count := range []int{3, 2, 1} {
+				for range count {
+					pending = append(pending, pendingAppLog{entry: models.AppLog{Message: fmt.Sprint(i), Level: models.LogLevelError, OccurrenceCount: 1}, metadata: map[string]string{}})
+				}
+			}
+			s.flush(context.Background(), pending)
+			h := s.Health()
+			if h.FailedEvents != tc.failed {
+				t.Fatalf("failed=%d want=%d", h.FailedEvents, tc.failed)
+			}
+			var saved uint64
+			for _, row := range repo.inserts {
+				saved += uint64(row.OccurrenceCount)
+			}
+			if saved+h.FailedEvents != 6 {
+				t.Fatalf("saved=%d failed=%d total should equal6", saved, h.FailedEvents)
+			}
+			wantFailures := uint64(1)
+			if tc.failed == 0 {
+				wantFailures = 0
+			}
+			if h.WriteFailures != wantFailures {
+				t.Fatalf("write failures=%d want=%d", h.WriteFailures, wantFailures)
+			}
+		})
+	}
+}
