@@ -111,14 +111,7 @@ setup("register a fresh account, then log back in", async ({ page }) => {
   await page.evaluate(() => globalThis.localStorage.clear());
   await page.context().clearCookies();
 
-  await forceEnglish(page);
-  await page.goto("/login");
-  await page.getByLabel(/^Username/i).fill(username);
-  await page.getByLabel(/^Password/i).fill(password);
-  await page.getByRole("button", { name: /^Log In$/ }).click();
-
-  await expect(page).toHaveURL(/\/channels/, { timeout: 20_000 });
-  await expectSignedInShell(page);
+  await loginAsCredentials(page, account);
 
   if (existsSync(CHANNEL_NOTIFICATION_FIXTURE_FILE)) {
     await resetChannelNotificationFixture(page);

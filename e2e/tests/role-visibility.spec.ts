@@ -1,6 +1,19 @@
 import { expect, test, type Page } from "@playwright/test";
 import { fixtureApi as api, dismissOnboardingOverlays, loginAsNotificationOwner, loginAsNotificationRecipient, readChannelNotificationFixture, resetChannelNotificationFixture } from "./helpers";
 
+test("notification fixture reset recovers after its previous server was already deleted", async ({ page }) => {
+  await loginAsNotificationOwner(page);
+  const before = readChannelNotificationFixture();
+  await api(page, "/servers/" + before.serverId, "DELETE");
+  await resetChannelNotificationFixture(page);
+  const after = readChannelNotificationFixture();
+  expect(after.serverId).not.toBe(before.serverId);
+  expect(after.owner.username).toBe(before.owner.username);
+  const server = await api<{ id: string; name: string }>(page, "/servers/" + after.serverId);
+  expect(server.id).toBe(after.serverId);
+  expect(server.name).toBe(after.serverName);
+});
+
 function receivedMessageIDs(page: Page) {
   const ids = new Set<string>();
   page.on("websocket", socket => socket.on("framereceived", ({ payload }) => {

@@ -295,6 +295,8 @@ function writePendingNotificationRecipient(account: TestAccount): void {
  * credentials plus IDs, and is gitignored under e2e/.tmp.
  */
 export async function provisionChannelNotificationFixture(page: Page, owner: TestAccount, existingRecipient?: TestAccount): Promise<void> {
+  const ownerToken = sessionTokens.get(page);
+  if (!ownerToken) throw new Error("Notification fixture requires an authenticated owner page");
   // Never let a prior interrupted run's credentials masquerade as this run's
   // fixture if API provisioning fails before the final write.
   if (!existingRecipient) rmSync(CHANNEL_NOTIFICATION_FIXTURE_FILE, { force: true });
@@ -304,7 +306,7 @@ export async function provisionChannelNotificationFixture(page: Page, owner: Tes
   const recipient = existingRecipient ?? pendingRecipient ?? { username: uniqueUsername(), password: generateTestPassword() };
   if (!existingRecipient) writePendingNotificationRecipient(recipient);
   const serverName = `E2E Notification ${Date.now()}`;
-  const ids = await page.evaluate(async ({ recipient, serverName, existingRecipient, pendingRecipient }) => {
+  const ids = await page.evaluate(async ({ recipient, serverName, existingRecipient, pendingRecipient, ownerToken }) => {
     const reuseRecipient = existingRecipient || pendingRecipient;
     type Envelope<T> = { success?: boolean; data?: T };
     type Server = { id: string };
@@ -331,19 +333,6 @@ export async function provisionChannelNotificationFixture(page: Page, owner: Tes
       if (envelope.success !== true || envelope.data === undefined) return fail(path, response.status);
       return envelope.data;
     };
-
-    // Refresh uses only the current owner session's HttpOnly cookie; all other
-    // calls use its short-lived bearer token with cookies omitted.
-    const refresh = await fetch("/api/auth/refresh", {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json", "X-HiChat-Client": "web" },
-      body: "{}",
-    });
-    if (!refresh.ok) return fail("/auth/refresh", refresh.status);
-    const ownerEnvelope = await refresh.json() as Envelope<{ access_token?: string }>;
-    const ownerToken = ownerEnvelope.data?.access_token;
-    if (ownerEnvelope.success !== true || !ownerToken) return fail("/auth/refresh", refresh.status);
 
     let recipientResponse = await fetch(reuseRecipient ? "/api/auth/login" : "/api/auth/register", {
       method: "POST",
@@ -429,6 +418,7 @@ export async function provisionChannelNotificationFixture(page: Page, owner: Tes
     serverName,
     existingRecipient: !!existingRecipient,
     pendingRecipient: !!pendingRecipient,
+    ownerToken,
   });
 
   writeChannelNotificationFixture({ owner, recipient, serverName, ...ids });
@@ -441,17 +431,9 @@ export async function resetChannelNotificationFixture(page: Page): Promise<void>
   if (!/^E2E Notification \d+$/.test(fixture.serverName)) {
     throw new Error("fixture cleanup refused a non-synthetic server name");
   }
-  const status = await page.evaluate(async ({ serverId, serverName, ownerUsername }) => {
-    const refresh = await fetch("/api/auth/refresh", {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json", "X-HiChat-Client": "web" },
-      body: "{}",
-    });
-    if (!refresh.ok) return refresh.status;
-    const envelope = await refresh.json() as { success?: boolean; data?: { access_token?: string } };
-    const token = envelope.data?.access_token;
-    if (envelope.success !== true || !token) return refresh.status;
+  const token = sessionTokens.get(page);
+  if (!token) throw new Error("Notification fixture cleanup requires an authenticated owner page");
+  const status = await page.evaluate(async ({ serverId, serverName, ownerUsername, token }) => {
     const authHeaders = { Authorization: `Bearer ${token}`, "X-HiChat-Client": "web" };
     const meResponse = await fetch("/api/users/me", { credentials: "omit", headers: authHeaders });
     if (!meResponse.ok) return meResponse.status;
@@ -460,6 +442,15 @@ export async function resetChannelNotificationFixture(page: Page): Promise<void>
     if (meEnvelope.success !== true || !me?.id || me.username !== ownerUsername) return 409;
     const serverResponse = await fetch(`/api/servers/${serverId}`, { credentials: "omit", headers: authHeaders });
     if (serverResponse.status === 404) return 404;
+    if (serverResponse.status === 403) {
+      // Membership middleware can hide an already deleted server as403. Only
+      // accept absence after an authenticated,successful server-list response.
+      const listResponse = await fetch("/api/servers", { credentials: "omit", headers: authHeaders });
+      if (listResponse.ok) {
+        const list = await listResponse.json() as { success?: boolean; data?: { id?: string }[] };
+        if (list.success === true && Array.isArray(list.data) && !list.data.some(item => item?.id === serverId)) return 404;
+      }
+    }
     if (!serverResponse.ok) return serverResponse.status;
     const serverEnvelope = await serverResponse.json() as { success?: boolean; data?: { id?: string; name?: string; owner_id?: string } };
     const server = serverEnvelope.data;
@@ -470,7 +461,7 @@ export async function resetChannelNotificationFixture(page: Page): Promise<void>
       headers: authHeaders,
     });
     return response.status;
-  }, { serverId: fixture.serverId, serverName: fixture.serverName, ownerUsername: fixture.owner.username });
+  }, { serverId: fixture.serverId, serverName: fixture.serverName, ownerUsername: fixture.owner.username, token });
   // A prior failed retry may already have deleted the server before it failed
   // to recreate the fixture. Treat that as an idempotent cleanup result.
   if (status !== 200 && status !== 204 && status !== 404) {
