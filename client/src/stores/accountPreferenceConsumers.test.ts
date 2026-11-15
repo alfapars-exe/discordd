@@ -1,4 +1,5 @@
 import { DEVICE_LOCAL_VOICE_SETTING_KEYS } from "./voicePreferenceScope";
+import { cacheable } from "./preferencesCodec";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createStore, type StateCreator, type StoreApi } from "zustand/vanilla";
 import type { VoiceSettings, VoiceSettingsSlice } from "./slices/voiceSettingsSlice";
@@ -63,6 +64,13 @@ afterEach(() => {
 });
 
 describe("account preference consumers", () => {
+  it("round-trips every account voice default while excluding every device field", () => {
+    const deviceFields = new Set<string>(DEVICE_LOCAL_VOICE_SETTING_KEYS);
+    const expected = Object.fromEntries(Object.entries(defaults).filter(([key]) => !deviceFields.has(key)));
+    expect(cacheable({ voice_settings: defaults })).toEqual({ voice_settings: expected });
+    const opposite = Object.fromEntries(Object.entries(defaults).map(([key, value]) => [key, typeof value === "boolean" ? !value : value]));
+    expect(cacheable({ voice_settings: opposite })).toEqual({ voice_settings: Object.fromEntries(Object.entries(opposite).filter(([key]) => !deviceFields.has(key))) });
+  });
   it.each([false, true])("retains every device field on account reset with preserveSessionState=%s", preserveSessionState => {
     const deviceValues = Object.fromEntries(DEVICE_LOCAL_VOICE_SETTING_KEYS.map(key => {
       const value = defaults[key];
