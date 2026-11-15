@@ -47,34 +47,51 @@ export async function scanPendingCachedSearchDeletions(
   let after: string | undefined;
   for (;;) {
     check();
-    const tx = db.transaction(["metadata", "messageCache"], "readwrite");
-    void tx.done.catch(() => {});
-    const ids: string[] = [];
-    let last: string | undefined;
-    try {
-      let cursor = await tx.objectStore("metadata").openCursor(IDBKeyRange.bound(after ?? prefix, prefix + "\uffff", after !== undefined, true));
-      while (cursor && ids.length < 128) {
-        check();
-        const value = cursor.value as { messageId?: unknown } | null;
-        if (!value || typeof value.messageId !== "string" || cursor.key !== cachedSearchDeletionKey(kind, channelId, value.messageId)) {
-          throw new Error("search_deletion_journal_invalid");
-        }
-        const row = await tx.objectStore("messageCache").get(value.messageId) as CachedDecryptedMessage | undefined;
-        // A fallback eviction may have succeeded while metadata was unavailable.
-        // Retire such orphan intents atomically with the source-record check.
-        if (!row || cachedMessageDeletionKey(row) !== cursor.key) await cursor.delete();
-        ids.push(value.messageId); last = cursor.key as string;
-        if (ids.length < 128) cursor = await cursor.continue();
-      }
-      await tx.done;
-    } catch (error) {
-      try { tx.abort(); } catch { /* Already complete. */ }
-      await tx.done.catch(() => {}); throw error;
-    }
+    const { ids, last } = await readDeletionBatch({ db, kind, channelId, prefix, check }, after);
     check();
     if (!ids.length) return;
     await consume(ids); check();
     if (ids.length < 128) return;
     after = last;
   }
+}
+
+
+type DeletionScan = {
+  db: IDBPDatabase;
+  kind: Kind;
+  channelId: string;
+  prefix: string;
+  check: () => void;
+};
+
+// The consumer runs only after this transaction completes, so its writes
+// cannot deadlock behind the metadata/source record check.
+async function readDeletionBatch(context: DeletionScan, after?: string): Promise<{ ids: string[]; last?: string }> {
+  const { db, kind, channelId, prefix, check } = context;
+  const tx = db.transaction(["metadata", "messageCache"], "readwrite");
+  void tx.done.catch(() => {});
+  const ids: string[] = [];
+  let last: string | undefined;
+  try {
+    let cursor = await tx.objectStore("metadata").openCursor(IDBKeyRange.bound(after ?? prefix, prefix + "\uffff", after !== undefined, true));
+    while (cursor && ids.length < 128) {
+      check();
+      const value = cursor.value as { messageId?: unknown } | null;
+      if (!value || typeof value.messageId !== "string" || cursor.key !== cachedSearchDeletionKey(kind, channelId, value.messageId)) {
+        throw new Error("search_deletion_journal_invalid");
+      }
+      const row = await tx.objectStore("messageCache").get(value.messageId) as CachedDecryptedMessage | undefined;
+      // A fallback eviction may have succeeded while metadata was unavailable.
+      // Retire such orphan intents atomically with the source-record check.
+      if (!row || cachedMessageDeletionKey(row) !== cursor.key) await cursor.delete();
+      ids.push(value.messageId); last = cursor.key as string;
+      if (ids.length < 128) cursor = await cursor.continue();
+    }
+    await tx.done;
+  } catch (error) {
+    try { tx.abort(); } catch { /* Already complete. */ }
+    await tx.done.catch(() => {}); throw error;
+  }
+  return { ids, last };
 }
