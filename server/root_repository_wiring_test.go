@@ -2,11 +2,13 @@ package main
 
 import (
 	"fmt"
-	"github.com/argeinfina/hichat/config"
-	"github.com/argeinfina/hichat/ws"
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/argeinfina/hichat/config"
+	"github.com/argeinfina/hichat/testutil"
+	"github.com/argeinfina/hichat/ws"
 )
 
 func stopRootFixture(s *Services, l *RateLimiters) {
@@ -46,9 +48,7 @@ func TestRootCompositionRejectsMissingDirectRepository(t *testing.T) {
 				if fmt.Sprint(caught) != "services requires repository "+field {
 					t.Errorf("panic=%v want missing %s", caught, field)
 				}
-				if after := routeCacheWorkerCount(t); after != before {
-					t.Fatalf("invalid root retained cache workers %d", after-before)
-				}
+				testutil.AssertWorkerCount(t, before, func() int { return routeCacheWorkerCount(t) })
 			})
 		}
 	}

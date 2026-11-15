@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/argeinfina/hichat/ws"
 	"reflect"
 	"testing"
+
+	"github.com/argeinfina/hichat/testutil"
+	"github.com/argeinfina/hichat/ws"
 )
 
 func permissionFoundationFixture(t *testing.T) permissionFoundationDependencies {
@@ -18,9 +20,7 @@ func expectPermissionFoundationPanic(t *testing.T, deps permissionFoundationDepe
 	if fmt.Sprint(caught) != want {
 		t.Errorf("panic=%v want %s", caught, want)
 	}
-	if after := routeCacheWorkerCount(t); after != before {
-		t.Fatalf("invalid composition leaked cache workers: before=%d after=%d", before, after)
-	}
+	testutil.AssertWorkerCount(t, before, func() int { return routeCacheWorkerCount(t) })
 }
 func TestPermissionFoundationRejectsMissingIntegration(t *testing.T) {
 	base := permissionFoundationFixture(t)
@@ -69,7 +69,5 @@ func TestPermissionFoundationTransfersAndStopsThreeCacheOwners(t *testing.T) {
 	}
 	group.Stop()
 	group.Stop()
-	if after := routeCacheWorkerCount(t); after != before {
-		t.Fatalf("Stop retained workers=%d", after-before)
-	}
+	testutil.AssertWorkerCount(t, before, func() int { return routeCacheWorkerCount(t) })
 }

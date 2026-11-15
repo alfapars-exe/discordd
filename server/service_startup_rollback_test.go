@@ -8,6 +8,7 @@ import (
 	"github.com/argeinfina/hichat/config"
 	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/services"
+	"github.com/argeinfina/hichat/testutil"
 	"github.com/argeinfina/hichat/ws"
 )
 
@@ -32,9 +33,7 @@ func TestServiceInitializationReleasesCacheWhenHubWiringPanics(t *testing.T) {
 	if caught != marker {
 		t.Fatalf("did not reach intended hub failure: %v", caught)
 	}
-	if after := routeCacheWorkerCount(t); after != before {
-		t.Fatalf("service initialization retained cache workers: before=%d after=%d", before, after)
-	}
+	testutil.AssertWorkerCount(t, before, func() int { return routeCacheWorkerCount(t) })
 }
 
 func TestServiceInitializationReleasesCacheOnEarlyConfigFailure(t *testing.T) {
@@ -48,9 +47,7 @@ func TestServiceInitializationReleasesCacheOnEarlyConfigFailure(t *testing.T) {
 	if caught != "voice runtime requires Config" {
 		t.Fatalf("did not reach configuration validation failure: %v", caught)
 	}
-	if after := routeCacheWorkerCount(t); after != before {
-		t.Fatalf("early initialization retained cache workers: before=%d after=%d", before, after)
-	}
+	testutil.AssertWorkerCount(t, before, func() int { return routeCacheWorkerCount(t) })
 }
 
 func (h *failingStartupHub) IsVisibleOnline(string) (bool, error) { return false, nil }
@@ -82,12 +79,8 @@ func TestServiceInitializationTransfersLiveWorkersToSuccessfulCaller(t *testing.
 	}
 	stopServiceCacheWorkers(svcs)
 	limiters.Stop()
-	if got := routeCacheWorkerCount(t); got != caches {
-		t.Fatalf("caller retained %d cache workers", got-caches)
-	}
-	if got := limiterWorkerCount(t); got != limitersBefore {
-		t.Fatalf("caller retained %d limiter workers", got-limitersBefore)
-	}
+	testutil.AssertWorkerCount(t, caches, func() int { return routeCacheWorkerCount(t) })
+	requireLimiterWorkerCount(t, limitersBefore)
 }
 
 func (*failingStartupHub) GameActivityEpoch() string { return "startup-fixture" }
@@ -131,9 +124,7 @@ func TestServiceInitializationUnwindsCacheOwnersAcrossDomainFailures(t *testing.
 			if caught != scenario.want {
 				t.Fatalf("panic=%v want %s", caught, scenario.want)
 			}
-			if after := routeCacheWorkerCount(t); after != before {
-				t.Fatalf("domain failure retained cache workers: before=%d after=%d", before, after)
-			}
+			testutil.AssertWorkerCount(t, before, func() int { return routeCacheWorkerCount(t) })
 		})
 	}
 }

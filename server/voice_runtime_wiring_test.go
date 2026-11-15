@@ -2,14 +2,16 @@ package main
 
 import (
 	"fmt"
-	"github.com/argeinfina/hichat/config"
-	"github.com/argeinfina/hichat/repository"
-	"github.com/argeinfina/hichat/services"
-	"github.com/argeinfina/hichat/ws"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/argeinfina/hichat/config"
+	"github.com/argeinfina/hichat/repository"
+	"github.com/argeinfina/hichat/services"
+	"github.com/argeinfina/hichat/testutil"
+	"github.com/argeinfina/hichat/ws"
 )
 
 type voiceRuntimeFixtureProviders struct {
@@ -50,9 +52,7 @@ func expectVoiceRuntimePanic(t *testing.T, deps voiceRuntimeDependencies, want, 
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Errorf("invalid runtime touched upload directory: %v", err)
 	}
-	if after := routeCacheWorkerCount(t); after != before {
-		t.Fatalf("invalid runtime leaked cache workers %d", after-before)
-	}
+	testutil.AssertWorkerCount(t, before, func() int { return routeCacheWorkerCount(t) })
 }
 func TestVoiceRuntimeRejectsMissingIntegration(t *testing.T) {
 	base := voiceRuntimeFixture(t)
