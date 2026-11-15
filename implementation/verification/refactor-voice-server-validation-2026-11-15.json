@@ -1,0 +1,36 @@
+{
+  "date": "2026-11-15",
+  "base": "536fe69c9c0ad533d3df93d5939723878aafdbc8",
+  "sources": {
+    "client/src/stores/preferencesCodec.ts": "f29fd8593dfadd3a9f50d4535d3703534dc0972f9a8f807771f5c10eee670b58",
+    "client/src/stores/slices/voiceSettingsSlice.ts": "4f0c8575726a68f872e511b1189b2869b5bdc953bb825e342e01e6aaf926e3d6",
+    "client/src/stores/accountPreferenceConsumers.test.ts": "79114445b97f40f0d22ab29c9f6b585e8ca092fac74d5963b3ba4c2f4e361c07"
+  },
+  "regressionBefore": "5 scalar validation cases failed; array map guard also strengthened to exact equality",
+  "fix": "Use existing sanitize/cacheable codec before merging server voice preferences; retain local devices, valid sibling leaves, peer map merges and legacy engine migration",
+  "validation": {
+    "targeted": "188tests/four suites before final three additional compatibility cases",
+    "fullCoverage": "482files;5003passed;1skipped;115.86s",
+    "coverage": {
+      "statements": 66.98,
+      "branches": 64.35,
+      "functions": 61.28,
+      "lines": 67.98
+    },
+    "typescript": "npx tsc -b passed",
+    "lint": "changed consumer test and voice slice passed",
+    "build": "Vite production build passed"
+  },
+  "ciCorrection": {
+    "failedHead": "536fe69c",
+    "failedJob": "132730616645",
+    "error": "TS2345: string not assignable to inferred device-key literal union",
+    "fixCommit": "aedb9a39",
+    "fix": "Explicit Set<string> membership type; type-only annotation changed during full test run, no emitted runtime difference",
+    "verificationLimit": "Earlier root tsc --noEmit did not traverse project references; prior receipts record the command but do not establish complete project type checking. Use tsc -b for this repository."
+  },
+  "limits": [
+    "full CI on resulting head pending",
+    "physical audio and complete RF13 acceptance remain open"
+  ]
+}

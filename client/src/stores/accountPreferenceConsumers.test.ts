@@ -64,6 +64,41 @@ afterEach(() => {
 });
 
 describe("account preference consumers", () => {
+  it.each(["krisp", "dpdfnet"])("migrates legacy server engine %s after validation", engine => {
+    voice.setState({ noiseReductionEngine: "webrtc" });
+    voice.getState().applyFromServer({ noiseReductionEngine: engine });
+    expect(voice.getState().noiseReductionEngine).toBe("rnnoise");
+    expect(sendPreferences).not.toHaveBeenCalled();
+  });
+  it("merges valid peer voice values while rejecting malformed peer entries", () => {
+    voice.setState({ userVolumes: { existing: 65 }, localMutedUsers: { existing: true } });
+    voice.getState().applyFromServer({
+      userVolumes: { accepted: 150, invalid: "loud", nonfinite: Number.POSITIVE_INFINITY, negative: -1 },
+      localMutedUsers: { accepted: false, invalid: "false" },
+    });
+    expect(voice.getState().userVolumes).toEqual({ existing: 65, accepted: 150 });
+    expect(voice.getState().localMutedUsers).toEqual({ existing: true, accepted: false });
+    expect(sendPreferences).not.toHaveBeenCalled();
+  });
+  it.each([
+    { masterVolume: "loud" }, { masterVolume: Number.NaN },
+    { soundsEnabled: "false" }, { micSensitivity: 999 },
+    { inputMode: "unsupported" }, { userVolumes: [50] },
+  ])("ignores malformed server voice leaves while applying valid siblings: %j", malformed => {
+    voice.getState().applyFromServer({ ...malformed, inputVolume: 125 });
+    expect(voice.getState().userVolumes).toEqual({});
+    expect(voice.getState()).toMatchObject({
+      masterVolume: defaults.masterVolume, soundsEnabled: defaults.soundsEnabled,
+      micSensitivity: defaults.micSensitivity, inputMode: defaults.inputMode,
+      userVolumes: {}, inputVolume: 125,
+    });
+    expect(JSON.parse(localStorage.getItem("mqvi_voice_settings")!)).toMatchObject({
+      masterVolume: defaults.masterVolume, soundsEnabled: defaults.soundsEnabled,
+      micSensitivity: defaults.micSensitivity, inputMode: defaults.inputMode,
+      userVolumes: {}, inputVolume: 125,
+    });
+    expect(sendPreferences).not.toHaveBeenCalled();
+  });
   it("persists the complete voice contract without runtime state or store actions", async () => {
     const expected = { ...defaults, inputDevice: "local-test-mic", masterVolume: 57 };
     voice.setState({ ...defaults, inputDevice: expected.inputDevice, preMuteVolumes: { runtimePeer: 91 } });

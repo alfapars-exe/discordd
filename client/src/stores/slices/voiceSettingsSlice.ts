@@ -8,6 +8,7 @@
 
 import type { StateCreator } from "zustand";
 import { DEVICE_LOCAL_VOICE_SETTING_KEYS } from "../voicePreferenceScope";
+import { cacheable, sanitize } from "../preferencesCodec";
 import { usePreferencesStore } from "../preferencesStore";
 import type { VoiceStore } from "../voiceStore";
 
@@ -577,15 +578,16 @@ export const createVoiceSettingsSlice: StateCreator<
       // server snapshot. Persist that reconciled result, not an older timer.
       cancelPendingSave();
       const merged: VoiceSettings = currentSettings(get());
-      const keys = Object.keys(settings) as (keyof VoiceSettings)[];
+      const incoming = (cacheable(sanitize({ voice_settings: settings })).voice_settings ?? {}) as Record<string, unknown>;
+      const keys = Object.keys(incoming) as (keyof VoiceSettings)[];
       for (const key of keys) {
         // Hardware IDs and native hotkey scope remain local in both directions.
         if (DEVICE_LOCAL_KEYS.has(key)) continue;
         if (key in merged) {
           if (key === "userVolumes" || key === "screenShareVolumes" || key === "localMutedUsers") {
-            (merged as Record<string, unknown>)[key] = { ...merged[key], ...(settings[key] as Record<string, unknown>) };
+            (merged as Record<string, unknown>)[key] = { ...merged[key], ...(incoming[key] as Record<string, unknown>) };
           } else {
-            (merged as Record<string, unknown>)[key] = settings[key];
+            (merged as Record<string, unknown>)[key] = incoming[key];
           }
         }
       }
