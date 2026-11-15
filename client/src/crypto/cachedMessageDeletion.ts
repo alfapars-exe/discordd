@@ -32,11 +32,9 @@ async function evictCachedMessage(db: IDBPDatabase, scope: DeletionScope, intent
   // Metadata failure must not prevent the old best-effort physical cleanup.
   const tx=db.transaction(journalFailed ? ["messageCache"] : ["messageCache", "metadata"],"readwrite");
   const metadata = journalFailed ? null : tx.objectStore("metadata");
-  let removed = false;
   try {
     const result = await deleteMatchingRecord(tx, scope);
     if (result === null) return false;
-    removed = result;
     if (metadata) {
       const intent = await metadata.get(journalKey) as { writeToken?: unknown } | undefined;
       // Another accepted deletion may have replaced this intent while this
@@ -45,6 +43,7 @@ async function evictCachedMessage(db: IDBPDatabase, scope: DeletionScope, intent
     }
     if (!isCurrent()) {tx.abort();await tx.done.catch(()=>{});return false;}
     await tx.done;
+    return result;
   } catch(error) {
     try {tx.abort();} catch {/* The transaction may already have completed. */}
     await tx.done.catch(()=>{});
@@ -52,7 +51,6 @@ async function evictCachedMessage(db: IDBPDatabase, scope: DeletionScope, intent
     if (journalFailed) throw new AggregateError([journalFailure, error], "cached_deletion_journal_and_eviction_failed", { cause: error });
     throw error;
   }
-  return removed;
 }
 
 async function deleteMatchingRecord(tx: DeletionTransaction, scope: DeletionScope): Promise<boolean | null> {
