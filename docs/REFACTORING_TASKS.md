@@ -2920,3 +2920,8 @@ Remote8efdfddcf642d337f6d6d9970c79e35ae3c7c0bc completed36/36 checks SUCCESS, in
 ### RF19 — titlebar installation IPC rejection (2026-11-15)
 
 A fail-first component test exposed the separate titlebar update button ignoring a rejected installUpdate Promise. The button now observes rejection using the existing updater warning behavior, remains ready and permits another attempt. Three suites/24tests,npx tsc -b,changed lint,Vite production build pass. Receipt:implementation/verification/refactor-titlebar-install-rejection-2026-11-15.json. This is IPC-request failure coverage, not native installer/physical upgrade acceptance. Earlier combined5,023-test coverage remains prior-source evidence. Local commit held while newly delivered c69db795 CI runs;its predecessor8efdfddc terminal36/36 is archived separately.
+
+
+### RF19 — shared subscription ownership and titlebar rollback (2026-11-15)
+
+Two fail-first titlebar component tests exposed retained maximize callbacks after update-subscription failure and skipped update disposal after maximize cleanup threw. Extracted the already tested useUpdateChecker rollback/disposal behavior into store-free ownSubscriptions, then applied it to both consumers. Separate refactor and titlebar fix commits preserve review boundaries. Six suites/95tests,npx tsc -b,changed-file lint,Vite build pass,including existing StrictMode/legacy-disposer/two-consumer/error-preservation coverage. Receipt:implementation/verification/refactor-titlebar-subscription-owner-2026-11-15.json. Previous5,023-test full run is prior-source evidence;native packaged acceptance remains open. Local changes held while c69db795 remote CI runs without cancellation.
