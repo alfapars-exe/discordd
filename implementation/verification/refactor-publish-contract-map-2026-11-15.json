@@ -1,0 +1,58 @@
+{
+  "date": "2026-11-15",
+  "base": "319e05ba",
+  "sources": {
+    "scripts\\publish-hf-space.py": "d7d447fa7e2c25de9767be2d76a94078454b9f3ff339b3ecc4de9c23f5aa8c8c",
+    "scripts\\test_publish_hf_space.py": "0990a5b913fefcf1dab8cf827d3e825ee8b2aa304362e5172196b15226cf1e18"
+  },
+  "requirementsToNamedTests": {
+    "dirty_source": [
+      "test_dirty_tracked_staged_and_untracked_source_refuses_publish",
+      "test_dirty_source_refuses_preview"
+    ],
+    "snapshot_provenance": [
+      "test_source_changes_during_snapshot_refuse_publish",
+      "test_source_head_changes_during_snapshot_refuse_publish"
+    ],
+    "reviewed_content_binding": [
+      "test_same_path_with_changed_bytes_invalidates_review",
+      "test_upload_is_bound_to_reviewed_bytes_even_if_file_changes_after_validation",
+      "test_manifest_covers_size_and_sha256_of_unchanged_sources_too"
+    ],
+    "remote_parent": [
+      "test_publish_cannot_discover_or_guess_an_unreviewed_parent",
+      "test_changed_parent_aborts_before_reading_sources_or_mutating",
+      "test_publish_requires_exact_reviewed_plan"
+    ],
+    "unmanaged_data_and_preview": [
+      "test_preview_never_mutates_and_only_plans_managed_deletion"
+    ],
+    "lfs": [
+      "test_crlf_lfs_pointer_is_not_uploaded",
+      "test_missing_materialized_lfs_object_aborts"
+    ],
+    "exact_commit": [
+      "test_verification_receives_exact_publish_result_commit",
+      "test_restart_failure_still_records_the_exact_published_commit"
+    ],
+    "failure_recovery": [
+      "test_commit_failure_restarts_the_paused_space_without_claiming_a_deployment",
+      "test_failed_restart_after_commit_failure_preserves_primary_error_and_reports_recovery",
+      "test_output_failure_still_attempts_restart_and_preserves_primary_error"
+    ],
+    "idempotent_noop": [
+      "test_unchanged_publish_is_idempotent_without_pausing_and_records_current_commit"
+    ]
+  },
+  "validation": {
+    "command": "python -m unittest discover -s scripts -p test_*hf*.py",
+    "result": "27tests passed"
+  },
+  "newEvidence": "two consecutive unchanged publishes record identical reviewed current commit;pause/create/restart are never called",
+  "limits": [
+    "HF API and git provenance responses are mocked;controlled local file snapshots",
+    "mapping is source-contract evidence,not real provider or deployment acceptance",
+    "exact deployed readiness,provider availability and Windows update artifact gates remain open",
+    "local commit held while remote dfcd853d CI runs;latest22success12pending0failure"
+  ]
+}

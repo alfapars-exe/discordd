@@ -8,7 +8,7 @@ from pathlib import Path
 import tempfile
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 spec = importlib.util.spec_from_file_location("space_release", Path(__file__).with_name("publish-hf-space.py"))
 release = importlib.util.module_from_spec(spec)
@@ -257,6 +257,20 @@ class PublishSafetyTests(unittest.TestCase):
         self.assertEqual(plan["add_or_update"], [])
         self.run_command("--publish", "--reviewed-plan-sha256", json.loads(preview.splitlines()[-1])["plan_sha256"])
         self.api.create_commit.assert_not_called()
+
+    def test_unchanged_publish_is_idempotent_without_pausing_and_records_current_commit(self):
+        data = Path("server/main.go").read_bytes()
+        blob = hashlib.sha1(b"blob " + str(len(data)).encode() + b"\0" + data).hexdigest()
+        self.api.list_repo_tree.return_value = [SimpleNamespace(path="server/main.go", blob_id=blob, lfs=None)]
+        digest = self.preview_hash()
+        with patch.object(release, "record_deployed_commit") as record:
+            for _ in range(2):
+                result = self.run_command("--publish", "--reviewed-plan-sha256", digest)
+                self.assertEqual(json.loads(result.splitlines()[-1]), {"status": "already_current", "commit": "reviewed-parent"})
+        self.assertEqual(record.call_args_list, [call("reviewed-parent"), call("reviewed-parent")])
+        self.api.pause_space.assert_not_called()
+        self.api.create_commit.assert_not_called()
+        self.api.restart_space.assert_not_called()
 
     def test_crlf_lfs_pointer_is_not_uploaded(self):
         Path("server/main.go").write_bytes(b"version https://git-lfs.github.com/spec/v1\r\n")
