@@ -70,6 +70,7 @@ import {beginDMHistoryBuffer} from "./slices/dmWsSlice";
 import {deleteCachedDMMessage} from "../crypto/keyStorage";
 import {encodePayload} from "../crypto/e2eePayload";
 import { getAuthSessionSnapshot, publishAuthGenerationChange, publishAuthOwnerChange } from "../api/authSessionEvents";
+import { waitForCachedMessageDeletions } from "../crypto/cachedMessageDeletions";
 
 const getDMMessages = vi.mocked(dmApi.getDMMessages);
 const getAround = vi.mocked(dmApi.getDMMessagesAround);
@@ -132,6 +133,7 @@ beforeEach(() => {
   hoisted.e2ee.localDeviceId = null;
   hoisted.e2ee.initStatus="ready";
   vi.mocked(dmApi.listDMChannels).mockReset();
+  vi.mocked(deleteCachedDMMessage).mockReset().mockResolvedValue(true);
 });
 
 function listedDM(id:string,unread_count=0):DMChannelWithUser{return {id,other_user:makeDM("message").author,e2ee_enabled:true,status:"accepted",initiated_by:"me",created_at:"",last_message_at:null,is_pinned:false,is_muted:false,unread_count,last_message:null}}
@@ -196,6 +198,45 @@ it("supports a legacy deletion receipt using the captured loaded conversation",a
   useDMStore.setState({messagesByChannel:{[CH]:[makeDM("deleted")]}});
   vi.mocked(dmApi.deleteDMMessage).mockResolvedValueOnce({success:true,data:{message:"message deleted"}});
   expect(await useDMStore.getState().deleteMessage("deleted")).toBe(true);expect(ids()).toEqual([]);
+});
+it("finishes HTTP deletion cache cleanup even when the committed store observer throws",async()=>{
+  useDMStore.setState({messagesByChannel:{[CH]:[makeDM("deleted")]}});
+  vi.mocked(dmApi.deleteDMMessage).mockResolvedValueOnce({success:true,data:{id:"deleted",dm_channel_id:CH,message:"deleted"}});
+  let stop=()=>{};
+  stop=useDMStore.subscribe(next=>{if(next.lastDeletedDM?.id==="deleted"){stop();throw new Error("deletion observer failed");}});
+  try{
+    expect(await useDMStore.getState().deleteMessage("deleted")).toBe(false);
+    expect(ids()).toEqual([]);
+    expect(deleteCachedDMMessage).toHaveBeenCalledExactlyOnceWith("deleted",CH,expect.any(Function));
+    await waitForCachedMessageDeletions("dm",CH);
+  }finally{stop();}
+});
+it("reserves accepted HTTP cleanup before a store observer starts another query",async()=>{
+  vi.mocked(dmApi.deleteDMMessage).mockResolvedValueOnce({success:true,data:{id:"deleted",dm_channel_id:CH,message:"deleted"}});
+  const cleanup=deferred<boolean>();vi.mocked(deleteCachedDMMessage).mockReturnValueOnce(cleanup.promise);
+  const started=vi.fn();let query:Promise<void>|undefined;
+  const stop=useDMStore.subscribe((next,prev)=>{if(next.lastDeletedDM!==prev.lastDeletedDM)query=waitForCachedMessageDeletions("dm",CH).then(started);});
+  try{
+    const deletion=useDMStore.getState().deleteMessage("deleted");
+    await vi.waitFor(()=>expect(deleteCachedDMMessage).toHaveBeenCalledOnce());
+    const premature=started.mock.calls.length;
+    cleanup.resolve(true);expect(await deletion).toBe(true);await query;
+    expect(premature).toBe(0);expect(started).toHaveBeenCalledOnce();
+  }finally{cleanup.resolve(true);stop();}
+});
+it("keeps a query waiting for all accepted HTTP deletions in its conversation",async()=>{
+  for(const id of ["first","second"])vi.mocked(dmApi.deleteDMMessage).mockResolvedValueOnce({success:true,data:{id,dm_channel_id:CH,message:"deleted"}});
+  const first=deferred<boolean>(),second=deferred<boolean>();
+  vi.mocked(deleteCachedDMMessage).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+  const started=vi.fn();let query:Promise<void>|undefined;
+  const stop=useDMStore.subscribe((next,prev)=>{if(next.lastDeletedDM!==prev.lastDeletedDM&&!query)query=waitForCachedMessageDeletions("dm",CH).then(started);});
+  try{
+    const deletingFirst=useDMStore.getState().deleteMessage("first"),deletingSecond=useDMStore.getState().deleteMessage("second");
+    await vi.waitFor(()=>expect(deleteCachedDMMessage).toHaveBeenCalledTimes(2));
+    first.resolve(true);await deletingFirst;await Promise.resolve();const premature=started.mock.calls.length;
+    second.resolve(true);await deletingSecond;await query;
+    expect(premature).toBe(0);expect(started).toHaveBeenCalledOnce();
+  }finally{first.resolve(true);second.resolve(true);stop();}
 });
 it("does not delete locally or clear cache after a failed HTTP deletion",async()=>{
   useDMStore.setState({messagesByChannel:{[CH]:[makeDM("deleted")]}});
