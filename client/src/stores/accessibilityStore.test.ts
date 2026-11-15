@@ -132,3 +132,14 @@ describe("accessibility preference validation and hydration", () => {
     expect(mocks.sync).toHaveBeenLastCalledWith({ accessibility: DEFAULT_ACCESSIBILITY });
   });
 });
+
+it.each([4, 6, 19, 3.5])("rejects unsupported notification duration %s during reload and hydration", async duration => {
+  localStorage.clear();
+  vi.resetModules();
+  const { useAccessibilityStore } = await freshStore(JSON.stringify({ notificationDuration: duration }));
+  expect(useAccessibilityStore.getState().notificationDuration).toBe(5);
+  useAccessibilityStore.getState().setNotificationDuration(10);
+  useAccessibilityStore.getState().applyFromServer({ notificationDuration: duration });
+  expect(useAccessibilityStore.getState().notificationDuration).toBe(10);
+  expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).notificationDuration).toBe(10);
+});
