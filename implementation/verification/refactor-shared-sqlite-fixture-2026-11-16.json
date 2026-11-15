@@ -24,7 +24,6 @@
     }
   },
   "pending": [
-    "New-source CI/PostgreSQL/Sonar",
     "Full RF01–RF30 acceptance"
   ],
   "repositoryBenchmark": {
@@ -92,5 +91,18 @@
     "blockingPatternHits": 0,
     "result": "PASS",
     "limit": "Pattern scan does not prove absence of vulnerabilities"
-  }
+  },
+  "ci": {
+    "head": "6fbcf7b8447e1e06d240e1ac6932bdd6b6763092",
+    "checks": "36/36 SUCCESS",
+    "serverRun": 43772172520,
+    "rawReceipt": "refactor-6fbc-terminal-ci-2026-11-16.json",
+    "includes": [
+      "PostgreSQL repository and migration contracts",
+      "PostgreSQL mTLS reconnect",
+      "Playwright production suites",
+      "Go race shards"
+    ]
+  },
+  "sonar": "No issues returned for internal/testfixture; analyzed sqlite.go source matched local"
 }

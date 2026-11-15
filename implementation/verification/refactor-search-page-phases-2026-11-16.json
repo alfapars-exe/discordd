@@ -56,5 +56,13 @@
     "New head CI and source scan",
     "RF17 first-query budget, native/platform and whole-pipeline acceptance"
   ],
-  "note": "Test mock return type corrected after initial tsc failure; final target and build passed."
+  "note": "Test mock return type corrected after initial tsc failure; final target and build passed.",
+  "negativeControl": {
+    "mutation": "Remove only the isCurrent guard after await revalidateLoaded",
+    "test": "abandons a page when ownership changes after loaded-row revalidation",
+    "result": "Expected assertion failure: returned page instead of null",
+    "sourceRestored": true,
+    "rawPath": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-page-owner-negative.log",
+    "sha256": "8a37a963449aa15117657c87fea975a6068dde326eab42299afc1eb1f96f285a"
+  }
 }

@@ -3591,3 +3591,5 @@ Sonar AaHdtCMB07pFJPuubXuL cachedSearchPage.ts karmaşıklık43 kaydı açık. a
 Arama sayfası son yerel doğrulama: 32 hedefli test; tam istemci 504 dosya, 5.518 başarılı/1 atlanan; lint 0 hata/2 mevcut TanStack uyarısı; TypeScript ve Vite build PASS (1,99s Vite). Kaynak-bound Sonar, yeni CI/tarama ve RF17 performans/platform kabulü açık. Kanıt: refactor-search-page-phases-2026-11-16.json.
 
 Ek async-boundary karakterizasyonu: yüklü satır revalidation dönüşüyle devam arasındaki microtask içinde owner değişirse null dönülür ve index mutation yapılmaz. Gerçek IndexedDB snapshot ile son hedefli33 test PASS. Bu ek test tam5.518 koşusundan sonradır; tam koşu sayısı yeni test eklenmiş gibi artırılmadı.
+
+6fbcf7b8 fixture teslimi terminal CI36/36 SUCCESS: gerçek PostgreSQL migration/repository, mTLS reconnect, tam Playwright ve Go race parçaları dahil. Ham kontroller refactor-6fbc-terminal-ci-2026-11-16.json içinde. Sonar internal/testfixture için kayıt döndürmedi; analiz edilen64kod satırı yerel kaynakla eşleşir (+boş EOF). Bu kabul sonraki arama kaynağının CI sonucu olarak sayılmaz.
