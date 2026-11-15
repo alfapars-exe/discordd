@@ -319,3 +319,50 @@ func TestAuditShutdownBoundsWholeBacklogAndJoinsWriter(t *testing.T) {
 		t.Fatalf("storage did not observe deadline: %v", ctx.Err())
 	}
 }
+
+type auditCancelThenDrainPersistence struct {
+	auditLifecycleRepo
+	active       chan struct{}
+	calls        int
+	drainContext context.Context
+}
+
+func (r *auditCancelThenDrainPersistence) Insert(ctx context.Context, entry *models.AuditLog) error {
+	r.calls++
+	if r.calls == 1 {
+		close(r.active)
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	r.drainContext = ctx
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return r.auditLifecycleRepo.Insert(ctx, entry)
+}
+func TestAuditShutdownCancelsActiveWriteAndUsesFreshDrainContext(t *testing.T) {
+	repo := &auditCancelThenDrainPersistence{active: make(chan struct{})}
+	hub := ws.NewHub()
+	s := NewAuditLogService(repo, nil, nil, hub, hub)
+	t.Cleanup(s.Stop)
+	s.Start()
+	s.Write(models.AuditLog{ServerID: "active"})
+	select {
+	case <-repo.active:
+	case <-time.After(time.Second):
+		t.Fatal("active write never started")
+	}
+	s.Write(models.AuditLog{ServerID: "queued"})
+	s.Stop()
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	if len(repo.entries) != 1 || repo.entries[0].ServerID != "queued" {
+		t.Fatalf("drain lost queued entry: %+v", repo.entries)
+	}
+	if repo.drainContext == nil {
+		t.Fatal("queued entry never reached storage")
+	}
+	if _, ok := repo.drainContext.Deadline(); !ok {
+		t.Fatal("fresh drain context has no deadline")
+	}
+}

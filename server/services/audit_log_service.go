@@ -27,6 +27,8 @@ import (
 
 var auditLogger = logx.Component("service.auditlog")
 
+const auditShutdownTimeout = 5 * time.Second
+
 // AuditLogService is the public API for writing and reading audit events.
 type AuditLogService interface {
 	// Write enqueues an event for async persistence + broadcast. Returns
@@ -37,7 +39,8 @@ type AuditLogService interface {
 	List(ctx context.Context, userID string, filter models.AuditLogFilter) ([]models.AuditLog, error)
 	// Start begins the writer goroutine.
 	Start()
-	// Stop drains the buffer and exits the writer goroutine.
+	// Stop joins the writer after a best-effort drain within one five-second
+	// budget. Unwritten events are reported when cooperative storage times out.
 	Stop()
 }
 
@@ -57,12 +60,13 @@ type auditLogService struct {
 	hub       ws.Broadcaster
 	hubOnline ws.UserStateProvider
 
-	lifecycleMu sync.Mutex
-	started     bool
-	stopped     bool
-	ch          chan models.AuditLog
-	cancel      context.CancelFunc
-	done        chan struct{}
+	lifecycleMu  sync.Mutex
+	started      bool
+	stopped      bool
+	ch           chan models.AuditLog
+	cancel       context.CancelFunc
+	done         chan struct{}
+	stopDeadline time.Time
 }
 
 // NewAuditLogService constructs the service. Call Start() to begin
@@ -229,17 +233,30 @@ func (s *auditLogService) startWriterLocked() {
 	s.started = true
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel
+	// A constructor-only Stop must never select queued work under an already
+	// cancelled live-write context. Its first operation belongs to the drain.
+	if s.stopped {
+		cancel()
+	}
 
 	// Same async-writer shape as appLogService — wrapped so a panic here
 	// can't crash the whole process (see pkg/logx.Go doc comment).
 	logx.Go("audit_log.writer", func() {
 		defer close(s.done)
 		for {
+			if ctx.Err() != nil {
+				s.drain(nil)
+				return
+			}
 			select {
 			case <-ctx.Done():
-				s.drain()
+				s.drain(nil)
 				return
 			case entry := <-s.ch:
+				if ctx.Err() != nil {
+					s.drain(&entry)
+					return
+				}
 				s.persistAndBroadcast(ctx, entry)
 			}
 		}
@@ -249,6 +266,9 @@ func (s *auditLogService) startWriterLocked() {
 func (s *auditLogService) Stop() {
 	s.lifecycleMu.Lock()
 	s.stopped = true
+	if s.stopDeadline.IsZero() {
+		s.stopDeadline = time.Now().Add(auditShutdownTimeout)
+	}
 	// Even a constructor-only owner must flush entries accepted before Stop.
 	if !s.started {
 		s.startWriterLocked()
@@ -260,13 +280,37 @@ func (s *auditLogService) Stop() {
 	auditLogger.Info("audit log service stopped")
 }
 
-// drain flushes remaining entries from the channel before exit. Mirrors
-// the same pattern as appLogService.drain().
-func (s *auditLogService) drain() {
+// drain shares one deadline across the entire backlog. Admission is already
+// closed, so the writer alone owns and releases any entries left at expiry.
+// Stop still joins this writer: no abandoned storage goroutine is introduced.
+func (s *auditLogService) drain(first *models.AuditLog) {
+	s.lifecycleMu.Lock()
+	deadline := s.stopDeadline
+	s.lifecycleMu.Unlock()
+	ctx, cancel := context.WithDeadline(context.Background(), deadline)
+	defer cancel()
 	for {
+		if ctx.Err() != nil {
+			dropped := len(s.ch)
+			if first != nil {
+				dropped++
+			}
+			for len(s.ch) > 0 {
+				<-s.ch
+			}
+			if dropped > 0 {
+				auditLogger.Warn("audit shutdown deadline exceeded, dropping queued events", "count", dropped)
+			}
+			return
+		}
+		if first != nil {
+			s.persistAndBroadcast(ctx, *first)
+			first = nil
+			continue
+		}
 		select {
 		case entry := <-s.ch:
-			s.persistAndBroadcast(context.Background(), entry)
+			s.persistAndBroadcast(ctx, entry)
 		default:
 			return
 		}
