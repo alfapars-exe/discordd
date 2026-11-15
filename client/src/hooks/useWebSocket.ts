@@ -126,7 +126,7 @@ export function useWebSocket() {
    * Updated every render so onmessage always calls the freshest handler,
    * avoiding stale closures after HMR or re-renders.
    */
-  const routeEventRef = useRef<(msg: WSMessage, isCurrent?: () => boolean) => void>(() => {});
+  const routeEventRef = useRef<(msg: WSMessage, isCurrent?: () => boolean) => Promise<void>>(async () => {});
 
   // routeEvent is defined further down (below sendVoiceJoin) because
   // it captures sendVoiceJoin in its WSHandlerContext. The lint rule
@@ -288,7 +288,10 @@ export function useWebSocket() {
         if (!server) continue;
         void resyncChannelDelivery(server, channel,
           (event) => routeEvent(event, isCurrent),
-          () => useMessageStore.getState().fetchMessages(channel, server), isCurrent);
+          () => useMessageStore.getState().fetchMessages(channel, server), isCurrent).catch(() => {
+            if (!isCurrent()) return;
+            void logToServer("error", "ws_channel_resync_failed");
+          });
       }
   }
 
@@ -582,7 +585,12 @@ export function useWebSocket() {
         }
 
         // Route via ref for closure freshness
-        routeEventRef.current(msg, () => isCurrentConnection(connectionId, ownerId, generation));
+        void routeEventRef.current(msg, () => isCurrentConnection(connectionId, ownerId, generation)).catch(() => {
+          if (!isCurrentConnection(connectionId, ownerId, generation)) return;
+          // A handler may already have mutated state before rejecting. Observe
+          // failure once without replaying it or logging payloads/crypto errors.
+          void logToServer("error", "ws_event_dispatch_failed", { op: msg.op });
+        });
       };
 
       // ─── onclose ───
