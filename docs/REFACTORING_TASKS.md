@@ -2710,3 +2710,8 @@ The existing Chromium benchmark now accepts --heap (and --dm --heap). Each fixtu
 ### RF17 — channel account ownership boundary (2026-11-15)
 
 A failing regression showed that channel search retained the old query/results when account ownership changed before server state reset. The keyed panel scope now includes the auth owner, preserving existing unmount cancellation and stale-response fencing. 84 targeted tests passed. CI source 5cb415ba separately failed macOS dependency retrieval before native compilation (public Swift package submodules requested GitHub authentication); underlying cause is not established. A failed-job rerun was rejected while Android kept the workflow running; retry remains pending. Source-bound observations are in the matching RF17 owner-boundary and macOS dependency-fetch receipts.
+
+
+### Combined client coverage after account fencing (2026-11-15)
+
+Fixed client source 13525faa passed 477 files: 4,908 passed, 1 skipped (120.53s). Full V8 coverage passed existing thresholds: 66.68% statements, 64.14% branches, 61.10% functions and 67.64% lines. Shared cachedSearchPage measured 94.44% lines / 94.11% branches; channel panel 90.00% / 81.72%, DM panel 88.42% / 80.26%, keyStorage 93.63% / 74.67%. Full lint passed with zero errors and two existing virtualization compatibility warnings. Exact counters are in refactor-1352-client-coverage-lint-2026-11-15.json. macOS dependency-fetch failure was retried only after the containing workflow finished; attempt 2/job 132659548624 is running and not yet accepted. RF17 and whole-project acceptance remain open.
