@@ -127,6 +127,23 @@ yeniden denenmez; veritabanına yazımdan sonraki bir panic mükerrer satır ür
 Snapshot zamanlayıcısı panic sırasında da iptal edilir.
 Bu kuyruk kalıcı teslim garantisi vermez.
 
+## İstemci tercih mutasyonları
+
+Zustand durumu eşzamanlı abonelerini çağırmadan önce kaydeder. Bir abone hata
+verdiğinde `completePreferenceMutation`, güncel hesap/sunucu bağlamına ve hâlâ
+sahip olunan alanlara ait önbellek ve gönderim kuyruğu adımlarını tamamlar.
+Durum mutasyonu bir kez çalışır; abonenin asıl hatası çağırana iletilir.
+
+Bildirim ve tamamlama birlikte hata verirse `AggregateError.errors` iki hatayı
+korur; `cause` tamamlama sırasında yakalanan hataya bağlanır. Hesap/sunucu nesli
+geçersizleşen işlem, yeni bağlamın önbelleğini veya kuyruğunu değiştiremez.
+Sunucudan uygulama ve sıfırlama yolları önbelleği tamamlar; sunucuya geri yazmaz.
+
+Yerel depolama yazımı mevcut en iyi çaba davranışını sürdürür. Kota veya erişim
+engeli durumunda bellek kuyruğu yetkilidir; kalıcı teslim garantisi verilmez.
+Hata veren abonenin ardından atlanan diğer abonelerin bildirimi ve asenkron
+fetch/save hata yolları ayrı yaşam döngüsü sınırlarıdır.
+
 ## Doğrulama
 
 Go testleri logger başlatma sırasını, maskelemeyi, tek HTTP tanı kaydını, kuyruk
