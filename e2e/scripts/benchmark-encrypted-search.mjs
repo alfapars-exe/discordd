@@ -17,7 +17,7 @@ try {
     for (const size of [1000, 10000, 50000]) {
       const report = await page.evaluate(async ({ size, dm }) => {
         const { publishAuthOwnerChange } = await import("/src/api/authSessionEvents.ts");
-        const { getCachedDecryptedMessage, openScopedKeyDatabase, searchCachedMessages, searchCachedDMMessages, searchCachedDMMessageRefs } = await import("/src/crypto/keyStorage.ts");
+        const { getCachedDecryptedMessage, openScopedKeyDatabase, searchCachedMessages, searchCachedDMMessages, searchCachedDMMessageRefs, searchCachedMessageRefs } = await import("/src/crypto/keyStorage.ts");
         const { sortDMBySource } = await import("/src/utils/dmSourceOrder.ts");
         const search = dm ? searchCachedDMMessages : searchCachedMessages;
         const { SERVER_URL } = await import("/src/utils/constants.ts");
@@ -63,13 +63,13 @@ try {
               throw new Error("Incorrect second page");
             }
           }
-          if (dm) {
+          {
             const compactStart = performance.now();
-            const refs = await searchCachedDMMessageRefs("target", "ÉTÉ");
+            const refs = await (dm ? searchCachedDMMessageRefs : searchCachedMessageRefs)("target", "ÉTÉ");
             if (refs.some(ref => "content" in ref)) throw new Error("Reference scan retained plaintext");
-            const orderedIds = sortDMBySource(refs.map(ref => ({
-              id: ref.messageId, created_at: new Date(ref.timestamp).toISOString(), source_sequence: ref.sourceSequence,
-            }))).reverse().map(ref => ref.id);
+            const orderedIds = dm ? sortDMBySource(refs.map(ref => ({
+              id: ref.messageId, created_at: new Date(ref.timestamp).toISOString(), source_sequence: "sourceSequence" in ref ? ref.sourceSequence : undefined,
+            }))).reverse().map(ref => ref.id) : refs.sort((a, b) => b.timestamp - a.timestamp).map(ref => ref.messageId);
             if (orderedIds.length !== expected.length || orderedIds.some((id, j) => id !== expected[expected.length - 1 - j])) {
               throw new Error("Incorrect compact reference order");
             }

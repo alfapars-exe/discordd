@@ -661,6 +661,14 @@ export function searchCachedMessages(channelId: string, query: string, signal?: 
   return searchMessageIndex("byChannel", channelId, query, message => message, signal);
 }
 
+/** Compact channel ordering references; full records are loaded per page. */
+export function searchCachedMessageRefs(channelId: string, query: string, signal?: AbortSignal) {
+  return searchMessageIndex("byChannel", channelId, query, message => ({
+    messageId: message.messageId,
+    timestamp: message.timestamp,
+  }), signal);
+}
+
 /**
  * Returns the entire decrypted message cache.
  * Used for inclusion in a backup — after restore, old messages can be read from the cache.

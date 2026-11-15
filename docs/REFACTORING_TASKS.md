@@ -2690,3 +2690,8 @@ The same stale-count/incomplete-page regression failed in encrypted channel pagi
 ### RF17 — last populated page recovery (2026-11-15)
 
 A failing regression showed that removing the last hit on page two stranded the panel on an empty page despite valid first-page matches. Shared hydration now returns a clamped offset with its messages, and both panels update pagination accordingly. Explicit channel and DM tests passed: 81 targeted tests total. The previous fixed source 480c7bff passed all 477 client files (4,903 passed, 1 skipped; 114.42s); that full-suite result predates this offset fix. Initial-query and matching-ID memory bounds remain open. Receipt: refactor-rf17-last-page-recovery-2026-11-15.json.
+
+
+### RF17 — compact channel first-page scan (2026-11-15)
+
+Encrypted channel search now scans only timestamp/ID references and hydrates first-page content with the same stale-hit-aware helper as subsequent pages and DM search. Existing full-message cache APIs remain available. 83 targeted tests passed, including compact reference content exclusion, channel isolation and cancellation. Real Chromium IndexedDB exact content/order comparisons passed at 1k/10k/50k; compact first-page medians were 19.5/213.8/1053.4 ms. No significant first-query speed improvement or heap bound is claimed. Full matching-ID memory remains open. Receipt: refactor-rf17-compact-channel-first-page-2026-11-15.json.

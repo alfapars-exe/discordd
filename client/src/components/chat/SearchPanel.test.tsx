@@ -29,7 +29,7 @@ vi.mock("../../api/search", () => ({
 }));
 
 vi.mock("../../crypto/keyStorage", () => ({
-  searchCachedMessages: vi.fn(async () => []),
+  searchCachedMessageRefs: vi.fn(async () => []),
   getCachedDecryptedMessage: vi.fn(),
 }));
 
@@ -74,7 +74,7 @@ vi.mock("../shared/Avatar", () => ({
 
 import SearchPanel from "./SearchPanel";
 import { searchMessages } from "../../api/search";
-import { getCachedDecryptedMessage, searchCachedMessages } from "../../crypto/keyStorage";
+import { getCachedDecryptedMessage, searchCachedMessageRefs } from "../../crypto/keyStorage";
 import { useMessageStore } from "../../stores/messageStore";
 import { useServerStore } from "../../stores/serverStore";
 import { useE2EEStore } from "../../stores/e2eeStore";
@@ -184,7 +184,8 @@ describe("SearchPanel — result races", () => {
     useE2EEStore.setState({ initStatus: "ready" });
     const row = { messageId: "id", channelId: "ch-1", dmChannelId: null, content: "private match", timestamp: 1 };
     const delayed = deferred<typeof row[]>();
-    vi.mocked(searchCachedMessages).mockResolvedValueOnce([row]).mockReturnValueOnce(delayed.promise);
+    vi.mocked(searchCachedMessageRefs).mockResolvedValueOnce([{ messageId: row.messageId, timestamp: row.timestamp }]).mockReturnValueOnce(delayed.promise);
+    vi.mocked(getCachedDecryptedMessage).mockResolvedValueOnce(row);
     render(<SearchPanel channelId="ch-1" onClose={() => {}} />);
     typeQuery("private");
     await act(async () => {});
@@ -193,7 +194,7 @@ describe("SearchPanel — result races", () => {
     expect(screen.queryByText(row.content)).not.toBeInTheDocument();
     act(() => useE2EEStore.setState({ initStatus: "ready" }));
     typeQuery("match");
-    const signal = vi.mocked(searchCachedMessages).mock.lastCall?.[2];
+    const signal = vi.mocked(searchCachedMessageRefs).mock.lastCall?.[2];
     act(() => useE2EEStore.setState({ initStatus: "uninitialized" }));
     expect(signal?.aborted).toBe(true);
     await act(async () => delayed.resolve([row]));
@@ -244,7 +245,7 @@ describe("SearchPanel — result races", () => {
     const rows = Array.from({ length: 26 }, (_, i) => ({
       messageId: `last-${i}`, channelId: "ch-1", dmChannelId: null, content: `match ${i}`, timestamp: i,
     }));
-    vi.mocked(searchCachedMessages).mockResolvedValueOnce(rows);
+    vi.mocked(searchCachedMessageRefs).mockResolvedValueOnce(rows.map(({ messageId, timestamp }) => ({ messageId, timestamp })));
     vi.mocked(getCachedDecryptedMessage).mockImplementation(async id => id === "last-0" ? null : rows.find(row => row.messageId === id) ?? null);
     render(<SearchPanel channelId="ch-1" onClose={() => {}} />);
     typeQuery("match");
@@ -263,7 +264,7 @@ describe("SearchPanel — result races", () => {
     const rows = Array.from({ length: 52 }, (_, i) => ({
       messageId: `refill-${i}`, channelId: "ch-1", dmChannelId: null, content: `match ${i}`, timestamp: i,
     }));
-    vi.mocked(searchCachedMessages).mockResolvedValueOnce(rows);
+    vi.mocked(searchCachedMessageRefs).mockResolvedValueOnce(rows.map(({ messageId, timestamp }) => ({ messageId, timestamp })));
     vi.mocked(getCachedDecryptedMessage).mockImplementation(async id => {
       if (id === "refill-26") return null;
       const row = rows.find(row => row.messageId === id);
@@ -287,7 +288,7 @@ describe("SearchPanel — result races", () => {
       messageId: String(i), channelId: "ch-1", dmChannelId: null,
       content: `hit number ${i}`, timestamp: i,
     }));
-    vi.mocked(searchCachedMessages).mockClear().mockImplementation(async () => [...rows]);
+    vi.mocked(searchCachedMessageRefs).mockClear().mockImplementation(async () => rows.map(({ messageId, timestamp }) => ({ messageId, timestamp })));
     vi.mocked(getCachedDecryptedMessage).mockImplementation(async id => rows.find(row => row.messageId === id) ?? null);
     render(<SearchPanel channelId="ch-1" onClose={() => {}} />);
     typeQuery("hit");
@@ -297,7 +298,7 @@ describe("SearchPanel — result races", () => {
     await act(async () => {});
     expect(screen.getByText("hit number 24")).toBeInTheDocument();
     expect(screen.queryByText("hit number 23")).not.toBeInTheDocument();
-    expect(searchCachedMessages).toHaveBeenCalledTimes(1);
+    expect(searchCachedMessageRefs).toHaveBeenCalledTimes(1);
   });
 
   it("returns to the last available page when its only local result is deleted", async () => {
@@ -306,7 +307,7 @@ describe("SearchPanel — result races", () => {
     const rows = Array.from({ length: 26 }, (_, i) => ({
       messageId: String(i), channelId: "ch-1", dmChannelId: null, content: `match ${i}`, timestamp: i,
     }));
-    vi.mocked(searchCachedMessages).mockResolvedValueOnce(rows);
+    vi.mocked(searchCachedMessageRefs).mockResolvedValueOnce(rows.map(({ messageId, timestamp }) => ({ messageId, timestamp })));
     vi.mocked(getCachedDecryptedMessage).mockImplementation(async id => rows.find(row => row.messageId === id) ?? null);
     render(<SearchPanel channelId="ch-1" onClose={() => {}} />);
     typeQuery("match");

@@ -3,9 +3,8 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { searchMessages } from "../../api/search";
-import { searchCachedMessages } from "../../crypto/keyStorage";
+import { searchCachedMessageRefs } from "../../crypto/keyStorage";
 import { readCachedSearchPage } from "../../crypto/cachedSearchPage";
-import type { CachedDecryptedMessage } from "../../crypto/types";
 import { useServerStore } from "../../stores/serverStore";
 import { useE2EEStore } from "../../stores/e2eeStore";
 import { useMessageStore } from "../../stores/messageStore";
@@ -101,23 +100,19 @@ function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId,
           const controller = new AbortController();
           localSearch.current = controller;
           const term = searchQuery.trim();
-          let paged: CachedDecryptedMessage[];
-          if (localMatches.current) {
-            const lowerTerm = term.toLowerCase();
-            const page = await readCachedSearchPage(localMatches, searchOffset, limit,
-              row => row.channelId === channelId && row.content.toLowerCase().includes(lowerTerm) && !deletedIds.current.has(row.messageId),
-              () => seq === searchSeqRef.current);
-            if (!page) return;
-            if (page.offset !== searchOffset) setOffset(page.offset);
-            paged = page.messages;
-          } else {
-            const cached = await searchCachedMessages(channelId, term, controller.signal);
+          if (!localMatches.current) {
+            const cached = await searchCachedMessageRefs(channelId, term, controller.signal);
             if (seq !== searchSeqRef.current) return;
-            const sorted = cached.filter(row => !deletedIds.current.has(row.messageId)).sort((a, b) => b.timestamp - a.timestamp);
-            localMatches.current = sorted.map(row => row.messageId);
-            paged = sorted.slice(searchOffset, searchOffset + limit);
+            localMatches.current = cached.filter(row => !deletedIds.current.has(row.messageId))
+              .sort((a, b) => b.timestamp - a.timestamp).map(row => row.messageId);
           }
-          if (seq !== searchSeqRef.current) return;
+          const lowerTerm = term.toLowerCase();
+          const page = await readCachedSearchPage(localMatches, searchOffset, limit,
+            row => row.channelId === channelId && row.content.toLowerCase().includes(lowerTerm) && !deletedIds.current.has(row.messageId),
+            () => seq === searchSeqRef.current);
+          if (!page || seq !== searchSeqRef.current) return;
+          if (page.offset !== searchOffset) setOffset(page.offset);
+          const paged = page.messages;
           const total = localMatches.current.length;
 
           // CachedDecryptedMessage -> Message minimal format for rendering

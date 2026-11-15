@@ -483,7 +483,7 @@ describe("keyStorage — deleteAllSenderKeysForChannel prefix scoping", () => {
 // ──────────────────────────────────
 
 describe("keyStorage — searchCachedMessages (byChannel index + cursor)", () => {
-  it.each([keyStorage.searchCachedMessages, keyStorage.searchCachedDMMessages, keyStorage.searchCachedDMMessageRefs])(
+  it.each([keyStorage.searchCachedMessages, keyStorage.searchCachedDMMessages, keyStorage.searchCachedDMMessageRefs, keyStorage.searchCachedMessageRefs])(
     "stops advancing an abandoned search cursor",
     async (search) => {
       await keyStorage.cacheDecryptedMessages(["a", "b", "c"].map(messageId =>
@@ -566,6 +566,18 @@ describe("keyStorage — searchCachedDMMessages (byDMChannel index + cursor)", (
 
     const hits = await keyStorage.searchCachedDMMessages("dm1", "secret");
     expect(hits.map((m) => m.messageId)).toEqual(["d1"]);
+  });
+});
+
+describe("keyStorage — compact channel search references", () => {
+  it("retains timestamp ordering metadata without content or foreign-channel hits", async () => {
+    await keyStorage.cacheDecryptedMessages([
+      makeCachedMessage({ messageId: "compact", channelId: "target", content: "Été " + "private".repeat(1000), timestamp: 99 }),
+      makeCachedMessage({ messageId: "foreign", channelId: "other", content: "Été" }),
+    ]);
+    expect(await keyStorage.searchCachedMessageRefs("target", "ÉTÉ")).toEqual([
+      { messageId: "compact", timestamp: 99 },
+    ]);
   });
 });
 
