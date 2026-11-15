@@ -238,6 +238,22 @@ it("keeps a query waiting for all accepted HTTP deletions in its conversation",a
     expect(premature).toBe(0);expect(started).toHaveBeenCalledOnce();
   }finally{first.resolve(true);second.resolve(true);stop();}
 });
+it.each(["account","generation","device"] as const)("does not clean replacement state when an accepted HTTP deletion observer replaces %s",async change=>{
+  vi.mocked(dmApi.deleteDMMessage).mockResolvedValueOnce({success:true,data:{id:"deleted",dm_channel_id:CH,message:"deleted"}});
+  let stop=()=>{};
+  stop=useDMStore.subscribe((next,prev)=>{
+    if(next.lastDeletedDM===prev.lastDeletedDM)return;
+    stop();
+    if(change==="account")hoisted.userId="replacement";
+    else if(change==="generation")useComposerDraftStore.getState().reset();
+    else hoisted.e2ee.localDeviceId="replacement";
+  });
+  try{
+    expect(await useDMStore.getState().deleteMessage("deleted")).toBe(false);
+    expect(deleteCachedDMMessage).not.toHaveBeenCalled();
+    await waitForCachedMessageDeletions("dm",CH);
+  }finally{stop();}
+});
 it("does not delete locally or clear cache after a failed HTTP deletion",async()=>{
   useDMStore.setState({messagesByChannel:{[CH]:[makeDM("deleted")]}});
   vi.mocked(dmApi.deleteDMMessage).mockResolvedValueOnce({success:false,error:"forbidden"});

@@ -36,6 +36,22 @@ beforeEach(async () => {
 });
 afterEach(async () => { for (const stop of stops.splice(0)) stop(); vi.restoreAllMocks(); await closeDB(); });
 
+it("HTTP DM deletion evicts actual cached plaintext after its committed notification throws", async () => {
+  const api = await import("../../api/dm");
+  vi.spyOn(api, "deleteDMMessage").mockResolvedValueOnce({ success: true, data: { id: "deleted", dm_channel_id: "room", message: "deleted" } });
+  const storage = await vi.importActual<typeof import("../../crypto/keyStorage")>("../../crypto/keyStorage");
+  vi.mocked(deleteCachedDMMessage).mockImplementation(storage.deleteCachedDMMessage);
+  await cacheDecryptedMessage({ messageId: "deleted", channelId: "", dmChannelId: "room", content: "deleted plaintext", timestamp: 10 });
+  await cacheDecryptedMessage({ messageId: "retained", channelId: "", dmChannelId: "room", content: "retained plaintext", timestamp: 11 });
+  stops.push(useDMStore.subscribe((next, previous) => {
+    if (next.lastDeletedDM !== previous.lastDeletedDM) throw new Error("committed HTTP notification failed");
+  }));
+  expect(await useDMStore.getState().deleteMessage("deleted")).toBe(false);
+  expect(await getCachedDecryptedMessage("deleted")).toBeNull();
+  expect((await getCachedDecryptedMessage("retained"))?.content).toBe("retained plaintext");
+  await waitForCachedMessageDeletions("dm", "room");
+});
+
 for (const kind of ["channel", "dm"] as const) {
   const event = { op: kind === "channel" ? "message_delete" : "dm_message_delete",
     d: kind === "channel" ? { id: "deleted", channel_id: "room" } : { id: "deleted", dm_channel_id: "room" } } as WSMessage;
