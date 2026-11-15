@@ -8,7 +8,7 @@ import { useE2EEStore } from "../../stores/e2eeStore";
 import { useOpenAtMessage } from "../../hooks/useOpenAtMessage";
 import { getAuthSessionOwner, subscribeAuthOwnerChanges } from "../../api/authSessionEvents";
 import type { CachedDecryptedMessage } from "../../crypto/types";
-import { getCachedDecryptedMessage, searchCachedDMMessages } from "../../crypto/keyStorage";
+import { getCachedDecryptedMessage, searchCachedDMMessageRefs } from "../../crypto/keyStorage";
 import Avatar from "../shared/Avatar";
 import SpamPreview from "../chat/SpamPreview";
 import GameMessageOrigin from "../chat/GameMessageOrigin";
@@ -98,22 +98,19 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted }: DMSearchPanelPro
           const controller = new AbortController();
           localSearch.current = controller;
           const term = searchQuery.trim();
-          let paged: CachedDecryptedMessage[];
-          if (localMatches.current) {
-            const ids = localMatches.current.slice(searchOffset, searchOffset + LIMIT);
-            const records = await Promise.all(ids.map(getCachedDecryptedMessage));
-            paged = records.filter((row): row is CachedDecryptedMessage => row !== null &&
-              row.dmChannelId === channelId && row.content.toLowerCase().includes(term.toLowerCase()) &&
-              !deletedIds.current.has(row.messageId));
-          } else {
-            const cached = await searchCachedDMMessages(channelId, term, controller.signal);
+          if (!localMatches.current) {
+            const cached = await searchCachedDMMessageRefs(channelId, term, controller.signal);
             if (seq !== searchSeqRef.current) return;
-            const sorted = sortDMBySource(cached.filter(row => !deletedIds.current.has(row.messageId)).map(record => ({
-              id: record.messageId, created_at: new Date(record.timestamp).toISOString(), source_sequence: record.sourceSequence, record,
-            }))).reverse().map(item => item.record);
-            localMatches.current = sorted.map(row => row.messageId);
-            paged = sorted.slice(searchOffset, searchOffset + LIMIT);
+            localMatches.current = sortDMBySource(cached.filter(row => !deletedIds.current.has(row.messageId)).map(record => ({
+              id: record.messageId, created_at: new Date(record.timestamp).toISOString(), source_sequence: record.sourceSequence,
+            }))).reverse().map(row => row.id);
           }
+          const ids = localMatches.current.slice(searchOffset, searchOffset + LIMIT);
+          const records = await Promise.all(ids.map(id => getCachedDecryptedMessage(id)));
+          const lowerTerm = term.toLowerCase();
+          const paged = records.filter((row): row is CachedDecryptedMessage => row !== null &&
+            row.dmChannelId === channelId && row.content.toLowerCase().includes(lowerTerm) &&
+            !deletedIds.current.has(row.messageId));
           if (seq !== searchSeqRef.current) return;
           const total = localMatches.current.length;
 

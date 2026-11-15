@@ -4,7 +4,7 @@ import { getAuthSessionOwner, publishAuthOwnerChange } from "../../api/authSessi
 import DMSearchPanel from "./DMSearchPanel";
 import { useDMStore } from "../../stores/dmStore";
 import { useE2EEStore } from "../../stores/e2eeStore";
-import { getCachedDecryptedMessage, searchCachedDMMessages } from "../../crypto/keyStorage";
+import { getCachedDecryptedMessage, searchCachedDMMessageRefs } from "../../crypto/keyStorage";
 
 const openAtDMMessage = vi.hoisted(() => vi.fn<() => Promise<boolean>>());
 vi.mock("../../hooks/useOpenAtMessage", () => ({ useOpenAtMessage: () => ({ openAtDMMessage }) }));
@@ -15,7 +15,7 @@ vi.mock("react-i18next", () => ({
   }),
   initReactI18next: { type: "3rdParty", init: () => {} },
 }));
-vi.mock("../../crypto/keyStorage", () => ({ searchCachedDMMessages: vi.fn(async () => []), getCachedDecryptedMessage: vi.fn() }));
+vi.mock("../../crypto/keyStorage", () => ({ searchCachedDMMessageRefs: vi.fn(async () => []), getCachedDecryptedMessage: vi.fn() }));
 vi.mock("../../stores/dmStore", async () => {
   const { create } = await import("zustand");
   return { useDMStore: create(() => ({
@@ -45,7 +45,7 @@ it.each([
   render(<DMSearchPanel channelId="dm" onClose={() => {}} />);
   fireEvent.change(screen.getByRole("textbox"), { target: { value: "private words" } });
   await act(async () => { await vi.advanceTimersByTimeAsync(300); });
-  expect(searchCachedDMMessages).toHaveBeenCalledTimes(Number(local));
+  expect(searchCachedDMMessageRefs).toHaveBeenCalledTimes(Number(local));
   expect(useDMStore.getState().searchMessages).toHaveBeenCalledTimes(Number(remote));
 });
 
@@ -53,13 +53,15 @@ it("counts a missing DM once when deletion arrives during navigation", async () 
   vi.useFakeTimers();
   useDMStore.setState(state => ({ channels: state.channels.map(c => ({ ...c, e2ee_enabled: true })) }));
   useE2EEStore.setState({ initStatus: "ready" });
-  vi.mocked(searchCachedDMMessages).mockResolvedValueOnce(["first", "second"].map(messageId => ({
+  const rows = ["first", "second"].map(messageId => ({
     messageId, channelId: "", dmChannelId: "dm", content: messageId, timestamp: 1,
-  })));
+  }));
+  vi.mocked(searchCachedDMMessageRefs).mockResolvedValueOnce(rows.map(({ messageId, timestamp }) => ({ messageId, timestamp, sourceSequence: undefined })));
+  vi.mocked(getCachedDecryptedMessage).mockImplementation(async id => rows.find(row => row.messageId === id) ?? null);
   let finishNavigation!: (found: boolean) => void;
   openAtDMMessage.mockImplementationOnce(() => new Promise(resolve => { finishNavigation = resolve; }));
   render(<DMSearchPanel channelId="dm" onClose={() => {}} />);
-  fireEvent.change(screen.getByRole("textbox"), { target: { value: "words" } });
+  fireEvent.change(screen.getByRole("textbox"), { target: { value: "s" } });
   await act(async () => { await vi.advanceTimersByTimeAsync(300); });
   fireEvent.click(screen.getByText("first"));
   act(() => useDMStore.setState({ lastDeletedDM: { id: "first", dm_channel_id: "dm" } }));
@@ -76,14 +78,16 @@ it("reads only next-page records from the source-ordered encrypted search snapsh
     messageId: `snapshot-${index + 1}`, channelId: "", dmChannelId: "dm", content: `match ${index + 1}`,
     timestamp: 100 - index, sourceSequence: String(index + 1),
   }));
-  vi.mocked(searchCachedDMMessages).mockResolvedValueOnce(rows);
+  vi.mocked(searchCachedDMMessageRefs).mockResolvedValueOnce(rows.map(row => ({ messageId: row.messageId, timestamp: row.timestamp, sourceSequence: "sourceSequence" in row ? row.sourceSequence as string : undefined })));
   vi.mocked(getCachedDecryptedMessage).mockImplementation(async id => rows.find(row => row.messageId === id) ?? null);
   render(<DMSearchPanel channelId="dm" onClose={() => {}} />);
   fireEvent.change(screen.getByRole("textbox"), { target: { value: "match" } });
   await act(async () => { await vi.advanceTimersByTimeAsync(300); });
   expect(screen.getByText("match 30")).toBeInTheDocument();
+  expect(getCachedDecryptedMessage).toHaveBeenCalledTimes(25);
+  vi.mocked(getCachedDecryptedMessage).mockClear();
   await act(async () => { fireEvent.click(screen.getByText("searchNext")); });
-  expect(searchCachedDMMessages).toHaveBeenCalledTimes(1);
+  expect(searchCachedDMMessageRefs).toHaveBeenCalledTimes(1);
   expect(vi.mocked(getCachedDecryptedMessage).mock.calls.map(([id]) => id)).toEqual(["snapshot-5", "snapshot-4", "snapshot-3", "snapshot-2", "snapshot-1"]);
   expect(screen.getByText("match 5")).toBeInTheDocument();
   expect(screen.queryByText("match 30")).not.toBeInTheDocument();
@@ -94,14 +98,14 @@ it("invalidates a pending encrypted search when the account owner changes", asyn
   const owner = getAuthSessionOwner();
   useDMStore.setState(state => ({ channels: state.channels.map(c => ({ ...c, e2ee_enabled: true })) }));
   useE2EEStore.setState({ initStatus: "ready" });
-  let resolve!: (rows: Awaited<ReturnType<typeof searchCachedDMMessages>>) => void;
-  vi.mocked(searchCachedDMMessages).mockReturnValueOnce(new Promise(done => { resolve = done; }));
+  let resolve!: (rows: Awaited<ReturnType<typeof searchCachedDMMessageRefs>>) => void;
+  vi.mocked(searchCachedDMMessageRefs).mockReturnValueOnce(new Promise(done => { resolve = done; }));
   render(<DMSearchPanel channelId="dm" onClose={() => {}} />);
   try {
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "old query" } });
     await act(async () => { await vi.advanceTimersByTimeAsync(300); });
     act(() => publishAuthOwnerChange("dm-search-next-owner"));
-    await act(async () => resolve([{ messageId: "old", channelId: "", dmChannelId: "dm", content: "old private result", timestamp: 1 }]));
+    await act(async () => resolve([{ messageId: "old", timestamp: 1, sourceSequence: undefined }]));
     expect(screen.queryByText("old private result")).not.toBeInTheDocument();
     expect(screen.getByRole("textbox")).toHaveValue("");
   } finally { act(() => publishAuthOwnerChange(owner)); }
@@ -112,7 +116,7 @@ it("removes an off-page deleted DM from the snapshot before reading the next pag
   useDMStore.setState(state => ({ channels: state.channels.map(c => ({ ...c, e2ee_enabled: true })) }));
   useE2EEStore.setState({ initStatus: "ready" });
   const rows = Array.from({ length: 30 }, (_, index) => ({ messageId: `off-${index + 1}`, channelId: "", dmChannelId: "dm", content: `off match ${index + 1}`, timestamp: index + 1 }));
-  vi.mocked(searchCachedDMMessages).mockResolvedValueOnce(rows);
+  vi.mocked(searchCachedDMMessageRefs).mockResolvedValueOnce(rows.map(row => ({ messageId: row.messageId, timestamp: row.timestamp, sourceSequence: "sourceSequence" in row ? row.sourceSequence as string : undefined })));
   vi.mocked(getCachedDecryptedMessage).mockImplementation(async id => rows.find(row => row.messageId === id) ?? null);
   render(<DMSearchPanel channelId="dm" onClose={() => {}} />);
   fireEvent.change(screen.getByRole("textbox"), { target: { value: "off match" } });
@@ -122,5 +126,25 @@ it("removes an off-page deleted DM from the snapshot before reading the next pag
   await act(async () => { fireEvent.click(screen.getByText("searchNext")); });
   expect(getCachedDecryptedMessage).not.toHaveBeenCalledWith("off-1");
   expect(screen.queryByText("off match 1")).not.toBeInTheDocument();
-  expect(searchCachedDMMessages).toHaveBeenCalledTimes(1);
+  expect(searchCachedDMMessageRefs).toHaveBeenCalledTimes(1);
+});
+
+it("discards first-page content reads completed after an account switch", async () => {
+  vi.useFakeTimers();
+  const owner = getAuthSessionOwner();
+  useDMStore.setState(state => ({ channels: state.channels.map(c => ({ ...c, e2ee_enabled: true })) }));
+  useE2EEStore.setState({ initStatus: "ready" });
+  vi.mocked(searchCachedDMMessageRefs).mockResolvedValueOnce([{ messageId: "late", timestamp: 1, sourceSequence: undefined }]);
+  let finish!: (row: Awaited<ReturnType<typeof getCachedDecryptedMessage>>) => void;
+  vi.mocked(getCachedDecryptedMessage).mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+  render(<DMSearchPanel channelId="dm" onClose={() => {}} />);
+  try {
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "private" } });
+    await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+    expect(getCachedDecryptedMessage).toHaveBeenCalledWith("late");
+    act(() => publishAuthOwnerChange("dm-content-next-owner"));
+    await act(async () => finish({ messageId: "late", channelId: "", dmChannelId: "dm", content: "private old-owner content", timestamp: 1 }));
+    expect(screen.queryByText("private old-owner content")).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox")).toHaveValue("");
+  } finally { act(() => publishAuthOwnerChange(owner)); }
 });

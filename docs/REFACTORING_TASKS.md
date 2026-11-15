@@ -2670,3 +2670,8 @@ Encrypted DM search now reuses matching IDs after its first query and reads at m
 ### RF17 — DM IndexedDB comparison (2026-11-15)
 
 The benchmark now supports --dm. Chromium 156.0.8078.4, one warmup and three measured repetitions verified accented-query matches and exact second-page content/IDs/order while timestamps oppose server source sequence. For 1k/10k/50k records, second-page medians changed from 23.7/225.6/1078.6 ms (rescan and source sort) to 2.3/2.7/2.5 ms (25 ID lookups). First-query medians remain 23.1/221.1/1061.0 ms. These are storage/page-selection measurements, not rendering or heap measurements. First-query bounds and complete RF17 remain open. Receipt: refactor-rf17-dm-indexeddb-benchmark-2026-11-15.json.
+
+
+### RF17 — compact DM first-page integration (2026-11-15)
+
+DMSearchPanel now scans compact ordering references and loads at most 25 full records for the first page as well as subsequent pages. Tests use reference-only responses and verify account switches during pending content reads. Three targeted files passed 76 tests; TypeScript and targeted ESLint passed. Real Chromium IndexedDB comparison verified exact source order/content at 1k/10k/50k. Compact first-page medians were 20.8/213.7/1081.4 ms; no first-query speed improvement is claimed. Full matched plaintext is no longer accumulated, but matching reference/ID count still grows and no heap bound is proved. RF17 remains open. Receipt: refactor-rf17-compact-dm-first-page-2026-11-15.json.

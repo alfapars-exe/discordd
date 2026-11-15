@@ -17,7 +17,7 @@ try {
     for (const size of [1000, 10000, 50000]) {
       const report = await page.evaluate(async ({ size, dm }) => {
         const { publishAuthOwnerChange } = await import("/src/api/authSessionEvents.ts");
-        const { getCachedDecryptedMessage, openScopedKeyDatabase, searchCachedMessages, searchCachedDMMessages } = await import("/src/crypto/keyStorage.ts");
+        const { getCachedDecryptedMessage, openScopedKeyDatabase, searchCachedMessages, searchCachedDMMessages, searchCachedDMMessageRefs } = await import("/src/crypto/keyStorage.ts");
         const { sortDMBySource } = await import("/src/utils/dmSourceOrder.ts");
         const search = dm ? searchCachedDMMessages : searchCachedMessages;
         const { SERVER_URL } = await import("/src/utils/constants.ts");
@@ -37,6 +37,7 @@ try {
         const samples = [];
         const previousPageMs = [];
         const indexedPageMs = [];
+        const compactFirstPageMs = [];
         const expectedPage = expected.toReversed().slice(25, 50);
         for (let i = 0; i < 4; i++) {
           const start = performance.now();
@@ -62,12 +63,28 @@ try {
               throw new Error("Incorrect second page");
             }
           }
+          if (dm) {
+            const compactStart = performance.now();
+            const refs = await searchCachedDMMessageRefs("target", "ÉTÉ");
+            if (refs.some(ref => "content" in ref)) throw new Error("Reference scan retained plaintext");
+            const orderedIds = sortDMBySource(refs.map(ref => ({
+              id: ref.messageId, created_at: new Date(ref.timestamp).toISOString(), source_sequence: ref.sourceSequence,
+            }))).reverse().map(ref => ref.id);
+            if (orderedIds.length !== expected.length || orderedIds.some((id, j) => id !== expected[expected.length - 1 - j])) {
+              throw new Error("Incorrect compact reference order");
+            }
+            const firstPage = await Promise.all(orderedIds.slice(0, 25).map(id => getCachedDecryptedMessage(id)));
+            if (firstPage.some((row, j) => row?.messageId !== orderedIds[j] || row.content !== "Été")) {
+              throw new Error("Incorrect compact first page");
+            }
+            if (i > 0) compactFirstPageMs.push(performance.now() - compactStart);
+          }
           if (i > 0) {
             previousPageMs.push(oldElapsed);
             indexedPageMs.push(pageElapsed);
           }
         }
-        return { mode: dm ? "dm" : "channel", size, matches: expected.length, samplesMs: samples, previousPageMs, indexedPageMs };
+        return { mode: dm ? "dm" : "channel", size, matches: expected.length, samplesMs: samples, previousPageMs, indexedPageMs, compactFirstPageMs };
       }, { size, dm });
       assert.equal(report.samplesMs.length, 3);
       console.log(JSON.stringify(report));
