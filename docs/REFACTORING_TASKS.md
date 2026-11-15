@@ -3014,3 +3014,8 @@ Fail-first stalled-storage regression exceeded6s before cleanup release.97071be1
 ### RF03/RF30 — terminal7ebe019d and next audit delivery (2026-11-15)
 
 Remote7ebe019dc5a1120587c8b6cee515645249020e34 completed36/36SUCCESS,including strict JSON opt-in contracts and the dedicated fresh-account role/notification Chromium profile. Snapshot:implementation/verification/refactor-7ebe019-terminal-ci-2026-11-15.json. SQLite ignore-map parity and asynchronous audit ownership/shutdown fixes have separate local regressions/race proofs and now require independent new-head CI. Earlier green checks do not prove this delivery. PR305 remains draft;full RF05/RF24/project/native/physical acceptance remains open.
+
+
+### RF24/RF11 — contain audit dependency panics per event (2026-11-15)
+
+Fail-first actual service tests showed one Insert or snapshot lookup panic terminating the whole writer and stranding accepted/future work.9538d45e wraps each live/drain event with existing logx.Run,retaining outer worker protection and releasing lookup timers during panic. Healthy accepted/future events and shutdown backlog continue. A write-then-panic regression proves no automatic retry or duplicate saved entry. Windows12roots+4subcasesPASS7.681s before final partial-write case;immutable final-source LinuxGo1.27.4/CGO1 race3repetitions39root+12subcasepasses24.472s;full root wiringPASS6.666s. Receipt:implementation/verification/refactor-audit-per-event-panic-2026-11-15.json. Owned runner removed. Recovery is best-effort:failed event/publication can be lost;no durable guarantee added. Full RF24/project/native acceptance remains open;held whilec853ee50 CI runs.

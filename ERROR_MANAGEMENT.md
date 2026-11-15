@@ -107,6 +107,10 @@ Sonraki `Stop` çağrıları süreyi uzatmaz. Süre dolunca kalan olaylar kuyruk
 çıkarılır ve sayıları tek uyarıda bildirilir; başarısız yazım ayrıca hata kaydı
 üretir. Her `Stop`, aynı yazıcının çıkışını bekler; sahipsiz veritabanı goroutine'i
 bırakılmaz. Süre sınırının işlemesi depoların context iptaline uymasına bağlıdır.
+Her olay mevcut `logx.Run` ile ayrı korunur. Bağımlılık panic'i aynı olay için
+bir hata kaydı üretir ve yazıcı sonraki olaya devam eder. Hatalı olay otomatik
+yeniden denenmez; veritabanına yazımdan sonraki bir panic mükerrer satır üretmez.
+Snapshot zamanlayıcısı panic sırasında da iptal edilir.
 Bu kuyruk kalıcı teslim garantisi vermez.
 
 ## Doğrulama
