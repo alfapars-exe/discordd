@@ -4,6 +4,7 @@ import * as preferencesApi from "../api/preferences";
 import { loadPreferencePresenter } from "./preferencePresenter";
 import { APPEARANCE_STORAGE_KEYS } from "./appearancePreferences";
 import { SERVER_URL } from "../utils/constants";
+import { getPreferenceScopeGeneration, retirePreferenceScope } from "./preferenceScope";
 
 import { decodeLegacyAppearance, object, sanitize, merge, nonempty, cacheable, type PreferencesData } from "./preferencesCodec";
 
@@ -29,7 +30,6 @@ type PreferencesState = {
 const CACHE_LIMIT = 64 * 1024;
 const LEGACY_BACKUP_KEY = "hichat.preferences.legacy-presentation.v1";
 const DEBOUNCE_MS = 1000;
-let epoch = 0;
 let cacheKey: string | null = null;
 let snapshotKey: string | null = null;
 let legacyImportKey: string | null = null;
@@ -136,7 +136,7 @@ function canImportLegacy(data: PreferencesData, loaded: boolean): boolean {
   try { if (localStorage.getItem(legacyImportKey) === "1") return false; } catch { /* Check the in-memory eligible leaves. */ }
   return nonempty(legacyImportPatch(data));
 }
-function current(version: number): boolean { return epoch === version && cacheKey !== null; }
+function current(version: number): boolean { return getPreferenceScopeGeneration() === version && cacheKey !== null; }
 function clearTimer(): void { if (timer) clearTimeout(timer); timer = null; }
 function requestContext(version: number) {
   return {
@@ -167,7 +167,7 @@ function schedule(): void {
 async function flush(): Promise<void> {
   if (!cacheKey) return;
   if (writePromise) return writePromise;
-  const version = epoch;
+  const version = getPreferenceScopeGeneration();
   if (!usePreferencesStore.getState().isLoaded) await usePreferencesStore.getState().fetchAndApply();
   if (!current(version) || !usePreferencesStore.getState().isLoaded || !nonempty(pending)) return;
   if (writePromise) return writePromise;
@@ -235,7 +235,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     persistCache(snapshotKey, acknowledged);
     persistPending();
     set({ accountId: userId, data: merge(acknowledged, pending), hasPendingChanges: nonempty(pending), syncStatus: nonempty(pending) ? "pending" : "idle", legacyImportAvailable: false });
-    preparation = applyData(epoch, true);
+    preparation = applyData(getPreferenceScopeGeneration(), true);
     // bindAccount is synchronous; callers may not fetch until the next render.
     // Observe preparation failures immediately while fetch still receives them.
     void preparation.catch(() => {});
@@ -243,7 +243,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   fetchAndApply: async () => {
     if (!cacheKey) return;
     if (fetchPromise) return fetchPromise;
-    const version = epoch;
+    const version = getPreferenceScopeGeneration();
     const run = async () => {
       let preparing = true;
       try {
@@ -290,7 +290,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     if (get().syncStatus !== "error" && nonempty(pending)) schedule();
   },
   retrySync: async () => {
-    const version = epoch;
+    const version = getPreferenceScopeGeneration();
     clearTimer();
     if (get().syncError === "preferences_apply_failed") {
       const plan = presentationRetry ?? { reset: false, preserveSessionState: false, preparation: false };
@@ -311,7 +311,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     if (current(version)) await flush();
   },
   importLegacyPreferences: async () => {
-    const version = epoch;
+    const version = getPreferenceScopeGeneration();
     if (!get().legacyImportAvailable || !get().isLoaded) return false;
     await preparation;
     if (fetchPromise) await fetchPromise;
@@ -342,7 +342,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     preserveLegacyPreferences();
     // Cache old-account pending data, never dispatch it under new credentials.
     persistPending();
-    epoch += 1;
+    retirePreferenceScope();
     controller.abort();
     controller = new AbortController();
     clearTimer();
