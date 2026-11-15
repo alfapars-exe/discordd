@@ -97,6 +97,7 @@
   "searchMessages": "Search Messages",
   "searchPlaceholder": "Search messages...",
   "searching": "Searching...",
+  "searchFailed": "Search could not be completed. Change your search to try again.",
   "searchHint": "Start typing to search",
   "noSearchResults": "No results found",
   "searchResultCount": "{{count}} results",

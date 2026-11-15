@@ -50,6 +50,7 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted }: DMSearchPanelPro
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchState>(null);
   const [isSearching, setIsSearching] = useState(false);
+  const [searchFailed, setSearchFailed] = useState(false);
   const [offset, setOffset] = useState(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Monotonic id per doSearch call — a slow response for an abandoned query
@@ -83,6 +84,7 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted }: DMSearchPanelPro
       // Bumping before the empty-query early return also invalidates any
       // in-flight search when the user clears the input.
       const seq = ++searchSeqRef.current;
+      setSearchFailed(false);
       queryOffset.current = searchOffset;
       localSearch.current?.abort();
 
@@ -159,7 +161,7 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted }: DMSearchPanelPro
           const failed = localMatches.current; localMatches.current = null;
           deletedIds.current.clear(); deletedIds.current = new Set();
           void failed?.dispose().catch(() => {});
-          setResults({ messages: [], totalCount: 0 });
+          setResults(null); setSearchFailed(true);
         }
         searching.current = false; setIsSearching(false);
         return;
@@ -185,7 +187,7 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted }: DMSearchPanelPro
     deletedIds.current.clear(); deletedIds.current = new Set();
     searchSeqRef.current++;
     localSearch.current?.abort();
-    setQuery(value);
+    setQuery(value); setSearchFailed(false);
     if (!value.trim()) { searching.current = false; setIsSearching(false); setResults(null); }
     setOffset(0); queryOffset.current = 0;
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -239,7 +241,7 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted }: DMSearchPanelPro
       localMatches.current = null; searchSeqRef.current++; localSearch.current?.abort();
       deletedIds.current.clear(); deletedIds.current = new Set();
       void snapshot.dispose().catch(() => {});
-      setResults({ messages: [], totalCount: 0 });
+      setResults(null); setSearchFailed(true);
       searching.current = false; setIsSearching(false);
     });
     return true;
@@ -355,6 +357,8 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted }: DMSearchPanelPro
       <div className="search-results">
         {isSearching ? (
           <p className="search-empty">{t("searching")}</p>
+        ) : searchFailed ? (
+          <p className="search-empty" role="alert">{t("searchFailed")}</p>
         ) : !results ? (
           <p className="search-empty">{t("searchHint")}</p>
         ) : results.messages.length === 0 ? (
