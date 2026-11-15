@@ -32,6 +32,22 @@ func (p permissionFoundation) Stop() {
 // initPermissionFoundation owns partial cache allocation until successful return.
 // Each cache retains its independent invalidation and shutdown owner.
 func initPermissionFoundation(deps permissionFoundationDependencies) (group permissionFoundation) {
+	for _, input := range []struct {
+		name  string
+		value any
+	}{{"Repositories", deps.Repositories}, {"Hub", deps.Hub}} {
+		if missingCompositionInput(input.value) {
+			panic("permission foundation requires " + input.name)
+		}
+	}
+	for _, input := range []struct {
+		name  string
+		value any
+	}{{"ChannelPermission", deps.Repositories.ChannelPermission}, {"Role", deps.Repositories.Role}, {"Channel", deps.Repositories.Channel}} {
+		if missingCompositionInput(input.value) {
+			panic("permission foundation requires repository " + input.name)
+		}
+	}
 	transferred := false
 	defer func() {
 		if !transferred {
