@@ -23,6 +23,27 @@ export async function verifySearchDeletionSpool() {
       if (!seen.has("0-late")) frontier.append("0-late");
     });
     check(seen.size === 1001 && maxBatch <= 128, "Native spool count/batch mismatch");
+    const getKeys = IDBObjectStore.prototype.getAllKeys;
+    let emptyReads = 0, injectedLate = false;
+    IDBObjectStore.prototype.getAllKeys = function (...args) {
+      if (this.name === "refs") emptyReads++;
+      return getKeys.apply(this, args);
+    };
+    try { await frontier.drain(async () => { throw new Error("Settled frontier repeated a row"); }); }
+    finally { IDBObjectStore.prototype.getAllKeys = getKeys; }
+    check(emptyReads === 0, "Settled pagination reopened native frontier read");
+    frontier.append("race-initial");
+    IDBObjectStore.prototype.getAllKeys = function (...args) {
+      const request = getKeys.apply(this, args);
+      if (this.name === "refs") request.addEventListener("success", () => {
+        if (!injectedLate && request.result.length === 0) { injectedLate = true; frontier.append("race-late"); }
+      });
+      return request;
+    };
+    const raced = [];
+    try { await frontier.drain(async ids => raced.push(...ids)); }
+    finally { IDBObjectStore.prototype.getAllKeys = getKeys; }
+    check(injectedLate && JSON.stringify(raced) === '["race-initial","race-late"]', "Native empty read lost a concurrent deletion");
     frontier.append("retry");
     check((await rejected(frontier.drain(async () => { throw new Error("consumer failed"); }))).message === "consumer failed", "Consumer failure lost");
     const controller = new AbortController();
@@ -110,6 +131,7 @@ export async function verifySearchDeletionSpool() {
     await rejected(ownerFrontier.drain(async () => {}));
     check(notifications === 0, "Retirement notified a stale query");
     return { mode: "native-deletion-spool", uniqueIds: seen.size, maxBatch, cancelledWithoutLoss: true,
+      settledEmptyReads: emptyReads, emptyReadRaceReconciled: true,
       consumerRetry: true, quotaNotified: true, transactionAbortNotified: true, resetFenced: true,
       boundedQueuedWriters: accepted, backpressureNotified: true,
       resetMetadataCleared: true, staleConsumerRejected: true, successorPreserved: true,

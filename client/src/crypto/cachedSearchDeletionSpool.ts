@@ -53,7 +53,7 @@ export async function openCachedSearchDeletionPool(): Promise<SearchDeletionPool
     create(onFailure) {
       if (closed || !scopeCurrent() || isCachedSearchResetting(name)) throw new Error("search_spool_scope_unavailable");
       const id = crypto.randomUUID(), expiresAt = Date.now() + SEARCH_SNAPSHOT_MAX_AGE_MS;
-      let disposed = false, failed = false, problem: unknown, revision = 0;
+      let disposed = false, failed = false, problem: unknown, revision = 0, drainedRevision = 0;
       let lastId: string | null = null;
       let notify: (() => void) | undefined = onFailure;
       let writer: IDBTransaction | null = null, disposal: Promise<void> | undefined, draining: Promise<void> | null = null;
@@ -125,11 +125,19 @@ export async function openCachedSearchDeletionPool(): Promise<SearchDeletionPool
           const run = async () => {
             for (;;) {
               await flush(signal);
+              if (drainedRevision === revision) return;
+              const readRevision = revision;
               const ids = await transaction("readonly", async tx => {
                 const keys = await tx.objectStore("refs").getAllKeys(range(id), 128);
                 return keys.map(key => (key as [string, string])[1]);
               }, signal);
-              if (!ids.length) return;
+              if (!ids.length) {
+                // A native read can finish before a newly queued write.
+                // Only acknowledge the revision that this empty read observed.
+                if (readRevision !== revision) continue;
+                drainedRevision = readRevision;
+                return;
+              }
               await remove(ids); check(signal);
               await transaction("readwrite", async tx => { await Promise.all(ids.map(async messageId => tx.objectStore("refs").delete([id, messageId]))); }, signal);
             }
