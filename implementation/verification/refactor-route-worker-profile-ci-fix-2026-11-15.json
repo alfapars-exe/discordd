@@ -1,0 +1,26 @@
+{
+  "date": "2026-11-15",
+  "sourceCommit": "fa059116",
+  "sourceSha256": "f559f81b65863f04967b7d67f25e00db69291077445761aa421cd18ba30089b2",
+  "failure": {
+    "head": "c69db7958a7f25d5615e7252f501a822ab3f8104",
+    "run": 43689999635,
+    "job": 132738452753,
+    "test": "TestRouteInspectionFixturesReleaseCacheWorkers",
+    "message": "route inspection fixtures retained workers: before=0 after=1",
+    "terminal": "33success;2failure(base and aggregate);1skipped(combined coverage)"
+  },
+  "fix": "Use existing testutil.AssertWorkerCount after stopped/failed route cache ownership. Same exact final worker count;bounded500ms runtime-profile bookkeeping settlement, fixture not rerun. Successful two-live-worker handoff assertion unchanged.",
+  "validation": {
+    "windowsTargeted": "go test . -run route lifecycle tests -count=200 -timeout=3m:pass1.520s",
+    "windowsRoot": "go test . -count=1 -timeout=5m:pass7.007s",
+    "linuxTargeted": "immutable server archive,Go1.27.4,CGO1,two CPUs/six GiB;go test -race . -run route lifecycle tests -count=200 -timeout=5m:pass5.064s",
+    "linuxRoot": "same immutable source;go test -race -covermode=atomic -coverprofile=/tmp/route-root-coverage.out . -count=1 -timeout=5m:pass33.399s,72.2%statements,no race report"
+  },
+  "cleanup": "both owned --rm containers completed and were removed;immutable snapshot retained in TEMP",
+  "limits": [
+    "root package only,not full server race/PostgreSQL validation",
+    "new-head CI must run;failed c69head is not reused as success evidence",
+    "whole-project/physical acceptance remains open"
+  ]
+}
