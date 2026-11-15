@@ -247,7 +247,11 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     const scope = `${encodeURIComponent(backend)}:${encodeURIComponent(userId)}`;
     const key = `hichat.preferences.pending.v1:${scope}`;
     if (cacheKey === key) return;
+    const previousVersion = getPreferenceScopeGeneration();
     get().reset();
+    // Reset publishes too. A nested reset/bind owns the newer generation and
+    // must not be overwritten when this older bind resumes.
+    if (getPreferenceScopeGeneration() !== previousVersion + 1) return;
     cacheKey = key;
     snapshotKey = `hichat.preferences.snapshot.v1:${scope}`;
     legacyImportKey = `hichat.preferences.legacy-imported.v1:${scope}`;
