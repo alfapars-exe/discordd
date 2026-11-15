@@ -341,18 +341,32 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   },
   importLegacyPreferences: async () => {
     const version = getPreferenceScopeGeneration();
-    if (!get().legacyImportAvailable || !get().isLoaded) return false;
-    await preparation;
-    if (fetchPromise) await fetchPromise;
-    if (!current(version) || !get().isLoaded || !canImportLegacy(get().data, true)) return false;
-    const patch = legacyImportPatch(get().data);
-    // Do not mark an import as used unless its recovery queue is safely persisted.
-    if (!persistCache(cacheKey, merge(inFlight, merge(pending, patch)))) return false;
-    get().set(patch);
-    try { if (legacyImportKey) localStorage.setItem(legacyImportKey, "1"); } catch { /* Backup and persisted queue remain recoverable. */ }
-    set({ legacyImportAvailable: false });
-    await applyData(version);
-    return current(version);
+    if (!get().legacyImportAvailable || !get().isLoaded || get().syncError === "preferences_account_mismatch") return false;
+    let queued = false;
+    try {
+      await preparation;
+      if (!current(version)) return false;
+      if (fetchPromise) await fetchPromise;
+      if (!current(version) || !get().isLoaded || get().syncError === "preferences_account_mismatch" || !canImportLegacy(get().data, true)) return false;
+      const patch = legacyImportPatch(get().data);
+      // Record assignment only after the recovery queue is durable, but before
+      // observers can replace the account/marker key during publication.
+      if (!persistCache(cacheKey, merge(inFlight, merge(pending, patch)))) return false;
+      queued = true;
+      const importedKey = legacyImportKey;
+      try { if (importedKey) localStorage.setItem(importedKey, "1"); } catch { /* Queue and backup remain recoverable. */ }
+      get().set(patch);
+      if (!current(version)) return false;
+      await applyData(version);
+      return current(version);
+    } catch (error) {
+      if (current(version) && queued) {
+        clearTimer();
+        presentationRetry = { ...(error instanceof PreferencePresentationError ? error.plan : { reset: false, preserveSessionState: false }), preparation: false };
+        set({ syncStatus: "error", syncError: "preferences_apply_failed", hasPendingChanges: nonempty(inFlight) || nonempty(pending) });
+      }
+      return false;
+    }
   },
   set: (partial) => {
     // Unauthenticated changes stay device-local in their owning stores.

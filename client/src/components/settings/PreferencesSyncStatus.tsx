@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
-import { useState } from "react";
-import { capturePreferenceScope } from "../../stores/preferenceScope";
+import { useEffect, useRef, useState } from "react";
+import { capturePreferenceScope, getPreferenceScopeGeneration } from "../../stores/preferenceScope";
 import { logToServer } from "../../api/clientLog";
 import { usePreferencesStore } from "../../stores/preferencesStore";
 import "../../styles/preferences-sync.css";
@@ -13,7 +13,31 @@ export default function PreferencesSyncStatus() {
   const retry = usePreferencesStore((s) => s.retrySync);
   const legacyAvailable = usePreferencesStore((s) => s.legacyImportAvailable);
   const importLegacy = usePreferencesStore((s) => s.importLegacyPreferences);
-  const [importError, setImportError] = useState(false);
+  // Every binding reset publishes store state, including same-user backend changes.
+  const binding = usePreferencesStore(() => getPreferenceScopeGeneration());
+  const [importState, setImportState] = useState<{ version: number; pending: boolean; error: boolean } | null>(null);
+  const importAttempt = useRef<{ version: number } | null>(null);
+  const currentImport = importState?.version === binding ? importState : null;
+  useEffect(() => () => { importAttempt.current = null; }, []);
+  async function importCurrent() {
+    const version = getPreferenceScopeGeneration();
+    if (importAttempt.current?.version === version) return;
+    const attempt = { version };
+    importAttempt.current = attempt;
+    setImportState({ version, pending: true, error: false });
+    const isCurrent = () => importAttempt.current === attempt && getPreferenceScopeGeneration() === version;
+    try {
+      const imported = await importLegacy();
+      if (isCurrent()) setImportState({ version, pending: false, error: !imported });
+    } catch {
+      if (isCurrent()) {
+        setImportState({ version, pending: false, error: true });
+        void logToServer("error", "preferences_import_failed");
+      }
+    } finally {
+      if (importAttempt.current === attempt) importAttempt.current = null;
+    }
+  }
   function retryCurrent() {
     const isCurrent = capturePreferenceScope();
     void retry().catch(() => {
@@ -33,10 +57,10 @@ export default function PreferencesSyncStatus() {
       </div>}
       {legacyAvailable && !accountChanged && <div className="preferences-sync">
         <span>{t("preferencesSync.legacyDescription")}</span>
-        <button type="button" onClick={async () => setImportError(!await importLegacy())}>
+        <button type="button" disabled={currentImport?.pending === true} aria-busy={currentImport?.pending === true} onClick={() => void importCurrent()}>
           {t("preferencesSync.importLegacy")}
         </button>
-        {importError && <span role="alert">{t("preferencesSync.legacyError")}</span>}
+        {currentImport?.error && <span role="alert">{t("preferencesSync.legacyError")}</span>}
       </div>}
     </>
   );
