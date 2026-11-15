@@ -181,6 +181,116 @@ describe("account-scoped preference synchronization", () => {
     }finally{mocks.theme.mockReset();}
   });
 
+  it.each(["current","owner","backend"] as const)("persists a validated PATCH before saved observers can fail or replace scope (%s)",async boundary=>{
+    await ready();
+    const failure=new Error("saved observer failed");let stop=()=>{};
+    stop=usePreferencesStore.subscribe(next=>{
+      if(next.syncStatus!=="saved")return;
+      stop();
+      if(boundary!=="current"){
+        state().bindAccount(boundary==="owner"?"bob":"alice",boundary==="backend"?"https://two.example":undefined);
+        state().set({theme:"replacement-pending"});
+      }
+      throw failure;
+    });
+    try{
+      state().set({theme:"accepted"});await vi.advanceTimersByTimeAsync(1000);
+      expect(JSON.parse(localStorage.getItem(snapshotKey)!)).toEqual({theme:"accepted"});
+      expect(localStorage.getItem(pendingKey)).toBeNull();
+      expect(mocks.update).toHaveBeenCalledTimes(1);
+      if(boundary==="current"){
+        expect(state().syncError).toBe("preferences_apply_failed");
+        await state().retrySync();
+        expect(mocks.update).toHaveBeenCalledTimes(1);
+        expect(state().syncStatus).toBe("saved");
+      }else{
+        expect(state().data).toEqual({theme:"replacement-pending"});
+        expect(state().hasPendingChanges).toBe(true);
+        expect(state().syncError).toBeNull();
+      }
+    }finally{stop();}
+  });
+
+  it("retains an authoritative GET before a loaded observer fails and retries only local application",async()=>{
+    await ready({theme:"old"});
+    mocks.get.mockResolvedValueOnce(ok({theme:"fresh"}));
+    let stop=()=>{};
+    stop=usePreferencesStore.subscribe(next=>{
+      if(next.syncStatus!=="saved"||next.data.theme!=="fresh")return;
+      stop();throw new Error("loaded observer failed");
+    });
+    try{
+      await state().fetchAndApply();
+      expect(JSON.parse(localStorage.getItem(snapshotKey)!)).toEqual({theme:"fresh"});
+      expect(state().syncError).toBe("preferences_apply_failed");
+      await state().retrySync();
+      expect(mocks.get).toHaveBeenCalledTimes(2);
+      expect(mocks.update).not.toHaveBeenCalled();
+      expect(mocks.theme).toHaveBeenLastCalledWith("fresh");
+      expect(state().syncStatus).toBe("saved");
+    }finally{stop();}
+  });
+
+  it("releases a failed saving notification without dispatching or stranding its pending patch",async()=>{
+    await ready();let stop=()=>{};
+    stop=usePreferencesStore.subscribe(next=>{
+      if(next.syncStatus!=="saving")return;
+      stop();throw new Error("saving observer failed");
+    });
+    try{
+      state().set({theme:"pending-before-dispatch"});
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(state().syncError).toBe("preferences_apply_failed");
+      expect(state().hasPendingChanges).toBe(true);
+      expect(JSON.parse(localStorage.getItem(pendingKey)!)).toEqual({theme:"pending-before-dispatch"});
+      expect(mocks.update).not.toHaveBeenCalled();
+      await state().retrySync();
+      expect(mocks.update).toHaveBeenCalledTimes(1);
+      expect(mocks.update.mock.calls[0][0]).toEqual({theme:"pending-before-dispatch"});
+      expect(state().syncStatus).toBe("saved");
+      expect(localStorage.getItem(pendingKey)).toBeNull();
+    }finally{stop();}
+  });
+
+  it("does not assign a retired pre-dispatch writer promise to a replacing account",async()=>{
+    await ready();let stop=()=>{};
+    stop=usePreferencesStore.subscribe(next=>{
+      if(next.syncStatus!=="saving")return;
+      stop();state().bindAccount("bob");state().set({theme:"bob-pending"});
+    });
+    try{
+      state().set({theme:"alice-pending"});await vi.advanceTimersByTimeAsync(1000);
+      expect(mocks.update).not.toHaveBeenCalled();
+      mocks.get.mockResolvedValue(ok({},"bob"));
+      await state().retrySync();
+      expect(mocks.update).toHaveBeenCalledTimes(1);
+      expect(mocks.update.mock.calls[0][0]).toEqual({theme:"bob-pending"});
+      expect(state().accountId).toBe("bob");
+      expect(state().hasPendingChanges).toBe(false);
+      expect(state().syncStatus).toBe("saved");
+    }finally{stop();}
+  });
+
+  it("reserves its writer before saving observers can request another same-account flush",async()=>{
+    await ready();const write=deferred<Response>();
+    mocks.update.mockReturnValueOnce(write.promise);
+    let joined:Promise<void>=Promise.resolve(),stop=()=>{};
+    stop=usePreferencesStore.subscribe(next=>{
+      if(next.syncStatus!=="saving")return;
+      stop();state().set({appearance:{uiScale:130}});joined=state().retrySync();
+    });
+    try{
+      state().set({theme:"first"});await vi.advanceTimersByTimeAsync(1000);
+      expect(mocks.update).toHaveBeenCalledTimes(1);
+      expect(mocks.update.mock.calls[0][0]).toEqual({theme:"first"});
+      write.resolve({success:true});await joined;await settle();
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(mocks.update).toHaveBeenCalledTimes(2);
+      expect(mocks.update.mock.calls[1][0]).toEqual({appearance:{uiScale:130}});
+      expect(state().hasPendingChanges).toBe(false);
+    }finally{stop();write.resolve({success:true});}
+  });
+
   it("fences an old account while the production presenter is still loading", async () => {
     const { applyAccountPreferences } = await import("./applyAccountPreferences");
     const loading = deferred<typeof applyAccountPreferences>();
