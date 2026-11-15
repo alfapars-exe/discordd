@@ -53,8 +53,8 @@
   },
   "pending": [
     "Source-bound Sonar analysis",
-    "New head CI and source scan",
-    "RF17 first-query budget, native/platform and whole-pipeline acceptance"
+    "RF17 first-query budget, native/platform and whole-pipeline acceptance",
+    "79f600db CI (Server run 43773318456)"
   ],
   "note": "Test mock return type corrected after initial tsc failure; final target and build passed.",
   "negativeControl": {
@@ -64,5 +64,17 @@
     "sourceRestored": true,
     "rawPath": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-page-owner-negative.log",
     "sha256": "8a37a963449aa15117657c87fea975a6068dde326eab42299afc1eb1f96f285a"
+  },
+  "selfScan": {
+    "archiveCommit": "f80d3c32",
+    "runtimeSourceEqualsPublished79f600db": true,
+    "runtimeSHA256": "f29dcafeff06e066821c2e09cec99718be7943eb40b3a21a17a23048078c2fa3",
+    "reviewedExactSourceRecords": 51,
+    "reviewLines": 480,
+    "blockingPatternHits": 0,
+    "result": "PASS",
+    "logPath": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-page-f80d3c32-scan.log",
+    "logSHA256": "4ce757293c0e5434c8ee2195b8dfe8278437f708065fd9300c5728793c16ada5",
+    "limit": "Final additional ownership test and documentation were added after this archive; runtime page source is byte-identical. Pattern scan is not a vulnerability absence proof."
   }
 }
