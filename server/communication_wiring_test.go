@@ -1,12 +1,16 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg/email"
+	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/services"
 	"github.com/argeinfina/hichat/ws"
 	"reflect"
 	"testing"
+	"time"
 )
 
 type communicationFixtureLogger struct{ services.P2PAppLogger }
@@ -71,5 +75,25 @@ func TestCommunicationDisabledSenderRetainsOwners(t *testing.T) {
 	group := initCommunicationServices(communicationFixture(t))
 	if group.EmailDelivery == nil || group.P2PCall == nil {
 		t.Fatal("missing communication owner")
+	}
+}
+
+type communicationClaimRecorder struct {
+	repository.EmailDeliveryRepository
+	claims int
+}
+
+func (r *communicationClaimRecorder) ClaimDue(context.Context, time.Time, int) ([]models.EmailDeliveryJob, error) {
+	r.claims++
+	return nil, fmt.Errorf("unexpected claim while sender disabled")
+}
+func TestCommunicationDisabledSenderDoesNotClaimQueuedDelivery(t *testing.T) {
+	deps := communicationFixture(t)
+	repo := &communicationClaimRecorder{EmailDeliveryRepository: deps.Repositories.EmailDelivery}
+	deps.Repositories.EmailDelivery = repo
+	group := initCommunicationServices(deps)
+	delivered, err := group.EmailDelivery.DeliverBatch(context.Background(), time.Now())
+	if err != nil || delivered != 0 || repo.claims != 0 {
+		t.Fatalf("disabled delivery: delivered=%d claims=%d err=%v", delivered, repo.claims, err)
 	}
 }
