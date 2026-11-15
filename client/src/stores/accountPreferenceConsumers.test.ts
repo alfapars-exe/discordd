@@ -64,6 +64,14 @@ afterEach(() => {
 });
 
 describe("account preference consumers", () => {
+  it("persists the complete voice contract without runtime state or store actions", async () => {
+    const expected = { ...defaults, inputDevice: "local-test-mic", masterVolume: 57 };
+    voice.setState({ ...defaults, inputDevice: expected.inputDevice, preMuteVolumes: { runtimePeer: 91 } });
+    voice.getState().setMasterVolume(expected.masterVolume);
+    await vi.advanceTimersByTimeAsync(400);
+    expect(JSON.parse(localStorage.getItem("mqvi_voice_settings")!)).toEqual(expected);
+    expect(sendPreferences).toHaveBeenCalledWith({ voice_settings: { masterVolume: 57 } });
+  });
   it("round-trips every account voice default while excluding every device field", () => {
     const deviceFields = new Set<string>(DEVICE_LOCAL_VOICE_SETTING_KEYS);
     const expected = Object.fromEntries(Object.entries(defaults).filter(([key]) => !deviceFields.has(key)));
