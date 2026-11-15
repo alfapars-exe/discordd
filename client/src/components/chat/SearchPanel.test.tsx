@@ -452,3 +452,22 @@ it("coalesces repeated deletion events while one index removal is pending", asyn
     view.unmount();vi.restoreAllMocks();vi.useRealTimers();
   }
 });
+
+it("distinguishes a failed encrypted search from a successful empty query and recovers", async () => {
+  vi.useFakeTimers();
+  useServerStore.setState(state=>({activeServerId:"srv-1",activeServer:{...state.activeServer!,id:"srv-1",e2ee_enabled:true}}));
+  useE2EEStore.setState({initStatus:"ready"});
+  snapshotReferences.mockRejectedValueOnce(new DOMException("Storage unavailable","QuotaExceededError"));
+  snapshotReferences.mockResolvedValueOnce([]);
+  const view=render(<SearchPanel channelId="ch-1" onClose={()=>{}}/>);
+  try {
+    fireEvent.change(screen.getByRole("textbox"),{target:{value:"first"}});
+    await act(async()=>{await vi.advanceTimersByTimeAsync(300);});
+    expect(screen.getByRole("alert")).toHaveTextContent("searchFailed");
+    expect(screen.queryByText("noSearchResults")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox"),{target:{value:"second"}});
+    await act(async()=>{await vi.advanceTimersByTimeAsync(300);});
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByText("noSearchResults")).toBeInTheDocument();
+  } finally {view.unmount();vi.useRealTimers();}
+});
