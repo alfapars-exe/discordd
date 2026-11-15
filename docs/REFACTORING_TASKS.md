@@ -3629,3 +3629,5 @@ Scoped deletion tam istemci505dosya/5.532başarılı/1atlanan/0başarısız123,5
 Reset e4ffe714 terminalCI36/36SUCCESS ve Sonar21CLOSED/FIXED; ham kontroller refactor-e4ff-terminal-ci-2026-11-16.json içinde. Bu kabul sonraki cachedMessageDeletion kaynağı değildir.
 
 Scoped deletion f6d6e764 dört geç owner-retirement kontratı ekler: channel/DM ve messageCache/metadata response sınırları. Gerçek IndexedDB request success olayı sırasında owner false olur; transaction rollback sonrası source row ve durable intent korunur. Eski e4ffe714 keyStorage gövdesiyle96PASS, finallyrestore/diffboş; yeni kaynakla96PASS. Son modül kapsamı %100satır/fonksiyon, %96,96dal, %98,03statement. Finalglobal lint0hata/2mevcutuyarı, TypeScriptPASS. Yeni dört testli tam koşu60510 ve sonbuild67443 sürüyor; önceki5532koşu sayısı artırılmadı.
+
+Scoped deletion son dört owner-boundary kontratı dahil tam505dosya/5.536başarılı/1atlanan/0başarısız. TypeScript+Vite sonbuildPASS7,29s. Kaynak2b418de1 PR305e gönderildi; ServerCI43776829922 çalışıyor. Yeni kaynak taraması20846, Sonar/nativeCI ve önceki panel timeout kök nedeni açık.

@@ -44,13 +44,12 @@
       "statements": 98.03,
       "branches": 96.96
     },
-    "finalFullWithOwnerCases": "RUNNING session60510",
+    "finalFullWithOwnerCases": "5536 passed / 1 skipped / 0 failed; 505 files",
     "finalBuild": "PASS TypeScript + Vite build (7.29s)"
   },
   "pending": [
     "Source-bound scan/Sonar/CI",
-    "Native IndexedDB transaction and deletion-drain acceptance",
-    "Final full suite and final build terminal results"
+    "Native IndexedDB transaction and deletion-drain acceptance"
   ],
   "evidence": {
     "before": {
@@ -76,7 +75,16 @@
     "ownerAfter": {
       "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-message-deletion-owner-after.log",
       "sha256": "9843787ec97f6649e30946a6d891a1c921d0fcd15d67b0c51ae6c70ee49d89de"
+    },
+    "finalOwnerFull": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-message-deletion-owner-full.log",
+      "sha256": "aef72c01bd2267643ac8a05370dad1c4d37e7e895c80d50d6739ec78b95e9bc5"
     }
   },
-  "published": "2b418de1"
+  "published": "2b418de1",
+  "ci": {
+    "head": "2b418de1",
+    "serverRun": 43776829922,
+    "status": "IN_PROGRESS"
+  }
 }
