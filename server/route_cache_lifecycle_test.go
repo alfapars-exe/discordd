@@ -6,6 +6,8 @@ import (
 	"runtime/pprof"
 	"strconv"
 	"testing"
+
+	"github.com/argeinfina/hichat/testutil"
 )
 
 type failingRouteRegistrar struct {
@@ -46,9 +48,7 @@ func TestRouteInitializationOwnsCacheWorkersUntilSuccessfulReturn(t *testing.T) 
 			if caught != marker {
 				t.Fatalf("registration panic changed: %v", caught)
 			}
-			if after := routeCacheWorkerCount(t); after != before {
-				t.Fatalf("failed registration retained workers: before=%d after=%d", before, after)
-			}
+			testutil.AssertWorkerCount(t, before, func() int { return routeCacheWorkerCount(t) })
 		})
 	}
 	t.Run("successful_handoff", func(t *testing.T) {
@@ -61,9 +61,7 @@ func TestRouteInitializationOwnsCacheWorkersUntilSuccessfulReturn(t *testing.T) 
 		}
 		auth.Stop()
 		perm.Stop()
-		if after := routeCacheWorkerCount(t); after != before {
-			t.Fatalf("returned owners retained workers: before=%d after=%d", before, after)
-		}
+		testutil.AssertWorkerCount(t, before, func() int { return routeCacheWorkerCount(t) })
 	})
 }
 
@@ -73,7 +71,5 @@ func TestRouteInspectionFixturesReleaseCacheWorkers(t *testing.T) {
 		captureRoutes()
 	}
 	t.Run("permission_fixture", TestRoutePermissions_EveryRouteHasADeclaredGate)
-	if after := routeCacheWorkerCount(t); after != before {
-		t.Fatalf("route inspection fixtures retained workers: before=%d after=%d", before, after)
-	}
+	testutil.AssertWorkerCount(t, before, func() int { return routeCacheWorkerCount(t) })
 }
