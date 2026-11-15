@@ -329,7 +329,7 @@ export async function handleDMEvent(msg: WSMessage, isCurrent: () => boolean = (
       }, () => useDMStore.getState().handleDMMessageDelete(dmDelData)], async () => {
         try {await deleteCachedDMMessage(dmDelData.id,dmDelData.dm_channel_id,current);}
         catch {if(current())console.warn("[ws] DM deleted-message cache cleanup failed");}
-      }, current);
+      }, current, { kind: "dm", channelId: dmDelData.dm_channel_id });
       return true;
     }
 

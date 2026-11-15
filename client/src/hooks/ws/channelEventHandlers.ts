@@ -286,7 +286,7 @@ export async function handleChannelEvent(msg: WSMessage, isCurrent: () => boolea
             if (current()) console.warn("[ws] Channel deleted-message cache cleanup failed");
           }
         }
-      }, current);
+      }, current, { kind: "channel", channelId: delData.channel_id });
       return true;
     }
 
