@@ -3631,3 +3631,9 @@ Reset e4ffe714 terminalCI36/36SUCCESS ve Sonar21CLOSED/FIXED; ham kontroller ref
 Scoped deletion f6d6e764 dört geç owner-retirement kontratı ekler: channel/DM ve messageCache/metadata response sınırları. Gerçek IndexedDB request success olayı sırasında owner false olur; transaction rollback sonrası source row ve durable intent korunur. Eski e4ffe714 keyStorage gövdesiyle96PASS, finallyrestore/diffboş; yeni kaynakla96PASS. Son modül kapsamı %100satır/fonksiyon, %96,96dal, %98,03statement. Finalglobal lint0hata/2mevcutuyarı, TypeScriptPASS. Yeni dört testli tam koşu60510 ve sonbuild67443 sürüyor; önceki5532koşu sayısı artırılmadı.
 
 Scoped deletion son dört owner-boundary kontratı dahil tam505dosya/5.536başarılı/1atlanan/0başarısız. TypeScript+Vite sonbuildPASS7,29s. Kaynak2b418de1 PR305e gönderildi; ServerCI43776829922 çalışıyor. Yeni kaynak taraması20846, Sonar/nativeCI ve önceki panel timeout kök nedeni açık.
+
+Scoped deletion18744b6c değişmez kaynak taraması51exact/480review/0blockingPASS. Sonraki dört ownership testi/doküman arşive dahil değil; runtime modülü değişmedi. Yeni2b418de1CI/Sonar/native kabulü sürüyor.
+
+### RF26 — arkadaşlık isteği politika kapısı (2026-11-16)
+
+18bbfe14 yedi davranış karakterizasyonu ekler: iki backend error/cancel cause, mevcutaccepted/outgoingpending/blocked/mutualpending yollarında policy bypass ve izinli gate öncesi persistence yasağı. Mevcut39+yenirecord9 ile48pass; önce/sonra test isimleri/çoklukları eşit. cc9760ea yalnız checkRequestPolicy yardımcısını ayırır; gate mevcut ilişki kararlarından sonra ve create/publicationdan önce kalır. Sentinel/wrapped cause/error metni ve publicAPI aynı. TamWindowsservices1.941pass/41skip/0fail54,432s; vet ve build PASS. LinuxGo1.26.11/CGO1race count20 değişmezserver arşivinden63225 sürüyor. Yeni kaynakCI/Sonar/tarama ve birleşik kabul açık. Receipt refactor-friendship-policy-gate-2026-11-16.json.

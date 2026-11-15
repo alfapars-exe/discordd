@@ -86,5 +86,15 @@
     "head": "2b418de1",
     "serverRun": 43776829922,
     "status": "IN_PROGRESS"
+  },
+  "selfScan": {
+    "archive": "18744b6c",
+    "result": "PASS",
+    "reviewedExactSourceRecords": 51,
+    "reviewLines": 480,
+    "blockingPatternHits": 0,
+    "log": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-message-deletion-18744b6c-scan.log",
+    "sha256": "1a1fe3c1e0fe50311b8956da99ef19bfa09a4ebc15bcc52d09cd1882b032875c",
+    "limit": "Runtime module source unchanged since archive; final four ownership tests/docs were added later. Pattern scan is not vulnerability absence proof."
   }
 }
