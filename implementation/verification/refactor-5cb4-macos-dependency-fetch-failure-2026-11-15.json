@@ -14,5 +14,12 @@
     "macosJob": 132659548624,
     "observedStatus": "in_progress",
     "result": "not yet established"
+  },
+  "terminalFollowup": {
+    "attempt": 2,
+    "macosJob": 132659548624,
+    "conclusion": "success",
+    "sourceUnchanged": true,
+    "interpretation": "Original retrieval failure did not recur. No source change required; no underlying infrastructure root cause established."
   }
 }
