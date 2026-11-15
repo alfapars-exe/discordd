@@ -1,0 +1,51 @@
+{
+  "scope": "Reentrant changes within the same preference binding after destination notifications.",
+  "sourceRevision": "5a5194052730fecd2005622b286aaaff87cc0b8d",
+  "red": {
+    "failed": 6,
+    "passed": 13,
+    "log": "hichat-preferences-reentrant-leaves-red.log",
+    "behavior": "Newer same-binding state remained in memory but old setter/hydration/reset persisted old values;old setters could overwrite pending newer values."
+  },
+  "targeted": {
+    "passed": 188,
+    "files": 6,
+    "seconds": 4.11,
+    "log": "hichat-preferences-reentrant-leaves-green.log",
+    "note": "Before one additional explicit user-reset contract case;final contract run and full suite cover that case."
+  },
+  "behavior": [
+    "Persist/apply the post-notification current accessibility snapshot rather than merging the old patch back over it.",
+    "Queue only setter leaves whose value still matches after notification;unrelated newer leaves and still-owned outer leaves both survive.",
+    "Time-format setter/hydration/reset persist current state;superseded setter value is not queued.",
+    "Strengthened account/backend cases directly assert the one surviving persisted pending queue and exact replacement patch.",
+    "Explicit user reset preserves a newer leaf while queueing unaffected default leaves."
+  ],
+  "sha256": {
+    "client/src/stores/accessibilityStore.ts": "492b928d6f27abb55b6fae22aa61dad9ff756575a00f18d84f4c56ca4e6bd69e",
+    "client/src/stores/timeFormatStore.ts": "438d0abe7ec82c4dfa07dbdf26150c5cf416e6e72b0be1450d269fe2632941ee",
+    "client/src/stores/preferenceDestinationScope.test.ts": "dbd75a244a48583924014c93f58074cf2f5b2c11786152904408650e0cf92839"
+  },
+  "limits": [
+    "Real synchronous Zustand/destination/preferences behavior with no-op bootstrap presentation;not real browser authentication/native/provider acceptance.",
+    "Other destination methods and whole RF13/offline/native/physical/project acceptance remain open.",
+    "No claim that general event backpressure or active search unique-ID memory frontier is complete."
+  ],
+  "finalContract": {
+    "passed": 20,
+    "seconds": 5.91,
+    "log": "hichat-preferences-reentrant-leaves-contract-final.log"
+  },
+  "fullClientCoverage": {
+    "files": 487,
+    "passed": 5109,
+    "skipped": 1,
+    "statementPercent": 67.41,
+    "branchPercent": 64.61,
+    "functionPercent": 61.59,
+    "linePercent": 68.47,
+    "log": "hichat-preferences-reentrant-leaves-coverage.log"
+  },
+  "build": "actual tsc-b/VitePASS3.29s; existing chunk warning",
+  "lint": "changed accessibility/time-format stores and contract test lintPASS"
+}
