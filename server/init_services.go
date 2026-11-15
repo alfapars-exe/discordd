@@ -232,8 +232,8 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	messageService, uploadService := channelMessaging.Message, channelMessaging.Upload
 	channelMessageNotificationWorker, deliveryDB := channelMessaging.Notifications, channelMessaging.DeliveryDB
 
-	profileUpdateNotifier := services.NewProfileUpdateNotifier(repos.Preferences, repos.Friendship, repos.Notification, hub)
-	onlineFriendNotifier := services.NewOnlineFriendNotifier(repos.User, repos.Preferences, repos.Friendship, repos.Notification, hub, hub, repos.Notification)
+	presenceNotifications := initPresenceNotificationServices(presenceNotificationDependencies{Repositories: repos, Hub: hub})
+	profileUpdateNotifier, onlineFriendNotifier := presenceNotifications.ProfileUpdates, presenceNotifications.OnlineFriends
 	rollback = append(rollback, onlineFriendNotifier.Stop)
 	privacy := initPrivacyPolicies(repos, hub)
 	profileAudiencePolicy, gameActivityPolicy := privacy.Profile, privacy.GameActivity
