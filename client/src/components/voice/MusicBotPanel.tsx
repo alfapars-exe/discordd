@@ -1,3 +1,4 @@
+import { VOICE_PEER_VOLUME_RANGE } from "../../stores/voicePreferenceMaps";
 /**
  * MusicBotPanel — Per-channel music bot UI tile.
  *
@@ -458,8 +459,8 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
         <span>{t("personalVolume")}</span>
         <input
           type="range"
-          min={0}
-          max={200}
+          min={VOICE_PEER_VOLUME_RANGE[0]}
+          max={VOICE_PEER_VOLUME_RANGE[1]}
           step={5}
           value={musicVolume}
           aria-label={t("personalVolume")}

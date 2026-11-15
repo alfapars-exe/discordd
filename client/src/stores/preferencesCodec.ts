@@ -1,3 +1,4 @@
+import { isVoicePeerMap, sanitizeVoicePeerMap, VOICE_PEER_MAP_KEYS } from "./voicePreferenceMaps";
 import { sanitizeAccessibilityPreferences } from "../utils/accessibilityPreferenceCodec";
 import { DEFAULT_ACCESSIBILITY } from "../utils/accessibilityPreferenceDefaults";
 import { DEVICE_LOCAL_VOICE_SETTING_KEYS } from "./voicePreferenceScope";
@@ -106,7 +107,7 @@ function validField(key: string, value: unknown): boolean {
     const entries = Object.entries(value);
     return entries.length <= 3 && entries.every(([scope, mode]) => ["friendDMs", "otherDMs", "channels"].includes(scope) && ["show", "blur", "block"].includes(mode as string));
   }
-  return ["userVolumes", "screenShareVolumes", "localMutedUsers"].includes(key) && object(value);
+  return isVoicePeerMap(key) && object(value);
 }
 function cachedGIFs(raw: unknown[]): PreferencesData[] {
   const seen = new Set<string>();
@@ -135,8 +136,8 @@ export function cacheable(data: PreferencesData): PreferencesData {
     const allowed: PreferencesData = namespace === "accessibility"
       ? { ...sanitizeAccessibilityPreferences(value) }
       : Object.fromEntries(Object.entries(value).filter(([k, v]) => fields.has(k) && validField(k, v)));
-    for (const key of ["userVolumes", "screenShareVolumes", "localMutedUsers"]) {
-      if (object(allowed[key])) allowed[key] = Object.fromEntries(Object.entries(allowed[key]).filter(([k, v]) => k.length > 0 && k.length <= 128 && (key === "localMutedUsers" ? typeof v === "boolean" : typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 200)));
+    for (const key of VOICE_PEER_MAP_KEYS) {
+      if (object(allowed[key])) allowed[key] = sanitizeVoicePeerMap(key, allowed[key]);
     }
     if (nonempty(allowed)) out[namespace] = allowed;
   }

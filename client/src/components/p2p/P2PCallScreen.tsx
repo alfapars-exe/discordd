@@ -1,3 +1,4 @@
+import { VOICE_PEER_VOLUME_RANGE } from "../../stores/voicePreferenceMaps";
 import P2PRemoteVideos from "../../video/P2PRemoteVideos";
 /**
  * P2PCallScreen — Main P2P call screen.
@@ -197,8 +198,8 @@ function P2PCallScreen() {
 
           <div className="p2p-duration">{formatDuration(callDuration)}</div>
           {ownsCall && peer && <div className="p2p-personal-audio">
-            <label>{tv("p2pMicrophoneVolume")}<input aria-label={tv("p2pMicrophoneVolume")} type="range" min={0} max={200} value={micVolumes[peer] ?? 100} onChange={event => {if(controlsCurrent())setMicVolume(peer, Number(event.target.value));}} /></label>
-            <label>{tv("p2pScreenAudioVolume")}<input aria-label={tv("p2pScreenAudioVolume")} type="range" min={0} max={200} value={shareVolumes[peer] ?? 100} onChange={event => {if(controlsCurrent())setShareVolume(peer, Number(event.target.value));}} /></label>
+            <label>{tv("p2pMicrophoneVolume")}<input aria-label={tv("p2pMicrophoneVolume")} type="range" min={VOICE_PEER_VOLUME_RANGE[0]} max={VOICE_PEER_VOLUME_RANGE[1]} value={micVolumes[peer] ?? 100} onChange={event => {if(controlsCurrent())setMicVolume(peer, Number(event.target.value));}} /></label>
+            <label>{tv("p2pScreenAudioVolume")}<input aria-label={tv("p2pScreenAudioVolume")} type="range" min={VOICE_PEER_VOLUME_RANGE[0]} max={VOICE_PEER_VOLUME_RANGE[1]} value={shareVolumes[peer] ?? 100} onChange={event => {if(controlsCurrent())setShareVolume(peer, Number(event.target.value));}} /></label>
             {!peerAudioSupported && <p role="status">{tv("p2pScreenAudioPeerUnsupported")}</p>}
             <label><input type="checkbox" checked={audioRequested} disabled={!peerAudioSupported || isScreenSharing || screenPending} onChange={event=>{const live=useP2PCallStore.getState();if(controlsCurrent()&&live.peerScreenAudioSupported&&!live.isScreenSharing&&!live.isScreenSharePending)setAudioRequested(event.target.checked);}} />{tv(isElectron()?"privateScreenAudioWindowsConsent":"privateScreenAudioBrowserConsent")}</label>
             <p role="status">{tv(audioStatus==="starting"?"privateScreenAudioStarting":audioStatus==="shared"?"privateScreenAudioShared":audioStatus==="not_returned"?"privateScreenAudioNotReturned":audioStatus==="unavailable"?"privateScreenAudioUnavailable":audioStatus==="ended"?"p2pScreenAudioEnded":"p2pScreenAudioOff")}</p>

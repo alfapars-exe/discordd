@@ -1,3 +1,4 @@
+import { VOICE_PEER_VOLUME_PRESETS } from "../../stores/voicePreferenceMaps";
 import { useRef, useState, type MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useVoiceStore } from "../../stores/voiceStore";
@@ -38,7 +39,7 @@ export default function MusicBotParticipant({ serverId, channelId }: Props) {
       { label: t("playSong"), disabled: busy, onClick: () => { if (current()) { setQuery(""); setPlayScope({ ...scope, current }); } } },
       { label: t(state?.is_paused ? "resume" : "pause"), disabled: busy || !state?.current_track, onClick: () => { void run(state?.is_paused ? "/resume" : "/pause", current); } },
       { label: t("playNext"), disabled: busy || !state?.current_track, onClick: () => { void run("/skip", current); } },
-      { label: `${t("personalVolume")} (${volume}%)`, onClick: () => {}, children: [0,25,50,75,100,150,200].map(value => ({ label: `${value}%`, onClick: () => { if (current()) useVoiceStore.getState().setUserVolume(`__music_bot__:${channelId}`, value); } })) },
+      { label: `${t("personalVolume")} (${volume}%)`, onClick: () => {}, children: VOICE_PEER_VOLUME_PRESETS.map(value => ({ label: `${value}%`, onClick: () => { if (current()) useVoiceStore.getState().setUserVolume(`__music_bot__:${channelId}`, value); } })) },
       { label: t("stop"), separator: true, danger: true, disabled: busy, onClick: () => { void run("/stop", current); } },
     ] });
   };

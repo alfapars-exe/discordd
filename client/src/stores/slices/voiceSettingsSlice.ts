@@ -1,3 +1,4 @@
+import { clampVoicePeerVolume, isVoicePeerKey } from "../voicePreferenceMaps";
 /**
  * voiceSettingsSlice — persisted voice settings (input mode, PTT, volumes, devices, etc.)
  *
@@ -323,6 +324,15 @@ export const createVoiceSettingsSlice: StateCreator<
     saveSettings(currentSettings(get()));
   };
 
+  const setPeerVolume = (field: "userVolumes" | "screenShareVolumes", userId: string, volume: number) => {
+    if (!isVoicePeerKey(userId)) return;
+    const normalized = clampVoicePeerVolume(volume);
+    if (normalized === undefined) return;
+    const patch: Partial<Pick<VoiceSettings, "userVolumes" | "screenShareVolumes">> = { [field]: { ...get()[field], [userId]: normalized } };
+    set(patch);
+    saveSettings(currentSettings(get()));
+  };
+
   return {
     inputMode: initial.inputMode,
     pttKey: initial.pttKey,
@@ -392,19 +402,9 @@ export const createVoiceSettingsSlice: StateCreator<
 
     setMicSensitivity: (value) => setNumericPreference("micSensitivity", value),
 
-    setUserVolume: (userId, volume) => {
-      if (typeof userId !== "string" || !userId || userId.length > 128 || ["__proto__", "constructor", "prototype"].includes(userId)) return;
-      if (!Number.isFinite(volume)) return;
-      set({ userVolumes: { ...get().userVolumes, [userId]: Math.max(0, Math.min(200, volume)) } });
-      saveSettings(currentSettings(get()));
-    },
+    setUserVolume: (userId, volume) => setPeerVolume("userVolumes", userId, volume),
 
-    setScreenShareVolume: (userId, volume) => {
-      if (typeof userId !== "string" || !userId || userId.length > 128 || ["__proto__", "constructor", "prototype"].includes(userId)) return;
-      if (!Number.isFinite(volume)) return;
-      set({ screenShareVolumes: { ...get().screenShareVolumes, [userId]: Math.max(0, Math.min(200, volume)) } });
-      saveSettings(currentSettings(get()));
-    },
+    setScreenShareVolume: (userId, volume) => setPeerVolume("screenShareVolumes", userId, volume),
 
     setInputDevice: (deviceId) => {
       set({ inputDevice: deviceId });
@@ -547,7 +547,7 @@ export const createVoiceSettingsSlice: StateCreator<
     setDeepfilterSuppression: (value) => setNumericPreference("deepfilterSuppression", value),
 
     toggleLocalMute: (userId: string) => {
-      if (typeof userId !== "string" || !userId || userId.length > 128 || ["__proto__", "constructor", "prototype"].includes(userId)) return;
+      if (!isVoicePeerKey(userId)) return;
       const { localMutedUsers, preMuteVolumes, userVolumes } = get();
       const isCurrentlyMuted = localMutedUsers[userId] ?? false;
 
