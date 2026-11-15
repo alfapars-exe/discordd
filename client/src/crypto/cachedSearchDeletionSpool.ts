@@ -120,8 +120,8 @@ export async function openCachedSearchDeletionPool(): Promise<SearchDeletionPool
           } catch (error) { fail(error); throw error; }
         },
         async drain(remove, signal) {
-          if (draining) await draining.catch(() => {});
           check(signal);
+          const previous = draining;
           const run = async () => {
             for (;;) {
               await flush(signal);
@@ -134,7 +134,9 @@ export async function openCachedSearchDeletionPool(): Promise<SearchDeletionPool
               await transaction("readwrite", async tx => { await Promise.all(ids.map(async messageId => tx.objectStore("refs").delete([id, messageId]))); }, signal);
             }
           };
-          const task = Promise.resolve().then(run); draining = task;
+          // Reserve the tail before yielding. Multiple waiters must not all
+          // resume the same predecessor and consume its unacknowledged rows.
+          const task = (previous ? previous.catch(() => {}) : Promise.resolve()).then(run); draining = task;
           try { await task; } finally { if (draining === task) draining = null; }
         },
         dispose() {
