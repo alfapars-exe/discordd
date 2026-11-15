@@ -535,7 +535,8 @@ describe("useWebSocket offline/online handling", () => {
       const current = lastSocket();
       act(() => current.onopen?.());
       await act(async () => { retired.onclose?.({ code: 1006, reason: "", wasClean: false } as CloseEvent); });
-      expect(view.result.current.connectionStatus).toBe("connected");
+      // The ready-event handler is mocked here; socket open retains connecting.
+      expect(view.result.current.connectionStatus).toBe("connecting");
       await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
       expect(current.send).toHaveBeenCalledWith(JSON.stringify({ op: "heartbeat" }));
       expect(retired.send).not.toHaveBeenCalled();
