@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"runtime"
 	"testing"
 
 	"github.com/argeinfina/hichat/config"
@@ -45,8 +44,8 @@ func TestServiceInitializationReleasesCacheOnEarlyConfigFailure(t *testing.T) {
 		defer func() { caught = recover() }()
 		initServices(db, repos, ws.NewHub(), nil, nil, nil)
 	}()
-	if _, ok := caught.(runtime.Error); !ok {
-		t.Fatalf("did not reach configuration dereference failure: %v", caught)
+	if caught != "voice runtime requires Config" {
+		t.Fatalf("did not reach configuration validation failure: %v", caught)
 	}
 	if after := routeCacheWorkerCount(t); after != before {
 		t.Fatalf("early initialization retained cache workers: before=%d after=%d", before, after)

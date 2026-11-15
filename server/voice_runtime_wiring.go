@@ -29,6 +29,31 @@ type voiceRuntimeServices struct {
 // initVoiceRuntimeServices installs mutually dependent media hooks before voice
 // allocates its fanout worker; runtime shutdown remains owned by the caller.
 func initVoiceRuntimeServices(deps voiceRuntimeDependencies) voiceRuntimeServices {
+	for _, input := range []struct {
+		name  string
+		value any
+	}{
+		{"Repositories", deps.Repositories}, {"Hub", deps.Hub}, {"Permissions", deps.Permissions}, {"Audit", deps.Audit}, {"Logger", deps.Logger}, {"Config", deps.Config},
+	} {
+		if missingCompositionInput(input.value) {
+			panic("voice runtime requires " + input.name)
+		}
+	}
+	for _, input := range []struct {
+		name  string
+		value any
+	}{
+		{"Channel", deps.Repositories.Channel}, {"LiveKit", deps.Repositories.LiveKit}, {"Server", deps.Repositories.Server}, {"MemberTimeout", deps.Repositories.MemberTimeout}, {"Ban", deps.Repositories.Ban},
+		{"Entrance", deps.Repositories.Entrance}, {"Role", deps.Repositories.Role}, {"User", deps.Repositories.User}, {"MusicSession", deps.Repositories.MusicSession},
+	} {
+		if missingCompositionInput(input.value) {
+			panic("voice runtime requires repository " + input.name)
+		}
+	}
+	// SQLite deliberately uses the portable voice access path.
+	if deps.Repositories.VoiceAccess != nil && missingCompositionInput(deps.Repositories.VoiceAccess) {
+		panic("voice runtime voice access provider is typed nil")
+	}
 	repos, permissions, hub := deps.Repositories, deps.Permissions, deps.Hub
 	var group voiceRuntimeServices
 	group.Voice = services.NewVoiceService(repos.Channel, repos.LiveKit, permissions, hub, hub, repos.Server, deps.EncryptionKey, repos.MemberTimeout, repos.Ban, deps.Audit,
