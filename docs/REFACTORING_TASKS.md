@@ -3094,3 +3094,14 @@ Fail-first real React panel tests delivered1000same-ID delete store updates whil
 ### RF03/RF30 — terminalb24 and pending-deletion delivery (2026-11-15)
 
 b24fb228f4e0b9eaf4b5f332a4a69bfa788ff4a6 completed36/36checks and all3workflowsSUCCESS,including the new native IndexedDB staging/quota/cancel/source-writer contracts. Snapshot:implementation/verification/refactor-b24-terminal-ci-2026-11-15.json. Pending same-ID deletion coalescing is delivered with its own37targeted and full5050passed1skipped client proofs,requiring independent new-head CI. Distinct-ID frontier design must honor actual event-before-cache-cleanup ordering in channel/DM WS handlers;aborting/restarting before writes settle could resurrect cached results. Full RF17/project/platform acceptance remains open;PR305 stays draft.
+
+
+### RF17 — avoid retaining hidden-page React deletion updates (2026-11-15)
+
+Fail-first native production React probe gated completed snapshot adoption and delivered10000distinct missing-ID store events. Baseline channel settled-versus-disposed heap exceeded512KiB (1154000bytes), failing the new explicit budget. Both panels now skip immediate row-filter state updates while the search spinner hides results; existing tombstones still reconcile the incoming page. Visible-page deletion remains immediate. Candidate active growth at1000/5000/10000events: channel45908/214188/416060bytes,DM49536/217084/418700bytes,down from roughly1.39MB at10000. Settled-minus-disposed channel-12468/DM71784bytes; both preserve267matches/exact first25rows and dispose cleanly. One controlled diagnostic run,actual native IndexedDB and production React;not full WS/cache-writer pipeline,physical memory bound or nine-sample latency comparison. The unique-ID frontier remains linear and open; no unsafe restart before cache writers finish. Targeted37tests and changed-files lint pass;actual tsc-b/Vite build passes. Receipt:implementation/verification/refactor-search-panel-retention-2026-11-15.json.
+
+### RF03/RF30 — terminal3db CI (2026-11-15)
+
+3db96c8f completed36/36checks and all3workflow runsSUCCESS, independently confirmed from current remote state. Snapshot:implementation/verification/refactor-3db-terminal-ci-2026-11-15.json. PR305 remains draft;whole-project/native/physical acceptance is open.
+
+Retention delivery validation on adb2543e: full485files5050passed1skipped110.96s; statement67.28/branch64.52/function61.49/line68.35%. Native budget regression ee9b94b6 and product fix adb2543e are separate commits. Distinct pending-ID bound and whole RF17 acceptance remain open.
