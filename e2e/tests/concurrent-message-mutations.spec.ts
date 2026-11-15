@@ -80,3 +80,61 @@ test("two sessions converge after sends overlap an edit and a deletion", async (
     await Promise.all([ownerContext.close(), memberContext.close()]);
   }
 });
+
+
+test("an offline session heals missed sends, edits and deletions before receiving live messages", async ({ browser }) => {
+  const ownerContext = await browser.newContext();
+  const memberContext = await browser.newContext();
+  try {
+    const owner = await ownerContext.newPage();
+    const member = await memberContext.newPage();
+    let memberSockets = 0;
+    let closedMemberSockets = 0;
+    member.on("websocket", socket => {
+      if (new URL(socket.url()).pathname !== "/ws") return;
+      memberSockets++;
+      socket.on("close", () => { closedMemberSockets++; });
+    });
+    await loginAsNotificationOwner(owner);
+    await resetChannelNotificationFixture(owner);
+    const fixture = readChannelNotificationFixture();
+    await loginAsNotificationRecipient(member);
+    await Promise.all([openChannel(owner, fixture.serverName), openChannel(member, fixture.serverName)]);
+    const stamp = Date.now();
+    const original = `before-offline-original-${stamp}`;
+    const revised = `after-offline-revised-${stamp}`;
+    const removed = `removed-while-offline-${stamp}`;
+    const missed = [`missed-one-${stamp}`, `missed-two-${stamp}`];
+    const live = `live-after-reconnect-${stamp}`;
+    await send(owner, original);
+    await send(owner, removed);
+    for (const text of [original, removed]) await expect(row(member, text)).toHaveCount(1);
+    const initialSockets = memberSockets;
+    expect(initialSockets).toBeGreaterThan(0);
+    await memberContext.setOffline(true);
+    await expect.poll(() => member.evaluate(() => navigator.onLine)).toBe(false);
+    await expect.poll(() => closedMemberSockets).toBeGreaterThan(0);
+    await edit(owner, original, revised);
+    await remove(owner, removed);
+    for (const text of missed) await send(owner, text);
+    // This client missed the actual server events, rather than rendering a
+    // page that was never loaded or receiving a synthetic store mutation.
+    for (const text of [original, removed]) await expect(row(member, text)).toHaveCount(1);
+    for (const text of [revised, ...missed]) await expect(row(member, text)).toHaveCount(0);
+    await memberContext.setOffline(false);
+    await expect.poll(() => memberSockets).toBeGreaterThan(initialSockets);
+    async function expectHealed() {
+      for (const text of [revised, ...missed]) await expect(row(member, text)).toHaveCount(1);
+      for (const text of [original, removed]) await expect(row(member, text)).toHaveCount(0);
+    }
+    await expectHealed();
+    await send(owner, live);
+    await expect(row(member, live)).toHaveCount(1);
+    await member.reload();
+    await expect(messageList(member)).toBeVisible();
+    await expectHealed();
+    await expect(row(member, live)).toHaveCount(1);
+  } finally {
+    await Promise.all([ownerContext.close(), memberContext.close()]);
+  }
+});
