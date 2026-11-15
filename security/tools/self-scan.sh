@@ -36,7 +36,7 @@ elif ! "$SELF_SCAN_PYTHON" "$REVIEWED_FP_HELPER" validate --root "$SRC" --manife
   FAIL=1
 fi
 
-INC='--include=*.ts --include=*.tsx --include=*.js --include=*.jsx'
+INC='--include=*.ts --include=*.tsx --include=*.js --include=*.jsx --include=*.mjs --include=*.cjs'
 INC_GO='--include=*.go'
 INC_CI='--include=*.yml --include=*.yaml'
 INC_SH='--include=*.sh'

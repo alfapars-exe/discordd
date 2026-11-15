@@ -49,12 +49,12 @@ SUPPRESSION_LINT = [
 ]
 
 PATHS = {
-    "js": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"],
+    "js": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs"],
     "go": ["**/*.go"],
     "ci": ["**/*.yml", "**/*.yaml"],
     "sh": ["**/*.sh"],
     # katlanmış çok dilli kurallar (FOLD sonucu)
-    "any": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.go", "**/*.sh"],
+    "any": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs", "**/*.go", "**/*.sh"],
 }
 # build/ dışlanmaz: electron-builder hook'ları (build/after-pack.js) birinci
 # taraf koddur; CI self-scan da build/'i tarar (EXC listesinden çıkarıldı).

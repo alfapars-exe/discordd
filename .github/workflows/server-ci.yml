@@ -351,6 +351,9 @@ jobs:
       - name: Guardrail drift check (SECURE-CODING §0.12.3)
         run: python3 security/tools/sync_agent_guardrail.py --check
 
+      - name: Self-scan and guardrail regression tests
+        run: python3 -m unittest security.tools.test_self_scan_reviewed_fp security.tools.test_sync_agent_guardrail
+
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.26.11" # Patched net/http: GO-2026-6859.
