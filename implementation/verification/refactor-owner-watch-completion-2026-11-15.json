@@ -33,9 +33,9 @@
   },
   "priorCI": {
     "sourceRevision": "42de5382a49fa7bab2998364ced99fb8de4b4048",
-    "serverRun": 43740933763,
-    "observed": "Linux WebKit native stepSUCCESS,production crypto recovery stepSUCCESS,SonarCloudSUCCESS;whole run still inprogress",
-    "remaining": "Terminal all-check archive before new push"
+    "checks": 36,
+    "success": 36,
+    "archive": "refactor-42de-terminal-ci-2026-11-15.json"
   },
   "remaining": [
     "New-head CI after push",

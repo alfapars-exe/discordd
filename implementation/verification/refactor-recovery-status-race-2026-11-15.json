@@ -136,8 +136,15 @@
   },
   "cleanup": "Owned e1c2b84cd7223ba9 fixture image identity verified,container removed;developer services preserved. No recursive temp deletion.",
   "remaining": [
-    "Push and new-head CI including Sonar and Linux WebKit native gate",
-    "Windows/WebKit30second contract throughput failure remains diagnostic limitation",
+    "Windows/WebKit measured30second throughput limitation",
     "Physical/native/whole-pipeline acceptance and RF01-RF30 remain open"
-  ]
+  ],
+  "followupCI": {
+    "sourceRevision": "42de5382a49fa7bab2998364ced99fb8de4b4048",
+    "checks": 36,
+    "success": 36,
+    "productionRecovery": "SUCCESS,no flaky retry accepted",
+    "sonarCloud": "SUCCESS",
+    "archive": "refactor-42de-terminal-ci-2026-11-15.json"
+  }
 }
