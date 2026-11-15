@@ -28,6 +28,7 @@ import (
 var dmLogger = logx.Component("service.dm")
 
 type DMService interface {
+	DMDeviceRosterAccess
 	GetOrCreateChannel(ctx context.Context, userID, otherUserID string) (*models.DMChannelWithUser, error)
 	// GetOrCreateSelfChannel is the "notes to self" DM (dm_self.go): the
 	// one channel whose two participants are the same user.
