@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"time"
 
 	"github.com/argeinfina/hichat/config"
 	"github.com/argeinfina/hichat/middleware"
@@ -165,7 +164,7 @@ type RateLimiters struct {
 //
 // reachabilityReporter is the readiness cache (constructed in main.go BEFORE
 // this call, specifically so it can be threaded through to
-// services.NewMetricsCollector below) — nil-safe, so tests/callers that
+// the operational composition group) — nil-safe, so tests/callers that
 // don't care about readiness integration can pass nil.
 type serviceHub interface {
 	GameActivityEpoch() string
@@ -296,10 +295,12 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	// channelPermService above) so it could be passed as a constructor
 	// parameter to voice/channel/message/member/role/server services.
 
-	metricsHistoryService := services.NewMetricsHistoryService(repos.MetricsHistory, repos.LiveKit)
-	feedbackService := services.NewFeedbackService(repos.Feedback)
-	feedbackService.SetUploadDir(cfg.Upload.Dir)
-	feedbackUploadService := services.NewFeedbackUploadService(repos.Feedback, cfg.Upload.Dir, cfg.Upload.MaxSize)
+	operations := initOperationalServices(operationalDependencies{
+		Repositories: repos, Config: cfg, ScreenShares: voiceService, Reachability: reachabilityReporter,
+	})
+	metricsHistoryService, feedbackService, feedbackUploadService := operations.History, operations.Feedback, operations.FeedbackUpload
+	metricsCollector := operations.Collector
+	rollback = append(rollback, metricsCollector.Stop)
 	expressions := initExpressionAssetServices(expressionAssetDependencies{
 		Repositories: repos, Hub: hub, Voice: voiceService, Emoji: emojiService,
 		UploadDir: cfg.Upload.Dir, MaxUploadSize: cfg.Upload.MaxSize,
@@ -312,15 +313,6 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 		MusicRetirement: musicBotService, EncryptionKey: encryptionKey,
 	})
 	authService, mfaService, emailVerificationService := accountSecurity.Auth, accountSecurity.MFA, accountSecurity.EmailVerification
-
-	metricsCollector := services.NewMetricsCollector(
-		repos.LiveKit, repos.MetricsHistory,
-		5*time.Minute,
-		30,
-		cfg.HetznerAPIToken,
-		voiceService,
-		reachabilityReporter,
-	)
 
 	wsTicketService := services.NewWSTicketService()
 	rollback = append(rollback, wsTicketService.Stop)
