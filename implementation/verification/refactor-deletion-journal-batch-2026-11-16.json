@@ -26,7 +26,6 @@
     }
   },
   "pending": [
-    "New-source CI/Sonar/scan",
     "Native/platform whole pipeline acceptance"
   ],
   "separatePublishedHeadFailure": {
@@ -72,5 +71,11 @@
     "log": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-journal-1dbb9750-scan.log",
     "sha256": "7c38f186e7d8179f745a771e922fef16bb76d5680582ec67805b7445a1484ff1",
     "limit": "Pattern scan does not establish vulnerability absence"
+  },
+  "ci": {
+    "head": "1dbb9750",
+    "checks": "36/36 SUCCESS",
+    "serverRun": 43774484351,
+    "receipt": "refactor-1dbb-terminal-ci-2026-11-16.json"
   }
 }

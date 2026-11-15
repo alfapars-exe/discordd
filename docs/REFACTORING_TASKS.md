@@ -3611,3 +3611,7 @@ Journal sıralama düzeltmesi sonrası tam istemci504dosya/5.522başarılı/1atl
 Reset aşamaları son yerel tam koşu505dosya/5.529başarılı/1atlanan/0başarısız; TypeScript+Vite build PASS(1,71s). Henüz yeni head CI veya native/runtime kabulü değildir.
 
 Reset için databases() API olmayan browser ve başlangıçta retired owner sınırları eklendi. Dokuz reset testi + snapshot sözleşmeleri, 1dbb9750 eski reset kaynağıyla32PASS; kaynak finally içinde geri yüklenip git diff boş doğrulandı. Güncel dört dosyada67PASS. Bu iki ek test önceki5.529tam koşuya dahil değildi; tam sayı artırılmadı. Kanıt receipt içinde baseline/candidate log hashleriyle bağlı.
+
+1dbb9750 journal teslimi terminal36/36CI SUCCESS; PostgreSQL, tam Playwright ve sekiz race parçası dahil. refactor-1dbb-terminal-ci-2026-11-16.json ham kontrolleri tutar. Önceki pending-panel timeout tekrarlanmadı; kök neden kapatılmadı.
+
+Reset ek davranış düzeltmesi: 77700924 senkron dispose callback throw durumunda diğer cleanup ve source resetin atlandığını gösteren RED regresyon ekler. 3e31c6a4 map callbackini async sararak sync throwu allSettled reddine dönüştürür; callback çağrı sırası korunur. Sonrasında68ilgili testPASS. Ayrıştırma ve davranış düzeltmesi ayrı commitlerdir. Son full40305 ve lint/build27327 çalışıyor. d91d3601 taraması bu ek fixi kapsamaz; son kaynak CI/tarama açık.

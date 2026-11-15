@@ -61,11 +61,29 @@
     "finalTarget": {
       "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-reset-final-target.log",
       "sha256": "6b2f334483363763fb218f00fa74a8eec597321e30ba1a02110ccffcfa7c08d8"
+    },
+    "syncRed": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-reset-sync-red.log",
+      "sha256": "516dde241bcd7101efd1398957ced05db53120fb6a64076db24f670db288581d"
+    },
+    "syncGreen": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-reset-sync-green.log",
+      "sha256": "243d4e4dd62c459da486cec172621af243b63fd49d9817aa6197cbe6c472b698"
     }
   },
   "pending": [
     "Source-bound scan/Sonar/CI",
     "RF17 whole-pipeline/first-query/native acceptance",
     "Separate production pending-panel CI timeout root cause remains open"
-  ]
+  ],
+  "followupBugFix": {
+    "redCommit": "77700924",
+    "fixCommit": "3e31c6a4",
+    "problem": "A synchronous disposer throw escaped the map before allSettled observed it, skipping later disposers and resetSource",
+    "fix": "Async callback wrapper converts synchronous throws to settled rejections, retaining callback invocation order",
+    "targetedGreen": 68,
+    "finalFull": "RUNNING session40305",
+    "lintBuild": "RUNNING session27327",
+    "sourceScanScope": "Existing d91d3601 scan excludes this follow-up fix; no final fix scan acceptance claimed"
+  }
 }
