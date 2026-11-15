@@ -525,4 +525,47 @@ describe("useWebSocket offline/online handling", () => {
     expect(current.closeCount).toBe(0);
   });
 
+  it("keeps the replacement heartbeat and state when a retired socket closes late", async () => {
+    vi.useFakeTimers();
+    const view = await mountHook();
+    try {
+      const retired = lastSocket();
+      act(() => retired.onopen?.());
+      await act(async () => { window.dispatchEvent(new Event("online")); await Promise.resolve(); await Promise.resolve(); });
+      const current = lastSocket();
+      act(() => current.onopen?.());
+      await act(async () => { retired.onclose?.({ code: 1006, reason: "", wasClean: false } as CloseEvent); });
+      expect(view.result.current.connectionStatus).toBe("connected");
+      await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+      expect(current.send).toHaveBeenCalledWith(JSON.stringify({ op: "heartbeat" }));
+      expect(retired.send).not.toHaveBeenCalled();
+      expect(FakeWebSocket.instances).toHaveLength(2);
+    } finally { view.unmount(); vi.useRealTimers(); }
+  });
+
+  it("discards a ticket completed after offline", async () => {
+    let resolveOld!: (value: { success: boolean; data: { ticket: string } }) => void;
+    revocation.ticket.mockReturnValueOnce(new Promise(resolve => { resolveOld = resolve; }));
+    const { result } = await mountHook();
+    act(() => { window.dispatchEvent(new Event("offline")); });
+    resolveOld({ success: true, data: { ticket: "retired-offline-ticket" } });
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(FakeWebSocket.instances).toHaveLength(0);
+    expect(result.current.connectionStatus).toBe("offline");
+  });
+
+  it("keeps resume and account changes offline until an online event", async () => {
+    const { result } = await mountHook();
+    act(() => { window.dispatchEvent(new Event("offline")); });
+    await act(async () => {
+      changeAuth("u2");
+      window.dispatchEvent(new Event("mqvi:app-resume"));
+      await Promise.resolve(); await Promise.resolve();
+    });
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    expect(result.current.connectionStatus).toBe("offline");
+    await act(async () => { window.dispatchEvent(new Event("online")); await Promise.resolve(); await Promise.resolve(); });
+    expect(FakeWebSocket.instances).toHaveLength(2);
+  });
+
 });
