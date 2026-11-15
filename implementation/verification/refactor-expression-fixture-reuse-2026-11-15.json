@@ -1,0 +1,31 @@
+{
+  "scope": "RF11 expression composition test fixture cost",
+  "changes": "Share one migrated database per invalid-input matrix. Copy the Repositories container and allocate a distinct nonexistent upload target for each case. Valid-construction fixture remains separate. No parallel subtests or database writes in rejected constructors.",
+  "migration_count": {
+    "before": 20,
+    "after": 3
+  },
+  "verification": {
+    "same_cases": "Identical 22 pass event names (3 top-level plus 19 subtests), zero fail/skip before and after",
+    "single_run_seconds": {
+      "before": 7.66,
+      "after": 1.769
+    },
+    "repeated_shuffled": "PASS -count=2 -shuffle=on, 2.597s",
+    "vet": "PASS go vet ."
+  },
+  "preceding_broad_run": {
+    "source": "ce428d42257d1ecd2b529e5eedcf53852a5a7211",
+    "services": 96.048,
+    "handlers": 7.334,
+    "repository": 195.124,
+    "ws": 5.457,
+    "root": 40.739,
+    "result": "PASS all five; source fixed throughout, later commits docs only until this test edit"
+  },
+  "limits": [
+    "Single before/after observation is not a statistical benchmark or CI speed prediction.",
+    "Windows non-race broad test; PostgreSQL and current-source CI separate.",
+    "Overall refactor acceptance remains open."
+  ]
+}

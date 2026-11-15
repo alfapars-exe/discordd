@@ -19,6 +19,17 @@ func expressionFixture(t *testing.T) expressionAssetDependencies {
 	providers := &expressionFixtureProviders{}
 	return expressionAssetDependencies{Repositories: startupPolicyRepositories(t), Hub: ws.NewHub(), Voice: providers, Emoji: providers, UploadDir: filepath.Join(t.TempDir(), "not-created")}
 }
+
+// Invalid constructor cases only replace provider fields; share migrated rows
+// while isolating each repository container and filesystem target.
+func expressionCase(t *testing.T, base expressionAssetDependencies) expressionAssetDependencies {
+	t.Helper()
+	deps := base
+	repos := *base.Repositories
+	deps.Repositories = &repos
+	deps.UploadDir = filepath.Join(t.TempDir(), "not-created")
+	return deps
+}
 func expectExpressionPanic(t *testing.T, deps expressionAssetDependencies, want string) {
 	t.Helper()
 	var caught any
@@ -31,9 +42,10 @@ func expectExpressionPanic(t *testing.T, deps expressionAssetDependencies, want 
 	}
 }
 func TestExpressionAssetsRejectMissingIntegrationBeforeFilesystem(t *testing.T) {
+	base := expressionFixture(t)
 	for _, field := range []string{"Repositories", "Hub", "Voice", "Emoji"} {
 		t.Run(field, func(t *testing.T) {
-			deps := expressionFixture(t)
+			deps := expressionCase(t, base)
 			v := reflect.ValueOf(&deps).Elem().FieldByName(field)
 			v.Set(reflect.Zero(v.Type()))
 			expectExpressionPanic(t, deps, "expression assets requires "+field)
@@ -41,7 +53,7 @@ func TestExpressionAssetsRejectMissingIntegrationBeforeFilesystem(t *testing.T) 
 	}
 	for _, field := range []string{"Hub", "Voice", "Emoji"} {
 		t.Run("typed nil "+field, func(t *testing.T) {
-			deps := expressionFixture(t)
+			deps := expressionCase(t, base)
 			v := reflect.ValueOf(&deps).Elem().FieldByName(field)
 			v.Set(reflect.Zero(v.Elem().Type()))
 			expectExpressionPanic(t, deps, "expression assets requires "+field)
@@ -49,10 +61,11 @@ func TestExpressionAssetsRejectMissingIntegrationBeforeFilesystem(t *testing.T) 
 	}
 }
 func TestExpressionAssetsRejectMissingRepositoryBeforeFilesystem(t *testing.T) {
+	base := expressionFixture(t)
 	for _, field := range []string{"Soundboard", "User", "Sticker", "Emoji", "Server", "Cosmetic"} {
 		for _, typedNil := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/typedNil=%v", field, typedNil), func(t *testing.T) {
-				deps := expressionFixture(t)
+				deps := expressionCase(t, base)
 				v := reflect.ValueOf(deps.Repositories).Elem().FieldByName(field)
 				if typedNil {
 					v.Set(reflect.Zero(v.Elem().Type()))
