@@ -257,7 +257,7 @@ func (s *auditLogService) startWriterLocked() {
 					s.drain(&entry)
 					return
 				}
-				s.persistAndBroadcast(ctx, entry)
+				s.processEntry(ctx, entry)
 			}
 		}
 	})
@@ -304,17 +304,23 @@ func (s *auditLogService) drain(first *models.AuditLog) {
 			return
 		}
 		if first != nil {
-			s.persistAndBroadcast(ctx, *first)
+			s.processEntry(ctx, *first)
 			first = nil
 			continue
 		}
 		select {
 		case entry := <-s.ch:
-			s.persistAndBroadcast(ctx, entry)
+			s.processEntry(ctx, entry)
 		default:
 			return
 		}
 	}
+}
+
+// A failed dependency may panic after a side effect. Report once without
+// retrying that event, and retain the single writer for the remaining queue.
+func (s *auditLogService) processEntry(ctx context.Context, entry models.AuditLog) {
+	logx.Run("audit_log.entry", func() { s.persistAndBroadcast(ctx, entry) })
 }
 
 func (s *auditLogService) persistAndBroadcast(ctx context.Context, entry models.AuditLog) {
@@ -322,6 +328,7 @@ func (s *auditLogService) persistAndBroadcast(ctx context.Context, entry models.
 	// wait on user storage. Explicit caller snapshots retain event-time values;
 	// otherwise this freezes the best available identity at persistence time.
 	snapshotCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel() // Also release the lookup timer if a dependency panics.
 	if entry.ActorSnapshot == nil && entry.ActorUserID != nil {
 		entry.ActorSnapshot = s.userSnapshot(snapshotCtx, *entry.ActorUserID)
 	}

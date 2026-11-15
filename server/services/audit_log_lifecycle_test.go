@@ -369,8 +369,9 @@ func TestAuditShutdownCancelsActiveWriteAndUsesFreshDrainContext(t *testing.T) {
 
 type auditPanickingPersistence struct {
 	auditLifecycleRepo
-	panicOnInsert bool
-	persisted     chan string
+	panicOnInsert    bool
+	panicAfterInsert bool
+	persisted        chan string
 }
 
 func (r *auditPanickingPersistence) Insert(ctx context.Context, entry *models.AuditLog) error {
@@ -378,6 +379,9 @@ func (r *auditPanickingPersistence) Insert(ctx context.Context, entry *models.Au
 		panic("synthetic audit storage failure")
 	}
 	err := r.auditLifecycleRepo.Insert(ctx, entry)
+	if r.panicAfterInsert && entry.ServerID == "bad" {
+		panic("synthetic failure after durable write")
+	}
 	r.persisted <- entry.ServerID
 	return err
 }
@@ -452,5 +456,19 @@ func TestAuditShutdownContinuesAfterFailedEvent(t *testing.T) {
 				t.Fatalf("shutdown retained %d entries", len(s.ch))
 			}
 		})
+	}
+}
+
+func TestAuditDoesNotRetryEventAfterWriteThenPanic(t *testing.T) {
+	repo := &auditPanickingPersistence{panicAfterInsert: true, persisted: make(chan string, 2)}
+	hub := ws.NewHub()
+	s := NewAuditLogService(repo, nil, nil, hub, hub)
+	s.Write(models.AuditLog{ServerID: "bad"})
+	s.Write(models.AuditLog{ServerID: "good"})
+	s.Stop()
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	if len(repo.entries) != 2 || repo.entries[0].ServerID != "bad" || repo.entries[1].ServerID != "good" {
+		t.Fatalf("partial-side-effect event retried or healthy backlog lost: %+v", repo.entries)
 	}
 }
