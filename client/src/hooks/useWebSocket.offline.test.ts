@@ -569,7 +569,7 @@ describe("useWebSocket offline/online handling", () => {
     expect(FakeWebSocket.instances).toHaveLength(2);
   });
 
-  it("releases a pending token refresh retry timer on unmount", async () => {
+  it.each(["unmount", "offline", "close", "account", "reconnect"])("releases pending token refresh retry on %s", async (boundary) => {
     vi.useFakeTimers();
     const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
     const view = await mountHook();
@@ -583,6 +583,70 @@ describe("useWebSocket offline/online handling", () => {
       await act(async () => { await vi.advanceTimersByTimeAsync(600_000); });
       expect(revocation.ensureFreshToken).toHaveBeenCalledTimes(2);
       expect(vi.getTimerCount()).toBeGreaterThan(0);
+      await act(async () => {
+        if (boundary === "unmount") view.unmount();
+        else if (boundary === "offline") window.dispatchEvent(new Event("offline"));
+        else if (boundary === "close") {
+          socket.readyState = FakeWebSocket.CLOSED;
+          socket.onclose?.({ code: 1006, reason: "", wasClean: false } as CloseEvent);
+        } else if (boundary === "account") changeAuth("u2");
+        else window.dispatchEvent(new Event("online"));
+        await Promise.resolve(); await Promise.resolve();
+      });
+      // Close alone retains the legitimate reconnect timer, not a refresh wait.
+      expect(vi.getTimerCount()).toBe(boundary === "close" ? 1 : 0);
+      const callsAfterBoundary = revocation.ensureFreshToken.mock.calls.length;
+      view.unmount();
+      await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+      expect(vi.getTimerCount()).toBe(0);
+      expect(revocation.ensureFreshToken).toHaveBeenCalledTimes(callsAfterBoundary);
+    } finally { view.unmount(); warning.mockRestore(); vi.useRealTimers(); }
+  });
+
+  it("does not acquire a new retry wait after a retired refresh rejects late", async () => {
+    vi.useFakeTimers();
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const view = await mountHook();
+    try {
+      const socket = lastSocket();
+      socket.send.mockImplementation((data: string) => {
+        if (JSON.parse(data).op === "heartbeat") socket.onmessage?.({ data: JSON.stringify({ op: "heartbeat_ack" }) } as MessageEvent);
+      });
+      act(() => socket.onopen?.());
+      let rejectOld!: (error: Error) => void;
+      revocation.ensureFreshToken.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectOld = reject; }));
+      await act(async () => { await vi.advanceTimersByTimeAsync(600_000); });
+      view.unmount();
+      rejectOld(new Error("late retired refresh failure"));
+      await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+      expect(vi.getTimerCount()).toBe(0);
+      expect(warning).not.toHaveBeenCalled();
+      expect(revocation.ensureFreshToken).toHaveBeenCalledTimes(2);
+    } finally { view.unmount(); warning.mockRestore(); vi.useRealTimers(); }
+  });
+
+  it.each([false, true])("preserves retry delay and bounded attempts (exhaust=%s)", async (exhaust) => {
+    vi.useFakeTimers();
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const view = await mountHook();
+    try {
+      const socket = lastSocket();
+      socket.send.mockImplementation((data: string) => {
+        if (JSON.parse(data).op === "heartbeat") socket.onmessage?.({ data: JSON.stringify({ op: "heartbeat_ack" }) } as MessageEvent);
+      });
+      act(() => socket.onopen?.());
+      if (exhaust) revocation.ensureFreshToken.mockRejectedValue(new Error("refresh unavailable"));
+      else revocation.ensureFreshToken.mockRejectedValueOnce(new Error("temporary refresh failure"));
+      await act(async () => { await vi.advanceTimersByTimeAsync(600_000); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(9_999); });
+      expect(revocation.ensureFreshToken).toHaveBeenCalledTimes(2);
+      await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+      expect(revocation.ensureFreshToken).toHaveBeenCalledTimes(3);
+      if (exhaust) {
+        await act(async () => { await vi.advanceTimersByTimeAsync(80_000); });
+        expect(revocation.ensureFreshToken).toHaveBeenCalledTimes(10); // Initial connect plus nine refresh attempts.
+      }
+      expect(vi.getTimerCount()).toBe(2); // Only heartbeat and proactive refresh intervals remain.
       view.unmount();
       expect(vi.getTimerCount()).toBe(0);
     } finally { view.unmount(); warning.mockRestore(); vi.useRealTimers(); }

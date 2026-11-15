@@ -96,6 +96,7 @@ export function useWebSocket() {
   const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tokenRefreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const tokenRefreshRetryWaitsRef = useRef(new Set<() => void>());
   const reconnectAttemptRef = useRef<number>(0);
   // Pending "connection proved stable → reset backoff" timer; cancelled on
   // close so a short-lived connection can never wipe the attempt counter.
@@ -150,6 +151,19 @@ export function useWebSocket() {
       clearInterval(tokenRefreshIntervalRef.current);
       tokenRefreshIntervalRef.current = null;
     }
+    for (const release of tokenRefreshRetryWaitsRef.current) release();
+  }
+
+  function waitForTokenRefreshRetry(delay: number): Promise<void> {
+    return new Promise((resolve) => {
+      const release = () => {
+        clearTimeout(timer);
+        tokenRefreshRetryWaitsRef.current.delete(release);
+        resolve();
+      };
+      const timer = setTimeout(release, delay);
+      tokenRefreshRetryWaitsRef.current.add(release);
+    });
   }
 
   /**
@@ -532,6 +546,7 @@ export function useWebSocket() {
               if (!isCurrentConnection(connectionId, ownerId, generation)) return;
               break;
             } catch {
+              if (!isCurrentConnection(connectionId, ownerId, generation)) return;
               console.warn(`[useWebSocket] Token refresh attempt ${attempt + 1} failed`);
               // Server-side bucket is 10 burst / ~30/min — a 9-retry loop
               // would absorb most of it. Log first attempt (initial failure
@@ -543,7 +558,7 @@ export function useWebSocket() {
                 });
               }
               if (attempt < TOKEN_REFRESH_MAX_RETRIES - 1) {
-                await new Promise((r) => setTimeout(r, TOKEN_REFRESH_RETRY_DELAY));
+                await waitForTokenRefreshRetry(TOKEN_REFRESH_RETRY_DELAY);
                 if (!isCurrentConnection(connectionId, ownerId, generation)) return;
               }
             }
@@ -589,6 +604,9 @@ export function useWebSocket() {
           });
         }
 
+        // Retire the closed transport before releasing pending retry waits.
+        // Their continuations must not refresh credentials for this socket.
+        myId = ++activeConnectionIdRef.current;
         setConnectionStatus("disconnected");
         cleanupTimers();
         if (event.code === 4001 && event.reason === "session_revoked" && connectionSession && getAccessSessionID() === connectionSession) {
