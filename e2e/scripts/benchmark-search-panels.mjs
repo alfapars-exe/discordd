@@ -172,7 +172,9 @@ try{
  // No active scan/index remains after a failed search. Missing live deletions
  // must not leave a query-sized frontier or queued React updates behind.
  await page.evaluate(()=>globalThis.panelBench.unmount());await page.evaluate(kind=>globalThis.panelBench.mount(kind,true),kind);
- await page.getByRole("textbox").fill("failed search");await page.waitForFunction(()=>document.querySelector(".search-empty")?.textContent==="noSearchResults");
+ await page.getByRole("textbox").fill("failed search");
+ await page.waitForFunction(expected=>document.querySelector(".search-empty")?.textContent===expected,variant==="after"?"searchFailed":"noSearchResults");
+ if(variant==="after")assert.equal(await page.getByRole("alert").textContent(),"searchFailed");
  await page.evaluate(kind=>globalThis.panelBench.deletes(kind,0,10),kind);await cdp.send("HeapProfiler.collectGarbage");const idle=await cdp.send("Runtime.getHeapUsage"),growth=[];
  let start=10;for(const end of [1000,5000,10000]){await page.evaluate(({kind,start,end})=>globalThis.panelBench.deletes(kind,start,end),{kind,start,end});await cdp.send("HeapProfiler.collectGarbage");const heap=await cdp.send("Runtime.getHeapUsage");growth.push({events:end,retainedGrowthBytes:heap.usedSize-idle.usedSize});start=end;}
  console.log(JSON.stringify({variant,kind,failedSearchFrontier:growth}));if(process.argv.includes("--assert-idle-budget")&&variant==="after")assert.ok(growth.at(-1).retainedGrowthBytes<256*1024,"Failed idle search retained more than256KiB after10000 missing deletions");await page.evaluate(()=>globalThis.panelBench.unmount());
