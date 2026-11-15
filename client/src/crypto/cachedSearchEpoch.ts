@@ -1,5 +1,6 @@
-import { getDB } from "./keyDatabase";
+import { getAccountDatabaseName, getDB } from "./keyDatabase";
 import { getAuthSessionSnapshot } from "../api/authSessionEvents";
+import { SERVER_URL } from "../utils/constants";
 
 // Derived local state: never include this fence in portable backup metadata.
 export const CACHED_SEARCH_EPOCH_KEY = "cached_search_epoch:v1";
@@ -22,9 +23,12 @@ if (channel) channel.onmessage = event => {
   const sourceName = (event.data as { sourceName?: unknown } | null)?.sourceName;
   if (typeof sourceName !== "string" || sourceName.length > 256) return;
   const scope = getAuthSessionSnapshot();
-  void getDB().then(async db => {
+  if (!scope.ownerId) return;
+  // Derive the namespace without opening storage. Foreign notifications must
+  // not create a key database in an inactive account or signed-out window.
+  void getAccountDatabaseName(scope.ownerId, SERVER_URL).then(async expectedName => {
     const now = getAuthSessionSnapshot();
-    if (scope.ownerId === now.ownerId && scope.generation === now.generation && db.name === sourceName) await getCachedSearchEpoch();
+    if (expectedName === sourceName && scope.ownerId === now.ownerId && scope.generation === now.generation) await getCachedSearchEpoch();
   }).catch(() => { /* Foreign/inactive accounts do not own this notification. */ });
 };
 /** Begin/end local reset notifications clear visible search results. A committed
