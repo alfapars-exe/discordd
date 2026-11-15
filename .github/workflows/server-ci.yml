@@ -503,6 +503,10 @@ jobs:
         run: node scripts/verify-search-staging.mjs
         working-directory: e2e
 
+      - name: Verify WebKit IndexedDB search staging contracts
+        run: node scripts/verify-search-staging.mjs --browser=webkit --trace
+        working-directory: e2e
+
       - name: Verify benchmark historical source isolation
         run: node --test scripts/search-source-baseline.test.mjs
         working-directory: e2e

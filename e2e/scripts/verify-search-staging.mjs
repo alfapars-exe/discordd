@@ -1,28 +1,38 @@
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
-import { chromium } from "playwright";
+import { chromium, webkit } from "playwright";
 import { createServer } from "../../client/node_modules/vite/dist/node/index.js";
 import { verifySearchDeletionDrain } from "./search-deletion-drain-contract.mjs";
 import { verifySearchDeletionSpool } from "./search-deletion-spool-contract.mjs";
 
+const engine = process.argv.find(arg => arg.startsWith("--browser="))?.slice("--browser=".length) ?? "chromium";
+assert.ok(engine === "chromium" || engine === "webkit", "Unsupported search contract browser");
 const root = fileURLToPath(new URL("../../client/", import.meta.url));
 const server = await createServer({ root, configFile: false, logLevel: "error", server: { host: "127.0.0.1", port: 0 } });
 await server.listen();
 try {
-  const browser = await chromium.launch();
+  const browser = await ({ chromium, webkit })[engine].launch();
   try {
     const context = await browser.newContext();
     const page = await context.newPage();
     const errors = [];
+    let spoolPhase = "module-load";
+    const spoolStarted = performance.now();
+    page.on("console", message => {
+      if (message.text().startsWith("native-spool-phase ")) {
+        spoolPhase = message.text().slice("native-spool-phase ".length);
+        if (process.argv.includes("--trace")) console.log("Native spool phase", spoolPhase, Math.round(performance.now() - spoolStarted));
+      }
+    });
     page.on("pageerror", error => errors.push(error.message));
     await context.route("**/staging.html", route => route.fulfill({ contentType: "text/html", body: "<title>Search staging contracts</title>" }));
     await page.goto(new URL("staging.html", server.resolvedUrls.local[0]).href);
-    console.log("Runtime", process.version, process.platform, "Chromium", browser.version());
+    console.log("Runtime", process.version, process.platform, engine, browser.version());
     let spoolDeadline;
     try {
       const spool = await Promise.race([
         page.evaluate(verifySearchDeletionSpool),
-        new Promise((_, reject) => { spoolDeadline = setTimeout(() => reject(new Error("Native deletion spool deadline exceeded")), 30_000); }),
+        new Promise((_, reject) => { spoolDeadline = setTimeout(() => reject(new Error(`Native deletion spool deadline exceeded: ${spoolPhase}`)), 30_000); }),
       ]);
       assert.equal(spool.uniqueIds, 1001);
       assert.ok(spool.maxBatch <= 128);

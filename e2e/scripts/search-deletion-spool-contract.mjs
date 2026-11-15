@@ -1,5 +1,7 @@
 /** Runs against native IndexedDB in a disposable browser context. */
 export async function verifySearchDeletionSpool() {
+  const phase = name => console.debug("native-spool-phase", name);
+  phase("module-load");
   const auth = await import("/src/api/authSessionEvents.ts");
   const { openCachedSearchDeletionPool } = await import("/src/crypto/cachedSearchDeletionSpool.ts");
   const { openSearchDatabase, withResetCachedSearchSnapshots } = await import("/src/crypto/cachedSearchDatabase.ts");
@@ -14,15 +16,20 @@ export async function verifySearchDeletionSpool() {
   const pool = async () => { const value = await openCachedSearchDeletionPool(); pools.push(value); return value; };
   let notifications = 0;
   try {
+    phase("bounded-drain");
     const writer = await pool(), frontier = writer.create(() => { notifications++; });
+    phase("pool-opened");
     for (let i = 0; i < 1000; i++) { frontier.append(`id-${i}`); frontier.append(`id-${i}`); }
+    phase("initial-writes-queued");
     const seen = new Set(); let maxBatch = 0;
     await frontier.drain(async ids => {
       maxBatch = Math.max(maxBatch, ids.length);
       for (const id of ids) { check(!seen.has(id), "Duplicate native spool delivery"); seen.add(id); }
+      phase(`consumed-${seen.size}`);
       if (!seen.has("0-late")) frontier.append("0-late");
     });
     check(seen.size === 1001 && maxBatch <= 128, "Native spool count/batch mismatch");
+    phase("empty-read-race");
     const getKeys = IDBObjectStore.prototype.getAllKeys;
     let emptyReads = 0, injectedLate = false;
     IDBObjectStore.prototype.getAllKeys = function (...args) {
@@ -48,6 +55,7 @@ export async function verifySearchDeletionSpool() {
     try { await frontier.drain(async ids => raced.push(...ids)); }
     finally { IDBObjectStore.prototype.getAllKeys = getKeys; }
     check(injectedLate && JSON.stringify(raced) === '["race-initial","race-late"]', "Native empty read lost a concurrent deletion");
+    phase("consumer-retry");
     frontier.append("retry");
     check((await rejected(frontier.drain(async () => { throw new Error("consumer failed"); }))).message === "consumer failed", "Consumer failure lost");
     const controller = new AbortController();
@@ -60,6 +68,7 @@ export async function verifySearchDeletionSpool() {
     // Inject failure at the native storage boundary, not a mocked pool API.
     // This validates error handling; it does not claim physical disk exhaustion.
     for (const mode of ["quota", "transaction-abort"]) {
+      phase(mode);
       let failures = 0;
       const broken = writer.create(() => { failures++; });
       const original = IDBObjectStore.prototype.put;
@@ -82,6 +91,7 @@ export async function verifySearchDeletionSpool() {
 
     // Hold an actual native write lock across event-loop turns so writers
     // accumulate as inactive queued transactions, rather than a single burst.
+    phase("writer-backpressure");
     const blockerDB = await openSearchDatabase(name);
     const blocker = blockerDB.transaction("refs", "readwrite");
     let holdLock = true;
@@ -101,6 +111,7 @@ export async function verifySearchDeletionSpool() {
     check(backpressureNotifications === 1, "Backpressure did not notify exactly once");
     await saturated.dispose();
 
+    phase("reset-fence");
     const resetFrontier = writer.create(() => { notifications++; }); resetFrontier.append("reset");
     let releaseConsumer, enteredConsumer;
     const heldConsumer = new Promise(resolve => { releaseConsumer = resolve; });
@@ -118,6 +129,7 @@ export async function verifySearchDeletionSpool() {
     try { check(await db.count("refs") === 0 && await db.count("snapshots") === 0, "Reset left native spool metadata"); }
     finally { db.close(); }
 
+    phase("successor-preservation");
     const replacement = await pool(), retired = replacement.create(() => { notifications++; }); retired.append("reset");
     releaseConsumer();
     check((await staleDrain).message === "search_spool_disposed", "Reset consumer continued after retirement");
@@ -125,6 +137,7 @@ export async function verifySearchDeletionSpool() {
     await retired.drain(async ids => successor.push(...ids));
     check(JSON.stringify(successor) === '["reset"]', "Stale consumer touched replacement frontier");
     retired.append("retired");
+    phase("scope-retirement");
     auth.publishAuthGenerationChange(auth.getAuthSessionSnapshot().generation + 1);
     check(replacement.closed, "Session replacement kept native pool open");
     await rejected(retired.drain(async () => {}));
