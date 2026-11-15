@@ -1,7 +1,7 @@
 /**
  * Regression tests for QA bug #5 in useMessageEditing: entering edit mode
- * left the browser-default caret at position 0 (fixed with the rAF +
- * setSelectionRange effect), and saveAndExit used trim(), stripping leading
+ * left the browser-default caret at position 0 (fixed by initializing the
+ * selection when the conditional textarea mounts), and saveAndExit used trim(), stripping leading
  * whitespace the user typed intentionally (now trimEnd only). Both are
  * pinned here against a real <textarea> in the conditional-mount shape the
  * message component uses.
@@ -22,8 +22,7 @@ interface ProbeProps {
 }
 
 // Mirrors how the message component consumes the hook: the textarea only
-// exists while editing, so the caret-placement rAF has to survive the
-// textarea mounting in the same commit that flips isEditing.
+// exists while editing; layout caret initialization sees its committed ref.
 function Probe({ initialContent, saveEdit, expose }: ProbeProps) {
   const editing = useMessageEditing({ initialContent, saveEdit });
   // Destructure like Message.tsx does — react-hooks/refs treats property
@@ -42,9 +41,7 @@ function Probe({ initialContent, saveEdit, expose }: ProbeProps) {
 }
 
 /**
- * Waits one animation frame inside act(). The hook queues its caret rAF in
- * the effect that runs when isEditing flips, so a frame queued after that
- * effect resolves strictly after the caret callback has run.
+ * Advances a frame inside act() to observe any delayed caret overwrite.
  */
 function flushAnimationFrame() {
   return act(
@@ -78,10 +75,9 @@ describe("useMessageEditing — QA bug #5 (edit caret + leading whitespace)", ()
     act(() => holder.latest?.startEdit());
 
     const textarea = screen.getByLabelText<HTMLTextAreaElement>("edit-message");
-    // Force the pre-fix browser-default state (caret at 0) before the rAF
-    // fires — proves the assertion below can only pass if the hook's
-    // setSelectionRange actually ran, not because jsdom defaulted to end.
-    textarea.setSelectionRange(0, 0);
+    // Probe has no autoFocus: the hook must focus during this commit.
+    expect(document.activeElement).toBe(textarea);
+    expect(textarea.selectionStart).toBe(content.length);
 
     await flushAnimationFrame();
 
