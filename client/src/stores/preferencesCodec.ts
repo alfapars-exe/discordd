@@ -1,4 +1,4 @@
-import { DEFAULT_ACCESSIBILITY, ACCESSIBILITY_BOOLEAN_FIELDS } from "../utils/accessibilityPreferenceDefaults";
+import { DEFAULT_ACCESSIBILITY, ACCESSIBILITY_BOOLEAN_FIELDS, ACCESSIBILITY_NUMBER_RANGES, NOTIFICATION_DURATION_OPTIONS } from "../utils/accessibilityPreferenceDefaults";
 import { DEVICE_LOCAL_VOICE_SETTING_KEYS } from "./voicePreferenceScope";
 import { DEFAULT_SETTINGS as DEFAULT_VOICE_SETTINGS } from "./voicePreferences";
 import { DEFAULT_NOTIFICATION_PREFERENCES, NOTIFICATION_BOOLEAN_FIELDS } from "../utils/notificationPreferenceDefaults";
@@ -27,7 +27,7 @@ const BOOLEAN_FIELDS = new Set([
 ]);
 const NUMBER_RANGES: Record<string, [number, number]> = {
   ...APPEARANCE_RANGES,
-  chatFontSize: [12, 24], messageGroupGapPx: [0, 24], saturation: [0, 100], notificationSoundVolume: [0, 100], ttsRate: [0.5, 2],
+  ...ACCESSIBILITY_NUMBER_RANGES,
   micSensitivity: [0, 100], masterVolume: [0, 100], inputVolume: [0, 200], deepfilterSuppression: [0, 100], volume: [0, 100], voiceOverlaySpeakingOpacity: [20, 100], voiceOverlayIdleOpacity: [0, 100], voiceOverlayScale: [75, 150],
 };
 const ENUM_FIELDS: Record<string, readonly (string | number)[]> = {
@@ -38,7 +38,7 @@ const ENUM_FIELDS: Record<string, readonly (string | number)[]> = {
   cameraFps: [15, 30], micProfile: ["konusma", "muzik"],
   profileAudience: ["all_servers", "small_servers", "friends_only"],
   gameActivityNewServerAudience: ["all", "small", "none"],
-  reactionMode: ["all", "direct", "none"], soundPack: ["classic", "soft", "minimal"], desktopDelaySeconds: [0, 3, 5, 10], notificationDuration: [3, 5, 10, 15, 20], stickerAnimation: ["always", "interaction", "never"],
+  reactionMode: ["all", "direct", "none"], soundPack: ["classic", "soft", "minimal"], desktopDelaySeconds: [0, 3, 5, 10], notificationDuration: NOTIFICATION_DURATION_OPTIONS, stickerAnimation: ["always", "interaction", "never"],
   timeFormat: ["auto", "12", "24"],
   voiceOverlayPosition: ["top-left", "bottom-left", "top-right", "bottom-right"],
   roleColorMode: ["names", "dots", "hidden"],

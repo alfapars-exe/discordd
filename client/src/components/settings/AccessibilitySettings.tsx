@@ -1,3 +1,4 @@
+import { ACCESSIBILITY_NUMBER_RANGES, NOTIFICATION_DURATION_OPTIONS } from "../../utils/accessibilityPreferenceDefaults";
 /**
  * AccessibilitySettings — five-section settings panel covering text
  * readability, visual density, color contrast, reduced motion, and
@@ -136,8 +137,8 @@ function AccessibilitySettings() {
             </div>
             <input
               type="range"
-              min={12}
-              max={24}
+              min={ACCESSIBILITY_NUMBER_RANGES.chatFontSize[0]}
+              max={ACCESSIBILITY_NUMBER_RANGES.chatFontSize[1]}
               step={1}
               value={chatFontSize}
               onChange={(e) => setChatFontSize(Number(e.target.value))}
@@ -239,8 +240,8 @@ function AccessibilitySettings() {
             </div>
             <input
               type="range"
-              min={0}
-              max={24}
+              min={ACCESSIBILITY_NUMBER_RANGES.messageGroupGapPx[0]}
+              max={ACCESSIBILITY_NUMBER_RANGES.messageGroupGapPx[1]}
               step={1}
               value={messageGroupGapPx}
               onChange={(e) => setMessageGroupGapPx(Number(e.target.value))}
@@ -266,8 +267,8 @@ function AccessibilitySettings() {
             </div>
             <input
               type="range"
-              min={0}
-              max={100}
+              min={ACCESSIBILITY_NUMBER_RANGES.saturation[0]}
+              max={ACCESSIBILITY_NUMBER_RANGES.saturation[1]}
               step={1}
               value={saturation}
               onChange={(e) => setSaturation(Number(e.target.value))}
@@ -364,14 +365,14 @@ function AccessibilitySettings() {
           <div className="vs-label">{t("acc.notificationDuration")}</div>
           <div className="vs-desc">{t("acc.notificationDurationDesc")}</div>
           <select className="vs-select" value={notificationDuration} onChange={(e) => setNotificationDuration(Number(e.target.value) as 3 | 5 | 10 | 15 | 20)}>
-            {[3, 5, 10, 15, 20].map((seconds) => <option key={seconds} value={seconds}>{seconds} sn</option>)}
+            {NOTIFICATION_DURATION_OPTIONS.map((seconds) => <option key={seconds} value={seconds}>{seconds} sn</option>)}
           </select>
         </div>
 
         <div className="vs-slider-row">
           <div className="vs-label">{t("acc.ttsRate")}</div>
           <div className="vs-desc">{t("acc.ttsRateDesc", { rate: ttsRate.toFixed(1) })}</div>
-          <input type="range" min={0.5} max={2} step={0.1} aria-label={t("acc.ttsRate")} value={ttsRate} disabled={!supportsSpeechSynthesis} onChange={(e) => setTtsRate(Number(e.target.value))} className="vs-range" />
+          <input type="range" min={ACCESSIBILITY_NUMBER_RANGES.ttsRate[0]} max={ACCESSIBILITY_NUMBER_RANGES.ttsRate[1]} step={0.1} aria-label={t("acc.ttsRate")} value={ttsRate} disabled={!supportsSpeechSynthesis} onChange={(e) => setTtsRate(Number(e.target.value))} className="vs-range" />
           <button type="button" className="settings-btn-secondary" disabled={!supportsSpeechSynthesis} onClick={() => previewTextToSpeech(t("acc.ttsPreviewText"))}>{t("acc.ttsPreview")}</button>
         </div>
 
@@ -433,8 +434,8 @@ function AccessibilitySettings() {
           <div className="acc-slider-track">
             <input
               type="range"
-              min={0}
-              max={100}
+              min={ACCESSIBILITY_NUMBER_RANGES.notificationSoundVolume[0]}
+              max={ACCESSIBILITY_NUMBER_RANGES.notificationSoundVolume[1]}
               step={1}
               value={notificationSoundVolume}
               onChange={(e) => setNotificationSoundVolume(Number(e.target.value))}

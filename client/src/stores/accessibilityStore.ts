@@ -1,3 +1,4 @@
+import { ACCESSIBILITY_NUMBER_RANGES, NOTIFICATION_DURATION_OPTIONS } from "../utils/accessibilityPreferenceDefaults";
 /**
  * accessibilityStore — user-facing accessibility preferences.
  *
@@ -42,10 +43,7 @@ import { capturePreferenceScope } from "./preferenceScope";
 
 const STORAGE_KEY = "tayfa.accessibility.v1";
 
-const NUMBER_LIMITS: Partial<Record<keyof AccessibilityState, readonly [number, number]>> = {
-  chatFontSize: [12, 24], messageGroupGapPx: [0, 24], saturation: [0, 100], notificationSoundVolume: [0, 100],
-  ttsRate: [0.5, 2], notificationDuration: [3, 20],
-};
+const NUMBER_LIMITS: Partial<Record<keyof AccessibilityState, readonly [number, number]>> = ACCESSIBILITY_NUMBER_RANGES;
 
 /** Stored JSON is untrusted; accept only current fields with their runtime types. */
 export function sanitizeAccessibilityPreferences(value: unknown): Partial<AccessibilityState> {
@@ -57,7 +55,7 @@ export function sanitizeAccessibilityPreferences(value: unknown): Partial<Access
     const item = source[key];
     const limits = NUMBER_LIMITS[key];
     if (key === "notificationDuration") {
-      if ([3, 5, 10, 15, 20].includes(item as number)) valid[key] = item;
+      if (NOTIFICATION_DURATION_OPTIONS.some(duration => duration === item)) valid[key] = item;
     } else if (limits) {
       if (typeof item === "number" && Number.isFinite(item) && item >= limits[0] && item <= limits[1]) valid[key] = item;
     } else if (key === "density") {
@@ -167,15 +165,15 @@ function commit(
 export const useAccessibilityStore = create<AccessibilityStore>((set, get) => ({
   ...initial,
 
-  setChatFontSize: (px) => commit(set, get as never, { chatFontSize: clamp(px, 12, 24) }),
+  setChatFontSize: (px) => commit(set, get as never, { chatFontSize: clamp(px, ...ACCESSIBILITY_NUMBER_RANGES.chatFontSize) }),
   setAlwaysUnderlineLinks: (v) => commit(set, get as never, { alwaysUnderlineLinks: v }),
   setShowDisplayNameStyles: (v) => commit(set, get as never, { showDisplayNameStyles: v }),
 
   setDensity: (d) => commit(set, get as never, { density: d }),
   setMessageStyle: (s) => commit(set, get as never, { messageStyle: s }),
-  setMessageGroupGapPx: (px) => commit(set, get as never, { messageGroupGapPx: clamp(px, 0, 24) }),
+  setMessageGroupGapPx: (px) => commit(set, get as never, { messageGroupGapPx: clamp(px, ...ACCESSIBILITY_NUMBER_RANGES.messageGroupGapPx) }),
 
-  setSaturation: (pct) => commit(set, get as never, { saturation: clamp(pct, 0, 100) }),
+  setSaturation: (pct) => commit(set, get as never, { saturation: clamp(pct, ...ACCESSIBILITY_NUMBER_RANGES.saturation) }),
   setSaturateCustomColors: (v) => commit(set, get as never, { saturateCustomColors: v }),
   setHighContrast: (v) => commit(set, get as never, { highContrast: v }),
   setSyncHighContrast: (v) => commit(set, get as never, { syncHighContrast: v }),
@@ -189,11 +187,11 @@ export const useAccessibilityStore = create<AccessibilityStore>((set, get) => ({
   setAutoplayGifs: (v) => commit(set, get as never, { autoplayGifs: v }),
   setStickerAnimation: (v) => commit(set, get as never, { stickerAnimation: v }),
 
-  setNotificationSoundVolume: (pct) => commit(set, get as never, { notificationSoundVolume: clamp(pct, 0, 100) }),
+  setNotificationSoundVolume: (pct) => commit(set, get as never, { notificationSoundVolume: clamp(pct, ...ACCESSIBILITY_NUMBER_RANGES.notificationSoundVolume) }),
   setTtsEnabled: (v) => commit(set, get as never, { ttsEnabled: v }),
-  setTtsRate: (v) => commit(set, get as never, { ttsRate: clamp(v, 0.5, 2) }),
+  setTtsRate: (v) => commit(set, get as never, { ttsRate: clamp(v, ...ACCESSIBILITY_NUMBER_RANGES.ttsRate) }),
   setNotificationDuration: (v) => {
-    if ([3, 5, 10, 15, 20].includes(v)) commit(set, get as never, { notificationDuration: v });
+    if (NOTIFICATION_DURATION_OPTIONS.includes(v)) commit(set, get as never, { notificationDuration: v });
   },
   setShowImageDescriptions: (v) => commit(set, get as never, { showImageDescriptions: v }),
   setLegacyComposer: (v) => commit(set, get as never, { legacyComposer: v }),

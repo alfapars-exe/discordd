@@ -5,6 +5,8 @@ export type StickerAnimationMode = "always" | "interaction" | "never";
 export type RoleColorMode = "names" | "dots" | "hidden";
 export type OfficialMessageStyle = "default" | "subtle" | "prominent";
 
+export const NOTIFICATION_DURATION_OPTIONS = [3, 5, 10, 15, 20] as const;
+
 export type AccessibilityState = {
   // ─── Text Readability ────────────────────────────────────────────────
   /** Body font-size in px. Discord uses 12-24; default 16. */
@@ -52,7 +54,7 @@ export type AccessibilityState = {
   /** Browser speech synthesis rate (0.5-2.0). */
   ttsRate: number;
   /** Minimum lifetime for eligible app-created OS notifications. */
-  notificationDuration: 3 | 5 | 10 | 15 | 20;
+  notificationDuration: (typeof NOTIFICATION_DURATION_OPTIONS)[number];
   showImageDescriptions: boolean;
   legacyComposer: boolean;
 };
@@ -87,3 +89,12 @@ export const DEFAULT_ACCESSIBILITY: AccessibilityState = {
 export const ACCESSIBILITY_BOOLEAN_FIELDS = Object.entries(DEFAULT_ACCESSIBILITY)
   .filter(([, value]) => typeof value === "boolean")
   .map(([key]) => key);
+
+/** Shared numeric validation bounds; setters clamp while hydration rejects out-of-range input. */
+export const ACCESSIBILITY_NUMBER_RANGES = {
+  chatFontSize: [12, 24],
+  messageGroupGapPx: [0, 24],
+  saturation: [0, 100],
+  notificationSoundVolume: [0, 100],
+  ttsRate: [0.5, 2],
+} satisfies Partial<Record<keyof AccessibilityState, [number, number]>>;
