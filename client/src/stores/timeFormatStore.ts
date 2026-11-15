@@ -17,14 +17,15 @@ type TimeFormatState = {
   resetAccountPreferences: () => void;
 };
 
-export const useTimeFormatStore = create<TimeFormatState>((set) => ({
+export const useTimeFormatStore = create<TimeFormatState>((set, get) => ({
   timeFormat: initial(),
   setTimeFormat: (timeFormat) => {
     const isCurrent = capturePreferenceScope();
     set({ timeFormat });
     if (!isCurrent()) return;
-    try { localStorage.setItem(STORAGE_KEY, timeFormat); } catch { /* best effort */ }
-    usePreferencesStore.getState().set({ locale: { timeFormat } });
+    const latest = get().timeFormat;
+    try { localStorage.setItem(STORAGE_KEY, latest); } catch { /* best effort */ }
+    if (latest === timeFormat) usePreferencesStore.getState().set({ locale: { timeFormat } });
   },
   applyFromServer: (value) => {
     const candidate = value && typeof value === "object" ? (value as { timeFormat?: unknown }).timeFormat : undefined;
@@ -32,13 +33,13 @@ export const useTimeFormatStore = create<TimeFormatState>((set) => ({
     const isCurrent = capturePreferenceScope();
     set({ timeFormat: candidate });
     if (!isCurrent()) return;
-    try { localStorage.setItem(STORAGE_KEY, candidate); } catch { /* best effort */ }
+    try { localStorage.setItem(STORAGE_KEY, get().timeFormat); } catch { /* best effort */ }
   },
   resetAccountPreferences: () => {
     const isCurrent = capturePreferenceScope();
     set({ timeFormat: "auto" });
     if (!isCurrent()) return;
-    try { localStorage.setItem(STORAGE_KEY, "auto"); } catch { /* best effort */ }
+    try { localStorage.setItem(STORAGE_KEY, get().timeFormat); } catch { /* best effort */ }
   },
 }));
 

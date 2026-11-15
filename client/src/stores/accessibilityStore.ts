@@ -148,13 +148,16 @@ function commit(
   const isCurrent = capturePreferenceScope();
   set(safe);
   if (!isCurrent()) return;
-  const next = { ...get(), ...safe } as AccessibilityState;
+  const next = get();
   applyAccessibility(next);
   persist(next);
   // The preferences store batches outgoing writes; one set() per setter
   // is fine. Server stores under a single "accessibility" namespace so
   // existing readers don't have to know the shape.
-  usePreferencesStore.getState().set({ accessibility: safe });
+  // Subscribers may have changed another field, or replaced this field,
+  // without changing accounts. Queue only leaves this setter still owns.
+  const owned = Object.fromEntries(Object.entries(safe).filter(([key, value]) => Object.is(next[key as keyof AccessibilityState], value)));
+  if (Object.keys(owned).length) usePreferencesStore.getState().set({ accessibility: owned });
 }
 
 export const useAccessibilityStore = create<AccessibilityStore>((set, get) => ({
@@ -194,10 +197,10 @@ export const useAccessibilityStore = create<AccessibilityStore>((set, get) => ({
   applyFromServer: (partial) => {
     // Hydration updates the local cache without echoing a write to the server.
     const safe = sanitizeAccessibilityPreferences(partial);
-    const next = { ...get(), ...safe } as AccessibilityState;
     const isCurrent = capturePreferenceScope();
     set(safe);
     if (!isCurrent()) return;
+    const next = get();
     applyAccessibility(next);
     persist(next);
   },
@@ -207,8 +210,9 @@ export const useAccessibilityStore = create<AccessibilityStore>((set, get) => ({
     const isCurrent = capturePreferenceScope();
     set({ ...DEFAULT_ACCESSIBILITY });
     if (!isCurrent()) return;
-    applyAccessibility(DEFAULT_ACCESSIBILITY);
-    persist(DEFAULT_ACCESSIBILITY);
+    const next = get();
+    applyAccessibility(next);
+    persist(next);
   },
 }));
 
