@@ -14,6 +14,13 @@ export function fakeCachedSearchSnapshot(kind: "channel" | "dm", refs: readonly 
       offset = Math.min(offset, Math.max(0, Math.floor((ids.length-1)/limit)*limit));
       return { ids: ids.slice(offset,offset+limit), offset, total:ids.length };
     },
+    async removeMany(batch) {
+      if (disposed) throw new Error("disposed");
+      const removed = new Set(batch);
+      let count = 0;
+      for (let i = ids.length - 1; i >= 0; i--) if (removed.has(ids[i])) { ids.splice(i,1); count++; }
+      return { removed: count, total: ids.length };
+    },
     async remove(id) {
       if (disposed) throw new Error("disposed");
       const position=ids.indexOf(id);

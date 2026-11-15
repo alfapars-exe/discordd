@@ -114,10 +114,15 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted }: DMSearchPanelPro
             localMatches.current = snapshot;
           }
           const snapshot = localMatches.current;
-          for (const id of pendingDeletes) {
-            await snapshot.remove(id, controller.signal);
+          while (pendingDeletes.size) {
+            const batch: string[] = [];
+            for (const id of pendingDeletes) {
+              batch.push(id);
+              if (batch.length === 128) break;
+            }
+            await snapshot.removeMany(batch, controller.signal);
             if (seq !== searchSeqRef.current) return;
-            pendingDeletes.delete(id);
+            for (const id of batch) pendingDeletes.delete(id);
           }
           const lowerTerm = term.toLowerCase();
           const page = await readCachedSearchPage(snapshot, searchOffset, LIMIT,

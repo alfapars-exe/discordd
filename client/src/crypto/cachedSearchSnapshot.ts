@@ -231,6 +231,26 @@ export async function createCachedSearchSnapshot(kind: "channel" | "dm", channel
           return { ids, offset: actualOffset, total };
         }, operationSignal);
       },
+      /** Reconcile a bounded pending frontier without a transaction/epoch read
+       * for every ID. Duplicate and absent IDs never decrement the total.
+       * Positions are unnecessary here: callers reread the reconciled page.
+       */
+      async removeMany(messageIds: readonly string[], operationSignal?: AbortSignal) {
+        if (messageIds.length > 128) throw new Error("search_snapshot_invalid_removal_batch");
+        const unique = [...new Set(messageIds)];
+        return transaction(["snapshots", "refs"], "readwrite", async tx => {
+          const stored = await header(tx), refs = tx.objectStore("refs");
+          const found = await Promise.all(unique.map(async messageId => refs.get([id, messageId])));
+          const present = unique.filter((_, index) => found[index] !== undefined);
+          // Async callbacks observe every request even if cancellation makes a
+          // later delete throw synchronously while an earlier one is pending.
+          try { await Promise.all(present.map(async messageId => refs.delete([id, messageId]))); }
+          catch (error) { operationSignal?.throwIfAborted(); throw error; }
+          const total = stored.total - present.length;
+          if (present.length) await tx.objectStore("snapshots").put({ ...stored, total });
+          return { removed: present.length, total };
+        }, operationSignal);
+      },
       async remove(messageId: string, operationSignal?: AbortSignal) {
         return transaction(["snapshots", "refs"], "readwrite", async tx => {
           const stored = await header(tx), refs = tx.objectStore("refs");
