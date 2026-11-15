@@ -1,0 +1,19 @@
+{
+  "backendSource": "22647bc45b894c78044a6e6fff0970f54d62a677",
+  "specSha256": "29423992ba4b2ba3825830e2cff18459b4f43a54d2b67e939f6474775d2f1761",
+  "observation": "Expanded 26-message encrypted DM browser scenario hits GET /api/users/:id/prekey-bundles HTTP 429; dmStore reports Failed to fetch recipient prekey bundles; subsequent scenario can inherit the same per-IP budget exhaustion.",
+  "evidence": "hichat-dm-search-key-budget-diagnostic.log: final profile 1 passed, 2 failed (2.1m)",
+  "sourceCause": [
+    "dmEncryption.encryptForRecipientDevices fetches recipient bundles per send",
+    "dmEncryption.encryptForSelfDevices fetches own bundles per send",
+    "DeviceEnum middleware permits 30/min/IP under an explicitly documented one-bundle-per-new-conversation assumption"
+  ],
+  "nextRequirements": [
+    "Keep public key-enumeration/harvesting limits intact",
+    "Avoid consuming/fetching prekey bundles on every established-session message",
+    "Preserve current device revocation and new-device trust behavior; do not introduce stale-roster delivery",
+    "Rerun complete 26-message channel+DM encrypted search/recovery profile after correction"
+  ],
+  "state": "Open; expanded E2E spec kept uncommitted for continued implementation. No passing-DM-browser or bounded-memory claim.",
+  "cleanup": "Dedicated PostgreSQL container and fixture image removed after terminal run; developer containers preserved"
+}

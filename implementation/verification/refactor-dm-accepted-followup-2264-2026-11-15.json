@@ -1,0 +1,20 @@
+{
+  "source": "22647bc4",
+  "problem": "A non-friend initiator could not send again after request acceptance unless the recipient first replied. Browser returned 403 on message two; two accepted-state service regressions failed with dm_request_pending.",
+  "change": "Within accepted-channel message_request handling, recognize an existing member initiator as the durable acceptance receipt retained by AcceptPendingUnblocked. Unaccepted requests and invalid markers retain previous guards. No schema/API change.",
+  "verification": {
+    "newTable": "Seven cases: member initiators allowed; missing/empty/foreign markers, block and friends_only remain denied",
+    "targeted": "TestSendMessage|TestDMAccept|TestDMDecline passed",
+    "broadWindows": "go test ./services ./handlers -count=1 passed; services 93.543s, handlers 6.961s",
+    "vet": "go vet ./services passed",
+    "build": "go build ./... passed",
+    "reviewedManifest": "50 exact source records valid",
+    "linuxRace": "Immutable source passed targeted DM send/accept/decline suite; 10.513s; separate receipt"
+  },
+  "limits": [
+    "Windows checks are non-race",
+    "Expanded encrypted-DM recovery browser scenario still under verification; earlier failed runs are not acceptance evidence",
+    "Whole refactor remains open"
+  ],
+  "browserFollowup": "After acceptance fix multiple encrypted sends succeeded, then prekey-bundle endpoint returned 429. Expanded recovery/search browser profile remains failing and is not acceptance evidence."
+}
