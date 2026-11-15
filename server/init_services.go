@@ -196,15 +196,11 @@ func initServices(db *sql.DB, repos *Repositories, hub serviceHub, cfg *config.C
 	logging := initLoggingServices(loggingDependencies{Repositories: repos, Hub: hub})
 	auditLogService, appLogService := logging.Audit, logging.App
 	rollback = append(rollback, appLogService.Stop, auditLogService.Stop)
-	var entranceService services.EntranceService
-	var musicBotService services.MusicBotRuntime
-	voiceService := services.NewVoiceService(
-		repos.Channel, repos.LiveKit, channelPermService, hub, hub, repos.Server, encryptionKey, repos.MemberTimeout, repos.Ban, auditLogService,
-		services.VoiceRuntimeDependencies{Fanout: services.VoiceFanoutDependencies{Online: hub, Members: repos.Server}, PermissionInvalidations: channelPermService, UsageCredit: services.NewDurableVoiceUsageCredit(repos.LiveKit), UsageRecovery: repos.LiveKit, VoiceAccess: repos.VoiceAccess, FreshPermissions: channelPermService, AppLogger: appLogService, Integrations: func(voice services.VoiceService) (services.VoiceEntranceHook, services.MusicBotChannelHook) {
-			entranceService, musicBotService = initVoiceMediaServices(voiceMediaDependencies{Repositories: repos, Hub: hub, Permissions: channelPermService, FreshPermissions: channelPermService, Voice: voice, UploadDir: cfg.Upload.Dir, EncryptionKey: encryptionKey, Logger: appLogService})
-			return entranceService, musicBotService
-		}},
-	)
+	voice := initVoiceRuntimeServices(voiceRuntimeDependencies{
+		Repositories: repos, Hub: hub, Permissions: channelPermService, Audit: auditLogService,
+		Logger: appLogService, Config: cfg, EncryptionKey: encryptionKey,
+	})
+	voiceService, entranceService, musicBotService := voice.Voice, voice.Entrance, voice.Music
 	rollback = append(rollback, voiceService.ShutdownVoiceStateFanout)
 
 	emailSender := configuredEmailProvider(cfg.Email)
