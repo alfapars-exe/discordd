@@ -119,6 +119,31 @@ class SelfScanReviewedFPTests(unittest.TestCase):
         for entry in self.entries:
             self.assertIn(entry["proof_ref"], review)
 
+    def test_module_javascript_extensions_use_the_same_blocking_rules(self) -> None:
+        for rel, source in {
+            "e2e/scripts/unsafe.mjs": "jwt.decode(untrusted);\n",
+            "build/unsafe.cjs": "child_process.exec(userInput);\n",
+        }.items():
+            path = self.root / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(source, encoding="utf-8")
+        result = self.scan()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("unsafe.mjs:1:jwt.decode(untrusted)", result.stdout)
+        self.assertIn("unsafe.cjs:1:child_process.exec(userInput)", result.stdout)
+        self.assertIn("❌ BLOK: jwt.decode", result.stdout)
+        self.assertIn("❌ BLOK: child_process exec/shell", result.stdout)
+
+    def test_module_dependencies_and_build_outputs_keep_existing_exclusions(self) -> None:
+        for rel in ("node_modules/fixture/unsafe.mjs", "client/dist/unsafe.cjs"):
+            path = self.root / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("jwt.decode(untrusted);\n", encoding="utf-8")
+        result = self.scan()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("unsafe.mjs", result.stdout)
+        self.assertNotIn("unsafe.cjs", result.stdout)
+
     def test_unexpected_token_storage_sql_and_sha1_remain_blocking(self) -> None:
         (self.root / "client/src/unsafe.ts").write_text(
             'localStorage.setItem("auth-token", token);\n', encoding="utf-8"
