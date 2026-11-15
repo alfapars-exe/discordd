@@ -70,6 +70,8 @@ type E2EEState = {
   localDeviceId: string | null;
   devices: DeviceInfo[];
   hasRecoveryBackup: boolean;
+  /** A successful lookup/setup is required before treating no backup as fact. */
+  recoveryBackupChecked: boolean;
   decryptionErrors: DecryptionError[];
   isGeneratingKeys: boolean;
   initError: string | null;
@@ -171,6 +173,7 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
   localDeviceId: null,
   devices: [],
   hasRecoveryBackup: false,
+  recoveryBackupChecked: false,
   decryptionErrors: [],
   isGeneratingKeys: false,
   initError: null,
@@ -190,7 +193,7 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
     if (current === "initializing" || current === "ready") return;
     const previousArchive = get().legacyArchive;
 
-    set({ initStatus: previousArchive ? "legacy-recovery" : "initializing", initError: null });
+    set({ initStatus: previousArchive ? "legacy-recovery" : "initializing", initError: null, recoveryBackupChecked: false });
 
     try {
       const hasKeys = await keyStorage.hasLocalKeys();
@@ -293,8 +296,7 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
         // Background: prekey check + device list + backup status + deferred recovery prompt
         get().handlePrekeyLow();
         get().fetchDevices();
-        checkRecoveryBackup(set);
-        scheduleDeferredRecoveryCheck(get);
+        void checkRecoveryBackup(set, get);
       } else {
         // No local keys — check backup status (don't block on it).
         // Even if backup exists, silently generate new keys so the app is usable immediately.
@@ -304,9 +306,7 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
         try {
           const backupRes = await e2eeApi.downloadKeyBackup();
           if (!isCurrent()) return;
-          if (backupRes.success && backupRes.data) {
-            set({ hasRecoveryBackup: true });
-          }
+          if (backupRes.success) set({ recoveryBackupChecked: true, hasRecoveryBackup: !!backupRes.data || get().hasRecoveryBackup });
         } catch {
           if (!isCurrent()) return;
           // Non-critical — continue
@@ -458,6 +458,7 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
         initStatus: "ready",
         localDeviceId: newDeviceId,
         hasRecoveryBackup: true,
+        recoveryBackupChecked: true,
         isGeneratingKeys: false,
       });
 
@@ -524,7 +525,7 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
         throw new Error(response.error ?? "Failed to upload key backup");
       }
 
-      set({ hasRecoveryBackup: true });
+      set({ hasRecoveryBackup: true, recoveryBackupChecked: true });
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to set recovery password";
@@ -540,8 +541,8 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
   },
 
   checkAndPromptRecovery: () => {
-    const { initStatus, hasRecoveryBackup, recoveryPromptDismissed, showRecoveryPrompt } = get();
-    if (initStatus !== "ready" || hasRecoveryBackup || recoveryPromptDismissed || showRecoveryPrompt) return;
+    const { initStatus, hasRecoveryBackup, recoveryBackupChecked, recoveryPromptDismissed, showRecoveryPrompt } = get();
+    if (initStatus !== "ready" || !recoveryBackupChecked || hasRecoveryBackup || recoveryPromptDismissed || showRecoveryPrompt) return;
 
     // Check if any DM channel or the active server has E2EE enabled
     const dmChannels = useDMStore.getState().channels;
@@ -714,6 +715,7 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
       localDeviceId: null,
       devices: [],
       hasRecoveryBackup: false,
+      recoveryBackupChecked: false,
       decryptionErrors: [],
       isGeneratingKeys: false,
       initError: null,
@@ -754,14 +756,17 @@ function captureStoreScope(): () => boolean {
 
 /** Check recovery backup status in background. Silently continues on error. */
 async function checkRecoveryBackup(
-  set: (partial: Partial<E2EEState>) => void
+  set: (partial: Partial<E2EEState>) => void,
+  get: () => E2EEState,
 ): Promise<void> {
   const isCurrent = captureStoreScope();
   try {
     const response = await e2eeApi.downloadKeyBackup();
     if (!isCurrent()) return;
-    if (response.success && response.data) {
-      set({ hasRecoveryBackup: true });
+    if (response.success) {
+      // A delayed absence result must not erase a backup uploaded meanwhile.
+      set({ hasRecoveryBackup: !!response.data || get().hasRecoveryBackup, recoveryBackupChecked: true });
+      if (isCurrent()) scheduleDeferredRecoveryCheck(get);
     }
   } catch {
     // Non-critical — silently continue
