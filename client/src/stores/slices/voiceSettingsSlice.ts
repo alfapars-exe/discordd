@@ -600,62 +600,9 @@ export const createVoiceSettingsSlice: StateCreator<
         /* ignore */
       }
       observedSettings = merged;
-      set({
-        inputMode: merged.inputMode,
-        pttKey: merged.pttKey,
-        micSensitivity: merged.micSensitivity,
-        userVolumes: merged.userVolumes,
-        inputDevice: merged.inputDevice,
-        outputDevice: merged.outputDevice,
-        masterVolume: merged.masterVolume,
-        inputVolume: merged.inputVolume,
-        soundsEnabled: merged.soundsEnabled,
-        screenShareAudio: merged.screenShareAudio,
-        screenShareQuality: merged.screenShareQuality,
-        screenShareFps: merged.screenShareFps,
-        screenShareShowCursor: merged.screenShareShowCursor,
-        screenShareLowLatency: merged.screenShareLowLatency,
-        screenShareMode: merged.screenShareMode,
-        localMutedUsers: merged.localMutedUsers,
-        noiseReduction: merged.noiseReduction,
-        noiseReductionEngine: merged.noiseReductionEngine,
-        noiseSuppressionLevel: merged.noiseSuppressionLevel,
-        deepfilterSuppression: merged.deepfilterSuppression,
-        screenShareVolumes: merged.screenShareVolumes,
-        cameraQuality: merged.cameraQuality,
-        cameraFps: merged.cameraFps,
-        micProfile: merged.micProfile,
-        muteHotkeyEnabled: merged.muteHotkeyEnabled,
-        muteHotkey: merged.muteHotkey,
-        voiceOverlayEnabled: merged.voiceOverlayEnabled,
-        voiceOverlayMode: merged.voiceOverlayMode,
-        voiceOverlaySpeakingOpacity: merged.voiceOverlaySpeakingOpacity,
-        voiceOverlayIdleOpacity: merged.voiceOverlayIdleOpacity,
-        voiceOverlayScale: merged.voiceOverlayScale,
-        voiceOverlayPosition: merged.voiceOverlayPosition,
-        voiceOverlayPinned: merged.voiceOverlayPinned,
-        voiceOverlayQuickActions: merged.voiceOverlayQuickActions,
-        voiceOverlayClickableActions: merged.voiceOverlayClickableActions,
-        voiceOverlayCompatibility: merged.voiceOverlayCompatibility,
-        voiceOverlayActivity: merged.voiceOverlayActivity,
-        voiceOverlayVideo: merged.voiceOverlayVideo,
-        voiceOverlayStreams: merged.voiceOverlayStreams,
-        voiceOverlayWelcome: merged.voiceOverlayWelcome,
-        voiceOverlayGoLive: merged.voiceOverlayGoLive,
-        voiceOverlayGameActivityNotifications: merged.voiceOverlayGameActivityNotifications,
-        voiceOverlayNowPlayingNotifications: merged.voiceOverlayNowPlayingNotifications,
-        voiceOverlayNotifications: merged.voiceOverlayNotifications,
-        voiceOverlayNotificationActions: merged.voiceOverlayNotificationActions,
-        voiceOverlayChat: merged.voiceOverlayChat,
-        voiceOverlayChatActions: merged.voiceOverlayChatActions,
-        voiceOverlayChatCompose: merged.voiceOverlayChatCompose,
-        voiceOverlaySpeakingOnly: merged.voiceOverlaySpeakingOnly,
-        voiceOverlayAvatarSize: merged.voiceOverlayAvatarSize,
-        voiceOverlayNameDisplay: merged.voiceOverlayNameDisplay,
-        voiceOverlayMaxParticipants: merged.voiceOverlayMaxParticipants,
-        // muteHotkeyGlobal intentionally omitted — device-local, see the
-        // field's doc comment and the `continue` above.
-      });
+      // The projection contains preference fields only. Zustand merges this
+      // snapshot, preserving runtime state and action references.
+      set(merged);
     },
     resetAccountPreferences: (preserveSessionState = false) => {
       cancelPendingSave();
