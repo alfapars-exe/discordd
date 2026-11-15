@@ -1,3 +1,4 @@
+import type { IDBPDatabase, IDBPTransaction } from "idb";
 import { getDB } from "./keyDatabase";
 import { cachedSearchDeletionKey, rememberCachedSearchDeletion } from "./cachedSearchDeletionJournal";
 import type { CachedDecryptedMessage } from "./types";
@@ -16,17 +17,26 @@ export async function deleteScopedCachedMessage(
   try { writeToken = await rememberCachedSearchDeletion(db, journalKey, messageId, isCurrent); }
   catch (error) { journalFailed = true; journalFailure = error; }
   if (!isCurrent()) return false;
+  return evictCachedMessage(db, { messageId, channelId, dmChannelId, isCurrent }, {
+    key: journalKey, token: writeToken, failed: journalFailed, failure: journalFailure,
+  });
+}
+
+type DeletionScope = { messageId: string; channelId: string; dmChannelId: string | null; isCurrent: () => boolean };
+type DeletionIntent = { key: string; token?: string; failed: boolean; failure: unknown };
+type DeletionTransaction = IDBPTransaction<unknown, string[], "readwrite">;
+
+async function evictCachedMessage(db: IDBPDatabase, scope: DeletionScope, intent: DeletionIntent): Promise<boolean> {
+  const { isCurrent } = scope;
+  const { key: journalKey, token: writeToken, failed: journalFailed, failure: journalFailure } = intent;
   // Metadata failure must not prevent the old best-effort physical cleanup.
   const tx=db.transaction(journalFailed ? ["messageCache"] : ["messageCache", "metadata"],"readwrite");
-  const cache = tx.objectStore("messageCache"), metadata = journalFailed ? null : tx.objectStore("metadata");
+  const metadata = journalFailed ? null : tx.objectStore("metadata");
   let removed = false;
   try {
-    const record=await cache.get(messageId) as CachedDecryptedMessage|undefined;
-    if (!isCurrent()) {tx.abort();await tx.done.catch(()=>{});return false;}
-    if (record?.messageId === messageId && record.channelId === channelId && record.dmChannelId === dmChannelId) {
-      await cache.delete(messageId);
-      removed = true;
-    }
+    const result = await deleteMatchingRecord(tx, scope);
+    if (result === null) return false;
+    removed = result;
     if (metadata) {
       const intent = await metadata.get(journalKey) as { writeToken?: unknown } | undefined;
       // Another accepted deletion may have replaced this intent while this
@@ -45,3 +55,14 @@ export async function deleteScopedCachedMessage(
   return removed;
 }
 
+async function deleteMatchingRecord(tx: DeletionTransaction, scope: DeletionScope): Promise<boolean | null> {
+  const { messageId, channelId, dmChannelId, isCurrent } = scope;
+  const cache = tx.objectStore("messageCache");
+  const record = await cache.get(messageId) as CachedDecryptedMessage | undefined;
+  if (!isCurrent()) { tx.abort(); await tx.done.catch(() => {}); return null; }
+  if (record?.messageId === messageId && record.channelId === channelId && record.dmChannelId === dmChannelId) {
+    await cache.delete(messageId);
+    return true;
+  }
+  return false;
+}
