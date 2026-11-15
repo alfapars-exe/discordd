@@ -3373,3 +3373,10 @@ Beş hedefli test Windows'ta20tekrar ve Linux/Go1.26.11CGO1race altında20tekrar
 Önceki42de5382 CI'ında Linux/WebKit native sözleşmeleri ve production encrypted recovery adımıSUCCESS;SonarCloudSUCCESS. Böylece99584d45'in iki ayrı hatası için yeni kaynakta olumlu kapı kanıtı var;whole-run terminal sonucu henüz bekleniyor. Yerel Windows/WebKit istek hızı sınırı ve fiziksel/tüm-hat/RF01-RF30 kabulü açık kalıyor. Önceki koşu tamamlanmadan yeni push ile iptal edilmeyecek.
 
 42de5382 terminalCI36/36SUCCESS archived in refactor-42de-terminal-ci-2026-11-15.json. Previous99584Playwright andSonar failures resolved in source and verified by requiredCI. LinuxWebKit native7modesPASS onNode22.23.4/WebKit27.2;Windows controls useNode26.13.1,so this is not a direct cross-OS latency comparison. PhysicalSafari/iOS and Windows diagnostic throughput limitation remain open. Owner-watch4ec27326 all local gates/self-scanPASS;new-headCI required after push.
+
+
+### RF26 — ownership AST test okuyucusunun ayrıştırılması (2026-11-15)
+
+608d3414 yalnız test kodunu ayrıştırır; eski üç kabul koşulu ve hata mesajları korunur. Altı aynı-AST eski/yeni karşılaştırması geçti: geçerli kaynak kabul, eksik defer/join, yanlış context, doğrudan goroutine ve çift defer ret. Ana paket PASS6.472s, beş hedefli test20tekrar PASS0.683s, vet PASS. Immutable kaynak taraması0blocking/478review satırı; bu desen taraması güvenlik açığı yokluğu kanıtı değildir. Linux race halen çalışıyor; yeni-head Sonar sonucu ve karmaşıklık puanı doğrulanmadı. Receipt: implementation/verification/refactor-owner-watch-ast-2026-11-15.json.
+
+Önceki228a00bb PR305 terminal CI36/36SUCCESS: implementation/verification/refactor-228a-terminal-ci-2026-11-15.json. Genel proje/fiziksel/platform kabulü açık.

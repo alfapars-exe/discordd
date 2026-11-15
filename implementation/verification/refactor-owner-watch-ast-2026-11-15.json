@@ -1,0 +1,25 @@
+{
+  "sourceRevision": "608d341483f2025ad6f0740688495cab7c2becb6",
+  "scope": "RF26: extract ownership shutdown AST collection into focused test-only helpers; preserve all original guard predicates and fatal messages. No product behavior or public contract change.",
+  "validation": {
+    "mainPackage": "PASS 6.472s",
+    "targeted": "5 tests,20 repeats,PASS 0.683s",
+    "vet": "PASS",
+    "equivalence": "Six original/new AST collector comparisons on identical mutated ASTs: valid accepted; missing defer,missing join,wrong context,direct goroutine,double defer rejected. Temporary test removed. PASS 0.623s.",
+    "linuxRace": "RUNNING; not accepted until terminal result",
+    "scan": "Immutable 608d3414 archive: 0 blocking matches;478 review lines. This pattern scan is not proof of absence of vulnerabilities."
+  },
+  "evidenceLogs": [
+    "TEMP/hichat-watch-ast-main.log",
+    "TEMP/hichat-watch-ast-repeated.log",
+    "TEMP/hichat-watch-ast-vet.log",
+    "TEMP/hichat-watch-ast-equivalence.log",
+    "TEMP/hichat-watch-ast-linux-race.log",
+    "TEMP/hichat-watch-ast-final-scan.log"
+  ],
+  "sonar": {
+    "before": "go:S3776 complexity45,required15 in backend_owner_watch_test.go",
+    "after": "Pending new-head Sonar analysis; no after-score claimed"
+  },
+  "completion": "RF01-RF30 and full project acceptance remain open."
+}
