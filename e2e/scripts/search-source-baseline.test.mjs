@@ -50,3 +50,9 @@ test("required historical entry points cannot fall back to current files", t => 
   const f = fixture(t);
   assert.throws(() => searchSourceBaseline(git, f.root, f.baseline, ["client/src/missing.ts"]), /Missing required historical/);
 });
+
+test("untracked runtime source cannot be reported as an immutable comparison", t => {
+  const f = fixture(t);
+  f.write("client/src/untracked.mjs", "export default true;");
+  assert.throws(() => searchSourceBaseline(git, f.root, f.baseline, ["client/src/panel.ts"]), /untracked client/);
+});

@@ -12,6 +12,8 @@ export function searchSourceBaseline(git, repo, baseline, requiredPaths) {
   const run = args => execFileSync(git, args, { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   try { run(["diff", "--quiet", "HEAD", "--", "client/src"]); }
   catch { throw new Error("Source comparison requires committed client/src changes"); }
+  const untracked = run(["ls-files", "--others", "--exclude-standard", "--", "client/src"]).trim().split(/\r?\n/).filter(runtimeSource);
+  assert.equal(untracked.length, 0, "Source comparison cannot include untracked client runtime source");
   const baselineFiles = new Set(run(["ls-tree", "-r", "--name-only", baseline, "--", "client/src"]).trim().split(/\r?\n/));
   for (const path of requiredPaths) assert.ok(baselineFiles.has(path), `Missing required historical source: ${path}`);
   const changed = run(["diff", "--name-only", baseline, "HEAD", "--", "client/src"]).trim().split(/\r?\n/);
