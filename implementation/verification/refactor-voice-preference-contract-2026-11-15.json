@@ -1,0 +1,25 @@
+{
+  "date": "2026-11-15",
+  "base": "0915ab3dfb33aa0b23d15887dd2172df205a2fdc",
+  "sources": {
+    "client/src/stores/voicePreferences.ts": "30569ce6bd2eba325423d831e2e5f6afc5b830e36fa8231c4ecedf6dc5fb82d8",
+    "client/src/stores/slices/voiceSettingsSlice.ts": "7632cfa238a3d5e1ad5a17557afdadeaf52e3469010b9d04da203b6118247db2",
+    "client/src/stores/preferencesCodec.ts": "59f89be14b601ac9f7149769387330f3858b8d5cd5bc2c8cd8ec4aca3a78c2a8",
+    "client/src/stores/accountPreferenceConsumers.test.ts": "59bb9b8ae628d088999f5ad09e59cf737bb3cea274b1549a870c1f1d9db7ba68"
+  },
+  "change": "Extract voice types/defaults to store-free module; retain legacy exports and derive account-cache field set from defaults minus device-local keys",
+  "validation": {
+    "before": "62 targeted tests pass before refactor with new round-trip case",
+    "afterTargeted": "112 tests passed",
+    "fullVitest": "482 files;4993 passed;1 skipped;103.54s",
+    "typescript": "tsc --noEmit passed",
+    "lint": "four changed source/test modules passed",
+    "build": "Vite production build passed;existing chunk-size warnings remain",
+    "extraction": "all moved type/default declaration text exactly matches base source"
+  },
+  "limits": [
+    "full run does not collect coverage",
+    "physical voice/media and full RF13 final-source acceptance remain open",
+    "new-head CI pending"
+  ]
+}

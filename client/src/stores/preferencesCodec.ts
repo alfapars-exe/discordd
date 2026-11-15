@@ -1,5 +1,6 @@
 import { DEFAULT_ACCESSIBILITY, ACCESSIBILITY_BOOLEAN_FIELDS } from "../utils/accessibilityPreferenceDefaults";
 import { DEVICE_LOCAL_VOICE_SETTING_KEYS } from "./voicePreferenceScope";
+import { DEFAULT_SETTINGS as DEFAULT_VOICE_SETTINGS } from "./voicePreferences";
 import { DEFAULT_NOTIFICATION_PREFERENCES, NOTIFICATION_BOOLEAN_FIELDS } from "../utils/notificationPreferenceDefaults";
 import { APPEARANCE_RANGES, APPEARANCE_STORAGE_KEYS } from "./appearancePreferences";
 
@@ -12,7 +13,7 @@ const CACHE_FIELDS: Record<string, Set<string>> = {
   appearance: new Set(Object.keys(APPEARANCE_STORAGE_KEYS)),
   entrance_sounds: new Set(["enabled", "volume"]),
   accessibility: new Set(Object.keys(DEFAULT_ACCESSIBILITY)),
-  voice_settings: new Set(["inputMode", "pttKey", "micSensitivity", "userVolumes", "masterVolume", "inputVolume", "soundsEnabled", "localMutedUsers", "noiseReduction", "noiseReductionEngine", "noiseSuppressionLevel", "deepfilterSuppression", "screenShareVolumes", "screenShareAudio", "screenShareQuality", "screenShareFps", "screenShareShowCursor", "screenShareLowLatency", "screenShareMode", "cameraQuality", "cameraFps", "micProfile", "muteHotkeyEnabled", "muteHotkey"]),
+  voice_settings: new Set(Object.keys(DEFAULT_VOICE_SETTINGS).filter(key => !DEVICE_FIELDS.has(key))),
   privacy: new Set(["improvementTelemetry", "profileAudience", "shareProfileUpdates", "shareOnlineUpdates", "shareStreamUpdates", "shareGameActivity", "allowFriendsToJoinGame", "allowVoiceParticipantsToJoinGame", "gameActivityNewServerAudience", "gameActivityServerOverrides", "clipVoiceConsent", "experiencePersonalization", "friendRequests", "ignoredUsers", "personalizedFriendMessages", "spamFilter", "spamRestoredMessages", "serverDMDefault", "serverDMOverrides", "sensitiveMedia", "disturbingMedia"]),
   notifications: new Set(Object.keys(DEFAULT_NOTIFICATION_PREFERENCES)),
   email_preferences: new Set(["communication", "social", "announcements", "tips", "recommendations", "marketingUnsubscribed"]),
