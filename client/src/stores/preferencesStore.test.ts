@@ -119,6 +119,51 @@ describe("account-scoped preference synchronization", () => {
     }finally{loader.resolve(applyAccountPreferences);bindPreferencePresenter(async()=>applyAccountPreferences);}
   });
 
+  it.each(["loader","application"] as const)("recovers failed initial preference presentation without rebinding (%s)",async phase=>{
+    const {applyAccountPreferences}=await import("./applyAccountPreferences");
+    bindPreferencePresenter(async()=>{
+      if(phase==="loader")throw new Error("presenter chunk unavailable");
+      return ()=>{throw new Error("local application unavailable");};
+    });
+    try {
+      state().bindAccount("alice");state().set({theme:"queued-before-load"});
+      await state().fetchAndApply();
+      expect(state().syncError).toBe("preferences_apply_failed");
+      expect(state().isLoaded).toBe(false);
+      await state().retrySync();
+      expect(mocks.get).not.toHaveBeenCalled();expect(mocks.update).not.toHaveBeenCalled();
+      expect(state().hasPendingChanges).toBe(true);
+      expect(JSON.parse(localStorage.getItem(pendingKey)!)).toEqual({theme:"queued-before-load"});
+      bindPreferencePresenter(async()=>applyAccountPreferences);
+      await state().retrySync();
+      expect(mocks.get).toHaveBeenCalledTimes(1);expect(mocks.update).toHaveBeenCalledTimes(1);
+      expect(mocks.update.mock.calls[0][0]).toEqual({theme:"queued-before-load"});
+      expect(state().syncStatus).toBe("saved");expect(state().isLoaded).toBe(true);
+      expect(state().hasPendingChanges).toBe(false);
+      expect(mocks.theme).toHaveBeenLastCalledWith("queued-before-load");
+    }finally{bindPreferencePresenter(async()=>applyAccountPreferences);}
+  });
+
+  it("retries an authoritative GET presentation with the original reset and session-preservation plan",async()=>{
+    await ready({theme:"removed-on-server",voice_settings:{masterVolume:45}});
+    const {applyAccountPreferences}=await import("./applyAccountPreferences");
+    bindPreferencePresenter(async()=>{throw new Error("presenter chunk unavailable");});
+    try {
+      mocks.get.mockResolvedValueOnce(ok({}));await state().fetchAndApply();
+      expect(state().syncError).toBe("preferences_apply_failed");
+      expect(state().data).toEqual({});
+      for(const reset of mocks.resets)reset.mockClear();
+      bindPreferencePresenter(async()=>applyAccountPreferences);
+      await state().retrySync();
+      expect(mocks.resets[0]).toHaveBeenCalledExactlyOnceWith(true);
+      expect(mocks.resets[1]).toHaveBeenCalledExactlyOnceWith();
+      expect(mocks.resets[2]).toHaveBeenCalledExactlyOnceWith(true);
+      expect(mocks.resets[3]).toHaveBeenCalledExactlyOnceWith();
+      expect(mocks.get).toHaveBeenCalledTimes(2);expect(mocks.update).not.toHaveBeenCalled();
+      expect(state().syncStatus).toBe("saved");
+    }finally{bindPreferencePresenter(async()=>applyAccountPreferences);}
+  });
+
   it("fences an old account while the production presenter is still loading", async () => {
     const { applyAccountPreferences } = await import("./applyAccountPreferences");
     const loading = deferred<typeof applyAccountPreferences>();
