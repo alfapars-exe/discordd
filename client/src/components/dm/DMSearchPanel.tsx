@@ -1,12 +1,14 @@
 import { sortDMBySource } from "../../utils/dmSourceOrder";
 /** DMSearchPanel — DM message search panel. Same pattern as channel SearchPanel. */
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { useDMStore } from "../../stores/dmStore";
 import { useE2EEStore } from "../../stores/e2eeStore";
 import { useOpenAtMessage } from "../../hooks/useOpenAtMessage";
-import { searchCachedDMMessages } from "../../crypto/keyStorage";
+import { getAuthSessionOwner, subscribeAuthOwnerChanges } from "../../api/authSessionEvents";
+import type { CachedDecryptedMessage } from "../../crypto/types";
+import { getCachedDecryptedMessage, searchCachedDMMessages } from "../../crypto/keyStorage";
 import Avatar from "../shared/Avatar";
 import SpamPreview from "../chat/SpamPreview";
 import GameMessageOrigin from "../chat/GameMessageOrigin";
@@ -31,7 +33,8 @@ type SearchState = {
 function DMSearchPanel(props: DMSearchPanelProps) {
   const encrypted = useDMStore((s) => s.channels.find((c) => c.id === props.channelId)?.e2ee_enabled);
   const keysReady = useE2EEStore((s) => s.initStatus === "ready");
-  const scope = JSON.stringify([props.channelId, encrypted, encrypted && keysReady]);
+  const owner = useSyncExternalStore(subscribeAuthOwnerChanges, getAuthSessionOwner);
+  const scope = JSON.stringify([owner, props.channelId, encrypted, encrypted && keysReady]);
   return <ScopedDMSearchPanel key={scope} {...props} encrypted={encrypted} />;
 }
 
@@ -50,6 +53,8 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted }: DMSearchPanelPro
   // must not overwrite the results of the search started after it.
   const searchSeqRef = useRef(0);
   const localSearch = useRef<AbortController | null>(null);
+  const localMatches = useRef<string[] | null>(null);
+  const deletedIds = useRef(new Set<string>());
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Auto-focus input on mount
@@ -92,13 +97,25 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted }: DMSearchPanelPro
         try {
           const controller = new AbortController();
           localSearch.current = controller;
-          const cached = await searchCachedDMMessages(channelId, searchQuery.trim(), controller.signal);
-          // A newer search started while this one was awaiting — its results
-          // (and spinner state) own the panel now.
+          const term = searchQuery.trim();
+          let paged: CachedDecryptedMessage[];
+          if (localMatches.current) {
+            const ids = localMatches.current.slice(searchOffset, searchOffset + LIMIT);
+            const records = await Promise.all(ids.map(getCachedDecryptedMessage));
+            paged = records.filter((row): row is CachedDecryptedMessage => row !== null &&
+              row.dmChannelId === channelId && row.content.toLowerCase().includes(term.toLowerCase()) &&
+              !deletedIds.current.has(row.messageId));
+          } else {
+            const cached = await searchCachedDMMessages(channelId, term, controller.signal);
+            if (seq !== searchSeqRef.current) return;
+            const sorted = sortDMBySource(cached.filter(row => !deletedIds.current.has(row.messageId)).map(record => ({
+              id: record.messageId, created_at: new Date(record.timestamp).toISOString(), source_sequence: record.sourceSequence, record,
+            }))).reverse().map(item => item.record);
+            localMatches.current = sorted.map(row => row.messageId);
+            paged = sorted.slice(searchOffset, searchOffset + LIMIT);
+          }
           if (seq !== searchSeqRef.current) return;
-          const total = cached.length;
-          const paged = sortDMBySource(cached.map(record => ({ id: record.messageId, created_at: new Date(record.timestamp).toISOString(), source_sequence: record.sourceSequence, record }))).reverse()
-            .slice(searchOffset, searchOffset + LIMIT).map(item => item.record);
+          const total = localMatches.current.length;
 
           // CachedDecryptedMessage -> DMMessage minimal format
           const messages: DMMessage[] = paged.map((c) => ({
@@ -145,6 +162,8 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted }: DMSearchPanelPro
   function handleInputChange(value: string) {
     searchSeqRef.current++;
     localSearch.current?.abort();
+    localMatches.current = null;
+    deletedIds.current.clear();
     setQuery(value);
     setOffset(0);
 
@@ -180,9 +199,12 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted }: DMSearchPanelPro
   useEffect(() => {
     const unsubscribe = useDMStore.subscribe((state, prev) => {
       const deleted = state.lastDeletedDM;
-      if (!deleted || deleted === prev.lastDeletedDM) return;
+      if (!deleted || deleted === prev.lastDeletedDM || deleted.dm_channel_id !== channelId) return;
+      deletedIds.current.add(deleted.id);
+      const index = localMatches.current?.indexOf(deleted.id) ?? -1;
+      if (index >= 0) localMatches.current!.splice(index, 1);
       setResults((prevResults) => {
-        if (!prevResults || !prevResults.messages.some((m) => m.id === deleted.id)) {
+        if (!prevResults || (index < 0 && !prevResults.messages.some((m) => m.id === deleted.id))) {
           return prevResults;
         }
         return {
@@ -194,7 +216,7 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted }: DMSearchPanelPro
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [channelId]);
 
   /** Scroll to message on result click. Inside the loaded window this is
    *  a plain scroll; outside it, fetch a window around the message. Results
@@ -213,6 +235,9 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted }: DMSearchPanelPro
       onClose();
       return;
     }
+    deletedIds.current.add(msg.id);
+    const index = localMatches.current?.indexOf(msg.id) ?? -1;
+    if (index >= 0) localMatches.current!.splice(index, 1);
     setResults((prev) =>
       prev?.messages.some((m) => m.id === msg.id)
         ? {

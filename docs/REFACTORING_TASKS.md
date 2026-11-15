@@ -2660,3 +2660,8 @@ The first post-timeout CI run also caught a non-UTF8 RF11 status row introduced 
 ### RF13 — production bootstrap preference loader contract (2026-11-15)
 
 The existing composed voice-store preference test now resolves the real presenter through bootstrapPreferences and loadPreferencePresenter, closing the previously excluded bootstrap-loader invocation path. The same assertions preserve channel/token/URL/room-key and mute/deafen/stream/callback identity while applying account volume; a null fenced read does not hydrate stale values. Four related Vitest files passed 179 tests (6.41s); targeted ESLint passed. External media/API boundaries remain mocked, and physical media, complete account timing matrix and whole RF13 remain open. Receipt: refactor-rf13-bootstrap-loader-contract-2026-11-15.json.
+
+
+### RF17 — encrypted DM pagination snapshot (2026-11-15)
+
+Encrypted DM search now reuses matching IDs after its first query and reads at most 25 cache records for each subsequent page. Source sequence ordering remains intact; account changes remount the search scope and discard pending old-owner results. Off-page deletion removes the matching ID and updates the count. The old implementation failed the repeated-scan regression; the changed implementation passed 17 DM/channel panel tests and targeted ESLint. First-query scanning, all-match ID memory, and the DM-specific 1k/10k/50k IndexedDB benchmark remain open. Receipt: refactor-rf17-dm-pagination-contract-2026-11-15.json.
