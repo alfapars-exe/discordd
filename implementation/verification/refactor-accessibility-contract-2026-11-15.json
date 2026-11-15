@@ -73,7 +73,7 @@
     "immutableSelfScan": "Both immutable0ae393e1 andfinal336fb196 scans RUNNING;neither accepted yet"
   },
   "remaining": [
-    "Final597313df fullclientcoverage andimmutable scan",
+    "Final597313df immutable scan",
     "New-headCI afterpush",
     "RF13 final runtime/account/platform acceptance;RF01-RF30 stillopen"
   ],
@@ -95,10 +95,122 @@
     "scope": "Corrects a regression caught locally during unpublished extraction;not a newly discovered pre-existing production bug."
   },
   "finalValidation": {
-    "fullClientCoverage": "RUNNING;TEMP/hichat-accessibility-codec-final-coverage.log",
+    "fullClientCoverage": "PASS496files5331passed1skipped;TEMP/hichat-accessibility-codec-final-coverage.log",
     "build": "PASS actualtsc-b/Vite4.43s;TEMP/hichat-accessibility-codec-final-build.log",
     "lint": "PASS changedpurecodec andregressiontest0errors;previous71d22b48 fullclientlint0errors2existingwarnings",
-    "scan": "RUNNING immutable597313df;TEMP/hichat-accessibility-codec-delivery-scan.log"
+    "scan": "RUNNING immutable597313df;TEMP/hichat-accessibility-codec-delivery-scan.log",
+    "coverageTotal": {
+      "lines": {
+        "total": 38498,
+        "covered": 26510,
+        "skipped": 0,
+        "pct": 68.86
+      },
+      "statements": {
+        "total": 52737,
+        "covered": 35762,
+        "skipped": 0,
+        "pct": 67.81
+      },
+      "functions": {
+        "total": 12321,
+        "covered": 7640,
+        "skipped": 0,
+        "pct": 62
+      },
+      "branches": {
+        "total": 39939,
+        "covered": 25908,
+        "skipped": 0,
+        "pct": 64.86
+      },
+      "branchesTrue": {
+        "total": 0,
+        "covered": 0,
+        "skipped": 0,
+        "pct": 100
+      }
+    },
+    "coverageModules": {
+      "\\src\\stores\\accessibilityStore.ts": {
+        "lines": {
+          "total": 68,
+          "covered": 49,
+          "skipped": 0,
+          "pct": 72.05
+        },
+        "functions": {
+          "total": 41,
+          "covered": 24,
+          "skipped": 0,
+          "pct": 58.53
+        },
+        "statements": {
+          "total": 82,
+          "covered": 60,
+          "skipped": 0,
+          "pct": 73.17
+        },
+        "branches": {
+          "total": 20,
+          "covered": 16,
+          "skipped": 0,
+          "pct": 80
+        }
+      },
+      "\\src\\stores\\preferencesCodec.ts": {
+        "lines": {
+          "total": 81,
+          "covered": 74,
+          "skipped": 0,
+          "pct": 91.35
+        },
+        "functions": {
+          "total": 25,
+          "covered": 22,
+          "skipped": 0,
+          "pct": 88
+        },
+        "statements": {
+          "total": 116,
+          "covered": 102,
+          "skipped": 0,
+          "pct": 87.93
+        },
+        "branches": {
+          "total": 173,
+          "covered": 147,
+          "skipped": 0,
+          "pct": 84.97
+        }
+      },
+      "\\src\\utils\\accessibilityPreferenceCodec.ts": {
+        "lines": {
+          "total": 16,
+          "covered": 16,
+          "skipped": 0,
+          "pct": 100
+        },
+        "functions": {
+          "total": 2,
+          "covered": 2,
+          "skipped": 0,
+          "pct": 100
+        },
+        "statements": {
+          "total": 20,
+          "covered": 20,
+          "skipped": 0,
+          "pct": 100
+        },
+        "branches": {
+          "total": 19,
+          "covered": 19,
+          "skipped": 0,
+          "pct": 100
+        }
+      }
+    }
   },
   "priorScans": {
     "0ae393e1": "PASS0blocking/51exactrecords/478reviewlines",
