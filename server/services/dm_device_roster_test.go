@@ -83,3 +83,19 @@ func TestDMDeviceRosterMembersRechecksRevocation(t *testing.T) {
 		t.Fatalf("new block members=%v err=%v", members, err)
 	}
 }
+
+func TestDMDeviceRosterHistoryFailureReturnsNoMembers(t *testing.T) {
+	f := newDMFixtureWithPolicy(dmRosterPolicy{allow: true})
+	f.repo.GetChannelByIDFn = func(context.Context, string) (*models.DMChannel, error) {
+		return &models.DMChannel{ID: "ch", User1ID: "alice", User2ID: "bob", Status: models.DMStatusAccepted, E2EEEnabled: true}, nil
+	}
+	f.users.GetByIDFn = func(_ context.Context, id string) (*models.User, error) { return &models.User{ID: id}, nil }
+	f.block.IsBlockedFn = func(context.Context, string, string) (bool, error) { return false, nil }
+	f.friends.AreFriendsFn = func(context.Context, string, string) (bool, error) { return false, nil }
+	failure := errors.New("history lookup failed")
+	f.repo.HasMessagesFn = func(context.Context, string) (bool, error) { return false, failure }
+	members, err := f.svc.GetDeviceRosterMembers(context.Background(), "alice", "ch")
+	if !errors.Is(err, failure) || len(members) != 0 {
+		t.Fatalf("failed history lookup exposed members=%v err=%v", members, err)
+	}
+}
