@@ -1,4 +1,5 @@
 import { cacheChannelMessage } from "../../crypto/channelMessageCache";
+import { completeMessageDeletion } from "./completeMessageDeletion";
 import i18n from "../../i18n";
 /**
  * Channel-domain WS event handlers.
@@ -265,27 +266,27 @@ export async function handleChannelEvent(msg: WSMessage, isCurrent: () => boolea
       const delData = msg.d;
       const owner = getAuthSessionOwner();
       const generation = getAuthGeneration();
-
-      const unreadCount = useReadStateStore.getState().unreadCounts[delData.channel_id] ?? 0;
-      if (unreadCount > 0) {
-        const channelMessages = useMessageStore.getState().messagesByChannel[delData.channel_id];
-        const deletedMsg = channelMessages?.find((m) => m.id === delData.id);
-        const myId = useAuthStore.getState().user?.id;
-        const isOwnMessage = deletedMsg?.user_id === myId || deletedMsg?.author?.id === myId;
-        if (!isOwnMessage) {
-          useReadStateStore.getState().decrementUnread(delData.channel_id);
+      const current = () => isCurrent() && getAuthSessionOwner() === owner && getAuthGeneration() === generation;
+      await completeMessageDeletion([() => {
+        const unreadCount = useReadStateStore.getState().unreadCounts[delData.channel_id] ?? 0;
+        if (unreadCount > 0) {
+          const channelMessages = useMessageStore.getState().messagesByChannel[delData.channel_id];
+          const deletedMsg = channelMessages?.find((m) => m.id === delData.id);
+          const myId = useAuthStore.getState().user?.id;
+          const isOwnMessage = deletedMsg?.user_id === myId || deletedMsg?.author?.id === myId;
+          if (deletedMsg && !isOwnMessage) {
+            useReadStateStore.getState().decrementUnread(delData.channel_id);
+          }
         }
-      }
-
-      useMessageStore.getState().handleMessageDelete(delData);
-      if (owner) {
-        const current = () => isCurrent() && getAuthSessionOwner() === owner && getAuthGeneration() === generation;
-        try {
-          await keyStorage.deleteCachedChannelMessage(delData.id, delData.channel_id, current);
-        } catch {
-          if (current()) console.warn("[ws] Channel deleted-message cache cleanup failed");
+      }, () => useMessageStore.getState().handleMessageDelete(delData)], async () => {
+        if (owner) {
+          try {
+            await keyStorage.deleteCachedChannelMessage(delData.id, delData.channel_id, current);
+          } catch {
+            if (current()) console.warn("[ws] Channel deleted-message cache cleanup failed");
+          }
         }
-      }
+      }, current);
       return true;
     }
 
