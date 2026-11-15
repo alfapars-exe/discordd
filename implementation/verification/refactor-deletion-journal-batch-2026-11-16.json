@@ -47,6 +47,14 @@
       "limit": "Timeout not reproduced locally; different browser/host from Linux CI. No resolution claimed.",
       "diagnosticChange": "Future timeout reports handoffReady, result count, count text, panel text, releasedAt and captured page errors; original 120s limit and thrown error preserved",
       "cleanup": "Task browser space closed; diagnostic server stopped"
+    },
+    "followingCIObservation": {
+      "head": "1dbb9750",
+      "run": 43774484351,
+      "job": 132997515593,
+      "step": "Verify production search panel retention and ordering",
+      "conclusion": "success",
+      "limit": "Failure did not recur in this run; original root cause remains open; whole run still in progress at observation"
     }
   },
   "sonar": {
