@@ -90,6 +90,18 @@ describe("useMessageEditing — QA bug #5 (edit caret + leading whitespace)", ()
     expect(textarea.selectionEnd).toBe(content.length);
   });
 
+  it("preserves a user selection made immediately after opening the editor", async () => {
+    const content = "replace this whole message";
+    const holder = renderProbe(content, vi.fn());
+    act(() => holder.latest?.startEdit());
+    const textarea = screen.getByLabelText<HTMLTextAreaElement>("edit-message");
+    textarea.focus();
+    textarea.setSelectionRange(0, content.length);
+    await flushAnimationFrame();
+    expect(textarea.selectionStart).toBe(0);
+    expect(textarea.selectionEnd).toBe(content.length);
+  });
+
   it("preserves leading whitespace on save and trims only the trailing run", async () => {
     const saveEdit = vi.fn();
     const holder = renderProbe("old content", saveEdit);
