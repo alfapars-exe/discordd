@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type Request } from "@playwright/test";
 import { randomBytes, webcrypto } from "node:crypto";
 import {
   composer, dismissOnboardingOverlays, fixtureApi, loginAsNotificationOwner,
@@ -17,6 +17,31 @@ async function openChannel(page: Page, serverName: string) {
   await page.locator("nav.server-rail").getByRole("button", { name: serverName, exact: true }).click();
   await page.locator("button.ch-tree-item").filter({ hasText: "general" }).first().click();
   await expect(composer(page)).toBeVisible();
+}
+
+async function expectEncryptedSearchPages(page: Page, query: string, newestFirst: string[]) {
+  const remoteSearches: string[] = [];
+  const observe = (request: Request) => {
+    const pathname = new URL(request.url()).pathname;
+    if (/^\/api\/servers\/[^/]+\/search$/.test(pathname)) remoteSearches.push(pathname);
+  };
+  page.on("request", observe);
+  try {
+    await page.getByRole("button", { name: "Search Messages", exact: true }).click();
+    const panel = page.locator(".search-panel");
+    await panel.getByPlaceholder("Search messages...", { exact: true }).fill(query.toUpperCase());
+    await expect(panel.locator(".search-count")).toHaveText(`${newestFirst.length} results`);
+    await expect(panel.locator(".search-result-content")).toHaveText(newestFirst.slice(0, 25));
+    await panel.getByRole("button", { name: "Next", exact: true }).click();
+    await expect(panel.locator(".search-result-content")).toHaveText(newestFirst.slice(25));
+    await panel.getByRole("button", { name: "Previous", exact: true }).click();
+    await expect(panel.locator(".search-result-content")).toHaveText(newestFirst.slice(0, 25));
+    expect(remoteSearches).toEqual([]);
+    await panel.locator(".search-close").click();
+    await expect(panel).toBeHidden();
+  } finally {
+    page.off("request", observe);
+  }
 }
 
 // Independent fixture preparation: emulate a v1 writer that encrypted the
@@ -81,7 +106,7 @@ for (const cacheFormat of ["source-tagged", "legacy-unversioned"] as const) {
       await original.reload();
       await dismissOnboardingOverlays(original);
       await openChannel(original, fixture.serverName);
-      const plaintext = `encrypted-history-${randomBytes(12).toString("hex")}`;
+      const plaintext = `encrypted-history-\u00c9t\u00e9-${randomBytes(12).toString("hex")}`;
       const committed = original.waitForResponse(response =>
         new URL(response.url()).pathname === `/api/servers/${fixture.serverId}/channels/${fixture.channelId}/messages`
         && response.request().method() === "POST");
@@ -93,6 +118,30 @@ for (const cacheFormat of ["source-tagged", "legacy-unversioned"] as const) {
       expect(message.encryption_version).toBe(1);
       expect(JSON.stringify(message)).not.toContain(plaintext);
       await expect(messageList(original).getByRole("article").filter({ hasText: plaintext })).toHaveCount(1);
+
+      const searchMessages = [plaintext];
+      if (cacheFormat === "source-tagged") {
+        // The real limiter allows ten sends per trailing five seconds. Pace
+        // fixture writes rather than weakening that policy or retrying failures.
+        for (let index = 1; index < 26; index++) {
+          await original.waitForTimeout(550);
+          const content = `${plaintext} ${String(index).padStart(2, "0")}`;
+          const sent = original.waitForResponse(response =>
+            new URL(response.url()).pathname === `/api/servers/${fixture.serverId}/channels/${fixture.channelId}/messages`
+            && response.request().method() === "POST");
+          await composer(original).fill(content);
+          await composer(original).press("Enter");
+          const committed = await sent;
+          expect(committed.status()).toBe(201);
+          const encrypted = (await committed.json()).data;
+          expect(encrypted.encryption_version).toBe(1);
+          expect(JSON.stringify(encrypted)).not.toContain(content);
+          await expect(original.locator(`#msg-${encrypted.id}`)).toBeVisible();
+          await expect(original.locator(`#msg-${encrypted.id}`)).toContainText(content);
+          searchMessages.push(content);
+        }
+        await expectEncryptedSearchPages(original, plaintext, searchMessages.toReversed());
+      }
 
       const settings = await encryptionSettings(original);
       await settings.locator("#recoveryPwd").fill(password);
@@ -129,10 +178,13 @@ for (const cacheFormat of ["source-tagged", "legacy-unversioned"] as const) {
       await restored.keyboard.press("Escape");
       await expect(restoredSettings).toBeHidden();
       await openChannel(restored, fixture.serverName);
-      await expect(messageList(restored).getByRole("article").filter({ hasText: plaintext })).toHaveCount(1);
+      await expect(restored.locator(`#msg-${message.id}`)).toContainText(plaintext);
       await restored.reload();
       await dismissOnboardingOverlays(restored);
-      await expect(messageList(restored).getByRole("article").filter({ hasText: plaintext })).toHaveCount(1);
+      await expect(restored.locator(`#msg-${message.id}`)).toContainText(plaintext);
+      if (cacheFormat === "source-tagged") {
+        await expectEncryptedSearchPages(restored, plaintext, searchMessages.toReversed());
+      }
     } finally {
       await Promise.all([originalContext.close(), restoredContext.close()]);
     }
