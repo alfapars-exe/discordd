@@ -3396,3 +3396,8 @@ Sonar PR305 a1e85a84: owner-watch testinin45karmaşıklık bulgusuAaHYWqzUd7dyvm
 ### RF26 — DM cihaz listesi ortak sunucu erişim kontrolü (2026-11-15)
 
 05649379, boş konuşmada ortak sunucu iznini doğrulayan bloğu verifyDMRosterServerAccess metoduna taşır. Arkadaşlık/yapılandırılmamış policy ve mevcut geçmiş erken dönüşleri, hata sarma, ret mesajları, platform-admin ve diğer kontrollerin sırası korunur. Önce geçmiş sorgusu hata verdiğinde üye kimliği dönmediğini sabitleyen test eski kaynaktaPASS0.595s. Sonra üçhedeflitest(11durumlu matris dahil)20tekrarPASS0.567s,vetPASS,tamservices ok  	github.com/argeinfina/hichat/services	96.520s. Immutabletarama ve yeniheadCI/Sonar henüz tamamlanmadı. Receipt:implementation/verification/refactor-dm-roster-policy-2026-11-15.json. Genelhedef açık.
+
+
+### RF13/RF26 — tercih yazımı yanıt/hata sınırlarının ayrılması (2026-11-15)
+
+7c604780 GET/PATCH yanıtı hesap eşleşmesi doğrulamasını validatePreferenceResponse içinde birleştirir;onaylanmış yazımın yerel uygulama hatası ile henüz onaylanmamış yazımın kuyruğa dönüşünü handlePreferenceWriteFailure ayırır. Generation denetimi, güncel pending önceliği, kabul edilen PATCHin yeniden gönderilmemesi ve observer hatası davranışı korunur. Mevcut79test önce3.91s/sonra4.24sPASS;gerçek tsc-b/VitebuildPASS1.78s;lint0hata2mevcutuyarı. Fullclientcoverage/immutablescan sürüyor;yeniheadCI/Sonar doğrulanmadı. Receipt:implementation/verification/refactor-preferences-write-layout-2026-11-15.json.

@@ -1,0 +1,27 @@
+{
+  "sourceRevision": "7c604780",
+  "scope": "RF13/RF26 separate preference GET/PATCH response validation and write failure handling;preserve scope fences,acknowledged queue retirement,presentation-only retry and unsent-edit recovery. Public store actions unchanged.",
+  "baseline": {
+    "sonarWriteRunComplexity": 25,
+    "targetedTests": "79PASS before3.91s andafter4.24s"
+  },
+  "validation": {
+    "build": "npm run build (tsc -b plus Vite)PASS;Vite1.78s",
+    "lint": "PASS0errors2existingwarnings",
+    "fullClientCoverage": "RUNNING,not accepted",
+    "immutableSelfScan": "RUNNING,not accepted"
+  },
+  "logs": {
+    "before": "TEMP/hichat-preferences-write-layout-before.log",
+    "after": "TEMP/hichat-preferences-write-layout-after.log",
+    "build": "TEMP/hichat-preferences-write-layout-build.log",
+    "lint": "TEMP/hichat-preferences-write-layout-lint.log",
+    "coverage": "TEMP/hichat-preferences-write-layout-coverage.log",
+    "scan": "TEMP/hichat-preferences-layout-final-scan.log"
+  },
+  "pending": [
+    "New-head CI and Sonar confirmation;no exact after complexity claimed",
+    "RF13 final account/offline/runtime acceptance",
+    "Whole-project RF01-RF30 acceptance"
+  ]
+}

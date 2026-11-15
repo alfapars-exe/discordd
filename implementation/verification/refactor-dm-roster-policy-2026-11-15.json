@@ -7,7 +7,8 @@
     "vet": "go vet ./services PASS",
     "fullServices": "ok  \tgithub.com/argeinfina/hichat/services\t96.520s",
     "fullServicesLog": "TEMP/hichat-roster-policy-services.log",
-    "selfScan": "RUNNING on immutable05649379 archive;not yet accepted"
+    "selfScan": "PASS on immutable05649379 archive;51 exact reviewed-source records,478 review lines,0 blocking patterns. Pattern scan is not proof of absence of vulnerabilities.",
+    "selfScanLog": "TEMP/hichat-roster-policy-self-scan.log"
   },
   "remaining": [
     "New-head CI/Sonar",
