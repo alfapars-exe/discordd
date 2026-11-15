@@ -42,8 +42,16 @@
     "reviewQueue": "Includes vendored ONNX runtime fetch/message patterns, owned audio probes and fixture scripts; review-only hits remain visible. Not a claim of complete vulnerability audit."
   },
   "remaining": [
-    "Prior41e0fdae CI terminal archive before pushing (cancel-in-progress=true)",
     "New-head CI after push",
     "RF01-RF30 project acceptance"
-  ]
+  ],
+  "priorCI": {
+    "sourceCommit": "41e0fdae6a2a2fc72e6b2824eaa9b1129374286f",
+    "checks": 36,
+    "success": 36,
+    "serverRun": 43731575019,
+    "mobileRun": 43731575007,
+    "frontendRun": 43731575025,
+    "archive": "refactor-41e-terminal-ci-2026-11-15.json"
+  }
 }
