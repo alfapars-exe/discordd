@@ -9,6 +9,7 @@
 import { create } from "zustand";
 import { type ThemeId, DEFAULT_THEME, THEMES, applyTheme } from "../styles/themes";
 import { usePreferencesStore } from "./preferencesStore";
+import { capturePreferenceScope } from "./preferenceScope";
 import { useServerStore } from "./serverStore";
 
 import {
@@ -37,8 +38,11 @@ const THEME_STORAGE_KEY = "mqvi_theme";
 const BLUR_MIGRATION_KEY = "mqvi_blur_default_migrated_v1";
 const TRANSPARENT_KEY = "mqvi_transparent_bg";
 
-function syncAppearance(partial: Partial<AppearancePreferences>): void {
-  usePreferencesStore.getState().set({ appearance: partial });
+function syncAppearance(partial: Partial<AppearancePreferences>, isCurrent: () => boolean): void {
+  if (!isCurrent()) return;
+  const state = useSettingsStore.getState();
+  const owned = Object.fromEntries(Object.entries(partial).filter(([key, value]) => Object.is(state[key as keyof AppearancePreferences], value)));
+  if (Object.keys(owned).length) usePreferencesStore.getState().set({ appearance: owned });
 }
 
 /** Device transparency hides wallpaper without changing the account preference. */
@@ -397,6 +401,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   setActiveTab: (tab) => set({ activeTab: tab }),
 
   setTheme: (id) => {
+    const isCurrent = capturePreferenceScope();
     applyTheme(id);
     try {
       localStorage.setItem(THEME_STORAGE_KEY, id);
@@ -405,20 +410,22 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     }
     set({ themeId: id });
     // Sync to server
-    usePreferencesStore.getState().set({ theme: id });
+    if (isCurrent() && useSettingsStore.getState().themeId === id) usePreferencesStore.getState().set({ theme: id });
   },
 
   setBlurEnabled: (enabled) => {
+    const isCurrent = capturePreferenceScope();
     try {
       localStorage.setItem(APPEARANCE_STORAGE_KEYS.blurEnabled, enabled ? "1" : "0");
     } catch {
       /* localStorage full or inaccessible */
     }
     set({ blurEnabled: enabled });
-    syncAppearance({ blurEnabled: enabled });
+    syncAppearance({ blurEnabled: enabled }, isCurrent);
   },
 
   setBlurStrength: (px) => {
+    const isCurrent = capturePreferenceScope();
     const clamped = Math.max(BLUR_STRENGTH_MIN, Math.min(BLUR_STRENGTH_MAX, Math.round(px)));
     try {
       localStorage.setItem(APPEARANCE_STORAGE_KEYS.blurStrength, String(clamped));
@@ -426,17 +433,18 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       /* localStorage full or inaccessible */
     }
     set({ blurStrength: clamped });
-    syncAppearance({ blurStrength: clamped });
+    syncAppearance({ blurStrength: clamped }, isCurrent);
   },
 
   setWallpaperEnabled: (enabled) => {
+    const isCurrent = capturePreferenceScope();
     try {
       localStorage.setItem(APPEARANCE_STORAGE_KEYS.wallpaperEnabled, enabled ? "1" : "0");
     } catch {
       /* localStorage full or inaccessible */
     }
     set({ wallpaperEnabled: enabled });
-    syncAppearance({ wallpaperEnabled: enabled });
+    syncAppearance({ wallpaperEnabled: enabled }, isCurrent);
   },
 
   setTransparentBackground: (enabled) => {
@@ -455,16 +463,18 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   },
 
   setLightningEnabled: (enabled) => {
+    const isCurrent = capturePreferenceScope();
     try {
       localStorage.setItem(APPEARANCE_STORAGE_KEYS.lightningEnabled, enabled ? "1" : "0");
     } catch {
       /* localStorage full or inaccessible */
     }
     set({ lightningEnabled: enabled });
-    syncAppearance({ lightningEnabled: enabled });
+    syncAppearance({ lightningEnabled: enabled }, isCurrent);
   },
 
   setLightningBlur: (px) => {
+    const isCurrent = capturePreferenceScope();
     const clamped = Math.max(LIGHTNING_BLUR_MIN, Math.min(LIGHTNING_BLUR_MAX, Math.round(px)));
     try {
       localStorage.setItem(APPEARANCE_STORAGE_KEYS.lightningBlur, String(clamped));
@@ -473,10 +483,11 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     }
     applyLightningBlur(clamped);
     set({ lightningBlur: clamped });
-    syncAppearance({ lightningBlur: clamped });
+    syncAppearance({ lightningBlur: clamped }, isCurrent);
   },
 
   setNeonEnabled: (enabled) => {
+    const isCurrent = capturePreferenceScope();
     try {
       localStorage.setItem(APPEARANCE_STORAGE_KEYS.neonEnabled, enabled ? "1" : "0");
     } catch {
@@ -487,10 +498,11 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     // as an argument — keeps the call sites symmetrical with lightning.
     applyNeonStyles(enabled, useSettingsStore.getState().neonIntensity);
     set({ neonEnabled: enabled });
-    syncAppearance({ neonEnabled: enabled });
+    syncAppearance({ neonEnabled: enabled }, isCurrent);
   },
 
   setNeonIntensity: (pct) => {
+    const isCurrent = capturePreferenceScope();
     const clamped = Math.max(NEON_INTENSITY_MIN, Math.min(NEON_INTENSITY_MAX, Math.round(pct)));
     try {
       localStorage.setItem(APPEARANCE_STORAGE_KEYS.neonIntensity, String(clamped));
@@ -499,10 +511,11 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     }
     applyNeonStyles(useSettingsStore.getState().neonEnabled, clamped);
     set({ neonIntensity: clamped });
-    syncAppearance({ neonIntensity: clamped });
+    syncAppearance({ neonIntensity: clamped }, isCurrent);
   },
 
   setUiScale: (pct) => {
+    const isCurrent = capturePreferenceScope();
     const clamped = Math.max(UI_SCALE_MIN, Math.min(UI_SCALE_MAX, Math.round(pct)));
     try {
       localStorage.setItem(APPEARANCE_STORAGE_KEYS.uiScale, String(clamped));
@@ -511,17 +524,18 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     }
     applyUiScale(clamped);
     set({ uiScale: clamped });
-    syncAppearance({ uiScale: clamped });
+    syncAppearance({ uiScale: clamped }, isCurrent);
   },
 
   setAvatarAnimation: (mode) => {
+    const isCurrent = capturePreferenceScope();
     try {
       localStorage.setItem(APPEARANCE_STORAGE_KEYS.avatarAnimation, mode);
     } catch {
       /* localStorage full or inaccessible */
     }
     set({ avatarAnimation: mode });
-    syncAppearance({ avatarAnimation: mode });
+    syncAppearance({ avatarAnimation: mode }, isCurrent);
   },
 
   setPendingWallpaperPreviewUrl: (url) => set({ pendingWallpaperPreviewUrl: url }),
