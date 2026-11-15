@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"testing"
@@ -25,6 +26,57 @@ func channelQueueFixture(t *testing.T) (*database.DB, context.Context, *sqliteCh
 	msg := newMessage(t, ctx, NewSQLiteMessageRepo(db.Conn), msgChannel, msgAuthor, "body must not be copied")
 	queue := NewSQLiteChannelMessageNotificationQueue(db.Conn).(*sqliteChannelMessageNotificationQueue)
 	return db, ctx, queue, msg
+}
+
+// Legacy stored preferences may predate validation. A malformed ignore map
+// must not abort the entire recipient page or be decoded a second time as JSON.
+func TestChannelNotificationSuppressionHandlesIgnoreMapShapes(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		ignored any
+		want    bool
+	}{
+		{"plain_string", "not-json", false},
+		{"encoded_object", fmt.Sprintf(`{"%s":true}`, msgAuthor), false},
+		{"number", 1, false},
+		{"boolean", true, false},
+		{"array", []bool{true}, false},
+		{"null", nil, false},
+		{"empty_object", map[string]bool{}, false},
+		{"ignored_actor", map[string]bool{msgAuthor: true}, true},
+		{"unignored_actor", map[string]bool{msgAuthor: false}, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			db, ctx, queue, message := channelQueueFixture(t)
+			data, err := json.Marshal(map[string]any{
+				"notifications": map[string]bool{"channelMessageNotifications": true},
+				"privacy":       map[string]any{"ignoredUsers": test.ignored},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := db.Conn.ExecContext(ctx, `UPDATE user_preferences SET data=? WHERE user_id=?`, string(data), msgSecondUser); err != nil {
+				t.Fatal(err)
+			}
+			if err := queue.Enqueue(ctx, message.ID, "srv-1", msgChannel, msgAuthor); err != nil {
+				t.Fatal(err)
+			}
+			job, ids, err := queue.NextBatch(ctx, ChannelMessageNotificationBatchSize)
+			if err != nil || job == nil || len(ids) != 2 {
+				t.Fatalf("page: job=%v ids=%v err=%v", job, ids, err)
+			}
+			suppressed, err := queue.SuppressedRecipients(ctx, job, ids)
+			if err != nil {
+				t.Fatalf("malformed ignore map poisoned recipient page: %v", err)
+			}
+			if got, ok := suppressed[msgSecondUser]; !ok || got != test.want {
+				t.Errorf("suppressed actor=%v present=%v want=%v", got, ok, test.want)
+			}
+			if got, ok := suppressed["u-no-view"]; !ok || got {
+				t.Errorf("unrelated recipient suppressed=%v present=%v", got, ok)
+			}
+		})
+	}
 }
 
 func TestChannelNotificationOptInRequiresJSONBoolean(t *testing.T) {
