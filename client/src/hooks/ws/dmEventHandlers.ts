@@ -29,7 +29,7 @@ import {useComposerDraftStore} from "../../stores/composerDraftStore";
 import {observeDMMessage} from "../../crypto/dmMessageVersions";
 import {deleteCachedDMMessage} from "../../crypto/keyStorage";
 import { notifyGroupDMPinsChanged } from "../../utils/groupDMPins";
-import { completeMessageDeletion } from "./completeMessageDeletion";
+import { completeMessageDeletion } from "../../utils/completeMessageDeletion";
 
 export async function handleDMEvent(msg: WSMessage, isCurrent: () => boolean = () => true): Promise<boolean> {
   switch (msg.op) {

@@ -1,4 +1,4 @@
-import { reserveCachedMessageDeletion } from "../../crypto/cachedMessageDeletions";
+import { reserveCachedMessageDeletion } from "../crypto/cachedMessageDeletions";
 
 /** Notification failure must not skip the remaining owned deletion effects.
  * Run synchronous publications in order, then await scoped cache cleanup.

@@ -1,5 +1,5 @@
 import { cacheChannelMessage } from "../../crypto/channelMessageCache";
-import { completeMessageDeletion } from "./completeMessageDeletion";
+import { completeMessageDeletion } from "../../utils/completeMessageDeletion";
 import i18n from "../../i18n";
 /**
  * Channel-domain WS event handlers.
