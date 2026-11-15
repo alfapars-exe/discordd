@@ -2870,3 +2870,8 @@ Replaced the manual server-apply field projection with Zustand merge of the alre
 ### RF13 — validate legacy local voice account leaves (2026-11-15)
 
 Six fail-first cases exposed malformed account values and unknown/runtime fields entering voice preferences from localStorage. loadSettings now validates account leaves with the shared codec, retains only declared device-local fields for the existing migrations, and still persists krisp/dpdfnet migration to rnnoise. Six suites/216tests,npx tsc -b,changed-file lint and Vite production build pass. Receipt:implementation/verification/refactor-voice-local-validation-2026-11-15.json. Held locally while remote c2baaec1 CI is active to avoid repeatedly cancelling validation. Full current-source/physical voice/RF13 acceptance remain open.
+
+
+### RF13 — reject malformed device IDs and native-hotkey cache types (2026-11-15)
+
+Three fail-first cases showed non-string microphone/speaker IDs and truthy nonboolean muteHotkeyGlobal entering device state. loadSettings now repairs all three hardware ID fields to string defaults and requires an actual boolean global-hotkey opt-in; valid IDs/true are preserved. Targeted6suites/220passed; frozen current-source full coverage482files/5,014passed/1skipped,stmt66.99%,branch64.36%,function61.28%,line67.98%. npx tsc -b,changed lint,Vite build pass. Source-bound receipt:implementation/verification/refactor-voice-device-cache-types-2026-11-15.json. Local changes remain unpushed while c2baaec1 remote CI runs;19success/15pending/0failed is an observation, not completion. Physical hardware/global-hook and remaining full acceptance stay open. Dirty main independently verified96tracked changes/14untracked, untouched.

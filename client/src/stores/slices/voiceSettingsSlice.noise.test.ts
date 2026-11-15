@@ -39,6 +39,24 @@ it("does not import unknown runtime fields from local preference storage", () =>
   expect(settings.inputDevice).toBe("local-mic");
 });
 
+it.each(["inputDevice", "outputDevice", "cameraDevice"] as const)("repairs malformed local %s without changing valid hardware IDs", field => {
+  for (const value of [null, 1, false, {}, []]) {
+    localStorage.setItem("mqvi_voice_settings", JSON.stringify({ [field]: value }));
+    expect(loadSettings()[field]).toBe("");
+  }
+  localStorage.setItem("mqvi_voice_settings", JSON.stringify({ [field]: "valid-hardware-id" }));
+  expect(loadSettings()[field]).toBe("valid-hardware-id");
+});
+
+it("does not enable the native global hotkey from a truthy nonboolean cache value", () => {
+  for (const value of ["false", "true", 1, {}, [], null]) {
+    localStorage.setItem("mqvi_voice_settings", JSON.stringify({ muteHotkeyGlobal: value }));
+    expect(loadSettings().muteHotkeyGlobal).toBe(false);
+  }
+  localStorage.setItem("mqvi_voice_settings", JSON.stringify({ muteHotkeyGlobal: true }));
+  expect(loadSettings().muteHotkeyGlobal).toBe(true);
+});
+
 describe("noise engine preference migration", () => {
   it("keeps the two independent game notice preferences local, default off, and immune to cloud hydration", () => {
     expect(loadSettings()).toMatchObject({ voiceOverlayGameActivityNotifications: false, voiceOverlayNowPlayingNotifications: false });

@@ -82,7 +82,10 @@ export function loadSettings(): VoiceSettings {
       ...Object.fromEntries(DEVICE_LOCAL_VOICE_SETTING_KEYS.filter(key => Object.hasOwn(stored, key)).map(key => [key, stored[key]])),
     };
     const merged: VoiceSettings = { ...DEFAULT_SETTINGS, ...parsed };
-    if (typeof merged.cameraDevice !== "string") merged.cameraDevice = "";
+    for (const field of ["inputDevice", "outputDevice", "cameraDevice"] as const) {
+      if (typeof merged[field] !== "string") merged[field] = DEFAULT_SETTINGS[field];
+    }
+    if (typeof merged.muteHotkeyGlobal !== "boolean") merged.muteHotkeyGlobal = DEFAULT_SETTINGS.muteHotkeyGlobal;
     if (typeof merged.voiceOverlayEnabled !== "boolean") merged.voiceOverlayEnabled = false;
     if (merged.voiceOverlayMode !== "desktop" && merged.voiceOverlayMode !== "game") {
       merged.voiceOverlayMode = DEFAULT_SETTINGS.voiceOverlayMode;
