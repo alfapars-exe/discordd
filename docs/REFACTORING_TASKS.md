@@ -3593,3 +3593,10 @@ Arama sayfası son yerel doğrulama: 32 hedefli test; tam istemci 504 dosya, 5.5
 Ek async-boundary karakterizasyonu: yüklü satır revalidation dönüşüyle devam arasındaki microtask içinde owner değişirse null dönülür ve index mutation yapılmaz. Gerçek IndexedDB snapshot ile son hedefli33 test PASS. Bu ek test tam5.518 koşusundan sonradır; tam koşu sayısı yeni test eklenmiş gibi artırılmadı.
 
 6fbcf7b8 fixture teslimi terminal CI36/36 SUCCESS: gerçek PostgreSQL migration/repository, mTLS reconnect, tam Playwright ve Go race parçaları dahil. Ham kontroller refactor-6fbc-terminal-ci-2026-11-16.json içinde. Sonar internal/testfixture için kayıt döndürmedi; analiz edilen64kod satırı yerel kaynakla eşleşir (+boş EOF). Bu kabul sonraki arama kaynağının CI sonucu olarak sayılmaz.
+
+
+### RF17/RF26 — silme günlüğü transaction sınırı (2026-11-16)
+
+3550f21b üç gerçek IndexedDB karakterizasyonu ekler: batch içindeki geç bozuk intent önceki orphan silmelerini rollback eder; kind/escaped room sınırları ayrıdır; consumer hatası committed batch sonrasında iletilir. Mevcut kaynakta25 test PASS. 182864c9 aynı transaction gövdesini readDeletionBatch yardımcısına taşır; indentation-normalized gövde hash eşitliği receipt içinde. Sonrasında üç dosyada58 test ve TypeScript PASS; kapsam %100satır/fonksiyon, %96,96dal. Lint0hata/2mevcutuyarı, build PASS. Tam koşuda5.521 başarılı/1 atlanan/1 başarısız: mevcut DM concurrent eviction testi sonuç0ın önce committed intent olmasını varsayıyordu. 10b35dfa iki intentin commit edilmesini ve eski eviction read başlangıcını explicit bariyerlerle sıralar; sonuç ve yeni intent assertionları aynen korunur. Hedefli25 PASS; son tam koşu session94992 sürüyor.
+
+Ayrı79f600db CI Playwright hatası açık: production search panel pending-frontier ölçümünde channel başarı sonrası DM25sonuç beklemesi120s timeout (benchmark-search-panels.mjs:142). Native Chromium/WebKit deletion-drain adımları geçti; bu, panel timeout çözümü değildir. Log hichat-79f6-playwright.log. Yeni push/rerun ile bu hata gizlenmedi. Journal ve arama pipeline kabulü açık.

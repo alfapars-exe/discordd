@@ -1,0 +1,35 @@
+{
+  "characterizationCommit": "3550f21b",
+  "sourceCommit": "182864c9",
+  "testOrderingCommit": "10b35dfa",
+  "sonarIssue": "AaHfuK4y4B142AX0cP6F",
+  "originalCognitiveComplexity": 22,
+  "change": "Extract one complete bounded metadata/messageCache transaction; orchestration keeps scope checks and consumer outside the transaction",
+  "transactionBodyIndentNormalizedSHA256": "acb4292c7aee0f73685d32e02b4f94e501497e43327cbc0a2e256947c44c40f9",
+  "validation": {
+    "before": 25,
+    "targetedAfter": 58,
+    "typeAndBuild": "PASS",
+    "lint": "0 errors / 2 existing warnings",
+    "coverage": {
+      "lines": 100,
+      "functions": 100,
+      "branches": 96.96,
+      "statements": 98.36
+    },
+    "initialFull": "5521 pass / 1 skip / 1 fail; pre-existing concurrent DM test assumed invocation order matched intent/eviction order",
+    "orderingFix": "Explicit durable-intent and eviction barriers retain exact outcomes and newer-intent assertion; 25 target tests pass",
+    "finalFull": "RUNNING session 94992"
+  },
+  "pending": [
+    "Final full client result",
+    "New-source CI/Sonar/scan",
+    "Native/platform whole pipeline acceptance"
+  ],
+  "separatePublishedHeadFailure": {
+    "head": "79f600db",
+    "job": 132993860147,
+    "reason": "Production search panel pending-frontier DM stage waitForFunction timeout at benchmark-search-panels.mjs:142; channel stage and Chromium/WebKit deletion drain passed; no rerun or resolution claimed",
+    "log": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-79f6-playwright.log"
+  }
+}
