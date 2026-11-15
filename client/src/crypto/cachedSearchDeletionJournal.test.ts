@@ -197,3 +197,41 @@ it("does not add a metadata point request per cached row during backup collectio
     expect(metadataReads).toBeLessThanOrEqual(2);
   } finally { hook.mockRestore(); }
 });
+
+it("rolls back orphan retirement when a later intent in the same batch is malformed", async () => {
+ const db = await getDB();
+ const orphan = cachedSearchDeletionKey("dm", "room", "a");
+ const corrupt = cachedSearchDeletionKey("dm", "room", "z");
+ await db.put("metadata", { messageId: "a" }, orphan);
+ await db.put("metadata", { messageId: "wrong" }, corrupt);
+ const consume = vi.fn(async () => {});
+ await expect(scanPendingCachedSearchDeletions("dm", "room", consume)).rejects.toThrow("search_deletion_journal_invalid");
+ expect(consume).not.toHaveBeenCalled();
+ expect(await db.get("metadata", orphan)).toEqual({ messageId: "a" });
+ expect(await db.get("metadata", corrupt)).toEqual({ messageId: "wrong" });
+});
+it("keeps kind and escaped channel boundaries separate during intent scans", async () => {
+ const db = await getDB();
+ await db.put("metadata", { messageId: "wanted:/" }, cachedSearchDeletionKey("dm", "room:/", "wanted:/"));
+ const otherKind = cachedSearchDeletionKey("channel", "room:/", "other-kind");
+ const otherRoom = cachedSearchDeletionKey("dm", "room", "other-room");
+ await db.put("metadata", { messageId: "other-kind" }, otherKind);
+ await db.put("metadata", { messageId: "other-room" }, otherRoom);
+ const consume = vi.fn(async () => {});
+ await scanPendingCachedSearchDeletions("dm", "room:/", consume);
+ expect(consume).toHaveBeenCalledExactlyOnceWith(["wanted:/"]);
+ expect(await db.get("metadata", otherKind)).toEqual({ messageId: "other-kind" });
+ expect(await db.get("metadata", otherRoom)).toEqual({ messageId: "other-room" });
+});
+it("propagates consumer failure after closing the committed batch", async () => {
+ const db = await getDB();
+ const key = cachedSearchDeletionKey("dm", "room", "orphan");
+ await db.put("metadata", { messageId: "orphan" }, key);
+ const failure = new Error("sidecar-unavailable");
+ await expect(scanPendingCachedSearchDeletions("dm", "room", async () => {
+  await db.put("metadata", true, "consumer-committed");
+  throw failure;
+ })).rejects.toBe(failure);
+ expect(await db.get("metadata", key)).toBeUndefined();
+ expect(await db.get("metadata", "consumer-committed")).toBe(true);
+});
