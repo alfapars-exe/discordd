@@ -100,6 +100,11 @@ const server=createServer((req,res)=>{const path=new URL(req.url,"http://localho
  const body=assets.get(path);if(body===undefined){res.statusCode=404;res.end();return;}res.setHeader("Content-Type",path.endsWith(".js")?"text/javascript":"application/octet-stream");res.end(body);});
 await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
 const browser=await chromium.launch();
+function compareSourcePaths(left, right) {
+ if (left < right) return -1;
+ if (left > right) return 1;
+ return 0;
+}
 const median=(rows,key)=>rows.map(row=>row[key]).sort((a,b)=>a-b)[Math.floor(rows.length/2)];
 async function measureUI(page,event,expected,action){
  await page.evaluate(({event,expected})=>{
@@ -117,7 +122,7 @@ async function measureUI(page,event,expected,action){
 try{
  console.log("Runtime",process.version,process.platform,"Chromium",browser.version(),"baseline",baseline);
  for(const variant of variants){const context=await browser.newContext(),page=await context.newPage(),cdp=await context.newCDPSession(page);const errors=[];page.on("pageerror",error=>errors.push(error.message));
- try{await page.goto(`http://127.0.0.1:${server.address().port}/${variant}/`);await page.waitForFunction(()=>Boolean(globalThis.panelBench));console.log(JSON.stringify({variant,react:await page.evaluate(()=>globalThis.panelBench.react),productionBuild:true,sourceHead,historicalOverrides:variant==="before"?usedHistoricalPaths.size:0,historicalSources:variant==="before"?[...usedHistoricalPaths].sort((left,right)=>left<right?-1:left>right?1:0):[]}));
+ try{await page.goto(`http://127.0.0.1:${server.address().port}/${variant}/`);await page.waitForFunction(()=>Boolean(globalThis.panelBench));console.log(JSON.stringify({variant,react:await page.evaluate(()=>globalThis.panelBench.react),productionBuild:true,sourceHead,historicalOverrides:variant==="before"?usedHistoricalPaths.size:0,historicalSources:variant==="before"?[...usedHistoricalPaths].sort(compareSourcePaths):[]}));
  for(const kind of ["channel","dm"]){
  if(pendingOnly){
   const matches=await page.evaluate(async kind=>{const matches=await globalThis.panelBench.seed(kind,1000);globalThis.panelBench.holdIndex();await globalThis.panelBench.mount(kind);return matches;},kind);
