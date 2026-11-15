@@ -39,3 +39,50 @@ it("reads the latest same-account values after a synchronous destination subscri
   applyAccountPreferences(()=>structuredClone(latest),false,true);
   expect(actions.voice).toHaveBeenCalledExactlyOnceWith({masterVolume:75});
 });
+
+it.each([false, true])("resets destinations in order before applying account values (preserve session=%s)", preserveSessionState => {
+  const calls: string[] = [];
+  for (const [name, action] of Object.entries(actions)) action.mockImplementation(() => { calls.push(name); });
+
+  applyAccountPreferences(() => data, true, preserveSessionState);
+
+  expect(calls).toEqual([...resetActions, ...applyActions]);
+  expect(actions.settingsReset).toHaveBeenCalledExactlyOnceWith(preserveSessionState, expect.any(Function));
+  expect(actions.voiceReset.mock.calls).toEqual([preserveSessionState ? [true] : []]);
+  for (const name of ["sidebarReset", "accessibilityReset", "timeReset"] as const) {
+    expect(actions[name]).toHaveBeenCalledExactlyOnceWith();
+  }
+  expect(actions.theme).toHaveBeenCalledExactlyOnceWith(data.theme);
+  expect(actions.appearance).toHaveBeenCalledExactlyOnceWith(data.appearance);
+  expect(actions.sidebar).toHaveBeenCalledExactlyOnceWith(data.sidebar_sections, undefined);
+  expect(actions.voice).toHaveBeenCalledExactlyOnceWith(data.voice_settings);
+  expect(actions.accessibility).toHaveBeenCalledExactlyOnceWith(data.accessibility);
+  expect(actions.locale).toHaveBeenCalledExactlyOnceWith(data.locale);
+});
+
+const destinationActions = [...resetActions, ...applyActions];
+it.each(destinationActions)("propagates a destination failure at %s before touching later destinations", boundary => {
+  const failure = new Error(`subscriber failed at ${boundary}`);
+  actions[boundary].mockImplementationOnce(() => { throw failure; });
+
+  expect(() => applyAccountPreferences(() => data, true, true)).toThrow(failure);
+
+  for (const name of destinationActions.slice(destinationActions.indexOf(boundary) + 1)) {
+    expect(actions[name]).not.toHaveBeenCalled();
+  }
+});
+
+it("ends a retired reset without reading or applying a replacement scope", () => {
+  const readCurrent = vi.fn()
+    .mockReturnValueOnce(data)
+    .mockReturnValueOnce(null)
+    .mockReturnValue({ theme: "replacement" });
+
+  applyAccountPreferences(readCurrent, true, false);
+
+  expect(readCurrent).toHaveBeenCalledTimes(2);
+  expect(actions.settingsReset).toHaveBeenCalledOnce();
+  for (const name of [...resetActions.slice(1), ...applyActions]) {
+    expect(actions[name]).not.toHaveBeenCalled();
+  }
+});
