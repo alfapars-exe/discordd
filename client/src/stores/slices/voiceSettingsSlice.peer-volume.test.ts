@@ -60,3 +60,15 @@ for (const field of ["userVolumes", "screenShareVolumes", "localMutedUsers"] as 
     expect((cached.voice_settings as Record<string, unknown> | undefined)?.[field] ?? {}).toEqual({});
   });
 }
+
+it.each(["toString", "hasOwnProperty"])("keeps own mute state and finite restore values for peer %s", id => {
+  const voice = store();
+  voice.getState().toggleLocalMute(id);
+  expect(voice.getState().localMutedUsers).toEqual({ [id]: true });
+  expect(voice.getState().userVolumes).toEqual({ [id]: 0 });
+  expect(voice.getState().preMuteVolumes).toEqual({ [id]: 100 });
+  voice.getState().toggleLocalMute(id);
+  expect(voice.getState().localMutedUsers).toEqual({});
+  expect(voice.getState().userVolumes).toEqual({ [id]: 100 });
+  expect(sync).toHaveBeenLastCalledWith({ voice_settings: { userVolumes: { [id]: 100 }, localMutedUsers: { [id]: false } } });
+});
