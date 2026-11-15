@@ -32,7 +32,8 @@ export async function withResetCachedSearchSnapshots<T>(sourceName: string, rese
   let failed = false, failure: unknown, result: T | undefined;
   try {
     // A final store clear retries cleanup even if one disposed handle failed.
-    await Promise.allSettled([...(activeSnapshots.get(name) ?? [])].map(dispose => dispose()));
+    // Also settle callbacks that throw before returning their cleanup promise.
+    await Promise.allSettled([...(activeSnapshots.get(name) ?? [])].map(async dispose => dispose()));
     if (!isCurrent()) throw new Error("e2ee_account_scope_changed");
     result = await resetSource();
   } catch (error) { failed = true; failure = error; }
