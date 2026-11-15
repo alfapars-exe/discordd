@@ -3065,3 +3065,22 @@ Three fail-first DOM-hook regressions reproduced cancelled mention selections to
 ### RF03/RF30 — terminal34b workflow failure and verified delivery (2026-11-15)
 
 All3Actions runs on34b866c8ec748e36d732499b2e064cf251196cd8 are terminal:Server CI/mobileSUCCESS,frontend workflow validationFAILURE before jobs. Its34registered checks all succeeded but expected frontend matrix checks were never created;overall delivery remains failed. Snapshot:implementation/verification/refactor-34b-terminal-workflow-failure-2026-11-15.json. Corrected step-scoped runner context and mandatory actionlint gate pass semantic validation for all9workflow files. Edit-session ownership has41targeted and full5048passed1skipped current-source client proofs,lint/build pass. This new delivery must independently validate workflow creation,Node22Windows packaging and all remaining gates;no missing-check or prior-green substitution. PR305 stays draft;full RF15/project/native acceptance remains open.
+
+
+### RF17 — bounded sidecar write coalescing and native staging contracts (2026-11-15)
+
+4bbd96fc retains128-reference source delivery and coalesces at most1024metadata writes per sidecar transaction,flushing the final tail before publication. No schema/order/public API change. Same Node26.13.1/Chromium156 production React harness,real IndexedDB,controlled providers,one warmup+nine samples;no concurrent local validation during measurement. First-result medians(ms):
+
+| Rows | Channel before → after | DM before → after |
+|---|---:|---:|
+| 1,000 | 335.7 → 335.3 | 339.3 → 339.2 |
+| 10,000 | 540.5 → 550.4 | 553.1 → 550.2 |
+| 50,000 | 1636.9 → 1536.8 | 1715.1 → 1681.2 |
+
+50k channel median improves6.12%;DM1.98% overlaps broad sample variability.10k channel regresses9.9ms.50k sampled peak medians rise184452/284428bytes while retained medians fall;no uniform speedup or legacy first-query parity claim. Raw9sample records and source hashes:implementation/verification/refactor-search-write-coalescing-2026-11-15.json.
+
+Large fake-IDB fixtures timed out under coverage;the4new cases moved to a required native Chromium CI step,plus cancellation/writer-release coverage. Each of5cases retains1201records,checks all14pages,disposes index,and quota/cancel cases verify a subsequent source write and successful recovery. Native quota is injected,not physical exhaustion. Final small family32passed3.21s;full485files5048passed1skipped111.81s,line68.35/branch64.51/statement67.28/function61.49%;lint0errors2existing warnings;actual tsc-b/VitePASS1.72s;all9workflow semantic checks pass. Native2window React reset passes for both panels. Performance,active frontier,large mixed latency,source-write budgets and whole RF17/project/platform acceptance remain open.
+
+### RF03/RF30 — terminal25cf and next measured delivery (2026-11-15)
+
+25cf99446755936896b5a6b8efbdc5cb5b6773e4 completed36/36checks and all3workflow runsSUCCESS,including actual Node22Windows/Linux packaging and the mandatory workflow expression gate. Snapshot:implementation/verification/refactor-25cf-terminal-ci-2026-11-15.json. Search coalescing/native-tier changes require independent new-head CI;prior green is not reused. PR305 stays draft;full project/native/physical acceptance remains open.
