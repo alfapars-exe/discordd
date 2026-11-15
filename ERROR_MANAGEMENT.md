@@ -144,6 +144,11 @@ Doğrulanmış GET/PATCH sonucu, yükleme/kayıt bildirimi yayımlanmadan önce 
 aboneler çalışmadan ayrılır. İç içe yeniden denemeler aynı yazıcıya katılır;
 hesabı değişmiş bekleyen yazıcı yeni bağlamın durumunu tüketmeden durur.
 
+Reddedilen GET/PATCH işlemleri, kendilerine ait tutamacı `finally` içinde
+serbest bırakır. Eski hesap işleminin temizliği yeni hesabın işini değiştiremez.
+Zamanlayıcı ve yeniden deneme düğmesi reddedilmeleri hesap kapsamıyla gözler;
+tanı kaydı yalnız sabit olay kodunu taşır, tercih veya hata içeriğini taşımaz.
+
 Yerel depolama yazımı mevcut en iyi çaba davranışını sürdürür. Kota veya erişim
 engeli durumunda bellek kuyruğu yetkilidir; kalıcı teslim garantisi verilmez.
 Hata veren abonenin ardından atlanan diğer abonelerin bildirimi ve asenkron

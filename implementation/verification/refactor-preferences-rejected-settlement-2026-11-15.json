@@ -1,0 +1,110 @@
+{
+  "sourceRevision": "0a0a414fae30fba80010bdf9bace4b9b098de516",
+  "scope": "Owned settlement of rejected preference fetch/write handles and detached/user retry observation.",
+  "red": [
+    {
+      "log": "hichat-preferences-rejected-handle-red.log",
+      "failed": 3,
+      "passed": 65,
+      "unhandledErrors": 1,
+      "behavior": "Error observer rejection stranded fetch/write handle;detached flush rejection was unobserved."
+    },
+    {
+      "log": "hichat-preferences-retry-ui-red.log",
+      "failed": 1,
+      "passed": 11,
+      "behavior": "Rejected user retry had no owned diagnostic observer."
+    }
+  ],
+  "targeted": {
+    "passed": 294,
+    "files": 9,
+    "seconds": 4.95,
+    "log": "hichat-preferences-settlement-green.log",
+    "note": "Before two additional replacement-account rejected cleanup controls,covered by final full run."
+  },
+  "fullClientCoverage": {
+    "files": 489,
+    "passed": 5206,
+    "skipped": 1,
+    "statementPercent": 67.46,
+    "branchPercent": 64.68,
+    "functionPercent": 61.72,
+    "linePercent": 68.49,
+    "log": "hichat-preferences-settlement-coverage.log"
+  },
+  "build": "actual tsc-b/VitePASS3.13s;existing chunk warning",
+  "lint": "changed store/UI source and testsPASS",
+  "behavior": [
+    "finally releases only matching current-owner fetch/write handles and owned fetch overlays;original rejection is preserved.",
+    "Debounce callback checks binding and timer identity before starting work;detached rejection emits only static background_flush_failed code while owner remains current.",
+    "UI retry observes rejection with static preferences_retry_failed diagnostic and captured scope;retired failures are observed without reporting into replacement binding.",
+    "A subsequent manual retry can fetch/flush persisted pending data after notification failure.",
+    "Retired rejecting cleanup leaves replacement account API work/data intact and preserves old account recoverable queue."
+  ],
+  "sha256": {
+    "client/src/stores/preferencesStore.ts": "c75723beb14b2cb54ee30f6479132e1f5b4484f4928bc4835f2a8341f4db6583",
+    "client/src/stores/preferencesStore.test.ts": "80660c169ab6b3da9fa59199cde75cd9605e7bb814f956e06b75626b46edb670",
+    "client/src/components/settings/PreferencesSyncStatus.tsx": "829e3da96f1ebf2b86c9eb92061ac86ef47ad5faef04c48b7a697010026a3ce6",
+    "client/src/components/settings/PreferencesSyncStatus.test.tsx": "3999f92159d96cf5222b16ebf237d8d87b7d5e29859370fc526fe0a67dfbd62b"
+  },
+  "limits": [
+    "Real store orchestration with mocked API/destination adapters;UI collaborator controlled;not native/provider/browser proof.",
+    "This does not resume skipped observers or close every bootstrap/other detached caller error path.",
+    "Storage quota/denied behavior remains best-effort;whole RF11/RF13/project/native/physical and search frontier acceptance remain open."
+  ],
+  "changedModuleCoverage": {
+    "PreferencesSyncStatus.tsx": {
+      "lines": {
+        "total": 15,
+        "covered": 15,
+        "skipped": 0,
+        "pct": 100
+      },
+      "functions": {
+        "total": 9,
+        "covered": 9,
+        "skipped": 0,
+        "pct": 100
+      },
+      "statements": {
+        "total": 22,
+        "covered": 22,
+        "skipped": 0,
+        "pct": 100
+      },
+      "branches": {
+        "total": 23,
+        "covered": 23,
+        "skipped": 0,
+        "pct": 100
+      }
+    },
+    "preferencesStore.ts": {
+      "lines": {
+        "total": 249,
+        "covered": 245,
+        "skipped": 0,
+        "pct": 98.39
+      },
+      "functions": {
+        "total": 34,
+        "covered": 33,
+        "skipped": 0,
+        "pct": 97.05
+      },
+      "statements": {
+        "total": 323,
+        "covered": 306,
+        "skipped": 0,
+        "pct": 94.73
+      },
+      "branches": {
+        "total": 202,
+        "covered": 180,
+        "skipped": 0,
+        "pct": 89.1
+      }
+    }
+  }
+}
