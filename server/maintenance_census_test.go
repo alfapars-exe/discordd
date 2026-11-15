@@ -13,7 +13,9 @@ import (
 	"context"
 	"database/sql"
 	"io/fs"
+	"os"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -21,6 +23,13 @@ import (
 	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/testutil"
 )
+
+// Cache immutable migrated bytes, never a shared connection or mutable path.
+var censusTemplate struct {
+	once sync.Once
+	data []byte
+	err  error
+}
 
 // newCensusDB boots a throwaway database with the full embedded migration set
 // and returns it alongside its path, so a test can also open a second,
@@ -31,7 +40,28 @@ func newCensusDB(t *testing.T) (*database.DB, string) {
 	if err != nil {
 		t.Fatalf("fs.Sub: %v", err)
 	}
+	censusTemplate.once.Do(func() {
+		templatePath := filepath.Join(t.TempDir(), "census-template.db")
+		template, err := database.NewLegacy(templatePath, migrationsFS)
+		if err != nil {
+			censusTemplate.err = err
+			return
+		}
+		// Closing the last connection checkpoints WAL before reading the file.
+		if err = template.Close(); err != nil {
+			censusTemplate.err = err
+			return
+		}
+		censusTemplate.data, censusTemplate.err = os.ReadFile(templatePath)
+	})
+	if censusTemplate.err != nil {
+		t.Fatalf("migrate census template: %v", censusTemplate.err)
+	}
 	path := filepath.Join(t.TempDir(), "census.db")
+	if err := os.WriteFile(path, censusTemplate.data, 0600); err != nil {
+		t.Fatalf("copy census template: %v", err)
+	}
+	// Keep production connection initialization and migration-ledger checks.
 	db, err := database.NewLegacy(path, migrationsFS)
 	if err != nil {
 		t.Fatalf("database.New: %v", err)
