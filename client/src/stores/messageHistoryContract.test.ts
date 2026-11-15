@@ -171,12 +171,14 @@ for (const fixture of fixtures) {
     const initial = fixture.queue([live], true);
     const first = fixture.fetch(); initial(); await first;
     fixture.edit({ ...live, content: "edited loaded row" });
-    const release = fixture.queue([{ id: "base" }, live]);
+    fixture.react("live");
+    const release = fixture.queue([{ id: "base" }, { id: "base", content: "duplicate" }, live]);
     const older = fixture.older();
     expect(fixture.beforeCursor()).toBe("live");
     release(); await older;
     expect(fixture.read().map(row => row.id)).toEqual(["base", "live"]);
-    expect(fixture.read()[1].content).toBe("edited loaded row");
+    expect(fixture.read()[0].content).toBe("base");
+    expect(fixture.read()[1]).toMatchObject({ content: "edited loaded row", reactions });
     expect(fixture.cursor()).toBe("live");
   });
 

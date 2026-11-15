@@ -97,6 +97,16 @@ export function createTypingHandler(
   return Object.assign(handle, { clear });
 }
 
+/** Keep loaded copies and admit only the first occurrence of each new id. */
+export function unseenMessages<T extends { id: string }>(loaded: readonly T[], incoming: readonly T[]): T[] {
+  const seen = new Set(loaded.map(message => message.id));
+  return incoming.filter(message => {
+    if (seen.has(message.id)) return false;
+    seen.add(message.id);
+    return true;
+  });
+}
+
 // ─── Generic WS Message Handlers ───
 
 /**

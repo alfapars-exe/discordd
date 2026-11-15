@@ -28,6 +28,7 @@ import {
 import { encodePayload } from "../crypto/e2eePayload";
 import {
   encryptFilesForE2EE,
+  unseenMessages,
 } from "./shared/messageUtils";
 import { sendWithRetryAndToast } from "./shared/sendWithRetry";
 import {
@@ -102,14 +103,6 @@ function captureDMReadContext(): () => boolean {
     && useE2EEStore.getState().localDeviceId === deviceId;
 }
 
-function unseenDMMessages(loaded: DMMessage[], incoming: DMMessage[]): DMMessage[] {
-  const seen = new Set(loaded.map(message => message.id));
-  return incoming.filter(message => {
-    if (seen.has(message.id)) return false;
-    seen.add(message.id);
-    return true;
-  });
-}
 
 function messagesForDM(channelId: string, messages: DMMessage[] = []): DMMessage[] {
   return messages.filter(message => message.dm_channel_id === channelId);
@@ -429,7 +422,7 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
       set((state) => ({
         messagesByChannel: {
           ...state.messagesByChannel,
-          [channelId]: sortDMBySource([...unseenDMMessages(messages, decrypted), ...messages].map(historyBuffer.apply)),
+          [channelId]: sortDMBySource([...unseenMessages(messages, decrypted), ...messages].map(historyBuffer.apply)),
         },
         hasMoreByChannel: {
           ...state.hasMoreByChannel,
@@ -543,7 +536,7 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
 
       set((state) => {
         const current = state.messagesByChannel[channelId] ?? [];
-        const appended = unseenDMMessages(current, [...decrypted, ...held]);
+        const appended = unseenMessages(current, [...decrypted, ...held]);
         return {
           messagesByChannel: {
             ...state.messagesByChannel,

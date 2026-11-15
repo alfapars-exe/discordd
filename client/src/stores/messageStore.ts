@@ -30,6 +30,7 @@ import type { Message, ReactionGroup, Server } from "../types";
 import { DEFAULT_MESSAGE_LIMIT } from "../utils/constants";
 import {
   encryptFilesForE2EE,
+  unseenMessages,
   createTypingHandler,
   updateMessageInRecord,
   deleteMessageFromRecord,
@@ -458,8 +459,7 @@ export const useMessageStore = create<MessageState>((set, get) => {
       void registerSpamBatch(changes.apply(decrypted), "channel", channelId, () => isCurrent() && accessCurrent());
       set((state) => {
         const loaded = state.messagesByChannel[channelId] ?? [];
-        const loadedIds = new Set(loaded.map(message => message.id));
-        const older = decrypted.filter(message => !loadedIds.has(message.id));
+        const older = unseenMessages(loaded, decrypted);
         return {
           messagesByChannel: {
             ...state.messagesByChannel,
