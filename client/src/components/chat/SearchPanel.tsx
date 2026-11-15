@@ -2,9 +2,10 @@
 
 import { useState, useCallback, useRef, useEffect, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
-import { getAuthSessionOwner, subscribeAuthOwnerChanges } from "../../api/authSessionEvents";
+import { getAuthSessionOwner, subscribeAuthOwnerChanges, getAuthSessionSnapshot, subscribeAuthGenerationChanges } from "../../api/authSessionEvents";
 import { searchMessages } from "../../api/search";
-import { searchCachedMessageRefs } from "../../crypto/keyStorage";
+import { createCachedSearchSnapshot, type CachedSearchSnapshot } from "../../crypto/cachedSearchSnapshot";
+import { getCachedSearchResetGeneration, subscribeCachedSearchResets } from "../../crypto/cachedSearchEpoch";
 import { readCachedSearchPage } from "../../crypto/cachedSearchPage";
 import { useServerStore } from "../../stores/serverStore";
 import { useE2EEStore } from "../../stores/e2eeStore";
@@ -32,7 +33,10 @@ function SearchPanel(props: SearchPanelProps) {
   const serverE2eeEnabled = useServerStore((s) => s.activeServer?.e2ee_enabled ?? false);
   const keysReady = useE2EEStore((s) => s.initStatus === "ready");
   const owner = useSyncExternalStore(subscribeAuthOwnerChanges, getAuthSessionOwner);
-  const scope = JSON.stringify([owner, activeServerId, props.channelId, serverE2eeEnabled, serverE2eeEnabled && keysReady]);
+  const generation = useSyncExternalStore(subscribeAuthGenerationChanges, () => getAuthSessionSnapshot().generation);
+  const resetGeneration = useSyncExternalStore(subscribeCachedSearchResets, getCachedSearchResetGeneration);
+  const deviceId = useE2EEStore(s => s.localDeviceId);
+  const scope = JSON.stringify([owner, generation, serverE2eeEnabled && resetGeneration, serverE2eeEnabled && deviceId, activeServerId, props.channelId, serverE2eeEnabled, serverE2eeEnabled && keysReady]);
   return <ScopedSearchPanel key={scope} {...props} activeServerId={activeServerId} serverE2eeEnabled={serverE2eeEnabled} />;
 }
 
@@ -50,8 +54,10 @@ function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId,
   // Monotonic id per doSearch call — a slow response for an abandoned query
   // must not overwrite the results of the search started after it.
   const searchSeqRef = useRef(0);
+  const searching = useRef(false);
+  const queryOffset = useRef(0);
   const localSearch = useRef<AbortController | null>(null);
-  const localMatches = useRef<string[] | null>(null);
+  const localMatches = useRef<CachedSearchSnapshot | null>(null);
   const deletedIds = useRef(new Set<string>());
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -67,6 +73,8 @@ function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId,
   useEffect(() => () => {
     localSearch.current?.abort();
     searchSeqRef.current++;
+    const snapshot = localMatches.current; localMatches.current = null;
+    void snapshot?.dispose().catch(() => {});
     if (debounceRef.current) clearTimeout(debounceRef.current);
   }, []);
 
@@ -75,47 +83,55 @@ function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId,
       // Bumping before the empty-query early return also invalidates any
       // in-flight search when the user clears the input.
       const seq = ++searchSeqRef.current;
+      queryOffset.current = searchOffset;
       localSearch.current?.abort();
 
       if (searchQuery.trim().length < 1) {
         setResults(null);
-        setIsSearching(false);
+        searching.current = false; setIsSearching(false);
         return;
       }
 
-      setIsSearching(true);
+      searching.current = true; setIsSearching(true);
 
       const current = useServerStore.getState();
       if (!activeServerId || current.activeServerId !== activeServerId || current.activeServer?.id !== activeServerId ||
           (current.activeServer.e2ee_enabled ?? false) !== serverE2eeEnabled) {
         setResults(null);
-        setIsSearching(false);
+        searching.current = false; setIsSearching(false);
         return;
       }
       if (serverE2eeEnabled) {
         if (!channelId || useE2EEStore.getState().initStatus !== "ready") {
           setResults(null);
-          setIsSearching(false);
+          searching.current = false; setIsSearching(false);
           return;
         }
         try {
           const controller = new AbortController();
           localSearch.current = controller;
           const term = searchQuery.trim();
+          const pendingDeletes = deletedIds.current;
           if (!localMatches.current) {
-            const cached = await searchCachedMessageRefs(channelId, term, controller.signal);
+            const snapshot = await createCachedSearchSnapshot("channel", channelId!, term, controller.signal);
+            if (seq !== searchSeqRef.current) { await snapshot.dispose(); return; }
+            localMatches.current = snapshot;
+          }
+          const snapshot = localMatches.current;
+          for (const id of pendingDeletes) {
+            await snapshot.remove(id, controller.signal);
             if (seq !== searchSeqRef.current) return;
-            localMatches.current = cached.filter(row => !deletedIds.current.has(row.messageId))
-              .sort((a, b) => b.timestamp - a.timestamp).map(row => row.messageId);
+            pendingDeletes.delete(id);
           }
           const lowerTerm = term.toLowerCase();
-          const page = await readCachedSearchPage(localMatches, searchOffset, limit,
-            row => row.channelId === channelId && row.content.toLowerCase().includes(lowerTerm) && !deletedIds.current.has(row.messageId),
-            () => seq === searchSeqRef.current);
+          const page = await readCachedSearchPage(snapshot, searchOffset, limit,
+            row => row.channelId === channelId && row.content.toLowerCase().includes(lowerTerm) && !pendingDeletes.has(row.messageId),
+            () => seq === searchSeqRef.current, controller.signal);
           if (!page || seq !== searchSeqRef.current) return;
+          queryOffset.current = page.offset;
           if (page.offset !== searchOffset) setOffset(page.offset);
           const paged = page.messages;
-          const total = localMatches.current.length;
+          const total = page.total;
 
           // CachedDecryptedMessage -> Message minimal format for rendering
           const messages: Message[] = paged.map((c) => ({
@@ -138,9 +154,11 @@ function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId,
           setResults({ messages, total_count: total });
         } catch {
           if (seq !== searchSeqRef.current) return;
+          const failed = localMatches.current; localMatches.current = null;
+          void failed?.dispose().catch(() => {});
           setResults({ messages: [], total_count: 0 });
         }
-        setIsSearching(false);
+        searching.current = false; setIsSearching(false);
         return;
       }
 
@@ -153,24 +171,22 @@ function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId,
       } else {
         setResults({ messages: [], total_count: 0 });
       }
-      setIsSearching(false);
+      searching.current = false; setIsSearching(false);
     },
     [activeServerId, channelId, serverE2eeEnabled]
   );
 
   /** Debounced search on input change */
   function handleInputChange(value: string) {
-    localMatches.current = null;
+    const previous = localMatches.current; localMatches.current = null;
+    void previous?.dispose().catch(() => {});
+    deletedIds.current = new Set();
     searchSeqRef.current++;
     localSearch.current?.abort();
     setQuery(value);
-    setOffset(0);
-
+    setOffset(0); queryOffset.current = 0;
     if (debounceRef.current) clearTimeout(debounceRef.current);
-
-    debounceRef.current = setTimeout(() => {
-      doSearch(value, 0);
-    }, DEBOUNCE_MS);
+    debounceRef.current = setTimeout(() => { doSearch(value, 0); }, DEBOUNCE_MS);
   }
 
   /** Next page */
@@ -188,22 +204,36 @@ function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId,
   }
 
   const removeLocalMatch = useCallback((id: string) => {
-    deletedIds.current.add(id);
-    const ids = localMatches.current;
-    if (!ids) return false;
-    const position = ids.indexOf(id);
-    if (position < 0) return false;
-    ids.splice(position, 1);
-    const total = ids.length;
-    setResults(prev => prev && ({ messages: prev.messages.filter(m => m.id !== id), total_count: total }));
-    if (position < offset + limit) {
-      const lastOffset = Math.max(0, Math.floor((total - 1) / limit) * limit);
-      const nextOffset = Math.min(offset, lastOffset);
-      setOffset(nextOffset);
-      void doSearch(query, nextOffset);
-    }
+    if (!serverE2eeEnabled || !query.trim()) return false;
+    const pending = deletedIds.current;
+    pending.add(id);
+    // Hide a live deletion immediately, even before IndexedDB commits.
+    setResults(prev => prev && ({ ...prev, messages: prev.messages.filter(message => message.id !== id) }));
+    const snapshot = localMatches.current;
+    if (!snapshot) return true;
+    void snapshot.remove(id).then(change => {
+      if (snapshot !== localMatches.current || !pending.has(id)) return;
+      const refresh = searching.current || (change.removed && change.position < queryOffset.current + limit);
+      // Invalidate older reads before releasing the tombstone: an index read
+      // may have completed before this deletion but returned after its commit.
+      searchSeqRef.current++; localSearch.current?.abort();
+      pending.delete(id);
+      setResults(prev => prev && ({ messages: prev.messages.filter(message => message.id !== id), total_count: Math.min(prev.total_count, change.total) }));
+      if (refresh) {
+        const nextOffset = Math.min(queryOffset.current, Math.max(0, Math.floor((change.total - 1) / limit) * limit));
+        setOffset(nextOffset);
+        void doSearch(query, nextOffset);
+      }
+    }).catch(() => {
+      if (snapshot !== localMatches.current) return;
+      localMatches.current = null; searchSeqRef.current++; localSearch.current?.abort();
+      void snapshot.dispose().catch(() => {});
+      setResults({ messages: [], total_count: 0 });
+      searching.current = false; setIsSearching(false);
+    });
     return true;
-  }, [doSearch, offset, query]);
+  }, [doSearch, query, serverE2eeEnabled]);
+
 
   // Live deletion while the panel is open: results are a snapshot, so a
   // WS-deleted message would linger as a dead row. Subscribe to the narrow

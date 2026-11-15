@@ -25,7 +25,7 @@
  * XSS defense and does not establish that OS full-disk encryption is enabled.
  */
 
-import { CACHED_SEARCH_EPOCH_KEY } from "./cachedSearchEpoch";
+import { CACHED_SEARCH_EPOCH_KEY, notifyCachedSearchReset } from "./cachedSearchEpoch";
 import { getDB, guardedPut } from "./keyDatabase";
 export { KEY_DATABASE_STORES, getAccountDatabaseName, upgradeKeyDatabase, openScopedKeyDatabase, closeDB } from "./keyDatabase";
 import type {
@@ -861,6 +861,9 @@ export async function clearAllE2EEData(options?: { resetSelfFanout: true }): Pro
 
   const { withResetCachedSearchSnapshots } = await import("./cachedSearchSnapshot");
   if (!isCurrent()) throw new Error("e2ee_account_scope_changed");
+  let committedEpoch: string | undefined;
+  notifyCachedSearchReset(db.name);
+  try {
   await withResetCachedSearchSnapshots(db.name, async () => {
     const tx = db.transaction(storeNames, "readwrite");
     try {
@@ -868,14 +871,17 @@ export async function clearAllE2EEData(options?: { resetSelfFanout: true }): Pro
         await tx.objectStore(storeName).clear();
       }
       if (options?.resetSelfFanout) await tx.objectStore("metadata").put(true, "self_fanout_reset");
-      await tx.objectStore("metadata").put(crypto.randomUUID(), CACHED_SEARCH_EPOCH_KEY);
+      const epoch = crypto.randomUUID();
+      await tx.objectStore("metadata").put(epoch, CACHED_SEARCH_EPOCH_KEY);
       await tx.done;
+      committedEpoch = epoch;
     } catch (error) {
       try { tx.abort(); } catch { /* An IndexedDB request may already have aborted it. */ }
       await tx.done.catch(() => {});
       throw error;
     }
   }, isCurrent);
+  } finally { notifyCachedSearchReset(db.name, isCurrent(), committedEpoch); }
 }
 
 /**

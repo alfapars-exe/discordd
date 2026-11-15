@@ -28,8 +28,13 @@ vi.mock("../../api/search", () => ({
   searchMessages: vi.fn(),
 }));
 
+const snapshotReferences = vi.hoisted(() => vi.fn(async (_channel: string, _query: string, _signal?: AbortSignal): Promise<{messageId:string;timestamp:number;sourceSequence?:string}[]> => []));
+vi.mock("../../crypto/cachedSearchSnapshot", async () => {
+  const { fakeCachedSearchSnapshot } = await import("../../test/fakeCachedSearchSnapshot");
+  return { createCachedSearchSnapshot: vi.fn(async (kind: "channel" | "dm", channel: string, query: string, signal?: AbortSignal) =>
+    fakeCachedSearchSnapshot(kind, await snapshotReferences(channel, query, signal))) };
+});
 vi.mock("../../crypto/keyStorage", () => ({
-  searchCachedMessageRefs: vi.fn(async () => []),
   getCachedDecryptedMessage: vi.fn(),
 }));
 
@@ -75,7 +80,7 @@ vi.mock("../shared/Avatar", () => ({
 import { getAuthSessionOwner, publishAuthOwnerChange } from "../../api/authSessionEvents";
 import SearchPanel from "./SearchPanel";
 import { searchMessages } from "../../api/search";
-import { getCachedDecryptedMessage, searchCachedMessageRefs } from "../../crypto/keyStorage";
+import { getCachedDecryptedMessage } from "../../crypto/keyStorage";
 import { useMessageStore } from "../../stores/messageStore";
 import { useServerStore } from "../../stores/serverStore";
 import { useE2EEStore } from "../../stores/e2eeStore";
@@ -203,7 +208,7 @@ describe("SearchPanel — result races", () => {
     useE2EEStore.setState({ initStatus: "ready" });
     const row = { messageId: "id", channelId: "ch-1", dmChannelId: null, content: "private match", timestamp: 1 };
     const delayed = deferred<typeof row[]>();
-    vi.mocked(searchCachedMessageRefs).mockResolvedValueOnce([{ messageId: row.messageId, timestamp: row.timestamp }]).mockReturnValueOnce(delayed.promise);
+    vi.mocked(snapshotReferences).mockResolvedValueOnce([{ messageId: row.messageId, timestamp: row.timestamp }]).mockReturnValueOnce(delayed.promise);
     vi.mocked(getCachedDecryptedMessage).mockResolvedValueOnce(row);
     render(<SearchPanel channelId="ch-1" onClose={() => {}} />);
     typeQuery("private");
@@ -213,7 +218,7 @@ describe("SearchPanel — result races", () => {
     expect(screen.queryByText(row.content)).not.toBeInTheDocument();
     act(() => useE2EEStore.setState({ initStatus: "ready" }));
     typeQuery("match");
-    const signal = vi.mocked(searchCachedMessageRefs).mock.lastCall?.[2];
+    const signal = vi.mocked(snapshotReferences).mock.lastCall?.[2];
     act(() => useE2EEStore.setState({ initStatus: "uninitialized" }));
     expect(signal?.aborted).toBe(true);
     await act(async () => delayed.resolve([row]));
@@ -264,7 +269,7 @@ describe("SearchPanel — result races", () => {
     const rows = Array.from({ length: 26 }, (_, i) => ({
       messageId: `last-${i}`, channelId: "ch-1", dmChannelId: null, content: `match ${i}`, timestamp: i,
     }));
-    vi.mocked(searchCachedMessageRefs).mockResolvedValueOnce(rows.map(({ messageId, timestamp }) => ({ messageId, timestamp })));
+    vi.mocked(snapshotReferences).mockResolvedValueOnce(rows.map(({ messageId, timestamp }) => ({ messageId, timestamp })));
     vi.mocked(getCachedDecryptedMessage).mockImplementation(async id => id === "last-0" ? null : rows.find(row => row.messageId === id) ?? null);
     render(<SearchPanel channelId="ch-1" onClose={() => {}} />);
     typeQuery("match");
@@ -283,7 +288,7 @@ describe("SearchPanel — result races", () => {
     const rows = Array.from({ length: 52 }, (_, i) => ({
       messageId: `refill-${i}`, channelId: "ch-1", dmChannelId: null, content: `match ${i}`, timestamp: i,
     }));
-    vi.mocked(searchCachedMessageRefs).mockResolvedValueOnce(rows.map(({ messageId, timestamp }) => ({ messageId, timestamp })));
+    vi.mocked(snapshotReferences).mockResolvedValueOnce(rows.map(({ messageId, timestamp }) => ({ messageId, timestamp })));
     vi.mocked(getCachedDecryptedMessage).mockImplementation(async id => {
       if (id === "refill-26") return null;
       const row = rows.find(row => row.messageId === id);
@@ -307,17 +312,17 @@ describe("SearchPanel — result races", () => {
       messageId: String(i), channelId: "ch-1", dmChannelId: null,
       content: `hit number ${i}`, timestamp: i,
     }));
-    vi.mocked(searchCachedMessageRefs).mockClear().mockImplementation(async () => rows.map(({ messageId, timestamp }) => ({ messageId, timestamp })));
+    vi.mocked(snapshotReferences).mockClear().mockImplementation(async () => rows.map(({ messageId, timestamp }) => ({ messageId, timestamp })));
     vi.mocked(getCachedDecryptedMessage).mockImplementation(async id => rows.find(row => row.messageId === id) ?? null);
     render(<SearchPanel channelId="ch-1" onClose={() => {}} />);
     typeQuery("hit");
     await act(async () => {});
-    act(() => useMessageStore.setState({ lastDeleted: { id: "23", channel_id: "ch-1" } }));
+    await act(async () => { useMessageStore.setState({ lastDeleted: { id: "23", channel_id: "ch-1" } }); });
     fireEvent.click(screen.getByRole("button", { name: "searchNext" }));
     await act(async () => {});
     expect(screen.getByText("hit number 24")).toBeInTheDocument();
     expect(screen.queryByText("hit number 23")).not.toBeInTheDocument();
-    expect(searchCachedMessageRefs).toHaveBeenCalledTimes(1);
+    expect(snapshotReferences).toHaveBeenCalledTimes(1);
   });
 
   it("returns to the last available page when its only local result is deleted", async () => {
@@ -326,7 +331,7 @@ describe("SearchPanel — result races", () => {
     const rows = Array.from({ length: 26 }, (_, i) => ({
       messageId: String(i), channelId: "ch-1", dmChannelId: null, content: `match ${i}`, timestamp: i,
     }));
-    vi.mocked(searchCachedMessageRefs).mockResolvedValueOnce(rows.map(({ messageId, timestamp }) => ({ messageId, timestamp })));
+    vi.mocked(snapshotReferences).mockResolvedValueOnce(rows.map(({ messageId, timestamp }) => ({ messageId, timestamp })));
     vi.mocked(getCachedDecryptedMessage).mockImplementation(async id => rows.find(row => row.messageId === id) ?? null);
     render(<SearchPanel channelId="ch-1" onClose={() => {}} />);
     typeQuery("match");
@@ -358,7 +363,7 @@ describe("SearchPanel — result click", () => {
     typeQuery("row");
     await act(async () => {});
     fireEvent.click(screen.getByText("gone row"));
-    act(() => useMessageStore.setState({ lastDeleted: { id: "a", channel_id: "ch-1" } }));
+    await act(async () => { useMessageStore.setState({ lastDeleted: { id: "a", channel_id: "ch-1" } }); });
     await act(async () => navigation.resolve(false));
     expect(screen.getByText("1", { selector: ".search-count" })).toBeInTheDocument();
   });
@@ -388,4 +393,23 @@ describe("SearchPanel — result click", () => {
     // The panel itself never toasts — useOpenAtMessage owns that message.
     expect(useToastStore.getState().addToast).not.toHaveBeenCalled();
   });
+});
+
+it("clears visible encrypted results and disposes the index on a cache reset", async () => {
+  vi.useFakeTimers();
+  useServerStore.setState(state => ({ activeServerId: "srv-1", activeServer: { ...state.activeServer!, id: "srv-1", e2ee_enabled: true } }));
+  useE2EEStore.setState({ initStatus: "ready" });
+  snapshotReferences.mockResolvedValueOnce([{messageId:"owned",timestamp:1}]);
+  vi.mocked(getCachedDecryptedMessage).mockResolvedValue({messageId:"owned",timestamp:1,channelId:"ch-1",dmChannelId:null,content:"owned private match"});
+  render(<SearchPanel channelId="ch-1" onClose={() => {}} />);
+  fireEvent.change(screen.getByRole("textbox"),{target:{value:"private match"}});
+  await act(async()=>{await vi.advanceTimersByTimeAsync(300);});
+  expect(screen.getByText("owned private match")).toBeInTheDocument();
+  const {createCachedSearchSnapshot}=await import("../../crypto/cachedSearchSnapshot");
+  const index=await vi.mocked(createCachedSearchSnapshot).mock.results.at(-1)!.value;
+  const {notifyCachedSearchReset}=await import("../../crypto/cachedSearchEpoch");
+  act(()=>notifyCachedSearchReset("fixture-source"));
+  expect(screen.queryByText("owned private match")).not.toBeInTheDocument();
+  expect(screen.getByRole("textbox")).toHaveValue("");
+  await expect(index.page(0,25)).rejects.toThrow("disposed");
 });

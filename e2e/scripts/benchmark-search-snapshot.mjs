@@ -66,7 +66,9 @@ try {
   // Its reset must invalidate the first page through the durable source epoch.
   await page.evaluate(async()=>{
    const {createCachedSearchSnapshot}=await import("/src/crypto/cachedSearchSnapshot.ts");
+   const {getCachedSearchResetGeneration}=await import("/src/crypto/cachedSearchEpoch.ts");
    Reflect.set(globalThis,"__crossTabSnapshot",await createCachedSearchSnapshot("dm","target","ÉTÉ"));
+   Reflect.set(globalThis,"__crossTabResetGeneration",getCachedSearchResetGeneration());
   });
   const resetPage=await page.context().newPage();
   try {
@@ -77,6 +79,10 @@ try {
     const {CACHED_SEARCH_EPOCH_KEY}=await import("/src/crypto/cachedSearchEpoch.ts");
     publishAuthOwnerChange("snapshot-benchmark");await clearAllE2EEData();
     if((await getAllMetadata()).some(([key])=>key===CACHED_SEARCH_EPOCH_KEY))throw new Error("Reset fence became portable");
+   });
+   await page.waitForFunction(async()=>{
+    const {getCachedSearchResetGeneration}=await import("/src/crypto/cachedSearchEpoch.ts");
+    return getCachedSearchResetGeneration()>Reflect.get(globalThis,"__crossTabResetGeneration");
    });
    const reset=await page.evaluate(async()=>{
     const snapshot=Reflect.get(globalThis,"__crossTabSnapshot");let rejected=false;
