@@ -37,6 +37,7 @@ import {
   type OfficialMessageStyle,
 } from "../styles/accessibility";
 import { usePreferencesStore } from "./preferencesStore";
+import { capturePreferenceScope } from "./preferenceScope";
 
 const STORAGE_KEY = "tayfa.accessibility.v1";
 
@@ -144,7 +145,9 @@ function commit(
 ): void {
   const safe = sanitizeAccessibilityPreferences(partial);
   if (Object.keys(safe).length === 0) return;
+  const isCurrent = capturePreferenceScope();
   set(safe);
+  if (!isCurrent()) return;
   const next = { ...get(), ...safe } as AccessibilityState;
   applyAccessibility(next);
   persist(next);
@@ -192,14 +195,18 @@ export const useAccessibilityStore = create<AccessibilityStore>((set, get) => ({
     // Hydration updates the local cache without echoing a write to the server.
     const safe = sanitizeAccessibilityPreferences(partial);
     const next = { ...get(), ...safe } as AccessibilityState;
+    const isCurrent = capturePreferenceScope();
     set(safe);
+    if (!isCurrent()) return;
     applyAccessibility(next);
     persist(next);
   },
 
   reset: () => commit(set, get as never, { ...DEFAULT_ACCESSIBILITY }),
   resetAccountPreferences: () => {
+    const isCurrent = capturePreferenceScope();
     set({ ...DEFAULT_ACCESSIBILITY });
+    if (!isCurrent()) return;
     applyAccessibility(DEFAULT_ACCESSIBILITY);
     persist(DEFAULT_ACCESSIBILITY);
   },
