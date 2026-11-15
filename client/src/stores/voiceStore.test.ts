@@ -987,8 +987,10 @@ it("preserves active voice transport and media state during account preference h
 });
 
 
-it("preserves voice session through the composed account preferences adapter", async () => {
-  const { applyAccountPreferences } = await import("./applyAccountPreferences");
+it("preserves voice session through the production bootstrap preference loader", async () => {
+  await import("../bootstrapPreferences");
+  const { loadPreferencePresenter } = await import("./preferencePresenter");
+  const applyAccountPreferences = await loadPreferencePresenter();
   resetStore();
   const onLeave = vi.fn();
   const send = vi.fn();
