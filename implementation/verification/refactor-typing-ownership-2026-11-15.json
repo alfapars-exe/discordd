@@ -26,7 +26,7 @@
     "build": "PASS actual npm run build (tsc -b,Vite);Vite1.65s;TEMP/hichat-typing-ownership-final-build.log",
     "fullClientCoverage": "PASS498files5345passed1skipped;TEMP/hichat-typing-ownership-coverage.log",
     "lint": "PASS0errors2existingwarnings;TEMP/hichat-typing-ownership-lint.log",
-    "selfScan": "RUNNING on immutable fec8b107 archive;TEMP/hichat-typing-owner-final-scan.log",
+    "selfScan": "PASS immutable fec8b107;51 exact reviewed-source records,478 review lines,0 blocking patterns. Pattern scan is not proof of absence of vulnerabilities. TEMP/hichat-typing-owner-final-scan.log",
     "coverageTotal": {
       "lines": {
         "total": 38518,
@@ -87,7 +87,6 @@
     }
   },
   "remaining": [
-    "Final immutable fec8b107 source scan",
     "Terminal prior-head CI before next push;new-head CI after push",
     "Full RF14/RF15 and RF01-RF30 runtime/platform/physical acceptance remain open"
   ]

@@ -3446,3 +3446,5 @@ Handler state bildiriminden önce bir timer kaydı ayırır. Reset bu kaydı ve 
 Dört dosyada 177 hedefli test geçti (3,95 saniye). Dokuz gerçek-store ve beş yardımcı yaşam döngüsü senaryosu dahil. Gerçek TypeScript/Vite build başarılı (Vite 1,65 saniye). Tam istemci coverage, lint ve değişmez kaynak taraması sürüyor. Receipt: `implementation/verification/refactor-typing-ownership-2026-11-15.json`. Genel RF14/RF15 ve proje kabulü açık; özel içerik sızıntısı iddiası yok.
 
 fec8b107 tam istemci doğrulaması: 498 dosyada 5.345 başarılı, 1 atlanan test. Satır kapsamı %68,91, dal kapsamı %64,89. Lint 0 hata ve mevcut 2 uyarıyla geçti. Son değişmez kaynak taraması ve önceki head CI terminal sonucu bekleniyor.
+
+Son fec8b107 arşiv taraması tamamlandı: 51 doğrulanmış kaynak kaydı, 478 inceleme satırı, 0 engelleyici desen eşleşmesi. Bu desen taraması güvenlik açığı yokluğunu kanıtlamaz. Yeni gönderim, önceki 9a965a09 CI terminal sonucunu bekliyor; çalışan koşular iptal edilmiyor.
