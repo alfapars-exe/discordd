@@ -39,12 +39,26 @@
     "fixtureProfileEvidence": "Full timeout stack traverses database.execStatementsTx/applyMigrationFile/runMigrations/NewLegacy -> newMFAHarness:33 -> boundAuthHarness -> musicPrivacyFixture -> newMusicScopeFixture. Repeated full schema setup remains a measured test-profile followup; no fixture optimization claimed."
   },
   "testHelperFollowup": {
-    "baseline": "cb516f2f Sonar introduced two test-body S3776 issues: AaHhFOdChH817EjyMxPc23 and AaHhFOdChH817EjyMxPd18. They remain open until new analysis; production25 issue already closed.",
+    "baseline": "cb516f2f Sonar introduced two test-body S3776 issues: AaHhFOdChH817EjyMxPc23 and AaHhFOdChH817EjyMxPd18. Production25 issue already closed.",
     "change": "3a23a1ec moves each scenario body into a named t.Helper function; same11 scenarios and assertion order. Runtime music source unchanged.",
     "equivalence": "Scenario bodies equal cb516f2f after indentation normalization,excluding added t.Helper. SHA256 matrix67c6da8800cce098e1aec78de864b405b1c63214bb371647ffdb908169bd3e6c; partial074f610076506903c7d51ffbfea8fec902c5d21dcfe7098b2f8dba6120c3179b. TEMP/hichat-verify-music-test-helper-bodies.py.",
     "validation": "Same targeted selection PASS5.920s; Go vet PASS; LinuxGo1.26.11CGO1race20repeatsPASS3.363s. TEMP/hichat-music-audience-test-helpers.log; TEMP/hichat-music-audience-test-helpers-race.log.",
-    "remaining": "New-head Sonar closure of both exact test issue keys and complete requiredCI"
+    "sonarAfter": "bd8b9652 analysis:CLOSED/FIXED for both exact test issue keys; no open issues returned for the test file. Source API matches all110 code lines plus one empty EOF line. No exact after complexity score claimed.",
+    "remaining": "Complete required bd8b9652CI"
+  },
+  "fixtureCPUProfile": {
+    "sourceRevision": "bd8b9652aef14a5888125a08fc65f5ae19828188",
+    "target": "TestMusicAccessScopeDeniedAfterExtractionNeverConnects/leave only",
+    "environment": "LinuxGo1.26.11CGO1race; same read-only source/module mounts and writable task cache",
+    "result": "PASS10.136s; TEMP/hichat-music-fixture-cpu-profile.log",
+    "binaryBuildID": "b624f21c9d58846b1c602dba86d62992b7df3ba5",
+    "profile": "TEMP/hichat-refactor-go-linux-cache/music-fixture-profile.cpu",
+    "durationSeconds": 6.9,
+    "totalCPUSamplesSeconds": 6.85,
+    "runMigrationsCumulativeSeconds": 4.68,
+    "runMigrationsCumulativePercent": 68.32,
+    "interpretation": "One instrumented diagnostic sample,not production latency or a performance gain claim. Repeated schema fixture initialization is a concrete RF03/RF04 test-profile followup; no fixture optimization implemented."
   },
   "runtimeCI": { "revision": "cb516f2f67558d10802de34ebfac8793c9e55cce", "result": "36/36 terminalSUCCESS including8servicesrace shards", "serverRun": 43762840813, "serverConclusion": "success", "rawChecks": "refactor-cb51-terminal-ci-2026-11-16.json", "scope": "Runtime995d4bf5 accepted in requiredshardedCI. Latest3a23a1ec test-helper source still requires its ownCI/Sonar." },
-  "remaining": ["New-source CI and two exact test Sonar issue closures", "MusicAudienceFreshPermissions interface naming issue S8196 remains separate", "Complete RF10 concurrency/runtime/provider acceptance", "Whole-project RF01-RF30 acceptance"]
+  "remaining": ["Complete bd8b9652CI; production and two exact test Sonar keys now CLOSED/FIXED", "MusicAudienceFreshPermissions interface naming issue S8196 remains separate", "Complete RF10 concurrency/runtime/provider acceptance", "Whole-project RF01-RF30 acceptance"]
 }
