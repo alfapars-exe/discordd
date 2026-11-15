@@ -43,6 +43,11 @@ let fetchEdits: PreferencesData = {};
 let fetchAcknowledged: PreferencesData = {};
 let fetchPromise: Promise<void> | null = null;
 let writePromise: Promise<void> | null = null;
+type PresentationPlan = { reset: boolean; preserveSessionState: boolean };
+class PreferencePresentationError extends Error {
+  constructor(readonly plan: PresentationPlan) { super("preferences_apply_failed"); }
+}
+let presentationRetry: (PresentationPlan & { preparation: boolean }) | null = null;
 let preparation: Promise<void> = Promise.resolve();
 let controller = new AbortController();
 
@@ -141,13 +146,17 @@ function requestContext(version: number) {
 }
 
 async function applyData(version: number, reset = false, preserveSessionState = false): Promise<void> {
-  const applyAccountPreferences = await loadPreferencePresenter();
-  if (!current(version)) return;
-  applyAccountPreferences(
-    () => current(version) ? cacheable(usePreferencesStore.getState().data) : null,
-    reset,
-    preserveSessionState,
-  );
+  try {
+    const applyAccountPreferences = await loadPreferencePresenter();
+    if (!current(version)) return;
+    applyAccountPreferences(
+      () => current(version) ? cacheable(usePreferencesStore.getState().data) : null,
+      reset,
+      preserveSessionState,
+    );
+  } catch {
+    if (current(version)) throw new PreferencePresentationError({ reset, preserveSessionState });
+  }
 }
 function schedule(): void {
   clearTimer();
@@ -191,6 +200,7 @@ async function flush(): Promise<void> {
         // The server already committed this patch. A local presenter failure
         // must not turn it back into an outbound edit or overwrite newer data
         // on retry. Keep only edits queued after the acknowledged request.
+        presentationRetry = { ...(error instanceof PreferencePresentationError ? error.plan : { reset: false, preserveSessionState: false }), preparation: false };
         usePreferencesStore.setState({ syncStatus: "error", syncError: "preferences_apply_failed", hasPendingChanges: nonempty(pending) });
         return;
       }
@@ -234,8 +244,10 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     if (fetchPromise) return fetchPromise;
     const version = epoch;
     const run = async () => {
+      let preparing = true;
       try {
         await preparation;
+        preparing = false;
         if (writePromise) await writePromise;
         if (!current(version)) return;
         fetchEdits = { ...pending };
@@ -259,7 +271,12 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
       } catch (error) {
         if (current(version)) {
           clearTimer();
-          set({ syncStatus: "error", syncError: error instanceof Error && error.message === "preferences_account_mismatch" ? "preferences_account_mismatch" : "preferences_load_failed" });
+          if (error instanceof PreferencePresentationError) {
+            presentationRetry = { ...error.plan, preparation: preparing };
+            set({ syncStatus: "error", syncError: "preferences_apply_failed" });
+          } else {
+            set({ syncStatus: "error", syncError: error instanceof Error && error.message === "preferences_account_mismatch" ? "preferences_account_mismatch" : "preferences_load_failed" });
+          }
         }
       }
     };
@@ -275,13 +292,19 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     const version = epoch;
     clearTimer();
     if (get().syncError === "preferences_apply_failed") {
-      try { await applyData(version); }
-      catch {
+      const plan = presentationRetry ?? { reset: false, preserveSessionState: false, preparation: false };
+      try {
+        const applying = applyData(version, plan.reset, plan.preserveSessionState);
+        // A failed initial presenter must be replaced, not awaited forever.
+        if (plan.preparation) preparation = applying;
+        await applying;
+      } catch {
         if (current(version)) set({ syncStatus: "error", syncError: "preferences_apply_failed" });
         return;
       }
       if (!current(version)) return;
-      set({ syncStatus: nonempty(pending) ? "pending" : "saved", syncError: null });
+      presentationRetry = null;
+      set({ syncStatus: get().isLoaded ? nonempty(pending) ? "pending" : "saved" : "idle", syncError: null });
     }
     if (!get().isLoaded || get().syncError === "preferences_load_failed") await get().fetchAndApply();
     if (current(version)) await flush();
@@ -326,7 +349,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     acknowledged = {};
     pending = {}; inFlight = {}; fetchEdits = {};
     fetchAcknowledged = {};
-    fetchPromise = null; writePromise = null; preparation = Promise.resolve();
+    fetchPromise = null; writePromise = null; preparation = Promise.resolve(); presentationRetry = null;
     set({ data: {}, isLoaded: false, accountId: null, syncStatus: "idle", syncError: null, hasPendingChanges: false, legacyImportAvailable: false });
   },
 }));
