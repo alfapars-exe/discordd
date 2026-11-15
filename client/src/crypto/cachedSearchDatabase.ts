@@ -37,18 +37,7 @@ export async function withResetCachedSearchSnapshots<T>(sourceName: string, rese
     result = await resetSource();
   } catch (error) { failed = true; failure = error; }
   try {
-    // Avoid creating a derived database for accounts that never searched.
-    if (isCurrent() && (typeof indexedDB.databases !== "function" || (await indexedDB.databases()).some(db => db.name === name))) {
-      const db = await openSearchDatabase(name);
-      try {
-        if (isCurrent()) {
-          const tx = db.transaction(["refs", "snapshots"], "readwrite");
-          void tx.done.catch(() => {});
-          try { await Promise.all([tx.objectStore("refs").clear(), tx.objectStore("snapshots").clear()]); await tx.done; }
-          catch (error) { try { tx.abort(); } catch { /* Already complete. */ } await tx.done.catch(() => {}); throw error; }
-        }
-      } finally { db.close(); }
-    }
+    await clearExistingSearchIndex(name, isCurrent);
   } catch (error) {
     if (!failed) { failed = true; failure = error; }
     else console.warn("[e2ee] search index cleanup failed after an unsuccessful key reset");
@@ -60,3 +49,26 @@ export async function withResetCachedSearchSnapshots<T>(sourceName: string, rese
   return result as T;
 }
 
+
+// Accounts that never searched must not acquire a derived database on reset.
+async function clearExistingSearchIndex(name: string, isCurrent: () => boolean): Promise<void> {
+  if (!isCurrent()) return;
+  if (typeof indexedDB.databases === "function" && !(await indexedDB.databases()).some(db => db.name === name)) return;
+  const db = await openSearchDatabase(name);
+  try {
+    if (isCurrent()) await clearSearchIndexStores(db);
+  } finally { db.close(); }
+}
+
+async function clearSearchIndexStores(db: IDBPDatabase): Promise<void> {
+  const tx = db.transaction(["refs", "snapshots"], "readwrite");
+  void tx.done.catch(() => {});
+  try {
+    await Promise.all([tx.objectStore("refs").clear(), tx.objectStore("snapshots").clear()]);
+    await tx.done;
+  } catch (error) {
+    try { tx.abort(); } catch { /* Already complete. */ }
+    await tx.done.catch(() => {});
+    throw error;
+  }
+}
