@@ -3005,3 +3005,12 @@ Fail-first production repository tests exposed two SQLite defects:plain-string i
 ### RF24/RF11 — asynchronous audit enrichment and queued ownership (2026-11-15)
 
 Two fail-first regressions showed Write waiting on user storage and caller pointer mutation changing queued identities/snapshots. e4b616db moves missing-snapshot lookups to the single writer with one shared2s lookup budget;Write owns copies of IDs and explicit snapshots. Explicit event-time snapshots stay frozen;without them,best-effort snapshots now observe user records at persistence time. Timeout/failure retains identity fallback. Full/stopped queues do not perform lookups. Windows8audit testsPASS2.694s;immutable LinuxGo1.27.4/CGO1 race5repetitions40passes13.662s;full root wiringPASS6.570s. Receipt:implementation/verification/refactor-audit-async-snapshot-ownership-2026-11-15.json. Owned race container removed. Persistence/drain deadline and wider RF24/project acceptance remain open;local work held while7ebe019d CI runs.
+
+
+### RF24/RF11 — bounded cooperative audit shutdown (2026-11-15)
+
+Fail-first stalled-storage regression exceeded6s before cleanup release.97071be1 fixes one5s absolute deadline on first Stop,closes admission,cancels active context and drains queued work under a fresh deadline. Constructor-only Stop enters drain directly. Expired queued entries are released and counted in one warning;insert failure logged separately. Stop still joins its one writer,including noncooperative dependencies;no detached storage goroutine or false join success. Windows10testsPASS7.709s before final test-only context assertion;immutable final-source LinuxGo1.27.4/CGO1 race3repetitions30passes24.599s;full rootPASS6.662s. ERROR_MANAGEMENT.md documents best-effort loss and context-cooperation boundary. Receipt:implementation/verification/refactor-audit-shutdown-deadline-2026-11-15.json. Owned runner removed;full RF24/project/platform acceptance remains open.
+
+### RF03/RF30 — terminal7ebe019d and next audit delivery (2026-11-15)
+
+Remote7ebe019dc5a1120587c8b6cee515645249020e34 completed36/36SUCCESS,including strict JSON opt-in contracts and the dedicated fresh-account role/notification Chromium profile. Snapshot:implementation/verification/refactor-7ebe019-terminal-ci-2026-11-15.json. SQLite ignore-map parity and asynchronous audit ownership/shutdown fixes have separate local regressions/race proofs and now require independent new-head CI. Earlier green checks do not prove this delivery. PR305 remains draft;full RF05/RF24/project/native/physical acceptance remains open.

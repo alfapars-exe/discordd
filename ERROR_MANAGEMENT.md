@@ -91,6 +91,24 @@ korunarak gösterilir.
   rezerv vardır; rezerv her 5 saniyede bir token yeniler. INFO bu rezervi
   tüketemez. 10 dakika kullanılmayan kullanıcı bucket'ları temizlenir.
 
+## Audit kuyruğu ve kapanış
+
+Audit `Write` çağrısı kullanıcı veya audit deposuna erişmez; olayın kimlik ve
+verilmiş snapshot değerlerini kopyalayıp sınırlı kuyruğa alır. Dolu kuyruk ve
+kapanmış servis yeni olayı kabul etmez. Eksik kullanıcı snapshot'ları tek yazıcıda
+ortak iki saniyelik bütçeyle tamamlanır. Çağıranın verdiği snapshot olay anındaki
+değeri korur; verilmemişse kayıt anındaki kullanıcı bilgisi kullanılır. Okuma
+başarısızsa kimlik korunur ve mevcut bilinmeyen kullanıcı gösterimi sürer.
+
+İlk `Stop` çağrısı kabulü kapatır ve aktif işin context'ini iptal eder. Aktif
+veritabanı işlemi iptalle başarısız olabilir; hata kaydı üretilir. Kuyrukta kalan
+olaylar, ilk `Stop` anından başlayan toplam beş saniyelik taze context ile yazılır.
+Sonraki `Stop` çağrıları süreyi uzatmaz. Süre dolunca kalan olaylar kuyruktan
+çıkarılır ve sayıları tek uyarıda bildirilir; başarısız yazım ayrıca hata kaydı
+üretir. Her `Stop`, aynı yazıcının çıkışını bekler; sahipsiz veritabanı goroutine'i
+bırakılmaz. Süre sınırının işlemesi depoların context iptaline uymasına bağlıdır.
+Bu kuyruk kalıcı teslim garantisi vermez.
+
 ## Doğrulama
 
 Go testleri logger başlatma sırasını, maskelemeyi, tek HTTP tanı kaydını, kuyruk
