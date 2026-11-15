@@ -316,3 +316,19 @@ export function projectVoiceSettings(settings: VoiceSettings): VoiceSettings {
     (Object.keys(DEFAULT_SETTINGS) as (keyof VoiceSettings)[]).map(key => [key, settings[key]]),
   ) as VoiceSettings;
 }
+
+/** Account numeric controls and recovery caches share these finite bounds. */
+export const VOICE_NUMBER_RANGES = {
+  micSensitivity: [0, 100],
+  masterVolume: [0, 100],
+  inputVolume: [0, 200],
+  deepfilterSuppression: [0, 100],
+} satisfies Partial<Record<keyof VoiceSettings, [number, number]>>;
+export type VoiceNumberPreference = keyof typeof VOICE_NUMBER_RANGES;
+
+/** Ignore non-finite edits; finite user edits clamp to the control's range. */
+export function clampVoicePreferenceNumber(field: VoiceNumberPreference, value: number): number | undefined {
+  if (!Number.isFinite(value)) return undefined;
+  const [min, max] = VOICE_NUMBER_RANGES[field];
+  return Math.max(min, Math.min(max, value));
+}

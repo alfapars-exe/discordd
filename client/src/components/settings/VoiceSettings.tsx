@@ -1,3 +1,4 @@
+import { VOICE_NUMBER_RANGES } from "../../stores/voicePreferences";
 /** VoiceSettings — Voice & Audio settings tab. All settings persisted via voiceStore + localStorage. */
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
@@ -187,7 +188,8 @@ function VoiceSettings() {
           <div className="vs-label">{t("micSensitivity")}</div>
           <VolumeSlider
             value={micSensitivity}
-            max={100}
+            min={VOICE_NUMBER_RANGES.micSensitivity[0]}
+            max={VOICE_NUMBER_RANGES.micSensitivity[1]}
             onChange={setMicSensitivity}
             ariaLabel={t("micSensitivity")}
           />
@@ -218,7 +220,8 @@ function VoiceSettings() {
         <fieldset disabled={microphoneStatus?.gainAvailable === false} style={{ border: 0, padding: 0, margin: 0 }}>
           <VolumeSlider
             value={inputVolume}
-            max={200}
+            min={VOICE_NUMBER_RANGES.inputVolume[0]}
+            max={VOICE_NUMBER_RANGES.inputVolume[1]}
             onChange={setInputVolume}
             ariaLabel={t("inputVolume")}
           />
@@ -292,7 +295,8 @@ function VoiceSettings() {
         <div className="vs-label">{t("masterVolume")}</div>
         <VolumeSlider
           value={masterVolume}
-          max={100}
+          min={VOICE_NUMBER_RANGES.masterVolume[0]}
+          max={VOICE_NUMBER_RANGES.masterVolume[1]}
           onChange={setMasterVolume}
           ariaLabel={t("masterVolume")}
         />

@@ -1,7 +1,7 @@
 import { sanitizeAccessibilityPreferences } from "../utils/accessibilityPreferenceCodec";
 import { DEFAULT_ACCESSIBILITY } from "../utils/accessibilityPreferenceDefaults";
 import { DEVICE_LOCAL_VOICE_SETTING_KEYS } from "./voicePreferenceScope";
-import { DEFAULT_SETTINGS as DEFAULT_VOICE_SETTINGS } from "./voicePreferences";
+import { DEFAULT_SETTINGS as DEFAULT_VOICE_SETTINGS, VOICE_NUMBER_RANGES } from "./voicePreferences";
 import { DEFAULT_NOTIFICATION_PREFERENCES, NOTIFICATION_BOOLEAN_FIELDS } from "../utils/notificationPreferenceDefaults";
 import { APPEARANCE_RANGES, APPEARANCE_STORAGE_KEYS } from "./appearancePreferences";
 
@@ -27,7 +27,8 @@ const BOOLEAN_FIELDS = new Set([
 ]);
 const NUMBER_RANGES: Record<string, [number, number]> = {
   ...APPEARANCE_RANGES,
-  micSensitivity: [0, 100], masterVolume: [0, 100], inputVolume: [0, 200], deepfilterSuppression: [0, 100], volume: [0, 100], voiceOverlaySpeakingOpacity: [20, 100], voiceOverlayIdleOpacity: [0, 100], voiceOverlayScale: [75, 150],
+  ...VOICE_NUMBER_RANGES,
+  volume: [0, 100], voiceOverlaySpeakingOpacity: [20, 100], voiceOverlayIdleOpacity: [0, 100], voiceOverlayScale: [75, 150],
 };
 const ENUM_FIELDS: Record<string, readonly (string | number)[]> = {
   avatarAnimation: ["hover", "always"],

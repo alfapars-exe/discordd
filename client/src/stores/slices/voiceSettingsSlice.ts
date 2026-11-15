@@ -12,7 +12,7 @@ import { cacheable, sanitize } from "../preferencesCodec";
 import { usePreferencesStore } from "../preferencesStore";
 import type { VoiceStore } from "../voiceStore";
 
-import { DEFAULT_SETTINGS, projectVoiceSettings as currentSettings, type InputMode, type ScreenShareQuality, type ScreenShareFps, type CameraQuality, type CameraFps, type VoiceOverlayPosition, type MicProfile, type NoiseSuppressionLevel, type NoiseReductionEngine, type VoiceSettings, type ScreenShareMode } from "../voicePreferences";
+import { clampVoicePreferenceNumber, type VoiceNumberPreference, DEFAULT_SETTINGS, projectVoiceSettings as currentSettings, type InputMode, type ScreenShareQuality, type ScreenShareFps, type CameraQuality, type CameraFps, type VoiceOverlayPosition, type MicProfile, type NoiseSuppressionLevel, type NoiseReductionEngine, type VoiceSettings, type ScreenShareMode } from "../voicePreferences";
 export { DEFAULT_SETTINGS } from "../voicePreferences";
 export type { InputMode, ScreenShareQuality, ScreenShareFps, CameraQuality, CameraFps, VoiceOverlayPosition, MicProfile, NoiseSuppressionLevel, NoiseReductionEngine, VoiceSettings, ScreenShareMode } from "../voicePreferences";
 
@@ -315,6 +315,13 @@ export const createVoiceSettingsSlice: StateCreator<
 > = (set, get) => {
   const initial = loadSettings();
   observedSettings = initial;
+  const setNumericPreference = (field: VoiceNumberPreference, value: number) => {
+    const normalized = clampVoicePreferenceNumber(field, value);
+    if (normalized === undefined) return;
+    const patch: Partial<Pick<VoiceSettings, VoiceNumberPreference>> = { [field]: normalized };
+    set(patch);
+    saveSettings(currentSettings(get()));
+  };
 
   return {
     inputMode: initial.inputMode,
@@ -383,11 +390,7 @@ export const createVoiceSettingsSlice: StateCreator<
       saveSettings(currentSettings(get()));
     },
 
-    setMicSensitivity: (value) => {
-      if (!Number.isFinite(value)) return;
-      set({ micSensitivity: Math.max(0, Math.min(100, value)) });
-      saveSettings(currentSettings(get()));
-    },
+    setMicSensitivity: (value) => setNumericPreference("micSensitivity", value),
 
     setUserVolume: (userId, volume) => {
       set({ userVolumes: { ...get().userVolumes, [userId]: volume } });
@@ -409,17 +412,9 @@ export const createVoiceSettingsSlice: StateCreator<
       saveSettings(currentSettings(get()));
     },
 
-    setMasterVolume: (value) => {
-      if (!Number.isFinite(value)) return;
-      set({ masterVolume: Math.max(0, Math.min(100, value)) });
-      saveSettings(currentSettings(get()));
-    },
+    setMasterVolume: (value) => setNumericPreference("masterVolume", value),
 
-    setInputVolume: (value) => {
-      if (!Number.isFinite(value)) return;
-      set({ inputVolume: Math.max(0, Math.min(200, value)) });
-      saveSettings(currentSettings(get()));
-    },
+    setInputVolume: (value) => setNumericPreference("inputVolume", value),
 
     setSoundsEnabled: (enabled) => {
       set({ soundsEnabled: enabled });
@@ -544,14 +539,8 @@ export const createVoiceSettingsSlice: StateCreator<
       saveSettings(currentSettings(get()));
     },
 
-    setDeepfilterSuppression: (value) => {
-      if (!Number.isFinite(value)) return;
-      // Clamp to 0-100 — this is a strength %, mapped to DeepFilterNet3's
-      // dB attenuation limit downstream (strengthToAttenLimDb), not raw dB.
-      const clamped = Math.max(0, Math.min(100, value));
-      set({ deepfilterSuppression: clamped });
-      saveSettings(currentSettings(get()));
-    },
+    // Strength percentage, mapped downstream to DeepFilterNet3's attenuation limit.
+    setDeepfilterSuppression: (value) => setNumericPreference("deepfilterSuppression", value),
 
     toggleLocalMute: (userId: string) => {
       const { localMutedUsers, preMuteVolumes, userVolumes } = get();
