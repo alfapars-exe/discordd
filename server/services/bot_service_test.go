@@ -15,9 +15,8 @@ type botDisconnectRecorder struct{ ids []string }
 
 func (r *botDisconnectRecorder) DisconnectUser(id string) { r.ids = append(r.ids, id) }
 
-// newBotTestDB boots a throwaway file-backed DB with the full embedded migration
-// set (mirrors repository.newTxTestDB, which is unexported to this package) so
-// the BotService runs against the real schema with FKs enforced.
+// newBotTestDB opens an isolated copy of the full migrated service schema,
+// through production connection setup, so real SQL and FKs remain under test.
 func newBotTestDB(t *testing.T) *database.DB {
 	t.Helper()
 	return newServiceFixtureDB(t, "bot_test.db")

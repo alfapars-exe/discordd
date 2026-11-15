@@ -15,8 +15,8 @@ import (
 	"github.com/argeinfina/hichat/ws"
 )
 
-// newE2EETestDB boots a throwaway file-backed DB with the full embedded
-// migration set (mirrors newBotTestDB in bot_service_test.go).
+// newE2EETestDB opens an isolated copy of the full migrated service schema,
+// through the same production connection setup as newBotTestDB.
 //
 // The recipient filter this closes pentest C-03 with is a SQL WHERE clause
 // (repository/sqlite_group_session.go GetForRecipient) — only a real SQL
