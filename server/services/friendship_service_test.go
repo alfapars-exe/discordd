@@ -33,13 +33,14 @@ type stubDMAcceptor struct {
 }
 
 type stubFriendRequestPolicy struct {
+	err     error
 	allowed bool
 	calls   [][2]string
 }
 
 func (s *stubFriendRequestPolicy) CanSend(_ context.Context, senderID, targetID string) (bool, error) {
 	s.calls = append(s.calls, [2]string{senderID, targetID})
-	return s.allowed, nil
+	return s.allowed, s.err
 }
 
 type emailEnqueueCall struct {
@@ -729,5 +730,90 @@ func TestFriendshipAreFriends(t *testing.T) {
 	f.friends.GetByPairFn = func(_ context.Context, _, _ string) (*models.Friendship, error) { return nil, boom }
 	if _, err = f.svc.AreFriends(context.Background(), "alice", "bob"); !errors.Is(err, boom) {
 		t.Errorf("repo error: err = %v, want boom", err)
+	}
+}
+
+func TestFriendshipPolicyFailureHasNoSideEffects(t *testing.T) {
+	for _, failure := range []error{errors.New("policy unavailable"), context.Canceled} {
+		t.Run(failure.Error(), func(t *testing.T) {
+			enqueuer := &stubEmailEnqueuer{}
+			f := newFriendSvcFixture(t, enqueuer)
+			policy := &stubFriendRequestPolicy{err: failure}
+			f.svc = NewFriendshipService(nil, f.friends, f.users, f.notif, f.hub, enqueuer, f.acceptor, policy)
+			f.friends.CreateFn = func(context.Context, *models.Friendship) error {
+				t.Fatal("policy failure persisted request")
+				return nil
+			}
+			result, err := f.svc.SendRequest(context.Background(), "alice", sendReq("bob"))
+			if result != nil || !errors.Is(err, failure) || !strings.HasPrefix(err.Error(), "failed to evaluate friend request policy: ") {
+				t.Fatalf("result=%+v err=%v, want wrapped policy failure", result, err)
+			}
+			if len(policy.calls) != 1 || policy.calls[0] != [2]string{"alice", "bob"} {
+				t.Fatalf("policy calls=%v", policy.calls)
+			}
+			if len(enqueuer.calls) != 0 || len(f.events) != 0 || len(f.acceptor.calls) != 0 {
+				t.Fatal("policy failure published side effects")
+			}
+		})
+	}
+}
+
+func TestFriendshipExistingRelationshipBypassesPolicy(t *testing.T) {
+	cases := []struct {
+		name   string
+		status models.FriendshipStatus
+		sender string
+		want   error
+	}{
+		{"accepted", models.FriendshipStatusAccepted, "alice", pkg.ErrAlreadyExists},
+		{"outgoing pending", models.FriendshipStatusPending, "alice", pkg.ErrAlreadyExists},
+		{"blocked", models.FriendshipStatusBlocked, "bob", pkg.ErrNotFound},
+		{"mutual pending", models.FriendshipStatusPending, "bob", nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFriendSvcFixture(t)
+			existing := pendingFriendship(tc.sender, "bob")
+			if tc.sender == "bob" {
+				existing.FriendID = "alice"
+			}
+			existing.Status = tc.status
+			f.setPair(existing)
+			policy := &stubFriendRequestPolicy{err: errors.New("must not evaluate policy")}
+			f.svc = NewFriendshipService(nil, f.friends, f.users, f.notif, f.hub, nil, f.acceptor, policy)
+			result, err := f.svc.SendRequest(context.Background(), "alice", sendReq("bob"))
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("err=%v want=%v", err, tc.want)
+			}
+			if tc.want == nil && (result == nil || result.Status != models.FriendshipStatusAccepted) {
+				t.Fatalf("mutual result=%+v", result)
+			}
+			if len(policy.calls) != 0 {
+				t.Fatalf("unexpected policy calls=%v", policy.calls)
+			}
+		})
+	}
+}
+
+func TestFriendshipAllowedPolicyPrecedesPersistence(t *testing.T) {
+	f := newFriendSvcFixture(t)
+	policy := &stubFriendRequestPolicy{allowed: true}
+	f.svc = NewFriendshipService(nil, f.friends, f.users, f.notif, f.hub, nil, f.acceptor, policy)
+	writes := 0
+	f.friends.CreateFn = func(_ context.Context, row *models.Friendship) error {
+		writes++
+		if len(policy.calls) != 1 || policy.calls[0] != [2]string{"alice", "bob"} {
+			t.Fatalf("persistence preceded policy: %v", policy.calls)
+		}
+		if row.UserID != "alice" || row.FriendID != "bob" || row.Status != models.FriendshipStatusPending {
+			t.Fatalf("wrong request=%+v", row)
+		}
+		return nil
+	}
+	if _, err := f.svc.SendRequest(context.Background(), "alice", sendReq("bob")); err != nil {
+		t.Fatal(err)
+	}
+	if writes != 1 {
+		t.Fatalf("writes=%d", writes)
 	}
 }
