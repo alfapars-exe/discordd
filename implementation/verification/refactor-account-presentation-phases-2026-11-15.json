@@ -9,7 +9,7 @@
     "function": "applyAccountPreferences",
     "complexity": 29,
     "threshold": 15,
-    "after": "Not yet analyzed; no resolution or after score claimed"
+    "after": "PR305 original issue CLOSED/FIXED after a9faf3fc delivery. Source API matches all85 local code lines, plus one empty EOF line. No exact after complexity score claimed."
   },
   "changes": {
     "phases": "Separate resetPreferenceDestinations and applyPreferenceValues; isolate sidebar payload normalization.",
@@ -36,5 +36,6 @@
     "nestedDestinationOwnership": "settingsStore.test.ts exercises real presenter fence inside a nested theme reset; preferenceDestinationScope.test.ts exercises real accessibility/time-format state, DOM and storage during owner/backend replacement.",
     "notComplete": "This mapping covers the changed presenter path. Full field-contract inventory, account/offline/native flows and whole-project acceptance remain open."
   },
-  "remaining": ["New-source CI and Sonar", "Final RF13 account/offline/session mapping and full runtime/platform acceptance", "Whole-project RF01-RF30 acceptance"]
+  "ci": { "revision": "a9faf3fcc94d270eb96653b2ad8b16e1c9f69eaa", "result": "36/36 terminalSUCCESS", "serverRun": 43759396844, "serverConclusion": "success", "rawChecks": "refactor-a9fa-terminal-ci-2026-11-15.json" },
+  "remaining": ["Final RF13 account/offline/session mapping and full runtime/platform acceptance", "Whole-project RF01-RF30 acceptance"]
 }
