@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import time
 
 from huggingface_hub import HfApi, CommitOperationAdd, CommitOperationDelete
@@ -33,6 +34,15 @@ def stop_previous_backend(api, repo):
         time.sleep(2)
         runtime = api.get_space_runtime(repo)
     raise SystemExit("Previous backend did not stop; no sources published")
+
+
+def restart_after_failure(api, repo):
+    """Try to resume the paused runtime without hiding the original failure."""
+    try:
+        api.restart_space(repo)
+    except Exception:
+        # Upstream exception strings can contain connection or credential data.
+        print("Space restart failed during error recovery; manual recovery required", file=sys.stderr)
 
 
 def clean_source_commit(expected=None):
@@ -97,17 +107,18 @@ def main():
         record_deployed_commit(current)
         return
     stop_previous_backend(api, repo)
-    result = api.create_commit(repo, repo_type="space", parent_commit=current, operations=operations, commit_message=f"Deploy HiChat {source[:12]}")
+    try:
+        result = api.create_commit(repo, repo_type="space", parent_commit=current, operations=operations, commit_message=f"Deploy HiChat {source[:12]}")
+    except Exception:
+        restart_after_failure(api, repo)
+        raise
     try:
         # The source commit already exists even if runtime restart fails.
         record_deployed_commit(result.oid)
     except Exception:
         # Output persistence must not strand an already published Space paused.
         # Keep the output error primary if restarting also fails.
-        try:
-            api.restart_space(repo)
-        except Exception:
-            pass
+        restart_after_failure(api, repo)
         raise
     api.restart_space(repo)
     print(json.dumps({"status": "published", "commit": result.oid, "url": result.commit_url}))

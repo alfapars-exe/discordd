@@ -126,12 +126,39 @@ class PublishSafetyTests(unittest.TestCase):
         digest = self.preview_hash()
         failure = OSError("output unavailable")
         self.api.restart_space.side_effect = RuntimeError("restart unavailable")
-        with patch.object(release, "record_deployed_commit", side_effect=failure):
+        with patch.object(release, "record_deployed_commit", side_effect=failure), contextlib.redirect_stderr(io.StringIO()):
             with self.assertRaises(OSError) as raised:
                 self.run_command("--publish", "--reviewed-plan-sha256", digest)
         self.assertIs(raised.exception, failure)
         self.api.create_commit.assert_called_once()
         self.api.restart_space.assert_called_once()
+
+    def test_commit_failure_restarts_the_paused_space_without_claiming_a_deployment(self):
+        digest = self.preview_hash()
+        failure = RuntimeError("commit rejected")
+        self.api.create_commit.side_effect = failure
+        with patch.object(release, "record_deployed_commit") as record:
+            with self.assertRaises(RuntimeError) as raised:
+                self.run_command("--publish", "--reviewed-plan-sha256", digest)
+        self.assertIs(raised.exception, failure)
+        self.api.pause_space.assert_called_once()
+        self.api.create_commit.assert_called_once()
+        self.api.restart_space.assert_called_once()
+        record.assert_not_called()
+
+    def test_failed_restart_after_commit_failure_preserves_primary_error_and_reports_recovery(self):
+        digest = self.preview_hash()
+        failure = RuntimeError("commit rejected")
+        self.api.create_commit.side_effect = failure
+        self.api.restart_space.side_effect = RuntimeError("sensitive upstream detail")
+        errors = io.StringIO()
+        with contextlib.redirect_stderr(errors):
+            with self.assertRaises(RuntimeError) as raised:
+                self.run_command("--publish", "--reviewed-plan-sha256", digest)
+        self.assertIs(raised.exception, failure)
+        self.api.restart_space.assert_called_once()
+        self.assertIn("manual recovery", errors.getvalue())
+        self.assertNotIn("sensitive upstream detail", errors.getvalue())
 
     def run_command(self, *args):
         output = io.StringIO()

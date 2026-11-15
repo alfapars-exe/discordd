@@ -1,0 +1,27 @@
+{
+  "date": "2026-11-15",
+  "base": "dfcd853dfed266eabb158ae5c1baf175f792206c",
+  "sources": {
+    "scripts/publish-hf-space.py": "d7d447fa7e2c25de9767be2d76a94078454b9f3ff339b3ecc4de9c23f5aa8c8c",
+    "scripts/test_publish_hf_space.py": "4027459779209434be8928c3e22fb0412fee3f5c43f3585d37d442d2716ee8db"
+  },
+  "before": "two new fake-API regressions failed: paused Space never restarted after create_commit exception",
+  "fix": "Attempt one runtime restart after commit failure; preserve primary exception and avoid deployment output. Shared failure-recovery helper also handles output-write failure and emits a credential-free manual-recovery diagnostic if restart fails.",
+  "validation": {
+    "command": "python -m unittest discover -s scripts -p test_*hf*.py",
+    "result": "26tests passed",
+    "externalWrites": "none; HfApi mocked"
+  },
+  "invariants": [
+    "no commit retry or changed parent expectation",
+    "create_commit failure does not record a guessed deployed commit",
+    "secondary restart failure does not replace original exception",
+    "secondary upstream error text not exposed in recovery diagnostic",
+    "unconfirmed pause path still refuses publication/restart"
+  ],
+  "limits": [
+    "network failure can leave remote commit outcome ambiguous; no success/readiness is claimed in that case",
+    "real publication/readiness/provider recovery remains unperformed",
+    "local commit held while dfcd853d CI runs"
+  ]
+}
