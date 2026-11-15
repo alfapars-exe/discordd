@@ -34,7 +34,7 @@
     "build": "PASS actual tsc-b/Vite1.62s;TEMP/hichat-history-contract-build.log",
     "fullClientCoverage": "PASS499files5359passed1skipped;TEMP/hichat-history-contract-coverage.log",
     "lint": "PASS0errors2existingwarnings;TEMP/hichat-history-contract-lint.log",
-    "selfScan": "RUNNING immutable7a857281;TEMP/hichat-history-contract-final-scan.log",
+    "selfScan": "PASS immutable7a857281;51exact reviewed-source records,478reviewlines,0blockingpatterns. Pattern scan is not proof of absence of vulnerabilities. TEMP/hichat-history-contract-final-scan.log",
     "coverageTotal": {
       "lines": {
         "total": 38521,
@@ -95,8 +95,7 @@
     }
   },
   "remaining": [
-    "Final immutable7a857281 source scan",
-    "Prior-head CI terminal receipt and new-head CI after push",
+    "New-head CI after push",
     "RF15 full history/read/permission/encryption runtime acceptance;RF01-RF30 remain open"
   ]
 }

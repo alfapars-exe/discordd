@@ -3463,3 +3463,5 @@ Tam istemci coverage, lint ve değişmez kaynak taraması sürüyor. Receipt: `i
 7a857281 tam istemci koşusu 499 dosyada 5.359 başarılı ve 1 atlanan testle tamamlandı. Satır kapsamı %68,91, dal kapsamı %64,90. Lint 0 hata ve mevcut 2 uyarıyla geçti. Son kaynak taraması ve CI kabulü açık. Günlük: TEMP/hichat-history-contract-coverage.log.
 
 caac0d77 PR305 terminal CI 36/36 başarılı. Timer ürün kaynağı fec8b107 ile client/server/electron/e2e farkı boş; bu aradaki değişiklikler teslim kanıtlarıdır. Arşiv: `implementation/verification/refactor-caac0-terminal-ci-2026-11-15.json`. Bu sonuç sonraki 7a857281 geçmiş düzeltmesinin yeni head kabulü değildir. Genel çalışma zamanı/platform/fiziksel kabul açık.
+
+Son 7a857281 arşiv taraması tamamlandı: 51 doğrulanmış kaynak kaydı, 478 inceleme satırı, 0 engelleyici desen eşleşmesi. Desen taraması güvenlik açığı yokluğunu kanıtlamaz. Önceki caac0d77 CI 36/36 başarılı; yeni geçmiş kaynağı gönderimden sonra ayrıca doğrulanacak.
