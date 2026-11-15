@@ -52,4 +52,12 @@ describe("PreferencesSyncStatus", () => {
     fireEvent.click(screen.getByRole("button", { name: "preferencesSync.importLegacy" }));
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("preferencesSync.legacyError"));
   });
+  it("distinguishes a local presentation failure from a failed server save",()=>{
+    state.syncStatus="error";state.syncError="preferences_apply_failed";
+    render(<PreferencesSyncStatus/>);
+    expect(screen.getByRole("status")).toHaveTextContent("preferencesSync.applyError");
+    fireEvent.click(screen.getByRole("button",{name:"preferencesSync.retry"}));
+    expect(state.retrySync).toHaveBeenCalledOnce();
+  });
+
 });

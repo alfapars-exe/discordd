@@ -52,6 +52,73 @@ describe("account-scoped preference synchronization", () => {
     vi.useRealTimers();
   });
 
+
+  it.each([false,true])("does not replay an acknowledged PATCH after presentation fails (newer pending=%s)", async newer => {
+    await ready();
+    const {applyAccountPreferences}=await import("./applyAccountPreferences");
+    let reject!: (error:Error)=>void;
+    bindPreferencePresenter(()=>new Promise((_resolve,fail)=>{reject=fail;}));
+    try {
+      state().set({theme:"accepted"});
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(mocks.update).toHaveBeenCalledTimes(1);
+      if(newer)state().set({appearance:{uiScale:130}});
+      reject(new Error("local presenter unavailable"));await settle();
+      expect(state().syncError).toBe("preferences_apply_failed");
+      expect(state().hasPendingChanges).toBe(newer);
+      expect(localStorage.getItem(pendingKey)).toBe(newer?JSON.stringify({appearance:{uiScale:130}}):null);
+      expect(JSON.parse(localStorage.getItem(snapshotKey)!)).toEqual({theme:"accepted"});
+      bindPreferencePresenter(async()=>applyAccountPreferences);
+      await state().retrySync();
+      expect(mocks.update).toHaveBeenCalledTimes(newer?2:1);
+      if(newer)expect(mocks.update.mock.calls[1][0]).toEqual({appearance:{uiScale:130}});
+      expect(mocks.theme).toHaveBeenLastCalledWith("accepted");
+      expect(state().syncStatus).toBe("saved");
+      expect(state().hasPendingChanges).toBe(false);
+    }finally{bindPreferencePresenter(async()=>applyAccountPreferences);}
+  });
+  it("keeps acknowledged edits out of the queue when local presentation retry also fails", async()=>{
+    await ready();
+    const {applyAccountPreferences}=await import("./applyAccountPreferences");
+    const failed=deferred<typeof applyAccountPreferences>();
+    bindPreferencePresenter(()=>failed.promise);
+    try {
+      state().set({theme:"accepted"});await vi.advanceTimersByTimeAsync(1000);
+      state().set({appearance:{uiScale:130}});
+      failed.reject(new Error("local presenter still unavailable"));await settle();
+      await state().retrySync();
+      expect(mocks.update).toHaveBeenCalledTimes(1);
+      expect(state().syncError).toBe("preferences_apply_failed");
+      expect(state().hasPendingChanges).toBe(true);
+      expect(JSON.parse(localStorage.getItem(pendingKey)!)).toEqual({appearance:{uiScale:130}});
+      bindPreferencePresenter(async()=>applyAccountPreferences);
+      await state().retrySync();
+      expect(mocks.update).toHaveBeenCalledTimes(2);
+      expect(mocks.update.mock.calls[1][0]).toEqual({appearance:{uiScale:130}});
+    }finally{bindPreferencePresenter(async()=>applyAccountPreferences);}
+  });
+
+  it("fences a pending presentation retry when the account changes",async()=>{
+    await ready();
+    const {applyAccountPreferences}=await import("./applyAccountPreferences");
+    bindPreferencePresenter(async()=>{throw new Error("local presenter unavailable");});
+    const loader=deferred<typeof applyAccountPreferences>();
+    try {
+      state().set({theme:"alice-accepted"});await vi.advanceTimersByTimeAsync(1000);
+      expect(state().syncError).toBe("preferences_apply_failed");
+      bindPreferencePresenter(()=>loader.promise);
+      const retry=state().retrySync();
+      state().bindAccount("bob");state().set({theme:"bob-pending"});
+      loader.resolve(applyAccountPreferences);await retry;await settle();
+      expect(state().accountId).toBe("bob");
+      expect(state().data).toEqual({theme:"bob-pending"});
+      expect(state().syncStatus).toBe("pending");
+      expect(state().hasPendingChanges).toBe(true);
+      expect(mocks.update).toHaveBeenCalledTimes(1);
+      expect(mocks.theme).not.toHaveBeenCalledWith("alice-accepted");
+    }finally{loader.resolve(applyAccountPreferences);bindPreferencePresenter(async()=>applyAccountPreferences);}
+  });
+
   it("fences an old account while the production presenter is still loading", async () => {
     const { applyAccountPreferences } = await import("./applyAccountPreferences");
     const loading = deferred<typeof applyAccountPreferences>();
