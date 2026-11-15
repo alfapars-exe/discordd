@@ -16,6 +16,10 @@ vi.mock("react-i18next", () => ({
   initReactI18next: { type: "3rdParty", init: () => {} },
 }));
 const snapshotReferences = vi.hoisted(() => vi.fn(async (_channel: string, _query: string, _signal?: AbortSignal): Promise<{messageId:string;timestamp:number;sourceSequence?:string}[]> => []));
+vi.mock("../../crypto/cachedSearchDeletionSpool", async () => {
+  const { fakeCachedSearchDeletionPool } = await import("../../test/fakeCachedSearchDeletionPool");
+  return { openCachedSearchDeletionPool: vi.fn(async () => fakeCachedSearchDeletionPool()) };
+});
 vi.mock("../../crypto/cachedSearchSnapshot", async () => {
   const { fakeCachedSearchSnapshot } = await import("../../test/fakeCachedSearchSnapshot");
   return { createCachedSearchSnapshot: vi.fn(async (kind: "channel" | "dm", channel: string, query: string, signal?: AbortSignal) =>
@@ -299,13 +303,15 @@ it("keeps counts monotonic when off-page deletion commits return out of order", 
  render(<DMSearchPanel channelId="dm" onClose={()=>{}}/>);fireEvent.change(screen.getByRole("textbox"),{target:{value:"order match"}});
  await act(async()=>{await vi.advanceTimersByTimeAsync(300);});
  const {createCachedSearchSnapshot}=await import("../../crypto/cachedSearchSnapshot"),index=await vi.mocked(createCachedSearchSnapshot).mock.results.at(-1)!.value;
- const original=index.remove.bind(index);let first!:()=>void,second!:()=>void;
+ const original=index.removeMany.bind(index);let first!:()=>void,second!:()=>void;
  const one=new Promise<void>(resolve=>{first=resolve;}),two=new Promise<void>(resolve=>{second=resolve;});
- vi.spyOn(index,"remove").mockImplementationOnce(async(...args)=>{const value=await original(...args);await one;return value;}).mockImplementationOnce(async(...args)=>{const value=await original(...args);await two;return value;});
+ const remove=vi.spyOn(index,"removeMany").mockImplementationOnce(async(...args)=>{const value=await original(...args);await one;return value;}).mockImplementationOnce(async(...args)=>{const value=await original(...args);await two;return value;});
  await act(async()=>{useDMStore.setState({lastDeletedDM:{id:"order-0",dm_channel_id:"dm"}});});
  await act(async()=>{useDMStore.setState({lastDeletedDM:{id:"order-1",dm_channel_id:"dm"}});});
- await act(async()=>second());expect(screen.getByText("28",{selector:".search-count"})).toBeInTheDocument();
+ await act(async()=>second());expect(screen.getByText("searching")).toBeInTheDocument();
+ expect(remove).toHaveBeenCalledTimes(1);
  await act(async()=>first());expect(screen.getByText("28",{selector:".search-count"})).toBeInTheDocument();
+ expect(remove).toHaveBeenCalledTimes(2);
  expect(snapshotReferences).toHaveBeenCalledTimes(1);
 });
 
@@ -325,8 +331,8 @@ it("coalesces repeated deletion events while one index removal is pending", asyn
     expect(screen.getByText("2",{selector:".search-count"})).toBeInTheDocument();
     const {createCachedSearchSnapshot}=await import("../../crypto/cachedSearchSnapshot");
     const index=await vi.mocked(createCachedSearchSnapshot).mock.results.at(-1)!.value;
-    const original=index.remove.bind(index);
-    const remove=vi.spyOn(index,"remove").mockImplementation(async(...args)=>{await gate;return original(...args);});
+    const original=index.removeMany.bind(index);
+    const remove=vi.spyOn(index,"removeMany").mockImplementation(async(...args)=>{await gate;return original(...args);});
     await act(async()=>{for(let i=0;i<1000;i++){useDMStore.setState({lastDeletedDM:{id:"duplicate-0",dm_channel_id:"dm"}});}});
     expect(screen.queryByText("duplicate match 0")).not.toBeInTheDocument();
     expect(remove).toHaveBeenCalledTimes(1);

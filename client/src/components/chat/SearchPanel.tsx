@@ -7,6 +7,8 @@ import { searchMessages } from "../../api/search";
 import { createCachedSearchSnapshot, type CachedSearchSnapshot } from "../../crypto/cachedSearchSnapshot";
 import { getCachedSearchResetGeneration, subscribeCachedSearchResets } from "../../crypto/cachedSearchEpoch";
 import { readCachedSearchPage } from "../../crypto/cachedSearchPage";
+import { useCachedSearchDeletionPool } from "../../hooks/useCachedSearchDeletionPool";
+import type { SearchDeletionPool, SearchDeletionSpool } from "../../crypto/cachedSearchDeletionSpool";
 import { useServerStore } from "../../stores/serverStore";
 import { useE2EEStore } from "../../stores/e2eeStore";
 import { useMessageStore } from "../../stores/messageStore";
@@ -37,12 +39,13 @@ function SearchPanel(props: SearchPanelProps) {
   const resetGeneration = useSyncExternalStore(subscribeCachedSearchResets, getCachedSearchResetGeneration);
   const deviceId = useE2EEStore(s => s.localDeviceId);
   const scope = JSON.stringify([owner, generation, serverE2eeEnabled && resetGeneration, serverE2eeEnabled && deviceId, activeServerId, props.channelId, serverE2eeEnabled, serverE2eeEnabled && keysReady]);
-  return <ScopedSearchPanel key={scope} {...props} activeServerId={activeServerId} serverE2eeEnabled={serverE2eeEnabled} />;
+  return <ScopedSearchPanel key={scope} {...props} activeServerId={activeServerId} serverE2eeEnabled={serverE2eeEnabled} keysReady={keysReady} />;
 }
 
-function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId, serverE2eeEnabled }: SearchPanelProps & {
+function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId, serverE2eeEnabled, keysReady }: SearchPanelProps & {
   activeServerId: string | null;
   serverE2eeEnabled: boolean;
+  keysReady: boolean;
 }) {
   const { t, i18n } = useTranslation("chat");
   const { t: tE2ee } = useTranslation("e2ee");
@@ -59,7 +62,9 @@ function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId,
   const queryOffset = useRef(0);
   const localSearch = useRef<AbortController | null>(null);
   const localMatches = useRef<CachedSearchSnapshot | null>(null);
-  const deletedIds = useRef(new Set<string>());
+  const deletionPool = useCachedSearchDeletionPool(Boolean(serverE2eeEnabled && keysReady));
+  const deletionSpool = useRef<SearchDeletionSpool | null>(null);
+  const queryRef = useRef("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   const limit = 25;
@@ -75,10 +80,25 @@ function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId,
     localSearch.current?.abort();
     searchSeqRef.current++;
     const snapshot = localMatches.current; localMatches.current = null;
-    deletedIds.current.clear();
+    const frontier = deletionSpool.current; deletionSpool.current = null;
+    void frontier?.dispose().catch(() => {});
     void snapshot?.dispose().catch(() => {});
     if (debounceRef.current) clearTimeout(debounceRef.current);
   }, []);
+
+  const failCurrentSearch = useCallback(() => {
+    searchSeqRef.current++; localSearch.current?.abort();
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = null;
+    const frontier = deletionSpool.current; deletionSpool.current = null;
+    const snapshot = localMatches.current; localMatches.current = null;
+    void frontier?.dispose().catch(() => {}); void snapshot?.dispose().catch(() => {});
+    searching.current = false; setIsSearching(false); setResults(null); setSearchFailed(true);
+  }, []);
+  const startFrontier = useCallback((pool: SearchDeletionPool) => {
+    const frontier = pool.create(() => { if (deletionSpool.current === frontier) failCurrentSearch(); });
+    return frontier;
+  }, [failCurrentSearch]);
 
   const doSearch = useCallback(
     async (searchQuery: string, searchOffset: number) => {
@@ -114,28 +134,30 @@ function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId,
           const controller = new AbortController();
           localSearch.current = controller;
           const term = searchQuery.trim();
-          const pendingDeletes = deletedIds.current;
+          const pool = await deletionPool.get();
+          if (seq !== searchSeqRef.current) return;
+          const pendingDeletes = deletionSpool.current ?? startFrontier(pool);
+          deletionSpool.current = pendingDeletes;
           if (!localMatches.current) {
             const snapshot = await createCachedSearchSnapshot("channel", channelId!, term, controller.signal);
             if (seq !== searchSeqRef.current) { await snapshot.dispose(); return; }
             localMatches.current = snapshot;
           }
           const snapshot = localMatches.current;
-          while (pendingDeletes.size) {
-            const batch: string[] = [];
-            for (const id of pendingDeletes) {
-              batch.push(id);
-              if (batch.length === 128) break;
-            }
-            await snapshot.removeMany(batch, controller.signal);
-            if (seq !== searchSeqRef.current) return;
-            for (const id of batch) pendingDeletes.delete(id);
-          }
           const lowerTerm = term.toLowerCase();
-          const page = await readCachedSearchPage(snapshot, searchOffset, limit,
-            row => row.channelId === channelId && row.content.toLowerCase().includes(lowerTerm) && !pendingDeletes.has(row.messageId),
-            () => seq === searchSeqRef.current, controller.signal);
-          if (!page || seq !== searchSeqRef.current) return;
+          let page: Awaited<ReturnType<typeof readCachedSearchPage>>;
+          for (;;) {
+            await pendingDeletes.drain(ids => snapshot.removeMany(ids, controller.signal), controller.signal);
+            if (seq !== searchSeqRef.current) return;
+            const revision = pendingDeletes.version;
+            page = await readCachedSearchPage(snapshot, searchOffset, limit,
+              row => row.channelId === channelId && row.content.toLowerCase().includes(lowerTerm),
+              () => seq === searchSeqRef.current, controller.signal);
+            if (!page || seq !== searchSeqRef.current) return;
+            // A deletion received during hydration invalidates this page even
+            // when its native spool write has not committed yet.
+            if (revision === pendingDeletes.version) break;
+          }
           queryOffset.current = page.offset;
           if (page.offset !== searchOffset) setOffset(page.offset);
           const paged = page.messages;
@@ -162,10 +184,7 @@ function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId,
           setResults({ messages, total_count: total });
         } catch {
           if (seq !== searchSeqRef.current) return;
-          const failed = localMatches.current; localMatches.current = null;
-          deletedIds.current.clear(); deletedIds.current = new Set();
-          void failed?.dispose().catch(() => {});
-          setResults(null); setSearchFailed(true);
+          failCurrentSearch();
         }
         searching.current = false; setIsSearching(false);
         return;
@@ -182,14 +201,16 @@ function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId,
       }
       searching.current = false; setIsSearching(false);
     },
-    [activeServerId, channelId, serverE2eeEnabled]
+    [activeServerId, channelId, serverE2eeEnabled, deletionPool, startFrontier, failCurrentSearch]
   );
 
   /** Debounced search on input change */
   function handleInputChange(value: string) {
     const previous = localMatches.current; localMatches.current = null;
     void previous?.dispose().catch(() => {});
-    deletedIds.current.clear(); deletedIds.current = new Set();
+    const frontier = deletionSpool.current; deletionSpool.current = null;
+    void frontier?.dispose().catch(() => {});
+    queryRef.current = value;
     searchSeqRef.current++;
     localSearch.current?.abort();
     setQuery(value); setSearchFailed(false);
@@ -215,42 +236,23 @@ function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId,
 
   const removeLocalMatch = useCallback((id: string) => {
     if (!serverE2eeEnabled) return false;
-    if (!query.trim()) return true;
-    const snapshot = localMatches.current;
-    // A failed/finished query has no index or pending scan to reconcile.
-    // Do not accumulate tombstones or enqueue no-op React updates indefinitely.
-    if (!snapshot && !searching.current && debounceRef.current === null) return true;
-    const pending = deletedIds.current;
-    if (pending.has(id)) return true;
-    pending.add(id);
-    // Visible results hide deletions immediately. During a search the spinner
-    // hides this page; tombstones reconcile the incoming page without retaining
-    // a React state updater for every event received while the index is pending.
-    if (!searching.current) setResults(prev => prev && ({ ...prev, messages: prev.messages.filter(message => message.id !== id) }));
-    if (!snapshot) return true;
-    void snapshot.remove(id).then(change => {
-      if (snapshot !== localMatches.current || !pending.has(id)) return;
-      const refresh = searching.current || (change.removed && change.position < queryOffset.current + limit);
-      // Invalidate older reads before releasing the tombstone: an index read
-      // may have completed before this deletion but returned after its commit.
-      searchSeqRef.current++; localSearch.current?.abort();
-      pending.delete(id);
-      setResults(prev => prev && ({ messages: prev.messages.filter(message => message.id !== id), total_count: Math.min(prev.total_count, change.total) }));
-      if (refresh) {
-        const nextOffset = Math.min(queryOffset.current, Math.max(0, Math.floor((change.total - 1) / limit) * limit));
-        setOffset(nextOffset);
-        void doSearch(query, nextOffset);
+    if (!queryRef.current.trim()) return true;
+    if (!localMatches.current && !searching.current && debounceRef.current === null) return true;
+    try {
+      let frontier = deletionSpool.current;
+      if (!frontier) {
+        const pool = deletionPool.peek();
+        if (!pool) { failCurrentSearch(); return true; }
+        frontier = startFrontier(pool); deletionSpool.current = frontier;
       }
-    }).catch(() => {
-      if (snapshot !== localMatches.current) return;
-      localMatches.current = null; searchSeqRef.current++; localSearch.current?.abort();
-      deletedIds.current.clear(); deletedIds.current = new Set();
-      void snapshot.dispose().catch(() => {});
-      setResults(null); setSearchFailed(true);
-      searching.current = false; setIsSearching(false);
-    });
+      frontier.append(id);
+    } catch { failCurrentSearch(); return true; }
+    if (!searching.current && debounceRef.current === null) {
+      searching.current = true; setIsSearching(true);
+      void doSearch(queryRef.current, queryOffset.current);
+    }
     return true;
-  }, [doSearch, query, serverE2eeEnabled]);
+  }, [serverE2eeEnabled, deletionPool, startFrontier, failCurrentSearch, doSearch]);
 
 
   // Live deletion while the panel is open: results are a snapshot, so a

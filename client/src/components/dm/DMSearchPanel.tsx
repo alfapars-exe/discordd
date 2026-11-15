@@ -8,6 +8,8 @@ import { useOpenAtMessage } from "../../hooks/useOpenAtMessage";
 import { getAuthSessionOwner, subscribeAuthOwnerChanges, getAuthSessionSnapshot, subscribeAuthGenerationChanges } from "../../api/authSessionEvents";
 import { getCachedSearchResetGeneration, subscribeCachedSearchResets } from "../../crypto/cachedSearchEpoch";
 import { readCachedSearchPage } from "../../crypto/cachedSearchPage";
+import { useCachedSearchDeletionPool } from "../../hooks/useCachedSearchDeletionPool";
+import type { SearchDeletionPool, SearchDeletionSpool } from "../../crypto/cachedSearchDeletionSpool";
 import { createCachedSearchSnapshot, type CachedSearchSnapshot } from "../../crypto/cachedSearchSnapshot";
 import Avatar from "../shared/Avatar";
 import SpamPreview from "../chat/SpamPreview";
@@ -38,14 +40,15 @@ function DMSearchPanel(props: DMSearchPanelProps) {
   const resetGeneration = useSyncExternalStore(subscribeCachedSearchResets, getCachedSearchResetGeneration);
   const deviceId = useE2EEStore(s => s.localDeviceId);
   const scope = JSON.stringify([owner, generation, encrypted && resetGeneration, encrypted && deviceId, props.channelId, encrypted, encrypted && keysReady]);
-  return <ScopedDMSearchPanel key={scope} {...props} encrypted={encrypted} />;
+  return <ScopedDMSearchPanel key={scope} {...props} encrypted={encrypted} keysReady={keysReady} />;
 }
 
-function ScopedDMSearchPanel({ channelId, onClose, encrypted }: DMSearchPanelProps & { encrypted?: boolean }) {
+function ScopedDMSearchPanel({ channelId, onClose, encrypted, keysReady }: DMSearchPanelProps & { encrypted?: boolean; keysReady: boolean }) {
   const { t, i18n } = useTranslation("chat");
   const { t: tE2ee } = useTranslation("e2ee");
   const searchMessages = useDMStore((s) => s.searchMessages);
   const setScrollToMessageId = useDMStore((s) => s.setScrollToMessageId);
+  const { openAtDMMessage } = useOpenAtMessage();
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchState>(null);
@@ -60,7 +63,9 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted }: DMSearchPanelPro
   const queryOffset = useRef(0);
   const localSearch = useRef<AbortController | null>(null);
   const localMatches = useRef<CachedSearchSnapshot | null>(null);
-  const deletedIds = useRef(new Set<string>());
+  const deletionPool = useCachedSearchDeletionPool(Boolean(encrypted && keysReady));
+  const deletionSpool = useRef<SearchDeletionSpool | null>(null);
+  const queryRef = useRef("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Auto-focus input on mount
@@ -74,10 +79,25 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted }: DMSearchPanelPro
     localSearch.current?.abort();
     searchSeqRef.current++;
     const snapshot = localMatches.current; localMatches.current = null;
-    deletedIds.current.clear();
+    const frontier = deletionSpool.current; deletionSpool.current = null;
+    void frontier?.dispose().catch(() => {});
     void snapshot?.dispose().catch(() => {});
     if (debounceRef.current) clearTimeout(debounceRef.current);
   }, []);
+
+  const failCurrentSearch = useCallback(() => {
+    searchSeqRef.current++; localSearch.current?.abort();
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = null;
+    const frontier = deletionSpool.current; deletionSpool.current = null;
+    const snapshot = localMatches.current; localMatches.current = null;
+    void frontier?.dispose().catch(() => {}); void snapshot?.dispose().catch(() => {});
+    searching.current = false; setIsSearching(false); setResults(null); setSearchFailed(true);
+  }, []);
+  const startFrontier = useCallback((pool: SearchDeletionPool) => {
+    const frontier = pool.create(() => { if (deletionSpool.current === frontier) failCurrentSearch(); });
+    return frontier;
+  }, [failCurrentSearch]);
 
   const doSearch = useCallback(
     async (searchQuery: string, searchOffset: number) => {
@@ -109,28 +129,30 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted }: DMSearchPanelPro
           const controller = new AbortController();
           localSearch.current = controller;
           const term = searchQuery.trim();
-          const pendingDeletes = deletedIds.current;
+          const pool = await deletionPool.get();
+          if (seq !== searchSeqRef.current) return;
+          const pendingDeletes = deletionSpool.current ?? startFrontier(pool);
+          deletionSpool.current = pendingDeletes;
           if (!localMatches.current) {
             const snapshot = await createCachedSearchSnapshot("dm", channelId!, term, controller.signal);
             if (seq !== searchSeqRef.current) { await snapshot.dispose(); return; }
             localMatches.current = snapshot;
           }
           const snapshot = localMatches.current;
-          while (pendingDeletes.size) {
-            const batch: string[] = [];
-            for (const id of pendingDeletes) {
-              batch.push(id);
-              if (batch.length === 128) break;
-            }
-            await snapshot.removeMany(batch, controller.signal);
-            if (seq !== searchSeqRef.current) return;
-            for (const id of batch) pendingDeletes.delete(id);
-          }
           const lowerTerm = term.toLowerCase();
-          const page = await readCachedSearchPage(snapshot, searchOffset, LIMIT,
-            row => row.dmChannelId === channelId && row.content.toLowerCase().includes(lowerTerm) && !pendingDeletes.has(row.messageId),
-            () => seq === searchSeqRef.current, controller.signal);
-          if (!page || seq !== searchSeqRef.current) return;
+          let page: Awaited<ReturnType<typeof readCachedSearchPage>>;
+          for (;;) {
+            await pendingDeletes.drain(ids => snapshot.removeMany(ids, controller.signal), controller.signal);
+            if (seq !== searchSeqRef.current) return;
+            const revision = pendingDeletes.version;
+            page = await readCachedSearchPage(snapshot, searchOffset, LIMIT,
+              row => row.dmChannelId === channelId && row.content.toLowerCase().includes(lowerTerm),
+              () => seq === searchSeqRef.current, controller.signal);
+            if (!page || seq !== searchSeqRef.current) return;
+            // A deletion received during hydration invalidates this page even
+            // when its native spool write has not committed yet.
+            if (revision === pendingDeletes.version) break;
+          }
           queryOffset.current = page.offset;
           if (page.offset !== searchOffset) setOffset(page.offset);
           const paged = page.messages;
@@ -158,10 +180,7 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted }: DMSearchPanelPro
           setResults({ messages, totalCount: total });
         } catch {
           if (seq !== searchSeqRef.current) return;
-          const failed = localMatches.current; localMatches.current = null;
-          deletedIds.current.clear(); deletedIds.current = new Set();
-          void failed?.dispose().catch(() => {});
-          setResults(null); setSearchFailed(true);
+          failCurrentSearch();
         }
         searching.current = false; setIsSearching(false);
         return;
@@ -177,14 +196,16 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted }: DMSearchPanelPro
       });
       searching.current = false; setIsSearching(false);
     },
-    [channelId, encrypted, searchMessages]
+    [channelId, encrypted, searchMessages, deletionPool, startFrontier, failCurrentSearch]
   );
 
   /** Debounced search on input change */
   function handleInputChange(value: string) {
     const previous = localMatches.current; localMatches.current = null;
     void previous?.dispose().catch(() => {});
-    deletedIds.current.clear(); deletedIds.current = new Set();
+    const frontier = deletionSpool.current; deletionSpool.current = null;
+    void frontier?.dispose().catch(() => {});
+    queryRef.current = value;
     searchSeqRef.current++;
     localSearch.current?.abort();
     setQuery(value); setSearchFailed(false);
@@ -210,51 +231,25 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted }: DMSearchPanelPro
 
   const removeLocalMatch = useCallback((id: string) => {
     if (!encrypted) return false;
-    if (!query.trim()) return true;
-    const snapshot = localMatches.current;
-    // A failed/finished query has no index or pending scan to reconcile.
-    // Do not accumulate tombstones or enqueue no-op React updates indefinitely.
-    if (!snapshot && !searching.current && debounceRef.current === null) return true;
-    const pending = deletedIds.current;
-    if (pending.has(id)) return true;
-    pending.add(id);
-    // Visible results hide deletions immediately. During a search the spinner
-    // hides this page; tombstones reconcile the incoming page without retaining
-    // a React state updater for every event received while the index is pending.
-    if (!searching.current) setResults(prev => prev && ({ ...prev, messages: prev.messages.filter(message => message.id !== id) }));
-    if (!snapshot) return true;
-    void snapshot.remove(id).then(change => {
-      if (snapshot !== localMatches.current || !pending.has(id)) return;
-      const refresh = searching.current || (change.removed && change.position < queryOffset.current + LIMIT);
-      // Invalidate older reads before releasing the tombstone: an index read
-      // may have completed before this deletion but returned after its commit.
-      searchSeqRef.current++; localSearch.current?.abort();
-      pending.delete(id);
-      setResults(prev => prev && ({ messages: prev.messages.filter(message => message.id !== id), totalCount: Math.min(prev.totalCount, change.total) }));
-      if (refresh) {
-        const nextOffset = Math.min(queryOffset.current, Math.max(0, Math.floor((change.total - 1) / LIMIT) * LIMIT));
-        setOffset(nextOffset);
-        void doSearch(query, nextOffset);
+    if (!queryRef.current.trim()) return true;
+    if (!localMatches.current && !searching.current && debounceRef.current === null) return true;
+    try {
+      let frontier = deletionSpool.current;
+      if (!frontier) {
+        const pool = deletionPool.peek();
+        if (!pool) { failCurrentSearch(); return true; }
+        frontier = startFrontier(pool); deletionSpool.current = frontier;
       }
-    }).catch(() => {
-      if (snapshot !== localMatches.current) return;
-      localMatches.current = null; searchSeqRef.current++; localSearch.current?.abort();
-      deletedIds.current.clear(); deletedIds.current = new Set();
-      void snapshot.dispose().catch(() => {});
-      setResults(null); setSearchFailed(true);
-      searching.current = false; setIsSearching(false);
-    });
+      frontier.append(id);
+    } catch { failCurrentSearch(); return true; }
+    if (!searching.current && debounceRef.current === null) {
+      searching.current = true; setIsSearching(true);
+      void doSearch(queryRef.current, queryOffset.current);
+    }
     return true;
-  }, [doSearch, query, encrypted]);
+  }, [encrypted, deletionPool, startFrontier, failCurrentSearch, doSearch]);
 
-  const { openAtDMMessage } = useOpenAtMessage();
 
-  // Live deletion while the panel is open: results are a snapshot, so a
-  // WS-deleted message would linger as a dead row. Subscribe to the narrow
-  // lastDeletedDM field (store subscription, not a selector hook — setState
-  // belongs in the callback per react-hooks/set-state-in-effect) and drop
-  // the row from our own snapshot, NOT the loaded message window — the
-  // result may live far outside it.
   useEffect(() => {
     const unsubscribe = useDMStore.subscribe((state, prev) => {
       const deleted = state.lastDeletedDM;

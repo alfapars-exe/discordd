@@ -29,6 +29,10 @@ vi.mock("../../api/search", () => ({
 }));
 
 const snapshotReferences = vi.hoisted(() => vi.fn(async (_channel: string, _query: string, _signal?: AbortSignal): Promise<{messageId:string;timestamp:number;sourceSequence?:string}[]> => []));
+vi.mock("../../crypto/cachedSearchDeletionSpool", async () => {
+  const { fakeCachedSearchDeletionPool } = await import("../../test/fakeCachedSearchDeletionPool");
+  return { openCachedSearchDeletionPool: vi.fn(async () => fakeCachedSearchDeletionPool()) };
+});
 vi.mock("../../crypto/cachedSearchSnapshot", async () => {
   const { fakeCachedSearchSnapshot } = await import("../../test/fakeCachedSearchSnapshot");
   return { createCachedSearchSnapshot: vi.fn(async (kind: "channel" | "dm", channel: string, query: string, signal?: AbortSignal) =>
@@ -120,6 +124,11 @@ function deferred<T>() {
 function ok(messages: Message[]): APIResponse<SearchResult> {
   return { success: true, data: { messages, total_count: messages.length } };
 }
+
+beforeEach(() => {
+  snapshotReferences.mockReset().mockResolvedValue([]);
+  vi.mocked(getCachedDecryptedMessage).mockReset();
+});
 
 /** Type into the search box and advance past the 300ms debounce. */
 function typeQuery(value: string) {
@@ -439,8 +448,8 @@ it("coalesces repeated deletion events while one index removal is pending", asyn
     expect(screen.getByText("2",{selector:".search-count"})).toBeInTheDocument();
     const {createCachedSearchSnapshot}=await import("../../crypto/cachedSearchSnapshot");
     const index=await vi.mocked(createCachedSearchSnapshot).mock.results.at(-1)!.value;
-    const original=index.remove.bind(index);
-    const remove=vi.spyOn(index,"remove").mockImplementation(async(...args)=>{await gate;return original(...args);});
+    const original=index.removeMany.bind(index);
+    const remove=vi.spyOn(index,"removeMany").mockImplementation(async(...args)=>{await gate;return original(...args);});
     await act(async()=>{for(let i=0;i<1000;i++){useMessageStore.setState({lastDeleted:{id:"duplicate-0",channel_id:"ch-1"}});}});
     expect(screen.queryByText("duplicate match 0")).not.toBeInTheDocument();
     expect(remove).toHaveBeenCalledTimes(1);
@@ -451,6 +460,29 @@ it("coalesces repeated deletion events while one index removal is pending", asyn
     await act(async()=>release());
     view.unmount();vi.restoreAllMocks();vi.useRealTimers();
   }
+});
+
+it("fails explicitly if a deletion arrives before native storage is available", async () => {
+  vi.useFakeTimers();
+  useServerStore.setState(state => ({ activeServerId: "srv-1", activeServer: { ...state.activeServer!, id: "srv-1", e2ee_enabled: true } }));
+  useE2EEStore.setState({ initStatus: "ready" });
+  const { openCachedSearchDeletionPool } = await import("../../crypto/cachedSearchDeletionSpool");
+  const { fakeCachedSearchDeletionPool } = await import("../../test/fakeCachedSearchDeletionPool");
+  let ready!: (pool: ReturnType<typeof fakeCachedSearchDeletionPool>) => void;
+  vi.mocked(openCachedSearchDeletionPool).mockReturnValueOnce(new Promise(resolve => { ready = resolve; }));
+  const pool = fakeCachedSearchDeletionPool();
+  const view = render(<SearchPanel channelId="ch-1" onClose={() => {}} />);
+  try {
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "private" } });
+    act(() => useMessageStore.setState({ lastDeleted: { id: "early", channel_id: "ch-1" } }));
+    expect(screen.getByRole("alert")).toHaveTextContent("searchFailed");
+    await act(async () => { ready(pool); await vi.advanceTimersByTimeAsync(300); });
+    expect(snapshotReferences).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent("searchFailed");
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "retry" } });
+    await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+    expect(screen.getByText("noSearchResults")).toBeInTheDocument();
+  } finally { view.unmount(); vi.useRealTimers(); }
 });
 
 it("distinguishes a failed encrypted search from a successful empty query and recovers", async () => {

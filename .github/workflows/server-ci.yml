@@ -501,7 +501,7 @@ jobs:
         working-directory: e2e
 
       - name: Verify production search panel retention and ordering
-        run: node scripts/benchmark-search-panels.mjs --after-only --pending-frontier-only --assert-pending-panel-budget
+        run: node scripts/benchmark-search-panels.mjs --after-only --pending-frontier-only --assert-pending-panel-budget --assert-active-pending-panel-budget
         working-directory: e2e
 
       - name: Verify production search failure state and idle retention
