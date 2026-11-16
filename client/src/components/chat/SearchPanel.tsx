@@ -20,15 +20,15 @@ import SpamPreview from "./SpamPreview";
 /** Debounce delay (ms) */
 const DEBOUNCE_MS = 300;
 
-type SearchPanelProps = {
+type SearchPanelProps = Readonly<{
   channelId?: string;
   onClose: () => void;
   /**
    * Navigate to the message on result click. Resolves false when the
-   * message no longer exists (the panel then drops the row and toasts).
+   * message no longer exists (the panel drops the row; the navigator toasts).
    */
   onSelectResult?: (message: Message) => Promise<boolean>;
-};
+}>;
 
 function SearchPanel(props: SearchPanelProps) {
   const activeServerId = useServerStore((s) => s.activeServerId);
@@ -42,11 +42,11 @@ function SearchPanel(props: SearchPanelProps) {
   return <ScopedSearchPanel key={scope} {...props} activeServerId={activeServerId} serverE2eeEnabled={serverE2eeEnabled} keysReady={keysReady} />;
 }
 
-function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId, serverE2eeEnabled, keysReady }: SearchPanelProps & {
+function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId, serverE2eeEnabled, keysReady }: Readonly<SearchPanelProps & {
   activeServerId: string | null;
   serverE2eeEnabled: boolean;
   keysReady: boolean;
-}) {
+}>) {
   const { t, i18n } = useTranslation("chat");
   const { t: tE2ee } = useTranslation("e2ee");
   const [query, setQuery] = useState("");
@@ -300,6 +300,67 @@ function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId,
   const totalPages = results ? Math.ceil(results.total_count / limit) : 0;
   const currentPage = Math.floor(offset / limit) + 1;
 
+  function renderResults() {
+    if (isSearching) return <p className="search-empty">{t("searching")}</p>;
+    if (searchFailed) return <p className="search-empty" role="alert">{t("searchFailed")}</p>;
+    if (!results) return <p className="search-empty">{t("searchHint")}</p>;
+    if (results.messages.length === 0) return <p className="search-empty">{t("noSearchResults")}</p>;
+    return (
+      <>
+        <p className="search-count">
+          {t("searchResultCount", { count: results.total_count })}
+        </p>
+        {results.messages.map((msg) => {
+          const displayName = msg.author?.display_name ?? msg.author?.username ?? "Unknown";
+
+          return (
+            <div
+              key={msg.id}
+              className="search-result-item"
+              onClick={() => void handleResultClick(msg)}
+            >
+              <div className="search-result-header">
+                <Avatar
+                  name={displayName}
+                  avatarUrl={msg.author?.avatar_url ?? undefined}
+                  size={18}
+                />
+                <span className="search-result-author">{displayName}</span>
+                <span className="search-result-time">{formatDate(msg.created_at)}</span>
+              </div>
+              <div className="search-result-content">
+                <SpamPreview kind="channel" message={msg} />
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="search-pagination">
+            <button
+              onClick={handlePrevPage}
+              disabled={currentPage <= 1}
+              className="search-page-btn"
+            >
+              {t("searchPrev")}
+            </button>
+            <span className="search-page-info">
+              {currentPage} / {totalPages}
+            </span>
+            <button
+              onClick={handleNextPage}
+              disabled={currentPage >= totalPages}
+              className="search-page-btn"
+            >
+              {t("searchNext")}
+            </button>
+          </div>
+        )}
+      </>
+    );
+  }
+
   return (
     <div className="search-panel">
       {/* Header */}
@@ -334,68 +395,7 @@ function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId,
 
       {/* Results */}
       <div className="search-results">
-        {isSearching ? (
-          <p className="search-empty">{t("searching")}</p>
-        ) : searchFailed ? (
-          <p className="search-empty" role="alert">{t("searchFailed")}</p>
-        ) : !results ? (
-          <p className="search-empty">{t("searchHint")}</p>
-        ) : results.messages.length === 0 ? (
-          <p className="search-empty">{t("noSearchResults")}</p>
-        ) : (
-          <>
-            <p className="search-count">
-              {t("searchResultCount", { count: results.total_count })}
-            </p>
-            {results.messages.map((msg) => {
-              const displayName = msg.author?.display_name ?? msg.author?.username ?? "Unknown";
-
-              return (
-                <div
-                  key={msg.id}
-                  className="search-result-item"
-                  onClick={() => void handleResultClick(msg)}
-                >
-                  <div className="search-result-header">
-                    <Avatar
-                      name={displayName}
-                      avatarUrl={msg.author?.avatar_url ?? undefined}
-                      size={18}
-                    />
-                    <span className="search-result-author">{displayName}</span>
-                    <span className="search-result-time">{formatDate(msg.created_at)}</span>
-                  </div>
-                  <div className="search-result-content">
-                    <SpamPreview kind="channel" message={msg} />
-                  </div>
-                </div>
-              );
-            })}
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="search-pagination">
-                <button
-                  onClick={handlePrevPage}
-                  disabled={currentPage <= 1}
-                  className="search-page-btn"
-                >
-                  {t("searchPrev")}
-                </button>
-                <span className="search-page-info">
-                  {currentPage} / {totalPages}
-                </span>
-                <button
-                  onClick={handleNextPage}
-                  disabled={currentPage >= totalPages}
-                  className="search-page-btn"
-                >
-                  {t("searchNext")}
-                </button>
-              </div>
-            )}
-          </>
-        )}
+        {renderResults()}
       </div>
     </div>
   );
