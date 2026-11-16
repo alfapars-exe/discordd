@@ -6,13 +6,13 @@ const hash = value => createHash("sha256").update(value).digest("hex");
 const profile = {probeId:"probe",channelId:"channel",userIds:["alice","bob"],messagesPerSender:2};
 function fixture() {
  const canonical = profile.userIds.flatMap(user=>[1,2].map(sequence=>[user,sequence,`${user}-${sequence}`]));
- const messages = canonical.map(([user,sequence,id],index)=>({id,user_id:user,channel_id:"channel",source_sequence:index+1,
-  content:JSON.stringify({probe:"probe",sender:user,sequence})})).reverse();
- const pages=[{messages:messages.slice(0,2),has_more:true,has_more_after:false},{messages:messages.slice(2),has_more:false,has_more_after:false}];
+ const messages = canonical.map(([user,sequence,id],index)=>({id,user_id:user,channel_id:"channel",source_sequence:0,created_at:`2026-11-16T08:00:0${index}Z`,
+  content:JSON.stringify({probe:"probe",sender:user,sequence})}));
+ const pages=[{messages:messages.slice(2),has_more:true,has_more_after:false},{messages:messages.slice(0,2),has_more:false,has_more_after:false}];
  const receipts=profile.userIds.map(receiver=>({receiver,digest:hash(JSON.stringify(canonical)),summary:{complete:true},acknowledged:canonical.filter(row=>row[0]===receiver).map(row=>row.slice(1))}));
  return {pages,receipts};
 }
-test("walks descending history pages and reconciles all receiver and HTTP acknowledgement IDs", async()=>{
+test("walks older REST pages in ascending created-at/ID order and reconciles all receivers", async()=>{
  const {pages,receipts}=fixture(),calls=[];
  const result=await reconcileFanoutHistory(profile,async cursor=>{calls.push(cursor);return pages.shift();},receipts,hash,2);
  assert.equal(result.persisted,4);assert.equal(result.historyPages,2);
@@ -22,7 +22,7 @@ for(const [name,mutate] of [
  ["missing history",f=>f.pages.pop()],
  ["repeated page",f=>{f.pages[1]=f.pages[0];}],
  ["duplicate message ID",f=>{f.pages[1].messages[0].id=f.pages[0].messages[0].id;}],
- ["reversed source order",f=>{f.pages[0].messages.reverse();}],
+ ["reversed REST page order",f=>{f.pages[0].messages.reverse();}],
  ["empty continuing page",f=>{f.pages[0].messages=[];}],
  ["extra continuation",f=>{f.pages[1].has_more=true;}],
  ["wrong probe",f=>{f.pages[0].messages[0].content='{}';}],
