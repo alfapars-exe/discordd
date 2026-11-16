@@ -3678,3 +3678,8 @@ Değişmeyen88892ed1Go backend + a03ea5d4 yük kodu, WindowsGo1.27.4/CGO0, k6v2.
 ### RF29 — çok sayfalı kalıcı geçmiş ve uzun kimlik sınırı (2026-11-16)
 
 7ab3c3c0, geçerli128karakterlik probe/sender bileşiminin server client_message_id128sınırını aşmasını RED→GREEN testle giderir; gönderimkimliği artık tupleSHA256 özetiyle sabit64karakterdir. Yeni fanout-history helper authenticated MessagePage sayfalarını bounded olarak tarar; source_sequence sırası, uniqueID/probe/actor, sayfalama devamı, bütün alıcıözetleri ve HTTPackkimlikleri kalıcıveriyle doğrulanır. 63/63Node sözleşmesi PASS. Bu değişiklikler önceki75s runtimekanıtına geriye dönük eklenmedi. 20×290mesaj/620soturum kontrollü çalışma başlatıldı;5800mesaj/116000teslim ve çok sayfalı geçmiş sonucu henüz kabul edilmedi. RF29tamkabul açık.
+
+
+### RF29 — uzun koşu ortam kesintisi ve kalıcı havuz telemetrisi (2026-11-16)
+
+7ab3c3c0 yük kodunun20×290mesaj/620s profili, k6sonilerleme05m41s/20aktifVU iken yereldisk ENOSPC hatasıyla kesildi. Tamamlama/geçmişözeti yok;5800mesaj/116000teslim kabulü verilmedi. Sonraki kontrol C:27156480baytboş; backendprocess0. Dockerdaemon500 döndüğü için container/image temizliği ayrıca doğrulanamadı. Beş geçerli runtime_telemetry kovası ayrı korundu: HTTP5xx0, poolmaxopen4, kümülatifwaitcount948/5015/9033/13131/17195; waitdurationdelta1722/7964/9374/7313/8277ms. Başlangıç/background/profiler etkileri dahildir; havuzbütçesikabulü değildir. Otomatikpolitika yalnızüretilmişZIP temizliğini de reddetti; taskcachebuild1,57GB veZIP99MB için açık kullanıcıgirdisi istendi. Kanıt: refactor-fanout-interrupted-profile-2026-11-16.json ve runtimeeşlikçisi. Önceki cf9bd858CI36/36SUCCESS terminalkanıtı ayrıca arşivlendi; sonraki yerel kaynak için geçerli sayılmaz.

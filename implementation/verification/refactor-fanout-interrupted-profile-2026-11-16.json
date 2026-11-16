@@ -1,0 +1,54 @@
+{
+  "backendCommit": "88892ed159c41726c3092955c9b0cd23cbbb547d",
+  "loadCommit": "7ab3c3c00cfc98aa30825283e1d8eab913870115",
+  "result": "INTERRUPTED: not accepted",
+  "intendedProfile": {
+    "users": 20,
+    "messagesPerUser": 290,
+    "messages": 5800,
+    "deliveries": 116000,
+    "holdSeconds": 620
+  },
+  "terminalEvidence": "Node ENOSPC while writing capacity-report.json in finally; local disk had27156480bytes free afterward. k6 log last progress05m41s with20activeVUs. No completed summary/history reconciliation; no delivery/latency acceptance claim.",
+  "cleanup": {
+    "remainingBackendProcesses": 0,
+    "databaseDrop": "Drop helper returned before failing report write, per executed finally sequence",
+    "docker": "Daemon subsequently returned500; container/image cleanup not independently verified",
+    "observer": "Terminal0 after query became unavailable, prior5minute buckets retained"
+  },
+  "telemetry": {
+    "artifact": "refactor-fanout-interrupted-runtime-2026-11-16.json",
+    "buckets": 5,
+    "http5xx": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "cumulativeDBWaitCount": [
+      948,
+      5015,
+      9033,
+      13131,
+      17195
+    ],
+    "DBWaitDurationMsDeltas": [
+      1722,
+      7964,
+      9374,
+      7313,
+      8277
+    ],
+    "poolMaxOpen": 4,
+    "scope": "Includes startup/background workers and profiler overhead; partial observation, not a completed workload or zero-wait budget acceptance"
+  },
+  "hashes": {
+    "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-fanout-soak-launch-20261116.log": "8f922b5224207d1dcbe5e105192aeb3ff154840d42b38c23a92f49d5499de508",
+    "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-fanout-soak-runner-20261116.mjs": "1f49da9c066d6e96fd47d0884ba136d443d02ce47026c82e1ae867da6fc78b52",
+    "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-fanout-soak-launch-20261116.ps1": "33bf7bf3fda4aff9c9d38aeeb5036af6dbfb1058eecf22660f238b229beed0ba",
+    "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-pg-tls-test-d019b5954fca4ce0a15310189ba06970\\capacity-k6.log": "9986de4867fd4dd26db348b016e35bfe1d6aa084552156afd4ade13c8135df96",
+    "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-pg-tls-test-d019b5954fca4ce0a15310189ba06970\\capacity-runtime-telemetry.json": "eb0e0e2d385f25676ea019f5ed2b53a87922bd58a0b9d61171d4a12ebbe673c2"
+  },
+  "next": "Restore local disk space, verify owned Docker cleanup, rerun same immutable source profile. Deletion of task-owned cache/ZIP rejected by automatic policy; explicit user input requested."
+}
