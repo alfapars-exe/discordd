@@ -68,7 +68,9 @@ RUN mkdir /tls && bash /generate-certs.sh && chown -R postgres:postgres /tls && 
 COPY --chown=postgres:postgres --chmod=0644 pg_hba.conf /tls/pg_hba.conf
 '@ -replace "`r`n", "`n"
     Write-Utf8NoBom (Join-Path $tempDir "Dockerfile") $dockerfile
-    docker build --tag $imageName $tempDir | Out-Null
+    # The generated certificates expire after two days; a cached RUN layer can
+    # otherwise resurrect expired credentials on a later local test run.
+    docker build --no-cache --tag $imageName $tempDir | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Could not build the disposable PostgreSQL TLS image." }
 
     $randomBytes = [byte[]]::new(24)
