@@ -38,7 +38,7 @@
     }
   },
   "pending": [
-    "New-source CI/Sonar/PostgreSQL/combined acceptance"
+    "Whole RF26 remaining static debt and combined RF01–RF30 acceptance"
   ],
   "evidence": {
     "before": {
@@ -79,5 +79,11 @@
       "sourceMismatches": 0
     },
     "limit": "Changed request/policy region matched; not a claim of full-file API source capture"
+  },
+  "ci": {
+    "head": "a4525d6e",
+    "checks": "36/36 SUCCESS",
+    "serverRun": 43777960656,
+    "receipt": "refactor-a452-terminal-ci-2026-11-16.json"
   }
 }
