@@ -36,6 +36,12 @@ jobs:
       - name: Repository query inventory contracts
         run: go test ./scripts/query-inventory/main.go ./scripts/query-inventory/main_test.go
 
+      - name: Local slow-consumer probe contracts
+        working-directory: server
+        run: |
+          go test -mod=readonly -race ../loadtest/slow-consumer/main.go ../loadtest/slow-consumer/main_test.go -count=1 -timeout=30s
+          go vet -mod=readonly ../loadtest/slow-consumer/main.go ../loadtest/slow-consumer/main_test.go
+
       # Production uses PostgreSQL; legacy SQLite fixtures cover offline import.
       - name: go vet
         run: go vet ./...
