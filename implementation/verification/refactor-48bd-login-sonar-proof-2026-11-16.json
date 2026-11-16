@@ -1,0 +1,25 @@
+{
+  "comparedCommit": "48bd3adc",
+  "sourceProof": [
+    {
+      "path": "client/src/components/auth/LoginPage.tsx",
+      "from": 80,
+      "lines": 61,
+      "mismatches": 0
+    },
+    {
+      "path": "client/src/components/auth/loginCredentialOperation.ts",
+      "from": 1,
+      "lines": 16,
+      "mismatches": 0
+    }
+  ],
+  "closedIssue": {
+    "key": "AaHYWqXxd7dyvm3wYSoC",
+    "component": "alfapars-exe_discordd:client/src/components/auth/LoginPage.tsx",
+    "message": "Refactor this function to reduce its Cognitive Complexity from 18 to the 15 allowed.",
+    "status": "CLOSED",
+    "resolution": "FIXED"
+  },
+  "limits": "Static login complexity closure only; complete native/auth/RF07 acceptance remains open."
+}
