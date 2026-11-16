@@ -65,29 +65,34 @@ func TestTicketUsesRealEnvelopeAndNeverFollowsRedirect(t *testing.T) {
 		{"redirect", ``, 302},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Method != http.MethodPost || r.URL.Path != "/api/auth/ws-ticket" || r.Header.Get("Authorization") != "Bearer fixture-access" {
-					t.Error("incorrect ticket request")
-				}
-				if tc.status == 302 {
-					w.Header().Set("Location", target.URL)
-				}
-				w.WriteHeader(tc.status)
-				_, _ = io.WriteString(w, tc.body)
-			}))
-			defer server.Close()
-			ticket, err := issueTicket(context.Background(), probeConfig{BaseURL: server.URL, AccessToken: "fixture-access"})
-			if tc.name == "valid" {
-				if err != nil || ticket != "fixture-one-use" {
-					t.Fatalf("ticket=%q err=%v", ticket, err)
-				}
-			} else if err == nil || err.Error() != "ticket_rejected" {
-				t.Fatalf("rejection=%v", err)
-			}
+			checkTicketEnvelope(t, tc.name, tc.body, tc.status, target.URL)
 		})
 	}
 	if redirected.Load() != 0 {
 		t.Fatal("ticket redirect forwarded credentials")
+	}
+}
+
+func checkTicketEnvelope(t *testing.T, name, body string, status int, targetURL string) {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/auth/ws-ticket" || r.Header.Get("Authorization") != "Bearer fixture-access" {
+			t.Error("incorrect ticket request")
+		}
+		if status == 302 {
+			w.Header().Set("Location", targetURL)
+		}
+		w.WriteHeader(status)
+		_, _ = io.WriteString(w, body)
+	}))
+	defer server.Close()
+	ticket, err := issueTicket(context.Background(), probeConfig{BaseURL: server.URL, AccessToken: "fixture-access"})
+	if name == "valid" {
+		if err != nil || ticket != "fixture-one-use" {
+			t.Fatalf("ticket=%q err=%v", ticket, err)
+		}
+	} else if err == nil || err.Error() != "ticket_rejected" {
+		t.Fatalf("rejection=%v", err)
 	}
 }
 
