@@ -152,18 +152,7 @@ func (s *serverService) JoinServer(ctx context.Context, userID, inviteCode strin
 	})
 
 	// Notify server members: new member joined (full MemberWithRoles for frontend)
-	user, err := s.userRepo.GetByID(ctx, userID)
-	if err != nil {
-		serverLogger.Error("failed to get user for member_join broadcast", "user_id", userID, "err", pkg.ErrText(err))
-	} else {
-		roles, _ := s.roleRepo.GetByUserIDAndServer(ctx, userID, serverID)
-		member := models.ToMemberWithRoles(user, roles)
-		member.RedactProfileFields()
-		s.hub.BroadcastToServer(serverID, ws.Event{
-			Op:   ws.OpMemberJoin,
-			Data: member,
-		})
-	}
+	s.broadcastJoinedServerMember(ctx, serverID, userID)
 
 	// Audit: member joined via invite. Actor == target (the joining user)
 	// because invite-based join is self-initiated. The i18n template only
@@ -253,4 +242,21 @@ func (s *serverService) ReorderServers(ctx context.Context, userID string, req *
 	}
 
 	return servers, nil
+}
+
+// broadcastJoinedServerMember is best-effort after membership commits.
+// Profile fields stay redacted even when the role lookup fails.
+func (s *serverService) broadcastJoinedServerMember(ctx context.Context, serverID, userID string) {
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		serverLogger.Error("failed to get user for member_join broadcast", "user_id", userID, "err", pkg.ErrText(err))
+	} else {
+		roles, _ := s.roleRepo.GetByUserIDAndServer(ctx, userID, serverID)
+		member := models.ToMemberWithRoles(user, roles)
+		member.RedactProfileFields()
+		s.hub.BroadcastToServer(serverID, ws.Event{
+			Op:   ws.OpMemberJoin,
+			Data: member,
+		})
+	}
 }
