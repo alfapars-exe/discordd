@@ -7,10 +7,10 @@ import { useE2EEStore } from "../../stores/e2eeStore";
 import { useOpenAtMessage } from "../../hooks/useOpenAtMessage";
 import { getAuthSessionOwner, subscribeAuthOwnerChanges, getAuthSessionSnapshot, subscribeAuthGenerationChanges } from "../../api/authSessionEvents";
 import { getCachedSearchResetGeneration, subscribeCachedSearchResets } from "../../crypto/cachedSearchEpoch";
-import { readCachedSearchPage } from "../../crypto/cachedSearchPage";
+import { runCachedSearch, type CachedSearchPage } from "../../crypto/cachedSearchRunner";
 import { useCachedSearchDeletionPool } from "../../hooks/useCachedSearchDeletionPool";
 import type { SearchDeletionPool, SearchDeletionSpool } from "../../crypto/cachedSearchDeletionSpool";
-import { createCachedSearchSnapshot, type CachedSearchSnapshot } from "../../crypto/cachedSearchSnapshot";
+import type { CachedSearchSnapshot } from "../../crypto/cachedSearchSnapshot";
 import Avatar from "../shared/Avatar";
 import SpamPreview from "../chat/SpamPreview";
 import GameMessageOrigin from "../chat/GameMessageOrigin";
@@ -100,7 +100,7 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted, keysReady }: Reado
   }, [failCurrentSearch]);
 
   const publishCachedPage = useCallback((
-    page: NonNullable<Awaited<ReturnType<typeof readCachedSearchPage>>>, searchOffset: number,
+    page: CachedSearchPage, searchOffset: number,
   ) => {
     queryOffset.current = page.offset;
     if (page.offset !== searchOffset) setOffset(page.offset);
@@ -131,42 +131,16 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted, keysReady }: Reado
 
   // All owned mutations stay inside this phase. The dispatcher adopts its
   // promise directly, adding no await boundary before publishing the page.
-  const searchEncryptedMessages = useCallback(async (searchQuery: string, searchOffset: number, seq: number) => {
-    try {
-      const controller = new AbortController();
-      localSearch.current = controller;
-      const term = searchQuery.trim();
-      const pool = await deletionPool.get();
-      if (seq !== searchSeqRef.current) return;
-      const pendingDeletes = deletionSpool.current ?? startFrontier(pool);
-      deletionSpool.current = pendingDeletes;
-      if (!localMatches.current) {
-        const snapshot = await createCachedSearchSnapshot("dm", channelId!, term, controller.signal);
-        if (seq !== searchSeqRef.current) { await snapshot.dispose(); return; }
-        localMatches.current = snapshot;
-      }
-      const snapshot = localMatches.current;
-      const lowerTerm = term.toLowerCase();
-      let page: Awaited<ReturnType<typeof readCachedSearchPage>>;
-      for (;;) {
-        await pendingDeletes.drain(ids => snapshot.removeMany(ids, controller.signal), controller.signal);
-        if (seq !== searchSeqRef.current) return;
-        const revision = pendingDeletes.version;
-        page = await readCachedSearchPage(snapshot, searchOffset, LIMIT,
-          row => row.dmChannelId === channelId && row.content.toLowerCase().includes(lowerTerm),
-          () => seq === searchSeqRef.current, controller.signal);
-        if (!page || seq !== searchSeqRef.current) return;
-        // A deletion received during hydration invalidates this page even
-        // when its native spool write has not committed yet.
-        if (revision === pendingDeletes.version) break;
-      }
-      publishCachedPage(page, searchOffset);
-    } catch {
-      if (seq !== searchSeqRef.current) return;
-      failCurrentSearch();
-    }
-    searching.current = false; setIsSearching(false);
-  }, [channelId, deletionPool, startFrontier, failCurrentSearch, publishCachedPage]);
+  const searchEncryptedMessages = useCallback((searchQuery: string, searchOffset: number, seq: number) => runCachedSearch({
+    kind: "dm", channelId, query: searchQuery, offset: searchOffset, limit: LIMIT,
+    controller: localSearch, snapshot: localMatches, deletions: deletionSpool,
+    getPool: () => deletionPool.get(), startFrontier,
+    matches: (row, lowerTerm) => row.dmChannelId === channelId && row.content.toLowerCase().includes(lowerTerm),
+    isCurrent: () => seq === searchSeqRef.current,
+    publish: page => publishCachedPage(page, searchOffset),
+    fail: failCurrentSearch,
+    finish: () => { searching.current = false; setIsSearching(false); },
+  }), [channelId, deletionPool, startFrontier, failCurrentSearch, publishCachedPage]);
 
   const doSearch = useCallback(
     async (searchQuery: string, searchOffset: number) => {

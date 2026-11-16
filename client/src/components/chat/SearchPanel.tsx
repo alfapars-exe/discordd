@@ -4,9 +4,9 @@ import { useState, useCallback, useRef, useEffect, useSyncExternalStore } from "
 import { useTranslation } from "react-i18next";
 import { getAuthSessionOwner, subscribeAuthOwnerChanges, getAuthSessionSnapshot, subscribeAuthGenerationChanges } from "../../api/authSessionEvents";
 import { searchMessages } from "../../api/search";
-import { createCachedSearchSnapshot, type CachedSearchSnapshot } from "../../crypto/cachedSearchSnapshot";
+import type { CachedSearchSnapshot } from "../../crypto/cachedSearchSnapshot";
 import { getCachedSearchResetGeneration, subscribeCachedSearchResets } from "../../crypto/cachedSearchEpoch";
-import { readCachedSearchPage } from "../../crypto/cachedSearchPage";
+import { runCachedSearch, type CachedSearchPage } from "../../crypto/cachedSearchRunner";
 import { useCachedSearchDeletionPool } from "../../hooks/useCachedSearchDeletionPool";
 import type { SearchDeletionPool, SearchDeletionSpool } from "../../crypto/cachedSearchDeletionSpool";
 import { useServerStore } from "../../stores/serverStore";
@@ -100,6 +100,33 @@ function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId,
     return frontier;
   }, [failCurrentSearch]);
 
+  const publishCachedPage = useCallback((page: CachedSearchPage, searchOffset: number) => {
+    queryOffset.current = page.offset;
+    if (page.offset !== searchOffset) setOffset(page.offset);
+    const paged = page.messages;
+    const total = page.total;
+
+    // CachedDecryptedMessage -> Message minimal format for rendering
+    const messages: Message[] = paged.map((c) => ({
+      id: c.messageId,
+      channel_id: c.channelId,
+      user_id: "",
+      content: c.content,
+      created_at: new Date(c.timestamp).toISOString(),
+      edited_at: null,
+      attachments: [],
+      mentions: [],
+      role_mentions: [],
+      reactions: [],
+      reply_to_id: null,
+      referenced_message: null,
+      author: { id: "", username: "", display_name: null, avatar_url: null, status: "offline" as const, custom_status: null, created_at: "" },
+      encryption_version: 1,
+    }));
+
+    setResults({ messages, total_count: total });
+  }, []);
+
   const doSearch = useCallback(
     async (searchQuery: string, searchOffset: number) => {
       // Bumping before the empty-query early return also invalidates any
@@ -130,64 +157,16 @@ function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId,
           searching.current = false; setIsSearching(false);
           return;
         }
-        try {
-          const controller = new AbortController();
-          localSearch.current = controller;
-          const term = searchQuery.trim();
-          const pool = await deletionPool.get();
-          if (seq !== searchSeqRef.current) return;
-          const pendingDeletes = deletionSpool.current ?? startFrontier(pool);
-          deletionSpool.current = pendingDeletes;
-          if (!localMatches.current) {
-            const snapshot = await createCachedSearchSnapshot("channel", channelId!, term, controller.signal);
-            if (seq !== searchSeqRef.current) { await snapshot.dispose(); return; }
-            localMatches.current = snapshot;
-          }
-          const snapshot = localMatches.current;
-          const lowerTerm = term.toLowerCase();
-          let page: Awaited<ReturnType<typeof readCachedSearchPage>>;
-          for (;;) {
-            await pendingDeletes.drain(ids => snapshot.removeMany(ids, controller.signal), controller.signal);
-            if (seq !== searchSeqRef.current) return;
-            const revision = pendingDeletes.version;
-            page = await readCachedSearchPage(snapshot, searchOffset, limit,
-              row => row.channelId === channelId && row.content.toLowerCase().includes(lowerTerm),
-              () => seq === searchSeqRef.current, controller.signal);
-            if (!page || seq !== searchSeqRef.current) return;
-            // A deletion received during hydration invalidates this page even
-            // when its native spool write has not committed yet.
-            if (revision === pendingDeletes.version) break;
-          }
-          queryOffset.current = page.offset;
-          if (page.offset !== searchOffset) setOffset(page.offset);
-          const paged = page.messages;
-          const total = page.total;
-
-          // CachedDecryptedMessage -> Message minimal format for rendering
-          const messages: Message[] = paged.map((c) => ({
-            id: c.messageId,
-            channel_id: c.channelId,
-            user_id: "",
-            content: c.content,
-            created_at: new Date(c.timestamp).toISOString(),
-            edited_at: null,
-            attachments: [],
-            mentions: [],
-            role_mentions: [],
-            reactions: [],
-            reply_to_id: null,
-            referenced_message: null,
-            author: { id: "", username: "", display_name: null, avatar_url: null, status: "offline" as const, custom_status: null, created_at: "" },
-            encryption_version: 1,
-          }));
-
-          setResults({ messages, total_count: total });
-        } catch {
-          if (seq !== searchSeqRef.current) return;
-          failCurrentSearch();
-        }
-        searching.current = false; setIsSearching(false);
-        return;
+        return runCachedSearch({
+          kind: "channel", channelId, query: searchQuery, offset: searchOffset, limit,
+          controller: localSearch, snapshot: localMatches, deletions: deletionSpool,
+          getPool: () => deletionPool.get(), startFrontier,
+          matches: (row, lowerTerm) => row.channelId === channelId && row.content.toLowerCase().includes(lowerTerm),
+          isCurrent: () => seq === searchSeqRef.current,
+          publish: page => publishCachedPage(page, searchOffset),
+          fail: failCurrentSearch,
+          finish: () => { searching.current = false; setIsSearching(false); },
+        });
       }
 
       // Plaintext — server-side FTS5 search
@@ -201,7 +180,7 @@ function ScopedSearchPanel({ channelId, onClose, onSelectResult, activeServerId,
       }
       searching.current = false; setIsSearching(false);
     },
-    [activeServerId, channelId, serverE2eeEnabled, deletionPool, startFrontier, failCurrentSearch]
+    [activeServerId, channelId, serverE2eeEnabled, deletionPool, startFrontier, failCurrentSearch, publishCachedPage]
   );
 
   /** Debounced search on input change */
