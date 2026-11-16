@@ -3724,3 +3724,5 @@ Kanal panelinin props tipi ve sonuç gösterimi a6f68284 ile düzenlendi; ilgili
 7305958d için 36/36 terminal CI başarısı ve iki üretim panelinin 50.000 olay bellek/sıra kanıtı `refactor-7305-terminal-ci-2026-11-16.json` dosyasında. Ayrı tarihsel 120 saniyelik bekleme kökü açık.
 
 RF06: b8784e1d rollback replay ve cache merge ayrıştırması, önce/sonra 72 test, metadata-first sıra ve ara hata sonrası devam karakterizasyonu, TypeScript/lint/build ve kaynak taramasıyla doğrulandı. Yapısal eşdeğerlik ve açık kabul sınırları `refactor-backup-replay-phases-2026-11-16.json` dosyasında; yeni CI/Sonar ve tarihsel/crash/atomiklik kabulü beklenir.
+
+RF08/HTTP istemcisi: token yenilemenin Retry-After hesabı ve hesap doğrulamalı token kurulumu senkron yardımcı işlevlere ayrıldı. Aynı 64 mevcut test önce/sonra başarılı; TypeScript ve hedefli lint geçti. Nesil kontrolleri ve await sınırları korundu. Kanıt: refactor-api-refresh-phases-2026-11-16.json. Yeni kaynak taraması/CI/Sonar ve kapsamlı auth/native/offline kabulü açık.

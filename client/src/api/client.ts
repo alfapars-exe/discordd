@@ -212,6 +212,35 @@ async function refreshAccessToken(): Promise<boolean> {
   }
 }
 
+type RefreshResponse = APIResponse<{ access_token: string; refresh_token: string; user?: { id: string } }>;
+
+/** Preserve server backoff without treating a temporary rate limit as logout. */
+function updateRefreshBackoff(headers: Headers): void {
+  const retryAfter = headers.get("Retry-After");
+  const seconds = retryAfter === null ? NaN : Number(retryAfter);
+  const deadline = Number.isFinite(seconds)
+    ? Date.now() + Math.max(0, seconds) * 1000
+    : Date.parse(retryAfter ?? "");
+  if (Number.isFinite(deadline)) refreshRetryAt = deadline;
+}
+
+/** Install only a response belonging to the account captured before refresh. */
+function installRefreshedAccess(data: RefreshResponse, expectedAccount: string | null): boolean {
+  if (data.success && data.data) {
+    // Defense in depth for older servers: never install a different user's
+    // token behind an already-bound account UI. The server-side constraint
+    // also prevents rotating that other account's cookie in the first place.
+    if (expectedAccount && data.data.user?.id !== expectedAccount) return false;
+    authAccountMemory = data.data.user?.id ?? expectedAccount;
+    // The server rotated its HttpOnly cookie. Refresh the access token without
+    // advancing the account generation used by in-flight request guards.
+    accessTokenMemory = data.data.access_token;
+    return true;
+  }
+
+  return false;
+}
+
 async function doRefresh(generation: number): Promise<boolean> {
   const expectedAccount = authAccountMemory;
   const expectedSession = getAccessSessionID();
@@ -238,12 +267,7 @@ async function doRefresh(generation: number): Promise<boolean> {
     if (generation !== authGeneration) return false;
     if (!res.ok) {
       if (res.status === 429) {
-        const retryAfter = res.headers.get("Retry-After");
-        const seconds = retryAfter === null ? NaN : Number(retryAfter);
-        const deadline = Number.isFinite(seconds)
-          ? Date.now() + Math.max(0, seconds) * 1000
-          : Date.parse(retryAfter ?? "");
-        if (Number.isFinite(deadline)) refreshRetryAt = deadline;
+        updateRefreshBackoff(res.headers);
       }
       if (res.status === 409) {
         // A concurrent rotation asks us to retry with the current cookie.
@@ -269,23 +293,11 @@ async function doRefresh(generation: number): Promise<boolean> {
       return false;
     }
 
-    const data: APIResponse<{ access_token: string; refresh_token: string; user?: { id: string } }> =
+    const data: RefreshResponse =
       await lifetime.wait(() => res.json());
 
     if (generation !== authGeneration) return false;
-    if (data.success && data.data) {
-      // Defense in depth for older servers: never install a different user's
-      // token behind an already-bound account UI. The server-side constraint
-      // also prevents rotating that other account's cookie in the first place.
-      if (expectedAccount && data.data.user?.id !== expectedAccount) return false;
-      authAccountMemory = data.data.user?.id ?? expectedAccount;
-      // The server rotated its HttpOnly cookie. Refresh the access token without
-      // advancing the account generation used by in-flight request guards.
-      accessTokenMemory = data.data.access_token;
-      return true;
-    }
-
-    return false;
+    return installRefreshedAccess(data, expectedAccount);
   } catch {
     // Network error (timeout, DNS, offline) — tokens may still be valid, don't clear.
     return false;
