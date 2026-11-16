@@ -582,98 +582,97 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
     const e2eeState = useE2EEStore.getState();
 
     const dmChannel = get().channels.find((ch) => ch.id === channelId);
-    if (dmChannel?.e2ee_enabled && e2eeState.initStatus === "ready" && e2eeState.localDeviceId) {
-      const channel = dmChannel;
-      const currentUserId = useAuthStore.getState().user?.id;
-
-      if (channel && currentUserId) {
-        // Only this send's own queue entry may be discarded on failure; if
-        // encryption threw before the push, discarding would drop the entry of
-        // another in-flight send to the same channel.
-        let queuedPayload:Parameters<typeof pushSentPlaintext>[1]|undefined;
-        try {
-          let encryptedFiles: File[] | undefined;
-          let fileMetas: import("../crypto/fileEncryption").EncryptedFileMeta[] | undefined;
-
-          if (files && files.length > 0) {
-            const result = await encryptFilesForE2EE(files);
-            if(!isCurrent())return false;
-            encryptedFiles = result.files;
-            fileMetas = result.metas;
-          }
-
-          const plaintext = encodePayload(content, fileMetas);
-
-          const envelopes = await encryptDMMessage(
-            currentUserId,
-            channel.other_user.id,
-            e2eeState.localDeviceId,
-            plaintext, { channelId, isCurrent }
-          );
-          if(!isCurrent())return false;
-
-          const ciphertext = JSON.stringify(envelopes);
-          // Distinguishes local-only/self-DM sends whose envelope arrays may
-          // both be empty. Not an idempotency key or authorization claim.
-          const metadata = JSON.stringify({client_send_id:crypto.randomUUID()});
-
-          queuedPayload={content,file_keys:fileMetas};
-          pushSentPlaintext(channelId, queuedPayload,{ciphertext,metadata});
-
-          const claimReceipt = captureDMReceipt(channelId);
-          const res = await sendWithRetryAndToast(() =>
-            dmApi.sendEncryptedDMMessage(
-              channelId,
-              ciphertext,
-              e2eeState.localDeviceId!,
-              metadata,
-              encryptedFiles,
-              replyToId,
-              {isCurrent,timeoutMs:60_000}
-            )
-          ,{isCurrent});
-
-          if(!isCurrent()){discardSentPlaintext(channelId,queuedPayload);return false}
-
-          if (res.success && res.data&&res.data.dm_channel_id===channelId&&res.data.user_id===owner&&res.data.sender_device_id===e2eeState.localDeviceId&&res.data.ciphertext===ciphertext&&res.data.e2ee_metadata===metadata) {
-            const receiptCurrent = claimReceipt(res.data);
-            if (!receiptCurrent) discardSentPlaintext(channelId,queuedPayload);
-            else bufferDMHistoryEvent({...res.data,content:queuedPayload.content,e2ee_file_keys:queuedPayload.file_keys});
-            try {
-              if (receiptCurrent) await cacheDMMessage(res.data,queuedPayload,()=>isCurrent()&&receiptCurrent());
-            } catch {
-              /* IndexedDB optional */
-            }
-          }
-
-          if (!res.success) {
-            discardSentPlaintext(channelId,queuedPayload);
-          }
-
-          return isCurrent()&&res.success;
-        } catch (err) {
-          if (queuedPayload) discardSentPlaintext(channelId,queuedPayload);
-          if(!isCurrent())return false;
-          console.error("[dmStore] E2EE encrypt failed:", err);
-
-          const errMsg = err instanceof Error ? err.message : "";
-          // Event + reason only — never the message content. channelId + the
-          // error code help diagnose "my DM won't send" reports.
-          logToServer("warn", "dm_send_failed", {
-            channelId,
-            reason: errMsg || "encrypt_error",
-            hadFiles: !!(files && files.length),
-          });
-          useToastStore.getState().addToast("error", i18n.t("e2ee:encryptionFailed"));
-          return false;
-        }
-      }
+    const currentUserId = dmChannel?.e2ee_enabled && e2eeState.initStatus === "ready" && e2eeState.localDeviceId
+      ? useAuthStore.getState().user?.id
+      : undefined;
+    if (!dmChannel || !currentUserId) {
+      const res = await sendWithRetryAndToast(() =>
+        dmApi.sendDMMessage(channelId, content, files, replyToId,{isCurrent,timeoutMs:60_000})
+      ,{isCurrent});
+      return isCurrent()&&res.success;
     }
 
-    const res = await sendWithRetryAndToast(() =>
-      dmApi.sendDMMessage(channelId, content, files, replyToId,{isCurrent,timeoutMs:60_000})
-    ,{isCurrent});
-    return isCurrent()&&res.success;
+    const channel = dmChannel;
+    // Only this send's own queue entry may be discarded on failure; if
+    // encryption threw before the push, discarding would drop the entry of
+    // another in-flight send to the same channel.
+    let queuedPayload:Parameters<typeof pushSentPlaintext>[1]|undefined;
+    try {
+      let encryptedFiles: File[] | undefined;
+      let fileMetas: import("../crypto/fileEncryption").EncryptedFileMeta[] | undefined;
+
+      if (files && files.length > 0) {
+        const result = await encryptFilesForE2EE(files);
+        if(!isCurrent())return false;
+        encryptedFiles = result.files;
+        fileMetas = result.metas;
+      }
+
+      const plaintext = encodePayload(content, fileMetas);
+
+      const envelopes = await encryptDMMessage(
+        currentUserId,
+        channel.other_user.id,
+        e2eeState.localDeviceId!,
+        plaintext, { channelId, isCurrent }
+      );
+      if(!isCurrent())return false;
+
+      const ciphertext = JSON.stringify(envelopes);
+      // Distinguishes local-only/self-DM sends whose envelope arrays may
+      // both be empty. Not an idempotency key or authorization claim.
+      const metadata = JSON.stringify({client_send_id:crypto.randomUUID()});
+
+      queuedPayload={content,file_keys:fileMetas};
+      pushSentPlaintext(channelId, queuedPayload,{ciphertext,metadata});
+
+      const claimReceipt = captureDMReceipt(channelId);
+      const res = await sendWithRetryAndToast(() =>
+        dmApi.sendEncryptedDMMessage(
+          channelId,
+          ciphertext,
+          e2eeState.localDeviceId!,
+          metadata,
+          encryptedFiles,
+          replyToId,
+          {isCurrent,timeoutMs:60_000}
+        )
+      ,{isCurrent});
+
+      if(!isCurrent()){discardSentPlaintext(channelId,queuedPayload);return false}
+
+      if (res.success && res.data&&res.data.dm_channel_id===channelId&&res.data.user_id===owner&&res.data.sender_device_id===e2eeState.localDeviceId&&res.data.ciphertext===ciphertext&&res.data.e2ee_metadata===metadata) {
+        const receiptCurrent = claimReceipt(res.data);
+        if (!receiptCurrent) discardSentPlaintext(channelId,queuedPayload);
+        else bufferDMHistoryEvent({...res.data,content:queuedPayload.content,e2ee_file_keys:queuedPayload.file_keys});
+        try {
+          if (receiptCurrent) await cacheDMMessage(res.data,queuedPayload,()=>isCurrent()&&receiptCurrent());
+        } catch {
+          /* IndexedDB optional */
+        }
+      }
+
+      if (!res.success) {
+        discardSentPlaintext(channelId,queuedPayload);
+      }
+
+      return isCurrent()&&res.success;
+    } catch (err) {
+      if (queuedPayload) discardSentPlaintext(channelId,queuedPayload);
+      if(!isCurrent())return false;
+      console.error("[dmStore] E2EE encrypt failed:", err);
+
+      const errMsg = err instanceof Error ? err.message : "";
+      // Event + reason only — never the message content. channelId + the
+      // error code help diagnose "my DM won't send" reports.
+      logToServer("warn", "dm_send_failed", {
+        channelId,
+        reason: errMsg || "encrypt_error",
+        hadFiles: !!(files && files.length),
+      });
+      useToastStore.getState().addToast("error", i18n.t("e2ee:encryptionFailed"));
+      return false;
+    }
     })();
     // Sent from a jumped-to window: DMs have no local insert (the WS echo is
     // the only path, and it is held back while detached), so return to the

@@ -3732,3 +3732,5 @@ RF05/SQL envanter aracı: dizin yürütme, dosya AST dolaşımı, yöntem/argüm
 SQL envanteri sınır karakterizasyonu: sekiz yöntem adı, yetersiz argüman, selector olmayan ve ilgisiz çağrılar eklendi; altı test eski/yeni uygulamada geçti. 963 adayın önce/sonra eşdeğerlik kanıtı korunur.
 
 SQL ayrıştırma kaynağı 9c740029 için değişmez kaynak taraması 51 kayıt/481 inceleme satırı/0 engelleyici desenle tamamlandı. 0b533af0 ek karakterizasyonunu da içeren son kaynak için CI/güvenlik/Sonar kabulü beklenir.
+
+RF07/DM gönderim kontrol akışı: plaintext yolu erken ayrılarak şifreli gönderimin iki iç içe koşulu kaldırıldı. Aynı 115 test önce/sonra ve son UTF-8 kaynakta başarılı; TypeScript/hedefli lint geçti. Şifreli try/catch, plaintext gönderim ve aksiyon dışı kaynak eşdeğerliği ayrı doğrulandı. Kanıt: refactor-dm-send-dispatch-2026-11-16.json. Yeni kaynak taraması/CI/Sonar ve geniş hesap/izin/offline/native kabulü açık.
