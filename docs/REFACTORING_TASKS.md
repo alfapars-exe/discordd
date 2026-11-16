@@ -3880,3 +3880,6 @@ RF09 gerçek üye SQL sözleşmesi f775d910 kaynağında zenginleştirildi: ayn�
 
 
 Üye SQL/enrichment sözleşmesinin yalnız yerel PG kanıtı vardı; zorunlu CI servis seçiminde değildi. TestMemberProjectionPhysicalSQLCount mevcut PostgreSQL seçim/PASS zorunluluğuna eklendi. Önce17 testte1 beklenen FAIL (zorunlu kayıt yok), sonra17/17PASS; eksik PASS ve SKIP başarılı process exit ile de reddedilir. Yeni tam CI sonucu beklenir. Tarihsel DM panel günlüğü yeniden okundu: searchFailed gözlendi, işlem hatası kaydı yok; kök neden kapatılmadı. Kanıt: refactor-member-sql-required-gate-2026-11-16.json.
+
+
+5fb756d1 terminal CI35SUCCESS/1AndroidSDK hazırlık FAIL: emulator system-image ZIP okunamadı; uygulama instrumentation assertion hatası kaydı yok. PostgreSQL job gerçek üye SQL sözleşmesi için açık PASS verdi; Playwright geçti. Sonar38/43 test/benchmark karmaşıklığı için hazırlık/parity/ölçüm ve sunucu fixture/enrichment yardımcıları ayrıldı; sayısal taşma RangeError oldu. SQLite servis3 tekrar,8 benchmark x3 operasyon,3Node pool ve17Python gate testi PASS; yeni kaynak PostgreSQL/CI/Sonar kabulü beklenir. RF09/RF29 matris satırları eski bekleyen alt işlere göre güncellendi; genel RF açık. Kanıtlar: refactor-5fb7-terminal-ci-2026-11-16.json, refactor-measurement-test-phases-2026-11-16.json, refactor-member-sql-n-plus-one-negative-2026-11-16.json.

@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/models"
 )
 
@@ -14,6 +15,20 @@ import (
 func BenchmarkGroupPublicProfilePopulation(b *testing.B) {
 	db := newTestDB(b)
 	ctx := context.Background()
+	ids := seedProfileBenchmark(b, db, ctx)
+	repo := NewSQLiteUserRepo(db.Conn)
+	for _, size := range []int{0, 1, 100, 1001} {
+		page := ids[:size]
+		checkProfileBenchmarkParity(b, repo, ctx, page, size)
+		for _, bulk := range []bool{false, true} {
+			b.Run(fmt.Sprintf("users=%d/bulk=%t", size, bulk), func(b *testing.B) {
+				runProfilePopulationBenchmark(b, db, repo, ctx, page, size, bulk)
+			})
+		}
+	}
+}
+
+func seedProfileBenchmark(b *testing.B, db *database.DB, ctx context.Context) []string {
 	tx, err := db.Conn.BeginTx(ctx, nil)
 	if err != nil {
 		b.Fatal(err)
@@ -29,41 +44,40 @@ func BenchmarkGroupPublicProfilePopulation(b *testing.B) {
 	if err := tx.Commit(); err != nil {
 		b.Fatal(err)
 	}
-	repo := NewSQLiteUserRepo(db.Conn)
-	for _, size := range []int{0, 1, 100, 1001} {
-		page := ids[:size]
-		found, err := repo.PublicUsersByID(ctx, page)
-		if err != nil || len(found) != size {
-			b.Fatalf("bulk parity size=%d: %v", size, err)
-		}
-		for _, id := range page {
-			user, err := repo.GetByID(ctx, id)
-			if err != nil || !reflect.DeepEqual(found[id], models.ToPublicUser(user)) {
-				b.Fatalf("projection differs: %v", err)
-			}
-		}
-		for _, bulk := range []bool{false, true} {
-			b.Run(fmt.Sprintf("users=%d/bulk=%t", size, bulk), func(b *testing.B) {
-				before := db.Conn.Stats()
-				b.ResetTimer()
-				for i := 0; i < b.N; i++ {
-					if bulk {
-						result, err := repo.PublicUsersByID(ctx, page)
-						if err != nil || len(result) != size {
-							b.Fatalf("bulk rows=%d: %v", len(result), err)
-						}
-					} else {
-						for _, id := range page {
-							if _, err := repo.GetByID(ctx, id); err != nil {
-								b.Fatal(err)
-							}
-						}
-					}
-				}
-				b.StopTimer()
-				after := db.Conn.Stats()
-				b.ReportMetric(float64((after.WaitDuration-before.WaitDuration).Nanoseconds())/float64(b.N), "pool-wait-ns/op")
-			})
+	return ids
+}
+
+func checkProfileBenchmarkParity(b *testing.B, repo UserRepository, ctx context.Context, page []string, size int) {
+	found, err := repo.PublicUsersByID(ctx, page)
+	if err != nil || len(found) != size {
+		b.Fatalf("bulk parity size=%d: %v", size, err)
+	}
+	for _, id := range page {
+		user, err := repo.GetByID(ctx, id)
+		if err != nil || !reflect.DeepEqual(found[id], models.ToPublicUser(user)) {
+			b.Fatalf("projection differs: %v", err)
 		}
 	}
+}
+
+func runProfilePopulationBenchmark(b *testing.B, db *database.DB, repo UserRepository, ctx context.Context, page []string, size int, bulk bool) {
+	before := db.Conn.Stats()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if bulk {
+			result, err := repo.PublicUsersByID(ctx, page)
+			if err != nil || len(result) != size {
+				b.Fatalf("bulk rows=%d: %v", len(result), err)
+			}
+		} else {
+			for _, id := range page {
+				if _, err := repo.GetByID(ctx, id); err != nil {
+					b.Fatal(err)
+				}
+			}
+		}
+	}
+	b.StopTimer()
+	after := db.Conn.Stats()
+	b.ReportMetric(float64((after.WaitDuration-before.WaitDuration).Nanoseconds())/float64(b.N), "pool-wait-ns/op")
 }

@@ -12,7 +12,7 @@ export function summarizePoolTelemetry(input) {
     waits += row.diagnostics.db_wait_count_delta;
     durationMs += row.diagnostics.db_wait_duration_ms_delta;
     if (!Number.isSafeInteger(waits) || !Number.isSafeInteger(durationMs)) {
-      throw new Error('Pool summary exceeds safe numeric range');
+      throw new RangeError('Pool summary exceeds safe numeric range');
     }
     if (i > 0) {
       const previous = rows[i - 1];

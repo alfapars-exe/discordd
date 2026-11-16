@@ -1,0 +1,23 @@
+{
+  "baseline": "5fb756d1",
+  "changes": [
+    "Extract member fixture setup, per-server setup and enrichment assertion helpers",
+    "Extract benchmark fixture/parity/timed-run helpers; keep timer boundaries and loop inputs",
+    "Use RangeError for unsafe numeric aggregation"
+  ],
+  "validation": {
+    "memberSQLiteRepetitions": 3,
+    "repositoryBenchmark": "3 operations per each of8 sub-benchmarks PASS; timing not compared with historical30x9",
+    "poolContracts": 3,
+    "postgresRunnerContracts": 17
+  },
+  "pending": [
+    "Actual extracted-source PostgreSQL run",
+    "Sonar source/complexity results",
+    "New terminal CI"
+  ],
+  "limits": [
+    "Previous full benchmark source-bound evidence not relabeled as new-source performance",
+    "No RF closure"
+  ]
+}
