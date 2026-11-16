@@ -1,0 +1,24 @@
+{
+  "baselineCommit": "a6522e38",
+  "scope": "Separate presence persistence and post-broadcast friend notifications. Preserve the caller-owned bounded context, preference gate, combined manual preference/status write, visibility commit, publication and notification order.",
+  "validation": {
+    "baseline": "Existing TestPresenceUpdateCallback and TestOfflinePresenceTransition contracts PASS",
+    "candidate": {
+      "repeats": 20,
+      "passedTestExecutionsIncludingSubtests": 360,
+      "distinctNamesIncludingSubtests": 18,
+      "fail": 0,
+      "skip": 0
+    },
+    "rootGoVet": "PASS",
+    "structuralParity": {
+      "callbackStatementParity": true,
+      "method": "Go AST statement printing after inlining persistence and notification helpers; helper false returns reconstructed as callback returns"
+    }
+  },
+  "remaining": [
+    "Immutable final-source scan and CI/Sonar",
+    "New-source Linux race",
+    "Full presence/reconnect/transport runtime and RF07/RF14 acceptance"
+  ]
+}

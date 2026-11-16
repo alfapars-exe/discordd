@@ -3750,3 +3750,5 @@ RF08/ses kapanışı: snapshot ve kullanım kredisi teslimi, dört işçiyle med
 628f61fd için Go AST karşılaştırması: üretici durdurma sırası, snapshot/accounting, inline edilmiş medya işçileri ve son metadata temizliği eşdeğer. Değişmez kaynak taraması 51 kayıt/482 inceleme/0 engelleyici desenle başarılı. Linux Go1.26.11 race derleme süreçleri canlı; henüz test kabulü yok. Son kaynak CI/Sonar beklenir.
 
 Ses kapanışı 628f61fd son Linux race: Go1.26.11/CGO1, yedi test x20=140 PASS, 0 FAIL/SKIP; paket süresi 3,607 s (derleme süresi dahil değil). Kaynak/test SHA256 eşleşmesi tekrar doğrulandı. PR üretim kaynağı 338e2d71 ile gönderildi; yeni CI/Sonar beklenir.
+
+RF07/RF14 presence güncellemesi: tercih doğrulama/kalıcı yazım ve yayın sonrası arkadaş bildirimleri ayrı yardımcıya taşındı. Sınırlı context ve write→visibility commit→broadcast→notify sırası korunur. Mevcut sözleşmeler eski kaynakta, 20 tekrarla adayda başarılı; root Go vet ve helper inline edildiğinde Go AST ifade eşdeğerliği geçti. Kanıt: refactor-presence-update-phases-2026-11-16.json. Yeni kaynak taraması/race/CI/Sonar ve geniş presence/reconnect kabulü açık.

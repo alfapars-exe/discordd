@@ -383,32 +383,7 @@ func presenceUpdateCallback(hub presenceStatePublisher, userRepo repository.User
 
 		ctx, cancel := services.BroadcastContext()
 		defer cancel()
-		if isAuto {
-			user, err := userRepo.GetByID(ctx, userID)
-			if err != nil {
-				hubLogger.Error("failed to load preferred status for auto presence", "area", "presence", "user_id", userID, "err", pkg.ErrText(err))
-				return
-			}
-			if user == nil {
-				hubLogger.Error("preferred status unavailable for auto presence", "area", "presence", "user_id", userID)
-				return
-			}
-			// Automatic idle/online transitions belong only to users whose
-			// persisted manual preference is online. This protects DND/idle
-			// selections from another tab's queued auto update. Empty is the
-			// legacy default and matches first-connect behavior (online).
-			if user.PrefStatus != "" && user.PrefStatus != models.UserStatusOnline {
-				return
-			}
-		}
-
-		if isAuto {
-			if err := userRepo.UpdateStatus(ctx, userID, st); err != nil {
-				hubLogger.Error("failed to set status", "area", "presence", "status", status, "user_id", userID, "err", pkg.ErrText(err))
-				return
-			}
-		} else if err := userRepo.UpdateManualPresence(ctx, userID, st); err != nil {
-			hubLogger.Error("failed to set manual presence", "area", "presence", "status", status, "user_id", userID, "err", pkg.ErrText(err))
+		if !persistPresenceUpdate(ctx, userRepo, userID, status, isAuto) {
 			return
 		}
 
@@ -427,21 +402,61 @@ func presenceUpdateCallback(hub presenceStatePublisher, userRepo repository.User
 			},
 		})
 
-		if notifier := firstOnlineFriendNotifier(onlineFriendNotifiers); notifier != nil && !isAuto {
-			if st == models.UserStatusOffline {
-				notifier.ObserveOffline(userID)
-			} else if containsPresenceUser(hub.GetVisibleOnlineUserIDs(), userID) {
-				if notifyErr := notifyOnlineAfterPresence(notifier, userID); notifyErr != nil {
-					logOnlineFriendFailure(userID, notifyErr)
-				}
-			}
-		}
+		notifyManualPresenceUpdate(hub, userID, st, isAuto, onlineFriendNotifiers)
 
 		source := "manual"
 		if isAuto {
 			source = "auto"
 		}
 		hubLogger.Info("presence updated", "area", "presence", "user_id", userID, "status", status, "source", source)
+	}
+}
+
+// Persist automatic status only for an online manual preference; manual updates
+// use the repository's combined preference/status write. The caller owns ctx.
+func persistPresenceUpdate(ctx context.Context, userRepo repository.UserRepository, userID, status string, isAuto bool) bool {
+	st := models.UserStatus(status)
+	if isAuto {
+		user, err := userRepo.GetByID(ctx, userID)
+		if err != nil {
+			hubLogger.Error("failed to load preferred status for auto presence", "area", "presence", "user_id", userID, "err", pkg.ErrText(err))
+			return false
+		}
+		if user == nil {
+			hubLogger.Error("preferred status unavailable for auto presence", "area", "presence", "user_id", userID)
+			return false
+		}
+		// Automatic idle/online transitions belong only to users whose
+		// persisted manual preference is online. This protects DND/idle
+		// selections from another tab's queued auto update. Empty is the
+		// legacy default and matches first-connect behavior (online).
+		if user.PrefStatus != "" && user.PrefStatus != models.UserStatusOnline {
+			return false
+		}
+	}
+
+	if isAuto {
+		if err := userRepo.UpdateStatus(ctx, userID, st); err != nil {
+			hubLogger.Error("failed to set status", "area", "presence", "status", status, "user_id", userID, "err", pkg.ErrText(err))
+			return false
+		}
+	} else if err := userRepo.UpdateManualPresence(ctx, userID, st); err != nil {
+		hubLogger.Error("failed to set manual presence", "area", "presence", "status", status, "user_id", userID, "err", pkg.ErrText(err))
+		return false
+	}
+	return true
+}
+
+// Notify only after the callback has committed visibility and broadcast it.
+func notifyManualPresenceUpdate(hub presenceStatePublisher, userID string, st models.UserStatus, isAuto bool, onlineFriendNotifiers []services.OnlineFriendPresenceNotifier) {
+	if notifier := firstOnlineFriendNotifier(onlineFriendNotifiers); notifier != nil && !isAuto {
+		if st == models.UserStatusOffline {
+			notifier.ObserveOffline(userID)
+		} else if containsPresenceUser(hub.GetVisibleOnlineUserIDs(), userID) {
+			if notifyErr := notifyOnlineAfterPresence(notifier, userID); notifyErr != nil {
+				logOnlineFriendFailure(userID, notifyErr)
+			}
+		}
 	}
 }
 
