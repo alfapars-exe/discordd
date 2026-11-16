@@ -3780,3 +3780,5 @@ RF07/desktop giriş: remember-me native IPC seçim işlemi senkron yardımcıya 
 55ae00d1 Sonar: sender-key frame/decrypt16 kaydı CLOSED/FIXED; 530–800 kaynak dilimi271 satır Git kaynağıyla eşleşir. Kanıt: refactor-55ae-sender-frame-sonar-proof-2026-11-16.json. CI pending DM reddinin kökü bu statik kapanışla kapatılmadı.
 
 55ae00d1 terminal CI36/36 SUCCESS. Aynı512KiB sınırında50k olay sonrası kanal40.348bayt/DM86.860bayt; ikisinde doğru sayfa ve indeks temizliği. Sonuç gözlemi7.073,9/6.421,2ms; kontrollü tek koşu, tam pipeline/SLA değil. 0e9b DM searchFailed reddinin kökü yeniden üretilmediği için açık kaldı. Kanıt: refactor-55ae-terminal-ci-2026-11-16.json. Sonraki LoginPagec727 yerel üretim build’i de geçti; kendi scan/CI kabulü beklenir.
+
+Login IPCc727d590 son değişmez kaynak taraması51 kayıt/482 inceleme/0 engelleyici desenle geçti; normalize inceleme farkı0.11test, TypeScript/lint/Vite ve aynı await noktası/promise kimliği doğrulamaları önceki kayıtta. Yeni head CI/Sonar ve paketli native kabulü açık.
