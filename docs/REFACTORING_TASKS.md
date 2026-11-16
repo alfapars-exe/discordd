@@ -3865,3 +3865,6 @@ Controller62 karmaşıklığı için hazırlık, hesap/kanal/üyelik, slow-peer 
 
 
 RF29 havuz özeti artık saf analiz modülünde: kümülatif sayaç yerine kayıtlı delta toplamları; eksik dakika, sayaç düşüşü ve max-open değişimi görünür. 8854 canlı kaydının 11 kovasında boş dakika/düşüş0; wait-count40410, toplam wait83884ms, kayıtlı bekleme başına ortalama2,0758ms. Örneklenmiş open tepe3/in-use tepe2, configured max4; sürekli tepe veya query/request p95 değildir. Üç analiz testi ve tüm117 Node sözleşmesi PASS. Query count/p95, bütçe/varyans ve genel RF kabulü açık. Kanıt: refactor-pool-summary-2026-11-16.json.
+
+
+RF09/RF29 benchmark:0/1/100/1001 distinct users, projection parity before timing,30 operations x9 repeats. SQLite and existing SQL query-count contract PASS. Repetition mean ns/op min/median/max and pool waits archived; not request p95 or concurrent pool acceptance. PostgreSQL and new source CI remain open. No production code/cache/index change. Evidence: refactor-profile-population-sqlite-2026-11-16.json.
