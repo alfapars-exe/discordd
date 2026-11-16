@@ -16,5 +16,15 @@
   "limits": [
     "New-source security scan, CI and Sonar remain pending",
     "Complete account/permission/offline/native acceptance remains open"
-  ]
+  ],
+  "sourceScan": {
+    "commit": "1f3c9cb1",
+    "blockingPatterns": 0,
+    "reviewLines": 482,
+    "normalizedReviewDelta": {
+      "added": 1,
+      "removed": 0,
+      "reason": "New inventory boundary test writes fixed queries.go beneath t.TempDir; no externally controlled path. No false-positive manifest changes."
+    }
+  }
 }

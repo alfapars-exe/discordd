@@ -70,20 +70,26 @@ func resolveConstantSQL(expr ast.Expr, seen map[*ast.Object]bool, depth int, bud
 		}
 		return left + right, true
 	case *ast.Ident:
-		obj := value.Obj
-		if obj == nil || obj.Kind != ast.Con || seen[obj] {
-			return "", false
-		}
-		declaration, ok := obj.Decl.(*ast.ValueSpec)
-		if !ok || len(declaration.Values) != len(declaration.Names) {
-			return "", false
-		}
-		seen[obj] = true
-		defer delete(seen, obj)
-		for i, name := range declaration.Names {
-			if name.Name == value.Name {
-				return resolveConstantSQL(declaration.Values[i], seen, depth+1, budget)
-			}
+		return resolveConstantIdentifier(value, seen, depth, budget)
+	}
+	return "", false
+}
+
+// Resolve a bound constant without borrowing a shadowed or mutable declaration.
+func resolveConstantIdentifier(value *ast.Ident, seen map[*ast.Object]bool, depth int, budget *int) (string, bool) {
+	obj := value.Obj
+	if obj == nil || obj.Kind != ast.Con || seen[obj] {
+		return "", false
+	}
+	declaration, ok := obj.Decl.(*ast.ValueSpec)
+	if !ok || len(declaration.Values) != len(declaration.Names) {
+		return "", false
+	}
+	seen[obj] = true
+	defer delete(seen, obj)
+	for i, name := range declaration.Names {
+		if name.Name == value.Name {
+			return resolveConstantSQL(declaration.Values[i], seen, depth+1, budget)
 		}
 	}
 	return "", false

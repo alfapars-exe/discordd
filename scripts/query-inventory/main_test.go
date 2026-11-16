@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"go/ast"
 	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -171,5 +173,41 @@ func TestInventoryMethodCandidateBoundaries(t *testing.T) {
 		if site.Method != method || site.SQL != "SELECT ?" || site.Function != "calls" || site.Line != 3+2*index {
 			t.Fatalf("candidate %d: %+v", index, site)
 		}
+	}
+}
+
+func TestConstantSQLRejectsCyclicAndExcessiveExpansion(t *testing.T) {
+	var expansion strings.Builder
+	expansion.WriteString("package fixture\nconst q0 = \"x\"\n")
+	for i := 1; i <= 13; i++ {
+		name, prior := "q"+strconv.Itoa(i), "q"+strconv.Itoa(i-1)
+		expansion.WriteString("const " + name + " = " + prior + " + " + prior + "\n")
+	}
+	expansion.WriteString("func query(){ db.Query(q13) }")
+	for name, source := range map[string]string{
+		"cycle":               "package fixture\nconst a = b\nconst b = a\nfunc query(){db.Query(a)}",
+		"excessive expansion": expansion.String(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			file, err := parser.ParseFile(token.NewFileSet(), "fixture.go", source, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var calls int
+			ast.Inspect(file, func(node ast.Node) bool {
+				call, ok := node.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+				calls++
+				if value, resolved := constantSQL(call.Args[0], make(map[*ast.Object]bool)); resolved {
+					t.Fatalf("unsafe expansion resolved: %q", value)
+				}
+				return true
+			})
+			if calls != 1 {
+				t.Fatalf("expected one query, got %d", calls)
+			}
+		})
 	}
 }

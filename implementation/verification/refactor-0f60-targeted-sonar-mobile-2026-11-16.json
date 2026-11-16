@@ -1,0 +1,195 @@
+{
+  "observedDate": "2026-11-16",
+  "sourceComparison": [
+    {
+      "path": "client/src/api/client.ts",
+      "comparedLines": 151,
+      "mismatchedLineNumbers": [],
+      "comparedCommit": "0f6010ec"
+    },
+    {
+      "path": "scripts/query-inventory/main.go",
+      "comparedLines": 208,
+      "mismatchedLineNumbers": [],
+      "comparedCommit": "0f6010ec"
+    },
+    {
+      "path": "client/src/crypto/backupStorage.ts",
+      "comparedLines": 430,
+      "mismatchedLineNumbers": [],
+      "comparedCommit": "0f6010ec"
+    }
+  ],
+  "issuesFirstPage": {
+    "total": 502,
+    "paging": {
+      "pageIndex": 1,
+      "pageSize": 500,
+      "total": 502
+    },
+    "selected": [
+      {
+        "key": "AaHispB2GiVmDmX-moY2",
+        "rule": "typescript:S9382",
+        "component": "alfapars-exe_discordd:client/src/crypto/backupStorage.ts",
+        "line": 400,
+        "message": "Unexpected `await` inside a loop.",
+        "status": "OPEN",
+        "resolution": null
+      },
+      {
+        "key": "AaHfuKpj4B142AX0cP5_",
+        "rule": "typescript:S9382",
+        "component": "alfapars-exe_discordd:client/src/crypto/backupStorage.ts",
+        "line": 259,
+        "message": "Unexpected `await` inside a loop.",
+        "status": "OPEN",
+        "resolution": null
+      },
+      {
+        "key": "AaHZZXx5GiVmDmX-ymL4",
+        "rule": "go:S3776",
+        "component": "alfapars-exe_discordd:scripts/query-inventory/main.go",
+        "line": 48,
+        "message": "Refactor this method to reduce its Cognitive Complexity from 21 to the 15 allowed.",
+        "status": "OPEN",
+        "resolution": null
+      },
+      {
+        "key": "AaHYWq3Gd7dyvm3wYSo_",
+        "rule": "go:S3776",
+        "component": "alfapars-exe_discordd:scripts/query-inventory/main.go",
+        "line": null,
+        "message": "Refactor this method to reduce its Cognitive Complexity from 49 to the 15 allowed.",
+        "status": "CLOSED",
+        "resolution": "FIXED"
+      },
+      {
+        "key": "AaHYWqPUd7dyvm3wYSnr",
+        "rule": "typescript:S3776",
+        "component": "alfapars-exe_discordd:client/src/crypto/backupStorage.ts",
+        "line": 224,
+        "message": "Refactor this function to reduce its Cognitive Complexity from 17 to the 15 allowed.",
+        "status": "OPEN",
+        "resolution": null
+      },
+      {
+        "key": "AaHYWqPUd7dyvm3wYSns",
+        "rule": "typescript:S9382",
+        "component": "alfapars-exe_discordd:client/src/crypto/backupStorage.ts",
+        "line": 293,
+        "message": "Unexpected `await` inside a loop.",
+        "status": "OPEN",
+        "resolution": null
+      },
+      {
+        "key": "AaHYWqPUd7dyvm3wYSnt",
+        "rule": "typescript:S9382",
+        "component": "alfapars-exe_discordd:client/src/crypto/backupStorage.ts",
+        "line": 316,
+        "message": "Unexpected `await` inside a loop.",
+        "status": "OPEN",
+        "resolution": null
+      },
+      {
+        "key": "AaHYWqPUd7dyvm3wYSnu",
+        "rule": "typescript:S9382",
+        "component": "alfapars-exe_discordd:client/src/crypto/backupStorage.ts",
+        "line": 332,
+        "message": "Unexpected `await` inside a loop.",
+        "status": "OPEN",
+        "resolution": null
+      },
+      {
+        "key": "AaHYWqPUd7dyvm3wYSnw",
+        "rule": "typescript:S9382",
+        "component": "alfapars-exe_discordd:client/src/crypto/backupStorage.ts",
+        "line": null,
+        "message": "Unexpected `await` inside a loop.",
+        "status": "CLOSED",
+        "resolution": "FIXED"
+      },
+      {
+        "key": "AaHYWqPUd7dyvm3wYSnx",
+        "rule": "typescript:S9382",
+        "component": "alfapars-exe_discordd:client/src/crypto/backupStorage.ts",
+        "line": null,
+        "message": "Unexpected `await` inside a loop.",
+        "status": "CLOSED",
+        "resolution": "FIXED"
+      },
+      {
+        "key": "AaHYWqPUd7dyvm3wYSnv",
+        "rule": "typescript:S9382",
+        "component": "alfapars-exe_discordd:client/src/crypto/backupStorage.ts",
+        "line": 364,
+        "message": "Unexpected `await` inside a loop.",
+        "status": "OPEN",
+        "resolution": null
+      },
+      {
+        "key": "AaHYWqPUd7dyvm3wYSny",
+        "rule": "typescript:S9382",
+        "component": "alfapars-exe_discordd:client/src/crypto/backupStorage.ts",
+        "line": null,
+        "message": "Unexpected `await` inside a loop.",
+        "status": "CLOSED",
+        "resolution": "FIXED"
+      },
+      {
+        "key": "AaHYWqPUd7dyvm3wYSnz",
+        "rule": "typescript:S9382",
+        "component": "alfapars-exe_discordd:client/src/crypto/backupStorage.ts",
+        "line": null,
+        "message": "Unexpected `await` inside a loop.",
+        "status": "CLOSED",
+        "resolution": "FIXED"
+      },
+      {
+        "key": "AaHYWqPUd7dyvm3wYSn0",
+        "rule": "typescript:S9382",
+        "component": "alfapars-exe_discordd:client/src/crypto/backupStorage.ts",
+        "line": null,
+        "message": "Unexpected `await` inside a loop.",
+        "status": "CLOSED",
+        "resolution": "FIXED"
+      },
+      {
+        "key": "AaHYWqJAd7dyvm3wYSnm",
+        "rule": "typescript:S3776",
+        "component": "alfapars-exe_discordd:client/src/stores/dmStore.ts",
+        "line": 229,
+        "message": "Refactor this function to reduce its Cognitive Complexity from 32 to the 15 allowed.",
+        "status": "OPEN",
+        "resolution": null
+      },
+      {
+        "key": "AaHYWqZud7dyvm3wYSoF",
+        "rule": "typescript:S7773",
+        "component": "alfapars-exe_discordd:client/src/api/client.ts",
+        "line": 220,
+        "message": "Prefer `Number.NaN` over `NaN`.",
+        "status": "OPEN",
+        "resolution": null
+      },
+      {
+        "key": "AaHYWqZud7dyvm3wYSoE",
+        "rule": "typescript:S3776",
+        "component": "alfapars-exe_discordd:client/src/api/client.ts",
+        "line": 244,
+        "message": "Refactor this function to reduce its Cognitive Complexity from 16 to the 15 allowed.",
+        "status": "OPEN",
+        "resolution": null
+      }
+    ]
+  },
+  "limits": "Targeted source slices verified; issue request returned first 500 of 502 records. Not a repository-wide closure audit. Residual backup17, constant evaluator21 and refresh16 remain subject to subsequent source analysis.",
+  "mobileCI": {
+    "sourceCommit": "0f6010ec",
+    "runId": 43807317513,
+    "failedJobId": 133100944769,
+    "firstAttempt": "FAIL before Android tests: Maven Central dependency GET HTTP429",
+    "iOS": "SUCCESS",
+    "retry": "Only failed Android job rerun once; attempt2 in progress, not accepted"
+  }
+}
