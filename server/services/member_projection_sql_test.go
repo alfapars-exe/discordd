@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/repository"
@@ -40,6 +41,7 @@ func TestMemberProjectionPhysicalSQLCount(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	expires := time.Now().UTC().Add(24 * time.Hour).Truncate(time.Second)
 	for _, size := range []int{0, 1, 1001} {
 		server := fmt.Sprintf("projection-server-%d", size)
 		if _, err := tx.ExecContext(ctx, `INSERT INTO servers(id,name,owner_id) VALUES(?,?,?)`, server, server, "projection-1001"); err != nil {
@@ -50,6 +52,22 @@ func TestMemberProjectionPhysicalSQLCount(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
+		if size > 0 {
+			for _, statement := range []struct {
+				query string
+				args  []any
+			}{
+				{`INSERT INTO roles(id,server_id,name,position,permissions,is_default,is_owner) VALUES(?,?,?,2,0,0,0)`, []any{server + "-role", server, "Scoped role"}},
+				{`INSERT INTO user_roles(user_id,role_id,server_id) VALUES(?,?,?)`, []any{"projection-0000", server + "-role", server}},
+				{`UPDATE server_members SET nickname=? WHERE server_id=? AND user_id=?`, []any{server + "-nickname", server, "projection-0000"}},
+				{`INSERT INTO member_timeouts(server_id,user_id,expires_at,applied_by,reason) VALUES(?,?,?,?,?)`, []any{server, "projection-0000", expires.Format("2006-01-02 15:04:05"), "projection-1001", server}},
+			} {
+				if _, err := tx.ExecContext(ctx, statement.query, statement.args...); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+
 	}
 	if err := tx.Commit(); err != nil {
 		t.Fatal(err)
@@ -72,7 +90,17 @@ func TestMemberProjectionPhysicalSQLCount(t *testing.T) {
 			if err != nil || len(rows) != size || counter.queries != expectedQueries {
 				t.Fatalf("members=%d SQL=%d want=%d err=%v", len(rows), counter.queries, expectedQueries, err)
 			}
+			if size > 0 {
+				first := rows[0]
+				server := fmt.Sprintf("projection-server-%d", size)
+				if len(first.Roles) != 1 || first.Roles[0].ID != server+"-role" || first.Nickname == nil || *first.Nickname != server+"-nickname" || first.TimeoutExpiresAt == nil || !first.TimeoutExpiresAt.Equal(expires) {
+					t.Fatal("scoped role/nickname/timeout enrichment differs")
+				}
+			}
 			for i, row := range rows {
+				if i > 0 && (len(row.Roles) != 0 || row.Nickname != nil || row.TimeoutExpiresAt != nil) {
+					t.Fatal("enrichment leaked to unrelated member")
+				}
 				if row.ID != fmt.Sprintf("projection-%04d", i) {
 					t.Fatal("member scope or username order changed")
 				}
