@@ -3748,3 +3748,5 @@ RF16 ileri yazım aşaması: on anahtar yazımı tembel senkron üreticiye ayrı
 RF08/ses kapanışı: snapshot ve kullanım kredisi teslimi, dört işçiyle medya temizliği ve kanal başına panic izolasyonu ayrıldı. Yedi mevcut test eski kaynakta, aynı yedi test 20 tekrarla adayda geçti; services Go vet başarılı. sync.Once, kabul edilen işlemleri bekleme, credit-before-media ve final metadata temizliği sırası korunur. Kanıt: refactor-voice-shutdown-phases-2026-11-16.json. Linux race, son kaynak taraması/CI/Sonar ve gerçek medya/provider/fiziksel kabulü açık.
 
 628f61fd için Go AST karşılaştırması: üretici durdurma sırası, snapshot/accounting, inline edilmiş medya işçileri ve son metadata temizliği eşdeğer. Değişmez kaynak taraması 51 kayıt/482 inceleme/0 engelleyici desenle başarılı. Linux Go1.26.11 race derleme süreçleri canlı; henüz test kabulü yok. Son kaynak CI/Sonar beklenir.
+
+Ses kapanışı 628f61fd son Linux race: Go1.26.11/CGO1, yedi test x20=140 PASS, 0 FAIL/SKIP; paket süresi 3,607 s (derleme süresi dahil değil). Kaynak/test SHA256 eşleşmesi tekrar doğrulandı. PR üretim kaynağı 338e2d71 ile gönderildi; yeni CI/Sonar beklenir.

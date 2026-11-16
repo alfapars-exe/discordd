@@ -8,7 +8,6 @@
     "gofmt": "Applied"
   },
   "remaining": [
-    "Linux race on final source",
     "Final-source CI/Sonar",
     "Real media/provider/physical acceptance and full shutdown resource inventory"
   ],
@@ -18,11 +17,16 @@
     "server/services/voice_shutdown_test.go": "a09e9681e25f4bdf9d86f32548c5c619733dd951a061263bad6f69c2120f8a9e"
   },
   "linuxRace": {
-    "state": "Confirmed live: Go compiler processes observed after four minutes; test execution has not emitted results yet",
+    "state": "Terminal PASS",
     "runtime": "Go1.26.11 linux/amd64, CGO1, GOMAXPROCS2",
     "scope": "Seven TestVoiceShutdown tests, count20, race detector",
     "constraints": "Network disabled; source bind read-only; dedicated task cache",
-    "initialAttempt": "Go1.26.10 image default toolchain rejected go.mod before test execution; corrected to cached1.26.11 with GOTOOLCHAINauto"
+    "initialAttempt": "Go1.26.10 image default toolchain rejected go.mod before test execution; corrected to cached1.26.11 with GOTOOLCHAINauto",
+    "testExecutionsPassed": 140,
+    "failed": 0,
+    "skipped": 0,
+    "packageSeconds": 3.607,
+    "logSHA256": "13fae1c18e515fe355dd0ef2a68647b868b34088b7971794cad0b02f7ede1200"
   },
   "sourceScan": {
     "sourceCommit": "628f61fd",
