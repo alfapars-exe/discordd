@@ -3904,3 +3904,9 @@ RF14/RF17 IndexedDB açılış sahipliği düzeltmesi: reddedilmiş open promise
 
 
 RF14/RF17 açılış retry eşzamanlılık sözleşmesi:8 çağrı tek başarısızopen ve aynı hata nesnesini paylaşıyor;8 retry tek yeniopen açıyor ve ilk metadata yazısı bütün handle’larda okunuyor. Aynı odaklı test eski37d4^ modülünde1beklenenFAIL/3seçilmemişSKIP; geçici kaynak/test dosyaları kaldırıldı. Düzeltilmiş kaynakta lifecycle/account-scope11/11PASS; hedefliESLint ve TypeScriptPASS. Ürün kodu bu takipte değişmedi. Native motor sıralaması, yeniCI ve genelRF kapıları açık. Kanıt: refactor-key-open-concurrent-retry-2026-11-16.json.
+
+
+RF26 hesap DB adres normalizasyonunda son slash regex’i lineer private yardımcıya ayrıldı. Eski karakterizasyon12PASS; yeni kaynak lifecycle/account-scope16PASS, ESLint/TypeScriptPASS. Gerçek helper kaynağı ile eski regex87390girdide aynı çıktı verdi; iç path ayraçları ve2048karakter sınırı korunur. Girdi zaten2048ile sınırlıydı; güvenlik açığı/performans bütçesi iddiası yok. YeniCI/Sonar ve genelRF kabulü açık. Kanıt: refactor-backend-url-normalization-2026-11-16.json.
+
+
+658271b2 terminalCI36/36SUCCESS: IndexedDB open ownership ve sekiz çağrılı retry sözleşmesi yeni birleşik istemci/native/Go race/PG/Playwright/WebKit kapılarından geçti. Composition arayüzleri ve openLifecycle testinin Sonar kaynakları bu commit ile eşleşti; üç dosyada açık kayıt0. Yerel regex normalizasyonu bu eski CI ile kabul edilmiş sayılmaz; kendi yeni kaynak sonucu gerekir. GenelRF kapıları açık. Kanıt: refactor-6582-terminal-ci-2026-11-16.json, refactor-6582-selected-sonar-2026-11-16.json.

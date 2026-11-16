@@ -1,0 +1,39 @@
+{
+  "baselineCommit": "658271b2a21572a5dfb93223227227f28c823803",
+  "scope": "Replace bounded backend URL trailing-slash regex with a linear private helper without changing account database names",
+  "parity": {
+    "result": "PASS",
+    "helperSourceSha256": "48be40ede32c24dddf329b87efbeb2cdd6a7f590960d280f8cade1d49cd000f0",
+    "stringsCompared": 87390,
+    "scope": "Exact output equivalence of the actual extracted helper and prior slash-suffix regex; exhaustive four-character strings through length8 and long suffix cases. Not a native browser or latency budget."
+  },
+  "validation": {
+    "beforeAccountScopePassed": 12,
+    "afterLifecycleAndAccountScopePassed": 16,
+    "eslint": "PASS",
+    "typescript": "PASS"
+  },
+  "logs": {
+    "backend-normalization-before.log": {
+      "path": "G:\\hichat-refactor-20261116-anoknpqz\\backend-normalization-before.log",
+      "sha256": "0ef0028be08be3f6b8e3a514a20ceb2c947e254f42a78fb83c3e74553636315a"
+    },
+    "backend-normalization-after.log": {
+      "path": "G:\\hichat-refactor-20261116-anoknpqz\\backend-normalization-after.log",
+      "sha256": "e08457835cefdb7198a84fff9770238fea00368ebd235e296feeb05ceb96e2b0"
+    },
+    "backend-normalization-lint.log": {
+      "path": "G:\\hichat-refactor-20261116-anoknpqz\\backend-normalization-lint.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "backend-normalization-typecheck.log": {
+      "path": "G:\\hichat-refactor-20261116-anoknpqz\\backend-normalization-typecheck.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "limits": [
+    "Existing2048-character guard already bounded input; no security exploit claim",
+    "Not a native engine or performance budget proof",
+    "New CI/Sonar and full RF acceptance pending"
+  ]
+}

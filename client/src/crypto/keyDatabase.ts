@@ -52,6 +52,12 @@ type DbEntry = { scope: AuthScope; promise: Promise<IDBPDatabase>; db?: IDBPData
 type KeyStoreName = (typeof KEY_DATABASE_STORES)[number];
 const dbEntries = new Map<string, DbEntry>();
 
+function trimTrailingSlashes(pathname: string): string {
+  let end = pathname.length;
+  while (pathname[end - 1] === "/") end--;
+  return pathname.slice(0, end);
+}
+
 function canonicalBackendUrl(value: string): string {
   const source = value || (typeof location !== "undefined" ? location.origin : "");
   if (!source || source.length > 2048) throw new Error("e2ee_backend_scope_unavailable");
@@ -61,7 +67,7 @@ function canonicalBackendUrl(value: string): string {
     throw new Error("e2ee_backend_scope_invalid");
   }
   if (url.username || url.password || url.search || url.hash) throw new Error("e2ee_backend_scope_invalid");
-  const pathname = url.pathname.replace(/\/+$/, "");
+  const pathname = trimTrailingSlashes(url.pathname);
   return `${url.origin}${pathname}`;
 }
 
