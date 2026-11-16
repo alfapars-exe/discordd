@@ -48,8 +48,7 @@
     "finalBuild": "PASS TypeScript + Vite build (7.29s)"
   },
   "pending": [
-    "Source-bound scan/Sonar/CI",
-    "Native IndexedDB transaction and deletion-drain acceptance"
+    "Whole RF17 first-query/physical/runtime budgets and project acceptance"
   ],
   "evidence": {
     "before": {
@@ -84,8 +83,9 @@
   "published": "2b418de1",
   "ci": {
     "head": "2b418de1",
+    "checks": "36/36 SUCCESS",
     "serverRun": 43776829922,
-    "status": "IN_PROGRESS"
+    "receipt": "refactor-2b41-terminal-ci-2026-11-16.json"
   },
   "selfScan": {
     "archive": "18744b6c",
