@@ -363,3 +363,31 @@ it("distinguishes a failed encrypted search from a successful empty query and re
     expect(screen.getByText("noSearchResults")).toBeInTheDocument();
   } finally {view.unmount();vi.useRealTimers();}
 });
+
+
+it.each(["replace", "clear", "owner"] as const)("discards a pending plaintext result after %s", async (change) => {
+  vi.useFakeTimers();
+  useDMStore.setState(state => ({ channels: state.channels.map(c => ({ ...c, e2ee_enabled: false })) }));
+  const search = vi.mocked(useDMStore.getState().searchMessages);
+  let finish!: (value: Awaited<ReturnType<typeof search>>) => void;
+  search.mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+  const owner = getAuthSessionOwner();
+  const view = render(<DMSearchPanel channelId="dm" onClose={() => {}} />);
+  try {
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "abandoned" } });
+    await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+    expect(search).toHaveBeenCalledWith("dm", "abandoned", 25, 0);
+    if (change === "owner") act(() => publishAuthOwnerChange("plaintext-search-next-owner"));
+    else fireEvent.change(screen.getByRole("textbox"), { target: { value: change === "clear" ? "" : "replacement" } });
+    await act(async () => finish({ messages: [], total_count: 0 }));
+    expect(screen.queryByText("noSearchResults")).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox")).toHaveValue(change === "replace" ? "replacement" : "");
+    if (change === "replace") {
+      await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+      expect(screen.getByText("noSearchResults")).toBeInTheDocument();
+    }
+  } finally {
+    view.unmount();
+    if (change === "owner") act(() => publishAuthOwnerChange(owner));
+  }
+});
