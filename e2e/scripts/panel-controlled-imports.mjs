@@ -7,6 +7,7 @@ export function controlledPanelCryptoImport(source, importer, root) {
   if (!source.startsWith(".") || !importer || importer.startsWith("\0")) return null;
   const target = resolve(dirname(importer.split("?")[0]), source);
   if (target === resolve(root, "src/crypto/cachedSearchSnapshot")) return "index";
+  if (target === resolve(root, "src/crypto/cachedSearchDeletionSpool")) return "spool";
   if (target === resolve(root, "src/crypto/keyStorage")) return "cache";
   return null;
 }

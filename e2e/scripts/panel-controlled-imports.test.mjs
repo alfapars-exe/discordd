@@ -6,6 +6,7 @@ const root = resolve("fixture-client");
 for (const [name, source, importer, expected] of [
   ["channel snapshot", "../../crypto/cachedSearchSnapshot", "src/components/chat/SearchPanel.tsx", "index"],
   ["DM cache", "../../crypto/keyStorage", "src/components/dm/DMSearchPanel.tsx", "cache"],
+  ["deletion pool", "../crypto/cachedSearchDeletionSpool", "src/hooks/useCachedSearchDeletionPool.ts", "spool"],
   ["shared runner snapshot", "./cachedSearchSnapshot", "src/crypto/cachedSearchRunner.ts", "index"],
   ["page reader cache", "./keyStorage", "src/crypto/cachedSearchPage.ts", "cache"],
   ["foreign directory", "./cachedSearchSnapshot", "src/unrelated/consumer.ts", null],

@@ -11,6 +11,7 @@ import { controlledPanelCryptoImport } from "./panel-controlled-imports.mjs";
 
 const root=fileURLToPath(new URL("../../client/",import.meta.url));
 const repo=fileURLToPath(new URL("../../",import.meta.url));
+const diagnosticsPath=fileURLToPath(new URL("./panel-search-diagnostics.mjs",import.meta.url)).replaceAll("\\","/");
 const quick=process.argv.includes("--quick"),failureOnly=process.argv.includes("--failure-only");
 const resetOnly=process.argv.includes("--reset-windows-only");
 const pendingOnly=process.argv.includes("--pending-frontier-only");
@@ -48,6 +49,7 @@ const stores=`import {create} from "zustand";
 const hooks=`export const useSpamVisibility=()=>({pending:false,hidden:false});export const useIgnoredMessage=()=>({ignored:false});export const useReducedMotion=()=>false;export const useOpenAtMessage=()=>({openAtDMMessage:async()=>false});`;
 const translations=`export const useTranslation=()=>({t:(key,options)=>key==="searchResultCount"?String(options?.count):key,i18n:{language:"en"}});`;
 const entry=`import React from "react";import {createRoot}from "react-dom/client";import{flushSync}from "react-dom";
+ import{diagnostics}from "virtual:panel-diagnostics";
  import Channel from "/src/components/chat/SearchPanel.tsx";import DM from "/src/components/dm/DMSearchPanel.tsx";
  import{useMessageStore,useDMStore}from "virtual:panel-stores";
  import{publishAuthOwnerChange}from "/src/api/authSessionEvents.ts";
@@ -63,7 +65,7 @@ const entry=`import React from "react";import {createRoot}from "react-dom/client
  async mount(kind,fail=false){globalThis.__panelFailNext=fail;flushSync(()=>root.render(React.createElement(kind==="dm"?DM:Channel,{channelId:"target",onClose:()=>{}})));},
  holdIndex(){globalThis.__panelIndexHandoffReady=false;globalThis.__panelIndexGate=new Promise(resolve=>{globalThis.__panelReleaseIndex=resolve;});},
  releaseIndex(){globalThis.__panelReleasedAt=performance.now();globalThis.__panelReleaseIndex?.();Reflect.deleteProperty(globalThis,"__panelIndexGate");Reflect.deleteProperty(globalThis,"__panelReleaseIndex");},
- async seed(kind,size){const db=await openScopedKeyDatabase("panel-benchmark",SERVER_URL),tx=db.transaction("messageCache","readwrite");await tx.store.clear();let matches=0;
+ async seed(kind,size){diagnostics.reset();const db=await openScopedKeyDatabase("panel-benchmark",SERVER_URL),tx=db.transaction("messageCache","readwrite");await tx.store.clear();let matches=0;
  for(let i=0;i<size;i++){const target=i%5!==0,match=i%3===0;if(target&&match)matches++;const id=String(i).padStart(5,"0");void tx.store.put({messageId:id,channelId:kind==="channel"?(target?"target":"other"):"",dmChannelId:kind==="dm"?(target?"target":"other"):null,timestamp:kind==="dm"?size-i:i,sourceSequence:String(9007199254740992n+BigInt(i)),content:match?"Été "+id:"other"});}await tx.done;return matches;},
  async deletes(kind,start,end){const store=kind==="dm"?useDMStore:useMessageStore;for(let i=start;i<end;i++)store.setState(kind==="dm"?{lastDeletedDM:{id:"missing-"+i,dm_channel_id:"target"}}:{lastDeleted:{id:"missing-"+i,channel_id:"target"}});await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));}
  };`;
@@ -72,6 +74,7 @@ for(const variant of variants){
  if(variant==="before")for(const [path,content] of historicalSource?.overrides??overridePaths.map(path=>[path,execFileSync(gitExecutable,["show",baseline+":"+path],{cwd:repo,encoding:"utf8"})]))
   overrides.set(fileURLToPath(new URL("../../"+path,import.meta.url)).replaceAll("\\","/"),content);
  const plugin={name:"controlled-panel-providers",enforce:"pre",resolveId(source,importer){
+  if(source==="virtual:panel-diagnostics")return "\0panel-diagnostics.js";
   if(source==="virtual:panel-entry")return "\0panel-entry.js";
   if(source==="virtual:panel-stores"||/\/stores\/(serverStore|messageStore|dmStore|e2eeStore|settingsStore)$/.test(source))return "\0panel-stores.js";
   if(/\/hooks\/(useSpamVisibility|useIgnoredMessage|useReducedMotion|useOpenAtMessage)$/.test(source))return "\0panel-hooks.js";
@@ -79,6 +82,7 @@ for(const variant of variants){
   if(source.endsWith("/api/search"))return "\0panel-api.js";
   const cryptoImport=controlledPanelCryptoImport(source,importer,root);
   if(cryptoImport==="index")return "\0panel-index.js";
+  if(cryptoImport==="spool")return "\0panel-spool.js";
   if(cryptoImport==="cache")return "\0panel-cache.js";
  },load(id){
   const normalized=id.replaceAll("\\","/").split("?")[0];
@@ -86,12 +90,14 @@ for(const variant of variants){
   const relative=normalized.startsWith(repoRoot)?normalized.slice(repoRoot.length):null;
   if(variant==="before"&&relative)historicalSource?.assertHistoricalPath(relative);
   const original=overrides.get(normalized);if(original!==undefined){usedOverrides.add(normalized);if(relative)usedHistoricalPaths.add(relative);return original;}
+  if(id==="\0panel-diagnostics.js")return `import{createPanelSearchDiagnostics}from ${JSON.stringify(diagnosticsPath)};export const diagnostics=createPanelSearchDiagnostics();globalThis.__panelDiagnostics=diagnostics;const open=IDBFactory.prototype.open;IDBFactory.prototype.open=function(...args){const request=Reflect.apply(open,this,args);request.addEventListener("success",()=>diagnostics.watchDatabase(request.result));return request;};`;
   if(id==="\0panel-entry.js")return entry;
   if(id==="\0panel-stores.js")return stores;
   if(id==="\0panel-hooks.js")return hooks;
   if(id==="\0panel-i18n.js")return translations;
   if(id==="\0panel-api.js")return 'export async function searchMessages(){throw Error("Unexpected REST search");}';
-  if(id==="\0panel-index.js")return 'export*from "/src/crypto/cachedSearchSnapshot.ts";import{createCachedSearchSnapshot as real}from "/src/crypto/cachedSearchSnapshot.ts";export async function createCachedSearchSnapshot(...args){if(globalThis.__panelFailNext){globalThis.__panelFailNext=false;throw Error("Injected index failure");}const gate=globalThis.__panelIndexGate;if(!gate)return real(...args);const snapshot=await real(...args);globalThis.__panelIndexHandoffReady=true;await gate;return snapshot;}';
+  if(id==="\0panel-index.js")return 'export*from "/src/crypto/cachedSearchSnapshot.ts";import{createCachedSearchSnapshot as real}from "/src/crypto/cachedSearchSnapshot.ts";import{diagnostics}from "virtual:panel-diagnostics";export async function createCachedSearchSnapshot(...args){if(globalThis.__panelFailNext){globalThis.__panelFailNext=false;throw Error("Injected index failure");}const gate=globalThis.__panelIndexGate;const opened=diagnostics.observe("snapshot.create",()=>real(...args));void opened.then(snapshot=>diagnostics.wrap(snapshot,"snapshot",["page","removeMany","dispose"]),()=>{});if(!gate)return opened;const snapshot=await opened;globalThis.__panelIndexHandoffReady=true;await gate;return snapshot;}';
+  if(id==="\0panel-spool.js")return 'export*from "/src/crypto/cachedSearchDeletionSpool.ts";import{openCachedSearchDeletionPool as real}from "/src/crypto/cachedSearchDeletionSpool.ts";import{diagnostics}from "virtual:panel-diagnostics";export function openCachedSearchDeletionPool(...args){const opened=diagnostics.observe("pool.open",()=>real(...args));void opened.then(pool=>diagnostics.wrapPool(pool),()=>{});return opened;}';
   if(id==="\0panel-cache.js")return 'export*from "/src/crypto/keyStorage.ts";import{searchCachedMessageRefs as channel,searchCachedDMMessageRefs as dm}from "/src/crypto/keyStorage.ts";function check(){if(globalThis.__panelFailNext){globalThis.__panelFailNext=false;throw Error("Injected scan failure");}}export async function searchCachedMessageRefs(...args){check();return channel(...args);}export async function searchCachedDMMessageRefs(...args){check();return dm(...args);}';
  }};
  const result=await build({root,configFile:false,logLevel:"error",base:"/"+variant+"/",plugins:[plugin,react()],define:{"process.env.NODE_ENV":JSON.stringify("production")},build:{write:false,minify:true,rollupOptions:{input:"virtual:panel-entry",output:{entryFileNames:"benchmark.js"}}}});
@@ -119,7 +125,10 @@ const median=(rows,key)=>rows.map(row=>row[key]).sort((a,b)=>a-b)[Math.floor(row
 async function waitForPendingPanel(page, { variant, kind, errors, phase="results" }) {
  try {
   if(phase==="handoff") await page.waitForFunction(()=>globalThis.__panelIndexHandoffReady===true,undefined,{timeout:30000});
-  else await page.waitForFunction(()=>document.querySelectorAll(".search-result-content").length===25,undefined,{timeout:120000});
+  else {
+   await page.waitForFunction(()=>document.querySelectorAll(".search-result-content").length===25||document.querySelector('.search-empty[role="alert"]'),undefined,{timeout:120000});
+   assert.equal(await page.locator(".search-result-content").count(),25,"Pending panel entered an explicit failed-search state");
+  }
  } catch (error) {
   const state = await page.evaluate(() => ({
    handoffReady: globalThis.__panelIndexHandoffReady,
@@ -127,8 +136,9 @@ async function waitForPendingPanel(page, { variant, kind, errors, phase="results
    count: document.querySelector(".search-count")?.textContent,
    panelText: document.querySelector(".search-panel")?.textContent?.slice(0,1000),
    releasedAt: globalThis.__panelReleasedAt,
+   operationFailures: globalThis.__panelDiagnostics?.failures,
   })).catch(failure => ({ diagnosticFailure: failure.message }));
-  const mode=phase==="handoff"?"index-handoff-timeout":"pending-frontier-timeout";
+  const mode=phase==="handoff"?"index-handoff-timeout":error.name==="TimeoutError"?"pending-frontier-timeout":"pending-frontier-failure";
   console.error(JSON.stringify({ mode, variant, kind, errors, state }));
   throw error;
  }

@@ -1,0 +1,56 @@
+{
+  "pullRequestHead": "0e9b0cfb",
+  "ciMergeHead": "e2b7619cd6ffa945be17ae94b9bd3e4f480fbd0f",
+  "files": [
+    {
+      "path": "client/src/crypto/cachedSearchRunner.ts",
+      "sourceParity": true,
+      "mergeBlobSHA256": "d3e63e645599853e8aeb5cff1432e4ab5409b12028716d516d12e958f2657e64"
+    },
+    {
+      "path": "client/src/crypto/cachedSearchSnapshot.ts",
+      "sourceParity": true,
+      "mergeBlobSHA256": "5d1da0317f413463ba173047306ac2850798b42e1d81e2d6502b7d9b3df8bba7"
+    },
+    {
+      "path": "client/src/crypto/cachedSearchDeletionSpool.ts",
+      "sourceParity": true,
+      "mergeBlobSHA256": "bc7f0bc9c5b828e77d8e3403863360d395a70442cf9d18539645503d46bab11d"
+    },
+    {
+      "path": "client/src/crypto/cachedSearchDatabase.ts",
+      "sourceParity": true,
+      "mergeBlobSHA256": "d755de0e43c02ff2f9a7c626179761afce8bdb15f87936e7674122cfaf121486"
+    },
+    {
+      "path": "client/src/crypto/cachedSearchPage.ts",
+      "sourceParity": true,
+      "mergeBlobSHA256": "f29dcafeff06e066821c2e09cec99718be7943eb40b3a21a17a23048078c2fa3"
+    },
+    {
+      "path": "client/src/crypto/keyDatabase.ts",
+      "sourceParity": true,
+      "mergeBlobSHA256": "b5eb476f215dfaf137d47c916822780449290399f6a4ef526ce143e2a748c226"
+    },
+    {
+      "path": "client/src/crypto/keyStorage.ts",
+      "sourceParity": true,
+      "mergeBlobSHA256": "1d0ceeeb3f56478de38962017213358297f56d1e364349320e0e32d63c8643d5"
+    },
+    {
+      "path": "client/src/components/dm/DMSearchPanel.tsx",
+      "sourceParity": true,
+      "mergeBlobSHA256": "59f15bf5506ff4d2dc4750e0c99d3b0006ed5ec5baab2523187834685fc87a6a"
+    },
+    {
+      "path": "client/src/hooks/useCachedSearchDeletionPool.ts",
+      "sourceParity": true,
+      "mergeBlobSHA256": "f1e7351be0cca2383aebb7d8bc93b82e5e3648888c2da7e4ebff77d88bc9697b"
+    },
+    {
+      "path": "e2e/scripts/benchmark-search-panels.mjs",
+      "sourceParity": true,
+      "mergeBlobSHA256": "86a22cb774ba2e1aa04937523aaf22bf2e44b46bfaf09bbdb3d0e410ce962344"
+    }
+  ]
+}

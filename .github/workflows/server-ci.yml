@@ -508,7 +508,7 @@ jobs:
         working-directory: e2e
 
       - name: Verify benchmark historical source isolation
-        run: node --test scripts/search-source-baseline.test.mjs scripts/panel-controlled-imports.test.mjs
+        run: node --test scripts/search-source-baseline.test.mjs scripts/panel-controlled-imports.test.mjs scripts/panel-search-diagnostics.test.mjs
         working-directory: e2e
 
       - name: Verify production search panel retention and ordering
