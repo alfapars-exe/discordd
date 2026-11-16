@@ -127,26 +127,8 @@ func (s *voiceService) detachVoiceChannel(serverID, channelID string) []deletedV
 			delete(s.forceMoveGrants, userID)
 		}
 	}
-	// Remove only viewer bookkeeping attached to the removed participants.
-	// There may be orphaned entries from other channels; without their channel
-	// identity, pruning them here would cross the deletion scope.
-	for streamerID, viewers := range s.screenShareViewers {
-		if _, removedStreamer := removedUsers[streamerID]; removedStreamer {
-			delete(s.screenShareViewers, streamerID)
-			snapshotChanged = true
-			continue
-		}
-		removedViewer := false
-		for removedUserID := range removedUsers {
-			if _, exists := viewers[removedUserID]; exists {
-				delete(viewers, removedUserID)
-				removedViewer = true
-				snapshotChanged = true
-			}
-		}
-		if removedViewer && len(viewers) == 0 {
-			delete(s.screenShareViewers, streamerID)
-		}
+	if s.pruneDeletedVoiceViewersLocked(removedUsers) {
+		snapshotChanged = true
 	}
 	if snapshotChanged {
 		s.bumpVoiceRevisionLocked()
@@ -162,4 +144,32 @@ func (s *voiceService) creditDeletedVoiceSession(session deletedVoiceSession, en
 	logx.Run("voice-channel-delete-credit", func() {
 		s.creditUsageSession(session.state.UsageSessionID, session.state.LiveKitInstanceID, session.state.LiveKitIsCloud, session.state.JoinedAt, endedAt)
 	})
+}
+
+// pruneDeletedVoiceViewersLocked removes only entries owned by deleted occupants.
+// The caller must hold s.mu; unrelated and orphaned bookkeeping stays intact.
+func (s *voiceService) pruneDeletedVoiceViewersLocked(removedUsers map[string]struct{}) bool {
+	changed := false
+	// Remove only viewer bookkeeping attached to the removed participants.
+	// There may be orphaned entries from other channels; without their channel
+	// identity, pruning them here would cross the deletion scope.
+	for streamerID, viewers := range s.screenShareViewers {
+		if _, removedStreamer := removedUsers[streamerID]; removedStreamer {
+			delete(s.screenShareViewers, streamerID)
+			changed = true
+			continue
+		}
+		removedViewer := false
+		for removedUserID := range removedUsers {
+			if _, exists := viewers[removedUserID]; exists {
+				delete(viewers, removedUserID)
+				removedViewer = true
+				changed = true
+			}
+		}
+		if removedViewer && len(viewers) == 0 {
+			delete(s.screenShareViewers, streamerID)
+		}
+	}
+	return changed
 }
