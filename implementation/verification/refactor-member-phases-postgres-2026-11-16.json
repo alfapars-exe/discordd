@@ -1,0 +1,24 @@
+{
+  "sourceCommit": "9a9437017201962d669f8a970470a740ba558dcd",
+  "result": "PASS",
+  "postgresRepetitions": 3,
+  "cases": [
+    0,
+    1,
+    1001
+  ],
+  "scope": "Extracted real-service SQL/enrichment fixture, no timing equivalence claim",
+  "log": "G:\\hichat-refactor-20261116-anoknpqz\\portable-fixture-checks\\local-fanout-3c0506d489e848a3ace956e999aeccb0\\member-projection-sql-postgres.log",
+  "logSha256": "8fd31bce37d51f9e54d349b88d5740786156ee6174aad480df62f54f01887d44",
+  "cleanup": {
+    "containerID": "df2ad7305cede02fcbad558893edbb06b621df2afc45340d3c174db124d42f63",
+    "failures": [],
+    "finishedAt": "2026-11-16T14:13:21.5904044Z",
+    "imageID": "sha256:40d14c99a891e0e539928cf252f9118fc552a302805c12211cb28f50d48f2a9f"
+  },
+  "containerImageAndExportCredentialsAbsent": true,
+  "pending": [
+    "Source-matched CI/Sonar",
+    "General RF acceptance"
+  ]
+}
