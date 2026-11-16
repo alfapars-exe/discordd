@@ -44,29 +44,7 @@ func TestAppLogPartialFallbackCountsOnlyUnwrittenOccurrences(t *testing.T) {
 		lost   uint64
 	}{{1, 6}, {2, 3}, {3, 1}, {4, 0}} {
 		t.Run(fmt.Sprintf("fail-at-%d", tc.failAt), func(t *testing.T) {
-			repo := &partialAppLogRepo{failAt: tc.failAt}
-			service := NewAppLogService(repo, nil).(*appLogService)
-			var pending []pendingAppLog
-			for i, count := range []int{3, 2, 1} {
-				for range count {
-					pending = append(pending, pendingAppLog{entry: models.AppLog{Message: fmt.Sprintf("group-%d", i), Level: models.LogLevelError, OccurrenceCount: 1}, metadata: map[string]string{}})
-				}
-			}
-			service.flush(context.Background(), pending)
-			if got := service.Health().FailedEvents; got != tc.lost {
-				t.Fatalf("failed events=%d, want only unwritten occurrences=%d", got, tc.lost)
-			}
-			saved := confirmedAppLogOccurrences(repo.inserts)
-			if saved+tc.lost != uint64(len(pending)) {
-				t.Fatalf("saved=%d lost=%d total=%d", saved, tc.lost, len(pending))
-			}
-			wantFailures := uint64(1)
-			if tc.lost == 0 {
-				wantFailures = 0
-			}
-			if got := service.Health().WriteFailures; got != wantFailures {
-				t.Fatalf("write failures=%d, want=%d", got, wantFailures)
-			}
+			checkAppLogPartialFallbackCase(t, tc.failAt, tc.lost)
 		})
 	}
 }
@@ -315,32 +293,7 @@ func (r *panicAppLogRepo) InsertBatch(ctx context.Context, rows []models.AppLog)
 func TestAppLogDependencyPanicDoesNotStrandWriterOrHideFailedEvents(t *testing.T) {
 	for _, stage := range []string{"purge", "batch", "fallback"} {
 		t.Run(stage, func(t *testing.T) {
-			repo := &panicAppLogRepo{stage: stage, saved: make(chan struct{}, 256)}
-			var writer repository.AppLogBatchWriter
-			if stage == "batch" {
-				writer = repo
-			}
-			s := NewAppLogService(repo, writer).(*appLogService)
-			t.Cleanup(s.Stop)
-			for i := range 128 {
-				s.Log(context.Background(), models.LogLevelInfo, models.LogCategoryGeneral, nil, nil, fmt.Sprintf("queued-%d", i), nil)
-			}
-			s.Start()
-
-			want := 64
-			if stage == "purge" {
-				want = 128
-			}
-			awaitSavedAppLogs(t, repo.saved, s.done, want)
-			for i := range 64 {
-				s.Log(context.Background(), models.LogLevelInfo, models.LogCategoryGeneral, nil, nil, fmt.Sprintf("future-%d", i), nil)
-			}
-			awaitSavedAppLogs(t, repo.saved, s.done, 64)
-			s.Stop()
-			if repo.count() != want+64 {
-				t.Fatalf("persisted=%d want=%d", repo.count(), want+64)
-			}
-			checkAppLogPanicHealth(t, stage, s.Health())
+			checkAppLogDependencyPanicStage(t, stage)
 		})
 	}
 }
@@ -363,28 +316,7 @@ func TestAppLogPartialPanicCountsOnlyUnconfirmedOccurrences(t *testing.T) {
 		failed uint64
 	}{{1, 6}, {2, 3}, {3, 1}, {4, 0}} {
 		t.Run(fmt.Sprint(tc.failAt), func(t *testing.T) {
-			repo := &panicPartialAppLogRepo{failAt: tc.failAt}
-			s := NewAppLogService(repo, nil).(*appLogService)
-			pending := repeatedAppLogOccurrences()
-			s.flush(context.Background(), pending)
-			h := s.Health()
-			if h.FailedEvents != tc.failed {
-				t.Fatalf("failed=%d want=%d", h.FailedEvents, tc.failed)
-			}
-			var saved uint64
-			for _, row := range repo.inserts {
-				saved += uint64(row.OccurrenceCount)
-			}
-			if saved+h.FailedEvents != 6 {
-				t.Fatalf("saved=%d failed=%d total should equal6", saved, h.FailedEvents)
-			}
-			wantFailures := uint64(1)
-			if tc.failed == 0 {
-				wantFailures = 0
-			}
-			if h.WriteFailures != wantFailures {
-				t.Fatalf("write failures=%d want=%d", h.WriteFailures, wantFailures)
-			}
+			checkAppLogPartialPanicCase(t, tc.failAt, tc.failed)
 		})
 	}
 }
@@ -431,4 +363,87 @@ func confirmedAppLogOccurrences(rows []models.AppLog) uint64 {
 		saved += uint64(row.OccurrenceCount)
 	}
 	return saved
+}
+
+func checkAppLogPartialFallbackCase(t *testing.T, failureIndex int, expectedLost uint64) {
+	t.Helper()
+	repo := &partialAppLogRepo{failAt: failureIndex}
+	service := NewAppLogService(repo, nil).(*appLogService)
+	var pending []pendingAppLog
+	for i, count := range []int{3, 2, 1} {
+		for range count {
+			pending = append(pending, pendingAppLog{entry: models.AppLog{Message: fmt.Sprintf("group-%d", i), Level: models.LogLevelError, OccurrenceCount: 1}, metadata: map[string]string{}})
+		}
+	}
+	service.flush(context.Background(), pending)
+	if got := service.Health().FailedEvents; got != expectedLost {
+		t.Fatalf("failed events=%d, want only unwritten occurrences=%d", got, expectedLost)
+	}
+	saved := confirmedAppLogOccurrences(repo.inserts)
+	if saved+expectedLost != uint64(len(pending)) {
+		t.Fatalf("saved=%d lost=%d total=%d", saved, expectedLost, len(pending))
+	}
+	wantFailures := uint64(1)
+	if expectedLost == 0 {
+		wantFailures = 0
+	}
+	if got := service.Health().WriteFailures; got != wantFailures {
+		t.Fatalf("write failures=%d, want=%d", got, wantFailures)
+	}
+}
+
+func checkAppLogDependencyPanicStage(t *testing.T, stage string) {
+	t.Helper()
+	repo := &panicAppLogRepo{stage: stage, saved: make(chan struct{}, 256)}
+	var writer repository.AppLogBatchWriter
+	if stage == "batch" {
+		writer = repo
+	}
+	s := NewAppLogService(repo, writer).(*appLogService)
+	t.Cleanup(s.Stop)
+	for i := range 128 {
+		s.Log(context.Background(), models.LogLevelInfo, models.LogCategoryGeneral, nil, nil, fmt.Sprintf("queued-%d", i), nil)
+	}
+	s.Start()
+
+	want := 64
+	if stage == "purge" {
+		want = 128
+	}
+	awaitSavedAppLogs(t, repo.saved, s.done, want)
+	for i := range 64 {
+		s.Log(context.Background(), models.LogLevelInfo, models.LogCategoryGeneral, nil, nil, fmt.Sprintf("future-%d", i), nil)
+	}
+	awaitSavedAppLogs(t, repo.saved, s.done, 64)
+	s.Stop()
+	if repo.count() != want+64 {
+		t.Fatalf("persisted=%d want=%d", repo.count(), want+64)
+	}
+	checkAppLogPanicHealth(t, stage, s.Health())
+}
+
+func checkAppLogPartialPanicCase(t *testing.T, failureIndex int, expectedFailed uint64) {
+	t.Helper()
+	repo := &panicPartialAppLogRepo{failAt: failureIndex}
+	s := NewAppLogService(repo, nil).(*appLogService)
+	pending := repeatedAppLogOccurrences()
+	s.flush(context.Background(), pending)
+	h := s.Health()
+	if h.FailedEvents != expectedFailed {
+		t.Fatalf("failed=%d want=%d", h.FailedEvents, expectedFailed)
+	}
+	var saved uint64
+	for _, row := range repo.inserts {
+		saved += uint64(row.OccurrenceCount)
+	}
+	if saved+h.FailedEvents != 6 {
+		t.Fatalf("saved=%d failed=%d total should equal6", saved, h.FailedEvents)
+	}
+	wantFailures := uint64(1)
+	if expectedFailed == 0 {
+		wantFailures = 0
+	}
+	if h.WriteFailures != wantFailures {
+		t.Fatalf("write failures=%d want=%d", h.WriteFailures, wantFailures)
+	}
 }

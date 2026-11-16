@@ -1,0 +1,48 @@
+{
+  "baselineCommit": "8c6e2e2cddf130f46a55f3393ae3f493a43bd3c6",
+  "scope": "Test-only scenario extraction for best-effort join publication, bounded SQL expansion and app-log fallback/panic accounting",
+  "sourceParity": [
+    {
+      "file": "server/services/server_join_broadcast_test.go",
+      "expandedGofmtEqualsBaseline": true,
+      "sourceSha256LF": "c51f400dd7c7589faa1c7ebde033abf18ecae25538524c505da23c3a97d813da"
+    },
+    {
+      "file": "scripts/query-inventory/main_test.go",
+      "expandedGofmtEqualsBaseline": true,
+      "sourceSha256LF": "f0b90f7b34392ccccd3ab89dcb715150cce2ab6b0d0f190c61a5dc108acf53c8"
+    }
+  ],
+  "allowedDifference": "New t.Helper only changes assertion failure attribution; removed for inverse expansion",
+  "samePassingTestNamesBeforeAfter": {
+    "join-broadcast": 27,
+    "query-limit": 9,
+    "app-log": 31
+  },
+  "failed": 0,
+  "skipped": 0,
+  "pending": [
+    "New-source CI/Linux race and Sonar complexity",
+    "General RF closure"
+  ],
+  "appLogSourceParity": {
+    "expandedGofmtSourceMatchesBaseline": true,
+    "allowedDifference": "New t.Helper attribution only",
+    "baselineCommit": "8c6e2e2cddf130f46a55f3393ae3f493a43bd3c6",
+    "helpers": [
+      "checkAppLogPartialFallbackCase",
+      "checkAppLogDependencyPanicStage",
+      "checkAppLogPartialPanicCase"
+    ]
+  },
+  "goVetServices": "PASS",
+  "logsSha256": {
+    "join-broadcast-phases-before.jsonl": "9aa5982849246340d722649550aaa2a14f16a34feb2ad2bdff76ecf82effd74c",
+    "join-broadcast-phases-after.jsonl": "25c7d49cab134205012c73a0080b1475b2e685393848deeff6b6a3798eeb9a3d",
+    "query-limit-phases-before.jsonl": "b9ac63f36e9248410694b4242dda3549b84d2ee15315872bf3d102985f0c7b4f",
+    "query-limit-phases-after.jsonl": "55fa56adf46aeeac4096726b75c0438e8da14ccf4e189852e49fae12fa443352",
+    "app-log-phases-after.jsonl": "32f321c8d0a6e3608dab9b845ab5e16e33a2648d241f44dbfcfd48148d8e3aa8",
+    "app-log-case-phases-after.jsonl": "39ad52d14462a4f7a3fc00db3792bd06f0887c6cdacb63a5faad2890580ecc83",
+    "join-app-log-phases-vet.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

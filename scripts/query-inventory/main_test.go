@@ -189,25 +189,30 @@ func TestConstantSQLRejectsCyclicAndExcessiveExpansion(t *testing.T) {
 		"excessive expansion": expansion.String(),
 	} {
 		t.Run(name, func(t *testing.T) {
-			file, err := parser.ParseFile(token.NewFileSet(), "fixture.go", source, 0)
-			if err != nil {
-				t.Fatal(err)
-			}
-			var calls int
-			ast.Inspect(file, func(node ast.Node) bool {
-				call, ok := node.(*ast.CallExpr)
-				if !ok {
-					return true
-				}
-				calls++
-				if value, resolved := constantSQL(call.Args[0], make(map[*ast.Object]bool)); resolved {
-					t.Fatalf("unsafe expansion resolved: %q", value)
-				}
-				return true
-			})
-			if calls != 1 {
-				t.Fatalf("expected one query, got %d", calls)
-			}
+			checkUnsafeConstantSQLFixture(t, source)
 		})
+	}
+}
+
+func checkUnsafeConstantSQLFixture(t *testing.T, source string) {
+	t.Helper()
+	file, err := parser.ParseFile(token.NewFileSet(), "fixture.go", source, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var calls int
+	ast.Inspect(file, func(node ast.Node) bool {
+		call, ok := node.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		calls++
+		if value, resolved := constantSQL(call.Args[0], make(map[*ast.Object]bool)); resolved {
+			t.Fatalf("unsafe expansion resolved: %q", value)
+		}
+		return true
+	})
+	if calls != 1 {
+		t.Fatalf("expected one query, got %d", calls)
 	}
 }
