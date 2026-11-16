@@ -3641,3 +3641,9 @@ Scoped deletion18744b6c değişmez kaynak taraması51exact/480review/0blockingPA
 2b418de1 Sonar analizinde özgün keyStorage21 kaydıAaHfuK2q4B142AX0cP6A CLOSED/FIXED. Yeni cachedMessageDeletion modülü için497toplam kayıt içeren500boyutlu tam cevapta bulgu yok; analiz edilen66kod satırı yerel kaynakla eşleşir(+boşEOF). Yalnız dosya taşıma nedeniyle eski kaydı kapatmış sayılmadı; yeni modül de kontrol edildi. Native/CI kabulü sürüyor.
 
 2b418de1 scoped deletion teslimi terminal36/36CI SUCCESS; tam PostgreSQL, Playwright/native ve Go race dahil. Ham kontroller refactor-2b41-terminal-ci-2026-11-16.json içinde. Arkadaşlık cc9760ea full-source tarama51exact/481review/0blockingPASS. Tek yeni review, yalnız iki sentetik hatanın mevcut wrapped-prefix metnini test eden err.Error() çağrısıdır; runtime log/data değişikliği yok. Go hedefli statement kapsamı SendRequest%91,9 / checkRequestPolicy%100; branch/fullpackage iddiası değil. Arkadaşlık yeniCI/Sonar ve genel RF01–RF30 kabulü açık.
+
+Arkadaşlık17Sonar kaydıAaHYWqnZd7dyvm3wYSod CLOSED/FIXED; SendRequest/policy bölgesi90–240arasında151analiz satırı yerel kaynakla eşleşir. Yeni a4525d6eCI tamamlanmadı.
+
+### RF15/RF26 — DM/grup cihaz listesi doğrulamasının ayrılması (2026-11-16)
+
+1784c1f8 on bozuk response kontratı ekler: version/member shape/count/unknown/duplicate, device array/null/emptyid, revision uppercase/type; prekey fetch/processing yapılmadan DM_ROSTER_INVALID reddi. Mevcut kaynakta37rosterPASS. 221f19df aynı epoch/member/device doğrulamasını senkron privatehelper içine taşır; actor/auth/capability/handshake ve local revoke sırası korunur. Sonrasında37roster; birleşikroster/encryption77PASS; TypeScriptPASS; kapsam%95,5satır/%100fonksiyon/%87,64dal. Lint0hata/2mevcutuyarı. Full38251 ve build4092 sürüyor; yeniCI/Sonar/tarama ve gerçekserverroster kabulü açık. Receipt refactor-device-roster-validation-2026-11-16.json.

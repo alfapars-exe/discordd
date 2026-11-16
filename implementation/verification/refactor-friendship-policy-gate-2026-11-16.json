@@ -67,5 +67,17 @@
     "newReview": "Raw err.Error() used only to assert the existing wrapped error prefix for two synthetic test errors; no runtime logging change or user data",
     "log": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-friendship-cc9760ea-scan.log",
     "sha256": "6141dfb633dad20f652ba8b9577a061f1de7175a91b4f3a8d2a595b146ac8897"
+  },
+  "sonar": {
+    "issue": "AaHYWqnZd7dyvm3wYSod",
+    "status": "CLOSED",
+    "resolution": "FIXED",
+    "analyzedChangedRegion": {
+      "from": 90,
+      "to": 240,
+      "lines": 151,
+      "sourceMismatches": 0
+    },
+    "limit": "Changed request/policy region matched; not a claim of full-file API source capture"
   }
 }

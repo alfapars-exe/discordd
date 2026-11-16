@@ -1,0 +1,48 @@
+{
+  "source": "221f19df",
+  "characterization": "1784c1f8",
+  "sonarIssue": "AaHdTCJSxOErB7BtYvzk",
+  "originalCognitiveComplexity": 19,
+  "change": "Extract synchronous fresh roster member/device validation from scope/capability/handshake orchestration",
+  "invariants": [
+    "Original roster version, exact member set, duplicate checks and device revision format retained",
+    "Group key epoch check remains before member validation",
+    "Revoked local device is rejected before prekey planning",
+    "Fresh membership and owner guards, one-time prekey consumption/session reuse contracts unchanged",
+    "Public endpoints, request fields, revision canonicalization and return context unchanged"
+  ],
+  "validation": {
+    "rosterBefore": 37,
+    "rosterAfter": 37,
+    "combinedRosterAndEncryption": 77,
+    "typecheck": "PASS",
+    "coverage": {
+      "lines": 95.5,
+      "functions": 100,
+      "branches": 87.64,
+      "statements": 92.37
+    },
+    "lint": "PASS zero errors / two existing warnings",
+    "fullClient": "RUNNING session38251",
+    "build": "RUNNING session4092"
+  },
+  "pending": [
+    "Full client/build terminal results",
+    "Immutable-source scan",
+    "New-source CI/Sonar and real-server device roster acceptance"
+  ],
+  "evidence": {
+    "before": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-roster-validation-before.log",
+      "sha256": "1f0a39dd1f19228f628af4e7bc5ebc744901452a6143adf5a2f5daf9c334ddad"
+    },
+    "after": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-roster-validation-after.log",
+      "sha256": "30a6a6b45aefa269460c8a4778e0f2e7503ac32091ca91d619665f5fe2d495ae"
+    },
+    "finalTarget": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-roster-validation-final-target.log",
+      "sha256": "7f9019f3657994ad8a55555a4b71d7477494cc02d3f85a67ea62e7de145b02f3"
+    }
+  }
+}
