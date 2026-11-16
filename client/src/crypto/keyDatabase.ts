@@ -217,7 +217,10 @@ export async function getDB(): Promise<IDBPDatabase> {
     const created: DbEntry = { scope, promise: Promise.resolve(null as unknown as IDBPDatabase) };
     created.promise = openDB(dbName, DB_VERSION, {
       upgrade: upgradeKeyDatabase,
-      blocking() { created.db?.close(); dbEntries.delete(dbName); },
+      blocking() {
+        created.db?.close();
+        if (dbEntries.get(dbName) === created) dbEntries.delete(dbName);
+      },
     }).then((db) => {
       created.db = db;
       if (dbEntries.get(dbName) !== created || !scopeIsCurrent(scope)) {
@@ -225,6 +228,9 @@ export async function getDB(): Promise<IDBPDatabase> {
         throw new Error("e2ee_account_scope_changed");
       }
       return db;
+    }).catch((error: unknown) => {
+      if (dbEntries.get(dbName) === created) dbEntries.delete(dbName);
+      throw error;
     });
     entry = created;
     dbEntries.set(dbName, created);

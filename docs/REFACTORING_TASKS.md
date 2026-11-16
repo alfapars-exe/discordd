@@ -3898,3 +3898,6 @@ RF29 kayıtlı profil ölçümlerinin tekrar varyansı artık depo denetleyicisi
 
 
 RF26 composition kökündeki üç unexported arayüz açık okuma/kontrol adları aldı: moderationMessageContextReader, moderationDMContextReader, gameActivityOnlineVisibilityChecker. Beş dosyada ters ad dönüşümü önceki LF-normalize baytlarla aynı; metot/public alan/HTTP/WS sözleşmesi değişmedi. Mevcut moderation/privacy composition testleri üç tekrar PASS; kök Go vet/build PASS. Yeni kaynak Sonar/CI ve genelRF26 kabulü açık. ICE ve backup ardışık await yolları sahiplik/rollback sırasını korumak için paralelleştirilmedi. Kanıt: refactor-internal-reader-names-2026-11-16.json.
+
+
+RF14/RF17 IndexedDB açılış sahipliği düzeltmesi: reddedilmiş open promise yalnız halen kendi registry girdisiyse temizlenir; sonraki istek açabilir ve ilk hata nesnesi korunur. Eski blocking callback yalnız kendi girdisini kaldırır; successor bağlantıyı silemez. Kontrollü openDB/late-callback ve fake-indexeddb ile önce2FAIL/1PASS, sonra80hedefliPASS; tam istemci5585PASS/1SKIP, TypeScript/Vite ve hedefliESLintPASS. Eski open rejection’ının successor’ı silmediği de doğrulandı. Yeni kaynak CI/Sonar/native motor yarışı ve genelRF kabulü açık; tarihsel DM panel hatası bu bulguyla açıklanmış sayılmaz. Kanıt: refactor-key-database-open-ownership-2026-11-16.json.
