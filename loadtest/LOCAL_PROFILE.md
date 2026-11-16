@@ -61,6 +61,10 @@ python loadtest/audit_local_profile.py /path/to/local-fanout-artifact-directory
 The standard-library auditor writes `independent-audit.json` with a PASS or FAIL
 verdict; a failed rerun replaces an older PASS and exits nonzero. Always check the
 command's exit code, including when the report itself could not be written.
+Keep the generated `local-fanout-<32 hex digits>` directory name when moving or
+sharing evidence. Its owner marker must match; unrelated CLI paths are refused
+without writing a verdict. Every input/output path must remain inside that
+fixture after filesystem resolution.
 It requires the fixed 58-page history and twenty complete receiver receipts;
 summary counters cannot replace missing pages. It preserves PostgreSQL's source
 sequence order, including valid timestamp inversions. Acceptance checks remain

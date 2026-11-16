@@ -6,20 +6,21 @@ export function localAPIURL(origin, path) {
     throw new Error('Invalid local fixture origin');
   }
   if (typeof path !== 'string' || path.length > 4096 || path.includes('#')) throw new Error('Invalid fixture API route');
-  const [pathname, query, extra] = path.split('?');
+  const parts = path.split('?');
+  const pathname = parts[0];
   const routes = [
     /^\/api\/auth\/(?:register|login)$/,
     /^\/api\/servers(?:\/join)?$/,
     /^\/api\/servers\/[A-Za-z0-9_-]{1,128}(?:\/(?:channels|invites))?$/,
     /^\/api\/servers\/[A-Za-z0-9_-]{1,128}\/channels\/[A-Za-z0-9_-]{1,128}\/messages$/,
   ];
-  if (extra !== undefined || !routes.some(route => route.test(pathname))) throw new Error('Invalid fixture API route');
+  if (parts.length > 2 || !routes.some(route => route.test(pathname))) throw new Error('Invalid fixture API route');
   const target = new URL(base.origin);
   // Encode each validated segment. No server-provided ID may introduce a route,
   // dot segment, credentials, a fragment or another origin.
   target.pathname = pathname.split('/').map(segment => encodeURIComponent(segment)).join('/');
-  const params = new URLSearchParams(query);
-  if (query !== undefined && !pathname.endsWith('/messages')) throw new Error('Invalid fixture API query');
+  const params = new URLSearchParams(parts.slice(1).join(''));
+  if (parts.length === 2 && !pathname.endsWith('/messages')) throw new Error('Invalid fixture API query');
   for (const [key, value] of params) {
     if (params.getAll(key).length !== 1 ||
       (key === 'limit' ? !/^(?:[1-9]\d?|100)$/.test(value) : key !== 'before' || !/^[A-Za-z0-9_-]{1,128}$/.test(value))) {

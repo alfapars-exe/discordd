@@ -23,11 +23,28 @@ def require(condition, message):
         raise AuditError(message)
 
 
-def read_json(path):
+def fixture_directory(path):
+    root = Path(path).resolve(strict=True)
+    require(root.is_dir() and re.fullmatch(r"local-fanout-[a-f0-9]{32}", root.name),
+            "Expected a generated local-fanout fixture directory")
+    return root
+
+
+def evidence_path(fixture, relative, *, must_exist=True):
+    root = fixture_directory(fixture)
+    require(not Path(relative).is_absolute(), "Evidence path is outside the fixture")
+    path = (root / relative).resolve(strict=must_exist)
+    require(path.is_relative_to(root), "Evidence path is outside the fixture")
+    return path
+
+
+def read_json(fixture, relative):
+    path = evidence_path(fixture, relative)
     return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
-def sha256(path):
+def sha256(fixture, relative):
+    path = evidence_path(fixture, relative)
     digest = hashlib.sha256()
     with path.open("rb") as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
@@ -50,7 +67,7 @@ def audit_sources(fixture, snapshot):
                 visit(child)
         else:
             require(path.is_file(), "Source is not a regular file")
-            actual[path.relative_to(source).as_posix()] = sha256(path)
+            actual[path.relative_to(source).as_posix()] = sha256(fixture, path.relative_to(fixture))
 
     for parent in [source, source / "e2e", source / "e2e/scripts"]:
         refuse_link(parent)
@@ -74,7 +91,7 @@ def audit_history(fixture, fanout):
     ids, slots, positions, canonical, page_hashes = set(), set(), set(), [], {}
     previous_oldest, before = None, ""
     for index in range(1, 59):
-        path = fixture / "history-pages" / f"{index}.json"
+        path = evidence_path(fixture, f"history-pages/{index}.json")
         data = path.read_bytes()
         page = json.loads(data.decode("utf-8-sig"))
         page_hashes[path.name] = hashlib.sha256(data).hexdigest()
@@ -191,15 +208,16 @@ def audit_runtime(report):
 
 
 def audit_profile(fixture):
-    fixture = Path(fixture)
-    report, owner = read_json(fixture / "capacity-report.json"), read_json(fixture / "owner.json")
+    fixture = fixture_directory(fixture)
+    report, owner = read_json(fixture, "capacity-report.json"), read_json(fixture, "owner.json")
+    require(owner["label"] == fixture.name, "Fixture owner marker differs from its directory")
     require(report["resultStatus"] == "completed" and report["failurePhases"] == []
             and report["databaseDropped"] is True and report["sourceStable"] is True
             and report["logWriteFailed"] is False, "Profile or cleanup did not complete")
     commit = report["sourceCommit"]
     require(isinstance(commit, str) and re.fullmatch(r"[a-f0-9]{40}", commit)
             and owner["sourceCommit"] == commit == report["loadCommit"], "Source revision differs")
-    require(read_json(fixture / "launcher-cleanup.json")["failures"] == [], "Launcher cleanup failed")
+    require(read_json(fixture, "launcher-cleanup.json")["failures"] == [], "Launcher cleanup failed")
     require(not any((fixture / name).exists() for name in ["capacity-private.json", "client.key", "client.crt", "ca.crt"])
             and not list(fixture.glob("run-*/hichat-e2e-postgres.json")), "Private fixture credentials remain")
     source_files = audit_sources(fixture, report["sourceSnapshot"])
@@ -209,7 +227,7 @@ def audit_profile(fixture):
         "result": "PASS", "sourceCommit": commit, "sourceFilesMatched": source_files,
         "messages": 5800, "healthyDeliveries": 116000, "historyPages": 58,
         "receiverDigestsMatched": 20, "senderAcknowledgementsMatched": 5800, "digest": digest,
-        "reportSha256": sha256(fixture / "capacity-report.json"),
+        "reportSha256": sha256(fixture, "capacity-report.json"),
         "historyPageHashes": page_hashes,
         "scope": "Independent history, source, recorded session/resource and cleanup-report audit. "
                  "Host process/container/image absence requires separate observation. "
@@ -222,8 +240,14 @@ def main():
     parser.add_argument("fixture", type=Path)
     args = parser.parse_args()
     failure = None
+    owned_fixture = None
     try:
-        result = audit_profile(args.fixture)
+        candidate = fixture_directory(args.fixture)
+        marker = read_json(candidate, "owner.json")
+        require(marker["label"] == candidate.name and re.fullmatch(r"[a-f0-9]{40}", marker["sourceCommit"]),
+                "Fixture ownership is not established")
+        owned_fixture = candidate
+        result = audit_profile(owned_fixture)
     except AuditError as error:
         failure = str(error)
     except Exception:
@@ -232,11 +256,14 @@ def main():
     if failure:
         print(f"Local profile audit failed: {failure}", file=sys.stderr)
         result = {"result": "FAIL", "reason": failure}
+    if owned_fixture is None:
+        return 1
     result["auditedAt"] = datetime.now().astimezone().isoformat()
     try:
         # A rejected rerun must not leave a previous PASS as the latest verdict.
-        (args.fixture / "independent-audit.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
-    except OSError:
+        output = evidence_path(owned_fixture, "independent-audit.json", must_exist=False)
+        output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+    except (OSError, AuditError):
         print("Local profile audit report could not be written", file=sys.stderr)
         return 1
     if failure:

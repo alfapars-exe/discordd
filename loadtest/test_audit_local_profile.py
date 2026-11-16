@@ -7,16 +7,17 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from audit_local_profile import AuditError, audit_profile
+from audit_local_profile import AuditError, audit_profile, read_json, sha256
 
 
 class LocalProfileAuditTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="hichat-audit-contract-")
         self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
+        self.root = Path(self.temporary.name) / ("local-fanout-" + "b" * 32)
+        self.root.mkdir()
         self.commit = "a" * 40
-        self.write("owner.json", {"sourceCommit": self.commit})
+        self.write("owner.json", {"sourceCommit": self.commit, "label": self.root.name})
         self.write("launcher-cleanup.json", {"failures": []})
         source_files = {}
         for name in ["server/go.mod", "e2e/scripts/pg-fixture.go", "loadtest/ws_connect.js"]:
@@ -176,6 +177,36 @@ class LocalProfileAuditTests(unittest.TestCase):
         self.assertEqual(process.returncode, 1)
         self.assertIn("report could not be written", process.stderr)
         self.assertEqual(process.stdout, "")
+
+    def test_json_and_hash_paths_cannot_escape_owned_fixture(self):
+        outside = self.root.parent / "outside.json"
+        outside.write_text('{"private":"must not be read"}', encoding="utf-8")
+        for reader in [read_json, sha256]:
+            with self.assertRaisesRegex(AuditError, "outside the fixture"):
+                reader(self.root, "../outside.json")
+
+    def test_faulty_cli_root_is_refused_without_writing_to_parent(self):
+        process = subprocess.run([sys.executable, str(Path(__file__).with_name("audit_local_profile.py")), str(self.root.parent)],
+                                 capture_output=True, text=True, timeout=15)
+        self.assertEqual(process.returncode, 1)
+        self.assertIn("generated local-fanout", process.stderr)
+        self.assertFalse((self.root.parent / "independent-audit.json").exists())
+
+    def test_wrong_owner_marker_cannot_authorize_a_verdict_write(self):
+        self.write("owner.json", {"sourceCommit": self.commit, "label": "unrelated-owner"})
+        process = subprocess.run([sys.executable, str(Path(__file__).with_name("audit_local_profile.py")), str(self.root)],
+                                 capture_output=True, text=True, timeout=15)
+        self.assertEqual(process.returncode, 1)
+        self.assertIn("ownership is not established", process.stderr)
+        self.assertFalse((self.root / "independent-audit.json").exists())
+
+    def test_faulty_cli_root_cannot_overwrite_an_unrelated_existing_verdict(self):
+        outside = self.root.parent / "independent-audit.json"
+        outside.write_text('{"sentinel":"keep"}', encoding="utf-8")
+        process = subprocess.run([sys.executable, str(Path(__file__).with_name("audit_local_profile.py")), str(self.root.parent)],
+                                 capture_output=True, text=True, timeout=15)
+        self.assertEqual(process.returncode, 1)
+        self.assertEqual(outside.read_text(encoding="utf-8"), '{"sentinel":"keep"}')
 
 
 if __name__ == "__main__":

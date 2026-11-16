@@ -1,0 +1,99 @@
+{
+  "sourceCommit": "76619f3607f21cabc7e72312dac0f824d27f88a1",
+  "scope": "Source-bound bounded runtime validation of absolute executable paths and guarded loopback REST adapter; not all-green quality or full RF acceptance.",
+  "go": "go version go1.27.4 windows/amd64",
+  "k6": "k6.exe v2.4.0 (commit/dd9395906d, go1.26.11, windows/amd64)",
+  "checks": {
+    "passed": 5940,
+    "failed": 0
+  },
+  "messages": 5800,
+  "healthyDeliveries": 116000,
+  "healthyReceivers": 20,
+  "historyPages": 58,
+  "receiverDigestsMatched": 20,
+  "senderAcknowledgementsMatched": 5800,
+  "digest": "bf9b1baebc82c446313c2ce02aad0350c52a5948a104f4dc3bfb42b64a73d579",
+  "sourceFilesMatched": 1608,
+  "sourceSnapshotSha256": "b7ace1ba98d6f0354ad650e94b9aa751327c36427b4bd566cb3d06e2d104c7b9",
+  "slowPeer": {
+    "exitCode": 0,
+    "events": [
+      {
+        "event": "connected",
+        "at": "2026-11-16T11:43:06.4680367Z",
+        "keepalive_pairs": 0,
+        "elapsed_ms": 0,
+        "receive_buffer_requested_bytes": 1024,
+        "post_upgrade_reader": false
+      },
+      {
+        "event": "finished",
+        "at": "2026-11-16T11:44:06.4684396Z",
+        "reason": "write_failed",
+        "keepalive_pairs": 4,
+        "elapsed_ms": 60000,
+        "receive_buffer_requested_bytes": 1024,
+        "post_upgrade_reader": false
+      }
+    ],
+    "stderrPresent": false,
+    "isolation": {
+      "peakAt": "2026-11-16T11:43:19.832Z",
+      "retiredAt": "2026-11-16T11:44:01.557Z",
+      "healthySamplesAfterProbeExit": 245,
+      "requestedReceiveBufferBytes": 1024
+    },
+    "readableAfterRetirement": true
+  },
+  "resources": {
+    "baseline": {
+      "samples": 3,
+      "goroutinesMedian": 51,
+      "heapAllocMedianBytes": 6037792,
+      "rssMedianBytes": 41148416
+    },
+    "load": {
+      "samples": 275,
+      "goroutinesMedian": 111,
+      "heapAllocMedianBytes": 9021824,
+      "rssMedianBytes": 54571008
+    },
+    "recovery": {
+      "samples": 6,
+      "goroutinesMedian": 51.0,
+      "heapAllocMedianBytes": 7071840.0,
+      "rssMedianBytes": 53501952.0
+    }
+  },
+  "telemetry": {
+    "buckets": 11,
+    "http5xx": 0,
+    "observerQueriesFailed": 0,
+    "poolMaxOpen": 4,
+    "finalCumulativeWaitCount": 33142
+  },
+  "cleanup": {
+    "launcherExitCode": 0,
+    "observerExitCode": 0,
+    "databaseDropped": true,
+    "allChildrenJoined": true,
+    "ownedHostProcessesAbsentObserved": true,
+    "containerAndImageFullIDsAbsentObserved": true,
+    "privateCredentialsRemovedVerifiedByAuditor": true,
+    "launcherFailures": []
+  },
+  "audit": {
+    "toolSha256": "162d680b4a26b3f51081786a390248e390e286caede738eba8a8fb2f20df3534",
+    "resultSha256": "c7c66e868533a342c160ac03444ed1bf58ad6c31afa97426383a0a1ee304b6c2",
+    "reportSha256": "683bd464f2e351e732f9654ab12b948c77b737149b01c1fa803cb10fec4b7e04"
+  },
+  "artifactRoot": "G:\\hichat-refactor-20261116-anoknpqz\\portable-fixture-checks\\local-fanout-6bceb14481b249c6a31f89f37911f231",
+  "limits": [
+    "This runtime source still has a failed Sonar gate: four follow-up findings are addressed by newer unverified source",
+    "API split conditions are subsequently restated using part counts; validated string-path behavior is equivalent, not a new runtime acceptance claim",
+    "Offline auditor checks evidence; host/container/image absence separately observed",
+    "Single bounded profile, no capacity/SLA, variance, churn or long-soak acceptance",
+    "Query/pool budgets, memory budgets, historical panel, native/physical/media/deployment and general RF gates open"
+  ]
+}
