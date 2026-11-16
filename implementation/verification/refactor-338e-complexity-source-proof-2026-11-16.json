@@ -1,0 +1,107 @@
+{
+  "sourceProof": [
+    {
+      "path": "client/src/api/client.ts",
+      "from": 200,
+      "returnedLines": 156,
+      "mismatches": [],
+      "comparedCommit": "338e2d71"
+    },
+    {
+      "path": "server/services/voice_shutdown.go",
+      "from": 1,
+      "returnedLines": 92,
+      "mismatches": [],
+      "comparedCommit": "338e2d71"
+    },
+    {
+      "path": "scripts/query-inventory/main.go",
+      "from": 1,
+      "returnedLines": 214,
+      "mismatches": [],
+      "comparedCommit": "338e2d71"
+    },
+    {
+      "path": "client/src/crypto/backupStorage.ts",
+      "from": 1,
+      "returnedLines": 452,
+      "mismatches": [],
+      "comparedCommit": "338e2d71"
+    }
+  ],
+  "issues": {
+    "total": 102,
+    "paging": {
+      "pageIndex": 1,
+      "pageSize": 500,
+      "total": 102
+    },
+    "selected": [
+      {
+        "key": "AaHbvd7PL2JGjhmuQ-Dq",
+        "component": "alfapars-exe_discordd:server/init_callbacks.go",
+        "line": 287,
+        "message": "Refactor this method to reduce its Cognitive Complexity from 16 to the 15 allowed.",
+        "status": "OPEN",
+        "resolution": null
+      },
+      {
+        "key": "AaHbvd7PL2JGjhmuQ-Dr",
+        "component": "alfapars-exe_discordd:server/init_callbacks.go",
+        "line": 373,
+        "message": "Refactor this method to reduce its Cognitive Complexity from 27 to the 15 allowed.",
+        "status": "OPEN",
+        "resolution": null
+      },
+      {
+        "key": "AaHZZXx5GiVmDmX-ymL4",
+        "component": "alfapars-exe_discordd:scripts/query-inventory/main.go",
+        "line": null,
+        "message": "Refactor this method to reduce its Cognitive Complexity from 21 to the 15 allowed.",
+        "status": "CLOSED",
+        "resolution": "FIXED"
+      },
+      {
+        "key": "AaHYWqoQd7dyvm3wYSof",
+        "component": "alfapars-exe_discordd:server/services/voice_shutdown.go",
+        "line": null,
+        "message": "Refactor this method to reduce its Cognitive Complexity from 25 to the 15 allowed.",
+        "status": "CLOSED",
+        "resolution": "FIXED"
+      },
+      {
+        "key": "AaHYWq3Gd7dyvm3wYSo_",
+        "component": "alfapars-exe_discordd:scripts/query-inventory/main.go",
+        "line": null,
+        "message": "Refactor this method to reduce its Cognitive Complexity from 49 to the 15 allowed.",
+        "status": "CLOSED",
+        "resolution": "FIXED"
+      },
+      {
+        "key": "AaHYWqPUd7dyvm3wYSnr",
+        "component": "alfapars-exe_discordd:client/src/crypto/backupStorage.ts",
+        "line": null,
+        "message": "Refactor this function to reduce its Cognitive Complexity from 17 to the 15 allowed.",
+        "status": "CLOSED",
+        "resolution": "FIXED"
+      },
+      {
+        "key": "AaHYWqJAd7dyvm3wYSnm",
+        "component": "alfapars-exe_discordd:client/src/stores/dmStore.ts",
+        "line": 229,
+        "message": "Refactor this function to reduce its Cognitive Complexity from 32 to the 15 allowed.",
+        "status": "OPEN",
+        "resolution": null
+      },
+      {
+        "key": "AaHYWqZud7dyvm3wYSoE",
+        "component": "alfapars-exe_discordd:client/src/api/client.ts",
+        "line": null,
+        "message": "Refactor this function to reduce its Cognitive Complexity from 16 to the 15 allowed.",
+        "status": "CLOSED",
+        "resolution": "FIXED"
+      }
+    ]
+  },
+  "limits": "Targeted source equality and static finding closure, not completion of RF cards or runtime/physical acceptance. New local presence source607f is not analyzed here."
+}
