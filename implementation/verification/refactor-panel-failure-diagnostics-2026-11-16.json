@@ -53,12 +53,23 @@
       "space30Closed": true,
       "ownedServer40468Stopped": true
     },
-    "diagnosticFormatting": "Throwing name/message getters cannot mask the original synchronous or asynchronous rejection; original object and promise identity preserved."
+    "diagnosticFormatting": "Throwing name/message getters cannot mask the original synchronous or asynchronous rejection; original object and promise identity preserved.",
+    "exactGCSequenceArtifact": "refactor-panel-exact-gc-sequence-2026-11-16.json"
   },
   "rootCauseStatus": "OPEN; diagnostics improve the next CI failure evidence, not a claimed fix for the observed DM rejection.",
   "limits": [
-    "Final source scan/CI",
+    "New-source CI; source55ae scan PASS",
     "No retries or relaxed gates",
     "Native/physical and full RF17 acceptance remain open"
-  ]
+  ],
+  "sourceScan": {
+    "sourceCommit": "55ae00d1",
+    "exactReviewedRecords": 51,
+    "reviewLines": 482,
+    "blockingPatterns": 0,
+    "normalizedReviewDelta": {
+      "added": 0,
+      "removed": 0
+    }
+  }
 }
