@@ -6,10 +6,14 @@
     "candidateClientTests": 64,
     "targetedEslint": "PASS",
     "typescriptBuild": "PASS",
-    "diffCheck": "PASS"
+    "diffCheck": "PASS",
+    "sourceScan": {
+      "reviewLines": 481,
+      "blockingPatterns": 0
+    }
   },
   "remaining": [
-    "Source scan and new-source CI/Sonar",
+    "New-source CI/Sonar",
     "Complete authentication/native/offline acceptance",
     "Other API request orchestration complexity"
   ],
@@ -20,6 +24,6 @@
   },
   "sourceScanAttempt": {
     "initialAttempt": "Invalid: system WSL bash could not resolve Windows paths; not a product scan result",
-    "current": "Git Bash scan on immutable e7cc898b source, process session 49127; pending"
+    "current": "Git Bash immutable e7cc898b scan terminal PASS: 51 exact source records, 481 review lines, 0 blocking patterns"
   }
 }

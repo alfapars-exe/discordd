@@ -27,6 +27,6 @@
     "New source CI and Sonar analysis",
     "Historical backup corpus",
     "Cross-store crash/atomicity acceptance; existing best-effort rollback is not atomic",
-    "Physical/native and complete RF06 acceptance"
+    "Physical/native and complete RF16 acceptance"
   ]
 }
