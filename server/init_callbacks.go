@@ -285,10 +285,8 @@ func scheduleOfflinePresenceTransition(debouncer *presenceOfflineDebouncer, hub 
 // reconnect happened before the timer fired; this is defense-in-depth, not
 // the primary mechanism.
 func offlinePresenceTransition(hub ws.EventPublisher, userRepo repository.UserRepository, debouncer *presenceOfflineDebouncer, userID string, gen uint64, onlineFriendNotifiers ...services.OnlineFriendPresenceNotifier) {
-	for _, connectedID := range hub.GetOnlineUserIDs() {
-		if connectedID == userID {
-			return
-		}
+	if containsPresenceUser(hub.GetOnlineUserIDs(), userID) {
+		return
 	}
 
 	// Generation gate right before the DB write: a reconnect's cancel()

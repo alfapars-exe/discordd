@@ -20,5 +20,11 @@
     "Immutable final-source scan and CI/Sonar",
     "New-source Linux race",
     "Full presence/reconnect/transport runtime and RF07/RF14 acceptance"
-  ]
+  ],
+  "sourceScan": {
+    "commit": "607f0239",
+    "exactReviewedRecords": 51,
+    "reviewLines": 482,
+    "blockingPatterns": 0
+  }
 }
