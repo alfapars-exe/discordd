@@ -131,3 +131,14 @@ counts fail before allocating samples. Zero-duration observations on tiny/empty
 operations reflect clock resolution, not zero cost. These are sequential
 repository percentiles, not HTTP latency or concurrent pool budgets. Unset
 `HICHAT_PROFILE_LATENCY` to run without per-operation sampling.
+
+
+Independently recalculate a complete30x9 latency capture from the repository root:
+
+```sh
+python loadtest/audit_profile_latencies.py /path/to/benchmark.log
+```
+
+The command reads at most16MiB and writes selected numeric evidence to stdout.
+It rejects missing cases/repetitions, incomplete samples, incorrect percentiles
+and failed runs. Source provenance and resource cleanup require separate checks.

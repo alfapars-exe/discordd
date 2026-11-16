@@ -3889,3 +3889,6 @@ RF09 gerçek üye SQL sözleşmesi f775d910 kaynağında zenginleştirildi: ayn�
 
 
 RF29 operasyon dağılımı için HICHAT_PROFILE_LATENCY=1 seçeneği eklendi; sabit -benchtime=30x -count=9 ile ham süreler ve nearest-rank p50/p95 raporlanır. Üst sınır10000;10001 operasyon negatif kontrolü beklenen FAIL. SQLite8 nüfus/yol kombinasyonu x9 tekrar x30 örnekte ham veriden percentile tekrar hesabı eşleşti. Boş işlem0ns saat çözünürlüğü sınırıdır; sıfır maliyet iddiası yok. Örnekleme clock/assertion overhead içerir; eski ortalama-only benchmark ile doğrudan zaman karşılaştırması, HTTPp95 veya concurrent pool bütçesi sayılmaz. PostgreSQL latency/CI/Sonar kabulü açık. Kanıt: refactor-profile-latency-sqlite-2026-11-16.json.
+
+
+RF29 latency örneklemesi662cc01c gerçek PostgreSQL18.6 verify-full mTLS üzerinde PASS:8 kombinasyon x9 tekrar x30 operasyon. Depo denetleyicisi SQLite vePG ham loglarında tüm p50/p95 nearest-rank sonuçlarını yeniden hesapladı; kalibrasyon ve eksik/yanlış/FAIL koşulları ayrıldı.20Python sözleşmesi PASS. Benchmark kaynağı frozen kaynakla eşleşti; launcherexit0, cleanupfailures0, container/image tam ID ve credential yokluğu doğrulandı. Ortalamaların percentile sayılması engellendi; sıralı repository p95 değeri HTTPp95/concurrentpool bütçesi değildir. Kanıt: refactor-profile-latency-postgres-2026-11-16.json. CI/Sonar ve genelRF açık.
