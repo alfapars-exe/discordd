@@ -4,7 +4,7 @@ const identifier = value => typeof value === "string" && /^[A-Za-z0-9_-]{1,128}$
 function validateProfile({ probeId, channelId, userIds, messagesPerSender }) {
   if (!identifier(probeId) || !identifier(channelId)) throw new Error("fanout_invalid_scope");
   if (!Array.isArray(userIds) || userIds.length < 1 || userIds.length > 1000 ||
-      userIds.some(id => !identifier(id)) || new Set(userIds).size !== userIds.length) {
+      Array.from(userIds).some(id => !identifier(id)) || new Set(userIds).size !== userIds.length) {
     throw new Error("fanout_invalid_senders");
   }
   if (!Number.isSafeInteger(messagesPerSender) || messagesPerSender < 1 ||
