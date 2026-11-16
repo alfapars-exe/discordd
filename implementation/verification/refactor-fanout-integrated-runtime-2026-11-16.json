@@ -1,0 +1,736 @@
+{
+  "scope": "Read-only observer overhead included; not pool-wait/capacity/SLA acceptance",
+  "buckets": [
+    {
+      "bucket_at": "2026-11-16 09:20:00",
+      "goroutines": 110,
+      "heap_alloc_bytes": 10201952,
+      "online_users": 20,
+      "db_open_conns": 4,
+      "db_in_use": 4,
+      "db_idle": 0,
+      "db_wait_count": 906,
+      "ws_dispatch_total": 18,
+      "ws_rate_limit_drops_total": 0,
+      "http_requests": 299,
+      "http_5xx": 0,
+      "http_max_latency_ms": 203,
+      "http_avg_latency_ms": 44.72240802675585,
+      "diagnostics": {
+        "app_log": {
+          "error_queue": 0,
+          "normal_queue": 0,
+          "error_capacity": 512,
+          "normal_capacity": 256,
+          "dropped_error": 0,
+          "dropped_warn": 0,
+          "dropped_info": 0,
+          "write_failures": 0,
+          "failed_events": 0,
+          "excluded_deleted": 0,
+          "grouped_events": 0,
+          "last_success_at": "2026-11-16T09:19:23.4631495Z",
+          "retention_days": 7
+        },
+        "db_max_open": 4,
+        "db_wait_count_delta": 906,
+        "db_wait_duration_ms_delta": 1676,
+        "http_routes": {
+          "GET /api/ready": {
+            "http_5xx": 0,
+            "p50_ms_upper": 25,
+            "p95_ms_upper": 25,
+            "p99_ms_upper": 25,
+            "requests": 1
+          },
+          "GET /api/servers/{serverId}/channels/{id}/messages": {
+            "http_5xx": 0,
+            "p50_ms_upper": 25,
+            "p95_ms_upper": 25,
+            "p99_ms_upper": 25,
+            "requests": 20
+          },
+          "GET /debug/pprof/goroutine": {
+            "http_5xx": 0,
+            "p50_ms_upper": 25,
+            "p95_ms_upper": 25,
+            "p99_ms_upper": 25,
+            "requests": 21
+          },
+          "GET /debug/pprof/heap": {
+            "http_5xx": 0,
+            "p50_ms_upper": 25,
+            "p95_ms_upper": 25,
+            "p99_ms_upper": 25,
+            "requests": 21
+          },
+          "PATCH /api/servers/{serverId}": {
+            "http_5xx": 0,
+            "p50_ms_upper": 25,
+            "p95_ms_upper": 25,
+            "p99_ms_upper": 25,
+            "requests": 1
+          },
+          "POST /api/auth/login": {
+            "http_5xx": 0,
+            "p50_ms_upper": 250,
+            "p95_ms_upper": 250,
+            "p99_ms_upper": 250,
+            "requests": 41
+          },
+          "POST /api/auth/register": {
+            "http_5xx": 0,
+            "p50_ms_upper": 250,
+            "p95_ms_upper": 250,
+            "p99_ms_upper": 250,
+            "requests": 1
+          },
+          "POST /api/auth/ws-ticket": {
+            "http_5xx": 0,
+            "p50_ms_upper": 25,
+            "p95_ms_upper": 25,
+            "p99_ms_upper": 25,
+            "requests": 20
+          },
+          "POST /api/servers": {
+            "http_5xx": 0,
+            "p50_ms_upper": 50,
+            "p95_ms_upper": 50,
+            "p99_ms_upper": 50,
+            "requests": 1
+          },
+          "POST /api/servers/join": {
+            "http_5xx": 0,
+            "p50_ms_upper": 25,
+            "p95_ms_upper": 50,
+            "p99_ms_upper": 50,
+            "requests": 20
+          },
+          "POST /api/servers/{serverId}/channels": {
+            "http_5xx": 0,
+            "p50_ms_upper": 25,
+            "p95_ms_upper": 25,
+            "p99_ms_upper": 25,
+            "requests": 1
+          },
+          "POST /api/servers/{serverId}/channels/{id}/messages": {
+            "http_5xx": 0,
+            "p50_ms_upper": 50,
+            "p95_ms_upper": 100,
+            "p99_ms_upper": 100,
+            "requests": 150
+          },
+          "POST /api/servers/{serverId}/invites": {
+            "http_5xx": 0,
+            "p50_ms_upper": 25,
+            "p95_ms_upper": 25,
+            "p99_ms_upper": 25,
+            "requests": 1
+          }
+        }
+      }
+    },
+    {
+      "bucket_at": "2026-11-16 09:21:00",
+      "goroutines": 110,
+      "heap_alloc_bytes": 9036128,
+      "online_users": 20,
+      "db_open_conns": 4,
+      "db_in_use": 4,
+      "db_idle": 0,
+      "db_wait_count": 5090,
+      "ws_dispatch_total": 58,
+      "ws_rate_limit_drops_total": 0,
+      "http_requests": 654,
+      "http_5xx": 0,
+      "http_max_latency_ms": 118,
+      "http_avg_latency_ms": 35.333333333333336,
+      "diagnostics": {
+        "app_log": {
+          "error_queue": 0,
+          "normal_queue": 0,
+          "error_capacity": 512,
+          "normal_capacity": 256,
+          "dropped_error": 0,
+          "dropped_warn": 0,
+          "dropped_info": 0,
+          "write_failures": 0,
+          "failed_events": 0,
+          "excluded_deleted": 0,
+          "grouped_events": 0,
+          "last_success_at": "2026-11-16T09:19:23.4631495Z",
+          "retention_days": 7
+        },
+        "db_max_open": 4,
+        "db_wait_count_delta": 4184,
+        "db_wait_duration_ms_delta": 8508,
+        "http_routes": {
+          "GET /debug/pprof/goroutine": {
+            "http_5xx": 0,
+            "p50_ms_upper": 25,
+            "p95_ms_upper": 25,
+            "p99_ms_upper": 25,
+            "requests": 27
+          },
+          "GET /debug/pprof/heap": {
+            "http_5xx": 0,
+            "p50_ms_upper": 25,
+            "p95_ms_upper": 25,
+            "p99_ms_upper": 25,
+            "requests": 27
+          },
+          "POST /api/servers/{serverId}/channels/{id}/messages": {
+            "http_5xx": 0,
+            "p50_ms_upper": 50,
+            "p95_ms_upper": 100,
+            "p99_ms_upper": 100,
+            "requests": 600
+          }
+        }
+      }
+    },
+    {
+      "bucket_at": "2026-11-16 09:22:00",
+      "goroutines": 110,
+      "heap_alloc_bytes": 9354592,
+      "online_users": 20,
+      "db_open_conns": 4,
+      "db_in_use": 4,
+      "db_idle": 0,
+      "db_wait_count": 9300,
+      "ws_dispatch_total": 98,
+      "ws_rate_limit_drops_total": 0,
+      "http_requests": 654,
+      "http_5xx": 0,
+      "http_max_latency_ms": 82,
+      "http_avg_latency_ms": 32.01987767584098,
+      "diagnostics": {
+        "app_log": {
+          "error_queue": 0,
+          "normal_queue": 0,
+          "error_capacity": 512,
+          "normal_capacity": 256,
+          "dropped_error": 0,
+          "dropped_warn": 0,
+          "dropped_info": 0,
+          "write_failures": 0,
+          "failed_events": 0,
+          "excluded_deleted": 0,
+          "grouped_events": 0,
+          "last_success_at": "2026-11-16T09:19:23.4631495Z",
+          "retention_days": 7
+        },
+        "db_max_open": 4,
+        "db_wait_count_delta": 4210,
+        "db_wait_duration_ms_delta": 7656,
+        "http_routes": {
+          "GET /debug/pprof/goroutine": {
+            "http_5xx": 0,
+            "p50_ms_upper": 25,
+            "p95_ms_upper": 25,
+            "p99_ms_upper": 25,
+            "requests": 27
+          },
+          "GET /debug/pprof/heap": {
+            "http_5xx": 0,
+            "p50_ms_upper": 25,
+            "p95_ms_upper": 25,
+            "p99_ms_upper": 25,
+            "requests": 27
+          },
+          "POST /api/servers/{serverId}/channels/{id}/messages": {
+            "http_5xx": 0,
+            "p50_ms_upper": 50,
+            "p95_ms_upper": 100,
+            "p99_ms_upper": 100,
+            "requests": 600
+          }
+        }
+      }
+    },
+    {
+      "bucket_at": "2026-11-16 09:23:00",
+      "goroutines": 110,
+      "heap_alloc_bytes": 6964264,
+      "online_users": 20,
+      "db_open_conns": 3,
+      "db_in_use": 1,
+      "db_idle": 2,
+      "db_wait_count": 13486,
+      "ws_dispatch_total": 138,
+      "ws_rate_limit_drops_total": 0,
+      "http_requests": 652,
+      "http_5xx": 0,
+      "http_max_latency_ms": 78,
+      "http_avg_latency_ms": 32.74079754601227,
+      "diagnostics": {
+        "app_log": {
+          "error_queue": 0,
+          "normal_queue": 0,
+          "error_capacity": 512,
+          "normal_capacity": 256,
+          "dropped_error": 0,
+          "dropped_warn": 0,
+          "dropped_info": 0,
+          "write_failures": 0,
+          "failed_events": 0,
+          "excluded_deleted": 0,
+          "grouped_events": 0,
+          "last_success_at": "2026-11-16T09:19:23.4631495Z",
+          "retention_days": 7
+        },
+        "db_max_open": 4,
+        "db_wait_count_delta": 4186,
+        "db_wait_duration_ms_delta": 7695,
+        "http_routes": {
+          "GET /debug/pprof/goroutine": {
+            "http_5xx": 0,
+            "p50_ms_upper": 25,
+            "p95_ms_upper": 25,
+            "p99_ms_upper": 25,
+            "requests": 26
+          },
+          "GET /debug/pprof/heap": {
+            "http_5xx": 0,
+            "p50_ms_upper": 25,
+            "p95_ms_upper": 25,
+            "p99_ms_upper": 50,
+            "requests": 26
+          },
+          "POST /api/servers/{serverId}/channels/{id}/messages": {
+            "http_5xx": 0,
+            "p50_ms_upper": 50,
+            "p95_ms_upper": 100,
+            "p99_ms_upper": 100,
+            "requests": 600
+          }
+        }
+      }
+    },
+    {
+      "bucket_at": "2026-11-16 09:24:00",
+      "goroutines": 110,
+      "heap_alloc_bytes": 10684400,
+      "online_users": 20,
+      "db_open_conns": 3,
+      "db_in_use": 3,
+      "db_idle": 0,
+      "db_wait_count": 17690,
+      "ws_dispatch_total": 178,
+      "ws_rate_limit_drops_total": 0,
+      "http_requests": 654,
+      "http_5xx": 0,
+      "http_max_latency_ms": 82,
+      "http_avg_latency_ms": 33.13455657492355,
+      "diagnostics": {
+        "app_log": {
+          "error_queue": 0,
+          "normal_queue": 0,
+          "error_capacity": 512,
+          "normal_capacity": 256,
+          "dropped_error": 0,
+          "dropped_warn": 0,
+          "dropped_info": 0,
+          "write_failures": 0,
+          "failed_events": 0,
+          "excluded_deleted": 0,
+          "grouped_events": 0,
+          "last_success_at": "2026-11-16T09:19:23.4631495Z",
+          "retention_days": 7
+        },
+        "db_max_open": 4,
+        "db_wait_count_delta": 4204,
+        "db_wait_duration_ms_delta": 7733,
+        "http_routes": {
+          "GET /debug/pprof/goroutine": {
+            "http_5xx": 0,
+            "p50_ms_upper": 25,
+            "p95_ms_upper": 25,
+            "p99_ms_upper": 25,
+            "requests": 27
+          },
+          "GET /debug/pprof/heap": {
+            "http_5xx": 0,
+            "p50_ms_upper": 25,
+            "p95_ms_upper": 50,
+            "p99_ms_upper": 50,
+            "requests": 27
+          },
+          "POST /api/servers/{serverId}/channels/{id}/messages": {
+            "http_5xx": 0,
+            "p50_ms_upper": 50,
+            "p95_ms_upper": 100,
+            "p99_ms_upper": 100,
+            "requests": 600
+          }
+        }
+      }
+    },
+    {
+      "bucket_at": "2026-11-16 09:25:00",
+      "goroutines": 110,
+      "heap_alloc_bytes": 8591528,
+      "online_users": 20,
+      "db_open_conns": 3,
+      "db_in_use": 1,
+      "db_idle": 2,
+      "db_wait_count": 21855,
+      "ws_dispatch_total": 218,
+      "ws_rate_limit_drops_total": 0,
+      "http_requests": 654,
+      "http_5xx": 0,
+      "http_max_latency_ms": 79,
+      "http_avg_latency_ms": 32.47094801223242,
+      "diagnostics": {
+        "app_log": {
+          "error_queue": 0,
+          "normal_queue": 0,
+          "error_capacity": 512,
+          "normal_capacity": 256,
+          "dropped_error": 0,
+          "dropped_warn": 0,
+          "dropped_info": 0,
+          "write_failures": 0,
+          "failed_events": 0,
+          "excluded_deleted": 0,
+          "grouped_events": 0,
+          "last_success_at": "2026-11-16T09:19:23.4631495Z",
+          "retention_days": 7
+        },
+        "db_max_open": 4,
+        "db_wait_count_delta": 4165,
+        "db_wait_duration_ms_delta": 7500,
+        "http_routes": {
+          "GET /debug/pprof/goroutine": {
+            "http_5xx": 0,
+            "p50_ms_upper": 25,
+            "p95_ms_upper": 25,
+            "p99_ms_upper": 25,
+            "requests": 27
+          },
+          "GET /debug/pprof/heap": {
+            "http_5xx": 0,
+            "p50_ms_upper": 25,
+            "p95_ms_upper": 50,
+            "p99_ms_upper": 50,
+            "requests": 27
+          },
+          "POST /api/servers/{serverId}/channels/{id}/messages": {
+            "http_5xx": 0,
+            "p50_ms_upper": 50,
+            "p95_ms_upper": 100,
+            "p99_ms_upper": 100,
+            "requests": 600
+          }
+        }
+      }
+    },
+    {
+      "bucket_at": "2026-11-16 09:26:00",
+      "goroutines": 110,
+      "heap_alloc_bytes": 7815520,
+      "online_users": 20,
+      "db_open_conns": 3,
+      "db_in_use": 2,
+      "db_idle": 1,
+      "db_wait_count": 26009,
+      "ws_dispatch_total": 258,
+      "ws_rate_limit_drops_total": 0,
+      "http_requests": 652,
+      "http_5xx": 0,
+      "http_max_latency_ms": 154,
+      "http_avg_latency_ms": 33.84969325153374,
+      "diagnostics": {
+        "app_log": {
+          "error_queue": 0,
+          "normal_queue": 0,
+          "error_capacity": 512,
+          "normal_capacity": 256,
+          "dropped_error": 0,
+          "dropped_warn": 0,
+          "dropped_info": 0,
+          "write_failures": 0,
+          "failed_events": 0,
+          "excluded_deleted": 0,
+          "grouped_events": 0,
+          "last_success_at": "2026-11-16T09:19:23.4631495Z",
+          "retention_days": 7
+        },
+        "db_max_open": 4,
+        "db_wait_count_delta": 4154,
+        "db_wait_duration_ms_delta": 7729,
+        "http_routes": {
+          "GET /debug/pprof/goroutine": {
+            "http_5xx": 0,
+            "p50_ms_upper": 25,
+            "p95_ms_upper": 25,
+            "p99_ms_upper": 25,
+            "requests": 26
+          },
+          "GET /debug/pprof/heap": {
+            "http_5xx": 0,
+            "p50_ms_upper": 50,
+            "p95_ms_upper": 50,
+            "p99_ms_upper": 100,
+            "requests": 26
+          },
+          "POST /api/servers/{serverId}/channels/{id}/messages": {
+            "http_5xx": 0,
+            "p50_ms_upper": 50,
+            "p95_ms_upper": 100,
+            "p99_ms_upper": 100,
+            "requests": 600
+          }
+        }
+      }
+    },
+    {
+      "bucket_at": "2026-11-16 09:27:00",
+      "goroutines": 110,
+      "heap_alloc_bytes": 6761432,
+      "online_users": 20,
+      "db_open_conns": 3,
+      "db_in_use": 2,
+      "db_idle": 1,
+      "db_wait_count": 30105,
+      "ws_dispatch_total": 298,
+      "ws_rate_limit_drops_total": 0,
+      "http_requests": 654,
+      "http_5xx": 0,
+      "http_max_latency_ms": 80,
+      "http_avg_latency_ms": 32.82721712538226,
+      "diagnostics": {
+        "app_log": {
+          "error_queue": 0,
+          "normal_queue": 0,
+          "error_capacity": 512,
+          "normal_capacity": 256,
+          "dropped_error": 0,
+          "dropped_warn": 0,
+          "dropped_info": 0,
+          "write_failures": 0,
+          "failed_events": 0,
+          "excluded_deleted": 0,
+          "grouped_events": 0,
+          "last_success_at": "2026-11-16T09:19:23.4631495Z",
+          "retention_days": 7
+        },
+        "db_max_open": 4,
+        "db_wait_count_delta": 4096,
+        "db_wait_duration_ms_delta": 7548,
+        "http_routes": {
+          "GET /debug/pprof/goroutine": {
+            "http_5xx": 0,
+            "p50_ms_upper": 25,
+            "p95_ms_upper": 25,
+            "p99_ms_upper": 25,
+            "requests": 27
+          },
+          "GET /debug/pprof/heap": {
+            "http_5xx": 0,
+            "p50_ms_upper": 50,
+            "p95_ms_upper": 50,
+            "p99_ms_upper": 50,
+            "requests": 27
+          },
+          "POST /api/servers/{serverId}/channels/{id}/messages": {
+            "http_5xx": 0,
+            "p50_ms_upper": 50,
+            "p95_ms_upper": 100,
+            "p99_ms_upper": 100,
+            "requests": 600
+          }
+        }
+      }
+    },
+    {
+      "bucket_at": "2026-11-16 09:28:00",
+      "goroutines": 110,
+      "heap_alloc_bytes": 8916904,
+      "online_users": 20,
+      "db_open_conns": 3,
+      "db_in_use": 3,
+      "db_idle": 0,
+      "db_wait_count": 34180,
+      "ws_dispatch_total": 338,
+      "ws_rate_limit_drops_total": 0,
+      "http_requests": 652,
+      "http_5xx": 0,
+      "http_max_latency_ms": 225,
+      "http_avg_latency_ms": 35.48159509202454,
+      "diagnostics": {
+        "app_log": {
+          "error_queue": 0,
+          "normal_queue": 0,
+          "error_capacity": 512,
+          "normal_capacity": 256,
+          "dropped_error": 0,
+          "dropped_warn": 0,
+          "dropped_info": 0,
+          "write_failures": 0,
+          "failed_events": 0,
+          "excluded_deleted": 0,
+          "grouped_events": 0,
+          "last_success_at": "2026-11-16T09:19:23.4631495Z",
+          "retention_days": 7
+        },
+        "db_max_open": 4,
+        "db_wait_count_delta": 4075,
+        "db_wait_duration_ms_delta": 8383,
+        "http_routes": {
+          "GET /debug/pprof/goroutine": {
+            "http_5xx": 0,
+            "p50_ms_upper": 25,
+            "p95_ms_upper": 25,
+            "p99_ms_upper": 25,
+            "requests": 26
+          },
+          "GET /debug/pprof/heap": {
+            "http_5xx": 0,
+            "p50_ms_upper": 50,
+            "p95_ms_upper": 50,
+            "p99_ms_upper": 50,
+            "requests": 26
+          },
+          "POST /api/servers/{serverId}/channels/{id}/messages": {
+            "http_5xx": 0,
+            "p50_ms_upper": 50,
+            "p95_ms_upper": 100,
+            "p99_ms_upper": 100,
+            "requests": 600
+          }
+        }
+      }
+    },
+    {
+      "bucket_at": "2026-11-16 09:29:00",
+      "goroutines": 110,
+      "heap_alloc_bytes": 6891776,
+      "online_users": 20,
+      "db_open_conns": 3,
+      "db_in_use": 3,
+      "db_idle": 0,
+      "db_wait_count": 38275,
+      "ws_dispatch_total": 378,
+      "ws_rate_limit_drops_total": 0,
+      "http_requests": 654,
+      "http_5xx": 0,
+      "http_max_latency_ms": 149,
+      "http_avg_latency_ms": 35.79510703363914,
+      "diagnostics": {
+        "app_log": {
+          "error_queue": 0,
+          "normal_queue": 0,
+          "error_capacity": 512,
+          "normal_capacity": 256,
+          "dropped_error": 0,
+          "dropped_warn": 0,
+          "dropped_info": 0,
+          "write_failures": 0,
+          "failed_events": 0,
+          "excluded_deleted": 0,
+          "grouped_events": 0,
+          "last_success_at": "2026-11-16T09:19:23.4631495Z",
+          "retention_days": 7
+        },
+        "db_max_open": 4,
+        "db_wait_count_delta": 4095,
+        "db_wait_duration_ms_delta": 8321,
+        "http_routes": {
+          "GET /debug/pprof/goroutine": {
+            "http_5xx": 0,
+            "p50_ms_upper": 25,
+            "p95_ms_upper": 25,
+            "p99_ms_upper": 25,
+            "requests": 27
+          },
+          "GET /debug/pprof/heap": {
+            "http_5xx": 0,
+            "p50_ms_upper": 50,
+            "p95_ms_upper": 50,
+            "p99_ms_upper": 100,
+            "requests": 27
+          },
+          "POST /api/servers/{serverId}/channels/{id}/messages": {
+            "http_5xx": 0,
+            "p50_ms_upper": 50,
+            "p95_ms_upper": 100,
+            "p99_ms_upper": 100,
+            "requests": 600
+          }
+        }
+      }
+    },
+    {
+      "bucket_at": "2026-11-16 09:30:00",
+      "goroutines": 49,
+      "heap_alloc_bytes": 7582976,
+      "online_users": 0,
+      "db_open_conns": 3,
+      "db_in_use": 3,
+      "db_idle": 0,
+      "db_wait_count": 39788,
+      "ws_dispatch_total": 400,
+      "ws_rate_limit_drops_total": 0,
+      "http_requests": 346,
+      "http_5xx": 0,
+      "http_max_latency_ms": 65,
+      "http_avg_latency_ms": 28.898843930635838,
+      "diagnostics": {
+        "app_log": {
+          "error_queue": 0,
+          "normal_queue": 0,
+          "error_capacity": 512,
+          "normal_capacity": 256,
+          "dropped_error": 0,
+          "dropped_warn": 0,
+          "dropped_info": 0,
+          "write_failures": 0,
+          "failed_events": 0,
+          "excluded_deleted": 0,
+          "grouped_events": 0,
+          "last_success_at": "2026-11-16T09:30:08.4650413Z",
+          "retention_days": 7
+        },
+        "db_max_open": 4,
+        "db_wait_count_delta": 1513,
+        "db_wait_duration_ms_delta": 2887,
+        "http_routes": {
+          "GET /api/servers/{serverId}/channels/{id}/messages": {
+            "http_5xx": 0,
+            "p50_ms_upper": 25,
+            "p95_ms_upper": 25,
+            "p99_ms_upper": 25,
+            "requests": 52
+          },
+          "GET /debug/pprof/goroutine": {
+            "http_5xx": 0,
+            "p50_ms_upper": 25,
+            "p95_ms_upper": 25,
+            "p99_ms_upper": 25,
+            "requests": 22
+          },
+          "GET /debug/pprof/heap": {
+            "http_5xx": 0,
+            "p50_ms_upper": 50,
+            "p95_ms_upper": 50,
+            "p99_ms_upper": 50,
+            "requests": 22
+          },
+          "POST /api/servers/{serverId}/channels/{id}/messages": {
+            "http_5xx": 0,
+            "p50_ms_upper": 50,
+            "p95_ms_upper": 100,
+            "p99_ms_upper": 100,
+            "requests": 250
+          }
+        }
+      }
+    }
+  ],
+  "observations": 54,
+  "queryFailures": 0,
+  "lastObservedAt": "2026-11-16T09:30:31.681Z",
+  "terminal": "Owned container stopped or removed",
+  "finishedAt": "2026-11-16T09:30:41.833Z"
+}

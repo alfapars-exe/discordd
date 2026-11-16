@@ -1,0 +1,96 @@
+{
+  "scope": "Task-owned files only; no deletion, main checkout or shared/global cache cleanup",
+  "guardedAttempt": {
+    "source": "1132823b",
+    "result": "Rejected before Go version/build/workload",
+    "CFreeBytes": 43302912,
+    "requiredStartBytes": 1073741824,
+    "evidenceLogSha256": "9d44f71e065eac229d1740cd319a234236183c43d88dc8d0aefbc5a2b7035c8c",
+    "ownedContainerRemoved": true
+  },
+  "binaryCompression": {
+    "files": 14,
+    "sha256Parity": true,
+    "freeBefore": 96681984,
+    "freeAfter": 316715008,
+    "results": [
+      {
+        "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-pg-tls-test-0bb7dda210cb4555b3a2d9ba43373755\\run-1794788837817-43180-fb7d79e7fcee18f6\\hichat-capacity.exe",
+        "exitCode": 0
+      },
+      {
+        "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-pg-tls-test-0bb7dda210cb4555b3a2d9ba43373755\\run-1794788837817-43180-fb7d79e7fcee18f6\\pg-fixture.exe",
+        "exitCode": 0
+      },
+      {
+        "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-pg-tls-test-1270ca27dfa049df88205ce524953171\\run-1794789250013-163472-47cf4704812339e3\\hichat-capacity.exe",
+        "exitCode": 0
+      },
+      {
+        "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-pg-tls-test-1270ca27dfa049df88205ce524953171\\run-1794789250013-163472-47cf4704812339e3\\pg-fixture.exe",
+        "exitCode": 0
+      },
+      {
+        "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-pg-tls-test-7569b3bf5e5643a18015740918eb36cd\\run-1794793258693-118692-66fb7e82b06771ee\\hichat-capacity.exe",
+        "exitCode": 0
+      },
+      {
+        "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-pg-tls-test-7569b3bf5e5643a18015740918eb36cd\\run-1794793258693-118692-66fb7e82b06771ee\\pg-fixture.exe",
+        "exitCode": 0
+      },
+      {
+        "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-pg-tls-test-7d1ce76d307e438b8909306d895d6ed4\\run-1794789138228-132416-446553f8ef31919b\\hichat-capacity.exe",
+        "exitCode": 0
+      },
+      {
+        "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-pg-tls-test-7d1ce76d307e438b8909306d895d6ed4\\run-1794789138228-132416-446553f8ef31919b\\pg-fixture.exe",
+        "exitCode": 0
+      },
+      {
+        "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-pg-tls-test-a942fc1fed6f4d5ca33fecd41457c71d\\run-1794793478733-144716-fd6f9e351d0454b3\\hichat-capacity.exe",
+        "exitCode": 0
+      },
+      {
+        "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-pg-tls-test-a942fc1fed6f4d5ca33fecd41457c71d\\run-1794793478733-144716-fd6f9e351d0454b3\\pg-fixture.exe",
+        "exitCode": 0
+      },
+      {
+        "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-pg-tls-test-d019b5954fca4ce0a15310189ba06970\\run-1794793981889-13712-354430d0f6d88d9e\\hichat-capacity.exe",
+        "exitCode": 0
+      },
+      {
+        "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-pg-tls-test-d019b5954fca4ce0a15310189ba06970\\run-1794793981889-13712-354430d0f6d88d9e\\pg-fixture.exe",
+        "exitCode": 0
+      },
+      {
+        "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-pg-tls-test-dc52c87520974b6d8527e0200cab028e\\run-1794793122762-139044-5ff5000584b8beab\\hichat-capacity.exe",
+        "exitCode": 0
+      },
+      {
+        "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-pg-tls-test-dc52c87520974b6d8527e0200cab028e\\run-1794793122762-139044-5ff5000584b8beab\\pg-fixture.exe",
+        "exitCode": 0
+      }
+    ],
+    "deletions": 0
+  },
+  "isolatedLinuxModuleCompression": {
+    "root": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-refactor-go-linux-cache\\modules",
+    "files": 31026,
+    "sha256Parity": true,
+    "readOnlyAttributesPreserved": true,
+    "exitCode": 0,
+    "freeBefore": 5989298176,
+    "freeAfter": 6236774400,
+    "deletions": 0
+  },
+  "diskAccounting": "C externally recovered above6GB during module pre-hash, before bulk compression; do not attribute entire recovery to compression. Native compact and before/after hashes prove content-preserving changes only.",
+  "mainCheckout": "Read-only status still96tracked/14untracked; no edits",
+  "retry": "Same frozen source and unchanged guards resumed only after C exceeded2GiB; completed separately",
+  "hashes": {
+    "G:\\hichat-refactor-20261116-anoknpqz\\owned-pg-binaries-compression-before.json": "d1a89ddb5cefc20f65467541d39f375899957b293e39591a4824d08f9f4f3867",
+    "G:\\hichat-refactor-20261116-anoknpqz\\owned-pg-binaries-compression-proof.json": "fc403d05801b66636e22d6a50cc9f3b3f94b7ef2ac0d6e12a5f56151c6b407a8",
+    "G:\\hichat-refactor-20261116-anoknpqz\\owned-linux-modules-compression-before.json": "1182dcdc91a881605370ea8269fd3c4d2c8b5d0ec52d610bc180599505bc4530",
+    "G:\\hichat-refactor-20261116-anoknpqz\\owned-linux-modules-compression-proof.json": "ad58f4622db6bafa3e632598ade39794dd9a4afaa610b40acc3f63c1498b305f",
+    "G:\\hichat-refactor-20261116-anoknpqz\\owned-linux-modules-compact.log": "f16381ff13bcfd64aef5127b87a826540dcfee6df42924409fe62b15637541ed"
+  }
+}
