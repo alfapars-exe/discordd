@@ -89,6 +89,86 @@ func resolveConstantSQL(expr ast.Expr, seen map[*ast.Object]bool, depth int, bud
 	return "", false
 }
 
+// sqlArgument identifies method-name candidates, not verified database receivers.
+func sqlArgument(call *ast.CallExpr) (*ast.SelectorExpr, ast.Expr, bool) {
+	method, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return nil, nil, false
+	}
+	index := 0
+	switch method.Sel.Name {
+	case "ExecContext", "QueryContext", "QueryRowContext", "PrepareContext":
+		index = 1
+	case "Exec", "Query", "QueryRow", "Prepare":
+	default:
+		return nil, nil, false
+	}
+	if len(call.Args) <= index {
+		return nil, nil, false
+	}
+	return method, call.Args[index], true
+}
+
+// Ownership is lexical. Nested closures retain their enclosing declaration.
+func assignDeclarationOwner(site *callSite, call *ast.CallExpr, functions []*ast.FuncDecl, positions *token.FileSet) {
+	for _, function := range functions {
+		if call.Pos() < function.Pos() || call.End() > function.End() {
+			continue
+		}
+		site.Function = function.Name.Name
+		site.DeclarationLine = positions.Position(function.Pos()).Line
+		if function.Recv != nil && len(function.Recv.List) > 0 {
+			var receiver bytes.Buffer
+			if err := format.Node(&receiver, positions, function.Recv.List[0].Type); err == nil {
+				site.Receiver = receiver.String()
+			}
+		}
+		return
+	}
+}
+
+func recordSQLExpression(result *report, site *callSite, expression ast.Expr) {
+	value, ok := constantSQL(expression, make(map[*ast.Object]bool))
+	if !ok {
+		result.Unresolved++
+		return
+	}
+	site.SQL = value
+	if _, direct := expression.(*ast.BasicLit); direct {
+		result.Literal++
+	} else {
+		result.Constants++
+	}
+}
+
+func inventoryFile(result *report, root, path string, positions *token.FileSet, file *ast.File) {
+	var functions []*ast.FuncDecl
+	for _, declaration := range file.Decls {
+		if function, ok := declaration.(*ast.FuncDecl); ok {
+			functions = append(functions, function)
+		}
+	}
+	ast.Inspect(file, func(node ast.Node) bool {
+		call, ok := node.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		method, expression, ok := sqlArgument(call)
+		if !ok {
+			return true
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			rel = path
+		}
+		site := callSite{File: filepath.ToSlash(rel), Line: positions.Position(call.Pos()).Line, Method: method.Sel.Name, Expression: fmt.Sprintf("%T", expression)}
+		assignDeclarationOwner(&site, call, functions, positions)
+		recordSQLExpression(result, &site, expression)
+		result.Calls = append(result.Calls, site)
+		return true
+	})
+}
+
 func inventory(root string) (report, error) {
 	result := report{Scope: "Non-test server/repository Go source; method-name candidates, not verified database receivers. Direct literals and same-file explicit string constants are resolved; mutable expressions remain unresolved.", Calls: []callSite{}}
 	directory := filepath.Join(root, "server", "repository")
@@ -105,67 +185,7 @@ func inventory(root string) (report, error) {
 			return err
 		}
 		result.Files++
-		// Ownership is lexical, not receiver typing or execution proof. Nested
-		// function literals remain attributed to their enclosing declaration.
-		var functions []*ast.FuncDecl
-		for _, declaration := range file.Decls {
-			if function, ok := declaration.(*ast.FuncDecl); ok {
-				functions = append(functions, function)
-			}
-		}
-		ast.Inspect(file, func(node ast.Node) bool {
-			call, ok := node.(*ast.CallExpr)
-			if !ok {
-				return true
-			}
-			method, ok := call.Fun.(*ast.SelectorExpr)
-			if !ok {
-				return true
-			}
-			index := 0
-			switch method.Sel.Name {
-			case "ExecContext", "QueryContext", "QueryRowContext", "PrepareContext":
-				index = 1
-			case "Exec", "Query", "QueryRow", "Prepare":
-			default:
-				return true
-			}
-			if len(call.Args) <= index {
-				return true
-			}
-			rel, err := filepath.Rel(root, path)
-			if err != nil {
-				rel = path
-			}
-			site := callSite{File: filepath.ToSlash(rel), Line: positions.Position(call.Pos()).Line, Method: method.Sel.Name, Expression: fmt.Sprintf("%T", call.Args[index])}
-			for _, function := range functions {
-				if call.Pos() < function.Pos() || call.End() > function.End() {
-					continue
-				}
-				site.Function = function.Name.Name
-				site.DeclarationLine = positions.Position(function.Pos()).Line
-				if function.Recv != nil && len(function.Recv.List) > 0 {
-					var receiver bytes.Buffer
-					if err := format.Node(&receiver, positions, function.Recv.List[0].Type); err == nil {
-						site.Receiver = receiver.String()
-					}
-				}
-				break
-			}
-			if value, ok := constantSQL(call.Args[index], make(map[*ast.Object]bool)); ok {
-				site.SQL = value
-				if _, direct := call.Args[index].(*ast.BasicLit); direct {
-					result.Literal++
-				} else {
-					result.Constants++
-				}
-			} else {
-				result.Unresolved++
-			}
-
-			result.Calls = append(result.Calls, site)
-			return true
-		})
+		inventoryFile(&result, root, path, positions, file)
 		return nil
 	})
 	return result, err
