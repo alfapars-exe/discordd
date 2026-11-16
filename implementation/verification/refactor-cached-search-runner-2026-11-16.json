@@ -1,0 +1,241 @@
+{
+  "sourceCommit": "3c1ed88bfd7062f352886a35a7dcd1692d82cbe4",
+  "extraBoundaryTestsCommit": "af957fbe07f851ed74f61fe93a21912ecc9c798f",
+  "change": "Share local cached search execution across channel and DM panels. Keep publication and finish callbacks inside the final owned continuation; parents directly adopt the runner promise. Keep projections and routing specific to each panel.",
+  "invariants": [
+    "AbortController and snapshot/frontier references remain per mounted scoped panel",
+    "Owner checks after pool admission, snapshot construction, deletion drain and page hydration",
+    "Late snapshots are disposed before reference attachment; successors are not overwritten",
+    "Tombstones received during hydration invalidate the page and force another drain/read",
+    "No added await between last ownership/frontier check and page publication or finish"
+  ],
+  "validation": {
+    "baseline": "57 unchanged contracts on29209f9f PASS",
+    "candidate": "Same57 PASS, then six new direct runner contracts and two owner-boundary cases:65PASS in4files, zero failed/skipped",
+    "mutation": "Adding await Promise.resolve() before finish failed the publication/finish contract; source restored in finally, SHA256c31e0c5341de84fb2bbc3fd5c44c270234731863d6be23ed99706762fbb26b07",
+    "projections": {
+      "src/components/chat/SearchPanel.tsx": {
+        "equal": true,
+        "tokenSHA256": "d14003af38d667f1abaeabb831b512a772aff94bd94c0bab35c95202e8c7bd61"
+      },
+      "src/components/dm/DMSearchPanel.tsx": {
+        "equal": true,
+        "tokenSHA256": "17be3eeb3f1dd1b0fdeca67b9c237badcf6f4cffd22662ab05cfa90551103278"
+      }
+    },
+    "type": "tsc-b PASS",
+    "lint": "Both panels, runner and runner tests PASS",
+    "productionBuild": "Vite1.64s PASS, existing large chunk warning",
+    "targetedCoverage": {
+      "total": {
+        "lines": {
+          "total": 332,
+          "covered": 307,
+          "skipped": 0,
+          "pct": 92.46
+        },
+        "statements": {
+          "total": 455,
+          "covered": 404,
+          "skipped": 0,
+          "pct": 88.79
+        },
+        "functions": {
+          "total": 99,
+          "covered": 81,
+          "skipped": 0,
+          "pct": 81.81
+        },
+        "branches": {
+          "total": 214,
+          "covered": 176,
+          "skipped": 0,
+          "pct": 82.24
+        },
+        "branchesTrue": {
+          "total": 0,
+          "covered": 0,
+          "skipped": 0,
+          "pct": 100
+        }
+      },
+      "C:\\Users\\PARS\\Desktop\\PROJELER\\HiChat\\refactor-integration\\client\\src\\components\\chat\\SearchPanel.tsx": {
+        "lines": {
+          "total": 150,
+          "covered": 137,
+          "skipped": 0,
+          "pct": 91.33
+        },
+        "functions": {
+          "total": 45,
+          "covered": 37,
+          "skipped": 0,
+          "pct": 82.22
+        },
+        "statements": {
+          "total": 204,
+          "covered": 178,
+          "skipped": 0,
+          "pct": 87.25
+        },
+        "branches": {
+          "total": 105,
+          "covered": 87,
+          "skipped": 0,
+          "pct": 82.85
+        }
+      },
+      "C:\\Users\\PARS\\Desktop\\PROJELER\\HiChat\\refactor-integration\\client\\src\\components\\dm\\DMSearchPanel.tsx": {
+        "lines": {
+          "total": 156,
+          "covered": 144,
+          "skipped": 0,
+          "pct": 92.3
+        },
+        "functions": {
+          "total": 51,
+          "covered": 41,
+          "skipped": 0,
+          "pct": 80.39
+        },
+        "statements": {
+          "total": 217,
+          "covered": 192,
+          "skipped": 0,
+          "pct": 88.47
+        },
+        "branches": {
+          "total": 91,
+          "covered": 71,
+          "skipped": 0,
+          "pct": 78.02
+        }
+      },
+      "C:\\Users\\PARS\\Desktop\\PROJELER\\HiChat\\refactor-integration\\client\\src\\crypto\\cachedSearchRunner.ts": {
+        "lines": {
+          "total": 26,
+          "covered": 26,
+          "skipped": 0,
+          "pct": 100
+        },
+        "functions": {
+          "total": 3,
+          "covered": 3,
+          "skipped": 0,
+          "pct": 100
+        },
+        "statements": {
+          "total": 34,
+          "covered": 34,
+          "skipped": 0,
+          "pct": 100
+        },
+        "branches": {
+          "total": 18,
+          "covered": 18,
+          "skipped": 0,
+          "pct": 100
+        }
+      }
+    }
+  },
+  "sourceScan": {
+    "commit": "3c1ed88bfd7062f352886a35a7dcd1692d82cbe4",
+    "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-refactor-source-scan-20261116",
+    "cleanWorktree": true,
+    "exactSourceRecords": 51,
+    "reviewLines": 481,
+    "blockingPatterns": 0,
+    "exit": 0,
+    "limits": "Pattern scan, not vulnerability absence. Snapshot precedes last two added tests; runtime code identical. Reusable detached worktree must stay unchanged until scan terminates; clean status verified after terminal0."
+  },
+  "previousDMSourceSonar": {
+    "sourceCommit": "29209f9f",
+    "codeLines": 430,
+    "extraEOF": 1,
+    "mismatches": [],
+    "allIssueRecordsRead": 499,
+    "pages": 1,
+    "issues": [
+      {
+        "key": "AaHe4ooUC7n5zOm-i-dM",
+        "rule": "typescript:S3358",
+        "status": "CLOSED",
+        "resolution": "FIXED",
+        "line": null,
+        "message": "Extract this nested ternary operation into an independent statement."
+      },
+      {
+        "key": "AaHcyWYyASsLdyanVxtV",
+        "rule": "typescript:S3776",
+        "status": "CLOSED",
+        "resolution": "FIXED",
+        "line": null,
+        "message": "Refactor this function to reduce its Cognitive Complexity from 30 to the 15 allowed."
+      },
+      {
+        "key": "AaHcyWYyASsLdyanVxtU",
+        "rule": "typescript:S6759",
+        "status": "CLOSED",
+        "resolution": "FIXED",
+        "line": null,
+        "message": "Mark the props of the component as read-only."
+      },
+      {
+        "key": "AaHiJTYbB_udLTV_W_En",
+        "rule": "typescript:S3626",
+        "status": "CLOSED",
+        "resolution": "FIXED",
+        "line": null,
+        "message": "Remove this \"return\" that does not affect the flow of execution."
+      }
+    ]
+  },
+  "channelSourceSonarBeforeChange": {
+    "allRecordsRead": 499,
+    "issues": [
+      {
+        "key": "AaHe4om3C7n5zOm-i-dL",
+        "rule": "typescript:S3358",
+        "status": "OPEN",
+        "resolution": null,
+        "line": 360,
+        "message": "Extract this nested ternary operation into an independent statement."
+      },
+      {
+        "key": "AaHYWqSLd7dyvm3wYSn8",
+        "rule": "typescript:S3776",
+        "status": "OPEN",
+        "resolution": null,
+        "line": 104,
+        "message": "Refactor this function to reduce its Cognitive Complexity from 34 to the 15 allowed."
+      },
+      {
+        "key": "AaHYWqSLd7dyvm3wYSn7",
+        "rule": "typescript:S6759",
+        "status": "OPEN",
+        "resolution": null,
+        "line": 33,
+        "message": "Mark the props of the component as read-only."
+      }
+    ]
+  },
+  "pending": [
+    "New-head CI and Sonar closure for channel34complexity issue",
+    "Channel readonly props/nested result ternary remain open",
+    "Full local client and whole-client coverage not rerun for this source",
+    "Real browser/native storage gates must pass current source; historical pending-panel timeout root remains open",
+    "RF17 complete first-query/live-write/physical acceptance and RF29 extended profile/slow-consumer/pool budgets remain open"
+  ],
+  "hashes": {
+    "hichat-cached-search-engine-baseline.log": "82da37521961b71a266b9e1a5afa31b34f11b0ebd84bb3b3b623bd0f2f4f4e92",
+    "hichat-cached-search-engine-final-coverage.log": "0ffbe67c71a082df8c8a89289c7d3851725918ca392ea8db088758b58a4d3384",
+    "hichat-cached-search-engine-boundary-red.log": "e3334269130791c1aa77f9bd2692b17b38ed60bffdd21840cf1ec90e6015b2b9",
+    "hichat-cached-search-engine-boundary-green.log": "ed22f96c6b75abda91ac77f4ef6b933941643825d428fae6bd170398e5875ecd",
+    "hichat-cached-search-engine-final-tsc.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "hichat-cached-search-engine-final-lint.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "hichat-search-runner-3c1ed88b-scan.log": "81af74f9da16c5e3fc7bdcb9853e2001fb244532771e85a34bc9805667a20bc2",
+    "hichat-search-runner-3c1ed88b-scan-review.txt": "4fd19c42dedbec4fef41375fb00230ddd76cbcfd2f28b0b32c7809ad8ff0aa3b",
+    "hichat-cached-search-engine-vite.log": "2731a88f118cae0f4a32c8e7f71a4a9de8d471ad1a25f784c0b62e29515a6ae1"
+  }
+}

@@ -109,7 +109,6 @@
     "limits": "Pattern scan, not proof of vulnerability absence. Snapshot precedes no-op return removal and four extra navigation cases; no newer-snapshot scan claimed."
   },
   "pending": [
-    "Current followup source CI and Sonar readonly/ternary/redundant-return closure",
     "RF17 query/write/live-receive budgets and physical/native behavior",
     "Historical intermittent pending-panel timeout root cause",
     "Interrupted extended message profile, slow-consumer and pool budget acceptance"
@@ -122,5 +121,48 @@
     "hichat-dm-panel-dd252eab-scan.log": "dff8e9cd6c30d752ccb949075df597593b95299bba0ebcf637e55bf908967785",
     "hichat-dm-panel-dd252eab-scan-review.txt": "9f7f353a624f6fd028ee7af3f5f4f05dfa4b81342bcff22bb142a084f4958bc6",
     "hichat-dm-search-render-vite.log": "4fb281bc51b70ab3561decb0a77c9c8692bba4ec5bb974a33519c6740699ea70"
-  }
+  },
+  "sonarFollowup": {
+    "sourceCommit": "29209f9f",
+    "codeLines": 430,
+    "extraEOF": 1,
+    "mismatches": [],
+    "allIssueRecordsRead": 499,
+    "pages": 1,
+    "issues": [
+      {
+        "key": "AaHe4ooUC7n5zOm-i-dM",
+        "rule": "typescript:S3358",
+        "status": "CLOSED",
+        "resolution": "FIXED",
+        "line": null,
+        "message": "Extract this nested ternary operation into an independent statement."
+      },
+      {
+        "key": "AaHcyWYyASsLdyanVxtV",
+        "rule": "typescript:S3776",
+        "status": "CLOSED",
+        "resolution": "FIXED",
+        "line": null,
+        "message": "Refactor this function to reduce its Cognitive Complexity from 30 to the 15 allowed."
+      },
+      {
+        "key": "AaHcyWYyASsLdyanVxtU",
+        "rule": "typescript:S6759",
+        "status": "CLOSED",
+        "resolution": "FIXED",
+        "line": null,
+        "message": "Mark the props of the component as read-only."
+      },
+      {
+        "key": "AaHiJTYbB_udLTV_W_En",
+        "rule": "typescript:S3626",
+        "status": "CLOSED",
+        "resolution": "FIXED",
+        "line": null,
+        "message": "Remove this \"return\" that does not affect the flow of execution."
+      }
+    ]
+  },
+  "ciEvidence": "refactor-2920-terminal-ci-2026-11-16.json"
 }
