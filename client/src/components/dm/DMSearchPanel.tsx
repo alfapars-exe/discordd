@@ -22,10 +22,10 @@ const DEBOUNCE_MS = 300;
 /** Results per page */
 const LIMIT = 25;
 
-type DMSearchPanelProps = {
+type DMSearchPanelProps = Readonly<{
   channelId: string;
   onClose: () => void;
-};
+}>;
 
 type SearchState = {
   messages: DMMessage[];
@@ -43,7 +43,7 @@ function DMSearchPanel(props: DMSearchPanelProps) {
   return <ScopedDMSearchPanel key={scope} {...props} encrypted={encrypted} keysReady={keysReady} />;
 }
 
-function ScopedDMSearchPanel({ channelId, onClose, encrypted, keysReady }: DMSearchPanelProps & { encrypted?: boolean; keysReady: boolean }) {
+function ScopedDMSearchPanel({ channelId, onClose, encrypted, keysReady }: Readonly<DMSearchPanelProps & { encrypted?: boolean; keysReady: boolean }>) {
   const { t, i18n } = useTranslation("chat");
   const { t: tE2ee } = useTranslation("e2ee");
   const searchMessages = useDMStore((s) => s.searchMessages);
@@ -326,6 +326,68 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted, keysReady }: DMSea
   const totalPages = results ? Math.ceil(results.totalCount / LIMIT) : 0;
   const currentPage = Math.floor(offset / LIMIT) + 1;
 
+  function renderResults() {
+    if (isSearching) return <p className="search-empty">{t("searching")}</p>;
+    if (searchFailed) return <p className="search-empty" role="alert">{t("searchFailed")}</p>;
+    if (!results) return <p className="search-empty">{t("searchHint")}</p>;
+    if (results.messages.length === 0) return <p className="search-empty">{t("noSearchResults")}</p>;
+    return (
+      <>
+        <p className="search-count">
+          {t("searchResultCount", { count: results.totalCount })}
+        </p>
+        {results.messages.map((msg) => {
+          const displayName = msg.author?.display_name ?? msg.author?.username ?? "Unknown";
+
+          return (
+            <div
+              key={msg.id}
+              className="search-result-item"
+              onClick={() => void handleSelectResult(msg)}
+            >
+              <div className="search-result-header">
+                <Avatar
+                  name={displayName}
+                  avatarUrl={msg.author?.avatar_url ?? undefined}
+                  size={18}
+                />
+                <span className="search-result-author">{displayName}</span>
+                <span className="search-result-time">{formatDate(msg.created_at)}</span>
+                <GameMessageOrigin applicationID={msg.application_id} authorID={msg.user_id} />
+              </div>
+              <div className="search-result-content">
+                <SpamPreview kind="dm" message={msg} />
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="search-pagination">
+            <button
+              onClick={handlePrevPage}
+              disabled={currentPage <= 1}
+              className="search-page-btn"
+            >
+              {t("searchPrev")}
+            </button>
+            <span className="search-page-info">
+              {currentPage} / {totalPages}
+            </span>
+            <button
+              onClick={handleNextPage}
+              disabled={currentPage >= totalPages}
+              className="search-page-btn"
+            >
+              {t("searchNext")}
+            </button>
+          </div>
+        )}
+      </>
+    );
+  }
+
   return (
     <div className="search-panel">
       {/* Header */}
@@ -360,69 +422,7 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted, keysReady }: DMSea
 
       {/* Results */}
       <div className="search-results">
-        {isSearching ? (
-          <p className="search-empty">{t("searching")}</p>
-        ) : searchFailed ? (
-          <p className="search-empty" role="alert">{t("searchFailed")}</p>
-        ) : !results ? (
-          <p className="search-empty">{t("searchHint")}</p>
-        ) : results.messages.length === 0 ? (
-          <p className="search-empty">{t("noSearchResults")}</p>
-        ) : (
-          <>
-            <p className="search-count">
-              {t("searchResultCount", { count: results.totalCount })}
-            </p>
-            {results.messages.map((msg) => {
-              const displayName = msg.author?.display_name ?? msg.author?.username ?? "Unknown";
-
-              return (
-                <div
-                  key={msg.id}
-                  className="search-result-item"
-                  onClick={() => void handleSelectResult(msg)}
-                >
-                  <div className="search-result-header">
-                    <Avatar
-                      name={displayName}
-                      avatarUrl={msg.author?.avatar_url ?? undefined}
-                      size={18}
-                    />
-                    <span className="search-result-author">{displayName}</span>
-                    <span className="search-result-time">{formatDate(msg.created_at)}</span>
-                    <GameMessageOrigin applicationID={msg.application_id} authorID={msg.user_id} />
-                  </div>
-                  <div className="search-result-content">
-                    <SpamPreview kind="dm" message={msg} />
-                  </div>
-                </div>
-              );
-            })}
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="search-pagination">
-                <button
-                  onClick={handlePrevPage}
-                  disabled={currentPage <= 1}
-                  className="search-page-btn"
-                >
-                  {t("searchPrev")}
-                </button>
-                <span className="search-page-info">
-                  {currentPage} / {totalPages}
-                </span>
-                <button
-                  onClick={handleNextPage}
-                  disabled={currentPage >= totalPages}
-                  className="search-page-btn"
-                >
-                  {t("searchNext")}
-                </button>
-              </div>
-            )}
-          </>
-        )}
+        {renderResults()}
       </div>
     </div>
   );
