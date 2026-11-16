@@ -147,3 +147,6 @@ RF29 havuz özeti artık saf analiz modülünde: kümülatif sayaç yerine kayı
 
 
 RF09/RF29 benchmark:0/1/100/1001 distinct users, projection parity before timing,30 operations x9 repeats. SQLite and existing SQL query-count contract PASS. Repetition mean ns/op min/median/max and pool waits archived; not request p95 or concurrent pool acceptance. PostgreSQL and new source CI remain open. No production code/cache/index change. Evidence: refactor-profile-population-sqlite-2026-11-16.json.
+
+
+RF09/RF29 PostgreSQL18.6 verify-full mTLS nüfus benchmark’ı da PASS: dondurulmuş b71f2e5d kaynağı;0/1/100/1001 benzersiz kullanıcı x tekil/toplu x9 tekrar x30 operasyon, projection eşitliği ve mevcut query-count testi başarılı. Canlı fixture TCP örneği2/2TLS+cert; application_name filtresi0 eşleştiği için kabul kaynağı değildir. Launcher exit0, cleanup failures0, container/image tam ID ve export credential yokluğu doğrulandı. Tekrarlı ns/op ortalamaları p95 veya concurrent pool bütçesi sayılmadı; genel RF açık. Kanıt: refactor-profile-population-postgres-2026-11-16.json.

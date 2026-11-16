@@ -1,0 +1,190 @@
+{
+  "sourceCommit": "b71f2e5db75509755af4e34bbf8bd873d146f3d8",
+  "backend": "PostgreSQL18.6 verify-full mTLS",
+  "fixture": "G:\\hichat-refactor-20261116-anoknpqz\\portable-fixture-checks\\local-fanout-e34dfa4dd6374d978256e5e64a5f73fa",
+  "launcherExit": 0,
+  "cleanup": {
+    "imageID": "sha256:9aec9f1fc27a5d89e68f9dbb8453cc9e43c35ff916bce362f81a5c2afe81dcdb",
+    "finishedAt": "2026-11-16T13:51:14.7978224Z",
+    "failures": [],
+    "containerID": "6fa985d21faaf444304ea9598b828c4b294dce59546c44a1b7fcf24b2610052a"
+  },
+  "containerAndImageFullIDsAbsent": true,
+  "exportedCredentialsAbsent": true,
+  "liveTLSObservation": {
+    "scope": "fixture user TCP connections, excluding local Unix-socket psql observer",
+    "connections": 2,
+    "tls": 2,
+    "clientCertificates": 2,
+    "applicationNameFilterMatched": 0
+  },
+  "logSha256": "3d79743862e85c0a0f2b00db8320bd76be3a07bd6683a62d73380b5816a48af5",
+  "benchmarkSourceSha256": "d0902fde2968e77eafc760619ae9b5ebef95ed2d24b252e1a3f2e72c963b92ef",
+  "measurements": {
+    "users=0/bulk=false": {
+      "repetitions": 9,
+      "operationsPerRepetition": 30,
+      "nsPerOperation": {
+        "median": 10.0,
+        "min": 6.667,
+        "max": 10.0
+      },
+      "poolWaitNsPerOperation": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "users=0/bulk=true": {
+      "repetitions": 9,
+      "operationsPerRepetition": 30,
+      "nsPerOperation": {
+        "median": 80.0,
+        "min": 60.0,
+        "max": 106.7
+      },
+      "poolWaitNsPerOperation": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "users=1/bulk=false": {
+      "repetitions": 9,
+      "operationsPerRepetition": 30,
+      "nsPerOperation": {
+        "median": 593620.0,
+        "min": 558720.0,
+        "max": 633757.0
+      },
+      "poolWaitNsPerOperation": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "users=1/bulk=true": {
+      "repetitions": 9,
+      "operationsPerRepetition": 30,
+      "nsPerOperation": {
+        "median": 650157.0,
+        "min": 610237.0,
+        "max": 675073.0
+      },
+      "poolWaitNsPerOperation": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "users=100/bulk=false": {
+      "repetitions": 9,
+      "operationsPerRepetition": 30,
+      "nsPerOperation": {
+        "median": 55605157.0,
+        "min": 54091007.0,
+        "max": 58323613.0
+      },
+      "poolWaitNsPerOperation": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "users=100/bulk=true": {
+      "repetitions": 9,
+      "operationsPerRepetition": 30,
+      "nsPerOperation": {
+        "median": 769057.0,
+        "min": 745663.0,
+        "max": 817673.0
+      },
+      "poolWaitNsPerOperation": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "users=1001/bulk=false": {
+      "repetitions": 9,
+      "operationsPerRepetition": 30,
+      "nsPerOperation": {
+        "median": 569369727.0,
+        "min": 564464530.0,
+        "max": 583418197.0
+      },
+      "poolWaitNsPerOperation": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "users=1001/bulk=true": {
+      "repetitions": 9,
+      "operationsPerRepetition": 30,
+      "nsPerOperation": {
+        "median": 2752810.0,
+        "min": 2167980.0,
+        "max": 3330223.0
+      },
+      "poolWaitNsPerOperation": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    }
+  },
+  "limits": [
+    "Sequential repository operations, not HTTP p95 or concurrent pool budget",
+    "Each ns/op is a repetition mean, not an individual-operation percentile",
+    "Full RF and query-family inventory remain open"
+  ]
+}
