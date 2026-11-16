@@ -116,6 +116,90 @@ export async function collectBackupContents(scope: AuthScope): Promise<BackupCon
   };
 }
 
+type RestoreSnapshot = {
+  identity: Awaited<ReturnType<typeof keyStorage.getIdentityKeyPair>>;
+  signing: Awaited<ReturnType<typeof keyStorage.getSigningKeyPair>>;
+  registration: Awaited<ReturnType<typeof keyStorage.getRegistrationData>>;
+  signedPreKeys: Awaited<ReturnType<typeof keyStorage.getAllSignedPreKeys>>;
+  preKeys: Awaited<ReturnType<typeof keyStorage.getAllPreKeys>>;
+  sessions: Awaited<ReturnType<typeof keyStorage.getAllSessions>>;
+  senderKeys: Awaited<ReturnType<typeof keyStorage.getAllSenderKeys>>;
+  trustedIdentities: Awaited<ReturnType<typeof keyStorage.getAllTrustedIdentities>>;
+  metadata: Awaited<ReturnType<typeof keyStorage.getAllMetadata>>;
+};
+type CachedMessages = Awaited<ReturnType<typeof keyStorage.getAllCachedMessages>>;
+type RollbackEntry = readonly [storeName: string, write: () => Promise<void>];
+
+// Yield one callback at a time, preserving the existing scoped await sequence.
+function* snapshotRollbackWrites(snapshot: RestoreSnapshot, existingCache: CachedMessages): Generator<RollbackEntry, void> {
+  yield ["clear", () => keyStorage.clearAllE2EEData()];
+  for (const [key, value] of snapshot.metadata) {
+    yield ["metadata", () =>
+      keyStorage.setMetadata(key, value)];
+  }
+  if (snapshot.identity) {
+    const identity = snapshot.identity;
+    yield ["identity", () =>
+      keyStorage.saveIdentityKeyPair(identity)];
+  }
+  if (snapshot.signing) {
+    const signing = snapshot.signing;
+    yield ["signing", () =>
+      keyStorage.saveSigningKeyPair(signing)];
+  }
+  if (snapshot.registration) {
+    const registration = snapshot.registration;
+    yield ["registration", () =>
+      keyStorage.saveRegistrationData(registration)];
+  }
+  for (const spk of snapshot.signedPreKeys) {
+    yield ["signedPreKeys", () =>
+      keyStorage.saveSignedPreKey(spk)];
+  }
+  if (snapshot.preKeys.length > 0) {
+    yield ["preKeys", () =>
+      keyStorage.savePreKeys(snapshot.preKeys)];
+  }
+  for (const ses of snapshot.sessions) {
+    yield ["sessions", () =>
+      keyStorage.saveSession(ses)];
+  }
+  for (const sk of snapshot.senderKeys) {
+    yield ["senderKeys", () =>
+      keyStorage.saveSenderKey(sk)];
+  }
+  for (const ti of snapshot.trustedIdentities) {
+    yield ["trustedIdentities", () =>
+      keyStorage.saveTrustedIdentity(ti)];
+  }
+  if (existingCache.length > 0) {
+    yield ["messageCache", () =>
+      keyStorage.cacheDecryptedMessages(existingCache)];
+  }
+}
+
+function mergeRestoredCache(existingCache: CachedMessages, backupCache: BackupContents["messageCache"], pendingDeletionKeys: ReadonlySet<string>): CachedMessages {
+  const existingIds = new Set(existingCache.map((m) => m.messageId));
+  const mergedCache = existingCache.filter(message => !pendingDeletionKeys.has(cachedMessageDeletionKey(message)));
+
+  if (backupCache) {
+    for (const m of backupCache) {
+      if (!existingIds.has(m.messageId) && !pendingDeletionKeys.has(cachedMessageDeletionKey(m))) {
+        mergedCache.push({
+          messageId: m.messageId,
+          channelId: m.channelId,
+          dmChannelId: m.dmChannelId,
+          content: m.content,
+          timestamp: m.timestamp,
+          encryptedSourceTag:m.encryptedSourceTag,
+          fileKeys:m.fileKeys,
+        });
+      }
+    }
+  }
+  return mergedCache;
+}
+
 /** Import backup contents into IndexedDB.
  *
  * Atomicity note: writing into IndexedDB inherently happens in
@@ -287,24 +371,7 @@ export async function importBackupContents(contents: BackupContents, scope: Auth
     }
 
     // Merge existing cache + backup cache (existing takes priority)
-    const existingIds = new Set(existingCache.map((m) => m.messageId));
-    const mergedCache = existingCache.filter(message => !pendingDeletionKeys.has(cachedMessageDeletionKey(message)));
-
-    if (contents.messageCache) {
-      for (const m of contents.messageCache) {
-        if (!existingIds.has(m.messageId) && !pendingDeletionKeys.has(cachedMessageDeletionKey(m))) {
-          mergedCache.push({
-            messageId: m.messageId,
-            channelId: m.channelId,
-            dmChannelId: m.dmChannelId,
-            content: m.content,
-            timestamp: m.timestamp,
-            encryptedSourceTag:m.encryptedSourceTag,
-            fileKeys:m.fileKeys,
-          });
-        }
-      }
-    }
+    const mergedCache = mergeRestoredCache(existingCache, contents.messageCache, pendingDeletionKeys);
 
     if (mergedCache.length > 0) {
       await awaitScoped(scope, () => keyStorage.cacheDecryptedMessages(mergedCache));
@@ -329,59 +396,8 @@ export async function importBackupContents(contents: BackupContents, scope: Auth
     console.error("[keyBackup] restore failed; rolling back to snapshot");
     const failedStores: string[] = [];
 
-    await rollbackWrite(scope, failedStores, "clear", () => keyStorage.clearAllE2EEData());
-    for (const [key, value] of snapshot.metadata) {
-      await rollbackWrite(scope, failedStores, "metadata", () =>
-        keyStorage.setMetadata(key, value)
-      );
-    }
-    if (snapshot.identity) {
-      const identity = snapshot.identity;
-      await rollbackWrite(scope, failedStores, "identity", () =>
-        keyStorage.saveIdentityKeyPair(identity)
-      );
-    }
-    if (snapshot.signing) {
-      const signing = snapshot.signing;
-      await rollbackWrite(scope, failedStores, "signing", () =>
-        keyStorage.saveSigningKeyPair(signing)
-      );
-    }
-    if (snapshot.registration) {
-      const registration = snapshot.registration;
-      await rollbackWrite(scope, failedStores, "registration", () =>
-        keyStorage.saveRegistrationData(registration)
-      );
-    }
-    for (const spk of snapshot.signedPreKeys) {
-      await rollbackWrite(scope, failedStores, "signedPreKeys", () =>
-        keyStorage.saveSignedPreKey(spk)
-      );
-    }
-    if (snapshot.preKeys.length > 0) {
-      await rollbackWrite(scope, failedStores, "preKeys", () =>
-        keyStorage.savePreKeys(snapshot.preKeys)
-      );
-    }
-    for (const ses of snapshot.sessions) {
-      await rollbackWrite(scope, failedStores, "sessions", () =>
-        keyStorage.saveSession(ses)
-      );
-    }
-    for (const sk of snapshot.senderKeys) {
-      await rollbackWrite(scope, failedStores, "senderKeys", () =>
-        keyStorage.saveSenderKey(sk)
-      );
-    }
-    for (const ti of snapshot.trustedIdentities) {
-      await rollbackWrite(scope, failedStores, "trustedIdentities", () =>
-        keyStorage.saveTrustedIdentity(ti)
-      );
-    }
-    if (existingCache.length > 0) {
-      await rollbackWrite(scope, failedStores, "messageCache", () =>
-        keyStorage.cacheDecryptedMessages(existingCache)
-      );
+    for (const [storeName, write] of snapshotRollbackWrites(snapshot, existingCache)) {
+      await rollbackWrite(scope, failedStores, storeName, write);
     }
 
     if (failedStores.length > 0) {
