@@ -1,0 +1,16 @@
+{
+  "characterizationCommit": "b95dd6fd",
+  "regression": "Production-style ascending REST page with source_sequence0 fails old verifier with history_order_not_descending",
+  "fix": "Use exact RFC3339 nanosecond instant and ID tuple, verify ascending page and strictly older page boundary, advance before with first row. Keep count/page/digest/acknowledgement gates.",
+  "contracts": {
+    "passed": 78,
+    "failed": 0,
+    "skipped": 0,
+    "specificNegativeReasonsAsserted": true,
+    "sameTimestampIdTies": true,
+    "nanosecondsAndOffsets": true,
+    "calendarAndMissingTimestampRejection": true,
+    "boundaryOverlapRejected": true
+  },
+  "realExtendedRerun": "Pending; previous failed run is not retroactively accepted"
+}

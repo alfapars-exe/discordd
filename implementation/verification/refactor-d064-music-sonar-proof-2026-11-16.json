@@ -1,0 +1,24 @@
+{
+  "headSha": "d064436a72f8cf08dff8be585a70e5adebd770c2",
+  "sourceProof": [
+    {
+      "path": "server/services/music_bot_pipeline.go",
+      "matchedLines": 983
+    },
+    {
+      "path": "server/services/music_bot_connection_setup.go",
+      "matchedLines": 67
+    }
+  ],
+  "issues": [
+    {
+      "key": "AaHYWqrkd7dyvm3wYSom",
+      "component": "alfapars-exe_discordd:server/services/music_bot_pipeline.go",
+      "status": "CLOSED",
+      "resolution": "FIXED",
+      "message": "Refactor this method to reduce its Cognitive Complexity from 18 to the 15 allowed."
+    }
+  ],
+  "remainingOpenProductionS3776InPR": [],
+  "scope": "Only fetched Go/TypeScript S3776 PR issues and source-matched music closure. Not repository-wide debt clearance or RF acceptance."
+}

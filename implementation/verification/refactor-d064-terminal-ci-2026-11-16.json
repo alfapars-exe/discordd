@@ -1,0 +1,245 @@
+{
+  "headSha": "d064436a72f8cf08dff8be585a70e5adebd770c2",
+  "success": 36,
+  "failure": 0,
+  "pending": 0,
+  "checks": [
+    {
+      "name": "Go test & build",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43827132126/job/133166288024"
+    },
+    {
+      "name": "Combined Go statement coverage",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43827132126/job/133165818431"
+    },
+    {
+      "name": "SonarCloud Code Analysis",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/runs/133165074825"
+    },
+    {
+      "name": "Go tests (./services shard 1/8)",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43827132126/job/133163527037"
+    },
+    {
+      "name": "Go tests (./repository shard 6/8)",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43827132126/job/133163527007"
+    },
+    {
+      "name": "Go tests (./repository shard 2/8)",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43827132126/job/133163526987"
+    },
+    {
+      "name": "Go tests (./services shard 2/8)",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43827132126/job/133163526981"
+    },
+    {
+      "name": "Go tests (./repository shard 5/8)",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43827132126/job/133163526972"
+    },
+    {
+      "name": "Go tests (./repository shard 7/8)",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43827132126/job/133163526931"
+    },
+    {
+      "name": "Go tests (./repository shard 0/8)",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43827132126/job/133163526896"
+    },
+    {
+      "name": "Go tests (./repository shard 3/8)",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43827132126/job/133163526744"
+    },
+    {
+      "name": "Go tests (./repository shard 1/8)",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43827132126/job/133163526599"
+    },
+    {
+      "name": "PostgreSQL repository and migration contracts",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43827132126/job/133163526571"
+    },
+    {
+      "name": "golangci-lint",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43827132126/job/133163526567"
+    },
+    {
+      "name": "Prod image build (HF Dockerfile)",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43827132126/job/133163526531"
+    },
+    {
+      "name": "native (ubuntu-latest)",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43827132146/job/133163526518"
+    },
+    {
+      "name": "Client lint, type, test & build",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43827132126/job/133163526513"
+    },
+    {
+      "name": "Migration filename hygiene",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43827132126/job/133163526453"
+    },
+    {
+      "name": "Go tests (./services shard 4/8)",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43827132126/job/133163526435"
+    },
+    {
+      "name": "Go tests (./repository shard 4/8)",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43827132126/job/133163526413"
+    },
+    {
+      "name": "PostgreSQL client certificate reconnect",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43827132126/job/133163526406"
+    },
+    {
+      "name": "Go tests (./services shard 5/8)",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43827132126/job/133163526396"
+    },
+    {
+      "name": "Go tests (./services shard 7/8)",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43827132126/job/133163526382"
+    },
+    {
+      "name": "npm audit (.)",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43827132126/job/133163526375"
+    },
+    {
+      "name": "npm audit (client)",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43827132126/job/133163526355"
+    },
+    {
+      "name": "Go tests (./services shard 6/8)",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43827132126/job/133163526326"
+    },
+    {
+      "name": "Go tests (./services shard 0/8)",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43827132126/job/133163526309"
+    },
+    {
+      "name": "npm audit (e2e)",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43827132126/job/133163526303"
+    },
+    {
+      "name": "Security scan",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43827132126/job/133163526290"
+    },
+    {
+      "name": "Go tests (./services shard 3/8)",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43827132126/job/133163526289"
+    },
+    {
+      "name": "Go base tests & build",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43827132126/job/133163526247"
+    },
+    {
+      "name": "Electron main-process tests",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43827132126/job/133163526246"
+    },
+    {
+      "name": "package (ubuntu-latest)",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43827132203/job/133163526193"
+    },
+    {
+      "name": "native (macos-latest)",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43827132146/job/133163526047"
+    },
+    {
+      "name": "Playwright E2E",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43827132126/job/133163525981"
+    },
+    {
+      "name": "package (windows-latest)",
+      "state": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43827132203/job/133163525874"
+    }
+  ],
+  "scope": "Terminal immutable-head CI. Security manifest failure in c9 resolved here. General RF01-RF30, physical media, historical panel root cause and long-profile acceptance remain separate.",
+  "client": {
+    "filesPassed": 508,
+    "testsPassed": 5582,
+    "testsSkipped": 1,
+    "coverage": {
+      "statements": {
+        "pct": 68.17,
+        "covered": 36042,
+        "total": 52866
+      },
+      "branches": {
+        "pct": 65.14,
+        "covered": 26015,
+        "total": 39936
+      },
+      "functions": {
+        "pct": 62.48,
+        "covered": 7736,
+        "total": 12381
+      },
+      "lines": {
+        "pct": 69.23,
+        "covered": 26731,
+        "total": 38610
+      }
+    },
+    "job": 133163526513,
+    "logSha256": "fc8b1d02301427792cf90358a14a5a4822442b5b898b7b582512068af2828e76"
+  },
+  "postgresRequiredCases": {
+    "job": 133163526571,
+    "cases": {
+      "TestGroupDMPostgresEditMembershipRace": [
+        "pass"
+      ],
+      "TestPostgresOwnershipTransferWaitsForDepartingTarget": [
+        "pass"
+      ],
+      "TestPostgresLeaveWaitsForOwnershipChange": [
+        "pass"
+      ],
+      "TestServerOwnershipTransferAtomicRolesAndOneWinner": [
+        "pass"
+      ],
+      "TestGroupDMDurableSendLifecycle": [
+        "pass"
+      ]
+    },
+    "logSha256": "70f64f9eaa2ea3053cb6a724b4fcebd8c899884f1af1bd47e16346ff0347444d"
+  },
+  "combinedGoStatementCoverage": {
+    "pct": 61.7,
+    "minimum": 58.7,
+    "job": 133165818431,
+    "logSha256": "38ddbe6221cb5c0053bd45d20db1027a9e2fde471fefeb6d8a3c7f5343c48463"
+  }
+}
