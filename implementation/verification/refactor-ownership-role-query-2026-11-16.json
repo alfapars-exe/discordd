@@ -1,0 +1,30 @@
+{
+  "scope": "Extract ownership-role query/cardinality check while keeping conditional authorization UPDATE, PostgreSQL target-member lock, role writes, audit and result read inside the existing transaction.",
+  "beforeCommit": "45122106",
+  "baseline": {
+    "passedIncludingSubtests": 15,
+    "failed": 0,
+    "skipped": 0,
+    "logSha256": "39102f685eb5f02be416a9c226835436faca0c381d959f7a9abc199cdb248913"
+  },
+  "candidate": {
+    "passedIncludingSubtests": 300,
+    "failed": 0,
+    "skipped": 0,
+    "logSha256": "59223b41c1d54a46e3d8e36310fb746795bae74854200af182840f20b1e791b9"
+  },
+  "toolchain": "Go1.26.11 Linux amd64 CGO1 race; owned read-only mounts and tmpfs build cache",
+  "vet": "PASS: go vet -mod=readonly -p=2 ./repository",
+  "parity": {
+    "sourceBefore": "45122106",
+    "method": "Inline extracted ownership-role query and restore return-value bindings; exact whole-file LF-normalized comparison",
+    "wholeFileParity": true,
+    "sqlAndCursorCloseOrderPreserved": true,
+    "transactionBoundaryPreserved": true
+  },
+  "limitations": [
+    "Local SQLite characterization only; PostgreSQL departure/transfer locking requires new-head CI",
+    "Full repository coverage/race and final CI pending",
+    "General refactor and long-profile acceptance remain open"
+  ]
+}
