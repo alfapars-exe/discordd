@@ -3688,3 +3688,6 @@ Değişmeyen88892ed1Go backend + a03ea5d4 yük kodu, WindowsGo1.27.4/CGO0, k6v2.
 ### RF17/RF26 — DM arama aşamaları (2026-11-16)
 
 f35a2b18, pending plaintextyanıtının sorgudeğişimi/temizleme/hesapdeğişimi sonrası atılmasını üç karakterizasyonla mevcutkaynakta doğrular:20→23PASS. d276b08c, encryptedsearch ve synchronouspagepublication aşamalarını dispatcher'dan ayırır. Önceki gövdelerin TypeScript tokenparitesi, yalnız publicationcallbackçağrısı yerine koyularak exactdoğrulandı; ilaveawaitöncesi publication yok. Deletionfrontierversion, seqkontrolleri, abort/snapshotdisposal ve DMmetadata projection korunur. İlgili3dosyada53PASS; tsc-b ve değişen dosyalar lintPASS. Sonar30 orijinalkaydı AaHcyWYyASsLdyanVxtV yeniheadanalizini bekler. Disksıkışıklığı nedeniyle yereltambuild/coverage, immutabletarama ve uzunkoşutekrarı henüz yok; bu durum UIkaynağının tamamlanmış genel kabulü sayılmadı. Kanıt refactor-dm-search-phases-2026-11-16.json. RF17/RF26 açık.
+
+
+DM arama ek doğrulaması: sonrakikontrolde C:yaklaşık2GBboş ve Docker29.9.3yanıtverir durumda. Reddedilen manueltemizlik uygulanmadı; kesilen koşunun bb6b666a78ebimage/containerancestor sorguları boş. Enaz1GBboşalan önkontrolüyle Viteproductionbuild2,27sPASS (mevcutlargechunkuyarısı). Önceki receiptbuildbekleniyor kaydı bu kanıtla güncellendi; uzunkoşukabulü verilmedi.

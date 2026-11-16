@@ -50,5 +50,14 @@
     "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-pg-tls-test-d019b5954fca4ce0a15310189ba06970\\capacity-k6.log": "9986de4867fd4dd26db348b016e35bfe1d6aa084552156afd4ade13c8135df96",
     "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-pg-tls-test-d019b5954fca4ce0a15310189ba06970\\capacity-runtime-telemetry.json": "eb0e0e2d385f25676ea019f5ed2b53a87922bd58a0b9d61171d4a12ebbe673c2"
   },
-  "next": "Restore local disk space, verify owned Docker cleanup, rerun same immutable source profile. Deletion of task-owned cache/ZIP rejected by automatic policy; explicit user input requested."
+  "next": "Restore local disk space, verify owned Docker cleanup, rerun same immutable source profile. Deletion of task-owned cache/ZIP rejected by automatic policy; explicit user input requested.",
+  "subsequentObservation": {
+    "at": "2026-11-16T02:14:09.944739+00:00",
+    "freeBytes": 2009264128,
+    "dockerServerVersion": "29.9.3",
+    "ownedContainerAbsent": "docker ps -a --filter ancestor=hichat-pg-tls-test:bb6b666a78eb: empty",
+    "ownedImageAbsent": "docker image ls --filter reference=hichat-pg-tls-test:bb6b666a78eb: empty",
+    "manualDeletion": "None; both policy-rejected ZIP commands did not execute",
+    "scope": "Does not turn interrupted run into acceptance. Extended profile still pending adequate headroom."
+  }
 }
