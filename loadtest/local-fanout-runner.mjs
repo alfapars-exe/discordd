@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { createServer } from "node:net";
+import { requestLocalAPI } from "./local-profile-api.mjs";
 import { reconcileFanoutHistory } from "./fanout-history.mjs";
 import { readLocalConfig, spawnOwned, validateLocalFixture, snapshotSources, assertSnapshotUnchanged, joinOwnedProcesses, openProfileLog, finishProfileLog, captureProbeResult } from "./local-profile-fixture.mjs";
 const cfg = readLocalConfig(process.argv[2]);
@@ -32,7 +33,7 @@ function assertDiskHeadroom(starting = false) {
   }
 }
 function sql(query, db = "hichat_e2e_control") {
-  return execFileSync("docker", ["exec", "-i", "--env", "PGAPPNAME=hichat-local-profile-collector", cfg.container, "psql", "-U", "hichat_tls_test", "-d", db, "-v", "ON_ERROR_STOP=1", "-tA"], {
+  return execFileSync(cfg.dockerBinary, ["exec", "-i", "--env", "PGAPPNAME=hichat-local-profile-collector", cfg.container, "psql", "-U", "hichat_tls_test", "-d", db, "-v", "ON_ERROR_STOP=1", "-tA"], {
     input: query,
     encoding: "utf8",
     windowsHide: true
@@ -95,24 +96,10 @@ $p | Select-Object Id,ProcessName,CPU,WorkingSet64,PrivateMemorySize64 | Convert
 `);
 const ps = join(process.env.SystemRoot, "System32/WindowsPowerShell/v1.0/powershell.exe");
 let baseURL, dbName;
-async function request(path, body, token = "", method) {
-  const response = await fetch(baseURL + path, {
-    method: method ?? (body === undefined ? "GET" : "POST"),
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? {
-        Authorization: `Bearer ${token}`
-      } : {})
-    },
-    ...(body === undefined ? {} : {
-      body: JSON.stringify(body)
-    }),
-    signal: AbortSignal.timeout(10000)
-  });
-  const data = await response.json();
-  if (!response.ok || !data.success) throw Error(`Fixture API failed: ${path} status=${response.status}`);
-  return data.data;
+function request(path, body, token, method) {
+  return requestLocalAPI(baseURL, { path, body, token, method });
 }
+
 async function debug(path) {
   const response = await fetch(baseURL + "/debug/pprof/" + path, {
     headers: {
@@ -120,16 +107,16 @@ async function debug(path) {
     },
     signal: AbortSignal.timeout(10000)
   });
-  if (!response.ok) throw Error(`Admin profiling failed status=${response.status}`);
+  if (!response.ok) throw new Error(`Admin profiling failed status=${response.status}`);
   return response.text();
 }
 async function sample(phase) {
   assertDiskHeadroom();
-  if (server.exitCode !== null) throw Error("Owned server exited before sample");
+  if (server.exitCode !== null) throw new Error("Owned server exited before sample");
   const goroutines = await debug("goroutine?debug=1"),
     heap = await debug("heap?debug=1");
   const total = Number(goroutines.match(/goroutine profile: total (\d+)/)?.[1]);
-  if (!Number.isSafeInteger(total)) throw Error("Missing goroutine profile count");
+  if (!Number.isSafeInteger(total)) throw new Error("Missing goroutine profile count");
   const pumps = {
     read: 0,
     write: 0
@@ -142,11 +129,11 @@ async function sample(phase) {
   const memory = {};
   for (const key of ["HeapAlloc", "HeapInuse", "NumGC"]) {
     const value = heap.match(new RegExp("^# " + key + " = (\\d+)", "m"));
-    if (!value) throw Error(`Missing heap profile field ${key}`);
+    if (!value) throw new Error(`Missing heap profile field ${key}`);
     memory[key] = Number(value[1]);
   }
   const stack = heap.match(/^# Stack = (\d+) \/ (\d+)/m);
-  if (!stack) throw Error("Missing Go stack profile values");
+  if (!stack) throw new Error("Missing Go stack profile values");
   memory.StackInuse = Number(stack[1]);
   memory.StackSys = Number(stack[2]);
   const os = JSON.parse(execFileSync(ps, ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", metricsPs, "-TaskServerPid", String(server.pid)], {
@@ -156,7 +143,7 @@ async function sample(phase) {
   const database = JSON.parse(sql(`SELECT json_build_object('connections',count(*),'active',count(*) FILTER(WHERE state='active'),'lockWaits',count(*) FILTER(WHERE wait_event_type='Lock'),'idleInTransaction',count(*) FILTER(WHERE state='idle in transaction'),'tlsConnections',count(*) FILTER(WHERE ssl),'clientCertificates',count(*) FILTER(WHERE client_dn IS NOT NULL)) FROM pg_stat_activity a JOIN pg_stat_ssl s ON a.pid=s.pid WHERE datname='${dbName}' AND backend_type='client backend' AND application_name='hichat';`));
   if (!Number.isSafeInteger(database.connections) || database.connections < 1 || database.connections !== database.tlsConnections || database.connections !== database.clientCertificates) {
     report.rejectedDatabaseSample = { at: new Date().toISOString(), database };
-    throw Error("Application database connection lacks mTLS");
+    throw new Error("Application database connection lacks mTLS");
   }
   const value = {
     at: new Date().toISOString(),
@@ -210,7 +197,7 @@ await runProfileWithReport({
     created = true;
     const descriptor = JSON.parse(readFileSync(join(runDir, "hichat-e2e-postgres.json"), "utf8"));
     dbName = new URL(descriptor.url).pathname.slice(1);
-    if (!/^hichat_e2e_run_[0-9_]+_[a-f0-9]{16}$/.test(dbName)) throw Error("Invalid owned database identity");
+    if (!/^hichat_e2e_run_[0-9_]+_[a-f0-9]{16}$/.test(dbName)) throw new Error("Invalid owned database identity");
     const listener = createServer();
     await new Promise(resolve => listener.listen(0, "127.0.0.1", resolve));
     const port = listener.address().port;
@@ -255,7 +242,7 @@ await runProfileWithReport({
     const deadline = Date.now() + 180000;
     let ready = false;
     while (Date.now() < deadline) {
-      if (server.exitCode !== null) throw Error("Owned backend exited during startup");
+      if (server.exitCode !== null) throw new Error("Owned backend exited during startup");
       try {
         const res = await fetch(baseURL + "/api/ready", {
           signal: AbortSignal.timeout(1000)
@@ -267,7 +254,7 @@ await runProfileWithReport({
       } catch {}
       await sleep(500);
     }
-    if (!ready) throw Error("Owned backend readiness timed out");
+    if (!ready) throw new Error("Owned backend readiness timed out");
     const seed = randomBytes(5).toString("hex"),
       prefix = `load${seed}`,
       monitor = `monitor${seed}`,
@@ -286,9 +273,9 @@ await runProfileWithReport({
       password
     });
     adminToken = auth.access_token;
-    if (typeof adminToken !== "string" || !adminToken) throw Error("Missing monitor credential");
+    if (typeof adminToken !== "string" || !adminToken) throw new Error("Missing monitor credential");
     report.dbUsers = Number(sql(`SELECT count(*) FROM users WHERE username LIKE '${prefix}%';`, dbName));
-    if (report.dbUsers !== 21) throw Error("Load account seeding count mismatch");
+    if (report.dbUsers !== 21) throw new Error("Load account seeding count mismatch");
     const guild = await request("/api/servers", {
       name: `Fanout ${seed}`,
       host_type: "mqvi_hosted"
@@ -296,7 +283,7 @@ await runProfileWithReport({
     const updated = await request(`/api/servers/${guild.id}`, {
       e2ee_enabled: false
     }, adminToken, "PATCH");
-    if (updated.e2ee_enabled !== false) throw Error("Fixture channel must be plaintext");
+    if (updated.e2ee_enabled !== false) throw new Error("Fixture channel must be plaintext");
     const channel = await request(`/api/servers/${guild.id}/channels`, {
       name: "fanout-probe",
       type: "text"
@@ -315,9 +302,9 @@ await runProfileWithReport({
       const joined = await request("/api/servers/join", {
         invite_code: invite.code
       }, login.access_token);
-      if (joined.id !== guild.id) throw Error("Unexpected joined guild");
+      if (joined.id !== guild.id) throw new Error("Unexpected joined guild");
       const page = await request(`/api/servers/${guild.id}/channels/${channel.id}/messages?limit=100`, undefined, login.access_token);
-      if (!Array.isArray(page.messages) || page.messages.length !== 0) throw Error("Expected empty readable fixture channel");
+      if (!Array.isArray(page.messages) || page.messages.length !== 0) throw new Error("Expected empty readable fixture channel");
       const uid = sql(`SELECT id FROM users WHERE username='${prefix}${i}';`, dbName);
       if (i === 20) {
         slowToken = login.access_token;
@@ -389,7 +376,7 @@ await runProfileWithReport({
     const admissionDeadline = Date.now() + 10000;
     let admitted = false;
     while (Date.now() < admissionDeadline) {
-      if (slowDone) throw Error("Slow probe exited before admission");
+      if (slowDone) throw new Error("Slow probe exited before admission");
       const v = await sample("slow_admission");
       if (v.pumps.read === 1 && v.pumps.write === 1) {
         admitted = true;
@@ -397,7 +384,7 @@ await runProfileWithReport({
       }
       await sleep(250);
     }
-    if (!admitted) throw Error("Slow peer was not admitted to server pumps");
+    if (!admitted) throw new Error("Slow peer was not admitted to server pumps");
     console.log(JSON.stringify({
       phase: "load",
       vus: 20,
@@ -447,14 +434,14 @@ await runProfileWithReport({
       });
     });
     while (!loadDone) {
-      if (stopRequested) throw Error("Diagnostic interrupted");
+      if (stopRequested) throw new Error("Diagnostic interrupted");
       const value = await sample("load");
       if (value.pumps.read === 21 && value.pumps.write === 21 && !slowPeakAt) slowPeakAt = value.at;
       if (slowPeakAt && value.pumps.read === 20 && value.pumps.write === 20) {
         if (!slowRetiredAt) slowRetiredAt = value.at;
         if (slowDone) slowHealthySamples++;
       }
-      if (slowDone && (slowError || report.slow.exitCode !== 0 || slowEvents.length !== 2 || slowEvents[1].reason !== "write_failed")) throw Error("Slow peer ended without a clean observed server-close write failure");
+      if (slowDone && (slowError || report.slow.exitCode !== 0 || slowEvents.length !== 2 || slowEvents[1].reason !== "write_failed")) throw new Error("Slow peer ended without a clean observed server-close write failure");
       if (samples.length % 10 === 0) console.log(JSON.stringify({
         phase: "sample",
         goroutines: value.goroutines,
@@ -468,13 +455,13 @@ await runProfileWithReport({
       if (load.exitCode !== null && load.stdout.readableEnded && load.stderr.readableEnded) resolve();
     });
     await flushLog(logLoad);
-    if (!slowDone) throw Error("Slow peer was not retired while healthy workload was live");
+    if (!slowDone) throw new Error("Slow peer was not retired while healthy workload was live");
     await slowExit;
-    if (slowError) throw Error("Slow probe output or report failed");
-    if (!slowPeakAt || !slowRetiredAt || slowHealthySamples < 10) throw Error("Missing 21-to-20 server pump isolation observations");
+    if (slowError) throw new Error("Slow probe output or report failed");
+    if (!slowPeakAt || !slowRetiredAt || slowHealthySamples < 10) throw new Error("Missing 21-to-20 server pump isolation observations");
     const connected = slowEvents[0],
       finished = slowEvents[1];
-    if (connected.event !== "connected" || finished.event !== "finished" || finished.keepalive_pairs < 2 || finished.elapsed_ms >= 750000 || finished.post_upgrade_reader !== false) throw Error("Slow probe liveness contract failed");
+    if (connected.event !== "connected" || finished.event !== "finished" || finished.keepalive_pairs < 2 || finished.elapsed_ms >= 750000 || finished.post_upgrade_reader !== false) throw new Error("Slow probe liveness contract failed");
     report.slow.isolation = {
       peakAt: slowPeakAt,
       retiredAt: slowRetiredAt,
@@ -497,7 +484,7 @@ await runProfileWithReport({
       connecting: metric("ws_connecting"),
       sessionDuration: metric("ws_session_duration")
     };
-    if (exitCode !== 0 || report.result.handshakes !== 20 || report.result.completed !== 20 || report.result.heartbeatAcks !== 400) throw Error("Authenticated load/heartbeat contract failed");
+    if (exitCode !== 0 || report.result.handshakes !== 20 || report.result.completed !== 20 || report.result.heartbeatAcks !== 400) throw new Error("Authenticated load/heartbeat contract failed");
     const receipts = readFileSync(join(cfg.tempDir, "capacity-k6.log"), "utf8").split(/\r?\n/).filter(line => line.startsWith("FANOUT_RECEIPT ")).map(line => JSON.parse(line.slice(15)));
     report.fanout.observedCounters = {
       sent: counter("fanout_sent"),
@@ -553,15 +540,15 @@ await runProfileWithReport({
       ...history,
       receipts
     };
-    if (report.fanout.result.sent !== 5800 || report.fanout.result.received !== 116000 || report.fanout.result.receivers !== 20 || report.fanout.result.duplicates !== 0 || report.fanout.result.invalid !== 0) throw Error("Fanout aggregate counter mismatch");
+    if (report.fanout.result.sent !== 5800 || report.fanout.result.received !== 116000 || report.fanout.result.receivers !== 20 || report.fanout.result.duplicates !== 0 || report.fanout.result.invalid !== 0) throw new Error("Fanout aggregate counter mismatch");
     for (let i = 0; i < 6; i++) {
       await sample("recovery");
       await sleep(1500);
     }
     const recovery = samples.filter(x => x.phase === 'recovery'),
       loadSamples = samples.filter(x => x.phase === 'load');
-    if (!loadSamples.some(x => x.pumps.read === 20 && x.pumps.write === 20)) throw Error("Did not observe twenty concurrent server pump pairs");
-    if (recovery.some(x => x.pumps.read !== 0 || x.pumps.write !== 0)) throw Error("Socket pump resources survived completed sessions");
+    if (!loadSamples.some(x => x.pumps.read === 20 && x.pumps.write === 20)) throw new Error("Did not observe twenty concurrent server pump pairs");
+    if (recovery.some(x => x.pumps.read !== 0 || x.pumps.write !== 0)) throw new Error("Socket pump resources survived completed sessions");
     report.limits = ["One 20-session local profile, not capacity/SLA or long-soak acceptance", "5800 plaintext channel messages; one non-reading TCP peer, no media provider load", "Profiling and process/DB sampling overhead included; CPU not pinned; other developer Docker services remain running", "Twenty-one ordinary users join through the real invite API; twenty healthy k6 users and one non-reading Go peer; separate synthetic platform admin reads profiles", "Heap is observed without forced GC; idle pool/heap retention is not asserted to return byte-for-byte to baseline"];
     console.log(JSON.stringify({
       phase: "accepted",

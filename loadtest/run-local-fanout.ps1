@@ -11,6 +11,7 @@ foreach ($tool in @('docker', 'git', 'tar', 'node')) {
 }
 $GoBinary = (Get-Command $GoBinary -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
 $K6Binary = (Get-Command $K6Binary -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
+$DockerBinary = (Get-Command docker -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
 $SourceRoot = (Resolve-Path -LiteralPath $SourceRoot).Path
 $ArtifactRoot = [IO.Path]::GetFullPath($ArtifactRoot)
 New-Item -ItemType Directory -Force -Path $ArtifactRoot | Out-Null
@@ -123,7 +124,7 @@ COPY --chown=postgres:postgres --chmod=0644 pg_hba.conf /tls/pg_hba.conf
         $controlURL += "&$($entry.Key)=$([Uri]::EscapeDataString($certPath))"
     }
     $privateConfig = Join-Path $tempDir 'capacity-private.json'
-    Write-Utf8NoBom $privateConfig (@{tempDir=$tempDir;container=$containerName;containerID=$containerID;ownerLabel=$ownerLabel;controlDSN=$controlURL;goBinary=$GoBinary;source=$frozenSource;sourceCommit=$sourceCommit;k6=$K6Binary}|ConvertTo-Json)
+    Write-Utf8NoBom $privateConfig (@{tempDir=$tempDir;container=$containerName;containerID=$containerID;ownerLabel=$ownerLabel;controlDSN=$controlURL;goBinary=$GoBinary;source=$frozenSource;sourceCommit=$sourceCommit;k6=$K6Binary;dockerBinary=$DockerBinary}|ConvertTo-Json)
     docker exec $containerName openssl x509 -in /tls/server.crt -noout -dates | Out-File -Encoding utf8 (Join-Path $tempDir 'server-cert-dates.log')
     Write-Output "Local profile evidence directory: $tempDir"
     & node (Join-Path $frozenSource 'loadtest/local-fanout-runner.mjs') $privateConfig

@@ -28,7 +28,8 @@ function fixture(t) {
     dsn.searchParams.set(key, join(tempDir, leaf));
   }
   const config = { tempDir, source, sourceCommit, ownerLabel, container: 'owned-container',
-    containerID: 'c'.repeat(64), controlDSN: dsn.toString(), goBinary: 'go', k6: 'k6' };
+    containerID: 'c'.repeat(64), controlDSN: dsn.toString(),
+    dockerBinary: join(tempDir, 'docker.exe'), goBinary: join(tempDir, 'go.exe'), k6: join(tempDir, 'k6.exe') };
   const container = { Id: config.containerID, State: { Running: true },
     Config: { Labels: { 'hichat.task': ownerLabel } },
     NetworkSettings: { Ports: { '5432/tcp': [{ HostIp: '127.0.0.1', HostPort: '54321' }] } } };
@@ -101,6 +102,13 @@ test('configuration errors never disclose the private DSN or underlying Docker e
   assert.throws(() => validateLocalFixture(config, { platform: 'win32', inspect() {
     throw new Error(config.controlDSN);
   } }), error => error.message === 'Invalid owned local profile fixture' && !error.message.includes('private-fixture-value'));
+});
+
+test('relative executable paths cannot reintroduce a PATH search after changing working directory', t => {
+  const { config, validate } = fixture(t);
+  for (const key of ['dockerBinary', 'goBinary', 'k6']) {
+    assert.throws(() => validate({ ...config, [key]: 'unqualified-tool' }), /Invalid owned local profile fixture/);
+  }
 });
 
 test('source snapshots detect added, removed and edited inputs without hashing generated output', t => {

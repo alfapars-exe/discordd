@@ -1,12 +1,12 @@
 import { spawn, execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { closeSync, createWriteStream, lstatSync, openSync, readFileSync, readSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
-import { join, relative, resolve, sep } from 'node:path';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 const processes = new WeakMap();
 const invalid = () => new Error('Invalid owned local profile fixture');
 const configKeys = ['tempDir', 'container', 'containerID', 'ownerLabel', 'controlDSN',
-  'goBinary', 'source', 'k6', 'sourceCommit'];
+  'goBinary', 'source', 'k6', 'sourceCommit', 'dockerBinary'];
 
 export function readLocalConfig(path) {
   let file;
@@ -21,8 +21,8 @@ export function readLocalConfig(path) {
   finally { if (file !== undefined) closeSync(file); }
 }
 
-function inspectContainer(name) {
-  return JSON.parse(execFileSync('docker', ['inspect', name], {
+function inspectContainer(name, dockerBinary) {
+  return JSON.parse(execFileSync(dockerBinary, ['inspect', name], {
     encoding: 'utf8', windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
   }))[0];
 }
@@ -35,6 +35,7 @@ export function validateLocalFixture(config, { platform = process.platform, insp
       typeof config[key] !== 'string' || !config[key] || config[key].length > 16384)) throw invalid();
     if (!/^[a-f0-9]{40}$/.test(config.sourceCommit) || !/^[a-f0-9]{64}$/.test(config.containerID) ||
       !/^local-fanout-[a-f0-9]{32}$/.test(config.ownerLabel)) throw invalid();
+    if (!['dockerBinary', 'goBinary', 'k6'].every(key => isAbsolute(config[key]))) throw invalid();
     const directory = realpathSync(config.tempDir);
     const source = realpathSync(config.source);
     if (source !== join(directory, 'source')) throw invalid();
@@ -44,12 +45,12 @@ export function validateLocalFixture(config, { platform = process.platform, insp
     if (dsn.protocol !== 'postgres:' || dsn.hostname !== '127.0.0.1' ||
       dsn.username !== 'hichat_tls_test' || !dsn.password || !dsn.port ||
       dsn.pathname !== '/hichat_e2e_control' || dsn.hash) throw invalid();
-    if ([...dsn.searchParams.keys()].sort().join(',') !== 'sslcert,sslkey,sslmode,sslrootcert' ||
+    if ([...dsn.searchParams.keys()].sort((a, b) => a.localeCompare(b, 'en')).join(',') !== 'sslcert,sslkey,sslmode,sslrootcert' ||
       dsn.searchParams.get('sslmode') !== 'verify-full') throw invalid();
     for (const [key, leaf] of [['sslcert', 'client.crt'], ['sslkey', 'client.key'], ['sslrootcert', 'ca.crt']]) {
       if (resolve(dsn.searchParams.get(key)) !== join(directory, leaf)) throw invalid();
     }
-    const container = inspect(config.container);
+    const container = inspect(config.container, config.dockerBinary);
     if (container.Id !== config.containerID || !container.State.Running ||
       container.Config.Labels['hichat.task'] !== config.ownerLabel ||
       !container.NetworkSettings.Ports['5432/tcp']?.some(binding =>

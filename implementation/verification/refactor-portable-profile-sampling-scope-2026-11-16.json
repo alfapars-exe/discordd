@@ -1,0 +1,30 @@
+{
+  "oldUnscoped": {
+    "connections": 5,
+    "tlsConnections": 3,
+    "clientCertificates": 3
+  },
+  "newBackendOnly": {
+    "connections": 3,
+    "tlsConnections": 3,
+    "clientCertificates": 3
+  },
+  "localObservers": [
+    {
+      "applicationName": "hichat-local-profile-observer",
+      "ssl": false,
+      "clientCertificate": false
+    },
+    {
+      "applicationName": "hichat-local-profile-scope-proof",
+      "ssl": false,
+      "clientCertificate": false
+    }
+  ],
+  "scope": "Controlled real PostgreSQL read-only overlap: old sampler rejects local diagnostic connections; new backend-only sampler retains positive TLS/client-certificate gate.",
+  "sourceCommit": "cf0e31a6924b9c12ffab535695d44d2845352d4c",
+  "fixtureRoot": "G:\\hichat-refactor-20261116-anoknpqz\\portable-fixture-checks\\local-fanout-a42e1d0652f548449471fdba5b20740b",
+  "observerExitCode": 0,
+  "result": "PASS: old aggregate false rejection reproduced; scoped gate passes same database",
+  "historicalLimit": "The interrupted run did not retain its rejected connection rows. This controlled overlap proves the false-rejection mechanism, not the identities in that earlier missing sample."
+}

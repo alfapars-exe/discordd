@@ -1,0 +1,57 @@
+{
+  "scope": "Portable standard-library offline auditor plus fixture API/executable boundary follow-up; runtime proof remains explicitly bound to cf0e31a6, not these newer runtime guards.",
+  "pythonContracts": {
+    "passed": 11,
+    "failed": 0,
+    "skipped": 0,
+    "logSha256": "c2391b77bd1197d1858d6624c209afcae05e45c5d88954186ff1c15df80644f9",
+    "covers": [
+      "Fixed full 5800-message corpus with reverse lexical sender order and allowed timestamp inversions",
+      "Missing pages, changed source, wrong page order or ACK, fake isolation summary, zero-connection TLS sample",
+      "Cleanup failure/remaining credentials",
+      "python -O cannot bypass gates",
+      "Failed rerun replaces PASS with FAIL; report-write failure exits nonzero"
+    ]
+  },
+  "nodeContracts": {
+    "passed": 109,
+    "failed": 0,
+    "skipped": 0,
+    "logSha256": "fbe64e353470dd1179ba45f6ebb838da18f7b4d774c60049a60686d1576f3502"
+  },
+  "apiCoverage": {
+    "linePercent": 100.0,
+    "branchPercent": 93.18,
+    "functionPercent": 100.0,
+    "scope": "local-profile-api.mjs only",
+    "logSha256": "87dcdd1477b6070651a40e908505a5be20fe9d15e1d8afbbfc780052e3432713"
+  },
+  "realCF0eAudit": {
+    "result": "PASS",
+    "filesMatched": 1604,
+    "messages": 5800,
+    "deliveries": 116000,
+    "historyPages": 58,
+    "receiverDigestsMatched": 20,
+    "senderAcknowledgementsMatched": 5800,
+    "resultSha256": "b5171d10cd207668145da90528cace1a5e4289865eb3852b99acb85c1e300822"
+  },
+  "staticChecks": {
+    "pinnedActionlint": "PASS",
+    "powershellParserErrors": 0
+  },
+  "sources": {
+    "loadtest/audit_local_profile.py": "c79ed6967ae6270d9efca0564a1cce8e91036e50f7d2a0002f09fd7310a962e1",
+    "loadtest/test_audit_local_profile.py": "6efdcd496a6e6f8b81d515b3b0d4c426df57dbb1b46b1813a90ea4c14cf6c8f6",
+    "loadtest/local-profile-api.mjs": "607d25c716eab3b336149839aaaf9d0b0f3d95108a942feaa619d31b91f6b27a",
+    "loadtest/local-profile-api.test.mjs": "d7291d7922f02d0cb6fda7d43e0c6f63be3fdefd54cccb68d162bb118e216481",
+    "loadtest/local-profile-fixture.mjs": "42e5e14c6fa2dfee57160d8647851880bf649a8ba60f37270e675f1cfb95ca4e",
+    "loadtest/local-fanout-runner.mjs": "33070eabc82a01b2977127374226cfbafcfe97a17d9a2b9ee43233810cbdab8d",
+    "loadtest/run-local-fanout.ps1": "e2e9dde3619174f2efd0d93e6127e630039b4c461f6d49bec628e9b46be235d2"
+  },
+  "remaining": [
+    "Fresh Sonar quality gate confirmation for API/path/executable guards",
+    "New runtime request adapter and 10-field fixture config require actual owned fixture validation",
+    "Controller cognitive complexity 62 and other maintainability findings remain; broad RF/capacity/soak/native/physical gates open"
+  ]
+}

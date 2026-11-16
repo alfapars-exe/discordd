@@ -1,5 +1,8 @@
 # WebSocket connect load test (k6)
 
+For the repository-owned Windows PostgreSQL workload and independent history
+audit, see [LOCAL_PROFILE.md](LOCAL_PROFILE.md).
+
 `ws_connect.js` opens many concurrent WebSocket connections against the
 HiChat server's real connect path — `POST /api/auth/login` ->
 `POST /api/auth/ws-ticket` -> `GET /ws?ticket=...` — holds each connection

@@ -1,0 +1,111 @@
+{
+  "sourceCommit": "cf0e31a6924b9c12ffab535695d44d2845352d4c",
+  "producerCommit": "cf0e31a6924b9c12ffab535695d44d2845352d4c",
+  "scope": "Successful real execution of the repository-owned Windows 20 healthy plus one non-reading peer fixture; bounded correctness/isolation and observed resources only.",
+  "toolchain": "go version go1.27.4 windows/amd64",
+  "k6": "k6.exe v2.4.0 (commit/dd9395906d, go1.26.11, windows/amd64)",
+  "checks": {
+    "passed": 5940,
+    "failed": 0
+  },
+  "messages": 5800,
+  "healthyDeliveries": 116000,
+  "healthyReceivers": 20,
+  "historyPages": 58,
+  "receiverDigestsMatched": 20,
+  "senderAcknowledgementsMatched": 5800,
+  "digest": "002288d9b108158aacc88bd60f4e076efb11f1fa87de64b42c58c2606bbfc904",
+  "slowPeer": {
+    "exitCode": 0,
+    "events": [
+      {
+        "event": "connected",
+        "at": "2026-11-16T11:12:24.3005783Z",
+        "keepalive_pairs": 0,
+        "elapsed_ms": 0,
+        "receive_buffer_requested_bytes": 1024,
+        "post_upgrade_reader": false
+      },
+      {
+        "event": "finished",
+        "at": "2026-11-16T11:13:24.3009573Z",
+        "reason": "write_failed",
+        "keepalive_pairs": 4,
+        "elapsed_ms": 60000,
+        "receive_buffer_requested_bytes": 1024,
+        "post_upgrade_reader": false
+      }
+    ],
+    "stderrPresent": false,
+    "isolation": {
+      "peakAt": "2026-11-16T11:12:37.521Z",
+      "retiredAt": "2026-11-16T11:13:20.539Z",
+      "healthySamplesAfterProbeExit": 246,
+      "requestedReceiveBufferBytes": 1024
+    },
+    "readableAfterRetirement": true
+  },
+  "sourceProof": {
+    "fileCount": 1604,
+    "allFrozenHashesVerifiedByRepoAuditor": true,
+    "sourceStable": true,
+    "snapshotSha256": "7a16fffb52c7bb3048d5c1a1a395e95ae7ffdc88daac73732d46b27580046195"
+  },
+  "resources": {
+    "baseline": {
+      "samples": 3,
+      "goroutinesMedian": 51,
+      "heapAllocMedianBytes": 7396672,
+      "rssMedianBytes": 40820736
+    },
+    "load": {
+      "samples": 277,
+      "goroutinesMedian": 111,
+      "heapAllocMedianBytes": 8640704,
+      "rssMedianBytes": 54460416
+    },
+    "recovery": {
+      "samples": 6,
+      "goroutinesMedian": 51.0,
+      "heapAllocMedianBytes": 7307344.0,
+      "rssMedianBytes": 53895168.0
+    }
+  },
+  "telemetry": {
+    "buckets": 11,
+    "http5xx": 0,
+    "observerQueriesFailed": 0,
+    "positiveBackendMTLSEverySample": true,
+    "applicationName": "hichat",
+    "collectorExcludedByApplicationName": true,
+    "poolMaxOpen": 4,
+    "finalCumulativeWaitCount": 38370
+  },
+  "audits": {
+    "taskOwnedAuditSha256": "37d86516f7ec6ed0f729526674e03240dd00e4a61705b7b2e3cd1e13321195f1",
+    "repositoryAuditorSha256": "c79ed6967ae6270d9efca0564a1cce8e91036e50f7d2a0002f09fd7310a962e1",
+    "repositoryAuditResultSha256": "b5171d10cd207668145da90528cace1a5e4289865eb3852b99acb85c1e300822",
+    "reportSha256": "42e34dc89c2d4df3d4d7b14f6fdb991287e176f09f539ed820a5c83cff77cf28"
+  },
+  "cleanup": {
+    "launcherExitCode": 0,
+    "observerExitCode": 0,
+    "databaseDropped": true,
+    "allOwnedChildrenJoined": true,
+    "ownedProcessesAbsentObserved": true,
+    "fullContainerIDAbsent": true,
+    "fullImageIDAbsent": true,
+    "privateCredentialsAndDescriptorAbsent": true,
+    "launcherCleanupFailures": []
+  },
+  "artifactRoot": "G:\\hichat-refactor-20261116-anoknpqz\\portable-fixture-checks\\local-fanout-a42e1d0652f548449471fdba5b20740b",
+  "limits": [
+    "Single successful source-bound local profile; no production SLA/capacity or controlled variance claim",
+    "Offline repository auditor checks evidence, not actual host process/container/image absence; those were separately observed",
+    "Old unscoped 9c4ad3cf run remains FAILED; no completion inferred from its healthy partial samples",
+    "Backend existing application_name is hichat; collector/observer local Unix sessions are excluded without weakening positive TLS/client-cert requirements",
+    "RSS retains above warm baseline; median heap returned slightly below baseline without forced GC; no byte-for-byte reset or pool wait budget acceptance",
+    "Transient controlled read-only sampler overlap and observer overhead included; CPU unpinned",
+    "Query/pool budgets, churn/long-soak, historical panel root cause, native/physical/media/deployment and general RF gates remain open"
+  ]
+}
