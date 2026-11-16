@@ -290,6 +290,25 @@ export async function encryptGroupDMMessage(
   return envelopes;
 }
 
+function markNewRecipientDevice(recipientUserId: string, deviceId: string, knownDeviceIds: ReadonlySet<string>): void {
+  // Silent device addition: a device the peer's key bundle now advertises
+  // but which we have never pinned. A hostile server adding a device it
+  // controls to the fan-out set is exactly the attack this surfaces.
+  //
+  // An empty pin set means first contact with this user (TOFU) — there is
+  // no baseline to compare against, so every device is "new" and alerting
+  // would be noise. Advisory only: the alert is recorded and the send
+  // continues (Signal's behaviour — never strand the user's message).
+  if (knownDeviceIds.size > 0 && !knownDeviceIds.has(deviceId)) {
+    useE2EEStore.getState().markPeerTrustAlert({
+      userId: recipientUserId,
+      deviceId: deviceId,
+      kind: "new_device",
+      detectedAt: Date.now(),
+    });
+  }
+}
+
 /**
  * Recipient pass of encryptDMMessage: one envelope per device of a PEER
  * account. Never called with the sender's own userId (see the self-DM note
@@ -341,22 +360,7 @@ async function encryptForRecipientDevices(
   // banner explains why.
   let sawLegacyDevice = false;
   for (const bundle of recipientBundles.data) {
-    // Silent device addition: a device the peer's key bundle now advertises
-    // but which we have never pinned. A hostile server adding a device it
-    // controls to the fan-out set is exactly the attack this surfaces.
-    //
-    // An empty pin set means first contact with this user (TOFU) — there is
-    // no baseline to compare against, so every device is "new" and alerting
-    // would be noise. Advisory only: the alert is recorded and the send
-    // continues (Signal's behaviour — never strand the user's message).
-    if (knownDeviceIds.size > 0 && !knownDeviceIds.has(bundle.device_id)) {
-      useE2EEStore.getState().markPeerTrustAlert({
-        userId: recipientUserId,
-        deviceId: bundle.device_id,
-        kind: "new_device",
-        detectedAt: Date.now(),
-      });
-    }
+    markNewRecipientDevice(recipientUserId, bundle.device_id, knownDeviceIds);
 
     try {
       const envelope = await encryptForDevice(
