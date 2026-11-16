@@ -3874,3 +3874,6 @@ RF09/RF29 PostgreSQL18.6 verify-full mTLS nüfus benchmark’ı da PASS: donduru
 
 
 RF09 üye projection servisinin fiziksel SQL sınırı gerçek repository ve tam şemayla doğrulandı:0 üyede3,1/1001 üyede4 QueryContext/QueryRowContext çağrısı; kapsam/sıra korunuyor. SQLite1 ve PostgreSQL3 tekrar PASS. Bu sayaç DB sunucusu iç statement/trigger sayısı değildir; rol/nickname/timeout dolu sonuç eşitliği önceki ayrı testlerde, HTTP p95/concurrent bütçe ve genel RF açık. Dondurulmuş kaynak eşleşmesi, launcher exit0, cleanup0 ve container/image/credential yokluğu doğrulandı. Kanıt: refactor-member-physical-sql-2026-11-16.json.
+
+
+RF09 gerçek üye SQL sözleşmesi f775d910 kaynağında zenginleştirildi: aynı kullanıcı için iki sunucuda farklı rol/takma ad, aktif timeout bitiş eşitliği ve diğer üyelere metadata sızmaması. SQLite/PostgreSQL üçer tekrar PASS;0/1/1001 üyede3/4/4 gerçek TxQuerier read çağrısı. Yeni mTLS fixture launcher exit0 ve cleanup failures0; container/image tam ID ve export credential yokluğu doğrulandı. HTTPp95/pool contention/expiry sınırı veya genel RF kabulü değildir; yeni kaynak CI/race beklenir. Kanıt: refactor-member-enrichment-sql-2026-11-16.json.

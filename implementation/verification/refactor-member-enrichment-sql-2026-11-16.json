@@ -1,0 +1,45 @@
+{
+  "sourceCommit": "f775d9108a67bc18318a4da1c0b172d78a0069f8",
+  "result": "PASS",
+  "cases": [
+    0,
+    1,
+    1001
+  ],
+  "repetitionsPerBackend": 3,
+  "queries": {
+    "empty": 3,
+    "oneMember": 4,
+    "1001Members": 4
+  },
+  "assertions": [
+    "Full migrated schema and real service/repositories",
+    "Username order and member scope",
+    "Same user has different role IDs and nicknames in different servers",
+    "Active timeout expiry is preserved",
+    "Role/nickname/timeout metadata does not leak to other members"
+  ],
+  "logs": {
+    "SQLite": {
+      "path": "G:\\hichat-refactor-20261116-anoknpqz\\member-sql-enrichment-sqlite.log",
+      "sha256": "04be7fa24abef14257034d647f16e0b963a6220b518ed35effe1173cd5d3e595"
+    },
+    "PostgreSQL": {
+      "path": "G:\\hichat-refactor-20261116-anoknpqz\\portable-fixture-checks\\local-fanout-bd86c08d25654147ae90ea353b44e6f8\\member-projection-sql-postgres.log",
+      "sha256": "56c088d3e84cea762b5be62603ff7af07c607dd0dc2edff056956837664118f3"
+    }
+  },
+  "cleanup": {
+    "containerID": "990aaad10feb955d55b78730fab160580fdfe84a0d3642a9f0e27358fb7434df",
+    "finishedAt": "2026-11-16T13:58:29.1959787Z",
+    "imageID": "sha256:b5f30b17378d5d4ba4788d0a12414e410b4d1d08e2d5f23eb186315955dc17a1",
+    "failures": []
+  },
+  "containerAndImageFullIDsAbsent": true,
+  "exportedCredentialsAbsent": true,
+  "limits": [
+    "TxQuerier read calls, not PostgreSQL internal executor operations",
+    "No HTTP p95, pool contention, expiry-boundary or full RF acceptance",
+    "New CI/race source acceptance pending"
+  ]
+}
