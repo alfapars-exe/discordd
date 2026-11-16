@@ -687,6 +687,19 @@ describe("keyBackup — a failed restore rolls the metadata store back", () => {
     ]);
   });
 
+  it("replays rollback metadata before identity and retains later writes after cache failure", async () => {
+    const backup = await seedDeviceThenFailRestore();
+    expect(await restoreFromBackup(backup, "pw")).toBe(false);
+    const clears = vi.mocked(keyStorageMock.clearAllE2EEData).mock.invocationCallOrder;
+    const identity = vi.mocked(keyStorageMock.saveIdentityKeyPair).mock.invocationCallOrder;
+    const metadata = vi.mocked(keyStorageMock.setMetadata).mock.invocationCallOrder.filter(order => order > clears[1]);
+    expect(clears).toHaveLength(2); expect(identity).toHaveLength(2);
+    expect(metadata.length).toBeGreaterThan(0);
+    expect(Math.max(...metadata)).toBeLessThan(identity[1]);
+    expect(vi.mocked(keyStorageMock.cacheDecryptedMessages).mock.invocationCallOrder[1]).toBeGreaterThan(identity[1]);
+    expect(metadataStore.get("deviceId")).toBe("device-before-restore");
+  });
+
   it("keeps rolling back the remaining stores when one rollback write fails", async () => {
     const backup = await seedDeviceThenFailRestore();
 
