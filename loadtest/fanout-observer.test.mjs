@@ -82,3 +82,7 @@ for (const [name, patch] of [
 ]) test(`rejects ${name} before any network work`, () => {
   assert.throws(() => createFanoutObserver({ ...profile(), ...patch }), /fanout_invalid_/);
 });
+
+test("rejects a sparse sender list instead of accepting an undefined actor", () => {
+  assert.throws(() => createFanoutObserver({ ...profile(), userIds: new Array(1), messagesPerSender: 1 }), /fanout_invalid_senders/);
+});
