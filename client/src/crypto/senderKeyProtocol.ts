@@ -544,6 +544,49 @@ export async function decryptGroupHistory(
   return decryptGroupPayload(channelId, senderUserId, senderDeviceId, message, isCurrent, true);
 }
 
+/** Verify the signed frame synchronously before any ratchet or AES work. */
+function verifiedSenderKeyCiphertext(message: SenderKeyMessage, senderKey: StoredSenderKey): Uint8Array {
+  const rawData = fromBase64(message.ciphertext);
+
+  // Verify signature + extract ciphertext. Verification is MANDATORY: this
+  // branch used to fall back to "treat the whole frame as unsigned ciphertext"
+  // whenever rawData was short enough, so stripping the 64-byte signature
+  // prefix off a small message skipped authentication entirely (security
+  // review 2026-08-01, unsigned-frame acceptance).
+  //
+  // The floor is MIN_SENDER_KEY_FRAME_BYTES, the size of a signed frame around
+  // an empty plaintext. The guard enforces exactly that bound: a frame in the
+  // 65..91 range carries a full signature prefix but a truncated GCM frame, so
+  // it is rejected here instead of being handed to ed25519.verify over a body
+  // that could never have decrypted anyway.
+  if (rawData.length < MIN_SENDER_KEY_FRAME_BYTES) {
+    throw new Error(
+      `Sender key frame too short: ${rawData.length} bytes. A signed frame is ` +
+        `at least ${MIN_SENDER_KEY_FRAME_BYTES} bytes ` +
+        "(signature 64 + iv 12 + auth tag 16)."
+    );
+  }
+
+  const signature = rawData.slice(0, 64);
+  const ciphertext = rawData.slice(64);
+
+  // Ed25519 signature verification
+  try {
+    const valid = ed25519.verify(
+      signature,
+      ciphertext,
+      senderKey.publicSigningKey
+    );
+    if (!valid) {
+      throw new Error("Sender key signature verification failed");
+    }
+  } catch {
+    throw new Error("Sender key signature verification failed");
+  }
+
+  return ciphertext;
+}
+
 async function decryptGroupPayload(
   channelId: string, senderUserId: string, senderDeviceId: string,
   message: SenderKeyMessage, isCurrent: () => boolean, readOnlyHistory: boolean,
@@ -610,43 +653,7 @@ async function decryptGroupPayload(
     );
   }
 
-  const rawData = fromBase64(message.ciphertext);
-
-  // Verify signature + extract ciphertext. Verification is MANDATORY: this
-  // branch used to fall back to "treat the whole frame as unsigned ciphertext"
-  // whenever rawData was short enough, so stripping the 64-byte signature
-  // prefix off a small message skipped authentication entirely (security
-  // review 2026-08-01, unsigned-frame acceptance).
-  //
-  // The floor is MIN_SENDER_KEY_FRAME_BYTES, the size of a signed frame around
-  // an empty plaintext. The guard enforces exactly that bound: a frame in the
-  // 65..91 range carries a full signature prefix but a truncated GCM frame, so
-  // it is rejected here instead of being handed to ed25519.verify over a body
-  // that could never have decrypted anyway.
-  if (rawData.length < MIN_SENDER_KEY_FRAME_BYTES) {
-    throw new Error(
-      `Sender key frame too short: ${rawData.length} bytes. A signed frame is ` +
-        `at least ${MIN_SENDER_KEY_FRAME_BYTES} bytes ` +
-        "(signature 64 + iv 12 + auth tag 16)."
-    );
-  }
-
-  const signature = rawData.slice(0, 64);
-  const ciphertext = rawData.slice(64);
-
-  // Ed25519 signature verification
-  try {
-    const valid = ed25519.verify(
-      signature,
-      ciphertext,
-      senderKey.publicSigningKey
-    );
-    if (!valid) {
-      throw new Error("Sender key signature verification failed");
-    }
-  } catch {
-    throw new Error("Sender key signature verification failed");
-  }
+  const ciphertext = verifiedSenderKeyCiphertext(message, senderKey);
 
   // Advance chain key to sender's iteration
   let currentChainKey = senderKey.chainKey;
