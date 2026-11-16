@@ -3691,3 +3691,10 @@ f35a2b18, pending plaintextyanıtının sorgudeğişimi/temizleme/hesapdeğişim
 
 
 DM arama ek doğrulaması: sonrakikontrolde C:yaklaşık2GBboş ve Docker29.9.3yanıtverir durumda. Reddedilen manueltemizlik uygulanmadı; kesilen koşunun bb6b666a78ebimage/containerancestor sorguları boş. Enaz1GBboşalan önkontrolüyle Viteproductionbuild2,27sPASS (mevcutlargechunkuyarısı). Önceki receiptbuildbekleniyor kaydı bu kanıtla güncellendi; uzunkoşukabulü verilmedi.
+
+
+### RF17/RF26 — DM sonuç durumları, gezinme ve kaynak kapanış kanıtı (2026-11-16)
+
+7e8d4dfdCI36/36SUCCESS. Sonarorijinal30kaydı AaHcyWYyASsLdyanVxtV CLOSED/FIXED;431satır+boşEOF kaynak APIparitesi0mismatch. dd252eab resultsrender durumlarını erken dönüşlere ayırır ve componentprops tipleriniReadonly yapar. e4f2cddb yenihelperın gereksizsonreturnünü kaldırır. Bu üç kalanSonarbulgusunun yeniheadkapanışı henüz beklenir.
+
+75292b05 dört gezinmekarakterizasyonu ekler: yüklümesaja kaydırma, aroundfetchbaşarısı, kaybolanplaintextsonucu çıkarma ve encryptedöncekisayfa/snapshotreuse. Aynı27paneltesti önceki7e8kaynakta ve güncelkaynaktaPASS; baselinefinallyiçindegeri yüklenip candidateSHA256 doğrulandı. Son3dosyada57PASS; typecheck ve iki dosyalintPASS. TekDMpanelV8kapsamı93,25%satır/79,59%fonksiyon/78,89%dal/88,61%statement. dd252eabVitebuild1,93sPASS. Immutabledd252eabtarama51exact/481review/0blockingPASS; sonrakiNOPreturn ve4test bu snapshot'a eklenmiş sayılmaz. Kaynak kopyası araZIPolmadan Git tarstreaminden çıkarıldı;silme uygulanmadı. Kanıt refactor-dm-search-result-states-2026-11-16.json ve refactor-7e8d-terminal-ci-2026-11-16.json. RF17/RF26 ve genelhedef açık.
