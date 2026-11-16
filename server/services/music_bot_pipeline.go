@@ -16,10 +16,8 @@ import (
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
-	"github.com/argeinfina/hichat/pkg/crypto"
 	"github.com/argeinfina/hichat/pkg/logx"
 
-	"github.com/livekit/protocol/auth"
 	livekitproto "github.com/livekit/protocol/livekit"
 	lksdk "github.com/livekit/server-sdk-go/v2"
 
@@ -40,17 +38,9 @@ import (
 // list immediately after /play.
 func (s *musicBotService) connectBotToRoom(ctx context.Context, bot *botInstance) error {
 	musicBotLogger.Info("connectBotToRoom: starting", "channel_id", bot.channelID, "server_id", bot.serverID)
-	if s.roomKeys == nil {
-		return fmt.Errorf("music room E2EE key source is unavailable")
-	}
-	keyProvider := &musicRoomKeyProvider{source: s.roomKeys, roomName: bot.roomName}
-	keyIndex := keyProvider.CurrentKeyIndex()
-	if _, err := keyProvider.GetKey(keyIndex); err != nil {
-		return fmt.Errorf("prepare music room E2EE key: %w", err)
-	}
-	frameEncryptor, err := lksdk.NewFrameEncryptor(keyProvider, lksdk.CodecOpus)
+	frameEncryptor, err := s.prepareMusicFrameEncryptor(bot.roomName)
 	if err != nil {
-		return fmt.Errorf("prepare music Opus frame encryption: %w", err)
+		return err
 	}
 	lkInstance, err := s.livekit.GetByServerID(ctx, bot.serverID)
 	if err != nil {
@@ -60,36 +50,9 @@ func (s *musicBotService) connectBotToRoom(ctx context.Context, bot *botInstance
 	musicBotLogger.Info("connectBotToRoom: livekit instance resolved",
 		"url", lkInstance.URL, "self_hosted", !lkInstance.IsPlatformManaged)
 
-	apiKey, err := crypto.Decrypt(lkInstance.APIKey, s.encryptionKey)
+	token, err := s.musicBotRoomToken(bot, lkInstance)
 	if err != nil {
-		musicBotLogger.Error("connectBotToRoom: api key decrypt failed", "instance_id", lkInstance.ID, "err", pkg.ErrText(err))
-		return fmt.Errorf("api key decrypt: %w", err)
-	}
-	apiSecret, err := crypto.Decrypt(lkInstance.APISecret, s.encryptionKey)
-	if err != nil {
-		musicBotLogger.Error("connectBotToRoom: api secret decrypt failed", "instance_id", lkInstance.ID, "err", pkg.ErrText(err))
-		return fmt.Errorf("api secret decrypt: %w", err)
-	}
-
-	canPublish := true
-	canSubscribe := true
-	canPublishData := false
-
-	at := auth.NewAccessToken(apiKey, apiSecret)
-	at.SetVideoGrant(&auth.VideoGrant{
-		RoomJoin:       true,
-		Room:           bot.roomName,
-		CanPublish:     &canPublish,
-		CanSubscribe:   &canSubscribe,
-		CanPublishData: &canPublishData,
-	}).
-		SetIdentity(models.MusicBotUserID + ":" + bot.channelID).
-		SetName("MusicBot").
-		SetValidFor(24 * time.Hour)
-
-	token, err := at.ToJWT()
-	if err != nil {
-		return fmt.Errorf("jwt: %w", err)
+		return err
 	}
 
 	musicBotLogger.Info("connectBotToRoom: dialing livekit", "url", lkInstance.URL, "room", bot.roomName)
