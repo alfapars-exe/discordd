@@ -33,6 +33,19 @@ test("bounds diagnostics while retaining the first cause", () => {
   assert.deepEqual(d.failures, []);
 });
 
+test("unprintable rejection metadata cannot replace the original failure", async () => {
+  const d = createPanelSearchDiagnostics();
+  const error = {
+    get name() { throw new Error("name getter"); },
+    get message() { throw new Error("message getter"); },
+  };
+  assert.throws(() => d.observe("sync", () => { throw error; }), actual => actual === error);
+  const rejected = Promise.reject(error);
+  assert.equal(d.observe("async", () => rejected), rejected);
+  await assert.rejects(rejected, actual => actual === error);
+  assert.deepEqual(d.failures.map(row => row.message), ["Unprintable failure", "Unprintable failure"]);
+});
+
 test("records bounded names and messages without copying error properties", () => {
   const d = createPanelSearchDiagnostics();
   const error = { name: "N".repeat(100), message: "M".repeat(1000), privatePayload: "not diagnostic data" };

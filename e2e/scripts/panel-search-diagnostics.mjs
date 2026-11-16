@@ -5,10 +5,13 @@ export function createPanelSearchDiagnostics(limit = 16) {
   const failures = [];
   const watched = new WeakSet();
   function record(phase, error) {
+    let name = typeof error, message = "Unprintable failure";
+    try { const value = error?.name; if (typeof value === "string") name = value; } catch { /* Diagnostic only. */ }
+    try { const value = error?.message; message = typeof value === "string" ? value : String(error); } catch { /* Keep the original rejection. */ }
     const entry = {
       phase: phase.slice(0, 64),
-      name: typeof error?.name === "string" ? error.name.slice(0, 64) : typeof error,
-      message: (typeof error?.message === "string" ? error.message : String(error)).slice(0, 256),
+      name: name.slice(0, 64),
+      message: message.slice(0, 256),
     };
     // Keep the first cause even when disposal produces many later aborts.
     if (failures.length >= limit) failures.splice(1, 1);

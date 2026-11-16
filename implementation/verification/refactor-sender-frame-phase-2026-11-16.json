@@ -54,5 +54,11 @@
     "Immutable source scan and new-source CI/Sonar",
     "Full final-head client coverage",
     "Historical backup/native/recovery corpus and full RF16 acceptance"
-  ]
+  ],
+  "sourceScan": {
+    "sourceCommit": "955233c8",
+    "exactReviewedRecords": 51,
+    "reviewLines": 482,
+    "blockingPatterns": 0
+  }
 }

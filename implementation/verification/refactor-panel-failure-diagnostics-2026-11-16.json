@@ -2,7 +2,7 @@
   "baselineHead": "0e9b0cfb",
   "scope": "Bounded synthetic-fixture diagnostics around snapshot/spool operations and native IndexedDB error/abort events; no production error reporting changes. Explicit failed-search UI now fails the check promptly;30s handoff/120s result and512KiB budgets unchanged.",
   "validation": {
-    "nodeContracts": 20,
+    "nodeContracts": 21,
     "nodeContractsFail": 0,
     "nodeSyntaxCheck": "PASS",
     "viteProductionServeOnlyBuild": "PASS",
@@ -52,7 +52,8 @@
       "syntheticAccountReset": true,
       "space30Closed": true,
       "ownedServer40468Stopped": true
-    }
+    },
+    "diagnosticFormatting": "Throwing name/message getters cannot mask the original synchronous or asynchronous rejection; original object and promise identity preserved."
   },
   "rootCauseStatus": "OPEN; diagnostics improve the next CI failure evidence, not a claimed fix for the observed DM rejection.",
   "limits": [
