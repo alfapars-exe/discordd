@@ -1,0 +1,32 @@
+{
+  "sourceCommit": "9c4ad3cf909e1653db173693b704abf775704962",
+  "status": "FAILED / NOT ACCEPTED",
+  "failure": "Application database connection lacks mTLS from unscoped pg_stat_activity join",
+  "resultStatus": "failed",
+  "failurePhases": [
+    "workload"
+  ],
+  "databaseDropped": true,
+  "sourceStable": true,
+  "lastSample": {
+    "at": "2026-11-16T11:07:23.723Z",
+    "phase": "load",
+    "pumps": {
+      "read": 20,
+      "write": 20
+    }
+  },
+  "completedHealthySessionCounters": null,
+  "hypothesis": "The unscoped query also counts simultaneous local psql collector/observer connections without TLS. Needs controlled real PostgreSQL reproduction; application transport failure is not proven from this aggregate.",
+  "followup": "Backend-only application_name scope, positive connection count required, and rejected aggregate retained on future failure. Full corrected run still required.",
+  "cleanup": {
+    "launcherFailures": [],
+    "privateCredentialFilesAbsent": true,
+    "descriptorAbsent": true,
+    "launcherExitCode": 1,
+    "observerTerminal": "Owned container stopped or removed"
+  },
+  "rawReportSha256": "fb12905d3c378075089b4f692b255523235af0bbe139f5bb2ac2fb6a4db79711",
+  "artifactRoot": "G:\\hichat-refactor-20261116-anoknpqz\\portable-fixture-checks\\local-fanout-5561f9e19bfd4e38aae7032d561810bf",
+  "limits": "No 5800-message/116000-delivery/history/capacity acceptance from this interrupted run."
+}

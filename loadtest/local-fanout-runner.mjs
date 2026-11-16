@@ -5,7 +5,7 @@ import { execFileSync } from "node:child_process";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { reconcileFanoutHistory } from "./fanout-history.mjs";
-import { readLocalConfig, spawnOwned, validateLocalFixture, snapshotSources, assertSnapshotUnchanged, joinOwnedProcesses, openProfileLog, finishProfileLog } from "./local-profile-fixture.mjs";
+import { readLocalConfig, spawnOwned, validateLocalFixture, snapshotSources, assertSnapshotUnchanged, joinOwnedProcesses, openProfileLog, finishProfileLog, captureProbeResult } from "./local-profile-fixture.mjs";
 const cfg = readLocalConfig(process.argv[2]);
 validateLocalFixture(cfg);
 const sourceSnapshot = snapshotSources(cfg.source);
@@ -32,7 +32,7 @@ function assertDiskHeadroom(starting = false) {
   }
 }
 function sql(query, db = "hichat_e2e_control") {
-  return execFileSync("docker", ["exec", "-i", cfg.container, "psql", "-U", "hichat_tls_test", "-d", db, "-v", "ON_ERROR_STOP=1", "-tA"], {
+  return execFileSync("docker", ["exec", "-i", "--env", "PGAPPNAME=hichat-local-profile-collector", cfg.container, "psql", "-U", "hichat_tls_test", "-d", db, "-v", "ON_ERROR_STOP=1", "-tA"], {
     input: query,
     encoding: "utf8",
     windowsHide: true
@@ -153,8 +153,11 @@ async function sample(phase) {
     encoding: "utf8",
     windowsHide: true
   }));
-  const database = JSON.parse(sql(`SELECT json_build_object('connections',count(*),'active',count(*) FILTER(WHERE state='active'),'lockWaits',count(*) FILTER(WHERE wait_event_type='Lock'),'idleInTransaction',count(*) FILTER(WHERE state='idle in transaction'),'tlsConnections',count(*) FILTER(WHERE ssl),'clientCertificates',count(*) FILTER(WHERE client_dn IS NOT NULL)) FROM pg_stat_activity a JOIN pg_stat_ssl s ON a.pid=s.pid WHERE datname='${dbName}' AND backend_type='client backend';`));
-  if (database.connections !== database.tlsConnections || database.connections !== database.clientCertificates) throw Error("Application database connection lacks mTLS");
+  const database = JSON.parse(sql(`SELECT json_build_object('connections',count(*),'active',count(*) FILTER(WHERE state='active'),'lockWaits',count(*) FILTER(WHERE wait_event_type='Lock'),'idleInTransaction',count(*) FILTER(WHERE state='idle in transaction'),'tlsConnections',count(*) FILTER(WHERE ssl),'clientCertificates',count(*) FILTER(WHERE client_dn IS NOT NULL)) FROM pg_stat_activity a JOIN pg_stat_ssl s ON a.pid=s.pid WHERE datname='${dbName}' AND backend_type='client backend' AND application_name='hichat';`));
+  if (!Number.isSafeInteger(database.connections) || database.connections < 1 || database.connections !== database.tlsConnections || database.connections !== database.clientCertificates) {
+    report.rejectedDatabaseSample = { at: new Date().toISOString(), database };
+    throw Error("Application database connection lacks mTLS");
+  }
   const value = {
     at: new Date().toISOString(),
     phase,
@@ -356,25 +359,27 @@ await runProfileWithReport({
         slow.kill();
       }
     });
-    slowExit = new Promise((resolve, reject) => {
+    slowExit = new Promise(resolve => {
       slow.once("error", () => {
         slowError = true;
       });
       slow.once("close", code => {
         slowDone = true;
-        try {
-          slowEvents = slowText.trim().split(/\r?\n/).filter(Boolean).map(line => JSON.parse(line));
-        } catch {
-          slowError = true;
-        }
-        report.slow = {
+        const captured = captureProbeResult({
           exitCode: code,
-          events: slowEvents,
-          stderrPresent: slowStderr.length > 0
-        };
-        writeFileSync(join(cfg.tempDir, "slow-probe-events.json"), JSON.stringify(report.slow, null, 2));
+          text: slowText,
+          stderrPresent: slowStderr.length > 0,
+          outputPath: join(cfg.tempDir, "slow-probe-events.json")
+        });
+        report.slow = captured.result;
+        slowEvents = captured.result.events;
+        slowError ||= captured.failed;
         resolve(code);
       });
+    });
+    slow.stdin.once("error", () => {
+      slowError = true;
+      slow.kill();
     });
     slow.stdin.end(JSON.stringify({
       base_url: baseURL,
@@ -465,6 +470,7 @@ await runProfileWithReport({
     await flushLog(logLoad);
     if (!slowDone) throw Error("Slow peer was not retired while healthy workload was live");
     await slowExit;
+    if (slowError) throw Error("Slow probe output or report failed");
     if (!slowPeakAt || !slowRetiredAt || slowHealthySamples < 10) throw Error("Missing 21-to-20 server pump isolation observations");
     const connected = slowEvents[0],
       finished = slowEvents[1];

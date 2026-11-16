@@ -1,6 +1,6 @@
 import { spawn, execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { closeSync, createWriteStream, lstatSync, openSync, readFileSync, readSync, readdirSync, realpathSync } from 'node:fs';
+import { closeSync, createWriteStream, lstatSync, openSync, readFileSync, readSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 
 const processes = new WeakMap();
@@ -130,4 +130,15 @@ export function finishProfileLog(stream) {
       if (error) fail(); else resolveLog();
     });
   });
+}
+
+/** Called from a child close listener: filesystem errors must not escape it. */
+export function captureProbeResult({ exitCode, text, stderrPresent, outputPath }) {
+  let events = [], failed = false;
+  try { events = text.trim().split(/\r?\n/).filter(Boolean).map(line => JSON.parse(line)); }
+  catch { failed = true; }
+  const result = { exitCode, events, stderrPresent };
+  try { writeFileSync(outputPath, JSON.stringify(result, null, 2)); }
+  catch { failed = true; result.reportWriteFailed = true; }
+  return { result, failed };
 }

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { once } from 'node:events';
 import { readLocalConfig, validateLocalFixture, snapshotSources, assertSnapshotUnchanged,
-  spawnOwned, joinOwnedProcesses, openProfileLog, finishProfileLog } from './local-profile-fixture.mjs';
+  spawnOwned, joinOwnedProcesses, openProfileLog, finishProfileLog, captureProbeResult } from './local-profile-fixture.mjs';
 
 function fixture(t) {
   const tempDir = mkdtempSync(join(tmpdir(), 'hichat-local-profile-contract-'));
@@ -177,4 +177,26 @@ test('log open/write failure is observed and cannot masquerade as flushed output
   await failed;
   assert.equal(failures, 1);
   await assert.rejects(finishProfileLog(log), /^Error: Profile log write failed$/);
+});
+
+test('probe close callback keeps valid events and makes disk failure observable without throwing', t => {
+  const { tempDir } = fixture(t);
+  const event = { event: 'finished', reason: 'write_failed' };
+  const input = { exitCode: 0, text: JSON.stringify(event) + '\n', stderrPresent: false };
+  const outputPath = join(tempDir, 'probe.json');
+  const captured = captureProbeResult({ ...input, outputPath });
+  assert.equal(captured.failed, false);
+  assert.deepEqual(JSON.parse(readFileSync(outputPath, 'utf8')).events, [event]);
+  const failed = captureProbeResult({ ...input, outputPath: join(tempDir, 'missing', 'probe.json') });
+  assert.equal(failed.failed, true);
+  assert.equal(failed.result.reportWriteFailed, true);
+  assert.deepEqual(failed.result.events, [event]);
+});
+
+test('malformed probe output cannot become a successful close result', t => {
+  const { tempDir } = fixture(t);
+  const captured = captureProbeResult({ exitCode: 0, text: 'malformed fixture output',
+    stderrPresent: false, outputPath: join(tempDir, 'probe.json') });
+  assert.equal(captured.failed, true);
+  assert.deepEqual(captured.result.events, []);
 });
