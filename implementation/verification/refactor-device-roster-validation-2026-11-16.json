@@ -23,11 +23,16 @@
       "statements": 92.37
     },
     "lint": "PASS zero errors / two existing warnings",
-    "fullClient": "RUNNING session38251",
-    "build": "RUNNING session4092"
+    "fullClient": "5546 passed / 1 skipped / 0 failed; 505 files",
+    "build": "PASS TypeScript + Vite",
+    "validationBodyParity": {
+      "baseline": "a4525d6e",
+      "normalizedProtocolParameter": true,
+      "remainingBodyByteIdenticalLF": true,
+      "sha256": "b1e0e1130dae92f21cee91d08b7d96ffd5cb933c898c8c1f57ec707d3a7d7f29"
+    }
   },
   "pending": [
-    "Full client/build terminal results",
     "Immutable-source scan",
     "New-source CI/Sonar and real-server device roster acceptance"
   ],
@@ -43,6 +48,10 @@
     "finalTarget": {
       "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-roster-validation-final-target.log",
       "sha256": "7f9019f3657994ad8a55555a4b71d7477494cc02d3f85a67ea62e7de145b02f3"
+    },
+    "fullClient": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-roster-validation-full.log",
+      "sha256": "f15f120d99b4d63bb55a253ccf9782a4a2c0eadd529e52b2f545a758b79c8733"
     }
   }
 }

@@ -3647,3 +3647,5 @@ Arkadaşlık17Sonar kaydıAaHYWqnZd7dyvm3wYSod CLOSED/FIXED; SendRequest/policy 
 ### RF15/RF26 — DM/grup cihaz listesi doğrulamasının ayrılması (2026-11-16)
 
 1784c1f8 on bozuk response kontratı ekler: version/member shape/count/unknown/duplicate, device array/null/emptyid, revision uppercase/type; prekey fetch/processing yapılmadan DM_ROSTER_INVALID reddi. Mevcut kaynakta37rosterPASS. 221f19df aynı epoch/member/device doğrulamasını senkron privatehelper içine taşır; actor/auth/capability/handshake ve local revoke sırası korunur. Sonrasında37roster; birleşikroster/encryption77PASS; TypeScriptPASS; kapsam%95,5satır/%100fonksiyon/%87,64dal. Lint0hata/2mevcutuyarı. Full38251 ve build4092 sürüyor; yeniCI/Sonar/tarama ve gerçekserverroster kabulü açık. Receipt refactor-device-roster-validation-2026-11-16.json.
+
+Roster son tam istemci505dosya/5.546başarılı/1atlanan/0başarısız; type+Vite buildPASS. Eski a4525d6e doğrulama gövdesi, local roster alias kaldırma/protocol.keyEpoch parametre adı dışında LF baytlarıyla aynı; hash receipt içinde. YeniCI/Sonar/tarama ve gerçekserverkabulü açık.
