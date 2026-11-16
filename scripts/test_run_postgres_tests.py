@@ -12,6 +12,7 @@ spec.loader.exec_module(runner)
 
 class PostgreSQLRunnerTests(unittest.TestCase):
     service_passes = (
+        "--- PASS: TestMemberProjectionPhysicalSQLCount (0.01s)\n"
         "--- PASS: TestDeliveryClaimCancellationLogging (0.01s)\n"
         "--- PASS: TestDeliveryStopCancelsPoolWait (0.01s)\n"
         "--- PASS: TestVoiceUsagePostgresShutdownJoinsAcceptedCredit (0.01s)\n"
@@ -36,6 +37,13 @@ class PostgreSQLRunnerTests(unittest.TestCase):
         "--- PASS: TestPostgresMemberRoleReplacement (0.01s)\n"
         "--- PASS: TestPostgresMetricsCollectorCancellation (0.01s)\n"
     )
+
+    def test_member_sql_contract_is_required_and_cannot_be_missing(self):
+        name = "TestMemberProjectionPhysicalSQLCount"
+        self.assertIn(name, runner.REQUIRED_SERVICE_POSTGRES_TESTS)
+        without = self.service_passes.replace(f"--- PASS: {name} (0.01s)\n", "")
+        self.assertEqual(self.execute(self.completed(), service_output=without), 1)
+        self.assertEqual(self.execute(self.completed(), service_output=without + f"--- SKIP: {name} (0.01s)\n"), 1)
 
     def execute(self, events, code=0, service_output=service_passes):
         process = Mock(stdout=io.StringIO("\n".join(json.dumps(event) for event in events)))

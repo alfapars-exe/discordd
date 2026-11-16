@@ -156,3 +156,6 @@ RF09 üye projection servisinin fiziksel SQL sınırı gerçek repository ve tam
 
 
 RF09 gerçek üye SQL sözleşmesi f775d910 kaynağında zenginleştirildi: aynı kullanıcı için iki sunucuda farklı rol/takma ad, aktif timeout bitiş eşitliği ve diğer üyelere metadata sızmaması. SQLite/PostgreSQL üçer tekrar PASS;0/1/1001 üyede3/4/4 gerçek TxQuerier read çağrısı. Yeni mTLS fixture launcher exit0 ve cleanup failures0; container/image tam ID ve export credential yokluğu doğrulandı. HTTPp95/pool contention/expiry sınırı veya genel RF kabulü değildir; yeni kaynak CI/race beklenir. Kanıt: refactor-member-enrichment-sql-2026-11-16.json.
+
+
+Üye SQL/enrichment sözleşmesinin yalnız yerel PG kanıtı vardı; zorunlu CI servis seçiminde değildi. TestMemberProjectionPhysicalSQLCount mevcut PostgreSQL seçim/PASS zorunluluğuna eklendi. Önce17 testte1 beklenen FAIL (zorunlu kayıt yok), sonra17/17PASS; eksik PASS ve SKIP başarılı process exit ile de reddedilir. Yeni tam CI sonucu beklenir. Tarihsel DM panel günlüğü yeniden okundu: searchFailed gözlendi, işlem hatası kaydı yok; kök neden kapatılmadı. Kanıt: refactor-member-sql-required-gate-2026-11-16.json.

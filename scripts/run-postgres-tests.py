@@ -24,6 +24,7 @@ REDACTED_DATABASE = "[test-database]"
 REQUIRED_SERVER_POSTGRES_TEST = "TestPurgeExpiredNotificationsPostgres"
 REQUIRED_ACTIVE_PROCESS_TEST = "TestActiveVoiceProcessPostgresSignal"
 REQUIRED_SERVICE_POSTGRES_TESTS = (
+    "TestMemberProjectionPhysicalSQLCount",
     "TestPostgresRolePatchConcurrentChanges",
     "TestPostgresMemberRoleReplacement",
     "TestVoiceMaintenanceAFKPostgresCancellation",
