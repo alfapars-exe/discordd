@@ -1,0 +1,32 @@
+{
+  "sourceCommit": "b8784e1db7fb0ab9bd61842f6878ab2a87ff18f1",
+  "characterizationCommits": [
+    "a319ff78",
+    "239f01e2"
+  ],
+  "scope": "Separate lazy synchronous rollback replay generator and pure restored cache merge; metadata-first scoped write order and best-effort continuation preserved.",
+  "validation": {
+    "beforeAndAfter": "72 tests in four crypto backup files PASS on original and candidate source",
+    "typeAndLint": "tsc-b and changed source/test ESLint PASS",
+    "build": "Vite PASS; existing chunk-size warning",
+    "sourceScan": {
+      "blockingPatterns": 0,
+      "reviewLines": 481
+    }
+  },
+  "structuralParity": {
+    "method": "TypeScript canonical statement printing, comments omitted and LF normalized; yield callbacks reconstructed as original scoped await calls",
+    "rollbackSites": 11,
+    "rollbackParity": true,
+    "cacheParity": true,
+    "importParity": true,
+    "rollbackSHA256": "47a9f1eb925ed50a09b8d2d3bcb206707a6a19ae93d8ee7d626e34532fe0013e",
+    "cacheSHA256": "2fb3c0f4abc5ac43fb34c80b613a56b5f3c61e5913cda58ac9e5cef941fe8b49"
+  },
+  "openRequirements": [
+    "New source CI and Sonar analysis",
+    "Historical backup corpus",
+    "Cross-store crash/atomicity acceptance; existing best-effort rollback is not atomic",
+    "Physical/native and complete RF06 acceptance"
+  ]
+}

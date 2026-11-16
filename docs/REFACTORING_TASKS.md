@@ -3718,3 +3718,9 @@ Immutable3c1ed88btarama51exact/481review/0blocking/exit0PASS; son2test snapshots
 7e2c7b87 karakterizasyonu, peer pinlerinin bir kez okunmasını ve yeni cihaz uyarısının o cihazın el sıkışmasından önce kaydedilmesini mevcut kaynakta doğruladı. 6c5b7c00 bu senkron sorumluluğu `markNewRecipientDevice` yardımcısına ayırır. Await yerleri, alıcı sırası ve uyarı alanları token paritesiyle korundu. Eski ve yeni kaynakta 78 test geçti; typecheck, lint ve production build başarılı. Dar kripto kapsam koşusu iki kaynakta da mevcut bütün-istemci eşiklerini karşılamadı; dal kapsamı ikisinde de %55,39. Eşikler değiştirilmedi. Güncel tam istemci koşusu 506 dosyada 5.562 başarılı/1 atlanan/0 başarısız; bütün kapsam eşikleri geçti: %68,12 statement, %65,05 dal, %62,43 fonksiyon, %69,16 satır. Yardımcının iki statement ve dört dal kolu kapsandı. Kanıt: refactor-peer-trust-advisory-2026-11-16.json ve tam kapsam eşlikçisi.
 
 Kanal panelinin props tipi ve sonuç gösterimi a6f68284 ile düzenlendi; ilgili 65 test, typecheck/lint ve build geçti. Önceki kaynakta kanalın 34 puanlık karmaşıklık kaydı CLOSED/FIXED; iki panel ve runner için kaynak API paritesi 0 mismatch. Yeni head'in CI/Sonar sonuçları, fiziksel/native kabul ve RF17/RF26'nın diğer maddeleri açık.
+
+### 16 Kasım: CI ve yedek geri yükleme ayrıştırması
+
+7305958d için 36/36 terminal CI başarısı ve iki üretim panelinin 50.000 olay bellek/sıra kanıtı `refactor-7305-terminal-ci-2026-11-16.json` dosyasında. Ayrı tarihsel 120 saniyelik bekleme kökü açık.
+
+RF06: b8784e1d rollback replay ve cache merge ayrıştırması, önce/sonra 72 test, metadata-first sıra ve ara hata sonrası devam karakterizasyonu, TypeScript/lint/build ve kaynak taramasıyla doğrulandı. Yapısal eşdeğerlik ve açık kabul sınırları `refactor-backup-replay-phases-2026-11-16.json` dosyasında; yeni CI/Sonar ve tarihsel/crash/atomiklik kabulü beklenir.
