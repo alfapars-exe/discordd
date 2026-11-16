@@ -38,3 +38,20 @@ test("missing peer delivery fails the measured receiver even when all sends succ
 test("wrong authoritative actor in HTTP response fails instead of counting acceptance",()=>{
  const h=scenario({wrongResponseActor:true});assert.equal(h.metrics.sent.value,0);assert.equal(h.metrics.receivers.value,0);assert.ok(h.checks.some(x=>!x.passed));
 });
+
+test("maximum-length valid scope IDs produce bounded, distinct, replay-stable client message IDs", () => {
+ const actor="u".repeat(128), probeId="p".repeat(128);
+ const profile=readFanoutProfile({...env(), FANOUT_PROBE_ID:probeId,FANOUT_USER_IDS:JSON.stringify([actor])}, {...connection(),vus:1,userCount:1});
+ const run=()=>{
+  const requests=[],timers=[];
+  const metric={add(){}};
+  const session=createFanoutSession(profile,{vu:1,baseURL:connection().baseURL,accessToken:"fixture-only",
+   http:{post(_url,body){requests.push(JSON.parse(body));return{status:503,json:()=>({success:false})};}},
+   check:(value,predicates)=>Object.values(predicates).every(predicate=>predicate(value)),
+   metrics:{sent:metric,received:metric,receivers:metric,duplicates:metric,invalid:metric},
+   hash:value=>createHash("sha256").update(value).digest("hex"),log(){}});
+  session.start({setTimeout:callback=>timers.push(callback)});timers.forEach(callback=>callback());
+  return requests.map(request=>request.client_message_id);
+ };
+ const ids=run();assert.ok(ids.every(id=>id.length<=128));assert.equal(new Set(ids).size,2);assert.deepEqual(ids,run());
+});

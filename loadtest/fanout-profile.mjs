@@ -41,7 +41,7 @@ export function createFanoutSession(profile, { vu, baseURL, accessToken, http, c
   const send = sequence => {
     const content = JSON.stringify({ probe: profile.probeId, sender: actor, sequence });
     const response = http.post(`${baseURL}/api/servers/${encodeURIComponent(profile.serverId)}/channels/${encodeURIComponent(profile.channelId)}/messages`,
-      JSON.stringify({ content, client_message_id: `${profile.probeId}:${actor}:${sequence}` }),
+      JSON.stringify({ content, client_message_id: hash(JSON.stringify([profile.probeId, actor, sequence])) }),
       { headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" } });
     const message = acceptedMessage(response, actor, profile.channelId);
     const ok = check(response, { "fanout message accepted with correct actor/channel": () => message !== null });
