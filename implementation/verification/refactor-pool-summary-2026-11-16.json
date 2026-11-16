@@ -1,0 +1,20 @@
+{
+  "sourceCommit": "8854ffba2b00f05c7cf6723e04d06c5fe3f20b68",
+  "sourceEvidence": "implementation/verification/refactor-owned-telemetry-runtime-2026-11-16.json",
+  "pool": {
+    "buckets": 11,
+    "firstBucket": "2026-11-16 13:30:00",
+    "lastBucket": "2026-11-16 13:40:00",
+    "missingMinutes": 0,
+    "counterDecreases": 0,
+    "recordedWaitCountDeltaSum": 40410,
+    "recordedWaitDurationMsDeltaSum": 83884,
+    "meanRecordedWaitMs": 2.07582281613462,
+    "sampledPeakOpen": 3,
+    "sampledPeakInUse": 2,
+    "configuredMaxOpenValues": [
+      4
+    ],
+    "scope": "Recorded interval deltas and instantaneous pool samples only. Duration deltas are truncated to milliseconds by the server. No query count, latency percentile, full-run coverage, capacity or budget verdict; zero max-open means unlimited."
+  }
+}

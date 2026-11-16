@@ -141,3 +141,6 @@ Controller62 karmaşıklığı için hazırlık, hesap/kanal/üyelik, slow-peer 
 
 
 8854ffba evidenceVersion2 gerçek 20+1/620s koşusu ve bağımsız audit PASS: 5800 mesaj, 116000 benzersiz teslim, 58 sayfa, 20 digest, 5800 ACK ve 1610 kaynak dosyası eşleşti. Runtime sorgusu 11 kalıcı kovayı 13:40:31.706Z tarihinde cleanup başlamadan topladı; HTTP5xx toplamı 0. Owned DB/credential temizliği auditor ile, container/image tam ID yokluğu Docker envanteriyle, Node/backend PID yokluğu host gözlemiyle doğrulandı. Aynı commit 36/36 terminal CI SUCCESS. Önceki dış observer hatası açıklanmış sayılmaz; tek koşu query/pool bütçesi, kapasite/varyans/churn/soak/native/physical veya genel RF kapanışı değildir. Kanıtlar: refactor-owned-telemetry-runtime-2026-11-16.json, refactor-8854-terminal-ci-2026-11-16.json.
+
+
+RF29 havuz özeti artık saf analiz modülünde: kümülatif sayaç yerine kayıtlı delta toplamları; eksik dakika, sayaç düşüşü ve max-open değişimi görünür. 8854 canlı kaydının 11 kovasında boş dakika/düşüş0; wait-count40410, toplam wait83884ms, kayıtlı bekleme başına ortalama2,0758ms. Örneklenmiş open tepe3/in-use tepe2, configured max4; sürekli tepe veya query/request p95 değildir. Üç analiz testi ve tüm117 Node sözleşmesi PASS. Query count/p95, bütçe/varyans ve genel RF kabulü açık. Kanıt: refactor-pool-summary-2026-11-16.json.

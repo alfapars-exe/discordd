@@ -102,3 +102,14 @@ It does not establish a production SLA, capacity, variance, churn, long-soak,
 physical media, or whether queue overflow versus the write deadline removed the
 slow peer. The separate runtime telemetry observer used in historical evidence
 is not silently replaced by these contracts or the offline audit.
+
+
+For a numeric pool summary of a completed version-2 report, use the pure
+`summarizePoolTelemetry(report.runtimeTelemetry.rows)` export from
+`loadtest/pool-summary.mjs`. It sums the recorded diagnostic deltas rather than
+subtracting or summing cumulative counters. The result exposes missing minutes,
+counter decreases and configured max-open changes (zero means unlimited).
+`meanRecordedWaitMs` divides recorded wait duration by recorded wait count;
+it is null when no waits are recorded. Server duration deltas are truncated to
+milliseconds. Sampled peaks are not continuous peaks. This summary establishes
+neither query/request latency percentiles nor a capacity or pool budget.
