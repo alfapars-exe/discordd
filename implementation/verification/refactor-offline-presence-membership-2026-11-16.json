@@ -11,5 +11,11 @@
     "Final-source scan and CI/Sonar",
     "Linux race for new presence source",
     "Full transport/reconnect/physical and RF07/RF14 acceptance"
-  ]
+  ],
+  "sourceScan": {
+    "sourceCommit": "60b6c61c",
+    "exactReviewedRecords": 51,
+    "reviewLines": 482,
+    "blockingPatterns": 0
+  }
 }

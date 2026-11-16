@@ -1,3 +1,4 @@
+import { onlySelfDMChannelsAdded, mergeDMChannelUnreadCounts, retainSelfDMChannels } from "./shared/dmChannelSnapshot";
 import { sortDMBySource } from "../utils/dmSourceOrder";
 import { create } from "zustand";
 import i18n from "../i18n";
@@ -243,12 +244,7 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
       if (!isCurrent()) return false;
       if (res.success && res.data) {
         const currentChannels = get().channels;
-        const initialById = new Map(initialChannels.map(channel => [channel.id, channel]));
-        const currentById = new Map(currentChannels.map(channel => [channel.id, channel]));
-        const onlySelfAdded = currentChannels.length >= initialChannels.length
-          && initialChannels.every(channel => currentById.get(channel.id) === channel)
-          && currentChannels.every(channel => initialById.get(channel.id) === channel
-            || channel.other_user.id === scope.ownerId);
+        const onlySelfAdded = onlySelfDMChannelsAdded(initialChannels, currentChannels, scope.ownerId);
         if (metadataRevision !== dmChannelMetadataRevision && currentChannels !== initialChannels && !onlySelfAdded) {
           // A WS/read event or another local channel mutation landed while
           // this snapshot was in flight. The event path is newer than this
@@ -259,25 +255,8 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
         }
         // Seed unread counts from the server's per-user read cursor so a fresh
         // tab (or a reconnect) shows what was missed instead of starting at 0.
-        const dmUnreadCounts: Record<string, number> = {};
-        for (const ch of res.data) {
-          if (ch.unread_count > 0) dmUnreadCounts[ch.id] = ch.unread_count;
-        }
-        const currentUnreadCounts = get().dmUnreadCounts;
-        for (const id of new Set([...Object.keys(initialUnreadCounts), ...Object.keys(currentUnreadCounts)])) {
-          if (initialUnreadCounts[id] !== currentUnreadCounts[id]) {
-            if (currentUnreadCounts[id] === undefined) delete dmUnreadCounts[id];
-            else dmUnreadCounts[id] = currentUnreadCounts[id];
-          }
-        }
-        const channels = [...res.data];
-        const listedIds = new Set(channels.map(channel => channel.id));
-        for (const channel of currentChannels) {
-          if (channel.other_user.id === scope.ownerId && !listedIds.has(channel.id)) {
-            channels.push(channel);
-            listedIds.add(channel.id);
-          }
-        }
+        const dmUnreadCounts = mergeDMChannelUnreadCounts(res.data, initialUnreadCounts, get().dmUnreadCounts);
+        const channels = retainSelfDMChannels(res.data, currentChannels, scope.ownerId);
         set({ channels, dmUnreadCounts, isLoading: false });
         return true;
       }
