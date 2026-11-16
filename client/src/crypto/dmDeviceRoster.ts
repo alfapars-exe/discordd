@@ -92,25 +92,7 @@ async function prepareDeviceRoster(
   });
   assertCurrent();
   if (!response.success || !response.data) throw new Error("DM_ROSTER_UNAVAILABLE");
-  const roster = response.data;
-  if (protocol.keyEpoch !== undefined && roster.key_epoch !== protocol.keyEpoch) throw new Error("GROUP_ROSTER_EPOCH_CHANGED");
-  const expected = new Set(memberUsers);
-  if (roster.version !== 1 || !Array.isArray(roster.members) || roster.members.length !== expected.size) {
-    throw new Error("DM_ROSTER_INVALID");
-  }
-  const members = new Map<string, Reference[]>();
-  for (const member of roster.members) {
-    if (!member || !expected.has(member.user_id) || members.has(member.user_id) || !Array.isArray(member.devices)) {
-      throw new Error("DM_ROSTER_INVALID");
-    }
-    const seen = new Set<string>();
-    for (const ref of member.devices) {
-      if (!ref || typeof ref.device_id !== "string" || !ref.device_id || seen.has(ref.device_id) ||
-          typeof ref.key_revision !== "string" || !/^[a-f0-9]{64}$/.test(ref.key_revision)) throw new Error("DM_ROSTER_INVALID");
-      seen.add(ref.device_id);
-    }
-    members.set(member.user_id, member.devices);
-  }
+  const members = validateRosterMembers(response.data, memberUsers, protocol.keyEpoch);
   if (!members.get(currentUser)?.some(ref => ref.device_id === localDevice)) throw new Error("DM_LOCAL_DEVICE_REVOKED");
   const key = (user: string, device: string) => JSON.stringify([scopeKey, localDevice, user, device]);
   return {
@@ -151,6 +133,29 @@ async function prepareDeviceRoster(
       return targets;
     },
   };
+}
+
+// Validate the fresh server roster before planning or consuming any prekeys.
+function validateRosterMembers(roster: Roster, memberUsers: readonly string[], keyEpoch?: number): Map<string, Reference[]> {
+  if (keyEpoch !== undefined && roster.key_epoch !== keyEpoch) throw new Error("GROUP_ROSTER_EPOCH_CHANGED");
+  const expected = new Set(memberUsers);
+  if (roster.version !== 1 || !Array.isArray(roster.members) || roster.members.length !== expected.size) {
+    throw new Error("DM_ROSTER_INVALID");
+  }
+  const members = new Map<string, Reference[]>();
+  for (const member of roster.members) {
+    if (!member || !expected.has(member.user_id) || members.has(member.user_id) || !Array.isArray(member.devices)) {
+      throw new Error("DM_ROSTER_INVALID");
+    }
+    const seen = new Set<string>();
+    for (const ref of member.devices) {
+      if (!ref || typeof ref.device_id !== "string" || !ref.device_id || seen.has(ref.device_id) ||
+          typeof ref.key_revision !== "string" || !/^[a-f0-9]{64}$/.test(ref.key_revision)) throw new Error("DM_ROSTER_INVALID");
+      seen.add(ref.device_id);
+    }
+    members.set(member.user_id, member.devices);
+  }
+  return members;
 }
 
 export type DMDeviceRosterContext = NonNullable<Awaited<ReturnType<typeof prepareDMDeviceRoster>>>;
