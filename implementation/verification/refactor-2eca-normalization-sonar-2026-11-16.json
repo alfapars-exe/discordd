@@ -1,0 +1,18 @@
+{
+  "sourceCommit": "2eca909d94ea824897b1738b450b30345ecbd4a0",
+  "file": "client/src/crypto/keyDatabase.ts",
+  "sourceMatches": true,
+  "sha256LF": "b48b3e336d4839650a36c1b22c9dac29a927f68311c73113d9d89f41847b7572",
+  "openTrailingSlashRegexIssues": 0,
+  "remainingIssues": [
+    {
+      "rule": "typescript:S6582",
+      "message": "Prefer using an optional chain expression instead, as it's more concise and easier to read."
+    },
+    {
+      "rule": "typescript:S7503",
+      "message": "Review this async function: it has no await expression."
+    }
+  ],
+  "scope": "Source-matched absence of S8786 only; remaining issues and global RF gates remain open"
+}

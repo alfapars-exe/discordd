@@ -56,10 +56,7 @@ func TestAppLogPartialFallbackCountsOnlyUnwrittenOccurrences(t *testing.T) {
 			if got := service.Health().FailedEvents; got != tc.lost {
 				t.Fatalf("failed events=%d, want only unwritten occurrences=%d", got, tc.lost)
 			}
-			var saved uint64
-			for _, row := range repo.inserts {
-				saved += uint64(row.OccurrenceCount)
-			}
+			saved := confirmedAppLogOccurrences(repo.inserts)
 			if saved+tc.lost != uint64(len(pending)) {
 				t.Fatalf("saved=%d lost=%d total=%d", saved, tc.lost, len(pending))
 			}
@@ -329,41 +326,21 @@ func TestAppLogDependencyPanicDoesNotStrandWriterOrHideFailedEvents(t *testing.T
 				s.Log(context.Background(), models.LogLevelInfo, models.LogCategoryGeneral, nil, nil, fmt.Sprintf("queued-%d", i), nil)
 			}
 			s.Start()
-			await := func(count int) {
-				t.Helper()
-				timer := time.NewTimer(2 * time.Second)
-				defer timer.Stop()
-				for range count {
-					select {
-					case <-repo.saved:
-					case <-s.done:
-						t.Fatal("dependency panic terminated app-log writer")
-					case <-timer.C:
-						t.Fatal("healthy app-log work stranded after dependency panic")
-					}
-				}
-			}
+
 			want := 64
 			if stage == "purge" {
 				want = 128
 			}
-			await(want)
+			awaitSavedAppLogs(t, repo.saved, s.done, want)
 			for i := range 64 {
 				s.Log(context.Background(), models.LogLevelInfo, models.LogCategoryGeneral, nil, nil, fmt.Sprintf("future-%d", i), nil)
 			}
-			await(64)
+			awaitSavedAppLogs(t, repo.saved, s.done, 64)
 			s.Stop()
 			if repo.count() != want+64 {
 				t.Fatalf("persisted=%d want=%d", repo.count(), want+64)
 			}
-			h := s.Health()
-			if stage == "purge" {
-				if h.WriteFailures != 0 || h.FailedEvents != 0 {
-					t.Fatalf("purge mislabeled as failed write: %+v", h)
-				}
-			} else if h.WriteFailures != 1 || h.FailedEvents != 64 {
-				t.Fatalf("failed batch accounting: %+v", h)
-			}
+			checkAppLogPanicHealth(t, stage, s.Health())
 		})
 	}
 }
@@ -388,12 +365,7 @@ func TestAppLogPartialPanicCountsOnlyUnconfirmedOccurrences(t *testing.T) {
 		t.Run(fmt.Sprint(tc.failAt), func(t *testing.T) {
 			repo := &panicPartialAppLogRepo{failAt: tc.failAt}
 			s := NewAppLogService(repo, nil).(*appLogService)
-			var pending []pendingAppLog
-			for i, count := range []int{3, 2, 1} {
-				for range count {
-					pending = append(pending, pendingAppLog{entry: models.AppLog{Message: fmt.Sprint(i), Level: models.LogLevelError, OccurrenceCount: 1}, metadata: map[string]string{}})
-				}
-			}
+			pending := repeatedAppLogOccurrences()
 			s.flush(context.Background(), pending)
 			h := s.Health()
 			if h.FailedEvents != tc.failed {
@@ -415,4 +387,48 @@ func TestAppLogPartialPanicCountsOnlyUnconfirmedOccurrences(t *testing.T) {
 			}
 		})
 	}
+}
+
+func awaitSavedAppLogs(t *testing.T, saved <-chan struct{}, done <-chan struct{}, count int) {
+	t.Helper()
+	timer := time.NewTimer(2 * time.Second)
+	defer timer.Stop()
+	for range count {
+		select {
+		case <-saved:
+		case <-done:
+			t.Fatal("dependency panic terminated app-log writer")
+		case <-timer.C:
+			t.Fatal("healthy app-log work stranded after dependency panic")
+		}
+	}
+}
+
+func checkAppLogPanicHealth(t *testing.T, stage string, h models.AppLogHealth) {
+	t.Helper()
+	if stage == "purge" {
+		if h.WriteFailures != 0 || h.FailedEvents != 0 {
+			t.Fatalf("purge mislabeled as failed write: %+v", h)
+		}
+	} else if h.WriteFailures != 1 || h.FailedEvents != 64 {
+		t.Fatalf("failed batch accounting: %+v", h)
+	}
+}
+
+func repeatedAppLogOccurrences() []pendingAppLog {
+	var pending []pendingAppLog
+	for i, count := range []int{3, 2, 1} {
+		for range count {
+			pending = append(pending, pendingAppLog{entry: models.AppLog{Message: fmt.Sprint(i), Level: models.LogLevelError, OccurrenceCount: 1}, metadata: map[string]string{}})
+		}
+	}
+	return pending
+}
+
+func confirmedAppLogOccurrences(rows []models.AppLog) uint64 {
+	var saved uint64
+	for _, row := range rows {
+		saved += uint64(row.OccurrenceCount)
+	}
+	return saved
 }
