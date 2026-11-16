@@ -1,0 +1,18 @@
+{
+  "scope": "Correct test verifier database order; product server code and workload unchanged",
+  "regression": {
+    "oldCommit": "7b348fd6",
+    "oldFailure": "history_order_not_ascending",
+    "fixedPersisted": 4,
+    "fixture": "Observed PostgreSQL timestamp inversions with strictly ascending source positions"
+  },
+  "contracts": {
+    "passed": 87,
+    "failed": 0,
+    "skipped": 0,
+    "PostgreSQL": "Ascending safe positive source_sequence; timestamp inversions allowed; repeated/overlapping/invalid source positions rejected",
+    "SQLite": "Explicit created_at_id mode, nanosecond/timezone parsing, tuple ties and page boundary checks remain",
+    "selection": "Unknown order rejected before network; never infer/fallback"
+  },
+  "realRerun": "Pending; neither prior failed run is retroactively accepted"
+}

@@ -21,10 +21,19 @@ function compareHistoryKeys(left, right) {
   return left.id < right.id ? -1 : 1;
 }
 
-/** Walk older REST pages, each ascending by (created_at, id), against every receiver. */
-export async function reconcileFanoutHistory(profile, fetchPage, receipts, hash, limit = 100) {
+function sourceSequenceKey(message) {
+  if (!Number.isSafeInteger(message.source_sequence) || message.source_sequence < 1) {
+    throw new Error("invalid_history_order_key");
+  }
+  return { instant: BigInt(message.source_sequence), id: "" };
+}
+
+/** Walk older ASC REST pages using the explicitly selected database cursor contract. */
+export async function reconcileFanoutHistory(profile, fetchPage, receipts, hash, limit = 100, order = "source_sequence") {
   const observer = createFanoutObserver(profile);
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new Error("invalid_history_limit");
+  if (order !== "source_sequence" && order !== "created_at_id") throw new Error("invalid_history_order");
+  const keyOf = order === "source_sequence" ? sourceSequenceKey : historyKey;
   const expected = profile.userIds.length * profile.messagesPerSender;
   let before = "", previousPageOldest = null, pages = 0;
   for (;;) {
@@ -34,7 +43,7 @@ export async function reconcileFanoutHistory(profile, fetchPage, receipts, hash,
         page.has_more_after !== false) throw new Error("invalid_history_page");
     let previous = null, oldest = null;
     for (const message of page.messages) {
-      const key = historyKey(message);
+      const key = keyOf(message);
       if (previous && compareHistoryKeys(key, previous) <= 0) throw new Error("history_order_not_ascending");
       if (previousPageOldest && compareHistoryKeys(key, previousPageOldest) >= 0) throw new Error("history_page_not_older");
       oldest ??= key;

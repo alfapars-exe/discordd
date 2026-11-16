@@ -4,10 +4,10 @@ import { createHash } from "node:crypto";
 import { reconcileFanoutHistory } from "./fanout-history.mjs";
 const hash = value => createHash("sha256").update(value).digest("hex");
 const profile = {probeId:"probe",channelId:"channel",userIds:["alice","bob"],messagesPerSender:2};
-function fixture({ timestamps, ids } = {}) {
+function fixture({ timestamps, ids, sequences } = {}) {
  const canonical = profile.userIds.flatMap(user=>[1,2].map(sequence=>[user,sequence,`${user}-${sequence}`]));
  if (ids) canonical.forEach((row,index)=>{row[2]=ids[index];});
- const messages = canonical.map(([user,sequence,id],index)=>({id,user_id:user,channel_id:"channel",source_sequence:0,created_at:timestamps?.[index]??`2026-11-16T08:00:0${index}Z`,
+ const messages = canonical.map(([user,sequence,id],index)=>({id,user_id:user,channel_id:"channel",source_sequence:sequences?.[index]??0,created_at:timestamps?.[index]??`2026-11-16T08:00:0${index}Z`,
   content:JSON.stringify({probe:"probe",sender:user,sequence})}));
  const pages=[{messages:messages.slice(2),has_more:true,has_more_after:false},{messages:messages.slice(0,2),has_more:false,has_more_after:false}];
  const receipts=profile.userIds.map(receiver=>({receiver,digest:hash(JSON.stringify(canonical)),summary:{complete:true},acknowledged:canonical.filter(row=>row[0]===receiver).map(row=>row.slice(1))}));
@@ -15,7 +15,7 @@ function fixture({ timestamps, ids } = {}) {
 }
 test("walks older REST pages in ascending created-at/ID order and reconciles all receivers", async()=>{
  const {pages,receipts}=fixture(),calls=[];
- const result=await reconcileFanoutHistory(profile,async cursor=>{calls.push(cursor);return pages.shift();},receipts,hash,2);
+ const result=await reconcileFanoutHistory(profile,async cursor=>{calls.push(cursor);return pages.shift();},receipts,hash,2,"created_at_id");
  assert.equal(result.persisted,4);assert.equal(result.historyPages,2);
  assert.deepEqual(calls,[{before:"",limit:2},{before:"bob-1",limit:2}]);
 });
@@ -34,7 +34,7 @@ for(const [name,mutate,error] of [
  ["duplicate HTTP acknowledgement slot",f=>{f.receipts[0].acknowledged[1]=f.receipts[0].acknowledged[0];},/acknowledgement_history_mismatch/],
 ]) test(`rejects ${name}`,async()=>{
  const f=fixture();mutate(f);
- await assert.rejects(reconcileFanoutHistory(profile,async()=>f.pages.shift(),f.receipts,hash,2),error);
+ await assert.rejects(reconcileFanoutHistory(profile,async()=>f.pages.shift(),f.receipts,hash,2,"created_at_id"),error);
 });
 
 for (const [name, options] of [
@@ -47,7 +47,7 @@ for (const [name, options] of [
 ]) test(`preserves ${name} across page boundaries`, async()=>{
  const f=fixture(options),calls=[];
  const expectedCursor=f.pages[0].messages[0].id;
- const result=await reconcileFanoutHistory(profile,async cursor=>{calls.push(cursor);return f.pages.shift();},f.receipts,hash,2);
+ const result=await reconcileFanoutHistory(profile,async cursor=>{calls.push(cursor);return f.pages.shift();},f.receipts,hash,2,"created_at_id");
  assert.equal(result.persisted,4);
  assert.equal(calls[1].before,expectedCursor);
 });
@@ -56,11 +56,43 @@ for (const timestamp of [undefined,"invalid","2026-02-30T08:00:00Z","2026-11-16T
  "2026-11-16T08:00:00","2026-11-16T08:00:00.1234567890Z"]) {
  test(`rejects malformed history timestamp ${timestamp}`,async()=>{
   const f=fixture();f.pages[0].messages[0].created_at=timestamp;
-  await assert.rejects(reconcileFanoutHistory(profile,async()=>f.pages.shift(),f.receipts,hash,2),/invalid_history_order_key/);
+  await assert.rejects(reconcileFanoutHistory(profile,async()=>f.pages.shift(),f.receipts,hash,2,"created_at_id"),/invalid_history_order_key/);
  });
 }
 
 test("rejects a page crossing its oldest-message cursor",async()=>{
  const f=fixture();f.pages[1].messages[1].created_at="2026-11-16T09:00:00Z";
- await assert.rejects(reconcileFanoutHistory(profile,async()=>f.pages.shift(),f.receipts,hash,2),/history_page_not_older/);
+ await assert.rejects(reconcileFanoutHistory(profile,async()=>f.pages.shift(),f.receipts,hash,2,"created_at_id"),/history_page_not_older/);
+});
+
+test("PostgreSQL sequence order survives observed transaction timestamp inversions",async()=>{
+ const timestamps=["2026-11-16T08:34:54.379002Z","2026-11-16T08:34:54.378869Z",
+  "2026-11-16T08:34:55.388290Z","2026-11-16T08:34:55.386156Z"];
+ const f=fixture({sequences:[1,2,3,4],timestamps});
+ const calls=[];
+ const result=await reconcileFanoutHistory(profile,async cursor=>{calls.push(cursor);return f.pages.shift();},f.receipts,hash,2);
+ assert.equal(result.persisted,4);
+ assert.equal(calls[1].before,"bob-1");
+ const tuple=fixture({sequences:[1,2,3,4],timestamps});
+ await assert.rejects(reconcileFanoutHistory(profile,async()=>tuple.pages.shift(),tuple.receipts,hash,2,"created_at_id"),/history_order_not_ascending/);
+});
+
+for(const sequence of [undefined,0,-1,1.5,Number.MAX_SAFE_INTEGER+1,"3"]) {
+ test(`PostgreSQL rejects invalid source sequence ${sequence} without a timestamp fallback`,async()=>{
+  const f=fixture({sequences:[1,2,3,4]});f.pages[0].messages[0].source_sequence=sequence;
+  await assert.rejects(reconcileFanoutHistory(profile,async()=>f.pages.shift(),f.receipts,hash,2),/invalid_history_order_key/);
+ });
+}
+
+test("PostgreSQL rejects repeated source positions and overlapping page boundaries",async()=>{
+ const repeated=fixture({sequences:[1,2,3,3]});
+ await assert.rejects(reconcileFanoutHistory(profile,async()=>repeated.pages.shift(),repeated.receipts,hash,2),/history_order_not_ascending/);
+ const overlap=fixture({sequences:[1,4,3,5]});
+ await assert.rejects(reconcileFanoutHistory(profile,async()=>overlap.pages.shift(),overlap.receipts,hash,2),/history_page_not_older/);
+});
+
+test("unknown database order fails before fetching history",async()=>{
+ let fetched=false;
+ await assert.rejects(reconcileFanoutHistory(profile,async()=>{fetched=true;},[],hash,2,"auto"),/invalid_history_order/);
+ assert.equal(fetched,false);
 });
