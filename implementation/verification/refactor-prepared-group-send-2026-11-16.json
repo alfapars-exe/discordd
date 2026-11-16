@@ -1,0 +1,44 @@
+{
+  "scope": "Extract prepared group-send binding after existing group-first membership/epoch lock; keep operation check, message ID mutation, insert, reads/notifications and committed phase in the same transaction.",
+  "characterizationCommit": "41ffe647",
+  "baseline": {
+    "passedIncludingSubtests": 20,
+    "failed": 0,
+    "skipped": 1,
+    "skippedNames": [
+      "TestGroupDMPostgresEditMembershipRace"
+    ],
+    "logSha256": "43cf17afc7bd73c9e333d3453f24c78fc1caae11cf439ae86538d115cab59a71"
+  },
+  "characterizationBeforeRefactor": {
+    "passedIncludingSubtests": 1,
+    "failed": 0,
+    "skipped": 0,
+    "skippedNames": [],
+    "logSha256": "e5bd417db18b2e270d881d9990dacd71ee916fd519ab5b608e4aef3c20b3a361"
+  },
+  "candidate": {
+    "passedIncludingSubtests": 60,
+    "failed": 0,
+    "skipped": 3,
+    "skippedNames": [
+      "TestGroupDMPostgresEditMembershipRace"
+    ],
+    "logSha256": "2c82c1e92f764f2d538884106934cb7d5af06251fce97f99c0a45210b4fc82b2"
+  },
+  "candidateRepeats": 3,
+  "toolchain": "Go1.26.11 Linux amd64 CGO1 race, owned isolated read-only mounts/tmpfs build cache",
+  "parity": {
+    "beforeCommit": "41ffe647",
+    "method": "Inline sole prepared-send helper call and gofmt both complete files; exact comparison",
+    "wholeFileParity": true,
+    "groupFirstLockTransactionRollbackCommitOrderPreserved": true,
+    "sqlAndMessageIdMutationPreserved": true
+  },
+  "vet": "PASS: go vet -mod=readonly -p=2 ./repository",
+  "limitations": [
+    "TestGroupDMPostgresEditMembershipRace skipped: HICHAT_TEST_POSTGRES_DSN not configured locally",
+    "Final source PostgreSQL, full CI and Sonar still required",
+    "No physical/media/long-profile acceptance; historical DM panel root cause open"
+  ]
+}

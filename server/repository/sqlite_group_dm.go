@@ -286,26 +286,9 @@ func (r *sqliteGroupDMRepo) CreateMessage(ctx context.Context, m *models.GroupDM
 	}
 
 	if m.SendRequestID != "" {
-		locked, lockErr := tx.ExecContext(ctx, `UPDATE group_dm_send_operations SET phase=phase WHERE group_id=? AND user_id=? AND request_id=? AND phase='prepared' AND cancelled_at IS NULL`, m.GroupID, m.UserID, m.SendRequestID)
-		if lockErr != nil {
-			return lockErr
+		if err := bindPreparedGroupSend(ctx, tx, m); err != nil {
+			return err
 		}
-		n, lockErr := locked.RowsAffected()
-		if lockErr != nil {
-			return lockErr
-		}
-		if n != 1 {
-			return pkg.ErrConflict
-		}
-		op, lockErr := readGroupSend(ctx, tx, m.GroupID, m.UserID, m.SendRequestID)
-		if lockErr != nil {
-			return lockErr
-		}
-		if m.ID != "" && m.ID != op.MessageID {
-			return pkg.ErrConflict
-		}
-		m.ID = op.MessageID
-
 	}
 	if _, err = tx.ExecContext(ctx, `INSERT INTO group_dm_messages(id,group_id,user_id,content,encryption_version,ciphertext,sender_device_id,e2ee_metadata,key_epoch,reply_to_id,source_sequence) VALUES(?,?,?,?,?,?,?,?,?,?,?)`, m.ID, m.GroupID, m.UserID, m.Content, m.EncryptionVersion, m.Ciphertext, m.SenderDeviceID, m.E2EEMetadata, m.KeyEpoch, m.ReplyToID, m.SourceSequence); err != nil {
 		return err
@@ -664,4 +647,30 @@ func (r *sqliteGroupDMRepo) GetAttachmentFileURLsByGroup(ctx context.Context, gr
 		out = append(out, u)
 	}
 	return out, rows.Err()
+}
+
+// bindPreparedGroupSend binds the prepared request ID after the group lock.
+// The caller owns the transaction and commits the message and operation together.
+func bindPreparedGroupSend(ctx context.Context, tx *sql.Tx, m *models.GroupDMMessage) error {
+	locked, lockErr := tx.ExecContext(ctx, `UPDATE group_dm_send_operations SET phase=phase WHERE group_id=? AND user_id=? AND request_id=? AND phase='prepared' AND cancelled_at IS NULL`, m.GroupID, m.UserID, m.SendRequestID)
+	if lockErr != nil {
+		return lockErr
+	}
+	n, lockErr := locked.RowsAffected()
+	if lockErr != nil {
+		return lockErr
+	}
+	if n != 1 {
+		return pkg.ErrConflict
+	}
+	op, lockErr := readGroupSend(ctx, tx, m.GroupID, m.UserID, m.SendRequestID)
+	if lockErr != nil {
+		return lockErr
+	}
+	if m.ID != "" && m.ID != op.MessageID {
+		return pkg.ErrConflict
+	}
+	m.ID = op.MessageID
+
+	return nil
 }
