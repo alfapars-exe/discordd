@@ -11,7 +11,8 @@
     "literalCalls": 659,
     "constantCalls": 31,
     "unresolvedCalls": 273,
-    "canonicalInventorySHA256": "f7df13c26bab1d466f3ecbc42403d412701ad06f3227222192ccec21a768bbe9"
+    "canonicalInventorySHA256": "f7df13c26bab1d466f3ecbc42403d412701ad06f3227222192ccec21a768bbe9",
+    "boundaryCharacterization": "All eight SQL method spellings, too-short argument lists, non-selector and unrelated calls; six tests total PASS on original and candidate implementations."
   },
   "remaining": [
     "New-source scan and CI/Sonar",

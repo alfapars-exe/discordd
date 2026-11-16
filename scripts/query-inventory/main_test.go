@@ -133,3 +133,43 @@ func TestConstantSQLRejectsExcessiveExpressionNesting(t *testing.T) {
 		t.Fatalf("deep expression accepted: %q, %v", got, ok)
 	}
 }
+
+// Candidate selection must remain syntactic: all supported method spellings
+// count, while too-short calls and non-selector functions remain excluded.
+func TestInventoryMethodCandidateBoundaries(t *testing.T) {
+	root := t.TempDir()
+	directory := filepath.Join(root, "server", "repository")
+	if err := os.MkdirAll(directory, 0700); err != nil {
+		t.Fatal(err)
+	}
+	methods := []string{"ExecContext", "QueryContext", "QueryRowContext", "PrepareContext", "Exec", "Query", "QueryRow", "Prepare"}
+	var source strings.Builder
+	source.WriteString("package fixture\nfunc calls(){\n")
+	for _, method := range methods {
+		args := "\"SELECT ?\""
+		short := ""
+		if strings.HasSuffix(method, "Context") {
+			args = "ctx," + args
+			short = "ctx"
+		}
+		source.WriteString("db." + method + "(" + args + ")\n")
+		source.WriteString("db." + method + "(" + short + ")\n")
+	}
+	source.WriteString("Exec(\"SELECT ?\")\nother.NotSQL(\"SELECT ?\")\n}\n")
+	if err := os.WriteFile(filepath.Join(directory, "queries.go"), []byte(source.String()), 0600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := inventory(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Calls) != len(methods) || got.Literal != len(methods) || got.Constants != 0 || got.Unresolved != 0 {
+		t.Fatalf("unexpected classification: %+v", got)
+	}
+	for index, method := range methods {
+		site := got.Calls[index]
+		if site.Method != method || site.SQL != "SELECT ?" || site.Function != "calls" || site.Line != 3+2*index {
+			t.Fatalf("candidate %d: %+v", index, site)
+		}
+	}
+}
