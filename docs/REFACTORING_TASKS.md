@@ -3734,3 +3734,5 @@ SQL envanteri sınır karakterizasyonu: sekiz yöntem adı, yetersiz argüman, s
 SQL ayrıştırma kaynağı 9c740029 için değişmez kaynak taraması 51 kayıt/481 inceleme satırı/0 engelleyici desenle tamamlandı. 0b533af0 ek karakterizasyonunu da içeren son kaynak için CI/güvenlik/Sonar kabulü beklenir.
 
 RF07/DM gönderim kontrol akışı: plaintext yolu erken ayrılarak şifreli gönderimin iki iç içe koşulu kaldırıldı. Aynı 115 test önce/sonra ve son UTF-8 kaynakta başarılı; TypeScript/hedefli lint geçti. Şifreli try/catch, plaintext gönderim ve aksiyon dışı kaynak eşdeğerliği ayrı doğrulandı. Kanıt: refactor-dm-send-dispatch-2026-11-16.json. Yeni kaynak taraması/CI/Sonar ve geniş hesap/izin/offline/native kabulü açık.
+
+RF07 HTTP refresh: Sonar kaynağı 0f6010ec ile ilgili satırlarda eşleştirildi; kalan 16 puanlık akışın terminal ret sınıflandırması ve token temizliği senkron yardımcıya ayrıldı. 409 body await/nesil kontrolü ve lifetime dispose yerinde kalır. 64 test, TypeScript/lint ve helper inline edildiğinde TypeScript ifade eşdeğerliği başarılı. Kanıt: refactor-api-refresh-rejection-2026-11-16.json. Son kaynak CI/Sonar ve geniş kabul açık.

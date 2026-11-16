@@ -241,6 +241,22 @@ function installRefreshedAccess(data: RefreshResponse, expectedAccount: string |
   return false;
 }
 
+/** Apply terminal refresh rejection without moving conflict-response awaits. */
+function applyRefreshRejection(res: Response): void {
+  refreshRejected = [400, 401, 403].includes(res.status);
+  // Only clear tokens on explicit auth rejection — 5xx/429/network errors
+  // don't mean the token is invalid, just that the server/network failed.
+  if (res.status === 401 || res.status === 403) {
+    // Production builds intentionally suppress this warning; an attacker
+    // with DevTools should not learn that the server rejected our
+    // refresh attempt (one less oracle signal). Local dev still logs.
+    if (import.meta.env?.DEV) {
+      console.warn(`[apiClient] refresh endpoint returned ${res.status} — clearing tokens`);
+    }
+    clearTokens();
+  }
+}
+
 async function doRefresh(generation: number): Promise<boolean> {
   const expectedAccount = authAccountMemory;
   const expectedSession = getAccessSessionID();
@@ -278,18 +294,7 @@ async function doRefresh(generation: number): Promise<boolean> {
         }
         return false;
       }
-      refreshRejected = [400, 401, 403].includes(res.status);
-      // Only clear tokens on explicit auth rejection — 5xx/429/network errors
-      // don't mean the token is invalid, just that the server/network failed.
-      if (res.status === 401 || res.status === 403) {
-        // Production builds intentionally suppress this warning; an attacker
-        // with DevTools should not learn that the server rejected our
-        // refresh attempt (one less oracle signal). Local dev still logs.
-        if (import.meta.env?.DEV) {
-          console.warn(`[apiClient] refresh endpoint returned ${res.status} — clearing tokens`);
-        }
-        clearTokens();
-      }
+      applyRefreshRejection(res);
       return false;
     }
 
