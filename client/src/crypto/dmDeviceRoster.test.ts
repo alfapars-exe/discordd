@@ -273,3 +273,30 @@ it("excludes a revoked peer device on the next group send", async () => {
   expect(envelopes.map(item => item.recipient_device_id)).toEqual(["peer-device", "third-device"]);
   expect(e2eeApi.fetchPreKeyBundles).toHaveBeenCalledTimes(2);
 });
+
+function rosterContractMembers() {
+ const revision = "a".repeat(64);
+ return [
+  { user_id: "me", devices: [{ device_id: "local", key_revision: revision }] },
+  { user_id: "peer", devices: [{ device_id: "peer-device", key_revision: revision }] },
+ ];
+}
+it.each([
+ { name: "unsupported response version", roster: () => ({ version: 2, members: rosterContractMembers() }) },
+ { name: "non-array members", roster: () => ({ version: 1, members: {} }) },
+ { name: "missing expected member", roster: () => ({ version: 1, members: rosterContractMembers().slice(0, 1) }) },
+ { name: "unexpected member", roster: () => ({ version: 1, members: [rosterContractMembers()[0], { user_id: "stranger", devices: [] }] }) },
+ { name: "duplicate member", roster: () => ({ version: 1, members: [rosterContractMembers()[0], rosterContractMembers()[0]] }) },
+ { name: "non-array devices", roster: () => ({ version: 1, members: [rosterContractMembers()[0], { user_id: "peer", devices: {} }] }) },
+ { name: "null device reference", roster: () => ({ version: 1, members: [rosterContractMembers()[0], { user_id: "peer", devices: [null] }] }) },
+ { name: "empty device id", roster: () => ({ version: 1, members: [rosterContractMembers()[0], { user_id: "peer", devices: [{ device_id: "", key_revision: "a".repeat(64) }] }] }) },
+ { name: "uppercase revision", roster: () => ({ version: 1, members: [rosterContractMembers()[0], { user_id: "peer", devices: [{ device_id: "peer-device", key_revision: "A".repeat(64) }] }] }) },
+ { name: "non-string revision", roster: () => ({ version: 1, members: [rosterContractMembers()[0], { user_id: "peer", devices: [{ device_id: "peer-device", key_revision: 7 }] }] }) },
+])("rejects $name before consuming prekeys", async ({ roster }) => {
+ vi.mocked(apiClient)
+  .mockResolvedValueOnce({ success: true, data: { dm_device_roster_version: 1 } })
+  .mockResolvedValueOnce({ success: true, data: roster() });
+ await expect(prepare()).rejects.toThrow("DM_ROSTER_INVALID");
+ expect(e2eeApi.fetchPreKeyBundles).not.toHaveBeenCalled();
+ expect(signalProtocol.processPreKeyBundle).not.toHaveBeenCalled();
+});
