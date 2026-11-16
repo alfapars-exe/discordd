@@ -113,3 +113,21 @@ counter decreases and configured max-open changes (zero means unlimited).
 it is null when no waits are recorded. Server duration deltas are truncated to
 milliseconds. Sampled peaks are not continuous peaks. This summary establishes
 neither query/request latency percentiles nor a capacity or pool budget.
+
+
+Repository profile latency distribution (from `server`, either configured test backend):
+
+```powershell
+$env:HICHAT_PROFILE_LATENCY = '1'
+go test ./repository -run '^(TestProfileLatencyNearestRanks|TestProfileProjectionSQLQueryCount)$' -bench '^BenchmarkGroupPublicProfilePopulation$' -benchtime=30x -count=9 -v
+```
+
+Each repetition records thirty complete repository-operation durations, then
+reports nearest-rank p50/p95 and the unsorted raw nanosecond samples. Calibration
+runs must be excluded from analysis. Sampling includes clock and assertion
+costs; it changes the timing instrumentation relative to the earlier mean-only
+benchmark. Use fixed iterations up to10000 when sampling is enabled; larger
+counts fail before allocating samples. Zero-duration observations on tiny/empty
+operations reflect clock resolution, not zero cost. These are sequential
+repository percentiles, not HTTP latency or concurrent pool budgets. Unset
+`HICHAT_PROFILE_LATENCY` to run without per-operation sampling.
