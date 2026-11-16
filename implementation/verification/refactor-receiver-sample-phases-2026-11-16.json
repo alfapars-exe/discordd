@@ -83,8 +83,18 @@
     "client/src/hooks/useScreenShareReceiverStats.test.ts": "03e7c6171524e8f7aa7da85484b37adc87fde0d2eb5698991d958d03bb76284b"
   },
   "remaining": [
-    "Immutable source scan and final-source CI/Sonar",
+    "Final-source CI/Sonar; immutable sourcef03b scan PASS",
     "Final integrated full coverage",
     "Real receiver/device/media and complete RF12 acceptance"
-  ]
+  ],
+  "sourceCommit": "f03b5980",
+  "sourceScan": {
+    "exactReviewedRecords": 51,
+    "reviewLines": 482,
+    "blockingPatterns": 0,
+    "normalizedReviewDelta": {
+      "added": 0,
+      "removed": 0
+    }
+  }
 }

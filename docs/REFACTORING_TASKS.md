@@ -3786,3 +3786,5 @@ Login IPCc727d590 son değişmez kaynak taraması51 kayıt/482 inceleme/0 engell
 RF12/alıcı istatistiği: önce25fa6d77 ile normal delta/yuvarlama, negatif sayaç reseti/boş payda ve ilerlemeyen saat karakterize edildi. Mevcut iki geç-track olayı dahil aynı5test eski/yeni kaynakta geçti. Saf baseline kopyası ve delta hesapları ayrıldı; lifecycle ve baseline-before-log sırası kaldı. TypeScript/lint/Vite ve tiplerle birlikte tüm hook ifade eşdeğerliği başarılı. Yeni saf modülde19/19ifade,4/4dal ve2/2fonksiyon kapsandı; fiziksel medya kabulü değil. Kanıt: refactor-receiver-sample-phases-2026-11-16.json. Son kaynak scan/CI ve tam cihaz kabulü açık.
 
 48bd3adc terminal CI36/36 SUCCESS. Tam istemci508dosyada5579PASS/1SKIP, %69,17satır/%65,07dal. Login18 karmaşıklık kaydı Sonar kaynak eşlemesiyle CLOSED/FIXED. Kanıtlar: refactor-48bd-terminal-ci-2026-11-16.json ve refactor-48bd-login-sonar-proof-2026-11-16.json. Eski DM reddinin kökü açık kaldı.
+
+Receiver samplef03b5980 değişmez kaynak taraması51 kayıt/482 inceleme/0 engelleyici desenle başarılı; normalize inceleme farkı0. Son kaynak CI/Sonar ve fiziksel alıcı kabulü ayrı açık kaldı.
