@@ -43,5 +43,20 @@
       "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-fresh-cert-toolchains-20261116.log",
       "sha256": "94784f30d5114e380a63076e51b90111a8fe46ec817a574adb9e7b20169b7714"
     }
+  },
+  "ci": {
+    "head": "b4916579",
+    "checks": "36/36 SUCCESS",
+    "serverRun": 43782760859,
+    "receipt": "refactor-b491-terminal-ci-2026-11-16.json"
+  },
+  "selfScan": {
+    "source": "b4916579",
+    "result": "PASS",
+    "reviewedExactSourceRecords": 51,
+    "reviewLines": 481,
+    "blockingPatternHits": 0,
+    "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-capacity-b4916579-scan.log",
+    "sha256": "f2f83fd0ba321c07f9afbb36c7e9cd0569f711f6a10f46803f6aaa97274f9ef9"
   }
 }
