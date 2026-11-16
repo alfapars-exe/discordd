@@ -208,6 +208,47 @@ class LocalProfileAuditTests(unittest.TestCase):
         self.assertEqual(process.returncode, 1)
         self.assertEqual(outside.read_text(encoding="utf-8"), '{"sentinel":"keep"}')
 
+    def version_two(self):
+        self.write("owner.json", {"sourceCommit": self.commit, "label": self.root.name, "evidenceVersion": 2})
+        self.report["evidenceVersion"] = 2
+        self.report["cleanupStartedAt"] = self.at(700)
+        rows = []
+        for minute in range(11):
+            row = {key: 0 for key in ["goroutines", "heap_alloc_bytes", "online_users", "db_open_conns", "db_in_use",
+                   "db_idle", "db_wait_count", "ws_dispatch_total", "ws_rate_limit_drops_total", "http_requests",
+                   "http_5xx", "http_max_latency_ms"]}
+            row.update(bucket_at=f"2026-01-01 00:{minute:02}:00", http_avg_latency_ms=0,
+                       diagnostics={"db_max_open": 4, "db_wait_count_delta": 0, "db_wait_duration_ms_delta": 0})
+            rows.append(row)
+        self.report["runtimeTelemetry"] = {"status": "completed", "startedAt": self.at(680), "finishedAt": self.at(690), "rows": rows}
+        self.save()
+
+    def test_version_two_requires_pre_cleanup_telemetry(self):
+        self.version_two()
+        self.assertEqual(audit_profile(self.root)["runtimeTelemetryBuckets"], 11)
+        self.report["runtimeTelemetry"]["finishedAt"] = self.at(701)
+        self.save()
+        with self.assertRaisesRegex(AuditError, "before cleanup"):
+            audit_profile(self.root)
+
+    def test_version_two_missing_collection_and_version_mismatch_fail(self):
+        self.version_two()
+        del self.report["runtimeTelemetry"]
+        self.save()
+        with self.assertRaisesRegex(AuditError, "did not complete"):
+            audit_profile(self.root)
+        del self.report["evidenceVersion"]
+        self.save()
+        with self.assertRaisesRegex(AuditError, "version differs"):
+            audit_profile(self.root)
+
+    def test_version_two_rejects_private_diagnostics(self):
+        self.version_two()
+        self.report["runtimeTelemetry"]["rows"][0]["diagnostics"]["app_log"] = {"private": "must not be published"}
+        self.save()
+        with self.assertRaisesRegex(AuditError, "telemetry diagnostics"):
+            audit_profile(self.root)
+
 
 if __name__ == "__main__":
     unittest.main()

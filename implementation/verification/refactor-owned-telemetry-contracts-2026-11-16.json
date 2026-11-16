@@ -1,0 +1,66 @@
+{
+  "scope": "Evidence version2: collect persisted numeric runtime buckets inside the owned workload before cleanup; not retrospective diagnosis of the historical external observer failure.",
+  "nodeContracts": {
+    "passed": 114,
+    "failed": 0,
+    "skipped": 0,
+    "logSha256": "95aa5ed63ae867c980513967eab42f4afb25614c5e2890c2730fa0ecfaaef14c"
+  },
+  "pythonContracts": {
+    "passed": 18,
+    "failed": 0,
+    "skipped": 0,
+    "logSha256": "c9797fb4b1f9fdf0aa94a26a895c10a408f1305d3aa4fadaad7c00d97eb2cbd9"
+  },
+  "historicalDataReplay": {
+    "result": "PASS",
+    "scope": "Offline normalization of existing persisted rows; not a new pre-cleanup read or zero-observer-error claim",
+    "buckets": 11,
+    "keys": [
+      "bucket_at",
+      "goroutines",
+      "heap_alloc_bytes",
+      "online_users",
+      "db_open_conns",
+      "db_in_use",
+      "db_idle",
+      "db_wait_count",
+      "ws_dispatch_total",
+      "ws_rate_limit_drops_total",
+      "http_requests",
+      "http_5xx",
+      "http_max_latency_ms",
+      "http_avg_latency_ms",
+      "diagnostics"
+    ],
+    "diagnosticsKeys": [
+      "db_max_open",
+      "db_wait_count_delta",
+      "db_wait_duration_ms_delta"
+    ]
+  },
+  "boundaries": [
+    "One explicit PostgreSQL query before cleanup with10s child timeout and128KiB maximum output",
+    "10\u201320 strictly ordered persisted minute buckets; final partial-minute flush is not forced",
+    "Numeric columns and three diagnostics allowlisted; logs/route strings/future columns excluded",
+    "Read/validation failure records stage, timestamp and safe exit/system code, rejects successful profile and still joins cleanup",
+    "Owner/report version match required; legacy v1 audit remains legacy rather than upgrading measurement claims"
+  ],
+  "sources": {
+    "loadtest/profile-telemetry.mjs": "739fd8a5f54d15f7908311a59485d444bf021044f2c2dab792433df53ae8a025",
+    "loadtest/profile-telemetry.test.mjs": "635b945ef9b8325cc6214f67e9762f461fa2016bf1ec03b6855409c68ece5bf6",
+    "loadtest/local-fanout-runner.mjs": "8b90f215c54db6d13b49af3e47ed2d5024397b22ad283a963b42f7fa574cd0f4",
+    "loadtest/run-local-fanout.ps1": "17d1658de43b24ffe2cbd0e5b9436ccb43d491663caec5c48f6cb9333cf0f9f2",
+    "loadtest/audit_local_profile.py": "87528d1a23fc4ca6982cbbf038bb4861c8a2da71159b112e76d35b0301faa846",
+    "loadtest/test_audit_local_profile.py": "2b3dc3cc4128aec2b2131e318baa99818aa219464c3c8ebbd4935224d5f6c340"
+  },
+  "staticChecks": {
+    "powershellParserErrors": 0,
+    "nodeSyntax": "PASS"
+  },
+  "pending": [
+    "Actual SQL execution and full620s version2 fixture",
+    "New CI/Sonar and source-bound runtime audit",
+    "No capacity/SLA, variance, query/pool budget, churn/long-soak, native/physical or overall RF closure"
+  ]
+}

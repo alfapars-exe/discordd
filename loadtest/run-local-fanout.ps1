@@ -43,7 +43,7 @@ $workloadFailure = $null
 $cleanupFailures = @()
 try {
     New-Item -ItemType Directory -Path $tempDir | Out-Null
-    Write-Utf8NoBom (Join-Path $tempDir 'owner.json') (@{label=$ownerLabel;sourceCommit=$sourceCommit}|ConvertTo-Json)
+    Write-Utf8NoBom (Join-Path $tempDir 'owner.json') (@{label=$ownerLabel;sourceCommit=$sourceCommit;evidenceVersion=2}|ConvertTo-Json)
     $archive = Join-Path $tempDir 'source.tar'
     git -C $SourceRoot archive --format=tar --output=$archive $sourceCommit server e2e/scripts/pg-fixture.go loadtest
     if ($LASTEXITCODE -ne 0) { throw 'Cannot archive committed profile source' }

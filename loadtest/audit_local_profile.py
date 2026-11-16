@@ -7,6 +7,7 @@ are outside this offline audit; the launcher cleanup record is checked as a reco
 import argparse
 import hashlib
 import json
+import math
 import re
 import sys
 from datetime import datetime
@@ -207,10 +208,54 @@ def audit_runtime(report):
             and 10 <= isolation["healthySamplesAfterProbeExit"] <= count, "Missing isolation transition")
 
 
+def audit_evidence_version(report, owner):
+    version = owner.get("evidenceVersion", 1)
+    require(type(version) is int and version in (1, 2), "Unsupported evidence version")
+    require(type(report.get("evidenceVersion", 1)) is int and report.get("evidenceVersion", 1) == version,
+            "Report evidence version differs from owner marker")
+    return version
+
+
+def audit_telemetry_row(row):
+    counters = {"goroutines", "heap_alloc_bytes", "online_users", "db_open_conns", "db_in_use", "db_idle",
+                "db_wait_count", "ws_dispatch_total", "ws_rate_limit_drops_total", "http_requests", "http_5xx", "http_max_latency_ms"}
+    require(set(row) == counters | {"bucket_at", "http_avg_latency_ms", "diagnostics"}, "Unexpected telemetry fields")
+    require(all(type(row[key]) is int and 0 <= row[key] < 2**53 for key in counters), "Invalid telemetry counter")
+    average = row["http_avg_latency_ms"]
+    require(type(average) in (int, float) and math.isfinite(average) and 0 <= average < 2**53
+            and row["http_5xx"] <= row["http_requests"], "Invalid telemetry HTTP values")
+    expected = {"db_max_open", "db_wait_count_delta", "db_wait_duration_ms_delta"}
+    require(set(row["diagnostics"]) == expected and all(type(row["diagnostics"][key]) is int
+            and 0 <= row["diagnostics"][key] < 2**53 for key in expected), "Invalid telemetry diagnostics")
+    stamp = datetime.strptime(row["bucket_at"], "%Y-%m-%d %H:%M:%S")
+    require(stamp.strftime("%Y-%m-%d %H:%M:00") == row["bucket_at"], "Invalid telemetry minute bucket")
+    return stamp
+
+
+def audit_telemetry(report, version):
+    if version == 1:
+        return 0
+    telemetry = report.get("runtimeTelemetry")
+    require(isinstance(telemetry, dict) and telemetry.get("status") == "completed", "Telemetry collection did not complete")
+    rows = telemetry.get("rows")
+    require(isinstance(rows, list) and 10 <= len(rows) <= 20, "Incomplete telemetry buckets")
+    times = [datetime.fromisoformat(value.replace("Z", "+00:00")) for value in
+             [telemetry["startedAt"], telemetry["finishedAt"], report["cleanupStartedAt"]]]
+    require(all(value.tzinfo is not None for value in times) and times[0] <= times[1] <= times[2],
+            "Telemetry was not collected before cleanup")
+    previous = None
+    for row in rows:
+        stamp = audit_telemetry_row(row)
+        require(previous is None or stamp > previous, "Telemetry buckets overlap or reverse")
+        previous = stamp
+    return len(rows)
+
+
 def audit_profile(fixture):
     fixture = fixture_directory(fixture)
     report, owner = read_json(fixture, "capacity-report.json"), read_json(fixture, "owner.json")
     require(owner["label"] == fixture.name, "Fixture owner marker differs from its directory")
+    version = audit_evidence_version(report, owner)
     require(report["resultStatus"] == "completed" and report["failurePhases"] == []
             and report["databaseDropped"] is True and report["sourceStable"] is True
             and report["logWriteFailed"] is False, "Profile or cleanup did not complete")
@@ -222,9 +267,11 @@ def audit_profile(fixture):
             and not list(fixture.glob("run-*/hichat-e2e-postgres.json")), "Private fixture credentials remain")
     source_files = audit_sources(fixture, report["sourceSnapshot"])
     audit_runtime(report)
+    telemetry_buckets = audit_telemetry(report, version)
     digest, page_hashes = audit_history(fixture, report["fanout"])
     return {
-        "result": "PASS", "sourceCommit": commit, "sourceFilesMatched": source_files,
+        "result": "PASS", "sourceCommit": commit, "sourceFilesMatched": source_files, "evidenceVersion": version,
+        "runtimeTelemetryBuckets": telemetry_buckets,
         "messages": 5800, "healthyDeliveries": 116000, "historyPages": 58,
         "receiverDigestsMatched": 20, "senderAcknowledgementsMatched": 5800, "digest": digest,
         "reportSha256": sha256(fixture, "capacity-report.json"),

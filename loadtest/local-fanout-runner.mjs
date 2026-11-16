@@ -6,6 +6,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { requestLocalAPI } from "./local-profile-api.mjs";
 import { reconcileFanoutHistory } from "./fanout-history.mjs";
+import { collectRuntimeTelemetry, RUNTIME_TELEMETRY_QUERY } from "./profile-telemetry.mjs";
 import { readLocalConfig, spawnOwned, validateLocalFixture, snapshotSources, assertSnapshotUnchanged, joinOwnedProcesses, openProfileLog, finishProfileLog, captureProbeResult } from "./local-profile-fixture.mjs";
 const cfg = readLocalConfig(process.argv[2]);
 validateLocalFixture(cfg);
@@ -33,7 +34,11 @@ function assertDiskHeadroom(starting = false) {
   }
 }
 function sql(query, db = "hichat_e2e_control") {
+  return executeSQL(query, db);
+}
+function executeSQL(query, db, options = {}) {
   return execFileSync(cfg.dockerBinary, ["exec", "-i", "--env", "PGAPPNAME=hichat-local-profile-collector", cfg.container, "psql", "-U", "hichat_tls_test", "-d", db, "-v", "ON_ERROR_STOP=1", "-tA"], {
+    ...options,
     input: query,
     encoding: "utf8",
     windowsHide: true
@@ -80,6 +85,7 @@ async function flushLog(log) {
 let samples = [],
   summary;
 const report = {
+  evidenceVersion: 2,
   sourceCommit: cfg.sourceCommit,
   loadCommit: cfg.sourceCommit,
   sourceSnapshot,
@@ -627,6 +633,8 @@ await runProfileWithReport({
     report.slow.readableAfterRetirement = true;
     await verifyProfileHistory(exitCode, guild, channel, probeId, userIds, readerToken);
     await verifyRecovery();
+    await collectRuntimeTelemetry({ report,
+      read: () => JSON.parse(executeSQL(RUNTIME_TELEMETRY_QUERY, dbName, { timeout: 10000, maxBuffer: 128 * 1024 })) });
     report.limits = ["One 20-session local profile, not capacity/SLA or long-soak acceptance", "5800 plaintext channel messages; one non-reading TCP peer, no media provider load", "Profiling and process/DB sampling overhead included; CPU not pinned; other developer Docker services remain running", "Twenty-one ordinary users join through the real invite API; twenty healthy k6 users and one non-reading Go peer; separate synthetic platform admin reads profiles", "Heap is observed without forced GC; idle pool/heap retention is not asserted to return byte-for-byte to baseline"];
     console.log(JSON.stringify({
       phase: "accepted",
@@ -637,6 +645,7 @@ await runProfileWithReport({
     }));
   },
   cleanup: async () => {
+    report.cleanupStartedAt = new Date().toISOString();
     const errors = [];
     try {
       await joinOwnedProcesses([load, slow, server]);

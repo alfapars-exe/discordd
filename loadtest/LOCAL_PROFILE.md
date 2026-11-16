@@ -51,6 +51,22 @@ evidence should select the report, samples, history and sanitized diagnostics;
 neither credentials nor private keys belong in a PR. Docker build context is
 restricted to its Dockerfile, certificate generator and access configuration.
 
+New launcher runs use evidence version 2 in both the owner marker and report.
+After history/recovery verification, the workload awaits one bounded telemetry
+read before cleanup begins. The query has a ten-second process timeout and
+128 KiB output limit; it selects numeric runtime/pool/HTTP fields and three
+numeric diagnostics only. Ten to twenty ordered minute buckets are required.
+Application logs, route text and unknown future columns are excluded.
+Read or validation failure rejects the profile and records a timestamped stage
+plus safe child exit/system codes while still running cleanup. This does not
+identify the cause of an older external observer's unrecorded failure.
+Persisted buckets do not force-flush the final partial minute or establish a
+capacity, latency or pool-wait budget.
+
+The offline auditor supports legacy version-1 captures without upgrading their
+measurement claims. Version 2 requires completed telemetry and its recorded
+completion before cleanup; missing data or mismatched marker versions fail.
+
 After the launcher has finished, independently check persisted messages,
 receiver digests, ACK IDs, source hashes and recorded resource/cleanup evidence:
 
