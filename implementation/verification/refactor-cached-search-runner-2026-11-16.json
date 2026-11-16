@@ -221,7 +221,7 @@
     ]
   },
   "pending": [
-    "New-head CI and Sonar closure for channel34complexity issue",
+    "CI406e failed handoff fixture; root fix and exact new-head gate remain pending",
     "Channel readonly props/nested result ternary remain open",
     "Full local client and whole-client coverage not rerun for this source",
     "Real browser/native storage gates must pass current source; historical pending-panel timeout root remains open",
@@ -237,5 +237,39 @@
     "hichat-search-runner-3c1ed88b-scan.log": "81af74f9da16c5e3fc7bdcb9853e2001fb244532771e85a34bc9805667a20bc2",
     "hichat-search-runner-3c1ed88b-scan-review.txt": "4fd19c42dedbec4fef41375fb00230ddd76cbcfd2f28b0b32c7809ad8ff0aa3b",
     "hichat-cached-search-engine-vite.log": "2731a88f118cae0f4a32c8e7f71a4a9de8d471ad1a25f784c0b62e29515a6ae1"
-  }
+  },
+  "sonarFollowup": {
+    "sourceCommit": "406eec6f",
+    "files": {
+      "components/chat/SearchPanel.tsx": {
+        "codeLines": 404,
+        "mismatches": [],
+        "extraEOF": 1
+      },
+      "components/dm/DMSearchPanel.tsx": {
+        "codeLines": 404,
+        "mismatches": [],
+        "extraEOF": 1
+      },
+      "crypto/cachedSearchRunner.ts": {
+        "codeLines": 63,
+        "mismatches": [],
+        "extraEOF": 1
+      }
+    },
+    "recordsRead": 499,
+    "issues": [
+      {
+        "key": "AaHYWqSLd7dyvm3wYSn8",
+        "rule": "typescript:S3776",
+        "status": "CLOSED",
+        "resolution": "FIXED",
+        "line": null,
+        "message": "Refactor this function to reduce its Cognitive Complexity from 34 to the 15 allowed.",
+        "component": "alfapars-exe_discordd:client/src/components/chat/SearchPanel.tsx"
+      }
+    ]
+  },
+  "ciEvidence": "refactor-406e-terminal-ci-2026-11-16.json",
+  "ciFixEvidence": "refactor-panel-handoff-import-ci-fix-2026-11-16.json"
 }

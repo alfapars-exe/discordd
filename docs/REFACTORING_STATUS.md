@@ -44,8 +44,10 @@ Bu tablo tam kabul sertifikası değildir. Görev kartlarının bütün Acceptan
 CI anlık görüntüleri [verification dizininde](../implementation/verification/refactor-pr-snapshot-2026-11-13.json) commit kimliklerine bağlıdır; yeni push sonrasında önceki başarı güncel head'in sonucu değildir. Yinelenen #270 kapatılmıştır; LiveKit silme temizliğinin kanonik PR'ı [#222](https://github.com/alfapars-exe/discordd/pull/222)'dir.
 
 
-## 16 Kasım ek doğrulaması
+## 16 Kasım güncel doğrulaması
 
-RF03/RF04/RF26: fbbdcef1 ortak SQLite test desteği servis, repository ve census fixture'larını birleştirir. Tam Linux race 1.394 başarılı/34 atlanan/0 başarısız; immutable-source tarama 51 exact kayıt, 480 inceleme satırı ve 0 engelleyici desen. PostgreSQL seçimi ve soğuk migration testleri korunur; yeni CI PostgreSQL sözleşme koşusu sürmektedir. Değişmeyen transaction testinde aynı Linux Go/CGO/race ortamında bir ısınma+dokuz örnek medyanı 8,73 → 0,13 saniye. Bu test hazırlığı ölçümüdür. Kanıt: refactor-shared-sqlite-fixture-2026-11-16.json.
+Ortak `cachedSearchRunner`, kanal ve DM aramasının sahipli snapshot/silme/sayfa yürütmesini birleştirir. 65 hedefli test ve motorun tüm dalları geçti. DM panelinin önceki dört Sonar bulgusu ve kanalın 34 puanlık karmaşıklık bulgusu, kaynak eşleşmesi doğrulanarak kapandı. Kanalın kalan props/sonuç gösterimi ve kripto güven uyarısı ayrıştırmalarının yeni analiz sonucu beklenir.
 
-RF17/RF26: 6e69da33 arama sayfasının pencere, yeniden doğrulama ve hydration adımlarını ayırır; dört karakterizasyon önce mevcut kaynakta geçti. Hedefli32, tam istemci5.518 başarılı/1 atlanan; type/build ve lint0hata/2mevcutuyarı. Sayfa kapsamı %100 satır/fonksiyon, %87,87 dal. Sonar43 kaydı yeni analizle henüz doğrulanmadı. Kaynak taraması ve son head CI açık; bu kanıtlar first-query bütçesi veya fiziksel/native kabulün yerine geçmez. Kanıt: refactor-search-page-phases-2026-11-16.json.
+406eec6f CI'ında 35 başarılı/1 başarısız kontrol vardı. Başarısızlık, test hazırlığının ortak motordaki göreli snapshot importunu sarmalamamasından kaynaklanan 30 saniyelik kapı beklemesiydi. Import çözümlemesi ve modül exportları düzeltildi; 14 Node testi ve iki gerçek IndexedDB panelinde 50.000 olay sonrası doğru sayfa doğrulaması geçti. CI'ın aynı bellek ve bekleme bütçeleri yeni head'de tekrar doğrulanacak. Ayrı tarihsel 120 saniyelik timeout'un kökü açık.
+
+Güncel yerel tam istemci kapsamı: 506 dosyada 5.562 başarılı, 1 atlanan; %69,16 satır ve %65,05 dal. Eşikler korunur. Kaynak taraması 51 kayıtlı eşleşme/481 inceleme satırı/0 engelleyici desenle geçti. Bu kanıtlar genel RF01–RF30, fiziksel medya/native, tam arama performansı veya uzun yük kabulünü kapatmaz. Ayrıntı ve kaynak revizyonları görev defterine bağlı verification dosyalarındadır.
