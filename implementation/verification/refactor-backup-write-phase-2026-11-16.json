@@ -17,5 +17,11 @@
     "Final-source scan/CI/Sonar",
     "Historical backup corpus",
     "Cross-store crash/atomicity and complete RF16 acceptance"
-  ]
+  ],
+  "sourceScan": {
+    "sourceCommit": "b4ac50b5",
+    "exactReviewedRecords": 51,
+    "reviewLines": 482,
+    "blockingPatterns": 0
+  }
 }

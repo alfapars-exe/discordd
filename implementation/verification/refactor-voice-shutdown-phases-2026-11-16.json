@@ -11,5 +11,17 @@
     "Linux race on final source",
     "Immutable source scan and final-source CI/Sonar",
     "Real media/provider/physical acceptance and full shutdown resource inventory"
-  ]
+  ],
+  "sourceCommit": "628f61fd",
+  "sourceSHA256": {
+    "server/services/voice_shutdown.go": "d219a4d7b4ec4ef51857adc81dc1636b2e6f5498149b5182b3f49ebce901b0e3",
+    "server/services/voice_shutdown_test.go": "a09e9681e25f4bdf9d86f32548c5c619733dd951a061263bad6f69c2120f8a9e"
+  },
+  "linuxRace": {
+    "state": "Confirmed running in owned Docker container hichat-voice-phases-race-20261116",
+    "runtime": "Go1.26.11 linux/amd64, CGO1, GOMAXPROCS2",
+    "scope": "Seven TestVoiceShutdown tests, count20, race detector",
+    "constraints": "Network disabled; source bind read-only; dedicated task cache",
+    "initialAttempt": "Go1.26.10 image default toolchain rejected go.mod before test execution; corrected to cached1.26.11 with GOTOOLCHAINauto"
+  }
 }
