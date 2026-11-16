@@ -15,7 +15,14 @@
     "boundaryCharacterization": "All eight SQL method spellings, too-short argument lists, non-selector and unrelated calls; six tests total PASS on original and candidate implementations."
   },
   "remaining": [
-    "New-source scan and CI/Sonar",
+    "Final-source CI/security scan and Sonar",
     "RF05 query execution/dialect parity and runtime coverage; syntax inventory does not prove those"
-  ]
+  ],
+  "sourceScan": {
+    "sourceCommit": "9c740029",
+    "blockingPatterns": 0,
+    "reviewLines": 481,
+    "exactReviewedRecords": 51,
+    "limits": "The additional boundary characterization test in 0b533af0 is covered by local old/new Go tests; final-source CI/security scan remains pending."
+  }
 }

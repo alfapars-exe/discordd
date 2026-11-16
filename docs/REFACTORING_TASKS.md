@@ -3730,3 +3730,5 @@ RF07/HTTP istemcisi: token yenilemenin Retry-After hesabı ve hesap doğrulamal�
 RF05/SQL envanter aracı: dizin yürütme, dosya AST dolaşımı, yöntem/argüman seçimi ve lexical declaration sahipliği ayrıldı. Aynı 5 test önce/sonra ve Go vet başarılı; 182 dosya/963 aday için JSON alanları ve sıra tamamen eşleşti (659 literal, 31 constant, 273 unresolved). Kanıt: refactor-query-inventory-phases-2026-11-16.json. Yeni kaynak taraması/CI/Sonar ve gerçek sorgu yürütme/dialect kabulü açık.
 
 SQL envanteri sınır karakterizasyonu: sekiz yöntem adı, yetersiz argüman, selector olmayan ve ilgisiz çağrılar eklendi; altı test eski/yeni uygulamada geçti. 963 adayın önce/sonra eşdeğerlik kanıtı korunur.
+
+SQL ayrıştırma kaynağı 9c740029 için değişmez kaynak taraması 51 kayıt/481 inceleme satırı/0 engelleyici desenle tamamlandı. 0b533af0 ek karakterizasyonunu da içeren son kaynak için CI/güvenlik/Sonar kabulü beklenir.
