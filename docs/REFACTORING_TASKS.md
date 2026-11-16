@@ -3760,3 +3760,5 @@ Presence607f0239 kaynak taraması 51 kayıt/482 inceleme/0 engelleyici desenle b
 338e2d71 terminal CI: 36/36 SUCCESS; recovery E2E dahil bütün kontroller tamamlandı. Kanıt: refactor-338e-terminal-ci-2026-11-16.json. Sonraki yerel presence60b6 için aynı kabul varsayılmadı.
 
 DM kanal listesi snapshot uzlaştırması store dışına ayrıldı: yalnız self-DM ekleme sınıflandırması, yerel unread farkları ve eksik self-DM satırlarını koruma. Önce 115 store testi; sonra aynı 115 +10 yeni sözleşme=125 PASS. TypeScript/lint ve üç çıkarılmış işlem gövdesi paritesi başarılı. Yalnız yeni modülde V8 satır/ifade/fonksiyon/dal %100; global istemci kapsamı iddiası değil. Kanıt: refactor-dm-channel-snapshot-2026-11-16.json. Presence60b6 taraması 51 kayıt/482 inceleme/0 engelleyici desenle geçti. Son birleşik kaynak tarama/CI/Sonar, tam kapsam ve geniş kabul açık.
+
+Birleşik presence + DM snapshot 42512f2a kaynak taraması: 51 kayıt/482 inceleme/0 engelleyici desen; 60b6 ile normalize inceleme farkı {'added': 0, 'removed': 0}. Kaynak blob kimlikleri DM kanıt dosyasında. Coverage eşikleri ve CI komutları değişmedi; son head tam istemci/Go race/PostgreSQL/E2E ve Sonar sonucu beklenir.

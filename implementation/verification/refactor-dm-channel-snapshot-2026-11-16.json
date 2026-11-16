@@ -74,12 +74,29 @@
         }
       }
     },
-    "coverageScope": "Only src/stores/shared/dmChannelSnapshot.ts included for this diagnostic. Not whole-client coverage. Existing global thresholds were not edited."
+    "coverageScope": "Only src/stores/shared/dmChannelSnapshot.ts included for this diagnostic. Not whole-client coverage. Existing global thresholds were not edited.",
+    "coverageGateChanges": "No changes to client/vitest.config.ts or CI coverage commands between 338e2d71 and 42512f2a."
   },
   "timingDetail": "Current unread state is read before pure server-count seeding instead of after it. Both remain in one synchronous continuation, with no await, external call or store write in the seed loop.",
   "remaining": [
-    "Immutable final-source scan and CI/Sonar",
+    "Final integrated CI/Sonar; immutable source4251 scan PASS",
     "Full-client coverage at final integrated head",
     "Full reconnect/offline/account/permission runtime and RF07/RF15 acceptance"
-  ]
+  ],
+  "sourceCommit": "42512f2a",
+  "sourceBlobOids": {
+    "client/src/stores/dmStore.ts": "d26969af3ad5068ca5221ff0d8bd0e81c6f28e54",
+    "client/src/stores/shared/dmChannelSnapshot.ts": "3ec317c339df7ab04af35e36aaadebba9b4cb1f8",
+    "client/src/stores/shared/dmChannelSnapshot.test.ts": "60270364aafe96f080f17d234371639bf11c1ffc"
+  },
+  "sourceScan": {
+    "sourceCommit": "42512f2a",
+    "exactReviewedRecords": 51,
+    "reviewLines": 482,
+    "blockingPatterns": 0,
+    "normalizedDeltaVs60b6": {
+      "added": 0,
+      "removed": 0
+    }
+  }
 }
