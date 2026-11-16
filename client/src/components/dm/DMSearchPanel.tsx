@@ -99,6 +99,76 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted, keysReady }: DMSea
     return frontier;
   }, [failCurrentSearch]);
 
+  const publishCachedPage = useCallback((
+    page: NonNullable<Awaited<ReturnType<typeof readCachedSearchPage>>>, searchOffset: number,
+  ) => {
+    queryOffset.current = page.offset;
+    if (page.offset !== searchOffset) setOffset(page.offset);
+    const paged = page.messages;
+    const total = page.total;
+
+    // CachedDecryptedMessage -> DMMessage minimal format
+    const messages: DMMessage[] = paged.map((c) => ({
+      id: c.messageId,
+      dm_channel_id: channelId,
+      user_id: c.senderUserId ?? "",
+      application_id: c.applicationId,
+      source_sequence: c.sourceSequence,
+      content: c.content,
+      created_at: new Date(c.timestamp).toISOString(),
+      edited_at: null,
+      is_pinned: false,
+      attachments: [],
+      reactions: [],
+      reply_to_id: null,
+      referenced_message: null,
+      author: { id: "", username: "", display_name: null, avatar_url: null, status: "offline" as const, custom_status: null, created_at: "" },
+      encryption_version: 1,
+    }));
+
+    setResults({ messages, totalCount: total });
+  }, [channelId]);
+
+  // All owned mutations stay inside this phase. The dispatcher adopts its
+  // promise directly, adding no await boundary before publishing the page.
+  const searchEncryptedMessages = useCallback(async (searchQuery: string, searchOffset: number, seq: number) => {
+    try {
+      const controller = new AbortController();
+      localSearch.current = controller;
+      const term = searchQuery.trim();
+      const pool = await deletionPool.get();
+      if (seq !== searchSeqRef.current) return;
+      const pendingDeletes = deletionSpool.current ?? startFrontier(pool);
+      deletionSpool.current = pendingDeletes;
+      if (!localMatches.current) {
+        const snapshot = await createCachedSearchSnapshot("dm", channelId!, term, controller.signal);
+        if (seq !== searchSeqRef.current) { await snapshot.dispose(); return; }
+        localMatches.current = snapshot;
+      }
+      const snapshot = localMatches.current;
+      const lowerTerm = term.toLowerCase();
+      let page: Awaited<ReturnType<typeof readCachedSearchPage>>;
+      for (;;) {
+        await pendingDeletes.drain(ids => snapshot.removeMany(ids, controller.signal), controller.signal);
+        if (seq !== searchSeqRef.current) return;
+        const revision = pendingDeletes.version;
+        page = await readCachedSearchPage(snapshot, searchOffset, LIMIT,
+          row => row.dmChannelId === channelId && row.content.toLowerCase().includes(lowerTerm),
+          () => seq === searchSeqRef.current, controller.signal);
+        if (!page || seq !== searchSeqRef.current) return;
+        // A deletion received during hydration invalidates this page even
+        // when its native spool write has not committed yet.
+        if (revision === pendingDeletes.version) break;
+      }
+      publishCachedPage(page, searchOffset);
+    } catch {
+      if (seq !== searchSeqRef.current) return;
+      failCurrentSearch();
+    }
+    searching.current = false; setIsSearching(false);
+    return;
+  }, [channelId, deletionPool, startFrontier, failCurrentSearch, publishCachedPage]);
+
   const doSearch = useCallback(
     async (searchQuery: string, searchOffset: number) => {
       // Bumping before the empty-query early return also invalidates any
@@ -124,67 +194,7 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted, keysReady }: DMSea
         searching.current = false; setIsSearching(false);
         return;
       }
-      if (encrypted) {
-        try {
-          const controller = new AbortController();
-          localSearch.current = controller;
-          const term = searchQuery.trim();
-          const pool = await deletionPool.get();
-          if (seq !== searchSeqRef.current) return;
-          const pendingDeletes = deletionSpool.current ?? startFrontier(pool);
-          deletionSpool.current = pendingDeletes;
-          if (!localMatches.current) {
-            const snapshot = await createCachedSearchSnapshot("dm", channelId!, term, controller.signal);
-            if (seq !== searchSeqRef.current) { await snapshot.dispose(); return; }
-            localMatches.current = snapshot;
-          }
-          const snapshot = localMatches.current;
-          const lowerTerm = term.toLowerCase();
-          let page: Awaited<ReturnType<typeof readCachedSearchPage>>;
-          for (;;) {
-            await pendingDeletes.drain(ids => snapshot.removeMany(ids, controller.signal), controller.signal);
-            if (seq !== searchSeqRef.current) return;
-            const revision = pendingDeletes.version;
-            page = await readCachedSearchPage(snapshot, searchOffset, LIMIT,
-              row => row.dmChannelId === channelId && row.content.toLowerCase().includes(lowerTerm),
-              () => seq === searchSeqRef.current, controller.signal);
-            if (!page || seq !== searchSeqRef.current) return;
-            // A deletion received during hydration invalidates this page even
-            // when its native spool write has not committed yet.
-            if (revision === pendingDeletes.version) break;
-          }
-          queryOffset.current = page.offset;
-          if (page.offset !== searchOffset) setOffset(page.offset);
-          const paged = page.messages;
-          const total = page.total;
-
-          // CachedDecryptedMessage -> DMMessage minimal format
-          const messages: DMMessage[] = paged.map((c) => ({
-            id: c.messageId,
-            dm_channel_id: channelId,
-            user_id: c.senderUserId ?? "",
-            application_id: c.applicationId,
-            source_sequence: c.sourceSequence,
-            content: c.content,
-            created_at: new Date(c.timestamp).toISOString(),
-            edited_at: null,
-            is_pinned: false,
-            attachments: [],
-            reactions: [],
-            reply_to_id: null,
-            referenced_message: null,
-            author: { id: "", username: "", display_name: null, avatar_url: null, status: "offline" as const, custom_status: null, created_at: "" },
-            encryption_version: 1,
-          }));
-
-          setResults({ messages, totalCount: total });
-        } catch {
-          if (seq !== searchSeqRef.current) return;
-          failCurrentSearch();
-        }
-        searching.current = false; setIsSearching(false);
-        return;
-      }
+      if (encrypted) return searchEncryptedMessages(searchQuery, searchOffset, seq);
 
       // Plaintext — server-side FTS5 search
       const result = await searchMessages(channelId, searchQuery.trim(), LIMIT, searchOffset);
@@ -196,7 +206,7 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted, keysReady }: DMSea
       });
       searching.current = false; setIsSearching(false);
     },
-    [channelId, encrypted, searchMessages, deletionPool, startFrontier, failCurrentSearch]
+    [channelId, encrypted, searchMessages, searchEncryptedMessages]
   );
 
   /** Debounced search on input change */
