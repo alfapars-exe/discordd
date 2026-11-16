@@ -3790,3 +3790,5 @@ RF12/alıcı istatistiği: önce25fa6d77 ile normal delta/yuvarlama, negatif say
 Receiver samplef03b5980 değişmez kaynak taraması51 kayıt/482 inceleme/0 engelleyici desenle başarılı; normalize inceleme farkı0. Son kaynak CI/Sonar ve fiziksel alıcı kabulü ayrı açık kaldı.
 
 Ses kanalı silme izleyici temizliği aynı mutex altında ayrı yardımcıya taşındı; closeout/bildirim, force-move, epoch, revizyon ve oda anahtarı sırası korundu. Önce 19 mevcut race testi ve yeni karakterizasyon 20 tekrar geçti; sonrasında 400 PASS/0 FAIL/SKIP, services vet başarılı. Yardımcı geri açıldığında tüm kaynak dosyası eşleşir. RAM test düzeni performans/PG/fiziksel medya kabulü değildir. Kanıt: refactor-voice-viewer-cleanup-2026-11-16.json. Genel refactor ve tarihsel panel CI kök nedeni açık.
+
+RF29 hata raporlama: profile-lifecycle workload/cleanup/report hatalarını birlikte korur; tek hata kimliği değişmez. ENOSPC negatif kontrolü dahil6 yeni sözleşme ve tüm loadtest69/69 başarılı. Geçici runner güvenli kopyasına uygulandı ve sözdizimi doğrulandı; gerçek uzun profil disk nedeniyle yeniden çalışmadı, kabul açık. Kanıt: refactor-profile-lifecycle-2026-11-16.json.

@@ -1,0 +1,27 @@
+{
+  "scope": "RF29 diagnostic lifecycle: keep workload error observable when cleanup or report persistence also fails. No delivery, capacity, pool-wait or performance acceptance.",
+  "validation": {
+    "nodeContracts": {
+      "passed": 69,
+      "failed": 0,
+      "skipped": 0
+    },
+    "newLifecycleContracts": 6,
+    "negativeControl": "Unguarded finally report write demonstrably masks original failure",
+    "singleFailureIdentity": "preserved",
+    "multipleFailures": "AggregateError.errors in workload, cleanup, report order",
+    "safeRunnerSyntax": "node --check PASS; not executed"
+  },
+  "safeRunner": {
+    "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-fanout-soak-runner-safe-20261116.mjs",
+    "sha256": "fdd1836d969a02f59a3737d94a18f719cb8bc19798b143a71c8aac7261668b60",
+    "originalPreserved": true,
+    "realRun": "NOT RUN: insufficient disk headroom"
+  },
+  "limitations": [
+    "Helper used by prepared task-owned runner copy, not the historical interrupted run",
+    "No original failure recovered from the historical masked exception",
+    "Real extended profile remains incomplete",
+    "Callers must verify resource identity and join individual cleanup operations"
+  ]
+}
