@@ -150,3 +150,6 @@ RF09/RF29 benchmark:0/1/100/1001 distinct users, projection parity before timing
 
 
 RF09/RF29 PostgreSQL18.6 verify-full mTLS nüfus benchmark’ı da PASS: dondurulmuş b71f2e5d kaynağı;0/1/100/1001 benzersiz kullanıcı x tekil/toplu x9 tekrar x30 operasyon, projection eşitliği ve mevcut query-count testi başarılı. Canlı fixture TCP örneği2/2TLS+cert; application_name filtresi0 eşleştiği için kabul kaynağı değildir. Launcher exit0, cleanup failures0, container/image tam ID ve export credential yokluğu doğrulandı. Tekrarlı ns/op ortalamaları p95 veya concurrent pool bütçesi sayılmadı; genel RF açık. Kanıt: refactor-profile-population-postgres-2026-11-16.json.
+
+
+RF09 üye projection servisinin fiziksel SQL sınırı gerçek repository ve tam şemayla doğrulandı:0 üyede3,1/1001 üyede4 QueryContext/QueryRowContext çağrısı; kapsam/sıra korunuyor. SQLite1 ve PostgreSQL3 tekrar PASS. Bu sayaç DB sunucusu iç statement/trigger sayısı değildir; rol/nickname/timeout dolu sonuç eşitliği önceki ayrı testlerde, HTTP p95/concurrent bütçe ve genel RF açık. Dondurulmuş kaynak eşleşmesi, launcher exit0, cleanup0 ve container/image/credential yokluğu doğrulandı. Kanıt: refactor-member-physical-sql-2026-11-16.json.
