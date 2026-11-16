@@ -18,7 +18,7 @@ beforeEach(async () => {
   publishAuthOwnerChange("open-lifecycle-owner");
   publishAuthGenerationChange(++generation);
 });
-afterEach(async () => { await closeDB(); });
+afterEach(async () => { vi.restoreAllMocks(); await closeDB(); });
 
 it("evicts a failed opening so a later request can retry", async () => {
   const failure = new DOMException("controlled open failure", "UnknownError");
@@ -50,4 +50,26 @@ it("a retired failed opening cannot evict a successor", async () => {
   await rejected;
   await getDB();
   expect(controlled.open).toHaveBeenCalledTimes(2);
+});
+
+
+it("shares one failed opening and one retry across concurrent callers", async () => {
+  vi.spyOn(crypto.subtle, "digest").mockResolvedValue(new ArrayBuffer(32));
+  let reject!: (reason: unknown) => void;
+  controlled.open.mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail; }));
+  const outcome = Promise.allSettled(Array.from({ length: 8 }, () => getDB()));
+  await vi.waitFor(() => expect(controlled.open).toHaveBeenCalledTimes(1));
+  const failure = new DOMException("shared open failure", "UnknownError");
+  reject(failure);
+  const failures = await outcome;
+  expect(failures).toHaveLength(8);
+  for (const result of failures) {
+    expect(result.status).toBe("rejected");
+    if (result.status === "rejected") expect(result.reason).toBe(failure);
+  }
+  const retried = await Promise.all(Array.from({ length: 8 }, () => getDB()));
+  expect(controlled.open).toHaveBeenCalledTimes(2);
+  await retried[0].put("metadata", "shared value", "concurrency-check");
+  expect(await Promise.all(retried.map(db => db.get("metadata", "concurrency-check"))))
+    .toEqual(Array(8).fill("shared value"));
 });

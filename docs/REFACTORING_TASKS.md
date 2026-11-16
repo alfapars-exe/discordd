@@ -3901,3 +3901,6 @@ RF26 composition kökündeki üç unexported arayüz açık okuma/kontrol adlar�
 
 
 RF14/RF17 IndexedDB açılış sahipliği düzeltmesi: reddedilmiş open promise yalnız halen kendi registry girdisiyse temizlenir; sonraki istek açabilir ve ilk hata nesnesi korunur. Eski blocking callback yalnız kendi girdisini kaldırır; successor bağlantıyı silemez. Kontrollü openDB/late-callback ve fake-indexeddb ile önce2FAIL/1PASS, sonra80hedefliPASS; tam istemci5585PASS/1SKIP, TypeScript/Vite ve hedefliESLintPASS. Eski open rejection’ının successor’ı silmediği de doğrulandı. Yeni kaynak CI/Sonar/native motor yarışı ve genelRF kabulü açık; tarihsel DM panel hatası bu bulguyla açıklanmış sayılmaz. Kanıt: refactor-key-database-open-ownership-2026-11-16.json.
+
+
+RF14/RF17 açılış retry eşzamanlılık sözleşmesi:8 çağrı tek başarısızopen ve aynı hata nesnesini paylaşıyor;8 retry tek yeniopen açıyor ve ilk metadata yazısı bütün handle’larda okunuyor. Aynı odaklı test eski37d4^ modülünde1beklenenFAIL/3seçilmemişSKIP; geçici kaynak/test dosyaları kaldırıldı. Düzeltilmiş kaynakta lifecycle/account-scope11/11PASS; hedefliESLint ve TypeScriptPASS. Ürün kodu bu takipte değişmedi. Native motor sıralaması, yeniCI ve genelRF kapıları açık. Kanıt: refactor-key-open-concurrent-retry-2026-11-16.json.

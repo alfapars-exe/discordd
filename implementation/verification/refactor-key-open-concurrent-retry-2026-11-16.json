@@ -1,0 +1,43 @@
+{
+  "productionFix": "37d4d0bf",
+  "scope": "Eight concurrent callers share one failed open and one retry; production source unchanged in this follow-up",
+  "negativeControl": {
+    "source": "37d4d0bf^",
+    "failed": 1,
+    "unselectedSkipped": 3,
+    "scope": "Same focused test against uniquely named old module; temporary source/test leaves removed"
+  },
+  "positive": {
+    "targetedPassed": 11,
+    "targetedFiles": 2,
+    "eslint": "PASS",
+    "typescript": "PASS"
+  },
+  "assertions": [
+    "All eight failures preserve the original error object",
+    "Eight retries invoke openDB only once",
+    "All eight returned handles read the metadata written by the first"
+  ],
+  "logs": {
+    "key-open-concurrent.log": {
+      "path": "G:\\hichat-refactor-20261116-anoknpqz\\key-open-concurrent.log",
+      "sha256": "07b96cc4713109816194148cefd4e2fdbff71ec657c2fc39a05976e6c2b9f440"
+    },
+    "key-open-concurrent-negative.log": {
+      "path": "G:\\hichat-refactor-20261116-anoknpqz\\key-open-concurrent-negative.log",
+      "sha256": "faa5fe057239d0e957851d405a3dd6dcc6e8c65a53c3e0a0006aa556bdc7c97a"
+    },
+    "key-open-concurrent-lint.log": {
+      "path": "G:\\hichat-refactor-20261116-anoknpqz\\key-open-concurrent-lint.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "key-open-concurrent-typecheck.log": {
+      "path": "G:\\hichat-refactor-20261116-anoknpqz\\key-open-concurrent-typecheck.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "limits": [
+    "Controlled opening and fake-indexeddb; not native engine scheduling proof",
+    "Current-source CI and general RF acceptance pending"
+  ]
+}
