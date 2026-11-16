@@ -33,8 +33,7 @@
     }
   },
   "pending": [
-    "Immutable-source scan",
-    "New-source CI/Sonar and real-server device roster acceptance"
+    "RF15 complete permission/encryption/runtime mapping and physical/platform acceptance"
   ],
   "evidence": {
     "before": {
@@ -53,5 +52,27 @@
       "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-roster-validation-full.log",
       "sha256": "f15f120d99b4d63bb55a253ccf9782a4a2c0eadd529e52b2f545a758b79c8733"
     }
+  },
+  "ci": {
+    "head": "1ea35841",
+    "checks": "36/36 SUCCESS",
+    "serverRun": 43779709324,
+    "receipt": "refactor-1ea3-terminal-ci-2026-11-16.json"
+  },
+  "sonar": {
+    "issue": "AaHdTCJSxOErB7BtYvzk",
+    "status": "CLOSED",
+    "resolution": "FIXED",
+    "analyzedLines": 161,
+    "sourceMismatches": 0,
+    "extraEmptyEOF": 1,
+    "remainingFileFindings": "Two pre-existing serial-await findings remain; not waived or claimed fixed"
+  },
+  "selfScan": {
+    "source": "221f19df",
+    "result": "PASS",
+    "reviewedExactSourceRecords": 51,
+    "reviewLines": 481,
+    "blockingPatternHits": 0
   }
 }
