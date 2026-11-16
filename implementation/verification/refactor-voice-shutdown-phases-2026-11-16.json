@@ -1,0 +1,15 @@
+{
+  "baselineCommit": "b4ac50b5",
+  "scope": "Separate terminal voice shutdown snapshot/accounting handoff, bounded media worker drain and per-channel panic-isolated cleanup. sync.Once owner, stop/join ordering, four-worker bound and final metadata cleanup remain unchanged.",
+  "validation": {
+    "baseline": "Seven TestVoiceShutdown tests PASS",
+    "candidate": "Same seven tests with count=20 PASS; 140 test executions",
+    "servicesGoVet": "PASS",
+    "gofmt": "Applied"
+  },
+  "remaining": [
+    "Linux race on final source",
+    "Immutable source scan and final-source CI/Sonar",
+    "Real media/provider/physical acceptance and full shutdown resource inventory"
+  ]
+}
