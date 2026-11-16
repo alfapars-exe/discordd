@@ -1,0 +1,95 @@
+{
+  "scope": "Synchronous page and receiver/ACK validation extraction; no HTTP, cursor, mode, ordering, limits, errors or await-point change.",
+  "baselineCommit": "590d004c080f29a48e8d63e6b98a4912fc101937",
+  "parity": {
+    "result": "PASS",
+    "baselineCommit": "590d004c080f29a48e8d63e6b98a4912fc101937",
+    "helpers": [
+      "observeHistoryPage",
+      "verifyHistoryReceipts"
+    ],
+    "expandedWholeModuleASTIdentical": true,
+    "printerASTIdentical": true,
+    "additionalAwaitExpressions": 0,
+    "preserved": [
+      "observer creation before input validation",
+      "page budget before fetch",
+      "page/message/cursor validation order",
+      "digest before receiver validation",
+      "all mismatch errors and PostgreSQL/SQLite explicit mode selection"
+    ]
+  },
+  "tests": {
+    "beforePassed": 31,
+    "afterPassed": 31,
+    "failed": 0,
+    "skipped": 0,
+    "allLoadtestContractsPassed": 109,
+    "beforeLogSha256": "4f4b89109aa54c2694ab51b9b243d3e12f378204411cf11a71020b100a629649",
+    "afterLogSha256": "6fb222cbaec6b7d47da2a2c52750f6931139c4e868e6138fa8185ea38f1217be",
+    "allLogSha256": "056c2369c6352139aec22d8ca7898a79798dab493b75f2820911a7becc88a08f"
+  },
+  "realCaptureReplay": {
+    "result": "PASS",
+    "scope": "Offline replay of three sealed real PostgreSQL captures; not a new live HTTP/server workload.",
+    "records": [
+      {
+        "sourceCommit": "cf0e31a6924b9c12ffab535695d44d2845352d4c",
+        "fixture": "G:\\hichat-refactor-20261116-anoknpqz\\portable-fixture-checks\\local-fanout-a42e1d0652f548449471fdba5b20740b",
+        "outcomes": [
+          {
+            "label": "baseline",
+            "persisted": 5800,
+            "historyPages": 58,
+            "digest": "002288d9b108158aacc88bd60f4e076efb11f1fa87de64b42c58c2606bbfc904"
+          },
+          {
+            "label": "refactor",
+            "persisted": 5800,
+            "historyPages": 58,
+            "digest": "002288d9b108158aacc88bd60f4e076efb11f1fa87de64b42c58c2606bbfc904"
+          }
+        ]
+      },
+      {
+        "sourceCommit": "76619f3607f21cabc7e72312dac0f824d27f88a1",
+        "fixture": "G:\\hichat-refactor-20261116-anoknpqz\\portable-fixture-checks\\local-fanout-6bceb14481b249c6a31f89f37911f231",
+        "outcomes": [
+          {
+            "label": "baseline",
+            "persisted": 5800,
+            "historyPages": 58,
+            "digest": "bf9b1baebc82c446313c2ce02aad0350c52a5948a104f4dc3bfb42b64a73d579"
+          },
+          {
+            "label": "refactor",
+            "persisted": 5800,
+            "historyPages": 58,
+            "digest": "bf9b1baebc82c446313c2ce02aad0350c52a5948a104f4dc3bfb42b64a73d579"
+          }
+        ]
+      },
+      {
+        "sourceCommit": "590d004c080f29a48e8d63e6b98a4912fc101937",
+        "fixture": "G:\\hichat-refactor-20261116-anoknpqz\\portable-fixture-checks\\local-fanout-2935756af2f14cf1bdbdd9aacfb2e326",
+        "outcomes": [
+          {
+            "label": "baseline",
+            "persisted": 5800,
+            "historyPages": 58,
+            "digest": "933b820dc5f18c2c24819dc6d4cfa0c546ab9782bebcde98364d0d32806f1e29"
+          },
+          {
+            "label": "refactor",
+            "persisted": 5800,
+            "historyPages": 58,
+            "digest": "933b820dc5f18c2c24819dc6d4cfa0c546ab9782bebcde98364d0d32806f1e29"
+          }
+        ]
+      }
+    ]
+  },
+  "sourceSha256": "f98c7508c14d0f81dbdf5e18b6ebecedae53d1679380f6ab3100cf32efdcb593",
+  "driverSha256": "54cb76a2f6842f6a9ea9e12f4dce1cb6b95856d7aabff40f0cda68d928c6324e",
+  "remaining": "New Sonar/CI and final-candidate runtime acceptance are pending. Captured replay is offline evidence, not a new authenticated HTTP workload. General RF and performance/native/physical gates remain open."
+}
