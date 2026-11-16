@@ -604,7 +604,7 @@ jobs:
         run: npm ci
 
       - name: Load profile contract tests
-        run: node --experimental-vm-modules --test loadtest/ws_connect.test.mjs
+        run: node --experimental-vm-modules --test loadtest/*.test.mjs
 
       - name: electron:test (resolve-path + regression suite)
         run: npm run electron:test
