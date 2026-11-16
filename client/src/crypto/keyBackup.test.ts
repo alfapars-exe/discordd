@@ -700,6 +700,19 @@ describe("keyBackup — a failed restore rolls the metadata store back", () => {
     expect(metadataStore.get("deviceId")).toBe("device-before-restore");
   });
 
+  it("continues rollback signing and registration after the identity replay rejects", async () => {
+    const backup = await seedDeviceThenFailRestore();
+    const identity = vi.mocked(keyStorageMock.saveIdentityKeyPair);
+    identity.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("identity rollback failure"));
+    try {
+      expect(await restoreFromBackup(backup, "pw")).toBe(false);
+      expect(keyStorageMock.saveSigningKeyPair).toHaveBeenCalledTimes(2);
+      expect(keyStorageMock.saveRegistrationData).toHaveBeenCalledTimes(2);
+      expect(keyStorageMock.cacheDecryptedMessages).toHaveBeenCalledTimes(2);
+      expect(metadataStore.get("deviceId")).toBe("device-before-restore");
+    } finally { identity.mockReset().mockResolvedValue(undefined); }
+  });
+
   it("keeps rolling back the remaining stores when one rollback write fails", async () => {
     const backup = await seedDeviceThenFailRestore();
 
