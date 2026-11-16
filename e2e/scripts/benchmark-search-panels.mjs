@@ -6,14 +6,16 @@ import { setInterval as sampleInterval } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { build } from "../../client/node_modules/vite/dist/node/index.js";
 import react from "../../client/node_modules/@vitejs/plugin-react/dist/index.js";
-import { chromium } from "playwright";
 import { searchSourceBaseline } from "./search-source-baseline.mjs";
+import { controlledPanelCryptoImport } from "./panel-controlled-imports.mjs";
 
 const root=fileURLToPath(new URL("../../client/",import.meta.url));
 const repo=fileURLToPath(new URL("../../",import.meta.url));
 const quick=process.argv.includes("--quick"),failureOnly=process.argv.includes("--failure-only");
 const resetOnly=process.argv.includes("--reset-windows-only");
 const pendingOnly=process.argv.includes("--pending-frontier-only");
+const serveOnly=process.argv.includes("--serve-only");
+if(serveOnly&&!process.argv.includes("--after-only"))throw Error("Serve-only requires --after-only");
 const assertPendingBudget=process.argv.includes("--assert-pending-panel-budget");
 if(assertPendingBudget&&!pendingOnly)throw Error("Pending panel budget requires --pending-frontier-only");
 const assertActivePendingBudget=process.argv.includes("--assert-active-pending-panel-budget");
@@ -69,14 +71,15 @@ for(const variant of variants){
  const overrides=new Map(),usedOverrides=new Set();
  if(variant==="before")for(const [path,content] of historicalSource?.overrides??overridePaths.map(path=>[path,execFileSync(gitExecutable,["show",baseline+":"+path],{cwd:repo,encoding:"utf8"})]))
   overrides.set(fileURLToPath(new URL("../../"+path,import.meta.url)).replaceAll("\\","/"),content);
- const plugin={name:"controlled-panel-providers",enforce:"pre",resolveId(source){
+ const plugin={name:"controlled-panel-providers",enforce:"pre",resolveId(source,importer){
   if(source==="virtual:panel-entry")return "\0panel-entry.js";
   if(source==="virtual:panel-stores"||/\/stores\/(serverStore|messageStore|dmStore|e2eeStore|settingsStore)$/.test(source))return "\0panel-stores.js";
   if(/\/hooks\/(useSpamVisibility|useIgnoredMessage|useReducedMotion|useOpenAtMessage)$/.test(source))return "\0panel-hooks.js";
   if(source==="react-i18next")return "\0panel-i18n.js";
   if(source.endsWith("/api/search"))return "\0panel-api.js";
-  if(source.endsWith("/crypto/cachedSearchSnapshot"))return "\0panel-index.js";
-  if(source.endsWith("/crypto/keyStorage"))return "\0panel-cache.js";
+  const cryptoImport=controlledPanelCryptoImport(source,importer,root);
+  if(cryptoImport==="index")return "\0panel-index.js";
+  if(cryptoImport==="cache")return "\0panel-cache.js";
  },load(id){
   const normalized=id.replaceAll("\\","/").split("?")[0];
   const repoRoot=repo.replaceAll("\\","/");
@@ -99,6 +102,13 @@ const entryPages=new Map(variants.map(variant=>[variant+"/",'<div id="root"></di
 const server=createServer((req,res)=>{const path=new URL(req.url,"http://localhost").pathname.slice(1),entryPage=entryPages.get(path);if(entryPage!==undefined){res.setHeader("Content-Type","text/html");res.end(entryPage);return;}
  const body=assets.get(path);if(body===undefined){res.statusCode=404;res.end();return;}res.setHeader("Content-Type",path.endsWith(".js")?"text/javascript":"application/octet-stream");res.end(body);});
 await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
+if(serveOnly){
+ console.log(JSON.stringify({mode:"controlled-panel-server",pid:process.pid,url:`http://127.0.0.1:${server.address().port}/after/`,sourceHead}));
+ await new Promise(resolve=>process.once("SIGINT",resolve));
+ await new Promise(resolve=>server.close(resolve));
+ process.exit(0);
+}
+const {chromium}=await import("playwright");
 const browser=await chromium.launch();
 function compareSourcePaths(left, right) {
  if (left < right) return -1;
