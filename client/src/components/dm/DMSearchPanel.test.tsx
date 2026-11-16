@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { getAuthSessionOwner, publishAuthOwnerChange, getAuthSessionSnapshot, publishAuthGenerationChange } from "../../api/authSessionEvents";
 import DMSearchPanel from "./DMSearchPanel";
+import type { DMMessage } from "../../types";
 import { useDMStore } from "../../stores/dmStore";
 import { useE2EEStore } from "../../stores/e2eeStore";
 import { getCachedDecryptedMessage } from "../../crypto/keyStorage";
@@ -390,4 +391,54 @@ it.each(["replace", "clear", "owner"] as const)("discards a pending plaintext re
     view.unmount();
     if (change === "owner") act(() => publishAuthOwnerChange(owner));
   }
+});
+
+
+it.each(["loaded", "found", "missing"] as const)("navigates plaintext search results when the selected message is %s", async (mode) => {
+  vi.useFakeTimers();
+  const message: DMMessage = {
+    id: "selected", dm_channel_id: "dm", user_id: "peer", content: "selected result", created_at: "2026-11-16T00:00:00Z",
+    edited_at: null, reply_to_id: null, is_pinned: false, attachments: [], reactions: [], referenced_message: null, encryption_version: 0,
+    author: { id: "peer", username: "peer", display_name: null, avatar_url: null, status: "offline", custom_status: null, created_at: "" },
+  };
+  const scroll = vi.fn(), close = vi.fn();
+  useDMStore.setState(state => ({ channels: state.channels.map(c => ({ ...c, e2ee_enabled: false })),
+    messagesByChannel: { dm: mode === "loaded" ? [message] : [] }, setScrollToMessageId: scroll }));
+  vi.mocked(useDMStore.getState().searchMessages).mockResolvedValueOnce({ messages: [message], total_count: 1 });
+  if (mode !== "loaded") openAtDMMessage.mockResolvedValueOnce(mode === "found");
+  const view = render(<DMSearchPanel channelId="dm" onClose={close} />);
+  try {
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "selected" } });
+    await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+    await act(async () => { fireEvent.click(screen.getByText("selected result")); });
+    expect(scroll).toHaveBeenCalledTimes(Number(mode === "loaded"));
+    if (mode === "loaded") expect(scroll).toHaveBeenCalledWith("selected");
+    else expect(openAtDMMessage).toHaveBeenCalledWith("dm", "selected");
+    expect(close).toHaveBeenCalledTimes(Number(mode !== "missing"));
+    if (mode === "missing") {
+      expect(screen.queryByText("selected result")).not.toBeInTheDocument();
+      expect(screen.getByText("noSearchResults")).toBeInTheDocument();
+    }
+  } finally { view.unmount(); }
+});
+
+it("returns to the previous encrypted page without rebuilding its search snapshot", async () => {
+  vi.useFakeTimers();
+  useDMStore.setState(state => ({ channels: state.channels.map(c => ({ ...c, e2ee_enabled: true })), messagesByChannel: {} }));
+  useE2EEStore.setState({ initStatus: "ready" });
+  const rows = Array.from({ length: 30 }, (_, index) => ({ messageId: `previous-${index + 1}`, dmChannelId: "dm", channelId: "",
+    content: `previous match ${index + 1}`, timestamp: index + 1, sourceSequence: String(index + 1) }));
+  snapshotReferences.mockResolvedValueOnce(rows);
+  vi.mocked(getCachedDecryptedMessage).mockImplementation(async id => rows.find(row => row.messageId === id) ?? null);
+  const view = render(<DMSearchPanel channelId="dm" onClose={() => {}} />);
+  try {
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "previous match" } });
+    await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+    await act(async () => { fireEvent.click(screen.getByText("searchNext")); });
+    expect(screen.getByText("previous match 5")).toBeInTheDocument();
+    await act(async () => { fireEvent.click(screen.getByText("searchPrev")); });
+    expect(screen.getByText("previous match 30")).toBeInTheDocument();
+    expect(screen.queryByText("previous match 5")).not.toBeInTheDocument();
+    expect(snapshotReferences).toHaveBeenCalledTimes(1);
+  } finally { view.unmount(); }
 });
