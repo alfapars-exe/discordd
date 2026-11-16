@@ -166,7 +166,6 @@ function ScopedDMSearchPanel({ channelId, onClose, encrypted, keysReady }: Reado
       failCurrentSearch();
     }
     searching.current = false; setIsSearching(false);
-    return;
   }, [channelId, deletionPool, startFrontier, failCurrentSearch, publishCachedPage]);
 
   const doSearch = useCallback(
