@@ -116,9 +116,10 @@ function compareSourcePaths(left, right) {
  return 0;
 }
 const median=(rows,key)=>rows.map(row=>row[key]).sort((a,b)=>a-b)[Math.floor(rows.length/2)];
-async function waitForPendingPanel(page, { variant, kind, errors }) {
+async function waitForPendingPanel(page, { variant, kind, errors, phase="results" }) {
  try {
-  await page.waitForFunction(()=>document.querySelectorAll(".search-result-content").length===25,undefined,{timeout:120000});
+  if(phase==="handoff") await page.waitForFunction(()=>globalThis.__panelIndexHandoffReady===true,undefined,{timeout:30000});
+  else await page.waitForFunction(()=>document.querySelectorAll(".search-result-content").length===25,undefined,{timeout:120000});
  } catch (error) {
   const state = await page.evaluate(() => ({
    handoffReady: globalThis.__panelIndexHandoffReady,
@@ -127,7 +128,8 @@ async function waitForPendingPanel(page, { variant, kind, errors }) {
    panelText: document.querySelector(".search-panel")?.textContent?.slice(0,1000),
    releasedAt: globalThis.__panelReleasedAt,
   })).catch(failure => ({ diagnosticFailure: failure.message }));
-  console.error(JSON.stringify({ mode:"pending-frontier-timeout", variant, kind, errors, state }));
+  const mode=phase==="handoff"?"index-handoff-timeout":"pending-frontier-timeout";
+  console.error(JSON.stringify({ mode, variant, kind, errors, state }));
   throw error;
  }
 }
@@ -154,7 +156,7 @@ try{
   const growth=[];
   try{
    await page.getByRole("textbox").fill("ÉTÉ");
-   await page.waitForFunction(()=>globalThis.__panelIndexHandoffReady===true);
+   await waitForPendingPanel(page, { variant, kind, errors, phase:"handoff" });
    await page.evaluate(kind=>globalThis.panelBench.deletes(kind,0,10),kind);
    await cdp.send("HeapProfiler.collectGarbage");const base=await cdp.send("Runtime.getHeapUsage");
    let start=10;
