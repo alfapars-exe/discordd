@@ -69,3 +69,22 @@ it.each([true, false])("reports storage failure only for a current owner (%s)", 
   expect(request.finish).toHaveBeenCalledTimes(Number(current));
   expect(request.publish).not.toHaveBeenCalled();
 });
+
+it.each(["drain", "page"] as const)("does not publish or finish when ownership retires during %s", async stage => {
+  const { request, snapshot, frontier } = fixture();
+  if (stage === "drain") {
+    frontier.append("retired-hit");
+    vi.spyOn(snapshot, "removeMany").mockImplementation(async ids => {
+      vi.mocked(request.isCurrent).mockReturnValue(false);
+      return { removed: ids.length, total: 0 };
+    });
+  } else {
+    vi.mocked(readCachedSearchPage).mockImplementationOnce(async () => {
+      vi.mocked(request.isCurrent).mockReturnValue(false); return page;
+    });
+  }
+  await runCachedSearch(request);
+  if (stage === "drain") expect(readCachedSearchPage).not.toHaveBeenCalled();
+  expect(request.publish).not.toHaveBeenCalled(); expect(request.fail).not.toHaveBeenCalled();
+  expect(request.finish).not.toHaveBeenCalled();
+});
