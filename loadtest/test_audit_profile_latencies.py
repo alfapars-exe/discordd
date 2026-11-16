@@ -1,5 +1,5 @@
 import unittest
-from audit_profile_latencies import audit
+from audit_profile_latencies import audit, summarize_repetitions
 
 
 def capture():
@@ -28,3 +28,12 @@ class ProfileLatencyAuditTests(unittest.TestCase):
                      capture() + "\n--- FAIL: test", "PASS"]:
             with self.subTest(case=text[:60]), self.assertRaises(ValueError):
                 audit(text)
+
+
+class RepetitionSummaryTests(unittest.TestCase):
+    def test_outlier_is_visible_and_zero_resolution_is_not_a_ratio(self):
+        summary = summarize_repetitions([{"p95Ns": x} for x in [1, 1, 1, 1, 1, 1, 1, 1, 10]])
+        self.assertEqual(summary["p95AcrossRepetitionsNs"], {"min": 1, "median": 1, "max": 10})
+        self.assertGreater(summary["p95SampleCoefficientOfVariation"], 1)
+        zeros = summarize_repetitions([{"p95Ns": 0}] * 9)
+        self.assertIsNone(zeros["p95SampleCoefficientOfVariation"])

@@ -171,3 +171,6 @@ RF29 operasyon dağılımı için HICHAT_PROFILE_LATENCY=1 seçeneği eklendi; s
 
 
 RF29 latency örneklemesi662cc01c gerçek PostgreSQL18.6 verify-full mTLS üzerinde PASS:8 kombinasyon x9 tekrar x30 operasyon. Depo denetleyicisi SQLite vePG ham loglarında tüm p50/p95 nearest-rank sonuçlarını yeniden hesapladı; kalibrasyon ve eksik/yanlış/FAIL koşulları ayrıldı.20Python sözleşmesi PASS. Benchmark kaynağı frozen kaynakla eşleşti; launcherexit0, cleanupfailures0, container/image tam ID ve credential yokluğu doğrulandı. Ortalamaların percentile sayılması engellendi; sıralı repository p95 değeri HTTPp95/concurrentpool bütçesi değildir. Kanıt: refactor-profile-latency-postgres-2026-11-16.json. CI/Sonar ve genelRF açık.
+
+
+RF29 kayıtlı profil ölçümlerinin tekrar varyansı artık depo denetleyicisinde: dokuz p95 tahmini için min/medyan/max ve örnek standart sapma/ortalama oranı; ortalama0 ise oran null. Outlier ve sıfır çözünürlük testleri dahil21PythonPASS. PG1001toplu p95 min2,6076/medyan3,2032/max4,2033ms; örnekCV%17,31. Birleştirilmiş ham p95, güven aralığı, hostlar arası varyans veya HTTP/pool bütçesi kabulü değildir. İki backend’in aynı ham logları yeni özetle tekrar denetlendi. Kanıt: refactor-profile-latency-variation-2026-11-16.json.

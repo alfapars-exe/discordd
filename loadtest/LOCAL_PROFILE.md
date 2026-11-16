@@ -142,3 +142,19 @@ python loadtest/audit_profile_latencies.py /path/to/benchmark.log
 The command reads at most16MiB and writes selected numeric evidence to stdout.
 It rejects missing cases/repetitions, incomplete samples, incorrect percentiles
 and failed runs. Source provenance and resource cleanup require separate checks.
+
+
+Audit a captured latency log without rerunning its workload:
+
+```sh
+python loadtest/audit_profile_latencies.py /absolute/path/profile-latencies.log
+```
+
+The auditor reads at most16MiB and emits selected numeric evidence to stdout.
+It requires eight cases, nine measured repetitions per case and thirty raw
+operation durations per repetition, excluding calibration. Each recorded p50/p95
+must match the raw nearest ranks; failed/incomplete runs are rejected. Its
+summary reports min/median/max of the nine p95 estimates and their sample
+coefficient of variation. A zero mean gives a null ratio. This is descriptive
+repeat variation, not pooled p95, confidence intervals or a budget verdict.
+Source provenance and resource cleanup must be checked separately.
