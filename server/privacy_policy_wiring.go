@@ -6,8 +6,8 @@ import (
 	"github.com/argeinfina/hichat/services"
 )
 
-type gameActivityHubPresence interface{ IsVisibleOnline(string) (bool, error) }
-type gameActivityPresenceAdapter struct{ hub gameActivityHubPresence }
+type gameActivityOnlineVisibilityChecker interface{ IsVisibleOnline(string) (bool, error) }
+type gameActivityPresenceAdapter struct{ hub gameActivityOnlineVisibilityChecker }
 
 func (a gameActivityPresenceAdapter) IsVisibleOnline(_ context.Context, userID string) (bool, error) {
 	if a.hub == nil {
@@ -25,7 +25,7 @@ type privacyPolicies struct {
 }
 
 // initPrivacyPolicies binds account and relationship policy readers as one domain.
-func initPrivacyPolicies(repos *Repositories, presence gameActivityHubPresence) privacyPolicies {
+func initPrivacyPolicies(repos *Repositories, presence gameActivityOnlineVisibilityChecker) privacyPolicies {
 	if repos == nil {
 		panic("privacy policies require repositories")
 	}

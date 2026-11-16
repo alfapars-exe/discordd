@@ -171,7 +171,7 @@ type serviceHub interface {
 	services.AuthSessionDisconnecter
 	services.GameJoinConnectionGate
 	ws.EventPublisher
-	gameActivityHubPresence
+	gameActivityOnlineVisibilityChecker
 	SetDurableChannelSends(bool)
 	OnGameJoinOffer(func(string, uint64, any) any)
 }

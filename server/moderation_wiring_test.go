@@ -9,8 +9,8 @@ import (
 )
 
 type moderationFixtureProviders struct {
-	moderationMessages
-	moderationDMs
+	moderationMessageContextReader
+	moderationDMContextReader
 	services.EmojiResolver
 }
 

@@ -63,7 +63,7 @@ func TestPrivacyPolicyCompositionRejectsMissingReaders(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			copy := *base
 			repos := &copy
-			var presence gameActivityHubPresence = ws.NewHub()
+			var presence gameActivityOnlineVisibilityChecker = ws.NewHub()
 			want := name
 			switch name {
 			case "repositories":

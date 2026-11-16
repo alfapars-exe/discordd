@@ -174,3 +174,6 @@ RF29 latency örneklemesi662cc01c gerçek PostgreSQL18.6 verify-full mTLS üzeri
 
 
 RF29 kayıtlı profil ölçümlerinin tekrar varyansı artık depo denetleyicisinde: dokuz p95 tahmini için min/medyan/max ve örnek standart sapma/ortalama oranı; ortalama0 ise oran null. Outlier ve sıfır çözünürlük testleri dahil21PythonPASS. PG1001toplu p95 min2,6076/medyan3,2032/max4,2033ms; örnekCV%17,31. Birleştirilmiş ham p95, güven aralığı, hostlar arası varyans veya HTTP/pool bütçesi kabulü değildir. İki backend’in aynı ham logları yeni özetle tekrar denetlendi. Kanıt: refactor-profile-latency-variation-2026-11-16.json.
+
+
+RF26 composition kökündeki üç unexported arayüz açık okuma/kontrol adları aldı: moderationMessageContextReader, moderationDMContextReader, gameActivityOnlineVisibilityChecker. Beş dosyada ters ad dönüşümü önceki LF-normalize baytlarla aynı; metot/public alan/HTTP/WS sözleşmesi değişmedi. Mevcut moderation/privacy composition testleri üç tekrar PASS; kök Go vet/build PASS. Yeni kaynak Sonar/CI ve genelRF26 kabulü açık. ICE ve backup ardışık await yolları sahiplik/rollback sırasını korumak için paralelleştirilmedi. Kanıt: refactor-internal-reader-names-2026-11-16.json.

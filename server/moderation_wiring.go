@@ -9,10 +9,10 @@ import (
 	"github.com/argeinfina/hichat/ws"
 )
 
-type moderationMessages interface {
+type moderationMessageContextReader interface {
 	GetAround(context.Context, string, string, string, string, int) (*models.MessagePage, error)
 }
-type moderationDMs interface {
+type moderationDMContextReader interface {
 	GetMessagesAround(context.Context, string, string, string, int) (*models.DMMessagePage, error)
 }
 type moderationDependencies struct {
@@ -20,8 +20,8 @@ type moderationDependencies struct {
 	Repositories  *Repositories
 	Hub           ws.BroadcastAndOnline
 	Permissions   services.ChannelPermResolver
-	Messages      moderationMessages
-	DMs           moderationDMs
+	Messages      moderationMessageContextReader
+	DMs           moderationDMContextReader
 	Emoji         services.EmojiResolver
 	UploadDir     string
 	MaxUploadSize int64
