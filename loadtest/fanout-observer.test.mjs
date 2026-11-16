@@ -3,7 +3,7 @@ import test from "node:test";
 import { createFanoutObserver } from "./fanout-observer.mjs";
 
 const profile = () => ({ probeId: "probe-1", channelId: "channel-1", userIds: ["alice", "bob"], messagesPerSender: 2 });
-const frame = (sender, sequence, id = `${sender}-${sequence}`) => ({ op: "message_create", data: {
+const frame = (sender, sequence, id = `${sender}-${sequence}`) => ({ op: "message_create", d: {
   id, channel_id: "channel-1", user_id: sender,
   content: JSON.stringify({ probe: "probe-1", sender, sequence }),
 } });
@@ -48,9 +48,9 @@ test("reordered delivery remains complete and is counted separately", () => {
 test("other operations, channels, probes and malformed JSON do not satisfy delivery", () => {
   const observer = createFanoutObserver(profile());
   observer.observe({ op: "heartbeat_ack" });
-  observer.observe({ ...frame("alice", 1), data: { ...frame("alice", 1).data, channel_id: "other" } });
-  observer.observe({ ...frame("alice", 1), data: { ...frame("alice", 1).data, content: '{"probe":"other"}' } });
-  observer.observe({ op: "message_create", data: { channel_id: "channel-1", content: "malformed" } });
+  observer.observe({ ...frame("alice", 1), d: { ...frame("alice", 1).data, channel_id: "other" } });
+  observer.observe({ ...frame("alice", 1), d: { ...frame("alice", 1).data, content: '{"probe":"other"}' } });
+  observer.observe({ op: "message_create", d: { channel_id: "channel-1", content: "malformed" } });
   assert.equal(observer.snapshot().ignored, 4); assert.equal(observer.snapshot().missing, 4);
 });
 for (const [name, message] of [
@@ -66,7 +66,7 @@ for (const [name, message] of [
 });
 test("payload sender and authoritative event actor must match", () => {
   const observer = createFanoutObserver(profile()), message = frame("alice", 1);
-  message.data.user_id = "bob";
+  message.d.user_id = "bob";
   assert.equal(observer.observe(message).kind, "invalid");
 });
 test("configuration and returned snapshots cannot mutate receiver accounting", () => {
@@ -97,4 +97,10 @@ test("exported receipts cannot mutate the IDs used for reconciliation", () => {
  const observer = createFanoutObserver(profile()); receiveAll(observer);
  observer.receipts()[0][2] = "tampered";
  assert.equal(observer.receipts()[0][2], "alice-1");
+});
+
+test("Go ws.Event serializes the message payload under d", () => {
+  const observer = createFanoutObserver(profile());
+  const serialized = String.raw`{"op":"message_create","d":{"id":"wire-1","channel_id":"channel-1","user_id":"alice","content":"{\"probe\":\"probe-1\",\"sender\":\"alice\",\"sequence\":1}"},"seq":7}`;
+  assert.equal(observer.observe(JSON.parse(serialized)).kind, "accepted");
 });

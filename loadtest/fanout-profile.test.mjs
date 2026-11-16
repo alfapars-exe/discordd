@@ -17,12 +17,12 @@ function scenario({missingPeer=false,wrongResponseActor=false}={}) {
  const metrics=Object.fromEntries(["sent","received","receivers","duplicates","invalid"].map(name=>[name,{value:0,add(n){this.value+=n;}}]));
  const check=(value,predicates)=>{const result=Object.entries(predicates).map(([name,predicate])=>({name,passed:!!predicate(value)}));checks.push(...result);return result.every(x=>x.passed);};
  let session;
- const http={post(url,body,options){requests.push({url,body:JSON.parse(body),options});const payload=JSON.parse(JSON.parse(body).content);const message={id:`alice-${payload.sequence}`,user_id:wrongResponseActor?"bob":"alice",channel_id:"channel",content:JSON.stringify(payload)};session.observe({op:"message_create",data:message});return{status:201,json:()=>({success:true,data:message})};}};
+ const http={post(url,body,options){requests.push({url,body:JSON.parse(body),options});const payload=JSON.parse(JSON.parse(body).content);const message={id:`alice-${payload.sequence}`,user_id:wrongResponseActor?"bob":"alice",channel_id:"channel",content:JSON.stringify(payload)};session.observe({op:"message_create",d:message});return{status:201,json:()=>({success:true,data:message})};}};
  session=createFanoutSession(profile,{vu:1,baseURL:connection().baseURL,accessToken:"fixture-only",http,check,metrics,hash:text=>createHash("sha256").update(text).digest("hex"),log:value=>logs.push(value)});
  session.start({setTimeout:(callback,delay)=>timers.push({callback,delay})});
  for(const timer of timers.sort((a,b)=>a.delay-b.delay))timer.callback();
  const count=missingPeer?1:2;
- for(let sequence=1;sequence<=count;sequence++)session.observe({op:"message_create",data:{id:`bob-${sequence}`,channel_id:"channel",user_id:"bob",content:JSON.stringify({probe:"probe",sender:"bob",sequence})}});
+ for(let sequence=1;sequence<=count;sequence++)session.observe({op:"message_create",d:{id:`bob-${sequence}`,channel_id:"channel",user_id:"bob",content:JSON.stringify({probe:"probe",sender:"bob",sequence})}});
  const result=session.finish();return{checks,logs,metrics,timers,requests,result};
 }
 test("publishes paced messages and reconciles HTTP IDs with echoed WebSocket IDs",()=>{

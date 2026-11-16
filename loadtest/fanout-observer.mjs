@@ -13,11 +13,11 @@ function validateProfile({ probeId, channelId, userIds, messagesPerSender }) {
 }
 
 function readProbe(frame, profile) {
-  if (frame?.op !== "message_create" || frame.data?.channel_id !== profile.channelId ||
-      typeof frame.data.content !== "string" || frame.data.content.length > 4096) return null;
+  if (frame?.op !== "message_create" || frame.d?.channel_id !== profile.channelId ||
+      typeof frame.d.content !== "string" || frame.d.content.length > 4096) return null;
   let payload;
-  try { payload = JSON.parse(frame.data.content); } catch { return null; }
-  return payload?.probe === profile.probeId ? { message: frame.data, payload } : null;
+  try { payload = JSON.parse(frame.d.content); } catch { return null; }
+  return payload?.probe === profile.probeId ? { message: frame.d, payload } : null;
 }
 
 function validRecord({ message, payload }, lanes, messagesPerSender) {

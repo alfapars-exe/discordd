@@ -142,7 +142,7 @@ This is one connect/heartbeat resource profile, not a throughput/SLA or extended
 
 `fanout-observer.mjs` is a portable Node/k6 receiver-accounting component for the next message fan-out profile. It accepts only the selected channel/probe, checks each authoritative actor against the payload sender, and requires every sender/sequence slot exactly once with unique message IDs. Missing, duplicate or matching malformed deliveries prevent completeness; late duplicates invalidate earlier complete snapshots. Reordering is counted separately. State is bounded to 1,000 senders and 10,000 expected messages per receiver. Sparse sender lists are rejected before any network work.
 
-Run all load-test contracts with `node --experimental-vm-modules --test loadtest/*.test.mjs`. The observer was also executed in k6 v2.4.0 with two offline checks. This does not add message traffic to `ws_connect.js`: a shared-guild/channel fixture, producer schedule and HTTP/WebSocket/history reconciliation still need to be wired and run. No actual fan-out capacity result is claimed by these unit/runtime contracts.
+Run all load-test contracts with `node --experimental-vm-modules --test loadtest/*.test.mjs`. The observer was also executed in k6 v2.4.0 with two offline checks. The optional producer described below now adds message traffic to `ws_connect.js`. A real shared-guild fixture and HTTP/WebSocket/history reconciliation remain a separate acceptance gate. No actual fan-out capacity result is claimed by these unit/runtime contracts.
 
 The observer is the strict, fault-free load-profile criterion. It does not promise exactly-once transport under reconnect, outbox retry or process failure; those scenarios require separate replay/idempotency acceptance.
 
