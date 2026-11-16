@@ -9,8 +9,8 @@ $ErrorActionPreference = 'Stop'
 foreach ($tool in @('docker', 'git', 'tar', 'node')) {
     if (-not (Get-Command $tool -CommandType Application -ErrorAction SilentlyContinue)) { throw "Required executable not found: $tool" }
 }
-$GoBinary = (Get-Command $GoBinary -CommandType Application -ErrorAction Stop).Source
-$K6Binary = (Get-Command $K6Binary -CommandType Application -ErrorAction Stop).Source
+$GoBinary = (Get-Command $GoBinary -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
+$K6Binary = (Get-Command $K6Binary -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
 $SourceRoot = (Resolve-Path -LiteralPath $SourceRoot).Path
 $ArtifactRoot = [IO.Path]::GetFullPath($ArtifactRoot)
 New-Item -ItemType Directory -Force -Path $ArtifactRoot | Out-Null
