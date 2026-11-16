@@ -11,6 +11,7 @@ import { localizeAuthError } from "../../utils/authErrors";
 import { sanitizeReturnUrl } from "../../utils/returnUrl";
 import { useServerWakeUp } from "../../hooks/useServerWakeUp";
 import type { APIResponse, AuthTokens } from "../../types";
+import { loginCredentialOperation } from "./loginCredentialOperation";
 
 function LoginPage() {
   // ─── Hooks ───
@@ -94,11 +95,7 @@ function LoginPage() {
       // Electron: save or clear credentials
       if (isElectron()) {
         try {
-          if (rememberMe) {
-            await window.electronAPI?.saveCredentials(u, p, SERVER_URL);
-          } else {
-            await window.electronAPI?.clearCredentials();
-          }
+          await loginCredentialOperation(window.electronAPI, rememberMe, u, p, SERVER_URL);
         } catch {
           useToastStore.getState().addToast("warning", t(rememberMe ? "rememberSaveFailed" : "rememberClearFailed"));
         }

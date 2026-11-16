@@ -1,0 +1,14 @@
+{
+  "comparedCommit": "55ae00d1",
+  "path": "client/src/crypto/senderKeyProtocol.ts",
+  "from": 530,
+  "returnedLines": 271,
+  "mismatches": [],
+  "issue": {
+    "key": "AaHY2-k6oCt6TAwwqpS2",
+    "status": "CLOSED",
+    "resolution": "FIXED",
+    "message": "Refactor this function to reduce its Cognitive Complexity from 16 to the 15 allowed."
+  },
+  "limits": "Static closure and source slice equality; not general crypto/recovery/native acceptance."
+}
