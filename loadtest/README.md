@@ -145,3 +145,14 @@ This is one connect/heartbeat resource profile, not a throughput/SLA or extended
 Run all load-test contracts with `node --experimental-vm-modules --test loadtest/*.test.mjs`. The observer was also executed in k6 v2.4.0 with two offline checks. This does not add message traffic to `ws_connect.js`: a shared-guild/channel fixture, producer schedule and HTTP/WebSocket/history reconciliation still need to be wired and run. No actual fan-out capacity result is claimed by these unit/runtime contracts.
 
 The observer is the strict, fault-free load-profile criterion. It does not promise exactly-once transport under reconnect, outbox retry or process failure; those scenarios require separate replay/idempotency acceptance.
+
+
+## Optional local message producer
+
+`ws_connect.js` now enables message publishing when any nonempty `FANOUT_*` setting is supplied. Configure all of `FANOUT_SERVER_ID`, `FANOUT_CHANNEL_ID`, `FANOUT_PROBE_ID`, and `FANOUT_USER_IDS` (a JSON array in the same order as the seeded username suffixes). The base URL must be loopback and `USER_COUNT == WS_VUS == userIds.length`. Every account must already belong to the selected disposable plaintext channel with read/send access. Do not use a real user channel.
+
+Defaults are five messages per sender, a 20-second delay after each socket opens, and 2,000 milliseconds between messages. Override with `FANOUT_MESSAGES_PER_SENDER`, `FANOUT_START_DELAY_SECONDS`, and `FANOUT_MESSAGE_INTERVAL_MS`. The start delay must exceed the ramp duration by five seconds; the final scheduled send must precede socket closure by five seconds. This is a bounded fault-free profile: duplicate delivery fails this benchmark, without asserting exactly-once delivery across reconnects or crashes.
+
+HTTP responses must be 201 with the correct authoritative actor, channel and message ID. Each receiver must see every expected sender/sequence pair once. Aggregate counters require all sends, all deliveries and all receivers; zero duplicates and malformed matching events are mandatory. Each `FANOUT_RECEIPT` log contains a SHA-256 digest of canonical sender/sequence/message-ID tuples and the sender's HTTP acknowledgement IDs. A surrounding fixture must still compare these digests against persisted HTTP history. This comparison and a real message load run have not yet been completed; passing mocked contracts or `k6 inspect` does not establish end-to-end fan-out acceptance.
+
+Run all contracts with `node --experimental-vm-modules --test loadtest/*.test.mjs`. The producer, receiver and script wiring currently have 48 passing contracts. k6 v2.4.0 successfully evaluates the enabled profile with `k6 inspect` and explicit synthetic `-e` settings; inspect performs no network workload.

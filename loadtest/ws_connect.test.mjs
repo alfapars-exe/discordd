@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import test from 'node:test';
 import vm from 'node:vm';
 
@@ -27,11 +27,20 @@ async function harness(overrides = {}, environment = {}) {
     checks.push(...results); return results.every(result => result.passed);
   };
   class Counter { constructor(name) { this.name = name; metrics.set(name, 0); } add(value) { metrics.set(this.name, metrics.get(this.name) + value); } }
-  const exports = { 'k6/http': { default: http }, 'k6/ws': { default: ws }, 'k6': { check, sleep: value => sleeps.push(value) }, 'k6/metrics': { Counter } };
+  const exports = { 'k6/http': { default: http }, 'k6/ws': { default: ws }, 'k6': { check, sleep: value => sleeps.push(value) }, 'k6/crypto': { sha256: value => createHash('sha256').update(value).digest('hex') }, 'k6/metrics': { Counter } };
   const module = new vm.SourceTextModule(source, { context });
-  await module.link(specifier => new vm.SyntheticModule(Object.keys(exports[specifier]), function () {
-    for (const [key, value] of Object.entries(exports[specifier])) this.setExport(key, value);
-  }, { context }));
+  const localModules = new Map();
+  const linker = specifier => {
+    if (specifier.startsWith('./')) {
+      if (!localModules.has(specifier)) localModules.set(specifier, new vm.SourceTextModule(
+        readFileSync(new URL(specifier, import.meta.url), 'utf8'), { context }));
+      return localModules.get(specifier);
+    }
+    return new vm.SyntheticModule(Object.keys(exports[specifier]), function () {
+      for (const [key, value] of Object.entries(exports[specifier])) this.setExport(key, value);
+    }, { context });
+  };
+  await module.link(linker);
   await module.evaluate();
   return { state, requests, connections, checks, metrics, sleeps, context, options: module.namespace.options, run: module.namespace.default };
 }
@@ -87,3 +96,14 @@ for (const [name, value] of [['WS_VUS', '0'], ['WS_VUS', '2garbage'], ['HOLD_SEC
     await assert.rejects(harness({}, { [name]: value }), new RegExp(`${name} must be a positive integer`));
   });
 }
+
+test('fanout thresholds account for every sender and receiver while default stays connection-only', async () => {
+  const plain = await harness();
+  assert.equal(plain.options.thresholds.fanout_sent, undefined);
+  const h = await harness({}, { WS_VUS: '2', USER_COUNT: '2', HOLD_SECONDS: '75', RAMP_UP: '10s',
+    FANOUT_SERVER_ID: 'guild', FANOUT_CHANNEL_ID: 'room', FANOUT_PROBE_ID: 'probe',
+    FANOUT_USER_IDS: '["alice","bob"]', FANOUT_MESSAGES_PER_SENDER: '5' });
+  assert.deepEqual(Array.from(h.options.thresholds.fanout_sent), ['count==10']);
+  assert.deepEqual(Array.from(h.options.thresholds.fanout_received), ['count==20']);
+  assert.deepEqual(Array.from(h.options.thresholds.fanout_receivers), ['count==2']);
+});

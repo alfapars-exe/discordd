@@ -31,7 +31,7 @@ function validRecord({ message, payload }, lanes, messagesPerSender) {
  */
 export function createFanoutObserver(options) {
   const profile = validateProfile(options);
-  const lanes = new Map(profile.userIds.map(id => [id, { seen: new Set(), highest: 0 }]));
+  const lanes = new Map(profile.userIds.map(id => [id, { seen: new Map(), highest: 0 }]));
   const messageIds = new Set();
   const counts = { received: 0, duplicates: 0, invalid: 0, ignored: 0, outOfOrder: 0 };
   return {
@@ -46,8 +46,11 @@ export function createFanoutObserver(options) {
       }
       if (payload.sequence < lane.highest) counts.outOfOrder++;
       lane.highest = Math.max(lane.highest, payload.sequence);
-      lane.seen.add(payload.sequence); messageIds.add(message.id); counts.received++;
+      lane.seen.set(payload.sequence, message.id); messageIds.add(message.id); counts.received++;
       return { kind: "accepted", sender: message.user_id, sequence: payload.sequence };
+    },
+    receipts() {
+      return [...lanes].flatMap(([sender, lane]) => [...lane.seen].sort((a, b) => a[0] - b[0]).map(([sequence, id]) => [sender, sequence, id]));
     },
     snapshot() {
       const expected = profile.userIds.length * profile.messagesPerSender;

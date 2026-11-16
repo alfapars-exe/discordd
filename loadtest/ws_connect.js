@@ -15,6 +15,8 @@ import http from 'k6/http';
 import ws from 'k6/ws';
 import { check, sleep } from 'k6';
 import { Counter } from 'k6/metrics';
+import { sha256 } from 'k6/crypto';
+import { readFanoutProfile, createFanoutSession } from './fanout-profile.mjs';
 
 // ─── Configuration (all overridable via -e or exported env vars) ───
 
@@ -61,6 +63,11 @@ for (const [name, value] of [['USER_COUNT', USER_COUNT], ['WS_VUS', WS_VUS], ['H
   if (!Number.isInteger(value) || value < 1) throw new Error(`${name} must be a positive integer`);
 }
 
+const fanoutProfile = readFanoutProfile(__ENV, { baseURL: BASE_URL, vus: WS_VUS, userCount: USER_COUNT, rampUp: RAMP_UP, holdSeconds: HOLD_SECONDS });
+const fanoutMetrics = fanoutProfile ? Object.fromEntries(
+  ['sent', 'received', 'duplicates', 'invalid', 'receivers'].map(name => [name, new Counter(`fanout_${name}`)])
+) : null;
+
 // Client -> server heartbeat cadence. Matches the real client's interval;
 // see ws/client.go pongWait (90s = 3 missed heartbeats at 30s each).
 const HEARTBEAT_INTERVAL_MS = 30 * 1000;
@@ -87,6 +94,13 @@ export const options = {
     // Every VU must reach a successful WS handshake — a single failure
     // means the auth/ticket/connect chain broke somewhere.
     checks: ['rate==1.0'],
+    ...(fanoutProfile ? {
+      fanout_sent: [`count==${WS_VUS * fanoutProfile.messagesPerSender}`],
+      fanout_received: [`count==${WS_VUS * WS_VUS * fanoutProfile.messagesPerSender}`],
+      fanout_receivers: [`count==${WS_VUS}`],
+      fanout_duplicates: ['count==0'],
+      fanout_invalid: ['count==0'],
+    } : {}),
     ws_handshakes_succeeded: ['count>0', `count==${WS_VUS}`],
     ws_sessions_succeeded: [`count==${WS_VUS}`],
     // Time to establish the WS connection (post-upgrade-request).
@@ -187,12 +201,17 @@ export default function () {
     wsURL = `${wsURLFromBase(BASE_URL)}/ws?ticket=${ticket}`;
   }
 
+  const fanout = fanoutProfile ? createFanoutSession(fanoutProfile, {
+    vu: __VU, baseURL: BASE_URL, accessToken, http, check, metrics: fanoutMetrics,
+    hash: value => sha256(value, 'hex'), log: value => console.log(value),
+  }) : null;
   let completedHold = false;
   let socketFailed = false;
   let res = null;
   try {
     res = ws.connect(wsURL, {}, function (socket) {
     socket.on('open', function () {
+      fanout?.start(socket);
       socket.setInterval(function () {
         socket.send(JSON.stringify({ op: 'heartbeat' }));
       }, HEARTBEAT_INTERVAL_MS);
@@ -205,6 +224,7 @@ export default function () {
       } catch (e) {
         return;
       }
+      fanout?.observe(msg);
       if (msg.op === 'heartbeat_ack') {
         heartbeatAcks.add(1);
       }
@@ -229,4 +249,5 @@ export default function () {
   });
   if (res && res.status === 101) successfulHandshakes.add(1);
   if (completed) successfulSessions.add(1);
+  fanout?.finish();
 }

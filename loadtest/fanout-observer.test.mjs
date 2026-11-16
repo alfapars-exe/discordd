@@ -86,3 +86,15 @@ for (const [name, patch] of [
 test("rejects a sparse sender list instead of accepting an undefined actor", () => {
   assert.throws(() => createFanoutObserver({ ...profile(), userIds: new Array(1), messagesPerSender: 1 }), /fanout_invalid_senders/);
 });
+
+test("receipts have deterministic sender/sequence order independently of delivery order", () => {
+ const observer = createFanoutObserver(profile());
+ observer.observe(frame("bob", 2)); observer.observe(frame("alice", 2));
+ observer.observe(frame("bob", 1)); observer.observe(frame("alice", 1));
+ assert.deepEqual(observer.receipts(), [["alice",1,"alice-1"],["alice",2,"alice-2"],["bob",1,"bob-1"],["bob",2,"bob-2"]]);
+});
+test("exported receipts cannot mutate the IDs used for reconciliation", () => {
+ const observer = createFanoutObserver(profile()); receiveAll(observer);
+ observer.receipts()[0][2] = "tampered";
+ assert.equal(observer.receipts()[0][2], "alice-1");
+});
