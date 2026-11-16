@@ -10,5 +10,11 @@
   "remaining": [
     "Final source scan/CI/Sonar",
     "Real SQL execution/dialect parity and RF05 acceptance"
-  ]
+  ],
+  "sourceScan": {
+    "sourceCommit": "8072cd04",
+    "reviewLines": 482,
+    "blockingPatterns": 0,
+    "exactReviewedRecords": 51
+  }
 }

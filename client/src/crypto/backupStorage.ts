@@ -200,6 +200,121 @@ function mergeRestoredCache(existingCache: CachedMessages, backupCache: BackupCo
   return mergedCache;
 }
 
+/** Decode and produce one crypto write at a time; the caller owns scoped awaits. */
+function* restoredCryptoWrites(contents: BackupContents): Generator<() => Promise<void>, void> {
+  // Identity key pair
+  yield () => keyStorage.saveIdentityKeyPair({
+    publicKey: fromBase64(contents.identity.publicKey),
+    privateKey: fromBase64(contents.identity.privateKey),
+  });
+
+  // Signing key pair
+  yield () => keyStorage.saveSigningKeyPair({
+    publicKey: fromBase64(contents.signing.publicKey),
+    privateKey: fromBase64(contents.signing.privateKey),
+  });
+
+  // Registration data
+  yield () => keyStorage.saveRegistrationData({
+    registrationId: contents.registration.registrationId,
+    deviceId: contents.registration.deviceId,
+    userId: contents.registration.userId,
+    createdAt: Date.now(),
+  });
+
+  // Write deviceId to metadata store — getLocalDeviceId() reads from here.
+  // Without this, localDeviceId stays null after restore → device management breaks.
+  yield () => keyStorage.setMetadata("deviceId", contents.registration.deviceId);
+
+  // Restore nextPrekeyId to prevent new prekeys from overwriting old private keys
+  if (contents.nextPrekeyId) {
+    yield () => keyStorage.setMetadata("nextPrekeyId", contents.nextPrekeyId!);
+  }
+
+  // Signed prekeys
+  for (const spk of contents.signedPreKeys) {
+    yield () => keyStorage.saveSignedPreKey({
+      id: spk.id,
+      publicKey: fromBase64(spk.publicKey),
+      privateKey: fromBase64(spk.privateKey),
+      signature: fromBase64(spk.signature),
+      createdAt: spk.createdAt,
+    });
+  }
+
+  // One-time prekeys — critical for X3DH
+  if (contents.preKeys && contents.preKeys.length > 0) {
+    yield () => keyStorage.savePreKeys(
+      contents.preKeys.map((pk) => ({
+        id: pk.id,
+        publicKey: fromBase64(pk.publicKey),
+        privateKey: fromBase64(pk.privateKey),
+      })),
+    );
+  }
+
+  // Sessions
+  for (const s of contents.sessions) {
+    const state = decodeBackupSessionState(s.state);
+    yield () => keyStorage.saveSession({
+      userId: s.userId,
+      deviceId: s.deviceId,
+      state,
+      createdAt: s.createdAt,
+      updatedAt: s.updatedAt,
+    });
+  }
+
+  // Sender keys
+  for (const sk of contents.senderKeys) {
+    // The window comes off a JSON.parse, so it is normalized rather than
+    // trusted: isReplay binary-searches and would silently miss hits on an
+    // unsorted or poisoned array. Absent (older backup) normalizes to the
+    // safe empty window with floor 0.
+    const window = normalizeReplayWindow(sk.seenIterations, sk.replayFloor);
+    yield () => keyStorage.saveSenderKey({
+      channelId: sk.channelId,
+      senderUserId: sk.senderUserId,
+      senderDeviceId: sk.senderDeviceId,
+      distributionId: sk.distributionId,
+      chainKey: fromBase64(sk.chainKey),
+      // Carry a real absence through instead of substituting chainKey.
+      //
+      // chainKey is the CURRENT ratcheted key; for anything past iteration 0
+      // it is not the anchor. Rewinding from it derives the wrong message
+      // keys, so restored history decrypts to garbage and renders as
+      // content: null. The lasting damage is worse than the lost messages:
+      // channelEncryption's repair is gated on !existingKey.initialChainKey,
+      // so a fabricated anchor is truthy and shuts that door permanently.
+      // Absence makes the rewind throw instead — a loud, recoverable failure
+      // that the repair can still fix later.
+      //
+      // decodeAnchor also maps "" to undefined, which is how backups written
+      // before the field became optional encoded absence: fromBase64("")
+      // returns a zero-length Uint8Array, an object, therefore TRUTHY — so
+      // decoding the old encoding literally would reproduce the same bug.
+      initialChainKey: decodeAnchor(sk.initialChainKey),
+      publicSigningKey: fromBase64(sk.publicSigningKey),
+      iteration: sk.iteration,
+      createdAt: sk.createdAt,
+      seenIterations: window.seenIterations,
+      replayFloor: window.replayFloor,
+    });
+  }
+
+  // Trusted identities
+  for (const ti of contents.trustedIdentities) {
+    yield () => keyStorage.saveTrustedIdentity({
+      userId: ti.userId,
+      deviceId: ti.deviceId,
+      identityKey: fromBase64(ti.identityKey),
+      firstSeen: ti.firstSeen,
+      verified: ti.verified,
+    });
+  }
+
+}
+
 /** Import backup contents into IndexedDB.
  *
  * Atomicity note: writing into IndexedDB inherently happens in
@@ -259,115 +374,8 @@ export async function importBackupContents(contents: BackupContents, scope: Auth
     for (const [key, value] of pendingDeletions) await awaitScoped(scope, () => keyStorage.setMetadata(key, value));
     const pendingDeletionKeys = new Set(pendingDeletions.map(([key]) => key));
 
-    // Identity key pair
-    await awaitScoped(scope, () => keyStorage.saveIdentityKeyPair({
-      publicKey: fromBase64(contents.identity.publicKey),
-      privateKey: fromBase64(contents.identity.privateKey),
-    }));
-
-    // Signing key pair
-    await awaitScoped(scope, () => keyStorage.saveSigningKeyPair({
-      publicKey: fromBase64(contents.signing.publicKey),
-      privateKey: fromBase64(contents.signing.privateKey),
-    }));
-
-    // Registration data
-    await awaitScoped(scope, () => keyStorage.saveRegistrationData({
-      registrationId: contents.registration.registrationId,
-      deviceId: contents.registration.deviceId,
-      userId: contents.registration.userId,
-      createdAt: Date.now(),
-    }));
-
-    // Write deviceId to metadata store — getLocalDeviceId() reads from here.
-    // Without this, localDeviceId stays null after restore → device management breaks.
-    await awaitScoped(scope, () => keyStorage.setMetadata("deviceId", contents.registration.deviceId));
-
-    // Restore nextPrekeyId to prevent new prekeys from overwriting old private keys
-    if (contents.nextPrekeyId) {
-      await awaitScoped(scope, () => keyStorage.setMetadata("nextPrekeyId", contents.nextPrekeyId!));
-    }
-
-    // Signed prekeys
-    for (const spk of contents.signedPreKeys) {
-      await awaitScoped(scope, () => keyStorage.saveSignedPreKey({
-        id: spk.id,
-        publicKey: fromBase64(spk.publicKey),
-        privateKey: fromBase64(spk.privateKey),
-        signature: fromBase64(spk.signature),
-        createdAt: spk.createdAt,
-      }));
-    }
-
-    // One-time prekeys — critical for X3DH
-    if (contents.preKeys && contents.preKeys.length > 0) {
-      await awaitScoped(scope, () => keyStorage.savePreKeys(
-        contents.preKeys.map((pk) => ({
-          id: pk.id,
-          publicKey: fromBase64(pk.publicKey),
-          privateKey: fromBase64(pk.privateKey),
-        })),
-      ));
-    }
-
-    // Sessions
-    for (const s of contents.sessions) {
-      const state = decodeBackupSessionState(s.state);
-      await awaitScoped(scope, () => keyStorage.saveSession({
-        userId: s.userId,
-        deviceId: s.deviceId,
-        state,
-        createdAt: s.createdAt,
-        updatedAt: s.updatedAt,
-      }));
-    }
-
-    // Sender keys
-    for (const sk of contents.senderKeys) {
-      // The window comes off a JSON.parse, so it is normalized rather than
-      // trusted: isReplay binary-searches and would silently miss hits on an
-      // unsorted or poisoned array. Absent (older backup) normalizes to the
-      // safe empty window with floor 0.
-      const window = normalizeReplayWindow(sk.seenIterations, sk.replayFloor);
-      await awaitScoped(scope, () => keyStorage.saveSenderKey({
-        channelId: sk.channelId,
-        senderUserId: sk.senderUserId,
-        senderDeviceId: sk.senderDeviceId,
-        distributionId: sk.distributionId,
-        chainKey: fromBase64(sk.chainKey),
-        // Carry a real absence through instead of substituting chainKey.
-        //
-        // chainKey is the CURRENT ratcheted key; for anything past iteration 0
-        // it is not the anchor. Rewinding from it derives the wrong message
-        // keys, so restored history decrypts to garbage and renders as
-        // content: null. The lasting damage is worse than the lost messages:
-        // channelEncryption's repair is gated on !existingKey.initialChainKey,
-        // so a fabricated anchor is truthy and shuts that door permanently.
-        // Absence makes the rewind throw instead — a loud, recoverable failure
-        // that the repair can still fix later.
-        //
-        // decodeAnchor also maps "" to undefined, which is how backups written
-        // before the field became optional encoded absence: fromBase64("")
-        // returns a zero-length Uint8Array, an object, therefore TRUTHY — so
-        // decoding the old encoding literally would reproduce the same bug.
-        initialChainKey: decodeAnchor(sk.initialChainKey),
-        publicSigningKey: fromBase64(sk.publicSigningKey),
-        iteration: sk.iteration,
-        createdAt: sk.createdAt,
-        seenIterations: window.seenIterations,
-        replayFloor: window.replayFloor,
-      }));
-    }
-
-    // Trusted identities
-    for (const ti of contents.trustedIdentities) {
-      await awaitScoped(scope, () => keyStorage.saveTrustedIdentity({
-        userId: ti.userId,
-        deviceId: ti.deviceId,
-        identityKey: fromBase64(ti.identityKey),
-        firstSeen: ti.firstSeen,
-        verified: ti.verified,
-      }));
+    for (const write of restoredCryptoWrites(contents)) {
+      await awaitScoped(scope, write);
     }
 
     // Merge existing cache + backup cache (existing takes priority)

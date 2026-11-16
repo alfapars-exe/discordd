@@ -3740,3 +3740,7 @@ RF07 HTTP refresh: Sonar kaynağı 0f6010ec ile ilgili satırlarda eşleştirild
 RF05/constant identifier: sanal AST nesnesine bağlı sabit çözümleme ayrı yardımcıya taşındı; ortak bütçe, depth artışı, cycle koruması ve defer temizliği korunur. Yedi test önce/sonra, final Go vet ve 963 aday tam envanter eşdeğerliği başarılı. Kanıt: refactor-query-constant-identifier-2026-11-16.json. Yeni kaynak taraması/CI/Sonar beklenir.
 
 DM 1f3c9cb1 kaynak taraması 482 inceleme/0 engelleyici desenle başarılı. Tek yeni normalize inceleme, t.TempDir altına sabit queries.go yazan SQL karakterizasyonudur; waiver eklenmedi. 0f6010ec Sonar kaynak eşlemesi ve Android Maven HTTP429 başarısızlığı refactor-0f60-targeted-sonar-mobile-2026-11-16.json dosyasında; Android failed-job retry sonucu henüz kabul edilmedi.
+
+0f6010ec terminal CI: 36/36 SUCCESS. Android ilk Maven Central HTTP429 hatasından sonra yalnız başarısız iş aynı kaynakta bir kez yeniden koşuldu ve geçti; ret/gate değiştirilmedi. Kanıt: refactor-0f60-terminal-ci-2026-11-16.json. 8072cd04 kaynak taraması 482 inceleme/0 engelleyici desenle başarılı.
+
+RF16 ileri yazım aşaması: on anahtar yazımı tembel senkron üreticiye ayrıldı; scoped await, deletion-intent, cache ve rollback sırası korunur. 72 test önce/sonra, TypeScript/lint/Vite başarılı; üretici tersine çevrildiğinde bütün dosyanın TypeScript ifadeleri eşleşir. Kanıt: refactor-backup-write-phase-2026-11-16.json. Yeni kaynak taraması/CI/Sonar, tarihsel corpus ve crash/atomiklik kabulü açık.
