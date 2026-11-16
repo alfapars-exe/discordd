@@ -12,5 +12,14 @@
     "Source scan and new-source CI/Sonar",
     "Complete authentication/native/offline acceptance",
     "Other API request orchestration complexity"
-  ]
+  ],
+  "sourceCommit": "e7cc898b",
+  "structuralParity": {
+    "method": "Canonical TypeScript AST printing after reconstructing both synchronous helper call sites",
+    "doRefreshParity": true
+  },
+  "sourceScanAttempt": {
+    "initialAttempt": "Invalid: system WSL bash could not resolve Windows paths; not a product scan result",
+    "current": "Git Bash scan on immutable e7cc898b source, process session 49127; pending"
+  }
 }
