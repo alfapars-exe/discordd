@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"errors"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 	"os"
@@ -31,9 +32,22 @@ func TestBackendOwnerExcludesSecondAndDetectsLoss(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer owner.Close()
-	if second, err := AcquireBackendOwner(ctx, pool); err == nil {
-		second.Close()
-		t.Fatal("second backend acquired ownership")
+	if second, err := AcquireBackendOwner(ctx, pool); !errors.Is(err, ErrBackendOwnerBusy) {
+		if second != nil {
+			second.Close()
+		}
+		t.Fatalf("second backend: got %v, want ErrBackendOwnerBusy", err)
+	}
+	var idle string
+	if err = owner.QueryRowContext(ctx, `SHOW idle_session_timeout`).Scan(&idle); err != nil || idle != "30s" {
+		t.Fatalf("owner idle_session_timeout = %q, %v; want 30s", idle, err)
+	}
+	waitCtx, waitCancel := context.WithTimeout(ctx, 300*time.Millisecond)
+	var seen *BackendOwnerHolder
+	_, err = WaitForBackendOwner(waitCtx, pool, 50*time.Millisecond, func(h *BackendOwnerHolder) { seen = h })
+	waitCancel()
+	if !errors.Is(err, ErrBackendOwnerBusy) || seen == nil || seen.PID == 0 {
+		t.Fatalf("waiting second backend: err=%v holder=%+v", err, seen)
 	}
 	lost := make(chan struct{})
 	go WatchBackendOwner(ctx, owner, func() { close(lost) })
@@ -45,7 +59,7 @@ func TestBackendOwnerExcludesSecondAndDetectsLoss(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("ownership loss was not detected")
 	}
-	next, err := AcquireBackendOwner(ctx, pool)
+	next, err := WaitForBackendOwner(ctx, pool, 50*time.Millisecond, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

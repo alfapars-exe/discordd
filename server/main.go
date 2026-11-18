@@ -110,7 +110,20 @@ func main() {
 	}
 	ownerCtx, stopOwner := context.WithCancel(context.Background())
 	defer stopOwner()
-	owner, err := database.AcquireBackendOwner(ownerCtx, db.Conn)
+	ownerWait := backendOwnerWait()
+	acquireCtx, stopAcquire := context.WithTimeout(ownerCtx, ownerWait)
+	owner, err := database.WaitForBackendOwner(acquireCtx, db.Conn, 5*time.Second, func(holder *database.BackendOwnerHolder) {
+		if holder == nil {
+			bootLogger.Warn("backend ownership busy; waiting for previous instance to release it", "max_wait", ownerWait.String())
+			return
+		}
+		bootLogger.Warn("backend ownership busy; waiting for previous instance to release it",
+			"max_wait", ownerWait.String(), "holder_pid", holder.PID, "holder_app", holder.ApplicationName,
+			"holder_client", holder.ClientAddr, "holder_state", holder.State,
+			"holder_since", holder.BackendStart.UTC().Format(time.RFC3339),
+			"holder_last_change", holder.StateChange.UTC().Format(time.RFC3339))
+	})
+	stopAcquire()
 	if err != nil {
 		logx.Fatal("boot", "another backend owns this database", err)
 	}
