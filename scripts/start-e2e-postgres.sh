@@ -17,8 +17,9 @@ chmod 0600 ./*.key
 printf 'local all all trust\nhostssl all all 0.0.0.0/0 cert\n' > pg_hba.conf
 cat > Dockerfile <<'EOF'
 FROM postgres:18.6-bookworm@sha256:bbf83594798e144bff365a9c191c5d779f181fb3135902064ab8ff11918020fc
+RUN install -d -o postgres -g postgres -m 0700 /tls
 COPY --chown=postgres:postgres --chmod=0600 server.key /tls/server.key
-COPY --chown=postgres:postgres server.crt ca.crt pg_hba.conf /tls/
+COPY --chown=postgres:postgres --chmod=0644 server.crt ca.crt pg_hba.conf /tls/
 EOF
 docker build --quiet --tag "$image" . >/dev/null
 docker run --detach --name "$container" --publish 127.0.0.1::5432 \
@@ -31,7 +32,15 @@ for attempt in {1..90}; do
   if docker exec "$container" pg_isready -U hichat_e2e -d hichat_e2e_control >/dev/null 2>&1; then ready=1; break; fi
   sleep 1
 done
-if [[ "$ready" != 1 ]]; then docker rm -f "$container" >/dev/null; exit 1; fi
+if [[ "$ready" != 1 ]]; then
+  # Fixture-only container: its log holds no secrets and is the only evidence
+  # of why PostgreSQL refused to start (TLS file permissions, config).
+  echo "E2E PostgreSQL did not become ready; container status and log tail:" >&2
+  docker inspect --format '{{.State.Status}} exit={{.State.ExitCode}}' "$container" >&2 || true
+  docker logs --tail 40 "$container" >&2 || true
+  docker rm -f "$container" >/dev/null
+  exit 1
+fi
 port="$(docker port "$container" 5432/tcp | sed 's/^127\.0\.0\.1://')"
 dsn="postgres://hichat_e2e@127.0.0.1:${port}/hichat_e2e_control?sslmode=verify-full&sslrootcert=${fixture_dir}/ca.crt&sslcert=${fixture_dir}/client.crt&sslkey=${fixture_dir}/client.key"
 printf '%s' "$dsn" > control-url.txt
