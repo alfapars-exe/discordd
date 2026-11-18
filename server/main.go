@@ -122,6 +122,10 @@ func main() {
 			"holder_client", holder.ClientAddr, "holder_state", holder.State,
 			"holder_since", holder.BackendStart.UTC().Format(time.RFC3339),
 			"holder_last_change", holder.StateChange.UTC().Format(time.RFC3339))
+	}, func(holder database.BackendOwnerHolder) {
+		bootLogger.Warn("terminated orphaned backend owner session",
+			"holder_pid", holder.PID, "holder_client", holder.ClientAddr,
+			"holder_last_change", holder.StateChange.UTC().Format(time.RFC3339))
 	})
 	stopAcquire()
 	if err != nil {
