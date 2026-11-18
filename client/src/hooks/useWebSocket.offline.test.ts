@@ -34,6 +34,7 @@ import { useWebSocket } from "./useWebSocket";
 import { handleChannelEvent } from "./ws/channelEventHandlers";
 import { handleDMEvent } from "./ws/dmEventHandlers";
 import { handleSystemEvent } from "./ws/systemEventHandlers";
+import { logToServer } from "../api/clientLog";
 const revocation = vi.hoisted(() => ({
   session: "session-a", owner: "u1" as string | null, generation: 1,
   ownerListeners: new Set<(owner: string | null) => void>(),
@@ -71,8 +72,12 @@ vi.mock("../utils/nativePlugins", () => ({
 }));
 
 // Channel history repair is a collaborator of the socket lifecycle tested here.
+const historyRepair=vi.hoisted(()=>({
+  messagesByChannel:{} as Record<string,{server_id?:string}[]>,
+  fetchMessages:vi.fn(async()=>{}),
+}));
 vi.mock("../stores/messageStore", () => ({
-  useMessageStore: { getState: () => ({ messagesByChannel: {}, fetchMessages: vi.fn() }) },
+  useMessageStore: { getState: () => historyRepair },
 }));
 
 vi.mock("../stores/p2pCallStore", () => ({
@@ -229,6 +234,7 @@ describe("useWebSocket offline/online handling", () => {
     vi.mocked(handleChannelEvent).mockClear();
     vi.mocked(handleDMEvent).mockClear();
     vi.mocked(handleSystemEvent).mockClear();
+    historyRepair.messagesByChannel={};historyRepair.fetchMessages.mockReset().mockResolvedValue();
     FakeWebSocket.instances = [];
     globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
     listeners = spyOnWindowListeners();
@@ -483,4 +489,212 @@ describe("useWebSocket offline/online handling", () => {
     expect(FakeWebSocket.instances.length).toBe(socketsAtUnmount);
     expect(result.current.connectionStatus).toBe("connecting");
   });
+  it("ignores retired socket frames and close callbacks after offline", async () => {
+    const { result } = await mountHook();
+    const retired = lastSocket();
+    act(() => { window.dispatchEvent(new Event("offline")); });
+    await act(async () => {
+      retired.onmessage?.({ data: JSON.stringify({ op: "message_create", d: { id: "retired" } }) } as MessageEvent);
+      retired.onclose?.({ code: 1006, reason: "", wasClean: false } as CloseEvent);
+    });
+    expect(handleChannelEvent).not.toHaveBeenCalled();
+    expect(result.current.connectionStatus).toBe("offline");
+    expect(result.current.reconnectAttempt).toBe(0);
+  });
+
+  it("retires an in-flight token lookup on offline and reconnects only after online", async () => {
+    let resolveOld!: (token: string) => void;
+    revocation.ensureFreshToken.mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve; }));
+    const { result } = await mountHook();
+    expect(FakeWebSocket.instances).toHaveLength(0);
+    act(() => { window.dispatchEvent(new Event("offline")); });
+    resolveOld("retired-offline-token");
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(FakeWebSocket.instances).toHaveLength(0);
+    expect(result.current.connectionStatus).toBe("offline");
+    await act(async () => { window.dispatchEvent(new Event("online")); await Promise.resolve(); await Promise.resolve(); });
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    expect(lastSocket().url).not.toContain("retired-offline-token");
+  });
+
+  it("keeps only the latest overlapping reconnect attempt for the same account", async () => {
+    await mountHook();
+    let resolveOld!: (token: string) => void;
+    revocation.ensureFreshToken.mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve; }));
+    await act(async () => { window.dispatchEvent(new Event("online")); await Promise.resolve(); });
+    await act(async () => { window.dispatchEvent(new Event("online")); await Promise.resolve(); await Promise.resolve(); });
+    expect(FakeWebSocket.instances).toHaveLength(2);
+    const current = lastSocket();
+    resolveOld("superseded-token");
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(FakeWebSocket.instances).toHaveLength(2);
+    expect(current.closeCount).toBe(0);
+  });
+
+  it("keeps the replacement heartbeat and state when a retired socket closes late", async () => {
+    vi.useFakeTimers();
+    const view = await mountHook();
+    try {
+      const retired = lastSocket();
+      act(() => retired.onopen?.());
+      await act(async () => { window.dispatchEvent(new Event("online")); await Promise.resolve(); await Promise.resolve(); });
+      const current = lastSocket();
+      act(() => current.onopen?.());
+      await act(async () => { retired.onclose?.({ code: 1006, reason: "", wasClean: false } as CloseEvent); });
+      // The ready-event handler is mocked here; socket open retains connecting.
+      expect(view.result.current.connectionStatus).toBe("connecting");
+      await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+      expect(current.send).toHaveBeenCalledWith(JSON.stringify({ op: "heartbeat" }));
+      expect(retired.send).not.toHaveBeenCalled();
+      expect(FakeWebSocket.instances).toHaveLength(2);
+    } finally { view.unmount(); vi.useRealTimers(); }
+  });
+
+  it("discards a ticket completed after offline", async () => {
+    let resolveOld!: (value: { success: boolean; data: { ticket: string } }) => void;
+    revocation.ticket.mockReturnValueOnce(new Promise(resolve => { resolveOld = resolve; }));
+    const { result } = await mountHook();
+    act(() => { window.dispatchEvent(new Event("offline")); });
+    resolveOld({ success: true, data: { ticket: "retired-offline-ticket" } });
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(FakeWebSocket.instances).toHaveLength(0);
+    expect(result.current.connectionStatus).toBe("offline");
+  });
+
+  it("keeps resume and account changes offline until an online event", async () => {
+    const { result } = await mountHook();
+    act(() => { window.dispatchEvent(new Event("offline")); });
+    await act(async () => {
+      changeAuth("u2");
+      window.dispatchEvent(new Event("mqvi:app-resume"));
+      await Promise.resolve(); await Promise.resolve();
+    });
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    expect(result.current.connectionStatus).toBe("offline");
+    await act(async () => { window.dispatchEvent(new Event("online")); await Promise.resolve(); await Promise.resolve(); });
+    expect(FakeWebSocket.instances).toHaveLength(2);
+  });
+
+  it.each(["unmount", "offline", "close", "account", "reconnect"])("releases pending token refresh retry on %s", async (boundary) => {
+    vi.useFakeTimers();
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const view = await mountHook();
+    try {
+      const socket = lastSocket();
+      socket.send.mockImplementation((data: string) => {
+        if (JSON.parse(data).op === "heartbeat") socket.onmessage?.({ data: JSON.stringify({ op: "heartbeat_ack" }) } as MessageEvent);
+      });
+      act(() => socket.onopen?.());
+      revocation.ensureFreshToken.mockRejectedValueOnce(new Error("synthetic refresh failure"));
+      await act(async () => { await vi.advanceTimersByTimeAsync(600_000); });
+      expect(revocation.ensureFreshToken).toHaveBeenCalledTimes(2);
+      expect(vi.getTimerCount()).toBeGreaterThan(0);
+      await act(async () => {
+        if (boundary === "unmount") view.unmount();
+        else if (boundary === "offline") window.dispatchEvent(new Event("offline"));
+        else if (boundary === "close") {
+          socket.readyState = FakeWebSocket.CLOSED;
+          socket.onclose?.({ code: 1006, reason: "", wasClean: false } as CloseEvent);
+        } else if (boundary === "account") changeAuth("u2");
+        else window.dispatchEvent(new Event("online"));
+        await Promise.resolve(); await Promise.resolve();
+      });
+      // Close alone retains the legitimate reconnect timer, not a refresh wait.
+      expect(vi.getTimerCount()).toBe(boundary === "close" ? 1 : 0);
+      const callsAfterBoundary = revocation.ensureFreshToken.mock.calls.length;
+      view.unmount();
+      await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+      expect(vi.getTimerCount()).toBe(0);
+      expect(revocation.ensureFreshToken).toHaveBeenCalledTimes(callsAfterBoundary);
+    } finally { view.unmount(); warning.mockRestore(); vi.useRealTimers(); }
+  });
+
+  it("does not acquire a new retry wait after a retired refresh rejects late", async () => {
+    vi.useFakeTimers();
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const view = await mountHook();
+    try {
+      const socket = lastSocket();
+      socket.send.mockImplementation((data: string) => {
+        if (JSON.parse(data).op === "heartbeat") socket.onmessage?.({ data: JSON.stringify({ op: "heartbeat_ack" }) } as MessageEvent);
+      });
+      act(() => socket.onopen?.());
+      let rejectOld!: (error: Error) => void;
+      revocation.ensureFreshToken.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectOld = reject; }));
+      await act(async () => { await vi.advanceTimersByTimeAsync(600_000); });
+      view.unmount();
+      rejectOld(new Error("late retired refresh failure"));
+      await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+      expect(vi.getTimerCount()).toBe(0);
+      expect(warning).not.toHaveBeenCalled();
+      expect(revocation.ensureFreshToken).toHaveBeenCalledTimes(2);
+    } finally { view.unmount(); warning.mockRestore(); vi.useRealTimers(); }
+  });
+
+  it.each([false, true])("preserves retry delay and bounded attempts (exhaust=%s)", async (exhaust) => {
+    vi.useFakeTimers();
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const view = await mountHook();
+    try {
+      const socket = lastSocket();
+      socket.send.mockImplementation((data: string) => {
+        if (JSON.parse(data).op === "heartbeat") socket.onmessage?.({ data: JSON.stringify({ op: "heartbeat_ack" }) } as MessageEvent);
+      });
+      act(() => socket.onopen?.());
+      if (exhaust) revocation.ensureFreshToken.mockRejectedValue(new Error("refresh unavailable"));
+      else revocation.ensureFreshToken.mockRejectedValueOnce(new Error("temporary refresh failure"));
+      await act(async () => { await vi.advanceTimersByTimeAsync(600_000); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(9_999); });
+      expect(revocation.ensureFreshToken).toHaveBeenCalledTimes(2);
+      await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+      expect(revocation.ensureFreshToken).toHaveBeenCalledTimes(3);
+      if (exhaust) {
+        await act(async () => { await vi.advanceTimersByTimeAsync(80_000); });
+        expect(revocation.ensureFreshToken).toHaveBeenCalledTimes(10); // Initial connect plus nine refresh attempts.
+      }
+      expect(vi.getTimerCount()).toBe(2); // Only heartbeat and proactive refresh intervals remain.
+      view.unmount();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { view.unmount(); warning.mockRestore(); vi.useRealTimers(); }
+  });
+
+  it.each(["active", "offline", "account", "unmount"] as const)("observes rejected dispatch without leaking retired work (%s)", async boundary => {
+    const view=await mountHook();
+    try {
+      const socket=lastSocket();
+      let reject!: (error:Error)=>void;
+      vi.mocked(handleChannelEvent).mockImplementationOnce(()=>new Promise((_resolve,fail)=>{reject=fail;}));
+      await act(async()=>socket.onmessage?.({data:JSON.stringify({op:"message_delete",d:{channel_id:"private-channel",id:"private-id",content:"private plaintext"}})} as MessageEvent));
+      if(boundary==="offline")act(()=>window.dispatchEvent(new Event("offline")));
+      if(boundary==="account")await act(async()=>changeAuth("u2"));
+      if(boundary==="unmount")view.unmount();
+      await act(async()=>{reject(new Error("private plaintext and token"));await Promise.resolve();await Promise.resolve();});
+      const reports=vi.mocked(logToServer).mock.calls.filter(call=>call[1]==="ws_event_dispatch_failed");
+      expect(reports).toEqual(boundary==="active"?[["error","ws_event_dispatch_failed",{op:"message_delete"}]]:[]);
+      if(boundary==="active"){
+        vi.mocked(handleChannelEvent).mockResolvedValueOnce(true);
+        await act(async()=>socket.onmessage?.({data:JSON.stringify({op:"message_delete",d:{channel_id:"private-channel",id:"next"}})} as MessageEvent));
+        expect(handleChannelEvent).toHaveBeenCalledTimes(2);
+      }
+    }finally{view.unmount();}
+  });
+
+  it.each(["active", "offline", "account", "unmount"] as const)("observes background history repair rejection (%s)", async boundary => {
+    const view=await mountHook();
+    try {
+      historyRepair.messagesByChannel={"private-channel":[{server_id:"private-server"}]};
+      let reject!: (error:Error)=>void;
+      historyRepair.fetchMessages.mockImplementationOnce(()=>new Promise((_resolve,fail)=>{reject=fail;}));
+      const socket=lastSocket();
+      await act(async()=>socket.onmessage?.({data:JSON.stringify({op:"ready",d:{}})} as MessageEvent));
+      expect(historyRepair.fetchMessages).toHaveBeenCalledTimes(1);
+      if(boundary==="offline")act(()=>window.dispatchEvent(new Event("offline")));
+      if(boundary==="account")await act(async()=>changeAuth("u2"));
+      if(boundary==="unmount")view.unmount();
+      await act(async()=>{reject(new Error("private repair error"));await Promise.resolve();await Promise.resolve();});
+      const reports=vi.mocked(logToServer).mock.calls.filter(call=>call[1]==="ws_channel_resync_failed");
+      expect(reports).toEqual(boundary==="active"?[["error","ws_channel_resync_failed"]]:[]);
+    }finally{view.unmount();}
+  });
+
 });

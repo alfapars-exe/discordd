@@ -45,16 +45,16 @@ type MessageRateLimiter struct {
 	maxMessages int
 	window      time.Duration
 	cooldown    time.Duration
-	stopCleanup chan struct{}
+	cleanupWorker
 }
 
 func NewMessageRateLimiter(maxMessages int, window, cooldown time.Duration) *MessageRateLimiter {
 	rl := &MessageRateLimiter{
-		buckets:     make(map[string]*messageBucket),
-		maxMessages: maxMessages,
-		window:      window,
-		cooldown:    cooldown,
-		stopCleanup: make(chan struct{}),
+		buckets:       make(map[string]*messageBucket),
+		maxMessages:   maxMessages,
+		window:        window,
+		cooldown:      cooldown,
+		cleanupWorker: newCleanupWorker(),
 	}
 
 	go rl.cleanupLoop()
@@ -135,6 +135,7 @@ func (rl *MessageRateLimiter) CooldownSeconds(userID string) int {
 }
 
 func (rl *MessageRateLimiter) cleanupLoop() {
+	defer close(rl.cleanupDone)
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 

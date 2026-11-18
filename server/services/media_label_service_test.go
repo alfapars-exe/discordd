@@ -46,9 +46,9 @@ func TestMediaLabelChannelAndGroupAccess(t *testing.T) {
 					}
 					return models.PermViewChannel, nil
 				}}
-				access := NewSpamInboxService(nil, messages, channels, nil, mediaGroupAccessStub{member: allowed}, permissions)
+				access := NewSpamInboxService(nil, messages, channels, nil, mediaGroupAccessStub{member: allowed}, permissions, nil)
 				store := &mediaStoreStub{}
-				svc := NewMediaLabelService(store, access)
+				svc := NewMediaLabelService(store, access, nil)
 				entry := &models.MediaLabel{SourceKind: kind, ChannelID: "source", MessageID: "m", Revision: "original", Fingerprint: strings.Repeat("a", 64), Label: "ordinary"}
 				err := svc.Set(context.Background(), "recipient", entry)
 				if allowed && (err != nil || store.calls != 1) {
@@ -92,7 +92,6 @@ func TestMediaLabelInvalidatesOnlyOwnerAfterSuccessfulCommit(t *testing.T) {
 			if fail {
 				store.err = errors.New("storage unavailable")
 			}
-			svc := NewMediaLabelService(store, mediaReferenceAccessStub{})
 			calls := 0
 			hub := &testutil.MockBroadcaster{
 				BroadcastToAllFn:    func(ws.Event) { t.Fatal("public broadcast") },
@@ -109,7 +108,7 @@ func TestMediaLabelInvalidatesOnlyOwnerAfterSuccessfulCommit(t *testing.T) {
 					}
 				},
 			}
-			svc.SetBroadcaster(hub)
+			svc := NewMediaLabelService(store, mediaReferenceAccessStub{}, hub)
 			entry := &models.MediaLabel{UserID: "forged", SourceKind: "dm", ChannelID: "source", MessageID: "m", Revision: "original", Fingerprint: strings.Repeat("a", 64), Label: "ordinary"}
 			var err error
 			if remove {
@@ -135,8 +134,8 @@ func TestMediaLabelSourceAuthorizationAndOwnerBinding(t *testing.T) {
 				return &models.DMChannel{ID: "private", User1ID: "sender", User2ID: "recipient"}, nil
 			}}
 			store := &mediaStoreStub{}
-			access := NewSpamInboxService(nil, nil, nil, dms, nil, nil)
-			service := NewMediaLabelService(store, access)
+			access := NewSpamInboxService(nil, nil, nil, dms, nil, nil, nil)
+			service := NewMediaLabelService(store, access, nil)
 			entry := &models.MediaLabel{UserID: "forged", SourceKind: "dm", ChannelID: tc.channel, MessageID: "m", Revision: tc.revision, Fingerprint: strings.Repeat("a", 64), Label: "both"}
 			err := service.Set(context.Background(), tc.user, entry)
 			if !errors.Is(err, tc.want) {
@@ -153,7 +152,7 @@ func TestMediaLabelSourceAuthorizationAndOwnerBinding(t *testing.T) {
 }
 func TestMediaLabelDeleteOwnReferenceWithoutSourceAccess(t *testing.T) {
 	store := &mediaStoreStub{}
-	service := NewMediaLabelService(store, nil)
+	service := NewMediaLabelService(store, nil, nil)
 	entry := &models.MediaLabel{UserID: "foreign", SourceKind: "group", ChannelID: "g", MessageID: "m", Revision: "original", Fingerprint: strings.Repeat("a", 64)}
 	if err := service.Delete(context.Background(), "owner", entry); err != nil {
 		t.Fatal(err)

@@ -1,0 +1,28 @@
+{
+  "scope": "RF11 personal messaging composition extraction",
+  "services": [
+    "Saved",
+    "Reminder",
+    "UserNote",
+    "Personalization"
+  ],
+  "preserved": [
+    "Same channel permission resolver for saved and reminder access",
+    "Same DM repository membership checks",
+    "Same preferences/user/server/friendship personalization readers",
+    "MessageReminderWorker remains separately constructed in process bundle and started by lifecycle owner; no new workers"
+  ],
+  "checks": {
+    "root": "PASS startup/rollback/routes/callback/device/media composition tests, 2.990s",
+    "services": "PASS saved/reminder/user-note/personalization tests, 0.661s",
+    "build": "PASS go build ./...",
+    "vet": "PASS go vet .",
+    "reviewed_sql_manifest": "PASS 50 exact records"
+  },
+  "remaining": [
+    "Required-input and repository validation for new group",
+    "Other domain and optional/resource lifecycle acceptance",
+    "Full RF01-RF30 completion unproven"
+  ],
+  "ci": "Remote source 4408d2f2 still live; local extraction excluded."
+}

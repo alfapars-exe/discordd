@@ -1,0 +1,39 @@
+{
+  "date": "2026-11-15",
+  "base": "093695f8113147cb417bd5ac88235f1e5f25f449",
+  "sources": {
+    "client/src/crypto/cachedSearchScan.test.ts": "52948a5bbe64129a5e3aee856ffa0a98aae97ee34946c0038b99c06779778f5e",
+    "e2e/scripts/benchmark-search-panels.mjs": "409a59bf2b88025ca44fb756f7c78a96dfeb70e06d8e9499390c5a4b4f6c6e55"
+  },
+  "validation": {
+    "vitest": "cachedSearchScan + cachedSearchSnapshot: 32/32 passed",
+    "eslint": "changed scanner test passed",
+    "typescript": "tsc --noEmit passed",
+    "chromium": "benchmark-search-panels --quick --after-only --assert-idle-budget exit 0",
+    "benchmarkLog": "TEMP/hichat-search-panels-ci-fixes.log"
+  },
+  "behavior": [
+    "stalled consumer cancellation releases queued writer",
+    "session replacement rejects old-session writer and allows fresh-session write",
+    "late consumer rejection remains observed"
+  ],
+  "sonarBefore": {
+    "head": "093695f8",
+    "failedRules": [
+      "javascript:S4036",
+      "jssecurity:S5131",
+      "javascript:S2189"
+    ],
+    "changes": [
+      "fixed executable paths",
+      "static entry-page map",
+      "abortable timer iterator"
+    ]
+  },
+  "limits": [
+    "fake-indexeddb lock regression is not native-browser contention timing",
+    "quick browser run is not nine-repeat performance evidence",
+    "previous controlled samples retain their original source hashes and sampler implementation",
+    "new-head CI and Sonar result pending"
+  ]
+}

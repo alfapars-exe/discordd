@@ -1,0 +1,23 @@
+{
+  "base_source": "8c341d74a7353fe3f272e862c5d4309b9b5f825c",
+  "behavior_commit": "b566ca7b",
+  "before": {
+    "passed": 48,
+    "failed": 2,
+    "cases": "New-device setup and backup recovery continued history effects after ready notification replaced auth generation."
+  },
+  "after_behavior": {
+    "passed": 50,
+    "failed": 0
+  },
+  "refactor": "Extract refreshEncryptedHistory into one private helper shared by existing keys, new-device setup and backup recovery. Recheck the owning session between channel invalidation, DM invalidation and selected-channel refetch.",
+  "after_extraction": {
+    "test_files": 2,
+    "passed": 54,
+    "failed": 0,
+    "typescript": "passed",
+    "changed_files_eslint": "passed"
+  },
+  "additional_case": "A session replacement triggered during channel invalidation must prevent DM invalidation and channel refetch.",
+  "scope": "Store action names and HTTP/WebSocket contracts unchanged. Current production CI is on the base source and does not yet contain this follow-up."
+}

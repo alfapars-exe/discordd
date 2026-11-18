@@ -184,7 +184,15 @@ func TestMusicYouTubeLiveKitSmoke(t *testing.T) {
 	lk := &mockConfigurableLiveKitGetter{GetByServerIDFn: func(context.Context, string) (*models.LiveKitInstance, error) {
 		return &models.LiveKitInstance{URL: lkURL, APIKey: apiKey, APISecret: secret}, nil
 	}}
-	svc := NewMusicBotService(&stubChannelGetter{channel: &models.Channel{ID: channelID, ServerID: serverID, Type: models.ChannelTypeVoice}}, lk, nil, &testutil.MockBroadcaster{}, stubMusicUserGetter{}, key, nil, nil, roomKeys)
+	svc := NewMusicBotService(&stubChannelGetter{channel: &models.Channel{ID: channelID, ServerID: serverID, Type: models.ChannelTypeVoice}},
+		lk,
+		nil,
+		&testutil.MockBroadcaster{},
+		stubMusicUserGetter{},
+		key,
+		nil,
+		MusicPersistenceDependencies{Sessions: nil, RequesterPrivacy: nil, LegacyEnqueue: nil, Control: nil},
+		roomKeys)
 	defer svc.Stop(channelID)
 	tracks, err := svc.Enqueue(ctx, "integration-user", channelID, videoURL)
 	if err != nil {

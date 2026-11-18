@@ -30,7 +30,7 @@ func (r *sqliteDMRepo) GetMessages(ctx context.Context, channelID string, before
 			       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.status, ru.custom_status, ru.created_at
 			FROM dm_messages m
 			LEFT JOIN users u ON m.user_id = u.id
-			LEFT JOIN dm_messages rm ON m.reply_to_id = rm.id
+			LEFT JOIN dm_messages rm ON m.reply_to_id = rm.id AND rm.dm_channel_id = m.dm_channel_id
 			LEFT JOIN users ru ON rm.user_id = ru.id
 			WHERE m.dm_channel_id = ?
 			ORDER BY m.source_sequence DESC
@@ -47,7 +47,7 @@ func (r *sqliteDMRepo) GetMessages(ctx context.Context, channelID string, before
 			       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.status, ru.custom_status, ru.created_at
 			FROM dm_messages m
 			LEFT JOIN users u ON m.user_id = u.id
-			LEFT JOIN dm_messages rm ON m.reply_to_id = rm.id
+			LEFT JOIN dm_messages rm ON m.reply_to_id = rm.id AND rm.dm_channel_id = m.dm_channel_id
 			LEFT JOIN users ru ON rm.user_id = ru.id
 			WHERE m.dm_channel_id = ?
 			  AND m.source_sequence < (SELECT source_sequence FROM dm_messages WHERE id = ? AND dm_channel_id = ?)
@@ -94,7 +94,7 @@ const dmMessageHistorySelect = `
 	       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.status, ru.custom_status, ru.created_at
 	FROM dm_messages m
 	LEFT JOIN users u ON m.user_id = u.id
-	LEFT JOIN dm_messages rm ON m.reply_to_id = rm.id
+	LEFT JOIN dm_messages rm ON m.reply_to_id = rm.id AND rm.dm_channel_id = m.dm_channel_id
 	LEFT JOIN users ru ON rm.user_id = ru.id`
 
 // dmAnchorExists — channel-scoped anchor check, see
@@ -205,7 +205,7 @@ func (r *sqliteDMRepo) GetMessageByID(ctx context.Context, id string) (*models.D
 		       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.status, ru.custom_status, ru.created_at
 		FROM dm_messages m
 		LEFT JOIN users u ON m.user_id = u.id
-		LEFT JOIN dm_messages rm ON m.reply_to_id = rm.id
+		LEFT JOIN dm_messages rm ON m.reply_to_id = rm.id AND rm.dm_channel_id = m.dm_channel_id
 		LEFT JOIN users ru ON rm.user_id = ru.id
 		WHERE m.id = ?`
 
@@ -460,7 +460,7 @@ func (r *sqliteDMRepo) SearchMessages(ctx context.Context, channelID string, sea
 		FROM dm_messages m
 		JOIN dm_messages_fts fts ON fts.rowid = m.rowid
 		LEFT JOIN users u ON m.user_id = u.id
-		LEFT JOIN dm_messages rm ON m.reply_to_id = rm.id
+		LEFT JOIN dm_messages rm ON m.reply_to_id = rm.id AND rm.dm_channel_id = m.dm_channel_id
 		LEFT JOIN users ru ON rm.user_id = ru.id
 		WHERE m.dm_channel_id = ? AND fts.content MATCH ?
 		ORDER BY fts.rank,m.source_sequence DESC

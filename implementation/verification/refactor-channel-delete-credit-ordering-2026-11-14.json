@@ -1,0 +1,39 @@
+{
+  "date": "2026-11-14",
+  "scope": "DeleteVoiceChannel accepted and post-admission-close cleanup; every detached session accounting attempt joins before music/media phase",
+  "negative_overlay": {
+    "exit": 1,
+    "three_failures": {
+      "admitted_eviction": 4,
+      "closed_eviction": 1,
+      "closed_music": 0
+    },
+    "expected_credits": 8,
+    "log_sha256": "60229f2908f7ae9a33d1375facd01f8caa8f9ff84cd23ed1cf51fe256135bf76"
+  },
+  "positive": {
+    "targeted_repetitions": 20,
+    "accounting_worker_limit": 4,
+    "producer_join_and_no_media_before_credit_phase": "pass",
+    "integration_full_services_seconds": 84.788,
+    "canonical_full_services_seconds": 84.509,
+    "vet": "pass both trees",
+    "lint": "0 issues both trees",
+    "runner_unit_tests": {
+      "integration": 15,
+      "canonical": 10
+    }
+  },
+  "new_native_requirement": "TestVoiceUsagePostgresChannelDeletionHandsOffAllBeforeMedia: 6 applied credits with equal positive seconds and aggregate=ledger before blocked media; mandatory PASS, selected native race regex includes test",
+  "unverified": [
+    "new PostgreSQL test only compiled/skipped locally; requires next CI",
+    "new behavior race not yet executed",
+    "physical provider/media eviction",
+    "database enqueue failure and pre-first-enqueue crash"
+  ],
+  "limitations": [
+    "accounting uses existing bounded per-credit contexts; database delay can defer media phase across bounded batches",
+    "successful media eviction is distinct from an attempt"
+  ],
+  "published_production_binary_source": "a9f00ad9 native SUCCESS is separate and does not include this behavior fix"
+}

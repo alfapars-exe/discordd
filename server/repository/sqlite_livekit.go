@@ -11,6 +11,6 @@ type sqliteLiveKitRepo struct {
 	db database.TxQuerier
 }
 
-func NewSQLiteLiveKitRepo(db database.TxQuerier) LiveKitRepository {
+func NewSQLiteLiveKitRepo(db database.TxQuerier) LiveKitStore {
 	return &sqliteLiveKitRepo{db: db}
 }

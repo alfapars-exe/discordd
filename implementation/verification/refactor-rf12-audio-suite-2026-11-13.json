@@ -1,0 +1,11 @@
+{
+  "sourceCommit": "84bd45978c2423bd8ba21fb740e0b2ed253bac96",
+  "command": "npm run test:audio",
+  "exitCode": 0,
+  "filesPassed": 31,
+  "testsPassed": 336,
+  "durationSeconds": 9.8,
+  "log": "TEMP/hichat-rf12-audio-suite.log",
+  "scope": "src/audio; mic test; initial room sync; P2P call audio/camera; voice settings audio; preferences",
+  "limits": "Mocked and SDK contract tests; no physical audio, screen capture, model inference or deployment acceptance"
+}

@@ -27,15 +27,15 @@ type Friendship struct {
 // FriendshipWithUser includes the other user's profile info.
 // The service layer resolves which side is "the other user".
 type FriendshipWithUser struct {
-	ID        string           `json:"id"`
-	Status    FriendshipStatus `json:"status"`
-	CreatedAt time.Time        `json:"created_at"`
-	UserID          string  `json:"user_id"`
-	Username        string  `json:"username"`
-	DisplayName     *string `json:"display_name"`
-	AvatarURL       *string `json:"avatar_url"`
-	UserStatus      string  `json:"user_status"`
-	UserCustomStatus *string `json:"user_custom_status"`
+	ID               string           `json:"id"`
+	Status           FriendshipStatus `json:"status"`
+	CreatedAt        time.Time        `json:"created_at"`
+	UserID           string           `json:"user_id"`
+	Username         string           `json:"username"`
+	DisplayName      *string          `json:"display_name"`
+	AvatarURL        *string          `json:"avatar_url"`
+	UserStatus       string           `json:"user_status"`
+	UserCustomStatus *string          `json:"user_custom_status"`
 }
 
 type SendFriendRequestRequest struct {

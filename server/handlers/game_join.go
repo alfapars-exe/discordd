@@ -13,7 +13,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
 )
 
 type GameJoinHandler struct {
@@ -24,8 +23,8 @@ type GameJoinHandler struct {
 	limiter   *ratelimit.LoginRateLimiter
 }
 
-func NewGameJoinHandler(service *services.GameJoinService, auth services.AuthService, users repository.UserRepository, lifecycle repository.AccountLifecycleRepository) *GameJoinHandler {
-	return &GameJoinHandler{service, auth, users, lifecycle, ratelimit.NewLoginRateLimiter(60, time.Minute)}
+func NewGameJoinHandler(service *services.GameJoinService, auth services.AuthService, users repository.UserRepository, lifecycle repository.AccountLifecycleRepository, limiter *ratelimit.LoginRateLimiter) *GameJoinHandler {
+	return &GameJoinHandler{service, auth, users, lifecycle, limiter}
 }
 func (h *GameJoinHandler) allow(w http.ResponseWriter, user string) bool {
 	if h.limiter == nil || !h.limiter.Allow(user) {

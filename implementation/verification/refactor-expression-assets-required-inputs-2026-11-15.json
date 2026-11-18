@@ -1,0 +1,34 @@
+{
+  "scope": "RF11 expression assets validation before filesystem side effects",
+  "integrations": [
+    "Repositories",
+    "Hub",
+    "Voice",
+    "Emoji"
+  ],
+  "repositories": [
+    "Soundboard",
+    "User",
+    "Sticker",
+    "Emoji",
+    "Server",
+    "Cosmetic"
+  ],
+  "regression": "19 invalid-provider cases failed before validation: 4 missing integrations, 3 typed-nil interfaces, 12 nil/typed-nil repositories.",
+  "assertions": [
+    "Every invalid case leaves its previously nonexistent upload directory absent",
+    "Valid composition retains Soundboard/Sticker/Clone/Cosmetic and creates upload directory"
+  ],
+  "checks": {
+    "root": "PASS expression matrix and ServiceInitialization/routes/callbacks/auth-cache/permission/real friendship-DM, 10.169s",
+    "services": "PASS soundboard/sticker/expression/cosmetic tests, 0.835s",
+    "build": "PASS go build ./...",
+    "vet": "PASS go vet .",
+    "reviewed_manifest": "PASS 50 exact records"
+  },
+  "limits": [
+    "Upload path/size configuration semantics unchanged. Presence validation is not full provider identity or device media proof.",
+    "Other domains, optional/lifecycle/race acceptance and RF01-RF30 completion remain open.",
+    "Remote 0eb3744f CI live without observed failures; local changes excluded."
+  ]
+}

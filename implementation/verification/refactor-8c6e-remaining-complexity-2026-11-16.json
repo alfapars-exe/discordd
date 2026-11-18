@@ -1,0 +1,22 @@
+{
+  "sourceCommit": "8c6e2e2cddf130f46a55f3393ae3f493a43bd3c6",
+  "sourceMatches": true,
+  "scope": "Remaining parent app-log test complexity; new local case extractions still require their own analysis",
+  "issues": [
+    {
+      "rule": "go:S3776",
+      "message": "Refactor this method to reduce its Cognitive Complexity from 16 to the 15 allowed.",
+      "line": 360
+    },
+    {
+      "rule": "go:S3776",
+      "message": "Refactor this method to reduce its Cognitive Complexity from 16 to the 15 allowed.",
+      "line": 315
+    },
+    {
+      "rule": "go:S3776",
+      "message": "Refactor this method to reduce its Cognitive Complexity from 20 to the 15 allowed.",
+      "line": 41
+    }
+  ]
+}

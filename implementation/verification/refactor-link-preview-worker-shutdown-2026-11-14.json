@@ -1,0 +1,27 @@
+{
+  "date": "2026-11-14",
+  "pr": 299,
+  "canonical_source": "4e3f03498fe2606b5f543954600077ccab5af9f7",
+  "base": "7484408ab8dcff16ac17d6d784ab86f5ec6c22ff",
+  "scope": "Link preview Stop cancels admission and snapshots registered flight completion channels under mutex, joins after unlocking; concurrent/idempotent stop preserves request behavior",
+  "negative_overlay": {
+    "exit": 1,
+    "failure": "Stop returned while canceled repository worker was still running",
+    "log_sha256": "8cc27dc07a2b0191b1187bedbbb08d8d17e59e79d9c21b5ce5cb23011ed5f87c"
+  },
+  "local_validation": {
+    "link_preview_repetitions": 20,
+    "canonical_full_services_seconds": 91.15,
+    "canonical_vet_and_build": "pass",
+    "canonical_lint": "0 issues",
+    "integration_targeted_repetitions": 20,
+    "integration_vet": "pass",
+    "integration_lint": "0 issues"
+  },
+  "unverified": [
+    "new-source Linux race and complete PR CI pending",
+    "final integrated full-source acceptance",
+    "real provider/runtime acceptance"
+  ],
+  "worktree_safety": "separate main-based worktree; primary dirty discordd tree preserved"
+}

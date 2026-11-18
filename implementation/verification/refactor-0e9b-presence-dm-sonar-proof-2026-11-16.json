@@ -1,0 +1,50 @@
+{
+  "comparedCommit": "0e9b0cfb",
+  "sourceProof": [
+    {
+      "path": "server/init_callbacks.go",
+      "from": 287,
+      "lines": 254,
+      "mismatches": 0
+    },
+    {
+      "path": "client/src/stores/dmStore.ts",
+      "from": 200,
+      "lines": 101,
+      "mismatches": 0
+    },
+    {
+      "path": "client/src/stores/shared/dmChannelSnapshot.ts",
+      "from": 1,
+      "lines": 44,
+      "mismatches": 0
+    }
+  ],
+  "closedIssues": [
+    {
+      "key": "AaHbvd7PL2JGjhmuQ-Dq",
+      "component": "alfapars-exe_discordd:server/init_callbacks.go",
+      "line": null,
+      "message": "Refactor this method to reduce its Cognitive Complexity from 16 to the 15 allowed.",
+      "status": "CLOSED",
+      "resolution": "FIXED"
+    },
+    {
+      "key": "AaHbvd7PL2JGjhmuQ-Dr",
+      "component": "alfapars-exe_discordd:server/init_callbacks.go",
+      "line": null,
+      "message": "Refactor this method to reduce its Cognitive Complexity from 27 to the 15 allowed.",
+      "status": "CLOSED",
+      "resolution": "FIXED"
+    },
+    {
+      "key": "AaHYWqJAd7dyvm3wYSnm",
+      "component": "alfapars-exe_discordd:client/src/stores/dmStore.ts",
+      "line": null,
+      "message": "Refactor this function to reduce its Cognitive Complexity from 32 to the 15 allowed.",
+      "status": "CLOSED",
+      "resolution": "FIXED"
+    }
+  ],
+  "limits": "Static closure only; final CI and full RF/runtime/physical acceptance remain separate. New sender-frame9552 source is not analyzed here."
+}

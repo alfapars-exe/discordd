@@ -1,0 +1,17 @@
+{
+  "dependency": "6.8.11",
+  "scope": "Actual installed BaseUpdater/NsisUpdater source in a VM; app, process spawning and all native effects are mocked. No installer or application quit occurred.",
+  "events": [
+    "spawn-requested",
+    "before-quit-for-update",
+    "quit-requested",
+    "deferred-install-error"
+  ],
+  "quit_requested_before_error": true,
+  "vendor_install_latch_after_error": true,
+  "source_hashes": {
+    "BaseUpdater.js": "9cff8b894ed709f6d9a5b938614fc377be89e1ea5bd1cc1f4cd6143048d918a3",
+    "NsisUpdater.js": "31f36b4ef5cadd35a93df91d9454aa70044e41c0e6b4c799783dca4302cd03b6"
+  },
+  "remaining": "A generic late error has no attempt identifier and may arrive after quit is requested. This receipt does not implement or verify async installer recovery."
+}

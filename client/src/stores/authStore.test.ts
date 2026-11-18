@@ -59,6 +59,8 @@ import { useAuthStore, isTransientAuthError } from "./authStore";
 import * as authApi from "../api/auth";
 import { clearTokens } from "../api/client";
 import { pingServer } from "../utils/serverProbe";
+import { logToServer } from "../api/clientLog";
+import { retirePreferenceScope } from "./preferenceScope";
 import { useSavedStore } from "./savedStore";
 import { useUserNoteStore } from "./userNoteStore";
 import { useVoiceStore } from "./voiceStore";
@@ -190,6 +192,41 @@ describe("initialize", () => {
 
     expect(mockedClearTokens).toHaveBeenCalledTimes(1);
     expect(useAuthStore.getState().isInitialized).toBe(true);
+  });
+
+  it("stops an offline restore when login succeeds during backoff", async () => {
+    getMe.mockResolvedValueOnce({ success: false, error: "Failed to fetch" });
+    mockedPing.mockResolvedValue(false);
+    const restore = useAuthStore.getState().initialize();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(useAuthStore.getState().initPhase).toBe("waking");
+    useAuthStore.getState().applyLoginResponse({
+      success: true,
+      data: { user: fakeUser, access_token: "access", refresh_token: "refresh" },
+    });
+    await vi.runAllTimersAsync();
+    await restore;
+    expect(mockedPing).not.toHaveBeenCalled();
+    expect(useAuthStore.getState()).toMatchObject({ user: fakeUser, isInitialized: true, initPhase: "idle" });
+  });
+
+  it.each([false, true])("ignores a probe returning %s after a new login", async (reachable) => {
+    getMe.mockResolvedValueOnce({ success: false, error: "Failed to fetch" });
+    let finishProbe!: (reachable: boolean) => void;
+    mockedPing.mockImplementationOnce(() => new Promise<boolean>((resolve) => { finishProbe = resolve; }));
+    const restore = useAuthStore.getState().initialize();
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(mockedPing).toHaveBeenCalledOnce();
+    useAuthStore.getState().applyLoginResponse({
+      success: true,
+      data: { user: fakeUser, access_token: "access", refresh_token: "refresh" },
+    });
+    finishProbe(reachable);
+    await vi.runAllTimersAsync();
+    await restore;
+    expect(getMe).toHaveBeenCalledOnce();
+    expect(mockedPing).toHaveBeenCalledOnce();
+    expect(useAuthStore.getState()).toMatchObject({ user: fakeUser, isInitialized: true, initPhase: "idle" });
   });
 
   it("exhausts the wake budget without destroying tokens", async () => {
@@ -337,4 +374,22 @@ describe("startup restore concurrency", () => {
     finish({ success: true, data: fakeUser }); await pending;
     expect(useAuthStore.getState().user?.id).toBe("account-b");
   });
+});
+
+describe("owned detached preference hydration",()=>{
+ it.each((["login","registration","restore"] as const).flatMap(source=>[false,true].map(retired=>({source,retired}))))("observes $source hydration failure (retired=$retired)",async({source,retired})=>{
+  const prefs=usePreferencesStore.getState();let reject!:(error:Error)=>void;
+  vi.mocked(prefs.fetchAndApply).mockReturnValueOnce(new Promise((_resolve,fail)=>{reject=fail;}));
+  const response={success:true,data:{user:fakeUser,access_token:"access",refresh_token:"refresh"}};
+  try{
+   if(source==="login"){vi.mocked(authApi.login).mockResolvedValueOnce(response);expect(await useAuthStore.getState().login("alice","password")).toBe(true);}
+   else if(source==="registration"){vi.mocked(authApi.register).mockResolvedValueOnce(response);expect(await useAuthStore.getState().register("alice","password","Alice")).toBe(true);}
+   else{getMe.mockResolvedValueOnce({success:true,data:fakeUser});await useAuthStore.getState().initialize();}
+   if(retired)retirePreferenceScope();
+   reject(new Error("private preference failure"));await Promise.resolve();await Promise.resolve();
+   expect(useAuthStore.getState().user?.id).toBe("u1");
+   const reports=vi.mocked(logToServer).mock.calls.filter(call=>call[1]==="preferences_background_failed");
+   expect(reports).toEqual(retired?[]:[["error","preferences_background_failed",{source}]]);
+  }finally{vi.mocked(prefs.fetchAndApply).mockReset();}
+ });
 });

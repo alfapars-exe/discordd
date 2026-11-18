@@ -20,6 +20,23 @@ afterEach(async () => {
 });
 
 describe("keyStorage account/backend scope", () => {
+  it.each([
+    ["https://scope-test.example/", "https://scope-test.example"],
+    ["https://scope-test.example/api/v1////", "https://scope-test.example/api/v1"],
+    ["HTTPS://SCOPE-TEST.EXAMPLE:443/api//v1///", "https://scope-test.example/api//v1"],
+    ["https://scope-test.example/" + "/".repeat(1900), "https://scope-test.example"],
+  ])("preserves the account database name for equivalent backend URLs: %s", async (input, canonical) => {
+    expect(await keyStorage.getAccountDatabaseName("account-a", input))
+      .toBe(await keyStorage.getAccountDatabaseName("account-a", canonical));
+  });
+
+  it("keeps internal path separators and backend length bounds significant", async () => {
+    expect(await keyStorage.getAccountDatabaseName("account-a", "https://scope-test.example/api//v1"))
+      .not.toBe(await keyStorage.getAccountDatabaseName("account-a", "https://scope-test.example/api/v1"));
+    await expect(keyStorage.getAccountDatabaseName("account-a", "https://scope-test.example/" + "/".repeat(2048)))
+      .rejects.toThrow("e2ee_backend_scope_unavailable");
+  });
+
   it("derives distinct deterministic names for owner and backend, outside the legacy namespace", async () => {
     const a = await keyStorage.getAccountDatabaseName("account-a", backend);
     expect(a).toMatch(/^mqvi_e2ee\.account\.v1\.[0-9a-f]{64}$/);

@@ -26,17 +26,9 @@ type preferencesService struct {
 
 type GameActivityPolicyInvalidator interface{ PolicyChanged(context.Context, string) }
 
-func (s *preferencesService) SetGameActivitySync(policy GameActivityPolicyInvalidator, hub ws.Broadcaster) {
-	s.gameActivity, s.hub = policy, hub
-}
-
-func (s *preferencesService) SetProfileAudienceInvalidator(invalidator ProfileAudienceInvalidator) {
-	s.profileAudienceInvalidator = invalidator
-}
-
 // NewPreferencesService creates a new PreferencesService.
-func NewPreferencesService(repo repository.PreferencesRepository) PreferencesService {
-	return &preferencesService{repo: repo}
+func NewPreferencesService(repo repository.PreferencesRepository, invalidator ProfileAudienceInvalidator, activity GameActivityPolicyInvalidator, hub ws.Broadcaster) PreferencesService {
+	return &preferencesService{repo: repo, profileAudienceInvalidator: invalidator, gameActivity: activity, hub: hub}
 }
 
 func (s *preferencesService) Get(ctx context.Context, userID string) (*models.UserPreferences, error) {

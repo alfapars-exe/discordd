@@ -1,0 +1,468 @@
+{
+  "source": "c458dddc7314628b7e7a487fde06f7ca860b39e0",
+  "scope": "Literal ipcMain/ipc handle/on registrations in top-level non-test electron TypeScript sources. Discovery inventory only; it does not prove sender authorization or cover dynamically named registrations.",
+  "registrations": [
+    {
+      "file": "electron/app-settings-ipc.ts",
+      "line": 21,
+      "registration": "handle",
+      "channel": "get-app-settings"
+    },
+    {
+      "file": "electron/app-settings-ipc.ts",
+      "line": 27,
+      "registration": "handle",
+      "channel": "set-app-setting"
+    },
+    {
+      "file": "electron/credential-ipc.ts",
+      "line": 20,
+      "registration": "handle",
+      "channel": "save-credentials"
+    },
+    {
+      "file": "electron/credential-ipc.ts",
+      "line": 28,
+      "registration": "handle",
+      "channel": "load-credentials"
+    },
+    {
+      "file": "electron/credential-ipc.ts",
+      "line": 32,
+      "registration": "handle",
+      "channel": "login-with-saved-credentials"
+    },
+    {
+      "file": "electron/credential-ipc.ts",
+      "line": 36,
+      "registration": "handle",
+      "channel": "clear-credentials"
+    },
+    {
+      "file": "electron/cs2-join-ipc.ts",
+      "line": 30,
+      "registration": "handle",
+      "channel": "sync-game-join-context"
+    },
+    {
+      "file": "electron/cs2-join-ipc.ts",
+      "line": 35,
+      "registration": "handle",
+      "channel": "launch-cs2-game-join"
+    },
+    {
+      "file": "electron/diagnostic-ipc.ts",
+      "line": 29,
+      "registration": "handle",
+      "channel": "consume-last-crash"
+    },
+    {
+      "file": "electron/diagnostic-ipc.ts",
+      "line": 30,
+      "registration": "on",
+      "channel": "diagnostic-log"
+    },
+    {
+      "file": "electron/diagnostic-ipc.ts",
+      "line": 40,
+      "registration": "handle",
+      "channel": "build-diagnostic-upload"
+    },
+    {
+      "file": "electron/diagnostic-ipc.ts",
+      "line": 44,
+      "registration": "handle",
+      "channel": "export-diagnostics"
+    },
+    {
+      "file": "electron/diagnostic-ipc.ts",
+      "line": 61,
+      "registration": "handle",
+      "channel": "open-logs-dir"
+    },
+    {
+      "file": "electron/diagnostic-ipc.ts",
+      "line": 62,
+      "registration": "handle",
+      "channel": "get-diagnostic-verbose"
+    },
+    {
+      "file": "electron/diagnostic-ipc.ts",
+      "line": 63,
+      "registration": "handle",
+      "channel": "set-diagnostic-verbose"
+    },
+    {
+      "file": "electron/diagnostic-ipc.ts",
+      "line": 68,
+      "registration": "handle",
+      "channel": "capture-performance-trace"
+    },
+    {
+      "file": "electron/diagnostic-ipc.ts",
+      "line": 69,
+      "registration": "handle",
+      "channel": "cancel-performance-trace"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 84,
+      "registration": "handle",
+      "channel": "reset-overlay-layout"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 94,
+      "registration": "handle",
+      "channel": "set-overlay-shortcut"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 103,
+      "registration": "handle",
+      "channel": "open-overlay-media-lease"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 104,
+      "registration": "handle",
+      "channel": "send-overlay-media"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 105,
+      "registration": "handle",
+      "channel": "send-overlay-media-viewport"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 106,
+      "registration": "handle",
+      "channel": "set-overlay-media-receiver-ready"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 107,
+      "registration": "handle",
+      "channel": "get-overlay-media-availability"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 147,
+      "registration": "handle",
+      "channel": "get-registered-games"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 151,
+      "registration": "handle",
+      "channel": "get-registered-game-activity"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 155,
+      "registration": "handle",
+      "channel": "set-registered-games-background-detection"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 160,
+      "registration": "handle",
+      "channel": "add-registered-game"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 171,
+      "registration": "handle",
+      "channel": "remove-registered-game"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 179,
+      "registration": "handle",
+      "channel": "set-registered-game-join-adapter"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 185,
+      "registration": "handle",
+      "channel": "set-registered-game-sharing"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 197,
+      "registration": "on",
+      "channel": "voice-overlay-snapshot"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 198,
+      "registration": "handle",
+      "channel": "voice-overlay-snapshot"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 206,
+      "registration": "handle",
+      "channel": "set-registered-game-overlay"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 213,
+      "registration": "handle",
+      "channel": "get-version"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 214,
+      "registration": "handle",
+      "channel": "relaunch"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 239,
+      "registration": "handle",
+      "channel": "get-desktop-sources"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 256,
+      "registration": "handle",
+      "channel": "get-display-info"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 273,
+      "registration": "handle",
+      "channel": "start-system-capture"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 274,
+      "registration": "handle",
+      "channel": "stop-system-capture"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 275,
+      "registration": "handle",
+      "channel": "get-system-capture-status"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 276,
+      "registration": "handle",
+      "channel": "start-system-capture-diagnostic"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 277,
+      "registration": "handle",
+      "channel": "stop-system-capture-diagnostic"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 285,
+      "registration": "handle",
+      "channel": "set-badge-count"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 312,
+      "registration": "handle",
+      "channel": "flash-frame"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 318,
+      "registration": "handle",
+      "channel": "minimize-window"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 319,
+      "registration": "handle",
+      "channel": "maximize-window"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 325,
+      "registration": "handle",
+      "channel": "close-window"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 328,
+      "registration": "handle",
+      "channel": "write-clipboard"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 351,
+      "registration": "handle",
+      "channel": "register-ptt-shortcut"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 359,
+      "registration": "handle",
+      "channel": "unregister-ptt-shortcut"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 362,
+      "registration": "handle",
+      "channel": "register-mute-hotkey-shortcut"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 367,
+      "registration": "handle",
+      "channel": "unregister-mute-hotkey-shortcut"
+    },
+    {
+      "file": "electron/overlay-action-ipc.ts",
+      "line": 10,
+      "registration": "handle",
+      "channel": "overlay-voice-action"
+    },
+    {
+      "file": "electron/overlay-action-ipc.ts",
+      "line": 17,
+      "registration": "handle",
+      "channel": "overlay-open-inbox"
+    },
+    {
+      "file": "electron/overlay-action-ipc.ts",
+      "line": 24,
+      "registration": "handle",
+      "channel": "confirm-overlay-open-inbox"
+    },
+    {
+      "file": "electron/overlay-action-ipc.ts",
+      "line": 27,
+      "registration": "handle",
+      "channel": "overlay-prepare-notification-reply"
+    },
+    {
+      "file": "electron/overlay-action-ipc.ts",
+      "line": 32,
+      "registration": "handle",
+      "channel": "confirm-overlay-prepare-notification-reply"
+    },
+    {
+      "file": "electron/overlay-action-ipc.ts",
+      "line": 33,
+      "registration": "handle",
+      "channel": "overlay-open-chat"
+    },
+    {
+      "file": "electron/overlay-action-ipc.ts",
+      "line": 40,
+      "registration": "handle",
+      "channel": "confirm-overlay-open-chat"
+    },
+    {
+      "file": "electron/overlay-action-ipc.ts",
+      "line": 43,
+      "registration": "handle",
+      "channel": "overlay-open-chat-composer"
+    },
+    {
+      "file": "electron/overlay-action-ipc.ts",
+      "line": 46,
+      "registration": "handle",
+      "channel": "overlay-chat-send"
+    },
+    {
+      "file": "electron/overlay-action-ipc.ts",
+      "line": 47,
+      "registration": "handle",
+      "channel": "close-overlay-chat-composer"
+    },
+    {
+      "file": "electron/overlay-action-ipc.ts",
+      "line": 48,
+      "registration": "handle",
+      "channel": "resolve-overlay-chat-send"
+    },
+    {
+      "file": "electron/overlay-game-notice-ipc.ts",
+      "line": 3,
+      "registration": "handle",
+      "channel": "clear-overlay-game-notices"
+    },
+    {
+      "file": "electron/ptt-ipc.ts",
+      "line": 6,
+      "registration": "handle",
+      "channel": "acquire-ptt-lease"
+    },
+    {
+      "file": "electron/ptt-ipc.ts",
+      "line": 16,
+      "registration": "handle",
+      "channel": "release-ptt-lease"
+    },
+    {
+      "file": "electron/registered-game-name-ipc.ts",
+      "line": 6,
+      "registration": "handle",
+      "channel": "set-registered-game-name"
+    },
+    {
+      "file": "electron/screen-picker.ts",
+      "line": 237,
+      "registration": "on",
+      "channel": "screen-picker-result"
+    },
+    {
+      "file": "electron/screen-picker.ts",
+      "line": 238,
+      "registration": "on",
+      "channel": "screen-picker-refresh"
+    },
+    {
+      "file": "electron/system-audio-ipc.ts",
+      "line": 6,
+      "registration": "handle",
+      "channel": "reserve-system-capture-lease"
+    },
+    {
+      "file": "electron/system-audio-ipc.ts",
+      "line": 12,
+      "registration": "handle",
+      "channel": "start-system-capture-lease"
+    },
+    {
+      "file": "electron/system-audio-ipc.ts",
+      "line": 13,
+      "registration": "handle",
+      "channel": "release-system-capture-lease"
+    },
+    {
+      "file": "electron/updater-ipc.ts",
+      "line": 11,
+      "registration": "handle",
+      "channel": "was-update-checked"
+    },
+    {
+      "file": "electron/updater-ipc.ts",
+      "line": 12,
+      "registration": "handle",
+      "channel": "check-update"
+    },
+    {
+      "file": "electron/updater-ipc.ts",
+      "line": 20,
+      "registration": "handle",
+      "channel": "download-update"
+    },
+    {
+      "file": "electron/updater-ipc.ts",
+      "line": 28,
+      "registration": "handle",
+      "channel": "install-update"
+    }
+  ]
+}

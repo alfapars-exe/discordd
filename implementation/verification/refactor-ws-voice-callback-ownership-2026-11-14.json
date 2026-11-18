@@ -1,0 +1,43 @@
+{
+  "source_head": "ed53302ae2c5a58cf3596927979a5d48f4b21c10",
+  "pr": "https://github.com/alfapars-exe/discordd/pull/302",
+  "before": {
+    "join_and_late_admission": "both failed on original source",
+    "same_actor_order": "old-source overlay failed: leave overtook earlier activity"
+  },
+  "after": {
+    "lifecycle_order_repetitions": 30,
+    "full_ws_repetitions": 3,
+    "full_ws_seconds": 11.342,
+    "canonical_vet_build": "passed",
+    "canonical_windows_linux_lint": "passed",
+    "integrated_voice_snapshot_registration_repetitions": 20,
+    "integrated_seconds": 5.824,
+    "integrated_vet_build_lint": "passed"
+  },
+  "ci": "pending_current_ed53302a",
+  "remaining": [
+    "Linux race/full CI for follow-up source",
+    "final combined-source CI",
+    "physical voice/LiveKit"
+  ],
+  "local_followup_head": "ed53302ae2c5a58cf3596927979a5d48f4b21c10",
+  "p2p_typing_followup": {
+    "before": "P2P end, channel typing and DM typing all failed owner shutdown join",
+    "change": "one dispatchOwnedCallback shared by voice, P2P and typing handlers",
+    "canonical_regressions_repetitions": 30,
+    "canonical_full_ws_repetitions": 3,
+    "canonical_full_ws_seconds": 11.816,
+    "canonical_vet_build_windows_linux_lint": "passed before constructor-only fixture correction",
+    "fixture_correction": "construct Hub via NewHub and join on cleanup; retain authenticated-actor and validated-DTO assertions",
+    "integrated_targeted_repetitions": 20,
+    "integrated_targeted_seconds": 5.687,
+    "integrated_full_ws_repetitions": 3,
+    "integrated_full_ws_seconds": 16.148,
+    "integrated_lint": "passed",
+    "compatibility": "preserved integrated call_id callback signature and additional wire test",
+    "publication": "pushed after previous source completed36/36 checks",
+    "canonical_vet_build_current": "passed"
+  },
+  "previous_source_head": "882bd6c395e0adcefb9d509b73eb5757392ab66f"
+}

@@ -3,14 +3,11 @@ package middleware
 import (
 	"context"
 	"net/http"
-	"strings"
-	"sync"
 	"time"
 
 	"github.com/argeinfina/hichat/handlers"
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
-	"github.com/argeinfina/hichat/pkg/cache"
 	"github.com/argeinfina/hichat/repository"
 )
 
@@ -43,73 +40,21 @@ const permCacheTTL = 5 * time.Second
 type PermissionMiddleware struct {
 	roleRepo repository.RoleRepository
 
-	// permCache memoizes the (userID, serverID) -> effective Permission
-	// computation that previously hit the DB on every request.
-	permCache *cache.TTLCache[string, models.Permission]
-	// Serializes revision checks/cache publication with invalidation, never DB IO.
-	cacheMu       sync.Mutex
-	cacheRevision uint64
+	*PermissionCache
 }
 
-func NewPermissionMiddleware(roleRepo repository.RoleRepository) *PermissionMiddleware {
+func NewPermissionMiddleware(roleRepo repository.RoleRepository, owner *PermissionCache) *PermissionMiddleware {
+	if owner == nil {
+		owner = NewPermissionCache()
+	}
 	return &PermissionMiddleware{
-		roleRepo:  roleRepo,
-		permCache: cache.New[string, models.Permission](permCacheTTL, time.Minute),
+		roleRepo:        roleRepo,
+		PermissionCache: owner,
 	}
 }
 
 func permCacheKey(userID, serverID string) string {
 	return userID + ":" + serverID
-}
-
-// InvalidateUserPermissions drops every cached entry for this user across
-// all servers. Wired via InvalidateUser (below) into the
-// services.PermissionInvalidator composite that member-write paths
-// (kick/ban/role-reassign) call, so the next request sees fresh
-// permissions instead of waiting up to permCacheTTL for the entry to
-// expire.
-func (m *PermissionMiddleware) InvalidateUserPermissions(userID string) {
-	m.cacheMu.Lock()
-	defer m.cacheMu.Unlock()
-	m.cacheRevision++
-	prefix := userID + ":"
-	m.permCache.DeleteFunc(func(key string) bool {
-		return strings.HasPrefix(key, prefix)
-	})
-}
-
-// InvalidateServerPermissions drops every cached entry for every member of
-// a server. Currently unused by any wired call site (role-permission-mask
-// edits use InvalidateAll instead, since a role's server isn't known from
-// the composite's ISP-narrowed interface) — kept for symmetry with
-// channelPermService and as the natural target if a server-scoped
-// invalidation path is added later.
-func (m *PermissionMiddleware) InvalidateServerPermissions(serverID string) {
-	m.cacheMu.Lock()
-	defer m.cacheMu.Unlock()
-	m.cacheRevision++
-	suffix := ":" + serverID
-	m.permCache.DeleteFunc(func(key string) bool {
-		return strings.HasSuffix(key, suffix)
-	})
-}
-
-// InvalidateUser satisfies services.PermissionInvalidator so this
-// middleware can be wired as a fan-out target alongside
-// channelPermService. Delegates to InvalidateUserPermissions.
-func (m *PermissionMiddleware) InvalidateUser(userID string) {
-	m.InvalidateUserPermissions(userID)
-}
-
-// InvalidateAll drops the entire cache. Used when a role's permission mask
-// changes — that affects every member holding the role, and this cache
-// only keys on (userID, serverID), not role, so a full wipe is the correct
-// (and only practical) response. Mirrors channelPermService.InvalidateAll.
-func (m *PermissionMiddleware) InvalidateAll() {
-	m.cacheMu.Lock()
-	defer m.cacheMu.Unlock()
-	m.cacheRevision++
-	m.permCache.Clear()
 }
 
 // resolveEffectivePerms returns the cached permission mask, falling back to
@@ -207,3 +152,6 @@ func (m *PermissionMiddleware) Require(perm models.Permission, next http.Handler
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
+
+// Stop retires the middleware cache worker while preserving draining access.
+func (m *PermissionMiddleware) Stop() { m.Close() }

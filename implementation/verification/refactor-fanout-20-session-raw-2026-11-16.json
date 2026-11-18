@@ -1,0 +1,4276 @@
+{
+  "sourceCommit": "88892ed159c41726c3092955c9b0cd23cbbb547d",
+  "loadCommit": "a03ea5d469bce03527a0518e15e5bc22dd785f41",
+  "profile": {
+    "vus": 20,
+    "users": 20,
+    "rampUp": "10s",
+    "hold": "60s",
+    "rampDown": "10s",
+    "holdSeconds": 75,
+    "legacyToken": false
+  },
+  "samples": [
+    {
+      "at": "2026-11-16T01:45:06.586Z",
+      "phase": "baseline",
+      "goroutines": 51,
+      "pumps": {
+        "read": 0,
+        "write": 0
+      },
+      "memory": {
+        "HeapAlloc": 7948352,
+        "HeapInuse": 10592256,
+        "NumGC": 6,
+        "StackInuse": 3080192,
+        "StackSys": 3080192
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 5,
+        "WorkingSet64": 41775104,
+        "PrivateMemorySize64": 69087232
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:45:08.482Z",
+      "phase": "baseline",
+      "goroutines": 51,
+      "pumps": {
+        "read": 0,
+        "write": 0
+      },
+      "memory": {
+        "HeapAlloc": 8204064,
+        "HeapInuse": 10756096,
+        "NumGC": 6,
+        "StackInuse": 3080192,
+        "StackSys": 3080192
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 5,
+        "WorkingSet64": 41967616,
+        "PrivateMemorySize64": 69234688
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:45:10.375Z",
+      "phase": "baseline",
+      "goroutines": 51,
+      "pumps": {
+        "read": 0,
+        "write": 0
+      },
+      "memory": {
+        "HeapAlloc": 8446176,
+        "HeapInuse": 10944512,
+        "NumGC": 6,
+        "StackInuse": 3080192,
+        "StackSys": 3080192
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 5.0625,
+        "WorkingSet64": 42135552,
+        "PrivateMemorySize64": 69652480
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:45:12.550Z",
+      "phase": "load",
+      "goroutines": 51,
+      "pumps": {
+        "read": 0,
+        "write": 0
+      },
+      "memory": {
+        "HeapAlloc": 8706696,
+        "HeapInuse": 11157504,
+        "NumGC": 6,
+        "StackInuse": 3080192,
+        "StackSys": 3080192
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 5.125,
+        "WorkingSet64": 42344448,
+        "PrivateMemorySize64": 69824512
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:45:15.034Z",
+      "phase": "load",
+      "goroutines": 64,
+      "pumps": {
+        "read": 4,
+        "write": 4
+      },
+      "memory": {
+        "HeapAlloc": 5568000,
+        "HeapInuse": 9445376,
+        "NumGC": 7,
+        "StackInuse": 3080192,
+        "StackSys": 3080192
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 6.078125,
+        "WorkingSet64": 43089920,
+        "PrivateMemorySize64": 70336512
+      },
+      "database": {
+        "connections": 3,
+        "active": 2,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:45:17.455Z",
+      "phase": "load",
+      "goroutines": 79,
+      "pumps": {
+        "read": 9,
+        "write": 9
+      },
+      "memory": {
+        "HeapAlloc": 6623960,
+        "HeapInuse": 10018816,
+        "NumGC": 7,
+        "StackInuse": 3244032,
+        "StackSys": 3244032
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 7.046875,
+        "WorkingSet64": 43331584,
+        "PrivateMemorySize64": 70508544
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:45:19.778Z",
+      "phase": "load",
+      "goroutines": 94,
+      "pumps": {
+        "read": 14,
+        "write": 14
+      },
+      "memory": {
+        "HeapAlloc": 7901000,
+        "HeapInuse": 10854400,
+        "NumGC": 7,
+        "StackInuse": 3473408,
+        "StackSys": 3473408
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 8,
+        "WorkingSet64": 43696128,
+        "PrivateMemorySize64": 70905856
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:45:22.131Z",
+      "phase": "load",
+      "goroutines": 108,
+      "pumps": {
+        "read": 18,
+        "write": 18
+      },
+      "memory": {
+        "HeapAlloc": 6003808,
+        "HeapInuse": 10264576,
+        "NumGC": 8,
+        "StackInuse": 3309568,
+        "StackSys": 3309568
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 8.828125,
+        "WorkingSet64": 44273664,
+        "PrivateMemorySize64": 71389184
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:45:24.535Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 6635152,
+        "HeapInuse": 10526720,
+        "NumGC": 8,
+        "StackInuse": 3342336,
+        "StackSys": 3342336
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 8.96875,
+        "WorkingSet64": 44281856,
+        "PrivateMemorySize64": 71389184
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:45:26.853Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 7001944,
+        "HeapInuse": 10526720,
+        "NumGC": 8,
+        "StackInuse": 3342336,
+        "StackSys": 3342336
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 9.015625,
+        "WorkingSet64": 44281856,
+        "PrivateMemorySize64": 71389184
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:45:29.269Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 7357568,
+        "HeapInuse": 10665984,
+        "NumGC": 8,
+        "StackInuse": 3342336,
+        "StackSys": 3342336
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 9.03125,
+        "WorkingSet64": 44281856,
+        "PrivateMemorySize64": 71389184
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:45:31.736Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 7708696,
+        "HeapInuse": 10854400,
+        "NumGC": 8,
+        "StackInuse": 3342336,
+        "StackSys": 3342336
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 9.078125,
+        "WorkingSet64": 44314624,
+        "PrivateMemorySize64": 71389184
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:45:34.164Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 8671816,
+        "HeapInuse": 11542528,
+        "NumGC": 8,
+        "StackInuse": 3440640,
+        "StackSys": 3440640
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 9.1875,
+        "WorkingSet64": 44670976,
+        "PrivateMemorySize64": 71593984
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:45:36.643Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 7072992,
+        "HeapInuse": 11771904,
+        "NumGC": 9,
+        "StackInuse": 3604480,
+        "StackSys": 3604480
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 9.28125,
+        "WorkingSet64": 46067712,
+        "PrivateMemorySize64": 73265152
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:45:39.128Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 6714016,
+        "HeapInuse": 11534336,
+        "NumGC": 10,
+        "StackInuse": 3833856,
+        "StackSys": 3833856
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 9.359375,
+        "WorkingSet64": 47374336,
+        "PrivateMemorySize64": 74575872
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:45:41.802Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 6996368,
+        "HeapInuse": 11632640,
+        "NumGC": 11,
+        "StackInuse": 4194304,
+        "StackSys": 4194304
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 9.609375,
+        "WorkingSet64": 48422912,
+        "PrivateMemorySize64": 75214848
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:45:44.440Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 6821016,
+        "HeapInuse": 11550720,
+        "NumGC": 12,
+        "StackInuse": 4292608,
+        "StackSys": 4292608
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 9.734375,
+        "WorkingSet64": 48730112,
+        "PrivateMemorySize64": 75395072
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:45:46.922Z",
+      "phase": "load",
+      "goroutines": 112,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 6402544,
+        "HeapInuse": 11337728,
+        "NumGC": 13,
+        "StackInuse": 4325376,
+        "StackSys": 4325376
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 9.84375,
+        "WorkingSet64": 49287168,
+        "PrivateMemorySize64": 75829248
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:45:49.384Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 9401032,
+        "HeapInuse": 13074432,
+        "NumGC": 13,
+        "StackInuse": 4653056,
+        "StackSys": 4653056
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 10.109375,
+        "WorkingSet64": 49385472,
+        "PrivateMemorySize64": 75829248
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:45:51.730Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 10298240,
+        "HeapInuse": 13647872,
+        "NumGC": 13,
+        "StackInuse": 4685824,
+        "StackSys": 4685824
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 10.140625,
+        "WorkingSet64": 49487872,
+        "PrivateMemorySize64": 75894784
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:45:54.377Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 10756136,
+        "HeapInuse": 13828096,
+        "NumGC": 13,
+        "StackInuse": 4718592,
+        "StackSys": 4718592
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 10.203125,
+        "WorkingSet64": 49577984,
+        "PrivateMemorySize64": 75968512
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:45:56.788Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 11198872,
+        "HeapInuse": 14090240,
+        "NumGC": 13,
+        "StackInuse": 4718592,
+        "StackSys": 4718592
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 10.265625,
+        "WorkingSet64": 49631232,
+        "PrivateMemorySize64": 75993088
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:45:59.186Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 6195968,
+        "HeapInuse": 11583488,
+        "NumGC": 14,
+        "StackInuse": 4521984,
+        "StackSys": 4521984
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 10.34375,
+        "WorkingSet64": 50143232,
+        "PrivateMemorySize64": 76570624
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:46:01.676Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 6639200,
+        "HeapInuse": 11673600,
+        "NumGC": 14,
+        "StackInuse": 4587520,
+        "StackSys": 4587520
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 10.375,
+        "WorkingSet64": 50180096,
+        "PrivateMemorySize64": 76619776
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:46:04.110Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 7276432,
+        "HeapInuse": 11771904,
+        "NumGC": 14,
+        "StackInuse": 4620288,
+        "StackSys": 4620288
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 10.453125,
+        "WorkingSet64": 50262016,
+        "PrivateMemorySize64": 76726272
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:46:06.440Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 7721128,
+        "HeapInuse": 11870208,
+        "NumGC": 14,
+        "StackInuse": 4620288,
+        "StackSys": 4620288
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 10.515625,
+        "WorkingSet64": 50274304,
+        "PrivateMemorySize64": 76734464
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:46:08.995Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 8155408,
+        "HeapInuse": 11960320,
+        "NumGC": 14,
+        "StackInuse": 4620288,
+        "StackSys": 4620288
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 10.5625,
+        "WorkingSet64": 50335744,
+        "PrivateMemorySize64": 76759040
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:46:11.653Z",
+      "phase": "load",
+      "goroutines": 112,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 8604288,
+        "HeapInuse": 12214272,
+        "NumGC": 14,
+        "StackInuse": 4620288,
+        "StackSys": 4620288
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 10.609375,
+        "WorkingSet64": 50368512,
+        "PrivateMemorySize64": 76775424
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:46:14.160Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 9087624,
+        "HeapInuse": 12525568,
+        "NumGC": 14,
+        "StackInuse": 4620288,
+        "StackSys": 4620288
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 10.65625,
+        "WorkingSet64": 50417664,
+        "PrivateMemorySize64": 76816384
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:46:16.697Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 9566352,
+        "HeapInuse": 12877824,
+        "NumGC": 14,
+        "StackInuse": 4620288,
+        "StackSys": 4620288
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 10.6875,
+        "WorkingSet64": 50487296,
+        "PrivateMemorySize64": 76881920
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:46:19.214Z",
+      "phase": "load",
+      "goroutines": 112,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 10246688,
+        "HeapInuse": 13426688,
+        "NumGC": 14,
+        "StackInuse": 4620288,
+        "StackSys": 4620288
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 10.734375,
+        "WorkingSet64": 50577408,
+        "PrivateMemorySize64": 76963840
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:46:21.918Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 10719240,
+        "HeapInuse": 13729792,
+        "NumGC": 14,
+        "StackInuse": 4685824,
+        "StackSys": 4685824
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 10.75,
+        "WorkingSet64": 50585600,
+        "PrivateMemorySize64": 76963840
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:46:24.803Z",
+      "phase": "load",
+      "goroutines": 112,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 11197504,
+        "HeapInuse": 14131200,
+        "NumGC": 14,
+        "StackInuse": 4685824,
+        "StackSys": 4685824
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 10.75,
+        "WorkingSet64": 50597888,
+        "PrivateMemorySize64": 76963840
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:46:27.618Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 11666568,
+        "HeapInuse": 14409728,
+        "NumGC": 14,
+        "StackInuse": 4685824,
+        "StackSys": 4685824
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 10.796875,
+        "WorkingSet64": 50622464,
+        "PrivateMemorySize64": 76963840
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:46:30.275Z",
+      "phase": "load",
+      "goroutines": 105,
+      "pumps": {
+        "read": 16,
+        "write": 16
+      },
+      "memory": {
+        "HeapAlloc": 6368392,
+        "HeapInuse": 10977280,
+        "NumGC": 15,
+        "StackInuse": 4390912,
+        "StackSys": 4390912
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 10.828125,
+        "WorkingSet64": 49164288,
+        "PrivateMemorySize64": 75325440
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:46:32.996Z",
+      "phase": "load",
+      "goroutines": 95,
+      "pumps": {
+        "read": 11,
+        "write": 11
+      },
+      "memory": {
+        "HeapAlloc": 7258824,
+        "HeapInuse": 11239424,
+        "NumGC": 15,
+        "StackInuse": 4325376,
+        "StackSys": 4325376
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 10.859375,
+        "WorkingSet64": 49192960,
+        "PrivateMemorySize64": 75325440
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:46:35.817Z",
+      "phase": "load",
+      "goroutines": 83,
+      "pumps": {
+        "read": 5,
+        "write": 5
+      },
+      "memory": {
+        "HeapAlloc": 8358968,
+        "HeapInuse": 12075008,
+        "NumGC": 15,
+        "StackInuse": 4227072,
+        "StackSys": 4227072
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 10.921875,
+        "WorkingSet64": 49201152,
+        "PrivateMemorySize64": 75325440
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:46:38.531Z",
+      "phase": "load",
+      "goroutines": 52,
+      "pumps": {
+        "read": 0,
+        "write": 0
+      },
+      "memory": {
+        "HeapAlloc": 9439272,
+        "HeapInuse": 12632064,
+        "NumGC": 15,
+        "StackInuse": 4161536,
+        "StackSys": 4161536
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 11,
+        "WorkingSet64": 49205248,
+        "PrivateMemorySize64": 75325440
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:46:41.591Z",
+      "phase": "recovery",
+      "goroutines": 52,
+      "pumps": {
+        "read": 0,
+        "write": 0
+      },
+      "memory": {
+        "HeapAlloc": 5360072,
+        "HeapInuse": 10117120,
+        "NumGC": 16,
+        "StackInuse": 3997696,
+        "StackSys": 3997696
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 11.046875,
+        "WorkingSet64": 49012736,
+        "PrivateMemorySize64": 75063296
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:46:44.996Z",
+      "phase": "recovery",
+      "goroutines": 51,
+      "pumps": {
+        "read": 0,
+        "write": 0
+      },
+      "memory": {
+        "HeapAlloc": 5806848,
+        "HeapInuse": 10264576,
+        "NumGC": 16,
+        "StackInuse": 4030464,
+        "StackSys": 4030464
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 11.109375,
+        "WorkingSet64": 49025024,
+        "PrivateMemorySize64": 75063296
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:46:48.321Z",
+      "phase": "recovery",
+      "goroutines": 52,
+      "pumps": {
+        "read": 0,
+        "write": 0
+      },
+      "memory": {
+        "HeapAlloc": 6592888,
+        "HeapInuse": 10461184,
+        "NumGC": 16,
+        "StackInuse": 4096000,
+        "StackSys": 4096000
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 11.171875,
+        "WorkingSet64": 49041408,
+        "PrivateMemorySize64": 75063296
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:46:51.147Z",
+      "phase": "recovery",
+      "goroutines": 51,
+      "pumps": {
+        "read": 0,
+        "write": 0
+      },
+      "memory": {
+        "HeapAlloc": 7273984,
+        "HeapInuse": 10690560,
+        "NumGC": 16,
+        "StackInuse": 4128768,
+        "StackSys": 4128768
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 11.203125,
+        "WorkingSet64": 49045504,
+        "PrivateMemorySize64": 75063296
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:46:53.833Z",
+      "phase": "recovery",
+      "goroutines": 52,
+      "pumps": {
+        "read": 0,
+        "write": 0
+      },
+      "memory": {
+        "HeapAlloc": 7712232,
+        "HeapInuse": 10928128,
+        "NumGC": 16,
+        "StackInuse": 4128768,
+        "StackSys": 4128768
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 11.21875,
+        "WorkingSet64": 49049600,
+        "PrivateMemorySize64": 75063296
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T01:46:56.564Z",
+      "phase": "recovery",
+      "goroutines": 52,
+      "pumps": {
+        "read": 0,
+        "write": 0
+      },
+      "memory": {
+        "HeapAlloc": 8141760,
+        "HeapInuse": 11190272,
+        "NumGC": 16,
+        "StackInuse": 4128768,
+        "StackSys": 4128768
+      },
+      "os": {
+        "Id": 40740,
+        "ProcessName": "hichat-capacity",
+        "CPU": 11.234375,
+        "WorkingSet64": 49061888,
+        "PrivateMemorySize64": 75063296
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    }
+  ],
+  "go": "go version go1.27.4 windows/amd64",
+  "k6": "k6.exe v2.4.0 (commit/dd9395906d, go1.26.11, windows/amd64)",
+  "dbUsers": 20,
+  "fanout": {
+    "guild": "742848044c621402",
+    "channel": "8450156e0b11834d",
+    "userIds": [
+      "2a6a3e0f-7f11-4441-9143-ea14c5e79102",
+      "0176b347-20ef-4812-b843-1f7040bd2203",
+      "a7705848-281d-4587-8a68-972054445238",
+      "a61a6007-9746-4fc9-830e-2b1ffae02300",
+      "f0e6fdbc-b75e-4600-a3c4-d273734a30e9",
+      "870e6f59-8873-4b1c-ad1c-85e93032c2b0",
+      "73ffc2a8-f7d8-458a-9f7c-2d99f0afe9ed",
+      "52da5c07-9048-41e3-8f6a-81496bba0038",
+      "272d1be0-d728-4822-80eb-7dcb0db846a8",
+      "9e911ea4-3e05-4d67-8d3f-640be096a62c",
+      "1ffd13ff-33d9-4830-b598-b9c586b4358d",
+      "be5efeb3-de2e-4796-ae7d-a54ee3bfd120",
+      "e6e7eb23-c99c-41cc-b20c-506e7f6601e8",
+      "82e2356c-a79a-4701-8a30-65e0ea09f8ea",
+      "8536f593-7319-48bc-a15a-40bea81cedfa",
+      "9024da56-1515-40d4-8cec-97e1379bb169",
+      "82a77c43-89e0-4d93-852c-6d8b66964d7d",
+      "30ab8d55-11f8-4c1a-86ff-91bd381833b1",
+      "36bc34b6-9f6c-4dae-898e-7b97163507da",
+      "6d612d5a-12a6-4a67-a9c6-6f2f97d60254"
+    ],
+    "probeId": "probe-cd38d15c1d",
+    "messagesPerSender": 5,
+    "result": {
+      "sent": 100,
+      "received": 2000,
+      "receivers": 20,
+      "duplicates": 0,
+      "invalid": 0,
+      "persisted": 100,
+      "digest": "6dc25d5df51357fd58ffdf5dfbdbd9d8f349ec04cd0247e37fd0daf64b141fe9",
+      "receipts": [
+        {
+          "receiver": "f0e6fdbc-b75e-4600-a3c4-d273734a30e9",
+          "digest": "6dc25d5df51357fd58ffdf5dfbdbd9d8f349ec04cd0247e37fd0daf64b141fe9",
+          "summary": {
+            "received": 100,
+            "duplicates": 0,
+            "invalid": 0,
+            "ignored": 24,
+            "outOfOrder": 0,
+            "expected": 100,
+            "missing": 0,
+            "complete": true,
+            "perSender": [
+              {
+                "userId": "2a6a3e0f-7f11-4441-9143-ea14c5e79102",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "0176b347-20ef-4812-b843-1f7040bd2203",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a7705848-281d-4587-8a68-972054445238",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a61a6007-9746-4fc9-830e-2b1ffae02300",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "f0e6fdbc-b75e-4600-a3c4-d273734a30e9",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "870e6f59-8873-4b1c-ad1c-85e93032c2b0",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "73ffc2a8-f7d8-458a-9f7c-2d99f0afe9ed",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "52da5c07-9048-41e3-8f6a-81496bba0038",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "272d1be0-d728-4822-80eb-7dcb0db846a8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9e911ea4-3e05-4d67-8d3f-640be096a62c",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "1ffd13ff-33d9-4830-b598-b9c586b4358d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "be5efeb3-de2e-4796-ae7d-a54ee3bfd120",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "e6e7eb23-c99c-41cc-b20c-506e7f6601e8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82e2356c-a79a-4701-8a30-65e0ea09f8ea",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "8536f593-7319-48bc-a15a-40bea81cedfa",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9024da56-1515-40d4-8cec-97e1379bb169",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82a77c43-89e0-4d93-852c-6d8b66964d7d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "30ab8d55-11f8-4c1a-86ff-91bd381833b1",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "36bc34b6-9f6c-4dae-898e-7b97163507da",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "6d612d5a-12a6-4a67-a9c6-6f2f97d60254",
+                "received": 5,
+                "missing": 0
+              }
+            ]
+          },
+          "acknowledged": [
+            [
+              1,
+              "dc951221dc136122"
+            ],
+            [
+              2,
+              "336ea5cd5be067eb"
+            ],
+            [
+              3,
+              "4fb3c6622268c86c"
+            ],
+            [
+              4,
+              "75819a6dbf1bb6a7"
+            ],
+            [
+              5,
+              "c0ddde0d23ee6a01"
+            ]
+          ]
+        },
+        {
+          "receiver": "73ffc2a8-f7d8-458a-9f7c-2d99f0afe9ed",
+          "digest": "6dc25d5df51357fd58ffdf5dfbdbd9d8f349ec04cd0247e37fd0daf64b141fe9",
+          "summary": {
+            "received": 100,
+            "duplicates": 0,
+            "invalid": 0,
+            "ignored": 23,
+            "outOfOrder": 0,
+            "expected": 100,
+            "missing": 0,
+            "complete": true,
+            "perSender": [
+              {
+                "userId": "2a6a3e0f-7f11-4441-9143-ea14c5e79102",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "0176b347-20ef-4812-b843-1f7040bd2203",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a7705848-281d-4587-8a68-972054445238",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a61a6007-9746-4fc9-830e-2b1ffae02300",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "f0e6fdbc-b75e-4600-a3c4-d273734a30e9",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "870e6f59-8873-4b1c-ad1c-85e93032c2b0",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "73ffc2a8-f7d8-458a-9f7c-2d99f0afe9ed",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "52da5c07-9048-41e3-8f6a-81496bba0038",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "272d1be0-d728-4822-80eb-7dcb0db846a8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9e911ea4-3e05-4d67-8d3f-640be096a62c",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "1ffd13ff-33d9-4830-b598-b9c586b4358d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "be5efeb3-de2e-4796-ae7d-a54ee3bfd120",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "e6e7eb23-c99c-41cc-b20c-506e7f6601e8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82e2356c-a79a-4701-8a30-65e0ea09f8ea",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "8536f593-7319-48bc-a15a-40bea81cedfa",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9024da56-1515-40d4-8cec-97e1379bb169",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82a77c43-89e0-4d93-852c-6d8b66964d7d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "30ab8d55-11f8-4c1a-86ff-91bd381833b1",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "36bc34b6-9f6c-4dae-898e-7b97163507da",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "6d612d5a-12a6-4a67-a9c6-6f2f97d60254",
+                "received": 5,
+                "missing": 0
+              }
+            ]
+          },
+          "acknowledged": [
+            [
+              1,
+              "7fcdb0e0f015325b"
+            ],
+            [
+              2,
+              "4230cd3427ff7358"
+            ],
+            [
+              3,
+              "8a9eb1f02ce9616a"
+            ],
+            [
+              4,
+              "0a90ea85351492c2"
+            ],
+            [
+              5,
+              "827dada58746e69a"
+            ]
+          ]
+        },
+        {
+          "receiver": "0176b347-20ef-4812-b843-1f7040bd2203",
+          "digest": "6dc25d5df51357fd58ffdf5dfbdbd9d8f349ec04cd0247e37fd0daf64b141fe9",
+          "summary": {
+            "received": 100,
+            "duplicates": 0,
+            "invalid": 0,
+            "ignored": 22,
+            "outOfOrder": 0,
+            "expected": 100,
+            "missing": 0,
+            "complete": true,
+            "perSender": [
+              {
+                "userId": "2a6a3e0f-7f11-4441-9143-ea14c5e79102",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "0176b347-20ef-4812-b843-1f7040bd2203",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a7705848-281d-4587-8a68-972054445238",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a61a6007-9746-4fc9-830e-2b1ffae02300",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "f0e6fdbc-b75e-4600-a3c4-d273734a30e9",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "870e6f59-8873-4b1c-ad1c-85e93032c2b0",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "73ffc2a8-f7d8-458a-9f7c-2d99f0afe9ed",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "52da5c07-9048-41e3-8f6a-81496bba0038",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "272d1be0-d728-4822-80eb-7dcb0db846a8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9e911ea4-3e05-4d67-8d3f-640be096a62c",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "1ffd13ff-33d9-4830-b598-b9c586b4358d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "be5efeb3-de2e-4796-ae7d-a54ee3bfd120",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "e6e7eb23-c99c-41cc-b20c-506e7f6601e8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82e2356c-a79a-4701-8a30-65e0ea09f8ea",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "8536f593-7319-48bc-a15a-40bea81cedfa",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9024da56-1515-40d4-8cec-97e1379bb169",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82a77c43-89e0-4d93-852c-6d8b66964d7d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "30ab8d55-11f8-4c1a-86ff-91bd381833b1",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "36bc34b6-9f6c-4dae-898e-7b97163507da",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "6d612d5a-12a6-4a67-a9c6-6f2f97d60254",
+                "received": 5,
+                "missing": 0
+              }
+            ]
+          },
+          "acknowledged": [
+            [
+              1,
+              "6d11fb4e0a8f076f"
+            ],
+            [
+              2,
+              "da391007cceef8cc"
+            ],
+            [
+              3,
+              "1c8708c1bd51ef26"
+            ],
+            [
+              4,
+              "7cb0ff649bab7037"
+            ],
+            [
+              5,
+              "e5f1361670fa8633"
+            ]
+          ]
+        },
+        {
+          "receiver": "52da5c07-9048-41e3-8f6a-81496bba0038",
+          "digest": "6dc25d5df51357fd58ffdf5dfbdbd9d8f349ec04cd0247e37fd0daf64b141fe9",
+          "summary": {
+            "received": 100,
+            "duplicates": 0,
+            "invalid": 0,
+            "ignored": 21,
+            "outOfOrder": 0,
+            "expected": 100,
+            "missing": 0,
+            "complete": true,
+            "perSender": [
+              {
+                "userId": "2a6a3e0f-7f11-4441-9143-ea14c5e79102",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "0176b347-20ef-4812-b843-1f7040bd2203",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a7705848-281d-4587-8a68-972054445238",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a61a6007-9746-4fc9-830e-2b1ffae02300",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "f0e6fdbc-b75e-4600-a3c4-d273734a30e9",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "870e6f59-8873-4b1c-ad1c-85e93032c2b0",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "73ffc2a8-f7d8-458a-9f7c-2d99f0afe9ed",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "52da5c07-9048-41e3-8f6a-81496bba0038",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "272d1be0-d728-4822-80eb-7dcb0db846a8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9e911ea4-3e05-4d67-8d3f-640be096a62c",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "1ffd13ff-33d9-4830-b598-b9c586b4358d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "be5efeb3-de2e-4796-ae7d-a54ee3bfd120",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "e6e7eb23-c99c-41cc-b20c-506e7f6601e8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82e2356c-a79a-4701-8a30-65e0ea09f8ea",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "8536f593-7319-48bc-a15a-40bea81cedfa",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9024da56-1515-40d4-8cec-97e1379bb169",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82a77c43-89e0-4d93-852c-6d8b66964d7d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "30ab8d55-11f8-4c1a-86ff-91bd381833b1",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "36bc34b6-9f6c-4dae-898e-7b97163507da",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "6d612d5a-12a6-4a67-a9c6-6f2f97d60254",
+                "received": 5,
+                "missing": 0
+              }
+            ]
+          },
+          "acknowledged": [
+            [
+              1,
+              "7e475ba555d092cc"
+            ],
+            [
+              2,
+              "181f001b95f23573"
+            ],
+            [
+              3,
+              "0b280caf51a54153"
+            ],
+            [
+              4,
+              "d7023356ab2ea821"
+            ],
+            [
+              5,
+              "9eb1221fd1a198b4"
+            ]
+          ]
+        },
+        {
+          "receiver": "30ab8d55-11f8-4c1a-86ff-91bd381833b1",
+          "digest": "6dc25d5df51357fd58ffdf5dfbdbd9d8f349ec04cd0247e37fd0daf64b141fe9",
+          "summary": {
+            "received": 100,
+            "duplicates": 0,
+            "invalid": 0,
+            "ignored": 20,
+            "outOfOrder": 0,
+            "expected": 100,
+            "missing": 0,
+            "complete": true,
+            "perSender": [
+              {
+                "userId": "2a6a3e0f-7f11-4441-9143-ea14c5e79102",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "0176b347-20ef-4812-b843-1f7040bd2203",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a7705848-281d-4587-8a68-972054445238",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a61a6007-9746-4fc9-830e-2b1ffae02300",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "f0e6fdbc-b75e-4600-a3c4-d273734a30e9",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "870e6f59-8873-4b1c-ad1c-85e93032c2b0",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "73ffc2a8-f7d8-458a-9f7c-2d99f0afe9ed",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "52da5c07-9048-41e3-8f6a-81496bba0038",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "272d1be0-d728-4822-80eb-7dcb0db846a8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9e911ea4-3e05-4d67-8d3f-640be096a62c",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "1ffd13ff-33d9-4830-b598-b9c586b4358d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "be5efeb3-de2e-4796-ae7d-a54ee3bfd120",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "e6e7eb23-c99c-41cc-b20c-506e7f6601e8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82e2356c-a79a-4701-8a30-65e0ea09f8ea",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "8536f593-7319-48bc-a15a-40bea81cedfa",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9024da56-1515-40d4-8cec-97e1379bb169",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82a77c43-89e0-4d93-852c-6d8b66964d7d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "30ab8d55-11f8-4c1a-86ff-91bd381833b1",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "36bc34b6-9f6c-4dae-898e-7b97163507da",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "6d612d5a-12a6-4a67-a9c6-6f2f97d60254",
+                "received": 5,
+                "missing": 0
+              }
+            ]
+          },
+          "acknowledged": [
+            [
+              1,
+              "cd0060fab4068f09"
+            ],
+            [
+              2,
+              "389872a31eebfa62"
+            ],
+            [
+              3,
+              "78c5193251b90f7d"
+            ],
+            [
+              4,
+              "314a1bc765f8c447"
+            ],
+            [
+              5,
+              "a73a941ef39933fa"
+            ]
+          ]
+        },
+        {
+          "receiver": "82a77c43-89e0-4d93-852c-6d8b66964d7d",
+          "digest": "6dc25d5df51357fd58ffdf5dfbdbd9d8f349ec04cd0247e37fd0daf64b141fe9",
+          "summary": {
+            "received": 100,
+            "duplicates": 0,
+            "invalid": 0,
+            "ignored": 19,
+            "outOfOrder": 0,
+            "expected": 100,
+            "missing": 0,
+            "complete": true,
+            "perSender": [
+              {
+                "userId": "2a6a3e0f-7f11-4441-9143-ea14c5e79102",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "0176b347-20ef-4812-b843-1f7040bd2203",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a7705848-281d-4587-8a68-972054445238",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a61a6007-9746-4fc9-830e-2b1ffae02300",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "f0e6fdbc-b75e-4600-a3c4-d273734a30e9",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "870e6f59-8873-4b1c-ad1c-85e93032c2b0",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "73ffc2a8-f7d8-458a-9f7c-2d99f0afe9ed",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "52da5c07-9048-41e3-8f6a-81496bba0038",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "272d1be0-d728-4822-80eb-7dcb0db846a8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9e911ea4-3e05-4d67-8d3f-640be096a62c",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "1ffd13ff-33d9-4830-b598-b9c586b4358d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "be5efeb3-de2e-4796-ae7d-a54ee3bfd120",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "e6e7eb23-c99c-41cc-b20c-506e7f6601e8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82e2356c-a79a-4701-8a30-65e0ea09f8ea",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "8536f593-7319-48bc-a15a-40bea81cedfa",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9024da56-1515-40d4-8cec-97e1379bb169",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82a77c43-89e0-4d93-852c-6d8b66964d7d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "30ab8d55-11f8-4c1a-86ff-91bd381833b1",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "36bc34b6-9f6c-4dae-898e-7b97163507da",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "6d612d5a-12a6-4a67-a9c6-6f2f97d60254",
+                "received": 5,
+                "missing": 0
+              }
+            ]
+          },
+          "acknowledged": [
+            [
+              1,
+              "1374a36959569b31"
+            ],
+            [
+              2,
+              "9590f3fe8471f6b3"
+            ],
+            [
+              3,
+              "88687ee04a571e47"
+            ],
+            [
+              4,
+              "9d582c0a7cde5597"
+            ],
+            [
+              5,
+              "61d70a9bc90b7107"
+            ]
+          ]
+        },
+        {
+          "receiver": "870e6f59-8873-4b1c-ad1c-85e93032c2b0",
+          "digest": "6dc25d5df51357fd58ffdf5dfbdbd9d8f349ec04cd0247e37fd0daf64b141fe9",
+          "summary": {
+            "received": 100,
+            "duplicates": 0,
+            "invalid": 0,
+            "ignored": 18,
+            "outOfOrder": 0,
+            "expected": 100,
+            "missing": 0,
+            "complete": true,
+            "perSender": [
+              {
+                "userId": "2a6a3e0f-7f11-4441-9143-ea14c5e79102",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "0176b347-20ef-4812-b843-1f7040bd2203",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a7705848-281d-4587-8a68-972054445238",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a61a6007-9746-4fc9-830e-2b1ffae02300",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "f0e6fdbc-b75e-4600-a3c4-d273734a30e9",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "870e6f59-8873-4b1c-ad1c-85e93032c2b0",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "73ffc2a8-f7d8-458a-9f7c-2d99f0afe9ed",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "52da5c07-9048-41e3-8f6a-81496bba0038",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "272d1be0-d728-4822-80eb-7dcb0db846a8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9e911ea4-3e05-4d67-8d3f-640be096a62c",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "1ffd13ff-33d9-4830-b598-b9c586b4358d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "be5efeb3-de2e-4796-ae7d-a54ee3bfd120",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "e6e7eb23-c99c-41cc-b20c-506e7f6601e8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82e2356c-a79a-4701-8a30-65e0ea09f8ea",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "8536f593-7319-48bc-a15a-40bea81cedfa",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9024da56-1515-40d4-8cec-97e1379bb169",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82a77c43-89e0-4d93-852c-6d8b66964d7d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "30ab8d55-11f8-4c1a-86ff-91bd381833b1",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "36bc34b6-9f6c-4dae-898e-7b97163507da",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "6d612d5a-12a6-4a67-a9c6-6f2f97d60254",
+                "received": 5,
+                "missing": 0
+              }
+            ]
+          },
+          "acknowledged": [
+            [
+              1,
+              "7052118d50ee1e60"
+            ],
+            [
+              2,
+              "7a55e4d3ee274784"
+            ],
+            [
+              3,
+              "b3da2309c453189a"
+            ],
+            [
+              4,
+              "aadaf1d026b74945"
+            ],
+            [
+              5,
+              "b2575745946f3e9d"
+            ]
+          ]
+        },
+        {
+          "receiver": "2a6a3e0f-7f11-4441-9143-ea14c5e79102",
+          "digest": "6dc25d5df51357fd58ffdf5dfbdbd9d8f349ec04cd0247e37fd0daf64b141fe9",
+          "summary": {
+            "received": 100,
+            "duplicates": 0,
+            "invalid": 0,
+            "ignored": 17,
+            "outOfOrder": 0,
+            "expected": 100,
+            "missing": 0,
+            "complete": true,
+            "perSender": [
+              {
+                "userId": "2a6a3e0f-7f11-4441-9143-ea14c5e79102",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "0176b347-20ef-4812-b843-1f7040bd2203",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a7705848-281d-4587-8a68-972054445238",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a61a6007-9746-4fc9-830e-2b1ffae02300",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "f0e6fdbc-b75e-4600-a3c4-d273734a30e9",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "870e6f59-8873-4b1c-ad1c-85e93032c2b0",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "73ffc2a8-f7d8-458a-9f7c-2d99f0afe9ed",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "52da5c07-9048-41e3-8f6a-81496bba0038",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "272d1be0-d728-4822-80eb-7dcb0db846a8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9e911ea4-3e05-4d67-8d3f-640be096a62c",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "1ffd13ff-33d9-4830-b598-b9c586b4358d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "be5efeb3-de2e-4796-ae7d-a54ee3bfd120",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "e6e7eb23-c99c-41cc-b20c-506e7f6601e8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82e2356c-a79a-4701-8a30-65e0ea09f8ea",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "8536f593-7319-48bc-a15a-40bea81cedfa",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9024da56-1515-40d4-8cec-97e1379bb169",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82a77c43-89e0-4d93-852c-6d8b66964d7d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "30ab8d55-11f8-4c1a-86ff-91bd381833b1",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "36bc34b6-9f6c-4dae-898e-7b97163507da",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "6d612d5a-12a6-4a67-a9c6-6f2f97d60254",
+                "received": 5,
+                "missing": 0
+              }
+            ]
+          },
+          "acknowledged": [
+            [
+              1,
+              "5fc72ab8301166f8"
+            ],
+            [
+              2,
+              "ad576ddbe4f52e95"
+            ],
+            [
+              3,
+              "7e180a4509d4474b"
+            ],
+            [
+              4,
+              "7029b77894399d44"
+            ],
+            [
+              5,
+              "84bd680c83e8b73e"
+            ]
+          ]
+        },
+        {
+          "receiver": "36bc34b6-9f6c-4dae-898e-7b97163507da",
+          "digest": "6dc25d5df51357fd58ffdf5dfbdbd9d8f349ec04cd0247e37fd0daf64b141fe9",
+          "summary": {
+            "received": 100,
+            "duplicates": 0,
+            "invalid": 0,
+            "ignored": 16,
+            "outOfOrder": 0,
+            "expected": 100,
+            "missing": 0,
+            "complete": true,
+            "perSender": [
+              {
+                "userId": "2a6a3e0f-7f11-4441-9143-ea14c5e79102",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "0176b347-20ef-4812-b843-1f7040bd2203",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a7705848-281d-4587-8a68-972054445238",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a61a6007-9746-4fc9-830e-2b1ffae02300",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "f0e6fdbc-b75e-4600-a3c4-d273734a30e9",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "870e6f59-8873-4b1c-ad1c-85e93032c2b0",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "73ffc2a8-f7d8-458a-9f7c-2d99f0afe9ed",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "52da5c07-9048-41e3-8f6a-81496bba0038",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "272d1be0-d728-4822-80eb-7dcb0db846a8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9e911ea4-3e05-4d67-8d3f-640be096a62c",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "1ffd13ff-33d9-4830-b598-b9c586b4358d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "be5efeb3-de2e-4796-ae7d-a54ee3bfd120",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "e6e7eb23-c99c-41cc-b20c-506e7f6601e8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82e2356c-a79a-4701-8a30-65e0ea09f8ea",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "8536f593-7319-48bc-a15a-40bea81cedfa",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9024da56-1515-40d4-8cec-97e1379bb169",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82a77c43-89e0-4d93-852c-6d8b66964d7d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "30ab8d55-11f8-4c1a-86ff-91bd381833b1",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "36bc34b6-9f6c-4dae-898e-7b97163507da",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "6d612d5a-12a6-4a67-a9c6-6f2f97d60254",
+                "received": 5,
+                "missing": 0
+              }
+            ]
+          },
+          "acknowledged": [
+            [
+              1,
+              "c732981a5b1f0ad5"
+            ],
+            [
+              2,
+              "0583c6682167b908"
+            ],
+            [
+              3,
+              "874201c773379ec9"
+            ],
+            [
+              4,
+              "d8e0075846f50b31"
+            ],
+            [
+              5,
+              "2fa0584cc9a6e687"
+            ]
+          ]
+        },
+        {
+          "receiver": "6d612d5a-12a6-4a67-a9c6-6f2f97d60254",
+          "digest": "6dc25d5df51357fd58ffdf5dfbdbd9d8f349ec04cd0247e37fd0daf64b141fe9",
+          "summary": {
+            "received": 100,
+            "duplicates": 0,
+            "invalid": 0,
+            "ignored": 15,
+            "outOfOrder": 0,
+            "expected": 100,
+            "missing": 0,
+            "complete": true,
+            "perSender": [
+              {
+                "userId": "2a6a3e0f-7f11-4441-9143-ea14c5e79102",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "0176b347-20ef-4812-b843-1f7040bd2203",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a7705848-281d-4587-8a68-972054445238",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a61a6007-9746-4fc9-830e-2b1ffae02300",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "f0e6fdbc-b75e-4600-a3c4-d273734a30e9",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "870e6f59-8873-4b1c-ad1c-85e93032c2b0",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "73ffc2a8-f7d8-458a-9f7c-2d99f0afe9ed",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "52da5c07-9048-41e3-8f6a-81496bba0038",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "272d1be0-d728-4822-80eb-7dcb0db846a8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9e911ea4-3e05-4d67-8d3f-640be096a62c",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "1ffd13ff-33d9-4830-b598-b9c586b4358d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "be5efeb3-de2e-4796-ae7d-a54ee3bfd120",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "e6e7eb23-c99c-41cc-b20c-506e7f6601e8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82e2356c-a79a-4701-8a30-65e0ea09f8ea",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "8536f593-7319-48bc-a15a-40bea81cedfa",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9024da56-1515-40d4-8cec-97e1379bb169",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82a77c43-89e0-4d93-852c-6d8b66964d7d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "30ab8d55-11f8-4c1a-86ff-91bd381833b1",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "36bc34b6-9f6c-4dae-898e-7b97163507da",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "6d612d5a-12a6-4a67-a9c6-6f2f97d60254",
+                "received": 5,
+                "missing": 0
+              }
+            ]
+          },
+          "acknowledged": [
+            [
+              1,
+              "771ca2c2f4bbcb16"
+            ],
+            [
+              2,
+              "554dbd076f3da048"
+            ],
+            [
+              3,
+              "92791537888ec531"
+            ],
+            [
+              4,
+              "a9a2c868bf5a01b7"
+            ],
+            [
+              5,
+              "381b230ac52125b0"
+            ]
+          ]
+        },
+        {
+          "receiver": "1ffd13ff-33d9-4830-b598-b9c586b4358d",
+          "digest": "6dc25d5df51357fd58ffdf5dfbdbd9d8f349ec04cd0247e37fd0daf64b141fe9",
+          "summary": {
+            "received": 100,
+            "duplicates": 0,
+            "invalid": 0,
+            "ignored": 14,
+            "outOfOrder": 0,
+            "expected": 100,
+            "missing": 0,
+            "complete": true,
+            "perSender": [
+              {
+                "userId": "2a6a3e0f-7f11-4441-9143-ea14c5e79102",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "0176b347-20ef-4812-b843-1f7040bd2203",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a7705848-281d-4587-8a68-972054445238",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a61a6007-9746-4fc9-830e-2b1ffae02300",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "f0e6fdbc-b75e-4600-a3c4-d273734a30e9",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "870e6f59-8873-4b1c-ad1c-85e93032c2b0",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "73ffc2a8-f7d8-458a-9f7c-2d99f0afe9ed",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "52da5c07-9048-41e3-8f6a-81496bba0038",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "272d1be0-d728-4822-80eb-7dcb0db846a8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9e911ea4-3e05-4d67-8d3f-640be096a62c",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "1ffd13ff-33d9-4830-b598-b9c586b4358d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "be5efeb3-de2e-4796-ae7d-a54ee3bfd120",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "e6e7eb23-c99c-41cc-b20c-506e7f6601e8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82e2356c-a79a-4701-8a30-65e0ea09f8ea",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "8536f593-7319-48bc-a15a-40bea81cedfa",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9024da56-1515-40d4-8cec-97e1379bb169",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82a77c43-89e0-4d93-852c-6d8b66964d7d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "30ab8d55-11f8-4c1a-86ff-91bd381833b1",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "36bc34b6-9f6c-4dae-898e-7b97163507da",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "6d612d5a-12a6-4a67-a9c6-6f2f97d60254",
+                "received": 5,
+                "missing": 0
+              }
+            ]
+          },
+          "acknowledged": [
+            [
+              1,
+              "792a5743879b9c0d"
+            ],
+            [
+              2,
+              "61bc0a2f316a9425"
+            ],
+            [
+              3,
+              "65616c9b241473d2"
+            ],
+            [
+              4,
+              "5a0a792313a8d826"
+            ],
+            [
+              5,
+              "961dcfc36bfdfe0f"
+            ]
+          ]
+        },
+        {
+          "receiver": "82e2356c-a79a-4701-8a30-65e0ea09f8ea",
+          "digest": "6dc25d5df51357fd58ffdf5dfbdbd9d8f349ec04cd0247e37fd0daf64b141fe9",
+          "summary": {
+            "received": 100,
+            "duplicates": 0,
+            "invalid": 0,
+            "ignored": 13,
+            "outOfOrder": 0,
+            "expected": 100,
+            "missing": 0,
+            "complete": true,
+            "perSender": [
+              {
+                "userId": "2a6a3e0f-7f11-4441-9143-ea14c5e79102",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "0176b347-20ef-4812-b843-1f7040bd2203",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a7705848-281d-4587-8a68-972054445238",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a61a6007-9746-4fc9-830e-2b1ffae02300",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "f0e6fdbc-b75e-4600-a3c4-d273734a30e9",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "870e6f59-8873-4b1c-ad1c-85e93032c2b0",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "73ffc2a8-f7d8-458a-9f7c-2d99f0afe9ed",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "52da5c07-9048-41e3-8f6a-81496bba0038",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "272d1be0-d728-4822-80eb-7dcb0db846a8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9e911ea4-3e05-4d67-8d3f-640be096a62c",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "1ffd13ff-33d9-4830-b598-b9c586b4358d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "be5efeb3-de2e-4796-ae7d-a54ee3bfd120",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "e6e7eb23-c99c-41cc-b20c-506e7f6601e8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82e2356c-a79a-4701-8a30-65e0ea09f8ea",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "8536f593-7319-48bc-a15a-40bea81cedfa",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9024da56-1515-40d4-8cec-97e1379bb169",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82a77c43-89e0-4d93-852c-6d8b66964d7d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "30ab8d55-11f8-4c1a-86ff-91bd381833b1",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "36bc34b6-9f6c-4dae-898e-7b97163507da",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "6d612d5a-12a6-4a67-a9c6-6f2f97d60254",
+                "received": 5,
+                "missing": 0
+              }
+            ]
+          },
+          "acknowledged": [
+            [
+              1,
+              "436a6cbd64ef7688"
+            ],
+            [
+              2,
+              "ecaebda19a727d0b"
+            ],
+            [
+              3,
+              "fbd09eed91ccfeff"
+            ],
+            [
+              4,
+              "9497fb73508d07cd"
+            ],
+            [
+              5,
+              "bfbb7387099404c9"
+            ]
+          ]
+        },
+        {
+          "receiver": "a7705848-281d-4587-8a68-972054445238",
+          "digest": "6dc25d5df51357fd58ffdf5dfbdbd9d8f349ec04cd0247e37fd0daf64b141fe9",
+          "summary": {
+            "received": 100,
+            "duplicates": 0,
+            "invalid": 0,
+            "ignored": 12,
+            "outOfOrder": 0,
+            "expected": 100,
+            "missing": 0,
+            "complete": true,
+            "perSender": [
+              {
+                "userId": "2a6a3e0f-7f11-4441-9143-ea14c5e79102",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "0176b347-20ef-4812-b843-1f7040bd2203",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a7705848-281d-4587-8a68-972054445238",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a61a6007-9746-4fc9-830e-2b1ffae02300",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "f0e6fdbc-b75e-4600-a3c4-d273734a30e9",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "870e6f59-8873-4b1c-ad1c-85e93032c2b0",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "73ffc2a8-f7d8-458a-9f7c-2d99f0afe9ed",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "52da5c07-9048-41e3-8f6a-81496bba0038",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "272d1be0-d728-4822-80eb-7dcb0db846a8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9e911ea4-3e05-4d67-8d3f-640be096a62c",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "1ffd13ff-33d9-4830-b598-b9c586b4358d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "be5efeb3-de2e-4796-ae7d-a54ee3bfd120",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "e6e7eb23-c99c-41cc-b20c-506e7f6601e8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82e2356c-a79a-4701-8a30-65e0ea09f8ea",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "8536f593-7319-48bc-a15a-40bea81cedfa",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9024da56-1515-40d4-8cec-97e1379bb169",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82a77c43-89e0-4d93-852c-6d8b66964d7d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "30ab8d55-11f8-4c1a-86ff-91bd381833b1",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "36bc34b6-9f6c-4dae-898e-7b97163507da",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "6d612d5a-12a6-4a67-a9c6-6f2f97d60254",
+                "received": 5,
+                "missing": 0
+              }
+            ]
+          },
+          "acknowledged": [
+            [
+              1,
+              "9f7cac71ca604cfd"
+            ],
+            [
+              2,
+              "90490f9261927d68"
+            ],
+            [
+              3,
+              "92f353cd34886e54"
+            ],
+            [
+              4,
+              "48c8233348e94bba"
+            ],
+            [
+              5,
+              "1f63c1538b07a56c"
+            ]
+          ]
+        },
+        {
+          "receiver": "8536f593-7319-48bc-a15a-40bea81cedfa",
+          "digest": "6dc25d5df51357fd58ffdf5dfbdbd9d8f349ec04cd0247e37fd0daf64b141fe9",
+          "summary": {
+            "received": 100,
+            "duplicates": 0,
+            "invalid": 0,
+            "ignored": 11,
+            "outOfOrder": 0,
+            "expected": 100,
+            "missing": 0,
+            "complete": true,
+            "perSender": [
+              {
+                "userId": "2a6a3e0f-7f11-4441-9143-ea14c5e79102",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "0176b347-20ef-4812-b843-1f7040bd2203",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a7705848-281d-4587-8a68-972054445238",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a61a6007-9746-4fc9-830e-2b1ffae02300",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "f0e6fdbc-b75e-4600-a3c4-d273734a30e9",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "870e6f59-8873-4b1c-ad1c-85e93032c2b0",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "73ffc2a8-f7d8-458a-9f7c-2d99f0afe9ed",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "52da5c07-9048-41e3-8f6a-81496bba0038",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "272d1be0-d728-4822-80eb-7dcb0db846a8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9e911ea4-3e05-4d67-8d3f-640be096a62c",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "1ffd13ff-33d9-4830-b598-b9c586b4358d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "be5efeb3-de2e-4796-ae7d-a54ee3bfd120",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "e6e7eb23-c99c-41cc-b20c-506e7f6601e8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82e2356c-a79a-4701-8a30-65e0ea09f8ea",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "8536f593-7319-48bc-a15a-40bea81cedfa",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9024da56-1515-40d4-8cec-97e1379bb169",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82a77c43-89e0-4d93-852c-6d8b66964d7d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "30ab8d55-11f8-4c1a-86ff-91bd381833b1",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "36bc34b6-9f6c-4dae-898e-7b97163507da",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "6d612d5a-12a6-4a67-a9c6-6f2f97d60254",
+                "received": 5,
+                "missing": 0
+              }
+            ]
+          },
+          "acknowledged": [
+            [
+              1,
+              "2e8bd9285dba88ff"
+            ],
+            [
+              2,
+              "3fa45e04eb738d1d"
+            ],
+            [
+              3,
+              "c1ecce068420edab"
+            ],
+            [
+              4,
+              "923e3abfe80cd6ae"
+            ],
+            [
+              5,
+              "0606fd0812a28698"
+            ]
+          ]
+        },
+        {
+          "receiver": "272d1be0-d728-4822-80eb-7dcb0db846a8",
+          "digest": "6dc25d5df51357fd58ffdf5dfbdbd9d8f349ec04cd0247e37fd0daf64b141fe9",
+          "summary": {
+            "received": 100,
+            "duplicates": 0,
+            "invalid": 0,
+            "ignored": 10,
+            "outOfOrder": 0,
+            "expected": 100,
+            "missing": 0,
+            "complete": true,
+            "perSender": [
+              {
+                "userId": "2a6a3e0f-7f11-4441-9143-ea14c5e79102",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "0176b347-20ef-4812-b843-1f7040bd2203",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a7705848-281d-4587-8a68-972054445238",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a61a6007-9746-4fc9-830e-2b1ffae02300",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "f0e6fdbc-b75e-4600-a3c4-d273734a30e9",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "870e6f59-8873-4b1c-ad1c-85e93032c2b0",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "73ffc2a8-f7d8-458a-9f7c-2d99f0afe9ed",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "52da5c07-9048-41e3-8f6a-81496bba0038",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "272d1be0-d728-4822-80eb-7dcb0db846a8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9e911ea4-3e05-4d67-8d3f-640be096a62c",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "1ffd13ff-33d9-4830-b598-b9c586b4358d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "be5efeb3-de2e-4796-ae7d-a54ee3bfd120",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "e6e7eb23-c99c-41cc-b20c-506e7f6601e8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82e2356c-a79a-4701-8a30-65e0ea09f8ea",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "8536f593-7319-48bc-a15a-40bea81cedfa",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9024da56-1515-40d4-8cec-97e1379bb169",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82a77c43-89e0-4d93-852c-6d8b66964d7d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "30ab8d55-11f8-4c1a-86ff-91bd381833b1",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "36bc34b6-9f6c-4dae-898e-7b97163507da",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "6d612d5a-12a6-4a67-a9c6-6f2f97d60254",
+                "received": 5,
+                "missing": 0
+              }
+            ]
+          },
+          "acknowledged": [
+            [
+              1,
+              "90ac389d9f684f77"
+            ],
+            [
+              2,
+              "02b23c011f41769e"
+            ],
+            [
+              3,
+              "8240cbf860150796"
+            ],
+            [
+              4,
+              "e042c095ee84672d"
+            ],
+            [
+              5,
+              "dcdd5098082c7709"
+            ]
+          ]
+        },
+        {
+          "receiver": "9e911ea4-3e05-4d67-8d3f-640be096a62c",
+          "digest": "6dc25d5df51357fd58ffdf5dfbdbd9d8f349ec04cd0247e37fd0daf64b141fe9",
+          "summary": {
+            "received": 100,
+            "duplicates": 0,
+            "invalid": 0,
+            "ignored": 9,
+            "outOfOrder": 0,
+            "expected": 100,
+            "missing": 0,
+            "complete": true,
+            "perSender": [
+              {
+                "userId": "2a6a3e0f-7f11-4441-9143-ea14c5e79102",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "0176b347-20ef-4812-b843-1f7040bd2203",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a7705848-281d-4587-8a68-972054445238",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a61a6007-9746-4fc9-830e-2b1ffae02300",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "f0e6fdbc-b75e-4600-a3c4-d273734a30e9",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "870e6f59-8873-4b1c-ad1c-85e93032c2b0",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "73ffc2a8-f7d8-458a-9f7c-2d99f0afe9ed",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "52da5c07-9048-41e3-8f6a-81496bba0038",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "272d1be0-d728-4822-80eb-7dcb0db846a8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9e911ea4-3e05-4d67-8d3f-640be096a62c",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "1ffd13ff-33d9-4830-b598-b9c586b4358d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "be5efeb3-de2e-4796-ae7d-a54ee3bfd120",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "e6e7eb23-c99c-41cc-b20c-506e7f6601e8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82e2356c-a79a-4701-8a30-65e0ea09f8ea",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "8536f593-7319-48bc-a15a-40bea81cedfa",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9024da56-1515-40d4-8cec-97e1379bb169",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82a77c43-89e0-4d93-852c-6d8b66964d7d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "30ab8d55-11f8-4c1a-86ff-91bd381833b1",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "36bc34b6-9f6c-4dae-898e-7b97163507da",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "6d612d5a-12a6-4a67-a9c6-6f2f97d60254",
+                "received": 5,
+                "missing": 0
+              }
+            ]
+          },
+          "acknowledged": [
+            [
+              1,
+              "211fb51b8d383596"
+            ],
+            [
+              2,
+              "62f4c71becc27b05"
+            ],
+            [
+              3,
+              "0a4b94603bafff28"
+            ],
+            [
+              4,
+              "0445c68e078c1398"
+            ],
+            [
+              5,
+              "7892211a852813f0"
+            ]
+          ]
+        },
+        {
+          "receiver": "e6e7eb23-c99c-41cc-b20c-506e7f6601e8",
+          "digest": "6dc25d5df51357fd58ffdf5dfbdbd9d8f349ec04cd0247e37fd0daf64b141fe9",
+          "summary": {
+            "received": 100,
+            "duplicates": 0,
+            "invalid": 0,
+            "ignored": 8,
+            "outOfOrder": 0,
+            "expected": 100,
+            "missing": 0,
+            "complete": true,
+            "perSender": [
+              {
+                "userId": "2a6a3e0f-7f11-4441-9143-ea14c5e79102",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "0176b347-20ef-4812-b843-1f7040bd2203",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a7705848-281d-4587-8a68-972054445238",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a61a6007-9746-4fc9-830e-2b1ffae02300",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "f0e6fdbc-b75e-4600-a3c4-d273734a30e9",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "870e6f59-8873-4b1c-ad1c-85e93032c2b0",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "73ffc2a8-f7d8-458a-9f7c-2d99f0afe9ed",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "52da5c07-9048-41e3-8f6a-81496bba0038",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "272d1be0-d728-4822-80eb-7dcb0db846a8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9e911ea4-3e05-4d67-8d3f-640be096a62c",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "1ffd13ff-33d9-4830-b598-b9c586b4358d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "be5efeb3-de2e-4796-ae7d-a54ee3bfd120",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "e6e7eb23-c99c-41cc-b20c-506e7f6601e8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82e2356c-a79a-4701-8a30-65e0ea09f8ea",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "8536f593-7319-48bc-a15a-40bea81cedfa",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9024da56-1515-40d4-8cec-97e1379bb169",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82a77c43-89e0-4d93-852c-6d8b66964d7d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "30ab8d55-11f8-4c1a-86ff-91bd381833b1",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "36bc34b6-9f6c-4dae-898e-7b97163507da",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "6d612d5a-12a6-4a67-a9c6-6f2f97d60254",
+                "received": 5,
+                "missing": 0
+              }
+            ]
+          },
+          "acknowledged": [
+            [
+              1,
+              "8cb0a3a402c4272d"
+            ],
+            [
+              2,
+              "ac72cd1db222e661"
+            ],
+            [
+              3,
+              "f4cf3bebd9726ab1"
+            ],
+            [
+              4,
+              "e5071aa642fb936f"
+            ],
+            [
+              5,
+              "0376073a47eb3c18"
+            ]
+          ]
+        },
+        {
+          "receiver": "a61a6007-9746-4fc9-830e-2b1ffae02300",
+          "digest": "6dc25d5df51357fd58ffdf5dfbdbd9d8f349ec04cd0247e37fd0daf64b141fe9",
+          "summary": {
+            "received": 100,
+            "duplicates": 0,
+            "invalid": 0,
+            "ignored": 8,
+            "outOfOrder": 0,
+            "expected": 100,
+            "missing": 0,
+            "complete": true,
+            "perSender": [
+              {
+                "userId": "2a6a3e0f-7f11-4441-9143-ea14c5e79102",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "0176b347-20ef-4812-b843-1f7040bd2203",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a7705848-281d-4587-8a68-972054445238",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a61a6007-9746-4fc9-830e-2b1ffae02300",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "f0e6fdbc-b75e-4600-a3c4-d273734a30e9",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "870e6f59-8873-4b1c-ad1c-85e93032c2b0",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "73ffc2a8-f7d8-458a-9f7c-2d99f0afe9ed",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "52da5c07-9048-41e3-8f6a-81496bba0038",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "272d1be0-d728-4822-80eb-7dcb0db846a8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9e911ea4-3e05-4d67-8d3f-640be096a62c",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "1ffd13ff-33d9-4830-b598-b9c586b4358d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "be5efeb3-de2e-4796-ae7d-a54ee3bfd120",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "e6e7eb23-c99c-41cc-b20c-506e7f6601e8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82e2356c-a79a-4701-8a30-65e0ea09f8ea",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "8536f593-7319-48bc-a15a-40bea81cedfa",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9024da56-1515-40d4-8cec-97e1379bb169",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82a77c43-89e0-4d93-852c-6d8b66964d7d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "30ab8d55-11f8-4c1a-86ff-91bd381833b1",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "36bc34b6-9f6c-4dae-898e-7b97163507da",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "6d612d5a-12a6-4a67-a9c6-6f2f97d60254",
+                "received": 5,
+                "missing": 0
+              }
+            ]
+          },
+          "acknowledged": [
+            [
+              1,
+              "52a0a8b77c18d029"
+            ],
+            [
+              2,
+              "f5ede9de1b0f298c"
+            ],
+            [
+              3,
+              "edbd257163039fcb"
+            ],
+            [
+              4,
+              "a7184ae7871f28d0"
+            ],
+            [
+              5,
+              "cea57c855e091244"
+            ]
+          ]
+        },
+        {
+          "receiver": "be5efeb3-de2e-4796-ae7d-a54ee3bfd120",
+          "digest": "6dc25d5df51357fd58ffdf5dfbdbd9d8f349ec04cd0247e37fd0daf64b141fe9",
+          "summary": {
+            "received": 100,
+            "duplicates": 0,
+            "invalid": 0,
+            "ignored": 8,
+            "outOfOrder": 0,
+            "expected": 100,
+            "missing": 0,
+            "complete": true,
+            "perSender": [
+              {
+                "userId": "2a6a3e0f-7f11-4441-9143-ea14c5e79102",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "0176b347-20ef-4812-b843-1f7040bd2203",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a7705848-281d-4587-8a68-972054445238",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a61a6007-9746-4fc9-830e-2b1ffae02300",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "f0e6fdbc-b75e-4600-a3c4-d273734a30e9",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "870e6f59-8873-4b1c-ad1c-85e93032c2b0",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "73ffc2a8-f7d8-458a-9f7c-2d99f0afe9ed",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "52da5c07-9048-41e3-8f6a-81496bba0038",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "272d1be0-d728-4822-80eb-7dcb0db846a8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9e911ea4-3e05-4d67-8d3f-640be096a62c",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "1ffd13ff-33d9-4830-b598-b9c586b4358d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "be5efeb3-de2e-4796-ae7d-a54ee3bfd120",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "e6e7eb23-c99c-41cc-b20c-506e7f6601e8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82e2356c-a79a-4701-8a30-65e0ea09f8ea",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "8536f593-7319-48bc-a15a-40bea81cedfa",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9024da56-1515-40d4-8cec-97e1379bb169",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82a77c43-89e0-4d93-852c-6d8b66964d7d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "30ab8d55-11f8-4c1a-86ff-91bd381833b1",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "36bc34b6-9f6c-4dae-898e-7b97163507da",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "6d612d5a-12a6-4a67-a9c6-6f2f97d60254",
+                "received": 5,
+                "missing": 0
+              }
+            ]
+          },
+          "acknowledged": [
+            [
+              1,
+              "5a311e9d087b3e9d"
+            ],
+            [
+              2,
+              "bd596f60234e0e35"
+            ],
+            [
+              3,
+              "61855c5521d95d9d"
+            ],
+            [
+              4,
+              "acf588cca8aa9ff8"
+            ],
+            [
+              5,
+              "ebfea1a1a3203ad1"
+            ]
+          ]
+        },
+        {
+          "receiver": "9024da56-1515-40d4-8cec-97e1379bb169",
+          "digest": "6dc25d5df51357fd58ffdf5dfbdbd9d8f349ec04cd0247e37fd0daf64b141fe9",
+          "summary": {
+            "received": 100,
+            "duplicates": 0,
+            "invalid": 0,
+            "ignored": 8,
+            "outOfOrder": 0,
+            "expected": 100,
+            "missing": 0,
+            "complete": true,
+            "perSender": [
+              {
+                "userId": "2a6a3e0f-7f11-4441-9143-ea14c5e79102",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "0176b347-20ef-4812-b843-1f7040bd2203",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a7705848-281d-4587-8a68-972054445238",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "a61a6007-9746-4fc9-830e-2b1ffae02300",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "f0e6fdbc-b75e-4600-a3c4-d273734a30e9",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "870e6f59-8873-4b1c-ad1c-85e93032c2b0",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "73ffc2a8-f7d8-458a-9f7c-2d99f0afe9ed",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "52da5c07-9048-41e3-8f6a-81496bba0038",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "272d1be0-d728-4822-80eb-7dcb0db846a8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9e911ea4-3e05-4d67-8d3f-640be096a62c",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "1ffd13ff-33d9-4830-b598-b9c586b4358d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "be5efeb3-de2e-4796-ae7d-a54ee3bfd120",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "e6e7eb23-c99c-41cc-b20c-506e7f6601e8",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82e2356c-a79a-4701-8a30-65e0ea09f8ea",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "8536f593-7319-48bc-a15a-40bea81cedfa",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "9024da56-1515-40d4-8cec-97e1379bb169",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "82a77c43-89e0-4d93-852c-6d8b66964d7d",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "30ab8d55-11f8-4c1a-86ff-91bd381833b1",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "36bc34b6-9f6c-4dae-898e-7b97163507da",
+                "received": 5,
+                "missing": 0
+              },
+              {
+                "userId": "6d612d5a-12a6-4a67-a9c6-6f2f97d60254",
+                "received": 5,
+                "missing": 0
+              }
+            ]
+          },
+          "acknowledged": [
+            [
+              1,
+              "a108ae5934ac5f01"
+            ],
+            [
+              2,
+              "bbb7f0617ab8742a"
+            ],
+            [
+              3,
+              "604a37064ecc4019"
+            ],
+            [
+              4,
+              "4c70f73277651109"
+            ],
+            [
+              5,
+              "e5a4b27ebe1993ad"
+            ]
+          ]
+        }
+      ]
+    }
+  },
+  "result": {
+    "exitCode": 0,
+    "handshakes": 20,
+    "completed": 20,
+    "heartbeatAcks": 40,
+    "checks": {
+      "login succeeded": {
+        "path": "::login succeeded",
+        "id": "904b20f978ea9858883ce098334e6bab",
+        "passes": 20,
+        "fails": 0,
+        "name": "login succeeded"
+      },
+      "ws-ticket issued": {
+        "name": "ws-ticket issued",
+        "path": "::ws-ticket issued",
+        "id": "22609ee14462a54d3391e04408b48f55",
+        "passes": 20,
+        "fails": 0
+      },
+      "fanout message accepted with correct actor/channel": {
+        "passes": 100,
+        "fails": 0,
+        "name": "fanout message accepted with correct actor/channel",
+        "path": "::fanout message accepted with correct actor/channel",
+        "id": "bd6d42ccd8beb4d883b7b68f434778f2"
+      },
+      "ws handshake succeeded (status 101)": {
+        "name": "ws handshake succeeded (status 101)",
+        "path": "::ws handshake succeeded (status 101)",
+        "id": "05c0dcd57c1df3132e4fca6e198807f0",
+        "passes": 20,
+        "fails": 0
+      },
+      "ws session completed hold": {
+        "name": "ws session completed hold",
+        "path": "::ws session completed hold",
+        "id": "eddc40d004b87149496fca4642656239",
+        "passes": 20,
+        "fails": 0
+      },
+      "ws session had no errors": {
+        "name": "ws session had no errors",
+        "path": "::ws session had no errors",
+        "id": "642979f42cd426be13715b390c3aeece",
+        "passes": 20,
+        "fails": 0
+      },
+      "fanout received all expected unique deliveries": {
+        "name": "fanout received all expected unique deliveries",
+        "path": "::fanout received all expected unique deliveries",
+        "id": "8e412d4fe9266478cf7f92f2cefc33df",
+        "passes": 20,
+        "fails": 0
+      },
+      "fanout HTTP and own WebSocket IDs agree": {
+        "id": "5490b695568ff832b5b9d5448de33922",
+        "passes": 20,
+        "fails": 0,
+        "name": "fanout HTTP and own WebSocket IDs agree",
+        "path": "::fanout HTTP and own WebSocket IDs agree"
+      }
+    },
+    "connecting": {
+      "avg": 2.7425999999999995,
+      "min": 2.3214,
+      "med": 2.6499,
+      "max": 3.7631,
+      "p(90)": 3.20003,
+      "p(95)": 3.3036800000000004,
+      "thresholds": {
+        "p(95)<1000": false
+      }
+    },
+    "sessionDuration": {
+      "med": 75003.64365000001,
+      "max": 75011.0933,
+      "p(90)": 75007.52266,
+      "p(95)": 75007.968465,
+      "avg": 75004.41734999999,
+      "min": 75002.8962,
+      "thresholds": {
+        "p(95)>67500": false
+      }
+    }
+  },
+  "limits": [
+    "One 20-session local profile, not capacity/SLA or long-soak acceptance",
+    "100 plaintext channel messages; no slow consumers or media provider load",
+    "Profiling and process/DB sampling overhead included; CPU not pinned; other developer Docker services remain running",
+    "Twenty ordinary users join the private fixture guild through the real API; a separate synthetic platform admin reads profiles",
+    "Heap is observed without forced GC; idle pool/heap retention is not asserted to return byte-for-byte to baseline"
+  ],
+  "databaseDropped": true,
+  "finishedAt": "2026-11-16T01:47:00.292Z"
+}

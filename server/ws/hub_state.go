@@ -64,7 +64,9 @@ func (h *Hub) GetVisibleOnlineUserIDs() []string {
 func (h *Hub) IsVisibleOnline(userID string) (bool, error) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	if h.shuttingDown || h.invisibleUsers[userID] { return false, nil }
+	if h.shuttingDown || h.invisibleUsers[userID] {
+		return false, nil
+	}
 	return len(h.clients[userID]) > 0, nil
 }
 

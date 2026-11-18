@@ -1,0 +1,34 @@
+{
+  "scope": "RF11 channel navigation required composition providers",
+  "integrations": [
+    "Repositories",
+    "Hub",
+    "Permissions",
+    "FreshPermissions",
+    "VoiceDeletion",
+    "Audit"
+  ],
+  "repositories": [
+    "Channel",
+    "Category",
+    "Notification",
+    "Message",
+    "Pin",
+    "Search",
+    "ReadState"
+  ],
+  "regression": "25 invalid-provider cases failed first: 6 missing integrations, 5 typed-nil integration implementations and 14 nil/typed-nil repositories.",
+  "implementation": "Reject missing providers before constructing owners; keep fresh authorization separate from cached visibility/read mapping. Lower-level constructors retain standalone semantics.",
+  "checks": {
+    "root": "PASS matrix, ServiceInitialization, route/callback/permission/auth-cache/real friendship-DM, 3.904s",
+    "services": "PASS channel/thread/pin/search/read-state tests, 2.803s",
+    "build": "PASS go build ./...",
+    "vet": "PASS go vet .",
+    "reviewed_sql_manifest": "PASS 50 exact records"
+  },
+  "limits": [
+    "Presence validation does not prove full runtime authorization or database identity.",
+    "Remaining domains, optional/lifecycle matrix, race/current-source CI and RF01-RF30 completion remain open.",
+    "Remote CI 43655342717 on 0eb3744f remains live without observed failures and excludes local changes."
+  ]
+}

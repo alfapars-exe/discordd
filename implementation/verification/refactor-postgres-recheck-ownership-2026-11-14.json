@@ -1,0 +1,25 @@
+{
+  "date": "2026-11-14",
+  "scope": "Real permission service blocked PostgreSQL query ownership",
+  "checks": {
+    "host_count": 3,
+    "host_exit": 0,
+    "host_seconds": 3.07,
+    "linux_postgres_race_count": 3,
+    "race_exit": 0,
+    "race_seconds": 6.027,
+    "overlay_without_recheck_root_exit": 1,
+    "overlay_failure": "shutdown returned before PostgreSQL permission lookup",
+    "postgres_runner_tests": 14,
+    "runner_exit": 0
+  },
+  "mandatory_service_tests_added": [
+    "TestVoiceUsagePostgresShutdownJoinsPermissionRecheck",
+    "TestVoiceUsagePostgresLateMemberRevocationPreservesCredit"
+  ],
+  "limitations": [
+    "Fixture channel exists; absent ConnectVoice permission removes stale session. Earlier missing-channel interpretation was corrected after inspecting postgresServerFixture.",
+    "Real authorization repositories/query lock tested; media network is mocked/unavailable.",
+    "Local integration only; final whole-project/native/physical acceptance remains open."
+  ]
+}

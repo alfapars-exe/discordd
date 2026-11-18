@@ -1,0 +1,55 @@
+{
+  "scope": "Failure-path follow-up to the repository-owned local profile fixture; successful full corrected runtime is pending.",
+  "contracts": {
+    "allLoadtestTestsPassed": 102,
+    "fixtureTestsPassed": 15,
+    "failed": 0,
+    "skipped": 0,
+    "logSha256": "d9596d7ac1258c22fd313668bd911d7501c7c0e63cef3f96f05c744eaee50338"
+  },
+  "helperCoverage": {
+    "linePercent": 96.53,
+    "branchPercent": 95.4,
+    "functionPercent": 92.31,
+    "scope": "local-profile-fixture.mjs only; full runner and launcher are not represented by this percentage",
+    "logSha256": "810e454833db8c7343fdd136bf81de31360237f68cf5e465fdee53c4d5a5ba3b"
+  },
+  "callbackNegativeControl": {
+    "mutation": "Remove catch around probe-close report write in isolated copy",
+    "sameTestSource": true,
+    "expectedFailure": "ENOENT from missing output directory",
+    "logSha256": "b7193d8a352bbae717e82de04d3d85107fa6379a951bd534c91d56590f7930c2"
+  },
+  "liveChildFailure": {
+    "fixtureRoot": "G:\\hichat-refactor-20261116-anoknpqz\\portable-fixture-checks\\local-fanout-eaf3615c4cc4499eadf523c02494d049",
+    "sourceCommit": "9c4ad3cf909e1653db173693b704abf775704962",
+    "injectedChildExitCode": 17,
+    "serverAndSlowPeerAdmitted": true,
+    "resultStatus": "failed",
+    "failurePhases": [
+      "workload"
+    ],
+    "databaseDropped": true,
+    "sourceStable": true,
+    "privateCredentialsAndDescriptorRemoved": true,
+    "ownedProcessesAbsent": true,
+    "launcherCleanupFailures": []
+  },
+  "samplingChange": {
+    "existingBackendApplicationName": "hichat",
+    "authoritativeSource": "server/database/postgres.go:63",
+    "collectorApplicationName": "hichat-local-profile-collector",
+    "requirements": "Filter backend connections by existing application_name; require positive count and every connection TLS plus client certificate; retain rejected aggregate",
+    "controlledPGReproduction": "pending; aggregate failure alone does not prove application transport failure"
+  },
+  "sources": {
+    "loadtest/local-fanout-runner.mjs": "52bf1a5d51bd4f5e873966737451367ae3fdd11169344a474c633c184fb9573e",
+    "loadtest/local-profile-fixture.mjs": "5146c5108e87a5e3f69b1aa14f66f43aedee51df45c0dcd44c18aa7f40a626a8",
+    "loadtest/local-profile-fixture.test.mjs": "b641b0bad58b510260729ec71b90cd71c571171320339747586b89a38d071071"
+  },
+  "limits": [
+    "Previous natural TCP acceptance remains bound to dda2c221; 9c4ad3cf interrupted runtime is not accepted",
+    "Current callback/sampling fixes need their own real PostgreSQL and CI evidence",
+    "No general RF, capacity, long-soak or physical/native closure"
+  ]
+}

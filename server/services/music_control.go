@@ -13,6 +13,7 @@ import (
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/repository"
 	"github.com/google/uuid"
 )
 
@@ -46,13 +47,9 @@ type ErrorAwareMusicState interface {
 	GetStateWithError(context.Context, string) (*models.MusicBotChannelState, error)
 }
 
-type musicControlStore interface {
-	MusicControlHead(context.Context, string) (*models.MusicControlHead, error)
-	AdoptMusicControl(context.Context, models.MusicControlHead) (models.MusicControlHead, error)
-	FindMusicReceipt(context.Context, models.MusicOperation) (*models.MusicOperationReceipt, error)
-	CommitMusicOperation(context.Context, models.MusicOperationCommit) (models.MusicOperationReceipt, bool, error)
-	SaveMusicTransition(context.Context, models.MusicControlHead, *models.MusicSession) error
-}
+type MusicControlStore = repository.MusicControlRepository
+
+type musicControlStore = MusicControlStore
 
 type musicCommandContextKey struct{}
 type musicReconnectContextKey struct{}
@@ -100,16 +97,16 @@ func lockMusicRequest(key [32]byte) func() {
 }
 
 func (s *musicBotService) controlStore() (musicControlStore, error) {
-	store, ok := s.sessions.(musicControlStore)
-	if !ok {
+	store := s.controls
+	if store == nil {
 		return nil, fmt.Errorf("music protocol store unavailable")
 	}
 	return store, nil
 }
 
 func (s *musicBotService) CheckLegacyControl(ctx context.Context, channelID string) error {
-	store, ok := s.sessions.(musicControlStore)
-	if !ok {
+	store := s.controls
+	if store == nil {
 		return nil
 	}
 	head, err := store.MusicControlHead(ctx, channelID)
@@ -241,7 +238,7 @@ func (s *musicBotService) persistEnqueue(ctx context.Context, bot *botInstance, 
 		if err := s.CheckLegacyControl(ctx, bot.channelID); err != nil {
 			return err
 		}
-		if writer, ok := s.sessions.(musicLegacyEnqueueStore); ok {
+		if writer := s.legacyEnqueue; writer != nil {
 			if err := writer.SaveMusicEnqueue(ctx, s.sessionSnapshot(bot), actor); err != nil {
 				return err
 			}

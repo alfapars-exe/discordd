@@ -723,6 +723,48 @@ func TestDMRepo_ReplyReference(t *testing.T) {
 	}
 }
 
+func TestDMRepo_ReplyReferenceCannotExposeAnotherConversation(t *testing.T) {
+	db := newTestDB(t)
+	seedDMUsers(t, db)
+	repo := NewSQLiteDMRepo(db.Conn)
+	ctx := context.Background()
+	private := newDMChannel(t, ctx, repo, dmAlice, dmCarol, models.DMStatusAccepted)
+	visible := newDMChannel(t, ctx, repo, dmAlice, dmBob, models.DMStatusAccepted)
+	original := newDMMessage(t, ctx, repo, private.ID, dmCarol, "private content")
+	// A malformed imported reply bypasses the send service's validation.
+	reply := &models.DMMessage{DMChannelID: visible.ID, UserID: dmAlice, Content: strPtr("reply"), ReplyToID: &original.ID}
+	if err := repo.CreateMessage(ctx, reply); err != nil {
+		t.Fatal(err)
+	}
+	got, err := repo.GetMessageByID(ctx, reply.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check := func(message *models.DMMessage) {
+		t.Helper()
+		if message.ID != reply.ID {
+			t.Fatalf("unexpected message %q", message.ID)
+		}
+		if ref := message.ReferencedMessage; ref != nil && (ref.Content != nil || ref.Author != nil) {
+			t.Fatal("reply disclosed the content or author of another conversation")
+		}
+	}
+	check(got)
+	if err := repo.PinMessage(ctx, reply.ID); err != nil {
+		t.Fatal(err)
+	}
+	pinned, err := repo.GetPinnedMessages(ctx, visible.ID)
+	if err != nil || len(pinned) != 1 {
+		t.Fatalf("loading pinned reply: %d rows, error %v", len(pinned), err)
+	}
+	check(&pinned[0])
+	found, count, err := repo.SearchMessages(ctx, visible.ID, "reply", 10, 0)
+	if err != nil || count != 1 || len(found) != 1 {
+		t.Fatalf("searching for reply: total %d, rows %d, error %v", count, len(found), err)
+	}
+	check(&found[0])
+}
+
 // ─── Reactions ───
 
 func TestDMRepo_Reactions(t *testing.T) {

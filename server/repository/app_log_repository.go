@@ -13,3 +13,13 @@ type AppLogRepository interface {
 	DeleteBefore(ctx context.Context, before string) (int64, error)
 	DeleteAll(ctx context.Context) error
 }
+
+type AppLogBatchWriter interface {
+	InsertBatch(context.Context, []models.AppLog) (int64, error)
+}
+
+// AppLogStore retains optional production batching at composition.
+type AppLogStore interface {
+	AppLogRepository
+	AppLogBatchWriter
+}

@@ -36,6 +36,14 @@ type AppLogService interface {
 	Stop()
 }
 
+// AppLogRuntime retains the sink and health capabilities owned by startup.
+// HTTP handlers continue to consume the narrower AppLogService contract.
+type AppLogRuntime interface {
+	AppLogService
+	ConsumeRecord(context.Context, slog.Record)
+	Health() models.AppLogHealth
+}
+
 const appLogRetentionDays = 7
 const appLogBatchSize = 64
 const maxAppLogBytes = 8 * 1024
@@ -46,6 +54,7 @@ type pendingAppLog struct {
 	metadata map[string]string
 }
 type appLogService struct {
+	batchWriter                                                 repository.AppLogBatchWriter
 	repo                                                        repository.AppLogRepository
 	ch                                                          chan pendingAppLog
 	errors                                                      chan pendingAppLog
@@ -60,8 +69,8 @@ type appLogService struct {
 	stopDeadline                                                atomic.Int64
 }
 
-func NewAppLogService(repo repository.AppLogRepository) AppLogService {
-	return &appLogService{repo: repo, ch: make(chan pendingAppLog, 256), errors: make(chan pendingAppLog, 512), done: make(chan struct{})}
+func NewAppLogService(repo repository.AppLogRepository, batchWriter repository.AppLogBatchWriter) AppLogRuntime {
+	return &appLogService{batchWriter: batchWriter, repo: repo, ch: make(chan pendingAppLog, 256), errors: make(chan pendingAppLog, 512), done: make(chan struct{})}
 }
 
 func (s *appLogService) Log(ctx context.Context, level models.LogLevel, category models.LogCategory, userID, serverID *string, message string, metadata map[string]string) {
@@ -314,22 +323,39 @@ func (s *appLogService) flush(parent context.Context, pending []pendingAppLog) {
 	defer cancel()
 	var err error
 	var written int64
-	if batch, ok := s.repo.(interface {
-		InsertBatch(context.Context, []models.AppLog) (int64, error)
-	}); ok {
-		written, err = batch.InsertBatch(ctx, rows)
-	} else {
-		for i := range rows {
-			if err = s.repo.Insert(ctx, &rows[i]); err != nil {
-				break
+	failedEvents := uint64(len(pending))
+	completed := false
+	// The app_log component prefix prevents a storage panic report from being
+	// enqueued into this same sink. Existing partial-write counters stay owned
+	// by this attempt, and a possibly committed row is never retried.
+	logx.Run("app_log.write", func() {
+		if batch := s.batchWriter; batch != nil {
+			written, err = batch.InsertBatch(ctx, rows)
+		} else {
+			for i := range rows {
+				if err = s.repo.Insert(ctx, &rows[i]); err != nil {
+					break
+				}
+				written++
+				// A fallback Insert commits independently. Its grouped occurrences
+				// must not be counted as lost if a later row fails.
+				if occurrences := rows[i].OccurrenceCount; occurrences > 0 {
+					failedEvents -= min(failedEvents, uint64(occurrences))
+				}
 			}
-			written++
 		}
+		completed = true
+	})
+	if !completed {
+		s.writeFailures.Add(1)
+		s.failedEvents.Add(failedEvents)
+		return // logx.Run already emitted the single panic diagnostic.
 	}
+
 	if err != nil {
 		s.writeFailures.Add(1)
-		s.failedEvents.Add(uint64(len(pending)))
-		appLogger.Error("failed to write log batch", "count", len(rows), "err", pkg.ErrText(err))
+		s.failedEvents.Add(failedEvents)
+		appLogger.Error("failed to write log batch", "count", len(rows), "written_rows", written, "failed_events", failedEvents, "err", pkg.ErrText(err))
 		return
 	}
 	if written >= 0 && written < int64(len(rows)) {
@@ -338,6 +364,10 @@ func (s *appLogService) flush(parent context.Context, pending []pendingAppLog) {
 	s.lastSuccess.Store(time.Now().UnixNano())
 }
 func (s *appLogService) purge(parent context.Context) {
+	logx.Run("app_log.purge", func() { s.purgeExpired(parent) })
+}
+
+func (s *appLogService) purgeExpired(parent context.Context) {
 	ctx, cancel := context.WithTimeout(parent, 2*time.Second)
 	defer cancel()
 	cutoff := time.Now().AddDate(0, 0, -appLogRetentionDays).UTC().Format("2006-01-02 15:04:05")

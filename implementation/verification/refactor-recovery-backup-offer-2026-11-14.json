@@ -1,0 +1,26 @@
+{
+  "base_source": "07ca378e0da27b3dfbda1406b953704648e50ce2",
+  "finding": "A fresh device detected an existing key backup but never exposed the only restore UI: the deferred prompt intentionally returns when hasRecoveryBackup is true.",
+  "change": "Offer the non-blocking restore prompt after successful fresh-device registration with an existing backup; keep auth-generation guard and ready-state requirement. No automatic key restoration.",
+  "regression_before": {
+    "passed": 43,
+    "failed": 1,
+    "failure": "showRecoveryPrompt was false after successful initialization with a server backup"
+  },
+  "after": {
+    "command": "vitest run src/stores/e2eeStore.test.ts",
+    "passed": 46,
+    "failed": 0,
+    "cases": [
+      "backup exists",
+      "no backup",
+      "device registration failure"
+    ],
+    "typescript": "tsc -b passed before final test-only registration-failure case",
+    "eslint": "changed store and test passed before final test-only case"
+  },
+  "limitations": [
+    "Production browser backup/restore and history decryption still require a dedicated E2E run.",
+    "No deployment or device acceptance implied."
+  ]
+}

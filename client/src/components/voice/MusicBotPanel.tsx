@@ -1,3 +1,4 @@
+import { VOICE_PEER_VOLUME_RANGE, voicePeerVolume } from "../../stores/voicePreferenceMaps";
 /**
  * MusicBotPanel — Per-channel music bot UI tile.
  *
@@ -51,7 +52,7 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
   const cacheGeneration=useVoiceStore(s=>s.musicBotResetRevision);
   const room = useRoomContext();
   const musicBotIdentity = `__music_bot__:${channelId}`;
-  const musicVolume = useVoiceStore((s) => s.userVolumes[musicBotIdentity] ?? 100);
+  const musicVolume = useVoiceStore((s) => voicePeerVolume(s.userVolumes, musicBotIdentity));
   const setUserVolume = useVoiceStore((s) => s.setUserVolume);
 
   const [timeline, setTimeline] = useState<MusicTimeline | null>(null);
@@ -458,8 +459,8 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
         <span>{t("personalVolume")}</span>
         <input
           type="range"
-          min={0}
-          max={200}
+          min={VOICE_PEER_VOLUME_RANGE[0]}
+          max={VOICE_PEER_VOLUME_RANGE[1]}
           step={5}
           value={musicVolume}
           aria-label={t("personalVolume")}

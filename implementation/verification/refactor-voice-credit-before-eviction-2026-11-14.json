@@ -1,0 +1,27 @@
+{
+  "date": "2026-11-14",
+  "scope": "Persist one session accounting before dual LiveKit eviction",
+  "before": {
+    "test": "TestVoiceUsagePostgresShutdownCreditsBeforeMediaWait",
+    "exit": 1,
+    "failure": "credit not durable before media wait; sql no rows"
+  },
+  "after": {
+    "two_postgres_tests_count": 3,
+    "host_exit": 0,
+    "host_seconds": 5.3,
+    "verified_mtls_linux_race_count": 3,
+    "race_exit": 0,
+    "race_seconds": 8.339,
+    "services_vet_exit": 0,
+    "services_lint_issues": 0,
+    "postgres_runner_tests": 14,
+    "runner_exit": 0
+  },
+  "limitations": [
+    "Blocked media boundary is a controlled LiveKit lookup; actual remote eviction not verified.",
+    "Only per-session credit-before-eviction ordering proven; music-stop and queued sessions before first enqueue remain open.",
+    "No guarantee for crash before first durable handoff or DB unavailability.",
+    "Local integration only; PR298 published527a3ad3 has32 successful of34 observed checks, no failure, overall pending."
+  ]
+}

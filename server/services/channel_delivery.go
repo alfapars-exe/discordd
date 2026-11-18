@@ -15,15 +15,6 @@ import (
 	"github.com/argeinfina/hichat/ws"
 )
 
-// ConfigureChannelDelivery enables the PostgreSQL durable path. Kept separate
-// from the constructor so legacy repository fixtures remain independently usable.
-func ConfigureChannelDelivery(service MessageService, db *sql.DB) {
-	if s, ok := service.(*messageService); ok {
-		s.deliveryDB = db
-		s.deliveryWake = make(chan struct{}, 1)
-	}
-}
-
 // Coalesced hints only: the committed outbox and periodic poll own delivery.
 func (s *messageService) wakeChannelDelivery() {
 	select {
@@ -129,9 +120,12 @@ func (s *messageService) loadAttachmentStates(ctx context.Context, m *models.Mes
 }
 
 // StartChannelDelivery returns a stop function which waits for its worker.
-func StartChannelDelivery(parent context.Context, service MessageService) func() {
-	s, ok := service.(*messageService)
-	if !ok || s.deliveryDB == nil {
+func StartChannelDelivery(parent context.Context, service interface{ StartChannelDelivery(context.Context) func() }) func() {
+	return service.StartChannelDelivery(parent)
+}
+
+func (s *messageService) StartChannelDelivery(parent context.Context) func() {
+	if s.deliveryDB == nil {
 		return func() { /* No worker exists for a legacy fixture. */ }
 	}
 	ctx, cancel := channelWorkerContext(parent)
@@ -262,6 +256,9 @@ func (s *messageService) deliverNext(ctx context.Context) bool {
 		return false
 	}
 	if err != nil {
+		if errors.Is(err, context.Canceled) && errors.Is(ctx.Err(), context.Canceled) {
+			return false
+		}
 		messageLogger.Error("channel outbox claim failed", "err", pkg.ErrText(err))
 		return false
 	}

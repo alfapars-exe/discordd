@@ -74,7 +74,7 @@ func (s *musicBotService) editRestoredMusicQueue(ctx context.Context, store musi
 	s.mu.Unlock()
 	state := &models.MusicBotChannelState{SessionID: head.SessionID, ChannelID: next.ChannelID, ServerID: next.ServerID, Revision: next.Revision, IsPaused: true, Queue: next.Queue, RepeatMode: next.RepeatMode}
 	if clean, err := s.sanitizeMusicState(ctx, state); err == nil {
-		s.publishMusicState(next.ServerID, next.ChannelID, clean, false)
+		s.publishMusicState(next.ServerID, next.ChannelID, clean, nil)
 	}
 	return receipt.Result, nil
 }

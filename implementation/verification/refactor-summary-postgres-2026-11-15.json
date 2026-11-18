@@ -1,0 +1,23 @@
+{
+  "head": "1e601af0acd7fffe7e8355171fe67b454dd04979",
+  "source_delta": "notification_counts_test.go uses the declared factory return contract instead of concrete casts",
+  "database": "PostgreSQL 18.6 dedicated loopback container",
+  "tests": [
+    {
+      "Time": "2026-11-15T01:01:00.8942451+03:00",
+      "Action": "pass",
+      "Package": "github.com/argeinfina/hichat/repository",
+      "Test": "TestNotificationUnreadSummaryAuthoritativeBeyondPageAndReadIsolation",
+      "Elapsed": 1.69
+    },
+    {
+      "Time": "2026-11-15T01:01:01.5771534+03:00",
+      "Action": "pass",
+      "Package": "github.com/argeinfina/hichat/repository",
+      "Test": "TestNotificationUnreadSummaryExcludesOnlyExactCanonicalDMSource",
+      "Elapsed": 0.68
+    }
+  ],
+  "package_seconds": 2.622,
+  "limits": "sslmode=disable, non-race, no deployment or device acceptance claim"
+}

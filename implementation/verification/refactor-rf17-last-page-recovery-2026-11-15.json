@@ -1,0 +1,22 @@
+{
+  "scope": "RF17 final result page recovery",
+  "regression": "When the only hit on page two disappears during hydration, both panels could display an empty page although page one still contained matches. DM regression failed before fix.",
+  "change": "Shared hydration clamps the requested offset to the last remaining page after pruning; returns effective offset with messages. Both panels update their pagination state.",
+  "verification": {
+    "targeted": "81 passed across DMSearchPanel, SearchPanel and keyStorage",
+    "fullClientPriorSource": {
+      "source": "480c7bff",
+      "filesPassed": 477,
+      "testsPassed": 4903,
+      "testsSkipped": 1,
+      "durationSeconds": 114.42
+    },
+    "fullClientScope": "Full suite precedes this offset fix; not evidence for new source.",
+    "typescript": "passed",
+    "eslint": "passed"
+  },
+  "limits": [
+    "First-query and matching-ID memory bounds remain open",
+    "Whole RF17 and overall refactor remain open"
+  ]
+}

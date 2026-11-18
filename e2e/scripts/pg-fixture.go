@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/argeinfina/hichat/database"
 	"github.com/jackc/pgx/v5"
@@ -64,21 +65,25 @@ func runFixture() error {
 	if action != "create" {
 		return fmt.Errorf("unknown action")
 	}
-	if _, err = db.ExecContext(ctx, createQuery); err != nil {
-		return fmt.Errorf("cannot create unique run database")
-	}
+	// The launcher reads the descriptor only after this process succeeds.
+	// Finish filesystem work first so a disk error cannot strand a database.
 	runURL := *control
 	runURL.Path = "/" + name
-	encoded, _ := json.Marshal(map[string]string{"url": runURL.String(), "run_id": id})
-	file, err := os.OpenFile(descriptor, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-	if err != nil {
-		_, _ = db.ExecContext(ctx, dropQuery)
-		return fmt.Errorf("cannot create run descriptor")
-	}
-	_, err = file.Write(encoded)
-	closeErr := file.Close()
+	encoded, err := json.Marshal(map[string]string{"url": runURL.String(), "run_id": id})
 	if err != nil {
 		return err
 	}
-	return closeErr
+	file, err := os.OpenFile(descriptor, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if err != nil {
+		return fmt.Errorf("cannot create run descriptor")
+	}
+	_, writeErr := file.Write(encoded)
+	closeErr := file.Close()
+	if err := errors.Join(writeErr, closeErr); err != nil {
+		return errors.Join(err, os.Remove(descriptor))
+	}
+	if _, err = db.ExecContext(ctx, createQuery); err != nil {
+		return errors.Join(fmt.Errorf("cannot create unique run database"), os.Remove(descriptor))
+	}
+	return nil
 }

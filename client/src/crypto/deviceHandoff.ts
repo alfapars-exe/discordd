@@ -2,6 +2,7 @@
  * No source records are deleted. Capsule output exists only after the durable
  * retirement marker and the encrypted capsule are committed together.
  */
+import { CACHED_SEARCH_EPOCH_KEY } from "./cachedSearchEpoch";
 import { openDB, type IDBPDatabase } from "idb";
 import { x25519, ed25519 } from "@noble/curves/ed25519.js";
 import { hkdf } from "@noble/hashes/hkdf.js";
@@ -263,6 +264,7 @@ async function snapshot(db: IDBPDatabase, owner: string) {
   rows.metadata = rows.metadata.filter(
     (r) =>
       r.key !== markerKey &&
+      r.key !== CACHED_SEARCH_EPOCH_KEY &&
       !String(r.key).startsWith("group_pending_key:v1:") &&
       !String(r.key).startsWith("group_pending:v1:"),
   );

@@ -1,3 +1,5 @@
+import { DEVICE_LOCAL_VOICE_SETTING_KEYS } from "./voicePreferenceScope";
+import { cacheable } from "./preferencesCodec";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createStore, type StateCreator, type StoreApi } from "zustand/vanilla";
 import type { VoiceSettings, VoiceSettingsSlice } from "./slices/voiceSettingsSlice";
@@ -62,6 +64,105 @@ afterEach(() => {
 });
 
 describe("account preference consumers", () => {
+  it("applies the complete account contract while retaining runtime identity, actions and local devices", () => {
+    const deviceFields = new Set<string>(DEVICE_LOCAL_VOICE_SETTING_KEYS);
+    const local = Object.fromEntries(DEVICE_LOCAL_VOICE_SETTING_KEYS.map(key => [key,
+      typeof defaults[key] === "boolean" ? !defaults[key] : defaults[key],
+    ]));
+    const runtime = { runtimePeer: 73 };
+    voice.setState({ ...local, cameraDevice: "local-camera", muteHotkeyGlobal: true, preMuteVolumes: runtime });
+    const action = voice.getState().setMasterVolume;
+    const account = Object.fromEntries(Object.entries(defaults).filter(([key]) => !deviceFields.has(key))
+      .map(([key, value]) => [key, typeof value === "boolean" ? !value : value]));
+    voice.getState().applyFromServer({ ...account, cameraDevice: "foreign-camera", muteHotkeyGlobal: false });
+    const expected = { ...defaults, ...local, ...account, cameraDevice: "local-camera", muteHotkeyGlobal: true };
+    expect(voice.getState()).toMatchObject(expected);
+    expect(voice.getState().preMuteVolumes).toBe(runtime);
+    expect(voice.getState().setMasterVolume).toBe(action);
+    expect(JSON.parse(localStorage.getItem("mqvi_voice_settings")!)).toEqual(expected);
+    expect(sendPreferences).not.toHaveBeenCalled();
+  });
+  it.each(["krisp", "dpdfnet"])("migrates legacy server engine %s after validation", engine => {
+    voice.setState({ noiseReductionEngine: "webrtc" });
+    voice.getState().applyFromServer({ noiseReductionEngine: engine });
+    expect(voice.getState().noiseReductionEngine).toBe("rnnoise");
+    expect(sendPreferences).not.toHaveBeenCalled();
+  });
+  it("merges valid peer voice values while rejecting malformed peer entries", () => {
+    voice.setState({ userVolumes: { existing: 65 }, localMutedUsers: { existing: true } });
+    voice.getState().applyFromServer({
+      userVolumes: { accepted: 150, invalid: "loud", nonfinite: Number.POSITIVE_INFINITY, negative: -1 },
+      localMutedUsers: { accepted: false, invalid: "false" },
+    });
+    expect(voice.getState().userVolumes).toEqual({ existing: 65, accepted: 150 });
+    expect(voice.getState().localMutedUsers).toEqual({ existing: true, accepted: false });
+    expect(sendPreferences).not.toHaveBeenCalled();
+  });
+  it.each([
+    { masterVolume: "loud" }, { masterVolume: Number.NaN },
+    { soundsEnabled: "false" }, { micSensitivity: 999 },
+    { inputMode: "unsupported" }, { userVolumes: [50] },
+  ])("ignores malformed server voice leaves while applying valid siblings: %j", malformed => {
+    voice.getState().applyFromServer({ ...malformed, inputVolume: 125 });
+    expect(voice.getState().userVolumes).toEqual({});
+    expect(voice.getState()).toMatchObject({
+      masterVolume: defaults.masterVolume, soundsEnabled: defaults.soundsEnabled,
+      micSensitivity: defaults.micSensitivity, inputMode: defaults.inputMode,
+      userVolumes: {}, inputVolume: 125,
+    });
+    expect(JSON.parse(localStorage.getItem("mqvi_voice_settings")!)).toMatchObject({
+      masterVolume: defaults.masterVolume, soundsEnabled: defaults.soundsEnabled,
+      micSensitivity: defaults.micSensitivity, inputMode: defaults.inputMode,
+      userVolumes: {}, inputVolume: 125,
+    });
+    expect(sendPreferences).not.toHaveBeenCalled();
+  });
+  it("persists the complete voice contract without runtime state or store actions", async () => {
+    const expected = { ...defaults, inputDevice: "local-test-mic", masterVolume: 57 };
+    voice.setState({ ...defaults, inputDevice: expected.inputDevice, preMuteVolumes: { runtimePeer: 91 } });
+    voice.getState().setMasterVolume(expected.masterVolume);
+    await vi.advanceTimersByTimeAsync(400);
+    expect(JSON.parse(localStorage.getItem("mqvi_voice_settings")!)).toEqual(expected);
+    expect(sendPreferences).toHaveBeenCalledWith({ voice_settings: { masterVolume: 57 } });
+  });
+  it("round-trips every account voice default while excluding every device field", () => {
+    const deviceFields = new Set<string>(DEVICE_LOCAL_VOICE_SETTING_KEYS);
+    const expected = Object.fromEntries(Object.entries(defaults).filter(([key]) => !deviceFields.has(key)));
+    expect(cacheable({ voice_settings: defaults })).toEqual({ voice_settings: expected });
+    const opposite = Object.fromEntries(Object.entries(defaults).map(([key, value]) => [key, typeof value === "boolean" ? !value : value]));
+    expect(cacheable({ voice_settings: opposite })).toEqual({ voice_settings: Object.fromEntries(Object.entries(opposite).filter(([key]) => !deviceFields.has(key))) });
+  });
+  it.each([false, true])("retains every device field on account reset with preserveSessionState=%s", preserveSessionState => {
+    const deviceValues = Object.fromEntries(DEVICE_LOCAL_VOICE_SETTING_KEYS.map(key => {
+      const value = defaults[key];
+      return [key, typeof value === "boolean" ? !value : typeof value === "number" ? value + 1 : `local-${key}`];
+    }));
+    const sessionVolumes = { alice: 73 };
+    voice.setState({ ...deviceValues, masterVolume: 42, preMuteVolumes: sessionVolumes });
+    voice.getState().resetAccountPreferences(preserveSessionState);
+    expect(voice.getState()).toMatchObject({ ...deviceValues, masterVolume: defaults.masterVolume });
+    expect(voice.getState().preMuteVolumes).toEqual(preserveSessionState ? sessionVolumes : {});
+    expect(JSON.parse(localStorage.getItem("mqvi_voice_settings")!)).toMatchObject(deviceValues);
+    expect(sendPreferences).not.toHaveBeenCalled();
+  });
+
+  it("keeps device-only overlay flags local through server apply and account reset", async () => {
+    voice.getState().setVoiceOverlayCompatibility(true);
+    voice.getState().setVoiceOverlayVideo(true);
+    voice.getState().setVoiceOverlayStreams(true);
+    voice.getState().setVoiceOverlayWelcome(true);
+    voice.getState().setVoiceOverlayGoLive(true);
+    const local = { voiceOverlayCompatibility: true, voiceOverlayVideo: true, voiceOverlayStreams: true, voiceOverlayWelcome: true, voiceOverlayGoLive: true };
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(sendPreferences).not.toHaveBeenCalled();
+    voice.getState().applyFromServer({ voiceOverlayCompatibility: false, voiceOverlayVideo: false, voiceOverlayStreams: false, voiceOverlayWelcome: false, voiceOverlayGoLive: false, masterVolume: 88 });
+    expect(voice.getState()).toMatchObject({ ...local, masterVolume: 88 });
+    voice.getState().resetAccountPreferences();
+    expect(voice.getState()).toMatchObject(local);
+    expect(JSON.parse(localStorage.getItem("mqvi_voice_settings")!)).toMatchObject(local);
+    expect(sendPreferences).not.toHaveBeenCalled();
+  });
+
   it("resets every appearance value and cached preview without syncing or changing local transparency", async () => {
     settings.getState().applyFromServer("ocean");
     settings.getState().applyAppearanceFromServer({

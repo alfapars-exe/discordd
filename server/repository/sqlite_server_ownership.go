@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/argeinfina/hichat/database"
@@ -31,6 +32,17 @@ func (r *sqliteServerOwnershipRepo) Transfer(ctx context.Context, actor, sid, ha
 	}
 	var result *models.Server
 	err := database.WithTx(ctx, raw, func(tx *sql.Tx) error {
+		if database.IsPostgres(r.db) {
+			// Wait for an in-flight departure before checking transfer eligibility.
+			var member int
+			err := tx.QueryRowContext(ctx, "SELECT 1 FROM server_members WHERE server_id=? AND user_id=? FOR KEY SHARE", serverID, target).Scan(&member)
+			if errors.Is(err, sql.ErrNoRows) {
+				return pkg.ErrForbidden
+			}
+			if err != nil {
+				return err
+			}
+		}
 		// One conditional UPDATE acquires the write boundary and checks both
 		// identities, membership, bans, session generation, password and MFA.
 		updated, err := tx.ExecContext(ctx, `UPDATE servers SET owner_id=?1 WHERE id=?2 AND owner_id=?3
@@ -55,33 +67,16 @@ func (r *sqliteServerOwnershipRepo) Transfer(ctx context.Context, actor, sid, ha
 		if n != 1 {
 			return pkg.ErrForbidden
 		}
-		rows, err := tx.QueryContext(ctx, `SELECT id FROM roles WHERE server_id=? AND is_owner=1`, serverID)
+		ownerRoleID, err := serverOwnerRoleID(ctx, tx, serverID)
 		if err != nil {
 			return err
 		}
-		ids := []string{}
-		for rows.Next() {
-			var id string
-			if err := rows.Scan(&id); err != nil {
-				rows.Close()
-				return err
-			}
-			ids = append(ids, id)
-		}
-		scanErr := rows.Err()
-		rows.Close()
-		if scanErr != nil {
-			return scanErr
-		}
-		if len(ids) != 1 {
-			return fmt.Errorf("ownership role invariant unavailable")
-		}
 		// Clear every assignment of this server's owner role (including any
 		// inconsistent historical extra grant); ordinary roles stay intact.
-		if _, err := tx.ExecContext(ctx, `DELETE FROM user_roles WHERE role_id=?`, ids[0]); err != nil {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM user_roles WHERE role_id=?`, ownerRoleID); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO user_roles(user_id,role_id,server_id) VALUES(?,?,?)`, target, ids[0], serverID); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO user_roles(user_id,role_id,server_id) VALUES(?,?,?)`, target, ownerRoleID, serverID); err != nil {
 			return err
 		}
 		auditQuery := `INSERT INTO audit_logs(server_id,actor_user_id,target_user_id,event_type,metadata,actor_snapshot,target_snapshot)
@@ -104,4 +99,31 @@ func (r *sqliteServerOwnershipRepo) Transfer(ctx context.Context, actor, sid, ha
 		return nil, err
 	}
 	return result, nil
+}
+
+// serverOwnerRoleID reads the ownership invariant within the transfer transaction.
+// Close the cursor before any role writes, including on scan failure.
+func serverOwnerRoleID(ctx context.Context, tx *sql.Tx, serverID string) (string, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT id FROM roles WHERE server_id=? AND is_owner=1`, serverID)
+	if err != nil {
+		return "", err
+	}
+	ids := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return "", err
+		}
+		ids = append(ids, id)
+	}
+	scanErr := rows.Err()
+	rows.Close()
+	if scanErr != nil {
+		return "", scanErr
+	}
+	if len(ids) != 1 {
+		return "", fmt.Errorf("ownership role invariant unavailable")
+	}
+	return ids[0], nil
 }

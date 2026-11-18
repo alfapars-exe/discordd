@@ -16,10 +16,8 @@ import (
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
-	"github.com/argeinfina/hichat/pkg/crypto"
 	"github.com/argeinfina/hichat/pkg/logx"
 
-	"github.com/livekit/protocol/auth"
 	livekitproto "github.com/livekit/protocol/livekit"
 	lksdk "github.com/livekit/server-sdk-go/v2"
 
@@ -40,17 +38,9 @@ import (
 // list immediately after /play.
 func (s *musicBotService) connectBotToRoom(ctx context.Context, bot *botInstance) error {
 	musicBotLogger.Info("connectBotToRoom: starting", "channel_id", bot.channelID, "server_id", bot.serverID)
-	if s.roomKeys == nil {
-		return fmt.Errorf("music room E2EE key source is unavailable")
-	}
-	keyProvider := &musicRoomKeyProvider{source: s.roomKeys, roomName: bot.roomName}
-	keyIndex := keyProvider.CurrentKeyIndex()
-	if _, err := keyProvider.GetKey(keyIndex); err != nil {
-		return fmt.Errorf("prepare music room E2EE key: %w", err)
-	}
-	frameEncryptor, err := lksdk.NewFrameEncryptor(keyProvider, lksdk.CodecOpus)
+	frameEncryptor, err := s.prepareMusicFrameEncryptor(bot.roomName)
 	if err != nil {
-		return fmt.Errorf("prepare music Opus frame encryption: %w", err)
+		return err
 	}
 	lkInstance, err := s.livekit.GetByServerID(ctx, bot.serverID)
 	if err != nil {
@@ -60,36 +50,9 @@ func (s *musicBotService) connectBotToRoom(ctx context.Context, bot *botInstance
 	musicBotLogger.Info("connectBotToRoom: livekit instance resolved",
 		"url", lkInstance.URL, "self_hosted", !lkInstance.IsPlatformManaged)
 
-	apiKey, err := crypto.Decrypt(lkInstance.APIKey, s.encryptionKey)
+	token, err := s.musicBotRoomToken(bot, lkInstance)
 	if err != nil {
-		musicBotLogger.Error("connectBotToRoom: api key decrypt failed", "instance_id", lkInstance.ID, "err", pkg.ErrText(err))
-		return fmt.Errorf("api key decrypt: %w", err)
-	}
-	apiSecret, err := crypto.Decrypt(lkInstance.APISecret, s.encryptionKey)
-	if err != nil {
-		musicBotLogger.Error("connectBotToRoom: api secret decrypt failed", "instance_id", lkInstance.ID, "err", pkg.ErrText(err))
-		return fmt.Errorf("api secret decrypt: %w", err)
-	}
-
-	canPublish := true
-	canSubscribe := true
-	canPublishData := false
-
-	at := auth.NewAccessToken(apiKey, apiSecret)
-	at.SetVideoGrant(&auth.VideoGrant{
-		RoomJoin:       true,
-		Room:           bot.roomName,
-		CanPublish:     &canPublish,
-		CanSubscribe:   &canSubscribe,
-		CanPublishData: &canPublishData,
-	}).
-		SetIdentity(models.MusicBotUserID + ":" + bot.channelID).
-		SetName("MusicBot").
-		SetValidFor(24 * time.Hour)
-
-	token, err := at.ToJWT()
-	if err != nil {
-		return fmt.Errorf("jwt: %w", err)
+		return err
 	}
 
 	musicBotLogger.Info("connectBotToRoom: dialing livekit", "url", lkInstance.URL, "room", bot.roomName)
@@ -100,7 +63,7 @@ func (s *musicBotService) connectBotToRoom(ctx context.Context, bot *botInstance
 				// Preserve the interrupted track and pending queue. Rejoining and
 				// resuming is deliberately explicit: an unattended backend or
 				// LiveKit reconnect must never make the bot start playing again.
-				logx.Go("service.music_bot.disconnected", func() {
+				s.launchMusicWorker("service.music_bot.disconnected", func() {
 					s.StopAllForChannel(bot.channelID)
 					s.recoverDisconnectedBot(bot.channelID)
 				})
@@ -503,14 +466,16 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 	// ends up here. So this call site needs its own guard, independent of
 	// extractTracks's.
 	//
-	// Runs on its own bounded context, checked and released before
+	// Runs on its own bounded context, linked to terminal service cancellation,
+	// and checked and released before
 	// bot.cancelFn is ever set: at this point the stall watchdog doesn't
 	// exist yet (it's armed further down), so a guard tied to the pipeline's
 	// own un-timed context could block this goroutine on a wedged DNS
 	// resolver forever. Ordering it before the cancelFn assignment also
 	// means a rejection here never leaves bot.cancelFn pointing at a
 	// pipeline that was never started.
-	guardCtx, guardCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	lifetime := s.musicLifetimeContext()
+	guardCtx, guardCancel := context.WithTimeout(lifetime, 5*time.Second)
 	guardErr := validateMusicURLNetwork(guardCtx, track.URL)
 	// Read before guardCancel, which would turn the context's error into
 	// Canceled.
@@ -529,7 +494,7 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 	// *LocalSampleTrack is a non-nil interface value, and WriteSample on it
 	// panics.
 	bot.mu.Lock()
-	endedEarly := bot.killRequestedLocked()
+	endedEarly := bot.killRequestedLocked() || lifetime.Err() != nil
 	audio := bot.audioTrack
 	room := bot.lkRoom
 	bot.mu.Unlock()
@@ -552,7 +517,7 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 	}
 	var sink sampleWriter = audio
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(lifetime)
 	defer cancel()
 
 	bot.mu.Lock()
@@ -995,15 +960,17 @@ func (s *musicBotService) scheduleIdleLeaveLocked(bot *botInstance) {
 	bot.cancelIdleTimer()
 	gen := bot.idleGen
 	bot.idleTimer = time.AfterFunc(s.idleLeaveDelay(), func() {
-		bot.mu.Lock()
-		if gen != bot.idleGen || bot.loopRunning || len(bot.queue) > 0 || bot.stopFlag {
+		s.launchMusicWorker("service.music_bot.idle_leave", func() {
+			bot.mu.Lock()
+			if gen != bot.idleGen || bot.loopRunning || len(bot.queue) > 0 || bot.stopFlag {
+				bot.mu.Unlock()
+				return
+			}
+			bot.stopping.Store(true)
 			bot.mu.Unlock()
-			return
-		}
-		bot.stopping.Store(true)
-		bot.mu.Unlock()
-		musicBotLogger.Info("idle leave", "channel_id", bot.channelID)
-		s.stopBot(bot)
+			musicBotLogger.Info("idle leave", "channel_id", bot.channelID)
+			s.stopBot(bot)
+		})
 	})
 }
 

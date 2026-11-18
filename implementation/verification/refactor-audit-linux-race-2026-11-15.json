@@ -1,0 +1,26 @@
+{
+  "source": "17782ba8cf959180af3bf94eb0e7f3c15c8cb960",
+  "source_stability": "No server source edits during run; later commits documentation only.",
+  "environment": {
+    "os": "Linux amd64 Docker",
+    "go": "1.27.4",
+    "CGO_ENABLED": "1",
+    "image_prefix": "4fa7c968ba93",
+    "cpus": 2,
+    "memory": "6g",
+    "source_mount": "readonly"
+  },
+  "command": "go test -race ./services -run ^TestAudit -count=10 -timeout=5m",
+  "result": "PASS, 3.426s test package execution; cold race compilation time excluded from package duration",
+  "scope": [
+    "Stop-before-Start drains accepted entries",
+    "Write after terminal Stop rejected",
+    "32 concurrent lifecycle callers retain one writer; 64 accepted entries persisted once"
+  ],
+  "cleanup": "Docker --rm owned hichat-audit-race-20261115 completed and removed automatically; cache volumes retained.",
+  "limits": [
+    "Targeted audit lifecycle race run; not full server race acceptance.",
+    "Windows broad session 88113 remains live; current-source CI separate.",
+    "RF11 and overall RF01-RF30 incomplete."
+  ]
+}

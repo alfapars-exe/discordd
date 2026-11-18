@@ -70,7 +70,7 @@ func TestPostgresRolePatchConcurrentChanges(t *testing.T) {
 	published := make(chan *models.Role, 1)
 	hub := &testutil.MockBroadcaster{BroadcastToServerFn: func(_ string, e ws.Event) { published <- e.Data.(*models.Role) }}
 	roles := repository.NewSQLiteRoleRepo(db)
-	svc := NewRoleService(roles, repository.NewServerMembershipTxRunner(db), hub, nil)
+	svc := NewRoleService(roles, repository.NewServerMembershipTxRunner(db), hub, nil, nil)
 	name := "after"
 	zero := models.Permission(0)
 	for _, tc := range []struct {

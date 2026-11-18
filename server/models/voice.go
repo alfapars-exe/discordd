@@ -24,7 +24,8 @@ type VoiceState struct {
 	// the session duration without a second instance lookup, and skip
 	// writing usage rows for self-hosted instances. All json:"-" because
 	// clients have no business seeing this.
-	JoinedAt time.Time `json:"-"`
+	JoinedAt       time.Time `json:"-"`
+	UsageSessionID string    `json:"-"` // Stable server-generated usage replay identity.
 	// ChannelGeneration fences pending channel work without resetting quota accounting.
 	ChannelGeneration uint64 `json:"-"`
 	LiveKitInstanceID string `json:"-"`

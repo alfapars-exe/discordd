@@ -9,6 +9,7 @@
 
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { ownSubscriptions } from "../../utils/ownSubscriptions";
 
 function CustomTitleBar() {
   const { t } = useTranslation("settings");
@@ -19,13 +20,10 @@ function CustomTitleBar() {
     const api = window.electronAPI;
     if (!api) return;
 
-    const stopMaximized = api.onMaximizedChange((val) => setIsMaximized(val));
-    const stopDownloaded = api.onUpdateDownloaded(() => setUpdateReady(true));
-
-    return () => {
-      stopMaximized?.();
-      stopDownloaded?.();
-    };
+    return ownSubscriptions([
+      () => api.onMaximizedChange((val) => setIsMaximized(val)),
+      () => api.onUpdateDownloaded(() => setUpdateReady(true)),
+    ]);
   }, []);
 
   function handleMinimize() {
@@ -41,7 +39,9 @@ function CustomTitleBar() {
   }
 
   function handleUpdate() {
-    window.electronAPI?.installUpdate();
+    void window.electronAPI?.installUpdate().catch(() => {
+      console.warn("[updater] Install request failed");
+    });
   }
 
   return (

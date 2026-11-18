@@ -1,0 +1,24 @@
+{
+  "date": "2026-11-15",
+  "sourceCommit": "93deb973",
+  "sources": {
+    "permission_foundation_wiring_test.go": "cdd3a666f9a7fe4909171b961eecb66c1a214e5581ad0bd5c0709094d435b6e0",
+    "root_repository_wiring_test.go": "4808ee40e776af1ae41c47f14d3de3eeea27a0421e0c8af9ce3aceec1c876727",
+    "service_startup_rollback_test.go": "1273f93bbd762a964bc2055d29298a884ba0246c91ea40d289491bbc2207e6c7",
+    "voice_runtime_wiring_test.go": "892709d16e45e9ee97f0b8fc21a341a8fd9c0391a4cb7c8d3d3ce943246db63f"
+  },
+  "basis": "same stopped-goroutine profile bookkeeping race exposed by c69db795 route fixture CI failure",
+  "change": "replace nine remaining exact post-stop cache/limiter profile assertions with existing bounded settlement helpers across four root fixture files",
+  "audit": "remaining direct routeCacheWorkerCount/limiterWorkerCount assertions all validate positive live-worker handoff;no post-stop instantaneous assertion remains in this root counter family",
+  "validation": {
+    "windowsRoot": "go test . -count=1 -timeout=5m:PASS6.990s before import-only grouping",
+    "linuxRoot": "immutable git archive93deb973,Go1.27.4/CGO1,two CPUs/six GiB;go test -race -covermode=atomic -coverprofile=/tmp/root-profiles.out . -count=1 -timeout=5m:PASS33.139s,72.2%statements,no race report"
+  },
+  "cleanup": "owned --rm Linux container completed and removed;immutable snapshot retained in TEMP",
+  "limits": [
+    "expected final counts and500ms bound unchanged;no fixture reruns",
+    "root package verification only,not entire server/PostgreSQL acceptance",
+    "held locally while dfcd853d CI runs;latest17success17pending0failure is nonterminal",
+    "RF11 and whole-project acceptance remain open"
+  ]
+}

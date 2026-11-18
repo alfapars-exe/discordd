@@ -1,0 +1,47 @@
+{
+  "baselineCommit": "bae26d297c35dfc5c0b037c9cf282a6b0fb998b7",
+  "scope": "IndexedDB opening failure recovery and identity-owned registry eviction; no automatic retry and no historical DM timeout diagnosis",
+  "before": {
+    "failed": 2,
+    "passed": 1
+  },
+  "after": {
+    "targetedPassed": 80,
+    "fullClientPassed": 5585,
+    "fullClientSkipped": 1,
+    "typescriptViteBuild": "PASS",
+    "targetedESLint": "PASS"
+  },
+  "regressions": [
+    "Rejected opening is evicted; later caller can retry and original error identity is preserved",
+    "Retired blocking callback cannot evict successor connection",
+    "Retired opening rejection cannot evict successor connection"
+  ],
+  "logs": {
+    "key-open-before.log": {
+      "path": "G:\\hichat-refactor-20261116-anoknpqz\\key-open-before.log",
+      "sha256": "2a9c0079bfefe4457f133f80a6d4ca33526ef351d2d28d486227f71ffc42ee4e"
+    },
+    "key-open-after.log": {
+      "path": "G:\\hichat-refactor-20261116-anoknpqz\\key-open-after.log",
+      "sha256": "cf22f9abd5dfb58391012374427edb8f1db2eedfa1419d7c967b36ffebecb889"
+    },
+    "key-open-full-client.log": {
+      "path": "G:\\hichat-refactor-20261116-anoknpqz\\key-open-full-client.log",
+      "sha256": "7a7612782ad13c698accee5c875bedcfe4e300ca8d7fb1c0bcba5a16aebb943d"
+    },
+    "key-open-build.log": {
+      "path": "G:\\hichat-refactor-20261116-anoknpqz\\key-open-build.log",
+      "sha256": "9b9ae7d3c99f38ba72fa715eb8c66fd49086053dd6fb6c774ae65b819af0dd0d"
+    },
+    "key-open-lint.log": {
+      "path": "G:\\hichat-refactor-20261116-anoknpqz\\key-open-lint.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "limits": [
+    "Controlled idb.openDB failure and late callback with fake-indexeddb; native engine race reproduction not claimed",
+    "Current-source CI/Sonar pending",
+    "Historical DM panel/app-log root causes and whole-project RF acceptance remain open"
+  ]
+}

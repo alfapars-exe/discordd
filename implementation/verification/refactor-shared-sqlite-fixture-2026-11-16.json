@@ -1,0 +1,108 @@
+{
+  "source": "fbbdcef1",
+  "scope": "Shared immutable SQLite bootstrap bytes for services, repository and census test fixtures",
+  "invariants": [
+    "Each case owns a private file, production-initialized connection pool and cleanup",
+    "Repository PostgreSQL selection and custom cold migration tests unchanged",
+    "Database migration tests stay cold"
+  ],
+  "local": {
+    "go": "1.27.4 windows CGO_ENABLED=0",
+    "testPassRecords": 1393,
+    "testSkipRecords": 35,
+    "failed": 0,
+    "rawPath": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-shared-fixture-full.jsonl",
+    "sha256": "2abe34cad3c3f8e9c62ad9d260362a6e7f1e606af4d8b588a3441cb37781a37b",
+    "vet": "PASS internal/testfixture repository services root",
+    "build": "PASS ./...",
+    "fixtureCoverage": {
+      "statementsPercent": 76.7,
+      "OpenPercent": 100,
+      "OpenWithPathPercent": 73.7,
+      "sqliteSchemaBytesPercent": 75,
+      "note": "Normal migrated schema, connection settings, mutation and parallel isolation covered; constructor and filesystem fatal error branches not fault injected."
+    }
+  },
+  "pending": [
+    "Full RF01–RF30 acceptance"
+  ],
+  "repositoryBenchmark": {
+    "test": "TestChannelPositionsPreparedTransactionContract",
+    "baseline": "fb6e5a62",
+    "candidate": "fbbdcef1",
+    "environment": "Linux Go1.26.11 CGO1 -race; one warmup + nine samples; unchanged transaction test source",
+    "limits": "Local CPU not pinned; this measures test fixture cost, not production latency",
+    "results": {
+      "before": {
+        "warmup": 9.05,
+        "samples": [
+          16.21,
+          15.8,
+          16.29,
+          8.48,
+          8.61,
+          8.73,
+          9.33,
+          8.45,
+          8.65
+        ],
+        "medianSeconds": 8.73,
+        "sha256": "723b63321b6db2151c6997d89c95aecfd3cba10c2ef706b327e0571281218503",
+        "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-refactor-go-linux-cache\\repository-fixture-before-race.jsonl"
+      },
+      "after": {
+        "warmup": 7.29,
+        "samples": [
+          0.13,
+          0.14,
+          0.12,
+          0.13,
+          0.12,
+          0.13,
+          0.13,
+          0.13,
+          0.15
+        ],
+        "medianSeconds": 0.13,
+        "sha256": "75ccd394bcdbabfd8c91e1585c82e70924a4d1b1897ad3b9b5b189b51de8b18a",
+        "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-refactor-go-linux-cache\\repository-fixture-after-race.jsonl"
+      }
+    }
+  },
+  "linuxRace": {
+    "source": "fbbdcef1",
+    "go": "1.26.11 Linux CGO1",
+    "command": "go test -mod=readonly -race ./internal/testfixture ./repository . -count=1 -timeout=15m -json",
+    "passRecords": 1394,
+    "skipRecords": 34,
+    "failRecords": 0,
+    "packageSeconds": {
+      "internal/testfixture": 40.19,
+      "root": 36.92,
+      "repository": 213.383
+    },
+    "rawPath": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-refactor-go-linux-cache\\shared-fixture-full-race.jsonl",
+    "sha256": "bc7194e5b72843f1c8a8224443900aa5843eb09bb025c85e0f781e8d294c8d4a"
+  },
+  "selfScan": {
+    "source": "fbbdcef1",
+    "reviewedExactSourceRecords": 51,
+    "reviewLines": 480,
+    "blockingPatternHits": 0,
+    "result": "PASS",
+    "limit": "Pattern scan does not prove absence of vulnerabilities"
+  },
+  "ci": {
+    "head": "6fbcf7b8447e1e06d240e1ac6932bdd6b6763092",
+    "checks": "36/36 SUCCESS",
+    "serverRun": 43772172520,
+    "rawReceipt": "refactor-6fbc-terminal-ci-2026-11-16.json",
+    "includes": [
+      "PostgreSQL repository and migration contracts",
+      "PostgreSQL mTLS reconnect",
+      "Playwright production suites",
+      "Go race shards"
+    ]
+  },
+  "sonar": "No issues returned for internal/testfixture; analyzed sqlite.go source matched local"
+}

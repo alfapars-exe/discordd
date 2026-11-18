@@ -1,0 +1,88 @@
+{
+  "sourceRevision": "0e891eb96a12865da1caff62743ec80ed3fcceb0",
+  "scope": "Async preference ACK publication and pre-dispatch writer ownership under synchronous observer effects.",
+  "red": [
+    {
+      "log": "hichat-preferences-ack-notification-red.log",
+      "failed": 4,
+      "passed": 58,
+      "behavior": "Validated GET/PATCH could be absent from snapshot/accepted patch retained on disk when a saved/loaded observer threw or replaced the binding."
+    },
+    {
+      "log": "hichat-preferences-saving-notification-red.log",
+      "failed": 1,
+      "passed": 62,
+      "unhandledErrors": 1,
+      "behavior": "Saving observer exception before try stranded in-flight patch and rejected detached flush."
+    },
+    {
+      "log": "hichat-preferences-reentrant-writer-red.log",
+      "failed": 2,
+      "passed": 63,
+      "behavior": "Pre-dispatch account replacement polluted writer ownership;reentrant same-binding retry dispatched concurrent/out-of-order PATCH."
+    }
+  ],
+  "targeted": {
+    "passed": 279,
+    "files": 8,
+    "seconds": 4.37,
+    "log": "hichat-preferences-async-observer-green.log"
+  },
+  "behavior": [
+    "Persist validated GET/PATCH acknowledgment and clear accepted queued data before loaded/saved notifications can throw or replace scope.",
+    "GET observer failures use local application retry with original reset/session plan;no redundant GET/PATCH.",
+    "Initial saving notification failure preserves unsent queue,dispatches no request,and recovers on manual retry.",
+    "Reserve writer before running synchronous notification effects;reentrant retries join the existing writer.",
+    "Retired queued writer checks scope before consuming state and before API dispatch.",
+    "Typed presentation errors preserve cause;HTTP/cache/action fields unchanged."
+  ],
+  "sha256": {
+    "client/src/stores/preferencesStore.ts": "41c5e2c61367c483bf9d2da60b9600bbb8e5376a190c28987c6f33ed8795f636",
+    "client/src/stores/preferencesStore.test.ts": "3a740ada1e062ada7084e3377a3cdd10766b1d0b7ea74bd39eca7d7a2d2da6d6"
+  },
+  "limits": [
+    "Real preferences orchestration,API/destination adapters mocked;not provider/native/browser acceptance.",
+    "Persistent failures in error/loading notifications and other lifecycle error paths remain separate review scope.",
+    "Existing quota/denied cache remains best-effort;whole RF11/RF13/project/native/physical and active search unique-ID frontier remain open."
+  ],
+  "fullClientCoverage": {
+    "files": 489,
+    "passed": 5199,
+    "skipped": 1,
+    "statementPercent": 67.46,
+    "branchPercent": 64.68,
+    "functionPercent": 61.72,
+    "linePercent": 68.49,
+    "log": "hichat-preferences-async-observer-coverage.log"
+  },
+  "changedModuleCoverage": {
+    "preferencesStore.ts": {
+      "lines": {
+        "total": 243,
+        "covered": 239,
+        "skipped": 0,
+        "pct": 98.35
+      },
+      "functions": {
+        "total": 33,
+        "covered": 32,
+        "skipped": 0,
+        "pct": 96.96
+      },
+      "statements": {
+        "total": 319,
+        "covered": 303,
+        "skipped": 0,
+        "pct": 94.98
+      },
+      "branches": {
+        "total": 196,
+        "covered": 174,
+        "skipped": 0,
+        "pct": 88.77
+      }
+    }
+  },
+  "build": "actual tsc-b/VitePASS3.21s; existing chunk warning",
+  "lint": "changed preference orchestration and testsPASS including preserve-caught-error"
+}

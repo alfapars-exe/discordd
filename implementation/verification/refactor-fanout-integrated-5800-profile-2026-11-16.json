@@ -1,0 +1,199 @@
+{
+  "backendCommit": "1132823baac6b69762c0c6860248672d3da607d8",
+  "producerCommit": "7ab3c3c00cfc98aa30825283e1d8eab913870115",
+  "verifierCommit": "ddbec8f3",
+  "result": "PASS: current integrated candidate, bounded source-bound correctness/resource profile",
+  "profile": {
+    "users": 20,
+    "messagesPerSender": 290,
+    "holdSeconds": 620,
+    "sent": 5800,
+    "uniqueDeliveries": 116000,
+    "completeReceivers": 20,
+    "duplicates": 0,
+    "invalid": 0,
+    "checksPassed": 5940,
+    "checksFailed": 0
+  },
+  "tools": {
+    "go": "go version go1.27.4 windows/amd64",
+    "k6": "k6.exe v2.4.0 (commit/dd9395906d, go1.26.11, windows/amd64)",
+    "backendBinarySha256": "a40403270b34a1fba0e35e1f9f0b2927dd77ecc24fd976aee9fe9c065408ae2f"
+  },
+  "snapshot": {
+    "commit": "1132823baac6b69762c0c6860248672d3da607d8",
+    "files": 1584,
+    "allFileHashesUnchanged": true,
+    "manifestSha256": "67dfc1c4f75ce1d1c4eb35bb44efcc41dfffda47df5d79db0228e5fed5237ff7"
+  },
+  "historyAudit": {
+    "result": "PASS: independently audited bounded extended profile",
+    "backendCommit": "1132823baac6b69762c0c6860248672d3da607d8",
+    "producerCommit": "7ab3c3c00cfc98aa30825283e1d8eab913870115",
+    "verifierCommit": "ddbec8f3",
+    "users": 20,
+    "messages": 5800,
+    "deliveries": 116000,
+    "historyPages": 58,
+    "receiverDigestsMatched": 20,
+    "senderAcknowledgementsMatched": 5800,
+    "digest": "d86d9602458d3bdc624df317e59f98fec65259f329dc866a96ae528e24372c90",
+    "timestampInversionsWithinPages": 341,
+    "canonicalSenderOrder": "profile.userIds insertion order, matching published receipt contract",
+    "historyOrder": "PostgreSQL strictly ascending source_sequence per page, strictly older page boundary, first-row before cursor",
+    "goroutinesMedian": {
+      "baseline": 51,
+      "load": 111.0,
+      "recovery": 51.0
+    },
+    "recoveryPumpPairsZero": true,
+    "scope": "Correctness and observed resources for one620s local profile. Current candidate source-bound correctness/resource profile; not capacity/SLA/slow-consumer/long-soak/physical acceptance. Artifact placement on G differs from short baseline; PostgreSQL storage unchanged.",
+    "pageHashes": {
+      "1.json": "3be3f21219e247699b965862d04e913fbc883522758f606f18415c85e7abd53b",
+      "2.json": "7f5ef0991611990effb58ce666c705cb0d1536e6ff764ce05276647c00cd868b",
+      "3.json": "661ee45d7e1abe9d023391d4c4ebb483428176bf3c0da8e45a7fc16b0f3e4451",
+      "4.json": "fe6b7371a266845f7f4667421ec532047165e84f3a8a12166f0d886fb5bb574c",
+      "5.json": "803388f38627acc4529337eea6abf1036f0140eb403f74bd4cbcbd5177721b50",
+      "6.json": "409bc0acbfae0ff7ce4a728ed9cfb8f38619edc68a97c397e1f2e94f26bb476e",
+      "7.json": "46d06c93f5990e494b68f7edfc4cf045818af83fea60edfd22be2f2e6a7df2d5",
+      "8.json": "b54ae57e82de1130a8bf27c09a63097897aad76386cef55df591cc03a92e1c28",
+      "9.json": "cc5dc98aee1c7ea608040d8ed5041cfe5317e20dea10d2cf8329b1522c281c34",
+      "10.json": "6b6180c2122440b85c5654c6fc2668243a881fb78e06db25dfe36c43a0b8aaae",
+      "11.json": "b794fdff5129b0067e6c377a6cd26126d98701a8332ad6898edc04da13895708",
+      "12.json": "6392ebcb2ac44cd1f43841067caa85f637f272d3b7bb104078dca38a842f6997",
+      "13.json": "9ebbb5ef0e52ba01a28e0512d6ca213b7a59f4719ad4c610f07e80ac574ded7d",
+      "14.json": "98b1b06ca3978ae7ab8f099c2ce8e9d7bb186ca7cc711683c7008e1ad9e6b235",
+      "15.json": "532093f6ff572b4855c326febe3e5caf3e68a37ae227d26c64a2e31b873874c9",
+      "16.json": "966627ebdc0873dca66a04abee41bf7a4de39e85223cfdd5feab271e6cff6d32",
+      "17.json": "e346e5c79f8b932b5c0077641a471044e9776cd69f297054a4567e3b068751e5",
+      "18.json": "4f43759314a571d6a277daa78c032cba82cf9b40b63ae51c6fb1519167a0603e",
+      "19.json": "febee9cc4219831a35d4c68e23ea8c48648e6cc3dfaf1d901f52574c9b5de39b",
+      "20.json": "561ec931e3247da561e491cc7b5dabf65918310d5904a8e24062040bd651faca",
+      "21.json": "85bcc4ada1eb1c556b93622469419267df4486c93bc0815f36f07ff25b398d39",
+      "22.json": "d442620669c264e7b805f8ee6c70b2c9f89cd56970d6b6d88a717aef32dac463",
+      "23.json": "e071dbe36fb2ddd62621e1b2ff016b5a6f5ecbef5a726648d991fa502430c025",
+      "24.json": "850c79cf1d8cea0894ee6554233a304a86523a12a6b225d1954a58afe16c87a7",
+      "25.json": "e51b966355f70cf83c3a53b90ed607481f3d78b3771e354edd43fc69820e454d",
+      "26.json": "b37ae44d1b7835badb1c87aba11ac676bb48bba8dfc862bd8748cab5acab3081",
+      "27.json": "9bfcc8514acb578a08af130f825d491dfcf8924dceb3e8bff611db0cd1caa4c7",
+      "28.json": "1678a15fee5275e5b7e8ba0a25ae59f8acd7971ddf466674b6b9d0b2cb48135a",
+      "29.json": "aaa44f3dbb17d27d5c8acd56df4887fabb41351e1f649739e4fc06228825d8d4",
+      "30.json": "df1f5251dd13e643bab19e71315049bf2150e210d91342683befbbadc645f81d",
+      "31.json": "d08f0114a476384900b347d204f9f520304920f365e18d3b65d9e74a7b6e0e38",
+      "32.json": "71d131f0707c58dc25f2b79b59ce704e7e2e87b164f5d5e3280dedb0ae9ac5f9",
+      "33.json": "11c0885780edbf5e7606516967985e561a6d5e4887797766aca54a174573ceb8",
+      "34.json": "a4e95bcd1b3608ac6c74e85972736909420f74b8ac544cde5097bd1e70034404",
+      "35.json": "46d6b5a781c66b966c36086697099ba6b0b01906862446812ff96129aff34e95",
+      "36.json": "281c258c1fb5afe95de4c413bdfae28d5ded5af559d0cf43236a045cf91fc7ac",
+      "37.json": "f657558dca37752916322a80b012623208ed218d753136e057f5b559ecae34f3",
+      "38.json": "e4fb56a09a3cfb7f21bffbb0bbb7b9cfb892eb6bdcfc2263d4955f64cda7c315",
+      "39.json": "9a6695bb51ceb530acf116043ad04ae9051b5584b6743cf2f3b46ecbda10bcaf",
+      "40.json": "ff58fd38932f621ff4c8a89002796c0789032562ed5dac8baff9d76fe28c3a5c",
+      "41.json": "b6ee3a939c1eb87508a633356f9839f5e9764321345c40a5ef52c9e748ab6e6e",
+      "42.json": "344f688fc5ff9fba45ecb11307d171b82e35e42168124d6c29c182c844eb6af7",
+      "43.json": "2b58c19e2f7afeecb8291bad36222c0d1b1cfa42ea796f85503e0f7f8f4b1f74",
+      "44.json": "4bba48862d068260f5ca6483eabef7557133be1d92ceafe7eca1efd6aad16861",
+      "45.json": "41204ab05ec718ce5e28f08d626ad7b6e0c788fd5915d763aeae7307639280ea",
+      "46.json": "f80c4608a0e979629973e1aca76000f8afcd69279a04e3913d148793564a93bf",
+      "47.json": "8a9aa591b4696b0fee05655792ee94f9cd2dcee53c72e65f638adb49ec7e973f",
+      "48.json": "8148423a923a96e78a5081d2880f8e5e05436e1f8ddfe2386684e8c2cba4ad30",
+      "49.json": "450f7dfc131716bc7611005df32901549aec510b3de22cf1bad89fd9e2f0db88",
+      "50.json": "638594481ae199eae5611fcc2467270d10f350d1c2beac5eb76fcee4f1c6d8fd",
+      "51.json": "1b10bca886185783d22424c612af704198b0ff80320a69af37bb4deea1e8e6f7",
+      "52.json": "b67562e3fa5bc70351d7f0e897e214c3a103fe0410a728f84554928393fe2cc5",
+      "53.json": "4085cf0f51f6055d94a3f6824d8aaccba3885bcead178e43fc87a7249d0f7631",
+      "54.json": "bca2f8ba92e74998c5b6cd2468244412d78df01d58f620521e82eee7a99a541b",
+      "55.json": "61391abeed5da6b15b8e2935bcbc93f1f3d3c5845f07d5fa6706671b032b2f41",
+      "56.json": "deda4d04f53f7bf99301b5f0724d3de49338a7b25dd9516b22529860d74dcd09",
+      "57.json": "2a823cf4542d41cd0840c1a8a71e959bff8111a642c03e8be9fbd38140cf59e6",
+      "58.json": "3f719446fb829ee652cb2cb0663ec83aae491d3d9160ca220aeb028ae85a3545"
+    },
+    "reportSha256": "1b36f91274cfbb25098a0d103d27ca6fc36dadc0d7131317bb0e7db5fb1de13e"
+  },
+  "resources": {
+    "baseline": {
+      "samples": 3,
+      "goroutinesMedian": 51,
+      "heapAllocMedianBytes": 5781720,
+      "workingSetMedianBytes": 41062400
+    },
+    "load": {
+      "samples": 280,
+      "goroutinesMedian": 111.0,
+      "heapAllocMedianBytes": 8623512.0,
+      "workingSetMedianBytes": 53397504.0
+    },
+    "recovery": {
+      "samples": 6,
+      "goroutinesMedian": 51.0,
+      "heapAllocMedianBytes": 7047868.0,
+      "workingSetMedianBytes": 53704704.0
+    }
+  },
+  "mTLS": "Positive sampled application connections all TLS with client certificates; verify-full fixture",
+  "telemetry": {
+    "buckets": 11,
+    "HTTP5xx": 0,
+    "observerQueryFailures": 0,
+    "poolMaxOpenObserved": [
+      4
+    ],
+    "lastCumulativeDBWaitCount": 39788,
+    "waitDurationMsDeltas": [
+      1676,
+      8508,
+      7656,
+      7695,
+      7733,
+      7500,
+      7729,
+      7548,
+      8383,
+      8321,
+      2887
+    ],
+    "scope": "Startup, background, read-only observer and profiling overhead included; no pool-wait budget acceptance"
+  },
+  "cleanup": {
+    "databaseDropped": true,
+    "ownedContainerAbsent": true,
+    "ownedImageAbsent": true,
+    "ownedBackendProcessesRemaining": 0,
+    "observerExit": 0,
+    "observerTerminal": "Owned container stopped or removed",
+    "recoverySamplesWithZeroReadWritePumps": 6
+  },
+  "comparison": {
+    "baselineReceipt": "refactor-fanout-5800-complete-profile-2026-11-16.json",
+    "sameProducerVerifierScheduleAndThresholds": true,
+    "baselineGoroutinesMedian": [
+      51,
+      111,
+      51
+    ],
+    "currentGoroutinesMedian": [
+      51,
+      111,
+      51
+    ],
+    "limits": "Single runs, CPU not pinned; different source paths and background state. Correctness and observations only, not causal performance/SLA/capacity equivalence."
+  },
+  "remaining": [
+    "Slow consumers, query/pool budgets, capacity and longer soak",
+    "RSS and heap retain above warm baseline; no forced-GC or byte-exact return claim",
+    "Historical DM panel root cause; native/device/media/deployment and RF01-RF30 acceptance",
+    "New runtime source changes require source-appropriate revalidation"
+  ],
+  "hashes": {
+    "G:\\hichat-refactor-20261116-anoknpqz\\hichat-pg-tls-test-bdc1493fefb14d16af8596cd4b5f0875\\capacity-report.json": "1b36f91274cfbb25098a0d103d27ca6fc36dadc0d7131317bb0e7db5fb1de13e",
+    "G:\\hichat-refactor-20261116-anoknpqz\\hichat-pg-tls-test-bdc1493fefb14d16af8596cd4b5f0875\\capacity-k6-summary.json": "2f8c3ff27f1f811f20492e78d706b38e863aff79c4944032045015122618c242",
+    "G:\\hichat-refactor-20261116-anoknpqz\\hichat-pg-tls-test-bdc1493fefb14d16af8596cd4b5f0875\\capacity-k6.log": "b033bfe0821a1478b4102d4da69f600f281b93b2bf97ddb935e44013d1a6931a",
+    "G:\\hichat-refactor-20261116-anoknpqz\\launch-integrated-retry.log": "39f38afb9fd1bf6f80e0c91770870ec5b6d44d02983b945d111fbead2744d057",
+    "G:\\hichat-refactor-20261116-anoknpqz\\integrated-independent-audit.json": "96d5a387c9de8a3ac1a240f01dfe33054d03c2f8dd7f06a57670849e7b82ec5d",
+    "G:\\hichat-refactor-20261116-anoknpqz\\audit-integrated-profile.py": "64859c97637decfcee153c72aaed3f75711f88f6a7fd12431eda506f8ba0c3ce",
+    "G:\\hichat-refactor-20261116-anoknpqz\\runtime-telemetry-observer-integrated.json": "0e1b07388c2c291685e6a694ad26953d9ffddfc35a6148ca3c49a9483cf984f4",
+    "G:\\hichat-refactor-20261116-anoknpqz\\integrated-rerun-preflight.json": "8d2d6fa49407078af3836f76c2ecba7f58d4c8fda011951135fcf1646cfbe709",
+    "G:\\hichat-refactor-20261116-anoknpqz\\integrated-source-manifest.json": "67dfc1c4f75ce1d1c4eb35bb44efcc41dfffda47df5d79db0228e5fed5237ff7",
+    "G:\\hichat-refactor-20261116-anoknpqz\\integrated-source-after-proof.json": "dd37828e9b1637ae10360d1179ac494970349fee38c65709a1288ac9f97a7602"
+  }
+}

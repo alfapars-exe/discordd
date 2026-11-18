@@ -1,4 +1,4 @@
-import {dmSourceSequence,sortDMBySource} from "../utils/dmSourceOrder";
+import {dmSourceSequence,preserveDMSourceSequence,sortDMBySource} from "../utils/dmSourceOrder";
 import { create } from "zustand";
 import * as api from "../api/groupDM";
 import { getAuthGeneration } from "../api/client";
@@ -140,15 +140,18 @@ function mutateMessage(groupId:string,messageId:string):number {
 }
 function mergeHistory(groupId:string,fresh:GroupDMMessage[],current:GroupDMMessage[],started:number):GroupDMMessage[]{
   const safe=fresh.filter(m=>m.group_id===groupId && (messageVersions.get(groupId)?.get(m.id)??0)<=started);
-  return sortGroupMessages([...new Map([...current,...safe].map(m=>[m.id,m])).values()]);
+  return mergeUniqueGroupMessages(current, safe);
 }
 function sortGroupMessages(messages:GroupDMMessage[]):GroupDMMessage[]{
-  const legacy=[...messages].sort((a,b)=>new Date(a.created_at).getTime()-new Date(b.created_at).getTime()||a.id.localeCompare(b.id));
-  return sortDMBySource(legacy,new Map(legacy.map((m,index)=>[m.id,index])));
+  return sortDMBySource(messages, "id");
 }
 function mergeUniqueGroupMessages(...lists:GroupDMMessage[][]):GroupDMMessage[]{
   const merged=new Map<string,GroupDMMessage>();
-  for(const message of lists.flat()){const previous=merged.get(message.id);merged.set(message.id,message.source_sequence===undefined&&dmSourceSequence(previous?.source_sequence)!==null?{...message,source_sequence:previous?.source_sequence}:message)}
+  for (const list of lists) {
+    for (const message of list) {
+      merged.set(message.id, preserveDMSourceSequence(merged.get(message.id), message));
+    }
+  }
   return sortGroupMessages([...merged.values()]);
 }
 function validReadState(read:GroupDMReadState):boolean {
@@ -396,7 +399,7 @@ export const useGroupDMStore = create<GroupDMState>((set, get) => ({
         const draftRevision=useComposerDraftStore.getState().drafts[composerKey(currentUserId,"group",groupId)]?.revision??0;
         const encrypted=files?.length?await encryptFilesForE2EE(files):undefined;
         if(!isCurrent())return false;
-        const ciphertext=JSON.stringify(await encryptGroupDMMessage(currentUserId,group.members.map(member=>member.id),localDeviceId,encodePayload(content,encrypted?.metas)));
+        const ciphertext=JSON.stringify(await encryptGroupDMMessage(currentUserId,group.members.map(member=>member.id),localDeviceId,encodePayload(content,encrypted?.metas),{groupId,keyEpoch:group.key_epoch,isCurrent}));
         if(!isCurrent())return false;
         const account=captureAccount(),lifetime=groupLifetimes.get(groupId);
         const ownerCurrent=()=>sendSessionCurrent()&&account()&&groupLifetimes.get(groupId)===lifetime&&get().groups.some(g=>g.id===groupId);
@@ -447,7 +450,7 @@ export const useGroupDMStore = create<GroupDMState>((set, get) => ({
         const resolved=next;mutateMessage(groupId,sent.id);
         const created=messageCreateVersions.get(groupId)??new Map<string,number>();created.set(sent.id,messageVersions.get(groupId)?.get(sent.id)??messageClock);messageCreateVersions.set(groupId,created);
         if(get().hasMoreAfterByGroup[groupId])detachedWsMessages.set(groupId,mergeUniqueGroupMessages(detachedWsMessages.get(groupId)??[],[resolved]));
-        else set(state=>{const current=state.messages[groupId]??[];return {messages:{...state.messages,[groupId]:mergeUniqueGroupMessages(current.filter(item=>item.id!==resolved.id),[resolved])}}});
+        else set(state=>{const current=state.messages[groupId]??[];return {messages:{...state.messages,[groupId]:mergeUniqueGroupMessages(current,[resolved])}}});
       }
       let outstandingPartial=Boolean(wrapped||res.status===207);
       if(outstandingPartial){
@@ -581,7 +584,7 @@ export const useGroupDMStore = create<GroupDMState>((set, get) => ({
     if(!content||!group||!currentUserId||!localDeviceId||!isCurrent()||!original||original.user_id!==currentUserId||original.content===null)return false;
     set({error:null});
     try{
-      const ciphertext=JSON.stringify(await encryptGroupDMMessage(currentUserId,group.members.map((m)=>m.id),localDeviceId,encodePayload(content,original.e2ee_file_keys)));
+      const ciphertext=JSON.stringify(await encryptGroupDMMessage(currentUserId,group.members.map((m)=>m.id),localDeviceId,encodePayload(content,original.e2ee_file_keys),{groupId,keyEpoch:group.key_epoch,isCurrent}));
       if(!isCurrent())return false;
       const res=await api.editGroupDMMessage(groupId,messageId,{ciphertext,sender_device_id:localDeviceId,e2ee_metadata:JSON.stringify({key_epoch:group.key_epoch}),key_epoch:group.key_epoch},{isCurrent,timeoutMs:30_000});
       if(!isCurrent())return false;
@@ -740,7 +743,7 @@ export const useGroupDMStore = create<GroupDMState>((set, get) => ({
     if(get().hasMoreAfterByGroup[message.group_id]&&!get().messages[message.group_id]?.some(item=>item.id===message.id)){
       detachedWsMessages.set(message.group_id,mergeUniqueGroupMessages(detachedWsMessages.get(message.group_id)??[],[decrypted]));return;
     }
-    set((state) => ({ messages: { ...state.messages, [message.group_id]: mergeUniqueGroupMessages((state.messages[message.group_id]??[]).filter(item=>item.id!==message.id),[decrypted]) } }));
+    set((state) => ({ messages: { ...state.messages, [message.group_id]: mergeUniqueGroupMessages(state.messages[message.group_id]??[],[decrypted]) } }));
   },
   handleMessageDelete:(groupId,messageId)=>{mutateMessage(groupId,messageId);detachedWsMessages.set(groupId,(detachedWsMessages.get(groupId)??[]).filter(message=>message.id!==messageId));set((s)=>({messages:{...s.messages,[groupId]:(s.messages[groupId]??[]).filter((m)=>m.id!==messageId)},scrollTarget:s.scrollTarget?.groupId===groupId&&s.scrollTarget.messageId===messageId?null:s.scrollTarget}))},
   handleReactionUpdate:(groupId,messageId,reactions)=>{const held=detachedWsMessages.get(groupId);if(held)detachedWsMessages.set(groupId,held.map(message=>message.id===messageId?{...message,reactions}:message));set((s)=>({messages:{...s.messages,[groupId]:(s.messages[groupId]??[]).map((m)=>m.id===messageId?{...m,reactions}:m)}}))},

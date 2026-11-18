@@ -1,0 +1,150 @@
+{
+  "characterizationCommit": "7e2c7b87",
+  "sourceCommit": "6c5b7c00",
+  "scope": "Extract synchronous new-recipient-device advisory from encryption loop. Readonly pin set, alert fields and handshake order preserved.",
+  "tokenParity": {
+    "advisoryParity": true,
+    "recipientPassParity": true,
+    "advisorySHA256": "824549dbe4ea10d523497ec688fdbffed6b99a19bfb3e16154ff4a9be6e650fe",
+    "recipientSHA256": "f959a97c5829eea510d5c448676afbb2a907c361a653afae7ab88a3f20a0f835"
+  },
+  "validation": {
+    "beforeAndAfter": "78 tests in2files PASS; same peer pin read/alert/handshake order",
+    "typeAndLint": "tsc-b and changed crypto source/test ESLint PASS",
+    "partialCoverage": {
+      "coverage-peer-trust-advisory-baseline": {
+        "lines": {
+          "total": 271,
+          "covered": 183,
+          "skipped": 0,
+          "pct": 67.52
+        },
+        "statements": {
+          "total": 354,
+          "covered": 224,
+          "skipped": 0,
+          "pct": 63.27
+        },
+        "functions": {
+          "total": 53,
+          "covered": 35,
+          "skipped": 0,
+          "pct": 66.03
+        },
+        "branches": {
+          "total": 278,
+          "covered": 154,
+          "skipped": 0,
+          "pct": 55.39
+        },
+        "branchesTrue": {
+          "total": 0,
+          "covered": 0,
+          "skipped": 0,
+          "pct": "Unknown"
+        }
+      },
+      "coverage-peer-trust-advisory": {
+        "lines": {
+          "total": 272,
+          "covered": 184,
+          "skipped": 0,
+          "pct": 67.64
+        },
+        "statements": {
+          "total": 355,
+          "covered": 225,
+          "skipped": 0,
+          "pct": 63.38
+        },
+        "functions": {
+          "total": 54,
+          "covered": 36,
+          "skipped": 0,
+          "pct": 66.66
+        },
+        "branches": {
+          "total": 278,
+          "covered": 154,
+          "skipped": 0,
+          "pct": 55.39
+        },
+        "branchesTrue": {
+          "total": 0,
+          "covered": 0,
+          "skipped": 0,
+          "pct": "Unknown"
+        }
+      }
+    },
+    "partialCoverageResult": "Both old and new targeted runs failed unchanged whole-client statement/branch thresholds; diagnostic result retained, thresholds not waived",
+    "advisoryCoverage": {
+      "range": [
+        293,
+        310
+      ],
+      "calls": 124,
+      "statementsCovered": 2,
+      "statementsTotal": 2,
+      "branchArmsCovered": 4,
+      "branchArmsTotal": 4
+    },
+    "fullClient": {
+      "files": 506,
+      "pass": 5562,
+      "skip": 1,
+      "fail": 0,
+      "durationSeconds": 639.93,
+      "maxWorkers": 2,
+      "cache": false,
+      "coverage": {
+        "lines": {
+          "total": 38593,
+          "covered": 26694,
+          "skipped": 0,
+          "pct": 69.16
+        },
+        "statements": {
+          "total": 52848,
+          "covered": 36001,
+          "skipped": 0,
+          "pct": 68.12
+        },
+        "functions": {
+          "total": 12368,
+          "covered": 7722,
+          "skipped": 0,
+          "pct": 62.43
+        },
+        "branches": {
+          "total": 39936,
+          "covered": 25982,
+          "skipped": 0,
+          "pct": 65.05
+        },
+        "branchesTrue": {
+          "total": 0,
+          "covered": 0,
+          "skipped": 0,
+          "pct": 100
+        }
+      },
+      "thresholds": "Unchanged production test configuration PASS",
+      "artifact": "refactor-handoff-fix-full-client-coverage-summary-2026-11-16.json",
+      "summarySHA256": "0af4a848add37fdb7d12cb9b125a8585846717b2383a93753668a68a85e0bbba"
+    },
+    "productionBuild": "Vite1.84s PASS, existing large chunk warning"
+  },
+  "pending": [
+    "Original dmEncryption17complexity issue new-head Sonar analysis",
+    "Physical/packaged encrypted messaging acceptance and remaining module coverage debt"
+  ],
+  "hashes": {
+    "hichat-peer-trust-advisory-baseline.log": "f0b707b0ecf507ef73d134500050594807edd776ec9458f7f4d2939e244e8b80",
+    "hichat-peer-trust-advisory-candidate.log": "54c6a07f0e5ed0da3cfcd9c8e6dc28c6a25b7237888d61bd53c248500ac4ab83",
+    "hichat-peer-trust-advisory-coverage.log": "a32308c023392b20f4f353b9239ec042a21b2aab03827401bb90839c3e6bd41d",
+    "hichat-peer-trust-advisory-baseline-coverage.log": "039c38ef39ec0fb97f117d87b34a3efb96cdc67beff06c1eec4fa6147b785643",
+    "hichat-handoff-fix-full-client-coverage.log": "5de31e7d255342d846a068ca00466258868257adf2d14211b1bf370995b64f27",
+    "hichat-peer-trust-advisory-token-parity.json": "8f6616e4a0d826839d08f30c8ebc62c27e84636fedfc6cb2fc8bf1a06ea5e109"
+  }
+}

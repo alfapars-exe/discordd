@@ -1,0 +1,236 @@
+{
+  "source_commit": "154d5687cc0a7be448f96f85c43ba94f82b97000",
+  "parser": "5.9.3",
+  "scope": "Source entry-guard verification for 23 newly protected IPC commands, paired with behavior regressions documented in the task ledger. Not physical/native runtime acceptance.",
+  "gates": [
+    {
+      "channel": "relaunch",
+      "file": "electron/app-command-ipc.ts",
+      "line": 15,
+      "first_statement": "operations.trusted(event);"
+    },
+    {
+      "channel": "write-clipboard",
+      "file": "electron/app-command-ipc.ts",
+      "line": 16,
+      "first_statement": "operations.trusted(event);"
+    },
+    {
+      "channel": "set-app-setting",
+      "file": "electron/app-settings-ipc.ts",
+      "line": 28,
+      "first_statement": "operations.trusted(event);"
+    },
+    {
+      "channel": "check-update",
+      "file": "electron/updater-ipc.ts",
+      "line": 13,
+      "first_statement": "operations.trusted(event);"
+    },
+    {
+      "channel": "download-update",
+      "file": "electron/updater-ipc.ts",
+      "line": 22,
+      "first_statement": "operations.trusted(event);"
+    },
+    {
+      "channel": "install-update",
+      "file": "electron/updater-ipc.ts",
+      "line": 31,
+      "first_statement": "operations.trusted(event);"
+    },
+    {
+      "channel": "consume-last-crash",
+      "file": "electron/diagnostic-ipc.ts",
+      "line": 30,
+      "first_statement": "operations.trusted(event);"
+    },
+    {
+      "channel": "build-diagnostic-upload",
+      "file": "electron/diagnostic-ipc.ts",
+      "line": 41,
+      "first_statement": "operations.trusted(event);"
+    },
+    {
+      "channel": "export-diagnostics",
+      "file": "electron/diagnostic-ipc.ts",
+      "line": 46,
+      "first_statement": "operations.trusted(event);"
+    },
+    {
+      "channel": "open-logs-dir",
+      "file": "electron/diagnostic-ipc.ts",
+      "line": 64,
+      "first_statement": "operations.trusted(event);"
+    },
+    {
+      "channel": "set-diagnostic-verbose",
+      "file": "electron/diagnostic-ipc.ts",
+      "line": 66,
+      "first_statement": "operations.trusted(event);"
+    },
+    {
+      "channel": "capture-performance-trace",
+      "file": "electron/diagnostic-ipc.ts",
+      "line": 72,
+      "first_statement": "operations.trusted(event);"
+    },
+    {
+      "channel": "cancel-performance-trace",
+      "file": "electron/diagnostic-ipc.ts",
+      "line": 73,
+      "first_statement": "operations.trusted(event);"
+    },
+    {
+      "channel": "get-desktop-sources",
+      "file": "electron/desktop-media-ipc.ts",
+      "line": 17,
+      "first_statement": "operations.trusted(event);"
+    },
+    {
+      "channel": "start-system-capture-diagnostic",
+      "file": "electron/capture-command-ipc.ts",
+      "line": 11,
+      "first_statement": "trusted(event);"
+    },
+    {
+      "channel": "stop-system-capture-diagnostic",
+      "file": "electron/capture-command-ipc.ts",
+      "line": 12,
+      "first_statement": "trusted(event);"
+    },
+    {
+      "channel": "register-mute-hotkey-shortcut",
+      "file": "electron/global-shortcut-ipc.ts",
+      "line": 16,
+      "first_statement": "operations.trusted(event);"
+    },
+    {
+      "channel": "unregister-mute-hotkey-shortcut",
+      "file": "electron/global-shortcut-ipc.ts",
+      "line": 21,
+      "first_statement": "operations.trusted(event);"
+    },
+    {
+      "channel": "set-badge-count",
+      "file": "electron/window-control-ipc.ts",
+      "line": 18,
+      "first_statement": "operations.trusted(event);"
+    },
+    {
+      "channel": "flash-frame",
+      "file": "electron/window-control-ipc.ts",
+      "line": 46,
+      "first_statement": "operations.trusted(event);"
+    },
+    {
+      "channel": "minimize-window",
+      "file": "electron/window-control-ipc.ts",
+      "line": 53,
+      "first_statement": "operations.trusted(event);"
+    },
+    {
+      "channel": "maximize-window",
+      "file": "electron/window-control-ipc.ts",
+      "line": 54,
+      "first_statement": "operations.trusted(event);"
+    },
+    {
+      "channel": "close-window",
+      "file": "electron/window-control-ipc.ts",
+      "line": 61,
+      "first_statement": "operations.trusted(event);"
+    }
+  ],
+  "hashes": {
+    "electron/app-command-ipc.ts": "1ab800ef9ac68f8735876db6c72af441ba215b1a241ec01f7482433227b01367",
+    "electron/app-settings-ipc.ts": "a459c9e74457e0648ca07d3747e8c4f6eaaa20f8b70c4b7b2548796281af3231",
+    "electron/updater-ipc.ts": "5434300b73032e045eef1de96defcdd54ff2e569cc193fdb102590b4e400ee59",
+    "electron/diagnostic-ipc.ts": "797bfb0fa6cf269c688c7c51044c2dd5e3d6ae147a57749d336b58fb4207ada7",
+    "electron/desktop-media-ipc.ts": "0e3ba556989d719fe77cdf6a82a1b0e72bae70c51f406d12e3199421f34d03e6",
+    "electron/capture-command-ipc.ts": "8c16c758470a725185c1bd0c0cb4972caeaee7853a2e2b7435357418ee7a070a",
+    "electron/global-shortcut-ipc.ts": "9a939b738da1cc8504366abb2f854a73a49b0df7444901a31dced77799a1c3cc",
+    "electron/window-control-ipc.ts": "35625171ca2459aa537331cca46fa46d722afa16db49b4344232d9608403054b"
+  },
+  "unchanged_public_channels": [
+    "get-version",
+    "get-app-settings",
+    "was-update-checked",
+    "get-diagnostic-verbose",
+    "get-display-info",
+    "get-system-capture-status",
+    "diagnostic-log"
+  ],
+  "remaining": [
+    "Packaged/runtime sender and session matrix",
+    "Physical export, updater, capture, multi-display and native hooks",
+    "Final integrated source acceptance"
+  ],
+  "verification": {
+    "client_build": {
+      "exit": 0,
+      "log": "%TEMP%/hichat-ipc-final-client-build.log",
+      "warning": "Existing >500 kB chunk warning remains"
+    },
+    "client_lint": {
+      "exit": 0,
+      "errors": 0,
+      "warnings": 2,
+      "log": "%TEMP%/hichat-ipc-final-client-lint.log"
+    },
+    "go_vet": {
+      "exit": 0,
+      "log": "%TEMP%/hichat-ipc-final-go-vet.log"
+    },
+    "go_build": {
+      "exit": 0,
+      "log": "%TEMP%/hichat-ipc-final-go-build.log"
+    },
+    "electron": {
+      "pass": 399,
+      "skip": 1,
+      "fail": 0,
+      "coverage_scope": "Compiled *-ipc.js modules only; all eight modified guard modules have 100% line/branch/function coverage; excludes full main/IPC composition and native acceptance",
+      "log": "%TEMP%/hichat-ipc-entry-coverage.log"
+    },
+    "go_race": {
+      "status": "failed_package_timeouts",
+      "profile": "Docker golang:1.26.10-bookworm; no PostgreSQL DSN, SQLite/general profile",
+      "exec_session": 87987,
+      "log": "%TEMP%/hichat-ipc-final-go-race.jsonl",
+      "exit": 1,
+      "test_pass_events": 2950,
+      "test_skip_events": 46,
+      "package_pass": 22,
+      "packages_without_tests": 7,
+      "timed_out_packages": [
+        "repository",
+        "services"
+      ],
+      "race_reports_observed": 0,
+      "limits": "Partial test passes do not establish full race success; both large packages reached 15 minutes."
+    },
+    "go_race_shards": {
+      "status": "completed",
+      "exec_session": 45007,
+      "runner": "Existing scripts/go-test-shard.py, 8 shards/package, 2 concurrent jobs, unchanged race+cover+15m gates",
+      "source_directory": "refactor-integration held unchanged for Go source",
+      "log_directory": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-ipc-final-shards-9bdd3e13e08f4be98d1984468c47e1cd",
+      "profile": "General/SQLite; no PostgreSQL DSN",
+      "exit": 0,
+      "successful_shards": 16,
+      "selection_audit": {
+        "repository": {
+          "top_level_names": 436,
+          "each_selected_exactly_once": true,
+          "shards": 8
+        },
+        "services": {
+          "top_level_names": 923,
+          "each_selected_exactly_once": true,
+          "shards": 8
+        }
+      }
+    }
+  }
+}

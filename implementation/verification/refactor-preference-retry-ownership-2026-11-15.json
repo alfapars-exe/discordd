@@ -1,0 +1,121 @@
+{
+  "sourceRevision": "1225afe7",
+  "regressionCommits": [
+    "82c69604",
+    "fcf54995"
+  ],
+  "behaviorFixCommit": "4ddd4463",
+  "phaseExtractionCommit": "b1b8dad9",
+  "scope": "RF13/RF26 retrySync ownership after saved publication;presentation start/completion phases and explicit error/sync status selection. Public actions and wire/storage names unchanged.",
+  "baseline": {
+    "revision": "d510e473",
+    "canonicalRed": "2 failed,81 passed of83 preferenceStore cases. Synchronous owner/backend replacement initiated one unexpected GET for replacement binding;microtask replacement controls passed. No real HTTP or disclosure demonstrated.",
+    "log": "TEMP/hichat-preference-retry-scope-canonical-red.log",
+    "method": "Only owned store source temporarily restored from pinned Git baseline;candidate bytes restored in finally."
+  },
+  "sonarBefore": {
+    "revision": "d510e473",
+    "function": "retrySync",
+    "issues": [
+      {
+        "key": "AaHfLfsHL2JGjhmu0CHH",
+        "rule": "typescript:S3358",
+        "line": 216,
+        "message": "Extract this nested ternary operation into an independent statement.",
+        "status": "OPEN"
+      },
+      {
+        "key": "AaHe-pzEMioAmihIyi9w",
+        "rule": "typescript:S3776",
+        "line": 353,
+        "message": "Refactor this function to reduce its Cognitive Complexity from 17 to the 15 allowed.",
+        "status": "OPEN"
+      },
+      {
+        "key": "AaHe-pzEMioAmihIyi9x",
+        "rule": "typescript:S3358",
+        "line": 369,
+        "message": "Extract this nested ternary operation into an independent statement.",
+        "status": "OPEN"
+      }
+    ],
+    "after": "PR305 Sonar issues API: all three original keys CLOSED/FIXED. Source-lines API contains startPreferencePresentationRetry, completePreferencePresentationRetry and loadedPreferenceSyncStatus from published7666100f. No exact after complexity score claimed."
+  },
+  "changes": {
+    "scopeFence": "Check scope after saved publication;retired retry cannot initiate fetch/flush for replacement binding.",
+    "promiseOrdering": "Start helper returns original applyData promise without an async wrapper;four synchronous/microtask owner/backend cases protect ordering.",
+    "completion": "Check scope before clearing retry/publishing state and again after observers return.",
+    "selectors": "Preserve presentation/account-mismatch/save error precedence and inFlight/pending/saved priority using explicit conditions."
+  },
+  "validation": {
+    "before": "116 tests across3files PASS",
+    "afterBehavior": "120 tests across3files PASS4.32s;TEMP/hichat-preference-retry-scope-green.log",
+    "afterPhaseExtraction": "120 tests across3files PASS4.37s;TEMP/hichat-preference-retry-refactor.log",
+    "fullClient": "Final1225afe7:503files5435passed1skipped123.06s;TEMP/hichat-preference-retry-delivery-coverage.log",
+    "coverageTotal": {
+      "lines": {
+        "total": 38566,
+        "covered": 26646,
+        "skipped": 0,
+        "pct": 69.09
+      },
+      "statements": {
+        "total": 52824,
+        "covered": 35927,
+        "skipped": 0,
+        "pct": 68.01
+      },
+      "functions": {
+        "total": 12340,
+        "covered": 7682,
+        "skipped": 0,
+        "pct": 62.25
+      },
+      "branches": {
+        "total": 39951,
+        "covered": 25956,
+        "skipped": 0,
+        "pct": 64.96
+      },
+      "branchesTrue": {
+        "total": 0,
+        "covered": 0,
+        "skipped": 0,
+        "pct": 100
+      }
+    },
+    "coveragePreferencesStore": {
+      "lines": {
+        "total": 278,
+        "covered": 274,
+        "skipped": 0,
+        "pct": 98.56
+      },
+      "functions": {
+        "total": 41,
+        "covered": 40,
+        "skipped": 0,
+        "pct": 97.56
+      },
+      "statements": {
+        "total": 360,
+        "covered": 341,
+        "skipped": 0,
+        "pct": 94.72
+      },
+      "branches": {
+        "total": 214,
+        "covered": 190,
+        "skipped": 0,
+        "pct": 88.78
+      }
+    },
+    "build": "PASS actual tsc -b/Vite3.88s;TEMP/hichat-preference-retry-delivery-build.log",
+    "lint": "PASS0errors2existingwarnings;TEMP/hichat-preference-retry-delivery-lint.log",
+    "selfScan": "PASS immutable1225afe7:51exact reviewed-source records,480reviewlines,0blockingpatterns. Pattern scan is not proof of absence of vulnerabilities. TEMP/hichat-preference-retry-final-scan.log"
+  },
+  "remaining": [
+    "7666100f CI terminal36/36SUCCESS; raw checks in refactor-7666-terminal-ci-2026-11-15.json. Whole RF13 acceptance remains open",
+    "Whole RF13/RF26 and RF01–RF30 runtime/platform/physical acceptance remain open"
+  ]
+}

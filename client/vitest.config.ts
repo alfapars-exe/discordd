@@ -16,6 +16,10 @@ export default defineConfig({
       reporter: ["text-summary", "json-summary", "lcov"],
       reportsDirectory: "./coverage",
       thresholds: {
+        statements: 65.1,
+        branches: 63.0,
+        functions: 59.4,
+        lines: 65.8,
         "src/audio/outputRouting.ts": { statements: 90, branches: 85, functions: 90, lines: 90 },
       },
     },

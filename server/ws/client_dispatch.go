@@ -34,7 +34,7 @@ func init() {
 		OpP2PCallInitiate:       (*Client).handleP2PCallInitiate,
 		OpP2PCallAccept:         (*Client).handleP2PCallAccept,
 		OpP2PCallDecline:        (*Client).handleP2PCallDecline,
-		OpP2PCallEnd:            func(c *Client, _ Event) { c.handleP2PCallEnd() },
+		OpP2PCallEnd:            (*Client).handleP2PCallEnd,
 		OpP2PSignal:             (*Client).handleP2PSignal,
 	}
 }

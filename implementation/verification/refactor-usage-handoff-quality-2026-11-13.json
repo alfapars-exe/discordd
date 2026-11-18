@@ -1,0 +1,72 @@
+{
+  "canonical_source": "bb848eaa",
+  "behavior_source": "bf915ddf",
+  "scope": "voice usage handoff, pending recovery, migration, maintenance, shutdown wiring and existing mute retry controls",
+  "race_named_passes": [
+    "TestVoiceUsageDeliveryJoinsAfterHTTPBeforeLogs",
+    "TestPostgresVoiceUsageMigrationPreservesTotals",
+    "TestVoiceMaintenanceHasOwnedShutdown",
+    "TestVoiceMaintenanceStopJoinsSweepAndConcurrentOwners",
+    "TestVoiceMaintenanceStopBeforeStart",
+    "TestVoiceMaintenancePublicOwnersJoin",
+    "TestVoiceMaintenanceAFKStopCancelsLookup",
+    "TestVoiceMaintenanceAFKPostgresCancellation",
+    "TestAdminDisconnectUser_CreditsUsage",
+    "TestApplyServerMuteToLiveKit_UnmuteRetriesThenEvicts",
+    "TestApplyServerMuteToLiveKit_ReDerivesTruthAtExecutionTime",
+    "TestVoiceUsageDeliveryStopCancelsAndJoins",
+    "TestVoiceUsageDeliveryBatchIsBounded",
+    "TestVoiceUsageIdentitySurvivesRejoinAndReachesRecorder",
+    "TestVoiceUsageHandoffFailureNeverFallsBackToIncrement",
+    "TestVoiceUsageCreditHasBoundedContext",
+    "TestVoiceUsageCreditPostgresDeadline",
+    "TestVoiceUsageCreditPostgresAdditiveWrites",
+    "TestVoiceUsageCreditUsesCapturedSessionEnd",
+    "TestVoiceUsagePostgresReplayTransaction",
+    "TestVoiceUsagePostgresPendingRecovery",
+    "TestVoiceUsagePostgresServiceHandoffSurvivesApplyFailure"
+  ],
+  "race_pass_count": 22,
+  "race_skip_count": 0,
+  "race_fail_count": 0,
+  "package_results": [
+    {
+      "Time": "2026-11-13T20:45:37.87274289Z",
+      "Action": "pass",
+      "Package": "github.com/argeinfina/hichat",
+      "Elapsed": 3.625
+    },
+    {
+      "Time": "2026-11-13T20:45:40.883722428Z",
+      "Action": "pass",
+      "Package": "github.com/argeinfina/hichat/database",
+      "Elapsed": 1.734
+    },
+    {
+      "Time": "2026-11-13T20:45:56.355226173Z",
+      "Action": "pass",
+      "Package": "github.com/argeinfina/hichat/services",
+      "Elapsed": 17.206
+    }
+  ],
+  "other_validation": {
+    "canonical_full_vet_build": "PASS",
+    "canonical_lint": "0 issues",
+    "additional_existing_mute_and_permission_tests_count_5": "PASS 2.133s",
+    "mandatory_runner_unit_tests": {
+      "canonical": 9,
+      "integrated": 14
+    }
+  },
+  "quality_gate": {
+    "failed_source": "2ff44c99",
+    "cause": "Sonar new reliability rating E from unconditional migration UPDATE; additional readability/empty-body/interface naming findings",
+    "source_changes": "WHERE applied_at IS NULL; explanatory no-op comments; Applier naming; extracted microphone muting and AFK policy; split test verification stages",
+    "new_source_remote_gate": "pending; no rule suppression or false-positive dismissal"
+  },
+  "limitations": [
+    "Successful durable enqueue precedes aggregate attempt, but state can still be forgotten before asynchronous enqueue starts.",
+    "Detached usage producer join and crash-before-handoff recovery remain open.",
+    "Targeted scope is not whole-project race/coverage, active media or physical platform acceptance."
+  ]
+}

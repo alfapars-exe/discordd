@@ -21,7 +21,7 @@ func musicControlFixture(t *testing.T) MusicControlRepository {
 		{q: `INSERT INTO servers(id,name,owner_id) VALUES('music-server','Music','music-actor')`},
 		{q: `INSERT INTO channels(id,name,type,server_id) VALUES('music-channel','Music','voice','music-server')`},
 	})
-	return NewSQLiteMusicSessionRepo(db.Conn).(MusicControlRepository)
+	return NewSQLiteMusicSessionRepo(db.Conn)
 }
 
 func musicCommit(revision uint64, request, session string) models.MusicOperationCommit {
@@ -197,7 +197,7 @@ func TestMusicControlServerDeletionCleansReceiptsWithFKsOff(t *testing.T) {
 		{q: `INSERT INTO servers(id,name,owner_id) VALUES('music-server','Music','music-actor'),('other-server','Other','music-actor')`},
 		{q: `INSERT INTO channels(id,name,type,server_id) VALUES('music-channel','Music','voice','music-server'),('other-channel','Other','voice','other-server')`},
 	})
-	repo := NewSQLiteMusicSessionRepo(db.Conn).(MusicControlRepository)
+	repo := NewSQLiteMusicSessionRepo(db.Conn)
 	head := models.MusicControlHead{ChannelID: "music-channel", ServerID: "music-server", SessionID: "session", MinimumProtocol: 2}
 	if _, err := repo.AdoptMusicControl(context.Background(), head); err != nil {
 		t.Fatal(err)

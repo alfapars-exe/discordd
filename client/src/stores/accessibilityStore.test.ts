@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cacheable } from "./preferencesCodec";
 import { DEFAULT_ACCESSIBILITY } from "../styles/accessibility";
 
 const mocks = vi.hoisted(() => ({ sync: vi.fn() }));
@@ -130,5 +131,52 @@ describe("accessibility preference validation and hydration", () => {
     useAccessibilityStore.getState().reset();
     expect(fields(useAccessibilityStore.getState())).toEqual(DEFAULT_ACCESSIBILITY);
     expect(mocks.sync).toHaveBeenLastCalledWith({ accessibility: DEFAULT_ACCESSIBILITY });
+  });
+
+  it.each([4, 6, 19, 3.5])("rejects unsupported notification duration %s during reload and hydration", async duration => {
+    localStorage.clear();
+    vi.resetModules();
+    const { useAccessibilityStore } = await freshStore(JSON.stringify({ notificationDuration: duration }));
+    expect(useAccessibilityStore.getState().notificationDuration).toBe(5);
+    useAccessibilityStore.getState().setNotificationDuration(10);
+    useAccessibilityStore.getState().applyFromServer({ notificationDuration: duration });
+    expect(useAccessibilityStore.getState().notificationDuration).toBe(10);
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).notificationDuration).toBe(10);
+  });
+
+  it.each([
+    ["chatFontSize", "setChatFontSize", 12, 24],
+    ["messageGroupGapPx", "setMessageGroupGapPx", 0, 24],
+    ["saturation", "setSaturation", 0, 100],
+    ["notificationSoundVolume", "setNotificationSoundVolume", 0, 100],
+    ["ttsRate", "setTtsRate", 0.5, 2],
+  ] as const)("keeps %s bounds consistent across setters, hydration and account cache", async (field, setter, min, max) => {
+    localStorage.clear();
+    vi.resetModules();
+    const { useAccessibilityStore, sanitizeAccessibilityPreferences } = await freshStore();
+    for (const value of [min, max]) {
+      const patch = { [field]: value };
+      expect(sanitizeAccessibilityPreferences(patch)).toEqual(patch);
+      expect(cacheable({ accessibility: patch })).toEqual({ accessibility: patch });
+    }
+    for (const value of [min - 1, max + 1]) {
+      const patch = { [field]: value };
+      expect(sanitizeAccessibilityPreferences(patch)).toEqual({});
+      expect(cacheable({ accessibility: patch })).toEqual({});
+    }
+    useAccessibilityStore.getState()[setter](min - 1);
+    expect(useAccessibilityStore.getState()[field]).toBe(min);
+    useAccessibilityStore.getState()[setter](max + 1);
+    expect(useAccessibilityStore.getState()[field]).toBe(max);
+    useAccessibilityStore.getState().applyFromServer({ [field]: min - 1 });
+    expect(useAccessibilityStore.getState()[field]).toBe(max);
+  });
+
+  it.each([3, 5, 10, 15, 20])("retains supported notification duration %s across reload and account cache", async notificationDuration => {
+    localStorage.clear();
+    vi.resetModules();
+    const { useAccessibilityStore } = await freshStore(JSON.stringify({ notificationDuration }));
+    expect(useAccessibilityStore.getState().notificationDuration).toBe(notificationDuration);
+    expect(cacheable({ accessibility: { notificationDuration } })).toEqual({ accessibility: { notificationDuration } });
   });
 });

@@ -1,3 +1,4 @@
+import { ownVoicePeerValue } from "../../stores/voicePreferenceMaps";
 import { useTranslation } from "react-i18next";
 import { useVoiceStore } from "../../stores/voiceStore";
 import { useAuthStore } from "../../stores/authStore";
@@ -57,7 +58,7 @@ function VoiceParticipantList({
     <div className="ch-tree-voice-users">
       {participants.map((p) => {
         const isMe = p.user_id === currentUser?.id;
-        const isLocalMuted = localMutedUsers[p.user_id] ?? false;
+        const isLocalMuted = ownVoicePeerValue(localMutedUsers, p.user_id) ?? false;
         const isSpeaking = activeSpeakers[p.user_id] ?? false;
         // Resolve viewer ids → participant rows for the indented sub-list.
         // Unknown ids (stale rows) are dropped silently — better than

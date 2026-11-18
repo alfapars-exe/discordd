@@ -1,0 +1,22 @@
+{
+  "date": "2026-11-15",
+  "base": "c2baaec19c2a963e4e9efed6a5e5afb298d78fbd",
+  "sources": {
+    "client/src/stores/slices/voiceSettingsSlice.ts": "6deec2df641a143fa47478a388114aefc633c19953ae14c52942f6dce274d68e",
+    "client/src/stores/slices/voiceSettingsSlice.noise.test.ts": "f1e05dc1fa55274634e16d95c0c6766dd8efb975a1ad093b182264df38389818"
+  },
+  "before": "six new regressions failed",
+  "change": "Validate account leaves from local voice storage through existing codec, retain declared local fields for migrations and exclude unknown/runtime keys; preserve persistence of removed-engine migration",
+  "validation": {
+    "targeted": "six suites216tests passed",
+    "typescript": "npx tsc -b passed",
+    "lint": "two changed modules passed",
+    "build": "Vite production build passed;existing chunk-size warning remains"
+  },
+  "delivery": "Local commit; defer next push until currently active remote-head CI terminates to avoid cancelling useful validation",
+  "limits": [
+    "full current-source suite not rerun",
+    "device-local field validators remain existing implementation",
+    "remaining RF13/physical voice and final CI acceptance open"
+  ]
+}

@@ -1,0 +1,1278 @@
+{
+  "source_commit": "edb3194abed90b4569caaaf18a4686ac6833920e",
+  "baseline_source_commit": "25cf99446755936896b5a6b8efbdc5cb5b6773e4",
+  "candidate_product_commit": "4bbd96fc",
+  "source_sha256": {
+    "client/src/crypto/cachedSearchSnapshot.ts": "659f51ea0ff23717e3fef2e8da8eb865700deddea13ff64230f505bab4e12a48",
+    "client/src/crypto/cachedSearchSnapshot.test.ts": "1a4639eaa9caf6037237b5b2a5c0e4671412c29b267e4e75c73833585c862628",
+    "e2e/scripts/benchmark-search-panels.mjs": "b09825bfb1df53d1077fd27325879e38ae4f39a7477bec05938a2711d222273a",
+    "e2e/scripts/verify-search-staging.mjs": "a14f51adefc4e04f1dcac37a185607c9f7ad7bcbd3a328c2284db5a6a7972c33",
+    ".github/workflows/server-ci.yml": "d0733a8db803434208ea759ac0cd0eebe0024561a4f72d278ae0a91c0dd782d5"
+  },
+  "runtime": "Runtime v26.13.1 win32 Chromium 156.0.8078.4 baseline eb0a31cc40b244c3beb9b74a78e50d83dea83f19",
+  "benchmark_conditions": "Actual production React panel sources with real IndexedDB;controlled stores/i18n/navigation;after-only harness mode for both runs;one warmup9samples each;no concurrent local validation launched during either measurement",
+  "change": "Retain128-reference coherent source delivery;coalesce disposable sidecar writes in at most1024metadata records;flush final tail before ready header;no schema,query ordering or public API change",
+  "comparisons": [
+    {
+      "kind": "channel",
+      "size": 1000,
+      "matches": 267,
+      "first_before_ms": 335.7000000178814,
+      "first_after_ms": 335.30000001192093,
+      "first_change_percent": -0.11915400832265277,
+      "retained_before_bytes": 153936,
+      "retained_after_bytes": 154696,
+      "sampled_peak_median_before_bytes": 982972,
+      "sampled_peak_median_after_bytes": 967036,
+      "sampled_peak_max_before_bytes": 1086696,
+      "sampled_peak_max_after_bytes": 1070148
+    },
+    {
+      "kind": "channel",
+      "size": 10000,
+      "matches": 2667,
+      "first_before_ms": 540.5,
+      "first_after_ms": 550.4000000059605,
+      "first_change_percent": 1.8316373739057257,
+      "retained_before_bytes": 121388,
+      "retained_after_bytes": 119000,
+      "sampled_peak_median_before_bytes": 1081220,
+      "sampled_peak_median_after_bytes": 1190548,
+      "sampled_peak_max_before_bytes": 1738976,
+      "sampled_peak_max_after_bytes": 1377100
+    },
+    {
+      "kind": "channel",
+      "size": 50000,
+      "matches": 13333,
+      "first_before_ms": 1636.9000000059605,
+      "first_after_ms": 1536.7999999821186,
+      "first_change_percent": -6.1152177911587335,
+      "retained_before_bytes": 136944,
+      "retained_after_bytes": 119232,
+      "sampled_peak_median_before_bytes": 3608664,
+      "sampled_peak_median_after_bytes": 3793116,
+      "sampled_peak_max_before_bytes": 3881528,
+      "sampled_peak_max_after_bytes": 3993732
+    },
+    {
+      "kind": "dm",
+      "size": 1000,
+      "matches": 267,
+      "first_before_ms": 339.30000001192093,
+      "first_after_ms": 339.2000000178814,
+      "first_change_percent": -0.02947244150781625,
+      "retained_before_bytes": 134852,
+      "retained_after_bytes": 129992,
+      "sampled_peak_median_before_bytes": 1015584,
+      "sampled_peak_median_after_bytes": 959724,
+      "sampled_peak_max_before_bytes": 1081364,
+      "sampled_peak_max_after_bytes": 1054892
+    },
+    {
+      "kind": "dm",
+      "size": 10000,
+      "matches": 2667,
+      "first_before_ms": 553.0999999940395,
+      "first_after_ms": 550.1999999880791,
+      "first_change_percent": -0.5243174843593823,
+      "retained_before_bytes": 135744,
+      "retained_after_bytes": 127892,
+      "sampled_peak_median_before_bytes": 1638108,
+      "sampled_peak_median_after_bytes": 1718456,
+      "sampled_peak_max_before_bytes": 1957916,
+      "sampled_peak_max_after_bytes": 2140656
+    },
+    {
+      "kind": "dm",
+      "size": 50000,
+      "matches": 13333,
+      "first_before_ms": 1715.0999999940395,
+      "first_after_ms": 1681.199999988079,
+      "first_change_percent": -1.9765611338160016,
+      "retained_before_bytes": 143216,
+      "retained_after_bytes": 139216,
+      "sampled_peak_median_before_bytes": 3933724,
+      "sampled_peak_median_after_bytes": 4218152,
+      "sampled_peak_max_before_bytes": 4063892,
+      "sampled_peak_max_after_bytes": 4414756
+    }
+  ],
+  "raw_benchmark_records": {
+    "before": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-write-coalescing-before.log",
+      "sha256": "2156561e83a7762e1ebf5870dcb91c20a0f60abd962f030c39c17b6ee6d0a6e5",
+      "records": [
+        {
+          "variant": "after",
+          "react": "19.3.1",
+          "productionBuild": true,
+          "historicalOverrides": 0
+        },
+        {
+          "variant": "after",
+          "kind": "channel",
+          "size": 1000,
+          "matches": 267,
+          "repetitions": 9,
+          "firstMedianMs": 335.7000000178814,
+          "nextMedianMs": 21.19999998807907,
+          "previousMedianMs": 22.19999998807907,
+          "retainedMedianBytes": 153936,
+          "sampledPeakMedianBytes": 982972,
+          "sampledPeakMaximumBytes": 1086696,
+          "samples": [
+            {
+              "firstMs": 336.09999999403954,
+              "nextMs": 21.19999998807907,
+              "previousMs": 22.099999994039536,
+              "retainedBytes": 256112,
+              "sampledPeakBytes": 1066520
+            },
+            {
+              "firstMs": 331.5,
+              "nextMs": 21.099999994039536,
+              "previousMs": 20.200000017881393,
+              "retainedBytes": 207896,
+              "sampledPeakBytes": 1086696
+            },
+            {
+              "firstMs": 334.90000000596046,
+              "nextMs": 20.599999994039536,
+              "previousMs": 22.900000005960464,
+              "retainedBytes": 171792,
+              "sampledPeakBytes": 990684
+            },
+            {
+              "firstMs": 330.39999997615814,
+              "nextMs": 19.900000005960464,
+              "previousMs": 22.19999998807907,
+              "retainedBytes": 187452,
+              "sampledPeakBytes": 1046832
+            },
+            {
+              "firstMs": 341,
+              "nextMs": 22.700000017881393,
+              "previousMs": 22.799999982118607,
+              "retainedBytes": 144372,
+              "sampledPeakBytes": 950560
+            },
+            {
+              "firstMs": 335.7000000178814,
+              "nextMs": 22.100000023841858,
+              "previousMs": 22.19999998807907,
+              "retainedBytes": 153936,
+              "sampledPeakBytes": 942564
+            },
+            {
+              "firstMs": 332.09999999403954,
+              "nextMs": 22.400000005960464,
+              "previousMs": 22.30000001192093,
+              "retainedBytes": 113392,
+              "sampledPeakBytes": 977284
+            },
+            {
+              "firstMs": 345,
+              "nextMs": 21.80000001192093,
+              "previousMs": 22.599999994039536,
+              "retainedBytes": 153720,
+              "sampledPeakBytes": 957576
+            },
+            {
+              "firstMs": 338.59999999403954,
+              "nextMs": 18,
+              "previousMs": 21,
+              "retainedBytes": 124976,
+              "sampledPeakBytes": 982972
+            }
+          ],
+          "scope": "Actual production React panels + real IndexedDB, controlled stores/i18n/spam/navigation.25ms sampled peak is not an exact upper bound; excludes whole-app state/native disk. Durations use input/click capture to committed matching DOM,exclude Playwright actionability; first includes300ms debounce."
+        },
+        {
+          "variant": "after",
+          "kind": "channel",
+          "size": 10000,
+          "matches": 2667,
+          "repetitions": 9,
+          "firstMedianMs": 540.5,
+          "nextMedianMs": 21.400000005960464,
+          "previousMedianMs": 21.69999998807907,
+          "retainedMedianBytes": 121388,
+          "sampledPeakMedianBytes": 1081220,
+          "sampledPeakMaximumBytes": 1738976,
+          "samples": [
+            {
+              "firstMs": 538.5,
+              "nextMs": 20.80000001192093,
+              "previousMs": 23.099999994039536,
+              "retainedBytes": 128272,
+              "sampledPeakBytes": 1738976
+            },
+            {
+              "firstMs": 532.5,
+              "nextMs": 22.399999976158142,
+              "previousMs": 22.30000001192093,
+              "retainedBytes": 123472,
+              "sampledPeakBytes": 1095016
+            },
+            {
+              "firstMs": 545.4000000059605,
+              "nextMs": 20.69999998807907,
+              "previousMs": 21,
+              "retainedBytes": 121388,
+              "sampledPeakBytes": 977304
+            },
+            {
+              "firstMs": 558.6999999880791,
+              "nextMs": 21.700000017881393,
+              "previousMs": 21.69999998807907,
+              "retainedBytes": 117112,
+              "sampledPeakBytes": 1116896
+            },
+            {
+              "firstMs": 569.1999999880791,
+              "nextMs": 21.69999998807907,
+              "previousMs": 21.5,
+              "retainedBytes": 124584,
+              "sampledPeakBytes": 1055468
+            },
+            {
+              "firstMs": 523.3000000119209,
+              "nextMs": 20.900000005960464,
+              "previousMs": 23.299999982118607,
+              "retainedBytes": 116632,
+              "sampledPeakBytes": 1076968
+            },
+            {
+              "firstMs": 530.9000000059605,
+              "nextMs": 23.69999998807907,
+              "previousMs": 21.400000005960464,
+              "retainedBytes": 142452,
+              "sampledPeakBytes": 1214548
+            },
+            {
+              "firstMs": 589,
+              "nextMs": 21.099999994039536,
+              "previousMs": 22.400000005960464,
+              "retainedBytes": 119004,
+              "sampledPeakBytes": 1081220
+            },
+            {
+              "firstMs": 540.5,
+              "nextMs": 21.400000005960464,
+              "previousMs": 20.69999998807907,
+              "retainedBytes": 116756,
+              "sampledPeakBytes": 894964
+            }
+          ],
+          "scope": "Actual production React panels + real IndexedDB, controlled stores/i18n/spam/navigation.25ms sampled peak is not an exact upper bound; excludes whole-app state/native disk. Durations use input/click capture to committed matching DOM,exclude Playwright actionability; first includes300ms debounce."
+        },
+        {
+          "variant": "after",
+          "kind": "channel",
+          "size": 50000,
+          "matches": 13333,
+          "repetitions": 9,
+          "firstMedianMs": 1636.9000000059605,
+          "nextMedianMs": 22,
+          "previousMedianMs": 22.30000001192093,
+          "retainedMedianBytes": 136944,
+          "sampledPeakMedianBytes": 3608664,
+          "sampledPeakMaximumBytes": 3881528,
+          "samples": [
+            {
+              "firstMs": 1670.9000000059605,
+              "nextMs": 23.30000001192093,
+              "previousMs": 22.600000023841858,
+              "retainedBytes": 142848,
+              "sampledPeakBytes": 3410180
+            },
+            {
+              "firstMs": 1621.300000011921,
+              "nextMs": 22,
+              "previousMs": 21.5,
+              "retainedBytes": 135620,
+              "sampledPeakBytes": 3874100
+            },
+            {
+              "firstMs": 1636.9000000059605,
+              "nextMs": 21,
+              "previousMs": 22.899999976158142,
+              "retainedBytes": 134848,
+              "sampledPeakBytes": 3858896
+            },
+            {
+              "firstMs": 1628.9000000059605,
+              "nextMs": 21.69999998807907,
+              "previousMs": 22.30000001192093,
+              "retainedBytes": 141276,
+              "sampledPeakBytes": 3608664
+            },
+            {
+              "firstMs": 1661.9000000059605,
+              "nextMs": 22.400000005960464,
+              "previousMs": 22.099999994039536,
+              "retainedBytes": 136944,
+              "sampledPeakBytes": 3422024
+            },
+            {
+              "firstMs": 1634.2000000178814,
+              "nextMs": 15,
+              "previousMs": 24.099999994039536,
+              "retainedBytes": 134032,
+              "sampledPeakBytes": 3197648
+            },
+            {
+              "firstMs": 1618.2999999821186,
+              "nextMs": 22.80000001192093,
+              "previousMs": 23,
+              "retainedBytes": 134556,
+              "sampledPeakBytes": 3881528
+            },
+            {
+              "firstMs": 1646.4000000059605,
+              "nextMs": 19.799999982118607,
+              "previousMs": 21.69999998807907,
+              "retainedBytes": 137316,
+              "sampledPeakBytes": 3330816
+            },
+            {
+              "firstMs": 1664.699999988079,
+              "nextMs": 22.19999998807907,
+              "previousMs": 15.300000011920929,
+              "retainedBytes": 153996,
+              "sampledPeakBytes": 3827064
+            }
+          ],
+          "scope": "Actual production React panels + real IndexedDB, controlled stores/i18n/spam/navigation.25ms sampled peak is not an exact upper bound; excludes whole-app state/native disk. Durations use input/click capture to committed matching DOM,exclude Playwright actionability; first includes300ms debounce."
+        },
+        {
+          "variant": "after",
+          "kind": "channel",
+          "failedSearchFrontier": [
+            {
+              "events": 1000,
+              "retainedGrowthBytes": 11964
+            },
+            {
+              "events": 5000,
+              "retainedGrowthBytes": 12144
+            },
+            {
+              "events": 10000,
+              "retainedGrowthBytes": 12192
+            }
+          ]
+        },
+        {
+          "variant": "after",
+          "kind": "dm",
+          "size": 1000,
+          "matches": 267,
+          "repetitions": 9,
+          "firstMedianMs": 339.30000001192093,
+          "nextMedianMs": 22.299999982118607,
+          "previousMedianMs": 23.099999994039536,
+          "retainedMedianBytes": 134852,
+          "sampledPeakMedianBytes": 1015584,
+          "sampledPeakMaximumBytes": 1081364,
+          "samples": [
+            {
+              "firstMs": 340.59999999403954,
+              "nextMs": 22.099999994039536,
+              "previousMs": 25.399999976158142,
+              "retainedBytes": 167772,
+              "sampledPeakBytes": 1015584
+            },
+            {
+              "firstMs": 332.5,
+              "nextMs": 22.299999982118607,
+              "previousMs": 22.19999998807907,
+              "retainedBytes": 153748,
+              "sampledPeakBytes": 972440
+            },
+            {
+              "firstMs": 350.2000000178814,
+              "nextMs": 20.80000001192093,
+              "previousMs": 21.900000005960464,
+              "retainedBytes": 125704,
+              "sampledPeakBytes": 936420
+            },
+            {
+              "firstMs": 333.39999997615814,
+              "nextMs": 23,
+              "previousMs": 21.700000017881393,
+              "retainedBytes": 129324,
+              "sampledPeakBytes": 1007152
+            },
+            {
+              "firstMs": 339.59999999403954,
+              "nextMs": 21.600000023841858,
+              "previousMs": 23.30000001192093,
+              "retainedBytes": 145584,
+              "sampledPeakBytes": 1016840
+            },
+            {
+              "firstMs": 337.5,
+              "nextMs": 23,
+              "previousMs": 21.69999998807907,
+              "retainedBytes": 126684,
+              "sampledPeakBytes": 1040452
+            },
+            {
+              "firstMs": 341.90000000596046,
+              "nextMs": 19.900000005960464,
+              "previousMs": 23.400000005960464,
+              "retainedBytes": 124756,
+              "sampledPeakBytes": 937412
+            },
+            {
+              "firstMs": 339.30000001192093,
+              "nextMs": 22.299999982118607,
+              "previousMs": 23.30000001192093,
+              "retainedBytes": 152256,
+              "sampledPeakBytes": 1081364
+            },
+            {
+              "firstMs": 336,
+              "nextMs": 25.099999994039536,
+              "previousMs": 23.099999994039536,
+              "retainedBytes": 134852,
+              "sampledPeakBytes": 1019272
+            }
+          ],
+          "scope": "Actual production React panels + real IndexedDB, controlled stores/i18n/spam/navigation.25ms sampled peak is not an exact upper bound; excludes whole-app state/native disk. Durations use input/click capture to committed matching DOM,exclude Playwright actionability; first includes300ms debounce."
+        },
+        {
+          "variant": "after",
+          "kind": "dm",
+          "size": 10000,
+          "matches": 2667,
+          "repetitions": 9,
+          "firstMedianMs": 553.0999999940395,
+          "nextMedianMs": 22.19999998807907,
+          "previousMedianMs": 22.600000023841858,
+          "retainedMedianBytes": 135744,
+          "sampledPeakMedianBytes": 1638108,
+          "sampledPeakMaximumBytes": 1957916,
+          "samples": [
+            {
+              "firstMs": 552.5999999940395,
+              "nextMs": 22.19999998807907,
+              "previousMs": 25.299999982118607,
+              "retainedBytes": 132496,
+              "sampledPeakBytes": 1767812
+            },
+            {
+              "firstMs": 543.9000000059605,
+              "nextMs": 21.69999998807907,
+              "previousMs": 21,
+              "retainedBytes": 139400,
+              "sampledPeakBytes": 1619652
+            },
+            {
+              "firstMs": 553.0999999940395,
+              "nextMs": 21.400000005960464,
+              "previousMs": 21.80000001192093,
+              "retainedBytes": 126124,
+              "sampledPeakBytes": 1957916
+            },
+            {
+              "firstMs": 553.0999999940395,
+              "nextMs": 22.5,
+              "previousMs": 23,
+              "retainedBytes": 141640,
+              "sampledPeakBytes": 1737908
+            },
+            {
+              "firstMs": 551.2000000178814,
+              "nextMs": 21.400000005960464,
+              "previousMs": 22.100000023841858,
+              "retainedBytes": 123308,
+              "sampledPeakBytes": 1688508
+            },
+            {
+              "firstMs": 553.1999999880791,
+              "nextMs": 21.099999994039536,
+              "previousMs": 23.099999994039536,
+              "retainedBytes": 141052,
+              "sampledPeakBytes": 1563612
+            },
+            {
+              "firstMs": 571.4000000059605,
+              "nextMs": 22.69999998807907,
+              "previousMs": 15.900000005960464,
+              "retainedBytes": 126660,
+              "sampledPeakBytes": 1527948
+            },
+            {
+              "firstMs": 569.9000000059605,
+              "nextMs": 22.899999976158142,
+              "previousMs": 22.600000023841858,
+              "retainedBytes": 137964,
+              "sampledPeakBytes": 1573272
+            },
+            {
+              "firstMs": 558.5,
+              "nextMs": 23.400000005960464,
+              "previousMs": 27.30000001192093,
+              "retainedBytes": 135744,
+              "sampledPeakBytes": 1638108
+            }
+          ],
+          "scope": "Actual production React panels + real IndexedDB, controlled stores/i18n/spam/navigation.25ms sampled peak is not an exact upper bound; excludes whole-app state/native disk. Durations use input/click capture to committed matching DOM,exclude Playwright actionability; first includes300ms debounce."
+        },
+        {
+          "variant": "after",
+          "kind": "dm",
+          "size": 50000,
+          "matches": 13333,
+          "repetitions": 9,
+          "firstMedianMs": 1715.0999999940395,
+          "nextMedianMs": 23,
+          "previousMedianMs": 21.80000001192093,
+          "retainedMedianBytes": 143216,
+          "sampledPeakMedianBytes": 3933724,
+          "sampledPeakMaximumBytes": 4063892,
+          "samples": [
+            {
+              "firstMs": 1721.9000000059605,
+              "nextMs": 22.099999994039536,
+              "previousMs": 20.900000005960464,
+              "retainedBytes": 158720,
+              "sampledPeakBytes": 3935424
+            },
+            {
+              "firstMs": 1715.0999999940395,
+              "nextMs": 24.299999982118607,
+              "previousMs": 21.80000001192093,
+              "retainedBytes": 137580,
+              "sampledPeakBytes": 3951592
+            },
+            {
+              "firstMs": 1781,
+              "nextMs": 24.900000005960464,
+              "previousMs": 20.80000001192093,
+              "retainedBytes": 143216,
+              "sampledPeakBytes": 4063892
+            },
+            {
+              "firstMs": 1700.4000000059605,
+              "nextMs": 24,
+              "previousMs": 22.400000005960464,
+              "retainedBytes": 137508,
+              "sampledPeakBytes": 3933724
+            },
+            {
+              "firstMs": 1714.9000000059605,
+              "nextMs": 22.799999982118607,
+              "previousMs": 22.200000017881393,
+              "retainedBytes": 168996,
+              "sampledPeakBytes": 3766604
+            },
+            {
+              "firstMs": 1706.2000000178814,
+              "nextMs": 23.099999994039536,
+              "previousMs": 21.5,
+              "retainedBytes": 139976,
+              "sampledPeakBytes": 3962624
+            },
+            {
+              "firstMs": 1663.2000000178814,
+              "nextMs": 22.69999998807907,
+              "previousMs": 14.400000005960464,
+              "retainedBytes": 143344,
+              "sampledPeakBytes": 3892492
+            },
+            {
+              "firstMs": 1813.300000011921,
+              "nextMs": 22.299999982118607,
+              "previousMs": 22,
+              "retainedBytes": 136308,
+              "sampledPeakBytes": 3889884
+            },
+            {
+              "firstMs": 1724.5999999940395,
+              "nextMs": 23,
+              "previousMs": 23.400000005960464,
+              "retainedBytes": 145524,
+              "sampledPeakBytes": 3917268
+            }
+          ],
+          "scope": "Actual production React panels + real IndexedDB, controlled stores/i18n/spam/navigation.25ms sampled peak is not an exact upper bound; excludes whole-app state/native disk. Durations use input/click capture to committed matching DOM,exclude Playwright actionability; first includes300ms debounce."
+        },
+        {
+          "variant": "after",
+          "kind": "dm",
+          "failedSearchFrontier": [
+            {
+              "events": 1000,
+              "retainedGrowthBytes": 10816
+            },
+            {
+              "events": 5000,
+              "retainedGrowthBytes": 10816
+            },
+            {
+              "events": 10000,
+              "retainedGrowthBytes": 10520
+            }
+          ]
+        }
+      ]
+    },
+    "candidate": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-write-coalescing-candidate.log",
+      "sha256": "205d54a8dbdf8b9104b0a8175b6c7cb7da2b8c886d5f02ef49592675f2d72caf",
+      "records": [
+        {
+          "variant": "after",
+          "react": "19.3.1",
+          "productionBuild": true,
+          "historicalOverrides": 0
+        },
+        {
+          "variant": "after",
+          "kind": "channel",
+          "size": 1000,
+          "matches": 267,
+          "repetitions": 9,
+          "firstMedianMs": 335.30000001192093,
+          "nextMedianMs": 21.5,
+          "previousMedianMs": 22.599999994039536,
+          "retainedMedianBytes": 154696,
+          "sampledPeakMedianBytes": 967036,
+          "sampledPeakMaximumBytes": 1070148,
+          "samples": [
+            {
+              "firstMs": 335.30000001192093,
+              "nextMs": 21.099999994039536,
+              "previousMs": 22.19999998807907,
+              "retainedBytes": 254908,
+              "sampledPeakBytes": 1070148
+            },
+            {
+              "firstMs": 334.59999999403954,
+              "nextMs": 22.299999982118607,
+              "previousMs": 20,
+              "retainedBytes": 208876,
+              "sampledPeakBytes": 1024888
+            },
+            {
+              "firstMs": 334.09999999403954,
+              "nextMs": 22.200000017881393,
+              "previousMs": 22.599999994039536,
+              "retainedBytes": 171856,
+              "sampledPeakBytes": 978788
+            },
+            {
+              "firstMs": 330.30000001192093,
+              "nextMs": 21.5,
+              "previousMs": 21.299999982118607,
+              "retainedBytes": 189436,
+              "sampledPeakBytes": 996148
+            },
+            {
+              "firstMs": 341.7999999821186,
+              "nextMs": 21.30000001192093,
+              "previousMs": 23.099999994039536,
+              "retainedBytes": 145032,
+              "sampledPeakBytes": 952448
+            },
+            {
+              "firstMs": 341,
+              "nextMs": 22.19999998807907,
+              "previousMs": 23.400000005960464,
+              "retainedBytes": 152776,
+              "sampledPeakBytes": 937072
+            },
+            {
+              "firstMs": 334.7999999821186,
+              "nextMs": 24.30000001192093,
+              "previousMs": 26.600000023841858,
+              "retainedBytes": 111436,
+              "sampledPeakBytes": 921160
+            },
+            {
+              "firstMs": 336.59999999403954,
+              "nextMs": 21.5,
+              "previousMs": 21.799999982118607,
+              "retainedBytes": 154696,
+              "sampledPeakBytes": 967036
+            },
+            {
+              "firstMs": 341,
+              "nextMs": 19.5,
+              "previousMs": 22.700000017881393,
+              "retainedBytes": 124652,
+              "sampledPeakBytes": 929828
+            }
+          ],
+          "scope": "Actual production React panels + real IndexedDB, controlled stores/i18n/spam/navigation.25ms sampled peak is not an exact upper bound; excludes whole-app state/native disk. Durations use input/click capture to committed matching DOM,exclude Playwright actionability; first includes300ms debounce."
+        },
+        {
+          "variant": "after",
+          "kind": "channel",
+          "size": 10000,
+          "matches": 2667,
+          "repetitions": 9,
+          "firstMedianMs": 550.4000000059605,
+          "nextMedianMs": 23.099999994039536,
+          "previousMedianMs": 21.900000005960464,
+          "retainedMedianBytes": 119000,
+          "sampledPeakMedianBytes": 1190548,
+          "sampledPeakMaximumBytes": 1377100,
+          "samples": [
+            {
+              "firstMs": 664.7999999821186,
+              "nextMs": 23,
+              "previousMs": 24.30000001192093,
+              "retainedBytes": 126084,
+              "sampledPeakBytes": 1164436
+            },
+            {
+              "firstMs": 566.5999999940395,
+              "nextMs": 23.099999994039536,
+              "previousMs": 20.5,
+              "retainedBytes": 124404,
+              "sampledPeakBytes": 1187160
+            },
+            {
+              "firstMs": 557.5,
+              "nextMs": 20.69999998807907,
+              "previousMs": 23.400000005960464,
+              "retainedBytes": 115896,
+              "sampledPeakBytes": 1217460
+            },
+            {
+              "firstMs": 538,
+              "nextMs": 24.900000005960464,
+              "previousMs": 21.900000005960464,
+              "retainedBytes": 117740,
+              "sampledPeakBytes": 1350372
+            },
+            {
+              "firstMs": 526.2000000178814,
+              "nextMs": 23.30000001192093,
+              "previousMs": 16.900000005960464,
+              "retainedBytes": 125940,
+              "sampledPeakBytes": 1190548
+            },
+            {
+              "firstMs": 529,
+              "nextMs": 23.599999994039536,
+              "previousMs": 20.19999998807907,
+              "retainedBytes": 116344,
+              "sampledPeakBytes": 1349256
+            },
+            {
+              "firstMs": 550.4000000059605,
+              "nextMs": 22.399999976158142,
+              "previousMs": 22.5,
+              "retainedBytes": 141912,
+              "sampledPeakBytes": 1170736
+            },
+            {
+              "firstMs": 534.1999999880791,
+              "nextMs": 20.299999982118607,
+              "previousMs": 22.099999994039536,
+              "retainedBytes": 119000,
+              "sampledPeakBytes": 1152044
+            },
+            {
+              "firstMs": 562.9000000059605,
+              "nextMs": 23.400000005960464,
+              "previousMs": 20.700000017881393,
+              "retainedBytes": 115464,
+              "sampledPeakBytes": 1377100
+            }
+          ],
+          "scope": "Actual production React panels + real IndexedDB, controlled stores/i18n/spam/navigation.25ms sampled peak is not an exact upper bound; excludes whole-app state/native disk. Durations use input/click capture to committed matching DOM,exclude Playwright actionability; first includes300ms debounce."
+        },
+        {
+          "variant": "after",
+          "kind": "channel",
+          "size": 50000,
+          "matches": 13333,
+          "repetitions": 9,
+          "firstMedianMs": 1536.7999999821186,
+          "nextMedianMs": 22,
+          "previousMedianMs": 21.299999982118607,
+          "retainedMedianBytes": 119232,
+          "sampledPeakMedianBytes": 3793116,
+          "sampledPeakMaximumBytes": 3993732,
+          "samples": [
+            {
+              "firstMs": 1577.2999999821186,
+              "nextMs": 22.5,
+              "previousMs": 22.400000005960464,
+              "retainedBytes": 124848,
+              "sampledPeakBytes": 3452580
+            },
+            {
+              "firstMs": 1580.7000000178814,
+              "nextMs": 21.5,
+              "previousMs": 21.5,
+              "retainedBytes": 115340,
+              "sampledPeakBytes": 3993732
+            },
+            {
+              "firstMs": 1536.7999999821186,
+              "nextMs": 22.19999998807907,
+              "previousMs": 20.700000017881393,
+              "retainedBytes": 113236,
+              "sampledPeakBytes": 3889260
+            },
+            {
+              "firstMs": 1525.7000000178814,
+              "nextMs": 36,
+              "previousMs": 21.299999982118607,
+              "retainedBytes": 122424,
+              "sampledPeakBytes": 3838216
+            },
+            {
+              "firstMs": 1636.6000000238419,
+              "nextMs": 21.700000017881393,
+              "previousMs": 20.5,
+              "retainedBytes": 119040,
+              "sampledPeakBytes": 3810940
+            },
+            {
+              "firstMs": 1536.9000000059605,
+              "nextMs": 22.5,
+              "previousMs": 22.099999994039536,
+              "retainedBytes": 119232,
+              "sampledPeakBytes": 3767516
+            },
+            {
+              "firstMs": 1515.5,
+              "nextMs": 15.800000011920929,
+              "previousMs": 21.400000005960464,
+              "retainedBytes": 115832,
+              "sampledPeakBytes": 3385824
+            },
+            {
+              "firstMs": 1484.199999988079,
+              "nextMs": 21.69999998807907,
+              "previousMs": 20.900000005960464,
+              "retainedBytes": 125304,
+              "sampledPeakBytes": 3793116
+            },
+            {
+              "firstMs": 1521.5999999940395,
+              "nextMs": 22,
+              "previousMs": 20.799999982118607,
+              "retainedBytes": 133668,
+              "sampledPeakBytes": 3521452
+            }
+          ],
+          "scope": "Actual production React panels + real IndexedDB, controlled stores/i18n/spam/navigation.25ms sampled peak is not an exact upper bound; excludes whole-app state/native disk. Durations use input/click capture to committed matching DOM,exclude Playwright actionability; first includes300ms debounce."
+        },
+        {
+          "variant": "after",
+          "kind": "channel",
+          "failedSearchFrontier": [
+            {
+              "events": 1000,
+              "retainedGrowthBytes": 10792
+            },
+            {
+              "events": 5000,
+              "retainedGrowthBytes": 10972
+            },
+            {
+              "events": 10000,
+              "retainedGrowthBytes": 11020
+            }
+          ]
+        },
+        {
+          "variant": "after",
+          "kind": "dm",
+          "size": 1000,
+          "matches": 267,
+          "repetitions": 9,
+          "firstMedianMs": 339.2000000178814,
+          "nextMedianMs": 22.30000001192093,
+          "previousMedianMs": 22.5,
+          "retainedMedianBytes": 129992,
+          "sampledPeakMedianBytes": 959724,
+          "sampledPeakMaximumBytes": 1054892,
+          "samples": [
+            {
+              "firstMs": 337.7000000178814,
+              "nextMs": 22.600000023841858,
+              "previousMs": 22.5,
+              "retainedBytes": 168728,
+              "sampledPeakBytes": 1054892
+            },
+            {
+              "firstMs": 341.7000000178814,
+              "nextMs": 22,
+              "previousMs": 23.69999998807907,
+              "retainedBytes": 132828,
+              "sampledPeakBytes": 947312
+            },
+            {
+              "firstMs": 338.2999999821186,
+              "nextMs": 22.399999976158142,
+              "previousMs": 21.900000005960464,
+              "retainedBytes": 128932,
+              "sampledPeakBytes": 1003628
+            },
+            {
+              "firstMs": 340.19999998807907,
+              "nextMs": 21.599999994039536,
+              "previousMs": 22.899999976158142,
+              "retainedBytes": 129448,
+              "sampledPeakBytes": 932340
+            },
+            {
+              "firstMs": 338.5,
+              "nextMs": 21.5,
+              "previousMs": 23.19999998807907,
+              "retainedBytes": 127320,
+              "sampledPeakBytes": 959724
+            },
+            {
+              "firstMs": 346.7999999821186,
+              "nextMs": 21.5,
+              "previousMs": 18.099999994039536,
+              "retainedBytes": 129992,
+              "sampledPeakBytes": 958788
+            },
+            {
+              "firstMs": 338.2000000178814,
+              "nextMs": 22.30000001192093,
+              "previousMs": 21.5,
+              "retainedBytes": 124820,
+              "sampledPeakBytes": 956700
+            },
+            {
+              "firstMs": 343.5,
+              "nextMs": 23,
+              "previousMs": 19.80000001192093,
+              "retainedBytes": 135652,
+              "sampledPeakBytes": 980048
+            },
+            {
+              "firstMs": 339.2000000178814,
+              "nextMs": 22.5,
+              "previousMs": 23.5,
+              "retainedBytes": 136792,
+              "sampledPeakBytes": 976788
+            }
+          ],
+          "scope": "Actual production React panels + real IndexedDB, controlled stores/i18n/spam/navigation.25ms sampled peak is not an exact upper bound; excludes whole-app state/native disk. Durations use input/click capture to committed matching DOM,exclude Playwright actionability; first includes300ms debounce."
+        },
+        {
+          "variant": "after",
+          "kind": "dm",
+          "size": 10000,
+          "matches": 2667,
+          "repetitions": 9,
+          "firstMedianMs": 550.1999999880791,
+          "nextMedianMs": 21.900000005960464,
+          "previousMedianMs": 22.30000001192093,
+          "retainedMedianBytes": 127892,
+          "sampledPeakMedianBytes": 1718456,
+          "sampledPeakMaximumBytes": 2140656,
+          "samples": [
+            {
+              "firstMs": 532.5,
+              "nextMs": 22.200000017881393,
+              "previousMs": 22.5,
+              "retainedBytes": 132560,
+              "sampledPeakBytes": 1718456
+            },
+            {
+              "firstMs": 540.7999999821186,
+              "nextMs": 20.099999994039536,
+              "previousMs": 18.599999994039536,
+              "retainedBytes": 124600,
+              "sampledPeakBytes": 1741720
+            },
+            {
+              "firstMs": 541.8000000119209,
+              "nextMs": 22,
+              "previousMs": 22.099999994039536,
+              "retainedBytes": 141252,
+              "sampledPeakBytes": 2140656
+            },
+            {
+              "firstMs": 544.4000000059605,
+              "nextMs": 21.299999982118607,
+              "previousMs": 21,
+              "retainedBytes": 124252,
+              "sampledPeakBytes": 1631256
+            },
+            {
+              "firstMs": 551.9000000059605,
+              "nextMs": 22.80000001192093,
+              "previousMs": 22.30000001192093,
+              "retainedBytes": 126724,
+              "sampledPeakBytes": 1638484
+            },
+            {
+              "firstMs": 569.5,
+              "nextMs": 21.900000005960464,
+              "previousMs": 21,
+              "retainedBytes": 139364,
+              "sampledPeakBytes": 1538240
+            },
+            {
+              "firstMs": 555.4000000059605,
+              "nextMs": 24.400000005960464,
+              "previousMs": 24,
+              "retainedBytes": 127892,
+              "sampledPeakBytes": 1710156
+            },
+            {
+              "firstMs": 550.1999999880791,
+              "nextMs": 21.700000017881393,
+              "previousMs": 22.400000005960464,
+              "retainedBytes": 123820,
+              "sampledPeakBytes": 1729316
+            },
+            {
+              "firstMs": 551.7999999821186,
+              "nextMs": 21.099999994039536,
+              "previousMs": 23.599999994039536,
+              "retainedBytes": 154164,
+              "sampledPeakBytes": 1869776
+            }
+          ],
+          "scope": "Actual production React panels + real IndexedDB, controlled stores/i18n/spam/navigation.25ms sampled peak is not an exact upper bound; excludes whole-app state/native disk. Durations use input/click capture to committed matching DOM,exclude Playwright actionability; first includes300ms debounce."
+        },
+        {
+          "variant": "after",
+          "kind": "dm",
+          "size": 50000,
+          "matches": 13333,
+          "repetitions": 9,
+          "firstMedianMs": 1681.199999988079,
+          "nextMedianMs": 22.5,
+          "previousMedianMs": 22.30000001192093,
+          "retainedMedianBytes": 139216,
+          "sampledPeakMedianBytes": 4218152,
+          "sampledPeakMaximumBytes": 4414756,
+          "samples": [
+            {
+              "firstMs": 1681.199999988079,
+              "nextMs": 23.600000023841858,
+              "previousMs": 22.099999994039536,
+              "retainedBytes": 154648,
+              "sampledPeakBytes": 4400500
+            },
+            {
+              "firstMs": 1674.2999999821186,
+              "nextMs": 24.900000005960464,
+              "previousMs": 20.700000017881393,
+              "retainedBytes": 123360,
+              "sampledPeakBytes": 4414756
+            },
+            {
+              "firstMs": 1738.5999999940395,
+              "nextMs": 25.100000023841858,
+              "previousMs": 22.900000005960464,
+              "retainedBytes": 140684,
+              "sampledPeakBytes": 4218152
+            },
+            {
+              "firstMs": 1779.9000000059605,
+              "nextMs": 18.5,
+              "previousMs": 22.600000023841858,
+              "retainedBytes": 123768,
+              "sampledPeakBytes": 3988476
+            },
+            {
+              "firstMs": 1732,
+              "nextMs": 16,
+              "previousMs": 22.5,
+              "retainedBytes": 166012,
+              "sampledPeakBytes": 4171652
+            },
+            {
+              "firstMs": 1622.4000000059605,
+              "nextMs": 20.599999994039536,
+              "previousMs": 22.200000017881393,
+              "retainedBytes": 125048,
+              "sampledPeakBytes": 3915780
+            },
+            {
+              "firstMs": 1623.2999999821186,
+              "nextMs": 22.599999994039536,
+              "previousMs": 21.69999998807907,
+              "retainedBytes": 141668,
+              "sampledPeakBytes": 4121408
+            },
+            {
+              "firstMs": 1716.5999999940395,
+              "nextMs": 22.099999994039536,
+              "previousMs": 22.30000001192093,
+              "retainedBytes": 123648,
+              "sampledPeakBytes": 4285016
+            },
+            {
+              "firstMs": 1635,
+              "nextMs": 22.5,
+              "previousMs": 23.099999994039536,
+              "retainedBytes": 139216,
+              "sampledPeakBytes": 4357800
+            }
+          ],
+          "scope": "Actual production React panels + real IndexedDB, controlled stores/i18n/spam/navigation.25ms sampled peak is not an exact upper bound; excludes whole-app state/native disk. Durations use input/click capture to committed matching DOM,exclude Playwright actionability; first includes300ms debounce."
+        },
+        {
+          "variant": "after",
+          "kind": "dm",
+          "failedSearchFrontier": [
+            {
+              "events": 1000,
+              "retainedGrowthBytes": 10816
+            },
+            {
+              "events": 5000,
+              "retainedGrowthBytes": 10816
+            },
+            {
+              "events": 10000,
+              "retainedGrowthBytes": 10520
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "validation": {
+    "unit_family": "32passed3.21s",
+    "native_contracts": [
+      {
+        "mode": "channel",
+        "records": 1201,
+        "exactPages": 14,
+        "failureWrites": 0,
+        "indexDisposed": true
+      },
+      {
+        "mode": "dm",
+        "records": 1201,
+        "exactPages": 14,
+        "failureWrites": 0,
+        "indexDisposed": true
+      },
+      {
+        "mode": "mixed",
+        "records": 1201,
+        "exactPages": 14,
+        "failureWrites": 0,
+        "indexDisposed": true
+      },
+      {
+        "mode": "quota",
+        "records": 1201,
+        "exactPages": 14,
+        "failureName": "QuotaExceededError",
+        "failureWrites": 300,
+        "writerReleased": true,
+        "indexDisposed": true
+      },
+      {
+        "mode": "cancel",
+        "records": 1201,
+        "exactPages": 14,
+        "failureName": "AbortError",
+        "failureWrites": 301,
+        "writerReleased": true,
+        "indexDisposed": true
+      }
+    ],
+    "native_reset": "channel+DM actual React panels across2windows PASS;visible results0,input cleared,index disposal drained",
+    "full_client": "485files5048passed1skipped111.81s",
+    "coverage": {
+      "lines": {
+        "total": 38085,
+        "covered": 26033,
+        "skipped": 0,
+        "pct": 68.35
+      },
+      "statements": {
+        "total": 52056,
+        "covered": 35024,
+        "skipped": 0,
+        "pct": 67.28
+      },
+      "functions": {
+        "total": 12150,
+        "covered": 7472,
+        "skipped": 0,
+        "pct": 61.49
+      },
+      "branches": {
+        "total": 39633,
+        "covered": 25570,
+        "skipped": 0,
+        "pct": 64.51
+      },
+      "branchesTrue": {
+        "total": 0,
+        "covered": 0,
+        "skipped": 0,
+        "pct": 100
+      }
+    },
+    "changed_module_coverage": {
+      "C:\\Users\\PARS\\Desktop\\PROJELER\\HiChat\\refactor-integration\\client\\src\\crypto\\cachedSearchSnapshot.ts": {
+        "lines": {
+          "total": 171,
+          "covered": 167,
+          "skipped": 0,
+          "pct": 97.66
+        },
+        "functions": {
+          "total": 45,
+          "covered": 37,
+          "skipped": 0,
+          "pct": 82.22
+        },
+        "statements": {
+          "total": 259,
+          "covered": 241,
+          "skipped": 0,
+          "pct": 93.05
+        },
+        "branches": {
+          "total": 110,
+          "covered": 97,
+          "skipped": 0,
+          "pct": 88.18
+        }
+      }
+    },
+    "general_lint": "0errors2existing warnings",
+    "changed_files_lint": "PASS",
+    "production_build": "actual tsc-b/Vite PASS1.72s;existing chunk warning",
+    "all9workflows_actionlint": "PASS"
+  },
+  "validation_tier_correction": {
+    "failed_full_run": "hichat-search-write-coalescing-full-coverage.log:4large fake-IDB fixture timeouts,5048passed1skipped",
+    "diagnosis": "isolated mixed fixture6.4s exceeded5s;coverage also exceeded fixture-specific20s",
+    "correction": "Moved all4new large cases to required native Chromium tier and added cancellation/source-writer liveness.1201records retained,all14pages per case checked;existing small unit corpus and global timeouts retained",
+    "native_log": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-native-staging-contracts-final.log",
+    "native_log_sha256": "1d556d39de038a1fab312f91c587f50c7135f5efe13f968fc8a67437ddd8d4f0"
+  },
+  "interpretation": [
+    "50k channel first-result median improved6.12%;DM1.98% difference overlaps broad sample variability",
+    "10k channel first-result median regressed9.9ms1.83%;not a uniform speedup",
+    "50k sampled peak medians increased184452bytes(channel)/284428bytes(DM);retained medians lower",
+    "Data fidelity/order/page navigation remain checked by the same measurement harness and native contracts"
+  ],
+  "limits": [
+    "25ms sampled peak is not an exact maximum or process/native/disk memory bound",
+    "First query includes300ms debounce;not full-app latency",
+    "Before run already used disk snapshots;legacy compact-scan parity is not proven",
+    "Large mixed history correctness covers1201rows,not50k mixed latency",
+    "Quota failure is synchronous injected DOMException,not real physical quota exhaustion",
+    "Source-write/live-receive latency budgets,active pending frontier,platform/physical and full RF17 acceptance remain open"
+  ]
+}

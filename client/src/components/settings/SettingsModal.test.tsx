@@ -54,6 +54,19 @@ describe("SettingsModal safety", () => {
     opener.remove();
   });
 
+  it("restores the opener when the conditional settings layer unmounts", async () => {
+    const opener = document.createElement("button");
+    document.body.append(opener);
+    opener.focus();
+    const view = render(<SettingsModal />);
+    await waitFor(() => expect(screen.getByText("First nav")).toHaveFocus());
+    view.unmount();
+    expect(opener).toHaveFocus();
+    fireEvent.keyDown(opener, { key: "Escape" });
+    expect(state.settings.closeSettings).not.toHaveBeenCalled();
+    opener.remove();
+  });
+
   it("does not close settings when Escape belongs to a nested modal", async () => {
     render(<SettingsModal />);
     await screen.findByText("Last field");

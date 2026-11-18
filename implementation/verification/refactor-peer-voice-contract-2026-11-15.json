@@ -1,0 +1,167 @@
+{
+  "sourceRevision": "6adfca62",
+  "scope": "RF13/RF12 per-peer volume/mute preference maps:finite numeric edits,0–200 bounds,valid nonempty keys,owned dictionary reads;shared store-free contracts for cache,UI,LiveKit/private/P2P/soundboard readers. Public action and wire/storage field names preserved.",
+  "regressions": {
+    "numericAndKeys": {
+      "commit": "707fc95e",
+      "baseline": "606a9b3e",
+      "result": "26failed16passed of42cases;non-finite/out-of-range volumes,invalid edit/mute keys and empty cached keys",
+      "log": "TEMP/hichat-peer-volume-red.log",
+      "fixCommit": "65ccbb6d"
+    },
+    "ownMuteRead": {
+      "commit": "806aa50c",
+      "baseline": "1af36196",
+      "result": "2failed42passed of44cases;toString/hasOwnProperty treated as inherited preference values instead of absent own entries;checks restored gain and outbound false mute patch",
+      "log": "TEMP/hichat-peer-map-own-read-red.log"
+    },
+    "gainRead": {
+      "commit": "9fcbb879",
+      "baselineHookSource": "606a9b3e",
+      "result": "3failed2passed;unconfigured inherited-name participant ids produced non-finite gains;explicit zero/deafen and delayed lifecycle control cases passed",
+      "log": "TEMP/hichat-volume-sync-own-read-canonical-red.log",
+      "method": "Only owned hook source temporarily replaced from pinned Git baseline;candidate bytes restored in finally. Other sources use candidate;this is an isolated hook negative control,not a whole-tree baseline."
+    },
+    "fixtureCorrection": "Initial deafen fixture expected a new call when combined effective deafen remained true. Canonical fixture independently transitions each override from false;initial4failed1passed result is not used as bug count."
+  },
+  "changes": {
+    "edits": "Ignore non-finite edits,clamp finite peer volumes to0–200,reject empty/overlong/reserved keys;keep128-character and synthetic music-bot ids.",
+    "sharedContractCommit": "1af36196;key/map validation,range and presets used by setters,cache and UI controls.",
+    "ownedReadsFix": "6adfca62;only own dictionary entries affect defaults,mute/restore and outbound deletion patches. Use shared reads across volume UI,LiveKit hook,private/P2P playback and soundboard. Preserve explicit0/false.",
+    "audio": "Existing finite own values retain the same gain arithmetic and deafen decisions;unconfigured peer defaults no longer come from Object.prototype. No physical-media acceptance claimed."
+  },
+  "validation": {
+    "afterCoreBehavior": "185tests4filesPASS3.66s;TEMP/hichat-peer-volume-green.log",
+    "afterMapExtraction": "224tests6filesPASS4.14s;P2P19tests3filesPASS4.00s",
+    "ownedReadTargeted": "208tests8filesPASS5.06s;TEMP/hichat-peer-map-own-read-green.log",
+    "newCoreMatrix": "52tests3filesPASS2.70s;TEMP/hichat-peer-own-read-final-green.log",
+    "fullClient": "PASS503files5431passed1skipped;TEMP/hichat-peer-contract-final-coverage.log",
+    "coverageTotal": {
+      "lines": {
+        "total": 38555,
+        "covered": 26635,
+        "skipped": 0,
+        "pct": 69.08
+      },
+      "statements": {
+        "total": 52807,
+        "covered": 35910,
+        "skipped": 0,
+        "pct": 68
+      },
+      "functions": {
+        "total": 12337,
+        "covered": 7679,
+        "skipped": 0,
+        "pct": 62.24
+      },
+      "branches": {
+        "total": 39949,
+        "covered": 25954,
+        "skipped": 0,
+        "pct": 64.96
+      },
+      "branchesTrue": {
+        "total": 0,
+        "covered": 0,
+        "skipped": 0,
+        "pct": 100
+      }
+    },
+    "coverageModules": {
+      "\\src\\hooks\\useVolumeSync.ts": {
+        "lines": {
+          "total": 54,
+          "covered": 54,
+          "skipped": 0,
+          "pct": 100
+        },
+        "functions": {
+          "total": 18,
+          "covered": 18,
+          "skipped": 0,
+          "pct": 100
+        },
+        "statements": {
+          "total": 60,
+          "covered": 60,
+          "skipped": 0,
+          "pct": 100
+        },
+        "branches": {
+          "total": 14,
+          "covered": 12,
+          "skipped": 0,
+          "pct": 85.71
+        }
+      },
+      "\\src\\stores\\voicePreferenceMaps.ts": {
+        "lines": {
+          "total": 17,
+          "covered": 17,
+          "skipped": 0,
+          "pct": 100
+        },
+        "functions": {
+          "total": 8,
+          "covered": 8,
+          "skipped": 0,
+          "pct": 100
+        },
+        "statements": {
+          "total": 22,
+          "covered": 21,
+          "skipped": 0,
+          "pct": 95.45
+        },
+        "branches": {
+          "total": 25,
+          "covered": 24,
+          "skipped": 0,
+          "pct": 96
+        }
+      },
+      "\\src\\stores\\slices\\voiceSettingsSlice.ts": {
+        "lines": {
+          "total": 251,
+          "covered": 247,
+          "skipped": 0,
+          "pct": 98.4
+        },
+        "functions": {
+          "total": 71,
+          "covered": 71,
+          "skipped": 0,
+          "pct": 100
+        },
+        "statements": {
+          "total": 309,
+          "covered": 300,
+          "skipped": 0,
+          "pct": 97.08
+        },
+        "branches": {
+          "total": 151,
+          "covered": 131,
+          "skipped": 0,
+          "pct": 86.75
+        }
+      }
+    },
+    "build": "PASS actualtsc-b/Vite3.64s;TEMP/hichat-peer-contract-final-build.log",
+    "lint": "PASS0errors2existingwarnings;TEMP/hichat-peer-contract-final-lint.log",
+    "selfScan": "PASS immutable6adfca62:51exact reviewed-source records,480reviewlines,0blockingpatterns. Pattern scan is not proof of absence of vulnerabilities. TEMP/hichat-peer-contract-final-scan.log",
+    "newReviewHits": "Two added __proto__ pattern hits reviewed:voicePreferenceMaps.ts reserved-key rejection constants and peer-volume.test.ts negative id fixture. Neither performs prototype writes."
+  },
+  "ci": {
+    "revision": "d510e47385a3159f2266912d8bc6688aee9bbe87",
+    "checks": 36,
+    "success": 36,
+    "runtimeEquivalence": "git diff 6adfca62..d510e473 -- client server electron e2e is empty",
+    "receipt": "refactor-d510-terminal-ci-2026-11-15.json"
+  },
+  "remaining": [
+    "Separate retrySync17complexity issue remains open;legacy attribution corrected",
+    "Whole RF13/RF12 and RF01-RF30 runtime/platform/physical acceptance remain open"
+  ]
+}

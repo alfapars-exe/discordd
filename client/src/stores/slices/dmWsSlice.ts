@@ -1,4 +1,4 @@
-import { sortDMBySource, newerDMSource } from "../../utils/dmSourceOrder";
+import { sortDMBySource, newerDMSource, preserveDMSourceSequence } from "../../utils/dmSourceOrder";
 import type { StateCreator } from "zustand";
 import type { DMChannelWithUser, DMMessage, ReactionGroup } from "../../types";
 import { useUIStore } from "../uiStore";
@@ -42,7 +42,10 @@ export function beginDMHistoryBuffer(channelId:string) {
 
 export function bufferDMHistoryEvent(message:DMMessage) {
   const buffer=historyBuffers.get(message.dm_channel_id);
-  buffer?.messages.set(message.id,{...message,...buffer.metadata.get(message.id)});
+  if (buffer) {
+    const updated = preserveDMSourceSequence(buffer.messages.get(message.id), message);
+    buffer.messages.set(message.id, { ...updated, ...buffer.metadata.get(message.id) });
+  }
 }
 
 function bufferDMMetadata(channelId:string,messageId:string,patch:DMMetadataPatch) {
@@ -67,6 +70,11 @@ export function takeDetachedDMMessages(channelId: string): DMMessage[] {
 export function clearDetachedDMMessages(channelId?: string): void {
   if (channelId === undefined) {detachedDMMessages.clear();historyBuffers.clear();}
   else {detachedDMMessages.delete(channelId);historyBuffers.delete(channelId);}
+}
+
+let clearTypingTimers: (channelId?: string) => void = () => {};
+export function clearDMTypingTimers(channelId?: string): void {
+  clearTypingTimers(channelId);
 }
 
 export type DMWsSlice = {
@@ -96,7 +104,10 @@ export const createDMWsSlice: StateCreator<
   [],
   [],
   DMWsSlice
-> = (set, get) => ({
+> = (set, get) => {
+  const handleTyping = createTypingHandler(set);
+  clearTypingTimers = handleTyping.clear;
+  return ({
   lastDeletedDM: null,
 
   handleDMChannelCreate: (channel) => {
@@ -118,7 +129,7 @@ export const createDMWsSlice: StateCreator<
               // E2EE messages (the REST list carries null for those).
               last_message: {
                 id: message.id,
-                source_sequence: message.source_sequence,
+                source_sequence: message.source_sequence ?? (ch.last_message?.id === message.id ? ch.last_message.source_sequence : undefined),
                 user_id: message.user_id,
                 content: message.content,
                 encryption_version: message.encryption_version,
@@ -168,10 +179,10 @@ export const createDMWsSlice: StateCreator<
   handleDMMessageUpdate: (message) => {
     bufferDMHistoryEvent(message);
     const held=detachedDMMessages.get(message.dm_channel_id);
-    if(held)detachedDMMessages.set(message.dm_channel_id,held.map(item=>item.id===message.id?message:item));
+    if(held)detachedDMMessages.set(message.dm_channel_id,held.map(item=>item.id===message.id?preserveDMSourceSequence(item,message):item));
     set((state) => ({
       messagesByChannel: updateMessageInRecord(
-        state.messagesByChannel, message.dm_channel_id, message
+        state.messagesByChannel, message.dm_channel_id, message, preserveDMSourceSequence
       ),
     }));
   },
@@ -205,7 +216,7 @@ export const createDMWsSlice: StateCreator<
     }));
   },
 
-  handleDMTypingStart: createTypingHandler(set),
+  handleDMTypingStart: handleTyping,
 
   handleDMMessagePin: (data) => {
     bufferDMMetadata(data.dm_channel_id,data.message.id,{is_pinned:true});
@@ -345,3 +356,4 @@ export const createDMWsSlice: StateCreator<
     });
   },
 });
+};

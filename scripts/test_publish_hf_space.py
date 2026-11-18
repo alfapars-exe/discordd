@@ -8,7 +8,7 @@ from pathlib import Path
 import tempfile
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 spec = importlib.util.spec_from_file_location("space_release", Path(__file__).with_name("publish-hf-space.py"))
 release = importlib.util.module_from_spec(spec)
@@ -56,14 +56,109 @@ class PublishSafetyTests(unittest.TestCase):
         self.stack = contextlib.ExitStack()
         self.addCleanup(self.stack.close)
         self.stack.enter_context(patch.object(release, "HfApi", return_value=self.api))
-        self.stack.enter_context(patch.object(release.subprocess, "check_output", side_effect=lambda args, **kwargs: "source-commit\n" if args[1] == "rev-parse" else b"server/main.go\0"))
+        self.source_statuses = []
+        self.source_heads = []
+        self.stack.enter_context(patch.object(release.subprocess, "check_output", side_effect=self.source_git_output))
         self.stack.enter_context(patch.dict(os.environ, {"HF_TOKEN": "disposable-test-value"}))
+
+    def source_git_output(self, args, **kwargs):
+        if args[1] == "status":
+            return self.source_statuses.pop(0) if self.source_statuses else b""
+        if args[1] == "rev-parse":
+            return self.source_heads.pop(0) if self.source_heads else "source-commit\n"
+        if args[1] == "ls-files":
+            return b"server/main.go\0"
+        self.fail("Unexpected source Git command")
+
+    def test_dirty_tracked_staged_and_untracked_source_refuses_publish(self):
+        digest = self.preview_hash()
+        for status in [b" M server/main.go\0", b"M  server/main.go\0", b"?? server/new.go\0"]:
+            with self.subTest(status=status):
+                self.api.reset_mock()
+                self.source_statuses = [status]
+                with self.assertRaisesRegex(SystemExit, "dirty"):
+                    self.run_command("--publish", "--reviewed-plan-sha256", digest)
+                self.api.pause_space.assert_not_called()
+                self.api.create_commit.assert_not_called()
+                self.api.restart_space.assert_not_called()
+
+    def test_dirty_source_refuses_preview(self):
+        self.source_statuses = [b"?? server/new.go\0"]
+        with self.assertRaisesRegex(SystemExit, "dirty"):
+            self.run_command()
+        self.api.create_commit.assert_not_called()
+
+    def test_source_changes_during_snapshot_refuse_publish(self):
+        digest = self.preview_hash()
+        self.source_statuses = [b"", b" M server/main.go\0"]
+        with self.assertRaisesRegex(SystemExit, "dirty"):
+            self.run_command("--publish", "--reviewed-plan-sha256", digest)
+        self.api.pause_space.assert_not_called()
+        self.api.create_commit.assert_not_called()
+
+    def test_source_head_changes_during_snapshot_refuse_publish(self):
+        digest = self.preview_hash()
+        self.source_heads = ["source-commit\n", "changed-source\n"]
+        with self.assertRaisesRegex(SystemExit, "Source HEAD changed"):
+            self.run_command("--publish", "--reviewed-plan-sha256", digest)
+        self.api.pause_space.assert_not_called()
+        self.api.create_commit.assert_not_called()
 
     def test_verification_receives_exact_publish_result_commit(self):
         output = Path("github-output")
         with patch.dict(os.environ, {"GITHUB_OUTPUT": str(output)}):
             release.record_deployed_commit("a" * 40)
         self.assertEqual(output.read_text(encoding="utf-8"), "deployed_commit=" + "a" * 40 + "\n")
+
+    def test_restart_failure_still_records_the_exact_published_commit(self):
+        digest = self.preview_hash()
+        output = Path("github-output")
+        failure = RuntimeError("restart unavailable")
+        self.api.restart_space.side_effect = failure
+        with patch.dict(os.environ, {"GITHUB_OUTPUT": str(output)}):
+            with self.assertRaises(RuntimeError) as raised:
+                self.run_command("--publish", "--reviewed-plan-sha256", digest)
+        self.assertIs(raised.exception, failure)
+        self.assertEqual(output.read_text(encoding="utf-8"), "deployed_commit=new\n")
+        self.api.create_commit.assert_called_once()
+
+    def test_output_failure_still_attempts_restart_and_preserves_primary_error(self):
+        digest = self.preview_hash()
+        failure = OSError("output unavailable")
+        self.api.restart_space.side_effect = RuntimeError("restart unavailable")
+        with patch.object(release, "record_deployed_commit", side_effect=failure), contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(OSError) as raised:
+                self.run_command("--publish", "--reviewed-plan-sha256", digest)
+        self.assertIs(raised.exception, failure)
+        self.api.create_commit.assert_called_once()
+        self.api.restart_space.assert_called_once()
+
+    def test_commit_failure_restarts_the_paused_space_without_claiming_a_deployment(self):
+        digest = self.preview_hash()
+        failure = RuntimeError("commit rejected")
+        self.api.create_commit.side_effect = failure
+        with patch.object(release, "record_deployed_commit") as record:
+            with self.assertRaises(RuntimeError) as raised:
+                self.run_command("--publish", "--reviewed-plan-sha256", digest)
+        self.assertIs(raised.exception, failure)
+        self.api.pause_space.assert_called_once()
+        self.api.create_commit.assert_called_once()
+        self.api.restart_space.assert_called_once()
+        record.assert_not_called()
+
+    def test_failed_restart_after_commit_failure_preserves_primary_error_and_reports_recovery(self):
+        digest = self.preview_hash()
+        failure = RuntimeError("commit rejected")
+        self.api.create_commit.side_effect = failure
+        self.api.restart_space.side_effect = RuntimeError("sensitive upstream detail")
+        errors = io.StringIO()
+        with contextlib.redirect_stderr(errors):
+            with self.assertRaises(RuntimeError) as raised:
+                self.run_command("--publish", "--reviewed-plan-sha256", digest)
+        self.assertIs(raised.exception, failure)
+        self.api.restart_space.assert_called_once()
+        self.assertIn("manual recovery", errors.getvalue())
+        self.assertNotIn("sensitive upstream detail", errors.getvalue())
 
     def run_command(self, *args):
         output = io.StringIO()
@@ -162,6 +257,20 @@ class PublishSafetyTests(unittest.TestCase):
         self.assertEqual(plan["add_or_update"], [])
         self.run_command("--publish", "--reviewed-plan-sha256", json.loads(preview.splitlines()[-1])["plan_sha256"])
         self.api.create_commit.assert_not_called()
+
+    def test_unchanged_publish_is_idempotent_without_pausing_and_records_current_commit(self):
+        data = Path("server/main.go").read_bytes()
+        blob = hashlib.sha1(b"blob " + str(len(data)).encode() + b"\0" + data).hexdigest()
+        self.api.list_repo_tree.return_value = [SimpleNamespace(path="server/main.go", blob_id=blob, lfs=None)]
+        digest = self.preview_hash()
+        with patch.object(release, "record_deployed_commit") as record:
+            for _ in range(2):
+                result = self.run_command("--publish", "--reviewed-plan-sha256", digest)
+                self.assertEqual(json.loads(result.splitlines()[-1]), {"status": "already_current", "commit": "reviewed-parent"})
+        self.assertEqual(record.call_args_list, [call("reviewed-parent"), call("reviewed-parent")])
+        self.api.pause_space.assert_not_called()
+        self.api.create_commit.assert_not_called()
+        self.api.restart_space.assert_not_called()
 
     def test_crlf_lfs_pointer_is_not_uploaded(self):
         Path("server/main.go").write_bytes(b"version https://git-lfs.github.com/spec/v1\r\n")

@@ -28,17 +28,32 @@ type APIResponse struct {
 	CorrelationID string `json:"correlation_id,omitempty"`
 }
 
+// jsonResponseWriter commits the status on the encoder's first write, after
+// serialization succeeds. A transport error after that point cannot change it.
+type jsonResponseWriter struct {
+	http.ResponseWriter
+	status    int
+	committed bool
+}
+
+func (w *jsonResponseWriter) Write(data []byte) (int, error) {
+	if !w.committed {
+		w.WriteHeader(w.status)
+		w.committed = true
+	}
+	return w.ResponseWriter.Write(data)
+}
+
 func JSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-
-	resp := APIResponse{
-		Success: true,
-		Data:    data,
-	}
-
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+	output := &jsonResponseWriter{ResponseWriter: w, status: status}
+	err := json.NewEncoder(output).Encode(APIResponse{Success: true, Data: data})
+	if err != nil && !output.committed {
+		ctx := ResponseLogContext(w)
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		ErrorCtx(ctx, w, http.StatusInternalServerError, "internal server error", err)
 	}
 }
 
@@ -180,9 +195,9 @@ func writeError(w http.ResponseWriter, status int, message, code, correlationID 
 		CorrelationID: correlationID,
 	}
 
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		http.Error(w, "failed to encode error response", http.StatusInternalServerError)
-	}
+	// The envelope contains only strings and a bool. A write error means the
+	// transport failed after headers were committed.
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 func mapErrorToStatus(err error) int {

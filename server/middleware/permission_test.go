@@ -28,7 +28,8 @@ func TestPermissionCache_HitMissAndInvalidation(t *testing.T) {
 			}, nil
 		},
 	}
-	mw := NewPermissionMiddleware(repo)
+	mw := NewPermissionMiddleware(repo, nil)
+	t.Cleanup(mw.Stop)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 
 	// Cold read: cache miss → repo hit; role masks OR'd together.
@@ -73,7 +74,8 @@ func TestPermissionCache_ServerInvalidationIsScoped(t *testing.T) {
 			return []models.Role{{Permissions: models.PermViewChannel}}, nil
 		},
 	}
-	mw := NewPermissionMiddleware(repo)
+	mw := NewPermissionMiddleware(repo, nil)
+	t.Cleanup(mw.Stop)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 
 	// Warm: two members of server-A, one of server-B.
@@ -109,7 +111,9 @@ func TestRolePermissionHTTPAllowAndDeny(t *testing.T) {
 				}
 				return nil, nil
 			}}
-			gate := NewPermissionMiddleware(repo).Require(bit, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+			middleware := NewPermissionMiddleware(repo, nil)
+			t.Cleanup(middleware.Stop)
+			gate := middleware.Require(bit, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) }))
 			for user, want := range map[string]int{"allowed": 204, "denied": 403} {
 				req := httptest.NewRequest("POST", "/", nil)
 				ctx := context.WithValue(req.Context(), handlers.UserContextKey, &models.User{ID: user})

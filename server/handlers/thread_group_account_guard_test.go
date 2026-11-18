@@ -151,6 +151,7 @@ func TestGroupAccountMismatchPrecedesBodyServiceAndLimiter(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			svc := &accountGuardGroupService{}
 			limiter := ratelimit.NewMessageRateLimiter(1, time.Hour, 0)
+			t.Cleanup(limiter.Stop)
 			handler := NewGroupDMHandler(svc, nil, 0, nil, limiter, nil)
 			body := &accountGuardBody{reader: strings.NewReader(test.body)}
 			req := accountGuardRequest(test.method, test.path+"?expected_user_id=old", body, &models.User{ID: "current"})
@@ -171,6 +172,7 @@ func TestGroupAccountMismatchPrecedesBodyServiceAndLimiter(t *testing.T) {
 func TestGroupAddMemberAccountMismatchDoesNotConsumeLimiterAndQueryIsOptional(t *testing.T) {
 	svc := &accountGuardGroupService{}
 	limiter := ratelimit.NewMessageRateLimiter(1, time.Hour, 0)
+	t.Cleanup(limiter.Stop)
 	handler := NewGroupDMHandler(svc, nil, 0, nil, limiter, nil)
 	wrong := accountGuardRequest(http.MethodPost, "/api/group-dms/group/members?expected_user_id=old", io.NopCloser(strings.NewReader(`{"user_id":"new-member"}`)), &models.User{ID: "current"})
 	wrong.SetPathValue("groupId", "group")

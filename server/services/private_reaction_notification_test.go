@@ -61,7 +61,7 @@ func TestPrivateReactionNotificationGates(t *testing.T) {
 			blocks := reactionBlockStub{blocked: tc.blocked}
 			if !tc.pending {
 				repo := &reactionDeliveryRepo{created: true}
-				group := &groupDMService{groups: reactionGroupStub{added: tc.added, authorMember: tc.authorMember}, hub: hub, reactionBlocks: blocks, reactionPreferences: reactionPrefsStub{"direct"}, reactionNotifications: repo}
+				group := NewGroupDMService(reactionGroupStub{added: tc.added, authorMember: tc.authorMember}, nil, nil, hub, "", "", "", nil, "", repo, reactionPrefsStub{"direct"}, blocks, nil)
 				if err := group.ToggleReaction(context.Background(), "group", "message", "actor", "👍"); err != nil {
 					t.Fatal(err)
 				}
@@ -77,7 +77,7 @@ func TestPrivateReactionNotificationGates(t *testing.T) {
 			if tc.pending {
 				status = models.DMStatusPending
 			}
-			dm := &dmService{dmRepo: &testutil.MockDMRepo{
+			dm := NewDMService(nil, &testutil.MockDMRepo{
 				GetMessageByIDFn: func(context.Context, string) (*models.DMMessage, error) {
 					return &models.DMMessage{ID: "message", UserID: "author", DMChannelID: "private"}, nil
 				},
@@ -85,7 +85,7 @@ func TestPrivateReactionNotificationGates(t *testing.T) {
 					return &models.DMChannel{ID: "private", User1ID: "actor", User2ID: "author", Status: status}, nil
 				},
 				ToggleReactionFn: func(context.Context, string, string, string) (bool, error) { return tc.added, nil },
-			}, hub: hub, blockChecker: blocks, reactionPreferences: reactionPrefsStub{"direct"}, notificationRepo: repo}
+			}, nil, hub, blocks, nil, nil, nil, repo, nil, nil, reactionPrefsStub{"direct"}, repo, nil, nil)
 			if err := dm.ToggleReaction(context.Background(), "actor", "message", "👍"); err != nil {
 				t.Fatal(err)
 			}

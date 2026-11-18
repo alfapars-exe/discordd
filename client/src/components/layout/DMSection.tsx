@@ -158,7 +158,7 @@ function DMSection({ onShowUserCard }: DMSectionProps) {
       },
       {
         label: tDM("markAsRead"),
-        onClick: () => clearDMUnread(dm.id),
+        onClick: () => clearDMUnread(dm.id, "entire-conversation"),
         disabled: unread === 0,
       },
       {

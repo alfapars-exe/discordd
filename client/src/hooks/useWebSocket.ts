@@ -96,6 +96,7 @@ export function useWebSocket() {
   const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tokenRefreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const tokenRefreshRetryWaitsRef = useRef(new Set<() => void>());
   const reconnectAttemptRef = useRef<number>(0);
   // Pending "connection proved stable → reset backoff" timer; cancelled on
   // close so a short-lived connection can never wipe the attempt counter.
@@ -125,7 +126,7 @@ export function useWebSocket() {
    * Updated every render so onmessage always calls the freshest handler,
    * avoiding stale closures after HMR or re-renders.
    */
-  const routeEventRef = useRef<(msg: WSMessage, isCurrent?: () => boolean) => void>(() => {});
+  const routeEventRef = useRef<(msg: WSMessage, isCurrent?: () => boolean) => Promise<void>>(async () => {});
 
   // routeEvent is defined further down (below sendVoiceJoin) because
   // it captures sendVoiceJoin in its WSHandlerContext. The lint rule
@@ -150,6 +151,19 @@ export function useWebSocket() {
       clearInterval(tokenRefreshIntervalRef.current);
       tokenRefreshIntervalRef.current = null;
     }
+    for (const release of tokenRefreshRetryWaitsRef.current) release();
+  }
+
+  function waitForTokenRefreshRetry(delay: number): Promise<void> {
+    return new Promise((resolve) => {
+      const release = () => {
+        clearTimeout(timer);
+        tokenRefreshRetryWaitsRef.current.delete(release);
+        resolve();
+      };
+      const timer = setTimeout(release, delay);
+      tokenRefreshRetryWaitsRef.current.add(release);
+    });
   }
 
   /**
@@ -274,7 +288,10 @@ export function useWebSocket() {
         if (!server) continue;
         void resyncChannelDelivery(server, channel,
           (event) => routeEvent(event, isCurrent),
-          () => useMessageStore.getState().fetchMessages(channel, server), isCurrent);
+          () => useMessageStore.getState().fetchMessages(channel, server), isCurrent).catch(() => {
+            if (!isCurrent()) return;
+            void logToServer("error", "ws_channel_resync_failed");
+          });
       }
   }
 
@@ -342,6 +359,7 @@ export function useWebSocket() {
   useEffect(() => {
     let myId = ++activeConnectionIdRef.current;
     let disposed = false;
+    let offline = false;
     let reconnectAfterIdentityChangeQueued = false;
 
     function matchesCurrentIdentity(ownerId: string, generation: number): boolean {
@@ -360,7 +378,7 @@ export function useWebSocket() {
      * Shows "disconnected" banner after limit is reached.
      */
     function scheduleReconnect() {
-      if (activeConnectionIdRef.current !== myId) return;
+      if (disposed || offline || activeConnectionIdRef.current !== myId) return;
 
       if (reconnectAttemptRef.current >= MAX_RECONNECT_ATTEMPTS) {
         setConnectionStatus("disconnected");
@@ -399,7 +417,16 @@ export function useWebSocket() {
      * Refreshes token before connecting (WS has no 401 retry mechanism).
      */
     async function doConnect() {
-      const connectionId = myId;
+      if (disposed) return;
+      if (offline) { setConnectionStatus("offline"); return; }
+      // Each attempt owns its awaits, callbacks and timers, even when the
+      // authenticated account has not changed. Retire before either await.
+      const connectionId = ++activeConnectionIdRef.current;
+      myId = connectionId;
+      cleanupTimers();
+      const retired = wsRef.current;
+      wsRef.current = null;
+      retired?.close();
       // Capture before either token or ticket awaits. Every continuation and
       // socket callback is scoped to this exact authenticated identity.
       const ownerId = getAuthSessionOwner();
@@ -432,12 +459,6 @@ export function useWebSocket() {
       if (!token) {
         scheduleReconnect();
         return;
-      }
-
-      cleanupTimers();
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
       }
 
       // Prefer the short-lived one-time ticket over embedding the JWT
@@ -495,10 +516,7 @@ export function useWebSocket() {
 
         // Start heartbeat interval
         heartbeatIntervalRef.current = setInterval(() => {
-          if (activeConnectionIdRef.current !== myId) {
-            clearInterval(heartbeatIntervalRef.current!);
-            return;
-          }
+          if (!isCurrentConnection(connectionId, ownerId, generation)) return;
 
           if (socket.readyState === WebSocket.OPEN) {
             socket.send(JSON.stringify({ op: "heartbeat" }));
@@ -523,10 +541,7 @@ export function useWebSocket() {
         const TOKEN_REFRESH_MAX_RETRIES = 9;
 
         tokenRefreshIntervalRef.current = setInterval(async () => {
-          if (!isCurrentConnection(connectionId, ownerId, generation)) {
-            clearInterval(tokenRefreshIntervalRef.current!);
-            return;
-          }
+          if (!isCurrentConnection(connectionId, ownerId, generation)) return;
 
           for (let attempt = 0; attempt < TOKEN_REFRESH_MAX_RETRIES; attempt++) {
             try {
@@ -534,6 +549,7 @@ export function useWebSocket() {
               if (!isCurrentConnection(connectionId, ownerId, generation)) return;
               break;
             } catch {
+              if (!isCurrentConnection(connectionId, ownerId, generation)) return;
               console.warn(`[useWebSocket] Token refresh attempt ${attempt + 1} failed`);
               // Server-side bucket is 10 burst / ~30/min — a 9-retry loop
               // would absorb most of it. Log first attempt (initial failure
@@ -545,7 +561,7 @@ export function useWebSocket() {
                 });
               }
               if (attempt < TOKEN_REFRESH_MAX_RETRIES - 1) {
-                await new Promise((r) => setTimeout(r, TOKEN_REFRESH_RETRY_DELAY));
+                await waitForTokenRefreshRetry(TOKEN_REFRESH_RETRY_DELAY);
                 if (!isCurrentConnection(connectionId, ownerId, generation)) return;
               }
             }
@@ -569,7 +585,12 @@ export function useWebSocket() {
         }
 
         // Route via ref for closure freshness
-        routeEventRef.current(msg, () => isCurrentConnection(connectionId, ownerId, generation));
+        void routeEventRef.current(msg, () => isCurrentConnection(connectionId, ownerId, generation)).catch(() => {
+          if (!isCurrentConnection(connectionId, ownerId, generation)) return;
+          // A handler may already have mutated state before rejecting. Observe
+          // failure once without replaying it or logging payloads/crypto errors.
+          void logToServer("error", "ws_event_dispatch_failed", { op: msg.op });
+        });
       };
 
       // ─── onclose ───
@@ -591,6 +612,9 @@ export function useWebSocket() {
           });
         }
 
+        // Retire the closed transport before releasing pending retry waits.
+        // Their continuations must not refresh credentials for this socket.
+        myId = ++activeConnectionIdRef.current;
         setConnectionStatus("disconnected");
         cleanupTimers();
         if (event.code === 4001 && event.reason === "session_revoked" && connectionSession && getAccessSessionID() === connectionSession) {
@@ -624,7 +648,7 @@ export function useWebSocket() {
       const retired = wsRef.current;
       wsRef.current = null;
       retired?.close();
-      setConnectionStatus(getAuthSessionOwner() ? "connecting" : "disconnected");
+      setConnectionStatus(offline ? "offline" : getAuthSessionOwner() ? "connecting" : "disconnected");
       if (reconnectAfterIdentityChangeQueued) return;
       reconnectAfterIdentityChangeQueued = true;
       // setTokens publishes generation before authStore publishes its user.
@@ -667,6 +691,8 @@ export function useWebSocket() {
     // "You're offline" state instead of the generic reconnecting spinner.
     function onOffline() {
       if (disposed) return;
+      offline = true;
+      myId = ++activeConnectionIdRef.current;
       cleanupTimers();
       setConnectionStatus("offline");
       if (wsRef.current) {
@@ -682,6 +708,7 @@ export function useWebSocket() {
     // in doConnect resumes the backoff sequence.
     function onOnline() {
       if (disposed) return;
+      offline = false;
       reconnectAttemptRef.current = 0;
       setReconnectAttempt(0);
       doConnect();
@@ -694,12 +721,8 @@ export function useWebSocket() {
       disposed = true;
       unsubscribeOwner();
       unsubscribeGeneration();
-      // Increment from the snapshotted myId so the lint rule
-      // react-hooks/exhaustive-deps doesn't flag a cleanup-time
-      // ref read. Semantically identical to `activeConnectionIdRef.current++`
-      // because no one else mutates this ref during the effect's
-      // lifetime (scheduleReconnect/doConnect only *read* it via
-      // `=== myId` checks and bail out — they never increment).
+      // Retire the latest attempt owned by this effect before closing its
+      // socket, so late callbacks cannot affect a replacement effect.
       activeConnectionIdRef.current = myId + 1;
       cleanupTimers();
       window.removeEventListener(APP_RESUME_EVENT, onAppResume);

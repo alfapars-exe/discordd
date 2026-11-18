@@ -59,6 +59,13 @@ vi.mock("./voice/MuteHotkeySection", () => ({ default: () => null }));
 vi.mock("./voice/MicProfileSection", () => ({ default: () => null }));
 vi.mock("./voice/CameraSection", () => ({ default: () => null }));
 
+it("associates each audio device selector with its visible label", () => {
+  render(<VoiceSettings />);
+  for (const label of [en.inputDevice, en.outputDevice]) {
+    expect(screen.getByRole("combobox", { name: label })).toBe(screen.getByLabelText(label));
+  }
+});
+
 beforeEach(() => {
   delete window.electronAPI;
   vi.clearAllMocks();

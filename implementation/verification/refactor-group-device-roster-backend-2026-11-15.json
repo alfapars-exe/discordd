@@ -1,0 +1,37 @@
+{
+  "baseCommit": "17f324b698196e17bb8f8afac956556f041fadab",
+  "scope": "Group DM device roster backend boundary; client integration pending",
+  "route": "GET /api/group-dms/{groupId}/device-roster",
+  "access": "Fresh membership before and after member-ID read; changed key epoch conflicts; no profile or prekey enumeration",
+  "contract": "Version1 + key_epoch + current member device IDs and identity revisions; no-store; metadata assembled fully before response",
+  "tests": {
+    "service": "six cases: current, outsider, removal during read, epoch change, mixed member list, repository error; repeat membership revocation after success",
+    "handler": "three-member metadata/epoch response; auth denial and nonmembership before device reads; second-device-list failure cannot expose partial response",
+    "existingDM": "shared metadata encoder retains existing hash/non-disclosure/denial tests",
+    "targeted": "root route, handlers and services passed .651/.574/.593s",
+    "fullRoot": "6.352s passed after intentional one-line golden addition; initial root run failed only new-route golden drift",
+    "vet": "go vet ./... passed",
+    "build": "go build ./... passed",
+    "openapi": "parsed with required epoch and maximum10 members",
+    "manifest": "50 exact source records valid"
+  },
+  "normalizedLFSourceSha256": {
+    "server/handlers/dm_device_roster.go": "9177825d50ba747051f54f4d35a4a1bb773e7f44d1331068fdd4f01951164d67",
+    "server/handlers/group_dm_device_roster.go": "92f9f71a9fe69d5dbac58581bc8d95fb327f4c42ed4917ab37ab1edef244bb79",
+    "server/handlers/group_dm_device_roster_test.go": "87e79b552ef17a5687faa1deb1f09de3a697607635cbe131710c985d05e92e60",
+    "server/services/group_dm_device_roster.go": "a8b16c925f81daa2e0a6391ed4c8724b654a38fbf2d02968763251b0428bd480",
+    "server/services/group_dm_device_roster_test.go": "c2b532c966315dc1e0a9449e658a564a683cf547d98d7a0f452015b24e6a8d90",
+    "server/services/group_dm_service.go": "d3d8d23721ace3004440aab3034629e924d4d9dc2cc068fe54d24dfbc2392e0f",
+    "server/init_handlers.go": "f07db4c1bb5daf66957499a2f54ed411ba6507070934f4df27f4d4f19a63e44c",
+    "server/init_routes_global.go": "a19edb89353cf297897e3203d8a09797909bc6ef6651de75143f767e0066bfeb",
+    "server/testdata/routes.golden": "dc2d193d8646367427161cd3e3eceef0e18f78eded49c174596f0b17afec3da9",
+    "server/openapi.yaml": "b556d9efde13951f14c212227136c0905f7d5fc9f8d1ce59c00003768f81eaa9"
+  },
+  "remaining": [
+    "No client capability advertised yet; stable group encryption still fetches bundles per member per message",
+    "Client must compare roster epoch and exact member IDs to send snapshot, preserve trust and account fencing",
+    "Post-read membership/device revocation is not reserved; send still needs existing commit epoch guard",
+    "Real group multi-device/browser budget acceptance pending",
+    "Whole-project refactor acceptance pending"
+  ]
+}

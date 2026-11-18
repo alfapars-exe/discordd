@@ -1,0 +1,16 @@
+{
+  "scope": "RF17 stale encrypted DM search hits during page hydration",
+  "before": "27 references with one missing record and one edited-away match showed stale total and omitted valid trailing matches. Regression failed.",
+  "after": "Reject missing, foreign, wrong-ID, deleted and nonmatching reads; remove rejected IDs from snapshot and refill current window in batches of at most 25. Check request sequence before mutating snapshot after every await.",
+  "validation": {
+    "tests": "78 passed across DMSearchPanel, SearchPanel and keyStorage",
+    "typescript": "passed",
+    "eslint": "passed",
+    "pendingDeletion": "Deleted in-flight result does not return; empty result state shown"
+  },
+  "limits": [
+    "Invalid hits can require more than 25 total reads; each batch is at most 25",
+    "Complete matching ID snapshot still grows with result count",
+    "No first-query heap bound or complete RF17 acceptance claimed"
+  ]
+}

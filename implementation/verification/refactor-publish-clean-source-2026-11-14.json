@@ -1,0 +1,26 @@
+{
+  "source": "388a9fc8fffbb264933ad30a312e6cd1758bc907",
+  "pr": "https://github.com/alfapars-exe/discordd/pull/307",
+  "before": {
+    "tests": 20,
+    "failures": 6,
+    "log": "hichat-publish-clean-before.log"
+  },
+  "after": {
+    "publication_tests": 20,
+    "publication_failures": 0,
+    "all_python_script_tests": 35,
+    "all_python_failures": 0,
+    "integrated_python_tests": 44,
+    "integrated_failures": 0
+  },
+  "behavior": [
+    "reject Git-reported tracked/staged/untracked dirtiness before source snapshot",
+    "recheck clean source and same HEAD after immutable byte snapshot",
+    "abort before pause/create/restart on provenance mismatch",
+    "preserve reviewed content digest, remote parent, managed deletion and deployed-commit output"
+  ],
+  "provider_actions": "fake API only; no real Space mutation",
+  "local_huggingface_hub": "1.1.4; CI pinned SDK verification pending",
+  "ci": "pending individual and next combined candidate"
+}

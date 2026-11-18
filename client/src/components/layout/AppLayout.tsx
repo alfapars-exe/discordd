@@ -40,7 +40,7 @@ import ConfirmDialog from "../shared/ConfirmDialog";
 import ImageLightbox from "../shared/ImageLightbox";
 import DownloadPromptModal from "../shared/DownloadPromptModal";
 import WelcomeModal from "../shared/WelcomeModal";
-import SettingsModal from "../settings/SettingsModal";
+const SettingsModal = lazy(() => import("../settings/SettingsModal"));
 // VoiceProvider is lazy + conditionally mounted so the ~528 KiB livekit chunk
 // stays off /channels' initial load (Mayıs 28 2026 Lighthouse audit). The
 // component itself short-circuits when !isInVoice (see VoiceProvider.tsx:217),
@@ -72,8 +72,8 @@ import GroupConversationLauncher from "../dm/GroupConversationLauncher";
 import ServerCreationLauncher from "../servers/ServerCreationLauncher";
 import P2PAudioSink from "../p2p/P2PAudioSink";
 import QuickSwitcher from "../shared/QuickSwitcher";
-import KeyboardShortcutHelp from "../shared/KeyboardShortcutHelp";
-import LofiPlayer from "../shared/LofiPlayer";
+const KeyboardShortcutHelp = lazy(() => import("../shared/KeyboardShortcutHelp"));
+const LofiPlayer = lazy(() => import("../shared/LofiPlayer"));
 import ScreenPicker from "../voice/ScreenPicker";
 import AFKKickPopup from "../voice/AFKKickPopup";
 import ConnectionBanner from "../shared/ConnectionBanner";
@@ -104,6 +104,7 @@ import MessageDeepLinkHandler from "./MessageDeepLinkHandler";
 import "../../styles/voice-overlay.css";
 
 function AppLayout() {
+  const settingsOpen = useSettingsStore(state => state.isOpen);
   const { ownerId: overlayRenderOwner, generation: overlayRenderGeneration } = getAuthSessionSnapshot();
   useVoiceOverlayCleanup();
   const { sendTyping, sendDMTyping, sendPresenceUpdate, sendVoiceJoin, sendVoiceLeave, sendVoiceStateUpdate, sendWS, connectionStatus, reconnectAttempt } =
@@ -413,7 +414,7 @@ function AppLayout() {
       <ConnectionBanner status={connectionStatus} reconnectAttempt={reconnectAttempt} />
 
       {/* Settings modal */}
-      <SettingsModal />
+      {settingsOpen && <Suspense fallback={null}><SettingsModal /></Suspense>}
 
       {/* Confirm dialog */}
       <ConfirmDialog />
@@ -434,8 +435,16 @@ function AppLayout() {
       <QuickSwitcher />
       <GroupConversationLauncher />
       <ServerCreationLauncher />
-      {shortcutHelpOpen && <KeyboardShortcutHelp onClose={closeShortcutHelp} />}
-      {lofiOpen && <LofiPlayer onClose={closeLofi} />}
+      {shortcutHelpOpen && (
+        <SectionErrorBoundary section="KeyboardShortcutHelp">
+          <Suspense fallback={null}><KeyboardShortcutHelp onClose={closeShortcutHelp} /></Suspense>
+        </SectionErrorBoundary>
+      )}
+      {lofiOpen && (
+        <SectionErrorBoundary section="LofiPlayer">
+          <Suspense fallback={null}><LofiPlayer onClose={closeLofi} /></Suspense>
+        </SectionErrorBoundary>
+      )}
 
       {/* P2P incoming call overlay */}
       <IncomingCallOverlay />

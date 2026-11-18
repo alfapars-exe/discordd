@@ -1,0 +1,161 @@
+{
+  "source": "13525faa",
+  "command": "npm run test:coverage -- --reporter=dot",
+  "exitCode": 0,
+  "tests": {
+    "filesPassed": 477,
+    "passed": 4908,
+    "skipped": 1,
+    "durationSeconds": 120.53
+  },
+  "coverage": {
+    "total": {
+      "lines": {
+        "total": 37506,
+        "covered": 25371,
+        "skipped": 0,
+        "pct": 67.64
+      },
+      "statements": {
+        "total": 51201,
+        "covered": 34144,
+        "skipped": 0,
+        "pct": 66.68
+      },
+      "functions": {
+        "total": 12015,
+        "covered": 7342,
+        "skipped": 0,
+        "pct": 61.1
+      },
+      "branches": {
+        "total": 39193,
+        "covered": 25142,
+        "skipped": 0,
+        "pct": 64.14
+      },
+      "branchesTrue": {
+        "total": 0,
+        "covered": 0,
+        "skipped": 0,
+        "pct": 100
+      }
+    },
+    "client/src/components/chat/SearchPanel.tsx": {
+      "lines": {
+        "total": 130,
+        "covered": 117,
+        "skipped": 0,
+        "pct": 90
+      },
+      "functions": {
+        "total": 35,
+        "covered": 34,
+        "skipped": 0,
+        "pct": 97.14
+      },
+      "statements": {
+        "total": 156,
+        "covered": 136,
+        "skipped": 0,
+        "pct": 87.17
+      },
+      "branches": {
+        "total": 93,
+        "covered": 76,
+        "skipped": 0,
+        "pct": 81.72
+      }
+    },
+    "client/src/components/dm/DMSearchPanel.tsx": {
+      "lines": {
+        "total": 121,
+        "covered": 107,
+        "skipped": 0,
+        "pct": 88.42
+      },
+      "functions": {
+        "total": 36,
+        "covered": 32,
+        "skipped": 0,
+        "pct": 88.88
+      },
+      "statements": {
+        "total": 145,
+        "covered": 124,
+        "skipped": 0,
+        "pct": 85.51
+      },
+      "branches": {
+        "total": 76,
+        "covered": 61,
+        "skipped": 0,
+        "pct": 80.26
+      }
+    },
+    "client/src/crypto/cachedSearchPage.ts": {
+      "lines": {
+        "total": 18,
+        "covered": 17,
+        "skipped": 0,
+        "pct": 94.44
+      },
+      "functions": {
+        "total": 6,
+        "covered": 6,
+        "skipped": 0,
+        "pct": 100
+      },
+      "statements": {
+        "total": 28,
+        "covered": 26,
+        "skipped": 0,
+        "pct": 92.85
+      },
+      "branches": {
+        "total": 17,
+        "covered": 16,
+        "skipped": 0,
+        "pct": 94.11
+      }
+    },
+    "client/src/crypto/keyStorage.ts": {
+      "lines": {
+        "total": 283,
+        "covered": 265,
+        "skipped": 0,
+        "pct": 93.63
+      },
+      "functions": {
+        "total": 88,
+        "covered": 79,
+        "skipped": 0,
+        "pct": 89.77
+      },
+      "statements": {
+        "total": 382,
+        "covered": 319,
+        "skipped": 0,
+        "pct": 83.5
+      },
+      "branches": {
+        "total": 154,
+        "covered": 115,
+        "skipped": 0,
+        "pct": 74.67
+      }
+    }
+  },
+  "lint": {
+    "command": "npm run lint",
+    "exitCode": 0,
+    "errors": 0,
+    "warnings": 2,
+    "warningScope": "Existing TanStack useVirtualizer React compiler compatibility warnings"
+  },
+  "limits": [
+    "Coverage does not prove complete RF17 or overall refactor acceptance",
+    "First-query matching-ID memory remains unbounded",
+    "Native macOS retry remains in progress, not local coverage evidence"
+  ]
+}

@@ -33,13 +33,14 @@ type stubDMAcceptor struct {
 }
 
 type stubFriendRequestPolicy struct {
+	err     error
 	allowed bool
 	calls   [][2]string
 }
 
 func (s *stubFriendRequestPolicy) CanSend(_ context.Context, senderID, targetID string) (bool, error) {
 	s.calls = append(s.calls, [2]string{senderID, targetID})
-	return s.allowed, nil
+	return s.allowed, s.err
 }
 
 type emailEnqueueCall struct {
@@ -80,7 +81,10 @@ type friendSvcFixture struct {
 // newFriendSvcFixture wires two known users ("alice", "bob"); any other id
 // or username is unknown (pkg.ErrNotFound). The friendship repo starts
 // empty (every lookup → ErrNotFound) — tests set GetByPairFn/GetByIDFn.
-func newFriendSvcFixture(t *testing.T) *friendSvcFixture {
+func newFriendSvcFixture(t *testing.T, queues ...ScheduledEmailEnqueuer) *friendSvcFixture {
+	return newFriendSvcFixtureWithActivity(t, nil, queues...)
+}
+func newFriendSvcFixtureWithActivity(t *testing.T, activity GameActivityPrivacyInvalidator, queues ...ScheduledEmailEnqueuer) *friendSvcFixture {
 	t.Helper()
 	f := &friendSvcFixture{
 		friends:  &testutil.MockFriendshipRepo{},
@@ -111,8 +115,11 @@ func newFriendSvcFixture(t *testing.T) *friendSvcFixture {
 	f.hub.BroadcastToUserFn = func(userID string, e ws.Event) {
 		f.events = append(f.events, sentEvent{to: userID, ev: e})
 	}
-	f.svc = NewFriendshipService(f.friends, f.users, f.notif, f.hub)
-	f.svc.SetDMAcceptor(f.acceptor)
+	var queue ScheduledEmailEnqueuer
+	if len(queues) > 0 {
+		queue = queues[0]
+	}
+	f.svc = NewFriendshipService(activity, f.friends, f.users, f.notif, f.hub, queue, f.acceptor)
 	return f
 }
 
@@ -157,12 +164,10 @@ func sendReq(username string) *models.SendFriendRequestRequest {
 
 func TestFriendshipSendRequest_Rejections(t *testing.T) {
 	t.Run("target policy rejects direct API request", func(t *testing.T) {
-		f := newFriendSvcFixture(t)
 		enqueuer := &stubEmailEnqueuer{}
-		f.svc.SetEmailEnqueuer(enqueuer)
+		f := newFriendSvcFixture(t, enqueuer)
 		policy := &stubFriendRequestPolicy{allowed: false}
-		f.svc = NewFriendshipService(f.friends, f.users, f.notif, f.hub, policy)
-		f.svc.SetEmailEnqueuer(enqueuer)
+		f.svc = NewFriendshipService(nil, f.friends, f.users, f.notif, f.hub, enqueuer, f.acceptor, policy)
 		_, err := f.svc.SendRequest(context.Background(), "alice", sendReq("bob"))
 		if !errors.Is(err, pkg.ErrForbidden) {
 			t.Fatalf("err = %v, want ErrForbidden", err)
@@ -218,9 +223,8 @@ func TestFriendshipSendRequest_Rejections(t *testing.T) {
 	})
 
 	t.Run("pending same direction → already exists", func(t *testing.T) {
-		f := newFriendSvcFixture(t)
 		enqueuer := &stubEmailEnqueuer{}
-		f.svc.SetEmailEnqueuer(enqueuer)
+		f := newFriendSvcFixture(t, enqueuer)
 		f.setPair(pendingFriendship("alice", "bob"))
 		_, err := f.svc.SendRequest(context.Background(), "alice", sendReq("bob"))
 		if !errors.Is(err, pkg.ErrAlreadyExists) {
@@ -257,11 +261,10 @@ func TestFriendshipSendRequest_Rejections(t *testing.T) {
 }
 
 func TestFriendshipSendRequest_HappyPath(t *testing.T) {
-	f := newFriendSvcFixture(t)
+	enqueuer := &stubEmailEnqueuer{}
+	f := newFriendSvcFixture(t, enqueuer)
 	var created *models.Friendship
 	// Capture the persisted row so the email's dedupe key can be tied to it.
-	enqueuer := &stubEmailEnqueuer{}
-	f.svc.SetEmailEnqueuer(enqueuer)
 	f.friends.CreateFn = func(_ context.Context, fr *models.Friendship) error {
 		cp := *fr
 		created = &cp
@@ -342,7 +345,8 @@ func TestFriendshipSendRequest_HappyPath(t *testing.T) {
 }
 
 func TestFriendshipSendRequest_EmailBestEffortAndOmitsDisplayName(t *testing.T) {
-	f := newFriendSvcFixture(t)
+	enqueuer := &stubEmailEnqueuer{err: errors.New("sensitive transport details")}
+	f := newFriendSvcFixture(t, enqueuer)
 	name := `<Alice & Co>`
 	f.users.GetByIDFn = func(_ context.Context, id string) (*models.User, error) {
 		if id != "alice" {
@@ -350,8 +354,6 @@ func TestFriendshipSendRequest_EmailBestEffortAndOmitsDisplayName(t *testing.T) 
 		}
 		return &models.User{ID: "alice", Username: "alice", DisplayName: &name}, nil
 	}
-	enqueuer := &stubEmailEnqueuer{err: errors.New("sensitive transport details")}
-	f.svc.SetEmailEnqueuer(enqueuer)
 	res, err := f.svc.SendRequest(context.Background(), "alice", sendReq("bob"))
 	if err != nil {
 		t.Fatalf("email failure must not fail persisted friend request: %v", err)
@@ -367,7 +369,8 @@ func TestFriendshipSendRequest_EmailBestEffortAndOmitsDisplayName(t *testing.T) 
 
 func TestFriendshipSendRequest_EmailFallbackAndCreateFailure(t *testing.T) {
 	t.Run("blank display name does not add username to generic body", func(t *testing.T) {
-		f := newFriendSvcFixture(t)
+		enqueuer := &stubEmailEnqueuer{}
+		f := newFriendSvcFixture(t, enqueuer)
 		blank := "   "
 		f.users.GetByIDFn = func(_ context.Context, id string) (*models.User, error) {
 			if id != "alice" {
@@ -375,8 +378,6 @@ func TestFriendshipSendRequest_EmailFallbackAndCreateFailure(t *testing.T) {
 			}
 			return &models.User{ID: "alice", Username: "alice", DisplayName: &blank}, nil
 		}
-		enqueuer := &stubEmailEnqueuer{}
-		f.svc.SetEmailEnqueuer(enqueuer)
 		if _, err := f.svc.SendRequest(context.Background(), "alice", sendReq("bob")); err != nil {
 			t.Fatal(err)
 		}
@@ -386,9 +387,8 @@ func TestFriendshipSendRequest_EmailFallbackAndCreateFailure(t *testing.T) {
 	})
 
 	t.Run("failed friendship create does not enqueue", func(t *testing.T) {
-		f := newFriendSvcFixture(t)
 		enqueuer := &stubEmailEnqueuer{}
-		f.svc.SetEmailEnqueuer(enqueuer)
+		f := newFriendSvcFixture(t, enqueuer)
 		f.friends.CreateFn = func(_ context.Context, _ *models.Friendship) error { return errors.New("create failed") }
 		if _, err := f.svc.SendRequest(context.Background(), "alice", sendReq("bob")); err == nil {
 			t.Fatal("expected create error")
@@ -424,9 +424,8 @@ func TestFriendshipSendRequest_NotificationWriteIsBestEffort(t *testing.T) {
 // Mutual request: bob already sent alice a request; alice "sending" one to
 // bob auto-accepts the existing row instead of creating a second one.
 func TestFriendshipSendRequest_MutualAutoAccepts(t *testing.T) {
-	f := newFriendSvcFixture(t)
 	enqueuer := &stubEmailEnqueuer{}
-	f.svc.SetEmailEnqueuer(enqueuer)
+	f := newFriendSvcFixture(t, enqueuer)
 	existing := pendingFriendship("bob", "alice") // bob → alice
 	f.setPair(existing)
 	f.friends.CreateFn = func(_ context.Context, _ *models.Friendship) error {
@@ -509,10 +508,9 @@ func TestFriendshipAcceptRequest(t *testing.T) {
 	})
 
 	t.Run("failed persistence does not enqueue accepted event", func(t *testing.T) {
-		f := newFriendSvcFixture(t)
-		f.setByID(pendingFriendship("alice", "bob"))
 		enqueuer := &stubEmailEnqueuer{}
-		f.svc.SetEmailEnqueuer(enqueuer)
+		f := newFriendSvcFixture(t, enqueuer)
+		f.setByID(pendingFriendship("alice", "bob"))
 		f.friends.UpdateStatusFn = func(_ context.Context, _ string, _ models.FriendshipStatus) error { return errors.New("write failed") }
 		if _, err := f.svc.AcceptRequest(context.Background(), "bob", "fr-1"); err == nil {
 			t.Fatal("expected status write failure")
@@ -523,9 +521,8 @@ func TestFriendshipAcceptRequest(t *testing.T) {
 	})
 
 	t.Run("happy path", func(t *testing.T) {
-		f := newFriendSvcFixture(t)
 		enqueuer := &stubEmailEnqueuer{}
-		f.svc.SetEmailEnqueuer(enqueuer)
+		f := newFriendSvcFixture(t, enqueuer)
 		f.setByID(pendingFriendship("alice", "bob"))
 		var updated []string
 		f.friends.UpdateStatusFn = func(_ context.Context, id string, status models.FriendshipStatus) error {
@@ -733,5 +730,90 @@ func TestFriendshipAreFriends(t *testing.T) {
 	f.friends.GetByPairFn = func(_ context.Context, _, _ string) (*models.Friendship, error) { return nil, boom }
 	if _, err = f.svc.AreFriends(context.Background(), "alice", "bob"); !errors.Is(err, boom) {
 		t.Errorf("repo error: err = %v, want boom", err)
+	}
+}
+
+func TestFriendshipPolicyFailureHasNoSideEffects(t *testing.T) {
+	for _, failure := range []error{errors.New("policy unavailable"), context.Canceled} {
+		t.Run(failure.Error(), func(t *testing.T) {
+			enqueuer := &stubEmailEnqueuer{}
+			f := newFriendSvcFixture(t, enqueuer)
+			policy := &stubFriendRequestPolicy{err: failure}
+			f.svc = NewFriendshipService(nil, f.friends, f.users, f.notif, f.hub, enqueuer, f.acceptor, policy)
+			f.friends.CreateFn = func(context.Context, *models.Friendship) error {
+				t.Fatal("policy failure persisted request")
+				return nil
+			}
+			result, err := f.svc.SendRequest(context.Background(), "alice", sendReq("bob"))
+			if result != nil || !errors.Is(err, failure) || !strings.HasPrefix(err.Error(), "failed to evaluate friend request policy: ") {
+				t.Fatalf("result=%+v err=%v, want wrapped policy failure", result, err)
+			}
+			if len(policy.calls) != 1 || policy.calls[0] != [2]string{"alice", "bob"} {
+				t.Fatalf("policy calls=%v", policy.calls)
+			}
+			if len(enqueuer.calls) != 0 || len(f.events) != 0 || len(f.acceptor.calls) != 0 {
+				t.Fatal("policy failure published side effects")
+			}
+		})
+	}
+}
+
+func TestFriendshipExistingRelationshipBypassesPolicy(t *testing.T) {
+	cases := []struct {
+		name   string
+		status models.FriendshipStatus
+		sender string
+		want   error
+	}{
+		{"accepted", models.FriendshipStatusAccepted, "alice", pkg.ErrAlreadyExists},
+		{"outgoing pending", models.FriendshipStatusPending, "alice", pkg.ErrAlreadyExists},
+		{"blocked", models.FriendshipStatusBlocked, "bob", pkg.ErrNotFound},
+		{"mutual pending", models.FriendshipStatusPending, "bob", nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFriendSvcFixture(t)
+			existing := pendingFriendship(tc.sender, "bob")
+			if tc.sender == "bob" {
+				existing.FriendID = "alice"
+			}
+			existing.Status = tc.status
+			f.setPair(existing)
+			policy := &stubFriendRequestPolicy{err: errors.New("must not evaluate policy")}
+			f.svc = NewFriendshipService(nil, f.friends, f.users, f.notif, f.hub, nil, f.acceptor, policy)
+			result, err := f.svc.SendRequest(context.Background(), "alice", sendReq("bob"))
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("err=%v want=%v", err, tc.want)
+			}
+			if tc.want == nil && (result == nil || result.Status != models.FriendshipStatusAccepted) {
+				t.Fatalf("mutual result=%+v", result)
+			}
+			if len(policy.calls) != 0 {
+				t.Fatalf("unexpected policy calls=%v", policy.calls)
+			}
+		})
+	}
+}
+
+func TestFriendshipAllowedPolicyPrecedesPersistence(t *testing.T) {
+	f := newFriendSvcFixture(t)
+	policy := &stubFriendRequestPolicy{allowed: true}
+	f.svc = NewFriendshipService(nil, f.friends, f.users, f.notif, f.hub, nil, f.acceptor, policy)
+	writes := 0
+	f.friends.CreateFn = func(_ context.Context, row *models.Friendship) error {
+		writes++
+		if len(policy.calls) != 1 || policy.calls[0] != [2]string{"alice", "bob"} {
+			t.Fatalf("persistence preceded policy: %v", policy.calls)
+		}
+		if row.UserID != "alice" || row.FriendID != "bob" || row.Status != models.FriendshipStatusPending {
+			t.Fatalf("wrong request=%+v", row)
+		}
+		return nil
+	}
+	if _, err := f.svc.SendRequest(context.Background(), "alice", sendReq("bob")); err != nil {
+		t.Fatal(err)
+	}
+	if writes != 1 {
+		t.Fatalf("writes=%d", writes)
 	}
 }

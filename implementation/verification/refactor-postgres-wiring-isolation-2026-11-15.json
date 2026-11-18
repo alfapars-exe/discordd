@@ -1,0 +1,41 @@
+{
+  "base_head": "8e27a7b835d4d79e1216b4ff97a5012c1e83bf4c",
+  "ci": {
+    "run": 43652505951,
+    "job": 132623865377,
+    "failure": "TestRemoveMember_RoleCleanupFailureRollsBackMembership: removal succeeded without cleaning up role assignments"
+  },
+  "reproduced": "Old root composition fixture populated public; repository schema table rename fell back to public.user_roles through search_path. Old root then repository regression failed locally.",
+  "fix": "Root messaging fixture creates/drops owned isolated schema and asserts public user_roles table presence unchanged. Product code and rollback assertion unchanged.",
+  "verification": {
+    "root": [
+      {
+        "name": "TestChannelMessagingPostgresCompositionSelectsDurablePublication",
+        "seconds": 0.56
+      },
+      {
+        "name": "TestChannelMessagingPostgresCompositionSelectsDurablePublication",
+        "seconds": 0.53
+      }
+    ],
+    "repository": [
+      {
+        "name": "TestRemoveMember_DeletesMembershipAndRoleAssignments",
+        "seconds": 0.57
+      },
+      {
+        "name": "TestRemoveMember_NotAMember_ReturnsErrNotFoundAndLeavesRolesUntouched",
+        "seconds": 0.58
+      },
+      {
+        "name": "TestRemoveMember_TxBoundRepoUsesCallerTransaction",
+        "seconds": 0.53
+      },
+      {
+        "name": "TestRemoveMember_RoleCleanupFailureRollsBackMembership",
+        "seconds": 0.56
+      }
+    ]
+  },
+  "limits": "Dedicated PostgreSQL 18.6 loopback sslmode=disable, non-race. Current-source CI pending."
+}

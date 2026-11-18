@@ -1,0 +1,27 @@
+{
+  "source_parent": "c5400613",
+  "scope": "RF13 channel-message notification choice survives account cache and offline reload",
+  "before": {
+    "command": "npx vitest run src/stores/preferencesCodec.test.ts src/stores/preferencesStore.test.ts -t 'channel message notification' --reporter=dot",
+    "failed": 4,
+    "deselected_by_filter": 51,
+    "reason": "true/false choice omitted from cache; acknowledged snapshot absent"
+  },
+  "change": "Add existing boolean channelMessageNotifications to known cache fields and boolean validation",
+  "after": {
+    "command": "npx vitest run src/stores/preferencesCodec.test.ts src/stores/preferencesStore.test.ts src/utils/notificationPreferences.test.ts --reporter=dot",
+    "exit": 0,
+    "passed": 63
+  },
+  "assertions": [
+    "true and false round-trip through acknowledged snapshot",
+    "offline initial GET preserves same-account choice",
+    "switching to another account clears choice",
+    "string/number/null/object/array values rejected"
+  ],
+  "limits": [
+    "No wire/storage key rename",
+    "Behavior fix separate from following pure defaults refactor",
+    "Current-source production/preferences E2E and full CI remain required"
+  ]
+}

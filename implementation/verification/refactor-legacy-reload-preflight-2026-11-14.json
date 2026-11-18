@@ -1,0 +1,26 @@
+{
+  "tested_source": "6f8cfc5383b8c9461486202677542908ea084a1d",
+  "local_result": {
+    "files": 9,
+    "passed": 263,
+    "failed": 0,
+    "typescript": "passed",
+    "changed_runtime_eslint": "passed"
+  },
+  "browser_profile_listing": {
+    "setup": 1,
+    "source_tagged": 1,
+    "legacy_unversioned": 1,
+    "executed": false
+  },
+  "changes": [
+    "Read-only authentication and source-tag upgrade for eligible legacy cache receipts.",
+    "Refresh history after existing keys become ready; guard reentrant auth-session replacement.",
+    "Production E2E covers both tagged and legacy cache backups; fixture mutation uses fresh GCM nonce."
+  ],
+  "limits": [
+    "No current production browser success claimed.",
+    "Edited/attachment legacy receipts and missing initial anchors stay fail-closed.",
+    "The previous c9 CI passed 35/36 checks; current candidate CI is required."
+  ]
+}

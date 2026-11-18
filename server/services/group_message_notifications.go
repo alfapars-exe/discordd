@@ -10,13 +10,10 @@ import (
 // Source persistence lives in the group transaction, not in this postcommit
 // push. The concrete repository serializes this callback against revocation.
 func (s *groupDMService) deliverGroupIncomingNotifications(ctx context.Context, m *models.GroupDMMessage) {
-	provider, ok := s.groups.(interface {
-		DeliverCommittedGroupNotifications(context.Context, string, string, func(*models.Notification)) error
-	})
-	if !ok {
+	if s.notificationDelivery == nil {
 		return
 	}
-	if err := provider.DeliverCommittedGroupNotifications(ctx, m.GroupID, m.ID, func(n *models.Notification) { broadcastNotificationCreate(s.hub, n) }); err != nil {
+	if err := s.notificationDelivery.DeliverCommittedGroupNotifications(ctx, m.GroupID, m.ID, func(n *models.Notification) { broadcastNotificationCreate(s.hub, n) }); err != nil {
 		groupDMLogger.Error("committed group inbox push skipped", "group_id", m.GroupID, "err", pkg.ErrText(err))
 	}
 }
@@ -24,10 +21,10 @@ func (s *groupDMService) deliverGroupIncomingNotifications(ctx context.Context, 
 // Source reads/deletes may affect more than the bounded notification WS ID
 // budget. Refresh the owned feed; never claim every unrelated row was read.
 func (s *groupDMService) refreshGroupInbox(ctx context.Context, userID string) {
-	if s.reactionNotifications == nil {
+	if s.notifications == nil {
 		return
 	}
-	counts, err := NotificationUnreadSummary(ctx, s.reactionNotifications, userID)
+	counts, err := NotificationUnreadSummary(ctx, s.notifications, userID)
 	if err != nil {
 		groupDMLogger.Error("committed group inbox refresh skipped", "user_id", userID, "err", pkg.ErrText(err))
 		return

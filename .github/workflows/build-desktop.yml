@@ -234,6 +234,10 @@ jobs:
         shell: pwsh
         run: ./scripts/test-windows-upgrade-runner-guard.ps1
 
+      - name: Install packaged renderer test dependencies
+        if: matrix.platform == 'windows-latest'
+        run: npm ci --prefix e2e --ignore-scripts
+
       - name: Verify Windows install and upgrade
         if: matrix.platform == 'windows-latest'
         shell: pwsh

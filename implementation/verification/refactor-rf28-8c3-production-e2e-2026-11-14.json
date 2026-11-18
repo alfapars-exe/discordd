@@ -1,0 +1,213 @@
+{
+  "pr_source": "8c341d74a7353fe3f272e862c5d4309b9b5f825c",
+  "workflow_run": 43568798186,
+  "run_state_at_capture": {
+    "conclusion": "success",
+    "headSha": "8c341d74a7353fe3f272e862c5d4309b9b5f825c",
+    "status": "completed"
+  },
+  "job": {
+    "id": 132368420306,
+    "run_id": 43568798186,
+    "workflow_name": "Server CI",
+    "head_branch": "verify/refactor-integration",
+    "run_url": "https://api.github.com/repos/alfapars-exe/discordd/actions/runs/43568798186",
+    "run_attempt": 1,
+    "node_id": "CR_kwDOSTBJ_88AAAAe0cXN0g",
+    "head_sha": "8c341d74a7353fe3f272e862c5d4309b9b5f825c",
+    "url": "https://api.github.com/repos/alfapars-exe/discordd/actions/jobs/132368420306",
+    "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43568798186/job/132368420306",
+    "status": "completed",
+    "conclusion": "success",
+    "created_at": "2026-11-14T06:57:26Z",
+    "started_at": "2026-11-14T06:57:29Z",
+    "completed_at": "2026-11-14T07:03:52Z",
+    "name": "Playwright E2E",
+    "steps": [
+      {
+        "name": "Set up job",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 1,
+        "started_at": "2026-11-14T06:57:29Z",
+        "completed_at": "2026-11-14T06:57:32Z"
+      },
+      {
+        "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 2,
+        "started_at": "2026-11-14T06:57:32Z",
+        "completed_at": "2026-11-14T06:57:40Z"
+      },
+      {
+        "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 3,
+        "started_at": "2026-11-14T06:57:40Z",
+        "completed_at": "2026-11-14T06:57:45Z"
+      },
+      {
+        "name": "Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 4,
+        "started_at": "2026-11-14T06:57:45Z",
+        "completed_at": "2026-11-14T06:57:53Z"
+      },
+      {
+        "name": "Install client deps",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 5,
+        "started_at": "2026-11-14T06:57:53Z",
+        "completed_at": "2026-11-14T06:58:02Z"
+      },
+      {
+        "name": "Install e2e deps",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 6,
+        "started_at": "2026-11-14T06:58:02Z",
+        "completed_at": "2026-11-14T06:58:02Z"
+      },
+      {
+        "name": "Verify disposable E2E isolation guards",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 7,
+        "started_at": "2026-11-14T06:58:02Z",
+        "completed_at": "2026-11-14T06:58:02Z"
+      },
+      {
+        "name": "Install Playwright Chromium and WebKit",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 8,
+        "started_at": "2026-11-14T06:58:02Z",
+        "completed_at": "2026-11-14T06:59:07Z"
+      },
+      {
+        "name": "Start isolated PostgreSQL with mutual TLS",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 9,
+        "started_at": "2026-11-14T06:59:07Z",
+        "completed_at": "2026-11-14T06:59:25Z"
+      },
+      {
+        "name": "Chromium production application suite",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 10,
+        "started_at": "2026-11-14T06:59:25Z",
+        "completed_at": "2026-11-14T07:01:53Z"
+      },
+      {
+        "name": "Recover encrypted history in a fresh production database",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 11,
+        "started_at": "2026-11-14T07:01:53Z",
+        "completed_at": "2026-11-14T07:02:52Z"
+      },
+      {
+        "name": "WebKit production client smoke",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 12,
+        "started_at": "2026-11-14T07:02:52Z",
+        "completed_at": "2026-11-14T07:03:30Z"
+      },
+      {
+        "name": "Recover account from delivered email in a fresh database",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 13,
+        "started_at": "2026-11-14T07:03:30Z",
+        "completed_at": "2026-11-14T07:03:48Z"
+      },
+      {
+        "name": "Stop isolated PostgreSQL",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 14,
+        "started_at": "2026-11-14T07:03:48Z",
+        "completed_at": "2026-11-14T07:03:48Z"
+      },
+      {
+        "name": "Upload report on failure",
+        "status": "completed",
+        "conclusion": "skipped",
+        "number": 15,
+        "started_at": "2026-11-14T07:03:48Z",
+        "completed_at": "2026-11-14T07:03:48Z"
+      },
+      {
+        "name": "Post Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 28,
+        "started_at": "2026-11-14T07:03:48Z",
+        "completed_at": "2026-11-14T07:03:49Z"
+      },
+      {
+        "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 29,
+        "started_at": "2026-11-14T07:03:49Z",
+        "completed_at": "2026-11-14T07:03:49Z"
+      },
+      {
+        "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 30,
+        "started_at": "2026-11-14T07:03:49Z",
+        "completed_at": "2026-11-14T07:03:49Z"
+      },
+      {
+        "name": "Complete job",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 31,
+        "started_at": "2026-11-14T07:03:49Z",
+        "completed_at": "2026-11-14T07:03:49Z"
+      }
+    ],
+    "check_run_url": "https://api.github.com/repos/alfapars-exe/discordd/check-runs/132368420306",
+    "labels": [
+      "ubuntu-latest"
+    ],
+    "runner_id": 1000031611,
+    "runner_name": "GitHub Actions 1000031611",
+    "runner_group_id": 0,
+    "runner_group_name": "GitHub Actions"
+  },
+  "test_summaries": [
+    "2026-11-14T07:01:53.6321388Z ##[notice]  15 passed (2.5m)",
+    "2026-11-14T07:01:53.6331779Z   15 passed (2.5m)",
+    "2026-11-14T07:02:52.1084324Z ##[notice]  3 passed (58.0s)",
+    "2026-11-14T07:02:52.1087762Z   3 passed (58.0s)",
+    "2026-11-14T07:03:30.3258454Z ##[notice]  1 passed (37.8s)",
+    "2026-11-14T07:03:30.3259847Z   1 passed (37.8s)",
+    "2026-11-14T07:03:48.7578873Z ##[notice]  2 passed (18.0s)",
+    "2026-11-14T07:03:48.7590774Z   2 passed (18.0s)"
+  ],
+  "recovery_cases": [
+    "2026-11-14T07:02:40.1958552Z   \u2713  2 [chromium] \u203a tests/crypto-recovery.spec.ts:47:7 \u203a a fresh device restores identity and encrypted history (source-tagged) (11.2s)",
+    "2026-11-14T07:02:52.0566739Z   \u2713  3 [chromium] \u203a tests/crypto-recovery.spec.ts:47:7 \u203a a fresh device restores identity and encrypted history (legacy-unversioned) (11.9s)"
+  ],
+  "verified_scope": [
+    "Production Chromium suite, concurrent mutations and lost-response retry.",
+    "Tagged and unversioned text-only backup recovery, wrong password rejection, fingerprint equality, historical plaintext and reload.",
+    "WebKit production smoke and delivered-email recovery."
+  ],
+  "limits": [
+    "New browser-offline and preferences-isolation scenarios are not in this source.",
+    "Later shared history-refresh helper and session guards await combined CI.",
+    "Edited/attachment legacy history and missing anchors remain outside automatic upgrade."
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "scope": "RF11 direct root and returned-literal repository validation",
+  "required": [
+    "ServerEvent",
+    "Server",
+    "Role",
+    "Channel",
+    "Invite",
+    "Friendship",
+    "ServerMute",
+    "ChannelMute",
+    "LinkPreview",
+    "Badge",
+    "EmailCampaign",
+    "AccountAssetCleanup",
+    "Reminder",
+    "ProfileShowcase",
+    "ServerEventDelivery",
+    "FriendAnniversary"
+  ],
+  "regression": "32 nil/typed-nil cases failed before validation. Old successful constructions were explicitly cleaned up; domain-specific earlier panics did not satisfy precise root contract.",
+  "implementation": "Validate direct root providers before cache/resource allocation; keep domain-specific validators and all constructor/worker startup behavior.",
+  "checks": {
+    "root": "PASS root matrix, ServiceInitialization/cache/routes/callbacks/permission/auth-cache/real friendship-DM, 4.431s",
+    "workers": "No cache worker count change after invalid root composition",
+    "build": "PASS go build ./...",
+    "vet": "PASS go vet .",
+    "reviewed_manifest": "PASS 50 exact records"
+  },
+  "preceding_full_suite": {
+    "source": "4eec9daf5f9482a80ec08064478e1bd1ea256fb5",
+    "services": 97.321,
+    "handlers": 7.492,
+    "repository": 192.083,
+    "ws": 5.498,
+    "root": 45.992,
+    "result": "all PASS; source fixed throughout; excludes later root validator"
+  },
+  "linux_race": {
+    "session": 83411,
+    "archive_commit": "e12ddc89ba7a0286a544571ba62042383a5d6ef0",
+    "server_source": "same as 4eec9daf",
+    "status": "live immutable snapshot; no success asserted"
+  },
+  "limits": [
+    "Complete optional/resource acquisition matrix and full RF01-RF30 acceptance remain open.",
+    "Current remote CI and immutable Linux race do not cover this later local change."
+  ]
+}

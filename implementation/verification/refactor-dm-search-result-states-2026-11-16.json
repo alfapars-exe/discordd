@@ -1,0 +1,168 @@
+{
+  "renderAndReadonlyCommit": "dd252eab4568f8a65e2332b32ac9b9aa0e4d5fa6",
+  "redundantReturnCommit": "e4f2cddb",
+  "navigationTestsCommit": "75292b058aab0ac3f950772659a47a1ecc6d6fa5",
+  "scope": "DM search UI result-state rendering and readonly props; no API/store action changes",
+  "validation": {
+    "navigationCharacterization": {
+      "baselineCommit": "7e8d4dfd",
+      "pass": 27,
+      "fail": 0,
+      "candidateRestoredSHA256": "d7032ba271bc43bce0174875d4cc625d6a2568353de7a1b0c7eb163c803ef31f"
+    },
+    "finalRelatedSuites": {
+      "files": 3,
+      "pass": 57,
+      "fail": 0,
+      "skip": 0
+    },
+    "typeAndLint": "tsc-b and both changed files ESLint PASS",
+    "productionBuild": "dd252eab Vite build1.93s PASS, existing large chunk warning; subsequent source change only removes a final no-op return",
+    "targetedCoverage": {
+      "lines": {
+        "total": 178,
+        "covered": 166,
+        "skipped": 0,
+        "pct": 93.25
+      },
+      "statements": {
+        "total": 246,
+        "covered": 218,
+        "skipped": 0,
+        "pct": 88.61
+      },
+      "functions": {
+        "total": 49,
+        "covered": 39,
+        "skipped": 0,
+        "pct": 79.59
+      },
+      "branches": {
+        "total": 109,
+        "covered": 86,
+        "skipped": 0,
+        "pct": 78.89
+      },
+      "branchesTrue": {
+        "total": 0,
+        "covered": 0,
+        "skipped": 0,
+        "pct": "Unknown"
+      }
+    },
+    "coverageScope": "27 DM panel tests and one included production file; not whole-client coverage"
+  },
+  "sonar": {
+    "sourceCommit": "7e8d4dfd",
+    "codeLines": 431,
+    "mismatches": [],
+    "extraEOF": 1,
+    "issues": [
+      {
+        "key": "AaHe4ooUC7n5zOm-i-dM",
+        "rule": "typescript:S3358",
+        "status": "OPEN",
+        "resolution": null,
+        "line": 365,
+        "message": "Extract this nested ternary operation into an independent statement."
+      },
+      {
+        "key": "AaHcyWYyASsLdyanVxtV",
+        "rule": "typescript:S3776",
+        "status": "CLOSED",
+        "resolution": "FIXED",
+        "line": null,
+        "message": "Refactor this function to reduce its Cognitive Complexity from 30 to the 15 allowed."
+      },
+      {
+        "key": "AaHcyWYyASsLdyanVxtU",
+        "rule": "typescript:S6759",
+        "status": "OPEN",
+        "resolution": null,
+        "line": 35,
+        "message": "Mark the props of the component as read-only."
+      },
+      {
+        "key": "AaHiJTYbB_udLTV_W_En",
+        "rule": "typescript:S3626",
+        "status": "OPEN",
+        "resolution": null,
+        "line": 169,
+        "message": "Remove this \"return\" that does not affect the flow of execution."
+      }
+    ]
+  },
+  "sourceScan": {
+    "commit": "dd252eab4568f8a65e2332b32ac9b9aa0e4d5fa6",
+    "archive": {
+      "commit": "dd252eab4568f8a65e2332b32ac9b9aa0e4d5fa6",
+      "source": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-dm-panel-dd252eab-source-0034b77ea2",
+      "trackedBytes": 110951456,
+      "freeBefore": 1995010048,
+      "freeAfter": 1782439936,
+      "method": "git archive tar stream, no intermediate ZIP"
+    },
+    "exactSourceRecords": 51,
+    "reviewLines": 481,
+    "blockingPatterns": 0,
+    "exit": 0,
+    "limits": "Pattern scan, not proof of vulnerability absence. Snapshot precedes no-op return removal and four extra navigation cases; no newer-snapshot scan claimed."
+  },
+  "pending": [
+    "RF17 query/write/live-receive budgets and physical/native behavior",
+    "Historical intermittent pending-panel timeout root cause",
+    "Interrupted extended message profile, slow-consumer and pool budget acceptance"
+  ],
+  "disk": "No rejected cleanup action was executed. About1.7GiB remains after streamed archive; no intermediate ZIP was created.",
+  "hashes": {
+    "hichat-dm-search-render-final-contracts.log": "5ec29bfb4ccbac345507b6dc5117c909542372905caf21cc3a75cbb12e2f4688",
+    "hichat-dm-search-navigation-baseline.log": "8f5d502ca340563e3da1b4e7867bfc0054dc33eb9d07386a0278bc5d594c7622",
+    "hichat-dm-search-navigation-coverage.log": "69adfef508aa7ba297d136102eaa6994a06f4113e39e7ded3870d4f2a3a558cc",
+    "hichat-dm-panel-dd252eab-scan.log": "dff8e9cd6c30d752ccb949075df597593b95299bba0ebcf637e55bf908967785",
+    "hichat-dm-panel-dd252eab-scan-review.txt": "9f7f353a624f6fd028ee7af3f5f4f05dfa4b81342bcff22bb142a084f4958bc6",
+    "hichat-dm-search-render-vite.log": "4fb281bc51b70ab3561decb0a77c9c8692bba4ec5bb974a33519c6740699ea70"
+  },
+  "sonarFollowup": {
+    "sourceCommit": "29209f9f",
+    "codeLines": 430,
+    "extraEOF": 1,
+    "mismatches": [],
+    "allIssueRecordsRead": 499,
+    "pages": 1,
+    "issues": [
+      {
+        "key": "AaHe4ooUC7n5zOm-i-dM",
+        "rule": "typescript:S3358",
+        "status": "CLOSED",
+        "resolution": "FIXED",
+        "line": null,
+        "message": "Extract this nested ternary operation into an independent statement."
+      },
+      {
+        "key": "AaHcyWYyASsLdyanVxtV",
+        "rule": "typescript:S3776",
+        "status": "CLOSED",
+        "resolution": "FIXED",
+        "line": null,
+        "message": "Refactor this function to reduce its Cognitive Complexity from 30 to the 15 allowed."
+      },
+      {
+        "key": "AaHcyWYyASsLdyanVxtU",
+        "rule": "typescript:S6759",
+        "status": "CLOSED",
+        "resolution": "FIXED",
+        "line": null,
+        "message": "Mark the props of the component as read-only."
+      },
+      {
+        "key": "AaHiJTYbB_udLTV_W_En",
+        "rule": "typescript:S3626",
+        "status": "CLOSED",
+        "resolution": "FIXED",
+        "line": null,
+        "message": "Remove this \"return\" that does not affect the flow of execution."
+      }
+    ]
+  },
+  "ciEvidence": "refactor-2920-terminal-ci-2026-11-16.json"
+}

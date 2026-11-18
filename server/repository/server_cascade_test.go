@@ -520,3 +520,61 @@ func TestDeleteServerCascade_CoversEveryServerScopedTable(t *testing.T) {
 		}
 	}
 }
+
+// Thread starters form a cycle: channels -> messages -> thread channels.
+// Exercise both the pool-owned transaction and an existing caller transaction.
+func TestDeleteServerCascade_ThreadStarterCycle(t *testing.T) {
+	for _, callerTx := range []bool{false, true} {
+		t.Run(fmt.Sprintf("callerTx=%t", callerTx), func(t *testing.T) {
+			db := newTestDB(t)
+			ctx := context.Background()
+			repos := struct {
+				server   ServerRepository
+				role     RoleRepository
+				channel  ChannelRepository
+				category CategoryRepository
+				message  MessageRepository
+				user     UserRepository
+			}{NewSQLiteServerRepo(db.Conn), NewSQLiteRoleRepo(db.Conn), NewSQLiteChannelRepo(db.Conn), NewSQLiteCategoryRepo(db.Conn), NewSQLiteMessageRepo(db.Conn), NewSQLiteUserRepo(db.Conn)}
+			doomed, parent, _, starter := seedFullServer(t, repos)
+			survivor, survivorParent, _, survivorStarter := seedFullServer(t, repos)
+			for _, fixture := range []struct{ server, parent, starter string }{{doomed, parent, starter}, {survivor, survivorParent, survivorStarter}} {
+				thread := &models.Channel{ServerID: fixture.server, Name: "thread", Type: "thread", ParentChannelID: &fixture.parent, StarterMessageID: &fixture.starter}
+				if err := repos.channel.Create(ctx, thread); err != nil {
+					t.Fatal(err)
+				}
+				message := &models.Message{ChannelID: thread.ID, UserID: "", Content: strPtr("thread reply")}
+				if err := db.Conn.QueryRowContext(ctx, "SELECT owner_id FROM servers WHERE id=?", fixture.server).Scan(&message.UserID); err != nil {
+					t.Fatal(err)
+				}
+				if err := repos.message.Create(ctx, message); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if callerTx {
+				tx, err := db.Conn.BeginTx(ctx, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer func() { _ = tx.Rollback() }()
+				if err := NewSQLiteServerRepo(tx).Delete(ctx, doomed); err != nil {
+					t.Fatal(err)
+				}
+				if err := tx.Commit(); err != nil {
+					t.Fatal(err)
+				}
+			} else if err := repos.server.Delete(ctx, doomed); err != nil {
+				t.Fatal(err)
+			}
+			if n := countRows(t, db, "SELECT COUNT(*) FROM channels WHERE server_id=?", doomed); n != 0 {
+				t.Fatalf("deleted server channels: %d", n)
+			}
+			if n := countRows(t, db, "SELECT COUNT(*) FROM messages WHERE channel_id IN (SELECT id FROM channels WHERE server_id=?)", survivor); n != 2 {
+				t.Fatalf("surviving messages: %d", n)
+			}
+			if n := countRows(t, db, "SELECT COUNT(*) FROM channels WHERE server_id=? AND starter_message_id=?", survivor, survivorStarter); n != 1 {
+				t.Fatalf("surviving thread starter links: %d", n)
+			}
+		})
+	}
+}

@@ -1,0 +1,20 @@
+{
+  "baselineCommit": "95f8edcf",
+  "scope": "Separate bound constant identifier resolution from the expression evaluator. Preserve shared node budget, depth increments, cycle guard, lexical object binding and defer-based seen-set cleanup.",
+  "validation": {
+    "beforeAndAfter": "Seven tests including cycle and excessive shared-constant expansion rejection PASS on old and new source",
+    "goVet": "PASS including final test source",
+    "inventoryParity": true,
+    "candidateCalls": 963
+  },
+  "remaining": [
+    "Final source scan/CI/Sonar",
+    "Real SQL execution/dialect parity and RF05 acceptance"
+  ],
+  "sourceScan": {
+    "sourceCommit": "8072cd04",
+    "reviewLines": 482,
+    "blockingPatterns": 0,
+    "exactReviewedRecords": 51
+  }
+}

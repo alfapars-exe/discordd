@@ -4,6 +4,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/argeinfina/hichat/database"
@@ -75,6 +76,57 @@ func (r *sqliteUserRepo) GetByUsername(ctx context.Context, username string) (*m
 	}
 
 	return user, nil
+}
+
+// ListServerMemberProfiles reads the fields used by ToMemberWithRoles.
+func (r *sqliteUserRepo) ListServerMemberProfiles(ctx context.Context, serverID string) ([]models.User, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT u.id, u.username, u.display_name, u.avatar_url,
+		u.status, u.pref_status, u.custom_status, u.created_at, u.last_seen_at, u.avatar_animated_url,
+		u.banner_url, u.banner_animated_url, u.bio, u.pronouns, u.accent_color
+		FROM server_members m JOIN users u ON u.id = m.user_id
+		WHERE m.server_id = ? ORDER BY u.username`, serverID)
+	if err != nil {
+		return nil, fmt.Errorf("list member profiles: %w", err)
+	}
+	return scanRows(rows, "member profile", func(rows *sql.Rows) (models.User, error) {
+		var u models.User
+		err := rows.Scan(&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.Status, &u.PrefStatus,
+			&u.CustomStatus, &u.CreatedAt, &u.LastSeenAt, &u.AvatarAnimatedURL, &u.BannerURL,
+			&u.BannerAnimatedURL, &u.Bio, &u.Pronouns, &u.AccentColor)
+		return u, err
+	})
+}
+
+func (r *sqliteUserRepo) PublicUsersByID(ctx context.Context, ids []string) (map[string]*models.PublicUser, error) {
+	found := make(map[string]*models.PublicUser)
+	if len(ids) == 0 {
+		return found, nil
+	}
+	keys := make(map[string]int, len(ids))
+	for _, id := range ids {
+		keys[id] = 1
+	}
+	payload, err := json.Marshal(keys)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.db.QueryContext(ctx, `SELECT id, username, display_name, avatar_url, status, custom_status, created_at
+		FROM users WHERE id IN (SELECT key FROM json_each(?))`, string(payload))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var u models.PublicUser
+		if err := rows.Scan(&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.Status, &u.CustomStatus, &u.CreatedAt); err != nil {
+			return nil, err
+		}
+		found[u.ID] = &u
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return found, nil
 }
 
 func (r *sqliteUserRepo) GetAll(ctx context.Context) ([]models.User, error) {

@@ -17,8 +17,9 @@ chmod 0600 ./*.key
 printf 'local all all trust\nhostssl all all 0.0.0.0/0 cert\n' > pg_hba.conf
 cat > Dockerfile <<'EOF'
 FROM postgres:18.6-bookworm@sha256:bbf83594798e144bff365a9c191c5d779f181fb3135902064ab8ff11918020fc
+RUN install -d -o postgres -g postgres -m 0700 /tls
 COPY --chown=postgres:postgres --chmod=0600 server.key /tls/server.key
-COPY --chown=postgres:postgres server.crt ca.crt pg_hba.conf /tls/
+COPY --chown=postgres:postgres --chmod=0644 server.crt ca.crt pg_hba.conf /tls/
 EOF
 docker build --quiet --tag "$image" . >/dev/null
 docker run --detach --name "$container" --publish 127.0.0.1::5432 \

@@ -58,7 +58,7 @@ func (s *dmService) ToggleReaction(ctx context.Context, userID, messageID, emoji
 		},
 	})
 	if added && msg.UserID != userID && channel.Status == models.DMStatusAccepted {
-		if creator, ok := s.notificationRepo.(reactionNotificationCreator); ok {
+		if creator := s.reactionWriter; creator != nil {
 			blocked := false
 			if s.blockChecker != nil {
 				var checkErr error

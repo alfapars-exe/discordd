@@ -1,0 +1,25 @@
+{
+  "date": "2026-11-14",
+  "pr": 298,
+  "canonical_head": "22aae5bbea879bd0fe026f0d27fa29090b1d28fe",
+  "scope": "Publish staged active-session shutdown",
+  "local_checks": {
+    "targeted_test_events": {
+      "pass": 29,
+      "skip": 13
+    },
+    "log_sha256": "84a83f8eb8ef4ad8247cdf56cbd0d2353bf43c7f6050d519bdf0baab83ad6fbd",
+    "full_vet_exit": 0,
+    "full_build_exit": 0,
+    "full_lint_issues": 0,
+    "runner_tests": 9,
+    "runner_exit": 0
+  },
+  "environment": "Docker version call now fails terminal: Docker Desktop is unable to start",
+  "limitations": [
+    "13 skipped PostgreSQL events explicitly retained; parent test pass can contain skipped subtests.",
+    "Canonical Linux race/PostgreSQL validation awaits current-head CI.",
+    "Integration native/race proof predates canonical transfer and is separate evidence.",
+    "Active SIGTERM/physical media and whole-project acceptance remain open."
+  ]
+}

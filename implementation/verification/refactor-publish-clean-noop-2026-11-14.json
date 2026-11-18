@@ -1,0 +1,12 @@
+{
+  "source": "388a9fc8fffbb264933ad30a312e6cd1758bc907",
+  "mode": "fake API observation of existing no-op test",
+  "tests_run": 1,
+  "provider_mutation_calls": {
+    "pause_space": 0,
+    "create_commit": 0,
+    "restart_space": 0
+  },
+  "deployed_output": "deployed_commit=reviewed-parent",
+  "real_provider_called": false
+}

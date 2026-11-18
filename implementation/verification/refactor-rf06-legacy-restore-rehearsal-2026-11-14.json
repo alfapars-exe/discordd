@@ -1,0 +1,25 @@
+{
+  "source_parent": "7fa67e4c",
+  "test": "TestLegacyRecoveryFromVerifiedBackup",
+  "command": "go test ./database -run '^TestLegacyRecoveryFromVerifiedBackup$' -count=1 -timeout=3m",
+  "exit": 0,
+  "package_seconds": 2.203,
+  "combined_command": "go test ./database -run 'TestLegacy|TestApplyMigrationFile_RollsBackEntireFileOnError|TestInitialization' -count=1 -timeout=3m",
+  "combined_exit": 0,
+  "combined_package_seconds": 6.35,
+  "profile": "Windows Go1.27.4 CGO0, actual file-backed SQLite and embedded migrations",
+  "steps": [
+    "Upgrade fixture to verified migration144 prefix; seed user/server/channel/message graph; empty ledger",
+    "VACUUM INTO consistent backup snapshot",
+    "Add unknown index to active fixture; reject schema adoption without forging ledger rows",
+    "Close edited database; restore backup bytes into a distinct owned temporary file",
+    "Open through NewLegacy with full current migrations; validate preserved user/message joins and migration150",
+    "Close and reopen again; validate SQLite integrity_check and foreign_key_check, and absence of unknown index"
+  ],
+  "limits": [
+    "Disposable synthetic fixture only; no production database modified",
+    "SQLite legacy restore proof does not replace native PostgreSQL import/TLS contracts",
+    "No production backup retention or offsite availability claim",
+    "Whole RF06 requirement mapping remains open"
+  ]
+}

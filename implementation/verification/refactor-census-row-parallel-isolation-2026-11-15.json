@@ -1,0 +1,16 @@
+{
+  "scope": "Fixture snapshot optimization isolation acceptance",
+  "checks": [
+    "Real UserRepository inserts in first fixture are absent from existing second and later third fixture",
+    "Existing schema/migration-ledger isolation assertions retained",
+    "Eight parallel fixtures independently create and retrieve the same unique username without collisions",
+    "Three repeated shuffled runs passed, 1.642s",
+    "go vet . passed",
+    "Reviewed source manifest: 50 exact records valid"
+  ],
+  "limits": [
+    "Windows non-race current test changes; separate immutable add8fa44 Linux full race/coverage run remains live and excludes this later test extension.",
+    "No product behavior changed; protects isolation prerequisite of CI timeout fix.",
+    "Whole-project refactor remains incomplete."
+  ]
+}

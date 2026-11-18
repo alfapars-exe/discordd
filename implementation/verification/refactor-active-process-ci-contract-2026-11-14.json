@@ -1,0 +1,34 @@
+{
+  "date": "2026-11-14",
+  "scope": "Require Linux active voice SIGTERM process acceptance in native PostgreSQL lane",
+  "canonical_head": "6162072e",
+  "implementation": [
+    "Separate test-executable process executes production main with fresh minimal environment",
+    "Owned loopback database, normal login and one-shot WS ticket, voice_join observed",
+    "WS remains active for at least2.1s before SIGTERM",
+    "Require successful process exit/graceful marker and exactly one applied credit matching monthly total",
+    "No external cloud credentials inherited; no auth token/DSN output",
+    "Native runner rejects missing/skipped/wrong-package process test result"
+  ],
+  "local_checks": {
+    "integration_runner_tests": 15,
+    "integration_runner_exit": 0,
+    "canonical_runner_tests": 10,
+    "canonical_runner_exit": 0,
+    "integration_and_canonical_full_vet_exit": 0,
+    "integration_and_canonical_full_build_exit": 0,
+    "integration_and_canonical_full_lint_issues": 0,
+    "process_runtime": "SKIP on Windows; POSIX/native acceptance not yet proven"
+  },
+  "transfer_corrections": [
+    "Canonical branch has no backendWatchTestPool; supplied local owned-database fixture with bounded cleanup instead of importing unrelated watcher tests.",
+    "Derived child DATABASE_URL keeps URL form and TLS query parameters; OpenPostgres rejects pgx key/value ConnString form."
+  ],
+  "limitations": [
+    "Current-head CI required; instrumented test executable is not a release artifact or physical device.",
+    "Actual LiveKit endpoint is intentionally unavailable; no real media eviction claim.",
+    "Local standalone production-binary SIGTERM still blocked by Docker failure.",
+    "New process test is normal native lane; no native-process race run claimed yet.",
+    "Whole-project goal remains open."
+  ]
+}

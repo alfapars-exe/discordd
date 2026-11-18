@@ -64,16 +64,16 @@ func TestGo_recoversPanicWithoutCrashing(t *testing.T) {
 	case <-done:
 		// fn's defer precedes the outer recovery. Wait for recovery logging too,
 		// so this goroutine cannot write into the next test's default logger.
-		waitForPanicLog(t, buf, "test.panicker", "boom")
+		waitForPanicLog(t, buf, "test.panicker")
 	case <-time.After(2 * time.Second):
 		t.Fatal("goroutine did not complete — panic recovery may have hung or crashed")
 	}
 }
 
-// TestGo_logsComponentAndPanicValue verifies the recovered panic is surfaced
+// TestGo_logsComponentAndPanicType verifies the recovered panic is surfaced
 // via slog (reaching Sentry through pkg/logx/sentry.go's >= Error forwarding)
 // with the component name and stack trace attached.
-func TestGo_logsComponentAndPanicValue(t *testing.T) {
+func TestGo_logsComponentAndPanicType(t *testing.T) {
 	buf, restore := captureSlog(t)
 	defer restore()
 
@@ -85,24 +85,24 @@ func TestGo_logsComponentAndPanicValue(t *testing.T) {
 	})
 	wg.Wait()
 
-	logLine := waitForPanicLog(t, buf, "test.component", "kaboom")
+	logLine := waitForPanicLog(t, buf, "test.component")
 	if !strings.Contains(logLine, `"component":"test.component"`) {
 		t.Errorf("log missing component: %s", logLine)
 	}
-	if !strings.Contains(logLine, "kaboom") {
-		t.Errorf("log missing panic value: %s", logLine)
+	if strings.Contains(logLine, "kaboom") {
+		t.Errorf("log exposed panic value: %s", logLine)
 	}
 	if !strings.Contains(logLine, `"stack"`) {
 		t.Errorf("log missing stack trace: %s", logLine)
 	}
 }
 
-func waitForPanicLog(t *testing.T, buf *syncBuffer, component, panicValue string) string {
+func waitForPanicLog(t *testing.T, buf *syncBuffer, component string) string {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
 	for {
 		line := buf.String()
-		if strings.Contains(line, `"component":"`+component+`"`) && strings.Contains(line, `"panic":"`+panicValue+`"`) {
+		if strings.Contains(line, `"component":"`+component+`"`) && strings.Contains(line, `"panic_type":"string"`) {
 			return line
 		}
 		if time.Now().After(deadline) {
@@ -115,9 +115,9 @@ func waitForPanicLog(t *testing.T, buf *syncBuffer, component, panicValue string
 func TestGo_recoveryLogIsNotSatisfiedByAnotherGoroutine(t *testing.T) {
 	buf, restore := captureSlog(t)
 	defer restore()
-	slog.Error("goroutine panic recovered", "component", "another.component", "panic", "another panic")
+	slog.Error("goroutine panic recovered", "component", "another.component", "panic_type", "string")
 	Go("test.current", func() { panic("current panic") })
-	line := waitForPanicLog(t, buf, "test.current", "current panic")
+	line := waitForPanicLog(t, buf, "test.current")
 	if !strings.Contains(line, `"component":"test.current"`) || !strings.Contains(line, `"stack"`) {
 		t.Fatalf("expected the current goroutine's completed recovery record: %s", line)
 	}

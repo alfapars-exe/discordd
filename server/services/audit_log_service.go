@@ -15,6 +15,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
@@ -26,6 +27,8 @@ import (
 
 var auditLogger = logx.Component("service.auditlog")
 
+const auditShutdownTimeout = 5 * time.Second
+
 // AuditLogService is the public API for writing and reading audit events.
 type AuditLogService interface {
 	// Write enqueues an event for async persistence + broadcast. Returns
@@ -36,7 +39,8 @@ type AuditLogService interface {
 	List(ctx context.Context, userID string, filter models.AuditLogFilter) ([]models.AuditLog, error)
 	// Start begins the writer goroutine.
 	Start()
-	// Stop drains the buffer and exits the writer goroutine.
+	// Stop joins the writer after a best-effort drain within one five-second
+	// budget. Unwritten events are reported when cooperative storage times out.
 	Stop()
 }
 
@@ -56,9 +60,13 @@ type auditLogService struct {
 	hub       ws.Broadcaster
 	hubOnline ws.UserStateProvider
 
-	ch     chan models.AuditLog
-	cancel context.CancelFunc
-	done   chan struct{}
+	lifecycleMu  sync.Mutex
+	started      bool
+	stopped      bool
+	ch           chan models.AuditLog
+	cancel       context.CancelFunc
+	done         chan struct{}
+	stopDeadline time.Time
 }
 
 // NewAuditLogService constructs the service. Call Start() to begin
@@ -93,21 +101,41 @@ func canViewAudit(perms models.Permission) bool {
 }
 
 func (s *auditLogService) Write(entry models.AuditLog) {
+	s.lifecycleMu.Lock()
+	stopped := s.stopped
+	s.lifecycleMu.Unlock()
+	if stopped {
+		return
+	}
 	// Default metadata to "{}" so the wire shape is consistent for clients
 	// that always JSON.parse it.
 	if entry.Metadata == "" {
 		entry.Metadata = "{}"
 	}
-	// Fill snapshots from current user records if the caller didn't.
-	// Doing it here (vs in every call site) keeps the call-site one-liner.
-	ctx := context.Background()
-	if entry.ActorSnapshot == nil && entry.ActorUserID != nil {
-		entry.ActorSnapshot = s.userSnapshot(ctx, *entry.ActorUserID)
+	// The queue owns pointer-valued fields after this call returns. Callers may
+	// reuse their input values while the asynchronous writer is still pending.
+	if entry.ActorUserID != nil {
+		value := *entry.ActorUserID
+		entry.ActorUserID = &value
 	}
-	if entry.TargetSnapshot == nil && entry.TargetUserID != nil {
-		entry.TargetSnapshot = s.userSnapshot(ctx, *entry.TargetUserID)
+	if entry.TargetUserID != nil {
+		value := *entry.TargetUserID
+		entry.TargetUserID = &value
+	}
+	if entry.ActorSnapshot != nil {
+		value := *entry.ActorSnapshot
+		entry.ActorSnapshot = &value
+	}
+	if entry.TargetSnapshot != nil {
+		value := *entry.TargetSnapshot
+		entry.TargetSnapshot = &value
 	}
 
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if s.stopped {
+		return
+	}
 	select {
 	case s.ch <- entry:
 	default:
@@ -192,47 +220,122 @@ func (s *auditLogService) allowedViewers(ctx context.Context, serverID string) [
 }
 
 func (s *auditLogService) Start() {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if s.started || s.stopped {
+		return
+	}
+	s.startWriterLocked()
+}
+
+// startWriterLocked registers exactly one writer before releasing lifecycleMu.
+func (s *auditLogService) startWriterLocked() {
+	s.started = true
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel
+	// A constructor-only Stop must never select queued work under an already
+	// cancelled live-write context. Its first operation belongs to the drain.
+	if s.stopped {
+		cancel()
+	}
 
 	// Same async-writer shape as appLogService — wrapped so a panic here
 	// can't crash the whole process (see pkg/logx.Go doc comment).
 	logx.Go("audit_log.writer", func() {
 		defer close(s.done)
 		for {
+			if ctx.Err() != nil {
+				s.drain(nil)
+				return
+			}
 			select {
 			case <-ctx.Done():
-				s.drain()
+				s.drain(nil)
 				return
 			case entry := <-s.ch:
-				s.persistAndBroadcast(ctx, entry)
+				if ctx.Err() != nil {
+					s.drain(&entry)
+					return
+				}
+				s.processEntry(ctx, entry)
 			}
 		}
 	})
 }
 
 func (s *auditLogService) Stop() {
-	if s.cancel != nil {
-		s.cancel()
+	s.lifecycleMu.Lock()
+	s.stopped = true
+	if s.stopDeadline.IsZero() {
+		s.stopDeadline = time.Now().Add(auditShutdownTimeout)
 	}
+	// Even a constructor-only owner must flush entries accepted before Stop.
+	if !s.started {
+		s.startWriterLocked()
+	}
+	cancel := s.cancel
+	s.lifecycleMu.Unlock()
+	cancel()
 	<-s.done
 	auditLogger.Info("audit log service stopped")
 }
 
-// drain flushes remaining entries from the channel before exit. Mirrors
-// the same pattern as appLogService.drain().
-func (s *auditLogService) drain() {
+// drain shares one deadline across the entire backlog. Admission is already
+// closed, so the writer alone owns and releases any entries left at expiry.
+// Stop still joins this writer: no abandoned storage goroutine is introduced.
+func (s *auditLogService) drain(first *models.AuditLog) {
+	s.lifecycleMu.Lock()
+	deadline := s.stopDeadline
+	s.lifecycleMu.Unlock()
+	ctx, cancel := context.WithDeadline(context.Background(), deadline)
+	defer cancel()
 	for {
+		if ctx.Err() != nil {
+			dropped := len(s.ch)
+			if first != nil {
+				dropped++
+			}
+			for len(s.ch) > 0 {
+				<-s.ch
+			}
+			if dropped > 0 {
+				auditLogger.Warn("audit shutdown deadline exceeded, dropping queued events", "count", dropped)
+			}
+			return
+		}
+		if first != nil {
+			s.processEntry(ctx, *first)
+			first = nil
+			continue
+		}
 		select {
 		case entry := <-s.ch:
-			s.persistAndBroadcast(context.Background(), entry)
+			s.processEntry(ctx, entry)
 		default:
 			return
 		}
 	}
 }
 
+// A failed dependency may panic after a side effect. Report once without
+// retrying that event, and retain the single writer for the remaining queue.
+func (s *auditLogService) processEntry(ctx context.Context, entry models.AuditLog) {
+	logx.Run("audit_log.entry", func() { s.persistAndBroadcast(ctx, entry) })
+}
+
 func (s *auditLogService) persistAndBroadcast(ctx context.Context, entry models.AuditLog) {
+	// Enrich only accepted events on the writer, so moderation requests never
+	// wait on user storage. Explicit caller snapshots retain event-time values;
+	// otherwise this freezes the best available identity at persistence time.
+	snapshotCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel() // Also release the lookup timer if a dependency panics.
+	if entry.ActorSnapshot == nil && entry.ActorUserID != nil {
+		entry.ActorSnapshot = s.userSnapshot(snapshotCtx, *entry.ActorUserID)
+	}
+	if entry.TargetSnapshot == nil && entry.TargetUserID != nil {
+		entry.TargetSnapshot = s.userSnapshot(snapshotCtx, *entry.TargetUserID)
+	}
+	cancel()
 
 	if err := s.repo.Insert(ctx, &entry); err != nil {
 		auditLogger.Error("failed to insert audit entry",

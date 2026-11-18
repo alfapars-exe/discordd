@@ -1,0 +1,54 @@
+{
+  "launch_head": "6713da6c",
+  "command": "go test ./services ./handlers ./repository ./ws . -count=1",
+  "exit_code": 0,
+  "packages_seconds": {
+    "services": 97.567,
+    "handlers": 8.055,
+    "repository": 199.858,
+    "ws": 5.472,
+    "root": 16.573
+  },
+  "limits": [
+    "Local Windows non-race run; PostgreSQL environment was not configured.",
+    "Later replay tests and notification runtime source changed after launch; this result does not prove those later commits.",
+    "Later notification runtime selected tests passed separately: services 0.748s, handlers 0.645s, root 3.199s; build and scoped vet passed."
+  ],
+  "postgres": {
+    "head": "2fda3eea1313f22853474df866e9a6057b829654",
+    "version": "18.6",
+    "tests": [
+      {
+        "name": "TestPostgresMessageTxChannelNotificationEnqueueUsesDialect",
+        "seconds": 0.61
+      },
+      {
+        "name": "TestPostgresChannelNotificationWritersSharePolicyFence",
+        "seconds": 5.56
+      },
+      {
+        "name": "TestPostgresChannelNotificationFreshSnapshotAfterConcurrentOverrideInsert",
+        "seconds": 0.75
+      },
+      {
+        "name": "TestPostgresChannelNotificationRetirementBarrierPrecedesRecipientFences",
+        "seconds": 0.68
+      },
+      {
+        "name": "TestPostgresChannelDeleteAndNotificationFanoutUseFenceOrder",
+        "seconds": 0.72
+      },
+      {
+        "name": "TestPostgresServerCascadeAndNotificationFanoutUseFenceOrder",
+        "seconds": 0.69
+      },
+      {
+        "name": "TestPostgresOverlappingRecipientPagesUseDeterministicLockOrder",
+        "seconds": 0.68
+      }
+    ],
+    "package_seconds": 9.925,
+    "skipped": 0,
+    "limits": "Dedicated loopback database, sslmode=disable, non-race; no physical-client or deployed-provider claim."
+  }
+}

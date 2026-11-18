@@ -265,6 +265,7 @@
     "securityDescription": "Manage your email and password settings."
   },
   "preferencesSync": {
+    "applyError": "Some settings could not be applied on this device. Try again.",
     "loading": "Loading account settings…",
     "pending": "Settings changes are waiting to be saved…",
     "saving": "Saving account settings…",

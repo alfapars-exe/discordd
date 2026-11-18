@@ -1,0 +1,27 @@
+{
+  "scope": "RF11 presence notification required composition providers",
+  "integrations": [
+    "Repositories",
+    "Hub"
+  ],
+  "repositories": [
+    "Preferences",
+    "Friendship",
+    "Notification",
+    "User"
+  ],
+  "regression": "11 invalid-provider cases failed before validation: two missing integrations, typed-nil hub, eight nil/typed-nil repositories.",
+  "checks": {
+    "valid": "Both owners retained; online notifier Stop repeated safely",
+    "root": "PASS presence matrix, ServiceInitialization/routes/callbacks/permission/auth-cache/real friendship-DM, 3.814s",
+    "services": "PASS online-friend/profile-update tests, 0.570s",
+    "build": "PASS go build ./...",
+    "vet": "PASS go vet .",
+    "reviewed_manifest": "PASS 50 exact records"
+  },
+  "limits": [
+    "Composition presence checks do not prove every persisted privacy transition or physical multi-client receipt.",
+    "Remaining process groups, lifecycle/optional matrix and full RF01-RF30 acceptance open.",
+    "Remote 43658196686 source 5b9b9216 live without observed failures; local changes excluded."
+  ]
+}

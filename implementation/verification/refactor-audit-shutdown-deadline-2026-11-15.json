@@ -1,0 +1,50 @@
+{
+  "source_commit": "97071be1aac97e97d4838aed6929a57c4521eca1",
+  "source_sha256": {
+    "server/services/audit_log_service.go": "7dfa3fb14d28f461b1257137d304b9c5145d3d527423b338f4003c50073a05d5",
+    "server/services/audit_log_lifecycle_test.go": "a83d3cd94cd538bffdb88ff05421d6c214bdd9f5e6270788d21ffebd4804495f",
+    "ERROR_MANAGEMENT.md": "15fba2cca0d7375c895e7cbe18e44a6ce4146e26ff72607c2b41ecfb30c6a96d"
+  },
+  "red_proof": {
+    "log": "hichat-audit-shutdown-red.log",
+    "result": "FAIL after6s, stalled backlog did not terminate until explicit cleanup release"
+  },
+  "policy": [
+    "First Stop closes admission and fixes one total5s deadline; concurrent Stop cannot extend it",
+    "Active writer context cancelled; queued events receive a fresh deadline context",
+    "Pre-start Stop starts directly in drain, preventing cancelled live-context admission",
+    "Expired backlog references released; failed insert logged and remaining count warned once",
+    "Stop joins the one writer; no detached goroutine or timed-out join shortcut"
+  ],
+  "checks": {
+    "windows_pre_final_test_assertion": {
+      "log": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-audit-shutdown-green.log",
+      "root_pass_records": 10,
+      "result": "ok  \tgithub.com/argeinfina/hichat/services\t7.709s"
+    },
+    "linux_race_final_source": {
+      "log": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-audit-shutdown-linux-race.log",
+      "root_pass_records": 30,
+      "result": "ok  \tgithub.com/argeinfina/hichat/services\t24.599s"
+    },
+    "root_wiring": {
+      "log": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-audit-shutdown-root.log",
+      "root_pass_records": 0,
+      "result": "ok  \tgithub.com/argeinfina/hichat\t6.662s"
+    }
+  },
+  "linux": {
+    "go": "1.27.4",
+    "cgo": 1,
+    "race": true,
+    "repetitions": 3,
+    "source_read_only": true,
+    "owned_container_removed": true
+  },
+  "limits": [
+    "Bound depends on storage honoring context cancellation; deliberately noncooperative dependency is still joined",
+    "Best-effort queue can lose active or queued events at shutdown; no durable audit guarantee added",
+    "Windows green preceded a test-only ctx.Err assertion; final-source Linux race covers the strengthened assertion",
+    "Full services/project/native/physical acceptance remains open; remote7ebe019d proof belongs to the earlier source"
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "scope": "RF13 production bootstrap loader invocation gap",
+  "change": "Existing composed voice-store test now imports production bootstrapPreferences, resolves loadPreferencePresenter and invokes returned real applyAccountPreferences rather than importing adapter directly. Same session and invalidated-read assertions retained.",
+  "assertions": [
+    "Account master volume updates while channel/token/URL/E2EE room key and mute/deafen/stream state remain",
+    "Leave and websocket send callbacks are not invoked",
+    "Null fenced read does not hydrate stale preferences"
+  ],
+  "checks": {
+    "vitest": "PASS four files, 179 tests, 6.41s; voiceStore/preferencesStore/accountPreferenceConsumers/preferencesCodec",
+    "eslint": "PASS targeted voiceStore.test.ts"
+  },
+  "limits": [
+    "External API/media boundaries in existing voice fixture remain mocked.",
+    "Does not establish physical media, every bootstrap race or all RF13 acceptance.",
+    "Current CI source excludes this later local test; whole-project refactor remains open."
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "scope": "RF11 audit service terminal lifecycle correctness",
+  "regression": "Stop-before-Start blocked and Write-after-Stop retained unowned queue entries; both repository tests failed before implementation. Initial test file creation used wrong relative path and selected no tests; excluded from evidence; corrected real tests then failed.",
+  "implementation": [
+    "Serialize Start/Stop/queue admission with lifecycle mutex",
+    "Register exactly one writer; Start after terminal Stop cannot restart",
+    "Stop-before-Start launches drain owner, cancels and joins it",
+    "Reject writes after Stop, including writes that finish snapshots after terminal transition",
+    "Preserve buffered pre-start writes and existing persistence/broadcast drain semantics"
+  ],
+  "checks": {
+    "lifecycle": "PASS three tests repeated ten times, 0.661s; 32 concurrent lifecycle callers, 64 distinct entries each persisted once",
+    "root": "PASS ServiceInitialization/routes/callbacks/auth-cache/permission, 2.186s",
+    "build": "PASS go build ./...",
+    "vet": "PASS go vet ./services .",
+    "reviewed_manifest": "PASS 50 exact records"
+  },
+  "preceding_full_suite": {
+    "source": "f5d32ee32718aa0ad623825638352adafc2bc6fa",
+    "services": 97.102,
+    "handlers": 8.058,
+    "repository": 193.664,
+    "ws": 5.457,
+    "root": 40.29,
+    "result": "PASS all five, source unchanged throughout; does not cover lifecycle fix"
+  },
+  "limits": [
+    "Windows non-race; Linux race/current-source CI still required.",
+    "Persistence drain still uses existing unbounded background DB context; bounded shutdown policy separate.",
+    "Logging composition and complete RF01-RF30 acceptance remain open."
+  ]
+}

@@ -1,0 +1,174 @@
+{
+  "fixCommits": [
+    "3804799a",
+    "5e836383",
+    "4c2433ed"
+  ],
+  "failedHead": "406eec6f2d21bb2e7e5b5f9d173ea11c3381a130",
+  "failedRuntimeMerge": "408470ca8079e8ccc60a806e2df3a3649e869c04",
+  "rootCause": "The fixture intercepted snapshot imports using literal /crypto/ text. Shared cachedSearchRunner imports ./cachedSearchSnapshot, bypassing the gate wrapper. Initial handoff wait timed out at30s before result waiting or deletion traffic.",
+  "fix": "Resolve relative extensionless imports against importer and client root; wrap only exact snapshot/cache module paths. Absolute .ts re-exports bypass interception. Forward all real snapshot exports so deletion spool can read its lifetime constant.",
+  "regression": "Old matcher failed current shared-runner relative import and foreign-path cases; new resolver plus source-overlay contracts14/14PASS. Real Vite build exposed missing lifetime export; re-export fix built and served successfully.",
+  "budgets": {
+    "handoffSeconds": 30,
+    "resultsSeconds": 120,
+    "activeRetainedBytes": 524288,
+    "changed": false,
+    "diagnostics": "Both handoff and result timeout phases now record the same scoped state and rethrow original failure"
+  },
+  "localBrowser": {
+    "sourceHead": "5e8363832e0921fa5c9a3f4e1ecdef8f4bee3fa2",
+    "platform": "Windows, Node26.13.1, Ego Chrome156, production React bundle, real IndexedDB, controlled stores/API/i18n/navigation",
+    "cases": [
+      {
+        "kind": "channel",
+        "events": 50000,
+        "heldBeforeRelease": {
+          "gate": true,
+          "rows": 0,
+          "searching": "searching"
+        },
+        "correctPage": true,
+        "rows": [
+          "Été 00999",
+          "Été 00996",
+          "Été 00993",
+          "Été 00987",
+          "Été 00984",
+          "Été 00981",
+          "Été 00978",
+          "Été 00972",
+          "Été 00969",
+          "Été 00966",
+          "Été 00963",
+          "Été 00957",
+          "Été 00954",
+          "Été 00951",
+          "Été 00948",
+          "Été 00942",
+          "Été 00939",
+          "Été 00936",
+          "Été 00933",
+          "Été 00927",
+          "Été 00924",
+          "Été 00921",
+          "Été 00918",
+          "Été 00912",
+          "Été 00909"
+        ],
+        "count": "267",
+        "releaseToObservedMs": 9588.09999999404
+      },
+      {
+        "kind": "dm",
+        "events": 50000,
+        "heldBeforeRelease": {
+          "gate": true,
+          "rows": 0
+        },
+        "correctPage": true,
+        "indexDisposalDrained": true,
+        "ownedAccountReset": true,
+        "rows": [
+          "Été 00999",
+          "Été 00996",
+          "Été 00993",
+          "Été 00987",
+          "Été 00984",
+          "Été 00981",
+          "Été 00978",
+          "Été 00972",
+          "Été 00969",
+          "Été 00966",
+          "Été 00963",
+          "Été 00957",
+          "Été 00954",
+          "Été 00951",
+          "Été 00948",
+          "Été 00942",
+          "Été 00939",
+          "Été 00936",
+          "Été 00933",
+          "Été 00927",
+          "Été 00924",
+          "Été 00921",
+          "Été 00918",
+          "Été 00912",
+          "Été 00909"
+        ],
+        "count": "267",
+        "releaseToObservedMs": 9260.09999999404
+      }
+    ],
+    "cleanup": "Both panels unmounted and native index disposal drained; synthetic account reset on owned random loopback origin; Ego space29 finished; owned PID161148 stopped after identity check",
+    "limits": "One correctness diagnostic. No local GC-retention budget or whole-app/native-platform acceptance asserted; CI exact Node22 Linux gate pending"
+  },
+  "sourceScan": {
+    "commit": "4c2433ed",
+    "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-refactor-source-scan-20261116",
+    "exactRecords": 51,
+    "reviewLines": 481,
+    "blockingPatterns": 0,
+    "exit": 0,
+    "normalizedReviewDelta": {
+      "newRows": [],
+      "removedRows": []
+    },
+    "limits": "Pattern scan, not proof of vulnerability absence"
+  },
+  "priorSourceSonar": {
+    "sourceCommit": "406eec6f",
+    "files": {
+      "components/chat/SearchPanel.tsx": {
+        "codeLines": 404,
+        "mismatches": [],
+        "extraEOF": 1
+      },
+      "components/dm/DMSearchPanel.tsx": {
+        "codeLines": 404,
+        "mismatches": [],
+        "extraEOF": 1
+      },
+      "crypto/cachedSearchRunner.ts": {
+        "codeLines": 63,
+        "mismatches": [],
+        "extraEOF": 1
+      }
+    },
+    "recordsRead": 499,
+    "issues": [
+      {
+        "key": "AaHYWqSLd7dyvm3wYSn8",
+        "rule": "typescript:S3776",
+        "status": "CLOSED",
+        "resolution": "FIXED",
+        "line": null,
+        "message": "Refactor this function to reduce its Cognitive Complexity from 34 to the 15 allowed.",
+        "component": "alfapars-exe_discordd:client/src/components/chat/SearchPanel.tsx"
+      }
+    ]
+  },
+  "pending": [
+    "New source complete CI including active/idle/reset panel gates",
+    "Earlier unrelated120s pending-panel timeout root cause remains open",
+    "RF17 full pipeline and physical acceptance, RF29 extended fanout/slow-consumer/pool budgets"
+  ],
+  "hashes": {
+    "hichat-406e-playwright.log": "25078bca6cfcfd427b3331c999433f683f62321da7512ade3d1ef59372b8d4ad",
+    "hichat-panel-import-resolver-red.log": "d9226d2989724fe2a33d823cd0d72f40953d900dd31049d11de54670c7f96058",
+    "hichat-panel-import-resolver-final.log": "a155ad41a3654d33bf12170cdb337fe49695265c5d1030f6b83dce008ebadfcf",
+    "hichat-panel-handoff-server-20261116.log": "0198be17459d6dcea9e4d3d45f93774f5b766ee9c503cde4011e983dc262b67b",
+    "hichat-panel-handoff-server-fixed-20261116.log": "ee6f864a4bc218257a758b67dfe542a28a018c89407099b5d7320f61920b7cba",
+    "hichat-panel-qa-round04.log": "9324773346dc934a8822dca3b811daf61896e050ba0db4d36c47871dc6ad6b23",
+    "hichat-panel-qa-round05.log": "34ae747d4574253f28582cafbb9245fe927cb09fd52fa73160204fdfd8c4d0ce",
+    "hichat-handoff-fix-scan.log": "b4b5d957a0db7068707b82558d18626ffe4dd50fe5a227135cd45e3c6d586dcc",
+    "hichat-handoff-fix-scan-review.txt": "4fd19c42dedbec4fef41375fb00230ddd76cbcfd2f28b0b32c7809ad8ff0aa3b"
+  },
+  "failedCIEvidence": "refactor-406e-terminal-ci-2026-11-16.json",
+  "channelResultsFollowup": {
+    "sourceCommit": "a6f682842e42025a7e1c1dec2d7114b2b782bc46",
+    "change": "Readonly props, guarded result states, corrected navigator-toast comment",
+    "contracts": "65PASS;tsc-b/lintPASS;Vite1.60sPASS",
+    "logSHA256": "e1f0f371341c43207807c4a35c842be9a7e1420eb4012ffd83212a7e96ef9c3a"
+  }
+}

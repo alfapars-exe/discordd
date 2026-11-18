@@ -1,0 +1,17 @@
+{
+  "scope": "RF17 DM live deletion page consistency",
+  "regression": "Deleting one visible result from a 26-hit snapshot left only 24 visible rows instead of bringing the remaining off-page hit into the first page. New regression failed before fix.",
+  "change": "DM local-hit removal now updates snapshot count, clamps offset and rehydrates affected pages without repeating the full search. Both live deletion and navigation-reported missing messages use this path. Off-page deletion avoids unnecessary refill.",
+  "verification": {
+    "targeted": "86 passed across DM/channel/keyStorage",
+    "preserved": [
+      "Double deletion counted once",
+      "Pending-read deletion does not restore content",
+      "Off-page deletion removes ID before next page"
+    ]
+  },
+  "limits": [
+    "Current-source full coverage not rerun for this small behavior change",
+    "Matching-ID memory bound and full RF17 acceptance remain open"
+  ]
+}

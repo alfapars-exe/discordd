@@ -70,6 +70,8 @@ type E2EEState = {
   localDeviceId: string | null;
   devices: DeviceInfo[];
   hasRecoveryBackup: boolean;
+  /** A successful lookup/setup is required before treating no backup as fact. */
+  recoveryBackupChecked: boolean;
   decryptionErrors: DecryptionError[];
   isGeneratingKeys: boolean;
   initError: string | null;
@@ -171,6 +173,7 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
   localDeviceId: null,
   devices: [],
   hasRecoveryBackup: false,
+  recoveryBackupChecked: false,
   decryptionErrors: [],
   isGeneratingKeys: false,
   initError: null,
@@ -190,7 +193,7 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
     if (current === "initializing" || current === "ready") return;
     const previousArchive = get().legacyArchive;
 
-    set({ initStatus: previousArchive ? "legacy-recovery" : "initializing", initError: null });
+    set({ initStatus: previousArchive ? "legacy-recovery" : "initializing", initError: null, recoveryBackupChecked: false });
 
     try {
       const hasKeys = await keyStorage.hasLocalKeys();
@@ -286,11 +289,14 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
           legacyArchive: null,
         });
 
+        // A cold reload can fetch ciphertext before the local keys are
+        // ready. Discard that projection and reload under the verified keys.
+        if (!refreshEncryptedHistory(isCurrent)) return;
+
         // Background: prekey check + device list + backup status + deferred recovery prompt
         get().handlePrekeyLow();
         get().fetchDevices();
-        checkRecoveryBackup(set);
-        scheduleDeferredRecoveryCheck(get);
+        void checkRecoveryBackup(set, get);
       } else {
         // No local keys — check backup status (don't block on it).
         // Even if backup exists, silently generate new keys so the app is usable immediately.
@@ -300,9 +306,7 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
         try {
           const backupRes = await e2eeApi.downloadKeyBackup();
           if (!isCurrent()) return;
-          if (backupRes.success && backupRes.data) {
-            set({ hasRecoveryBackup: true });
-          }
+          if (backupRes.success) set({ recoveryBackupChecked: true, hasRecoveryBackup: !!backupRes.data || get().hasRecoveryBackup });
         } catch {
           if (!isCurrent()) return;
           // Non-critical — continue
@@ -310,6 +314,12 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
 
         await get().setupNewDevice(userId);
         if (!isCurrent()) return;
+        // Fresh keys cannot decrypt the backed-up history. Offer restoration
+        // explicitly: the deferred activity check only prompts users who have
+        // no backup, so it cannot expose the existing-backup restore view.
+        if (get().initStatus === "ready" && get().hasRecoveryBackup) {
+          set({ showRecoveryPrompt: true });
+        }
         scheduleDeferredRecoveryCheck(get);
       }
     } catch (err) {
@@ -386,16 +396,11 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
         isGeneratingKeys: false,
       });
 
+      if (!isCurrent()) return;
       get().fetchDevices();
 
       // Invalidate message cache so messages get re-decrypted
-      useMessageStore.getState().invalidateFetchCache();
-      useDMStore.getState().invalidateFetchCache();
-
-      const activeChannelId = useChannelStore.getState().selectedChannelId;
-      if (activeChannelId) {
-        useMessageStore.getState().fetchMessages(activeChannelId);
-      }
+      if (!refreshEncryptedHistory(isCurrent)) return;
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Device setup failed";
@@ -453,22 +458,16 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
         initStatus: "ready",
         localDeviceId: newDeviceId,
         hasRecoveryBackup: true,
+        recoveryBackupChecked: true,
         isGeneratingKeys: false,
       });
 
+      if (!isCurrent()) return false;
       get().handlePrekeyLow();
       get().fetchDevices();
 
       // Invalidate cache — messages will now decrypt with restored keys
-      useMessageStore.getState().invalidateFetchCache();
-      useDMStore.getState().invalidateFetchCache();
-
-      const activeChannelId = useChannelStore.getState().selectedChannelId;
-      if (activeChannelId) {
-        useMessageStore.getState().fetchMessages(activeChannelId);
-      }
-
-      return true;
+      return refreshEncryptedHistory(isCurrent);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Recovery failed";
@@ -526,7 +525,7 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
         throw new Error(response.error ?? "Failed to upload key backup");
       }
 
-      set({ hasRecoveryBackup: true });
+      set({ hasRecoveryBackup: true, recoveryBackupChecked: true });
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to set recovery password";
@@ -542,8 +541,8 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
   },
 
   checkAndPromptRecovery: () => {
-    const { initStatus, hasRecoveryBackup, recoveryPromptDismissed, showRecoveryPrompt } = get();
-    if (initStatus !== "ready" || hasRecoveryBackup || recoveryPromptDismissed || showRecoveryPrompt) return;
+    const { initStatus, hasRecoveryBackup, recoveryBackupChecked, recoveryPromptDismissed, showRecoveryPrompt } = get();
+    if (initStatus !== "ready" || !recoveryBackupChecked || hasRecoveryBackup || recoveryPromptDismissed || showRecoveryPrompt) return;
 
     // Check if any DM channel or the active server has E2EE enabled
     const dmChannels = useDMStore.getState().channels;
@@ -716,6 +715,7 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
       localDeviceId: null,
       devices: [],
       hasRecoveryBackup: false,
+      recoveryBackupChecked: false,
       decryptionErrors: [],
       isGeneratingKeys: false,
       initError: null,
@@ -734,6 +734,18 @@ subscribeAuthGenerationChanges(() => { void useE2EEStore.getState().reset(); });
 // Internal Helpers
 // ──────────────────────────────────
 
+/** Refresh only the session whose encryption keys became usable. */
+function refreshEncryptedHistory(isCurrent: () => boolean): boolean {
+  if (!isCurrent()) return false;
+  useMessageStore.getState().invalidateFetchCache();
+  if (!isCurrent()) return false;
+  useDMStore.getState().invalidateFetchCache({ preserveChannelList: true });
+  if (!isCurrent()) return false;
+  const channelId = useChannelStore.getState().selectedChannelId;
+  if (channelId) useMessageStore.getState().fetchMessages(channelId);
+  return isCurrent();
+}
+
 function captureStoreScope(): () => boolean {
   const scope = getAuthSessionSnapshot();
   return () => {
@@ -744,14 +756,17 @@ function captureStoreScope(): () => boolean {
 
 /** Check recovery backup status in background. Silently continues on error. */
 async function checkRecoveryBackup(
-  set: (partial: Partial<E2EEState>) => void
+  set: (partial: Partial<E2EEState>) => void,
+  get: () => E2EEState,
 ): Promise<void> {
   const isCurrent = captureStoreScope();
   try {
     const response = await e2eeApi.downloadKeyBackup();
     if (!isCurrent()) return;
-    if (response.success && response.data) {
-      set({ hasRecoveryBackup: true });
+    if (response.success) {
+      // A delayed absence result must not erase a backup uploaded meanwhile.
+      set({ hasRecoveryBackup: !!response.data || get().hasRecoveryBackup, recoveryBackupChecked: true });
+      if (isCurrent()) scheduleDeferredRecoveryCheck(get);
     }
   } catch {
     // Non-critical — silently continue

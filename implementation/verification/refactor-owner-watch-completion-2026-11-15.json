@@ -1,0 +1,44 @@
+{
+  "sourceRevision": "4ec27326",
+  "regressionCommit": "7b64b60b",
+  "scope": "RF11/RF14 release child cancellation context when ownership observer returns naturally;stop still joins and never cancels caller context.",
+  "red": {
+    "log": "TEMP/hichat-watch-natural-completion-red.log",
+    "result": "Natural completion left child context open until explicitstop;1failed regression"
+  },
+  "validation": {
+    "windowsTargeted": "5tests20repeatsPASS",
+    "windowsLog": "TEMP/hichat-watch-natural-completion-green.log",
+    "linuxRace": "5tests20repeatsPASS,3.546s,CGO1,go1.26.11linux/amd64",
+    "linuxRaceLog": "TEMP/hichat-watch-natural-completion-linux-race.log",
+    "linuxSetup": "CachedGo1.26.10image auto-selected required1.26.11 toolchain;source and host module cache mounted read-only;container-owned caches;--rm cleanup",
+    "mainPackage": "PASS7.344s",
+    "mainLog": "TEMP/hichat-watch-main-package.log",
+    "vet": "PASS",
+    "vetLog": "TEMP/hichat-watch-main-vet.log",
+    "coverage": {
+      "function": "startBackendOwnerWatch",
+      "statementsPercent": 100,
+      "profile": "TEMP/hichat-watch-coverage.out",
+      "scope": "Targeted function coverage,not whole repository coverage"
+    }
+  },
+  "selfScan": {
+    "sourceRevision": "4ec27326",
+    "exitCode": 0,
+    "blockingMatches": 0,
+    "reviewedSourceRecords": 51,
+    "reviewLines": 478,
+    "log": "TEMP/hichat-watch-final-scan.log"
+  },
+  "priorCI": {
+    "sourceRevision": "42de5382a49fa7bab2998364ced99fb8de4b4048",
+    "checks": 36,
+    "success": 36,
+    "archive": "refactor-42de-terminal-ci-2026-11-15.json"
+  },
+  "remaining": [
+    "New-head CI after push",
+    "Whole project RF01-RF30 and physical/platform acceptance"
+  ]
+}

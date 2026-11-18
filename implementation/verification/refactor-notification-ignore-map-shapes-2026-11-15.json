@@ -1,0 +1,42 @@
+{
+  "source_commit": "1fbd287875311e01b2131dfcb638cebf78daef77",
+  "source_sha256": {
+    "server/repository/sqlite_channel_message_notification_queue.go": "73d281001530f3063c05dbf8ce20032adae11ba3dc9a75a340c3b93c441d2710",
+    "server/repository/sqlite_channel_message_notification_queue_test.go": "0b01c3412fe1265b87c45dd4f0085d96bae8bc6a8fe8192049ea7bc9813d197c",
+    "scripts/run-postgres-tests.py": "fa1c1c4344ddeedcad73eb51c45aadd96ba54bf3fd0b4a09911098d0522affb9",
+    "scripts/test_run_postgres_tests.py": "9b62f53b934671060065a66f81a1f71cbaec5a317e6193b73a04590cd050ecb2"
+  },
+  "before": {
+    "log": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-notice-ignore-shape-red.log",
+    "failures": [
+      "plain_string: malformed JSON aborts recipient page",
+      "encoded_object: JSON string decoded again and spuriously suppresses actor"
+    ]
+  },
+  "after": {
+    "sqlite-green": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-notice-ignore-shape-sqlite-green.log",
+      "root_passes": 7,
+      "subcase_passes": 18,
+      "result": "ok  \tgithub.com/argeinfina/hichat/repository\t8.041s"
+    },
+    "linux-race": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-notice-ignore-shape-linux-race.log",
+      "root_passes": 7,
+      "subcase_passes": 18,
+      "result": "ok  \tgithub.com/argeinfina/hichat/repository\t15.192s"
+    }
+  },
+  "native_gate": {
+    "tests": 16,
+    "result": "pass",
+    "fail_first": "omitted named test incorrectly accepted before required contract was added"
+  },
+  "policy": "SQLite extracts ignoredUsers only when the stored field is an actual JSON object, matching PostgreSQL. Both suppression and commit predicates guarded. Worker typed preference validation unchanged. Numeric/string map entry semantics not changed.",
+  "cleanup": "owned PG container, anonymous volume, fixture image and race runner removed; development containers untouched",
+  "limits": [
+    "Selected queue family only; full repository not rerun",
+    "New changes held locally while 7ebe019d CI runs",
+    "Full RF05/project/native/physical acceptance remains open"
+  ]
+}

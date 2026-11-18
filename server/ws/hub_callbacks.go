@@ -65,7 +65,7 @@ type VoiceActivityCallback func(userID string)
 type P2PCallInitiateCallback func(callerID string, data P2PCallInitiateData)
 type P2PCallAcceptCallback func(userID string, data P2PCallAcceptData)
 type P2PCallDeclineCallback func(userID string, data P2PCallDeclineData)
-type P2PCallEndCallback func(userID string)
+type P2PCallEndCallback func(userID, callID string)
 
 // P2PSignalCallback — WebRTC signaling data relayed to the other peer.
 type P2PSignalCallback func(senderID string, data P2PSignalData)
@@ -132,11 +132,6 @@ func (h *Hub) OnGameActivityDisconnect(cb GameActivityConnectionCallback) {
 func (h *Hub) OnGameActivityUpdate(cb GameActivityUpdateCallback) { h.onGameActivityUpdate = cb }
 
 func (h *Hub) GameActivityEpoch() string { return h.gameActivityEpoch }
-
-// SetAppLogger sets the structured app logger for WS events.
-func (h *Hub) SetAppLogger(logger AppLogger) {
-	h.appLogger = logger
-}
 
 // logEvent is a helper that safely logs via appLogger if set.
 //
@@ -217,12 +212,6 @@ func (h *Hub) OnDMTyping(cb DMTypingCallback) {
 
 func (h *Hub) OnScreenShareWatch(cb ScreenShareWatchCallback) {
 	h.onScreenShareWatch = cb
-}
-
-// SetVoiceAdminAuthorizer wires the WS-layer defense-in-depth check for
-// voice moderation events. Nil-safe (legacy behavior if absent).
-func (h *Hub) SetVoiceAdminAuthorizer(a VoiceAdminAuthorizer) {
-	h.voiceAdminAuthz = a
 }
 
 // authorizeVoiceModeration returns true if the action is allowed (or no

@@ -27,13 +27,27 @@ func TestChannelDeliveryMigrationPreservesPopulatedDatabase(t *testing.T) {
 		t.Fatal("local database required")
 	}
 	admin := stdlib.OpenDB(*cfg)
+	defer func() {
+		if err := admin.Close(); err != nil {
+			t.Errorf("close PostgreSQL fixture admin pool: %v", err)
+		}
+	}()
 	schema := fmt.Sprintf("hichat_upgrade_%d", time.Now().UnixNano())
 	if _, err = admin.Exec("CREATE SCHEMA " + schema); err != nil {
 		t.Fatal(err)
 	}
 	cfg.RuntimeParams["search_path"] = schema + ",public"
 	db := PostgreSQLPool(cfg)
-	defer func() { db.Close(); admin.Exec("DROP SCHEMA " + schema + " CASCADE"); admin.Close() }()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close PostgreSQL fixture pool: %v", err)
+		}
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if _, err := admin.ExecContext(cleanupCtx, "DROP SCHEMA "+schema+" CASCADE"); err != nil {
+			t.Errorf("drop PostgreSQL fixture schema %s: %v", schema, err)
+		}
+	}()
 	ctx := context.Background()
 	entries, err := postgresMigrations.ReadDir("postgres_migrations")
 	if err != nil {

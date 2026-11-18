@@ -18,8 +18,19 @@ const (
 	voiceStateFanoutIdle       = time.Second
 )
 
-type voiceStateFanoutMembership interface {
+type VoiceFanoutMembership interface {
 	ListMemberIDs(ctx context.Context, serverID string) ([]string, error)
+}
+
+type VoiceFanoutOnlineUsers interface {
+	GetOnlineUserIDsForServer(string) []string
+}
+
+// VoiceFanoutDependencies selects audience inputs explicitly. Missing inputs
+// keep event delivery disabled rather than discovering other service methods.
+type VoiceFanoutDependencies struct {
+	Online  VoiceFanoutOnlineUsers
+	Members VoiceFanoutMembership
 }
 
 type voiceStateFanoutEvent struct {
@@ -188,8 +199,8 @@ func (f *voiceStateFanout) deliver(batch []voiceStateFanoutEvent, membersByServe
 	item := batch[0]
 	resolutionStart := time.Now()
 	s := f.service
-	provider, ok := s.hub.(ws.UserStateProvider)
-	if !ok || provider == nil || s.permResolver == nil {
+	provider := s.fanoutAudience.Online
+	if provider == nil || s.permResolver == nil {
 		f.dropCount.Add(uint64(len(batch)))
 		voiceLogger.Warn("voice state fanout unavailable; event dropped", "server_id", item.serverID, "channel_id", item.channelID)
 		return
@@ -199,8 +210,8 @@ func (f *voiceStateFanout) deliver(batch []voiceStateFanoutEvent, membersByServe
 		voiceLogger.Warn("voice state fanout channel resolver unavailable; event dropped", "server_id", item.serverID, "channel_id", item.channelID)
 		return
 	}
-	members, ok := s.afkTimeoutGetter.(voiceStateFanoutMembership)
-	if !ok || members == nil {
+	members := s.fanoutAudience.Members
+	if members == nil {
 		f.dropCount.Add(uint64(len(batch)))
 		voiceLogger.Warn("voice state fanout membership resolver unavailable; event dropped", "server_id", item.serverID)
 		return
@@ -216,9 +227,7 @@ func (f *voiceStateFanout) deliver(batch []voiceStateFanoutEvent, membersByServe
 	if len(onlineIDs) == 0 {
 		return
 	}
-	if repo, ok := s.channelGetter.(interface {
-		VoiceVisibleUsers(context.Context, string, string, []string) ([]string, error)
-	}); ok {
+	if repo := s.voiceAccess; repo != nil {
 		visible, err := repo.VoiceVisibleUsers(ctx, item.serverID, item.channelID, onlineIDs)
 		if err != nil {
 			f.dropCount.Add(uint64(len(batch)))
@@ -269,7 +278,7 @@ func (f *voiceStateFanout) deliver(batch []voiceStateFanoutEvent, membersByServe
 	if len(recipients) == 0 {
 		return
 	}
-	permissions, err := resolveFreshFanoutPermissions(ctx, s.permResolver, item.channelID, recipients)
+	permissions, err := s.currentVoiceBulkPermissions(ctx, item.channelID, recipients)
 	if err != nil {
 		f.dropCount.Add(uint64(len(batch)))
 		voiceLogger.Warn("voice state fanout permission resolution failed; event dropped", "server_id", item.serverID, "channel_id", item.channelID)
@@ -304,11 +313,11 @@ func (f *voiceStateFanout) publishVisible(batch []voiceStateFanoutEvent, visible
 // different app instance cannot invalidate this process's permission cache,
 // so this publication boundary must read current role/override rows instead
 // of accepting a cached grant for up to permCacheTTL.
-func resolveFreshFanoutPermissions(ctx context.Context, resolver ChannelPermResolver, channelID string, recipients []string) (map[string]models.Permission, error) {
-	if cached, ok := resolver.(*cachingPermResolver); ok {
-		return cached.inner.ResolveChannelPermissionsBulk(ctx, channelID, recipients)
+func (s *voiceService) currentVoiceBulkPermissions(ctx context.Context, channelID string, recipients []string) (map[string]models.Permission, error) {
+	if s.freshPermissions != nil {
+		return s.freshPermissions.ResolveChannelPermissionsBulkFresh(ctx, channelID, recipients)
 	}
-	return resolver.ResolveChannelPermissionsBulk(ctx, channelID, recipients)
+	return s.permResolver.ResolveChannelPermissionsBulk(ctx, channelID, recipients)
 }
 
 func (f *voiceStateFanout) shutdown() {

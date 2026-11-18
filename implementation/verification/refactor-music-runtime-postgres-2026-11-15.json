@@ -1,0 +1,113 @@
+{
+  "head": "fd0b6be5a5876f2332271bffff413dc281ab6389",
+  "database": "PostgreSQL 18.6 dedicated loopback container",
+  "tests": [
+    {
+      "name": "TestMusicRequesterPrivacyObserverCannotDelaySecurityRevocation",
+      "seconds": 0.69
+    },
+    {
+      "name": "TestMusicControlEnqueueConcurrentReplayAndIntentionalDuplicate",
+      "seconds": 0.32
+    },
+    {
+      "name": "TestMusicControlOldSkipSeekAndStopNeverTouchReplacement",
+      "seconds": 0.28
+    },
+    {
+      "name": "TestMusicControlTransientFailureHasNoSuccessReceipt",
+      "seconds": 0.34
+    },
+    {
+      "name": "TestMusicControlFailedReceiptDoesNotApplyPlaybackEffect",
+      "seconds": 0.28
+    },
+    {
+      "name": "TestMusicControlAdoptionWinningAfterLegacyPrecheckRejectsEveryMutation",
+      "seconds": 2.94
+    },
+    {
+      "name": "TestMusicControlStopDuringExtractionDoesNotReconnectStaleSession",
+      "seconds": 0.4
+    },
+    {
+      "name": "TestMusicControlInactiveStatePropagatesStoreFailure",
+      "seconds": 0.38
+    },
+    {
+      "name": "TestMusicControlExplicitDisabledSelection",
+      "seconds": 0
+    },
+    {
+      "name": "TestMusicRequesterPrivacySlowEnqueueCannotReintroduceDeletedName",
+      "seconds": 0.45
+    },
+    {
+      "name": "TestMusicRequesterPrivacyRepeatLocalCopyAndPublicSnapshots",
+      "seconds": 0.39
+    },
+    {
+      "name": "TestMusicRequesterPrivacyDeletionFailureRollsBackWithoutRuntimeObserver",
+      "seconds": 0.39
+    },
+    {
+      "name": "TestMusicRequesterPrivacyPublicationFenceOrdersEqualRevisionReplacement",
+      "seconds": 0.38
+    },
+    {
+      "name": "TestMusicRequesterPrivacyIdentityLookupFailureNeverPublishesOldName",
+      "seconds": 0.38
+    },
+    {
+      "name": "TestMusicRequesterPrivacyAlreadyCanonicalCacheStillPublishesReplacement",
+      "seconds": 0
+    },
+    {
+      "name": "TestMusicRequesterPrivacyExplicitDisabledSelection",
+      "seconds": 0
+    },
+    {
+      "name": "TestMusicRestoredQueueEditDurableReplayAndEmpty",
+      "seconds": 0.36
+    },
+    {
+      "name": "TestMusicRestoredQueueFailureAndAuthorizationPreserveState",
+      "seconds": 1.54
+    },
+    {
+      "name": "TestMusicRestoredQueueConcurrentEditsConflict",
+      "seconds": 0.4
+    },
+    {
+      "name": "TestMusicRestoredQueueEditOrStopWinsConnectingRestore",
+      "seconds": 0.76
+    },
+    {
+      "name": "TestMusicTransitionFailureRetainsRevisionAndQueueUntilRetry",
+      "seconds": 0.77
+    },
+    {
+      "name": "TestMusicTransitionFailedDrainStillAcceptsGuardedStop",
+      "seconds": 0.39
+    },
+    {
+      "name": "TestMusicTransitionCommitKeepsReadersOldAndRejectsConcurrentStaleCommand",
+      "seconds": 0.41
+    },
+    {
+      "name": "TestMusicPlayLoopRetriesPersistenceWithoutReplayingAudio",
+      "seconds": 0.87
+    },
+    {
+      "name": "TestMusicTransitionBackoffIsCappedAndStopInterruptsMaximumDelay",
+      "seconds": 0.46
+    },
+    {
+      "name": "TestMusicPersistentTransitionFailureRetainsQueueAndAllowsStop",
+      "seconds": 1.17
+    }
+  ],
+  "package_seconds": 15.328,
+  "skipped": 0,
+  "limits": "sslmode=disable, Windows non-race. Explicit-selection cases use controlled adapters; DB-backed cases use dedicated PostgreSQL. No physical audio/provider acceptance."
+}

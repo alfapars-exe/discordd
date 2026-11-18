@@ -1,0 +1,29 @@
+{
+  "scope": "RF11 expression/profile asset composition extraction",
+  "owners": [
+    "Soundboard",
+    "Sticker",
+    "ExpressionClone",
+    "Cosmetic"
+  ],
+  "preserved": [
+    "Same production EmojiService owner for cloning",
+    "Same newly created StickerService owner for cloning",
+    "Same everyone-mode cosmetic entitlement provider",
+    "Same voice state, broadcaster, upload path and size",
+    "Same constructor sequence; no new background workers"
+  ],
+  "checks": {
+    "root": "PASS ServiceInitialization/routes/callbacks/auth-cache/permission/real friendship-DM, 2.841s",
+    "services": "PASS soundboard/sticker/expression/cosmetic tests, 0.772s",
+    "build": "PASS go build ./...",
+    "vet": "PASS go vet .",
+    "reviewed_sql_manifest": "PASS 50 exact records"
+  },
+  "remaining": [
+    "Required provider/repository validation before soundboard directory creation",
+    "Other domains, complete optional/lifecycle/race acceptance",
+    "Full RF01-RF30 completion unproven"
+  ],
+  "ci": "43655342717 source 0eb3744f live without observed failures; local extraction excluded."
+}

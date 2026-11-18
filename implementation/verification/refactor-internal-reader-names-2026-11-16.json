@@ -1,0 +1,20 @@
+{
+  "baselineCommit": "d90336f5bef3ac69b6c10bd9a6fbb31611bb8790",
+  "scope": "Three unexported composition interfaces renamed; methods, exported fields and runtime behavior preserved",
+  "names": {
+    "moderationMessages": "moderationMessageContextReader",
+    "moderationDMs": "moderationDMContextReader",
+    "gameActivityHubPresence": "gameActivityOnlineVisibilityChecker"
+  },
+  "validation": {
+    "inverseRenameByteEqualityLF": true,
+    "targetedRootCompositionRepetitions": 3,
+    "goVet": "PASS",
+    "goBuild": "PASS",
+    "logSha256": "3db9a228bb7ffa5ae1139cb540ac5cbb766639207a9de9baa395fb675aee081b"
+  },
+  "pending": [
+    "Source-matched Sonar and CI",
+    "Remaining RF26 and full RF acceptance"
+  ]
+}

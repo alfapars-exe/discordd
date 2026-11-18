@@ -1,0 +1,49 @@
+{
+  "source_commit": "e4b616db1603aabc29a356791f2f9116e3c0a00c",
+  "source_sha256": {
+    "server/services/audit_log_service.go": "b2f9961c9ae9f2c7e922893fc6ac15fdfba3b9b375181fc130d64acd6430c6da",
+    "server/services/audit_log_lifecycle_test.go": "a04d2c5d8c0bb78022e523faa557393f6888417ece9514bf7ccbcfc8fb6c3010"
+  },
+  "red_proofs": [
+    "hichat-audit-snapshot-red.log: request blocked on user lookup",
+    "hichat-audit-owned-values-red.log: caller mutation changes queued IDs and snapshots"
+  ],
+  "behavior": [
+    "Write only copies and enqueues; no user repository I/O in request path",
+    "Explicit actor/target snapshots and ID pointers copied at admission",
+    "Missing snapshots resolved asynchronously from current user records at persistence time, with one shared 2s enrichment budget",
+    "Failed/timed-out enrichment retains identity IDs and nil snapshot fallback",
+    "Full queue and stopped writer reject without user reads; metadata default and wire fields preserved"
+  ],
+  "checks": {
+    "windows": {
+      "log": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-audit-async-ownership-final.log",
+      "result": "ok  \tgithub.com/argeinfina/hichat/services\t2.694s",
+      "root_pass_records": 8
+    },
+    "linux_race": {
+      "log": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-audit-async-ownership-linux-race.log",
+      "result": "ok  \tgithub.com/argeinfina/hichat/services\t13.662s",
+      "root_pass_records": 40
+    },
+    "root_wiring": {
+      "log": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-audit-async-root-wiring.log",
+      "result": "ok  \tgithub.com/argeinfina/hichat\t6.570s",
+      "root_pass_records": 0
+    }
+  },
+  "linux": {
+    "go": "1.27.4",
+    "cgo": 1,
+    "race": true,
+    "repetitions": 5,
+    "immutable_source": true,
+    "owned_container_removed": true
+  },
+  "limits": [
+    "Snapshot enrichment without an explicit caller snapshot now observes persistence-time user data rather than request-time data",
+    "Audit persistence and shutdown drain still need a bounded dependency/backpressure policy",
+    "Full services and repository suites not rerun locally; remote CI7ebe019d is an earlier source",
+    "RF24 and whole-project/native/physical acceptance remain open"
+  ]
+}

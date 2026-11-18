@@ -1,0 +1,20 @@
+{
+  "scope": "RF11 behavioral disabled optional sender acceptance",
+  "test": "TestCommunicationDisabledSenderDoesNotClaimQueuedDelivery",
+  "method": "Construct production communication group with nil sender and a recording EmailDeliveryRepository wrapper. Invoke actual DeliverBatch. ClaimDue would record access and return error if called.",
+  "assertions": [
+    "Delivered count is zero",
+    "No error",
+    "ClaimDue count is zero; queue work is not claimed while external sender disabled"
+  ],
+  "checks": {
+    "communication_matrix": "PASS go test . -run ^TestCommunication -count=1, 2.224s",
+    "vet": "PASS go vet ."
+  },
+  "limits": [
+    "Controlled queue observer proves no claim; does not prove external provider delivery or database mutation semantics.",
+    "Existing correct disabled behavior verified; no product behavior changed.",
+    "Immutable Linux root race session 83411 still live and excludes this later test.",
+    "Overall refactor acceptance remains incomplete."
+  ]
+}

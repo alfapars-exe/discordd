@@ -14,7 +14,7 @@ import (
 	"github.com/argeinfina/hichat/pkg"
 )
 
-func newDMDeclineFixture(t *testing.T) (*database.DB, DMRepository, *models.DMChannel, *models.DMMessage) {
+func newDMDeclineFixture(t *testing.T) (*database.DB, DMRequestStore, *models.DMChannel, *models.DMMessage) {
 	t.Helper()
 	db := newDMDeclineFKOffDB(t)
 	seedDMUsers(t, db)
@@ -45,7 +45,7 @@ func TestDeclinePendingDeletesAtomicallyAndReturnsPostCommitData(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	changed, files, ids, err := repo.(PendingDMDecliner).DeclinePending(ctx, channel.ID, dmBob)
+	changed, files, ids, err := repo.DeclinePending(ctx, channel.ID, dmBob)
 	if err != nil || !changed {
 		t.Fatalf("DeclinePending changed=%v err=%v", changed, err)
 	}
@@ -77,7 +77,7 @@ func TestDeclinePendingDeletesAtomicallyAndReturnsPostCommitData(t *testing.T) {
 			t.Errorf("%s count=%d want=%d", check.query, n, check.want)
 		}
 	}
-	changed, files, ids, err = repo.(PendingDMDecliner).DeclinePending(ctx, channel.ID, dmBob)
+	changed, files, ids, err = repo.DeclinePending(ctx, channel.ID, dmBob)
 	if err != nil || changed || len(files) != 0 || len(ids) != 0 {
 		t.Fatalf("second decline changed=%v files=%v ids=%v err=%v", changed, files, ids, err)
 	}
@@ -89,7 +89,7 @@ func TestDeclinePendingRollsBackAllRowsOnDeleteFailure(t *testing.T) {
 	if _, err := db.Conn.ExecContext(ctx, `CREATE TRIGGER fail_dm_message_delete BEFORE DELETE ON dm_messages BEGIN SELECT RAISE(ABORT, 'forced delete failure'); END`); err != nil {
 		t.Fatal(err)
 	}
-	changed, files, ids, err := repo.(PendingDMDecliner).DeclinePending(ctx, channel.ID, dmBob)
+	changed, files, ids, err := repo.DeclinePending(ctx, channel.ID, dmBob)
 	if err == nil || changed || len(files) != 0 || len(ids) != 0 {
 		t.Fatalf("failed decline returned changed=%v files=%v ids=%v err=%v", changed, files, ids, err)
 	}
@@ -176,12 +176,12 @@ func TestAcceptAndDeclinePendingDMSerialize(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		<-start
-		accepted.changed, accepted.err = repo.(PendingDMAccepter).AcceptPendingUnblocked(ctx, channel.ID)
+		accepted.changed, accepted.err = repo.AcceptPendingUnblocked(ctx, channel.ID)
 	}()
 	go func() {
 		defer wg.Done()
 		<-start
-		declined.changed, _, _, declined.err = repo.(PendingDMDecliner).DeclinePending(ctx, channel.ID, dmBob)
+		declined.changed, _, _, declined.err = repo.DeclinePending(ctx, channel.ID, dmBob)
 	}()
 	close(start)
 	wg.Wait()
@@ -215,7 +215,7 @@ func TestDeclinePendingRemovesDependentsOnConfiguredBackend(t *testing.T) {
 	}
 	message := newDMMessage(t, ctx, repo, channel.ID, dmAlice, "hello")
 	seedDMDeclineDependents(t, db, channel.ID, message.ID)
-	changed, _, _, err := repo.(PendingDMDecliner).DeclinePending(ctx, channel.ID, dmBob)
+	changed, _, _, err := repo.DeclinePending(ctx, channel.ID, dmBob)
 	if err != nil || !changed {
 		t.Fatalf("decline changed=%v err=%v", changed, err)
 	}
@@ -232,4 +232,3 @@ func TestDeclinePendingRemovesDependentsOnConfiguredBackend(t *testing.T) {
 		}
 	}
 }
-

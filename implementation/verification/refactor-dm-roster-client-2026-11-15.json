@@ -1,0 +1,55 @@
+{
+  "baseCommit": "448ad13b93e8a8c171de4e4ad535cf8fc1bf3cd8",
+  "scope": "Fresh authorized DM rosters and established Signal session reuse; encrypted channel/DM recovery search pagination",
+  "verification": {
+    "vitest": "478 files; 4927 passed, 1 skipped; 120.85s",
+    "coverage": {
+      "statements": 66.76,
+      "branches": 64.21,
+      "functions": 61.14,
+      "lines": 67.73,
+      "dmDeviceRosterLines": 93.9,
+      "dmDeviceRosterBranches": 82.89
+    },
+    "lint": "0 errors; 2 existing TanStack incompatible-library warnings",
+    "go": "handlers 17.916s; services 118.205s; go vet ./... and go build ./... passed",
+    "openapi": "YAML parsed; additive capability contract present",
+    "manifest": "50 exact source records valid",
+    "browser": "Production client tsc/Vite build and real Go + owned PostgreSQL18.6 verify-full mTLS: 3/3 passed, 3.0m",
+    "browserAssertions": "26 encrypted channel and 26 DM messages; exact 25/1 newest-first accented uppercase search pages and previous/next, no REST search before and after new-context key recovery/reload; 26 fresh roster requests and exactly one peer + one sibling-owner prekey request",
+    "diagnostics": "Session refresh HTTP400 diagnostics occurred; completed successfully. Initial count assertion expected one request and failed because fixture includes a sibling owner device; corrected to assert exactly one request per expected user, not a loose upper bound.",
+    "cleanup": "Owned container hichat-e2e-pg-67cdc054457b9c3b and its uniquely tagged image removed after terminal browser exit0"
+  },
+  "invariants": [
+    "No prekey/one-time-prekey cache; bounded public revision receipts only",
+    "Fresh authorization/roster for every send; denied/error reads never fall back to stale roster",
+    "Missing capability supports older servers; explicitly unsupported version fails",
+    "Account/generation/local-device fencing, new-device alerts, identity-change handshake and explicit self-reset covered by regressions",
+    "Public device-enumeration limit unchanged"
+  ],
+  "normalizedLFSourceSha256": {
+    "client/src/api/client.ts": "fb4cbd5046ddf94d69714c49d19fdca7d1be60e2790574a6c82d7bf10a97a437",
+    "client/src/api/e2ee.ts": "52ef09c9a794ecea5401d9c26c3992410b5ad0fc4312a8f4b9e48023310d582d",
+    "client/src/crypto/dmEncryption.ts": "d4a4d30de213f885f2bdb88e301079006a6debae5645c9ac630e4c21afbc44d5",
+    "client/src/crypto/dmDeviceRoster.ts": "b75ebf182c07c1873540535ee5467edf03e3d3b6d720293616c9af249a4bf657",
+    "client/src/crypto/dmDeviceRoster.test.ts": "2f024f4102fb64636fe81e4b363cbf5d3bf7cad40226a15b1eea52b5aee33058",
+    "client/src/stores/dmStore.ts": "dbdb6362aa0a09eeb12ed855ff3f29c36bab57fcdf4dd9f1e245669bfbcf12f2",
+    "e2e/tests/crypto-recovery.spec.ts": "932e4b320595793cce77d306ec6a8d3e53abbe7209ab99cde6c189b02391fe67",
+    "server/handlers/dm.go": "977e46121ba1a9d3894e751e1eb8b206c8560bd4de0a3c39a04dbe4879e2584d",
+    "server/handlers/dm_device_roster_test.go": "b22e3629532c1f8d6bf4241acc3296abc8a753d3056588c471e127b4cb948d9f",
+    "server/openapi.yaml": "392fabed91c67c50249015ddffe2c81f0b4ebc2c539243806eb3c37fcd571a08"
+  },
+  "logSha256": {
+    "hichat-dm-roster-full-coverage.log": "2358a6d11d9e8673e4f753a83ce4e420bbfd87da8bca0629800c10a0412616b4",
+    "hichat-dm-roster-lint.log": "b51344ffc39e8ec9a8569b51c5ae7b28aa35df7af955a93bafae4f7a267c30fa",
+    "hichat-dm-roster-go-broad.log": "910854359a1088ffb02dfaa820533471f001aed231b493a93db3e92d3f243dad",
+    "hichat-dm-roster-26-counted-final.log": "97ecb013b3f880791ab00df32fa0bb1acee7f229b461aec1b7494ad0ab261a6c"
+  },
+  "remaining": [
+    "Group-DM still uses legacy prekey path; its enumeration budget needs separate implementation",
+    "Search matching-ID snapshot still unbounded; RF17 remains open",
+    "Concurrent roster read vs device revocation before message POST is not transactionally fenced",
+    "Complete physical/native/media and whole-project acceptance remains open",
+    "Current change CI and Linux race evidence pending; prior green CI is not proof for these bytes"
+  ]
+}

@@ -227,7 +227,9 @@ func (p *musicAudienceFixturePerms) ResolveChannelPermissionsFresh(_ context.Con
 // Explicit trusted fixtures: production never gets an implicit allow audience.
 func configureMusicAudienceFixture(s *musicBotService, channel, server string) {
 	s.audience = MusicAudienceDependencies{Voice: &musicAudienceFixtureVoice{states: map[string]models.VoiceState{"listener": {UserID: "listener", ChannelID: channel, ServerID: server, JoinedAt: time.Unix(1, 0), ChannelGeneration: 1}}}, Members: &musicAudienceFixtureMembers{}}
-	s.perms = &musicAudienceFixturePerms{}
+	fresh := &musicAudienceFixturePerms{}
+	s.perms = fresh
+	s.audience.FreshPermissions = fresh
 	if s.channels == nil {
 		s.channels = &stubChannelGetter{channel: &models.Channel{ID: channel, ServerID: server, Type: models.ChannelTypeVoice}}
 	}
@@ -285,7 +287,7 @@ func TestMusicAudienceStateAndErrorsOnlyReachCurrentPermittedParticipants(t *tes
 			case "missing-dependencies":
 				s.audience = MusicAudienceDependencies{}
 			case "missing-fresh-resolver":
-				s.perms = &testutil.MockChannelPermResolver{}
+				s.audience.FreshPermissions = nil
 			case "channel-moved":
 				s.channels = &stubChannelGetter{channel: &models.Channel{ID: "ch", ServerID: "other", Type: models.ChannelTypeVoice}}
 			case "text-channel":
@@ -437,7 +439,9 @@ func TestMusicAudienceNonAdminRepositoryCallsAreFourNPlusOne(t *testing.T) {
 			var membershipCalls, outerChannelCalls, sends int
 			s.audience.Members = &testutil.MockServerRepo{IsMemberFn: func(context.Context, string, string) (bool, error) { membershipCalls++; return true, nil }}
 			counter := &bulkRepoCounter{}
-			s.perms = (permFixture{serverID: "srv", channelID: "ch", roles: roles}).newService(counter)
+			resolver := (permFixture{serverID: "srv", channelID: "ch", roles: roles}).newService(t, counter)
+			s.perms = resolver
+			s.audience.FreshPermissions = resolver
 			s.channels = &testutil.MockChannelRepo{GetByIDFn: func(context.Context, string) (*models.Channel, error) {
 				outerChannelCalls++
 				return &models.Channel{ID: "ch", ServerID: "srv", Type: models.ChannelTypeVoice}, nil
@@ -448,7 +452,7 @@ func TestMusicAudienceNonAdminRepositoryCallsAreFourNPlusOne(t *testing.T) {
 				}
 				sends++
 			}}
-			if sent := s.broadcastMusicAudience("srv", "ch", ws.Event{Op: "music_bot_state"}); sent != (n > 0) {
+			if sent := s.broadcastMusicAudience("srv", "ch", ws.Event{Op: "music_bot_state"}, nil); sent != (n > 0) {
 				t.Fatal("wrong audience result")
 			}
 			if membershipCalls != n || outerChannelCalls != 1 || counter.channelByID != n || counter.rolesByUser != n || counter.overridesByRoles != n || counter.total() != 3*n || sends != n {
@@ -475,7 +479,45 @@ func TestMusicAudienceDeadlineCannotAuthorizeDelayedRecipient(t *testing.T) {
 		return true, nil
 	}}
 	s.hub = &testutil.MockBroadcaster{BroadcastToServerFn: func(string, ws.Event) { t.Error("broad timeout fallback") }, BroadcastToUsersFn: func([]string, ws.Event) { sends++ }}
-	if s.broadcastMusicAudience("srv", "ch", ws.Event{Op: "music_bot_state"}) || sends != 0 || membershipCalls != 1 {
+	if s.broadcastMusicAudience("srv", "ch", ws.Event{Op: "music_bot_state"}, nil) || sends != 0 || membershipCalls != 1 {
 		t.Fatalf("timeout leaked event: membership=%d sends=%d", membershipCalls, sends)
+	}
+}
+
+func TestPlaybackErrorDropsReplacedPublisherDuringAuthorization(t *testing.T) {
+	s := newTestMusicBotService("ch", "srv")
+	old := s.bots["ch"]
+	s.perms.(*musicAudienceFixturePerms).during = func(string) {
+		s.mu.Lock()
+		s.bots["ch"] = &botInstance{channelID: "ch", serverID: "srv"}
+		s.mu.Unlock()
+	}
+	s.hub = &testutil.MockBroadcaster{BroadcastToUsersFn: func([]string, ws.Event) {
+		t.Error("retired publisher delivered a playback error")
+	}}
+	s.broadcastPlaybackError(old, &models.MusicTrack{Title: "old track"}, musicBotErrorReason("test"), 1, false)
+}
+
+func TestMusicStateDropsReplacedPublisherDuringAuthorization(t *testing.T) {
+	for _, final := range []bool{false, true} {
+		s := newTestMusicBotService("ch", "srv")
+		old := s.bots["ch"]
+		if final {
+			delete(s.bots, "ch")
+		}
+		checked := false
+		s.perms.(*musicAudienceFixturePerms).during = func(string) {
+			checked = true
+			s.mu.Lock()
+			s.bots["ch"] = &botInstance{channelID: "ch", serverID: "srv"}
+			s.mu.Unlock()
+		}
+		s.hub = &testutil.MockBroadcaster{BroadcastToUsersFn: func([]string, ws.Event) {
+			t.Errorf("retired publisher delivered state (final=%v)", final)
+		}}
+		s.broadcastPrivateMusicState(old, final)
+		if !checked {
+			t.Fatalf("authorization was not reached (final=%v)", final)
+		}
 	}
 }

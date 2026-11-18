@@ -7,7 +7,6 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/google/uuid"
 )
 
@@ -145,7 +144,7 @@ func (c *Client) handleTyping(event Event) {
 
 	if c.hub.onChannelTyping != nil {
 		username := c.hub.getUserUsername(c.userID)
-		logx.Go("ws.channel_typing", func() { c.hub.onChannelTyping(c.userID, username, typing.ChannelID) })
+		c.dispatchOwnedCallback("ws.channel_typing", func() { c.hub.onChannelTyping(c.userID, username, typing.ChannelID) })
 	}
 }
 
@@ -170,6 +169,6 @@ func (c *Client) handleDMTyping(event Event) {
 
 	if c.hub.onDMTyping != nil {
 		username := c.hub.getUserUsername(c.userID)
-		logx.Go("ws.dm_typing", func() { c.hub.onDMTyping(c.userID, username, data.DMChannelID) })
+		c.dispatchOwnedCallback("ws.dm_typing", func() { c.hub.onDMTyping(c.userID, username, data.DMChannelID) })
 	}
 }

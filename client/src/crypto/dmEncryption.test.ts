@@ -873,3 +873,30 @@ describe("dmEncryption — sent-plaintext FIFO across a local device id change",
     expect(popSentPlaintext(CHANNEL)).toBeNull();
   });
 });
+
+it("snapshots peer pins once and records a new-device alert before that device's handshake", async () => {
+  h.peerDeviceIds = [PEER_DEVICE_A, PEER_DEVICE_B];
+  h.selfDeviceIds = [LOCAL_DEVICE];
+  h.trustedIdentities.add(`${PEER}:${PEER_DEVICE_A}`);
+  const order: string[] = [];
+  const pins = vi.mocked(keyStorage.getTrustedDeviceIdsForUser);
+  const handshake = vi.mocked(signalProtocol.processPreKeyBundle);
+  const originalPins = pins.getMockImplementation()!, originalHandshake = handshake.getMockImplementation()!;
+  pins.mockImplementation(async userId => {
+    if (userId === PEER) order.push("peer-pins");
+    return originalPins(userId);
+  });
+  handshake.mockImplementation(async (...args) => {
+    if (args[0] === PEER) order.push(`handshake:${args[1]}`);
+    return originalHandshake(...args);
+  });
+  h.markPeerTrustAlert.mockImplementationOnce(() => { order.push("peer-alert"); });
+  try {
+    const envelopes = await encryptDMMessage(ME, PEER, LOCAL_DEVICE, "hello");
+    expect(order).toEqual(["peer-pins", `handshake:${PEER_DEVICE_A}`, "peer-alert", `handshake:${PEER_DEVICE_B}`]);
+    expect(pins.mock.calls.filter(([userId]) => userId === PEER)).toHaveLength(1);
+    expect(envelopes.map(envelope => envelope.recipient_device_id)).toEqual([PEER_DEVICE_A, PEER_DEVICE_B]);
+  } finally {
+    pins.mockImplementation(originalPins); handshake.mockImplementation(originalHandshake);
+  }
+});

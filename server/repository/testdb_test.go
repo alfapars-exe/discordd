@@ -6,20 +6,19 @@
 // falsify any of that — only executing the statements against the real schema
 // can. So every test in this package that isn't a pure-Go helper test boots a
 // throwaway DB through the SAME code path main.go uses (database.New with the
-// full embedded migration set), which means the migrations themselves are
-// under test on every run too.
+// full embedded migration set), using a private copy of the fully migrated schema. Migration execution
+// remains covered by the database package and cold fixture parity tests.
 //
 // Extracted from message_tx_test.go, which was the first user.
 package repository
 
 import (
 	"database/sql"
-	"io/fs"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/argeinfina/hichat/database"
+	"github.com/argeinfina/hichat/internal/testfixture"
 
 	_ "modernc.org/sqlite" // registers "sqlite" for the fk-off helper connection
 )
@@ -66,21 +65,11 @@ func newTestDBWithPath(t testing.TB) (*database.DB, string) {
 
 // SQLite TEXT storage and historical SQLite migrations have no PostgreSQL
 // equivalent. These tests explicitly own a SQLite fixture in either CI lane.
+var repositoryFixtures testfixture.SQLite
+
 func newSQLiteTestDBWithPath(t testing.TB) (*database.DB, string) {
 	t.Helper()
-	// runMigrations expects the FS rooted at the migrations dir (main.go does
-	// the same fs.Sub before calling database.New).
-	migrationsFS, err := fs.Sub(database.EmbeddedMigrations, "migrations")
-	if err != nil {
-		t.Fatalf("fs.Sub: %v", err)
-	}
-	path := filepath.Join(t.TempDir(), "repo_test.db")
-	db, err := database.NewLegacy(path, migrationsFS)
-	if err != nil {
-		t.Fatalf("database.New: %v", err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
-	return db, path
+	return repositoryFixtures.OpenWithPath(t, "repo_test.db")
 }
 
 // wrapForRepo wraps the test DB in the SAME production retry wrapper

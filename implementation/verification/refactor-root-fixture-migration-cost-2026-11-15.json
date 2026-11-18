@@ -1,0 +1,25 @@
+{
+  "trigger": {
+    "CI": 43658196686,
+    "source": "5b9b921639b1eff24aa87bcf6baf3c6cf1aea859",
+    "failure": "Root Go package exceeded total 15m budget; active test had run 2 seconds and stack was executing fresh SQLite migrations. Shards/PostgreSQL/TLS passed; coverage/gate blocked downstream."
+  },
+  "change": "newCensusDB migrates immutable template bytes once per test process, closes pool/checkpoints WAL, writes separate per-fixture file then uses production NewLegacy initialization and migration ledger checks. No shared mutable DB, pool or path. No timeout increase.",
+  "checks": {
+    "isolation_and_targeted": "PASS census/schema isolation, orphan repair, initialization and composition matrices, 2.073s",
+    "full_root": "PASS go test . -count=1, 6.346s",
+    "vet": "PASS go vet .",
+    "reviewed_manifest": "PASS 50 exact records"
+  },
+  "observation": "Earlier fixed-source full root took 45.992s on Windows; one-run comparison includes later test changes and is not controlled statistical benchmark or CI prediction.",
+  "old_snapshot_linux_race": {
+    "archive": "e12ddc89ba7a0286a544571ba62042383a5d6ef0",
+    "command": "go test -race . -run Test.*(Wiring|Composition|ServiceInitialization|PermissionFoundation|VoiceRuntime) -count=1 -timeout=5m",
+    "result": "PASS 223.913s",
+    "scope": "Old immutable archive excludes later root validator/disabled sender/template change; container --rm completed."
+  },
+  "remaining": [
+    "New-source Linux race+coverage and exact-head CI",
+    "Whole-project refactor acceptance"
+  ]
+}

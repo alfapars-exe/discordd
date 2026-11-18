@@ -1,0 +1,15 @@
+{
+  "sourceCommit": "6a4c8ad8",
+  "path": "server/repository/sqlite_server_ownership.go",
+  "matchedLines": 129,
+  "ignoredTrailingWhitespaceLines": 1,
+  "issues": [
+    {
+      "key": "AaHYWqdqd7dyvm3wYSoO",
+      "status": "CLOSED",
+      "resolution": "FIXED",
+      "message": "Refactor this method to reduce its Cognitive Complexity from 16 to the 15 allowed."
+    }
+  ],
+  "scope": "Source-bound complexity issue closure only; final PostgreSQL/CI/general acceptance separate"
+}

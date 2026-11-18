@@ -41,8 +41,7 @@ func newAdminHarness(userRepo *testutil.MockUserRepo, email *testutil.MockEmailS
 	hub := &adminHubStub{}
 	voice := &adminVoiceStub{}
 	inval := &adminInvalStub{}
-	svc := NewAdminUserService(userRepo, hub, voice, email)
-	svc.SetUserCacheInvalidator(inval)
+	svc := NewAdminUserService(userRepo, hub, voice, email, inval)
 	return adminHarness{svc: svc, hub: hub, voice: voice, inval: inval}
 }
 

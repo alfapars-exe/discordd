@@ -1,0 +1,45 @@
+{
+  "scope": "Loopback-only non-reading authenticated WebSocket probe; preparation for natural TCP slow-consumer profile, not runtime acceptance.",
+  "parentCommit": "56c0521c6ffb9c8e1baff244f842e052b7c5f170",
+  "sources": {
+    "loadtest/slow-consumer/main.go": "126dc557887eb00b469eb60aeb6ebd1650b94044df1eaf12d924e634744c0270",
+    "loadtest/slow-consumer/main_test.go": "f7b8fdb254204be576de164562af0ae2af33ef8c27cf9c5bb13b85334e62eaf6",
+    ".github/workflows/server-ci.yml": "841cb588b48c12559b55ea1d0e00377fb7cfb7c2da8f2eaa7fd9695ad7ee79e3"
+  },
+  "toolchains": {
+    "windows": "go1.27.4 windows/amd64",
+    "linuxRace": "go1.26.11 linux/amd64 CGO_ENABLED=1"
+  },
+  "results": {
+    "slow-probe-windows-final.jsonl": {
+      "testCasesIncludingSubtests": 19,
+      "failed": 0,
+      "skipped": 0,
+      "sha256": "bf2539ceb10d360abcc7f114c722e96d0be188f00fba5639269146d9b62dad96",
+      "packageElapsedSeconds": 1.27
+    },
+    "slow-probe-linux-race-final.jsonl": {
+      "testCasesIncludingSubtests": 19,
+      "failed": 0,
+      "skipped": 0,
+      "sha256": "89508ae0f79e331ad1f2bbb312d0cfaca5806472837cd7489bd7be73e7161810",
+      "packageElapsedSeconds": 1.296
+    }
+  },
+  "negativeControl": {
+    "mutation": "Add a post-upgrade ReadMessage loop in an isolated copy only",
+    "testSourceIdentical": true,
+    "expectedFailure": "probe drained output and automatically answered the server ping",
+    "logSha256": "d694fdeb1a373f0b81f5df63e398f388cd382beee6ae7532e03e123c72893ff6"
+  },
+  "vet": "Linux explicit main.go and main_test.go passed",
+  "actionlint": "Pinned v1.7.12 passed with shellcheck/pyflakes disabled, matching CI command",
+  "limits": [
+    "HTTP101 is not proof of hub admission",
+    "1024 bytes is requested, not effective OS receive window",
+    "Mocked ticket endpoint and real localhost socket do not establish real-server authorization or PostgreSQL behavior",
+    "Natural TCP slow-peer retirement with 20 healthy receivers, all 5800 sends/116000 deliveries and independent history reconciliation remains unrun",
+    "General RF01-RF30 and physical/native/media/capacity/soak gates remain open"
+  ],
+  "artifactsRoot": "G:\\hichat-refactor-20261116-anoknpqz"
+}

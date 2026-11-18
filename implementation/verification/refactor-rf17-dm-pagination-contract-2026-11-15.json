@@ -1,0 +1,19 @@
+{
+  "scope": "RF17 encrypted DM subsequent-page lookup and account fencing",
+  "regression": "Before change, subsequent page called searchCachedDMMessages twice instead of once.",
+  "verification": {
+    "vitest": "17 passed across DMSearchPanel.test.tsx and SearchPanel.test.tsx; 3.23s",
+    "eslint": "Both changed DM files passed",
+    "contracts": [
+      "Source sequence ordering preserved",
+      "Subsequent page reads at most 25 snapshot IDs",
+      "Account switch discards pending old-owner results",
+      "Off-page deletion removes snapshot ID and decrements count"
+    ]
+  },
+  "limitations": [
+    "First query still scans all cached DM messages and retains all matching IDs",
+    "DM IndexedDB 1k/10k/50k benchmark still required",
+    "RF17 and overall refactor remain open"
+  ]
+}

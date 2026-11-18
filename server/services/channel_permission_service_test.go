@@ -15,12 +15,16 @@ import (
 
 // helper to create the service with mocks wired up.
 func newTestChannelPermService(
+	t testing.TB,
 	permRepo *testutil.MockChannelPermRepo,
 	roleRepo *testutil.MockRoleRepo,
 	channelRepo *testutil.MockChannelRepo,
 	hub *testutil.MockBroadcaster,
-) ChannelPermissionService {
-	return NewChannelPermissionService(permRepo, roleRepo, channelRepo, hub)
+) ChannelPermissionRuntime {
+	t.Helper()
+	service := NewChannelPermissionService(permRepo, roleRepo, channelRepo, hub).(*cachingPermResolver)
+	t.Cleanup(service.permCache.Close)
+	return service
 }
 
 // ─── ResolveChannelPermissions ───
@@ -218,7 +222,7 @@ func TestResolveChannelPermissions(t *testing.T) {
 			}
 			hub := &testutil.MockBroadcaster{}
 
-			svc := newTestChannelPermService(permRepo, roleRepo, channelRepo, hub)
+			svc := newTestChannelPermService(t, permRepo, roleRepo, channelRepo, hub)
 			got, err := svc.ResolveChannelPermissions(context.Background(), userID, channelID)
 
 			if tt.wantErr {
@@ -247,7 +251,7 @@ func TestResolveChannelPermissions_ChannelNotFound(t *testing.T) {
 	permRepo := &testutil.MockChannelPermRepo{}
 	hub := &testutil.MockBroadcaster{}
 
-	svc := newTestChannelPermService(permRepo, roleRepo, channelRepo, hub)
+	svc := newTestChannelPermService(t, permRepo, roleRepo, channelRepo, hub)
 	_, err := svc.ResolveChannelPermissions(context.Background(), "u1", "bad-chan")
 	if err == nil {
 		t.Fatal("expected error when channel not found")
@@ -268,7 +272,7 @@ func TestResolveChannelPermissions_RoleRepoError(t *testing.T) {
 	permRepo := &testutil.MockChannelPermRepo{}
 	hub := &testutil.MockBroadcaster{}
 
-	svc := newTestChannelPermService(permRepo, roleRepo, channelRepo, hub)
+	svc := newTestChannelPermService(t, permRepo, roleRepo, channelRepo, hub)
 	_, err := svc.ResolveChannelPermissions(context.Background(), "u1", "c1")
 	if err == nil {
 		t.Fatal("expected error when role repo fails")
@@ -385,7 +389,7 @@ func TestBuildVisibilityFilter(t *testing.T) {
 			channelRepo := &testutil.MockChannelRepo{}
 			hub := &testutil.MockBroadcaster{}
 
-			svc := newTestChannelPermService(permRepo, roleRepo, channelRepo, hub)
+			svc := newTestChannelPermService(t, permRepo, roleRepo, channelRepo, hub)
 			filter, err := svc.BuildVisibilityFilter(context.Background(), userID, serverID)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
@@ -435,7 +439,7 @@ func TestBuildVisibilityFilter_RoleRepoError(t *testing.T) {
 	channelRepo := &testutil.MockChannelRepo{}
 	hub := &testutil.MockBroadcaster{}
 
-	svc := newTestChannelPermService(permRepo, roleRepo, channelRepo, hub)
+	svc := newTestChannelPermService(t, permRepo, roleRepo, channelRepo, hub)
 	_, err := svc.BuildVisibilityFilter(context.Background(), "u1", "s1")
 	if err == nil {
 		t.Fatal("expected error when role repo fails")
@@ -456,7 +460,7 @@ func TestBuildVisibilityFilter_PermRepoError(t *testing.T) {
 	channelRepo := &testutil.MockChannelRepo{}
 	hub := &testutil.MockBroadcaster{}
 
-	svc := newTestChannelPermService(permRepo, roleRepo, channelRepo, hub)
+	svc := newTestChannelPermService(t, permRepo, roleRepo, channelRepo, hub)
 	_, err := svc.BuildVisibilityFilter(context.Background(), "u1", "s1")
 	if err == nil {
 		t.Fatal("expected error when perm repo fails")
@@ -488,7 +492,7 @@ func (c *resolveCallCounter) roleRepo(roles []models.Role) *testutil.MockRoleRep
 	}
 }
 
-func newCachedSvc(roles []models.Role, counter *resolveCallCounter) ChannelPermissionService {
+func newCachedSvc(t testing.TB, roles []models.Role, counter *resolveCallCounter) ChannelPermissionService {
 	permRepo := &testutil.MockChannelPermRepo{
 		GetByChannelAndRolesFn: func(_ context.Context, _ string, _ []string) ([]models.ChannelPermissionOverride, error) {
 			return nil, nil
@@ -499,13 +503,13 @@ func newCachedSvc(roles []models.Role, counter *resolveCallCounter) ChannelPermi
 			return &models.Channel{ID: "c1", ServerID: "s1"}, nil
 		},
 	}
-	return newTestChannelPermService(permRepo, counter.roleRepo(roles), channelRepo, &testutil.MockBroadcaster{})
+	return newTestChannelPermService(t, permRepo, counter.roleRepo(roles), channelRepo, &testutil.MockBroadcaster{})
 }
 
 func TestInvalidateUser_DropsThatUsersEntriesOnly(t *testing.T) {
 	counter := &resolveCallCounter{}
 	roles := []models.Role{{ID: "r1", Permissions: models.PermSendMessages}}
-	svc := newCachedSvc(roles, counter)
+	svc := newCachedSvc(t, roles, counter)
 	ctx := context.Background()
 
 	// Warm cache for two users; expect 2 repo calls.
@@ -538,7 +542,7 @@ func TestInvalidateUser_DropsThatUsersEntriesOnly(t *testing.T) {
 func TestInvalidateAll_DropsEveryEntry(t *testing.T) {
 	counter := &resolveCallCounter{}
 	roles := []models.Role{{ID: "r1", Permissions: models.PermSendMessages}}
-	svc := newCachedSvc(roles, counter)
+	svc := newCachedSvc(t, roles, counter)
 	ctx := context.Background()
 
 	_, _ = svc.ResolveChannelPermissions(ctx, "alice", "c1")
@@ -579,7 +583,7 @@ type nonVacuityFixture struct {
 	resolveCalls int
 }
 
-func (f *nonVacuityFixture) build() (ChannelPermissionService, *bool, *bool) {
+func (f *nonVacuityFixture) build(t testing.TB) (ChannelPermissionService, *bool, *bool) {
 	const (
 		serverID     = "srv-nv"
 		targetRoleID = "role-nv-target"
@@ -629,14 +633,14 @@ func (f *nonVacuityFixture) build() (ChannelPermissionService, *bool, *bool) {
 		},
 	}
 
-	svc := newTestChannelPermService(permRepo, roleRepo, channelRepo, &testutil.MockBroadcaster{})
+	svc := newTestChannelPermService(t, permRepo, roleRepo, channelRepo, &testutil.MockBroadcaster{})
 	return svc, &setCalled, &deleteCalled
 }
 
 func TestSetOverride_InvalidatesCache_NonVacuous(t *testing.T) {
 	const channelID = "chan-nv"
 	f := &nonVacuityFixture{}
-	svc, setCalled, _ := f.build()
+	svc, setCalled, _ := f.build(t)
 	ctx := context.Background()
 
 	if _, err := svc.ResolveChannelPermissions(ctx, "victim", channelID); err != nil {
@@ -668,7 +672,7 @@ func TestSetOverride_InvalidatesCache_NonVacuous(t *testing.T) {
 func TestDeleteOverride_InvalidatesCache_NonVacuous(t *testing.T) {
 	const channelID = "chan-nv"
 	f := &nonVacuityFixture{}
-	svc, _, deleteCalled := f.build()
+	svc, _, deleteCalled := f.build(t)
 	ctx := context.Background()
 
 	if _, err := svc.ResolveChannelPermissions(ctx, "victim", channelID); err != nil {
@@ -733,7 +737,7 @@ type permFixture struct {
 // newService wires the fixture into a real channelPermService (not a mock —
 // the point is to exercise the production resolution code) with every repo
 // call counted.
-func (f permFixture) newService(c *bulkRepoCounter) ChannelPermissionService {
+func (f permFixture) newService(t testing.TB, c *bulkRepoCounter) ChannelPermissionRuntime {
 	channelRepo := &testutil.MockChannelRepo{
 		GetByIDFn: func(_ context.Context, _ string) (*models.Channel, error) {
 			c.channelByID++
@@ -778,7 +782,7 @@ func (f permFixture) newService(c *bulkRepoCounter) ChannelPermissionService {
 			return out, nil
 		},
 	}
-	return newTestChannelPermService(permRepo, roleRepo, channelRepo, &testutil.MockBroadcaster{})
+	return newTestChannelPermService(t, permRepo, roleRepo, channelRepo, &testutil.MockBroadcaster{})
 }
 
 // TestResolveChannelPermissionsBulk_QueryCount is the headline regression
@@ -798,7 +802,7 @@ func TestResolveChannelPermissionsBulk_QueryCount(t *testing.T) {
 
 	// Baseline: the loop this change replaces.
 	singleCounter := &bulkRepoCounter{}
-	singleSvc := fixture.newService(singleCounter)
+	singleSvc := fixture.newService(t, singleCounter)
 	for _, uid := range users {
 		if _, err := singleSvc.ResolveChannelPermissions(context.Background(), uid, fixture.channelID); err != nil {
 			t.Fatalf("single resolve: %v", err)
@@ -811,7 +815,7 @@ func TestResolveChannelPermissionsBulk_QueryCount(t *testing.T) {
 
 	// Bulk: constant, and specifically one of each query.
 	bulkCounter := &bulkRepoCounter{}
-	bulkSvc := fixture.newService(bulkCounter)
+	bulkSvc := fixture.newService(t, bulkCounter)
 	got, err := bulkSvc.ResolveChannelPermissionsBulk(context.Background(), fixture.channelID, users)
 	if err != nil {
 		t.Fatalf("bulk resolve: %v", err)
@@ -832,7 +836,7 @@ func TestResolveChannelPermissionsBulk_QueryCount(t *testing.T) {
 
 func TestResolveChannelPermissionsBulk_EmptyUserIDs(t *testing.T) {
 	counter := &bulkRepoCounter{}
-	svc := permFixture{serverID: "srv-1", channelID: "chan-1"}.newService(counter)
+	svc := permFixture{serverID: "srv-1", channelID: "chan-1"}.newService(t, counter)
 
 	for _, users := range [][]string{nil, {}} {
 		got, err := svc.ResolveChannelPermissionsBulk(context.Background(), "chan-1", users)
@@ -859,7 +863,7 @@ func TestResolveChannelPermissionsBulk_MixedCacheHitsAndMisses(t *testing.T) {
 		},
 	}
 	counter := &bulkRepoCounter{}
-	svc := fixture.newService(counter)
+	svc := fixture.newService(t, counter)
 	ctx := context.Background()
 
 	// Warm alice through the single-user path — the caches must be shared.
@@ -907,7 +911,7 @@ func TestResolveChannelPermissionsBulk_SharesCacheKeysWithSinglePath(t *testing.
 		},
 	}
 	counter := &bulkRepoCounter{}
-	svc := fixture.newService(counter)
+	svc := fixture.newService(t, counter)
 	ctx := context.Background()
 
 	if _, err := svc.ResolveChannelPermissionsBulk(ctx, "chan-1", []string{"alice", "bob"}); err != nil {
@@ -1026,7 +1030,7 @@ func TestResolveChannelPermissionsBulk_Semantics(t *testing.T) {
 				serverID: "srv-1", channelID: channelID,
 				roles: tt.roles, overrides: tt.overrides,
 			}
-			svc := fixture.newService(&bulkRepoCounter{})
+			svc := fixture.newService(t, &bulkRepoCounter{})
 
 			users := make([]string, 0, len(tt.want))
 			for uid := range tt.want {
@@ -1108,8 +1112,8 @@ func TestResolveChannelPermissionsBulk_ParityWithSinglePath(t *testing.T) {
 		}
 
 		// Separate service instances so neither path warms the other's cache.
-		bulkSvc := fixture.newService(&bulkRepoCounter{})
-		singleSvc := fixture.newService(&bulkRepoCounter{})
+		bulkSvc := fixture.newService(t, &bulkRepoCounter{})
+		singleSvc := fixture.newService(t, &bulkRepoCounter{})
 
 		bulk, err := bulkSvc.ResolveChannelPermissionsBulk(context.Background(), "chan-1", users)
 		if err != nil {
@@ -1132,7 +1136,7 @@ func TestResolveChannelPermissionsBulk_RepoErrors(t *testing.T) {
 	boom := errors.New("db error")
 
 	t.Run("channel lookup failure", func(t *testing.T) {
-		svc := newTestChannelPermService(
+		svc := newTestChannelPermService(t,
 			&testutil.MockChannelPermRepo{},
 			&testutil.MockRoleRepo{},
 			&testutil.MockChannelRepo{GetByIDFn: func(_ context.Context, _ string) (*models.Channel, error) {
@@ -1146,7 +1150,7 @@ func TestResolveChannelPermissionsBulk_RepoErrors(t *testing.T) {
 	})
 
 	t.Run("role lookup failure", func(t *testing.T) {
-		svc := newTestChannelPermService(
+		svc := newTestChannelPermService(t,
 			&testutil.MockChannelPermRepo{},
 			&testutil.MockRoleRepo{GetRolesForUsersFn: func(_ context.Context, _ string, _ []string) (map[string][]models.Role, error) {
 				return nil, boom
@@ -1162,7 +1166,7 @@ func TestResolveChannelPermissionsBulk_RepoErrors(t *testing.T) {
 	})
 
 	t.Run("override lookup failure", func(t *testing.T) {
-		svc := newTestChannelPermService(
+		svc := newTestChannelPermService(t,
 			&testutil.MockChannelPermRepo{GetByChannelFn: func(_ context.Context, _ string) ([]models.ChannelPermissionOverride, error) {
 				return nil, boom
 			}},
@@ -1208,7 +1212,7 @@ type n03Fixture struct {
 	actorChannelOverride *models.ChannelPermissionOverride
 }
 
-func (f n03Fixture) build(setCalled *bool, deleteCalled *bool) ChannelPermissionService {
+func (f n03Fixture) build(t testing.TB, setCalled *bool, deleteCalled *bool) ChannelPermissionService {
 	const actorRoleID = "role-actor"
 
 	actorRole := models.Role{ID: actorRoleID, Position: f.actorPosition, Permissions: f.actorPermissions}
@@ -1254,7 +1258,7 @@ func (f n03Fixture) build(setCalled *bool, deleteCalled *bool) ChannelPermission
 		},
 	}
 
-	return newTestChannelPermService(permRepo, roleRepo, channelRepo, &testutil.MockBroadcaster{})
+	return newTestChannelPermService(t, permRepo, roleRepo, channelRepo, &testutil.MockBroadcaster{})
 }
 
 func TestSetOverride_RejectsAllowBitActorDoesNotHold(t *testing.T) {
@@ -1264,7 +1268,7 @@ func TestSetOverride_RejectsAllowBitActorDoesNotHold(t *testing.T) {
 		targetPosition:   3,
 	}
 	var setCalled bool
-	svc := fixture.build(&setCalled, nil)
+	svc := fixture.build(t, &setCalled, nil)
 
 	req := &models.SetOverrideRequest{Allow: models.PermManageMessages}
 	err := svc.SetOverride(context.Background(), n03ServerID, n03ChannelID, n03TargetID, n03ActorID, req)
@@ -1286,7 +1290,7 @@ func TestSetOverride_RejectsDenyBitActorDoesNotHold(t *testing.T) {
 		targetPosition:   3,
 	}
 	var setCalled bool
-	svc := fixture.build(&setCalled, nil)
+	svc := fixture.build(t, &setCalled, nil)
 
 	req := &models.SetOverrideRequest{Deny: models.PermManageMessages}
 	err := svc.SetOverride(context.Background(), n03ServerID, n03ChannelID, n03TargetID, n03ActorID, req)
@@ -1305,7 +1309,7 @@ func TestSetOverride_AllowsBitActorHolds(t *testing.T) {
 		targetPosition:   3,
 	}
 	var setCalled bool
-	svc := fixture.build(&setCalled, nil)
+	svc := fixture.build(t, &setCalled, nil)
 
 	req := &models.SetOverrideRequest{Allow: models.PermManageMessages}
 	if err := svc.SetOverride(context.Background(), n03ServerID, n03ChannelID, n03TargetID, n03ActorID, req); err != nil {
@@ -1323,7 +1327,7 @@ func TestSetOverride_RejectsEqualOrHigherTargetPosition(t *testing.T) {
 		targetPosition:   5, // equal to actor's own position
 	}
 	var setCalled bool
-	svc := fixture.build(&setCalled, nil)
+	svc := fixture.build(t, &setCalled, nil)
 
 	req := &models.SetOverrideRequest{Allow: models.PermManageMessages}
 	err := svc.SetOverride(context.Background(), n03ServerID, n03ChannelID, n03TargetID, n03ActorID, req)
@@ -1342,7 +1346,7 @@ func TestSetOverride_AdminBypassesEscalationCheck(t *testing.T) {
 		targetPosition:   3,
 	}
 	var setCalled bool
-	svc := fixture.build(&setCalled, nil)
+	svc := fixture.build(t, &setCalled, nil)
 
 	// A bit the admin doesn't literally hold via a specific flag — PermAdmin
 	// bypasses the check entirely (ResolveChannelPermissions resolves admin
@@ -1370,7 +1374,7 @@ func TestSetOverride_ChannelScopedNotServerWide(t *testing.T) {
 		},
 	}
 	var setCalled bool
-	svc := fixture.build(&setCalled, nil)
+	svc := fixture.build(t, &setCalled, nil)
 
 	req := &models.SetOverrideRequest{Allow: models.PermManageMessages}
 	err := svc.SetOverride(context.Background(), n03ServerID, n03ChannelID, n03TargetID, n03ActorID, req)
@@ -1388,7 +1392,7 @@ func TestDeleteOverride_RejectsEqualOrHigherTargetPosition(t *testing.T) {
 		targetPosition: 5,
 	}
 	var deleteCalled bool
-	svc := fixture.build(nil, &deleteCalled)
+	svc := fixture.build(t, nil, &deleteCalled)
 
 	err := svc.DeleteOverride(context.Background(), n03ServerID, n03ChannelID, n03TargetID, n03ActorID)
 	if !errors.Is(err, pkg.ErrForbidden) {
@@ -1405,7 +1409,7 @@ func TestDeleteOverride_AllowsLowerPositionTarget(t *testing.T) {
 		targetPosition: 3,
 	}
 	var deleteCalled bool
-	svc := fixture.build(nil, &deleteCalled)
+	svc := fixture.build(t, nil, &deleteCalled)
 
 	if err := svc.DeleteOverride(context.Background(), n03ServerID, n03ChannelID, n03TargetID, n03ActorID); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -1416,7 +1420,7 @@ func TestDeleteOverride_AllowsLowerPositionTarget(t *testing.T) {
 }
 
 func TestOverrideResetPropagatesStorageFailure(t *testing.T) {
-	svc := (n03Fixture{actorPosition: 5, actorPermissions: models.PermAll, targetPosition: 1}).build(nil, nil).(*cachingPermResolver)
+	svc := (n03Fixture{actorPosition: 5, actorPermissions: models.PermAll, targetPosition: 1}).build(t, nil, nil).(*cachingPermResolver)
 	repo := svc.inner.permRepo.(*testutil.MockChannelPermRepo)
 	failure := errors.New("write failed")
 	repo.DeleteFn = func(context.Context, string, string) error { return failure }

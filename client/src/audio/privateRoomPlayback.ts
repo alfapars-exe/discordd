@@ -1,3 +1,4 @@
+import { ownVoicePeerValue, voicePeerVolume, VOICE_PEER_VOLUME_RANGE } from "../stores/voicePreferenceMaps";
 import { RoomEvent, Track, type Room, type RemoteTrack, type RemoteParticipant, type RemoteTrackPublication } from "livekit-client";
 import { useVoiceStore } from "../stores/voiceStore";
 import { getAuthSessionSnapshot, subscribeAuthGenerationChanges, subscribeAuthOwnerChanges } from "../api/authSessionEvents";
@@ -13,9 +14,9 @@ export function privateRoomPlayback(room:Room, onStatus:(status:"ready"|"fallbac
  const current=()=>active&&isCurrentSource()&&!!auth.ownerId&&JSON.stringify(getAuthSessionSnapshot())===owner;
  const volume=(peer:string,source:Track.Source)=>{
   const state=useVoiceStore.getState();
-  if(state.isDeafened||state.localMutedUsers[peer])return 0;
-  const personal=source===Track.Source.ScreenShareAudio?state.screenShareVolumes[peer]:state.userVolumes[peer];
-  return bounded(state.masterVolume,100)/100*bounded(personal??100,200)/100;
+  if(state.isDeafened||ownVoicePeerValue(state.localMutedUsers, peer))return 0;
+  const personal=voicePeerVolume(source===Track.Source.ScreenShareAudio?state.screenShareVolumes:state.userVolumes,peer);
+  return bounded(state.masterVolume,100)/100*bounded(personal,VOICE_PEER_VOLUME_RANGE[1])/100;
  };
  const status=()=>{if(current())onStatus([...players.values()].some(item=>item.status==="failed")?"failed":[...players.values()].some(item=>item.status==="fallback")?"fallback":"ready");};
  const stopTrack=(track:RemoteTrack)=>{const item=players.get(track);if(item){item.ownership.active=false;item.player.stop();}players.delete(track);status();};

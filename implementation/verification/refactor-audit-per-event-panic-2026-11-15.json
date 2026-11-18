@@ -1,0 +1,56 @@
+{
+  "source_commit": "9538d45efb2f6a3307f7d4d8719e28d2961cefba",
+  "source_sha256": {
+    "server/services/audit_log_service.go": "219180271de6e15e6eff32a2343f0a612a389cf478d0f8f6b21721e1cf198cc1",
+    "server/services/audit_log_lifecycle_test.go": "bdaab9437b9ca58f82992e7eaa024390daee8418918b50b3fbf3c2e4b2f3fd37",
+    "ERROR_MANAGEMENT.md": "d2e0aa5310dc9acccf04e814ed2c27a81e75801710e2f38ca0a10a45db7d0922"
+  },
+  "red_proof": {
+    "log": "hichat-audit-event-panic-red.log",
+    "failures": [
+      "insert panic terminates writer with healthy accepted work pending",
+      "snapshot panic terminates writer with healthy accepted work pending"
+    ]
+  },
+  "behavior": [
+    "Existing logx.Run applied per event in live loop and both shutdown-drain paths",
+    "Snapshot context cancellation deferred as well as eager, releasing timer during panic",
+    "Healthy accepted and future work continues after one dependency panic",
+    "Shutdown drains healthy backlog after bad event",
+    "Write-then-panic event is not retried; saved row remains exactly once"
+  ],
+  "checks": {
+    "windows_before_final_partial_write_case": {
+      "log": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-audit-event-panic-green.log",
+      "root_pass_records": 12,
+      "subcase_pass_records": 4,
+      "result": "ok  \tgithub.com/argeinfina/hichat/services\t7.681s"
+    },
+    "linux_race_final": {
+      "log": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-audit-event-panic-linux-race.log",
+      "root_pass_records": 39,
+      "subcase_pass_records": 12,
+      "result": "ok  \tgithub.com/argeinfina/hichat/services\t24.472s"
+    },
+    "root_wiring": {
+      "log": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-audit-event-panic-root.log",
+      "root_pass_records": 0,
+      "subcase_pass_records": 0,
+      "result": "ok  \tgithub.com/argeinfina/hichat\t6.666s"
+    }
+  },
+  "linux": {
+    "go": "1.27.4",
+    "cgo": 1,
+    "race": true,
+    "repetitions": 3,
+    "source_read_only": true,
+    "owned_container_removed": true
+  },
+  "limits": [
+    "Panic recovery remains best-effort; failed event is not retried and publication may be lost after successful persistence",
+    "Dependency context cooperation remains required for bounded shutdown",
+    "Full services/DB/native/physical acceptance remains open",
+    "Changes held locally while remote c853ee50 CI runs; earlier CI is not evidence for new source"
+  ]
+}

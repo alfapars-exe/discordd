@@ -51,3 +51,11 @@ type LiveKitRepository interface {
 	// path stays narrow.
 	UpdateQuotaSettings(ctx context.Context, instanceID string, settings *models.UpdateLiveKitQuotaSettingsRequest) error
 }
+
+// LiveKitStore retains durable voice accounting at the composition boundary.
+// Domain consumers continue to use the narrower LiveKitRepository contract.
+type LiveKitStore interface {
+	LiveKitRepository
+	VoiceUsageRecorder
+	VoiceUsageQueue
+}

@@ -14,7 +14,7 @@ import (
 )
 
 type dmMultipartService struct {
-	services.DMService
+	services.DMRequestService
 	sends, broadcasts int
 	forbidden         bool
 	failSend          bool
@@ -129,3 +129,5 @@ func dmMultipartRequest(t *testing.T, clientID string, files int) *http.Request 
 	request.Header.Set("Content-Type", form.FormDataContentType())
 	return request
 }
+
+func (s *dmMultipartService) FinalizeDMCreate(context.Context, *models.DMMessage) error { return nil }

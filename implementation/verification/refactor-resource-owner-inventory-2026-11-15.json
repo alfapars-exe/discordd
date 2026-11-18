@@ -1,0 +1,35 @@
+{
+  "head": "8d74300c13067686c885ee63aad4c3a6e1619181",
+  "status": "open, implementation required",
+  "entries": [
+    {
+      "path": "server/services/auth_service.go",
+      "line": 303,
+      "selection": "s, ok := service.(*authService)",
+      "consumer": "server/main.go: StartAuthMaintenance",
+      "required_contract": "AuthRuntime.StartAuthMaintenance(context.Context) func()",
+      "classification": "resource ownership erased by factory result",
+      "acceptance": [
+        "factory result declares lifecycle capability",
+        "composition retains it and main calls directly",
+        "compatibility wrapper delegates without concrete assertion",
+        "existing cancellation/join and disabled-mode tests pass"
+      ]
+    },
+    {
+      "path": "server/services/dm_upload_cleanup.go",
+      "line": 20,
+      "selection": "s, ok := service.(*dmUploadService)",
+      "consumer": "server/main.go: StartDMUploadCleanup",
+      "required_contract": "DMUploadRuntime.StartDMUploadCleanup(context.Context) func()",
+      "classification": "resource ownership erased by factory result",
+      "acceptance": [
+        "factory result declares lifecycle capability",
+        "composition retains it and main calls directly",
+        "compatibility wrapper delegates without concrete assertion",
+        "existing cancellation/join and disabled-mode tests pass"
+      ]
+    }
+  ],
+  "limits": "Scoped inventory only. Does not establish RF11 or project completion."
+}

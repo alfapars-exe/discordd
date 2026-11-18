@@ -1,0 +1,260 @@
+{
+  "sourceCommit": "56c0521c6ffb9c8e1baff244f842e052b7c5f170",
+  "verifiedAt": "2026-11-16T10:29:24.958497+00:00",
+  "checkRuns": [
+    {
+      "name": "Go test & build",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43843503374/job/133223092590",
+      "completed_at": "2026-11-16T10:01:45Z"
+    },
+    {
+      "name": "Combined Go statement coverage",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43843503374/job/133221360372",
+      "completed_at": "2026-11-16T09:58:40Z"
+    },
+    {
+      "name": "SonarCloud Code Analysis",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/runs/133219049939",
+      "completed_at": "2026-11-16T09:53:41Z"
+    },
+    {
+      "name": "Go tests (./services shard 5/8)",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43843503374/job/133217786936",
+      "completed_at": "2026-11-16T09:53:40Z"
+    },
+    {
+      "name": "Go tests (./repository shard 5/8)",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43843503374/job/133217785166",
+      "completed_at": "2026-11-16T09:53:23Z"
+    },
+    {
+      "name": "Go tests (./services shard 6/8)",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43843503374/job/133217785042",
+      "completed_at": "2026-11-16T09:54:16Z"
+    },
+    {
+      "name": "Go tests (./services shard 7/8)",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43843503374/job/133217785023",
+      "completed_at": "2026-11-16T09:54:02Z"
+    },
+    {
+      "name": "Go tests (./services shard 1/8)",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43843503374/job/133217784948",
+      "completed_at": "2026-11-16T09:54:13Z"
+    },
+    {
+      "name": "Go tests (./services shard 3/8)",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43843503374/job/133217784941",
+      "completed_at": "2026-11-16T09:54:21Z"
+    },
+    {
+      "name": "Go tests (./repository shard 3/8)",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43843503374/job/133217784929",
+      "completed_at": "2026-11-16T09:53:01Z"
+    },
+    {
+      "name": "Go tests (./repository shard 2/8)",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43843503374/job/133217784923",
+      "completed_at": "2026-11-16T09:53:15Z"
+    },
+    {
+      "name": "Go tests (./repository shard 0/8)",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43843503374/job/133217784912",
+      "completed_at": "2026-11-16T09:53:38Z"
+    },
+    {
+      "name": "Go tests (./services shard 4/8)",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43843503374/job/133217784896",
+      "completed_at": "2026-11-16T09:54:09Z"
+    },
+    {
+      "name": "Migration filename hygiene",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43843503374/job/133217784880",
+      "completed_at": "2026-11-16T09:51:24Z"
+    },
+    {
+      "name": "Go tests (./repository shard 7/8)",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43843503374/job/133217784863",
+      "completed_at": "2026-11-16T09:53:05Z"
+    },
+    {
+      "name": "Go tests (./services shard 0/8)",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43843503374/job/133217784859",
+      "completed_at": "2026-11-16T09:54:07Z"
+    },
+    {
+      "name": "Go tests (./repository shard 4/8)",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43843503374/job/133217784855",
+      "completed_at": "2026-11-16T09:53:18Z"
+    },
+    {
+      "name": "Go tests (./repository shard 6/8)",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43843503374/job/133217784833",
+      "completed_at": "2026-11-16T09:53:50Z"
+    },
+    {
+      "name": "Go tests (./services shard 2/8)",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43843503374/job/133217784731",
+      "completed_at": "2026-11-16T09:53:58Z"
+    },
+    {
+      "name": "npm audit (e2e)",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43843503374/job/133217784630",
+      "completed_at": "2026-11-16T09:51:26Z"
+    },
+    {
+      "name": "Prod image build (HF Dockerfile)",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43843503374/job/133217784612",
+      "completed_at": "2026-11-16T09:55:30Z"
+    },
+    {
+      "name": "npm audit (.)",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43843503374/job/133217784609",
+      "completed_at": "2026-11-16T09:51:27Z"
+    },
+    {
+      "name": "Electron main-process tests",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43843503374/job/133217784599",
+      "completed_at": "2026-11-16T09:51:40Z"
+    },
+    {
+      "name": "golangci-lint",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43843503374/job/133217784518",
+      "completed_at": "2026-11-16T09:52:39Z"
+    },
+    {
+      "name": "Client lint, type, test & build",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43843503374/job/133217784517",
+      "completed_at": "2026-11-16T09:58:41Z"
+    },
+    {
+      "name": "PostgreSQL repository and migration contracts",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43843503374/job/133217784513",
+      "completed_at": "2026-11-16T10:01:38Z"
+    },
+    {
+      "name": "Security scan",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43843503374/job/133217784505",
+      "completed_at": "2026-11-16T09:55:22Z"
+    },
+    {
+      "name": "Playwright E2E",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43843503374/job/133217784462",
+      "completed_at": "2026-11-16T10:01:16Z"
+    },
+    {
+      "name": "npm audit (client)",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43843503374/job/133217784440",
+      "completed_at": "2026-11-16T09:51:57Z"
+    },
+    {
+      "name": "Go tests (./repository shard 1/8)",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43843503374/job/133217784395",
+      "completed_at": "2026-11-16T09:53:21Z"
+    },
+    {
+      "name": "Go base tests & build",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43843503374/job/133217784331",
+      "completed_at": "2026-11-16T09:58:15Z"
+    },
+    {
+      "name": "package (windows-latest)",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43843503361/job/133217784247",
+      "completed_at": "2026-11-16T09:54:15Z"
+    },
+    {
+      "name": "PostgreSQL client certificate reconnect",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43843503374/job/133217784072",
+      "completed_at": "2026-11-16T09:52:01Z"
+    },
+    {
+      "name": "package (ubuntu-latest)",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43843503361/job/133217783828",
+      "completed_at": "2026-11-16T09:53:21Z"
+    },
+    {
+      "name": "native (macos-latest)",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43843503360/job/133217783750",
+      "completed_at": "2026-11-16T09:55:11Z"
+    },
+    {
+      "name": "native (ubuntu-latest)",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43843503360/job/133217783037",
+      "completed_at": "2026-11-16T09:57:35Z"
+    }
+  ],
+  "statuses": [],
+  "scope": "Terminal CI evidence for controlled slow-client isolation test commit. Does not accept later natural TCP profile or close general refactor gates."
+}

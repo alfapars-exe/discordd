@@ -1,0 +1,23 @@
+{
+  "scope": "RF11 actual device-security composition backup integration",
+  "fixture": "Migrated SQLite database and production repositories through initDeviceSecurityServices; real user row and opaque test ciphertext.",
+  "assertions": [
+    "Upsert stores nonempty integrity MAC",
+    "Persisted MAC verifies against backup HKDF subkey of supplied master key",
+    "Untampered read round trip succeeds",
+    "Composition with different master key rejects existing backup with ErrInternal",
+    "Repository overwrite preserving old MAC rejects altered ciphertext",
+    "Normal upsert regenerates MAC and reads new ciphertext",
+    "Delete returns absent backup on next service read"
+  ],
+  "checks": {
+    "device_matrix_and_integration": "PASS 1.949s before independent HKDF assertion",
+    "final_root": "PASS device/media/startup/rollback/routes/callbacks/real friendship-DM, 3.319s",
+    "vet": "PASS go vet ."
+  },
+  "limits": [
+    "SQLite integration only; PostgreSQL and physical client E2EE acceptance separate.",
+    "Remote CI on 4408d2f2 remains live without observed failures and excludes this local test.",
+    "RF11 and overall RF01-RF30 scope remain open."
+  ]
+}

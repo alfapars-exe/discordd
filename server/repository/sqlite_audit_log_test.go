@@ -269,40 +269,40 @@ func idsOf(entries []models.AuditLog) []string {
 	return out
 }
 
-// TestDeleteBefore_RemovesOnlyOlderRows — P3.3 retention purge. Backdates one
-// row's created_at directly (repo.Insert always writes the DB-side "now"
-// default, so the only way to get an "old" row here is to update it after
-// the fact) and asserts DeleteBefore removes exactly that row, leaving a
-// same-instant row untouched — a >= vs > cutoff mistake would delete both or
-// neither.
+// TestDeleteBefore_RemovesOnlyOlderRows checks strict retention at an exact
+// boundary. All timestamps are explicit so fixture setup cannot cross a wall
+// clock second and accidentally put the supposedly fresh row before cutoff.
 func TestDeleteBefore_RemovesOnlyOlderRows(t *testing.T) {
 	db := newTestDB(t)
 	seedAuditWorld(t, db)
 	repo := NewSQLiteAuditLogRepo(wrapForRepo(db))
 	ctx := context.Background()
-
-	oldEntry := newAuditLog(t, ctx, repo, auditServer, models.AuditEventMemberKick)
-	freshEntry := newAuditLog(t, ctx, repo, auditServer, models.AuditEventMemberBan)
-
-	// Backdate oldEntry beyond the cutoff; leave freshEntry at "now".
-	cutoff := time.Now().UTC().Format("2006-01-02 15:04:05")
-	backdated := time.Now().UTC().AddDate(0, 0, -1).Format("2006-01-02 15:04:05")
-	if _, err := db.Conn.ExecContext(ctx, `UPDATE audit_logs SET created_at = ? WHERE id = ?`, backdated, oldEntry.ID); err != nil {
-		t.Fatalf("backdate old entry: %v", err)
+	cutoff := "2026-01-15 12:00:00"
+	for _, row := range []struct{ timestamp string }{
+		{"2026-01-15 11:59:59"},
+		{cutoff},
+		{"2026-01-15 12:00:01"},
+	} {
+		entry := newAuditLog(t, ctx, repo, auditServer, models.AuditEventMemberKick)
+		if _, err := db.Conn.ExecContext(ctx, `UPDATE audit_logs SET created_at = ? WHERE id = ?`, row.timestamp, entry.ID); err != nil {
+			t.Fatal(err)
+		}
 	}
-
 	deleted, err := repo.DeleteBefore(ctx, cutoff)
 	if err != nil {
-		t.Fatalf("DeleteBefore: %v", err)
+		t.Fatal(err)
 	}
 	if deleted != 1 {
-		t.Errorf("deleted = %d, want 1", deleted)
+		t.Fatalf("deleted = %d, want 1", deleted)
 	}
-
-	if got := countRows(t, db, `SELECT COUNT(*) FROM audit_logs WHERE id = ?`, oldEntry.ID); got != 0 {
-		t.Error("row older than the cutoff survived DeleteBefore")
-	}
-	if got := countRows(t, db, `SELECT COUNT(*) FROM audit_logs WHERE id = ?`, freshEntry.ID); got != 1 {
-		t.Error("row at/after the cutoff was incorrectly deleted")
+	for _, row := range []struct {
+		timestamp string
+		remaining int
+	}{
+		{"2026-01-15 11:59:59", 0}, {cutoff, 1}, {"2026-01-15 12:00:01", 1},
+	} {
+		if got := countRows(t, db, `SELECT COUNT(*) FROM audit_logs WHERE created_at = ?`, row.timestamp); got != row.remaining {
+			t.Errorf("timestamp %s: remaining=%d, want %d", row.timestamp, got, row.remaining)
+		}
 	}
 }

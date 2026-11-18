@@ -102,7 +102,7 @@ func TestGameActivityServiceKeepsPerConnectionSourcesAndDoesNotFloodRenewals(t *
 		mu.Unlock()
 	}}
 	policy := gameActivityPolicy(`{"privacy":{"shareGameActivity":true}}`, gameActivityFriendsStub{accepted: true}, gameActivityServersStub{}, gameActivityPresenceStub{visible: true}, nil)
-	svc := NewGameActivityService(policy, activityServiceFriends{}, activityServiceServers{}, hub)
+	svc := NewGameActivityService(policy, activityServiceFriends{}, activityServiceServers{}, hub, "")
 	ctx := context.Background()
 	svc.Connect("target", 1)
 	svc.Connect("target", 2)
@@ -143,7 +143,7 @@ func TestGameActivityServiceSequenceAndDisconnectFence(t *testing.T) {
 			events = append(events, event)
 		}
 	}}
-	svc := NewGameActivityService(gameActivityPolicy(`{"privacy":{"shareGameActivity":true}}`, gameActivityFriendsStub{accepted: true}, gameActivityServersStub{}, gameActivityPresenceStub{visible: true}, nil), activityServiceFriends{}, activityServiceServers{}, hub)
+	svc := NewGameActivityService(gameActivityPolicy(`{"privacy":{"shareGameActivity":true}}`, gameActivityFriendsStub{accepted: true}, gameActivityServersStub{}, gameActivityPresenceStub{visible: true}, nil), activityServiceFriends{}, activityServiceServers{}, hub, "")
 	ctx := context.Background()
 	game := &ws.GameActivityClientGame{ID: "x", Name: "X"}
 	svc.Connect("target", 7)
@@ -167,7 +167,7 @@ func TestGameActivityServiceExpiredLeaseRevokesImmediately(t *testing.T) {
 			events = append(events, event)
 		}
 	}}
-	svc := NewGameActivityService(gameActivityPolicy(`{"privacy":{"shareGameActivity":true}}`, gameActivityFriendsStub{accepted: true}, gameActivityServersStub{}, gameActivityPresenceStub{visible: true}, nil), activityServiceFriends{}, activityServiceServers{}, hub)
+	svc := NewGameActivityService(gameActivityPolicy(`{"privacy":{"shareGameActivity":true}}`, gameActivityFriendsStub{accepted: true}, gameActivityServersStub{}, gameActivityPresenceStub{visible: true}, nil), activityServiceFriends{}, activityServiceServers{}, hub, "")
 	svc.Connect("target", 1)
 	svc.Update(context.Background(), "target", 1, 1, &ws.GameActivityClientGame{ID: "x", Name: "X"})
 	svc.mu.Lock()
@@ -191,7 +191,7 @@ func TestGameActivityServiceStartedWorkerExpiresLeaseAndStopJoins(t *testing.T) 
 		}
 	}}
 	policy := gameActivityPolicy(`{"privacy":{"shareGameActivity":true}}`, gameActivityFriendsStub{accepted: true}, gameActivityServersStub{}, gameActivityPresenceStub{visible: true}, nil)
-	svc := NewGameActivityService(policy, activityServiceFriends{}, activityServiceServers{}, hub)
+	svc := NewGameActivityService(policy, activityServiceFriends{}, activityServiceServers{}, hub, "")
 	svc.tickerFactory = func(interval time.Duration) (<-chan time.Time, func()) {
 		if interval != 10*time.Second {
 			t.Errorf("worker interval = %s, want 10s", interval)
@@ -244,7 +244,7 @@ func TestGameActivityServiceStartedWorkerExpiresLeaseAndStopJoins(t *testing.T) 
 }
 
 func TestGameActivityTargetLockWaitHonorsContextCancellation(t *testing.T) {
-	svc := NewGameActivityService(&activityPolicyStub{}, activityServiceFriends{}, activityServiceServers{}, &testutil.MockBroadcaster{})
+	svc := NewGameActivityService(&activityPolicyStub{}, activityServiceFriends{}, activityServiceServers{}, &testutil.MockBroadcaster{}, "")
 	unlock := svc.lockTarget("target")
 	lockHeld := true
 	t.Cleanup(func() {
@@ -290,7 +290,7 @@ func TestGameActivityTargetLockWaitHonorsContextCancellation(t *testing.T) {
 func TestGameActivityServiceStopCancelsInFlightReconcile(t *testing.T) {
 	ticks := make(chan time.Time, 1)
 	friends := &blockingActivityServiceFriends{entered: make(chan struct{})}
-	svc := NewGameActivityService(&activityPolicyStub{}, friends, activityServiceServers{}, &testutil.MockBroadcaster{})
+	svc := NewGameActivityService(&activityPolicyStub{}, friends, activityServiceServers{}, &testutil.MockBroadcaster{}, "")
 	svc.tickerFactory = func(time.Duration) (<-chan time.Time, func()) { return ticks, func() {} }
 	svc.mu.Lock()
 	svc.sources["target"] = map[uint64]gameActivitySource{
@@ -332,7 +332,7 @@ func TestGameActivityServiceExpiryKeepsSelectedSourceAndSwitchesDirectlyToFallba
 			}
 		}}
 		policy := gameActivityPolicy(`{"privacy":{"shareGameActivity":true}}`, gameActivityFriendsStub{accepted: true}, gameActivityServersStub{}, gameActivityPresenceStub{visible: true}, nil)
-		return NewGameActivityService(policy, activityServiceFriends{}, activityServiceServers{}, hub), &events
+		return NewGameActivityService(policy, activityServiceFriends{}, activityServiceServers{}, hub, ""), &events
 	}
 
 	t.Run("expired non-selected source does not clear current game", func(t *testing.T) {
@@ -387,7 +387,7 @@ func TestGameActivityServicePolicyErrorRevokesThenCanRegrant(t *testing.T) {
 		}
 	}}
 	policy := &activityPolicyStub{}
-	svc := NewGameActivityService(policy, activityServiceFriends{}, activityServiceServers{}, hub)
+	svc := NewGameActivityService(policy, activityServiceFriends{}, activityServiceServers{}, hub, "")
 	svc.Connect("target", 1)
 	svc.Update(context.Background(), "target", 1, 1, &ws.GameActivityClientGame{ID: "x", Name: "X"})
 	policy.viewErr = context.DeadlineExceeded
@@ -414,7 +414,7 @@ func TestGameActivityMembershipRemovalRevokesOnlyServerContextImmediately(t *tes
 	}}
 	servers := activityMembershipServers{members: map[string]bool{"target": true, "viewer": true}}
 	policy := gameActivityPolicy(`{"privacy":{"shareGameActivity":true}}`, gameActivityFriendsStub{accepted: true}, gameActivityServersStub{members: map[string]map[string]bool{"server-1": {"target": true, "viewer": true}}, snapshots: map[string]bool{"server-1": true}}, gameActivityPresenceStub{visible: true}, nil)
-	svc := NewGameActivityService(policy, activityServiceFriends{}, servers, hub)
+	svc := NewGameActivityService(policy, activityServiceFriends{}, servers, hub, "")
 	svc.Connect("target", 1)
 	svc.Update(context.Background(), "target", 1, 1, &ws.GameActivityClientGame{ID: "x", Name: "X"})
 	var serverGrant bool

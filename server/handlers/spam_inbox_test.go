@@ -60,7 +60,7 @@ func TestSpamHandlerAuthentication(t *testing.T) {
 }
 func TestSpamHandlerRejectsInvalidBodiesBeforeStorage(t *testing.T) {
 	s := &spamHandlerStore{}
-	h := NewSpamInboxHandler(services.NewSpamInboxService(s, nil, nil, nil, nil, nil))
+	h := NewSpamInboxHandler(services.NewSpamInboxService(s, nil, nil, nil, nil, nil, nil))
 	for _, body := range []string{"", "null", `{}`, `{"unknown":true}`, `{"user_id":"foreign"}`, `{} {}`, `{"message_id":"` + strings.Repeat("x", 8200) + `"}`} {
 		for _, method := range []http.HandlerFunc{h.Record, h.Restore, h.Dismiss} {
 			w := httptest.NewRecorder()
@@ -76,7 +76,7 @@ func TestSpamHandlerRejectsInvalidBodiesBeforeStorage(t *testing.T) {
 }
 func TestSpamHandlerDecisionOwnershipAndErrors(t *testing.T) {
 	s := &spamHandlerStore{changed: true}
-	h := NewSpamInboxHandler(services.NewSpamInboxService(s, nil, nil, nil, nil, nil))
+	h := NewSpamInboxHandler(services.NewSpamInboxService(s, nil, nil, nil, nil, nil, nil))
 	body := `{"source_kind":"dm","channel_id":"private","message_id":"message","revision":"original"}`
 	for _, test := range []struct {
 		err     error
@@ -93,7 +93,7 @@ func TestSpamHandlerDecisionOwnershipAndErrors(t *testing.T) {
 }
 func TestSpamHandlerListAndDecisionsUseAuthenticatedScope(t *testing.T) {
 	s := &spamHandlerStore{}
-	h := NewSpamInboxHandler(services.NewSpamInboxService(s, nil, nil, nil, nil, nil))
+	h := NewSpamInboxHandler(services.NewSpamInboxService(s, nil, nil, nil, nil, nil, nil))
 	for _, method := range []http.HandlerFunc{h.List, h.Decisions} {
 		w := httptest.NewRecorder()
 		method(w, spamHandlerRequest("", &models.User{ID: "reader"}))

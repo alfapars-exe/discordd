@@ -43,16 +43,17 @@ var dispatchLogger = logx.Component("ws.dispatch")
 // Client represents a single WebSocket connection.
 // Each connection runs two goroutines: ReadPump (read) and WritePump (write).
 type Client struct {
-	sessionID       string
-	registered      chan struct{}
-	validateSession func(context.Context, string, string) error
-	hub             *Hub
-	conn            *websocket.Conn
-	userID          string
-	connectionID    uint64 // unique physical connection identity (not the account session)
-	activitySeq     atomic.Uint64
-	send            chan []byte
-	mu              sync.Mutex // protects conn.WriteMessage
+	registrationProfile *cachedUserInfo
+	sessionID           string
+	registered          chan struct{}
+	validateSession     func(context.Context, string, string) error
+	hub                 *Hub
+	conn                *websocket.Conn
+	userID              string
+	connectionID        uint64 // unique physical connection identity (not the account session)
+	activitySeq         atomic.Uint64
+	send                chan []byte
+	mu                  sync.Mutex // protects conn.WriteMessage
 
 	// done is closed exactly once (via closeDone) when the Hub removes this
 	// client — from removeClient (ban / disconnect) or Shutdown. The send
@@ -62,8 +63,9 @@ type Client struct {
 	// panic that kills the whole process. Closing a separate done channel
 	// instead lets every sender select on <-c.done and lets WritePump exit,
 	// making send-on-closed structurally impossible.
-	done      chan struct{}
-	closeOnce sync.Once
+	done             chan struct{}
+	closeOnce        sync.Once
+	unregisterQueued atomic.Bool
 
 	// serverIDs: servers this user belongs to. Populated from DB at connect,
 	// updated on join/leave. Used by BroadcastToServer for filtering.
@@ -100,7 +102,7 @@ func (c *Client) ReadPump() {
 	// that removeClient processes later on the Hub's own goroutine and
 	// never reads from c.conn, so which of the two happens first here
 	// doesn't matter.
-	defer func() { c.hub.unregister <- c }()
+	defer c.hub.unregisterClient(c)
 	defer c.conn.Close() // connection is already tearing down; nothing to act on
 
 	c.conn.SetReadLimit(maxMessageSize)

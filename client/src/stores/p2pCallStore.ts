@@ -257,17 +257,22 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
 
     acceptCall: (callId) => {
       const { _sendWS, incomingCall } = get();
-      if (!_sendWS || !incomingCall) return;
+      if (!_sendWS || incomingCall?.id !== callId || incomingCall.status !== "ringing") return;
       _sendWS("p2p_call_accept", { call_id: callId });
     },
 
     declineCall: (callId) => {
+      const { activeCall, incomingCall } = get();
+      const target = activeCall?.id === callId ? activeCall : incomingCall;
+      if (target?.id !== callId || target.status !== "ringing") return;
       get()._sendWS?.("p2p_call_decline", { call_id: callId });
-      set({ incomingCall: null, activeCall: null });
+      if (activeCall?.id === callId) get().cleanup();
+      else set({ incomingCall: null });
     },
 
     endCall: () => {
-      get()._sendWS?.("p2p_call_end");
+      const { activeCall, _sendWS } = get();
+      if (activeCall) _sendWS?.("p2p_call_end", { call_id: activeCall.id });
       get().cleanup();
     },
 
@@ -531,9 +536,10 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
     },
 
     handleCallBusy: () => {
+      // The server rejects a busy initiation before allocating a call.
+      if (get().activeCall || get().incomingCall) return;
       const t = i18n.t.bind(i18n);
       useToastStore.getState().addToast("warning", t("common:userBusy"));
-      get().cleanup();
     },
 
     handleSignal: async (data) => {
@@ -618,7 +624,7 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
           if (!peerConnection || !peerConnection.remoteDescription) {
             set((state) => ({ _pendingCandidates: [...state._pendingCandidates.slice(-127), candidate] }));
           } else {
-            await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+            await addRemoteCandidate(peerConnection, candidate);
           }
           break;
         }
@@ -645,6 +651,17 @@ async function flushPendingCandidates(
   if (pending.length === 0) return;
   set({ _pendingCandidates: [] });
   for (const c of pending) {
-    await pc.addIceCandidate(new RTCIceCandidate(c));
+    if (get().peerConnection !== pc) return;
+    await addRemoteCandidate(pc, c);
+  }
+}
+
+async function addRemoteCandidate(pc: RTCPeerConnection, candidate: RTCIceCandidateInit): Promise<void> {
+  try {
+    await pc.addIceCandidate(candidate);
+  } catch (error) {
+    // ICE restarts can leave an old username fragment or media section in flight.
+    if (error instanceof DOMException && error.name === "OperationError") return;
+    throw error;
   }
 }

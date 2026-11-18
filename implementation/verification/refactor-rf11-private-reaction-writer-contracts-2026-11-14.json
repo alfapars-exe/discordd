@@ -1,0 +1,49 @@
+{
+  "source_parent": "45b57eda",
+  "scope": "RF11 explicit private DM/group reaction writer contracts",
+  "before": {
+    "test": "TestPrivateReactionConstructorsRequireWriterCapability",
+    "exit": 1,
+    "failures": [
+      "group notification argument lacks writer capability",
+      "DM constructor has no explicit reaction writer argument"
+    ]
+  },
+  "change": [
+    "DM constructor receives a separate narrow ReactionNotificationWriter; ordinary notification repository remains unchanged for other DM operations",
+    "Group notification input/field uses NotificationStore because the same object serves unread-summary and reaction-write operations; field renamed notifications",
+    "DM/group runtime reaction-writer assertions replaced by direct typed optional-nil gates",
+    "Production injects actual notification store; private reaction fixtures inject writer explicitly; other fixtures explicitly disable writer",
+    "Inbox-summary fixture fails explicitly if unexpected reaction write occurs"
+  ],
+  "validation": [
+    {
+      "command": "go test ./services ./handlers ./ws . -run 'TestPrivateReaction|Test.*ReactionNotification|TestDM|TestGroup|Test.*Wiring|TestFriendshipDMProduction|TestServiceInitialization' -count=1 -timeout=3m",
+      "exit": 0,
+      "package_seconds": {
+        "services": 10.22,
+        "handlers": 2.532,
+        "ws": 0.901,
+        "root": 1.504
+      }
+    },
+    {
+      "command": "go build ./...",
+      "exit": 0
+    },
+    {
+      "command": "go vet ./services ./handlers ./ws .",
+      "exit": 0
+    }
+  ],
+  "intermediate_compile_findings": [
+    "Group notification repository also feeds NotificationUnreadSummary; a writer-only field would omit required read capability. Final contract uses NotificationStore.",
+    "Renamed group inbox fixture updated to complete contract without a silent reaction-write no-op."
+  ],
+  "limits": [
+    "Existing privacy/block/pending/author-membership/dedupe rules and assertions retained",
+    "Local default SQLite/fixture profile, not native PostgreSQL or Linux race proof",
+    "Current remote CI tests14d parent; later capability changes require fresh CI",
+    "Whole RF11 still needs full acceptance audit"
+  ]
+}

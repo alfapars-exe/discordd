@@ -43,7 +43,7 @@ func TestOnlineFriendBulkPrefilterAvoidsPerRecipientReadsAndStopsOnCancel(t *tes
 		t.Fatal("duplicate friends read on bulk path")
 		return nil, nil
 	}}
-	n := NewOnlineFriendNotifier(users, onlineFriendPrefsStub{}, friends, r, onlineFriendPresenceStub{"actor"}, &testutil.MockEventPublisher{}).(*onlineFriendNotifier)
+	n := NewOnlineFriendNotifier(users, onlineFriendPrefsStub{}, friends, r, onlineFriendPresenceStub{"actor"}, &testutil.MockEventPublisher{}, r).(*onlineFriendNotifier)
 	defer n.Stop()
 	err := n.NotifyOnline(ctx, "actor")
 	if !errors.Is(err, context.Canceled) || created != 1 || userReads != 1 || r.bulkCalls != 1 {
@@ -61,7 +61,7 @@ func TestOnlineFriendFreshBudgetAndShutdownCancellation(t *testing.T) {
 		}
 		return nil, nil
 	}}
-	n := NewOnlineFriendNotifier(users, onlineFriendPrefsStub{}, &testutil.MockFriendshipRepo{}, guardedOnlineNotices(nil), onlineFriendPresenceStub{"actor"}, &testutil.MockEventPublisher{}).(*onlineFriendNotifier)
+	n := NewOnlineFriendNotifier(users, onlineFriendPrefsStub{}, &testutil.MockFriendshipRepo{}, guardedOnlineNotices(nil), onlineFriendPresenceStub{"actor"}, &testutil.MockEventPublisher{}, nil)
 	if err := n.NotifyOnlinePresence("actor"); err != nil {
 		t.Fatal(err)
 	}

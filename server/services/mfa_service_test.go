@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io/fs"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -26,15 +24,7 @@ type mfaHarness struct {
 
 func newMFAHarness(t *testing.T) *mfaHarness {
 	t.Helper()
-	migrations, err := fs.Sub(database.EmbeddedMigrations, "migrations")
-	if err != nil {
-		t.Fatal(err)
-	}
-	db, err := database.NewLegacy(filepath.Join(t.TempDir(), "mfa.db"), migrations)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
+	db := newServiceFixtureDB(t, "mfa.db")
 	users := repository.NewSQLiteUserRepo(db.Conn)
 	user := &models.User{Username: "mfa_test", PasswordHash: preHashPassword(t, "current-password"), Status: models.UserStatusOffline}
 	if err := users.Create(context.Background(), user); err != nil {
@@ -43,7 +33,7 @@ func newMFAHarness(t *testing.T) *mfaHarness {
 	svc := NewMFAService(repository.NewSQLiteMFARepo(db.Conn), users, []byte(strings.Repeat("k", 32)))
 	h := &mfaHarness{db: db, svc: svc, user: user, now: 1800000000}
 	svc.now = func() time.Time { return time.Unix(h.now, 0) }
-	h.auth = NewAuthService(users, repository.NewSQLiteSessionRepo(db.Conn), nil, nil, nil, testJWTSecret, 15, 7, WithMFA(svc))
+	h.auth = NewAuthService(users, repository.NewSQLiteSessionRepo(db.Conn), nil, nil, nil, nil, testJWTSecret, 15, 7, WithMFA(svc))
 	return h
 }
 func (h *mfaHarness) enroll(t *testing.T) (*models.MFASetup, []string) {

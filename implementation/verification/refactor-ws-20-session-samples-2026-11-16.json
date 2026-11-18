@@ -1,0 +1,1517 @@
+{
+  "sourceCommit": "221f19df",
+  "profile": {
+    "vus": 20,
+    "users": 20,
+    "rampUp": "10s",
+    "hold": "60s",
+    "rampDown": "10s",
+    "holdSeconds": 75,
+    "legacyToken": false
+  },
+  "samples": [
+    {
+      "at": "2026-11-16T00:34:24.840Z",
+      "phase": "baseline",
+      "goroutines": 51,
+      "pumps": {
+        "read": 0,
+        "write": 0
+      },
+      "memory": {
+        "HeapAlloc": 5740632,
+        "HeapInuse": 8273920,
+        "NumGC": 4,
+        "StackInuse": 1900544,
+        "StackSys": 1900544
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 0.796875,
+        "WorkingSet64": 37400576,
+        "PrivateMemorySize64": 66048000
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:34:26.539Z",
+      "phase": "baseline",
+      "goroutines": 51,
+      "pumps": {
+        "read": 0,
+        "write": 0
+      },
+      "memory": {
+        "HeapAlloc": 6054680,
+        "HeapInuse": 8593408,
+        "NumGC": 4,
+        "StackInuse": 1966080,
+        "StackSys": 1966080
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 0.796875,
+        "WorkingSet64": 37601280,
+        "PrivateMemorySize64": 66170880
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:34:28.363Z",
+      "phase": "baseline",
+      "goroutines": 51,
+      "pumps": {
+        "read": 0,
+        "write": 0
+      },
+      "memory": {
+        "HeapAlloc": 6357872,
+        "HeapInuse": 8806400,
+        "NumGC": 4,
+        "StackInuse": 1998848,
+        "StackSys": 1998848
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 0.796875,
+        "WorkingSet64": 37838848,
+        "PrivateMemorySize64": 66359296
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:34:30.429Z",
+      "phase": "load",
+      "goroutines": 51,
+      "pumps": {
+        "read": 0,
+        "write": 0
+      },
+      "memory": {
+        "HeapAlloc": 6680408,
+        "HeapInuse": 9068544,
+        "NumGC": 4,
+        "StackInuse": 1998848,
+        "StackSys": 1998848
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 0.796875,
+        "WorkingSet64": 37961728,
+        "PrivateMemorySize64": 66424832
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:34:32.682Z",
+      "phase": "load",
+      "goroutines": 64,
+      "pumps": {
+        "read": 4,
+        "write": 4
+      },
+      "memory": {
+        "HeapAlloc": 5036168,
+        "HeapInuse": 8642560,
+        "NumGC": 5,
+        "StackInuse": 1998848,
+        "StackSys": 1998848
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 1.75,
+        "WorkingSet64": 39821312,
+        "PrivateMemorySize64": 67788800
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:34:35.006Z",
+      "phase": "load",
+      "goroutines": 78,
+      "pumps": {
+        "read": 8,
+        "write": 8
+      },
+      "memory": {
+        "HeapAlloc": 6316448,
+        "HeapInuse": 9764864,
+        "NumGC": 5,
+        "StackInuse": 2359296,
+        "StackSys": 2359296
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 2.59375,
+        "WorkingSet64": 40169472,
+        "PrivateMemorySize64": 67932160
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:34:37.375Z",
+      "phase": "load",
+      "goroutines": 91,
+      "pumps": {
+        "read": 13,
+        "write": 13
+      },
+      "memory": {
+        "HeapAlloc": 7445568,
+        "HeapInuse": 10600448,
+        "NumGC": 5,
+        "StackInuse": 2588672,
+        "StackSys": 2588672
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 3.5,
+        "WorkingSet64": 40853504,
+        "PrivateMemorySize64": 68513792
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:34:39.727Z",
+      "phase": "load",
+      "goroutines": 106,
+      "pumps": {
+        "read": 17,
+        "write": 17
+      },
+      "memory": {
+        "HeapAlloc": 6024608,
+        "HeapInuse": 9838592,
+        "NumGC": 6,
+        "StackInuse": 2719744,
+        "StackSys": 2719744
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 4.421875,
+        "WorkingSet64": 42016768,
+        "PrivateMemorySize64": 69611520
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:34:41.908Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 6783512,
+        "HeapInuse": 10059776,
+        "NumGC": 6,
+        "StackInuse": 2719744,
+        "StackSys": 2719744
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 4.671875,
+        "WorkingSet64": 42061824,
+        "PrivateMemorySize64": 69619712
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:34:44.309Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 7173312,
+        "HeapInuse": 10125312,
+        "NumGC": 6,
+        "StackInuse": 2719744,
+        "StackSys": 2719744
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 4.703125,
+        "WorkingSet64": 42082304,
+        "PrivateMemorySize64": 69619712
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:34:46.510Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 7582280,
+        "HeapInuse": 10354688,
+        "NumGC": 6,
+        "StackInuse": 2719744,
+        "StackSys": 2719744
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 4.703125,
+        "WorkingSet64": 42184704,
+        "PrivateMemorySize64": 69718016
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:34:48.783Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 8185920,
+        "HeapInuse": 10723328,
+        "NumGC": 6,
+        "StackInuse": 2752512,
+        "StackSys": 2752512
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 4.703125,
+        "WorkingSet64": 42364928,
+        "PrivateMemorySize64": 69816320
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:34:51.255Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 8598848,
+        "HeapInuse": 11051008,
+        "NumGC": 6,
+        "StackInuse": 2752512,
+        "StackSys": 2752512
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 4.78125,
+        "WorkingSet64": 42397696,
+        "PrivateMemorySize64": 69832704
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:34:53.728Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 9010400,
+        "HeapInuse": 11378688,
+        "NumGC": 6,
+        "StackInuse": 2752512,
+        "StackSys": 2752512
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 4.78125,
+        "WorkingSet64": 42573824,
+        "PrivateMemorySize64": 70070272
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:34:56.111Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 9434360,
+        "HeapInuse": 11829248,
+        "NumGC": 6,
+        "StackInuse": 2752512,
+        "StackSys": 2752512
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 4.78125,
+        "WorkingSet64": 42868736,
+        "PrivateMemorySize64": 70373376
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:34:58.502Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 9858416,
+        "HeapInuse": 12312576,
+        "NumGC": 6,
+        "StackInuse": 2752512,
+        "StackSys": 2752512
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 4.78125,
+        "WorkingSet64": 43307008,
+        "PrivateMemorySize64": 70774784
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:35:00.944Z",
+      "phase": "load",
+      "goroutines": 112,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 5719728,
+        "HeapInuse": 9650176,
+        "NumGC": 7,
+        "StackInuse": 2818048,
+        "StackSys": 2818048
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 4.78125,
+        "WorkingSet64": 43692032,
+        "PrivateMemorySize64": 71258112
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:35:03.253Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 6539936,
+        "HeapInuse": 10067968,
+        "NumGC": 7,
+        "StackInuse": 2883584,
+        "StackSys": 2883584
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 4.78125,
+        "WorkingSet64": 43950080,
+        "PrivateMemorySize64": 71487488
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:35:05.523Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 6975256,
+        "HeapInuse": 10190848,
+        "NumGC": 7,
+        "StackInuse": 2916352,
+        "StackSys": 2916352
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 4.78125,
+        "WorkingSet64": 44052480,
+        "PrivateMemorySize64": 71569408
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:35:07.877Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 7414576,
+        "HeapInuse": 10354688,
+        "NumGC": 7,
+        "StackInuse": 2981888,
+        "StackSys": 2981888
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 4.8125,
+        "WorkingSet64": 44113920,
+        "PrivateMemorySize64": 71602176
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:35:10.364Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 7873480,
+        "HeapInuse": 10608640,
+        "NumGC": 7,
+        "StackInuse": 3047424,
+        "StackSys": 3047424
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 4.828125,
+        "WorkingSet64": 44138496,
+        "PrivateMemorySize64": 71602176
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:35:12.635Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 8305280,
+        "HeapInuse": 10936320,
+        "NumGC": 7,
+        "StackInuse": 3080192,
+        "StackSys": 3080192
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 4.84375,
+        "WorkingSet64": 44163072,
+        "PrivateMemorySize64": 71602176
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:35:14.973Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 8725080,
+        "HeapInuse": 11264000,
+        "NumGC": 7,
+        "StackInuse": 3080192,
+        "StackSys": 3080192
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 4.859375,
+        "WorkingSet64": 44179456,
+        "PrivateMemorySize64": 71602176
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:35:17.297Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 9132136,
+        "HeapInuse": 11698176,
+        "NumGC": 7,
+        "StackInuse": 3080192,
+        "StackSys": 3080192
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 4.875,
+        "WorkingSet64": 44212224,
+        "PrivateMemorySize64": 71835648
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:35:19.573Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 9793672,
+        "HeapInuse": 12345344,
+        "NumGC": 7,
+        "StackInuse": 3145728,
+        "StackSys": 3145728
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 4.890625,
+        "WorkingSet64": 44347392,
+        "PrivateMemorySize64": 71843840
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:35:21.832Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 10225480,
+        "HeapInuse": 12599296,
+        "NumGC": 7,
+        "StackInuse": 3145728,
+        "StackSys": 3145728
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 4.890625,
+        "WorkingSet64": 44376064,
+        "PrivateMemorySize64": 71843840
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:35:24.113Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 5737200,
+        "HeapInuse": 9732096,
+        "NumGC": 8,
+        "StackInuse": 3145728,
+        "StackSys": 3145728
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 4.953125,
+        "WorkingSet64": 44851200,
+        "PrivateMemorySize64": 72450048
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:35:26.398Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 6174440,
+        "HeapInuse": 9936896,
+        "NumGC": 8,
+        "StackInuse": 3178496,
+        "StackSys": 3178496
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 5,
+        "WorkingSet64": 44945408,
+        "PrivateMemorySize64": 72523776
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:35:28.720Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 6608200,
+        "HeapInuse": 10043392,
+        "NumGC": 8,
+        "StackInuse": 3178496,
+        "StackSys": 3178496
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 5,
+        "WorkingSet64": 44990464,
+        "PrivateMemorySize64": 72531968
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:35:31.080Z",
+      "phase": "load",
+      "goroutines": 111,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 7041544,
+        "HeapInuse": 10223616,
+        "NumGC": 8,
+        "StackInuse": 3178496,
+        "StackSys": 3178496
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 5,
+        "WorkingSet64": 45051904,
+        "PrivateMemorySize64": 72556544
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 1,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:35:33.347Z",
+      "phase": "load",
+      "goroutines": 106,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 7706568,
+        "HeapInuse": 10575872,
+        "NumGC": 8,
+        "StackInuse": 3211264,
+        "StackSys": 3211264
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 5,
+        "WorkingSet64": 45191168,
+        "PrivateMemorySize64": 72712192
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:35:35.633Z",
+      "phase": "load",
+      "goroutines": 102,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 8134488,
+        "HeapInuse": 10870784,
+        "NumGC": 8,
+        "StackInuse": 3211264,
+        "StackSys": 3211264
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 5,
+        "WorkingSet64": 45305856,
+        "PrivateMemorySize64": 72794112
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:35:38.002Z",
+      "phase": "load",
+      "goroutines": 97,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 8599064,
+        "HeapInuse": 11182080,
+        "NumGC": 8,
+        "StackInuse": 3309568,
+        "StackSys": 3309568
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 5.015625,
+        "WorkingSet64": 45383680,
+        "PrivateMemorySize64": 72851456
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:35:40.311Z",
+      "phase": "load",
+      "goroutines": 92,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 9031416,
+        "HeapInuse": 11534336,
+        "NumGC": 8,
+        "StackInuse": 3375104,
+        "StackSys": 3375104
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 5.03125,
+        "WorkingSet64": 45383680,
+        "PrivateMemorySize64": 72851456
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:35:42.656Z",
+      "phase": "load",
+      "goroutines": 91,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 9619288,
+        "HeapInuse": 12017664,
+        "NumGC": 8,
+        "StackInuse": 3440640,
+        "StackSys": 3440640
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 5.046875,
+        "WorkingSet64": 45412352,
+        "PrivateMemorySize64": 72851456
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:35:44.984Z",
+      "phase": "load",
+      "goroutines": 91,
+      "pumps": {
+        "read": 20,
+        "write": 20
+      },
+      "memory": {
+        "HeapAlloc": 10044784,
+        "HeapInuse": 12361728,
+        "NumGC": 8,
+        "StackInuse": 3440640,
+        "StackSys": 3440640
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 5.046875,
+        "WorkingSet64": 45432832,
+        "PrivateMemorySize64": 72851456
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:35:47.392Z",
+      "phase": "load",
+      "goroutines": 86,
+      "pumps": {
+        "read": 17,
+        "write": 17
+      },
+      "memory": {
+        "HeapAlloc": 5786976,
+        "HeapInuse": 9789440,
+        "NumGC": 9,
+        "StackInuse": 3112960,
+        "StackSys": 3112960
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 5.0625,
+        "WorkingSet64": 45625344,
+        "PrivateMemorySize64": 72949760
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:35:49.821Z",
+      "phase": "load",
+      "goroutines": 77,
+      "pumps": {
+        "read": 12,
+        "write": 12
+      },
+      "memory": {
+        "HeapAlloc": 6660520,
+        "HeapInuse": 10174464,
+        "NumGC": 9,
+        "StackInuse": 3145728,
+        "StackSys": 3145728
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 5.078125,
+        "WorkingSet64": 45756416,
+        "PrivateMemorySize64": 72949760
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:35:52.050Z",
+      "phase": "load",
+      "goroutines": 68,
+      "pumps": {
+        "read": 8,
+        "write": 8
+      },
+      "memory": {
+        "HeapAlloc": 7667936,
+        "HeapInuse": 10985472,
+        "NumGC": 9,
+        "StackInuse": 3112960,
+        "StackSys": 3112960
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 5.09375,
+        "WorkingSet64": 45826048,
+        "PrivateMemorySize64": 72949760
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:35:54.337Z",
+      "phase": "load",
+      "goroutines": 58,
+      "pumps": {
+        "read": 3,
+        "write": 3
+      },
+      "memory": {
+        "HeapAlloc": 8493800,
+        "HeapInuse": 11272192,
+        "NumGC": 9,
+        "StackInuse": 3080192,
+        "StackSys": 3080192
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 5.109375,
+        "WorkingSet64": 45850624,
+        "PrivateMemorySize64": 72949760
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:35:56.547Z",
+      "phase": "recovery",
+      "goroutines": 52,
+      "pumps": {
+        "read": 0,
+        "write": 0
+      },
+      "memory": {
+        "HeapAlloc": 9280344,
+        "HeapInuse": 11796480,
+        "NumGC": 9,
+        "StackInuse": 2981888,
+        "StackSys": 2981888
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 5.125,
+        "WorkingSet64": 45875200,
+        "PrivateMemorySize64": 72949760
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:35:58.884Z",
+      "phase": "recovery",
+      "goroutines": 51,
+      "pumps": {
+        "read": 0,
+        "write": 0
+      },
+      "memory": {
+        "HeapAlloc": 9692008,
+        "HeapInuse": 12140544,
+        "NumGC": 9,
+        "StackInuse": 2981888,
+        "StackSys": 2981888
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 5.125,
+        "WorkingSet64": 45912064,
+        "PrivateMemorySize64": 72949760
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:36:01.342Z",
+      "phase": "recovery",
+      "goroutines": 52,
+      "pumps": {
+        "read": 0,
+        "write": 0
+      },
+      "memory": {
+        "HeapAlloc": 10104784,
+        "HeapInuse": 12427264,
+        "NumGC": 9,
+        "StackInuse": 2981888,
+        "StackSys": 2981888
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 5.15625,
+        "WorkingSet64": 45912064,
+        "PrivateMemorySize64": 72949760
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:36:03.722Z",
+      "phase": "recovery",
+      "goroutines": 51,
+      "pumps": {
+        "read": 0,
+        "write": 0
+      },
+      "memory": {
+        "HeapAlloc": 5033856,
+        "HeapInuse": 8740864,
+        "NumGC": 10,
+        "StackInuse": 2883584,
+        "StackSys": 2883584
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 5.171875,
+        "WorkingSet64": 45559808,
+        "PrivateMemorySize64": 72556544
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:36:06.046Z",
+      "phase": "recovery",
+      "goroutines": 51,
+      "pumps": {
+        "read": 0,
+        "write": 0
+      },
+      "memory": {
+        "HeapAlloc": 5432496,
+        "HeapInuse": 8986624,
+        "NumGC": 10,
+        "StackInuse": 2916352,
+        "StackSys": 2916352
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 5.1875,
+        "WorkingSet64": 45568000,
+        "PrivateMemorySize64": 72556544
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    },
+    {
+      "at": "2026-11-16T00:36:08.533Z",
+      "phase": "recovery",
+      "goroutines": 51,
+      "pumps": {
+        "read": 0,
+        "write": 0
+      },
+      "memory": {
+        "HeapAlloc": 5831328,
+        "HeapInuse": 9117696,
+        "NumGC": 10,
+        "StackInuse": 2916352,
+        "StackSys": 2916352
+      },
+      "os": {
+        "Id": 155788,
+        "ProcessName": "hichat-capacity",
+        "CPU": 5.21875,
+        "WorkingSet64": 45576192,
+        "PrivateMemorySize64": 72556544
+      },
+      "database": {
+        "connections": 3,
+        "active": 0,
+        "lockWaits": 0,
+        "idleInTransaction": 0,
+        "tlsConnections": 3,
+        "clientCertificates": 3
+      }
+    }
+  ],
+  "go": "go version go1.27.4 windows/amd64",
+  "k6": "k6.exe v2.4.0 (commit/dd9395906d, go1.26.11, windows/amd64)",
+  "dbUsers": 20,
+  "result": {
+    "exitCode": 0,
+    "handshakes": 20,
+    "completed": 20,
+    "heartbeatAcks": 40,
+    "checks": {
+      "login succeeded": {
+        "path": "::login succeeded",
+        "id": "904b20f978ea9858883ce098334e6bab",
+        "passes": 20,
+        "fails": 0,
+        "name": "login succeeded"
+      },
+      "ws-ticket issued": {
+        "passes": 20,
+        "fails": 0,
+        "name": "ws-ticket issued",
+        "path": "::ws-ticket issued",
+        "id": "22609ee14462a54d3391e04408b48f55"
+      },
+      "ws handshake succeeded (status 101)": {
+        "name": "ws handshake succeeded (status 101)",
+        "path": "::ws handshake succeeded (status 101)",
+        "id": "05c0dcd57c1df3132e4fca6e198807f0",
+        "passes": 20,
+        "fails": 0
+      },
+      "ws session completed hold": {
+        "passes": 20,
+        "fails": 0,
+        "name": "ws session completed hold",
+        "path": "::ws session completed hold",
+        "id": "eddc40d004b87149496fca4642656239"
+      },
+      "ws session had no errors": {
+        "name": "ws session had no errors",
+        "path": "::ws session had no errors",
+        "id": "642979f42cd426be13715b390c3aeece",
+        "passes": 20,
+        "fails": 0
+      }
+    },
+    "connecting": {
+      "min": 2.069,
+      "med": 2.5509500000000003,
+      "max": 3.2461,
+      "p(90)": 3.09524,
+      "p(95)": 3.147585,
+      "avg": 2.5571099999999998,
+      "thresholds": {
+        "p(95)<1000": false
+      }
+    },
+    "sessionDuration": {
+      "min": 75002.2545,
+      "med": 75002.98105,
+      "max": 75004.0997,
+      "p(90)": 75003.54320999999,
+      "p(95)": 75003.650635,
+      "avg": 75002.97823,
+      "thresholds": {
+        "p(95)>67500": false
+      }
+    }
+  },
+  "limits": [
+    "One 20-session local profile, not capacity/SLA or long-soak acceptance",
+    "No channel traffic, fan-out, slow consumers or media provider load",
+    "Profiling and process/DB sampling overhead included; CPU not pinned; other developer Docker services remain running",
+    "Load users were seeded through direct users inserts; no guild/channel workload was configured. Effective memberships were not independently queried; a separate synthetic platform admin sampled profiles.",
+    "Heap is observed without forced GC; idle pool/heap retention is not asserted to return byte-for-byte to baseline"
+  ],
+  "databaseDropped": true,
+  "finishedAt": "2026-11-16T00:36:11.101Z"
+}

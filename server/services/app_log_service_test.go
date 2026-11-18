@@ -54,7 +54,7 @@ func (f *fakeAppLogRepo) count() int {
 // and increment the dropped counter instead of blocking or panicking.
 func TestAppLogService_Log_countsDroppedWhenChannelFull(t *testing.T) {
 	repo := &fakeAppLogRepo{}
-	svc := NewAppLogService(repo).(*appLogService)
+	svc := NewAppLogService(repo, nil).(*appLogService)
 
 	capacity := cap(svc.ch)
 	for i := 0; i < capacity; i++ {
@@ -78,7 +78,7 @@ func TestAppLogService_Log_countsDroppedWhenChannelFull(t *testing.T) {
 // the accumulated count and leaves the counter at zero for the next window.
 func TestAppLogService_droppedCounter_swapResetsToZero(t *testing.T) {
 	repo := &fakeAppLogRepo{}
-	svc := NewAppLogService(repo).(*appLogService)
+	svc := NewAppLogService(repo, nil).(*appLogService)
 
 	svc.dropped.Add(3)
 	svc.dropped.Add(4)
@@ -97,7 +97,7 @@ func TestAppLogService_droppedCounter_swapResetsToZero(t *testing.T) {
 // may reuse or re-read it after the call).
 func TestAppLogService_Log_StampsRequestIDFromContext(t *testing.T) {
 	repo := &fakeAppLogRepo{}
-	svc := NewAppLogService(repo).(*appLogService)
+	svc := NewAppLogService(repo, nil).(*appLogService)
 	svc.Start()
 	defer svc.Stop()
 
@@ -142,7 +142,7 @@ func TestAppLogService_Log_StampsRequestIDFromContext(t *testing.T) {
 // nothing to add.
 func TestAppLogService_Log_NoRequestIDInContext_NilMetadataStaysNil(t *testing.T) {
 	repo := &fakeAppLogRepo{}
-	svc := NewAppLogService(repo).(*appLogService)
+	svc := NewAppLogService(repo, nil).(*appLogService)
 	svc.Start()
 	defer svc.Stop()
 
@@ -170,7 +170,7 @@ func TestAppLogService_Log_NoRequestIDInContext_NilMetadataStaysNil(t *testing.T
 // Stop() still returns (proving close(s.done) still fires).
 func TestAppLogService_Start_writesEntriesAndStopsCleanly(t *testing.T) {
 	repo := &fakeAppLogRepo{}
-	svc := NewAppLogService(repo).(*appLogService)
+	svc := NewAppLogService(repo, nil).(*appLogService)
 	svc.Start()
 
 	svc.Log(context.Background(), models.LogLevelInfo, models.LogCategoryWS, nil, nil, "hello", nil)

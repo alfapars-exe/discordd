@@ -94,15 +94,15 @@ type LoginRateLimiter struct {
 	buckets     map[string]*bucket
 	maxAttempts int
 	window      time.Duration
-	stopCleanup chan struct{}
+	cleanupWorker
 }
 
 func NewLoginRateLimiter(maxAttempts int, window time.Duration) *LoginRateLimiter {
 	rl := &LoginRateLimiter{
-		buckets:     make(map[string]*bucket),
-		maxAttempts: maxAttempts,
-		window:      window,
-		stopCleanup: make(chan struct{}),
+		buckets:       make(map[string]*bucket),
+		maxAttempts:   maxAttempts,
+		window:        window,
+		cleanupWorker: newCleanupWorker(),
 	}
 
 	go rl.cleanupLoop()
@@ -160,6 +160,7 @@ func (rl *LoginRateLimiter) RetryAfterSeconds(ip string) int {
 }
 
 func (rl *LoginRateLimiter) cleanupLoop() {
+	defer close(rl.cleanupDone)
 	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
 

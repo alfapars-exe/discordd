@@ -18,14 +18,15 @@ type ThreadService interface {
 }
 
 type threadService struct {
-	channels    repository.ChannelRepository
-	messages    repository.MessageRepository
-	permissions ChannelPermResolver
-	hub         ws.BroadcastAndOnline
+	freshPermissions FreshChannelPermResolver
+	channels         repository.ChannelRepository
+	messages         repository.MessageRepository
+	permissions      ChannelPermResolver
+	hub              ws.BroadcastAndOnline
 }
 
-func NewThreadService(channels repository.ChannelRepository, messages repository.MessageRepository, permissions ChannelPermResolver, hub ws.BroadcastAndOnline) ThreadService {
-	return &threadService{channels: channels, messages: messages, permissions: permissions, hub: hub}
+func NewThreadService(channels repository.ChannelRepository, messages repository.MessageRepository, permissions ChannelPermResolver, hub ws.BroadcastAndOnline, freshPermissions FreshChannelPermResolver) ThreadService {
+	return &threadService{freshPermissions: freshPermissions, channels: channels, messages: messages, permissions: permissions, hub: hub}
 }
 
 func (s *threadService) requireRead(ctx context.Context, userID, channelID string, send bool) error {
@@ -58,7 +59,7 @@ func (s *threadService) Create(ctx context.Context, serverID, parentID, actorID 
 	if err := s.channels.Create(ctx, ch); err != nil {
 		return nil, err
 	}
-	broadcastVisibleChannel(ctx, s.hub, s.permissions, ch, ws.OpChannelCreate)
+	broadcastVisibleChannel(ctx, s.hub, s.permissions, s.freshPermissions, ch, ws.OpChannelCreate)
 	return ch, nil
 }
 
@@ -113,7 +114,7 @@ func (s *threadService) SetArchived(ctx context.Context, serverID, threadID, act
 	}
 	thread, err = s.channels.GetByID(ctx, threadID)
 	if err == nil {
-		broadcastVisibleChannel(ctx, s.hub, s.permissions, thread, ws.OpChannelUpdate)
+		broadcastVisibleChannel(ctx, s.hub, s.permissions, s.freshPermissions, thread, ws.OpChannelUpdate)
 	}
 	return thread, err
 }

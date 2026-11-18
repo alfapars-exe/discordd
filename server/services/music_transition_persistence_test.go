@@ -50,6 +50,7 @@ func transitionFixture(t *testing.T, failures map[int]bool) (*musicBotService, *
 	}
 	store := &transitionFaultStore{MusicSessionRepository: svc.sessions, musicControlStore: control, failures: failures}
 	svc.sessions = store
+	svc.controls = store
 	bot := svc.bots["ch"]
 	t.Cleanup(func() { bot.mu.Lock(); bot.cancelIdleTimer(); bot.mu.Unlock() })
 	return svc, bot, store, head

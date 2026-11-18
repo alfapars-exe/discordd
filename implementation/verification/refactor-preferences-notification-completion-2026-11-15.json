@@ -1,0 +1,211 @@
+{
+  "scope": "Complete currently owned cache/pending-queue effects after synchronous notification failure;retain the observable failure.",
+  "sourceRevision": "7184dcdd5e0a745ba0a133fe8d034cf099408f79",
+  "red": {
+    "failed": 11,
+    "passed": 2,
+    "log": "hichat-preferences-observer-failure-red.log",
+    "behavior": "Five local setter families lost post-notification cache/queue work after destination or preference observer exceptions;dual failures were not preserved."
+  },
+  "targeted": {
+    "files": 8,
+    "passed": 268,
+    "seconds": 4.55,
+    "log": "hichat-preferences-observer-failure-green.log",
+    "note": "Before four additional server hydration/reset cache-without-echo cases and explicit AggregateError.cause assertion;final frozen full run covers them."
+  },
+  "behavior": [
+    "Run state update exactly once,complete owned cache/queue work,then rethrow original observer error.",
+    "Completion rechecks current preference binding and current leaf values;retired work does not mutate a replacement binding.",
+    "Preference store local set persists its actual current pending queue/schedules sync even if its own observer throws.",
+    "If both notification and completion throw,AggregateError.errors preserves both and cause points to the caught completion error.",
+    "Hydration/reset complete their cache work without outbound echo."
+  ],
+  "sha256": {
+    "client/src/stores/preferenceMutation.ts": "246c2808e87be1b64ebac16ada62ae688c5832ac3a73c31bced005ebe085a6d8",
+    "client/src/stores/preferencesStore.ts": "94c63eacec60926cac3937a5aa2a1fe17e60c1755316a2b66fe96e6b6134db09",
+    "client/src/stores/settingsStore.ts": "00901ae8476ac3d33f8bb2864cea8904bb0e6e0adb0e06cb43882aed2361b3ae",
+    "client/src/stores/sidebarStore.ts": "9bab7eb0b3eff4298bd79cc17ea726ff76962dae8e15054a185add9b7af24814",
+    "client/src/stores/accessibilityStore.ts": "2dc749313235b9a0bb8103927976b8b6ec178a6c08114739d29da4c13d6cb2e5",
+    "client/src/stores/timeFormatStore.ts": "c5d69b886ff2929fb84e95c83562688618d0e392b7329145d0b6aa9416621e30",
+    "client/src/stores/preferenceNotificationFailure.test.ts": "99713f28653a47d1aa927d68ec7980dad4b9b18766b6f7afd9ee96f464ed3316"
+  },
+  "lintCorrection": "Initial preserve-caught-error lint rejected aggregate without explicit cause;7184dcdd attaches completion cause and tests its identity. No suppression or swallowed error.",
+  "limits": [
+    "Working localStorage in failure fixtures;existing quota/denied-storage best-effort semantics remain.",
+    "This does not resume later observers skipped by a throwing Zustand callback or close all async fetch/save notification failure paths.",
+    "Real stores with no-op bootstrap presenter;not real browser/provider/native/physical acceptance.",
+    "Whole RF11/RF13/project and active search unique-ID frontier remain open."
+  ],
+  "finalFrozenClientCoverage": {
+    "files": 489,
+    "passed": 5192,
+    "skipped": 1,
+    "seconds": 113.8,
+    "statementPercent": 67.45,
+    "branchPercent": 64.66,
+    "functionPercent": 61.72,
+    "linePercent": 68.48,
+    "log": "hichat-preferences-observer-failure-coverage-final.log"
+  },
+  "changedModuleCoverage": {
+    "accessibilityStore.ts": {
+      "lines": {
+        "total": 91,
+        "covered": 69,
+        "skipped": 0,
+        "pct": 75.82
+      },
+      "functions": {
+        "total": 42,
+        "covered": 22,
+        "skipped": 0,
+        "pct": 52.38
+      },
+      "statements": {
+        "total": 113,
+        "covered": 87,
+        "skipped": 0,
+        "pct": 76.99
+      },
+      "branches": {
+        "total": 71,
+        "covered": 58,
+        "skipped": 0,
+        "pct": 81.69
+      }
+    },
+    "preferenceMutation.ts": {
+      "lines": {
+        "total": 6,
+        "covered": 6,
+        "skipped": 0,
+        "pct": 100
+      },
+      "functions": {
+        "total": 1,
+        "covered": 1,
+        "skipped": 0,
+        "pct": 100
+      },
+      "statements": {
+        "total": 12,
+        "covered": 12,
+        "skipped": 0,
+        "pct": 100
+      },
+      "branches": {
+        "total": 4,
+        "covered": 4,
+        "skipped": 0,
+        "pct": 100
+      }
+    },
+    "preferencesStore.ts": {
+      "lines": {
+        "total": 236,
+        "covered": 232,
+        "skipped": 0,
+        "pct": 98.3
+      },
+      "functions": {
+        "total": 33,
+        "covered": 32,
+        "skipped": 0,
+        "pct": 96.96
+      },
+      "statements": {
+        "total": 308,
+        "covered": 292,
+        "skipped": 0,
+        "pct": 94.8
+      },
+      "branches": {
+        "total": 188,
+        "covered": 165,
+        "skipped": 0,
+        "pct": 87.76
+      }
+    },
+    "settingsStore.ts": {
+      "lines": {
+        "total": 187,
+        "covered": 173,
+        "skipped": 0,
+        "pct": 92.51
+      },
+      "functions": {
+        "total": 59,
+        "covered": 55,
+        "skipped": 0,
+        "pct": 93.22
+      },
+      "statements": {
+        "total": 233,
+        "covered": 205,
+        "skipped": 0,
+        "pct": 87.98
+      },
+      "branches": {
+        "total": 116,
+        "covered": 73,
+        "skipped": 0,
+        "pct": 62.93
+      }
+    },
+    "sidebarStore.ts": {
+      "lines": {
+        "total": 37,
+        "covered": 33,
+        "skipped": 0,
+        "pct": 89.18
+      },
+      "functions": {
+        "total": 16,
+        "covered": 15,
+        "skipped": 0,
+        "pct": 93.75
+      },
+      "statements": {
+        "total": 44,
+        "covered": 40,
+        "skipped": 0,
+        "pct": 90.9
+      },
+      "branches": {
+        "total": 44,
+        "covered": 29,
+        "skipped": 0,
+        "pct": 65.9
+      }
+    },
+    "timeFormatStore.ts": {
+      "lines": {
+        "total": 22,
+        "covered": 22,
+        "skipped": 0,
+        "pct": 100
+      },
+      "functions": {
+        "total": 13,
+        "covered": 13,
+        "skipped": 0,
+        "pct": 100
+      },
+      "statements": {
+        "total": 37,
+        "covered": 35,
+        "skipped": 0,
+        "pct": 94.59
+      },
+      "branches": {
+        "total": 21,
+        "covered": 18,
+        "skipped": 0,
+        "pct": 85.71
+      }
+    }
+  },
+  "build": "actual tsc-b/VitePASS2.93s; existing chunk warning",
+  "lint": "all changed source/contract test filesPASS;preserve-caught-error satisfied"
+}

@@ -1,0 +1,31 @@
+{
+  "scope": "RF11 moderation/reporting composition extraction",
+  "owners": [
+    "SpamInbox",
+    "MediaLabel",
+    "Reaction",
+    "Report",
+    "ReportUpload"
+  ],
+  "preserved": [
+    "Same SQL database for spam inbox and media label repositories",
+    "Shared spam inbox access owner for labels",
+    "Report evidence receives the same production channel/DM readers through narrow interfaces",
+    "Reaction notification providers and shared EmojiResolver retained",
+    "Upload path and size limits retained; no constructor worker added"
+  ],
+  "checks": {
+    "root": "PASS ServiceInitialization/routes/callbacks/permission/auth-cache/real friendship-DM, 2.697s",
+    "services": "PASS spam-inbox/media-label/reaction/report tests, 0.666s",
+    "build": "PASS go build ./...",
+    "vet": "PASS go vet .",
+    "reviewed_sql_manifest": "PASS 50 exact records"
+  },
+  "compile_note": "Initial extraction left unused repository import in initServices; removed before successful checks.",
+  "remaining": [
+    "Required integration/repository validation for this group",
+    "Other composition domains, optional and lifecycle matrices",
+    "RF01-RF30 acceptance incomplete"
+  ],
+  "ci": "43655342717 source 0eb3744f live without observed failures; local change excluded."
+}

@@ -1,0 +1,29 @@
+{
+  "date": "2026-11-15",
+  "base": "a8fffc05",
+  "sources": {
+    "client/src/utils/ownSubscriptions.ts": "4a30a133112bcbe39b264014e9351ab7323391ec8554b26a1e36f654794d39c6",
+    "client/src/hooks/useUpdateChecker.ts": "aef11f751fa37099d23600cf8fa02985ca6cefd30c9f2e5672bc9fe1a91f77d7",
+    "client/src/components/layout/CustomTitleBar.tsx": "11a7fc4791eaa82a8e1c8d165cd88621d52ae2c3d7127eb8cc79b2e97c47ce79",
+    "client/src/components/layout/CustomTitleBar.test.tsx": "cca6b4278ca768f4af0734026aff3957324c19d3d64c97196f44906a53958069"
+  },
+  "before": "two titlebar lifecycle regressions failed",
+  "change": "Extract existing hook rollback/disposal behavior into ownSubscriptions and apply to titlebar maximize/download listeners",
+  "validation": {
+    "targeted": "six suites95tests passed;existing hook partial-failure,StrictMode,legacy-disposer and two-consumer cases retained",
+    "typescript": "npx tsc -b passed",
+    "lint": "four changed modules passed",
+    "build": "Vite production build passed"
+  },
+  "invariants": [
+    "titlebar update-subscription failure rolls back maximize listener",
+    "throwing maximize disposer does not skip update disposer",
+    "original acquisition error survives rollback failure",
+    "all acquired callbacks are attempted once per ownership lifetime"
+  ],
+  "limits": [
+    "transport bridge mocked,not packaged native runtime acceptance",
+    "previous full5023test run is prior-source evidence",
+    "local commits held while remote c69db795 CI runs;16success18pending0failed is not terminal"
+  ]
+}

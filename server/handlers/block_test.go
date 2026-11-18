@@ -73,6 +73,7 @@ func newBlockRequest(t *testing.T) *http.Request {
 func TestBlockUser_RateLimit(t *testing.T) {
 	svc := &stubBlockService{}
 	limiter := ratelimit.NewMessageRateLimiter(2, time.Minute, 30*time.Second)
+	t.Cleanup(limiter.Stop)
 	h := NewBlockHandler(svc, limiter)
 
 	for i := 0; i < 2; i++ {

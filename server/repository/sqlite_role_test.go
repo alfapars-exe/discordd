@@ -9,6 +9,7 @@ package repository
 
 import (
 	"context"
+	"strconv"
 	"testing"
 
 	"github.com/argeinfina/hichat/database"
@@ -85,6 +86,24 @@ func TestGetRolesForUsers_EmptyInput(t *testing.T) {
 	}
 	if len(got) != 0 {
 		t.Fatalf("expected empty map for empty userIDs, got %d entries", len(got))
+	}
+}
+
+func TestGetRolesForUsers_LargeAudience(t *testing.T) {
+	db := newTestDB(t)
+	roleTestSeed(t, db)
+	ids := []string{"alice", "carol", "alice", "dave", "missing'\"?"}
+	for i := 0; i < 65536; i++ {
+		ids = append(ids, strconv.Itoa(i))
+	}
+	ids = append(ids, "bob")
+	got, err := NewSQLiteRoleRepo(db.Conn).GetRolesForUsers(context.Background(), "srv-1", ids)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || !equalStrings(roleIDsOf(got["alice"]), []string{"role-a", "role-b"}) ||
+		!equalStrings(roleIDsOf(got["bob"]), []string{"role-b"}) {
+		t.Fatalf("unexpected role recipients: %v", got)
 	}
 }
 

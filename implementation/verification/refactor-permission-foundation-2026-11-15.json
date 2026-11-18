@@ -1,0 +1,29 @@
+{
+  "scope": "RF11 permission/cache ownership composition",
+  "preserved": [
+    "Independent AuthUserCache and PermissionCache owners",
+    "Same channel permission runtime and multi invalidator",
+    "Reverse cleanup: channel, server cache, auth cache",
+    "Helper owns partial construction until return; root immediately registers group Stop"
+  ],
+  "checks": {
+    "root": "PASS ServiceInitialization/ServiceCache/routes/callbacks/permission/auth-cache/real friendship-DM, 2.673s",
+    "build": "PASS go build ./...",
+    "vet": "PASS go vet .",
+    "reviewed_manifest": "PASS 50 exact records"
+  },
+  "preceding_full_suite": {
+    "source": "17782ba8cf959180af3bf94eb0e7f3c15c8cb960",
+    "services": 100.005,
+    "handlers": 7.481,
+    "repository": 201.625,
+    "ws": 5.428,
+    "root": 43.519,
+    "result": "all PASS fixed source; does not cover later extraction"
+  },
+  "remaining": [
+    "Required provider matrix and explicit helper failure cleanup regression",
+    "Remaining voice/process composition and complete resource acceptance",
+    "Overall RF01-RF30 acceptance incomplete"
+  ]
+}

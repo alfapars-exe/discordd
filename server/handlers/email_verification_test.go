@@ -36,7 +36,9 @@ func TestEmailVerificationOwnerAndBounds(t *testing.T) {
 	}
 }
 func TestEmailVerificationPublicProofLimits(t *testing.T) {
-	h := NewEmailVerificationHandler(services.NewEmailVerificationService(nil, nil), ratelimit.NewLoginRateLimiter(2, time.Minute))
+	limiter := ratelimit.NewLoginRateLimiter(2, time.Minute)
+	t.Cleanup(limiter.Stop)
+	h := NewEmailVerificationHandler(services.NewEmailVerificationService(nil, nil), limiter)
 	for i := 0; i < 3; i++ {
 		r := httptest.NewRequest("POST", "/api/auth/verify-email", strings.NewReader(`{"token":"malformed"}`))
 		w := httptest.NewRecorder()

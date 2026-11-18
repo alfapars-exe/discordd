@@ -12,7 +12,7 @@ import (
 )
 
 func defaultRunCmd(ctx context.Context, env []string, name string, args ...string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, name, args...) // #nosec G204 -- name is a runtime parameter only because this is the shared, testable indirection (see cmdRunner doc); at all 8 call sites in this file it is a fixed literal ("hf" or "sqlite3"), never a variable, and args come from internal config/generated paths, never raw request input. exec.CommandContext also never invokes a shell, so no metacharacter-injection vector exists regardless.
+	cmd := exec.CommandContext(ctx, name, args...) // #nosec G204 -- production names are fixed hf/sqlite3 literals; tests use the owned executable path. Arguments come from internal config/generated paths and are passed directly without a shell.
 	if env != nil {
 		cmd.Env = env
 	}

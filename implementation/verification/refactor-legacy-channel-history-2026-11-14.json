@@ -1,0 +1,33 @@
+{
+  "base_source": "c9ddad08bd1003fdcaea0a641adb679bc4a9f31b",
+  "regression_before": {
+    "passed": 41,
+    "failed": 1,
+    "case": "Legacy cached text was rejected by live replay protection."
+  },
+  "change": "Read-only historical signature/AEAD verification can upgrade an unversioned text-only receipt only when message ID, channel, creation time, optional sender, and authenticated plaintext agree. No distribution installation or replay-state writes occur on this path.",
+  "checks": {
+    "combined_tests": 211,
+    "failed": 0,
+    "protocol_after_additional_evicted_floor_case": 41,
+    "typescript": "passed",
+    "changed_files_eslint": "passed"
+  },
+  "negative_cases": [
+    "invalid signature",
+    "changed AEAD iteration",
+    "wrong distribution",
+    "invalid iteration bound",
+    "missing initial anchor",
+    "account generation change",
+    "cached plaintext mismatch",
+    "edited message",
+    "attachments",
+    "different timestamp or sender"
+  ],
+  "limits": [
+    "Edited/attachment legacy records and missing rewind anchors remain fail-closed.",
+    "A production browser run for legacy recovery is still required.",
+    "Current CI remains on c9ddad08 and does not contain this change."
+  ]
+}

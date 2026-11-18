@@ -1,0 +1,175 @@
+{
+  "backend": "SQLite",
+  "workload": "0/1/100/1001 distinct users; sequential repository calls; projection parity before timing",
+  "command": "go test ./repository -run ^TestProfileProjectionSQLQueryCount$ -bench ^BenchmarkGroupPublicProfilePopulation$ -benchtime=30x -count=9",
+  "log": "G:\\hichat-refactor-20261116-anoknpqz\\profile-population-sqlite.log",
+  "logSha256": "e001ff001e3db78732d831a72b27bd99a98885b878cfcca3df8c6b9ecec5d384",
+  "measurements": {
+    "users=0/bulk=false": {
+      "repetitions": 9,
+      "operationsPerRepetition": 30,
+      "nsPerOperation": {
+        "median": 3.333,
+        "min": 3.333,
+        "max": 10.0
+      },
+      "poolWaitNsPerOperation": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "users=0/bulk=true": {
+      "repetitions": 9,
+      "operationsPerRepetition": 30,
+      "nsPerOperation": {
+        "median": 73.33,
+        "min": 36.67,
+        "max": 453.3
+      },
+      "poolWaitNsPerOperation": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "users=1/bulk=false": {
+      "repetitions": 9,
+      "operationsPerRepetition": 30,
+      "nsPerOperation": {
+        "median": 36877.0,
+        "min": 26510.0,
+        "max": 51090.0
+      },
+      "poolWaitNsPerOperation": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "users=1/bulk=true": {
+      "repetitions": 9,
+      "operationsPerRepetition": 30,
+      "nsPerOperation": {
+        "median": 24240.0,
+        "min": 22727.0,
+        "max": 50013.0
+      },
+      "poolWaitNsPerOperation": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "users=100/bulk=false": {
+      "repetitions": 9,
+      "operationsPerRepetition": 30,
+      "nsPerOperation": {
+        "median": 3012970.0,
+        "min": 2794993.0,
+        "max": 3334530.0
+      },
+      "poolWaitNsPerOperation": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "users=100/bulk=true": {
+      "repetitions": 9,
+      "operationsPerRepetition": 30,
+      "nsPerOperation": {
+        "median": 216887.0,
+        "min": 194207.0,
+        "max": 298097.0
+      },
+      "poolWaitNsPerOperation": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "users=1001/bulk=false": {
+      "repetitions": 9,
+      "operationsPerRepetition": 30,
+      "nsPerOperation": {
+        "median": 37234350.0,
+        "min": 31641040.0,
+        "max": 39418307.0
+      },
+      "poolWaitNsPerOperation": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "users=1001/bulk=true": {
+      "repetitions": 9,
+      "operationsPerRepetition": 30,
+      "nsPerOperation": {
+        "median": 2607103.0,
+        "min": 2492353.0,
+        "max": 2766030.0
+      },
+      "poolWaitNsPerOperation": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    }
+  },
+  "limits": [
+    "Per-repetition ns/op is a mean, not request p95",
+    "Sequential warm repository operations, not HTTP or concurrent pool acceptance",
+    "PostgreSQL run and current source CI pending",
+    "No production code or cache/index change"
+  ]
+}

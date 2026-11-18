@@ -1,0 +1,1150 @@
+{
+  "parser": "5.9.3",
+  "scope": "Static TypeScript AST IPC-name candidates across non-test Electron files. Does not establish registration reachability or sender/session authorization.",
+  "calls": [
+    {
+      "file": "electron/preload.ts",
+      "line": 30,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "sync-game-join-context"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 31,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "launch-cs2-game-join"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 32,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "set-registered-game-join-adapter"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 36,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "get-version"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 39,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "relaunch"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 55,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "consume-last-crash"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 68,
+      "actor": "ipcRenderer",
+      "method": "send",
+      "channel": "diagnostic-log"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 73,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "build-diagnostic-upload"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 77,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "export-diagnostics"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 80,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "open-logs-dir"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 83,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "get-diagnostic-verbose"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 87,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "set-diagnostic-verbose"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 90,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "capture-performance-trace"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 91,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "cancel-performance-trace"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 94,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "was-update-checked"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 97,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "check-update"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 100,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "download-update"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 103,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "install-update"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 108,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "get-desktop-sources"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 122,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "get-display-info"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 126,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "get-registered-games"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 128,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "get-registered-game-activity"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 130,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "set-registered-games-background-detection"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 132,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "add-registered-game"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 134,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "remove-registered-game"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 136,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "set-registered-game-name"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 138,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "set-registered-game-sharing"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 140,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "set-registered-game-overlay"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 166,
+      "actor": "ipcRenderer",
+      "method": "send",
+      "channel": "screen-picker-refresh"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 190,
+      "actor": "ipcRenderer",
+      "method": "send",
+      "channel": "screen-picker-result"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 212,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "reserve-system-capture-lease"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 213,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "start-system-capture-lease"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 214,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "release-system-capture-lease"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 221,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "start-system-capture"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 224,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "stop-system-capture"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 228,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "get-system-capture-status"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 231,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "start-system-capture-diagnostic"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 234,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "stop-system-capture-diagnostic"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 273,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "acquire-ptt-lease"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 274,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "release-ptt-lease"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 283,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "register-ptt-shortcut"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 287,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "unregister-ptt-shortcut"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 311,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "register-mute-hotkey-shortcut"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 315,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "unregister-mute-hotkey-shortcut"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 331,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "save-credentials"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 338,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "load-credentials"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 348,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "login-with-saved-credentials"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 352,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "clear-credentials"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 358,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "get-app-settings"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 362,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "set-app-setting"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 368,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "voice-overlay-snapshot"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 369,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "clear-overlay-game-notices"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 370,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "open-overlay-media-lease"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 371,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "send-overlay-media"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 372,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "send-overlay-media-viewport"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 373,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "set-overlay-media-receiver-ready"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 374,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "get-overlay-media-availability"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 391,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "set-overlay-shortcut"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 392,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "reset-overlay-layout"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 393,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "overlay-voice-action"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 394,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "overlay-open-inbox"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 395,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "confirm-overlay-open-inbox"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 401,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "overlay-prepare-notification-reply"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 402,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "confirm-overlay-prepare-notification-reply"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 408,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "overlay-open-chat"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 409,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "confirm-overlay-open-chat"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 415,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "overlay-open-chat-composer"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 416,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "overlay-chat-send"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 417,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "close-overlay-chat-composer"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 423,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "resolve-overlay-chat-send"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 438,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "minimize-window"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 441,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "maximize-window"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 444,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "close-window"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 459,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "set-badge-count"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 462,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "flash-frame"
+    },
+    {
+      "file": "electron/preload.ts",
+      "line": 468,
+      "actor": "ipcRenderer",
+      "method": "invoke",
+      "channel": "write-clipboard"
+    }
+  ],
+  "registrations": [
+    {
+      "file": "electron/app-command-ipc.ts",
+      "line": 13,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "get-version"
+    },
+    {
+      "file": "electron/app-command-ipc.ts",
+      "line": 14,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "relaunch"
+    },
+    {
+      "file": "electron/app-command-ipc.ts",
+      "line": 15,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "write-clipboard"
+    },
+    {
+      "file": "electron/app-settings-ipc.ts",
+      "line": 21,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "get-app-settings"
+    },
+    {
+      "file": "electron/app-settings-ipc.ts",
+      "line": 27,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "set-app-setting"
+    },
+    {
+      "file": "electron/capture-command-ipc.ts",
+      "line": 8,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "start-system-capture"
+    },
+    {
+      "file": "electron/capture-command-ipc.ts",
+      "line": 9,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "stop-system-capture"
+    },
+    {
+      "file": "electron/capture-command-ipc.ts",
+      "line": 10,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "get-system-capture-status"
+    },
+    {
+      "file": "electron/capture-command-ipc.ts",
+      "line": 11,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "start-system-capture-diagnostic"
+    },
+    {
+      "file": "electron/capture-command-ipc.ts",
+      "line": 12,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "stop-system-capture-diagnostic"
+    },
+    {
+      "file": "electron/credential-ipc.ts",
+      "line": 20,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "save-credentials"
+    },
+    {
+      "file": "electron/credential-ipc.ts",
+      "line": 28,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "load-credentials"
+    },
+    {
+      "file": "electron/credential-ipc.ts",
+      "line": 32,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "login-with-saved-credentials"
+    },
+    {
+      "file": "electron/credential-ipc.ts",
+      "line": 36,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "clear-credentials"
+    },
+    {
+      "file": "electron/cs2-join-ipc.ts",
+      "line": 30,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "sync-game-join-context"
+    },
+    {
+      "file": "electron/cs2-join-ipc.ts",
+      "line": 35,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "launch-cs2-game-join"
+    },
+    {
+      "file": "electron/desktop-media-ipc.ts",
+      "line": 16,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "get-desktop-sources"
+    },
+    {
+      "file": "electron/desktop-media-ipc.ts",
+      "line": 17,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "get-display-info"
+    },
+    {
+      "file": "electron/diagnostic-ipc.ts",
+      "line": 29,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "consume-last-crash"
+    },
+    {
+      "file": "electron/diagnostic-ipc.ts",
+      "line": 30,
+      "actor": "ipc",
+      "method": "on",
+      "channel": "diagnostic-log"
+    },
+    {
+      "file": "electron/diagnostic-ipc.ts",
+      "line": 40,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "build-diagnostic-upload"
+    },
+    {
+      "file": "electron/diagnostic-ipc.ts",
+      "line": 44,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "export-diagnostics"
+    },
+    {
+      "file": "electron/diagnostic-ipc.ts",
+      "line": 61,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "open-logs-dir"
+    },
+    {
+      "file": "electron/diagnostic-ipc.ts",
+      "line": 62,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "get-diagnostic-verbose"
+    },
+    {
+      "file": "electron/diagnostic-ipc.ts",
+      "line": 63,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "set-diagnostic-verbose"
+    },
+    {
+      "file": "electron/diagnostic-ipc.ts",
+      "line": 68,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "capture-performance-trace"
+    },
+    {
+      "file": "electron/diagnostic-ipc.ts",
+      "line": 69,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "cancel-performance-trace"
+    },
+    {
+      "file": "electron/global-shortcut-ipc.ts",
+      "line": 10,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "register-ptt-shortcut"
+    },
+    {
+      "file": "electron/global-shortcut-ipc.ts",
+      "line": 15,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "unregister-ptt-shortcut"
+    },
+    {
+      "file": "electron/global-shortcut-ipc.ts",
+      "line": 16,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "register-mute-hotkey-shortcut"
+    },
+    {
+      "file": "electron/global-shortcut-ipc.ts",
+      "line": 20,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "unregister-mute-hotkey-shortcut"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 169,
+      "actor": "ipcMain",
+      "method": "on",
+      "channel": "voice-overlay-snapshot"
+    },
+    {
+      "file": "electron/ipc-handlers.ts",
+      "line": 170,
+      "actor": "ipcMain",
+      "method": "handle",
+      "channel": "voice-overlay-snapshot"
+    },
+    {
+      "file": "electron/overlay-action-ipc.ts",
+      "line": 10,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "overlay-voice-action"
+    },
+    {
+      "file": "electron/overlay-action-ipc.ts",
+      "line": 17,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "overlay-open-inbox"
+    },
+    {
+      "file": "electron/overlay-action-ipc.ts",
+      "line": 24,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "confirm-overlay-open-inbox"
+    },
+    {
+      "file": "electron/overlay-action-ipc.ts",
+      "line": 27,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "overlay-prepare-notification-reply"
+    },
+    {
+      "file": "electron/overlay-action-ipc.ts",
+      "line": 32,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "confirm-overlay-prepare-notification-reply"
+    },
+    {
+      "file": "electron/overlay-action-ipc.ts",
+      "line": 33,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "overlay-open-chat"
+    },
+    {
+      "file": "electron/overlay-action-ipc.ts",
+      "line": 40,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "confirm-overlay-open-chat"
+    },
+    {
+      "file": "electron/overlay-action-ipc.ts",
+      "line": 43,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "overlay-open-chat-composer"
+    },
+    {
+      "file": "electron/overlay-action-ipc.ts",
+      "line": 46,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "overlay-chat-send"
+    },
+    {
+      "file": "electron/overlay-action-ipc.ts",
+      "line": 47,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "close-overlay-chat-composer"
+    },
+    {
+      "file": "electron/overlay-action-ipc.ts",
+      "line": 48,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "resolve-overlay-chat-send"
+    },
+    {
+      "file": "electron/overlay-control-ipc.ts",
+      "line": 16,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "reset-overlay-layout"
+    },
+    {
+      "file": "electron/overlay-control-ipc.ts",
+      "line": 20,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "set-overlay-shortcut"
+    },
+    {
+      "file": "electron/overlay-control-ipc.ts",
+      "line": 26,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "open-overlay-media-lease"
+    },
+    {
+      "file": "electron/overlay-control-ipc.ts",
+      "line": 27,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "send-overlay-media"
+    },
+    {
+      "file": "electron/overlay-control-ipc.ts",
+      "line": 28,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "send-overlay-media-viewport"
+    },
+    {
+      "file": "electron/overlay-control-ipc.ts",
+      "line": 29,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "set-overlay-media-receiver-ready"
+    },
+    {
+      "file": "electron/overlay-control-ipc.ts",
+      "line": 30,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "get-overlay-media-availability"
+    },
+    {
+      "file": "electron/overlay-game-notice-ipc.ts",
+      "line": 3,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "clear-overlay-game-notices"
+    },
+    {
+      "file": "electron/ptt-ipc.ts",
+      "line": 6,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "acquire-ptt-lease"
+    },
+    {
+      "file": "electron/ptt-ipc.ts",
+      "line": 16,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "release-ptt-lease"
+    },
+    {
+      "file": "electron/registered-game-name-ipc.ts",
+      "line": 6,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "set-registered-game-name"
+    },
+    {
+      "file": "electron/registered-games-ipc.ts",
+      "line": 20,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "get-registered-games"
+    },
+    {
+      "file": "electron/registered-games-ipc.ts",
+      "line": 24,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "get-registered-game-activity"
+    },
+    {
+      "file": "electron/registered-games-ipc.ts",
+      "line": 28,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "set-registered-games-background-detection"
+    },
+    {
+      "file": "electron/registered-games-ipc.ts",
+      "line": 33,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "add-registered-game"
+    },
+    {
+      "file": "electron/registered-games-ipc.ts",
+      "line": 44,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "remove-registered-game"
+    },
+    {
+      "file": "electron/registered-games-ipc.ts",
+      "line": 52,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "set-registered-game-join-adapter"
+    },
+    {
+      "file": "electron/registered-games-ipc.ts",
+      "line": 58,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "set-registered-game-sharing"
+    },
+    {
+      "file": "electron/registered-games-ipc.ts",
+      "line": 65,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "set-registered-game-overlay"
+    },
+    {
+      "file": "electron/screen-picker.ts",
+      "line": 237,
+      "actor": "ipcMain",
+      "method": "on",
+      "channel": "screen-picker-result"
+    },
+    {
+      "file": "electron/screen-picker.ts",
+      "line": 238,
+      "actor": "ipcMain",
+      "method": "on",
+      "channel": "screen-picker-refresh"
+    },
+    {
+      "file": "electron/system-audio-ipc.ts",
+      "line": 6,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "reserve-system-capture-lease"
+    },
+    {
+      "file": "electron/system-audio-ipc.ts",
+      "line": 12,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "start-system-capture-lease"
+    },
+    {
+      "file": "electron/system-audio-ipc.ts",
+      "line": 13,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "release-system-capture-lease"
+    },
+    {
+      "file": "electron/updater-ipc.ts",
+      "line": 11,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "was-update-checked"
+    },
+    {
+      "file": "electron/updater-ipc.ts",
+      "line": 12,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "check-update"
+    },
+    {
+      "file": "electron/updater-ipc.ts",
+      "line": 20,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "download-update"
+    },
+    {
+      "file": "electron/updater-ipc.ts",
+      "line": 28,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "install-update"
+    },
+    {
+      "file": "electron/window-control-ipc.ts",
+      "line": 17,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "set-badge-count"
+    },
+    {
+      "file": "electron/window-control-ipc.ts",
+      "line": 44,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "flash-frame"
+    },
+    {
+      "file": "electron/window-control-ipc.ts",
+      "line": 50,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "minimize-window"
+    },
+    {
+      "file": "electron/window-control-ipc.ts",
+      "line": 51,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "maximize-window"
+    },
+    {
+      "file": "electron/window-control-ipc.ts",
+      "line": 57,
+      "actor": "ipc",
+      "method": "handle",
+      "channel": "close-window"
+    }
+  ],
+  "unresolved": [],
+  "missing": [],
+  "source_commit": "26ff1a81cfd7d6ea363bee98ab7118c812056672",
+  "source_hashes": {
+    "electron/app-command-ipc.ts": "e27a2d536a37373bfd32336385190012784f46c14336788b154917f3806aa3e5",
+    "electron/app-settings-ipc.ts": "287889464105545296d337dde4f069ce2a9a8160668742a7fdcfe39d30f75f20",
+    "electron/capture-command-ipc.ts": "4e9aab6e1e23e1afba09a601d601df4e87aa6dde547a23587300b61b72250ea8",
+    "electron/credential-ipc.ts": "86af500c5d2ba9f87c03627845a0982b85b5cf2a2941777e0b8640f34b8dd736",
+    "electron/cs2-join-ipc.ts": "f58c33bc463b6725c66c01462ddb1c03378f0b8f3fa7be351513e201d8b04cd3",
+    "electron/desktop-media-ipc.ts": "1a3a091fb20bc7e5cbe3aca55b919630e52f5749092352a822630a90a17cbea0",
+    "electron/diagnostic-ipc.ts": "5b7cef7ac003b01eff6b666cd228d609df94d86bd10cefa28b4a2b2555b43478",
+    "electron/global-shortcut-ipc.ts": "eeda7fe858f38c84db69f52461b67e722279763f23912a9a27d5681a555554c3",
+    "electron/ipc-handlers.ts": "37f564041d05ff3718fed68fc983924261d096c283f947b4f2cbf1e7835b16cc",
+    "electron/overlay-action-ipc.ts": "08e800e3467806e4d5564b4e8c65eb5c91dd44e310e06b9c7f75c788afb85582",
+    "electron/overlay-control-ipc.ts": "d5d396c54ec610294ea8d0b099fdd067b882f6e2bd09801f0f40a90b96c8cae9",
+    "electron/overlay-game-notice-ipc.ts": "8a35dff24d6a8143522160b8cfcf8431b78ab74f1b5781ce50a593a5833ada1c",
+    "electron/preload.ts": "c2a5459ab0de7760ca80a9aa0072bc023076fe5df9a4a620757f6959e02bafbb",
+    "electron/ptt-ipc.ts": "db7c255dbfcdd16e9805a6c160aa8104b0166a7d8a70ac723a07f5bfdd99b6fe",
+    "electron/registered-game-name-ipc.ts": "f1d9931963bd7c1a2ee427e3caec8bdcdff7118b57dbaca9b676975805ddffd2",
+    "electron/registered-games-ipc.ts": "c9487060bd8dcfd6ba97928e57bc7d9f6c108d61436989e8fe9a94c75e74dad8",
+    "electron/screen-picker.ts": "a6a63b9d1bacbf9648f67979caf27cddad0f4f9b2f611e7b9ef03f78dedfe9c6",
+    "electron/system-audio-ipc.ts": "5fb6d8f876efe895d26ad6ee8d45cd548d84ba4ca974bad0e2b3c5daab0eea68",
+    "electron/updater-ipc.ts": "72a943c17763b70110ed065d14a96e2547ce39f8c1661892d65ab92e355c01b4",
+    "electron/window-control-ipc.ts": "3121b6c4287179d1b2a425da550ee42ad42080b29ca7a1ddd82f51d18042f525"
+  },
+  "reviewed_groups": {
+    "main_sender_assertion": [
+      "credential-ipc.ts",
+      "cs2-join-ipc.ts",
+      "registered-games-ipc.ts",
+      "registered-game-name-ipc.ts",
+      "overlay-game-notice-ipc.ts"
+    ],
+    "main_sender_and_owned_lease": [
+      "ptt-ipc.ts",
+      "system-audio-ipc.ts"
+    ],
+    "overlay_session_or_broker_owned_validation": [
+      "overlay-action-ipc.ts"
+    ],
+    "mixed_layout_main_assertion_media_broker": [
+      "overlay-control-ipc.ts"
+    ],
+    "current_picker_owner_frame_and_lifecycle": [
+      "screen-picker.ts"
+    ],
+    "snapshot_main_sender_ack_and_stopping_guard": [
+      "ipc-handlers.ts"
+    ],
+    "mixed_capture_main_assertion_and_diagnostic_token": [
+      "capture-command-ipc.ts"
+    ],
+    "mixed_ptt_assertion_and_legacy_mute_without_sender_predicate": [
+      "global-shortcut-ipc.ts"
+    ],
+    "legacy_no_explicit_sender_predicate_in_registrar": [
+      "app-command-ipc.ts",
+      "app-settings-ipc.ts",
+      "desktop-media-ipc.ts",
+      "diagnostic-ipc.ts",
+      "updater-ipc.ts",
+      "window-control-ipc.ts"
+    ]
+  },
+  "limits": [
+    "Source matching is not proof that every registration executes in every platform/runtime state.",
+    "No exploitability or complete sender/session coverage is inferred.",
+    "Legacy no-predicate groups require capability/caller review and negative sender tests before RF20 closure.",
+    "The duplicate voice-overlay-snapshot registrations intentionally support send and invoke.",
+    "Parser uses installed client TypeScript 5.9.3; root TypeScript 7 exports no createSourceFile API."
+  ]
+}

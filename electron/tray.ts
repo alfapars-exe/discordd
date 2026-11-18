@@ -10,6 +10,7 @@
 
 import { app, Menu, MenuItemConstructorOptions, nativeImage, Tray } from "electron";
 import { autoUpdater } from "electron-updater";
+import { requestUpdateInstallation } from "./update-installation";
 import path from "path";
 import { getMainWindow, setQuitting } from "./window";
 
@@ -30,7 +31,7 @@ function buildContextMenu(): Menu {
         // relaunch the app. setQuitting unblocks the close-to-tray gate so
         // the running window can shut down cleanly.
         setQuitting(true);
-        autoUpdater.quitAndInstall(true, true);
+        requestUpdateInstallation(() => autoUpdater.quitAndInstall(true, true), autoUpdater);
       },
     });
     entries.push({ type: "separator" });

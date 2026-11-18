@@ -1,0 +1,29 @@
+{
+  "date": "2026-11-15",
+  "base": "eec903f972a3681ff268054b7e0e35fa8461fa08",
+  "sources": {
+    "client/src/stores/slices/voiceSettingsSlice.ts": "72ea70a75a5cd95986af19f0d25b1b39679e2319a49d99d199ebe259e7cb9cd5",
+    "client/src/stores/accountPreferenceConsumers.test.ts": "0516c2abadd17e8b95a5dba9745bd5a395a7bfc0be2a2ea93b7990541cd0f580"
+  },
+  "change": "Apply the already validated and projected voice preference snapshot with Zustand merge rather than another per-field assignment list",
+  "validation": {
+    "before": "54 consumer tests passed with new full-contract apply case",
+    "after": "four targeted suites192tests passed",
+    "typescript": "npx tsc -b passed",
+    "lint": "changed source and test passed",
+    "build": "Vite production build passed; existing chunk-size warnings remain"
+  },
+  "invariants": [
+    "all account fields/default boolean opposites applied",
+    "device-local camera/global hotkey retained despite foreign values",
+    "preMuteVolumes object identity retained",
+    "store action reference retained",
+    "persisted snapshot matches complete expected settings",
+    "no outbound account echo"
+  ],
+  "limits": [
+    "previous5003test coverage belongs to prior source",
+    "full current-head CI pending",
+    "remaining RF13 and physical audio acceptance open"
+  ]
+}

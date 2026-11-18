@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import time
 
 from huggingface_hub import HfApi, CommitOperationAdd, CommitOperationDelete
@@ -35,6 +36,26 @@ def stop_previous_backend(api, repo):
     raise SystemExit("Previous backend did not stop; no sources published")
 
 
+def restart_after_failure(api, repo):
+    """Try to resume the paused runtime without hiding the original failure."""
+    try:
+        api.restart_space(repo)
+    except Exception:
+        # Upstream exception strings can contain connection or credential data.
+        print("Space restart failed during error recovery; manual recovery required", file=sys.stderr)
+
+
+def clean_source_commit(expected=None):
+    # Check source provenance before and after snapshotting immutable upload bytes.
+    # Never clean, stage or commit the caller's working tree automatically.
+    if subprocess.check_output(["git", "status", "--porcelain=v1", "--untracked-files=all", "-z"]):
+        raise SystemExit("Source working tree is dirty; use a clean committed checkout; nothing published")
+    source = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    if expected is not None and source != expected:
+        raise SystemExit("Source HEAD changed while preparing the snapshot; nothing published")
+    return source
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--expected-head", default="", help="Reviewed Space commit; required when publishing")
@@ -50,7 +71,7 @@ def main():
     current = api.space_info(repo).sha
     if options.expected_head and current != options.expected_head:
         raise SystemExit("Space HEAD changed; review its new revision before publishing")
-    source = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    source = clean_source_commit()
     paths = subprocess.check_output(["git", "ls-files", "-z"]).decode().split("\0")
     local = {path: Path(path) for path in paths if managed(path)}
     remote = {entry.path: entry for entry in api.list_repo_tree(repo, repo_type="space", revision=current, recursive=True) if hasattr(entry, "blob_id") and managed(entry.path)}
@@ -70,6 +91,7 @@ def main():
             # Bind the operation to the bytes that were reviewed. A later
             # filesystem edit cannot change the content sent by this command.
             additions.append(CommitOperationAdd(path_in_repo=name, path_or_fileobj=data))
+    clean_source_commit(expected=source)
     removals = sorted(set(remote) - set(local))
     plan = {"manifest_version": 2, "source_commit": source, "source_files": source_files, "space_parent": current, "add_or_update": [op.path_in_repo for op in additions], "remove_managed_source": removals, "hub_may_update_lfs_metadata": True}
     plan_hash = hashlib.sha256(json.dumps(plan, sort_keys=True).encode()).hexdigest()
@@ -85,10 +107,21 @@ def main():
         record_deployed_commit(current)
         return
     stop_previous_backend(api, repo)
-    result = api.create_commit(repo, repo_type="space", parent_commit=current, operations=operations, commit_message=f"Deploy HiChat {source[:12]}")
+    try:
+        result = api.create_commit(repo, repo_type="space", parent_commit=current, operations=operations, commit_message=f"Deploy HiChat {source[:12]}")
+    except Exception:
+        restart_after_failure(api, repo)
+        raise
+    try:
+        # The source commit already exists even if runtime restart fails.
+        record_deployed_commit(result.oid)
+    except Exception:
+        # Output persistence must not strand an already published Space paused.
+        # Keep the output error primary if restarting also fails.
+        restart_after_failure(api, repo)
+        raise
     api.restart_space(repo)
     print(json.dumps({"status": "published", "commit": result.oid, "url": result.commit_url}))
-    record_deployed_commit(result.oid)
 
 
 if __name__ == "__main__":

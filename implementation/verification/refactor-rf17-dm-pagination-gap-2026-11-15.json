@@ -1,0 +1,30 @@
+{
+  "source": "4ad77d3e05b5dfb30578f3a90c17f2dd88cde518",
+  "scope": "RF17 encrypted DM search repeated scan gap",
+  "evidence": [
+    {
+      "file": "client/src/components/dm/DMSearchPanel.tsx",
+      "observation": "Every encrypted doSearch invocation calls searchCachedDMMessages, sorts all matches by DM source order, then slices LIMIT results. Next/previous page calls same path."
+    },
+    {
+      "file": "client/src/components/chat/SearchPanel.tsx",
+      "observation": "Channel panel retains matching IDs and loads only current-page records on later pages, with query/deletion fences."
+    },
+    {
+      "file": "client/src/crypto/keyStorage.ts",
+      "observation": "DM search scans byDMChannel cursor with cancellation, returning all matching records."
+    }
+  ],
+  "next": [
+    "Add component regression proving later DM pages do not repeat full cache search, while preserving source sequence ordering",
+    "Measure same 1k/10k/50k IndexedDB fixture before/after; retain exact result/content ordering checks",
+    "Cover query/account/channel/encryption/key invalidation, deletion and late response before adopting snapshot pagination",
+    "First-query full scan/memory bound remains separate RF17 acceptance; page reuse alone cannot close card"
+  ],
+  "status": "Source-backed gap; no product change or performance gain claimed.",
+  "parallel_server_verification": {
+    "session": 25243,
+    "source": "4ad77d3e05b5dfb30578f3a90c17f2dd88cde518",
+    "status": "running; previous broad run failure remains explicit"
+  }
+}

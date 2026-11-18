@@ -1,0 +1,31 @@
+{
+  "scope": "Separate app-log panic wait, health assertions, repeated fixture and saved occurrence accounting; test-only change",
+  "sourceParity": {
+    "baselineCommit": "2eca909d94ea824897b1738b450b30345ecbd4a0",
+    "result": "PASS",
+    "expandedGofmtSourceEqualsBaseline": true,
+    "baselineSha256LF": "5d08ede6e5ae7ebdd499ee89a3b5e7e28c6073f527c4dcb9f333378cfdc13783",
+    "helpers": [
+      "awaitSavedAppLogs",
+      "checkAppLogPanicHealth",
+      "repeatedAppLogOccurrences",
+      "confirmedAppLogOccurrences"
+    ],
+    "allowedDifference": "New health assertion t.Helper changes failure attribution; removed only when expanding it back. Existing await t.Helper preserved."
+  },
+  "passingTestsBeforeAndAfter": 31,
+  "samePassingTestNames": true,
+  "failed": 0,
+  "skipped": 0,
+  "goVet": "PASS",
+  "logs": {
+    "app-log-phases-before.jsonl": "491fa19377d67283f93b966d7c553a78d02c377584075c51fd22e5c26ccd5868",
+    "app-log-phases-after.jsonl": "32f321c8d0a6e3608dab9b845ab5e16e33a2648d241f44dbfcfd48148d8e3aa8",
+    "app-log-phases-vet.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "limits": [
+    "Production app-log implementation unchanged",
+    "Source-matched CI/Linux race and Sonar complexity results pending",
+    "Historical app-log timeout and general RF acceptance remain open"
+  ]
+}

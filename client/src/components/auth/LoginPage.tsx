@@ -4,12 +4,14 @@ import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuthStore } from "../../stores/authStore";
+import { useToastStore } from "../../stores/toastStore";
 import { isElectron, isNativeApp, SERVER_URL } from "../../utils/constants";
 import { detectOS, shouldShowDownloadPrompt } from "../../utils/detectOS";
 import { localizeAuthError } from "../../utils/authErrors";
 import { sanitizeReturnUrl } from "../../utils/returnUrl";
 import { useServerWakeUp } from "../../hooks/useServerWakeUp";
 import type { APIResponse, AuthTokens } from "../../types";
+import { loginCredentialOperation } from "./loginCredentialOperation";
 
 function LoginPage() {
   // ─── Hooks ───
@@ -92,10 +94,10 @@ function LoginPage() {
       wakeUp.reset();
       // Electron: save or clear credentials
       if (isElectron()) {
-        if (rememberMe) {
-          window.electronAPI?.saveCredentials(u, p);
-        } else {
-          window.electronAPI?.clearCredentials();
+        try {
+          await loginCredentialOperation(window.electronAPI, rememberMe, u, p, SERVER_URL);
+        } catch {
+          useToastStore.getState().addToast("warning", t(rememberMe ? "rememberSaveFailed" : "rememberClearFailed"));
         }
       }
       // Redirect to returnUrl (e.g. invite link) or /channels — sanitized,

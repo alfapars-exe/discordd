@@ -1,0 +1,26 @@
+{
+  "scope": "RF11 presence/profile notification composition extraction",
+  "owners": [
+    "ProfileUpdateNotifier",
+    "OnlineFriendNotifierRuntime"
+  ],
+  "preserved": [
+    "Same preferences/friendship/user and notification providers",
+    "Same visible presence source and broadcaster",
+    "Same guarded online writer and candidate reader",
+    "Online lifecycle owner returned and immediately registered for rollback; no worker start moved"
+  ],
+  "checks": {
+    "root": "PASS ServiceInitialization/routes/callbacks/permission/auth-cache/real friendship-DM, 2.850s",
+    "services": "PASS online-friend/profile-update tests, 0.620s",
+    "build": "PASS go build ./...",
+    "vet": "PASS go vet .",
+    "reviewed_manifest": "PASS 50 exact records"
+  },
+  "remaining": [
+    "Required provider/repository validation for this group",
+    "Permission/cache/voice process composition and full lifecycle acceptance",
+    "RF01-RF30 completion unproven"
+  ],
+  "remote_ci": "43658196686 source 5b9b9216 live without observed failures; local extraction excluded."
+}

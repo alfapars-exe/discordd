@@ -1,0 +1,30 @@
+{
+  "sourceCommit": "a4eccf63025868db7ffdb0fe4d8cb23f4690b49f",
+  "backend": "real Go net/http and WebSocket",
+  "database": "isolated verified-mTLS PostgreSQL",
+  "client": "production Vite build with base=/",
+  "runs": [
+    {
+      "log": "TEMP/hichat-rf12-rf24-production-chromium.log",
+      "appLogBatchFailures": 0,
+      "duration": "2.1m",
+      "passed": 14,
+      "project": "chromium",
+      "serverErrorLines": 0
+    },
+    {
+      "log": "TEMP/hichat-rf12-rf24-production-webkit.log",
+      "appLogBatchFailures": 0,
+      "duration": "40.8s",
+      "passed": 1,
+      "project": "webkit-smoke",
+      "serverErrorLines": 0
+    }
+  ],
+  "observations": [
+    "Chromium had one refresh 429; Retry-After honored and test passed",
+    "yt-dlp/ffmpeg unavailable in fixture",
+    "400/401 anonymous or retired-session refresh diagnostics occurred"
+  ],
+  "limits": "Does not prove physical capture/audio, model inference, deployed providers or historical app-log timeout root cause"
+}

@@ -1,0 +1,74 @@
+{
+  "date": "2026-11-13",
+  "fix_commit": "f4157516a87126b2f0ac69c71ee8dbfd25a051b2",
+  "scope": "Real HTTP/WebSocket upgrade with injected stalled transport writes; no database/auth/capacity claim",
+  "regressions_before": "Both tests failed at 500ms before fix; hichat-ws-slow-cleanup-before.log",
+  "regressions_after": "Two tests passed five repetitions; full ws package passed",
+  "race": {
+    "command": "Docker golang:1.26.10-bookworm go test -race ./ws -count=1",
+    "exit": 0,
+    "seconds": 14.611
+  },
+  "churn": {
+    "command": "HICHAT_MEASURE_WS_SLOW_CHURN=1 go -C server test ./ws -run ^TestRemovingStalledSocketReleasesBothPumps$ -count=3 -v",
+    "waves_per_run": 256,
+    "repetitions": 3,
+    "live_pumps_after_each_wave": 0,
+    "membership_after_each_wave": 0,
+    "samples": [
+      {
+        "heap_bytes_16": 2758192,
+        "heap_bytes_256": 2790856,
+        "goroutines": 3
+      },
+      {
+        "heap_bytes_16": 2792840,
+        "heap_bytes_256": 2812656,
+        "goroutines": 3
+      },
+      {
+        "heap_bytes_16": 2812736,
+        "heap_bytes_256": 2819344,
+        "goroutines": 3
+      }
+    ],
+    "log": "%TEMP%/hichat-ws-slow-churn.log"
+  },
+  "remaining": [
+    "Draft PR CI completion",
+    "Production CPU/heap/DB measurements",
+    "Extended soak and physical acceptance"
+  ],
+  "canonical": {
+    "pr": 290,
+    "source_commit": "b7cdba25",
+    "full_ws_seconds": 4.065,
+    "race_seconds": 7.162,
+    "race_exit": 0,
+    "adaptation": "Main lacks integration registration/shutdown helpers; added done-aware unregisterClient and wired existing ReadPump only.",
+    "golangci_lint": "v2.12.2: 0 issues before combined test extension"
+  },
+  "combined_saturation": {
+    "waves": 768,
+    "saturated_waves": 384,
+    "live_pumps_after_each_wave": 0,
+    "goroutines_at_samples": 3,
+    "race_full_ws_seconds": 7.187,
+    "race_exit": 0,
+    "log": "%TEMP%/hichat-ws-saturated-churn.log",
+    "heap_samples_16_to_256": [
+      [
+        2754552,
+        2804576
+      ],
+      [
+        2806080,
+        2812456
+      ],
+      [
+        2812272,
+        2833712
+      ]
+    ]
+  }
+}

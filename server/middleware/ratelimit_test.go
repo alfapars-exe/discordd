@@ -14,6 +14,7 @@ import (
 // rejected with 429 + Retry-After and never reach the wrapped handler.
 func TestRateLimitByIP_BlocksAfterBudget(t *testing.T) {
 	limiter := ratelimit.NewLoginRateLimiter(2, time.Minute) // 2 per window
+	t.Cleanup(limiter.Stop)
 
 	var served int
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

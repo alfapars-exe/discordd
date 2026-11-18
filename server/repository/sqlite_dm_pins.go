@@ -63,7 +63,7 @@ func (r *sqliteDMRepo) GetPinnedMessages(ctx context.Context, channelID string) 
 		       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.status, ru.custom_status, ru.created_at
 		FROM dm_messages m
 		LEFT JOIN users u ON m.user_id = u.id
-		LEFT JOIN dm_messages rm ON m.reply_to_id = rm.id
+		LEFT JOIN dm_messages rm ON m.reply_to_id = rm.id AND rm.dm_channel_id = m.dm_channel_id
 		LEFT JOIN users ru ON rm.user_id = ru.id
 		WHERE m.dm_channel_id = ? AND m.is_pinned = 1
 		ORDER BY m.source_sequence DESC`

@@ -1,0 +1,54 @@
+{
+  "scope": "Retire post-Zustand-notification effects after preference account/backend binding replacement.",
+  "sourceRevision": "dd4b461c6dd98c6713781b2a1bb39a5006cd7812",
+  "red": {
+    "log": "hichat-preferences-post-notification-red.log",
+    "failed": 12,
+    "behavior": "Real destination subscribers bind a replacement owner or same-user backend and update its values;old setter/hydration/reset continued DOM/cache writes,and old setters could queue their values under the replacement binding."
+  },
+  "refactorProof": {
+    "revision": "0a98b5d6",
+    "passed": 76,
+    "files": 2,
+    "seconds": 3.79,
+    "log": "hichat-preference-scope-extraction.log",
+    "scope": "Existing preferences orchestration/settings contract after extracting the existing generation;before consumer behavior change."
+  },
+  "targeted": {
+    "passed": 181,
+    "files": 6,
+    "seconds": 4.03,
+    "log": "hichat-preferences-post-notification-green.log"
+  },
+  "invariants": [
+    "One shared store-free preference binding generation,advanced by the same reset boundary as before;account and same-user backend replacement both retire old work.",
+    "Accessibility setter/hydration/reset and time-format setter/hydration/reset capture scope before set and check it after synchronous subscriber notification.",
+    "Retired work stops before later DOM/localStorage/outbound preference changes.",
+    "Replacement binding retains its own actual destination state,CSS,cache and pending patch.",
+    "Existing action signatures,cache keys,API fields and validation remain unchanged."
+  ],
+  "sha256": {
+    "client/src/stores/preferenceScope.ts": "0b4f74f883a7d9260d5d4cf7e73d633495d04a0b1048a2929b7b95c52e954db0",
+    "client/src/stores/preferencesStore.ts": "d272ba10e49718a091c0ef9eaae5cf46da571030f142eb01b9abf926ddde7466",
+    "client/src/stores/accessibilityStore.ts": "31bd3f7bfbe35c02ca8cc5525329514eb86ceed8ae0cfd93f3e082a50b789833",
+    "client/src/stores/timeFormatStore.ts": "e7250c5319ef2bb8429dce045eb7bb8884452e230655f03ca30b9e25f9e59858",
+    "client/src/stores/preferenceDestinationScope.test.ts": "173434f54b67cfd8a86ad556e922a43984023200f57f8c4ff40227b923c123a0"
+  },
+  "limits": [
+    "Real Zustand,preferences store and destinations;presentation bootstrap intentionally no-op to isolate synchronous reentrancy;not browser login or native-device proof.",
+    "Same-binding reentrant edits and other destination methods remain separate review scope.",
+    "Whole RF13/offline/native/physical/project acceptance and active unique-ID search frontier remain open."
+  ],
+  "fullClientCoverage": {
+    "files": 487,
+    "passed": 5101,
+    "skipped": 1,
+    "statementPercent": 67.4,
+    "branchPercent": 64.61,
+    "functionPercent": 61.59,
+    "linePercent": 68.47,
+    "log": "hichat-preferences-post-notification-coverage.log"
+  },
+  "build": "actual tsc-b/VitePASS3.51s; existing chunk warning",
+  "lint": "changed scope/orchestration/destination stores/new integration tests lintPASS"
+}

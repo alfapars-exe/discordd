@@ -9,7 +9,6 @@ import (
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
-	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
 )
 
@@ -87,8 +86,8 @@ func (s *dmService) GetOrCreateChannel(ctx context.Context, userID, otherUserID 
 		Status:  models.DMStatusAccepted,
 	}
 	created := true
-	if writer, ok := s.dmRepo.(repository.UnblockedDMChannelCreator); ok && !isPlatformAdmin {
-		created, err = writer.CreateChannelUnblocked(ctx, channel)
+	if !isPlatformAdmin {
+		created, err = s.dmRepo.CreateChannelUnblocked(ctx, channel)
 	} else {
 		err = s.dmRepo.CreateChannel(ctx, channel)
 	}

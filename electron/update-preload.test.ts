@@ -16,6 +16,8 @@ test("sandbox preload subscriptions preserve siblings and ignore queued callback
     },
   });
   for (const [method, channel] of [
+    ["onShowScreenPicker", "show-screen-picker"],
+    ["onScreenPickerRefreshResult", "screen-picker-refresh-result"],
     ["onMaximizedChange", "window-maximized-change"],
     ["onUpdateAvailable", "update-available"],
     ["onUpdateProgress", "update-progress"],

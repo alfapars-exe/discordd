@@ -1,0 +1,13 @@
+{
+  "source": "add8fa44c1e8007c47ef928936caacd7b6024826",
+  "fixture": "Immutable git archive, read-only Linux mount; Go1.27.4 amd64 CGO1, two CPUs/six GiB",
+  "command": "go test -race -covermode=atomic -coverprofile=/tmp/root-coverage.out . -count=1 -timeout=15m",
+  "result": "PASS exit 0, 33.045s, 72.2% statements; no race report",
+  "initial_attempt": "PowerShell argument splitting produced extra .out package failure despite root package passing 32.914s. Initial overall invocation failed and is excluded; corrected by passing constant command through container sh -c.",
+  "cleanup": "Both owned --rm containers completed and were removed. Immutable snapshot retained for reproducibility.",
+  "limits": [
+    "Root package only, not full server race or PostgreSQL/physical acceptance.",
+    "Later local row/parallel isolation tests excluded.",
+    "Current-source CI and whole-project refactor remain incomplete."
+  ]
+}

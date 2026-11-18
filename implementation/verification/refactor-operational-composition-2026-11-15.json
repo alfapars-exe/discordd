@@ -1,0 +1,27 @@
+{
+  "scope": "RF11 metrics and feedback composition",
+  "owners": [
+    "MetricsHistory",
+    "Feedback",
+    "FeedbackUpload",
+    "MetricsCollector"
+  ],
+  "preserved": [
+    "Collector interval five minutes and retention thirty days",
+    "Same Hetzner token, screen-share provider and optional reachability reporter",
+    "Same feedback upload path and size; history/livekit repositories"
+  ],
+  "ownership": "Collector constructor moved into group before expression/account constructors. No Start call added. Stop is registered immediately after group returns for rollback; successful return transfers same collector to main.",
+  "checks": {
+    "root": "PASS ServiceInitialization/routes/callbacks/permission/auth-cache/real friendship-DM, 2.739s",
+    "services": "PASS metrics/feedback tests, 0.819s",
+    "build": "PASS go build ./...",
+    "vet": "PASS go vet .",
+    "reviewed_manifest": "PASS 50 exact records"
+  },
+  "limits": [
+    "Full injection of failures after each operational acquisition remains unverified.",
+    "Required/optional provider validation for operational group remains open.",
+    "Overall RF11 and RF01-RF30 acceptance incomplete."
+  ]
+}

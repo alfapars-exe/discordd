@@ -18,7 +18,7 @@ type sqlitePreferencesRepo struct {
 }
 
 // NewSQLitePreferencesRepo creates a new SQLite-backed PreferencesRepository.
-func NewSQLitePreferencesRepo(db database.TxQuerier) PreferencesRepository {
+func NewSQLitePreferencesRepo(db database.TxQuerier) PreferencesStore {
 	return &sqlitePreferencesRepo{db: db}
 }
 

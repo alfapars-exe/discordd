@@ -1,0 +1,62 @@
+{
+  "fix": "fd0a7c12",
+  "baseline": {
+    "result": "Owned load fixture failed verified TLS before any WS load",
+    "dockerCertificateGenerationLayer": "CACHED",
+    "serverCertificateNotBeforeUTC": "2026-11-13T17:27:55Z",
+    "serverCertificateNotAfterUTC": "2026-11-15T17:27:55Z",
+    "observedExpiredOnUTC": "2026-11-16"
+  },
+  "change": "Docker build --no-cache prevents reuse of the two-day generated-certificate RUN layer; TLS verification/client authentication stay required",
+  "after": {
+    "serverCertificateNotBeforeUTC": "2026-11-16T00:34:03Z",
+    "serverCertificateNotAfterUTC": "2026-11-18T00:34:03Z",
+    "real20SessionProfile": "PASS 20/20 sessions, sampled application connections all mTLS",
+    "officialHarness": {
+      "toolchains": [
+        "go1.26.11 windows/amd64",
+        "go1.27.4 windows/amd64"
+      ],
+      "passRecords": 12,
+      "skipRecords": 0,
+      "failRecords": 0,
+      "contracts": [
+        "inline PEM reconnect",
+        "untrusted server chain rejected",
+        "mismatched client identity rejected",
+        "real repository lock cancellation",
+        "real repository pool cancellation"
+      ]
+    },
+    "ownedContainersAndPrivateFixtureCleanup": "PASS"
+  },
+  "evidence": {
+    "expiredCertificate": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-capacity-cached-cert-dates.log",
+      "sha256": "88b65bcb366d41d79fcdc579c5c324f3caf425183f4f9c2d32c42ab5ff459bd7"
+    },
+    "failedFixture": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-capacity-launch-20261116.log",
+      "sha256": "b997a18e1c95a0e8043d487354a8f203dc94f4229fa3759ed403343e5de073e2"
+    },
+    "officialHarness": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-fresh-cert-toolchains-20261116.log",
+      "sha256": "94784f30d5114e380a63076e51b90111a8fe46ec817a574adb9e7b20169b7714"
+    }
+  },
+  "ci": {
+    "head": "b4916579",
+    "checks": "36/36 SUCCESS",
+    "serverRun": 43782760859,
+    "receipt": "refactor-b491-terminal-ci-2026-11-16.json"
+  },
+  "selfScan": {
+    "source": "b4916579",
+    "result": "PASS",
+    "reviewedExactSourceRecords": 51,
+    "reviewLines": 481,
+    "blockingPatternHits": 0,
+    "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-capacity-b4916579-scan.log",
+    "sha256": "f2f83fd0ba321c07f9afbb36c7e9cd0569f711f6a10f46803f6aaa97274f9ef9"
+  }
+}

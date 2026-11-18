@@ -1,0 +1,204 @@
+{
+  "baseCommit": "d29f6a596a2636fad49804f93be9401629f2ad8c",
+  "scope": "Disk-backed encrypted-search ordering snapshot API; panels not yet migrated",
+  "storage": "Separate account/backend-hashed .search.v1 IndexedDB, public IDs/order metadata only; query/plaintext never persisted; source key DB v1 and retirement v2 unchanged",
+  "ordering": "Channel time descending/stable ID ties; DM exact BIGINT ordering with legacy slots. Pure histories reuse time/sequence indexes; mixed DM materializes immutable ranks. Deletion never reorders survivors.",
+  "lifecycle": "Unique UUID per query, explicit idempotent disposal, auth owner/generation auto-disposal, creation/operation abort, 24h expiry rejected on use and swept at next creation",
+  "verification": {
+    "tests": "104 passed in5 files8.50s: snapshot14,scanner8 and existing keyStorage/deviceHandoff/legacyArchive contracts",
+    "cases": [
+      "25-ID pages, next/previous/last clamp; 300 matches across128-row source batches",
+      "Mixed and duplicate authoritative sequences, invalid/legacy slots, timestamps and BIGINTs above2^53",
+      "Deletion removes exactly one ID and adjusts count/position atomically without reordering survivors",
+      "Concurrent snapshots/disposal isolation; expiry sweep; account and same-owner generation replacement",
+      "Cancellation during partial index staging; canceled removal rolls back ID and total; invalid timestamp cleanup without orphaned promise rejection"
+    ],
+    "coverage": "Snapshot+scanner targeted:99.33% lines,93.75% branches,97.64% statements,85.36% functions",
+    "tsc": "Final tsc -b passed. Initial draft failed on readonly/write transaction typing and ES2023 toReversed in test; corrected generic mode and copy/reverse under current target.",
+    "lint": "Targeted ESLint passed",
+    "runtime": "Node26.13.1 win32, Chromium156.0.8078.4",
+    "prototype": [
+      {
+        "kind": "channel",
+        "size": 1000,
+        "matches": 267,
+        "repetitions": 9,
+        "buildMedianMs": 96.69999998807907,
+        "firstPageMedianMs": 1.4000000059604645,
+        "nextPageMedianMs": 1.300000011920929,
+        "previousPageMedianMs": 1.300000011920929,
+        "retainedDeltaMedianBytes": 5500,
+        "maxPageIds": 25,
+        "scope": "Disk ordering snapshot API and25-ID windows, one warmup. Post-GC retained handle heap only; excludes transient peak, full panels and IndexedDB disk usage. Source cache writes wait during scan."
+      },
+      {
+        "kind": "channel",
+        "size": 10000,
+        "matches": 2667,
+        "repetitions": 9,
+        "buildMedianMs": 1013.8000000119209,
+        "firstPageMedianMs": 1.5,
+        "nextPageMedianMs": 1.600000023841858,
+        "previousPageMedianMs": 1.5,
+        "retainedDeltaMedianBytes": 5192,
+        "maxPageIds": 25,
+        "scope": "Disk ordering snapshot API and25-ID windows, one warmup. Post-GC retained handle heap only; excludes transient peak, full panels and IndexedDB disk usage. Source cache writes wait during scan."
+      },
+      {
+        "kind": "channel",
+        "size": 50000,
+        "matches": 13333,
+        "repetitions": 9,
+        "buildMedianMs": 5434.800000011921,
+        "firstPageMedianMs": 1.5999999940395355,
+        "nextPageMedianMs": 1.600000023841858,
+        "previousPageMedianMs": 1.399999976158142,
+        "retainedDeltaMedianBytes": 18060,
+        "maxPageIds": 25,
+        "scope": "Disk ordering snapshot API and25-ID windows, one warmup. Post-GC retained handle heap only; excludes transient peak, full panels and IndexedDB disk usage. Source cache writes wait during scan."
+      },
+      {
+        "kind": "dm",
+        "size": 1000,
+        "matches": 267,
+        "repetitions": 9,
+        "buildMedianMs": 132.10000002384186,
+        "firstPageMedianMs": 1.5,
+        "nextPageMedianMs": 1.5999999940395355,
+        "previousPageMedianMs": 1.399999976158142,
+        "retainedDeltaMedianBytes": 7764,
+        "maxPageIds": 25,
+        "scope": "Disk ordering snapshot API and25-ID windows, one warmup. Post-GC retained handle heap only; excludes transient peak, full panels and IndexedDB disk usage. Source cache writes wait during scan."
+      },
+      {
+        "kind": "dm",
+        "size": 10000,
+        "matches": 2667,
+        "repetitions": 9,
+        "buildMedianMs": 1326.2999999821186,
+        "firstPageMedianMs": 1.5,
+        "nextPageMedianMs": 1.5999999940395355,
+        "previousPageMedianMs": 1.4000000059604645,
+        "retainedDeltaMedianBytes": 9860,
+        "maxPageIds": 25,
+        "scope": "Disk ordering snapshot API and25-ID windows, one warmup. Post-GC retained handle heap only; excludes transient peak, full panels and IndexedDB disk usage. Source cache writes wait during scan."
+      },
+      {
+        "kind": "dm",
+        "size": 50000,
+        "matches": 13333,
+        "repetitions": 9,
+        "buildMedianMs": 6830.299999982119,
+        "firstPageMedianMs": 1.7000000178813934,
+        "nextPageMedianMs": 1.5999999940395355,
+        "previousPageMedianMs": 1.5,
+        "retainedDeltaMedianBytes": 15868,
+        "maxPageIds": 25,
+        "scope": "Disk ordering snapshot API and25-ID windows, one warmup. Post-GC retained handle heap only; excludes transient peak, full panels and IndexedDB disk usage. Source cache writes wait during scan."
+      }
+    ],
+    "final": [
+      {
+        "kind": "channel",
+        "size": 1000,
+        "matches": 267,
+        "repetitions": 9,
+        "buildMedianMs": 26,
+        "firstPageMedianMs": 1.4000000059604645,
+        "nextPageMedianMs": 1.4000000059604645,
+        "previousPageMedianMs": 1.4000000059604645,
+        "retainedDeltaMedianBytes": 5964,
+        "maxPageIds": 25,
+        "scope": "Disk ordering snapshot API and25-ID windows, one warmup. Post-GC retained handle heap only; excludes transient peak, full panels and IndexedDB disk usage. Source cache writes wait during scan."
+      },
+      {
+        "kind": "channel",
+        "size": 10000,
+        "matches": 2667,
+        "repetitions": 9,
+        "buildMedianMs": 338.80000001192093,
+        "firstPageMedianMs": 1.5999999940395355,
+        "nextPageMedianMs": 1.699999988079071,
+        "previousPageMedianMs": 1.5,
+        "retainedDeltaMedianBytes": 5740,
+        "maxPageIds": 25,
+        "scope": "Disk ordering snapshot API and25-ID windows, one warmup. Post-GC retained handle heap only; excludes transient peak, full panels and IndexedDB disk usage. Source cache writes wait during scan."
+      },
+      {
+        "kind": "channel",
+        "size": 50000,
+        "matches": 13333,
+        "repetitions": 9,
+        "buildMedianMs": 1914.9000000059605,
+        "firstPageMedianMs": 1.5999999940395355,
+        "nextPageMedianMs": 1.800000011920929,
+        "previousPageMedianMs": 1.5999999940395355,
+        "retainedDeltaMedianBytes": 18072,
+        "maxPageIds": 25,
+        "scope": "Disk ordering snapshot API and25-ID windows, one warmup. Post-GC retained handle heap only; excludes transient peak, full panels and IndexedDB disk usage. Source cache writes wait during scan."
+      },
+      {
+        "kind": "dm",
+        "size": 1000,
+        "matches": 267,
+        "repetitions": 9,
+        "buildMedianMs": 38.099999994039536,
+        "firstPageMedianMs": 1.5999999940395355,
+        "nextPageMedianMs": 1.699999988079071,
+        "previousPageMedianMs": 1.699999988079071,
+        "retainedDeltaMedianBytes": 9372,
+        "maxPageIds": 25,
+        "scope": "Disk ordering snapshot API and25-ID windows, one warmup. Post-GC retained handle heap only; excludes transient peak, full panels and IndexedDB disk usage. Source cache writes wait during scan."
+      },
+      {
+        "kind": "dm",
+        "size": 10000,
+        "matches": 2667,
+        "repetitions": 9,
+        "buildMedianMs": 361.30000001192093,
+        "firstPageMedianMs": 1.699999988079071,
+        "nextPageMedianMs": 1.800000011920929,
+        "previousPageMedianMs": 1.5,
+        "retainedDeltaMedianBytes": 8320,
+        "maxPageIds": 25,
+        "scope": "Disk ordering snapshot API and25-ID windows, one warmup. Post-GC retained handle heap only; excludes transient peak, full panels and IndexedDB disk usage. Source cache writes wait during scan."
+      },
+      {
+        "kind": "dm",
+        "size": 50000,
+        "matches": 13333,
+        "repetitions": 9,
+        "buildMedianMs": 1988.800000011921,
+        "firstPageMedianMs": 1.5999999940395355,
+        "nextPageMedianMs": 1.699999988079071,
+        "previousPageMedianMs": 1.699999988079071,
+        "retainedDeltaMedianBytes": 15488,
+        "maxPageIds": 25,
+        "scope": "Disk ordering snapshot API and25-ID windows, one warmup. Post-GC retained handle heap only; excludes transient peak, full panels and IndexedDB disk usage. Source cache writes wait during scan."
+      }
+    ],
+    "benchmark": "Each kind/size uses one warmup+nine repetitions; exact count/order,25-ID windows, hydration content,deletion,previous/next/last clamp checked. CDP post-GC retained handle deltas exclude peak, panel state and IndexedDB disk.",
+    "cleanup": "Both owned Chromium/Vite benchmark sessions completed exit0 and closed in finally"
+  },
+  "normalizedLFSourceSha256": {
+    "client/src/crypto/cachedSearchSnapshot.ts": "69b1a9ef7adbc7228c6250064cc85c020723853938e48d7f6d12041e50eabaf6",
+    "client/src/crypto/cachedSearchSnapshot.test.ts": "9d73430102bc95a1cca72d85baba0b112237ecb2349ec853ffec841afde32821",
+    "e2e/scripts/benchmark-search-snapshot.mjs": "062ebca1ab02a4e455d7729dcfc81de1ecbfdbb30799634b55c4a1f43c0ceb23"
+  },
+  "logSha256": {
+    "hichat-search-snapshot-tests.log": "e3b5bf72807f727de6a4bb0b00086b0bf668728d80acef6f999c62671a47c0e2",
+    "hichat-search-snapshot-final-tests.log": "35a6897e0186ffbd4fa8ebcbf73e1e20b2f7b6f7ac4ee34e633d0445aaef5aec",
+    "hichat-search-snapshot-final-coverage.log": "faa33b4d97b4d4e48bfcbd0b3419f86bb0f4a05bbce4a95740315266c761d48f",
+    "hichat-search-snapshot-chromium.log": "7678f5dc76824365a65c0feffe96bcdd7574a181ffdfaa0fe35435e4cd71a44e",
+    "hichat-search-snapshot-optimized-chromium.log": "41bfd0be933a50e86c626017c6cf8f45bc42c37ac5a8f38eec3a3b4cac041afc"
+  },
+  "remaining": [
+    "Connect both search panels and bounded stale-hit hydration; existing panels still retain all matching IDs",
+    "Wire key-reset/account-deletion cleanup before production panel use; auth disposal and expiry alone are not full reset acceptance",
+    "Preserve live deletion during index creation, missing rows, late query and permission/account fences",
+    "Final full-client coverage/build/CI and real recovery/search browser profile after panel migration",
+    "Pure-history50k build~1.9-2.0s still holds source read lock during scan; mixed-history large benchmark and final resource budget remain open",
+    "No whole-panel/first-query peak heap bound or speedup against old compact scan claimed",
+    "Whole-project refactor acceptance remains open"
+  ]
+}

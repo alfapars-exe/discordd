@@ -49,6 +49,12 @@ func TestPipelineSanitizesAllSinksAndExcludesRecursiveAndAccessEvents(t *testing
 	})
 	Component("test").With("password", "NEVER_LOG").Error("failure postgres://user:NEVER_LOG@host/db", "nested", map[string]any{"Authorization": "NEVER_LOG", "safe": "token=NEVER_LOG"})
 	slog.Error("http request", "event_kind", "http_access")
+	for _, component := range []string{"app_log.write", "app_log.purge"} {
+		Run(component, func() { panic("NEVER_LOG") })
+		if strings.Count(output.String(), `"component":"`+component+`"`) != 1 {
+			t.Errorf("panic diagnostic not emitted exactly once for %s", component)
+		}
+	}
 	if seen != 1 {
 		t.Fatalf("sink recursion/access duplicate: %d", seen)
 	}

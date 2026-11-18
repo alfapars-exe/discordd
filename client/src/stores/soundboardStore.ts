@@ -1,3 +1,4 @@
+import { voicePeerVolume } from "./voicePreferenceMaps";
 /** Call-bound soundboard. Browsing another server never changes its target. */
 import { create } from "zustand";
 import type { SoundboardSound, SoundboardPlayEvent } from "../types";
@@ -44,7 +45,7 @@ function blocked(userId?: string) { return !!userId && useBlockStore.getState().
 function effectiveVolume(sourceUserId?: string) {
   const voice = useVoiceStore.getState(), state = useSoundboardStore.getState();
   if (state.muted || voice.isDeafened || voice.isServerDeafened || blocked(sourceUserId)) return 0;
-  return soundboardVolume(state.volume * Math.max(0, voice.masterVolume) / 100 * (sourceUserId ? (voice.userVolumes[sourceUserId] ?? 100) / 100 : 1));
+  return soundboardVolume(state.volume * Math.max(0, voice.masterVolume) / 100 * (sourceUserId ? (voicePeerVolume(voice.userVolumes, sourceUserId)) / 100 : 1));
 }
 function stopAll() { for (const entry of [...active]) entry.player.stop(); }
 function resetContext() { request++; stopAll(); useSoundboardStore.setState({ sounds: EMPTY, contextKey: null, isLoading: false, isPanelOpen: false, playingSound: null, error: null }); }

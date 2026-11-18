@@ -14,7 +14,7 @@ type sqliteAppLogRepo struct {
 	db database.TxQuerier
 }
 
-func NewSQLiteAppLogRepo(db database.TxQuerier) AppLogRepository {
+func NewSQLiteAppLogRepo(db database.TxQuerier) AppLogStore {
 	return &sqliteAppLogRepo{db: db}
 }
 

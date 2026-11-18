@@ -50,8 +50,11 @@ const valueTerminators = "&\"' \t\r\n"
 func RedactSecrets(s string) string {
 	// Most log fields are IDs, fixed messages or route templates. Skip regex
 	// work when none of the supported credential forms can occur.
-	if !strings.ContainsAny(s, ":=?\"") && !strings.Contains(strings.ToLower(s), "bearer ") {
+	if !strings.ContainsAny(s, ":=?\"") && !strings.Contains(strings.ToLower(s), "bearer") {
 		return s
+	}
+	if strings.Contains(strings.ToLower(s), "password") {
+		s = logConninfoPassword.ReplaceAllString(s, "${1}***")
 	}
 	s = logURLCredentials.ReplaceAllString(s, "${1}***@")
 	s = logAuthorization.ReplaceAllString(s, "${1}***")
@@ -70,10 +73,12 @@ func RedactSecrets(s string) string {
 	return s
 }
 
+// libpq keyword DSNs allow quoted values and backslash-escaped spaces.
+var logConninfoPassword = regexp.MustCompile(`(?i)((?:^|[ \t])(?:ssl)?password[ \t]*=[ \t]*)(?:'(?:[^'\\\r\n]|\\[^\r\n])*(?:'|$)|(?:[^\s\\]|\\[^\r\n])+)`)
 var logURLCredentials = regexp.MustCompile(`(?i)([a-z][a-z0-9+.-]*://)[^\s/@]+@`)
 var logAuthorization = regexp.MustCompile(`(?im)((?:authorization|cookie|set-cookie)\s*[:=]\s*)[^\r\n]+`)
 var logBearer = regexp.MustCompile(`(?i)bearer\s+[a-z0-9._~+/=-]+`)
-var logJSONSecret = regexp.MustCompile(`(?i)("(?:password|password_hash|authorization|cookie|token|access_token|refresh_token|api_key|apikey|secret|ticket)"\s*:\s*")[^"\r\n]*"`)
+var logJSONSecret = regexp.MustCompile(`(?i)("(?:password|password_hash|authorization|cookie|token|access_token|refresh_token|api_key|apikey|secret|ticket)"\s*:\s*")(?:[^"\\\r\n]|\\[^\r\n])*"`)
 var logKeyNormalizer = strings.NewReplacer("-", "", "_", "", ".", "")
 
 // IsSecretLogKey also covers structured values that have no "token=" prefix.
@@ -87,14 +92,17 @@ func IsSecretLogKey(key string) bool {
 }
 
 func SafeLogString(s string, limit int) string {
-	s = RedactSecrets(s)
-	if len(s) > limit {
-		s = s[:limit]
-		for !utf8.ValidString(s) && s != "" {
-			s = s[:len(s)-1]
-		}
+	if limit <= 0 {
+		return ""
 	}
-	return s
+	s = strings.ToValidUTF8(RedactSecrets(s), "\uFFFD")
+	if len(s) <= limit {
+		return s
+	}
+	for !utf8.RuneStart(s[limit]) {
+		limit--
+	}
+	return s[:limit]
 }
 
 // redactParam replaces every `key<value>` occurrence with `key***`, ending the
@@ -108,6 +116,9 @@ func redactParam(s, key string) string {
 	for {
 		i := indexFold(rest, key)
 		if i < 0 {
+			if b.Len() == 0 {
+				return s
+			}
 			b.WriteString(rest)
 			return b.String()
 		}

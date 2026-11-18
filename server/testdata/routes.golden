@@ -74,6 +74,7 @@ GET /api/uploads/
 GET /api/dms/settings
 GET /api/dms
 GET /api/dms/send-capabilities
+GET /api/dms/{channelId}/device-roster
 GET /api/dms/{channelId}/events
 POST /api/dms
 POST /api/dms/self
@@ -101,6 +102,7 @@ POST /api/dms/{channelId}/unread
 PATCH /api/group-dms/{groupId}/settings
 GET /api/group-dms
 POST /api/group-dms
+GET /api/group-dms/{groupId}/device-roster
 GET /api/group-dms/{groupId}
 PATCH /api/group-dms/{groupId}
 POST /api/group-dms/{groupId}/members

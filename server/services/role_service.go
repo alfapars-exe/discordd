@@ -20,12 +20,6 @@ type RoleService interface {
 	Update(ctx context.Context, serverID, actorID, roleID string, req *models.UpdateRoleRequest) (*models.Role, error)
 	Delete(ctx context.Context, serverID, actorID, roleID string) error
 	ReorderRoles(ctx context.Context, serverID, actorID string, items []models.PositionUpdate) ([]models.Role, error)
-	// SetPermInvalidator wires the per-channel permission cache so that
-	// role mutations (Update / Delete) clear stale resolution results.
-	// Optional: if not wired, permission revocations take up to
-	// permCacheTTL (30s) to land — same behaviour as before this hook
-	// existed, just without the immediate-invalidate guarantee.
-	SetPermInvalidator(inv PermissionInvalidator)
 }
 
 type roleService struct {
@@ -34,10 +28,6 @@ type roleService struct {
 	hub              ws.Broadcaster
 	auditLogger      AuditWriter
 	permInvalidator  PermissionInvalidator
-}
-
-func (s *roleService) SetPermInvalidator(inv PermissionInvalidator) {
-	s.permInvalidator = inv
 }
 
 // invalidatePerms is a nil-safe wrapper — the invalidator is optional
@@ -67,8 +57,10 @@ func NewRoleService(
 	roleTransactions repository.ServerRoleTxRunner,
 	hub ws.Broadcaster,
 	auditLogger AuditWriter,
+	permInvalidator PermissionInvalidator,
 ) RoleService {
 	return &roleService{
+		permInvalidator:  permInvalidator,
 		roleRepo:         roleRepo,
 		roleTransactions: roleTransactions,
 		hub:              hub,

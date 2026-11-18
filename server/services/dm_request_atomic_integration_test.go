@@ -15,7 +15,7 @@ import (
 )
 
 type delayedDMDecliner struct {
-	repository.DMRepository
+	repository.DMRequestStore
 	started, release chan struct{}
 }
 
@@ -26,11 +26,11 @@ func (r delayedDMDecliner) DeclinePending(ctx context.Context, id, user string) 
 	case <-ctx.Done():
 		return false, nil, nil, ctx.Err()
 	}
-	return r.DMRepository.(repository.PendingDMDecliner).DeclinePending(ctx, id, user)
+	return r.DMRequestStore.DeclinePending(ctx, id, user)
 }
 
 func (r delayedDMDecliner) AcceptPendingUnblocked(ctx context.Context, id string) (bool, error) {
-	return r.DMRepository.(repository.PendingDMAccepter).AcceptPendingUnblocked(ctx, id)
+	return r.DMRequestStore.AcceptPendingUnblocked(ctx, id)
 }
 
 func TestDMDeclineAfterConcurrentAcceptPreservesChannelAndEmitsNoDecline(t *testing.T) {
@@ -54,7 +54,7 @@ func TestDMDeclineAfterConcurrentAcceptPreservesChannelAndEmitsNoDecline(t *test
 	started, release := make(chan struct{}), make(chan struct{})
 	var once sync.Once
 	t.Cleanup(func() { once.Do(func() { close(release) }) })
-	f.svc.(*dmService).dmRepo = delayedDMDecliner{DMRepository: repo, started: started, release: release}
+	f.svc.(*dmService).dmRepo = delayedDMDecliner{DMRequestStore: repo, started: started, release: release}
 	var declined atomic.Int32
 	f.hub.BroadcastToUserFn = func(_ string, event ws.Event) {
 		if event.Op == ws.OpDMRequestDecline {

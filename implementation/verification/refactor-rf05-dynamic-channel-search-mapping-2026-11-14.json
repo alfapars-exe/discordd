@@ -1,0 +1,28 @@
+{
+  "source_parent": "cea6fa28",
+  "task": "RF05",
+  "family": "Dynamic search conditions, allowed-channel IN list, count/page filtering and pagination",
+  "source_sha256": {
+    "server/repository/postgres_search.go": "faa581988d809be2cafdf1b633865b2a95697793da2d7cc559c278b663f834b1",
+    "server/repository/sqlite_search.go": "7b8a58ab5cd7a0679e2a08619bcbd195c52203e256a4db399f824b29cfeaeaaa",
+    "server/repository/sqlite_search_test.go": "506fb1c19ab3fcdb374f7c66da6c338e7c75cd309442e0850e886ea3f35f6c0d"
+  },
+  "production_mapping": {
+    "postgres_search.go:55,62": "Channel count and page share joined conditions; values remain bound. Optional channel and allowed list intersect.",
+    "postgres_search.go:85,92": "DM count/page dynamic conditions exist but are not covered by this selected channel search run."
+  },
+  "validation": {
+    "test_filter": "^TestSearchRepo_(AllowedChannelIDs_FiltersCountAndData|EmptyAllowedChannelIDs_ReturnsEmptyWithoutQuerying|EqualRankTimestampPagesHaveStableOrder)$",
+    "sqlite_passed": 3,
+    "postgres_18_6_passed": 3,
+    "skips": 0,
+    "both_exit": 0
+  },
+  "environment": "Dedicated loopback temporary PostgreSQL container, sslmode=disable, stopped after run. Existing services untouched.",
+  "limits": [
+    "Channel result/filter/order contracts only; SQLite relevance and PostgreSQL ILIKE semantics intentionally differ",
+    "DM dynamic search still requires explicit mapping",
+    "No race or mTLS claim",
+    "Full RF05 inventory remains open"
+  ]
+}

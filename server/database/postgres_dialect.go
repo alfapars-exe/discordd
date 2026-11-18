@@ -100,6 +100,9 @@ func (c *pgConn) PrepareContext(ctx context.Context, query string) (driver.Stmt,
 	return pgStmt{stmt}, nil
 }
 func (c *pgConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+	if ctx.Value(nativeMigrationKey{}) == true {
+		return c.Conn.ExecContext(ctx, query, args)
+	}
 	query, err := postgresQuery(query)
 	if err != nil {
 		return nil, err
@@ -119,7 +122,8 @@ func (c *pgConn) QueryContext(ctx context.Context, query string, args []driver.N
 }
 func (c *pgConn) CheckNamedValue(v *driver.NamedValue) error {
 	if valuer, ok := v.Value.(driver.Valuer); ok {
-		value, err := valuer.Value()
+		// Match database/sql's nil-pointer handling for value-receiver Valuers.
+		value, err := driver.DefaultParameterConverter.ConvertValue(valuer)
 		if err != nil {
 			return err
 		}
@@ -153,6 +157,41 @@ func IsPostgres(q TxQuerier) bool {
 	return false
 }
 
+func startsEscapeString(query string, quote int) bool {
+	if quote == 0 || (query[quote-1] != 'e' && query[quote-1] != 'E') {
+		return false
+	}
+	if quote == 1 {
+		return true
+	}
+	// E must start a token rather than end an unquoted SQL identifier.
+	return !postgresIdentifierByte(query[quote-2])
+}
+
+func postgresIdentifierStart(c byte) bool {
+	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c == '_' || c >= 0x80
+}
+
+func postgresIdentifierByte(c byte) bool {
+	return postgresIdentifierStart(c) || c >= '0' && c <= '9' || c == '$'
+}
+
+func dollarDelimiter(query string, start int) string {
+	if start > 0 && postgresIdentifierByte(query[start-1]) {
+		return ""
+	}
+	end := start + 1
+	if end < len(query) && postgresIdentifierStart(query[end]) {
+		for end < len(query) && query[end] != '$' && postgresIdentifierByte(query[end]) {
+			end++
+		}
+	}
+	if end < len(query) && query[end] == '$' {
+		return query[start : end+1]
+	}
+	return ""
+}
+
 // bindPostgres understands SQL strings, quoted identifiers and comments. It
 // never inserts argument values, and preserves SQLite's repeated ?N binding.
 func bindPostgres(query string) (string, error) {
@@ -162,20 +201,31 @@ func bindPostgres(query string) (string, error) {
 		c := query[i]
 		if c == '\'' || c == '"' || c == '`' {
 			quote := c
+			closed := false
+			escapes := quote == '\'' && startsEscapeString(query, i)
 			out.WriteByte(c)
 			i++
 			for i < len(query) {
 				c = query[i]
 				out.WriteByte(c)
 				i++
+				if escapes && c == '\\' && i < len(query) {
+					out.WriteByte(query[i])
+					i++
+					continue
+				}
 				if c == quote {
 					if i < len(query) && query[i] == quote {
 						out.WriteByte(query[i])
 						i++
 						continue
 					}
+					closed = true
 					break
 				}
+			}
+			if !closed {
+				return "", fmt.Errorf("unterminated SQL quoted token")
 			}
 			continue
 		}
@@ -190,14 +240,39 @@ func bindPostgres(query string) (string, error) {
 			continue
 		}
 		if i+1 < len(query) && query[i:i+2] == "/*" {
-			end := strings.Index(query[i+2:], "*/")
-			if end < 0 {
+			start := i
+			i += 2
+			depth := 1
+			for depth > 0 && i+1 < len(query) {
+				switch query[i : i+2] {
+				case "/*":
+					depth++
+					i += 2
+				case "*/":
+					depth--
+					i += 2
+				default:
+					i++
+				}
+			}
+			if depth != 0 {
 				return "", fmt.Errorf("unterminated SQL comment")
 			}
-			end += i + 4
-			out.WriteString(query[i:end])
-			i = end
+			out.WriteString(query[start:i])
 			continue
+		}
+		if c == '$' {
+			if delimiter := dollarDelimiter(query, i); delimiter != "" {
+				body := i + len(delimiter)
+				offset := strings.Index(query[body:], delimiter)
+				if offset < 0 {
+					return "", fmt.Errorf("unterminated SQL dollar string")
+				}
+				end := body + offset + len(delimiter)
+				out.WriteString(query[i:end])
+				i = end
+				continue
+			}
 		}
 		if c != '?' {
 			out.WriteByte(c)
@@ -213,9 +288,13 @@ func bindPostgres(query string) (string, error) {
 		if start < i {
 			var err error
 			n, err = strconv.Atoi(query[start:i])
-			if err != nil || n < 1 {
+			if err != nil {
 				return "", fmt.Errorf("invalid bind position")
 			}
+		}
+		// PostgreSQL's extended protocol encodes the bind count in 16 bits.
+		if n < 1 || n > 65535 {
+			return "", fmt.Errorf("invalid bind position")
 		}
 		if n > next {
 			next = n

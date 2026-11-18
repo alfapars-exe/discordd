@@ -1,0 +1,24 @@
+{
+  "date": "2026-11-15",
+  "productSource": "20d7553f43e1bca2ffaaa37990af5028e239ab6e",
+  "scriptSha256": "58ae7cd873c606bcc6bc0eb5717510a5c55cb33ca3bff928eca59e4c6a1a29df",
+  "command": "node e2e/scripts/verify-search-reset-windows.mjs",
+  "exitCode": 0,
+  "result": {
+    "chromium": "156.0.8078.4",
+    "foreignNotificationDatabaseOpens": 0,
+    "foreignQuietWindowMs": 250,
+    "signedOutNotificationDatabaseOpens": 0,
+    "sameAccountReset": {
+      "rejection": "search_snapshot_cache_reset",
+      "refs": 0,
+      "snapshots": 0
+    },
+    "scope": "Two same-origin native Chromium pages, real BroadcastChannel/IndexedDB and source modules. No React panel or packaged-platform acceptance."
+  },
+  "limits": [
+    "250ms negative observation windows do not prove behavior for arbitrary future delays",
+    "source modules served by Vite, not production React panel rendering",
+    "no packaged desktop/mobile or physical-platform acceptance"
+  ]
+}

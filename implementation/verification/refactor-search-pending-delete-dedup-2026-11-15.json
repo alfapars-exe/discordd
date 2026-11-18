@@ -1,0 +1,134 @@
+{
+  "source_commit": "9db4763d699051c77bdfe037572cf620de6e6d3d",
+  "client_git_tree": "d0b9ec6da8b09f002a0098204a81907f431772a3",
+  "source_sha256": {
+    "client/src/components/chat/SearchPanel.tsx": "8c58170a8ba7c18dbfa9e833c4d9fc7474eaaddcf0743c5fbd34151fd7282ffe",
+    "client/src/components/chat/SearchPanel.test.tsx": "e72a610df480a4cf41ece34b26b8d8ece96dd1df2ac2dcf8ebd132c9b4893c1f",
+    "client/src/components/dm/DMSearchPanel.tsx": "3878611986666d25d51a04dd87e334f984654dceb839725708fe007555d74d30",
+    "client/src/components/dm/DMSearchPanel.test.tsx": "fe09f14be8520dc70e1402ff90c7a71bf3b0d88b295cf2a85198d8d6db6df5f4"
+  },
+  "before": "1000same-ID store deletion events while first index removal pending cause1000remove API calls in both actual React panels",
+  "after": "Pending-ID guard coalesces duplicate events into1remove API call;first event still hides row immediately and final count decrements once",
+  "checks": {
+    "targeted": "2files37passed3.50s;includes existing deletion/navigation/out-of-order/account cases",
+    "full_client": "485files5050passed1skipped113.65s",
+    "coverage": {
+      "lines": {
+        "total": 38087,
+        "covered": 26035,
+        "skipped": 0,
+        "pct": 68.35
+      },
+      "statements": {
+        "total": 52060,
+        "covered": 35028,
+        "skipped": 0,
+        "pct": 67.28
+      },
+      "functions": {
+        "total": 12150,
+        "covered": 7472,
+        "skipped": 0,
+        "pct": 61.49
+      },
+      "branches": {
+        "total": 39637,
+        "covered": 25574,
+        "skipped": 0,
+        "pct": 64.52
+      },
+      "branchesTrue": {
+        "total": 0,
+        "covered": 0,
+        "skipped": 0,
+        "pct": 100
+      }
+    },
+    "changed_module_coverage": {
+      "C:\\Users\\PARS\\Desktop\\PROJELER\\HiChat\\refactor-integration\\client\\src\\components\\chat\\SearchPanel.tsx": {
+        "lines": {
+          "total": 162,
+          "covered": 137,
+          "skipped": 0,
+          "pct": 84.56
+        },
+        "functions": {
+          "total": 42,
+          "covered": 36,
+          "skipped": 0,
+          "pct": 85.71
+        },
+        "statements": {
+          "total": 219,
+          "covered": 173,
+          "skipped": 0,
+          "pct": 78.99
+        },
+        "branches": {
+          "total": 121,
+          "covered": 94,
+          "skipped": 0,
+          "pct": 77.68
+        }
+      },
+      "C:\\Users\\PARS\\Desktop\\PROJELER\\HiChat\\refactor-integration\\client\\src\\components\\dm\\DMSearchPanel.tsx": {
+        "lines": {
+          "total": 163,
+          "covered": 130,
+          "skipped": 0,
+          "pct": 79.75
+        },
+        "functions": {
+          "total": 46,
+          "covered": 33,
+          "skipped": 0,
+          "pct": 71.73
+        },
+        "statements": {
+          "total": 221,
+          "covered": 167,
+          "skipped": 0,
+          "pct": 75.56
+        },
+        "branches": {
+          "total": 107,
+          "covered": 79,
+          "skipped": 0,
+          "pct": 73.83
+        }
+      }
+    },
+    "changed_files_lint": "PASS",
+    "general_lint": "0errors2existing TanStack warnings",
+    "production_build": "actual tsc-b/Vite PASS1.69s;existing chunk warning"
+  },
+  "logs": {
+    "red": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-delete-coalescing-red.log",
+      "sha256": "cb828bcfd0787718eed13d17657f2bf6775a8d8c82ec58e912cd2d62e69091bc"
+    },
+    "targeted": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-delete-coalescing-green.log",
+      "sha256": "3b4274c96917678e9741e7286578953c2aee81fd9aa8cb8416637dc2ffc78031"
+    },
+    "full_coverage": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-delete-coalescing-full-coverage.log",
+      "sha256": "ea656c5dfb28bfec44734ca2aecb817a6f03fbf3e87af409f655b20caed4161d"
+    },
+    "build": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-delete-coalescing-build.log",
+      "sha256": "17dced219884e910e24e9f8355227ad4fca7ea8bc0b6f29381c3cbd4eba08244"
+    },
+    "lint": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-delete-coalescing-full-lint.log",
+      "sha256": "b51344ffc39e8ec9a8569b51c5ae7b28aa35df7af955a93bafae4f7a267c30fa"
+    }
+  },
+  "limits": [
+    "Removal collaborator is delayed/spied in DOM-hook tests;API-call reduction is not a measured native heap or latency benchmark",
+    "Distinct deletion IDs during long active staging remain unbounded and require separate pressure/consistency design",
+    "After a removal completes,a later repeated event can be processed again without retaining unbounded historical IDs",
+    "Native storage CI contracts on b24 passed but are not a new whole-app proof for this source",
+    "Full RF17/project/native/physical acceptance remains open;local commits held while b24 CI runs"
+  ]
+}

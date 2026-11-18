@@ -1,0 +1,29 @@
+{
+  "date": "2026-11-15",
+  "base": "5f9685d7",
+  "sources": {
+    "client/src/hooks/useWebUpdateChecker.ts": "424f9b3629b65ed688f4a2f8b2aa5b49ebcfd4b8b34a6cddfdcf3ddf0dbaf7ed",
+    "client/src/hooks/useWebUpdateChecker.http.test.ts": "36eef5c9a5506b829c47e1bb784f0abf148a9a28b140c6c410554ac104c70a96",
+    "client/src/hooks/useWebUpdateChecker.test.ts": "08a0277e01adb121d7b53e4bc29569dbb1374ee538d63d13081dd12d97287ce3",
+    "client/src/hooks/useUpdateChecker.ts": "ef8de55cf84736c6c5a175aac18998a2470e9ba68b3979bffc49e87ae7040384",
+    "client/src/hooks/useUpdateChecker.test.tsx": "36d67e65b005ad9820070f58ed0e12b7e816cad810b822451dae2372ee624e7b"
+  },
+  "validation": {
+    "integration": "actual apiClient + React hook; stalled fetch headers and stalled JSON body both hit total deadline, release request slot and allow later baseline/redeploy detection",
+    "targeted": "five suites92tests passed",
+    "fullCoverage": "484files;5023passed;1skipped;113.66s",
+    "coverage": {
+      "statements": 67.06,
+      "branches": 64.4,
+      "functions": 61.34,
+      "lines": 68.07
+    },
+    "typescript": "npx tsc -b passed",
+    "lint": "new HTTP integration test passed"
+  },
+  "limits": [
+    "network boundary stubbed at fetch; not live-browser/network soak",
+    "no production source changes in this validation commit",
+    "remote8efdfddc currently33success/one repository shard pending, not terminal"
+  ]
+}

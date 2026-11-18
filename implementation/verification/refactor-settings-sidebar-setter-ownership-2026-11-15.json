@@ -1,0 +1,46 @@
+{
+  "scope": "Local theme/appearance/sidebar setters across synchronous destination and preference notifications.",
+  "sourceRevision": "4b81ca5e4166347b05302dafc0c0d7a3fbcce0a5",
+  "red": {
+    "failed": 45,
+    "log": "hichat-settings-sidebar-setters-red.log",
+    "behavior": "Old theme/appearance setters overwrote replacement queues;sidebar persistence/sync inside state updaters let preference observers write replacement state which the returning old updater then replaced."
+  },
+  "targeted": {
+    "passed": 243,
+    "files": 6,
+    "seconds": 4.29,
+    "log": "hichat-settings-sidebar-setters-targeted.log"
+  },
+  "behavior": [
+    "Ten theme/appearance setters capture preference scope before mutation and queue only still-current matching leaves after destination notification.",
+    "Sidebar actions compute/persist next data and commit state before cross-store synchronization;no effects inside Zustand updater functions.",
+    "Sidebar checks captured scope and matches current leaf values before queueing.",
+    "Sixty reentrancy cases cover ten settings setters and five sidebar actions,owner/backend/same-binding changes,and both destination/preference sidebar notifications.",
+    "Six positive cases preserve unrelated edits,no-op expand/collapse/section behavior and explicit expansion of previously absent sections.",
+    "Action signatures,wire fields and localStorage keys unchanged;sidebar preference notification now observes committed sidebar state."
+  ],
+  "sha256": {
+    "client/src/stores/settingsStore.ts": "639edd589d5a623b018a8e0be40b9fc5916b528c5a2cf70b0d21021011219aa1",
+    "client/src/stores/sidebarStore.ts": "967a2954e27dfadcf7ecb2e47727d41e7a527e99019a44e4afca2c6e25ba3f2b",
+    "client/src/stores/preferencePresentationSetters.test.ts": "9e73c69b6733924d77a5520830df56306c2f3ad706b3968b0108ae02cda58bad"
+  },
+  "limits": [
+    "Real Zustand/settings/sidebar/preferences with no-op bootstrap presenter;not browser/provider/native-device proof.",
+    "Unexpected throwing subscribers and remaining destination paths require separate failure-matrix review.",
+    "Whole RF13/offline/native/physical/project acceptance and active search unique-ID frontier remain open."
+  ],
+  "fullClientCoverage": {
+    "files": 488,
+    "passed": 5175,
+    "skipped": 1,
+    "seconds": 113.62,
+    "statementPercent": 67.43,
+    "branchPercent": 64.66,
+    "functionPercent": 61.61,
+    "linePercent": 68.49,
+    "log": "hichat-settings-sidebar-setters-coverage.log"
+  },
+  "build": "actual tsc-b/VitePASS3.28s; existing chunk warning",
+  "lint": "changed settings/sidebar stores/new setter contracts lintPASS"
+}

@@ -110,7 +110,9 @@ func TestStickerHandler_CreateRejectsOversizedFile(t *testing.T) {
 }
 
 func TestStickerHandler_CreateRateLimited(t *testing.T) {
-	f := newStickerHandlerFixture(t, ratelimit.NewMessageRateLimiter(1, time.Minute, 30*time.Second))
+	limiter := ratelimit.NewMessageRateLimiter(1, time.Minute, 30*time.Second)
+	t.Cleanup(limiter.Stop)
+	f := newStickerHandlerFixture(t, limiter)
 	first := httptest.NewRecorder()
 	f.h.Create(first, emojiUpload(t, "srv", "alice", smallPNG(t), map[string]string{"display_name": "Bir"}))
 	if first.Code != http.StatusCreated {

@@ -3,8 +3,6 @@ package services
 import (
 	"context"
 	"errors"
-	"io/fs"
-	"path/filepath"
 	"testing"
 
 	"github.com/argeinfina/hichat/database"
@@ -17,21 +15,11 @@ type botDisconnectRecorder struct{ ids []string }
 
 func (r *botDisconnectRecorder) DisconnectUser(id string) { r.ids = append(r.ids, id) }
 
-// newBotTestDB boots a throwaway file-backed DB with the full embedded migration
-// set (mirrors repository.newTxTestDB, which is unexported to this package) so
-// the BotService runs against the real schema with FKs enforced.
+// newBotTestDB opens an isolated copy of the full migrated service schema,
+// through production connection setup, so real SQL and FKs remain under test.
 func newBotTestDB(t *testing.T) *database.DB {
 	t.Helper()
-	migrationsFS, err := fs.Sub(database.EmbeddedMigrations, "migrations")
-	if err != nil {
-		t.Fatalf("fs.Sub: %v", err)
-	}
-	db, err := database.NewLegacy(filepath.Join(t.TempDir(), "bot_test.db"), migrationsFS)
-	if err != nil {
-		t.Fatalf("database.New: %v", err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
-	return db
+	return newServiceFixtureDB(t, "bot_test.db")
 }
 
 func TestBotService_CreateAndValidate(t *testing.T) {
@@ -44,7 +32,7 @@ func TestBotService_CreateAndValidate(t *testing.T) {
 		t.Fatalf("seed owner: %v", err)
 	}
 
-	svc := NewBotService(repository.NewBotRepository(db.Conn))
+	svc := NewBotService(repository.NewBotRepository(db.Conn), BotRuntimeDependencies{})
 
 	bot, token, err := svc.CreateBot(ctx, "owner_1", models.CreateBotRequest{
 		Username: "weatherbot", DisplayName: "Weather",
@@ -99,7 +87,7 @@ func TestBotService_CreateRollsBackIdentityWhenInitialTokenFails(t *testing.T) {
 		 BEGIN SELECT RAISE(ABORT, 'fixture token failure'); END;`); err != nil {
 		t.Fatalf("seed fixture: %v", err)
 	}
-	svc := NewBotService(repository.NewBotRepository(db.Conn))
+	svc := NewBotService(repository.NewBotRepository(db.Conn), BotRuntimeDependencies{})
 	if _, token, err := svc.CreateBot(ctx, "owner_1", models.CreateBotRequest{Username: "atomicbot", DisplayName: "Atomic"}); err == nil || token != "" {
 		t.Fatalf("CreateBot = token %q, err %v; want no exposed credential and an error", token, err)
 	}
@@ -124,7 +112,7 @@ func TestBotService_RevokeIsolation_AcrossBots(t *testing.T) {
 	}
 
 	disconnects := &botDisconnectRecorder{}
-	svc := NewBotService(repository.NewBotRepository(db.Conn), disconnects)
+	svc := NewBotService(repository.NewBotRepository(db.Conn), BotRuntimeDependencies{Disconnecter: disconnects})
 
 	botA, tokenA, err := svc.CreateBot(ctx, "owner_1", models.CreateBotRequest{
 		Username: "botalpha", DisplayName: "Alpha",
@@ -176,7 +164,7 @@ func TestBotService_RevokeIsolation_AcrossOwners(t *testing.T) {
 	}
 
 	disconnects := &botDisconnectRecorder{}
-	svc := NewBotService(repository.NewBotRepository(db.Conn), disconnects)
+	svc := NewBotService(repository.NewBotRepository(db.Conn), BotRuntimeDependencies{Disconnecter: disconnects})
 
 	bot, token, err := svc.CreateBot(ctx, "owner_1", models.CreateBotRequest{
 		Username: "botcharlie", DisplayName: "Charlie",
@@ -209,7 +197,7 @@ func TestBotService_OwnershipTransferRequiresRecipientAndRotatesCredential(t *te
 		t.Fatal(err)
 	}
 	disconnects := &botDisconnectRecorder{}
-	svc := NewBotService(repository.NewBotRepository(db.Conn), disconnects)
+	svc := NewBotService(repository.NewBotRepository(db.Conn), BotRuntimeDependencies{Disconnecter: disconnects})
 	bot, oldToken, err := svc.CreateBot(ctx, "owner_1", models.CreateBotRequest{Username: "transferbot", DisplayName: "Transfer"})
 	if err != nil {
 		t.Fatal(err)

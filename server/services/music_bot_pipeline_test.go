@@ -510,6 +510,20 @@ func TestPlayLoop_SuccessResetsFailureCounter(t *testing.T) {
 // SIGTERM must tear the bots down through the normal Stop() path; otherwise the
 // container runtime SIGKILLs yt-dlp/ffmpeg mid-write and the LiveKit rooms are
 // left holding a ghost participant until the server times them out.
+func TestStopAllPreventsLateBotConnection(t *testing.T) {
+	svc := &musicBotService{
+		bots: map[string]*botInstance{},
+		connectBotFn: func(context.Context, *botInstance) error {
+			t.Error("attempted a new LiveKit connection after shutdown")
+			return nil
+		},
+	}
+	svc.StopAll()
+	if _, err := svc.getOrCreateBot(context.Background(), "server", "channel"); !errors.Is(err, errBotStoppedExplicitly) {
+		t.Fatalf("post-shutdown admission returned %v", err)
+	}
+}
+
 func TestStopAll_StopsEveryBot(t *testing.T) {
 	svc := &musicBotService{
 		bots: map[string]*botInstance{},

@@ -149,9 +149,6 @@ func (s *stubMemberService) SetNickname(context.Context, string, string, string,
 	return s.member, nil
 }
 
-func (s *stubMemberService) SetPermInvalidator(services.PermissionInvalidator)     {}
-func (s *stubMemberService) SetUserCacheInvalidator(services.UserCacheInvalidator) {}
-
 var _ services.MemberService = (*stubMemberService)(nil)
 
 // newModerationRequest builds a request carrying an authenticated actor and
@@ -475,8 +472,8 @@ func newRealMemberHandler(t *testing.T, current *models.User) (*MemberHandler, *
 			return nil
 		},
 	}
-	svc := services.NewMemberService(users, nil, nil, nil, &testutil.MockServerRepo{}, nil,
-		&testutil.MockEventPublisher{}, nil, nil)
+	svc := services.NewMemberService(nil, nil, users, nil, nil, nil, &testutil.MockServerRepo{}, nil,
+		&testutil.MockEventPublisher{}, nil, nil, nil, nil)
 	return NewMemberHandler(svc), &written
 }
 
@@ -601,7 +598,9 @@ func TestMemberProfileAudienceFiltersRosterAndSingleMember(t *testing.T) {
 
 func TestMemberMutationResponsesRespectProfileAudience(t *testing.T) {
 	bio := "sensitive bio"
-	newMember := func() *models.MemberWithRoles { return &models.MemberWithRoles{ID: "target", Username: "user", Bio: &bio} }
+	newMember := func() *models.MemberWithRoles {
+		return &models.MemberWithRoles{ID: "target", Username: "user", Bio: &bio}
+	}
 	for _, tt := range []struct {
 		name string
 		run  func(http.ResponseWriter, *http.Request, *MemberHandler)

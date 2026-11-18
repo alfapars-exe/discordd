@@ -6,14 +6,11 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"io/fs"
 	"net/url"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/repository"
 )
@@ -30,15 +27,8 @@ func (s *integrationCategorySender) SendCategoryEmail(_ context.Context, to, sub
 }
 
 func TestEmailDeliveryAndUnsubscribeSQLiteIntegration(t *testing.T) {
-	migrations, err := fs.Sub(database.EmbeddedMigrations, "migrations")
-	if err != nil {
-		t.Fatalf("migration sub-FS: %v", err)
-	}
-	db, err := database.NewLegacy(filepath.Join(t.TempDir(), "email_delivery_integration.db"), migrations)
-	if err != nil {
-		t.Fatalf("open SQLite test database: %v", err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
+	db := newServiceFixtureDB(t, "email_delivery_integration.db")
+	var err error
 	ctx := context.Background()
 	if _, err = db.Conn.ExecContext(ctx, `INSERT INTO users(id,username,password_hash,email,email_verified_at) VALUES(?,?,?,?,?)`, "integration-user", "integration-user", "x", "integration@example.test", 1); err != nil {
 		t.Fatalf("seed user: %v", err)
@@ -138,15 +128,8 @@ func TestEmailDeliveryAndUnsubscribeSQLiteIntegration(t *testing.T) {
 }
 
 func TestUnreadConversationDigestSQLiteIntegration(t *testing.T) {
-	migrations, err := fs.Sub(database.EmbeddedMigrations, "migrations")
-	if err != nil {
-		t.Fatal(err)
-	}
-	db, err := database.NewLegacy(filepath.Join(t.TempDir(), "digest.db"), migrations)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
+	db := newServiceFixtureDB(t, "digest.db")
+	var err error
 	ctx := context.Background()
 	if _, err = db.Conn.ExecContext(ctx, `
 		INSERT INTO users(id,username,password_hash,email,email_verified_at) VALUES('sender','private-name','x','sender@example.test',1),('owner','owner','x','owner@example.test',1);

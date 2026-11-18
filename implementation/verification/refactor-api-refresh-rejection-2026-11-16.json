@@ -1,0 +1,18 @@
+{
+  "baselineCommit": "1f3c9cb1",
+  "scope": "Extract synchronous terminal refresh rejection classification and token cleanup. Conflict-body await, auth-generation recheck and lifetime disposal stay in doRefresh.",
+  "validation": {
+    "clientTests": 64,
+    "typescript": "PASS",
+    "targetedEslint": "PASS",
+    "structuralParity": {
+      "method": "Canonical TypeScript statement printing after inlining synchronous terminal rejection helper",
+      "doRefreshParity": true
+    }
+  },
+  "developmentFailure": "Initial attempted helper included async conflict parsing; transform rejected it. That attempt was replaced before commit; final 64 tests/type/lint and canonical statement parity pass.",
+  "remaining": [
+    "Final-source scan/CI/Sonar",
+    "Complete RF07 auth/recovery/native acceptance"
+  ]
+}

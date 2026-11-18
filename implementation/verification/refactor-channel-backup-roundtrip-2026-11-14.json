@@ -1,0 +1,23 @@
+{
+  "runtime_source": "aa138419",
+  "test_files_sha256": {
+    "client/src/crypto/keyBackup.test.ts": "25f45df7c088f67dafe26b0cc03c232763d39d234b24a6a2eb56f60b8d510bd6",
+    "client/src/crypto/keyBackup.fixedFixtures.test.ts": "6d9625f4565438c63bf5ebf7738eebf17fe4e0094ac1eb83f5c1d0b01b6cf354",
+    "client/src/hooks/ws/channelNavigation.test.ts": "983449db0e80f61557ba8378ac9fdcf12c74b8ba27951c2de1f4f8b6c7dd49b4",
+    "client/src/crypto/channelMessageCache.test.ts": "d26d57b522957a6868e0f4610d2e9bf33d81d9660fcb18818862766f2d89d571",
+    "client/src/crypto/channelEncryption.test.ts": "6710fb620d73509e312e85f6c1dd8d601832a6b1dfe7862da49b2dc22d70b96e",
+    "client/src/crypto/senderKeyProtocol.test.ts": "8f424683b366b17796094db7650fbb36002f58131a247cfa1844b063df7bce03",
+    "client/src/stores/messageStore.test.ts": "28ca9451a7516927eb0a90ea3d62f8acc8549fff51b47626ce5a2ed1a9c04272"
+  },
+  "result": {
+    "test_files": 7,
+    "passed": 196,
+    "failed": 0
+  },
+  "backup_contract": "Actual PBKDF2/AES round trip into an initially empty cache preserves source tags and file keys for group and channel records.",
+  "limits": [
+    "Production restore/history E2E with the WebSocket fix pending.",
+    "Legacy fixed-format key restoration does not prove unversioned channel history rendering.",
+    "Linux CI is still on the previous 8a2f source."
+  ]
+}

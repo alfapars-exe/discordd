@@ -8,25 +8,25 @@ import (
 	"github.com/argeinfina/hichat/repository"
 )
 
-type gameJoinVoiceAdmission interface {
+type GameJoinVoiceAdmission interface {
 	GameJoinVoiceAdmission(string, string, string, string) (func(func() error) error, error)
 }
 type gameJoinPolicy struct {
-	activity    GameActivityPrivacyPolicy
-	prefs       repository.PreferencesRepository
-	friends     repository.FriendshipRepository
-	users       repository.UserRepository
-	lifecycle   repository.AccountLifecycleRepository
-	servers     repository.ServerRepository
-	bans        repository.BanRepository
-	channels    ChannelGetter
-	permissions ChannelPermResolver
-	voice       gameJoinVoiceAdmission
+	freshPermissions FreshChannelPermResolver
+	activity         GameActivityPrivacyPolicy
+	prefs            repository.PreferencesRepository
+	friends          repository.FriendshipRepository
+	users            repository.UserRepository
+	lifecycle        repository.AccountLifecycleRepository
+	servers          repository.ServerRepository
+	bans             repository.BanRepository
+	channels         ChannelGetter
+	permissions      ChannelPermResolver
+	voice            GameJoinVoiceAdmission
 }
 
-func NewGameJoinPolicy(activity GameActivityPrivacyPolicy, prefs repository.PreferencesRepository, friends repository.FriendshipRepository, users repository.UserRepository, lifecycle repository.AccountLifecycleRepository, servers repository.ServerRepository, bans repository.BanRepository, channels ChannelGetter, permissions ChannelPermResolver, voice VoiceService) GameJoinPolicy {
-	v, _ := voice.(gameJoinVoiceAdmission)
-	return &gameJoinPolicy{activity, prefs, friends, users, lifecycle, servers, bans, channels, permissions, v}
+func NewGameJoinPolicy(activity GameActivityPrivacyPolicy, prefs repository.PreferencesRepository, friends repository.FriendshipRepository, users repository.UserRepository, lifecycle repository.AccountLifecycleRepository, servers repository.ServerRepository, bans repository.BanRepository, channels ChannelGetter, permissions ChannelPermResolver, voice GameJoinVoiceAdmission, freshPermissions FreshChannelPermResolver) GameJoinPolicy {
+	return &gameJoinPolicy{activity: activity, prefs: prefs, friends: friends, users: users, lifecycle: lifecycle, servers: servers, bans: bans, channels: channels, permissions: permissions, voice: voice, freshPermissions: freshPermissions}
 }
 func (p *gameJoinPolicy) Authorize(ctx context.Context, viewer string, c GameJoinContext) (func(func() error) error, error) {
 	deny := func() (func(func() error) error, error) { return nil, pkg.ErrForbidden }
@@ -144,7 +144,7 @@ func (p *gameJoinPolicy) Authorize(ctx context.Context, viewer string, c GameJoi
 			return deny()
 		}
 	}
-	permissions, e := resolveFreshFanoutPermissions(ctx, p.permissions, c.ChannelID, []string{viewer, c.TargetUserID})
+	permissions, e := p.resolveVoicePermissions(ctx, c.ChannelID, []string{viewer, c.TargetUserID})
 	if e != nil {
 		return nil, e
 	}
@@ -181,4 +181,11 @@ func (s *voiceService) GameJoinVoiceAdmission(viewer, target, server, channel st
 		}
 		return commit()
 	}, nil
+}
+
+func (p *gameJoinPolicy) resolveVoicePermissions(ctx context.Context, channel string, users []string) (map[string]models.Permission, error) {
+	if p.freshPermissions != nil {
+		return p.freshPermissions.ResolveChannelPermissionsBulkFresh(ctx, channel, users)
+	}
+	return p.permissions.ResolveChannelPermissionsBulk(ctx, channel, users)
 }

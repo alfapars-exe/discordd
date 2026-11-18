@@ -49,6 +49,18 @@ func TestGroupDMDurableSendLifecycle(t *testing.T) {
 	}
 	cipher, device := "cipher", "device"
 	message := &models.GroupDMMessage{GroupID: "op-group", UserID: "op-owner", SendRequestID: key, Ciphertext: &cipher, SenderDeviceID: &device, EncryptionVersion: 1, KeyEpoch: 1}
+	mismatched := *message
+	mismatched.ID = "foreign-message"
+	if err = repo.CreateMessage(ctx, &mismatched); !errors.Is(err, pkg.ErrConflict) {
+		t.Fatal("prepared operation accepted a different message ID", err)
+	}
+	unchanged, err := repo.GetSendOperation(ctx, "op-group", "op-owner", key)
+	if err != nil || unchanged.Phase != "prepared" || unchanged.MessageID != op.MessageID {
+		t.Fatalf("rejected message changed operation: %+v %v", unchanged, err)
+	}
+	if _, err = repo.GetMessage(ctx, "op-group", mismatched.ID); !errors.Is(err, pkg.ErrNotFound) {
+		t.Fatal("rejected message was persisted", err)
+	}
 	if err = repo.CreateMessage(ctx, message); err != nil || message.ID != op.MessageID {
 		t.Fatalf("message=%+v err=%v", message, err)
 	}

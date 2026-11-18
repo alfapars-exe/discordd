@@ -1,0 +1,41 @@
+{
+  "date": "2026-11-14",
+  "scope": "Keep channel-deletion worker queues and active finalization progressing after callback panics",
+  "source_sha256": {
+    "server/services/voice_channel_delete.go": "74b375ebd7ad41971e231a209930e208fbad5250aabb6a0496ac5f026832d8c9",
+    "server/services/voice_channel_delete_test.go": "73c65eac60ba950cb62f990205328206aa435b7403d5557c69732d69bcfa81c4",
+    "server/services/voice_shutdown.go": "fb0151f47abc712455f2272d0b5ae318cafad15fc0ec59d652671c5dfa886992",
+    "server/services/voice_shutdown_test.go": "e9c5e99698cbb07597ba70f8f62f92aabf94b44bea87366f32d26275a88e3d69"
+  },
+  "before": {
+    "test": "TestDeleteVoiceChannelContinuesAfterCleanupPanic",
+    "exit": 1,
+    "failed_cases": [
+      "credit",
+      "eviction"
+    ],
+    "failure": "panicking cleanup stranded channel deletion queue"
+  },
+  "after": {
+    "targeted_count": 10,
+    "services_exit": 0,
+    "services_seconds": 0.963,
+    "logx_exit": 0,
+    "logx_seconds": 1.065,
+    "full_vet_exit": 0,
+    "full_build_exit": 0,
+    "full_lint_issues": 0
+  },
+  "invariants": [
+    "Each credit attempt and each of two identities has its own panic boundary",
+    "Credit panic does not suppress media attempts or later sessions",
+    "Late closed-owner music panic does not suppress committed channel cleanup",
+    "Active finalizer shares the guarded credit helper"
+  ],
+  "limitations": [
+    "A panic is logged and work is not retried; attempt does not imply successful credit or eviction.",
+    "No new native/race or physical acceptance while local Docker unavailable.",
+    "Local integration only; publishedfbf10657 CI43526056404 still live with20 successful jobs/no failure at last poll.",
+    "Other worker loops and final whole-project acceptance remain open."
+  ]
+}

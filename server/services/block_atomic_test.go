@@ -23,6 +23,7 @@ func TestBlockUserAtomicEventsFollowCommit(t *testing.T) {
 	for _, outcome := range []string{"failed", "new", "replaced"} {
 		t.Run(outcome, func(t *testing.T) {
 			f := newBlockSvcFixture(t)
+			activity := &recordingGameActivityInvalidator{}
 			failure := errors.New("commit failed")
 			called := false
 			f.friends.GetByPairFn = func(context.Context, string, string) (*models.Friendship, error) {
@@ -31,8 +32,8 @@ func TestBlockUserAtomicEventsFollowCommit(t *testing.T) {
 			}
 			repo := atomicBlockRepoStub{MockFriendshipRepo: f.friends, write: func(_ context.Context, row *models.Friendship) (bool, error) {
 				called = true
-				if len(f.events) != 0 {
-					t.Fatal("event emitted before transaction finished")
+				if len(f.events) != 0 || len(activity.calls) != 0 {
+					t.Fatal("event or activity invalidation emitted before transaction finished")
 				}
 				if row.UserID != "alice" || row.FriendID != "bob" || row.Status != models.FriendshipStatusBlocked || row.ID == "" {
 					t.Fatalf("invalid row %+v", row)
@@ -42,13 +43,13 @@ func TestBlockUserAtomicEventsFollowCommit(t *testing.T) {
 				}
 				return outcome == "replaced", nil
 			}}
-			svc := NewBlockService(repo, f.users, f.hub)
+			svc := NewBlockService(activity, repo, f.users, f.hub)
 			err := svc.BlockUser(context.Background(), "alice", "bob")
 			if !called {
 				t.Fatal("atomic writer not called")
 			}
 			if outcome == "failed" {
-				if !errors.Is(err, failure) || len(f.events) != 0 {
+				if !errors.Is(err, failure) || len(f.events) != 0 || len(activity.calls) != 0 {
 					t.Fatalf("error=%v events=%+v", err, f.events)
 				}
 				return
@@ -57,6 +58,9 @@ func TestBlockUserAtomicEventsFollowCommit(t *testing.T) {
 				t.Fatal(err)
 			}
 			assertUserBlockBothSides(t, f)
+			if len(activity.calls) != 1 || activity.calls[0] != (gameActivityInvalidationCall{kind: "relationship", a: "alice", b: "bob"}) {
+				t.Fatalf("committed block activity invalidation: %+v", activity.calls)
+			}
 			want := 0
 			if outcome == "replaced" {
 				want = 1

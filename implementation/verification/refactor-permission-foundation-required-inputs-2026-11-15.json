@@ -1,0 +1,27 @@
+{
+  "scope": "RF11 permission foundation required providers and cache ownership",
+  "integrations": [
+    "Repositories",
+    "Hub"
+  ],
+  "repositories": [
+    "ChannelPermission",
+    "Role",
+    "Channel"
+  ],
+  "regression": "9 invalid-provider cases failed first: missing repos/hub, typed-nil hub, six nil/typed-nil repository cases. Worker-count assertions found no retained workers even on old nil-repository partial-construction panic.",
+  "implementation": "Validate required providers before cache allocation; retain partial-construction rollback and reverse Stop ownership.",
+  "checks": {
+    "valid": "Exactly three cache workers transferred; repeated Stop returns worker count to baseline",
+    "invalid": "Worker count unchanged after all invalid cases",
+    "root": "PASS foundation/service initialization/cache/routes/callbacks/real permission and auth-cache revocation/real friendship-DM, 3.479s",
+    "build": "PASS go build ./...",
+    "vet": "PASS go vet .",
+    "reviewed_manifest": "PASS 50 exact records"
+  },
+  "limits": [
+    "Validation removes known nil-input allocation failures; arbitrary constructor failure injection still unproven.",
+    "Other process composition, complete lifecycle/race and RF01-RF30 acceptance remain open.",
+    "Current remote source 5b9b9216 excludes local changes."
+  ]
+}

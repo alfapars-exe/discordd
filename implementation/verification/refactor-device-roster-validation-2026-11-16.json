@@ -1,0 +1,78 @@
+{
+  "source": "221f19df",
+  "characterization": "1784c1f8",
+  "sonarIssue": "AaHdTCJSxOErB7BtYvzk",
+  "originalCognitiveComplexity": 19,
+  "change": "Extract synchronous fresh roster member/device validation from scope/capability/handshake orchestration",
+  "invariants": [
+    "Original roster version, exact member set, duplicate checks and device revision format retained",
+    "Group key epoch check remains before member validation",
+    "Revoked local device is rejected before prekey planning",
+    "Fresh membership and owner guards, one-time prekey consumption/session reuse contracts unchanged",
+    "Public endpoints, request fields, revision canonicalization and return context unchanged"
+  ],
+  "validation": {
+    "rosterBefore": 37,
+    "rosterAfter": 37,
+    "combinedRosterAndEncryption": 77,
+    "typecheck": "PASS",
+    "coverage": {
+      "lines": 95.5,
+      "functions": 100,
+      "branches": 87.64,
+      "statements": 92.37
+    },
+    "lint": "PASS zero errors / two existing warnings",
+    "fullClient": "5546 passed / 1 skipped / 0 failed; 505 files",
+    "build": "PASS TypeScript + Vite",
+    "validationBodyParity": {
+      "baseline": "a4525d6e",
+      "normalizedProtocolParameter": true,
+      "remainingBodyByteIdenticalLF": true,
+      "sha256": "b1e0e1130dae92f21cee91d08b7d96ffd5cb933c898c8c1f57ec707d3a7d7f29"
+    }
+  },
+  "pending": [
+    "RF15 complete permission/encryption/runtime mapping and physical/platform acceptance"
+  ],
+  "evidence": {
+    "before": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-roster-validation-before.log",
+      "sha256": "1f0a39dd1f19228f628af4e7bc5ebc744901452a6143adf5a2f5daf9c334ddad"
+    },
+    "after": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-roster-validation-after.log",
+      "sha256": "30a6a6b45aefa269460c8a4778e0f2e7503ac32091ca91d619665f5fe2d495ae"
+    },
+    "finalTarget": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-roster-validation-final-target.log",
+      "sha256": "7f9019f3657994ad8a55555a4b71d7477494cc02d3f85a67ea62e7de145b02f3"
+    },
+    "fullClient": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-roster-validation-full.log",
+      "sha256": "f15f120d99b4d63bb55a253ccf9782a4a2c0eadd529e52b2f545a758b79c8733"
+    }
+  },
+  "ci": {
+    "head": "1ea35841",
+    "checks": "36/36 SUCCESS",
+    "serverRun": 43779709324,
+    "receipt": "refactor-1ea3-terminal-ci-2026-11-16.json"
+  },
+  "sonar": {
+    "issue": "AaHdTCJSxOErB7BtYvzk",
+    "status": "CLOSED",
+    "resolution": "FIXED",
+    "analyzedLines": 161,
+    "sourceMismatches": 0,
+    "extraEmptyEOF": 1,
+    "remainingFileFindings": "Two pre-existing serial-await findings remain; not waived or claimed fixed"
+  },
+  "selfScan": {
+    "source": "221f19df",
+    "result": "PASS",
+    "reviewedExactSourceRecords": 51,
+    "reviewLines": 481,
+    "blockingPatternHits": 0
+  }
+}

@@ -1,0 +1,151 @@
+{
+  "baseCommit": "eb0a31cc40b244c3beb9b74a78e50d83dea83f19",
+  "scope": "Stable channel/DM encrypted search panels use disposable disk snapshots and bounded hydration instead of all-match ID arrays",
+  "behavior": [
+    "Index creation once per query;25-ID pages; stale rows pruned and pages refilled without full rescan",
+    "Live deletions hidden immediately; asynchronous removals invalidate older reads before releasing tombstones; out-of-order completion cannot increase total or reset current page incorrectly",
+    "Post-hydration index re-read and cached-row revalidation prevent a late tombstone from reappearing",
+    "Input changes,close,owner/session/device/encryption readiness/cache reset dispose old index and abandon late work",
+    "Local reset clears rendered results; same-origin reset bridge filters by account/backend database and observes durable epoch; persistent reads remain authoritative if bridge unavailable"
+  ],
+  "verification": {
+    "red": "A new real-index hydration race test failed before the final cached-row tombstone recheck",
+    "selected": "6 files123 tests passed; TypeScript passed",
+    "full": "481 files4974 passed/1 skipped,122.85s",
+    "coverage": {
+      "statements": 66.94,
+      "branches": 64.32,
+      "functions": 61.21,
+      "lines": 67.93,
+      "channelPanelLines": 85.16,
+      "channelPanelBranches": 80.35,
+      "dmPanelLines": 80.12,
+      "dmPanelBranches": 76.53,
+      "pageHydrationLines": 96.29,
+      "pageHydrationBranches": 81.48,
+      "resetEpochLines": 82.35,
+      "resetEpochBranches": 64.1
+    },
+    "lint": "0 errors,2 existing TanStack warnings",
+    "productionBuild": "tsc/Vite production build passed as part of real browser profile",
+    "productionBrowser": "Real Go + owned PostgreSQL18.6 verify-full mTLS,3/3 in2.9m;26 encrypted channel and26 DM messages,exact25/1 accented uppercase search pages,no REST search,correct after new-context backup recovery/reload;26 group sends and peer decryption/prekey budgets preserved",
+    "native": "Chromium156 API benchmark1k/10k/50k,one warmup+nine samples; reset notification generation observed across two actual JS realms,then old handle rejected and refs/headers counted0",
+    "nativeReports": [
+      {
+        "kind": "channel",
+        "size": 1000,
+        "matches": 267,
+        "repetitions": 9,
+        "buildMedianMs": 52.900000005960464,
+        "firstPageMedianMs": 3.300000011920929,
+        "nextPageMedianMs": 3.0999999940395355,
+        "previousPageMedianMs": 3.199999988079071,
+        "retainedDeltaMedianBytes": 9384,
+        "maxPageIds": 25,
+        "scope": "Disk ordering snapshot API and25-ID windows, one warmup. Post-GC retained handle heap only; excludes transient peak, full panels and IndexedDB disk usage. Source cache writes wait during scan."
+      },
+      {
+        "kind": "channel",
+        "size": 10000,
+        "matches": 2667,
+        "repetitions": 9,
+        "buildMedianMs": 446.90000000596046,
+        "firstPageMedianMs": 3.699999988079071,
+        "nextPageMedianMs": 2.899999976158142,
+        "previousPageMedianMs": 2.7000000178813934,
+        "retainedDeltaMedianBytes": 6852,
+        "maxPageIds": 25,
+        "scope": "Disk ordering snapshot API and25-ID windows, one warmup. Post-GC retained handle heap only; excludes transient peak, full panels and IndexedDB disk usage. Source cache writes wait during scan."
+      },
+      {
+        "kind": "channel",
+        "size": 50000,
+        "matches": 13333,
+        "repetitions": 9,
+        "buildMedianMs": 2404.0999999940395,
+        "firstPageMedianMs": 3,
+        "nextPageMedianMs": 2.7999999821186066,
+        "previousPageMedianMs": 2.9000000059604645,
+        "retainedDeltaMedianBytes": 23316,
+        "maxPageIds": 25,
+        "scope": "Disk ordering snapshot API and25-ID windows, one warmup. Post-GC retained handle heap only; excludes transient peak, full panels and IndexedDB disk usage. Source cache writes wait during scan."
+      },
+      {
+        "kind": "dm",
+        "size": 1000,
+        "matches": 267,
+        "repetitions": 9,
+        "buildMedianMs": 48.29999998211861,
+        "firstPageMedianMs": 3.0999999940395355,
+        "nextPageMedianMs": 3.0999999940395355,
+        "previousPageMedianMs": 2.7999999821186066,
+        "retainedDeltaMedianBytes": 5212,
+        "maxPageIds": 25,
+        "scope": "Disk ordering snapshot API and25-ID windows, one warmup. Post-GC retained handle heap only; excludes transient peak, full panels and IndexedDB disk usage. Source cache writes wait during scan."
+      },
+      {
+        "kind": "dm",
+        "size": 10000,
+        "matches": 2667,
+        "repetitions": 9,
+        "buildMedianMs": 501.30000001192093,
+        "firstPageMedianMs": 3.0999999940395355,
+        "nextPageMedianMs": 4.200000017881393,
+        "previousPageMedianMs": 3.2999999821186066,
+        "retainedDeltaMedianBytes": 7788,
+        "maxPageIds": 25,
+        "scope": "Disk ordering snapshot API and25-ID windows, one warmup. Post-GC retained handle heap only; excludes transient peak, full panels and IndexedDB disk usage. Source cache writes wait during scan."
+      },
+      {
+        "kind": "dm",
+        "size": 50000,
+        "matches": 13333,
+        "repetitions": 9,
+        "buildMedianMs": 2622.300000011921,
+        "firstPageMedianMs": 3.0999999940395355,
+        "nextPageMedianMs": 3.7999999821186066,
+        "previousPageMedianMs": 2.9000000059604645,
+        "retainedDeltaMedianBytes": 23316,
+        "maxPageIds": 25,
+        "scope": "Disk ordering snapshot API and25-ID windows, one warmup. Post-GC retained handle heap only; excludes transient peak, full panels and IndexedDB disk usage. Source cache writes wait during scan."
+      },
+      {
+        "crossTabReset": {
+          "rejected": true,
+          "refs": 0,
+          "snapshots": 0
+        }
+      }
+    ],
+    "measurementScope": "Native retained heap measures index handles,not full panel or transient peak. Ran alongside other validation; not isolated capacity/latency proof. Native reset proves bridge notification+storage denial; local React tests prove rendered result removal.",
+    "diagnostics": "Production profile logged session refresh400 warnings and completed successfully. Initial migration harness/typing errors were corrected before final gates.",
+    "cleanup": "Owned PostgreSQL container hichat-e2e-pg-cde87c95510335f8 and unique fixture image removed; native Chromium/Vite and Playwright sessions completed exit0"
+  },
+  "normalizedLFSourceSha256": {
+    "client/src/components/chat/SearchPanel.tsx": "85b6142b8cc0a06ca682568186f62c67ff41188854fc89a3b1e87d49c6f5cfc5",
+    "client/src/components/chat/SearchPanel.test.tsx": "dc7a7f47b83023e56dae6835bd18bbc82d4685a4d9945b728e93a14d57f78618",
+    "client/src/components/dm/DMSearchPanel.tsx": "1d017983817473b0084a13655dcfe0e38c5f2d280df41e62dd637271cbc0619a",
+    "client/src/components/dm/DMSearchPanel.test.tsx": "2d318a35602cbb67ad6144acb71c100fef8d77809f0da929baa3a04f0b061ee6",
+    "client/src/crypto/cachedSearchEpoch.ts": "a4add2318970efea76e945a6ca2ee6ff32175c7f408bf84cdcc09a88c06c1bd1",
+    "client/src/crypto/cachedSearchPage.ts": "81cbd50a137a3c5d3c2163c4c7aa627670b65b245bb621b7053ba9ae26801bc6",
+    "client/src/crypto/cachedSearchPage.test.ts": "b396142e60d5075674cd8ed0d67da7c2f7e90fcb8ec22d0d9a69b824947051d5",
+    "client/src/crypto/keyStorage.ts": "034c0cdde1e964803bbc6bd24c73f757bea2c889ee1a1f5a43af4e05e0228a65",
+    "client/src/test/fakeCachedSearchSnapshot.ts": "e14f5e090da0851b297007a91ea392af5a377f48d9636acaa6474d19cff1ed7f",
+    "e2e/scripts/benchmark-search-snapshot.mjs": "cbfa4a6a260f7e66110011a9c5e07e02ead2e2b8d5477f06a972392cc71a3f3f"
+  },
+  "logSha256": {
+    "hichat-search-page-tombstone-red.log": "7eb30d6fd3670afa377000272fac41909d7b7a717630a46f710eef28034bd4b4",
+    "hichat-search-panels-final-selected.log": "465d83bd05a0d86958b4fc517598293c2cc43ed5b81efe27346dad12b64f6549",
+    "hichat-search-panels-final-lint.log": "b51344ffc39e8ec9a8569b51c5ae7b28aa35df7af955a93bafae4f7a267c30fa",
+    "hichat-search-panels-full-coverage.log": "34d1436e037f89da18352075340f57b21fc93816b668142712f97df5638e4898",
+    "hichat-search-panels-production-browser.log": "630f5a3bc194359c3677f2e86ededa7ceabf26f67582f04983f4b559652ecb8c",
+    "hichat-search-panels-native-reset.log": "206b23d1975e8ffc43545312bba6c4a30794b51847773dab5253a4b86df810e6"
+  },
+  "remaining": [
+    "Measure actual rendered-panel retained/peak heap and controlled first-query/next/previous latency; API heap alone does not prove these",
+    "Pending live-deletion frontier and rapid query/delete resource budgets,quota/retry and extended permission/account/device matrices remain open",
+    "Source message-cache writes still wait during coherent first scan; mixed large-history timings and live receive latency under scan need acceptance",
+    "Legacy full-result storage search APIs remain for historical benchmarks; production panels no longer call them",
+    "Current source CI pending; whole-project/platform/media acceptance remains open"
+  ]
+}

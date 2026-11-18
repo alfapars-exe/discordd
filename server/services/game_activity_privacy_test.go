@@ -89,6 +89,7 @@ func gameActivityPolicy(data string, friends gameActivityFriendsStub, servers ga
 		gameActivityPrefsStub{data: []byte(data), err: prefsErr},
 		friends,
 		servers,
+		servers,
 		presence,
 	)
 }
@@ -206,7 +207,7 @@ func TestGameActivityPrivacyPolicyFailsClosed(t *testing.T) {
 }
 
 func TestGameActivityPrivacyPolicyRequiresIDsAndReaders(t *testing.T) {
-	policy := NewGameActivityPrivacyPolicy(nil, nil, nil, nil)
+	policy := NewGameActivityPrivacyPolicy(nil, nil, nil, nil, nil)
 	for _, ids := range [][2]string{{"", "target"}, {"viewer", ""}, {"viewer", "target"}} {
 		got, err := policy.CanView(context.Background(), ids[0], ids[1], "")
 		if err == nil || got {
@@ -225,4 +226,26 @@ func mustJSON(t *testing.T, value any) []byte {
 		t.Fatal(err)
 	}
 	return data
+}
+
+func TestGameActivityPrivacyUsesExplicitSnapshotSelection(t *testing.T) {
+	servers := gameActivityServersStub{members: map[string]map[string]bool{"shared": {"viewer": true, "target": true}}, snapshots: map[string]bool{"shared": true}}
+	for _, tc := range []struct {
+		name    string
+		reader  gameActivityMembershipAudienceReader
+		want    bool
+		wantErr bool
+	}{
+		{"enabled", servers, true, false},
+		{"disabled despite capable membership reader", nil, false, false},
+		{"snapshot error", gameActivityServersStub{snapshotErr: errors.New("unavailable")}, false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			policy := NewGameActivityPrivacyPolicy(gameActivityPrefsStub{data: []byte(`{"privacy":{"shareGameActivity":true}}`)}, gameActivityFriendsStub{}, servers, tc.reader, gameActivityPresenceStub{visible: true})
+			got, err := policy.CanView(context.Background(), "viewer", "target", "shared")
+			if got != tc.want || (err != nil) != tc.wantErr {
+				t.Fatalf("allow=%v err=%v", got, err)
+			}
+		})
+	}
 }

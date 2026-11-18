@@ -1,0 +1,59 @@
+{
+  "source_parent": "29ba2748",
+  "task": "RF07",
+  "status": "partial_layer_contract_matrix_open",
+  "current_validation": {
+    "go_top_level_passes": [
+      "TestPasswordRecoveryIdentifierContracts",
+      "TestPasswordRecoveryDoesNotMaskRepositoryFailureWithUsernameLookup",
+      "TestChangeEmail",
+      "TestForgotPassword",
+      "TestResetPassword",
+      "TestResetPassword_RevokesAllSessions",
+      "TestRecoveryEndpointKeepsKnownUnknownAndCooldownResponsesEquivalent",
+      "TestNewPasswordPolicyAcrossRequests"
+    ],
+    "go_packages": 3,
+    "client_files": 4,
+    "client_tests_passed": 11,
+    "sqlite_atomic_repository_tests": 2,
+    "all_exits": 0
+  },
+  "matrix": [
+    {
+      "requirement": "username, unknown and legacy email-less recovery",
+      "evidence": "TestPasswordRecoveryIdentifierContracts; TestForgotPassword; public handler equivalence",
+      "limit": "Service mocks and stub handler are distinct from composed HTTP/DB acceptance"
+    },
+    {
+      "requirement": "email removal rejected",
+      "evidence": "TestChangeEmail existing-address and no-address cases",
+      "limit": "Full UI/API/model mapping not completed here"
+    },
+    {
+      "requirement": "single-use/expired/concurrent reset and session invalidation",
+      "evidence": "Reset service tests; SQLite auth-session commit/replay and concurrent proof tests",
+      "limit": "Repository atomic path and mocked service tests are distinct; native race belongs to CI"
+    },
+    {
+      "requirement": "registration email requirement / legacy login",
+      "evidence": "RegisterPage and password-policy tests selected",
+      "limit": "New registration/legacy login model/service/handler matrix still requires explicit mapping"
+    },
+    {
+      "requirement": "provider failure/timeout",
+      "evidence": "Source propagates sender failure; no new focused runtime proof in this selection",
+      "limit": "Remains open"
+    },
+    {
+      "requirement": "OpenAPI and identifier normalization",
+      "evidence": "server/openapi.yaml ForgotPasswordRequest requires identifier and describes username/email",
+      "limit": "Case/trim parity and all status/error schema rows still require explicit comparison"
+    }
+  ],
+  "limits": [
+    "No real email provider send",
+    "No complete RF07 claim",
+    "Current selected Go tests do not establish every handler/client combination"
+  ]
+}

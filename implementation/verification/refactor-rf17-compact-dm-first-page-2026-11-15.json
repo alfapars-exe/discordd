@@ -1,0 +1,93 @@
+{
+  "runtime": "Chromium 156.0.8078.4",
+  "command": "node e2e/scripts/benchmark-encrypted-search.mjs --dm",
+  "results": [
+    {
+      "mode": "dm",
+      "size": 1000,
+      "matches": 267,
+      "samplesMs": [
+        16.30000001192093,
+        20.69999998807907,
+        18.80000001192093
+      ],
+      "previousPageMs": [
+        16.900000005960464,
+        21.19999998807907,
+        19.100000023841858
+      ],
+      "indexedPageMs": [
+        2,
+        2.300000011920929,
+        2.199999988079071
+      ],
+      "compactFirstPageMs": [
+        19,
+        23.599999994039536,
+        20.80000001192093
+      ]
+    },
+    {
+      "mode": "dm",
+      "size": 10000,
+      "matches": 2667,
+      "samplesMs": [
+        210.7999999821186,
+        210.30000001192093,
+        237.89999997615814
+      ],
+      "previousPageMs": [
+        215.19999998807907,
+        214.80000001192093,
+        242.2999999821186
+      ],
+      "indexedPageMs": [
+        2,
+        2.5,
+        2.0999999940395355
+      ],
+      "compactFirstPageMs": [
+        213.69999998807907,
+        226.5,
+        205.90000000596046
+      ]
+    },
+    {
+      "mode": "dm",
+      "size": 50000,
+      "matches": 13333,
+      "samplesMs": [
+        1039.800000011921,
+        1031.7999999821186,
+        1058.1000000238419
+      ],
+      "previousPageMs": [
+        1058.0999999940395,
+        1050.8999999761581,
+        1078.1000000238419
+      ],
+      "indexedPageMs": [
+        2.4000000059604645,
+        2,
+        1.9000000059604645
+      ],
+      "compactFirstPageMs": [
+        1072.0999999940395,
+        1081.3999999761581,
+        1087.800000011921
+      ]
+    }
+  ],
+  "checks": [
+    "Exact match and source order",
+    "First page ID/content equivalence",
+    "Reference records contain no content field",
+    "76 targeted tests passed",
+    "TypeScript and targeted ESLint passed"
+  ],
+  "limitations": [
+    "No first-query speed improvement demonstrated",
+    "No heap measurement; all matching references/IDs still retained",
+    "Full scan is still linear; RF17 remains open"
+  ]
+}

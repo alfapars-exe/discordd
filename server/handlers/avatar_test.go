@@ -65,8 +65,8 @@ func newAvatarFixture(t *testing.T) *avatarFixture {
 			return nil
 		},
 	}
-	svc := services.NewMemberService(users, nil, nil, nil, &testutil.MockServerRepo{}, nil,
-		&testutil.MockEventPublisher{}, nil, nil)
+	svc := services.NewMemberService(nil, nil, users, nil, nil, nil, &testutil.MockServerRepo{}, nil,
+		&testutil.MockEventPublisher{}, nil, nil, nil, nil)
 	f.h = NewAvatarHandler(users, svc, nil, f.dir, nil)
 	return f
 }

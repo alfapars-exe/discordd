@@ -1,0 +1,87 @@
+{
+  "source": "6e69da33",
+  "characterizationCommit": "ac22bc5d",
+  "sonarIssue": "AaHdtCMB07pFJPuubXuL",
+  "originalCognitiveComplexity": 43,
+  "changes": [
+    "Separate window retention, loaded tombstone revalidation, owned deletion and pending hydration",
+    "Preserve parallel hydration, stable index order, page refill and offset/total contracts",
+    "Recheck ownership after the newly asynchronous revalidation phase"
+  ],
+  "validation": {
+    "beforeCharacterization": 9,
+    "afterTargeted": 32,
+    "fullClientPass": 5518,
+    "fullClientSkip": 1,
+    "lintErrors": 0,
+    "lintWarnings": 2,
+    "typeAndBuild": "PASS",
+    "warningNote": "Existing TanStack incompatible-library warnings and Vite chunk size advisory",
+    "targetedCoverage": {
+      "lines": 100,
+      "functions": 100,
+      "branches": 87.87,
+      "statements": 92,
+      "command": "vitest run src/crypto/cachedSearchPage.test.ts --coverage --coverage.include=src/crypto/cachedSearchPage.ts",
+      "limit": "Nine real IndexedDB-backed page tests; whole search pipeline/native budgets remain open."
+    },
+    "finalTargetedWithRevalidationOwnerCase": 33,
+    "extraOwnerCase": "Owner changes in a microtask after loaded-row revalidation: null result, no index removal, same total",
+    "fullSuiteScope": "Full 5518-pass run preceded this final additional test; final targeted run has 33 passes."
+  },
+  "evidence": {
+    "hichat-search-page-before.log": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-page-before.log",
+      "sha256": "52649f6fe7a83e1f9c8e26246a1ed8df543fe8dffc6ad81f37137a75e226a799"
+    },
+    "hichat-search-page-final-target.log": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-page-final-target.log",
+      "sha256": "aa4b82b8ebd907c3730bb3b5bbc65896860f194e8116eeb71c4ed96402d300f0"
+    },
+    "hichat-search-page-full.log": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-page-full.log",
+      "sha256": "2dd975308e2e61dbd0875e9b00f34b8ae8017ed36196a2d2ba8adaf15c6629a6"
+    },
+    "hichat-search-page-lint.log": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-page-lint.log",
+      "sha256": "b51344ffc39e8ec9a8569b51c5ae7b28aa35df7af955a93bafae4f7a267c30fa"
+    },
+    "hichat-search-page-build.log": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-page-build.log",
+      "sha256": "215d4dbd091e2677002161bbdab324c7d33e124e283a02e6224c3c1e95d7d408"
+    }
+  },
+  "pending": [
+    "RF17 first-query budget, native/platform and whole-pipeline acceptance",
+    "79f600db CI failed Playwright pending-panel DM timeout; remediation/diagnostics open"
+  ],
+  "note": "Test mock return type corrected after initial tsc failure; final target and build passed.",
+  "negativeControl": {
+    "mutation": "Remove only the isCurrent guard after await revalidateLoaded",
+    "test": "abandons a page when ownership changes after loaded-row revalidation",
+    "result": "Expected assertion failure: returned page instead of null",
+    "sourceRestored": true,
+    "rawPath": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-page-owner-negative.log",
+    "sha256": "8a37a963449aa15117657c87fea975a6068dde326eab42299afc1eb1f96f285a"
+  },
+  "selfScan": {
+    "archiveCommit": "f80d3c32",
+    "runtimeSourceEqualsPublished79f600db": true,
+    "runtimeSHA256": "f29dcafeff06e066821c2e09cec99718be7943eb40b3a21a17a23048078c2fa3",
+    "reviewedExactSourceRecords": 51,
+    "reviewLines": 480,
+    "blockingPatternHits": 0,
+    "result": "PASS",
+    "logPath": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-search-page-f80d3c32-scan.log",
+    "logSHA256": "4ce757293c0e5434c8ee2195b8dfe8278437f708065fd9300c5728793c16ada5",
+    "limit": "Final additional ownership test and documentation were added after this archive; runtime page source is byte-identical. Pattern scan is not a vulnerability absence proof."
+  },
+  "sonar": {
+    "issue": "AaHdtCMB07pFJPuubXuL",
+    "status": "CLOSED",
+    "resolution": "FIXED",
+    "analyzedCodeLines": 76,
+    "sourceMismatches": 0,
+    "extraEmptyEOF": 1
+  }
+}

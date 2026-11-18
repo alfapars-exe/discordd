@@ -1,0 +1,31 @@
+{
+  "scope": "Extract best-effort post-commit server member broadcast. Keep profile redaction and original user/role lookup error handling; membership, invalidation, invite usage, subscription, user notifications and audit retain order.",
+  "characterizationCommit": "f4c10deb",
+  "baseline": {
+    "passedIncludingSubtests": 27,
+    "failed": 0,
+    "skipped": 0,
+    "sha256": "ccaab8df2adb0e2c66f623eda2ea2c474337e23800a9aae68b929d100bb1cbf8"
+  },
+  "candidate": {
+    "passedIncludingSubtests": 540,
+    "failed": 0,
+    "skipped": 0,
+    "sha256": "6f6d6ee321ab7f7c0a093ed38e260d5922291e2a76597025ba6ec5163b2bc02a"
+  },
+  "toolchain": "Go1.26.11 linux/amd64, CGO1, race, owned network-isolated tmpfs compiler",
+  "parity": {
+    "beforeCommit": "f4c10deb",
+    "method": "Inline sole broadcast helper call; exact LF-normalized whole-file comparison",
+    "wholeFileParity": true,
+    "callSites": 1,
+    "membershipPermissionInviteSubscriptionAuditOrderPreserved": true
+  },
+  "testAuthoringCorrection": "Initial new test incorrectly asserted pointer payload; corrected to existing models.MemberWithRoles value before accepted baseline. Original failed run is not product regression evidence.",
+  "vet": "PASS: go vet -mod=readonly -p=2 ./services",
+  "limitations": [
+    "Service mocks do not prove PostgreSQL transaction or real two-session delivery",
+    "New source CI/Sonar pending",
+    "General refactor and historical panel failure remain open"
+  ]
+}

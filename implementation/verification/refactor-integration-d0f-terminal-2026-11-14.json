@@ -1,0 +1,370 @@
+{
+  "pr": {
+    "headRefOid": "d0f880973651cf15ec82b293aeee724c7b6c285a",
+    "state": "OPEN",
+    "statusCheckRollup": [
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:25:38Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43560951991/job/132344275624",
+        "name": "native (ubuntu-latest)",
+        "startedAt": "2026-11-14T05:19:17Z",
+        "status": "COMPLETED",
+        "workflowName": "Mobile native builds"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:20:54Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43560952018/job/132344275877",
+        "name": "package (ubuntu-latest)",
+        "startedAt": "2026-11-14T05:19:17Z",
+        "status": "COMPLETED",
+        "workflowName": "Private frontend artifacts"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:29:44Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43560952030/job/132344276396",
+        "name": "Go base tests & build",
+        "startedAt": "2026-11-14T05:19:17Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:26:12Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43560951991/job/132344275437",
+        "name": "native (macos-latest)",
+        "startedAt": "2026-11-14T05:19:17Z",
+        "status": "COMPLETED",
+        "workflowName": "Mobile native builds"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:21:32Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43560952018/job/132344276096",
+        "name": "package (windows-latest)",
+        "startedAt": "2026-11-14T05:19:17Z",
+        "status": "COMPLETED",
+        "workflowName": "Private frontend artifacts"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:31:13Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43560952030/job/132344276590",
+        "name": "Go tests (./repository shard 0/8)",
+        "startedAt": "2026-11-14T05:19:20Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:26:33Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43560952030/job/132344276558",
+        "name": "Go tests (./repository shard 1/8)",
+        "startedAt": "2026-11-14T05:19:17Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:25:24Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43560952030/job/132344276517",
+        "name": "Go tests (./repository shard 2/8)",
+        "startedAt": "2026-11-14T05:19:17Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:29:31Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43560952030/job/132344276364",
+        "name": "Go tests (./repository shard 3/8)",
+        "startedAt": "2026-11-14T05:19:17Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:26:56Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43560952030/job/132344276632",
+        "name": "Go tests (./repository shard 4/8)",
+        "startedAt": "2026-11-14T05:19:21Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:30:11Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43560952030/job/132344276611",
+        "name": "Go tests (./repository shard 5/8)",
+        "startedAt": "2026-11-14T05:19:34Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:26:49Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43560952030/job/132344276300",
+        "name": "Go tests (./repository shard 6/8)",
+        "startedAt": "2026-11-14T05:19:17Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:28:59Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43560952030/job/132344276389",
+        "name": "Go tests (./repository shard 7/8)",
+        "startedAt": "2026-11-14T05:19:17Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:24:38Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43560952030/job/132344276565",
+        "name": "Go tests (./services shard 0/8)",
+        "startedAt": "2026-11-14T05:19:17Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:22:28Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43560952030/job/132344276349",
+        "name": "Go tests (./services shard 1/8)",
+        "startedAt": "2026-11-14T05:19:17Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:26:16Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43560952030/job/132344276366",
+        "name": "Go tests (./services shard 2/8)",
+        "startedAt": "2026-11-14T05:19:17Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:23:03Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43560952030/job/132344276503",
+        "name": "Go tests (./services shard 3/8)",
+        "startedAt": "2026-11-14T05:19:17Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:27:15Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43560952030/job/132344276714",
+        "name": "Go tests (./services shard 4/8)",
+        "startedAt": "2026-11-14T05:19:48Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:23:36Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43560952030/job/132344276347",
+        "name": "Go tests (./services shard 5/8)",
+        "startedAt": "2026-11-14T05:19:17Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:24:48Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43560952030/job/132344276485",
+        "name": "Go tests (./services shard 6/8)",
+        "startedAt": "2026-11-14T05:19:17Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:26:46Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43560952030/job/132344276662",
+        "name": "Go tests (./services shard 7/8)",
+        "startedAt": "2026-11-14T05:19:25Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:30:03Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43560952030/job/132344276187",
+        "name": "PostgreSQL repository and migration contracts",
+        "startedAt": "2026-11-14T05:19:17Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:20:41Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43560952030/job/132344276441",
+        "name": "PostgreSQL client certificate reconnect",
+        "startedAt": "2026-11-14T05:19:17Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:20:52Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43560952030/job/132344276330",
+        "name": "golangci-lint",
+        "startedAt": "2026-11-14T05:19:17Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:22:26Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43560952030/job/132344276410",
+        "name": "Security scan",
+        "startedAt": "2026-11-14T05:19:17Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:25:47Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43560952030/job/132344276323",
+        "name": "Client lint, type, test & build",
+        "startedAt": "2026-11-14T05:19:17Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:19:36Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43560952030/job/132344276400",
+        "name": "npm audit (.)",
+        "startedAt": "2026-11-14T05:19:17Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:19:54Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43560952030/job/132344276342",
+        "name": "npm audit (client)",
+        "startedAt": "2026-11-14T05:19:17Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:19:32Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43560952030/job/132344276462",
+        "name": "npm audit (e2e)",
+        "startedAt": "2026-11-14T05:19:17Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:23:36Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43560952030/job/132344276482",
+        "name": "Playwright E2E",
+        "startedAt": "2026-11-14T05:19:17Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:19:58Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43560952030/job/132344276581",
+        "name": "Electron main-process tests",
+        "startedAt": "2026-11-14T05:19:37Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:22:25Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43560952030/job/132344276466",
+        "name": "Prod image build (HF Dockerfile)",
+        "startedAt": "2026-11-14T05:19:52Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:19:23Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43560952030/job/132344276445",
+        "name": "Migration filename hygiene",
+        "startedAt": "2026-11-14T05:19:17Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:31:34Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43560952030/job/132347283316",
+        "name": "Combined Go statement coverage",
+        "startedAt": "2026-11-14T05:31:15Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:31:39Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43560952030/job/132347372598",
+        "name": "Go test & build",
+        "startedAt": "2026-11-14T05:31:36Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T05:21:15Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://sonarcloud.io/dashboard?id=alfapars-exe_discordd&pullRequest=305",
+        "name": "SonarCloud Code Analysis",
+        "startedAt": "2026-11-14T05:19:24Z",
+        "status": "COMPLETED",
+        "workflowName": ""
+      }
+    ],
+    "url": "https://github.com/alfapars-exe/discordd/pull/305"
+  },
+  "scope": "Frozen combined candidate CI only; no merge, deployment, installation or physical media acceptance implied."
+}

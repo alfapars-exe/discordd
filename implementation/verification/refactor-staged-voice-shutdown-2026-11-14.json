@@ -1,0 +1,38 @@
+{
+  "date": "2026-11-14",
+  "scope": "Attempt every shutdown session credit before starting music or LiveKit cleanup",
+  "source_sha256": {
+    "server/services/voice_shutdown.go": "840007f52ee3b7007cb66268f73ef195dbf58155f6d41fd4e44df6b31082e5de",
+    "server/services/voice_channel_delete.go": "2bc2aa6fcc7c10704e8031722bd6de153facd3b3a3f774ee0e88a58da5ad0b5b",
+    "server/services/voice_usage_replay_test.go": "f3d1c16e871041268866221bad04d8a461073804cb850c789014a1b7c754a200"
+  },
+  "before": {
+    "test": "TestVoiceUsagePostgresShutdownHandsOffAllBeforeMedia",
+    "exit": 1,
+    "failed_subtests": [
+      "music",
+      "eviction"
+    ],
+    "music_ledger_rows_at_block": 0
+  },
+  "after": {
+    "host_shutdown_tests_count": 3,
+    "host_exit": 0,
+    "host_seconds": 14.358,
+    "verified_mtls_linux_race_count": 3,
+    "race_exit": 0,
+    "race_seconds": 18.507,
+    "full_vet_exit": 0,
+    "full_build_exit": 0,
+    "full_lint_issues": 0,
+    "postgres_runner_tests": 14,
+    "runner_exit": 0
+  },
+  "verified_invariant": "Six healthy-DB native credits applied with equal captured duration before blocked music or media lookup; shutdown joins released cleanup.",
+  "limitations": [
+    "Database handoff failures remain logged; no claim all credits durable when enqueue fails.",
+    "Crash before first durable enqueue remains open.",
+    "Real media network/physical devices, active process-signal acceptance and runtime worker bound remain open.",
+    "Local integration only; published527a3ad3 CI does not cover staged shutdown."
+  ]
+}

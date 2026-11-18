@@ -1,0 +1,21 @@
+{
+  "source_head": "33ef783e4d3b4066fa0b4c83280b8fba8496bbe9",
+  "server_ci": {
+    "run": 43649647075,
+    "conclusion": "success"
+  },
+  "pr_rollup_before_retry": {
+    "total": 36,
+    "success": 35,
+    "failure": 1
+  },
+  "mobile": {
+    "run": 43649647034,
+    "failed_job": 132615035293,
+    "name": "native (ubuntu-latest)",
+    "observed_failure": "Maven Central dependency POM requests returned HTTP 429 Too Many Requests; Gradle dependency resolution failed.",
+    "action": "POST actions/jobs/132615035293/rerun accepted; same source run confirmed queued",
+    "status": "retry pending"
+  },
+  "limits": "This is a failure/retry record, not a terminal success receipt. Do not treat Server CI success as all PR checks passing."
+}

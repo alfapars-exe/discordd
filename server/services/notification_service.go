@@ -33,12 +33,18 @@ type NotificationService interface {
 	CountUnread(ctx context.Context, userID string) (int, error)
 }
 
+// NotificationRuntime retains authoritative inbox and badge aggregates for HTTP.
+type NotificationRuntime interface {
+	NotificationService
+	CountUnreadSummary(context.Context, string) (models.NotificationUnreadCounts, error)
+}
+
 type notificationService struct {
 	repo repository.NotificationRepository
 	hub  ws.Broadcaster
 }
 
-func NewNotificationService(repo repository.NotificationRepository, hub ws.Broadcaster) NotificationService {
+func NewNotificationService(repo repository.NotificationRepository, hub ws.Broadcaster) NotificationRuntime {
 	return &notificationService{repo: repo, hub: hub}
 }
 

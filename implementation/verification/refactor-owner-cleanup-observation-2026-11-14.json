@@ -1,0 +1,50 @@
+{
+  "date": "2026-11-14",
+  "scope": "Backend owner fixture cleanup diagnostics only",
+  "source_sha256": "f76c7fa64329d25f7a3677e43c5d53c3a26f955d0446e444e0e37f0a91df4365",
+  "combined_race": {
+    "log_sha256": "9815ec801e511d32fb611fbb2b4ed7166e765371f326451851566ac4ba411fef",
+    "packages": [
+      {
+        "package": "github.com/argeinfina/hichat/database",
+        "action": "pass",
+        "elapsed": 6.231
+      },
+      {
+        "package": "github.com/argeinfina/hichat",
+        "action": "pass",
+        "elapsed": 12.791
+      },
+      {
+        "package": "github.com/argeinfina/hichat/services",
+        "action": "pass",
+        "elapsed": 21.784
+      }
+    ],
+    "test_events": {
+      "pass": 105
+    },
+    "count": 5,
+    "exit_code": "not retained; all three terminal package pass events verified"
+  },
+  "observer_probe": {
+    "count": 3,
+    "exit_code": 0,
+    "elapsed_seconds": 4.312,
+    "observed": "Timeout/PgSleep",
+    "blockers": 0
+  },
+  "vet_exit": 0,
+  "build_exit": 0,
+  "golangci_lint": {
+    "version": "2.12.2",
+    "toolchain": "go1.26.11",
+    "exit_code": 0,
+    "issues": 0
+  },
+  "limitations": [
+    "Earlier 10-second DROP DATABASE cleanup timeout did not reproduce; root cause remains open.",
+    "Cleanup deadline remains 10 seconds; no retry introduced.",
+    "No production behavior or release changed."
+  ]
+}

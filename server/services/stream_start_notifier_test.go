@@ -270,7 +270,7 @@ func TestVerifyCurrentScreenShareUsesLiveKitParticipantAndExactTrack(t *testing.
 		return models.PermViewChannel | models.PermConnectVoice | models.PermStream, nil
 	}}
 	servers := &testutil.MockServerRepo{IsMemberFn: func(context.Context, string, string) (bool, error) { return true, nil }}
-	service := NewVoiceService(channels, livekitGetter, permissions, nil, nil, servers, key, streamVerifierTimeoutChecker{}, streamVerifierBanChecker{}, nil).(*voiceService)
+	service := NewVoiceService(channels, livekitGetter, permissions, nil, nil, servers, key, streamVerifierTimeoutChecker{}, streamVerifierBanChecker{}, nil, VoiceRuntimeDependencies{}).(*voiceService)
 	service.states["actor-1"] = &models.VoiceState{UserID: "actor-1", ServerID: "server-1", ChannelID: "channel-1"}
 
 	valid, err := service.VerifyCurrentScreenShare(context.Background(), "lk-current", "server-1", "channel-1", "actor-1", "TR_expected")
@@ -327,11 +327,13 @@ func TestVerifyCurrentScreenShareUsesLiveKitParticipantAndExactTrack(t *testing.
 		return nil, nil
 	}}
 	cachedPermissions := NewChannelPermissionService(permissionRepo, roles, channels, nil)
+	t.Cleanup(cachedPermissions.(*cachingPermResolver).permCache.Close)
 	if _, err := cachedPermissions.ResolveChannelPermissions(context.Background(), "actor-1", "channel-1"); err != nil {
 		t.Fatalf("warm permission cache: %v", err)
 	}
 	rolePermissions = models.PermViewChannel | models.PermConnectVoice // Stream was revoked elsewhere after cache fill.
 	service.permResolver = cachedPermissions
+	service.freshPermissions = cachedPermissions
 	lookupsBeforeRevokedCheck := len(identities)
 	valid, err = service.VerifyCurrentScreenShare(context.Background(), "lk-current", "server-1", "channel-1", "actor-1", "TR_expected")
 	if err != nil || valid {
@@ -341,6 +343,7 @@ func TestVerifyCurrentScreenShareUsesLiveKitParticipantAndExactTrack(t *testing.
 		t.Fatalf("provider was queried after fresh permission revocation: identities=%v", identities)
 	}
 	service.permResolver = permissions
+	service.freshPermissions = nil
 	service.timeoutChecker = streamVerifierTimeoutChecker{active: true}
 	valid, err = service.VerifyCurrentScreenShare(context.Background(), "lk-current", "server-1", "channel-1", "actor-1", "TR_expected")
 	if err != nil || valid {

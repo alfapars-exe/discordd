@@ -43,3 +43,16 @@ type FriendshipRepository interface {
 type ProfileAudienceBlockReader interface {
 	ListBlockedUserIDs(ctx context.Context, userID string, candidateIDs []string) (map[string]bool, error)
 }
+
+// BlockRelationshipStore declares only atomic relationship operations.
+// Ordinary readers continue to use FriendshipRepository.
+type BlockRelationshipStore interface {
+	FriendshipRepository
+	AtomicBlockWriter
+}
+
+// FriendshipStore retains production capabilities at the composition boundary.
+type FriendshipStore interface {
+	BlockRelationshipStore
+	ProfileAudienceBlockReader
+}

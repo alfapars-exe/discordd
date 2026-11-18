@@ -1,0 +1,47 @@
+{
+  "scope": "Account checks between preference destination adapter commands;not preemption of internal steps inside an already entered adapter.",
+  "sourceRevision": "693acc93805d423cc234d1d086a96e010862ddea",
+  "red": {
+    "log": "hichat-preferences-presenter-boundary-red.log",
+    "failed": 11,
+    "passed": 1,
+    "behavior": "Already-retired reset still mutated destinations;retirement from reset/apply callbacks did not stop subsequent adapters;later fields used a captured older same-account projection."
+  },
+  "targeted": {
+    "files": 4,
+    "passed": 149,
+    "seconds": 4.05,
+    "log": "hichat-preferences-presenter-boundary-targeted.log"
+  },
+  "behavior": [
+    "Check readCurrent before each reset and each field-group application.",
+    "A synchronous destination callback that retires the account stops all later adapter commands.",
+    "Read each next field group from current same-account data rather than a stale captured projection.",
+    "Real preferences-store integration binds bob during old theme application;alice appearance/voice values are never forwarded afterwards.",
+    "Composed real voice-store test verifies an already-null account fence with reset=true does not change active session/volume."
+  ],
+  "sha256": {
+    "client/src/stores/applyAccountPreferences.ts": "6c5bb6bc2ee861362ec04f3b7789f64e12b6bb06b200d86433b7c656bc17aaa0",
+    "client/src/stores/applyAccountPreferences.test.ts": "55e4590275ed6faff7f1461fad56507c86d3967b2b6cff5ab5a59249d96b936e",
+    "client/src/stores/preferencesStore.test.ts": "7a9aa8b4ee06864640c4bb68185b52abef8af9d450a288ffad1bbba2e8cb6912",
+    "client/src/stores/voiceStore.test.ts": "6dc7d198d65317b2f38ea06189f6050e8f4493e5415a4a6f805e6a10ea91fede"
+  },
+  "limits": [
+    "Boundary tests use controlled destination callbacks,not a full browser authentication flow.",
+    "An adapter already entered may perform multiple internal store mutations;this change does not interrupt those internal steps.",
+    "Full RF13,physical/native/offline acceptance and project completion remain open."
+  ],
+  "fullClientCoverage": {
+    "files": 486,
+    "passed": 5085,
+    "skipped": 1,
+    "seconds": 112.94,
+    "statementPercent": 67.37,
+    "branchPercent": 64.58,
+    "functionPercent": 61.55,
+    "linePercent": 68.43,
+    "log": "hichat-preferences-presenter-boundary-coverage.log"
+  },
+  "build": "actual tsc-b/VitePASS3.26s; existing chunk warning",
+  "lint": "changed presenter/presenter tests/preferences tests/voice tests lintPASS"
+}

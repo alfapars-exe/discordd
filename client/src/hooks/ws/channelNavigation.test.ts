@@ -5,7 +5,7 @@ const state = vi.hoisted(() => ({
   detached: false, newest: "m",
   ownerId: "me", authGeneration: 0,
   markAsRead: vi.fn(), incrementUnread: vi.fn(), sound: vi.fn(),
-  e2eeReady: false, decrypt: vi.fn(),
+  e2eeReady: false, decrypt: vi.fn(), cache: vi.fn(async () => {}),
   handleMessageCreate: vi.fn(), handleMessageUpdate: vi.fn(),
   handleDeletedChannel: vi.fn(), fetchChannels: vi.fn(), handleChannelDelete: vi.fn(),
   markVoiceChannelCreated: vi.fn(), markVoiceChannelDeleted: vi.fn(),
@@ -32,7 +32,7 @@ vi.mock("../../stores/pinStore", () => ({ usePinStore: {} }));
 vi.mock("../../stores/channelPermissionStore", () => ({ useChannelPermissionStore: {} }));
 vi.mock("../../stores/e2eeStore", () => ({ useE2EEStore: { getState: () => ({ initStatus: state.e2eeReady ? "ready" : "idle" }) } }));
 vi.mock("../../crypto/channelEncryption", () => ({ decryptChannelMessage: state.decrypt, markChannelRecipientsStale: vi.fn() }));
-vi.mock("../../crypto/keyStorage", () => ({}));
+vi.mock("../../crypto/keyStorage", () => ({ cacheDecryptedMessage: state.cache }));
 vi.mock("../../utils/sounds", () => ({ playNotificationSound: state.sound }));
 vi.mock("../../utils/notifications", () => ({ showNotification: vi.fn() }));
 import { handleChannelEvent } from "./channelEventHandlers";
@@ -96,6 +96,18 @@ describe("thread metadata websocket parity", () => {
 });
 
 describe("single-view unread routing", () => {
+  it.each(["message_create", "message_update"] as const)("%s retains encrypted source identity in its cache write", async op => {
+    state.e2eeReady = true;
+    state.decrypt.mockResolvedValueOnce({ content: "history", file_keys: [] });
+    await handleChannelEvent({ op, server_id: "s", d: {
+      id: "cached", channel_id: "background", user_id: "me", encryption_version: 1,
+      ciphertext: "cipher", sender_device_id: "device", created_at: "2026-11-14T00:00:00Z",
+    } } as WSMessage);
+    await vi.waitFor(() => expect(state.cache).toHaveBeenCalledWith(expect.objectContaining({
+      messageId: "cached", channelId: "background", content: "history", fileKeys: [],
+      encryptedSourceTag: expect.stringMatching(/^channel-v1:[a-f0-9]{64}$/),
+    }), expect.any(Function)));
+  });
   it.each(["message_create", "message_update"] as const)("%s decrypts using the event origin while another server is browsed", async (op) => {
     state.e2eeReady = true;
     state.decrypt.mockResolvedValue(null);

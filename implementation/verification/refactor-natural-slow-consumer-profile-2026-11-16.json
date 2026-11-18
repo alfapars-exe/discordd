@@ -1,0 +1,115 @@
+{
+  "scope": "One natural non-reading TCP consumer alongside twenty healthy authenticated ordinary users on a real isolated mTLS PostgreSQL backend; bounded isolation, delivery and persistence acceptance only.",
+  "backendCommit": "dda2c221662d627dfce13ffae938e356e15cd5db",
+  "producerCommit": "7ab3c3c00cfc98aa30825283e1d8eab913870115",
+  "historyVerifierCommit": "ddbec8f3",
+  "toolchain": "go version go1.27.4 windows/amd64",
+  "k6": "k6.exe v2.4.0 (commit/dd9395906d, go1.26.11, windows/amd64)",
+  "durationSecondsPerHealthySocket": 620,
+  "checks": {
+    "passed": 5940,
+    "failed": 0
+  },
+  "messages": 5800,
+  "healthyDeliveries": 116000,
+  "healthyReceivers": 20,
+  "historyPages": 58,
+  "receiverDigestsMatched": 20,
+  "senderAcknowledgementsMatched": 5800,
+  "digest": "819df31910ec3c4f1128aa22ae4ae49d5aa1e43d421d0732088b2513823d7f5d",
+  "slowPeer": {
+    "exitCode": 0,
+    "events": [
+      {
+        "event": "connected",
+        "at": "2026-11-16T10:27:41.6969681Z",
+        "keepalive_pairs": 0,
+        "elapsed_ms": 0,
+        "receive_buffer_requested_bytes": 1024,
+        "post_upgrade_reader": false
+      },
+      {
+        "event": "finished",
+        "at": "2026-11-16T10:28:41.6971122Z",
+        "reason": "write_failed",
+        "keepalive_pairs": 4,
+        "elapsed_ms": 60000,
+        "receive_buffer_requested_bytes": 1024,
+        "post_upgrade_reader": false
+      }
+    ],
+    "stderrPresent": false,
+    "isolation": {
+      "peakAt": "2026-11-16T10:27:54.454Z",
+      "retiredAt": "2026-11-16T10:28:36.611Z",
+      "healthySamplesAfterProbeExit": 250,
+      "requestedReceiveBufferBytes": 1024
+    },
+    "readableAfterRetirement": true
+  },
+  "sourceProof": {
+    "files": 1588,
+    "allFrozenHashesUnchanged": true,
+    "manifestSha256": "936e0ec49bcffe6b2b31322c9783840147c4d03ba3a2069aaeec15d5cff8372c",
+    "lineEndings": "Windows git archive exports CRLF text; local probe and archive match after normalizing both to LF. Raw frozen bytes are separately hashed unchanged."
+  },
+  "resources": {
+    "baseline": {
+      "samples": 3,
+      "goroutinesMedian": 51,
+      "heapAllocMedianBytes": 5591552,
+      "rssMedianBytes": 41033728
+    },
+    "load": {
+      "samples": 281,
+      "goroutinesMedian": 111,
+      "heapAllocMedianBytes": 8666400,
+      "rssMedianBytes": 54276096
+    },
+    "recovery": {
+      "samples": 6,
+      "goroutinesMedian": 51.0,
+      "heapAllocMedianBytes": 7325344.0,
+      "rssMedianBytes": 53866496.0
+    }
+  },
+  "telemetry": {
+    "buckets": 11,
+    "http5xx": 0,
+    "observerQueriesFailed": 0,
+    "positiveMTLSConnectionsEverySample": true,
+    "poolMaxOpen": 4,
+    "finalCumulativeWaitCount": 41732
+  },
+  "cleanup": {
+    "databaseDropped": true,
+    "backendExited": true,
+    "probeExited": true,
+    "launcherExitCode": 0,
+    "observerExitCode": 0,
+    "ownedContainerAbsent": true,
+    "ownedImageAbsent": true,
+    "ownedProcessesAbsent": true
+  },
+  "proofFiles": {
+    "fanout-slow-runner.mjs": "0a45a5e9d25978b6956fab4f6bf0d1455610ea415a4ef57bda3293dfe95ca218",
+    "fanout-slow-launch.ps1": "74d6304fef6ad1308f18218eb8aaab34ac9a3b1eac5ccf515dc823ec2352ec6a",
+    "audit-slow-profile.py": "c9543264e17f247f98021d534b671bc04ae507eafa34a483ff2ed8114f0ca73e",
+    "slow-independent-audit.json": "5fe40c7c56e2c7f66d09b29752508baabe136ed3c1d27ba7860468c0143b134f",
+    "runtime-telemetry-observer-slow.json": "f8cdd62b6965eae119aeaf418f6568a72e89b18584af133912efb1ba67cfed16",
+    "launch-slow.log": "3ff61ef2a010bd5b049104a1321e673c8518c692b58674b5e9606f8979826fb8"
+  },
+  "reportSha256": "9e203ccb0144ffedcd8ae94c9fcb9f04565191700d4df2aa939a0b9a3410ea1a",
+  "artifactsRoot": "G:\\hichat-refactor-20261116-anoknpqz",
+  "fixtureRoot": "G:\\hichat-refactor-20261116-anoknpqz\\hichat-pg-tls-test-f70992504d254404ad647d3a03a5dcf4",
+  "limits": [
+    "Single bounded profile; no capacity, production SLA, variance, repeated churn or long-soak claim",
+    "Requested 1024-byte TCP receive buffer is not the effective OS window",
+    "Slow peer never reads output; four successful keepalive pairs and retirement within 55s of upgrade exclude the unchanged 90s idle deadline; original access token still reads channel after retirement",
+    "20 healthy pump pairs remain through 250 samples after the slow helper exits; all healthy sockets complete 620s",
+    "No instrumented server removal cause; the run proves natural retirement and healthy isolation, not whether queue overflow or the unchanged write deadline won",
+    "Heap and RSS retention are observed without forced GC; no byte-for-byte memory reset assertion",
+    "CPU unpinned and profiling/observer overhead included; not a causal latency comparison",
+    "General RF gates, pool/query budgets, historical panel cause, native and physical/media/deployment checks remain open"
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "scope": "RF13 delayed presenter/account switch acceptance",
+  "test": "fences an old account while the production presenter is still loading",
+  "assertions": [
+    "Alice preparation/GET waiting for presenter does not apply or fetch under Bob",
+    "Bob pending theme remains visible and pending",
+    "Only current account reset executes",
+    "Alice pending patch stays recoverable in Alice cache"
+  ],
+  "checks": {
+    "vitest": "PASS four files, 180 tests, 3.79s",
+    "eslint": "PASS preferencesStore.test.ts and voiceStore.test.ts"
+  },
+  "separate_broad_go_result": {
+    "source": "f5d6b01bbce02953a92f0fddbd15b5054443f2d0",
+    "result": "FAIL repository TestChannelMessageNotificationRetryBackoffDoesNotStarveReadyJobs; services/handlers/ws/root passed. Investigating before any broad success claim."
+  },
+  "limits": [
+    "Controlled async presenter/API boundaries, not physical media or all RF13 acceptance.",
+    "No product behavior change; complete project refactor remains open."
+  ]
+}

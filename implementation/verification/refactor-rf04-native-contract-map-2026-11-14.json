@@ -1,0 +1,75 @@
+{
+  "source": "8ec41413f7ac03f72a53a1c11010df76283d1cf2",
+  "job": 132333839905,
+  "profile": "PostgreSQL repository/migration contracts; loopback service, not a blanket mTLS claim",
+  "pass_records": {
+    "TestRepositoryDialectContracts/Postgres": [
+      {
+        "Action": "pass",
+        "Package": "github.com/argeinfina/hichat/database",
+        "Test": "TestRepositoryDialectContracts/Postgres",
+        "Elapsed": 0.03
+      }
+    ],
+    "TestPostgresNativeMigrationAllowsJSONOperator": [
+      {
+        "Action": "pass",
+        "Package": "github.com/argeinfina/hichat/database",
+        "Test": "TestPostgresNativeMigrationAllowsJSONOperator",
+        "Elapsed": 0.01
+      }
+    ],
+    "TestMessageTxRunner_RollsBackOnError": [
+      {
+        "Action": "pass",
+        "Package": "github.com/argeinfina/hichat/repository",
+        "Test": "TestMessageTxRunner_RollsBackOnError",
+        "Elapsed": 0.43
+      }
+    ],
+    "TestSQLitePreferencesGetManyStrictIsBoundedAndDefaultsMissingRows": [
+      {
+        "Action": "pass",
+        "Package": "github.com/argeinfina/hichat/repository",
+        "Test": "TestSQLitePreferencesGetManyStrictIsBoundedAndDefaultsMissingRows",
+        "Elapsed": 0.51
+      }
+    ],
+    "TestPostgresImportPreservesDataAndRejectsReuse": [
+      {
+        "Action": "pass",
+        "Package": "github.com/argeinfina/hichat/database",
+        "Test": "TestPostgresImportPreservesDataAndRejectsReuse",
+        "Elapsed": 3.05
+      }
+    ],
+    "TestPostgresThreadTypeMigrationPreservesData": [
+      {
+        "Action": "pass",
+        "Package": "github.com/argeinfina/hichat/database",
+        "Test": "TestPostgresThreadTypeMigrationPreservesData",
+        "Elapsed": 1.39
+      }
+    ],
+    "TestChannelDeliveryMigrationPreservesPopulatedDatabase": [
+      {
+        "Action": "pass",
+        "Package": "github.com/argeinfina/hichat/database",
+        "Test": "TestChannelDeliveryMigrationPreservesPopulatedDatabase",
+        "Elapsed": 0.8
+      }
+    ]
+  },
+  "requirement_mapping": {
+    "timestamp_boolean_cursor_rollback": "TestRepositoryDialectContracts/Postgres: typed NULL, boolean and integer EXISTS, microsecond timestamp cursor, upsert and rollback to zero rows.",
+    "native_json": "TestPostgresNativeMigrationAllowsJSONOperator: executes the JSONB question-mark operator without rewriting.",
+    "atomic_repository_write": "TestMessageTxRunner_RollsBackOnError: message and unread count absent after callback failure.",
+    "bulk_json": "TestSQLitePreferencesGetManyStrictIsBoundedAndDefaultsMissingRows: backend-aware fixture; 1001 unique IDs, duplicates, missing-row defaults, persisted JSON preference.",
+    "migration_import": "Import, thread-type and populated 049 upgrade tests passed on PostgreSQL."
+  },
+  "remaining": [
+    "Explicit close/reopen requirement mapping still open.",
+    "TLS negative fixtures and checked cleanup added after this source; native follow-up pending.",
+    "RF02 baseline dependency review remains open."
+  ]
+}

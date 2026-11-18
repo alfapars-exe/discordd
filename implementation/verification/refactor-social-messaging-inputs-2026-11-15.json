@@ -1,0 +1,20 @@
+{
+  "scope": "RF11 social messaging integration validation",
+  "regression_before": "FAIL: five missing integrations, three missing policy readers and typed nil email were accepted or caused an unlabelled dereference.",
+  "implementation": "Validate required Database, Repositories, Hub, Config, Activity and ServerDM/FriendRequests/FriendGraph policies before constructors. Reject typed nil optional email; nil email and nil delivery DB remain explicit supported modes.",
+  "verification": {
+    "root": "PASS social messaging matrix, typed nil Hub/Activity, disabled email/delivery owners, real friendship-DM, startup, rollback, route and callback tests; 2.746s",
+    "build": "PASS go build ./...",
+    "vet": "PASS go vet ."
+  },
+  "ci_observation": {
+    "source": "019a03da471155d10decbd62f62f9efdbc7f970d",
+    "run": 43653225420,
+    "postgres_contracts": "completed success",
+    "workflow": "in_progress; does not cover local changes"
+  },
+  "remaining": [
+    "Social messaging repository capability matrix",
+    "Other RF11 domain/resource acceptance and full RF01-RF30 scope"
+  ]
+}

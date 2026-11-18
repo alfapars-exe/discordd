@@ -1,0 +1,8 @@
+{
+  "base_head": "c30207f1c20cf24db542a737c06eebfde2021fb0",
+  "source_delta": "new channel_messaging_postgres_test.go only",
+  "test": "TestChannelMessagingPostgresCompositionSelectsDurablePublication",
+  "package_seconds": 1.006,
+  "database": "PostgreSQL 18.6 dedicated loopback container",
+  "limits": "sslmode=disable via fixture pool, non-race. Production mTLS connection entrypoint unchanged. Verifies composition mode/owner identity, not message delivery or physical clients."
+}

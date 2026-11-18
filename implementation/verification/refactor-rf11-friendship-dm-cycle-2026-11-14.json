@@ -1,0 +1,42 @@
+{
+  "source_parent": "ecff4f2a",
+  "scope": "RF11 remove friendship-DM construction cycle",
+  "before": {
+    "test": "TestFriendshipConstructorRequiresDMAutoAccept",
+    "exit": 1,
+    "reason": "constructor had no DMRequestAcceptor parameter; dependency6 was optional policy slice"
+  },
+  "change": [
+    "DM friendship read dependency now uses existing two-method repository graph adapter instead of friendship writer service",
+    "DM can be built first, then injected as mandatory explicit auto-accept constructor argument into friendship service",
+    "SetDMAcceptor removed; fixtures inject at construction; no deferred holder or mutable callback bridge"
+  ],
+  "proof": [
+    "Graph adapter results compared against existing FriendshipService.AreFriends for accepted/pending/blocked/missing/error inputs",
+    "Existing auto-accept and notification assertions retained",
+    "Same repository instance and actor/context arguments retained"
+  ],
+  "validation": [
+    {
+      "command": "go test ./services ./handlers . -run 'TestFriendship|TestFriendRequest|TestDM.*Accept|TestDM.*Friend|Test.*Wiring|TestServiceInitialization' -count=1 -timeout=3m",
+      "exit": 0,
+      "services_seconds": 0.922,
+      "handlers_seconds": 0.513,
+      "root_seconds": 0.753
+    },
+    {
+      "command": "go build ./...",
+      "exit": 0
+    },
+    {
+      "command": "go vet ./services ./handlers .",
+      "exit": 0
+    }
+  ],
+  "limits": [
+    "Explicit nil remains possible for isolated fixtures; production uses actual DM service",
+    "No permission/privacy/default behavior or wire field changed",
+    "Windows Go1.27.4 CGO0; full Linux race/native/current-source production E2E remain CI requirements",
+    "RF11 remaining callback/resolver wiring and whole-card audit still open"
+  ]
+}

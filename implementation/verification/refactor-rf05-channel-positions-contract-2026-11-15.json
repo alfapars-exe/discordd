@@ -1,0 +1,39 @@
+{
+  "date": "2026-11-15",
+  "repositoryTestCommit": "a33d6cb7",
+  "sources": {
+    "server/repository/channel_positions_contract_test.go": "b45bb57ac2284540d81e30a81cbec4201973b8c6a0c44c44b3c0b927c0af57e6",
+    "scripts/run-postgres-tests.py": "825a41b2887cb650e6e4392c63c58b17524942f32132d4c62b672545c322ff89",
+    "scripts/test_run_postgres_tests.py": "ef453ff397dc33c60c53b33ea257125d988562c42c8b5215fd91106d10d7b97f"
+  },
+  "producer": {
+    "file": "server/repository/sqlite_channel.go",
+    "method": "(*sqliteChannelRepo).UpdatePositions",
+    "preparedSQL": [
+      "UPDATE channels SET position = ? WHERE id = ?",
+      "UPDATE channels SET position = ?, category_id = ? WHERE id = ?"
+    ],
+    "inventoryClarification": "Two unresolved ExecContext candidates pass item.Position as a prepared-statement value,not dynamically generated SQL text."
+  },
+  "validation": {
+    "sqlite": "actual migrated repository through retry wrapper,count1,PASS0.562s",
+    "postgresWindows": "dedicated PostgreSQL18.6 verify-full mTLS,count3,PASS2.042s",
+    "postgresLinuxRace": "immutable a33d6cb7 archive,Go1.27.4/CGO1,count3,PASS2.377s",
+    "nativeGate": "regression failed before adding required named repository/test PASS;all16 runner tests pass after fix"
+  },
+  "assertions": [
+    "nil category preserves current category",
+    "nonempty category changes parent",
+    "empty category persists SQL NULL",
+    "missing late row rolls back earlier position/category write",
+    "late FK failure rolls back whole batch",
+    "cancelled context does not mutate rows",
+    "empty batch leaves rows unchanged"
+  ],
+  "cleanup": "owned PostgreSQL container,image and --rm race runner removed after terminal test completion;dev containers untouched",
+  "limits": [
+    "one prepared query family,not complete RF05 dialect or relevance equivalence",
+    "no full repository PostgreSQL/race suite claimed",
+    "remote6a165db3 Playwright failed429refresh and subsequent403fixture cleanup;investigation continues"
+  ]
+}

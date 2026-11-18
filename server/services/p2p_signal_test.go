@@ -105,7 +105,7 @@ func TestP2PSignalRevisionAndAnswerRelation(t *testing.T) {
 	if sent != 4 {
 		t.Fatal(sent)
 	}
-	if err := s.EndCall("a"); err != nil {
+	if err := s.EndCall("a", ""); err != nil {
 		t.Fatal(err)
 	}
 	if len(s.signals) != 0 {

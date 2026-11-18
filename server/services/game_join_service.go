@@ -124,18 +124,28 @@ type gameJoinPending struct {
 	offer                             gameJoinOffer
 	until                             time.Time
 }
-type GameJoinService struct {
-	activity  *GameActivityService
-	policy    GameJoinPolicy
-	mu        sync.Mutex
-	offers    map[string]gameJoinOffer
-	revisions map[string]map[uint64]uint64
-	tickets   map[[32]byte]gameJoinPending
-	now       func() time.Time
+
+// GameJoinConnectionGate binds offers to the offering physical connection.
+// Nil explicitly disables joining and all checks continue to fail closed.
+type GameJoinConnectionGate interface {
+	WithGameActivityConnection(string, uint64, func() error) error
+	ValidateGameActivityConnection(context.Context, string, uint64) error
+	HasGameActivityConnection(string, uint64) bool
 }
 
-func NewGameJoinService(activity *GameActivityService, policy GameJoinPolicy) *GameJoinService {
-	s := &GameJoinService{activity: activity, policy: policy, offers: map[string]gameJoinOffer{}, revisions: map[string]map[uint64]uint64{}, tickets: map[[32]byte]gameJoinPending{}, now: time.Now}
+type GameJoinService struct {
+	connections GameJoinConnectionGate
+	activity    *GameActivityService
+	policy      GameJoinPolicy
+	mu          sync.Mutex
+	offers      map[string]gameJoinOffer
+	revisions   map[string]map[uint64]uint64
+	tickets     map[[32]byte]gameJoinPending
+	now         func() time.Time
+}
+
+func NewGameJoinService(activity *GameActivityService, policy GameJoinPolicy, connections GameJoinConnectionGate) *GameJoinService {
+	s := &GameJoinService{connections: connections, activity: activity, policy: policy, offers: map[string]gameJoinOffer{}, revisions: map[string]map[uint64]uint64{}, tickets: map[[32]byte]gameJoinPending{}, now: time.Now}
 	if activity != nil {
 		activity.gameJoin = s
 	}
@@ -185,22 +195,16 @@ func (s *GameJoinService) retireObsoleteOfferLocked(user string) {
 	}
 }
 func (s *GameJoinService) withHostLive(user string, connection uint64, commit func() error) error {
-	gate, ok := s.activity.hub.(interface {
-		WithGameActivityConnection(string, uint64, func() error) error
-	})
-	if !ok {
+	if s.connections == nil {
 		return pkg.ErrForbidden
 	}
-	return gate.WithGameActivityConnection(user, connection, commit)
+	return s.connections.WithGameActivityConnection(user, connection, commit)
 }
 func (s *GameJoinService) validateHost(ctx context.Context, user string, connection uint64) error {
-	validator, ok := s.activity.hub.(interface {
-		ValidateGameActivityConnection(context.Context, string, uint64) error
-	})
-	if !ok {
+	if s.connections == nil {
 		return pkg.ErrForbidden
 	}
-	return validator.ValidateGameActivityConnection(ctx, user, connection)
+	return s.connections.ValidateGameActivityConnection(ctx, user, connection)
 }
 
 // sourceLocked is called with the target's activity gate held. The selected
@@ -219,7 +223,7 @@ func (s *GameJoinService) sourceLocked(user string, connection uint64, sourceID,
 			return gameActivitySource{}, false
 		}
 	}
-	if live, ok := a.hub.(interface{ HasGameActivityConnection(string, uint64) bool }); !ok || !live.HasGameActivityConnection(user, connection) {
+	if s.connections == nil || !s.connections.HasGameActivityConnection(user, connection) {
 		return gameActivitySource{}, false
 	}
 	return source, true

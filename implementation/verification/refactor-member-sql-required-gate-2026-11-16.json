@@ -1,0 +1,25 @@
+{
+  "scope": "Require the real member projection SQL/enrichment contract in the existing PostgreSQL service selection and explicit-PASS gate",
+  "regressionBefore": {
+    "tests": 17,
+    "failures": 1,
+    "expectedReason": "TestMemberProjectionPhysicalSQLCount absent from REQUIRED_SERVICE_POSTGRES_TESTS"
+  },
+  "after": {
+    "tests": 17,
+    "failures": 0
+  },
+  "checks": [
+    "Required selection membership",
+    "Missing explicit PASS rejected",
+    "Skipped contract rejected even with successful process exit"
+  ],
+  "logs": {
+    "member-sql-required-before.log": "6f166697fe48084d09e30ef3d6fd064762c6915d1f62db070c831f1756f7500c",
+    "member-sql-required-after.log": "13aed062cb0fec3e511fc8b49bcde0826ccf52860a5b4e16101520748d305c7d"
+  },
+  "limits": [
+    "Local real PostgreSQL3x evidence remains bound to f775d910",
+    "New full CI acceptance pending; historical DM panel cause still unknown"
+  ]
+}

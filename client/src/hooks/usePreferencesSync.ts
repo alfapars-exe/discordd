@@ -1,4 +1,6 @@
 import { useEffect } from "react";
+import { startPreferenceTask } from "../stores/preferenceTask";
+import { logToServer } from "../api/clientLog";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../stores/authStore";
 import { usePreferencesStore } from "../stores/preferencesStore";
@@ -11,9 +13,15 @@ export function usePreferencesSync() {
   useEffect(() => {
     if (!userId) return;
     const refresh = () => {
-      if (document.visibilityState !== "hidden") void usePreferencesStore.getState().fetchAndApply();
+      if (document.visibilityState !== "hidden") startPreferenceTask(
+        () => usePreferencesStore.getState().fetchAndApply(),
+        () => { void logToServer("error", "preferences_background_failed", { source: "focus" }); },
+      );
     };
-    const retry = () => { void usePreferencesStore.getState().retrySync(); };
+    const retry = () => startPreferenceTask(
+      () => usePreferencesStore.getState().retrySync(),
+      () => { void logToServer("error", "preferences_background_failed", { source: "online" }); },
+    );
     const beforeUnload = (event: BeforeUnloadEvent) => {
       if (usePreferencesStore.getState().hasPendingChanges) {
         event.preventDefault();

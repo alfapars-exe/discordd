@@ -144,7 +144,8 @@ export async function proxyApiRequest(
     method: request.method,
     headers,
     credentials: "include",
-    redirect: "follow",
+    // Only the initial API target has passed the upstream policy.
+    redirect: "error",
     bypassCustomProtocolHandlers: true,
   };
   if (request.body !== null && request.method !== "GET" && request.method !== "HEAD") {

@@ -1,0 +1,40 @@
+{
+  "date": "2026-11-13",
+  "source_commit": "82bfd758",
+  "scope": "TTL cache eviction-worker ownership on normal server return; service interfaces and draining cache access preserved",
+  "owners": [
+    "channel permission service",
+    "WebSocket ticket service",
+    "auth middleware",
+    "permission middleware"
+  ],
+  "regressions_before": {
+    "concurrent_close": "Repeated closes panicked; recovered by regression",
+    "service_owners": "Neither cache-backed service exposed Stop",
+    "middleware_owners": "Neither cache-backed middleware exposed Stop",
+    "logs": [
+      "%TEMP%/hichat-cache-worker-stop-before.log",
+      "%TEMP%/hichat-middleware-cache-stop-before.log"
+    ]
+  },
+  "verification": {
+    "targeted_repeats": 5,
+    "targeted_exit": 0,
+    "race_repeats": 5,
+    "race_exit": 0,
+    "race_log": "%TEMP%/hichat-cache-owner-stop-race.log",
+    "full_cache_and_middleware_exit": 0,
+    "full_cache_and_middleware_log": "%TEMP%/hichat-cache-owner-stop-middleware.log",
+    "vet_exit": 0,
+    "build_exit": 0,
+    "lint": "golangci-lint v2.12.2: 0 issues",
+    "isolated_cache_statement_coverage_percent": 44.4,
+    "close_statement_coverage_percent": 100,
+    "coverage_profile": "%TEMP%/hichat-cache-owner-stop-cache.out"
+  },
+  "remaining": [
+    "Main registration is source-checked plus owner-unit-tested; actual server-process shutdown is not exercised here",
+    "Forced exit and failure before initializer return are not solved by these defers",
+    "Frozen integration shard session 45007 excludes this patch; final integrated acceptance remains open"
+  ]
+}

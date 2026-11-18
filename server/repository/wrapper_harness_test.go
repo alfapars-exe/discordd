@@ -9,6 +9,7 @@
 // path. Both repo shapes are covered:
 //   - rawDB computed at construction  (sqliteUserRepo.rawDB → CreateWithSession)
 //   - RawDB(r.db) called per-method    (sqliteCategoryRepo.UpdatePositions)
+//
 // If either reverts from database.RawDB(...) to a bare db.(*sql.DB) assertion,
 // RawDB returns nil through the wrapper and the transaction start fails here —
 // which the raw-*sql.DB harness could not detect.

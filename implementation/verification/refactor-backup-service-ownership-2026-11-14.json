@@ -1,0 +1,146 @@
+{
+  "source_head": "936c42596908f036f6f8e3635241ac9902b4624a",
+  "pr": "https://github.com/alfapars-exe/discordd/pull/301",
+  "before": {
+    "commit": "469e67a2",
+    "result": "two lifecycle regressions failed against original implementation"
+  },
+  "local": {
+    "lifecycle_repetitions": 20,
+    "canonical_full_services_seconds": 89.51,
+    "integrated_full_services_seconds": 90.121,
+    "canonical_vet_build": "passed",
+    "canonical_windows_linux_lint": "passed",
+    "integrated_windows_linux_lint": "passed"
+  },
+  "ci": {
+    "status": "new_source_pending"
+  },
+  "limitations": [
+    "Linux real subprocess cancellation test awaits CI execution",
+    "No live HF backup/restore acceptance",
+    "Partial uploads restore resume remains open",
+    "No release or installation acceptance"
+  ],
+  "previous_source_head": "ae4175f3311eeb05649d0e004723c32111d851cc",
+  "sonar_followup": {
+    "previous_failure": "7.4% duplicated new lines and cognitive complexity in snapshot cycle and cancellation test",
+    "change": "shared blocked-command fixture; extracted table subcase and snapshot/verified promotion steps; no exclusions or weakened assertions",
+    "canonical_full_services_seconds": 84.756,
+    "canonical_vet_build": "passed",
+    "canonical_windows_linux_lint": "passed",
+    "lifecycle_repetitions_both_trees": 20
+  },
+  "linux_process_followup": {
+    "ci_failure": {
+      "run": 43549219967,
+      "job": 132307706666,
+      "message": "owned helper did not start within 3 seconds"
+    },
+    "root_cause": "not proven; original self-reexec fixture passed once without race in WSL",
+    "change": "fixed /bin/sh fixture writes its PID then execs sleep; positional path argument; minimal PATH env; no provider credentials",
+    "unchanged_contract": "3 second readiness, 2 second cancellation completion, ESRCH for exact owned PID",
+    "wsl_linux_pass_repetitions": 20,
+    "ignored_cancellation_overlay": "failed at 2 second assertion; owned fixture self-exited at20.01 seconds; exit1",
+    "linux_crosscompile": "passed",
+    "linux_lint": "passed",
+    "current_ci_service_shard": {
+      "source": "936c42596908f036f6f8e3635241ac9902b4624a",
+      "run": 43550268177,
+      "job": {
+        "completedAt": "2026-11-14T03:15:15Z",
+        "conclusion": "success",
+        "databaseId": 132310983344,
+        "name": "Go tests (./services shard 7/8)",
+        "startedAt": "2026-11-14T03:11:20Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-14T03:11:22Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-14T03:11:21Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:11:26Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 2,
+            "startedAt": "2026-11-14T03:11:22Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:11:30Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 3,
+            "startedAt": "2026-11-14T03:11:26Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:11:30Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 4,
+            "startedAt": "2026-11-14T03:11:30Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:15:10Z",
+            "conclusion": "success",
+            "name": "go test shard (race + cover)",
+            "number": 5,
+            "startedAt": "2026-11-14T03:11:30Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:15:12Z",
+            "conclusion": "success",
+            "name": "Upload shard coverage",
+            "number": 6,
+            "startedAt": "2026-11-14T03:15:10Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:15:12Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 10,
+            "startedAt": "2026-11-14T03:15:12Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:15:12Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 11,
+            "startedAt": "2026-11-14T03:15:12Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:15:12Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 12,
+            "startedAt": "2026-11-14T03:15:12Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:15:12Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 13,
+            "startedAt": "2026-11-14T03:15:12Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/alfapars-exe/discordd/actions/runs/43550268177/job/132310983344"
+      },
+      "test_log_lines": [
+        "2026-11-14T03:12:19.3399277Z   TestBackupCommandCancellationJoinsOwnedProcess"
+      ]
+    }
+  }
+}

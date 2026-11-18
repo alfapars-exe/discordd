@@ -1,0 +1,48 @@
+{
+  "scope": "Retry initial and post-GET local preference presentation with the original reset/session-preservation plan;no wire/cache/action changes.",
+  "sourceRevision": "cf5d02691ae4a80b8123447f1dd9a5f55a3b66a2",
+  "red": {
+    "log": "hichat-preferences-bootstrap-retry-red.log",
+    "failed": 3,
+    "passed": 54,
+    "behavior": "Initial loader/application failure reused rejected preparation forever;post-GET local failure reported load failure instead of application failure."
+  },
+  "targeted": {
+    "passed": 67,
+    "files": 2,
+    "seconds": 3.76,
+    "log": "hichat-preferences-bootstrap-retry-green.log"
+  },
+  "behavior": [
+    "Internal typed presentation error carries reset/preserveSessionState flags without underlying error or payload.",
+    "Failed initial preparation is replaced on manual retry;no GET/PATCH proceeds while it still fails.",
+    "Successful preparation recovery proceeds to initial GET then sends only actual pending edits.",
+    "Post-GET retry reapplies already obtained authoritative data with reset=true/preserveSessionState=true;no redundant GET/PATCH.",
+    "Post-ACK retry keeps reset=false semantics and never replays acknowledged edits.",
+    "Account epoch guards prevent retired presentation failures/retries from changing the next account."
+  ],
+  "sha256": {
+    "client/src/stores/preferencesStore.ts": "800df1a67f0160b940f535ecbca2d1d7737671d36b34d754369cb066b14fb86c",
+    "client/src/stores/preferencesStore.test.ts": "d953c430710ef53436c79dfe0326a1d426956e93a86cf304e96044af08276989"
+  },
+  "limits": [
+    "Real preference orchestration and presenter,API and destination stores mocked;not browser/provider/physical media acceptance.",
+    "Whole RF13/account-bootstrap/offline/native/project acceptance remains open.",
+    "Active unique-ID search frontier remains open."
+  ],
+  "typeGateCorrection": "Initial tsc-b rejected constructor parameter property TS1294 under erasableSyntaxOnly. cf5d0269 uses an explicit typed field and assignment. Initial5072passed1skipped112.48s runtime evidence belongs to the pre-correction source;final frozen rerun is recorded separately.",
+  "finalFrozenClientCoverage": {
+    "files": 485,
+    "passed": 5072,
+    "skipped": 1,
+    "seconds": 114.19,
+    "statementPercent": 67.35,
+    "branchPercent": 64.55,
+    "functionPercent": 61.55,
+    "linePercent": 68.42,
+    "log": "hichat-preferences-bootstrap-retry-coverage-final.log"
+  },
+  "build": "actual tsc-b/VitePASS3.20s; existing chunk warning",
+  "lint": "changed store and store tests lintPASS",
+  "delivery": "Validated local commits held while prior b510283d Server CI43708045106 remains running;frontend/mobile success. No prior-green substitution."
+}

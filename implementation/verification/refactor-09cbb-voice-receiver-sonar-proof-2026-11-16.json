@@ -1,0 +1,34 @@
+{
+  "sourceProof": [
+    {
+      "path": "server/services/voice_channel_delete.go",
+      "matchedLines": 175,
+      "sourceMatches": "09cbb2c8"
+    },
+    {
+      "path": "client/src/hooks/useScreenShareReceiverStats.ts",
+      "matchedLines": 325,
+      "sourceMatches": "09cbb2c8"
+    },
+    {
+      "path": "client/src/hooks/screenShareReceiverSample.ts",
+      "matchedLines": 84,
+      "sourceMatches": "09cbb2c8"
+    }
+  ],
+  "issues": [
+    {
+      "key": "AaHYWqlPd7dyvm3wYSoZ",
+      "previousComplexity": 19,
+      "status": "CLOSED",
+      "resolution": "FIXED"
+    },
+    {
+      "key": "AaHYWqPAd7dyvm3wYSnq",
+      "previousComplexity": 16,
+      "status": "CLOSED",
+      "resolution": "FIXED"
+    }
+  ],
+  "limitations": "Source-bound complexity issue closure only. Full CI, physical media, historical panel failure and RF01-RF30 acceptance remain separate."
+}

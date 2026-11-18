@@ -1,0 +1,25 @@
+{
+  "result": "PASS",
+  "baselineCommit": "590d004c080f29a48e8d63e6b98a4912fc101937",
+  "expandedGofmtSourceIdentical": true,
+  "allowedDifference": "t.Helper attribution in extracted test helper only",
+  "requestResponseRedirectAndAssertionOrderPreserved": true,
+  "windows": {
+    "ticket-helper-before.jsonl": {
+      "passedIncludingSubtests": 19,
+      "failed": 0,
+      "skipped": 0,
+      "sha256": "4f26622a06d9fcca68b9fa6beef72d1f2c90036b122a0d07db90c23c82a774fa"
+    },
+    "ticket-helper-after.jsonl": {
+      "passedIncludingSubtests": 19,
+      "failed": 0,
+      "skipped": 0,
+      "sha256": "629761cd0247a78b830156efd1d64f26d7390d10365b13a2432cd601bc623d16"
+    }
+  },
+  "vet": "PASS",
+  "sourceSha256": "606f3140e62cca3b3cf138346ce12dac4758f1edeafe530d316dc533d94093f7",
+  "limits": "Linux race and new Sonar source-bound complexity check still required; production probe source unchanged.",
+  "scope": "Test-only ticket request/response/redirect assertion helper extraction; production Go probe unchanged."
+}

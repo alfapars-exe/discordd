@@ -1,0 +1,93 @@
+{
+  "runtime": "Chromium 156.0.8078.4",
+  "command": "node e2e/scripts/benchmark-encrypted-search.mjs",
+  "results": [
+    {
+      "mode": "channel",
+      "size": 1000,
+      "matches": 267,
+      "samplesMs": [
+        19.69999998807907,
+        17.80000001192093,
+        18.899999976158142
+      ],
+      "previousPageMs": [
+        19.80000001192093,
+        17.80000001192093,
+        18.899999976158142
+      ],
+      "indexedPageMs": [
+        3.399999976158142,
+        2.199999988079071,
+        1.7999999821186066
+      ],
+      "compactFirstPageMs": [
+        22,
+        19.100000023841858,
+        19.5
+      ]
+    },
+    {
+      "mode": "channel",
+      "size": 10000,
+      "matches": 2667,
+      "samplesMs": [
+        205.39999997615814,
+        209.40000000596046,
+        253
+      ],
+      "previousPageMs": [
+        205.49999997019768,
+        209.5,
+        253
+      ],
+      "indexedPageMs": [
+        1.9000000059604645,
+        1.800000011920929,
+        2.0999999940395355
+      ],
+      "compactFirstPageMs": [
+        213.90000000596046,
+        213.7999999821186,
+        207.60000002384186
+      ]
+    },
+    {
+      "mode": "channel",
+      "size": 50000,
+      "matches": 13333,
+      "samplesMs": [
+        1048.0999999940395,
+        1085.2999999821186,
+        1039.5
+      ],
+      "previousPageMs": [
+        1048.5,
+        1085.699999988079,
+        1039.9000000059605
+      ],
+      "indexedPageMs": [
+        2.800000011920929,
+        2.5999999940395355,
+        2.0999999940395355
+      ],
+      "compactFirstPageMs": [
+        1063.9000000059605,
+        1019.1000000238419,
+        1053.4000000059605
+      ]
+    }
+  ],
+  "scope": "Channel first query uses compact timestamp references and shared page hydration; existing full-message search API preserved.",
+  "validation": [
+    "83 targeted tests passed",
+    "Exact IndexedDB result content/order at 1k/10k/50k",
+    "Compact result objects have no content field",
+    "Cursor cancellation covered for compact channel scan"
+  ],
+  "limits": [
+    "No significant first-query speed gain claimed",
+    "All matching IDs remain in memory; no heap bound proved",
+    "Overall RF17 remains open"
+  ]
+}
