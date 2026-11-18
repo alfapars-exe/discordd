@@ -32,7 +32,15 @@ for attempt in {1..90}; do
   if docker exec "$container" pg_isready -U hichat_e2e -d hichat_e2e_control >/dev/null 2>&1; then ready=1; break; fi
   sleep 1
 done
-if [[ "$ready" != 1 ]]; then docker rm -f "$container" >/dev/null; exit 1; fi
+if [[ "$ready" != 1 ]]; then
+  # Fixture-only container: its log holds no secrets and is the only evidence
+  # of why PostgreSQL refused to start (TLS file permissions, config).
+  echo "E2E PostgreSQL did not become ready; container status and log tail:" >&2
+  docker inspect --format '{{.State.Status}} exit={{.State.ExitCode}}' "$container" >&2 || true
+  docker logs --tail 40 "$container" >&2 || true
+  docker rm -f "$container" >/dev/null
+  exit 1
+fi
 port="$(docker port "$container" 5432/tcp | sed 's/^127\.0\.0\.1://')"
 dsn="postgres://hichat_e2e@127.0.0.1:${port}/hichat_e2e_control?sslmode=verify-full&sslrootcert=${fixture_dir}/ca.crt&sslcert=${fixture_dir}/client.crt&sslkey=${fixture_dir}/client.key"
 printf '%s' "$dsn" > control-url.txt
