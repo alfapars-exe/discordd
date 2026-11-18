@@ -12,12 +12,14 @@ import (
 // ownership lock.
 var ErrBackendOwnerBusy = errors.New("single backend ownership unavailable")
 
-// backendOwnerIdleTimeout bounds how long PostgreSQL keeps an owner session
+// backendOwnerIdleTimeoutSQL bounds (to 30 s) how long PostgreSQL keeps an owner session
 // whose process vanished without closing its socket (container killed, network
 // cut). A live owner probes every second, so it is never idle this long; a
 // dead one is terminated by the server and its lock released, instead of the
 // lock lingering until TCP keepalive notices (hours by default).
-const backendOwnerIdleTimeout = 30 * time.Second
+// It is a fixed statement rather than a formatted one; singleton_test asserts
+// the applied value.
+const backendOwnerIdleTimeoutSQL = `SET idle_session_timeout = '30s'`
 
 // BackendOwnerHolder describes the session currently holding ownership, as far
 // as pg_stat_activity lets this role see it.
@@ -48,7 +50,7 @@ func AcquireBackendOwner(ctx context.Context, db *sql.DB) (*sql.Conn, error) {
 		return nil, ErrBackendOwnerBusy
 	}
 	// Session-scoped: only the owner session gets the idle limit.
-	if _, err = conn.ExecContext(ctx, fmt.Sprintf(`SET idle_session_timeout = %d`, backendOwnerIdleTimeout.Milliseconds())); err != nil {
+	if _, err = conn.ExecContext(ctx, backendOwnerIdleTimeoutSQL); err != nil {
 		_, _ = conn.ExecContext(context.Background(), `SELECT pg_advisory_unlock(7341982,30)`)
 		_ = conn.Close()
 		return nil, fmt.Errorf("backend ownership idle limit failed: %w", err)
