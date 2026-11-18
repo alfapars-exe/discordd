@@ -19,6 +19,14 @@ var ErrBackendOwnerBusy = errors.New("single backend ownership unavailable")
 // lock lingering until TCP keepalive notices (hours by default).
 const backendOwnerIdleTimeout = 30 * time.Second
 
+// staleBackendOwnerAfter is how long a hichat owner session may sit idle before
+// a booting backend treats it as orphaned. A live owner's watcher queries every
+// second, so its state_change is never more than a few seconds old. This also
+// recovers sessions opened by binaries that predate backendOwnerIdleTimeout,
+// whose orphaned sessions would otherwise hold the lock until TCP keepalive
+// (hours) — e.g. after the publisher pauses the Space and kills the container.
+var staleBackendOwnerAfter = 60 * time.Second
+
 // BackendOwnerHolder describes the session currently holding ownership, as far
 // as pg_stat_activity lets this role see it.
 type BackendOwnerHolder struct {
@@ -61,7 +69,9 @@ func AcquireBackendOwner(ctx context.Context, db *sql.DB) (*sql.Conn, error) {
 // that died uncleanly holds the lock until the server drops its session, so a
 // single attempt turns both into a crash loop. onBusy (optional) reports the
 // current holder after each busy attempt; holder is nil when not visible.
-func WaitForBackendOwner(ctx context.Context, db *sql.DB, retry time.Duration, onBusy func(holder *BackendOwnerHolder)) (*sql.Conn, error) {
+// An orphaned holder (see staleBackendOwnerAfter) is terminated and reported
+// through onReclaim (optional).
+func WaitForBackendOwner(ctx context.Context, db *sql.DB, retry time.Duration, onBusy func(holder *BackendOwnerHolder), onReclaim func(holder BackendOwnerHolder)) (*sql.Conn, error) {
 	if retry <= 0 {
 		retry = 5 * time.Second
 	}
@@ -76,6 +86,12 @@ func WaitForBackendOwner(ctx context.Context, db *sql.DB, retry time.Duration, o
 		holder := lookupBackendOwnerHolder(ctx, db)
 		if onBusy != nil {
 			onBusy(holder)
+		}
+		if reclaimStaleBackendOwner(ctx, db, holder) {
+			if onReclaim != nil {
+				onReclaim(*holder)
+			}
+			continue
 		}
 		timer := time.NewTimer(retry)
 		select {
@@ -103,6 +119,26 @@ func lookupBackendOwnerHolder(ctx context.Context, db *sql.DB) *BackendOwnerHold
 	h.ApplicationName, h.ClientAddr, h.State = app.String, addr.String, state.String
 	h.BackendStart, h.StateChange = started.Time, changed.Time
 	return &h
+}
+
+// reclaimStaleBackendOwner terminates the holder only if it is an idle hichat
+// session whose last activity is older than staleBackendOwnerAfter, measured on
+// the server clock. The checks are repeated inside the terminating statement so
+// a holder that woke up between lookup and termination is left alone.
+func reclaimStaleBackendOwner(ctx context.Context, db *sql.DB, h *BackendOwnerHolder) bool {
+	if h == nil || h.PID == 0 || h.ApplicationName != "hichat" || h.State != "idle" {
+		return false
+	}
+	probe, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	var terminated bool
+	err := db.QueryRowContext(probe, `SELECT COALESCE(bool_or(pg_terminate_backend(a.pid, 5000)), false)
+		FROM pg_locks l JOIN pg_stat_activity a ON a.pid = l.pid
+		WHERE l.locktype='advisory' AND l.classid=7341982 AND l.objid=30 AND l.objsubid=2 AND l.granted
+		  AND a.pid = $1 AND a.application_name = 'hichat' AND a.state = 'idle'
+		  AND a.state_change < clock_timestamp() - make_interval(secs => $2)`,
+		h.PID, staleBackendOwnerAfter.Seconds()).Scan(&terminated)
+	return err == nil && terminated
 }
 
 func describeBackendOwnerHolder(h *BackendOwnerHolder) string {
